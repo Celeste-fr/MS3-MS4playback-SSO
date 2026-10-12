@@ -288,7 +288,7 @@ QString NoteLanes::valueText(const Row& r, int tick) const
       const bool join = isJoin(r);
       QString s = describe(*m, join, value(*m, join));
       if (own(*m, join))
-            s += "  " + tr("own");
+            s += QString::fromUtf8(" · ") + tr("manual");
       return s;
       }
 

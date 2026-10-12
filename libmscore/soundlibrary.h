@@ -331,6 +331,19 @@ Choice choose(const LibInstrument& instrument, const Want& want);
 // of several patches: the best fit of all; of equal ones, the earlier patch
 Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want);
 
+// a note's own technique (the Inspector's Note › Technique: Note::libraryTechnique, Pid::LIBRARY_TECHNIQUE;
+// performancetechnique.h), "<patch>|<articulation>" (the map's names): that articulation when one of patches has it
+// (the patch routed), else none (Auto: the notation chooses)
+QString ownTechniqueKey(const LibInstrument& patch, const Articulation& articulation);
+Choice chooseOwn(const std::vector<const LibInstrument*>& patches, const QString& key);
+// a note's choice: its own technique (its tie chain's first note's), else choose(patches, want)
+Choice chooseNote(const std::vector<const LibInstrument*>& patches, const Want& want, const Note* note);
+// the techniques a note may be given (the Inspector's list): every articulation of its instrument's patches (the main
+// one, then the extras that can play) that sounds (not expect="silent"), as (key, name shown: the articulation's,
+// an extra's with its patch's); empty: the note's part doesn't play the library (no library, its playback mode, no
+// match, a kit)
+std::vector<std::pair<QString, QString>> ownTechniques(const Note* note);
+
 // a kit's drum sound: the patch (of patches) and key that play it; patch -1: none does
 struct DrumChoice {
       int patch { -1 };

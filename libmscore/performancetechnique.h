@@ -24,7 +24,7 @@
 //    Note::performanceAttack / performanceTransition (Pid::PERFORMANCE_ATTACK / _TRANSITION, the Inspector's
 //    Note › Performance attack / transition, every selected note at once); a tie chain plays its first note's.
 //    The score's metaTag "performanceTechniques" (kept by MuseScore 3.6 through a round trip) holds JSON
-//    [{"tick", "track", "grace", "pitch", "attack", "transition", "velocity", "join"}] ("grace": the grace chord's
+//    [{"tick", "track", "grace", "pitch", "attack", "transition", "velocity", "join", "technique"}] ("grace": the grace chord's
 //    index, left out for the chord itself; the others left out when Auto), written on save from the notes
 //    (each score of the file its own: the master score and each part), left out when every note is Auto;
 //    read after loading and applied to the notes found (and their linked copies). Copy / paste keeps them
@@ -35,6 +35,13 @@
 //    library patch, the join on a Performance patch, where it also decides attack or transition: the note before
 //    overlapping it, or a gap up to the map's legatoGap ms (SSO: 39, measured), goes on by transition, a longer gap
 //    re-attacks (HANDOFF.md › How the Performance patches work). An Inspector technique sets them back to Auto.
+//
+//    A note's own technique (Note::libraryTechnique, Pid::LIBRARY_TECHNIQUE; the Inspector's Note › Technique, every
+//    selected note at once; the owner, 2026-10-12): "<patch>|<articulation>", the map's names, replacing what the
+//    notation chooses (SoundLib::chooseNote: the renderer, the routes, the tuning lanes; so Live's clips and the plain
+//    set too); everything else then applies as for that technique (levels, onset, a Performance patch's attack and
+//    transition). A tie chain plays its first note's; a grace note its own. In the same metaTag ("technique"); a
+//    technique the part's patches don't have plays Auto. Auto: empty.
 //---------------------------------------------------------
 
 #include <QString>

@@ -730,6 +730,7 @@ Note::Note(const Note& n, bool link)
       _performanceTransition = n._performanceTransition;
       _libraryVelocity = n._libraryVelocity;
       _libraryJoin = n._libraryJoin;
+      _libraryTechnique = n._libraryTechnique;
       _headScheme        = n._headScheme;
       _headGroup         = n._headGroup;
       _headType          = n._headType;
@@ -1465,6 +1466,8 @@ void Note::write(XmlWriter& xml) const
                   xml.tag("libraryVelocity", _libraryVelocity);
             if (_libraryJoin != PerformanceTechnique::JOIN_AUTO)
                   xml.tag("libraryJoin", _libraryJoin);
+            if (!_libraryTechnique.isEmpty())
+                  xml.tag("libraryTechnique", _libraryTechnique);
             }
 
       for (Spanner* e : _spannerFor)
@@ -1605,6 +1608,8 @@ bool Note::readProperties(XmlReader& e)
             setProperty(Pid::LIBRARY_VELOCITY, e.readInt());
       else if (tag == "libraryJoin")
             setProperty(Pid::LIBRARY_JOIN, e.readInt());
+      else if (tag == "libraryTechnique")
+            _libraryTechnique = e.readElementText();
       else if (tag == "play")
             setPlay(e.readInt());
       else if (tag == "tuning")
@@ -3116,6 +3121,8 @@ QVariant Note::getProperty(Pid propertyId) const
                   return _libraryVelocity;
             case Pid::LIBRARY_JOIN:
                   return _libraryJoin;
+            case Pid::LIBRARY_TECHNIQUE:
+                  return _libraryTechnique;
             case Pid::PLAY:
                   return play();
             case Pid::LINE:
@@ -3227,6 +3234,10 @@ bool Note::setProperty(Pid propertyId, const QVariant& v)
                                  : qBound(-PerformanceTechnique::JOIN_MAX, v.toInt(), PerformanceTechnique::JOIN_MAX);
                   score()->setPlaylistDirty();
                   return true;
+            case Pid::LIBRARY_TECHNIQUE:
+                  _libraryTechnique = v.toString();
+                  score()->setPlaylistDirty();
+                  return true;
             case Pid::VISIBLE: {
                   setVisible(v.toBool());
                   if (m)
@@ -3304,6 +3315,8 @@ QVariant Note::propertyDefault(Pid propertyId) const
                   return 0;         // as rendered
             case Pid::LIBRARY_JOIN:
                   return PerformanceTechnique::JOIN_AUTO;
+            case Pid::LIBRARY_TECHNIQUE:
+                  return QString();       // Auto
             case Pid::PLAY:
                   return true;
             case Pid::FIXED:

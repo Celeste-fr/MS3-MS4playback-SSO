@@ -75,8 +75,10 @@ void read(Score* score)
             const Transition transition = transitionFromName(o.value("transition").toString());
             const int velocity = qBound(0, o.value("velocity").toInt(0), 127);
             const int join = o.contains("join") ? qBound(-JOIN_MAX, o.value("join").toInt(), JOIN_MAX) : JOIN_AUTO;
+            const QString technique = o.value("technique").toString();
             if (tick < 0 || track < 0 || track >= score->ntracks() || pitch < 0
-                || (attack == Attack::AUTO && transition == Transition::AUTO && velocity == 0 && join == JOIN_AUTO))
+                || (attack == Attack::AUTO && transition == Transition::AUTO && velocity == 0 && join == JOIN_AUTO
+                    && technique.isEmpty()))
                   continue;
             Segment* seg = score->tick2segment(Fraction::fromTicks(tick), true, SegmentType::ChordRest);
             Element* e = seg ? seg->element(track) : nullptr;
@@ -97,6 +99,7 @@ void read(Score* score)
                         toNote(l)->setPerformanceTransition(transition);
                         toNote(l)->setLibraryVelocity(velocity);
                         toNote(l)->setLibraryJoin(join);
+                        toNote(l)->setLibraryTechnique(technique);
                         }
                   }
             }
@@ -117,7 +120,7 @@ QString write(const Score* score)
                   auto add = [&](const Chord* c, int grace) {
                         for (const Note* n : c->notes()) {
                               if (n->performanceAttack() == Attack::AUTO && n->performanceTransition() == Transition::AUTO
-                                  && n->libraryVelocity() == 0 && n->libraryJoin() == JOIN_AUTO)
+                                  && n->libraryVelocity() == 0 && n->libraryJoin() == JOIN_AUTO && n->libraryTechnique().isEmpty())
                                     continue;
                               QJsonObject o;
                               o["tick"] = s->tick().ticks();
@@ -133,6 +136,8 @@ QString write(const Score* score)
                                     o["velocity"] = n->libraryVelocity();
                               if (n->libraryJoin() != JOIN_AUTO)
                                     o["join"] = n->libraryJoin();
+                              if (!n->libraryTechnique().isEmpty())
+                                    o["technique"] = n->libraryTechnique();
                               list.append(o);
                               }
                         };

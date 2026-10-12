@@ -289,6 +289,7 @@ class Note final : public Element {
       // its own velocity and join (the Velocity and Join lanes; performancetechnique.h); 0 / JOIN_AUTO: as rendered
       int _libraryVelocity { 0 };
       int _libraryJoin { PerformanceTechnique::JOIN_AUTO };
+      QString _libraryTechnique;        // its own technique (SoundLib::chooseOwn); empty: Auto
 
       char _offTimeType    { 0 };    // compatibility only 1 - user(absolute), 2 - offset (%)
       char _onTimeType     { 0 };    // compatibility only 1 - user, 2 - offset
@@ -505,6 +506,8 @@ class Note final : public Element {
       void setLibraryVelocity(int v)                                      { _libraryVelocity = v;          }
       int libraryJoin() const                                             { return _libraryJoin;           }
       void setLibraryJoin(int ms)                                         { _libraryJoin = ms;             }
+      const QString& libraryTechnique() const                             { return _libraryTechnique;      }
+      void setLibraryTechnique(const QString& t)                          { _libraryTechnique = t;         }
 
       void setOnTimeOffset(int v);
       void setOffTimeOffset(int v);

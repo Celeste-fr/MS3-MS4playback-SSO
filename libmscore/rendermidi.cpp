@@ -2401,8 +2401,8 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
 //---------------------------------------------------------
 //   libraryChoice
-//    the library's articulation for a note: what its articulations and the staff text in
-//    force ask for (SoundLib::want)
+//    the library's articulation for a note: its own technique (the Inspector's Note › Technique), else what its
+//    articulations and the staff text in force ask for (SoundLib::want)
 //---------------------------------------------------------
 
 SoundLib::Choice MidiRenderer::libraryChoice(const LibPart& lp, const SoundLib::LibInstrument& li, const Note* note,
@@ -2415,7 +2415,7 @@ SoundLib::Choice MidiRenderer::libraryChoice(const LibPart& lp, const SoundLib::
       // its written length (not the Play Panel's speed), with the notes tied to it
       const int tied = note->tieFor() && !note->tieBack() ? note->playTicks() - note->chord()->actualTicks().ticks() : 0;
       const double seconds = score->tempomap()->writtenTime(tick, tick + qMax(0, ticks) + qMax(0, tied));
-      return SoundLib::choose(lp.patchesFor(&li), SoundLib::want(noteArts, lp.text.at(tick), seconds, trill, score));
+      return SoundLib::chooseNote(lp.patchesFor(&li), SoundLib::want(noteArts, lp.text.at(tick), seconds, trill, score), note);
       }
 
 //---------------------------------------------------------

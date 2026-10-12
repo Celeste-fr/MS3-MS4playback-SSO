@@ -950,6 +950,34 @@ Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want
       return performance ? performance : chooseSlurred(patches, want, held);
       }
 
+QString ownTechniqueKey(const LibInstrument& patch, const Articulation& articulation)
+      {
+      return patch.name + "|" + articulation.name;
+      }
+
+Choice chooseOwn(const std::vector<const LibInstrument*>& patches, const QString& key)
+      {
+      if (key.isEmpty())
+            return Choice();
+      const int bar = key.indexOf('|');
+      const QString patch = key.left(bar);
+      const QString name = key.mid(bar + 1);
+      for (int p = 0; p < int(patches.size()); ++p) {
+            if (patches[size_t(p)]->name != patch)
+                  continue;
+            for (const Articulation& a : patches[size_t(p)]->articulations)
+                  if (a.name == name)
+                        return Choice { &a, a.techniques.value(0), p };
+            }
+      return Choice();
+      }
+
+Choice chooseNote(const std::vector<const LibInstrument*>& patches, const Want& want, const Note* note)
+      {
+      const Choice own = note ? chooseOwn(patches, note->firstTiedNote()->libraryTechnique()) : Choice();
+      return own ? own : choose(patches, want);
+      }
+
 //---------------------------------------------------------
 //   current
 //---------------------------------------------------------
@@ -1336,6 +1364,29 @@ static bool available(const LibInstrument& li)
       return !availableFn || availableFn(li);
       }
 
+std::vector<std::pair<QString, QString>> ownTechniques(const Note* note)
+      {
+      std::vector<std::pair<QString, QString>> out;
+      const std::shared_ptr<const Library> library = current();
+      const Part* part = note ? note->part() : nullptr;
+      if (!library || !part)
+            return out;
+      const Part* master = PartPlaybackModes::masterPart(part);
+      if (!PartPlaybackModes::playsLibrary(master, PartPlaybackModes::read(note->score()->masterScore())))
+            return out;
+      const LibInstrument* li = library->match(part->instrument(note->chord()->tick()), part);
+      if (!li || li->kit)
+            return out;
+      for (const LibInstrument* p : li->patches()) {
+            if (p != li && !available(*p))
+                  continue;
+            for (const Articulation& a : p->articulations)
+                  if (a.expect != "silent")
+                        out.push_back({ ownTechniqueKey(*p, a), p == li ? a.name : QString("%1 (%2)").arg(a.name, p->name) });
+            }
+      return out;
+      }
+
 std::shared_ptr<const Library> current()
       {
       std::lock_guard<std::mutex> lock(currentMutex);
@@ -1651,7 +1702,7 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
                         for (const Ms4::ArtRef& a : arts)
                               if (a.art == Ms4::Art::Trill || a.art == Ms4::Art::TrillBaroque)
                                     trill = trillSemitones(note);
-                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill, score));
+                        const Choice c = chooseNote(patches, want(arts, text.at(tick), seconds, trill, score), note);
                         if (c)
                               used[c.patch] = true;
                         }
@@ -1721,7 +1772,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                               if (a.art == Ms4::Art::Legato)
                                     slurred = true;
                               }
-                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill, score));
+                        const Choice c = chooseNote(patches, want(arts, text.at(tick), seconds, trill, score), note);
                         const double measured = c && c.articulation->releaseMs > 0 ? c.articulation->releaseMs / 1000.0 : 0.0;
                         // (the ring: a fixed tail with the release waited for, else the release to 60 dB under)
                         const double ring = tailSeconds < 0 ? laneRing(*patches[size_t(c ? c.patch : 0)], c ? c.articulation : nullptr, patches)
