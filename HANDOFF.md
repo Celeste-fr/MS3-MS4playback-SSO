@@ -16,6 +16,17 @@ a section there when you need the background of that topic. Commit messages desc
   until then they went at 100 (map `legatoVelocity`, chosen 2026-10-07 for timing: a run's arrival SD 54 -> 39 ms,
   never judged by ear at 69). Ask the owner to listen to Whence's Violas runs in build 422; if they smear, offer a
   measured tighter velocity inside the fingered band (20-84) as an option.
+- **Stage A verdict** (2026-10-12): the listening page https://claude.ai/artifact/PxWaWQ6cCA2K8f7kN5TK76 (db collection
+  `realrange1`) A/Bs `[levels] realRange` on a ppp -> fff ladder per section; read the verdicts (ArtifactData) and put
+  realRange into Recommended only for what the owner approves. A score with written dynamics is the next test (Whence has
+  almost none).
+- **Transition levels** (2026-10-12, the owner: "I want it evened out eventually"): branch `transition-levels` measures each
+  Performance note's level by the interval / transition it is reached from (Whence 12-TET bar 2 Celli: note 2 ~2.2 dB over
+  note 1 in SSO itself, sso_slur_swell.json); then propose a per-note correction, off until heard.
+- **Try in the next build:** the automation headers for every part (fold at will; `( + | All )`, round Draw Mode button,
+  Grid menu), the bar ruler (View > Bar Ruler), Update Live Set (Mixer > Advanced Options > Ableton Live), the MuseScore
+  Link device fix (copy the new device from the build into the User Library; Live no longer stalls with 28 copies, phrase-
+  first notes on time), smooth starts on time, a repeated key under a slur spiccato.
 
 ## Dynamics like a real player (the owner's decisions, 2026-10-12)
 
