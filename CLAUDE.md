@@ -91,7 +91,8 @@ measured curve or CC11 / CC1 per note, `libraryNoteLevels`; built-in: SoundFont 
 *Tools › Adapt Key Signatures to Clefs*, `mscore/keyedit.cpp`). Deleting a restating time signature keeps the
 measures (`Score::cmdRemoveTimeSig`). Numpad 1-7 enter scale degrees (`Score::scaleDegreeStep`; on Linux/xcb
 `ScoreView::event` takes the keypad keys, `numpadDegreeAction`; `Shortcut::load` gives new actions their defaults
-in an old shortcuts.xml).
+in an old shortcuts.xml). Continuous View has a bar ruler (`mscore/barruler.*`: every bar's number along the top,
+as the measure-number style counts, view only, View › Bar Ruler).
 
 **Tuning** (`libmscore/tuning.h`): temperament (metaTag `temperament`, the Tuning plugin's JSON) + accidental rules
 (microtonal, HEJI, Johnston, stacked accidentals as hidden `Symbol`s) + the note's own tuning. `tuningtables.h`

@@ -42,6 +42,7 @@ ContinuousPanel::ContinuousPanel(ScoreView* sv)
       _active     = true;
       _visible    = false;
       _width      = 0.0;
+      _panelWidth = 0.0;
       }
 
 //---------------------------------------------------------
@@ -277,6 +278,7 @@ void ContinuousPanel::paint(const QRect&, QPainter& painter)
       QRectF bg(_rect);
 
       bg.setWidth(_widthClef + _widthKeySig + _widthTimeSig + _leftMarginTotal + _panelRightPadding);
+      _panelWidth = bg.width();
       QPixmap* fgPixmap = _sv->fgPixmap();
       if (fgPixmap == 0 || fgPixmap->isNull())
             painter.fillRect(bg, preferences.getColor(PREF_UI_CANVAS_FG_COLOR));
