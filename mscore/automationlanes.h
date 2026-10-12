@@ -16,10 +16,16 @@
 //   the notes AND show you automation tracks for every possible parameter in SSO, in which you can draw
 //   automation curves just like you can in Ableton").
 //
-//   In Continuous View, a part the sound library plays shows its automation lanes under its staves when
-//   it is selected (any element of it): a header row, then one lane per controller, on the score's own
-//   time axis (each tick where its notes are). The notes stay editable as always. Room for them is made
-//   by the layout (Score::setAutomationSpace: the view's state, never saved; System::layout2).
+//   In Continuous View, every part the sound library plays (and an Edit-in-MuseScore clip tab's part) always shows its
+//   header row under its staves, "Automation · <part>" (the owner, 2026-10-12: "every instruments' automation rows get
+//   shown at the same time, and I can expand or contract them at will"), as Live's track headers: a click on the header
+//   (its "▸" / "▾" or name; not its buttons) opens or folds that part's lanes, several parts open at once; Alt-click
+//   every part's, to the clicked one's new state. Folded: the header row only. Which parts are open: lanefolds.h (per
+//   score, for the session, never saved; all folded at first; the score's selection doesn't change it). Open: one lane
+//   per controller under the header, on the score's own time axis (each tick where its notes are). The notes stay
+//   editable as always. Room for the rows is made by the layout (Score::setAutomationSpace: the view's state, never
+//   saved; System::layout2), checked after every layout (queueSpace: a part that comes to play the library gets its
+//   header). A lane's focus (its selected points, Delete, Ctrl+C …) is the lane last clicked, whichever part.
 //   What a lane shows and edits: libmscore/automation.h (Automation::Lane, Automation::Edit), stored in
 //   the score's metaTag "automation", one undoable step per gesture.
 //
@@ -34,7 +40,7 @@
 //   ("Live: Operator › Tone"); the device plays them in Live (liveclips.h), MuseScore's own playback can't. The "+"
 //   menu has a submenu per Live device. Shown: the
 //   lanes with points and those added with "+" (an empty lane is hidden until then), all of them with
-//   "All"; "×" hides a lane (its points still play). The header's "▾" folds the part's lanes ("▸" shows them again).
+//   "All"; "×" hides a lane (its points still play). "+" and "All" open a folded part.
 //   "Even" lays Continuous View out with every beat the same width (Score::lineEvenBeats, layoutlinear.cpp; the view
 //   only: not saved, not an undo step); the lanes follow the notes, so their grid is even too.
 //
@@ -70,7 +76,8 @@
 //   absolute and "shape while playing" / "write into the notes" (asks first).
 //   Time selection (Live's; the owner, 2026-10-12: "select all the automations in a bar, like I'm able to do in ableton,
 //   and just spam Ctrl+D to copy it over bars"): the score's range selection (click a measure, Shift-click to extend) on
-//   one part whose lanes are shown, rounded out to whole bars, is shown as a light band over all of the part's rows.
+//   one part with a header row (open or folded: whichever part it is on), rounded out to whole bars, is shown as a light
+//   band over all of the part's rows.
 //   Ctrl+D (with the focus in the score or in a lane) duplicates everything of the part's lanes in it to the bars after
 //   it, one undo step (Automation::duplicateTimeSelection): every lane of the part, shown or not (the target bars' points
 //   replaced, the envelope around them as before), and each note's attack, transition, velocity and join onto the note
@@ -93,6 +100,8 @@
 #include <QString>
 
 #include "libmscore/automation.h"
+#include "libmscore/soundlibrary.h"
+#include "lanefolds.h"
 
 class QContextMenuEvent;
 class QKeyEvent;
@@ -132,7 +141,7 @@ class AutomationLanes : public QObject {
       static bool enabled();
       static void setEnabled(bool on);
 
-      // the view's score changed (another score, undo / redo, a reload): selection and caches dropped
+      // the view's score changed (another score, undo / redo, a reload): selection and caches dropped (not the folding)
       void scoreChanged();
       void selectionChanged();
       void layoutChanged();
@@ -156,7 +165,9 @@ class AutomationLanes : public QObject {
       std::vector<Target> targets(const Part* part) const;
       double tickToX(int tick) const;
       int xToTick(double x) const;
-      void unfold(const Part* part, bool on = true);
+      void unfold(const Part* part, bool on = true);          // open / fold a part's lanes (lanefolds.h)
+      bool isOpen(const Part* part) const;
+      std::vector<const Part*> headerParts() const;           // the parts with a header row, in score order
       void showLane(const Part* part, const QString& target, bool on = true);
       void setDrawMode(bool on) { _drawMode = on; }
 
@@ -179,9 +190,8 @@ class AutomationLanes : public QObject {
 
       ScoreView* _view;
       NoteLanes* _notes;
-      std::set<const Part*> _unfolded;                         // view parts
-      std::set<const Part*> _folded;                           // view parts: the header row only ("▸")
-      const Part* _lastSelected { nullptr };
+      LaneFolds _folds;                                        // view parts whose lanes are open, per score
+      bool _spaceQueued { false };                             // updateSpace after the layout (queueSpace)
       std::map<const Part*, std::set<QString>> _added;         // master part -> empty lanes shown
       std::map<const Part*, std::set<QString>> _hidden;
       std::set<const Part*> _showAll;
@@ -232,6 +242,12 @@ class AutomationLanes : public QObject {
       mutable bool _rowsValid { false };
       mutable std::map<const Part*, std::vector<Target>> _targets;
       mutable int _targetsGeneration { -1 };
+      mutable std::vector<SoundLib::Route> _routes;            // the library's routes, once for all parts
+      mutable bool _routesValid { false };
+      void clearTargets() const;                               // (the targets and the routes)
+      const std::vector<SoundLib::Route>& libraryRoutes() const;
+      bool hasHeader(const Part* part) const;                  // a part with lanes (without rendering its notes)
+      void queueSpace();
       std::vector<Row> computeRows() const;
       std::vector<Target> computeTargets(const Part* part) const;
       std::vector<Target> libraryTargets(const Part* part) const;      // the sound library's controls (SSO's map)

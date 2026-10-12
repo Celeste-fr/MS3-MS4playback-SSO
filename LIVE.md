@@ -681,15 +681,19 @@ then "why not make it so that you can edit the automation curves in both and the
 
 ### Drawing them in MuseScore
 
-In **Continuous View**, click any note (or anything) of a part the sound library plays, of a part Live plays (*Live
-plays the score*) or of an *Edit in MuseScore* clip tab: its automation opens under its staves, on the score's own time
-axis (a lane's point sits under the middle of its note's heads, the grid's bar lines on the staff's: since 2026-10-02,
+In **Continuous View**, every part the sound library plays, every part Live plays (*Live plays the score*) and an *Edit
+in MuseScore* clip tab's part show a header row under their staves, "Automation · <part>", always (the owner, 2026-10-12:
+"what if every instruments' automation rows get shown at the same time, and I can expand or contract them at will?"), as
+Live's track headers: a click on the header (its triangle or name) opens or folds that part's automation, several parts
+open at once; Alt-click opens or folds every part's (to the clicked one's new state). All folded at first; the folding
+is the session's, per score (not saved, never marks the score changed; undo keeps it), and selecting in the score no
+longer changes it. Open, the lanes lie on the score's own time axis (a lane's point sits under the middle of its note's heads, the grid's bar lines on the staff's: since 2026-10-02,
 when they stood ~1 sp right of them). Header row: *+* adds a lane (Dynamics (CC1), Expression (CC11), and every
 control of the part's patches from the map: Vibrato, Mic Mix Distance, Mic 1-5, Release, Tightness, Mute …; a part
 Live plays also its Live track's parameters, "Live: Operator › Tone"; a clip tab only its track's Live parameters:
 below), *All* shows them all, the pencil is Draw Mode, *Even* lays the view out with every beat the same width (the
 owner, 2026-10-06; the view only, not saved; a bar line's room goes into the beat before it), the last button shows the
-grid (1/4 … 1/64, Bar; Off: no snap; a click turns snap on / off), the triangle folds. Empty lanes are hidden
+grid (1/4 … 1/64, Bar; Off: no snap; a click turns snap on / off); *+* and *All* open a folded part. Empty lanes are hidden
 until added; × hides a lane (it still plays). The grid is fixed (the owner, 2026-10-07: no adaptive grid): one step per
 beat of the time signature at first, Ctrl+1 narrower, Ctrl+2 wider, Ctrl+4 snap on / off (Live's keys; while a lane has
 the focus, where they override MuseScore's Ctrl+1 / 2 / 4). Editing as in Live 12 (manual 25.5): click adds a breakpoint

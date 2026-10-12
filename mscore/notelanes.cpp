@@ -57,8 +57,8 @@ NoteLanes::NoteLanes(AutomationLanes* lanes, ScoreView* view)
       _timer->setSingleShot(true);
       _timer->setInterval(RENDER_DELAY_MS);
       connect(_timer, &QTimer::timeout, this, [this]() {
-            // (rendered when lanes show: else when a part's lanes open, AutomationLanes::selectionChanged)
-            if (!_lanes->enabled() || !_lanes->score() || !_lanes->score()->lineMode() || _lanes->_unfolded.empty())
+            // (rendered when some part's lanes are open: else when one opens, AutomationLanes::unfold; once for the score, all parts)
+            if (!_lanes->enabled() || !_lanes->score() || !_lanes->score()->lineMode() || !_lanes->_folds.anyOpen(_lanes->score()))
                   return;
             if (seq && seq->isPlaying()) {
                   _timer->start();
@@ -80,7 +80,7 @@ NoteLanes::NoteLanes(AutomationLanes* lanes, ScoreView* view)
                         perfAfter |= m.joinable();
                   }
             if (before != after || perfBefore != perfAfter) {        // (lanes come or go)
-                  _lanes->_targets.clear();
+                  _lanes->clearTargets();
                   _lanes->updateSpace();
                   }
             _view->update();

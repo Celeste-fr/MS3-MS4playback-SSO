@@ -40,6 +40,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QSettings>
+#include <QTimer>
 
 namespace Ms {
 
@@ -86,7 +87,7 @@ void AutomationLanes::scoreChanged()
       _anchorsValid = false;
       _cachedTag = QString("\x01");           // read again
       _rowsValid = false;
-      _targets.clear();
+      clearTargets();
       _working = false;
       _work.clear();
       _drag = Drag::NONE;
@@ -105,10 +106,8 @@ void AutomationLanes::scoreChanged()
       if (s)
             for (const Part* p : s->parts())
                   parts.insert(p);
-      for (auto i = _unfolded.begin(); i != _unfolded.end(); )
-            i = parts.count(*i) ? std::next(i) : _unfolded.erase(i);
-      if (_lastSelected && !parts.count(_lastSelected))
-            _lastSelected = nullptr;
+      _folds.keepOnly(s, parts);          // (the folding stays: only parts gone are dropped)
+      queueSpace();                       // (a score opened: its headers)
       _view->update();
       }
 
@@ -116,17 +115,84 @@ void AutomationLanes::layoutChanged()
       {
       _anchorsValid = false;
       _rowsValid = false;
-      _targets.clear();
+      clearTargets();
       _notes->changed();
+      queueSpace();                 // (a part that came to play the library: its header; Continuous View on / off)
+      }
+
+// updateSpace once the layout is done (it may lay out again: not from within one)
+void AutomationLanes::queueSpace()
+      {
+      if (_spaceQueued)
+            return;
+      _spaceQueued = true;
+      QTimer::singleShot(0, this, [this]() {
+            _spaceQueued = false;
+            updateSpace();
+            });
+      }
+
+void AutomationLanes::clearTargets() const
+      {
+      _targets.clear();
+      _routesValid = false;
+      }
+
+// the library's routes, once for every part's header and targets (SoundLib::routes reads the whole score)
+const std::vector<SoundLib::Route>& AutomationLanes::libraryRoutes() const
+      {
+      if (!_routesValid) {
+            _routes.clear();
+            Score* s = score();
+            const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
+            if (s && lib)
+                  _routes = SoundLib::routes(s->masterScore(), *lib);
+            _routesValid = true;
+            }
+      return _routes;
+      }
+
+bool AutomationLanes::isOpen(const Part* part) const
+      {
+      return _folds.isOpen(score(), part);
       }
 
 void AutomationLanes::unfold(const Part* part, bool on)
       {
-      if (on)
-            _unfolded.insert(part);
-      else
-            _unfolded.erase(part);
+      _folds.setOpen(score(), part, on);
+      if (on && _notes->fresh())          // (the notes' lanes as the score is now)
+            clearTargets();
       updateSpace();
+      }
+
+// a header row: a part the library plays, a part Live plays with its track's parameters known, a clip tab's part; without
+// rendering the notes (targets() does, for the Velocity and Join lanes: called for open parts only)
+bool AutomationLanes::hasHeader(const Part* part) const
+      {
+      Score* s = score();
+      if (!s || !part)
+            return false;
+      if (LiveIntegration::LiveClipEditor::instance()->isClipScore(s))
+            return true;
+      const Part* master = PartPlaybackModes::masterPart(part);
+      for (const SoundLib::Route& r : libraryRoutes())
+            if (r.part == master && r.lane == 0 && r.instrument)
+                  return true;
+      const QString key = LiveIntegration::LiveClipsLink::instance()->routeKey(part);
+      const std::vector<LiveClipEdit::LiveParam>* lp = key.isEmpty() ? nullptr : LiveClipEdit::TrackParams::instance()->params(key);
+      return lp && !lp->empty();
+      }
+
+std::vector<const Part*> AutomationLanes::headerParts() const
+      {
+      std::vector<const Part*> out;
+      Score* s = score();
+      if (!s || !enabled() || !s->lineMode())
+            return out;
+      for (const Part* p : s->parts())
+            if (hasHeader(p))
+                  out.push_back(p);
+      return out;
       }
 
 void AutomationLanes::showLane(const Part* part, const QString& target, bool on)
@@ -143,32 +209,11 @@ void AutomationLanes::showLane(const Part* part, const QString& target, bool on)
       updateSpace();
       }
 
+// (the folding doesn't follow the selection: lanefolds.h; the time selection does, timeSelection)
 void AutomationLanes::selectionChanged()
       {
       _timeOff = false;             // (the score's selection is the newer one)
       _view->update();
-      Score* s = score();
-      if (!s || !enabled() || !s->lineMode())
-            return;
-      const Part* part = nullptr;
-      const Selection& sel = s->selection();
-      if (sel.isRange()) {
-            if (sel.staffStart() >= 0 && sel.staffStart() < s->nstaves()
-                && s->staff(sel.staffStart())->part() == s->staff(std::max(sel.staffStart(), sel.staffEnd() - 1))->part())
-                  part = s->staff(sel.staffStart())->part();
-            }
-      else if (sel.element() && sel.element()->staff())
-            part = sel.element()->staff()->part();
-      if (!part || part == _lastSelected)
-            return;
-      _lastSelected = part;
-      if (_notes->fresh())                // (the notes' lanes as the score is now)
-            _targets.clear();
-      if (targets(part).empty())
-            return;                 // (not a part the library plays)
-      _unfolded.clear();
-      _unfolded.insert(part);
-      updateSpace();
       }
 
 std::vector<AutomationLanes::Target> AutomationLanes::targets(const Part* part) const
@@ -176,7 +221,7 @@ std::vector<AutomationLanes::Target> AutomationLanes::targets(const Part* part) 
       const int gen = LiveClipEdit::TrackParams::instance()->generation();
       if (gen != _targetsGeneration) {          // (a Live track's parameters came, a clip tab's lanes became ready)
             _targetsGeneration = gen;
-            _targets.clear();
+            clearTargets();
             }
       auto cached = _targets.find(part);
       if (cached != _targets.end())
@@ -225,7 +270,7 @@ std::vector<AutomationLanes::Target> AutomationLanes::libraryTargets(const Part*
       const Part* master = PartPlaybackModes::masterPart(part);
       std::vector<SoundLib::Controller> ctrls;
       bool any = false;
-      for (const SoundLib::Route& r : SoundLib::routes(s->masterScore(), *lib)) {
+      for (const SoundLib::Route& r : libraryRoutes()) {
             if (r.part != master || r.lane != 0 || !r.instrument)
                   continue;
             any = true;
@@ -392,14 +437,10 @@ void AutomationLanes::updateSpace()
       if (!s)
             return;
       std::map<const Part*, qreal> space;
-      if (enabled() && s->lineMode()) {
-            for (const Part* p : _unfolded) {
-                  const std::vector<Target> t = targets(p);
-                  if (t.empty())
-                        continue;
-                  const size_t n = _folded.count(p) ? 0 : shownTargets(PartPlaybackModes::masterPart(p), t).size();
-                  space[p] = HEAD_SP + double(n) * (LANE_SP + GAP_SP);
-                  }
+      for (const Part* p : headerParts()) {
+            // (folded: the header row only; targets() for open parts only: it renders the notes once)
+            const size_t n = isOpen(p) ? shownTargets(PartPlaybackModes::masterPart(p), targets(p)).size() : 0;
+            space[p] = HEAD_SP + double(n) * (LANE_SP + GAP_SP);
             }
       _rowsValid = false;
       if (space == s->automationSpace()) {
@@ -454,7 +495,8 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
             if (lanesY < 0)
                   continue;
             const Part* master = PartPlaybackModes::masterPart(part);
-            const std::vector<Target> all = targets(part);
+            const bool open = isOpen(part);
+            const std::vector<Target> all = open ? targets(part) : std::vector<Target>();
             double y = origin.y() + lanesY;
             Row head;
             head.part = part;
@@ -463,7 +505,7 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
             head.rect = QRectF(x0, y, x1 - x0, HEAD_SP * sp);
             out.push_back(head);
             y += HEAD_SP * sp;
-            for (const QString& t : _folded.count(part) ? std::vector<QString>() : shownTargets(master, all)) {
+            for (const QString& t : open ? shownTargets(master, all) : std::vector<QString>()) {
                   Row r;
                   r.part = part;
                   r.master = master;
@@ -702,7 +744,7 @@ QString AutomationLanes::valueText(const QString& target, double v) const
 // the header row's label, and its font (bold, as tall as the row allows)
 QString AutomationLanes::headLabel(const Row& r) const
       {
-      return QString::fromUtf8(_folded.count(r.part) ? "▸ " : "▾ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name;
+      return QString::fromUtf8(isOpen(r.part) ? "▾ " : "▸ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name;
       }
 
 // the headers' text as large on screen as the score's instrument names (the owner, 2026-10-06: it was a fixed 9-13 px,
@@ -1087,8 +1129,7 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
                                     _showAll.erase(r.master);
                               else
                                     _showAll.insert(r.master);
-                              _folded.erase(r.part);
-                              updateSpace();
+                              unfold(r.part);
                               }
                         else if (i == 2) {
                               _drawMode = !_drawMode;
@@ -1105,16 +1146,15 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
                               }
                         return true;
                         }
-                  if (pixel.x() < h.left() + 6 + 1.6 * textPx()) {
-                        // ▾ folds the lanes away, ▸ shows them again; the header row stays (the owner, 2026-10-04: the
-                        // whole panel went, and selecting the part again didn't bring it back)
-                        if (_folded.count(r.part))
-                              _folded.erase(r.part);
-                        else
-                              _folded.insert(r.part);
-                        updateSpace();
-                        return true;
-                        }
+                  // the rest of the header (its ▸ / ▾ and name) opens or folds the part's lanes, as Live's track header;
+                  // Alt: every part's, to this one's new state (lanefolds.h)
+                  if (QApplication::keyboardModifiers() & Qt::AltModifier)
+                        _folds.toggleAll(score(), r.part, headerParts());
+                  else
+                        _folds.toggle(score(), r.part);
+                  if (isOpen(r.part) && _notes->fresh())      // (the notes' lanes as the score is now)
+                        clearTargets();
+                  updateSpace();
                   return true;
                   }
             if (pixel.x() >= h.right() - 1.6 * textPx() - 2) {
@@ -1153,7 +1193,7 @@ void AutomationLanes::addLaneMenu(const Row& r, const QPoint& globalPos)
             menu.addAction(tr("(every lane is shown)"))->setEnabled(false);
       QAction* a = menu.exec(globalPos);
       if (a && !a->data().toString().isEmpty()) {
-            _folded.erase(r.part);
+            _folds.setOpen(score(), r.part, true);
             showLane(r.part, a->data().toString(), true);
             }
       }
