@@ -12,6 +12,10 @@ a section there when you need the background of that topic. Commit messages desc
   vibrato). That is why Violins 1's eighth in bar 12 sounds quiet (Long at vibrato 0 is a slow, quiet swell, measured
   15.9 dB under). The owner will raise it in Mixer › Controllers and listen. Ask whether it's done and how it sounds;
   then remove this item.
+- **Violas' runs at fingered 69** (2026-10-12): `[slurs] transitions` sends the Violas' slurred notes fingered at 69;
+  until then they went at 100 (map `legatoVelocity`, chosen 2026-10-07 for timing: a run's arrival SD 54 -> 39 ms,
+  never judged by ear at 69). Ask the owner to listen to Whence's Violas runs in build 422; if they smear, offer a
+  measured tighter velocity inside the fingered band (20-84) as an option.
 
 ## Before a build goes to the owner (2026-10-09)
 
