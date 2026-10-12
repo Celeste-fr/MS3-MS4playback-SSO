@@ -19,6 +19,9 @@
 #include <QElapsedTimer>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QPushButton>
 #include <QStatusBar>
@@ -27,6 +30,7 @@
 #include <QTimer>
 #include <QUdpSocket>
 
+#include "libmscore/livetimingoverride.h"
 #include "libmscore/part.h"
 #include "libmscore/partplayback.h"
 #include "libmscore/rendermidi.h"
@@ -337,6 +341,10 @@ void LiveClipsLink::setScore(MasterScore* score)
       _score = score;
       if (_score)
             connect(_score, &Score::playlistChanged, this, &LiveClipsLink::scoreChanged);
+      _known.clear();               // (another score: what Live holds is known again from the cache, recall)
+      _reports.clear();
+      _deferred.clear();
+      _lastEdit.clear();
       _following = false;
       scoreChanged();
       }
@@ -425,9 +433,48 @@ void LiveClipsLink::received(const QString& address, const QVariantList& args)
                         s->second.status = args.value(2).toString();
                         s->second.liveTrack = args.value(3).toString();
                         _lastSync = now;
+                        // (protocol 10: written, and what the clip holds now)
+                        if (args.size() > 4 && args.value(4).toInt() != 0) {
+                              Known& k = _known[key];
+                              k.track = s->second.track;
+                              k.content = args.value(4).toInt();
+                              remember(key);
+                              }
                         }
                   }
             emit statusChanged();
+            }
+      else if (address == "/live/edited") {        // a clip edited in Live (livetimingoverride.h): its notes follow
+            _lastHello = now;
+            Report r;
+            r.content = args.value(1).toInt();
+            r.count = args.value(2).toInt();
+            r.chunks = args.value(3).toInt();
+            if (r.chunks <= 0)
+                  takeEdit(args.value(0).toString(), r);
+            else
+                  _reports[args.value(0).toString()] = r;
+            }
+      else if (address == "/live/editnotes") {
+            _lastHello = now;
+            auto r = _reports.find(args.value(0).toString());
+            if (r == _reports.end() || r->second.content != args.value(1).toInt())
+                  return;
+            for (int i = 3; i + 4 < args.size(); i += 5) {
+                  LiveClips::Note n;
+                  n.pitch = args.value(i).toInt();
+                  n.start = args.value(i + 1).toInt();
+                  n.length = args.value(i + 2).toInt();
+                  n.velocity = args.value(i + 3).toInt();
+                  n.muted = args.value(i + 4).toInt() != 0;
+                  r->second.notes.push_back(n);
+                  }
+            if (++r->second.got >= r->second.chunks) {
+                  const QString key = r->first;
+                  const Report done = r->second;
+                  _reports.erase(r);
+                  takeEdit(key, done);
+                  }
             }
       else if (address == "/live/papplied") {
             _lastHello = now;
@@ -447,6 +494,122 @@ void LiveClipsLink::received(const QString& address, const QVariantList& args)
             _wasConnected = connected();
             emit statusChanged();
             }
+      }
+
+//---------------------------------------------------------
+//   takeEdit
+//    a clip edited in Live: its timing edits become the notes' overrides (livetimingoverride.h), one undo step; its
+//    content the next write's base. Edits that aren't timing stay in Live until the next change (as before)
+//---------------------------------------------------------
+
+void LiveClipsLink::takeEdit(const QString& key, const Report& r)
+      {
+      if (!_score)
+            return;
+      auto k = _known.find(key);
+      if (k == _known.end()) {
+            _lastEdit = tr("A clip (route %1) was edited in Live, but this MuseScore doesn't know what it wrote there: "
+                           "MuseScore's clip replaces it at the next change.").arg(key);
+            log(QString("edited in Live: %1, not known").arg(key));
+            emit statusChanged();
+            return;
+            }
+      if (_score->undoStack()->active()) {      // (in the middle of a command: right after it)
+            const bool first = _deferred.empty();
+            _deferred[key] = r;
+            if (first)
+                  QTimer::singleShot(DEBOUNCE_MS, this, [this]() {
+                        const std::map<QString, Report> d = _deferred;
+                        _deferred.clear();
+                        for (const auto& x : d)
+                              takeEdit(x.first, x.second);
+                        });
+            return;
+            }
+      const LiveTimingOverride::Result res = LiveTimingOverride::fromLive(_score, LiveClips::timeline(_score),
+                                                                          k->second.track.notes, r.notes);
+      k->second.content = r.content;
+      int changed = 0;
+      if (!res.edits.empty()) {
+            _score->startCmd();
+            changed = LiveTimingOverride::apply(res);
+            _score->endCmd();
+            }
+      remember(key);
+      const QString clip = k->second.track.clip.mid(QString("MuseScore: ").size());
+      _lastEdit = tr("%1, edited in Live: the timing of %n note(s) kept", "", int(res.edits.size())).arg(clip);
+      if (res.other)
+            _lastEdit += "; " + tr("%n other edit(s) (velocity, pitch, notes added or deleted) replaced at the next change",
+                                   "", res.other);
+      log(QString("edited in Live: %1: %2 timing edits (%3 values changed), %4 unchanged, %5 other")
+          .arg(key).arg(res.edits.size()).arg(changed).arg(res.unchanged).arg(res.other));
+      auto s = _sent.find(key);
+      if (changed) {
+            if (s != _sent.end())
+                  s->second.force = true;       // (sent again with the new base, even if the render didn't change)
+            scoreChanged();
+            }
+      else if (s != _sent.end() && s->second.status == "edited in Live")
+            enqueue(s->second.track);           // (the write the edit held back, now on its content)
+      emit statusChanged();
+      }
+
+qint32 LiveClipsLink::knownContent(const QString& key) const
+      {
+      auto k = _known.find(key);
+      return k == _known.end() ? 0 : k->second.content;
+      }
+
+// what the device confirmed, kept per score file (QSettings liveIntegration/clipContent: { path: { "t": time, "<key>":
+// [render hash, content] } }, the 50 scores used last): a score opened as it was last written to Live takes the edits
+// made in Live meanwhile
+static const char* const CONTENT_SETTING = "liveIntegration/clipContent";
+static constexpr int CONTENT_SCORES = 50;       // (a bound on the setting's size, not a measured number)
+
+static QString scorePath(const MasterScore* score)
+      {
+      return score && score->fileInfo() && !score->fileInfo()->filePath().isEmpty() && !score->created()
+             ? score->fileInfo()->absoluteFilePath() : QString();
+      }
+
+void LiveClipsLink::remember(const QString& key)
+      {
+      const QString path = scorePath(_score);
+      auto k = _known.find(key);
+      if (path.isEmpty() || k == _known.end())
+            return;
+      QSettings settings;
+      QJsonObject all = QJsonDocument::fromJson(settings.value(CONTENT_SETTING).toByteArray()).object();
+      QJsonObject mine = all.value(path).toObject();
+      mine[key] = QJsonArray { double(k->second.track.hash), double(k->second.content) };
+      mine["t"] = double(QDateTime::currentMSecsSinceEpoch());
+      all[path] = mine;
+      while (all.size() > CONTENT_SCORES) {
+            QString oldest;
+            double t = 0;
+            for (auto i = all.begin(); i != all.end(); ++i)
+                  if (oldest.isEmpty() || i.value().toObject().value("t").toDouble() < t) {
+                        oldest = i.key();
+                        t = i.value().toObject().value("t").toDouble();
+                        }
+            all.remove(oldest);
+            }
+      settings.setValue(CONTENT_SETTING, QJsonDocument(all).toJson(QJsonDocument::Compact));
+      }
+
+// a route MuseScore knows nothing of yet: what the device confirmed for this score's file, if the render is the same
+void LiveClipsLink::recall(const LiveClips::Track& t)
+      {
+      const QString path = scorePath(_score);
+      if (path.isEmpty() || _known.count(t.key))
+            return;
+      const QJsonArray a = QJsonDocument::fromJson(QSettings().value(CONTENT_SETTING).toByteArray()).object()
+                           .value(path).toObject().value(t.key).toArray();
+      if (a.size() != 2 || quint32(a.at(0).toDouble()) != t.hash || a.at(1).toDouble() == 0)
+            return;
+      Known& k = _known[t.key];
+      k.track = t;
+      k.content = qint32(a.at(1).toDouble());
       }
 
 void LiveClipsLink::resync()
@@ -679,8 +842,9 @@ void LiveClipsLink::finish()
       std::map<QString, Sent> keep;
       std::vector<LiveClips::Track> changed, paramsChanged;
       for (const LiveClips::Track& t : tracks) {
+            recall(t);
             auto s = _sent.find(t.key);
-            if (s != _sent.end() && s->second.track.hash == t.hash) {
+            if (s != _sent.end() && s->second.track.hash == t.hash && !s->second.force) {
                   keep[t.key] = s->second;
                   if (s->second.track.paramsHash != t.paramsHash) {
                         keep[t.key].track = t;
@@ -715,7 +879,10 @@ void LiveClipsLink::enqueue(const LiveClips::Track& t)
       s.sentAt = QDateTime::currentMSecsSinceEpoch();
       s.tries++;
       s.confirmed = false;
-      for (const QByteArray& p : LiveClips::packets(t, ++_generation))
+      s.force = false;
+      LiveClips::Track based = t;
+      based.base = knownContent(t.key);   // (the device writes over only that: timing set in Live)
+      for (const QByteArray& p : LiveClips::packets(based, ++_generation))
             _queue.push_back(p);
       if (!_pace->isActive())
             _pace->start();
@@ -865,6 +1032,14 @@ QString LiveClipsLink::statusText() const
             text += "\n" + tr("Tempo and locators: %1").arg(_songStatus);
       if (!problems.isEmpty())
             text += "\n" + tr("Not in Live: %1").arg(problems.join("; "));
+      if (_score) {
+            const int overrides = LiveTimingOverride::count(_score);
+            if (overrides)
+                  text += "\n" + tr("%n note(s) play the timing set in Live (Inspector › Note › Start / End from Live).", "",
+                                    overrides);
+            }
+      if (!_lastEdit.isEmpty())
+            text += "\n" + _lastEdit;
       if (dropped)
             text += "\n" + tr("%n event(s) a clip can't hold were left out (other controllers).",
                               "", dropped);

@@ -2674,7 +2674,117 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             }
       libraryNoteLevels(chunk, events);
       libraryPitchBends(chunk, events);
+      libraryTimingOverrides(chunk, events);
       libraryTrackDelays(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   libraryTimingOverrides
+//    a note whose timing the owner set in Live (livetimingoverride.h: ms after its written start / end) plays there:
+//    its note-on and / or note-off moved after everything automatic (onset early, keepMs, the note before cut, joins,
+//    the same-key rule, levels, bends) is done, before the track delays (which Live's tracks add in Live). The switch,
+//    controllers and pitch bend at its old note-on on its route, before it, are copied to the new one (a chord's other
+//    notes keep theirs). The chunk's own notes (their chord in its measures, their note-on within the window the
+//    renderer starts notes in: 4 beats early … 1 late); not a grace note, nor a note with more than one note-on
+//---------------------------------------------------------
+
+void MidiRenderer::libraryTimingOverrides(const Chunk& chunk, EventMap* events)
+      {
+      if (writtenTiming || libRoutes.empty())
+            return;
+      struct Item {
+            const Note* first;
+            int on;
+            int pitch;
+            int port;
+            int channel;
+            };
+      std::vector<Item> items;
+      std::map<std::tuple<const Note*, int, int>, int> ons;       // (note, port, channel) -> its note-ons here
+      const int tick1 = chunk.tick1();
+      const int tick2 = chunk.tick2();
+      for (auto i = events->lower_bound(std::max(0, chunk.utick1() - 4 * DIVISION));
+           i != events->end() && i->first < chunk.utick2() + DIVISION; ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.librarySwitch() || ev.type() != ME_NOTEON || ev.velo() == 0 || !ev.note())
+                  continue;
+            const Note* first = ev.note()->firstTiedNote();
+            if (!LiveTimingOverride::isSet(first->liveStart()) && !LiveTimingOverride::isSet(first->liveEnd()))
+                  continue;
+            const int tick = first->chord()->tick().ticks();
+            if (first->chord()->isGrace() || tick < tick1 || tick >= tick2)
+                  continue;
+            const int written = tick + chunk.tickOffset();
+            if (i->first < written - 4 * DIVISION || i->first > written + DIVISION)
+                  continue;
+            ++ons[std::make_tuple(first, ev.extPort(), ev.extChannel())];
+            items.push_back({ first, i->first, ev.pitch(), ev.extPort(), ev.extChannel() });
+            }
+      auto sameRoute = [](const NPlayEvent& e, const Item& it) {
+            return e.isExternal() && e.extPort() == it.port && e.extChannel() == it.channel;
+            };
+      for (const Item& it : items) {
+            if (ons[std::make_tuple(it.first, it.port, it.channel)] != 1)
+                  continue;
+            auto on = events->end();
+            for (auto i = events->lower_bound(it.on); i != events->end() && i->first == it.on; ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (sameRoute(ev, it) && !ev.librarySwitch() && ev.type() == ME_NOTEON && ev.velo() > 0 && ev.pitch() == it.pitch
+                      && ev.note() && ev.note()->firstTiedNote() == it.first) {
+                        on = i;
+                        break;
+                        }
+                  }
+            if (on == events->end())
+                  continue;
+            auto off = events->end();
+            for (auto i = std::next(on); i != events->end(); ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (sameRoute(ev, it) && !ev.librarySwitch() && ev.pitch() == it.pitch
+                      && (ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && ev.velo() == 0))
+                      && (!ev.note() || ev.note()->firstTiedNote() == it.first)) {
+                        off = i;
+                        break;
+                        }
+                  }
+            const Note* last = it.first->lastTiedNote();
+            const int writtenOn = it.first->chord()->tick().ticks() + chunk.tickOffset();
+            const int writtenOff = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks() + chunk.tickOffset();
+            const double startMs = it.first->liveStart();
+            const double endMs = it.first->liveEnd();
+            const int newOn = LiveTimingOverride::isSet(startMs)
+                              ? std::max(0, score->utime2utick(score->utick2utime(writtenOn) + startMs / 1000.0)) : it.on;
+            int newOff = off == events->end() ? -1 : off->first;
+            if (newOff >= 0 && LiveTimingOverride::isSet(endMs))
+                  newOff = score->utime2utick(score->utick2utime(writtenOff) + endMs / 1000.0);
+            if (newOff >= 0)
+                  newOff = std::max(newOff, newOn + 1);
+            const NPlayEvent onEv = on->second;
+            if (newOn != it.on) {
+                  std::vector<NPlayEvent> with;
+                  for (auto i = events->lower_bound(it.on); i != on; ++i) {
+                        const NPlayEvent& ev = i->second;
+                        if (sameRoute(ev, it) && (ev.librarySwitch() || ev.type() == ME_CONTROLLER || ev.type() == ME_PITCHBEND))
+                              with.push_back(ev);
+                        }
+                  if (off != events->end() && newOff != off->first) {
+                        const NPlayEvent offEv = off->second;
+                        events->erase(off);
+                        events->insert(events->lower_bound(newOff), std::make_pair(newOff, offEv));
+                        off = events->end();
+                        }
+                  events->erase(on);
+                  const auto at = events->lower_bound(newOn);
+                  for (const NPlayEvent& c : with)
+                        events->insert(at, std::make_pair(newOn, c));
+                  events->insert(std::make_pair(newOn, onEv));
+                  }
+            if (off != events->end() && newOff != off->first) {
+                  const NPlayEvent offEv = off->second;
+                  events->erase(off);
+                  events->insert(events->lower_bound(newOff), std::make_pair(newOff, offEv));
+                  }
+            }
       }
 
 //---------------------------------------------------------

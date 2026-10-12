@@ -13,6 +13,16 @@ named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
 Green 1977) the owner hasn't approved yet.
 
+## Timing set in Live (2026-10-11)
+
+Branch `live-timing-overrides` (from `live-written-clips`). The owner: *Live plays the score* keeps the played timing in
+its clips, "but if I manually adjust the timings in Live, it stays overridden like that". A note moved or resized in a
+"MuseScore: …" clip becomes that note's override (ms after its written start / end), kept in the score (metaTag
+`liveTimingOverrides`), played by MuseScore too, never moved back by the next push (the device doesn't write over a
+clip edited since: `base`, protocol 10). LIVE.md › Live plays the score › Timing you set in Live has the design, rules and
+what only real Live can show. Not tried in real Live yet; the route set and the plain set's clips get no edits back
+from Live this way (the plain set plays an override through its played times when MuseScore writes the set again).
+
 ## Written clips in the plain set (2026-10-11)
 
 Branch `live-written-clips` (from `claude/whence-listen-2`). The owner (2026-10-11): Live clips hold the WRITTEN notes;

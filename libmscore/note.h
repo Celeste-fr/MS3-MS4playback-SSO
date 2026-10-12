@@ -21,6 +21,7 @@
 #include "element.h"
 #include "key.h"
 #include "noteevent.h"
+#include "livetimingoverride.h"
 #include "performancetechnique.h"
 #include "pitchspelling.h"
 #include "shape.h"
@@ -289,6 +290,9 @@ class Note final : public Element {
       // its own velocity and join (the Velocity and Join lanes; performancetechnique.h); 0 / JOIN_AUTO: as rendered
       int _libraryVelocity { 0 };
       int _libraryJoin { PerformanceTechnique::JOIN_AUTO };
+      // its timing as set in Live's clip (livetimingoverride.h): ms after its written start / end; AUTO: as rendered
+      double _liveStart { LiveTimingOverride::AUTO };
+      double _liveEnd { LiveTimingOverride::AUTO };
 
       char _offTimeType    { 0 };    // compatibility only 1 - user(absolute), 2 - offset (%)
       char _onTimeType     { 0 };    // compatibility only 1 - user, 2 - offset
@@ -505,6 +509,10 @@ class Note final : public Element {
       void setLibraryVelocity(int v)                                      { _libraryVelocity = v;          }
       int libraryJoin() const                                             { return _libraryJoin;           }
       void setLibraryJoin(int ms)                                         { _libraryJoin = ms;             }
+      double liveStart() const                                            { return _liveStart;             }
+      void setLiveStart(double ms)                                        { _liveStart = ms;               }
+      double liveEnd() const                                              { return _liveEnd;               }
+      void setLiveEnd(double ms)                                          { _liveEnd = ms;                 }
 
       void setOnTimeOffset(int v);
       void setOffTimeOffset(int v);

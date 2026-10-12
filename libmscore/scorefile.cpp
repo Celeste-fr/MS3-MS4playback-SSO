@@ -172,7 +172,8 @@ void Score::writeMovement(XmlWriter& xml, bool selectionOnly)
       QMapIterator<QString, QString> i(_metaTags);
       while (i.hasNext()) {
             i.next();
-            if (i.key() == PhraseMark::metaTag || i.key() == MarcatoLevel::metaTag || i.key() == PerformanceTechnique::metaTag)
+            if (i.key() == PhraseMark::metaTag || i.key() == MarcatoLevel::metaTag || i.key() == PerformanceTechnique::metaTag
+                || i.key() == LiveTimingOverride::metaTag)
                   continue;         // written from the slurs, the marcatos and the notes below
             // do not output "platform" and "creationDate" in test and save template mode
             if ((!MScore::testMode && !MScore::saveTemplateMode) || (i.key() != "platform" && i.key() != "creationDate"))
@@ -197,6 +198,10 @@ void Score::writeMovement(XmlWriter& xml, bool selectionOnly)
             const QString techniques = PerformanceTechnique::write(this);
             if (!techniques.isEmpty())
                   xml.tag(QString("metaTag name=\"%1\"").arg(PerformanceTechnique::metaTag), techniques);
+            // the notes' timing set in Live (livetimingoverride.h), likewise
+            const QString liveTiming = LiveTimingOverride::write(this);
+            if (!liveTiming.isEmpty())
+                  xml.tag(QString("metaTag name=\"%1\"").arg(LiveTimingOverride::metaTag), liveTiming);
             }
 
       if (_scoreOrder && !_scoreOrder->isCustom()) {

@@ -189,8 +189,10 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   follows, MuseScore's own built-in parts play along); a difference of more than 0.15 s moves it; Live's
   Stop stops it; stopped, the cursor follows Live's position. MuseScore's Play starts Live at the play
   position instead, its Stop stops Live. MuseScore sends no MIDI clock in this mode.
-- **The clips belong to MuseScore.** Notes edited in them in Live are overwritten at the next change of
-  the score. Draw automation in the track's lanes, not in the clips. The device never touches a clip it
+- **The clips belong to MuseScore, except the timing you set in Live** (2026-10-11, below: [Timing you set in
+  Live](#timing-you-set-in-live-2026-10-11)): a note moved or resized in a clip keeps that timing, in Live and in
+  MuseScore; other edits made in Live (velocity, pitch, notes added or deleted) are overwritten at the next change of
+  the score, as before. Draw automation in the track's lanes, not in the clips. The device never touches a clip it
   didn't make (another name) and makes none over a track's other clips.
 - **The link:** OSC over UDP on this computer only (127.0.0.1): MuseScore sends to port 9001
   (Preferences › Advanced `io/live/clipsPort`), the device answers on 9002. The device says hello every 2 s;
@@ -211,6 +213,67 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   MuseScore knew them, else a conflict), and their unwritten edits are written. Also notices: a clip tab's clip
   deleted in Live; the MuseScore Link copy removed from (or added again to) a clip tab's track. Not detected:
   the MIDI ports of playing through Live disappearing (loopMIDI closed) without the device.
+
+### Timing you set in Live (2026-10-11)
+
+The owner, 2026-10-11: the clips keep MuseScore's played timing (early onsets, keepMs cuts …: Live's API can't set a
+Track Delay, and a device can only delay), "but if I manually adjust the timings in Live, it stays overridden like
+that". Design: `libmscore/livetimingoverride.h`; MuseScore's side `mscore/liveclips.h`; the device's
+`MuseScoreLink.js` › Timing set in Live (protocol 10).
+
+- **What is an override.** A note of a "MuseScore: …" clip whose start and / or end you changed in Live (moved,
+  trimmed, lengthened). Velocity, pitch, notes added or deleted, carriers and keyswitches are not overrides: they stay
+  in Live until the next change of the score, then MuseScore's clip replaces them, as before.
+- **How it is kept.** On the score's note (the tie chain's first note), as two values: **Start from Live** = ms after
+  the note's written start, **End from Live** = ms after its written end (the end of its tie chain), in seconds as the
+  score's tempo map plays them; each Auto when not set. Saved in the metaTag `liveTimingOverrides` (JSON
+  `[{tick, track, grace, pitch, start, end}]`, left out when no note has one; MuseScore 3.6 keeps it through a round
+  trip). Shown and cleared in the Inspector › Note (the Play section): *Start from Live*, *End from Live*, each with
+  its reset button; reset with many notes selected (e.g. right-click › Select › Similar on this staff: a whole part)
+  clears them all in one undo step. The status line (Mixer › Advanced Options… › Ableton Live) counts the notes that
+  play an override and says what the last edit in Live did.
+- **How it plays.** MuseScore's renderer (`MidiRenderer::libraryTimingOverrides`) puts the note-on and / or note-off
+  there after all automatic timing (onset early, keepMs, the note before cut, joins, the same-key rule, levels, bends)
+  and before the track delays; the switch, controllers and pitch bend at the note's old note-on on its route are
+  copied to the new one. MuseScore's own playback and the next clip both come from that render: Live and MuseScore
+  play the note at the same time (`tst_liveequivalence liveTimingOverride`), and the next push doesn't move it back.
+  The plain set gets it too (its played times, through Track Delay and the device: `livetiming.h`).
+- **The rules** (and why):
+  - relative to the **written** note, not to MuseScore's automatic timing: "stays overridden like that" means where you
+    put it, whatever later changes the automatic timing (another technique and its onset, a playback setting, the
+    note before);
+  - in **ms**: the automatic timing it replaces is in ms, and an ms offset keeps its size when the tempo changes;
+  - the note **moved or lengthened in MuseScore**: the override goes with it; a note entered again (a new note) has
+    none; the note's **technique changed**: kept;
+  - **start and end separately**: a note trimmed at its start keeps its automatic end, and the other way round;
+  - **per note, not per repeat**: a note in a repeated passage plays its override in every pass;
+  - not for grace notes or notes with more than one note-on in a pass (trill, tremolo, glissando steps): replaced at
+    the next push, as before;
+  - **precision**: MuseScore plays a tick (1/480 quarter): a note set between two ticks moves by up to half a tick
+    (0.52 ms at 120 bpm) at the next push, once.
+- **How an edit is found.** After each write the device reads the clip back and keeps its **content hash** (pitch,
+  start, length, velocity, mute of every note, without Live's note ids), and answers it in `/live/applied`. Once a
+  second it reads each clip it wrote; changed (and not yet reported), it sends the clip's notes (`/live/edited`,
+  `/live/editnotes`, units, the carriers left out). MuseScore pairs them with the notes it last wrote there (same:
+  unchanged; else same key, nearest start within a beat): a pair whose start or end differs is an override of that
+  note (one undo step, "Timing from Live"); then the clip is rendered and sent again. Each `/ms/track` carries the
+  content MuseScore knows (`base`): **the device doesn't write over a clip edited since** (it answers "edited in Live"
+  and reports the edit), so an edit of the score made before MuseScore took Live's edit can't undo it. An older
+  MuseScore (no base) or one that knows nothing of the clip (base 0) writes over it, as before.
+- **Across restarts.** What MuseScore knows survives the device's resync; per score file it is also kept on this
+  computer (QSettings `liveIntegration/clipContent`: each route's render hash and the content the device confirmed, the
+  last 50 scores): a score opened as it was last written to Live takes the edits made in Live meanwhile. A score changed
+  since (or never saved) knows nothing: its first push writes over Live's clip, as before.
+- **Tested** (Linux, no Live): `tst_liveequivalence liveTimingOverride` (the edit found, kept, played by MuseScore where
+  the clip has it, stable when read back, relative to the written note, saved and read back, cleared),
+  `tst_liveintegration clipsTimingFromLive` (the OSC report taken by the link, in both passes of a repeat, undo) and
+  `clipsOsc` (the base), `tools/live/test/test_device.js` (reported once, not written over on an old base, written on
+  the reported one, an older MuseScore written over; the content hash). **Only real Live 12.4 can show:** that a note
+  dragged in Live's editor keeps reading back with the fields the hash uses and that a clip written by
+  `add_new_notes` reads back with the same content (else every write would look like an edit: a harmless override of
+  what Live plays, but noise); that `get_all_notes_extended` on every MuseScore clip once a second stays cheap with
+  thousands of notes (not measured: the clip tabs' check does the same for one clip); the round trip with the real
+  device and Kontakt + SSO.
 
 ### Setting it up
 
@@ -1570,6 +1633,9 @@ do.
 (Live plays the score; carrier notes 114-127, converted by the device only on a track holding a "MuseScore: …" clip, protocol 8), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
 tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
 (`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
+`libmscore/livetimingoverride.*` (timing set in Live: a note's override, ms after its written start / end, metaTag
+`liveTimingOverrides`, Inspector › Note; found from the device's `/live/edited` report against what MuseScore wrote,
+`base` in `/ms/track`, protocol 10; played by `MidiRenderer::libraryTimingOverrides`),
 `libmscore/plainliveset.*` (the plain set; its technique clips hold the written notes, `libmscore/livetiming.*` puts
 the played timing back by Track Delay and the device: `MidiRenderer::setWrittenTiming`, `LiveTiming::track`, the
 device's `"Timing"` store and `---mslt` ring, MuseScoreLink.js › Written clips), `libmscore/livetracks.*` (the plain set

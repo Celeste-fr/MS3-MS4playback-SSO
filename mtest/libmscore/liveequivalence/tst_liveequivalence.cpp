@@ -41,6 +41,8 @@
 #include "libmscore/liveset.h"
 #include "libmscore/livetracks.h"
 #include "libmscore/livetiming.h"
+#include "libmscore/livetimingoverride.h"
+#include "libmscore/note.h"
 #include "libmscore/measure.h"
 #include "libmscore/plainliveset.h"
 #include "libmscore/part.h"
@@ -108,6 +110,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainWritten_data();
       void plainWritten();
       void delayedTrackLevel();
+      void liveTimingOverride();
       void livePerformanceLevel();
       void liveContextLevel();
       void liveSectionBalance();
@@ -2250,6 +2253,183 @@ void TestLiveEquivalence::plainWritten()
       const std::vector<LiveSet::PartInfo> parts = LiveSet::partInfos(score, QStringList());
       LiveTracks::Import im = LiveTracks::import(score, set, parts, "a.als", QDateTime(), again);
       QCOMPARE(LiveTracks::delaysTag(score, im), TrackDelays::write(score, TrackDelays::read(score)));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveTimingOverride
+//    timing set in Live (livetimingoverride.h; the owner, 2026-10-11: "if I manually adjust the timings in Live, it
+//    stays overridden like that"): a note of a "Live plays the score" clip moved earlier and lengthened in Live becomes
+//    the note's override; the clip rendered again holds it where Live has it (within half a tick), every other note as
+//    it was, so the next push doesn't move it back; MuseScore's own playback plays every note-on and note-off where
+//    the clip has it (Live and MuseScore sound alike); pushed again and read back unchanged, nothing new; the override
+//    is relative to the written note (the automatic onsets off: the note stays, the others move); saved in the metaTag
+//    and read back; cleared (the Inspector's reset): as before, and no metaTag
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveTimingOverride()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long' onset='84:150 72:50 60:200'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccato staccatissimo' onset='8'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' onset='100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto render = [](MasterScore* sc, bool forClips) {
+            EventMap events;
+            MidiRenderer r(sc);
+            r.setForLiveClips(forClips);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      auto clips = [&](MasterScore* sc) { return LiveClips::tracks(sc, *lib, render(sc, true), QStringList(), tl); };
+      auto real = [](const std::vector<LiveClips::Note>& v) {
+            std::vector<LiveClips::Note> o;
+            for (const LiveClips::Note& n : v)
+                  if (n.pitch < LiveClips::CARRIER_LOW && n.source)
+                        o.push_back(n);
+            return o;
+            };
+      auto text = [](const std::vector<LiveClips::Note>& v) {
+            QStringList l;
+            for (const LiveClips::Note& n : v)
+                  l << QString("%1@%2+%3v%4").arg(n.pitch).arg(n.start).arg(n.length).arg(n.velocity);
+            return l.join(" ");
+            };
+      const std::vector<LiveClips::Track> before = clips(score);
+      // the route with the most notes, a note in its second half (after the tempo change: 120 bpm, 4 units a tick)
+      size_t ti = 0;
+      for (size_t k = 0; k < before.size(); ++k)
+            if (real(before[k].notes).size() > real(before[ti].notes).size())
+                  ti = k;
+      const LiveClips::Track& t = before[ti];
+      const std::vector<LiveClips::Note> was = real(t.notes);
+      QVERIFY(was.size() >= 6);
+      const size_t pick = was.size() * 2 / 3;
+      size_t i = 0;
+      while (!(t.notes[i].pitch == was[pick].pitch && t.notes[i].start == was[pick].start))
+            ++i;
+      const Note* note = t.notes[i].source->firstTiedNote();
+      const int earlier = 120;                  // units: 31.25 ms at Live's 60 bpm
+      const int longer = 200;
+      std::vector<LiveClips::Note> live = t.notes;
+      live[i].start -= earlier;
+      live[i].length += earlier + longer;
+      const int liveStart = live[i].start;
+      const int liveEnd = live[i].start + live[i].length;
+
+      const LiveTimingOverride::Result r = LiveTimingOverride::fromLive(score, tl, t.notes, live);
+      QCOMPARE(int(r.edits.size()), 1);
+      QCOMPARE(r.other, 0);
+      QCOMPARE(r.unchanged, int(was.size()) - 1);
+      QCOMPARE(r.edits[0].note, note);
+      score->startCmd();
+      QCOMPARE(LiveTimingOverride::apply(r), 2);
+      score->endCmd();
+      QVERIFY(LiveTimingOverride::isSet(note->liveStart()) && LiveTimingOverride::isSet(note->liveEnd()));
+
+      // the clip again: the note where Live has it, every other note as it was
+      auto check = [&](const std::vector<LiveClips::Track>& tracks, bool movedThere) {
+            const std::vector<LiveClips::Note> now = real(tracks[ti].notes);
+            QCOMPARE(int(now.size()), int(was.size()));
+            for (size_t k = 0; k < was.size(); ++k) {
+                  if (k == pick && movedThere) {
+                        QVERIFY2(std::abs(now[k].start - liveStart) <= 5 && std::abs(now[k].start + now[k].length - liveEnd) <= 5,
+                                 qPrintable(text(now) + " / " + QString("%1-%2").arg(liveStart).arg(liveEnd)));
+                        continue;
+                        }
+                  QVERIFY2(now[k].pitch == was[k].pitch && now[k].start == was[k].start && now[k].length == was[k].length
+                           && now[k].velocity == was[k].velocity, qPrintable(text(now) + " / " + text(was)));
+                  }
+            };
+      const std::vector<LiveClips::Track> after = clips(score);
+      check(after, true);
+
+      // MuseScore's playback plays every note-on and note-off where the clips have them (by route, key, units)
+      std::multiset<std::tuple<int, int, int, bool>> played, inClips;
+      for (const auto& te : render(score, false)) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF) || tl.units(te.first) < 64
+                || e.pitch() >= LiveClips::CARRIER_LOW)
+                  continue;
+            played.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), e.type() == ME_NOTEON && e.velo() > 0));
+            }
+      for (const LiveClips::Track& c : after)
+            for (const LiveClips::Note& n : c.notes) {
+                  if (n.pitch >= LiveClips::CARRIER_LOW || !n.source)
+                        continue;         // (at the clip's start a note waits for its carriers: left out, as above)
+                  if (n.start >= 64)
+                        inClips.insert(std::make_tuple(c.port * 16 + c.channel - 1, n.pitch, n.start, true));
+                  if (n.start + n.length >= 64)
+                        inClips.insert(std::make_tuple(c.port * 16 + c.channel - 1, n.pitch, n.start + n.length, false));
+                  }
+      {
+      QStringList diff;
+      for (const auto& x : played)
+            if (!inClips.count(x))
+                  diff << QString("MuseScore %1 key %2 at %3 %4").arg(std::get<0>(x)).arg(std::get<1>(x)).arg(std::get<2>(x)).arg(std::get<3>(x) ? "on" : "off");
+      for (const auto& x : inClips)
+            if (!played.count(x))
+                  diff << QString("Live %1 key %2 at %3 %4").arg(std::get<0>(x)).arg(std::get<1>(x)).arg(std::get<2>(x)).arg(std::get<3>(x) ? "on" : "off");
+      QVERIFY2(diff.isEmpty() && inClips.size() == played.size(), qPrintable(diff.join("; ")));
+      }
+
+      // pushed again and read back as written: nothing new
+      const LiveTimingOverride::Result again = LiveTimingOverride::fromLive(score, tl, after[ti].notes, after[ti].notes);
+      QVERIFY(again.edits.empty() && again.other == 0);
+
+      // relative to the written note: without the automatic onsets the other notes move, the overridden one stays
+      Playback::setIniValuesForTest({ { "heldNotes/early", "0" } });
+      {
+      const std::vector<LiveClips::Note> now = real(clips(score)[ti].notes);
+      QVERIFY(std::abs(now[pick].start - liveStart) <= 5 && std::abs(now[pick].start + now[pick].length - liveEnd) <= 5);
+      bool othersMoved = false;
+      for (size_t k = 0; k < was.size(); ++k)
+            othersMoved |= k != pick && now[k].start != was[k].start;
+      QVERIFY(othersMoved);
+      }
+      Playback::setIniValuesForTest({});
+
+      // saved (the metaTag) and read back
+      QVERIFY(saveScore(score, "liveTimingOverride.mscx"));
+      QFile f("liveTimingOverride.mscx");
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QVERIFY(f.readAll().contains("<metaTag name=\"liveTimingOverrides\">"));
+      f.close();
+      MasterScore* back = readCreatedScore("liveTimingOverride.mscx");
+      QVERIFY(back);
+      back->rebuildMidiMapping();
+      QCOMPARE(LiveTimingOverride::count(back), 1);
+      QCOMPARE(text(real(clips(back)[ti].notes)), text(real(after[ti].notes)));
+      delete back;
+
+      // cleared (the Inspector's reset, one undo step): as before, and no metaTag
+      score->startCmd();
+      const_cast<Note*>(note)->undoChangeProperty(Pid::LIVE_START, note->propertyDefault(Pid::LIVE_START));
+      const_cast<Note*>(note)->undoChangeProperty(Pid::LIVE_END, note->propertyDefault(Pid::LIVE_END));
+      score->endCmd();
+      QCOMPARE(LiveTimingOverride::count(score), 0);
+      check(clips(score), false);
+      QVERIFY(saveScore(score, "liveTimingOverride.mscx"));
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QVERIFY(!f.readAll().contains("liveTimingOverrides"));
+      f.close();
+      QFile::remove("liveTimingOverride.mscx");
       delete score;
       }
 

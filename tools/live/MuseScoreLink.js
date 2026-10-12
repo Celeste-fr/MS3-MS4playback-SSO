@@ -111,12 +111,14 @@ outlets = 10;     // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2:
                   // 9: the velocity shaper ("bias <ticks>", "log 0/1"), the carriers' gate ("gate 1/2": Carriers) and
                   //    the written clips' timing ("tgate 1/2", "tdef <on> <off>", "tbias <ticks>": Written clips)
 
-var PROTOCOL = 9;                       // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
+var PROTOCOL = 10;                      // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
                                         // 5: the tracks' parameters and the clips' places (automation lanes of any track);
                                         // 6: an arrangement clip's place in the song, Live's tempo reported as it changes;
                                         // 7: velocity curves of clip tabs, kept through the MuseScore Envelopes script;
                                         // 8: carriers converted only on a track holding a MuseScore clip (Carriers);
                                         // 9: written clips, their timing put back by the patcher (Written clips)
+                                        // 10: a MuseScore clip edited in Live is reported, not written over (Timing
+                                        //     set in Live)
 var CLIP_PREFIX = "MuseScore: ";        // liveclips.cpp clipName
 var CARRIER_NAMES_EVERY = 5;            // s: the clips' names read again (a rename) without a change of their ids
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
@@ -145,7 +147,9 @@ var mode = "clips";
 var pending = {};             // key -> a clip being received
 var pendingSong = null;
 var work = [];                // clips and the song to write, in order
-var placed = {};              // key -> { track: id, clip: name } where the hub put it
+var placed = {};              // key -> { track: id, clip: name, clipId, content, reported } where the hub put it (content:
+                              // the clip's contentHash read after writing; reported: the last edit reported)
+var EDIT_NOTES_PER_PACKET = 48;         // LiveClips::NOTES_PER_PACKET
 var lastTransport = { playing: -1, beat: -1, sent: 0 };
 var edits = {};               // key -> a clip edited in MuseScore
 var editSerial = 0;
@@ -296,6 +300,7 @@ function beat() {
                   send("/live/hello", session, PROTOCOL);
             outlet(8, "/ms/keep/ping", udpPort);          // (the script answers /live/keep/pong: it keeps the values)
             checkEdits();
+            checkPlaced();
             checkRouteParams();
             checkAudible();
             velAnswerLate();
@@ -472,7 +477,7 @@ function handle(address, a) {
       else if (address === "/ms/track") {
             var t = { gen: num(a[0]), key: str(a[1]), port: str(a[2]), channel: num(a[3]), part: str(a[4]), clip: str(a[5]),
                       main: num(a[6]) !== 0, length: num(a[7]) / UNITS, count: num(a[8]), chunks: num(a[9]), hash: num(a[10]),
-                      notes: [], got: 0 };
+                      base: a.length > 11 ? num(a[11]) : 0, notes: [], got: 0 };
             pending[t.key] = t;
             routes[t.key] = { key: t.key, port: t.port, channel: t.channel, part: t.part, clip: t.clip, main: t.main };
             if (t.chunks === 0)
@@ -828,6 +833,21 @@ function writeClip(t) {
       for (i = 0; i < clips.length; ++i)
             if (clips[i].name === t.clip)
                   ours = clips[i];
+      // edited in Live since MuseScore knew it (base: its content then; 0, an older MuseScore: written over): not
+      // written; the edit goes to MuseScore, which keeps its timing (livetimingoverride.h) and sends the clip again
+      if (ours && t.base) {
+            var have = readNotes(ours.api);
+            var cur = contentHash(have);
+            if (cur !== t.base) {
+                  var was0 = placed[t.key];
+                  placed[t.key] = { track: num(tr.id), clip: t.clip, devs: was0 && was0.track === num(tr.id) ? was0.devs : null,
+                                    clipId: ours.id, content: was0 ? was0.content : t.base, reported: cur };
+                  // (the answer first: MuseScore, taking the edit, sends this clip again when it was held back)
+                  send("/live/applied", t.key, t.hash, "edited in Live", trackName, 0);
+                  reportEdit(t.key, have, cur);
+                  return;
+                  }
+            }
       var fits = ours && Math.abs(ours.start) < 1e-6 && Math.abs(ours.end - t.length) < 1e-6;
       if (!fits) {
             for (i = 0; i < clips.length; ++i)
@@ -861,8 +881,10 @@ function writeClip(t) {
             c.call("add_new_notes", { notes: t.notes.slice(i, i + BATCH) });
       setMonitor(tr);
       var was = placed[t.key];
-      placed[t.key] = { track: num(tr.id), clip: t.clip, devs: was && was.track === num(tr.id) ? was.devs : null };
-      send("/live/applied", t.key, t.hash, deviceCheck(tr), trackName);
+      var content = contentHash(readNotes(c));
+      placed[t.key] = { track: num(tr.id), clip: t.clip, devs: was && was.track === num(tr.id) ? was.devs : null,
+                        clipId: ours.id, content: content, reported: content };
+      send("/live/applied", t.key, t.hash, deviceCheck(tr), trackName, content);
       sendParams(placed[t.key], t.key, tr);
       status("MuseScore Link: hub; last clip " + t.clip + " on " + trackName);
       }
@@ -1402,6 +1424,81 @@ function checkEdits() {
                   e.conflict = true;
                   send("/live/clip/conflict", key, h);
                   status("MuseScore Link: " + str(clip.get("name")) + " changed in Live: MuseScore stops writing to it");
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   Timing set in Live (protocol 10; libmscore/livetimingoverride.h): a MuseScore clip changed in Live (its content
+//   no longer as written or as last reported) is reported to MuseScore with its notes; MuseScore keeps the timing
+//   edits as the notes' overrides and sends the clip again with the content it took as base, which the hub writes
+//   over; a clip sent with another base (MuseScore hasn't seen the edit yet) is not written (writeClip)
+//---------------------------------------------------------
+
+// a clip's notes without their ids (Live gives new ones at each write): FNV-1a over each note's pitch, start and
+// length in units, velocity and mute, in order
+function contentHash(notes) {
+      var rows = [];
+      for (var i = 0; i < notes.length; ++i) {
+            var n = notes[i];
+            rows.push([num(n.pitch), Math.round(num(n.start_time) * UNITS), Math.round(num(n.duration) * UNITS),
+                       Math.round(num(n.velocity)), num(n.mute) ? 1 : 0]);
+            }
+      rows.sort(function(a, b) {
+            for (var k = 0; k < 5; ++k)
+                  if (a[k] !== b[k])
+                        return a[k] - b[k];
+            return 0;
+            });
+      var h = 0x811c9dc5;
+      for (var r = 0; r < rows.length; ++r) {
+            var s = rows[r].join(",") + ";";
+            for (var c = 0; c < s.length; ++c) {
+                  h ^= s.charCodeAt(c);
+                  h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+                  }
+            }
+      return (h | 0) || 1;          // (0 means "not known")
+      }
+
+// /live/edited key content count chunks, then /live/editnotes key content chunk (pitch start length velocity mute) × n
+// (units; the carriers left out)
+function reportEdit(key, notes, content) {
+      var rows = [];
+      for (var i = 0; i < notes.length; ++i) {
+            var n = notes[i];
+            if (num(n.pitch) >= 114)
+                  continue;
+            rows.push([num(n.pitch), Math.round(num(n.start_time) * UNITS), Math.round(num(n.duration) * UNITS),
+                       Math.round(num(n.velocity)), num(n.mute) ? 1 : 0]);
+            }
+      rows.sort(function(a, b) { return a[1] !== b[1] ? a[1] - b[1] : a[0] - b[0]; });
+      var chunks = Math.ceil(rows.length / EDIT_NOTES_PER_PACKET);
+      send("/live/edited", key, content, rows.length, chunks);
+      for (var k = 0; k < chunks; ++k) {
+            var args = ["/live/editnotes", key, content, k];
+            var part = rows.slice(k * EDIT_NOTES_PER_PACKET, (k + 1) * EDIT_NOTES_PER_PACKET);
+            for (var j = 0; j < part.length; ++j)
+                  args = args.concat(part[j]);
+            send.apply(this, args);
+            }
+      }
+
+// once a second: the clips the hub wrote, changed in Live since
+function checkPlaced() {
+      for (var key in placed) {
+            var p = placed[key];
+            if (!p.clipId || !p.content)
+                  continue;
+            var clip = new LiveAPI("id " + p.clipId);
+            if (!(num(clip.id) > 0))
+                  continue;
+            var notes = readNotes(clip);
+            var cur = contentHash(notes);
+            if (cur !== p.content && cur !== p.reported) {
+                  p.reported = cur;
+                  reportEdit(key, notes, cur);
+                  status("MuseScore Link: " + p.clip + " edited in Live: its timing goes to MuseScore");
                   }
             }
       }
@@ -2988,7 +3085,7 @@ function timFill() {
 // (Node tests)
 if (typeof module !== "undefined")
       module.exports = { handle: handle, workStep: workStep, displayName: displayName, ids: ids, loosePort: loosePort,
-                         findTrack: findTrack, writeSong: writeSong, report: report, hashNotes: hashNotes,
+                         findTrack: findTrack, writeSong: writeSong, report: report, hashNotes: hashNotes, contentHash: contentHash, checkPlaced: checkPlaced,
                          checkEdits: checkEdits, edit: edit, looseTitle: looseTitle, applyParams: applyParams,
                          pollParams: pollParams, restoreSaved: restoreSaved, encodeSaved: encodeSaved, packLane: packLane,
                          unpackLane: unpackLane, flushStores: flushStores,

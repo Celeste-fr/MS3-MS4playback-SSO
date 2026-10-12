@@ -296,6 +296,8 @@ std::map<int, RouteNotes> clipNotes(const EventMap& events, const Timeline& tl, 
                               n.start = noteAt;
                               n.velocity = e.velo();
                               n.muted = e.note() ? e.isMuted() : false;
+                              n.source = e.note();
+                              n.utick = tick;
                               open[n.pitch].push_back(n);
                               }
                         else if (off) {
@@ -643,7 +645,7 @@ std::vector<QByteArray> packets(const Track& t, int generation)
       const int n = int(t.notes.size());
       const int chunks = (n + NOTES_PER_PACKET - 1) / NOTES_PER_PACKET;
       out.push_back(osc("/ms/track", { generation, t.key, t.portName, t.channel, t.part, t.clip, int(t.main), t.length,
-                                       n, chunks, t.hash }));
+                                       n, chunks, t.hash, t.base }));
       for (int c = 0; c < chunks; ++c) {
             QVariantList args { generation, t.key, c };
             const int end = std::min(n, (c + 1) * NOTES_PER_PACKET);

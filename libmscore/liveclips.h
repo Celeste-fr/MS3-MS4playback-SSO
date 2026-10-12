@@ -63,7 +63,10 @@
 //                                         through Live, the tracks' Monitor on In)
 //       /ms/song   gen:i bpm:f length:i cues:i chunks:i hash:i
 //       /ms/cues   gen:i chunk:i (time:i name:s) × n
-//       /ms/track  gen:i key:s port:s channel:i part:s clip:s main:i length:i notes:i chunks:i hash:i
+//       /ms/track  gen:i key:s port:s channel:i part:s clip:s main:i length:i notes:i chunks:i hash:i base:i
+//                                        (base: the clip's content as MuseScore knows it, the device's hash; the device
+//                                         doesn't write over a clip edited in Live since: it reports the edit instead;
+//                                         0, or left out by an older MuseScore: written)
 //       /ms/notes  gen:i key:s chunk:i  (pitch:i start:i length:i velocity:i mute:i) × n
 //       /ms/clear  gen:i key:s port:s channel:i part:s clip:s          (a route gone: its clip goes)
 //       /ms/params gen:i key:s lanes:i hash:i  (protocol 3: the route's plug-in parameter lanes follow; 0: none)
@@ -77,7 +80,11 @@
 //       /live/hello     session:s protocol:i        (on load, then every 2 s)
 //       /live/bye       session:s                   (the hub copy goes: deleted, its set closed)
 //       /live/resync                                (send everything again)
-//       /live/applied   key:s hash:i status:s track:s   (key "song" for the tempo and locators)
+//       /live/applied   key:s hash:i status:s track:s content:i   (key "song" for the tempo and locators; content: the
+//                                         clip's content hash read after writing; 0: not written, e.g. "edited in Live")
+//       /live/edited    key:s content:i notes:i chunks:i              (the clip changed in Live: its notes follow)
+//       /live/editnotes key:s content:i chunk:i (pitch:i start:i length:i velocity:i mute:i) × n   (units)
+//                                        (livetimingoverride.h: their timing edits become the notes' overrides)
 //       /live/papplied  key:s hash:i status:s track:s   (the parameter lanes: "ok", "missing: <titles>" …)
 //       /live/transport playing:i beat:f bpm:f      (~25 a second while playing, on each change)
 //---------------------------------------------------------
@@ -95,6 +102,7 @@
 namespace Ms {
 
 class EventMap;
+class Note;
 class Score;
 
 namespace SoundLib {
@@ -166,6 +174,10 @@ struct Note {
       bool timed { false };
       int playedStart { 0 };
       int playedEnd { 0 };
+      // the score's note it plays and its note-on's utick (a note of the score, not a carrier or keyswitch; not part of
+      // the clip): an edit of it in Live becomes the note's timing override (livetimingoverride.h)
+      const Ms::Note* source { nullptr };
+      int utick { 0 };
       bool operator==(const Note& o) const {
             return pitch == o.pitch && start == o.start && length == o.length && velocity == o.velocity && muted == o.muted;
             }
@@ -208,6 +220,9 @@ struct Track {
       int parameters { 0 };
       int highNotes { 0 };
       quint32 hash { 0 };           // of all that is drawn
+      // the clip's content as the device last read it after writing, or as MuseScore took Live's edits from it
+      // (/live/applied, /live/edited): the device writes over only that (0: MuseScore knows nothing: it writes)
+      qint32 base { 0 };
       // the automation lanes of plug-in parameters MuseScore plays (not those Live's set plays itself:
       // Automation::Lane::playedByLive), for the device to set on the track's plug-in (/ms/params)
       struct ParamLane {

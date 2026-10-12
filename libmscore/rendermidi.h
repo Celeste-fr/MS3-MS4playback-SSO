@@ -262,6 +262,7 @@ class MidiRenderer {
       void libraryPitchBends(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);
       void libraryTrackDelays(const Chunk&, EventMap* events);
+      void libraryTimingOverrides(const Chunk&, EventMap* events);      // livetimingoverride.h
       void libraryDelayLead(const Chunk&, EventMap* events);
 
    public:

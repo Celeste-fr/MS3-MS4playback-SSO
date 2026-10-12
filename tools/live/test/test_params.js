@@ -81,9 +81,9 @@ const buf = (s, name) => s.live.buffers[name];
 const papplied = (s, key) => s.hub.sent("/live/papplied").filter((m) => m[0] === key);
 const near = (a, b) => Math.abs(a - b) < 1e-6;
 
-test("the hub says protocol 9 (parameter lanes from 3 on, an arrangement clip's span from 6, velocity curves from 7, carriers only on a MuseScore clip's track from 8, written clips' timing from 9)", () => {
+test("the hub says protocol 10 (parameter lanes from 3 on, an arrangement clip's span from 6, velocity curves from 7, carriers only on a MuseScore clip's track from 8, written clips' timing from 9, timing set in Live from 10)", () => {
       const s = setUp();
-      assert.strictEqual(s.hub.sent("/live/hello")[0][1], 9);
+      assert.strictEqual(s.hub.sent("/live/hello")[0][1], 10);
       });
 
 test("two tracks: each copy fills its own tables (steps, the base before the first, the range) and takes its parameters", () => {

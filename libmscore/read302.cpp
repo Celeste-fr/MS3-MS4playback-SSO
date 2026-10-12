@@ -371,11 +371,13 @@ bool MasterScore::read(XmlReader& e)
       PhraseMark::read(this);       // the slurs that are phrase marks (slur.h), with their parts' copies
       MarcatoLevel::read(this);     // the marcatos' levels (articulation.h), likewise
       PerformanceTechnique::read(this);   // the notes' Performance techniques (performancetechnique.h), likewise
+      LiveTimingOverride::read(this);     // the notes' timing set in Live (livetimingoverride.h), likewise
       for (Excerpt* ex : excerpts()) {    // and each part's own lists (a part saved on its own has only those)
             if (ex->partScore()) {
                   PhraseMark::read(ex->partScore());
                   MarcatoLevel::read(ex->partScore());
                   PerformanceTechnique::read(ex->partScore());
+                  LiveTimingOverride::read(ex->partScore());
                   }
             }
       for (Staff*& s : staves())
