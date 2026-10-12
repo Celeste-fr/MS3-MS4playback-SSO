@@ -480,7 +480,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       bool searchMeasure(int i);
       bool searchPage(int i);
       bool searchRehearsalMark(const QString& s);
-      void gotoMeasure(Measure*);
+      void gotoMeasure(Measure*, int preferStaff = -1);     // preferStaff: select its first chord or rest
       void setFocusRect();
       void changeVoice(int voice);
       virtual void drawBackground(QPainter* p, const QRectF& r) const override;

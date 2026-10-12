@@ -5402,11 +5402,28 @@ bool ScoreView::searchRehearsalMark(const QString& s)
 
 //---------------------------------------------------------
 //   gotoMeasure
+//    selects the measure's first chord or rest: on preferStaff when it has one (its 4 voices; "rewind": the staff
+//    selected, so the selection and the automation lanes stay on that part; the owner, 2026-10-12: rewinding moved the
+//    lanes from the Celli to Violins 1), else top-down as in 3.6
 //---------------------------------------------------------
 
-void ScoreView::gotoMeasure(Measure* measure)
+void ScoreView::gotoMeasure(Measure* measure, int preferStaff)
       {
       adjustCanvasPosition(measure, state != ViewState::NORMAL);
+      if (preferStaff >= 0 && preferStaff < _score->nstaves()) {
+            for (Segment* segment = measure->first(SegmentType::ChordRest); segment; segment = segment->next(SegmentType::ChordRest)) {
+                  for (int track = preferStaff * VOICES; track < (preferStaff + 1) * VOICES; ++track) {
+                        Element* el = segment->element(track);
+                        if (!el || !el->isChordRest())
+                              continue;
+                        Element* e = el->isChord() ? static_cast<Element*>(toChord(el)->upNote()) : el;
+                        _score->select(e, SelectType::SINGLE, 0);
+                        _score->setUpdateAll();
+                        _score->update();
+                        return;
+                        }
+                  }
+            }
       int tracks = _score->nstaves() * VOICES;
       for (Segment* segment = measure->first(); segment; segment = segment->next()) {
             if (segment->segmentType() != SegmentType::ChordRest)

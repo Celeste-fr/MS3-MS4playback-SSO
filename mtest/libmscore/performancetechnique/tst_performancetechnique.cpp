@@ -12,6 +12,7 @@
 #include "audio/midi/event.h"
 #include "mtest/testutils.h"
 #include "libmscore/articulation.h"
+#include "libmscore/automation.h"
 #include "libmscore/chord.h"
 #include "libmscore/excerpt.h"
 #include "libmscore/glissando.h"
@@ -130,6 +131,17 @@ class TestPerformanceTechnique : public QObject, public MTest
                   }
             return keys;
             }
+      // duplicate.musicxml (a Violin, 4/4): C5 [E5 G5] A5(half) | C5 [E5 G5 B5] A5~A5 | D5 D5 D5 D5 | D5 D5 D5~D5 | rest
+      MasterScore* duplicateScore() { return readScore(DIR + "duplicate.musicxml"); }
+      // the note of the chord at tick on track 0, idx from the bottom
+      static Note* at(Score* score, int tick, int idx = 0)
+            {
+            Segment* s = score->tick2segment(Fraction::fromTicks(tick), true, SegmentType::ChordRest);
+            Element* e = s && s->tick().ticks() == tick ? s->element(0) : nullptr;
+            if (!e || !e->isChord() || idx >= int(toChord(e)->notes().size()))
+                  return nullptr;
+            return toChord(e)->notes()[size_t(idx)];
+            }
       // ms at 120 BPM (480 ticks a quarter)
       static double ms(int ticks) { return ticks * 500.0 / 480.0; }
       static QString fileText(const QString& name)
@@ -159,6 +171,8 @@ class TestPerformanceTechnique : public QObject, public MTest
       void avoidBadSamples();
       void onPerformancePatch();
       void ownTechnique();
+      void duplicateNoteValues();
+      void duplicateAutomation();
       };
 
 //---------------------------------------------------------
@@ -860,6 +874,177 @@ void TestPerformanceTechnique::ownTechnique()
       delete s;
       SoundLib::setCurrent(nullptr);
       SoundLib::setOutput(SoundLib::Output::MIDI);
+      }
+
+//---------------------------------------------------------
+//   duplicateNoteValues
+//    Ctrl+D over a time selection of bars (Automation::duplicateTimeSelection): each note's technique, attack,
+//    transition, velocity, join and Live timing override onto the note at the same place in the bars after (same track, offset, index in its chord from
+//    the bottom; Auto too); a note without one under it, or tied from the one before, left; one undo step each; the
+//    score's end
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::duplicateNoteValues()
+      {
+      MasterScore* s = duplicateScore();
+      QVERIFY(s);
+      Part* part = s->parts().front();
+      QCOMPARE(s->endTick().ticks(), 9600);
+      QVERIFY(at(s, 3360) && at(s, 3360)->tieBack());
+      QVERIFY(at(s, 7200) && at(s, 7200)->tieBack());
+      // bar 1's values, and bar 2's own (replaced, or left: B5 has no note under it in bar 1, nor has the tied A5)
+      s->startCmd();
+      at(s, 0)->undoChangeProperty(Pid::LIBRARY_TECHNIQUE, QString("Violins 1 - Performance|Legato"));
+      at(s, 0)->undoChangeProperty(Pid::PERFORMANCE_ATTACK, int(Attack::SPICCATO));
+      at(s, 0)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 90);
+      at(s, 480, 0)->undoChangeProperty(Pid::LIBRARY_JOIN, 25);
+      at(s, 480, 0)->undoChangeProperty(Pid::LIVE_START, 12.5);
+      at(s, 480, 0)->undoChangeProperty(Pid::LIVE_END, -30.0);
+      at(s, 480, 1)->undoChangeProperty(Pid::PERFORMANCE_TRANSITION, int(Transition::BOWED));
+      at(s, 960)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 70);
+      at(s, 1920)->undoChangeProperty(Pid::PERFORMANCE_TRANSITION, int(Transition::FINGERED));
+      at(s, 2400, 1)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 20);
+      at(s, 2400, 2)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 50);
+      at(s, 3360)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 33);
+      at(s, 5280)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 44);
+      s->endCmd();
+
+      QVERIFY(Automation::duplicateTimeSelection(s, part, 0, 1920) == std::make_pair(1920, 3840));
+      QCOMPARE(at(s, 1920)->libraryTechnique(), QString("Violins 1 - Performance|Legato"));
+      QCOMPARE(at(s, 1920)->performanceAttack(), Attack::SPICCATO);           // (after the technique: kept)
+      QCOMPARE(at(s, 1920)->performanceTransition(), Transition::AUTO);       // (Auto in bar 1)
+      QCOMPARE(at(s, 2400, 0)->liveStart(), 12.5);                             // (Live's timing override too)
+      QCOMPARE(at(s, 2400, 0)->liveEnd(), -30.0);
+      QVERIFY(at(s, 2400, 1)->libraryTechnique().isEmpty());
+      QCOMPARE(at(s, 1920)->libraryVelocity(), 90);
+      QCOMPARE(at(s, 2400, 0)->libraryJoin(), 25);
+      QCOMPARE(at(s, 2400, 1)->performanceTransition(), Transition::BOWED);
+      QCOMPARE(at(s, 2400, 1)->libraryVelocity(), 0);                          // (Auto in bar 1)
+      QCOMPARE(at(s, 2400, 2)->libraryVelocity(), 50);                         // (no third note in bar 1's chord)
+      QCOMPARE(at(s, 2880)->libraryVelocity(), 70);
+      QCOMPARE(at(s, 3360)->libraryVelocity(), 33);                            // (no note at its place in bar 1)
+      QCOMPARE(at(s, 1920)->libraryJoin(), PerformanceTechnique::JOIN_AUTO);
+
+      // again, bar 2 onto bar 3: a note tied from the one before isn't copied (its chain plays the first note's)
+      QVERIFY(Automation::duplicateTimeSelection(s, part, 1920, 3840) == std::make_pair(3840, 5760));
+      QCOMPARE(at(s, 3840)->performanceAttack(), Attack::SPICCATO);
+      QCOMPARE(at(s, 3840)->libraryVelocity(), 90);
+      QCOMPARE(at(s, 4320)->libraryJoin(), 25);                                // (the lowest note's: E5's)
+      QCOMPARE(at(s, 4800)->libraryVelocity(), 70);
+      QCOMPARE(at(s, 5280)->libraryVelocity(), 44);
+      // bar 3 onto bar 4: nor onto one
+      QVERIFY(Automation::duplicateTimeSelection(s, part, 3840, 5760) == std::make_pair(5760, 7680));
+      QCOMPARE(at(s, 6720)->libraryVelocity(), 70);
+      QCOMPARE(at(s, 7200)->libraryVelocity(), 0);
+
+      // each one undo step
+      s->undoRedo(true, 0);
+      QCOMPARE(at(s, 6720)->libraryVelocity(), 0);
+      QCOMPARE(at(s, 4800)->libraryVelocity(), 70);
+      s->undoRedo(true, 0);
+      QCOMPARE(at(s, 3840)->performanceAttack(), Attack::AUTO);
+      QCOMPARE(at(s, 3840)->libraryVelocity(), 0);
+      QCOMPARE(at(s, 1920)->libraryVelocity(), 90);
+      s->undoRedo(true, 0);
+      QCOMPARE(at(s, 1920)->performanceTransition(), Transition::FINGERED);
+      QCOMPARE(at(s, 1920)->performanceAttack(), Attack::AUTO);
+      QCOMPARE(at(s, 1920)->libraryVelocity(), 0);
+      QCOMPARE(at(s, 2400, 1)->libraryVelocity(), 20);
+      QCOMPARE(at(s, 2400, 1)->performanceTransition(), Transition::AUTO);
+      s->undoRedo(false, 0);
+      QCOMPARE(at(s, 1920)->libraryVelocity(), 90);
+
+      // the score's end: two bars from bar 3 have room for one (no measures added); from bar 5 none
+      const int measures = s->nmeasures();
+      QVERIFY(Automation::duplicateTimeSelection(s, part, 3840, 7680) == std::make_pair(7680, 9600));
+      QVERIFY(Automation::duplicateTimeSelection(s, part, 7680, 9600) == std::make_pair(-1, -1));
+      QCOMPARE(s->nmeasures(), measures);
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   duplicateAutomation
+//    the same over the part's automation lanes (Automation::Edit::duplicateSpan): the envelope copied as drawn (a ramp
+//    across the bar line split, the value before a lane's first point), the target bars' points replaced, the envelope
+//    after them as before; Ctrl+D again goes on; one undo step; cut at the score's end
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::duplicateAutomation()
+      {
+      using Automation::Curve;
+      using Automation::Lane;
+      using Automation::Point;
+      MasterScore* s = duplicateScore();
+      QVERIFY(s);
+      Part* part = s->parts().front();
+      Lane a, b, c;
+      a.target = "cc11";          // 0.2, a ramp 0.4 -> 1.0 from beat 3 of bar 1 to beat 3 of bar 2
+      a.points = { Point(0, 0.2, Curve::STEP), Point(960, 0.4, Curve::LINEAR), Point(2880, 1.0, Curve::STEP) };
+      b.target = "cc1";           // steps, one in bar 2 (replaced) and one in bar 3
+      b.points = { Point(0, 0.5, Curve::STEP), Point(480, 0.3, Curve::STEP), Point(2400, 0.9, Curve::STEP), Point(4000, 0.1, Curve::STEP) };
+      c.target = "cc2";           // a point in bar 2 only: bar 1 has its value (the lane's dashed line)
+      c.points = { Point(2000, 0.6, Curve::STEP) };
+      std::map<const Part*, Automation::PartLanes> all;
+      all[part] = { a, b, c };
+      QVERIFY(Automation::undoWrite(s, all));
+      auto laneOf = [s, part](const QString& t) {
+            for (const Lane& l : Automation::lanes(part, Automation::read(s)))
+                  if (l.target == t)
+                        return l;
+            return Lane();
+            };
+      auto same = [](double x, double y) { return std::fabs(x - y) < 1e-6; };
+
+      QVERIFY(Automation::duplicateTimeSelection(s, part, 0, 1920) == std::make_pair(1920, 3840));
+      Lane la = laneOf("cc11");
+      Lane lb = laneOf("cc1");
+      Lane lc = laneOf("cc2");
+      for (int t : { 0, 300, 960, 1200, 1500, 1800, 1919 }) {
+            QVERIFY2(same(la.valueAt(t + 1920), la.valueAt(t)), qPrintable(QString::number(t)));
+            QVERIFY2(same(lb.valueAt(t + 1920), lb.valueAt(t)), qPrintable(QString::number(t)));
+            }
+      QVERIFY(same(la.valueAt(1440 + 1920), 0.55));       // (the ramp's first half: 0.4 -> 0.7)
+      QVERIFY(same(la.valueAt(3840), 1.0));                // (after: as before)
+      QVERIFY(same(lb.valueAt(3840), 0.9));                // (bar 2's 0.9 at 2400 replaced, still in force from bar 3)
+      QVERIFY(same(lb.valueAt(4000), 0.1));
+      QCOMPARE(lb.points.size(), size_t(6));
+      QVERIFY(same(lc.valueAt(1920), 0.6));
+      QVERIFY(lc.extra.contains("edited"));
+
+      // Ctrl+D again: bar 2 onto bar 3
+      QVERIFY(Automation::duplicateTimeSelection(s, part, 1920, 3840) == std::make_pair(3840, 5760));
+      la = laneOf("cc11");
+      lb = laneOf("cc1");
+      for (int t : { 0, 300, 960, 1200, 1500, 1800, 1919 }) {
+            QVERIFY2(same(la.valueAt(t + 3840), la.valueAt(t)), qPrintable(QString::number(t)));
+            QVERIFY2(same(lb.valueAt(t + 3840), lb.valueAt(t)), qPrintable(QString::number(t)));
+            }
+      QVERIFY(same(lb.valueAt(5760), 0.1));                // (the point at 4000 replaced; its value after the copy)
+      QVERIFY(same(la.valueAt(6000), 1.0));
+
+      // one undo step each: lanes (and notes) together
+      s->undoRedo(true, 0);
+      QCOMPARE(laneOf("cc1").points.size(), size_t(6));
+      s->undoRedo(true, 0);
+      QVERIFY(same(laneOf("cc1").valueAt(2400), 0.9));
+      QVERIFY(same(laneOf("cc2").valueAt(1920), -1));
+
+      // the same value through both spans: unchanged
+      Lane d;
+      d.points = { Point(0, 0.3, Curve::STEP) };
+      QVERIFY(!Automation::Edit::duplicateSpan(d, 0, 1920, 9600));
+      QCOMPARE(d.points.size(), size_t(1));
+      // cut at the limit: two bars onto one, the ramp's first half, then back to the value it had
+      Lane e;
+      e.points = { Point(0, 0.0, Curve::LINEAR), Point(3840, 1.0, Curve::STEP) };
+      QVERIFY(Automation::Edit::duplicateSpan(e, 0, 3840, 5760));
+      QVERIFY(same(e.valueAt(3840), 0.0));
+      QVERIFY(same(e.valueAt(4800), 0.25));
+      QVERIFY(same(e.valueAt(5700), 0.5 * 1860 / 1920));
+      QVERIFY(same(e.valueAt(5760), 1.0));
+      // no room
+      QVERIFY(!Automation::Edit::duplicateSpan(e, 3840, 5760, 5760));
+      delete s;
       }
 
 QTEST_MAIN(TestPerformanceTechnique)

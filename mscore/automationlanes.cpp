@@ -145,6 +145,8 @@ void AutomationLanes::showLane(const Part* part, const QString& target, bool on)
 
 void AutomationLanes::selectionChanged()
       {
+      _timeOff = false;             // (the score's selection is the newer one)
+      _view->update();
       Score* s = score();
       if (!s || !enabled() || !s->lineMode())
             return;
@@ -526,6 +528,84 @@ double AutomationLanes::pixel() const
       return m > 0 ? 1.0 / m : 1.0;
       }
 
+double AutomationLanes::barX(int tick) const
+      {
+      Score* s = score();
+      Measure* prev = tick > 0 ? s->tick2measureMM(Fraction::fromTicks(tick - 1)) : nullptr;
+      if (prev && prev->endTick().ticks() == tick && prev->system())
+            return Automation::barLineX(prev);
+      Measure* m = s->tick2measureMM(Fraction::fromTicks(tick));
+      return m && m->system() ? m->canvasPos().x() : tickToX(tick);
+      }
+
+//---------------------------------------------------------
+//   the time selection
+//---------------------------------------------------------
+
+AutomationLanes::TimeSelection AutomationLanes::timeSelection() const
+      {
+      TimeSelection t;
+      Score* s = score();
+      if (!s || _timeOff || !enabled() || !s->lineMode())
+            return t;
+      const Selection& sel = s->selection();
+      if (!sel.isRange() || sel.staffStart() < 0 || sel.staffEnd() > s->nstaves() || sel.staffEnd() <= sel.staffStart())
+            return t;
+      const Part* part = s->staff(sel.staffStart())->part();
+      if (s->staff(sel.staffEnd() - 1)->part() != part)
+            return t;
+      bool shown = false;
+      for (const Row& r : rows())
+            shown = shown || r.part == part;
+      if (!shown)
+            return t;
+      // (rounded out to whole bars)
+      Measure* m1 = s->tick2measure(sel.tickStart());
+      Measure* m2 = sel.tickEnd() > sel.tickStart() ? s->tick2measure(Fraction::fromTicks(sel.tickEnd().ticks() - 1)) : m1;
+      if (!m1 || !m2)
+            return t;
+      t.part = part;
+      t.start = m1->tick().ticks();
+      t.end = m2->endTick().ticks();
+      t.staffStart = sel.staffStart();
+      t.staffEnd = sel.staffEnd();
+      return t;
+      }
+
+bool AutomationLanes::duplicateTimeSelection()
+      {
+      const TimeSelection t = timeSelection();
+      if (!t.valid())
+            return false;
+      Score* s = score();
+      if (seq)
+            seq->waitForRendering();      // (the background renderer reads the metaTag and the notes)
+      const std::pair<int, int> next = Automation::duplicateTimeSelection(s->masterScore(), t.part, t.start, t.end);
+      _cachedTag = QString("\x01");
+      if (next.first < 0) {
+            if (mscore)
+                  mscore->showMessage(tr("Duplicate: the score ends here"), 1500);
+            return true;
+            }
+      // the bars after selected: Ctrl+D again goes on
+      Measure* m1 = s->tick2measure(Fraction::fromTicks(next.first));
+      Measure* m2 = s->tick2measure(Fraction::fromTicks(next.second - 1));
+      if (m1 && m2) {
+            s->select(m1, SelectType::SINGLE, t.staffStart);
+            s->select(m2, SelectType::RANGE, t.staffEnd - 1);
+            s->setUpdateAll();
+            s->update();
+            if (mscore)
+                  mscore->endCmd();       // (the selection's views: the Inspector, the lanes …)
+            }
+      if (mscore)
+            mscore->showMessage(tr("Duplicated: bars %1-%2").arg(m1 ? m1->no() + 1 : 0).arg(m2 ? m2->no() + 1 : 0), 1500);
+      _notes->changed();
+      updateSpace();
+      _view->update();
+      return true;
+      }
+
 // the grid (fixed, set by Ctrl+1 / Ctrl+2): the beat of the measure at tick (1920 / the time signature's
 // denominator), halved per level below 0 (at least 1/64: 30 ticks); level 1: the measure
 int AutomationLanes::gridTicks(int tick) const
@@ -731,6 +811,15 @@ void AutomationLanes::paint(QPainter& p, const QRect& viewport)
       for (const Row& r : rs)
             if (r.rect.intersects(visible))
                   paintLane(p, r, visible);
+      // the time selection: a light band over its part's rows (as Live shows one)
+      const TimeSelection ts = timeSelection();
+      if (ts.valid()) {
+            const double xa = barX(ts.start);
+            const double xb = barX(ts.end);
+            for (const Row& r : rs)
+                  if (r.part == ts.part && r.rect.intersects(visible))
+                        p.fillRect(QRectF(QPointF(xa, r.rect.top()), QPointF(xb, r.rect.bottom())), QColor(47, 109, 181, 40));
+            }
       // the rubber band
       if (_drag == Drag::RUBBER && !_rubber.isEmpty()) {
             p.setPen(QPen(QColor(47, 109, 181), 1.0 * pixel(), Qt::DashLine));
@@ -966,6 +1055,8 @@ void AutomationLanes::select(const Row& r, const std::vector<int>& sel)
       _selPart = r.master;
       _selTarget = r.target;
       _sel = sel;
+      if (!sel.empty())
+            _timeOff = true;        // (points selected: Ctrl+D duplicates them, not the time selection)
       }
 
 void AutomationLanes::dropFocus()
@@ -1604,9 +1695,12 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
 
 bool AutomationLanes::wantsKey(const QKeyEvent* ev) const
       {
+      const Qt::KeyboardModifiers m = ev->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
+      // Ctrl+D over a time selection, the focus in the score or in a lane (MuseScore 3 has no Ctrl+D of its own)
+      if (ev->key() == Qt::Key_D && m == Qt::ControlModifier && timeSelection().valid())
+            return true;
       if (!_focus)
             return false;
-      const Qt::KeyboardModifiers m = ev->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier | Qt::AltModifier | Qt::MetaModifier);
       switch (ev->key()) {
             case Qt::Key_Delete:
             case Qt::Key_Backspace:
@@ -1630,6 +1724,8 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
       {
       if (!wantsKey(ev))
             return false;
+      if (ev->key() == Qt::Key_D && duplicateTimeSelection())
+            return true;
       if (NoteLane::isTarget(_selTarget) && (ev->key() == Qt::Key_Delete || ev->key() == Qt::Key_Backspace)) {
             _notes->resetSelected();      // (back to Auto)
             return true;

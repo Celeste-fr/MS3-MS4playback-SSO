@@ -7779,8 +7779,15 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   seq->seek(tick.ticks());
                   if (cv) {
                         Measure* m = cs->tick2measureMM(tick);
+                        // (on the staff selected: the selection and the automation lanes stay on its part)
+                        const Selection& sel = cs->selection();
+                        int staff = -1;
+                        if (sel.isRange())
+                              staff = sel.staffStart();
+                        else if (sel.element())
+                              staff = sel.element()->staffIdx();
                         if (m)
-                              cv->gotoMeasure(m);
+                              cv->gotoMeasure(m, staff);
                         }
                   if (playPanel)
                         playPanel->heartBeat(0, 0, 0);

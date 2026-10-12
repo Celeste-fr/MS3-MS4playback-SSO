@@ -10,6 +10,7 @@
 
 #include "automation.h"
 #include "partplayback.h"
+#include "performancetechnique.h"
 #include "part.h"
 #include "score.h"
 #include "undo.h"
@@ -21,6 +22,7 @@
 #include <functional>
 #include <set>
 #include <cmath>
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -1055,7 +1057,104 @@ std::vector<int> pastePoints(Lane& lane, int tick, const std::vector<Point>& cli
       return out;
       }
 
+bool duplicateSpan(Lane& lane, int start, int end, int limit)
+      {
+      const int len = end - start;
+      const int to = std::min(end + len, limit);
+      if (start < 0 || len <= 0 || to <= end)
+            return false;
+      const int cut = start + (to - end);         // the source's end: end, earlier at the score's end
+      auto any = [&lane](int a, int b) {          // a point in [a, b)
+            return std::any_of(lane.points.begin(), lane.points.end(), [a, b](const Point& p) { return p.tick >= a && p.tick < b; });
+            };
+      if (!any(start, cut) && !any(end, to))
+            return false;                         // (the same value through both, or nothing)
+      Lane w = lane;
+      auto split = [&w](int tick) {
+            const bool at = std::any_of(w.points.begin(), w.points.end(), [tick](const Point& p) { return p.tick == tick; });
+            if (!at && !w.points.empty() && w.points.front().tick < tick)
+                  addPoint(w, tick, w.valueAt(tick));
+            };
+      const bool before = !w.points.empty() && w.points.front().tick < start;
+      split(start);
+      split(cut);
+      std::vector<Point> pts;
+      for (size_t i = 0; i < w.points.size(); ++i) {
+            const Point& p = w.points[i];
+            if (p.tick < start || p.tick >= cut)
+                  continue;
+            if (p.tick == start && i + 1 < w.points.size() && w.points[i + 1].tick == start)
+                  continue;                       // (a jump at start: the value it jumps to)
+            Point q = p;
+            q.tick += len;
+            pts.push_back(q);
+            }
+      // before the lane's first point: its value (as the lane draws it)
+      if (!before && !w.points.empty() && (pts.empty() || pts.front().tick > end))
+            pts.insert(pts.begin(), Point(end, pts.empty() ? w.points.front().value : pts.front().value, Curve::STEP));
+      // a ramp arriving at the cut: as it arrives
+      if (!pts.empty() && pts.back().curve == Curve::LINEAR) {
+            auto a = std::find_if(w.points.begin(), w.points.end(), [cut](const Point& p) { return p.tick == cut; });
+            if (a != w.points.end()) {
+                  Point q = *a;
+                  q.tick = to;
+                  pts.push_back(q);
+                  }
+            }
+      const QString old = pointsHash(lane.points);
+      replaceSpan(lane, end, to, pts);
+      // (a step to the value already held in the copy changes nothing: left out)
+      for (size_t i = lane.points.size(); i-- > 1; ) {
+            const Point& p = lane.points[i];
+            const Point& q = lane.points[i - 1];
+            if (p.tick >= end && p.tick <= to && p.curve == Curve::STEP && q.curve == Curve::STEP
+                && std::fabs(p.value - q.value) < 1e-9)
+                  lane.points.erase(lane.points.begin() + long(i));
+            }
+      return pointsHash(lane.points) != old;
+      }
+
 }     // namespace Edit
+
+//---------------------------------------------------------
+//   duplicateTimeSelection
+//---------------------------------------------------------
+
+std::pair<int, int> duplicateTimeSelection(MasterScore* score, const Part* part, int start, int end)
+      {
+      if (!score || !part || start < 0 || end <= start)
+            return { -1, -1 };
+      const Part* master = PartPlaybackModes::masterPart(part);
+      const int limit = score->endTick().ticks();
+      const int to = std::min(end + (end - start), limit);
+      if (to <= end)
+            return { -1, -1 };
+      std::map<const Part*, PartLanes> all = read(score);
+      bool changed = false;
+      auto it = all.find(master);
+      if (it != all.end()) {
+            const QString now = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+            for (Lane& l : it->second)
+                  if (Edit::duplicateSpan(l, start, end, limit)) {
+                        l.extra["edited"] = now;            // (as the editor's edits: the Live conflict dialog shows it)
+                        changed = true;
+                        }
+            }
+      score->startCmd();
+      if (changed) {
+            const QString tag = write(score, all);
+            QMap<QString, QString> tags = score->metaTags();
+            if (tag.isEmpty())
+                  tags.remove(metaTag);
+            else
+                  tags.insert(metaTag, tag);
+            score->undo(new ChangeMetaTags(score, tags));
+            }
+      PerformanceTechnique::duplicateNoteValues(score, master, start, end, limit);
+      score->endCmd();
+      score->setPlaylistDirty();
+      return { end, to };
+      }
 
 }     // namespace Automation
 }     // namespace Ms

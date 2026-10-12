@@ -42,12 +42,16 @@
 //    set too); everything else then applies as for that technique (levels, onset, a Performance patch's attack and
 //    transition). A tie chain plays its first note's; a grace note its own. In the same metaTag ("technique"); a
 //    technique the part's patches don't have plays Auto. Auto: empty.
+//    Ctrl+D over a time selection of bars (mscore/automationlanes.h › Time selection) copies a note's technique, attack,
+//    transition, velocity, join and Live timing override (livetimingoverride.h) to the notes at the same places in the
+//    bars after (duplicateNoteValues).
 //---------------------------------------------------------
 
 #include <QString>
 
 namespace Ms {
 
+class Part;
 class Score;
 
 namespace PerformanceTechnique {
@@ -69,6 +73,14 @@ Transition transitionFromName(const QString& s);
 // the metaTag: to the notes after loading (and out of the tags), from them on saving; empty: none
 void read(Score* score);
 QString write(const Score* score);
+
+// Ctrl+D over a time selection (automation.h duplicateTimeSelection): each note's attack, transition, own velocity and
+// join in [start, end) on the part's tracks onto the note at its tick + (end - start) (before limit), same track, same
+// grace chord, same index in its chord from the bottom. A note found gets the source's values, Auto included (an attack
+// or transition first: Note::undoChangeProperty resets the own values, then they are set); none found, or either note
+// tied from the one before (a tie chain plays its first note's), left as it is. Undoable changes in the caller's
+// command (each note's linked ones too). Returns the notes changed
+int duplicateNoteValues(Score* score, const Part* part, int start, int end, int limit);
 
 }     // namespace PerformanceTechnique
 }     // namespace Ms
