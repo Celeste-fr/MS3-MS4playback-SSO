@@ -26,8 +26,12 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   and section balance M, against SSO's measured loudness at that CC1 (sso_cc1_curves.json, after the Long calibration
   fix, branch long-calibration). CC1 and CC11 move together (hairpins ramp both); the Performance gain follows hairpins;
   shorts' velocity no longer capped silently (CC11 covers the rest). **Target: the real player's full range** (the
-  owner). **ppp and fff: decide after seeing data** (the TU Berlin set has only pp and ff; the owner wants to see data
-  before choosing how to extend to ppp / fff).
+  owner). **ppp and fff: rule D** (the owner, 2026-10-12, after the data page
+  https://claude.ai/artifact/Lcohqt9KsWsHanfD1jxxmw): TU Berlin's pp / ff ("as softly / loudly as possible") are the
+  player's ppp / fff, the markings between them in 7 equal dB steps ((ff - pp) / 7 at each pitch; e.g. Celli A3 72.3 ->
+  91.4 dB, 2.7 dB a step), relative to mp, where M was set. Rejected: A (beyond the measured extremes), C (ppp = pp,
+  fff = ff: two pairs of markings alike), E (Edinburgh's 30 dB exceeds the cellists' measured 19.1). No source measures
+  ff against fff (only pp / ff exist for strings), so the steps' sizes come from the rule; stage B adds the tone.
 - **Stage B, tone:** after A ("important for realism"): CC1 / short velocity chosen so the tone matches the dynamic
   (brightness change pp -> ff of the real instrument, TU Berlin spectral centroids, against SSO's measured per CC1 /
   velocity), loudness then entirely CC11.
