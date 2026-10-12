@@ -242,7 +242,16 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 **Live** (LIVE.md): Create Live Set writes the **plain set** (the owner, 2026-10-06: no automatic adjustments; since
 2026-10-07 a MuseScore Link copy on each technique track, `PLAIN_LINKED`, for clip editing; `plainliveset.*`: section group › part group › a Kontakt track per patch + a MIDI track per technique carrying
 its own switch, MIDI To the Kontakt; XML in `livesetxml.h`, `livesetclips.cpp`; `LiveSetKind`; LIVE.md › The plain
-set lists what Live hasn't confirmed); read back by `livetracks.*` (track keys in the Info text; metaTag `liveTracks`: the
+set lists what Live hasn't confirmed; **its technique clips hold the written notes** (the owner, 2026-10-11): a second
+render without the timing in seconds (`MidiRenderer::setWrittenTiming`: no onset early, keepMs, cut, joins), each note
+keeping its played times, which `libmscore/livetiming.*` puts back at playback: the technique track's Track Delay its
+lookahead earlier, its MuseScore Link copy delaying each note (the `"Timing"` store, MuseScoreLink.js › Written clips;
+LIVE.md › The plain set › Written clips); the Controllers clip stays at played times; *Live plays the score*'s clips
+are still played (no Track Delay through Live's API: open), but **timing set in Live** stays (the owner, 2026-10-11): a
+note moved or resized in such a clip keeps that timing as its override (`libmscore/livetimingoverride.*`: ms after its
+written start / end, metaTag `liveTimingOverrides`, Inspector › Note › Start / End from Live; the device reports an edited
+clip and doesn't write over it, `/ms/track` `base`, protocol 10; played by `MidiRenderer::libraryTimingOverrides`, so
+MuseScore plays it too; LIVE.md › Live plays the score › Timing you set in Live); read back by `livetracks.*` (track keys in the Info text; metaTag `liveTracks`: the
 written hashes, other tracks' mixer and its automation). Live plays the score as clips (`liveclips.*`), the route set (`livesetwriter.*`,
 `livesetexport.*`), automation from a set (`liveset.*`), clip tabs that edit Live clips (`liveclipmodel.*`,
 `liveclipedit.*`, `cliptempo.*`), the Max for Live device and Control Surface script (`tools/live/`), Live helpers
@@ -322,12 +331,12 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   2026-10-09 (UNMEASURED 9, CAPPED 2, ARRIVAL 1 fail: the Celli's 2nd note, bar 1, LEVEL STEP 12 info).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
   violas (bars 8-16), violins and celli, UNMEASURED for every Long (Rachm.) / Spiccato / Long outside the fit files.
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 26 passed (2026-10-11: verifyExportMix, the verification renders at the patch volumes; plainTuned checks the glided bend envelope, and bendSmoothing's steps; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): NN passed (2026-10-11: verifyExportMix, the verification renders at the patch volumes; liveTimingOverride, timing set in Live; plainWritten, three rows: written clips + Track Delay + the device's delays play every note-on / note-off of MuseScore's render; `dumpEvents` with `MS_DUMP_TIMING=<file>` writes each plain-set note's written and played times; plainTuned checks the glided bend envelope; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
   calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks, `MS_DUMP_LIVE` as Live's clips (plus kontakts.txt, routes.txt and multis.txt: the
   plain set's Kontakt instances and each slot's Tune); every dump writes routemap.txt (route, lane, cents, bend range)
-  and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 61 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
+  and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 62 with init and cleanup (2026-10-11, clipsTimingFromLive; 2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches; 2026-10-08:
   allArticulations, textLevel, calibrated), `tst_performancetechnique` 16 (2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
   rendered events, file round trip, undo; own velocity / join, the trace, the lanes' model `lanes`), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without

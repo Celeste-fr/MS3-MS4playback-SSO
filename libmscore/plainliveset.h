@@ -30,8 +30,13 @@
 //                  with the technique's clip, so a note moved to another technique's track plays that one
 //
 //   The input is MuseScore's own render (MidiRenderer, as "Live plays the score" renders: setForLiveClips), so the
-//   techniques are the ones MuseScore plays; the timing and level adjustments are whatever the playback settings say
-//   (off by default since 2026-10-06: docs/PLAYBACK_SETTINGS.md). Microtones (the owner, 2026-10-10: "I will not accept
+//   techniques are the ones MuseScore plays; the level adjustments are whatever the playback settings say
+//   (docs/PLAYBACK_SETTINGS.md). The technique tracks' clips hold the written notes (the owner, 2026-10-11: "Live clips
+//   hold the WRITTEN notes"; a second render at written times, MidiRenderer::setWrittenTiming): the timing MuseScore
+//   gives them (early starts by onset, keepMs, the note before cut, Performance joins) is put back at playback, the
+//   technique track's Track Delay its lookahead earlier and its MuseScore Link copy delaying each note into place
+//   (livetiming.h; Technique::timing). The Kontakt track's Controllers clip keeps the controllers where MuseScore plays
+//   them (a note's dynamic and CC11 before its played note-on, a bend at it). Microtones (the owner, 2026-10-10: "I will not accept
 //   losing microtones"): Live has no varispeed, so Live's routes (SoundLib::routes forLive) give a patch that doesn't
 //   bend a copy per tuning, each fixed: its own Kontakt track (Kontakt::cents, named "Violins 1 (−50 cents)"), whose
 //   state the export tunes by Kontakt's own Tune (KontaktSetup::withTune; measured with SSO 2026-10-10: ±50 cents
@@ -63,6 +68,7 @@
 #include <QStringList>
 
 #include "liveclips.h"
+#include "livetiming.h"
 #include "livesetwriter.h"
 #include "trackdelays.h"
 
@@ -84,6 +90,9 @@ struct Technique {
                                           // name when it doesn't switch
       int value { -1 };                   // its switch value (CC value, keyswitch pitch, program); -1: none
       std::vector<LiveClips::Note> notes; // by start
+      // the notes as MuseScore plays them (layout with a written render, livetiming.h): the track's Track Delay is
+      // timing.lookaheadMs earlier, the MuseScore Link copy on it delays each note into place
+      LiveTiming::Track timing;
       };
 
 // a controller's (or the pitch bend's) value from each time on
@@ -159,8 +168,11 @@ QString tuningName(const Kontakt& k);
 // the section of an instrument id (instruments.xml's group, a few merged: the percussion groups are "Percussion")
 QString sectionName(const QString& instrumentId);
 
+// events: the render as played (MidiRenderer::setForLiveClips); written: the same render at written times
+// (MidiRenderer::setWrittenTiming, the owner, 2026-10-11: Live's clips hold the written notes), whose notes the
+// techniques get, each with its played times from events (Technique::timing); nullptr: the played notes
 Layout layout(const Score* score, const SoundLib::Library& library, const EventMap& events,
-              const LiveClips::Timeline& tl);
+              const LiveClips::Timeline& tl, const EventMap* written = nullptr);
 
 // the value a technique's switch controller rests at between its notes: the lowest the patch's articulations don't use
 // (see switchClips)

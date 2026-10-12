@@ -316,20 +316,24 @@ function loadDevice(live, shared, deviceId) {
                   },
             Buffer: function(name) {
                   const b = live.buffers[name] = live.buffers[name] || { size: 0, data: [] };
-                  this.send = function(msg, n) {
+                  this.send = function(msg, n, channels) {
                         if (msg !== "sizeinsamps")
                               throw new Error("buffer~ " + msg);
                         b.size = Number(n);
-                        b.data = new Array(b.size).fill(0);
+                        b.channels = Number(channels) || 1;
+                        b.chans = [];
+                        for (let c = 0; c < b.channels; ++c)
+                              b.chans.push(new Array(b.size).fill(0));
+                        b.data = b.chans[0];
                         };
                   this.poke = function(ch, frame, values) {
-                        if (ch !== 1)
+                        if (!(ch >= 1 && ch <= (b.channels || 1)))
                               throw new Error("poke channel " + ch);
                         const v = Array.isArray(values) ? values : [values];
                         if (frame < 0 || frame + v.length > b.size)
                               throw new Error("poke past the end of " + name);
                         for (let i = 0; i < v.length; ++i)
-                              b.data[frame + i] = v[i];
+                              b.chans[ch - 1][frame + i] = v[i];
                         };
                   this.framecount = function() { return b.size; };
                   },

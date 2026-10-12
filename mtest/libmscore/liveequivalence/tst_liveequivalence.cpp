@@ -41,6 +41,9 @@
 #include "libmscore/livesetxml.h"
 #include "libmscore/liveset.h"
 #include "libmscore/livetracks.h"
+#include "libmscore/livetiming.h"
+#include "libmscore/livetimingoverride.h"
+#include "libmscore/note.h"
 #include "libmscore/measure.h"
 #include "libmscore/plainliveset.h"
 #include "libmscore/part.h"
@@ -106,8 +109,11 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSetLinked();
       void plainSetReadBack();
       void plainSetTrackDelays();
+      void plainWritten_data();
+      void plainWritten();
       void delayedTrackLevel();
       void verifyExportMix();
+      void liveTimingOverride();
       void livePerformanceLevel();
       void liveContextLevel();
       void liveSectionBalance();
@@ -2100,6 +2106,346 @@ void TestLiveEquivalence::plainSetTrackDelays()
       }
 
 //---------------------------------------------------------
+//   plainWritten
+//    the plain set's clips hold the written notes (the owner, 2026-10-11), their timing put back at playback
+//    (livetiming.h): each technique track's Track Delay is its lookahead earlier, the MuseScore Link copy on it delays
+//    each note into place. Proven on the played result: every note-on and note-off MuseScore plays (its own render,
+//    not the pairing) comes out of the clips, the Track Delay and the device's delays at its time (within a unit:
+//    the delays are kept to 0.01 ms). legato-early.musicxml (held notes early by their pitch's onset, capped by
+//    keepMs, the note before cut at the early start; a legato patch's transitions on the beat) and
+//    onset-longer.musicxml (an onset longer than the notes: every note capped); by pitch and by the median
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainWritten_data()
+      {
+      QTest::addColumn<QString>("file");
+      QTest::addColumn<QString>("byPitch");
+      QTest::newRow("legato-early by pitch") << "legato-early.musicxml" << "1";
+      QTest::newRow("legato-early median") << "legato-early.musicxml" << "0";
+      QTest::newRow("onset-longer") << "onset-longer.musicxml" << "1";
+      }
+
+void TestLiveEquivalence::plainWritten()
+      {
+      QFETCH(QString, file);
+      QFETCH(QString, byPitch);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "heldNotes/byPitch", byPitch } });
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long' onset='84:150 72:50 60:200'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccato staccatissimo' onset='8'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' onset='100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + file);
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto render = [score](bool written) {
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setWrittenTiming(written);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      const EventMap played = render(false);
+      const EventMap written = render(true);
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+
+      // MuseScore's played note-ons and note-offs, by route and key (units): what Live must play
+      std::multiset<std::tuple<int, int, int, bool>> want;          // (route, key, units, on)
+      for (const auto& te : played) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF))
+                  continue;
+            want.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), e.type() == ME_NOTEON && e.velo() > 0));
+            }
+      // what the set plays: each written note at its written place, the technique track's Track Delay (-lookahead) and
+      // the device's delays (LiveTiming::playedBy)
+      std::multiset<std::tuple<int, int, int, bool>> got;
+      int notes = 0, early = 0, exceptions = 0, onGrid = 0;
+      double maxLook = 0;
+      for (const PlainLiveSet::Section& s : l.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                        for (const PlainLiveSet::Technique& t : k.techniques) {
+                              QCOMPARE(t.timing.offsLate, 0);
+                              maxLook = std::max(maxLook, t.timing.lookaheadMs);
+                              exceptions += int(t.timing.exceptions.size());
+                              for (const LiveClips::Note& n : t.notes) {
+                                    ++notes;
+                                    QVERIFY(n.timed);
+                                    early += n.playedStart < n.start ? 1 : 0;
+                                    const std::pair<double, double> at = LiveTiming::playedBy(t.timing, n, tl.bpm);
+                                    got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.first)), true));
+                                    got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.second)), false));
+                                    QVERIFY2(std::fabs(at.first - n.playedStart) <= 0.5 && std::fabs(at.second - n.playedEnd) <= 0.5,
+                                             qPrintable(QString("%1 at %2: %3 / %4 against %5 / %6").arg(t.name).arg(n.start)
+                                                        .arg(at.first).arg(at.second).arg(n.playedStart).arg(n.playedEnd)));
+                                    }
+                              }
+      // the clips' notes are the written render's: every note-on of it on its tick
+      int writtenOns = 0;
+      for (const auto& te : written) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch() || e.type() != ME_NOTEON || e.velo() == 0)
+                  continue;
+            ++writtenOns;
+            for (const PlainLiveSet::Section& s : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : s.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                              for (const PlainLiveSet::Technique& t : k.techniques)
+                                    for (const LiveClips::Note& n : t.notes)
+                                          if (n.pitch == e.pitch() && n.start == tl.units(te.first)
+                                              && te.first == e.note()->chord()->tick().ticks())
+                                                ++onGrid;
+            }
+      QCOMPARE(notes, writtenOns);
+      QVERIFY(onGrid >= notes);           // (each written note-on is a chord's tick: on the grid)
+      QVERIFY(early > 0);                 // (the score has early notes: the test tests something)
+      QVERIFY(maxLook > 0);
+      if (byPitch == "1")
+            QVERIFY(exceptions > 0);      // (by pitch, capped, cut: the device's per-note delays)
+      // Live plays what MuseScore plays, note for note (within a unit: the delays' 0.01 ms)
+      QCOMPARE(got.size(), want.size());
+      auto g = got.begin();
+      for (auto w = want.begin(); w != want.end(); ++w, ++g) {
+            QCOMPARE(std::get<0>(*g), std::get<0>(*w));
+            QCOMPARE(std::get<1>(*g), std::get<1>(*w));
+            QVERIFY2(std::abs(std::get<2>(*g) - std::get<2>(*w)) <= 1, qPrintable(QString("key %1: %2 against %3")
+                     .arg(std::get<1>(*w)).arg(std::get<2>(*g)).arg(std::get<2>(*w))));
+            }
+
+      // the set: the technique tracks' Track Delay the lookahead earlier, the record on their MuseScore Link copy
+      LiveSetWriter::Spec spec;
+      spec.tracks = PlainLiveSet::tracks(l, true);
+      int records = 0;
+      for (const LiveSetWriter::Track& t : spec.tracks) {
+            if (t.midiTo < 0 || t.tuningCopy)
+                  continue;
+            QCOMPARE(t.delayMs, -t.lookaheadMs);
+            if (!t.linkTiming.empty()) {
+                  ++records;
+                  QCOMPARE(t.linkTiming[0], 1.0);
+                  QCOMPARE(t.linkTiming[1], t.lookaheadMs);
+                  QVERIFY(LiveSetWriter::linkBlob(9001, &t).contains("\"Timing\" : [ \"msl-timing\", 1, "));
+                  }
+            }
+      QVERIFY(records > 0);
+      // without the device (the plain set unlinked) the clips are the same; no record; the Track Delay the most common
+      // early start
+      for (const LiveSetWriter::Track& t : PlainLiveSet::tracks(l, false)) {
+            QVERIFY(t.linkTiming.empty());
+            if (t.midiTo >= 0 && !t.tuningCopy)
+                  QCOMPARE(t.delayMs, -t.lookaheadMs);
+            }
+      // read back: the technique's own delay (0), not the lookahead
+      const QByteArray x = LiveSetWriter::xml(spec);
+      QCOMPARE(LiveSetWriter::validate(x), QString());
+      const LiveSet::Set set = LiveSet::parse(x);
+      QVERIFY(set.error.isEmpty());
+      LiveTracks::Data data;
+      data.written = LiveTracks::written(score, spec.tracks, set);
+      const LiveTracks::Data again = LiveTracks::fromJson(LiveTracks::toJson(data));
+      bool kept = false;
+      for (const auto& w : again.written)
+            kept |= w.second.lookahead > 0;
+      QVERIFY(kept);
+      const std::vector<LiveSet::PartInfo> parts = LiveSet::partInfos(score, QStringList());
+      LiveTracks::Import im = LiveTracks::import(score, set, parts, "a.als", QDateTime(), again);
+      QCOMPARE(LiveTracks::delaysTag(score, im), TrackDelays::write(score, TrackDelays::read(score)));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveTimingOverride
+//    timing set in Live (livetimingoverride.h; the owner, 2026-10-11: "if I manually adjust the timings in Live, it
+//    stays overridden like that"): a note of a "Live plays the score" clip moved earlier and lengthened in Live becomes
+//    the note's override; the clip rendered again holds it where Live has it (within half a tick), every other note as
+//    it was, so the next push doesn't move it back; MuseScore's own playback plays every note-on and note-off where
+//    the clip has it (Live and MuseScore sound alike); pushed again and read back unchanged, nothing new; the override
+//    is relative to the written note (the automatic onsets off: the note stays, the others move); saved in the metaTag
+//    and read back; cleared (the Inspector's reset): as before, and no metaTag
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveTimingOverride()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long' onset='84:150 72:50 60:200'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccato staccatissimo' onset='8'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' onset='100'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto render = [](MasterScore* sc, bool forClips) {
+            EventMap events;
+            MidiRenderer r(sc);
+            r.setForLiveClips(forClips);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      auto clips = [&](MasterScore* sc) { return LiveClips::tracks(sc, *lib, render(sc, true), QStringList(), tl); };
+      auto real = [](const std::vector<LiveClips::Note>& v) {
+            std::vector<LiveClips::Note> o;
+            for (const LiveClips::Note& n : v)
+                  if (n.pitch < LiveClips::CARRIER_LOW && n.source)
+                        o.push_back(n);
+            return o;
+            };
+      auto text = [](const std::vector<LiveClips::Note>& v) {
+            QStringList l;
+            for (const LiveClips::Note& n : v)
+                  l << QString("%1@%2+%3v%4").arg(n.pitch).arg(n.start).arg(n.length).arg(n.velocity);
+            return l.join(" ");
+            };
+      const std::vector<LiveClips::Track> before = clips(score);
+      // the route with the most notes, a note in its second half (after the tempo change: 120 bpm, 4 units a tick)
+      size_t ti = 0;
+      for (size_t k = 0; k < before.size(); ++k)
+            if (real(before[k].notes).size() > real(before[ti].notes).size())
+                  ti = k;
+      const LiveClips::Track& t = before[ti];
+      const std::vector<LiveClips::Note> was = real(t.notes);
+      QVERIFY(was.size() >= 6);
+      const size_t pick = was.size() * 2 / 3;
+      size_t i = 0;
+      while (!(t.notes[i].pitch == was[pick].pitch && t.notes[i].start == was[pick].start))
+            ++i;
+      const Note* note = t.notes[i].source->firstTiedNote();
+      const int earlier = 120;                  // units: 31.25 ms at Live's 60 bpm
+      const int longer = 200;
+      std::vector<LiveClips::Note> live = t.notes;
+      live[i].start -= earlier;
+      live[i].length += earlier + longer;
+      const int liveStart = live[i].start;
+      const int liveEnd = live[i].start + live[i].length;
+
+      const LiveTimingOverride::Result r = LiveTimingOverride::fromLive(score, tl, t.notes, live);
+      QCOMPARE(int(r.edits.size()), 1);
+      QCOMPARE(r.other, 0);
+      QCOMPARE(r.unchanged, int(was.size()) - 1);
+      QCOMPARE(r.edits[0].note, note);
+      score->startCmd();
+      QCOMPARE(LiveTimingOverride::apply(r), 2);
+      score->endCmd();
+      QVERIFY(LiveTimingOverride::isSet(note->liveStart()) && LiveTimingOverride::isSet(note->liveEnd()));
+
+      // the clip again: the note where Live has it, every other note as it was
+      auto check = [&](const std::vector<LiveClips::Track>& tracks, bool movedThere) {
+            const std::vector<LiveClips::Note> now = real(tracks[ti].notes);
+            QCOMPARE(int(now.size()), int(was.size()));
+            for (size_t k = 0; k < was.size(); ++k) {
+                  if (k == pick && movedThere) {
+                        QVERIFY2(std::abs(now[k].start - liveStart) <= 5 && std::abs(now[k].start + now[k].length - liveEnd) <= 5,
+                                 qPrintable(text(now) + " / " + QString("%1-%2").arg(liveStart).arg(liveEnd)));
+                        continue;
+                        }
+                  QVERIFY2(now[k].pitch == was[k].pitch && now[k].start == was[k].start && now[k].length == was[k].length
+                           && now[k].velocity == was[k].velocity, qPrintable(text(now) + " / " + text(was)));
+                  }
+            };
+      const std::vector<LiveClips::Track> after = clips(score);
+      check(after, true);
+
+      // MuseScore's playback plays every note-on and note-off where the clips have them (by route, key, units)
+      std::multiset<std::tuple<int, int, int, bool>> played, inClips;
+      for (const auto& te : render(score, false)) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF) || tl.units(te.first) < 64
+                || e.pitch() >= LiveClips::CARRIER_LOW)
+                  continue;
+            played.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), e.type() == ME_NOTEON && e.velo() > 0));
+            }
+      for (const LiveClips::Track& c : after)
+            for (const LiveClips::Note& n : c.notes) {
+                  if (n.pitch >= LiveClips::CARRIER_LOW || !n.source)
+                        continue;         // (at the clip's start a note waits for its carriers: left out, as above)
+                  if (n.start >= 64)
+                        inClips.insert(std::make_tuple(c.port * 16 + c.channel - 1, n.pitch, n.start, true));
+                  if (n.start + n.length >= 64)
+                        inClips.insert(std::make_tuple(c.port * 16 + c.channel - 1, n.pitch, n.start + n.length, false));
+                  }
+      {
+      QStringList diff;
+      for (const auto& x : played)
+            if (!inClips.count(x))
+                  diff << QString("MuseScore %1 key %2 at %3 %4").arg(std::get<0>(x)).arg(std::get<1>(x)).arg(std::get<2>(x)).arg(std::get<3>(x) ? "on" : "off");
+      for (const auto& x : inClips)
+            if (!played.count(x))
+                  diff << QString("Live %1 key %2 at %3 %4").arg(std::get<0>(x)).arg(std::get<1>(x)).arg(std::get<2>(x)).arg(std::get<3>(x) ? "on" : "off");
+      QVERIFY2(diff.isEmpty() && inClips.size() == played.size(), qPrintable(diff.join("; ")));
+      }
+
+      // pushed again and read back as written: nothing new
+      const LiveTimingOverride::Result again = LiveTimingOverride::fromLive(score, tl, after[ti].notes, after[ti].notes);
+      QVERIFY(again.edits.empty() && again.other == 0);
+
+      // relative to the written note: without the automatic onsets the other notes move, the overridden one stays
+      Playback::setIniValuesForTest({ { "heldNotes/early", "0" } });
+      {
+      const std::vector<LiveClips::Note> now = real(clips(score)[ti].notes);
+      QVERIFY(std::abs(now[pick].start - liveStart) <= 5 && std::abs(now[pick].start + now[pick].length - liveEnd) <= 5);
+      bool othersMoved = false;
+      for (size_t k = 0; k < was.size(); ++k)
+            othersMoved |= k != pick && now[k].start != was[k].start;
+      QVERIFY(othersMoved);
+      }
+      Playback::setIniValuesForTest({});
+
+      // saved (the metaTag) and read back
+      QVERIFY(saveScore(score, "liveTimingOverride.mscx"));
+      QFile f("liveTimingOverride.mscx");
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QVERIFY(f.readAll().contains("<metaTag name=\"liveTimingOverrides\">"));
+      f.close();
+      MasterScore* back = readCreatedScore("liveTimingOverride.mscx");
+      QVERIFY(back);
+      back->rebuildMidiMapping();
+      QCOMPARE(LiveTimingOverride::count(back), 1);
+      QCOMPARE(text(real(clips(back)[ti].notes)), text(real(after[ti].notes)));
+      delete back;
+
+      // cleared (the Inspector's reset, one undo step): as before, and no metaTag
+      score->startCmd();
+      const_cast<Note*>(note)->undoChangeProperty(Pid::LIVE_START, note->propertyDefault(Pid::LIVE_START));
+      const_cast<Note*>(note)->undoChangeProperty(Pid::LIVE_END, note->propertyDefault(Pid::LIVE_END));
+      score->endCmd();
+      QCOMPARE(LiveTimingOverride::count(score), 0);
+      check(clips(score), false);
+      QVERIFY(saveScore(score, "liveTimingOverride.mscx"));
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QVERIFY(!f.readAll().contains("liveTimingOverrides"));
+      f.close();
+      QFile::remove("liveTimingOverride.mscx");
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   delayedTrackLevel
 //    a technique's track level (its notes' CC11) moves with the technique's track delay: played, each CC11 at its
 //    delayed note-on; in the plain set, the CC11 lane's point (the Kontakt track, not delayed by the technique) that
@@ -2738,7 +3084,8 @@ void TestLiveEquivalence::liveTracksJson()
 //    (<route> museScore.txt) and the MIDI the device makes of the clip (<route> live.txt) as lines "seconds type a b"
 //    (on, off, cc <n> <value>, pb <14-bit> 0), for replaying both through one plug-in instance elsewhere (the kthost
 //    on the Windows VM: LIVE.md › Measured with SSO). MS_DUMP_LIVE: rendered as Live's clips and sets are (Live's
-//    routes: a copy per tuning), with kontakts.txt (the plain set's Kontakts) and routes.txt (the hosted routes)
+//    routes: a copy per tuning), with kontakts.txt (the plain set's Kontakts) and routes.txt (the hosted routes);
+//    MS_DUMP_TIMING=<file>: each plain-set note's written and played times and the device's delays (livetiming.h)
 //---------------------------------------------------------
 
 void TestLiveEquivalence::dumpEvents()
@@ -2764,6 +3111,54 @@ void TestLiveEquivalence::dumpEvents()
       score->rebuildMidiMapping();
       if (qEnvironmentVariableIsSet("MS_DUMP_SETTINGS"))         // (the score's playback settings, e.g. heldNotes/byPitch=0)
             score->setMetaTag(Playback::metaTag, qEnvironmentVariable("MS_DUMP_SETTINGS"));
+      // MS_DUMP_TIMING=<file>: written clips (livetiming.h), each library note of the plain set (Live's routes) as
+      // "part|kontakt|technique|pitch|written on|written off|played on|played off|lookahead|device on|device off" (ms; the
+      // device's delays as playedBy gives them), to measure what Track Delay alone (without the device) would play
+      if (qEnvironmentVariableIsSet("MS_DUMP_TIMING")) {
+            auto render = [score](bool written) {
+                  EventMap ev;
+                  MidiRenderer r(score);
+                  r.setForLiveClips(true);
+                  r.setWrittenTiming(written);
+                  SynthesizerState ss;
+                  MidiRenderer::Context ctx(ss);
+                  ctx.metronome = false;
+                  ctx.renderHarmony = true;
+                  for (int utick = 0;;) {         // (as LiveClipsLink::renderEvents: chunk by chunk)
+                        const MidiRenderer::Chunk c = r.getChunkAt(utick);
+                        if (!c)
+                              break;
+                        r.renderChunk(c, &ev, ctx);
+                        utick = c.utick2();
+                        }
+                  return ev;
+                  };
+            const EventMap played = render(false), written = render(true);
+            const LiveClips::Timeline tl = LiveClips::timeline(score);
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+            QStringList lines;
+            auto ms = [&tl](double units) { return QString::number(LiveTiming::unitsToMs(units, tl.bpm), 'f', 3); };
+            for (const PlainLiveSet::Section& s : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : s.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                              for (const PlainLiveSet::Technique& t : k.techniques)
+                                    for (const LiveClips::Note& n : t.notes) {
+                                          double on = t.timing.onMs, off = t.timing.offMs;
+                                          for (const LiveTiming::Exception& e : t.timing.exceptions)
+                                                if (e.start == n.start && e.pitch == n.pitch) {
+                                                      on = e.onMs;
+                                                      off = e.offMs;
+                                                      }
+                                          lines << QStringList({ p.name, k.patch + PlainLiveSet::tuningName(k), t.name,
+                                                                 QString::number(n.pitch), ms(n.start), ms(n.start + n.length),
+                                                                 ms(n.playedStart), ms(n.playedEnd),
+                                                                 QString::number(t.timing.lookaheadMs, 'f', 2),
+                                                                 QString::number(on, 'f', 2), QString::number(off, 'f', 2) }).join("|");
+                                          }
+            QFile tf(qEnvironmentVariable("MS_DUMP_TIMING"));
+            QVERIFY(tf.open(QIODevice::WriteOnly | QIODevice::Text));
+            tf.write((lines.join("\n") + "\n").toUtf8());
+            }
       EventMap events;
       std::vector<MidiRenderer::LibTrace> trace;                  // (trace.txt: each library note's choice and glide)
       if (qEnvironmentVariableIsSet("MS_DUMP_CHUNKED")) {         // (as Seq plays it: 10-measure chunks, each in its own map)

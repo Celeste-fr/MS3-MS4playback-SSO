@@ -81,6 +81,7 @@ class MidiRenderer {
       QString partControllers;                              // the parts' library controllers as last read
       QString partAutomation;                               // the parts' automation lanes as last read
       bool forLiveClips { false };
+      bool writtenTiming { false };                         // setWrittenTiming
 
       // parts played by an external sound library (soundlibrary.h, MS4 note model only)
       struct LibPart {
@@ -261,6 +262,7 @@ class MidiRenderer {
       void libraryPitchBends(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);
       void libraryTrackDelays(const Chunk&, EventMap* events);
+      void libraryTimingOverrides(const Chunk&, EventMap* events);      // livetimingoverride.h
       void libraryDelayLead(const Chunk&, EventMap* events);
 
    public:
@@ -281,6 +283,11 @@ class MidiRenderer {
       // rendering the clips Live plays (liveclips.h): plug-in parameter lanes as ME_PARAMETER events whatever the
       // output (the MuseScore Link device sets them in Live), lanes Live plays itself (Lane::playedByLive) left out
       void setForLiveClips(bool v) { forLiveClips = v; needUpdate = true; }
+      // the library notes at their written times (the note model's, in ticks): none of the timing in seconds the
+      // renderer gives them otherwise (a held note early by its onset with keepMs' cap, the note before cut at that early
+      // start, a Performance note's join). Live's clips hold these (the owner, 2026-10-11); livetiming.h pairs them with
+      // the played render's and puts that timing back at playback (Track Delay and the MuseScore Link device)
+      void setWrittenTiming(bool v) { writtenTiming = v; needUpdate = true; }
       void setMinChunkSize(int sizeMeasures) { minChunkSize = sizeMeasures; needUpdate = true; }
       void setLibraryTrace(std::vector<LibTrace>* trace) { libTrace = trace; }
 

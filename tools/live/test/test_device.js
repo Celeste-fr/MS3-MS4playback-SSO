@@ -40,9 +40,12 @@ function setUp() {
       }
 
 // MuseScore's datagrams for one clip, as udpreceive hands them on (address, then the arguments)
-function sendClip(dev, gen, key, port, ch, part, clip, main, lengthBeats, notes, hash) {
+function sendClip(dev, gen, key, port, ch, part, clip, main, lengthBeats, notes, hash, base) {
       const chunks = Math.ceil(notes.length / 48);
-      dev.message("/ms/track", [gen, key, port, ch, part, clip, main ? 1 : 0, lengthBeats * UNITS, notes.length, chunks, hash]);
+      const head = [gen, key, port, ch, part, clip, main ? 1 : 0, lengthBeats * UNITS, notes.length, chunks, hash];
+      if (base !== undefined)
+            head.push(base);                           // (protocol 10: the content MuseScore knows; an older one sends none)
+      dev.message("/ms/track", head);
       for (let c = 0; c < chunks; ++c) {
             const args = [gen, key, c];
             for (const n of notes.slice(c * 48, (c + 1) * 48))
@@ -96,7 +99,9 @@ test("a clip on the track of the part's port and channel, notes in beats, the de
       assert.strictEqual(c.notes.find((n) => n.start_time === 3 * 960 / UNITS).mute, 1);
       assert.strictEqual(c.notes.find((n) => n.pitch === 127).duration, 8);
       assert.strictEqual(s.vln.current_monitoring_state, 1);                 // clips: Auto
-      assert.deepStrictEqual(s.hub.sent("/live/applied").pop(), ["0:1", 12345, "ok", "Violins 1"]);
+      const applied = s.hub.sent("/live/applied").pop();
+      assert.deepStrictEqual(applied.slice(0, 4), ["0:1", 12345, "ok", "Violins 1"]);
+      assert.strictEqual(applied[4], s.hub.api.contentHash(c.notes));        // (protocol 10: the content written)
       // the notes went in batches, each a dictionary with a notes list
       const adds = s.live.calls.filter((x) => x[2] === "add_new_notes");
       assert.ok(adds.length >= 1 && adds.every((x) => Array.isArray(x[3].notes)));
@@ -302,6 +307,68 @@ test("helpers: LOM dictionaries, id lists, port names", () => {
       assert.deepStrictEqual(Array.from(a.ids(["id", 3, "id", 7])), [3, 7]);
       assert.deepStrictEqual(Array.from(a.ids("id 3 id 0")), [3]);
       assert.strictEqual(a.loosePort("Ext: MuseScore A"), a.loosePort("MuseScore A"));
+      });
+
+test("timing set in Live (protocol 10): a MuseScore clip edited in Live is reported once with its notes, not written over on an old base, written on the reported one", () => {
+      const s = setUp();
+      const carrier = [127, 0, 8 * UNITS, 2];
+      sendClip(s.hub, 1, "0:1", "MuseScore A", 1, "Violins 1", "MuseScore: Violins 1", true, 8,
+               [[60, 0, 3840, 90], [62, 3840, 3840, 90], carrier], 11, 0);
+      s.hub.work();
+      const first = s.hub.sent("/live/applied").pop();
+      const written = first[4];
+      assert.ok(written !== 0);
+      s.hub.runTasks();                                // (unchanged: nothing reported)
+      assert.strictEqual(s.hub.sent("/live/edited").length, 0);
+      // the owner drags the D an eighth of a beat earlier and makes it longer
+      const c = s.live.objects[s.vln.clips[0]];
+      const d = c.notes.find((n) => n.pitch === 62);
+      d.start_time = (3840 - 480) / UNITS;
+      d.duration = (3840 + 960) / UNITS;
+      s.hub.runTasks();
+      const ed = s.hub.sent("/live/edited");
+      assert.strictEqual(ed.length, 1);
+      const content = ed[0][1];
+      assert.deepStrictEqual(ed[0], ["0:1", content, 2, 1]);           // (the carrier left out)
+      assert.strictEqual(content, s.hub.api.contentHash(c.notes));
+      assert.notStrictEqual(content, written);
+      assert.deepStrictEqual(s.hub.sent("/live/editnotes")[0], ["0:1", content, 0, 60, 0, 3840, 90, 0, 62, 3360, 4800, 90, 0]);
+      s.hub.runTasks();                                // once
+      assert.strictEqual(s.hub.sent("/live/edited").length, 1);
+      // MuseScore sends a clip made before it took the edit (its base: the content it wrote): the clip stays, reported again
+      sendClip(s.hub, 2, "0:1", "MuseScore A", 1, "Violins 1", "MuseScore: Violins 1", true, 8,
+               [[60, 0, 3840, 90], [64, 3840, 3840, 90], carrier], 12, written);
+      s.hub.work();
+      assert.deepStrictEqual(s.hub.sent("/live/applied").pop(), ["0:1", 12, "edited in Live", "Violins 1", 0]);
+      assert.deepStrictEqual(c.notes.map((n) => n.pitch).sort((x, y) => x - y), [60, 62, 127]);
+      assert.strictEqual(s.hub.sent("/live/edited").length, 2);
+      // on the reported content: written (MuseScore's clip with the D where the owner put it)
+      sendClip(s.hub, 3, "0:1", "MuseScore A", 1, "Violins 1", "MuseScore: Violins 1", true, 8,
+               [[60, 0, 3840, 90], [62, 3360, 4800, 90], [64, 7680, 3840, 90], carrier], 13, content);
+      s.hub.work();
+      const ok = s.hub.sent("/live/applied").pop();
+      assert.deepStrictEqual(ok.slice(0, 3), ["0:1", 13, "ok"]);
+      assert.deepStrictEqual(c.notes.map((n) => n.pitch).sort((x, y) => x - y), [60, 62, 64, 127]);
+      assert.strictEqual(ok[4], s.hub.api.contentHash(c.notes));
+      s.hub.runTasks();
+      assert.strictEqual(s.hub.sent("/live/edited").length, 2);       // (its own write: no edit)
+      // an older MuseScore (no base) or one that knows nothing (0): written over, as before
+      c.notes.find((n) => n.pitch === 60).velocity = 30;
+      sendClip(s.hub, 4, "0:1", "MuseScore A", 1, "Violins 1", "MuseScore: Violins 1", true, 8, [[65, 0, 3840, 90]], 14);
+      s.hub.work();
+      assert.deepStrictEqual(c.notes.map((n) => n.pitch), [65]);
+      assert.deepStrictEqual(s.hub.sent("/live/applied").pop().slice(0, 3), ["0:1", 14, "ok"]);
+      });
+
+test("timing set in Live: the content hash ignores Live's note ids and the notes' order", () => {
+      const s = setUp();
+      const a = s.hub.api;
+      const n1 = { note_id: 1, pitch: 60, start_time: 0, duration: 1, velocity: 90, mute: 0 };
+      const n2 = { note_id: 2, pitch: 62, start_time: 1, duration: 1, velocity: 90, mute: 0 };
+      assert.strictEqual(a.contentHash([n1, n2]), a.contentHash([Object.assign({}, n2, { note_id: 7 }), n1]));
+      assert.notStrictEqual(a.contentHash([n1, n2]), a.contentHash([n1, Object.assign({}, n2, { start_time: 1 + 1 / UNITS })]));
+      assert.notStrictEqual(a.contentHash([n1, n2]), a.contentHash([n1, Object.assign({}, n2, { velocity: 91 })]));
+      assert.notStrictEqual(a.contentHash([]), 0);
       });
 
 if (failures) {

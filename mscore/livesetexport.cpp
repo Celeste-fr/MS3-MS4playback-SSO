@@ -134,9 +134,11 @@ LiveSetWriter::LinkDevice findLinkDevice(QString* note)
 static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const SoundLib::Library& library, LiveSetPlan* plan,
                                                      bool link)
       {
-      EventMap events;
+      // the notes as written, their timing put back by Track Delay and the device (livetiming.h; the owner, 2026-10-11)
+      EventMap events, written;
       LiveClipsLink::renderEvents(score, &events);
-      const PlainLiveSet::Layout layout = PlainLiveSet::layout(score, library, events, LiveClips::timeline(score));
+      LiveClipsLink::renderEvents(score, &written, true);
+      const PlainLiveSet::Layout layout = PlainLiveSet::layout(score, library, events, LiveClips::timeline(score), &written);
       for (const PlainLiveSet::Clash& c : layout.clashes)
             plan->notes << QObject::tr("%1 – %2, beat %3: %4 start together; one switch can't play both (Live sends both "
                                        "switches, then both notes): move one to the other's track")

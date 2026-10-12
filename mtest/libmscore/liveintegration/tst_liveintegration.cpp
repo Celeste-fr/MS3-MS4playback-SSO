@@ -29,6 +29,8 @@
 #include "libmscore/note.h"
 #include "libmscore/segment.h"
 #include "libmscore/undo.h"
+#include "libmscore/livetimingoverride.h"
+#include "libmscore/note.h"
 #include "libmscore/part.h"
 #include "libmscore/repeatlist.h"
 #include "libmscore/rendermidi.h"
@@ -85,6 +87,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipsOnsetEarly();
       void clipsChanges();
       void clipsOsc();
+      void clipsTimingFromLive();
       void clipsImport();
       void clipEditImport();
       void clipEditPitch();
@@ -920,6 +923,87 @@ void TestLiveIntegration::clipsOnsetEarly()
 //    renders the same hashes; the Mixer's mute marks the notes; undo gives the first hash back
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   clipsTimingFromLive
+//    the device reports a MuseScore clip edited in Live (/live/edited, /live/editnotes: its notes, the carriers left
+//    out): the link pairs them with what it last wrote there and keeps the moved note's timing as its override
+//    (livetimingoverride.h), one undo step, in every pass of the repeat; a velocity edit is another edit; the content
+//    is the next write's base. The clip rendered again holds the note where Live has it
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipsTimingFromLive()
+      {
+      MasterScore* score = readScore(DIR + "clips.musicxml");
+      QVERIFY(score);
+      auto lib = loadMap(MAP);
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      score->rebuildMidiMapping();
+      score->setExpandRepeats(true);
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      const LiveClips::Track violin = tracks[0];
+      LiveIntegration::LiveClipsLink* link = LiveIntegration::LiveClipsLink::instance();
+      link->setScore(score);
+      link->knowForTest(violin, 1111);
+      QCOMPARE(link->knownContent("0:1"), 1111);
+
+      // the owner, in Live: the D5 of the first pass (beat 4) a tenth of a beat earlier (100 ms at 60 bpm), its length
+      // kept; the F5's velocity 33
+      std::vector<LiveClips::Note> live = realNotes(violin.notes);
+      QCOMPARE(int(live.size()), 6);
+      const LiveClips::Note d5 = live[1];
+      QCOMPARE(d5.pitch, 74);
+      QVERIFY(d5.source);
+      live[1].start -= U / 10;
+      live[5].velocity = 33;
+      const int chunks = (int(live.size()) + 47) / 48;
+      link->receivedForTest("/live/edited", { "0:1", 2222, int(live.size()), chunks });
+      QVariantList args { "0:1", 2222, 0 };
+      for (const LiveClips::Note& n : live)
+            args << n.pitch << n.start << n.length << n.velocity << int(n.muted);
+      link->receivedForTest("/live/editnotes", args);
+
+      const Note* note = d5.source->firstTiedNote();
+      QVERIFY2(std::fabs(note->liveStart() + 100.0) < 0.01, qPrintable(QString::number(note->liveStart())));
+      QVERIFY(LiveTimingOverride::isSet(note->liveEnd()));
+      QCOMPARE(LiveTimingOverride::count(score), 1);
+      QCOMPARE(link->knownContent("0:1"), 2222);            // (the next write's base)
+      QVERIFY2(link->lastEdit().contains("the timing of 1 note") && link->lastEdit().contains("1 other edit"),
+               qPrintable(link->lastEdit()));
+
+      // rendered again: the D5 in both passes 100 ms early, the same length; every other note as it was
+      tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      const std::vector<LiveClips::Note> again = realNotes(tracks[0].notes);
+      const std::vector<LiveClips::Note> was = realNotes(violin.notes);
+      QVERIFY2(again.size() == 6, qPrintable(describe(again)));
+      for (size_t i = 0; i < 6; ++i) {
+            const bool moved = was[i].source && was[i].source->firstTiedNote() == note;
+            QCOMPARE(again[i].pitch, was[i].pitch);
+            const int early = moved ? U / 10 : 0;
+            QVERIFY2(std::abs(again[i].start - (was[i].start - early)) <= U / 480 && std::abs(again[i].length - was[i].length) <= U / 480,
+                     qPrintable(describe(again) + " / " + describe(was)));
+            QCOMPARE(again[i].velocity, was[i].velocity);   // (Live's velocity edit: not kept)
+            }
+      QVERIFY(std::abs(again[3].start - (10 * U - U / 10)) <= U / 480);  // (the repeat's D5 too)
+
+      // undo: as before
+      score->undoRedo(true, nullptr);
+      QCOMPARE(LiveTimingOverride::count(score), 0);
+      QVERIFY(!LiveTimingOverride::isSet(note->liveStart()));
+      tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      QCOMPARE(describe(realNotes(tracks[0].notes)), describe(was));
+
+      // a report MuseScore can't pair (it knows nothing of the route): no change
+      link->receivedForTest("/live/edited", { "0:9", 3333, 0, 0 });
+      QVERIFY(link->lastEdit().contains("doesn't know"));
+      QCOMPARE(LiveTimingOverride::count(score), 0);
+      link->setScore(nullptr);
+      SoundLib::setCurrent(nullptr);
+      delete score;
+      }
+
 void TestLiveIntegration::clipsChanges()
       {
       MasterScore* score = readScore(DIR + "clips.musicxml");
@@ -1025,7 +1109,8 @@ void TestLiveIntegration::clipsOsc()
             QVERIFY2(x.size() < 1400, qPrintable(QString::number(x.size())));
       QVERIFY(LiveClips::parseOsc(p[0], &address, &args));
       QCOMPARE(address, QString("/ms/track"));
-      QCOMPARE(args.size(), 11);
+      QCOMPARE(args.size(), 12);
+      QCOMPARE(args[11].toInt(), 0);                        // (the base: MuseScore knows nothing of the clip in Live)
       QCOMPARE(args[0].toInt(), 7);
       QCOMPARE(args[1].toString(), QString("1:16"));
       QCOMPARE(args[2].toString(), QString("MuseScore B"));
@@ -1037,6 +1122,14 @@ void TestLiveIntegration::clipsOsc()
       QCOMPARE(args[8].toInt(), 100);
       QCOMPARE(args[9].toInt(), 3);
       QCOMPARE(qint32(args[10].toInt()), qint32(t.hash));
+      {     // the base (livetimingoverride.h: the device doesn't write over a clip edited in Live since): not in the hash
+      LiveClips::Track b = t;
+      b.base = -123456789;
+      QCOMPARE(LiveClips::hashOf(b), t.hash);
+      QVariantList bargs;
+      QVERIFY(LiveClips::parseOsc(LiveClips::packets(b, 7)[0], &address, &bargs));
+      QCOMPARE(bargs[11].toInt(), -123456789);
+      }
       std::vector<LiveClips::Note> back;
       for (size_t i = 1; i < p.size(); ++i) {
             QVERIFY(LiveClips::parseOsc(p[i], &address, &args));

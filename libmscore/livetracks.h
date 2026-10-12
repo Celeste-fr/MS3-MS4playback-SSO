@@ -44,9 +44,10 @@
 //                       "envelopes": [{"target": "volume" | "pan" | "speaker", "initial": v,
 //                                      "events": [[time, value], [time, value, c1x, c1y, c2x, c2y], …]}]}},
 //      "written": {key: {"kind": "section" | "part" | "kontakt" | "copy" | "technique", "part": index, "patch": n,
-//                        "hashes": {"cc1": hash, …}, "delayKey": trackdelays.h key}}}
+//                        "hashes": {"cc1": hash, …}, "delayKey": trackdelays.h key, "lookahead": ms}}}
 //   Track delays: each part's tracks' TrackDelay comes back as the part's delays (trackdelays.h; "part": its group's,
-//   "delayKey": a Kontakt's or technique's); one in samples (Live's toggle) is reported, not imported.
+//   "delayKey": a Kontakt's or technique's; a technique track's with its written notes' lookahead added back, livetiming.h:
+//   Create Live Set wrote it that much earlier); one in samples (Live's toggle) is reported, not imported.
 //   (only the values a track has; "initial" -1: none; an event's control points only on a curved one.)
 //---------------------------------------------------------
 
@@ -96,6 +97,8 @@ struct Written {
       int patch { 0 };              // 0: the part's main patch, else its extra's index + 1
       std::map<QString, QString> hashes;  // "cc<n>": the eventsHash of its clips' envelopes on CC n ("," between clips)
       QString delayKey;             // a Kontakt or technique track's trackdelays.h key ("" a part group's: the part's)
+      double lookahead { 0 };       // a technique track's written notes' lookahead (livetiming.h): its TrackDelay is that
+                                    // much earlier than the technique's own delay
       };
 
 struct Data {

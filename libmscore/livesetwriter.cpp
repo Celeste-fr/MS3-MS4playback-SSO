@@ -1240,6 +1240,13 @@ QByteArray linkBlob(int port, const Track* track, bool* lanesKept)
                         }
                   }
             }
+      // the written notes' timing (livetiming.h; MuseScoreLink.js › Written clips): "msl-timing" then the record
+      if (track && !track->linkTiming.empty() && track->linkTiming.size() + 1 <= size_t(LINK_STORE_ATOMS)) {
+            out += ",\r\n\t\"Timing\" : [ \"msl-timing\"";
+            for (double x : track->linkTiming)
+                  out += ", " + jsonNumber(x);
+            out += " ]";
+            }
       return out + "\r\n}\r\n" + QByteArray(1, '\0');
       }
 

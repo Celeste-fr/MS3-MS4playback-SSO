@@ -175,6 +175,11 @@ struct Track {
       std::vector<MixerAutomation> mixerAutomation;   // (a group's too)
       QString annotation;                 // the track's Info text (Name/Annotation): the plain set's track key
       double delayMs { 0 };               // Track Delay, ms (trackdelays.h; the plain set's tracks)
+      // the written notes' timing for the MuseScore Link copy on the track (livetiming.h: LiveTiming::record), kept in its
+      // "Timing" store; empty: none
+      std::vector<double> linkTiming;
+      double lookaheadMs { 0 };           // (not written) that timing's lookahead: delayMs is this much earlier than the
+                                          // technique's own delay (livetracks.h adds it back when the set is read)
       // (not written)
       QString routeKey;                   // "<port>:<channel 1-16>", as LiveClips::Track::key
       QString part;                       // the part's name

@@ -33,6 +33,13 @@
 //   - The UDP socket also carries the editing of Live clips (liveclipedit.h): it is bound while this
 //     is on or that setting is (liveIntegration/editClips, on by default); /live/clip/… goes there, and
 //     without "Live plays the score" a hello only records the device (no resync, no /ms/mode).
+//   - Timing set in Live (libmscore/livetimingoverride.h; device protocol 10): the device reports a clip changed in Live
+//     (/live/edited + /live/editnotes); its notes against what MuseScore last wrote to it (Known: the clip as the device
+//     confirmed it, with its content hash) give the notes' timing overrides, set in one undo step ("Timing from Live");
+//     the clip is then sent again with that content as its base, which the device writes over (it doesn't write over
+//     a clip edited since). What MuseScore knows survives a resync and, per score file, a restart (QSettings
+//     liveIntegration/clipContent: each route's render hash and the content the device confirmed): a score opened
+//     as it was last written to Live takes the edits made in Live meanwhile.
 //   All on the GUI thread, never the audio thread.
 //---------------------------------------------------------
 
@@ -75,7 +82,26 @@ class LiveClipsLink : public QObject {
             int paramsTries { 0 };
             bool paramsConfirmed { false };
             QString paramsStatus;         // "ok", "missing: Vibrato" …
+            bool force { false };         // sent again at the next render even unchanged (timing taken from Live)
             };
+      // what MuseScore knows the clip in Live holds: the track it last wrote there (its notes with their score notes) and
+      // the content hash the device read after writing it, or of the edit MuseScore took from it (the next write's base)
+      struct Known {
+            LiveClips::Track track;
+            qint32 content { 0 };
+            };
+      std::map<QString, Known> _known;
+      // a report of a clip edited in Live, being received
+      struct Report {
+            qint32 content { 0 };
+            int count { 0 };
+            int chunks { 0 };
+            int got { 0 };
+            std::vector<LiveClips::Note> notes;
+            };
+      std::map<QString, Report> _reports;
+      std::map<QString, Report> _deferred;      // complete, waiting for the score's command to end
+      QString _lastEdit;                        // what the last report from Live did (the status line)
 
       bool _on { false };
       int _port { LiveClips::DEFAULT_PORT };
@@ -137,6 +163,9 @@ class LiveClipsLink : public QObject {
       void resync();
       void sendMode();
       void applySeqMode();
+      void takeEdit(const QString& key, const Report& r);
+      void remember(const QString& key);
+      void recall(const LiveClips::Track& t);
 
    signals:
       void statusChanged();
@@ -146,7 +175,8 @@ class LiveClipsLink : public QObject {
       ~LiveClipsLink();
       static LiveClipsLink* instance();
       // the score rendered as this link renders it (MidiRenderer::setForLiveClips), at once
-      static void renderEvents(MasterScore* score, EventMap* events);
+      // written: the library notes at their written times (MidiRenderer::setWrittenTiming, livetiming.h)
+      static void renderEvents(MasterScore* score, EventMap* events, bool written = false);
       // the score's clips (notes, carriers, parameter lanes with their plug-in ids) as this link sends them, at once
       static std::vector<LiveClips::Track> renderTracks(MasterScore* score, const SoundLib::Library& library,
                                                         const QStringList& portNames);
@@ -190,6 +220,11 @@ class LiveClipsLink : public QObject {
       // the routes ("<port>:<channel>" keys) the device found no track for, for the score Live plays now;
       // *known: false unless the device answers for this score and has confirmed every route's clip
       QStringList keysWithoutTrack(const MasterScore* score, bool* known) const;
+      // (tests) what MuseScore knows each route's clip in Live holds (0: nothing), and a device's message as if received
+      qint32 knownContent(const QString& key) const;
+      void receivedForTest(const QString& address, const QVariantList& args) { received(address, args); }
+      void knowForTest(const LiveClips::Track& t, qint32 content) { _known[t.key] = { t, content }; }
+      QString lastEdit() const { return _lastEdit; }
       };
 
 }     // namespace LiveIntegration

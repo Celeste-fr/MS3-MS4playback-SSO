@@ -83,6 +83,7 @@ Data fromJson(const QString& json)
             w.part = t.value("part").toInt(-1);
             w.patch = t.value("patch").toInt(0);
             w.delayKey = t.value("delayKey").toString();
+            w.lookahead = t.value("lookahead").toDouble(0);
             const QJsonObject h = t.value("hashes").toObject();
             for (auto hi = h.begin(); hi != h.end(); ++hi)
                   w.hashes[hi.key()] = hi.value().toString();
@@ -137,6 +138,8 @@ QString toJson(const Data& data)
                   w["patch"] = ws.second.patch;
             if (!ws.second.delayKey.isEmpty())
                   w["delayKey"] = ws.second.delayKey;
+            if (ws.second.lookahead != 0)
+                  w["lookahead"] = ws.second.lookahead;
             if (!ws.second.hashes.empty()) {
                   QJsonObject h;
                   for (const auto& hs : ws.second.hashes)
@@ -271,6 +274,7 @@ std::map<QString, Written> written(const Score* score, const std::vector<LiveSet
                               w.part = i;
                   }
             w.delayKey = t.delayKey;
+            w.lookahead = t.lookaheadMs;
             if (w.kind == "kontakt")
                   w.patch = t.routePatch;
             else if ((w.kind == "technique" || w.kind == "copy") && t.midiTo < int(tracks.size()))
@@ -470,8 +474,8 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                         notImported << QObject::tr("Track \"%1\": its Track Delay is in samples (MuseScore's are in ms)").arg(t.name);
                   else if (w.kind == "part")
                         d.ms = TrackDelays::clampMs(t.delay);
-                  else if (t.delay != 0)
-                        d.tracks[w.delayKey] = TrackDelays::clampMs(t.delay);
+                  else if (t.delay + w.lookahead != 0)     // (written notes: the lookahead was taken off, livetiming.h)
+                        d.tracks[w.delayKey] = TrackDelays::clampMs(t.delay + w.lookahead);
                   else
                         d.tracks.erase(w.delayKey);
                   }

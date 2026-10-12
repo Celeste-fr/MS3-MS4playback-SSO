@@ -120,6 +120,8 @@ InspectorNote::InspectorNote(QWidget* parent)
             { Pid::VELO_OFFSET,    0, n.velocity,      n.resetVelocity      },
             { Pid::PERFORMANCE_ATTACK,     0, n.performanceAttack,     n.resetPerformanceAttack     },
             { Pid::PERFORMANCE_TRANSITION, 0, n.performanceTransition, n.resetPerformanceTransition },
+            { Pid::LIVE_START,     0, n.liveStart,     n.reset_liveStart    },
+            { Pid::LIVE_END,       0, n.liveEnd,       n.reset_liveEnd      },
             { Pid::FIXED,          0, n.fixed,         n.resetFixed         },
             { Pid::FIXED_LINE,     0, n.fixedLine,     n.resetFixedLine     },
 
