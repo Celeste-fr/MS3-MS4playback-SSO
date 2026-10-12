@@ -92,9 +92,10 @@
 //   outlet 2 (the patcher's initial state) every note straight on to the velocity shaper, unchanged. The copy sets it
 //   (outlet 9 "gate 1" / "gate 2") from its own track: a clip named "MuseScore: …" (liveclips.cpp clipName: only
 //   MuseScore's clips carry carriers; the plain set's clips are named after their technique) in the arrangement or in a
-//   session slot -> 1, else 2. Checked when the copy loads, once a second (the clips' ids each time, their names when
-//   the ids change and every CARRIER_NAMES_EVERY seconds: a rename), and at once when the hub makes or deletes a clip on
-//   the track (messnamed("msl_carriers", track) -> every copy's [receive msl_carriers] -> deferlow). The whole track
+//   session slot -> 1, else 2. Checked when the copy loads, when Live reports a change (observers of the track's
+//   arrangement clips and clip slots, each slot's has_clip and each clip's name), every CARRIER_NAMES_EVERY seconds in
+//   any case, and at once when the hub makes or deletes a clip on the track (messnamed("msl_carriers", track) -> every
+//   copy's [receive msl_carriers] -> deferlow). The whole track
 //   counts: another clip on a track with a MuseScore clip has its keys 114-127 converted too (the hub makes no clip
 //   over a track's other clips). A note on 114-127 sounding while the gate goes to 1 (a MuseScore clip made on its
 //   track just then) loses its note-off, as the carriers' are dropped.
@@ -243,6 +244,61 @@ function ids(v) {
       return out;
       }
 
+// LiveAPI objects reused (2026-10-12): each copy's periodic work (its heartbeat, the hub's transport report 25 times a
+// second) made new LiveAPI objects for the same few Live objects every time; with the plain set's 28 copies Live's main
+// thread (Max for Live's JS runs on it) climbed to ~100 % within minutes in Live 12.4.6 (the test VM), and the window
+// stopped responding. Only paths that name one Live object for good are kept: "live_set", "this_device …" and "id <n>"
+// (an id names one object; an object deleted keeps its id unused, so a later id is never another object's). A view's
+// path ("live_set view detail_clip") follows the selection and is always made new. LOM_CACHE_MAX: past it the cache
+// starts again (ids come and go as clips are written).
+var LOM_CACHE_MAX = 2048;
+var lomCache = {};
+var lomCount = 0;
+function lom(path) {
+      if (typeof LiveAPI === "undefined")
+            return null;
+      var o = lomCache[path];
+      if (o)
+            return o;
+      if (lomCount >= LOM_CACHE_MAX) {
+            lomCache = {};
+            lomCount = 0;
+            }
+      o = new LiveAPI(path);
+      lomCache[path] = o;
+      ++lomCount;
+      return o;
+      }
+function lomId(id) { return lom("id " + id); }
+
+// Max's Buffer objects for the buffer~s the script fills, made once each
+var buffers = {};
+function buffer(name) {
+      if (!buffers[name])
+            buffers[name] = new Buffer(name);
+      return buffers[name];
+      }
+
+// a Live object's property observed: cb() on each change (Max calls it once when the property is set, too).
+// Returns the LiveAPI object (kept referenced by the caller; unwatch() stops it)
+function watch(path, prop, cb) {
+      if (typeof LiveAPI === "undefined")
+            return null;
+      try {
+            var o = new LiveAPI(function() { cb(); }, path);
+            o.property = prop;
+            return o;
+            }
+      catch (e) {
+            return null;
+            }
+      }
+function unwatch(o) {
+      if (!o)
+            return;
+      try { o.property = ""; } catch (e) {}
+      }
+
 function status(text) {
       outlet(2, "set", text);
       }
@@ -261,9 +317,9 @@ function bang() {
       if (initialised)
             return;
       initialised = true;
-      var dev = new LiveAPI("this_device");
+      var dev = lom("this_device");
       me.device = num(dev.id);
-      var tr = new LiveAPI("this_device canonical_parent");
+      var tr = lom("this_device canonical_parent");
       me.track = num(tr.id);
       var r = registry();
       r[me.key] = { track: me.track, device: me.device, beat: now(), protocol: PROTOCOL };
@@ -283,6 +339,7 @@ function bang() {
       paramsCheck(!!saved);
       velTask = new Task(velFill, this);
       timTask = new Task(timFill, this);
+      carrierTask = new Task(function() { carriersCheck(false); }, this);
       velObserve();
       velChanged();
       carriersCheck(true);
@@ -311,7 +368,14 @@ function beat() {
       velFill();
       timFill();
       carriersCheck(false);
+      if (g.timAsk && g.timAsk !== timAsked) {      // (the "tim ask" probe)
+            timAsked = g.timAsk;
+            g["tst" + me.track] = JSON.stringify({ rec: !!timRec, look: timRec ? timRec.look : 0, def: timDef, ex: timRec ? timRec.ex.length : 0,
+                                                   cells: timRec ? timCellCount(timRec) : 0, gate: timGate, bias: timBias, sees: timSees(),
+                                                   sr: velSr, vs: velVs });
+            }
       }
+var timAsked = 0;
 
 function elect() {
       if (isHub)
@@ -387,6 +451,11 @@ function notifydeleted() {
       if (paramTask) paramTask.cancel();
       if (storeTask) storeTask.cancel();
       if (velTask) velTask.cancel();
+      if (timTask) timTask.cancel();
+      if (carrierTask) carrierTask.cancel();
+      var obs = velObservers.concat(carrierTrackObs, carrierObs);
+      for (var i = 0; i < obs.length; ++i)
+            unwatch(obs[i]);
       }
 
 //---------------------------------------------------------
@@ -970,7 +1039,7 @@ function writeSong(s) {
 //---------------------------------------------------------
 
 function report() {
-      var song = new LiveAPI("live_set");
+      var song = lom("live_set");
       var playing = num(song.get("is_playing")) ? 1 : 0;
       var b = num(song.get("current_song_time"));
       var bpm = num(song.get("tempo"));
@@ -1064,10 +1133,10 @@ function trackOf(clip) {
       var p = ids(clip.get("canonical_parent"));
       if (!p.length)
             return null;
-      var o = new LiveAPI("id " + p[0]);
+      var o = lomId(p[0]);
       if (str(o.type) === "ClipSlot") {
             p = ids(o.get("canonical_parent"));
-            o = p.length ? new LiveAPI("id " + p[0]) : null;
+            o = p.length ? lomId(p[0]) : null;
             }
       return o;
       }
@@ -1486,13 +1555,21 @@ function reportEdit(key, notes, content) {
 
 // once a second: the clips the hub wrote, changed in Live since
 function checkPlaced() {
+      var lists = {};                     // track id -> its arrangement clips' ids (is the clip still there?)
+      var all = null;
       for (var key in placed) {
             var p = placed[key];
             if (!p.clipId || !p.content)
                   continue;
-            var clip = new LiveAPI("id " + p.clipId);
-            if (!(num(clip.id) > 0))
+            if (!all)
+                  all = ids(lom("live_set").get("tracks"));
+            if (all.indexOf(p.track) < 0)
                   continue;
+            if (!lists[p.track])
+                  lists[p.track] = ids(lomId(p.track).get("arrangement_clips"));
+            if (lists[p.track].indexOf(p.clipId) < 0)
+                  continue;
+            var clip = lomId(p.clipId);
             var notes = readNotes(clip);
             var cur = contentHash(notes);
             if (cur !== p.content && cur !== p.reported) {
@@ -1513,9 +1590,9 @@ var PARAMS_PER_PACKET = 16;             // about 0.8 kB a datagram
 function whereOf(clip, tr) {
       var t = -1, s = -1;
       if (tr) {
-            t = ids(new LiveAPI("live_set").get("tracks")).indexOf(num(tr.id));
+            t = ids(lom("live_set").get("tracks")).indexOf(num(tr.id));
             var p = ids(clip.get("canonical_parent"));
-            if (p.length && str(new LiveAPI("id " + p[0]).type) === "ClipSlot")
+            if (p.length && str(lomId(p[0]).type) === "ClipSlot")
                   s = ids(tr.get("clip_slots")).indexOf(p[0]);
             }
       return { track: t, slot: s };
@@ -1604,10 +1681,12 @@ function sendParams(holder, key, tr) {
 
 // the routes' tracks: their devices changed (a device added in Live)
 function checkRouteParams() {
+      var all = null;
       for (var k in placed) {
-            var tr = new LiveAPI("id " + placed[k].track);
-            if (num(tr.id) > 0)
-                  sendParams(placed[k], k, tr);
+            if (!all)
+                  all = ids(lom("live_set").get("tracks"));
+            if (all.indexOf(placed[k].track) >= 0)
+                  sendParams(placed[k], k, lomId(placed[k].track));
             }
       }
 
@@ -1706,7 +1785,7 @@ function pollParams() {
 //---------------------------------------------------------
 
 function liveTempo() {
-      try { return num(new LiveAPI("live_set").get("tempo")) || 120; } catch (e) { return 120; }
+      try { return num(lom("live_set").get("tempo")) || 120; } catch (e) { return 120; }
       }
 function msFactor(bpm) { return PERIOD_QUARTERS * 60000 / bpm; }
 
@@ -2640,8 +2719,8 @@ function velPlan(tr, t, song, nowB) {
       var slotClip = function(k) {
             if (!(k >= 0 && k < slots.length))
                   return null;
-            var c = ids(new LiveAPI("id " + slots[k]).get("clip"));
-            return c.length ? new LiveAPI("id " + c[0]) : null;
+            var c = ids(lomId(slots[k]).get("clip"));
+            return c.length ? lomId(c[0]) : null;
             };
       var psi = num(tr.get("playing_slot_index")), fsi = num(tr.get("fired_slot_index"));
       var switchAt = Infinity;
@@ -2671,7 +2750,7 @@ function velPlan(tr, t, song, nowB) {
       else if (!num(tr.get("back_to_arranger"))) {
             var ac = ids(tr.get("arrangement_clips"));
             for (var i = 0; i < ac.length; ++i) {
-                  var c = new LiveAPI("id " + ac[i]);
+                  var c = lomId(ac[i]);
                   var s = num(c.get("start_time")), r = shaped(1, Math.round(s * UNITS));
                   if (!r)
                         continue;
@@ -2711,15 +2790,13 @@ function velObserve() {
       if (typeof LiveAPI === "undefined" || !me.track)
             return;
       var cb = function() { velSig = ""; if (velTask) velTask.schedule(0); if (timTask) timTask.schedule(0); };
-      try {
-            var props = [["id " + me.track, "playing_slot_index"], ["id " + me.track, "fired_slot_index"], ["live_set", "is_playing"]];
-            for (var i = 0; i < props.length; ++i) {
-                  var o = new LiveAPI(cb, props[i][0]);
-                  o.property = props[i][1];
+      var props = [["id " + me.track, "playing_slot_index"], ["id " + me.track, "fired_slot_index"], ["live_set", "is_playing"],
+                   ["id " + me.track, "back_to_arranger"]];     // (not the tempo: automated, it changes all the time)
+      for (var i = 0; i < props.length; ++i) {
+            var o = watch(props[i][0], props[i][1], cb);
+            if (o)
                   velObservers.push(o);
-                  }
             }
-      catch (e) {}
       }
 
 function velRingName() { return prefix.replace(/mslp$/, "mslv"); }
@@ -2734,13 +2811,15 @@ function velFill() {
             outlet(9, "log", logOn);
             }
       var t = velRec;
-      var tr = new LiveAPI("id " + me.track);
       var any = false;
       if (t)
             for (var i = 0; i < t.clips.length; ++i)
                   if (t.clips[i].rec.output === 0 && t.clips[i].rec.points.length)
                         any = true;
-      var b = new Buffer(velRingName());
+      if (!any && !velActive)                   // (nothing to shape, the ring all 0: nothing to do, no Live API)
+            return;
+      var tr = lomId(me.track);
+      var b = buffer(velRingName());
       if (!velSized) {
             b.send("sizeinsamps", VEL_RING, 1);
             velSized = true;
@@ -2756,7 +2835,7 @@ function velFill() {
                   }
             return;
             }
-      var song = new LiveAPI("live_set");
+      var song = lom("live_set");
       var nowB = num(song.get("current_song_time"));
       var bpm = liveTempo();
       var plan = velPlan(tr, t, song, nowB);
@@ -2815,6 +2894,21 @@ function probe(id, what) {
       if (what === "vlog on" || what === "vlog off") {    // (every copy: the shaper's note-ons to the script, or not)
             g.vlog = what === "vlog on" ? 1 : 0;
             return send("/live/probe", id, what);
+            }
+      if (what === "tsees 0" || what === "tsees 1" || what === "tsees") {     // (every copy: TIM_SEES_TRACK_DELAY overridden,
+            g.timSees = what === "tsees" ? "" : what.substring(6);         // or as built)
+            return send("/live/probe", id, what + " (as built: " + TIM_SEES_TRACK_DELAY + ")");
+            }
+      if (what === "tim ask") {                 // (every copy writes its written clips' state at its next second)
+            g.timAsk = (Number(g.timAsk) || 0) + 1;
+            return send("/live/probe", id, "tim asked " + g.timAsk);
+            }
+      if (what === "tim") {                     // (… which this collects)
+            var ts = {};
+            for (var tk in g)
+                  if (/^tst\d+$/.test(tk))
+                        ts[tk] = str(g[tk]);
+            return send("/live/probe", id, probeText(ts).substring(0, 7000));
             }
       if (what === "vlog") {                    // (every copy's logged note-ons, through the Global)
             return send("/live/probe", id, str(g.vlogged).substring(0, 7000));
@@ -2878,9 +2972,13 @@ function probeCall(id, path, fn, args) {
 //---------------------------------------------------------
 
 var carrierGate = 0;          // what the gate was last set to (0: not yet)
-var carrierSig = "";          // the track's clips' ids at the last reading of their names
-var carrierNamed = 0;         // when their names were read
+var carrierSig = "";          // the track's clips' and slots' ids at the last full reading (the observers' set)
+var carrierNamed = 0;         // when the clips' names were last read (the fallback: every CARRIER_NAMES_EVERY s)
 var carrierOurs = false;
+var carrierDirty = false;     // an observer saw a change: read again (carrierTask)
+var carrierTask = null;
+var carrierTrackObs = [];     // observers of the track's arrangement_clips and clip_slots (made once)
+var carrierObs = [];          // … of each slot's has_clip and each clip's name (made again when the ids change)
 
 // the hub made or deleted a clip on the track: its copies look again at once
 function carriersChanged(track) {
@@ -2888,35 +2986,66 @@ function carriersChanged(track) {
             messnamed("msl_carriers", track);
       }
 
-// the clips on this copy's track: arrangement and session, by id
-function carrierClipIds(tr) {
+// the clips on this copy's track: arrangement and session, by id; slots: the track's clip slots
+function carrierClipIds(tr, slots) {
       var l = ids(tr.get("arrangement_clips"));
-      var slots = ids(tr.get("clip_slots"));
       for (var i = 0; i < slots.length; ++i) {
-            var c = ids(new LiveAPI("id " + slots[i]).get("clip"));
+            var c = ids(lomId(slots[i]).get("clip"));
             if (c.length)
                   l.push(c[0]);
             }
       return l;
       }
 
+// an observer fired: the check in a Task (not inside Live's notification)
+function carrierNotified() {
+      carrierDirty = true;
+      if (carrierTask)
+            carrierTask.schedule(0);
+      }
+
+// Live tells the copy when the track's clips change (2026-10-12: before, every copy read the track's 8 clip slots and
+// clips once a second with new LiveAPI objects): the track's arrangement_clips and clip_slots, each slot's has_clip and
+// each clip's name are observed; a quiet second costs nothing. Every CARRIER_NAMES_EVERY s all is read again anyway
+// (as before: a change an observer missed is seen then)
+function carriersWatch(tr, slots, clips) {
+      if (!carrierTrackObs.length) {
+            var t1 = watch("id " + me.track, "arrangement_clips", carrierNotified);
+            var t2 = watch("id " + me.track, "clip_slots", carrierNotified);
+            if (t1) carrierTrackObs.push(t1);
+            if (t2) carrierTrackObs.push(t2);
+            }
+      for (var i = 0; i < carrierObs.length; ++i)
+            unwatch(carrierObs[i]);
+      carrierObs = [];
+      var add = function(o) { if (o) carrierObs.push(o); };
+      for (i = 0; i < slots.length; ++i)
+            add(watch("id " + slots[i], "has_clip", carrierNotified));
+      for (i = 0; i < clips.length; ++i)
+            add(watch("id " + clips[i], "name", carrierNotified));
+      }
+
 function carriersCheck(force) {
       if (typeof LiveAPI === "undefined" || !me.track)
             return;
-      var ours = carrierOurs;
+      if (!force && !carrierDirty && now() - carrierNamed < CARRIER_NAMES_EVERY * 1000)
+            return;
+      carrierDirty = false;
+      var ours = false;
       try {
-            var tr = new LiveAPI("id " + me.track);
+            var tr = lomId(me.track);
             if (!(num(tr.id) > 0))
                   return;
-            var l = carrierClipIds(tr);
-            var sig = l.join(",");
-            if (force || sig !== carrierSig || now() - carrierNamed >= CARRIER_NAMES_EVERY * 1000) {
-                  ours = false;
-                  for (var i = 0; i < l.length && !ours; ++i)
-                        if (str(new LiveAPI("id " + l[i]).get("name")).indexOf(CLIP_PREFIX) === 0)
-                              ours = true;
+            var slots = ids(tr.get("clip_slots"));
+            var l = carrierClipIds(tr, slots);
+            for (var i = 0; i < l.length && !ours; ++i)
+                  if (str(lomId(l[i]).get("name")).indexOf(CLIP_PREFIX) === 0)
+                        ours = true;
+            carrierNamed = now();
+            var sig = l.join(",") + "/" + slots.join(",");
+            if (sig !== carrierSig) {
                   carrierSig = sig;
-                  carrierNamed = now();
+                  carriersWatch(tr, slots, l);
                   }
             }
       catch (e) {
@@ -2940,16 +3069,23 @@ function carriersCheck(force) {
 //   lookahead ms earlier than its own (Live's lookahead); the patcher delays every note-on by `on` ms and every note-off
 //   by `off` ms (the defaults), and the exceptions' by theirs, so each note sounds where MuseScore plays it. Controllers
 //   (a technique's switch: Live's Bank / Sub at a clip's start) go with the next note-on.
-//   The patcher reads the delays where it reads the velocity shaper's codes: [buffer~ ---mslt] (2 channels: a note-on's
-//   code, a note-off's), one cell a tick of song time (480 a beat), cell = tick mod VEL_RING, code = 1 + ms (0: the
-//   default, "tdef on off"); this script fills it every second from the song position on, like the velocity ring, while
-//   the track plays the arrangement (its clips are at their song times), and opens the patcher's timing gates ("tgate 1";
-//   "tgate 2": every message straight on, as without a record). Each exception's code goes into its own cell and the one
-//   on each side (a note read a tick off still finds it; a cell's own note wins).
+//   The patcher reads the delays from [buffer~ ---mslt] (2 channels: a note-on's code, a note-off's), one cell a tick of
+//   song time (480 a beat) from the song's start, cell = tick, code = 1 + ms (0: the default, "tdef on off"). This script
+//   fills the whole record into it once, when the record comes (timFillAll): the buffer is as long as the last
+//   exception's cell plus TIM_PAD, its last cells 0, and the patcher's index stops at the last ("tlast <cell>": a note
+//   after the last exception reads 0, the default). Each exception's code goes into its own cell and the one on each
+//   side (a note read a tick off still finds it; a cell's own note wins). Every second, and at once when Live reports a
+//   change (the track's playing clip, Back to Arrangement, the transport), the script sets the gates
+//   ("tgate 1" while the track plays the arrangement, its clips at their song times; "tgate 2": every message straight
+//   on, as without a record), the defaults and the bias for the tempo.
+//   Until 2026-10-12 the buffer was a ring of VEL_RING cells the script filled every second from the song position on
+//   (as the velocity shaper's); nothing now depends on when the script runs (an offline export runs the song at its
+//   own pace), and no copy writes cells while Live plays.
 //   Where the patcher reads (TIM_SEES_TRACK_DELAY): with a Track Delay of -L ms Live sends the track's notes L ms before
-//   their song time; the song position the patcher sees then is taken to be L ms before the note's (the cells are read
-//   L ms of ticks ahead: "tbias", with the velocity shaper's one signal vector). Only Live can confirm it (LIVE.md ›
-//   Written clips › What only Live can show); false: the cells are read at the song position itself.
+//   their song time; true: the song position the patcher sees then is L ms before the note's (the cells are read L ms
+//   of ticks ahead: "tbias", with the velocity shaper's one signal vector); false: the patcher sees the note's own song
+//   position (the cells are read there, ahead by the vector only). The "tsees 0" / "tsees 1" probe (every copy, through
+//   the Global) overrides it while the set is open, for a test in Live.
 //---------------------------------------------------------
 
 var TIM_SEES_TRACK_DELAY = true;
@@ -2958,8 +3094,9 @@ var timRec = null;            // copy: the record in force
 var timGate = 2;              // copy: the gates as last set (1 through the delays, 2 straight: the patcher's initial)
 var timDef = "0 0";           // copy: "tdef" as last sent (the patcher's initial)
 var timBias = null;
-var timSized = false;
-var timTask = null;           // copy: the ring at once (Live's transport started, the track's clip changed: velObserve)
+var timFilled = null;         // copy: the record in the buffer
+var timTask = null;           // copy: the gates and the bias at once (velObserve: Live reported a change)
+var TIM_PAD = 3;              // cells after the last exception's own: its neighbour, then 0 (the index stops at the last)
 
 // the record's atoms -> { look, on, off, ex: [{ start, end, pitch, on, off }] }; null: not a record
 function timParse(a) {
@@ -3010,6 +3147,14 @@ function timCells(rec, t0, n) {
       return { on: on, off: off };
       }
 
+// the buffer's length for a record: up to the last exception's own cell (a start or an end), then TIM_PAD
+function timCellCount(rec) {
+      var last = 0, per = UNITS / TICKS;
+      for (var i = 0; rec && i < rec.ex.length; ++i)
+            last = Math.max(last, Math.round(rec.ex[i].start / per), Math.round(rec.ex[i].end / per));
+      return last + 1 + TIM_PAD;
+      }
+
 function timRingName() { return prefix.replace(/mslp$/, "mslt"); }
 
 function timSet(a) {
@@ -3022,23 +3167,46 @@ function timChanged() {
       timFill();
       }
 
+// TIM_SEES_TRACK_DELAY, or the "tsees" probe's
+function timSees() {
+      var v = str(g.timSees);
+      return v === "0" || v === "1" ? v === "1" : TIM_SEES_TRACK_DELAY;
+      }
+
 // the ticks the cells are read ahead of the song position the patcher sees
 function timBiasTicks(rec, bpm) {
       var b = velSr > 0 ? velVs / velSr * bpm / 60 * TICKS : 0;
-      if (rec && TIM_SEES_TRACK_DELAY)
+      if (rec && timSees())
             b += rec.look / 1000 * bpm / 60 * TICKS;
       return b;
       }
 
-// the ring from the song position on (each second, and at once on a change)
+// the whole record into the buffer, once
+function timFillAll(rec) {
+      var n = timCellCount(rec);
+      var b = buffer(timRingName());
+      b.send("sizeinsamps", n, 2);
+      var c = timCells(rec, 0, n);
+      for (var ch = 1; ch <= 2; ++ch) {
+            var vals = ch === 1 ? c.on : c.off;
+            for (var i = 0; i < n; i += POKE)
+                  b.poke(ch, i, vals.slice(i, Math.min(n, i + POKE)));
+            }
+      outlet(9, "tlast", n - 1);
+      timFilled = rec;
+      }
+
+// the gates, the defaults and the bias (each second, and at once on a change); the buffer when the record changed
 function timFill() {
       if (!me.track || !prefix)
             return;
       var rec = timRec;
       var arrangement = false;
       if (rec) {
-            var tr = new LiveAPI("id " + me.track);
+            var tr = lomId(me.track);
             arrangement = num(tr.get("playing_slot_index")) < 0 && !num(tr.get("back_to_arranger"));
+            if (timFilled !== rec)
+                  timFillAll(rec);
             }
       var gate = arrangement ? 1 : 2;
       if (gate !== timGate) {
@@ -3050,35 +3218,12 @@ function timFill() {
             timDef = def;
             outlet(9, "tdef", rec ? rec.on : 0, rec ? rec.off : 0);
             }
-      if (!arrangement)
+      if (!rec)
             return;
-      var song = new LiveAPI("live_set");
-      var nowB = num(song.get("current_song_time"));
-      var bpm = liveTempo();
-      var bias = timBiasTicks(rec, bpm);
+      var bias = timBiasTicks(rec, liveTempo());
       if (bias !== timBias) {
             timBias = bias;
             outlet(9, "tbias", bias);
-            }
-      var b = new Buffer(timRingName());
-      if (!timSized) {
-            b.send("sizeinsamps", VEL_RING, 2);
-            timSized = true;
-            }
-      var t0 = Math.floor(nowB * TICKS);
-      var cells = Math.min(VEL_RING / 2, Math.ceil(VEL_AHEAD_S * bpm / 60 * TICKS + bias) + 2);
-      var c = timCells(rec, t0, cells);
-      var start = t0 % VEL_RING;
-      for (var ch = 1; ch <= 2; ++ch) {
-            var vals = ch === 1 ? c.on : c.off;
-            for (var i = 0; i < cells; i += POKE) {
-                  var part = vals.slice(i, Math.min(cells, i + POKE));
-                  var at = (start + i) % VEL_RING;
-                  var first = Math.min(part.length, VEL_RING - at);
-                  b.poke(ch, at, part.slice(0, first));
-                  if (first < part.length)
-                        b.poke(ch, 0, part.slice(first));
-                  }
             }
       }
 
@@ -3095,7 +3240,7 @@ if (typeof module !== "undefined")
                          velClipTime: velClipTime, velGrid: velGrid, chunkAtoms: chunkAtoms, beat: beat,
                          carriersCheck: carriersCheck,
                          timParse: timParse, timCells: timCells, timSet: timSet, timFill: timFill,
-                         timBiasTicks: timBiasTicks,
+                         timBiasTicks: timBiasTicks, timCellCount: timCellCount,
                          VEL_RING: VEL_RING, KEEP_PACKET: KEEP_PACKET,
                          decodeSaved: decodeSaved, state: function() {
                                return { isHub: isHub, work: work, pending: pending, placed: placed, mode: mode, me: me,

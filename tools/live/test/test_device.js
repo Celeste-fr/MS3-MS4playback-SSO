@@ -146,20 +146,34 @@ test("carriers (protocol 8): each copy's gate is 1 only while its track holds a 
       s.other.runTasks();
       assert.deepStrictEqual(gates(s.hub), [2, 1]);
       assert.deepStrictEqual(gates(s.other), [2]);
-      // the clip deleted in Live (the ids change: seen within a second)
+      // the clip deleted in Live: Live tells the copy (its observer of the track's arrangement_clips)
       s.vln.clips = [];
-      s.hub.runTasks();
+      s.hub.runTasks();                                                       // (not seen without Live's word …)
+      assert.deepStrictEqual(gates(s.hub), [2, 1]);
+      s.live.notify(s.vln, "arrangement_clips");
+      s.live.settle();
       assert.deepStrictEqual(gates(s.hub), [2, 1, 2]);
       // a plain set's clip (named after its technique) and a session clip: through; a session clip named "MuseScore: …": 1
-      s.live.clip(s.fl, "Long", 0, 8);
       const slot = s.live.clipSlot(s.fl);
+      s.live.notify(s.fl, "clip_slots");
+      s.live.settle();
+      s.live.clip(s.fl, "Long", 0, 8);
+      s.live.notify(s.fl, "arrangement_clips");
       slot.clip = s.live.add({ kind: "clip", name: "Spiccato", notes: [] }).id;
-      s.other.runTasks();
+      s.live.notify(slot, "has_clip");
+      s.live.settle();
       assert.deepStrictEqual(gates(s.other), [2]);
-      s.live.objects[slot.clip].name = "MuseScore: Flute";                    // (a rename: read again within 5 s)
-      s.other.call("carrierNamed = 0");
+      s.live.objects[slot.clip].name = "MuseScore: Flute";                    // a rename: the clip's name observed
+      s.live.notify(s.live.objects[slot.clip], "name");
+      s.live.settle();
+      assert.deepStrictEqual(gates(s.other), [2, 1]);
+      // … and everything read again every 5 s in any case (a change Live didn't report)
+      s.live.objects[slot.clip].name = "Spiccato";
       s.other.runTasks();
       assert.deepStrictEqual(gates(s.other), [2, 1]);
+      s.other.call("carrierNamed = 0");
+      s.other.runTasks();
+      assert.deepStrictEqual(gates(s.other), [2, 1, 2]);
       // the hub clears a part (/ms/clip/clear path): the violins' copy goes back to 2 at once
       sendClip(s.hub, 2, "0:1", "MuseScore A", 1, "Violins 1", "MuseScore: Violins 1", true, 30, [[60, 0, 3840, 90]], 2);
       s.hub.work();

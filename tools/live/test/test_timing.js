@@ -70,7 +70,7 @@ test("the cells: an exception's code (1 + ms) at its tick and on each side; a ce
       assert.deepStrictEqual(Array.from(c2.on.slice(0, 4)), [11, 11, 21, 21]);
       });
 
-test("a record from the set: the gates open, the defaults and the bias (the vector plus the lookahead) go to the patcher; the ring is filled", () => {
+test("a record from the set: the gates open, the defaults and the bias (the vector plus the lookahead) go to the patcher; the whole record is in the buffer from the song's start, and the index stops at its last cell (a 0)", () => {
       const s = setUp();
       assert.deepStrictEqual(nine(s).filter((m) => /^t/.test(m[0])), []);            // (none without a record)
       s.live.song.current_song_time = 3.5;
@@ -83,12 +83,14 @@ test("a record from the set: the gates open, the defaults and the bias (the vect
       assert.ok(Math.abs(bias - (vector + look)) < 1e-9);
       const buf = s.live.buffers["001mslt"];
       assert.strictEqual(buf.channels, 2);
-      const ring = s.d.api.VEL_RING;
-      assert.strictEqual(buf.chans[0][(4 * TICKS) % ring], 31.5);
-      assert.strictEqual(buf.chans[1][(5 * TICKS) % ring], 87);
-      assert.strictEqual(buf.chans[0][(6 * TICKS) % ring], 1);
-      assert.strictEqual(buf.chans[1][(7 * TICKS) % ring], 1);
-      assert.strictEqual(buf.chans[0][(5 * TICKS) % ring], 0);
+      assert.strictEqual(buf.size, 7 * TICKS + 1 + 3);                       // (the last exception's end, then 0s)
+      assert.deepStrictEqual(nine(s).filter((m) => m[0] === "tlast"), [["tlast", buf.size - 1]]);
+      assert.strictEqual(buf.chans[0][buf.size - 1] + buf.chans[1][buf.size - 1], 0);
+      assert.strictEqual(buf.chans[0][(4 * TICKS)], 31.5);
+      assert.strictEqual(buf.chans[1][(5 * TICKS)], 87);
+      assert.strictEqual(buf.chans[0][(6 * TICKS)], 1);
+      assert.strictEqual(buf.chans[1][(7 * TICKS)], 1);
+      assert.strictEqual(buf.chans[0][(5 * TICKS)], 0);
       });
 
 test("a session clip playing on the track: the gates closed (every note straight on); back to the arrangement: open", () => {
@@ -108,6 +110,26 @@ test("TIM_SEES_TRACK_DELAY false: the bias is the vector alone", () => {
       s.d.message("timing", REC);
       const bias = nine(s).filter((m) => m[0] === "tbias").pop()[1];
       assert.ok(Math.abs(bias - 64 / 44100 * 120 / 60 * TICKS) < 1e-9);
+      });
+
+test("the \"tsees\" probe (a test in Live): every copy's bias follows it at its next second; \"tsees\" alone: as built", () => {
+      const s = setUp();
+      s.d.message("timing", REC);
+      const vector = 64 / 44100 * 120 / 60 * TICKS, look = 0.086 * 120 / 60 * TICKS;
+      s.d.call("probe(1, 'tsees 0')");
+      s.d.call("beat()");
+      assert.ok(Math.abs(nine(s).filter((m) => m[0] === "tbias").pop()[1] - vector) < 1e-9);
+      s.d.call("probe(2, 'tsees')");
+      s.d.call("beat()");
+      assert.ok(Math.abs(nine(s).filter((m) => m[0] === "tbias").pop()[1] - (vector + look)) < 1e-9);
+      s.d.call("probe(3, 'tim ask')");
+      s.d.call("beat()");
+      s.d.call("probe(4, 'tim')");
+      const answer = s.d.out.filter((m) => m[0] === 0 && m[1] === "/live/probe" && m[2] === 4).pop();
+      const st = JSON.parse(JSON.parse(answer[3])["tst" + s.t.id]);
+      assert.strictEqual(st.ex, 2);
+      assert.strictEqual(st.gate, 1);
+      assert.strictEqual(st.sees, true);
       });
 
 if (failures) {

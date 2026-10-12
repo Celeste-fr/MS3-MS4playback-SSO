@@ -528,13 +528,20 @@ test("written clips: as loaded (and with \"tgate 2\") every note and controller 
       const d = loadDevice(live, {}, live.thisDevice);
       const U = 3840, L = 86;
       const rec = ["msl-timing", 1, L, 0, L, 2, 2 * U, 3 * U, 60, 0, 30.5, 3 * U, 4 * U, 62, 30.5, L];
-      const cells = d.api.timCells(d.api.timParse(rec), 0, 6 * 480);
-      for (let i = 0; i < cells.on.length; ++i) {
-            if (cells.on[i])
-                  tring[1][i] = cells.on[i];
-            if (cells.off[i])
-                  tring[2][i] = cells.off[i];
-            }
+      // the script's own fill: the whole record into [buffer~ ---mslt] from the song's start, and "tlast" (the index stops
+      // there: C and D, after the last exception, read its 0, the default)
+      d.bang();
+      d.message("prefix", ["001mslp"]);
+      d.message("timing", rec);
+      const buf = live.buffers["001mslt"];
+      assert.strictEqual(buf.size, 4 * 480 + 1 + 3);
+      for (const ch of [1, 2])
+            for (let i = 0; i < buf.size; ++i)
+                  if (buf.chans[ch - 1][i])
+                        tring[ch][i] = buf.chans[ch - 1][i];
+      const tlast = d.out.filter((m) => m[0] === 9 && m[1] === "tlast").pop();
+      assert.deepStrictEqual(tlast, [9, "tlast", buf.size - 1]);
+      emit(v8, 9, ["tlast", tlast[2]]);
       emit(v8, 9, ["tgate", 1]);
       emit(v8, 9, ["tdef", 0, L]);
       const look = L / 500 * 480;             // the lookahead in ticks: the patcher sees the song L ms before the note's
@@ -561,6 +568,56 @@ test("written clips: as loaded (and with \"tgate 2\") every note and controller 
       assert.deepStrictEqual(playTimed([{ t: 7000, beat: 14, bytes: [0x90, 60, 90] }]), [[7000, [0x90, 60, 90]]]);
       emit(v8, 9, ["tdef", 0, 0]);
       emit(v8, 9, ["tbias", 0]);
+      emit(v8, 9, ["tlast", 0]);
+      for (const ch of [1, 2])
+            for (const k of Object.keys(tring[ch]))
+                  delete tring[ch][k];
+      carriers(true);
+      });
+
+// (2026-10-12, Live 12.4.6 on the test VM, Export All Individual Tracks of the plain set of Whence: each phrase's first
+// note on Violins 1 / Violas - Performance, own delay 0, played with the track's default and so late by it, +48 / +83 ms.
+// The script filled a ring of codes from the song position 2 s ahead, once a second; an offline export doesn't wait for
+// it. Now the whole record is in the buffer before the song plays)
+test("written clips: every exception applies over the whole song with no work of the script while it plays (an offline export)", () => {
+      const v8 = patcher.boxes.find((b) => b.box.text === "v8").box.id;
+      carriers(false);
+      const { FakeLive, loadDevice } = require("./fakelive");
+      const live = new FakeLive();
+      const t = live.track("Violas – Performance", { playing_slot_index: -1, back_to_arranger: 0 });
+      live.thisDevice = live.device(t, "MxDeviceMidiEffect", "MuseScore Link").id;
+      const d = loadDevice(live, {}, live.thisDevice);
+      // 120 bpm; lookahead 83 ms; most note-ons 60 ms after the Track Delay's place (23 ms early), note-offs 83; three
+      // phrase-first notes (beats 2, 40, 300: 1 s, 20 s, 2.5 min) with their own note-on 0 (83 ms early: a smooth attack)
+      const U = 3840, L = 83, firsts = [2, 40, 300];
+      const rec = ["msl-timing", 1, L, 60, L, firsts.length];
+      for (const b of firsts)
+            rec.push(b * U, (b + 1) * U, 60, 0, L);
+      live.song.current_song_time = 0;
+      d.bang();
+      d.message("prefix", ["002mslp"]);
+      d.message("timing", rec);
+      const buf = live.buffers["002mslt"];
+      for (const ch of [1, 2])
+            for (let i = 0; i < buf.size; ++i)
+                  if (buf.chans[ch - 1][i])
+                        tring[ch][i] = buf.chans[ch - 1][i];
+      for (const m of d.out.filter((x) => x[0] === 9))
+            emit(v8, 9, m.slice(1));
+      // the patcher sees the song L ms before the note's (TIM_SEES_TRACK_DELAY): the bias as the script sent it
+      const at = (beat, bytes) => ({ t: beat * 500 - L, beat: beat - L / 500, bytes: bytes });
+      const evs = [];
+      for (const b of [1, 2, 3, 39, 40, 41, 299, 300, 301]) {
+            evs.push(at(b, [0x90, 60, 90]));
+            evs.push(at(b + 0.5, [0x80, 60, 0]));
+            }
+      const out = playTimed(evs).filter((e) => e[1][2] > 0);
+      const want = [1, 2, 3, 39, 40, 41, 299, 300, 301].map((b) => b * 500 - L + (firsts.indexOf(b) >= 0 ? 0 : 60));
+      assert.deepStrictEqual(out.map((e) => Math.round(e[0] * 1000) / 1000), want);
+      emit(v8, 9, ["tgate", 2]);
+      emit(v8, 9, ["tdef", 0, 0]);
+      emit(v8, 9, ["tbias", 0]);
+      emit(v8, 9, ["tlast", 0]);
       for (const ch of [1, 2])
             for (const k of Object.keys(tring[ch]))
                   delete tring[ch][k];
