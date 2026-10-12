@@ -130,6 +130,13 @@ test("the \"tsees\" probe (a test in Live): every copy's bias follows it at its 
       assert.strictEqual(st.ex, 2);
       assert.strictEqual(st.gate, 1);
       assert.strictEqual(st.sees, true);
+      // the timing path's log (the patcher's "tlog <pitch> <phase> <delay> <velocity>"): per track, as song beats
+      s.d.message("tlog", [62, 4 / 16384, 30.5, 90]);
+      s.d.call("probe(5, 'tlog " + s.t.id + "')");
+      const log = s.d.out.filter((m) => m[0] === 0 && m[1] === "/live/probe" && m[2] === 5).pop();
+      assert.deepStrictEqual(JSON.parse(log[3]), [[4, 62, 30.5, 90]]);
+      s.d.call("probe(6, 'tlog 0')");
+      assert.strictEqual(s.d.out.filter((m) => m[0] === 0 && m[2] === 6).pop()[3], s.t.id + ":1");
       });
 
 if (failures) {

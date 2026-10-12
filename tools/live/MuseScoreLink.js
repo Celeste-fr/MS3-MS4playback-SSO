@@ -510,6 +510,8 @@ function anything() {
             }
       if (messagename === "vlog")                             // (the shaper's note-ons, while the "vlog" probe asks)
             return velLog(a);
+      if (messagename === "tlog")                             // (the timing path's notes, the same)
+            return timLog(a);
       if (messagename === "dspsr" || messagename === "dspvs") {   // ([dspstate~]: the sample rate, the vector size)
             if (messagename === "dspsr")
                   velSr = num(a[0]);
@@ -2870,6 +2872,18 @@ function velLog(a) {
       g.vlogged = JSON.stringify(o);
       }
 
+// ("vlog on" probe, written clips) the timing path's notes: "tlog <pitch> <phase> <delay ms> <velocity>", kept per track
+// as [song beat (from the phase), pitch, delay, velocity], the last 96 ("tlog <track id>" probe)
+function timLog(a) {
+      var k = "tlogged" + me.track;
+      var l = [];
+      try { l = JSON.parse(g[k] || "[]"); } catch (e) {}
+      l.push([Math.round(num(a[1]) * PERIOD_QUARTERS * 1e6) / 1e6, num(a[0]), Math.round(num(a[2]) * 100) / 100, num(a[3])]);
+      if (l.length > 96)
+            l.shift();
+      g[k] = JSON.stringify(l);
+      }
+
 //---------------------------------------------------------
 //   debugging in real Live (hub): /ms/probe, /ms/probecall
 //---------------------------------------------------------
@@ -2912,6 +2926,24 @@ function probe(id, what) {
             }
       if (what === "vlog") {                    // (every copy's logged note-ons, through the Global)
             return send("/live/probe", id, str(g.vlogged).substring(0, 7000));
+            }
+      if (/^tlog \d+$/.test(what)) {            // (a track's timing path's notes; "tlog 0": the tracks that logged any)
+            var tt = what.substring(5);
+            if (tt === "0") {
+                  var have = [];
+                  for (var gk in g)
+                        if (/^tlogged\d+$/.test(gk))
+                              have.push(gk.substring(7) + ":" + JSON.parse(g[gk] || "[]").length);
+                  return send("/live/probe", id, have.join(" "));
+                  }
+            return send("/live/probe", id, str(g["tlogged" + tt]).substring(0, 7000));
+            }
+      if (what === "tlog clear") {
+            for (var ck in g)
+                  if (/^tlogged\d+$/.test(ck))
+                        g[ck] = "[]";
+            g.vlogged = "";
+            return send("/live/probe", id, "cleared");
             }
       if (what === "vel") {                     // (the velocity state: the script, the Global's records)
             var vs = { alive: scriptAlive(), keepAsked: keepAsked, velReady: velReady, asks: velAsks.length, sr: velSr, vs: velVs,

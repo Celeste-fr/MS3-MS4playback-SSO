@@ -611,9 +611,17 @@ test("written clips: every exception applies over the whole song with no work of
             evs.push(at(b, [0x90, 60, 90]));
             evs.push(at(b + 0.5, [0x80, 60, 0]));
             }
+      emit(v8, 9, ["log", 1]);                // (the "vlog on" probe: the timing path's log too)
+      toScript.length = 0;
       const out = playTimed(evs).filter((e) => e[1][2] > 0);
+      emit(v8, 9, ["log", 0]);
       const want = [1, 2, 3, 39, 40, 41, 299, 300, 301].map((b) => b * 500 - L + (firsts.indexOf(b) >= 0 ? 0 : 60));
       assert.deepStrictEqual(out.map((e) => Math.round(e[0] * 1000) / 1000), want);
+      // the log: "tlog <pitch> <phase> <delay> <velocity>", each note as the patcher read it
+      const tl = toScript.filter((m) => m[0] === "tlog" && m[4] > 0);
+      assert.deepStrictEqual(tl.map((m) => [m[1], Math.round(m[2] * 16384 * 1e4) / 1e4, m[3], m[4]]),
+                             [1, 2, 3, 39, 40, 41, 299, 300, 301].map((b) => [60, Math.round((b - L / 500) * 1e4) / 1e4,
+                                                                               firsts.indexOf(b) >= 0 ? 0 : 60, 90]));
       emit(v8, 9, ["tgate", 2]);
       emit(v8, 9, ["tdef", 0, 0]);
       emit(v8, 9, ["tbias", 0]);

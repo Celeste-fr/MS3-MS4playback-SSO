@@ -382,6 +382,22 @@ def build(script):
     p.connect(vgate, 0, vpre, 0)
     p.connect(vpre, 0, vdl, 0)
     p.connect(vdl, 0, js, 0)
+    # (written clips) the same "log 0/1" opens the timing path's log: each note through the delays as "tlog <pitch> <phase>
+    # <delay ms> <velocity>" (the song position it read, the delay it took) -> deferlow -> the script (the "tlog" probe).
+    # [unpack]'s velocity (right) comes first, through TIM_NOTE_EXPR into the pack's cold inlets, then the pitch
+    tlog = p.obj("pack 0 0. 0. 0", 4, 1, 1000, 420, outlettype=[""])
+    p.connect(tunp, 1, tlog, 3)
+    p.connect(tsnap, 0, tlog, 1)
+    p.connect(texpr, 0, tlog, 2)
+    p.connect(tunp, 0, tlog, 0)
+    tlgate = p.obj("gate 1", 2, 1, 1000, 450, outlettype=[""])
+    p.connect(vroute, 1, tlgate, 0)
+    p.connect(tlog, 0, tlgate, 1)
+    tlpre = p.obj("prepend tlog", 1, 1, 1000, 480)
+    tldl = p.obj("deferlow", 1, 1, 1000, 510)
+    p.connect(tlgate, 0, tlpre, 0)
+    p.connect(tlpre, 0, tldl, 0)
+    p.connect(tldl, 0, js, 0)
     # outlet 8: what is kept in the set, to the MuseScore Envelopes script; its word that a track's values came, and a
     # velocity curve changed (the hub's messnamed), through deferlow
     p.connect(js, 8, p.obj("udpsend 127.0.0.1 9005", 1, 0, 650, 560), 0)
