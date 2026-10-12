@@ -5,6 +5,14 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Remind the owner (raise these at the start of the next conversation)
+
+- **Whence, Violin I's vibrato** (the owner, 2026-10-12: "record this so I can be reminded later"): the score's Violin I
+  part has Controllers › Vibrato (CC21) at 0, non-vibrato (SSO's zones: 0-41 non-vibrato, 42-84 vibrato, 85-127 molto
+  vibrato). That is why Violins 1's eighth in bar 12 sounds quiet (Long at vibrato 0 is a slow, quiet swell, measured
+  15.9 dB under). The owner will raise it in Mixer › Controllers and listen. Ask whether it's done and how it sounds;
+  then remove this item.
+
 ## Before a build goes to the owner (2026-10-09)
 
 Run the playback audit on *Whence* (the quarter-tone original, `Whence.mscz`, the standard score since 2026-10-11) with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`

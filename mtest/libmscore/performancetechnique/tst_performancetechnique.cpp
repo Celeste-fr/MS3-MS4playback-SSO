@@ -213,7 +213,7 @@ void TestPerformanceTechnique::map()
 
 //---------------------------------------------------------
 //   autoTechniques
-//    Auto plays the notation: C5 after silence spiccato (112); D5 starts the slur right after C5: a re-attack (106),
+//    Auto plays the notation: C5 after silence smooth (5; [slurs] smoothStart 0: spiccato, 112); D5 starts the slur right after C5: a re-attack (106),
 //    C5 ending 54 ms before it; E5 and F5 fingered (69; [slurs] transitions 0: bowed, 93), the note before ending 24 ms
 //    after them; G5's accent accented
 //    (122), F5 ending 54 ms before it; A5 right after it a re-attack (106); B5 after the glissando portamento (10),
@@ -227,7 +227,7 @@ void TestPerformanceTechnique::autoTechniques()
       QVERIFY(lib && s);
       std::map<int, Key> k = render(s, lib);
       QVERIFY(k.count(72) && k.count(83));
-      QCOMPARE(k[72].velocity, 112);
+      QCOMPARE(k[72].velocity, 5);          // (smooth after silence: [slurs] smoothStart)
       QCOMPARE(k[74].velocity, 106);
       QCOMPARE(k[76].velocity, 69);           // (slurs/transitions: fingered under a slur; 0: bowed, 93)
       QCOMPARE(k[77].velocity, 69);
@@ -264,7 +264,7 @@ void TestPerformanceTechnique::ownValues()
       set({ n[3] }, Pid::LIBRARY_JOIN, 40);
       set({ n[3] }, Pid::LIBRARY_VELOCITY, 50);
       std::map<int, Key> k = render(s, lib);
-      QCOMPARE(k[72].velocity, 112);
+      QCOMPARE(k[72].velocity, 5);          // (smooth after silence: [slurs] smoothStart)
       QCOMPARE(k[74].velocity, 93);
       QCOMPARE(k[76].velocity, 106);
       QCOMPARE(k[77].velocity, 50);
@@ -370,7 +370,7 @@ void TestPerformanceTechnique::trace()
       std::map<int, MidiRenderer::LibTrace> byPitch;
       for (const MidiRenderer::LibTrace& e : t)
             byPitch.emplace(e.note->pitch(), e);
-      QCOMPARE(byPitch[72].velocity, 112);
+      QCOMPARE(byPitch[72].velocity, 5);          // (smooth after silence: [slurs] smoothStart)
       QCOMPARE(byPitch[72].performance, MidiRenderer::LibPerformance::ATTACK);
       QCOMPARE(byPitch[72].joinMs, PerformanceTechnique::JOIN_AUTO);
       QCOMPARE(byPitch[74].performance, MidiRenderer::LibPerformance::ATTACK);
@@ -630,7 +630,7 @@ void TestPerformanceTechnique::lanes()
       QCOMPARE(m[0].note->pitch(), 72);
       QVERIFY(!m[0].joinable());
       QCOMPARE(names(NoteLane::velocityBands(m[0], m[0].joinMs)), QString("smooth:1-9 spiccato:10-116 accented:117-127"));
-      QCOMPARE(NoteLane::bandAt(NoteLane::velocityBands(m[0], m[0].joinMs), m[0].velocity)->name, QString("spiccato"));
+      QCOMPARE(NoteLane::bandAt(NoteLane::velocityBands(m[0], m[0].joinMs), m[0].velocity)->name, QString("smooth"));
       // D5: re-attacked 54 ms after C5 ends; joined at -39 ms, a transition, at -40 not
       QCOMPARE(m[1].joinMs, -54);
       QCOMPARE(NoteLane::legatoGap(m[1]), 39);
@@ -721,7 +721,7 @@ void TestPerformanceTechnique::avoidBadSamples()
       QCOMPARE(violins->avoidVelocity(74, 106), 106);
       violins->avoid = { { 74, 74, 100, 116, 90 }, { 76, 77, 85, 127, 50 } };
       std::map<int, Key> k = render(s, lib);
-      QCOMPARE(k[72].velocity, 112);
+      QCOMPARE(k[72].velocity, 5);          // (smooth after silence: [slurs] smoothStart)
       QCOMPARE(k[74].velocity, 90);
       QCOMPARE(k[76].velocity, 69);           // (transitions, fingered: not steered)
       QCOMPARE(k[77].velocity, 69);
@@ -1052,7 +1052,7 @@ void TestPerformanceTechnique::duplicateAutomation()
 //---------------------------------------------------------
 //   slurTransitions
 //    [slurs] transitions (on by default, Recommended; the owner, 2026-10-12): slurs.musicxml, three slurs touching:
-//    [C5 D5 E5 F5] [G5 A5 B5 C6] [D6> E6]. C5 after silence spiccato (112); the notes under a slur fingered (69), the
+//    [C5 D5 E5 F5] [G5 A5 B5 C6] [D6> E6]. C5 after silence smooth (5, [slurs] smoothStart); the notes under a slur fingered (69), the
 //    note before ending 24 ms after them; G5, a slur's first note right after the slur before, a bowed transition (93)
 //    from F5 (F5 ending 24 ms after it, not cut); D6's accent keeps the accented attack (122), C6 ending 54 ms before
 //    it; E6 goes on from it by a transition (until 2026-10-12 a re-attack: the accent made D6's choice other than
@@ -1070,7 +1070,7 @@ void TestPerformanceTechnique::slurTransitions()
             s->setMetaTag(Playback::metaTag, on ? QString() : QString("slurs/transitions=0"));
             std::map<int, Key> k = render(s, lib);
             QVERIFY(k.count(72) && k.count(88));
-            QCOMPARE(k[72].velocity, 112);
+            QCOMPARE(k[72].velocity, 5);          // (smooth after silence: [slurs] smoothStart)
             for (int p : { 74, 76, 77, 81, 83, 84, 88 })
                   QVERIFY2(k[p].velocity == (on ? 69 : 93), qPrintable(QString("key %1: %2").arg(p).arg(k[p].velocity)));
             QCOMPARE(k[86].velocity, 122);

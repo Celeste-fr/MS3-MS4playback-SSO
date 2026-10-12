@@ -91,6 +91,12 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: on a Performance legato with listed techniques (SSO's string sections), Auto plays a slurred note's transition "
         "fingered and the first note of a slur that starts where the slur before ends (same patch, no rest, no accent) as a "
         "bowed transition from it, instead of a re-attack; 0: slurred notes bowed, each slur re-attacked", true },
+      // (the owner, 2026-10-12: the first note of a phrase "smooth"; measured on Violins 1 - Performance 2026-10-10: smooth
+      // velocity 1-9, no bite, -6 dB at ~165 ms; spiccato 10-116, a bite at 50-80 ms then a swell)
+      { "slurs/smoothStart", 1, 0, 1, "on/off",
+        "1: on a Performance legato with listed techniques (SSO's string sections), Auto starts a note after silence on its "
+        "patch with the smooth attack (no bite) instead of spiccato; an accent or marcato still accented, a re-attack right "
+        "after a note of the patch still spiccato; 0: spiccato", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -333,7 +339,7 @@ QString iniTemplate()
 //   presets
 //    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated,
 //    levels/context, levels/sectionBalance) and
-//    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance, slurs/transitions) differ between them. The other settings are not in the table because: legato/keepMs acts
+//    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance, slurs/transitions, slurs/smoothStart) differ between them. The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -347,12 +353,12 @@ const std::vector<Preset>& presets()
             // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; 2026-10-09, quickLevel re-measured in context:
             // "1 is the right balance, make it the recommended preset"; 2026-10-10: the strings' slurs on Performance, and the
             // level rule: levels/context; 2026-10-11: the section balance M, levels/sectionBalance; 2026-10-12: fingered within a slur,
-            // bowed between slurs, slurs/transitions)
+            // bowed between slurs, slurs/transitions; a phrase's first note smooth, slurs/smoothStart)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
-                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 },
                                               { "levels/context", 1 }, { "levels/sectionBalance", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 } } },
             };
       return P;

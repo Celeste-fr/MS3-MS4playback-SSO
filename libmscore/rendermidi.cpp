@@ -1559,7 +1559,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // else with [slurs] transitions fingered, without bowed: the map's legatoVelocity where measured);
                   // with [slurs] transitions a slur's first note right after the slur before ends on its patch, without
                   // an accent, by a bowed transition from it; else an attack: accented under an accent
-                  // or marcato, a re-attack right after a note of its patch, spiccato after silence. A note's own join
+                  // or marcato, a re-attack right after a note of its patch, after silence spiccato (with [slurs] smoothStart smooth). A note's own join
                   // (the Join lane, Note::libraryJoin) right after a note of its patch: a transition up to legatoGap ms
                   // apart (none listed: overlapping or touching), else a re-attack; the note before ends that far from
                   // it. Its own velocity (Note::libraryVelocity) replaces the technique's
@@ -1631,8 +1631,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         if (at != PerformanceTechnique::Attack::AUTO)
                               t = a->attack(PerformanceTechnique::attackName(at));
-                        else
-                              t = a->attack(accent ? "accented" : "spiccato");
+                        else      // (after silence on this patch, [slurs] smoothStart: smooth; the owner, 2026-10-12)
+                              t = a->attack(accent ? "accented" : (!joinable && Playback::on("slurs/smoothStart", score)) ? "smooth" : "spiccato");
                         if (t)
                               p.velocity = (t->name == "spiccato" && joinable && a->reattackVelocity > 0) ? a->reattackVelocity : t->velocity;
                         if (own > 0)
