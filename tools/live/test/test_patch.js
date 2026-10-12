@@ -544,10 +544,10 @@ test("written clips: as loaded (and with \"tgate 2\") every note and controller 
       emit(v8, 9, ["tlast", tlast[2]]);
       emit(v8, 9, ["tgate", 1]);
       emit(v8, 9, ["tdef", 0, L]);
-      const look = L / 500 * 480;             // the lookahead in ticks: the patcher sees the song L ms before the note's
-      emit(v8, 9, ["tbias", look]);
-      // Live sends each message L ms before its clip time (the Track Delay); the patcher sees that song position
-      const at = (beat, bytes) => ({ t: beat * 500 - L, beat: beat - L / 500, bytes: bytes });
+      // Live 12.4.6 (the test VM, 2026-10-12): under a Track Delay of -L ms the patcher sees the note's own song position
+      emit(v8, 9, ["tbias", 0]);              // (the script's bias: one signal vector, 0 in this model)
+      // Live sends each message L ms before its clip time (the Track Delay); the patcher sees the note's own position
+      const at = (beat, bytes) => ({ t: beat * 500 - L, beat: beat, bytes: bytes });
       const u = 1 / U;
       const out = playTimed([at(2, [0x90, 60, 90]), at(3 - u, [0xb0, 32, 5]), at(3, [0x80, 60, 0]), at(3, [0x90, 62, 90]),
                              at(4, [0x80, 62, 0]), at(5, [0x90, 64, 80]), at(5, [0x90, 67, 80]), at(6, [0x80, 64, 0]),
@@ -604,8 +604,8 @@ test("written clips: every exception applies over the whole song with no work of
                         tring[ch][i] = buf.chans[ch - 1][i];
       for (const m of d.out.filter((x) => x[0] === 9))
             emit(v8, 9, m.slice(1));
-      // the patcher sees the song L ms before the note's (TIM_SEES_TRACK_DELAY): the bias as the script sent it
-      const at = (beat, bytes) => ({ t: beat * 500 - L, beat: beat - L / 500, bytes: bytes });
+      // the patcher sees the note's own song position (Live 12.4.6, TIM_SEES_TRACK_DELAY false): the bias as the script sent it
+      const at = (beat, bytes) => ({ t: beat * 500 - L, beat: beat, bytes: bytes });
       const evs = [];
       for (const b of [1, 2, 3, 39, 40, 41, 299, 300, 301]) {
             evs.push(at(b, [0x90, 60, 90]));
@@ -620,7 +620,7 @@ test("written clips: every exception applies over the whole song with no work of
       // the log: "tlog <pitch> <phase> <delay> <velocity>", each note as the patcher read it
       const tl = toScript.filter((m) => m[0] === "tlog" && m[4] > 0);
       assert.deepStrictEqual(tl.map((m) => [m[1], Math.round(m[2] * 16384 * 1e4) / 1e4, m[3], m[4]]),
-                             [1, 2, 3, 39, 40, 41, 299, 300, 301].map((b) => [60, Math.round((b - L / 500) * 1e4) / 1e4,
+                             [1, 2, 3, 39, 40, 41, 299, 300, 301].map((b) => [60, Math.round(b * 1e4) / 1e4,
                                                                                firsts.indexOf(b) >= 0 ? 0 : 60, 90]));
       emit(v8, 9, ["tgate", 2]);
       emit(v8, 9, ["tdef", 0, 0]);

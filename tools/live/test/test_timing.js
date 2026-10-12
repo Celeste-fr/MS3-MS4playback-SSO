@@ -80,7 +80,8 @@ test("a record from the set: the gates open, the defaults and the bias (the vect
       assert.ok(n.some((m) => m[0] === "tdef" && m[1] === 0 && m[2] === 86));
       const bias = n.filter((m) => m[0] === "tbias").pop()[1];
       const vector = 64 / 44100 * 120 / 60 * TICKS, look = 0.086 * 120 / 60 * TICKS;
-      assert.ok(Math.abs(bias - (vector + look)) < 1e-9);
+      assert.ok(Math.abs(bias - vector) < 1e-9);                     // (TIM_SEES_TRACK_DELAY false: measured in Live 12.4.6)
+      assert.ok(look > 0);
       const buf = s.live.buffers["001mslt"];
       assert.strictEqual(buf.channels, 2);
       assert.strictEqual(buf.size, 7 * TICKS + 1 + 3);                       // (the last exception's end, then 0s)
@@ -104,34 +105,36 @@ test("a session clip playing on the track: the gates closed (every note straight
       assert.deepStrictEqual(nine(s).filter((m) => m[0] === "tgate").pop(), ["tgate", 1]);
       });
 
-test("TIM_SEES_TRACK_DELAY false: the bias is the vector alone", () => {
+test("TIM_SEES_TRACK_DELAY true (the assumption before Live showed otherwise): the bias is the vector plus the lookahead", () => {
       const s = setUp();
-      s.d.call("TIM_SEES_TRACK_DELAY = false");
+      s.d.call("TIM_SEES_TRACK_DELAY = true");
       s.d.message("timing", REC);
       const bias = nine(s).filter((m) => m[0] === "tbias").pop()[1];
-      assert.ok(Math.abs(bias - 64 / 44100 * 120 / 60 * TICKS) < 1e-9);
+      assert.ok(Math.abs(bias - (64 / 44100 * 120 / 60 * TICKS + 0.086 * 120 / 60 * TICKS)) < 1e-9);
       });
 
 test("the \"tsees\" probe (a test in Live): every copy's bias follows it at its next second; \"tsees\" alone: as built", () => {
       const s = setUp();
       s.d.message("timing", REC);
       const vector = 64 / 44100 * 120 / 60 * TICKS, look = 0.086 * 120 / 60 * TICKS;
-      s.d.call("probe(1, 'tsees 0')");
-      s.d.call("beat()");
-      assert.ok(Math.abs(nine(s).filter((m) => m[0] === "tbias").pop()[1] - vector) < 1e-9);
-      s.d.call("probe(2, 'tsees')");
+      s.d.call("probe(1, 'tsees 1')");
       s.d.call("beat()");
       assert.ok(Math.abs(nine(s).filter((m) => m[0] === "tbias").pop()[1] - (vector + look)) < 1e-9);
+      s.d.call("probe(2, 'tsees')");
+      s.d.call("beat()");
+      assert.ok(Math.abs(nine(s).filter((m) => m[0] === "tbias").pop()[1] - vector) < 1e-9);
       s.d.call("probe(3, 'tim ask')");
       s.d.call("beat()");
       s.d.call("probe(4, 'tim')");
       const answer = s.d.out.filter((m) => m[0] === 0 && m[1] === "/live/probe" && m[2] === 4).pop();
-      const st = JSON.parse(JSON.parse(answer[3])["tst" + s.t.id]);
+      const st = JSON.parse(answer[3])[s.t.id];
       assert.strictEqual(st.ex, 2);
       assert.strictEqual(st.gate, 1);
-      assert.strictEqual(st.sees, true);
+      assert.strictEqual(st.sees, false);
       // the timing path's log (the patcher's "tlog <pitch> <phase> <delay> <velocity>"): per track, as song beats
       s.d.message("tlog", [62, 4 / 16384, 30.5, 90]);
+      s.d.call("probe(7, 'tim ask')");                 // (each copy hands its log over at its next second)
+      s.d.call("beat()");
       s.d.call("probe(5, 'tlog " + s.t.id + "')");
       const log = s.d.out.filter((m) => m[0] === 0 && m[1] === "/live/probe" && m[2] === 5).pop();
       assert.deepStrictEqual(JSON.parse(log[3]), [[4, 62, 30.5, 90]]);

@@ -372,7 +372,12 @@ function beat() {
             timAsked = g.timAsk;
             g["tst" + me.track] = JSON.stringify({ rec: !!timRec, look: timRec ? timRec.look : 0, def: timDef, ex: timRec ? timRec.ex.length : 0,
                                                    cells: timRec ? timCellCount(timRec) : 0, gate: timGate, bias: timBias, sees: timSees(),
-                                                   sr: velSr, vs: velVs });
+                                                   sr: velSr, vs: velVs, log: velLogOn, tlogs: timLogs });
+            g["tlogged" + me.track] = JSON.stringify({ l: timLogged });
+            }
+      if (g.timLogClear && g.timLogClear !== timLogCleared) {     // (the "tlog clear" probe)
+            timLogCleared = g.timLogClear;
+            timLogged = [];
             }
       }
 var timAsked = 0;
@@ -2874,14 +2879,16 @@ function velLog(a) {
 
 // ("vlog on" probe, written clips) the timing path's notes: "tlog <pitch> <phase> <delay ms> <velocity>", kept per track
 // as [song beat (from the phase), pitch, delay, velocity], the last 96 ("tlog <track id>" probe)
+// (kept in the copy and handed to the hub through the Global at the "tim ask" probe: in Live 12.4.6 a value one copy
+// wrote at each note was not readable by the hub, unlike one written in its heartbeat)
+var timLogs = 0;
+var timLogged = [];
+var timLogCleared = 0;
 function timLog(a) {
-      var k = "tlogged" + me.track;
-      var l = [];
-      try { l = JSON.parse(g[k] || "[]"); } catch (e) {}
-      l.push([Math.round(num(a[1]) * PERIOD_QUARTERS * 1e6) / 1e6, num(a[0]), Math.round(num(a[2]) * 100) / 100, num(a[3])]);
-      if (l.length > 96)
-            l.shift();
-      g[k] = JSON.stringify(l);
+      ++timLogs;
+      timLogged.push([Math.round(num(a[1]) * PERIOD_QUARTERS * 1e6) / 1e6, num(a[0]), Math.round(num(a[2]) * 100) / 100, num(a[3])]);
+      if (timLogged.length > 96)
+            timLogged.shift();
       }
 
 //---------------------------------------------------------
@@ -2917,31 +2924,41 @@ function probe(id, what) {
             g.timAsk = (Number(g.timAsk) || 0) + 1;
             return send("/live/probe", id, "tim asked " + g.timAsk);
             }
+      // (the copies' tracks from the registry: a Global's properties another copy set are not listed by for … in here, Live
+      // 12.4.6)
+      var copyTracks = function() {
+            var r = registry(), l = [];
+            for (var rk in r)
+                  if (l.indexOf(r[rk].track) < 0)
+                        l.push(r[rk].track);
+            return l;
+            };
       if (what === "tim") {                     // (… which this collects)
-            var ts = {};
-            for (var tk in g)
-                  if (/^tst\d+$/.test(tk))
-                        ts[tk] = str(g[tk]);
+            var ts = {}, tl = copyTracks();
+            for (var ti = 0; ti < tl.length; ++ti)
+                  if (g["tst" + tl[ti]])
+                        ts[tl[ti]] = JSON.parse(str(g["tst" + tl[ti]]));
             return send("/live/probe", id, probeText(ts).substring(0, 7000));
             }
       if (what === "vlog") {                    // (every copy's logged note-ons, through the Global)
             return send("/live/probe", id, str(g.vlogged).substring(0, 7000));
             }
-      if (/^tlog \d+$/.test(what)) {            // (a track's timing path's notes; "tlog 0": the tracks that logged any)
+      // (a track's timing path's notes as its copy handed them at the last "tim ask"; "tlog 0": how many each track's has)
+      if (/^tlog \d+$/.test(what)) {
             var tt = what.substring(5);
+            var logOf = function(track) {
+                  try { return JSON.parse(str(g["tlogged" + track]) || "{}").l || []; } catch (e) { return []; }
+                  };
             if (tt === "0") {
-                  var have = [];
-                  for (var gk in g)
-                        if (/^tlogged\d+$/.test(gk))
-                              have.push(gk.substring(7) + ":" + JSON.parse(g[gk] || "[]").length);
+                  var have = [], hl = copyTracks();
+                  for (var hi = 0; hi < hl.length; ++hi)
+                        have.push(hl[hi] + ":" + logOf(hl[hi]).length);
                   return send("/live/probe", id, have.join(" "));
                   }
-            return send("/live/probe", id, str(g["tlogged" + tt]).substring(0, 7000));
+            return send("/live/probe", id, JSON.stringify(logOf(tt)).substring(0, 7000));
             }
-      if (what === "tlog clear") {
-            for (var ck in g)
-                  if (/^tlogged\d+$/.test(ck))
-                        g[ck] = "[]";
+      if (what === "tlog clear") {              // (every copy empties its log at its next second)
+            g.timLogClear = (Number(g.timLogClear) || 0) + 1;
             g.vlogged = "";
             return send("/live/probe", id, "cleared");
             }
@@ -3118,9 +3135,14 @@ function carriersCheck(force) {
 //   of ticks ahead: "tbias", with the velocity shaper's one signal vector); false: the patcher sees the note's own song
 //   position (the cells are read there, ahead by the vector only). The "tsees 0" / "tsees 1" probe (every copy, through
 //   the Global) overrides it while the set is open, for a test in Live.
+//   Measured 2026-10-12 in Live 12.4.6 (the test VM, the plain set of Whence, 28 technique tracks with Track Delays of
+//   0 to -170.5 ms, the "tlog" probe): every one of 310 note-ons was read at its own song position less one signal
+//   vector (-1.43 to -1.45 ms at 44.1 kHz, 64 samples), in playback and in Export All Individual Tracks alike: false.
+//   (Before, true: a note's cells were read L ms of ticks too far ahead, so each exception whose neighbours were the
+//   default took the default: Violins 1 / Violas - Performance's phrase-first notes late by 48 / 83 ms in the export.)
 //---------------------------------------------------------
 
-var TIM_SEES_TRACK_DELAY = true;
+var TIM_SEES_TRACK_DELAY = false;
 var timSaved = null;          // copy: the record the set kept ([pattr Timing])
 var timRec = null;            // copy: the record in force
 var timGate = 2;              // copy: the gates as last set (1 through the delays, 2 straight: the patcher's initial)
