@@ -121,6 +121,15 @@ static const std::vector<Definition> DEFINITIONS = {
         "from measured sound power and section sizes, against SSO's measured levels) plays that many dB louder, staccatos and Performance alike, by the patches' volumes (with [levels] "
         "context the Performance patches' volume carries the section's largest slur gain too; everything lower together so the "
         "loudest stays at Live's Volume top, +6 dB); 0: every section at the same level", true },
+      // (the owner, 2026-10-12, stage A of the dynamics plan: each note as loud as a real player at its written dynamic,
+      // the player's full range; rule D: TU Berlin's pp / ff are ppp / fff, 7 equal dB steps, relative to mp. Off everywhere,
+      // Recommended too, until the owner has heard and approved it; contextlevel.h › Real range)
+      { "levels/realRange", 0, 0, 1, "on/off",
+        "1: each note of a section with a map realSpan (SSO's five string sections) as loud as a real player at its written "
+        "dynamic: ppp .. fff in 7 equal steps of the player's measured pp .. ff range (Weinzierl et al. 2018) from mp, less "
+        "what the library's held note already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' "
+        "volumes (everything lower together past Live's Volume top, +6 dB); a short at velocity 127 still under its "
+        "calibrated level gets the rest by CC11; 0: the library's own range", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },

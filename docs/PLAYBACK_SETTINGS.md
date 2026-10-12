@@ -275,6 +275,60 @@ are M apart and the mix 2.77 dB quieter (HANDOFF.md › Section balance).
 Test: `tst_soundlibrary::levelSectionBalance` (the levels, the volumes, each note's level, the layers, a map without
 levels, the shipped map's M), `tst_liveequivalence::liveSectionBalance` (Live's clips, the route set's and the plain set's Kontakt volumes).
 
+### Real range
+
+Stage A of the dynamics plan (HANDOFF.md › Dynamics like a real player; the owner, 2026-10-12): a written dynamic is one
+gesture; in SSO, CC1 (and a short's velocity) mostly picks the recording (tone), CC11 and the patch's volume are
+loudness only. `[levels] realRange` (**0 everywhere, Recommended too, until the owner has heard and approved it**; per
+score through `playbackSettings`) makes each note of the five string sections as loud as a real player at its written
+dynamic, the player's full range, by CC11 and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
+
+- **Rule D** (the owner, 2026-10-12): TU Berlin's pp and ff ("as softly / loudly as possible") are the player's ppp and
+  fff; the markings between in 7 equal dB steps of (ff - pp) / 7 at each pitch, relative to mp (CC1 64, where the section
+  balance M was set; M stays on top). A section's own pp → ff range in dB is one player's (section size doesn't change it).
+- **Each note** plays by CC11 `realDb(x, p) = steps(x) × span(p) / 7 - long(x, p)`: x the dynamics CC in force as written
+  (so CC1 and CC11 move together: a hairpin ramps both), steps(x) its distance from mp in markings (ppp -3, pp -2 … ff +3,
+  fff +4; between them linear in CC1, the inverse of `Ms4::expressionLevel`), span(p) one player's ff - pp at the pitch,
+  long(x, p) SSO's All techniques Long at CC1 x less at 64 (`ContextLevel::realRangeDb`).
+- **Every technique**: a short is calibrated to the Long at its dynamic, a Performance legato note to the Long by CC1
+  ([levels] calibrated) or, with [levels] context, by its slur's gain measured in the music at the written dynamic
+  against the staccatos (which are the Long's level there). Each is the Long's level at the written CC1, which already
+  holds SSO's own change with CC1 once; realDb takes it away (- long) and puts the player's in, so it is counted once.
+- **Capped shorts**: a short whose calibrated velocity is 127 and still under its level (or 1 and still over) gets the
+  rest by CC11 (`realExtra`, rendermidi.cpp `realRangeLevel`); before, it stayed under silently. Not with the note's own
+  velocity (the Velocity lane).
+- **Headroom**: CC11 only lowers. A part's notes play realDb (+ realExtra) less the part's largest R, found by rendering
+  the score once (`ContextLevel::realRangeTops`, every CC1 value each note meets), and every patch of the part plays R
+  louder by its volume (`TrackDelays::patchGain`), within the same S' as the level rule and the section balance: the
+  loudest patch at Live's Volume top (+6 dB), everything else lower together.
+- **Live**: the CC11 values are the renderer's (`libraryNoteLevels`), so Live's clips and the plain set's CC11 lanes carry
+  them; the volumes reach the route set's and the plain set's Kontakt track Volume (`tst_liveequivalence::liveRealRange`).
+
+The data (`tools/soundlibraries/real_range.py` → `sso_real_range.json` → `gen_spitfire_sso.py` → the map's
+`<Instrument realSpan longLevel>` on the five sections' main patches, their extras take them):
+
+- Real side: Weinzierl et al. 2018 (TU Berlin database v3, `3_Audio_Features.csv`, "SoundPower in dB" of single tones,
+  modern instruments, `_et_` files, pp and ff; violin for Violins 1 and 2). The span ff - pp per semitone is smoothed (single
+  takes jump by several dB a semitone): local linear least squares over ±k semitones, k = 5 chosen by leave-one-out
+  cross-validation pooled over the four instruments (RMS 2.39 dB; k 1 … 12: 2.69 … 2.49). Beyond the database's range: the
+  nearest end's.
+- SSO side: `sso_cc1_curves.json` (Windows VM, Kontakt 8 + SSO, 2026-10-11), rmsDb (the sustain's mean power 1.5-3.0 s after
+  the note-on: like for like with sound power), each measured pitch less its CC1 64, unsmoothed (repeat spread ~1 dB);
+  linear in CC1 and pitch between the points.
+
+At a middle pitch (dB; realDb ppp / mp / fff against mp, CC11 before the headroom):
+
+| Section | pitch | real pp / ff | span (smoothed) | step | SSO Long 16 / 127 | realDb ppp / fff |
+|---|---|---|---|---|---|---|
+| Violins 1 | 73 | 57.5 / 90.5 | 30.8 | 4.40 | -5.8 / +4.5 | -7.4 / +13.1 |
+| Violins 2 | 73 | 57.5 / 90.5 | 30.8 | 4.40 | -6.0 / +4.1 | -7.2 / +13.5 |
+| Violas | 75 | 67.9 / 92.1 | 25.4 | 3.63 | -6.5 / +4.8 | -4.4 / +9.8 |
+| Celli | 64 | 70.5 / 90.1 | 21.8 | 3.11 | -5.3 / +4.3 | -4.1 / +8.2 |
+| Basses | 52 | 65.9 / 91.0 | 21.5 | 3.08 | -9.1 / +10.1 | -0.1 / +2.2 |
+
+Test: `tst_soundlibrary::levelRealRange` (realDb, CC11 at ppp / mp / fff, a hairpin's CC11 following its CC1, R as
+volume, a capped short, the layers, the presets without it, the shipped map), `tst_liveequivalence::liveRealRange`.
+
 ## Inventory
 
 Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitfire Symphony Orchestra.xml`, made by
@@ -307,6 +361,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Auto's attack after silence on a Performance legato with listed techniques (SSO's five string sections): smooth (map velocity 5; measured on Violins 1 - Performance 2026-10-10: velocity 1-9, no bite, -6 dB at ~165 ms) instead of spiccato (112: a bite at 50-80 ms, then a swell). An accent or marcato stays accented (122), a re-attack right after a note of the patch spiccato (106); the Inspector's attack and the Velocity lane override. The owner, 2026-10-12: "smooth" for a phrase's first note (after setting it by hand in Whence). A smooth note starts early by the smooth attack's own measured onset (map `attackOnset`, `sso_smooth_onset.json`, 2026-10-12, kthost on the test VM, CC1 64: median Violins 1 100.2, Violins 2 91.1, Violas 236.2, Celli 172.2, Basses 103.1 ms; by pitch with `[heldNotes] byPitch` 1), not the articulation's onset (measured at velocity 80), within the same cap (the note before on its patch keeps keepMs; chunks); Live's written clips get it through their timing. 0: spiccato | 1 (on; Recommended 1, Library default 0) | `rendermidi.cpp` `performanceNote` | `[slurs] smoothStart`; score: `playbackSettings` |
 | Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' volumes, the rest of the part's patches lower together (above, Level rule; the owner, 2026-10-10) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a string section its map `sectionLevel` louder by its volume, with the level rule each phrase at gain + its section's level, all lower together so the loudest stays at +6 dB (above, Section balance; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::volumes`), `TrackDelays::patchGain`; data: map `sectionLevel` from `gen_spitfire_sso.py` `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
+| Real range: each note of the five string sections as loud as a real player at its written dynamic (rule D: TU Berlin's pp / ff are ppp / fff, 7 equal dB steps from mp), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 0 (everywhere, Recommended too, until the owner has heard it) | `contextlevel.cpp` (`realRangeDb`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |
 | Pedal changes after their chord (legato pedalling) | up one tick after, down the tick after (since 2026-10-06; the pianist's timing, `[pedal]`, removed 2026-10-07) | `renderSpanners` (pedal) | fixed |
 | A key struck again ends its sounding note just before | on | `finishLibraryEvents` | `[notes] sameKeyEndsFirst` |
 | An attack at a velocity whose recording at that key is faulty plays at the nearest clean velocity measured (map `avoid`, `tools/soundlibraries/sso_bad_samples.json`: SSO's Celli - Performance B2-C3 at 100-116, the spiccato attack's top layer and the re-attack 106, plays its 5th round robin of 6 with a narrow tone near 1184 Hz, +9 .. +11 dB over the other attacks there; 99 and below clean; kthost on the Windows VM, 2026-10-10). Not legato transitions, not a note's own velocity (the Velocity lane). The owner, 2026-10-10: "the weird square wave-y noise problem" in Whence's Celli under the level rule (its CC1 64 makes the recording stand out: at CC1 89 it is there too, +3 dB) | on | `rendermidi.cpp` (`libAvoidBad`), `Articulation::avoidVelocity` | `[notes] avoidBadSamples`; score: `playbackSettings` |

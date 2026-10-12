@@ -37,6 +37,37 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   velocity), loudness then entirely CC11.
 - Other sections than strings (woodwind / brass Performance transitions): later.
 
+### Stage A built: `[levels] realRange` (branch `real-range`, 2026-10-12; 0 everywhere until the owner has heard it)
+
+Design: contextlevel.h › Real range, docs/PLAYBACK_SETTINGS.md › Real range. Each string note plays by CC11
+realDb = steps(written CC1) × span / 7 - SSO Long's change from CC1 64 (span: Weinzierl's ff - pp at the pitch,
+smoothed, k = 5 by leave-one-out; SSO: `sso_cc1_curves.json` rmsDb), following CC1 through hairpins; a capped short's
+rest by CC11; each part's largest R as its patches' volume within the level rule's / section balance's S'. Windows
+build of 8ce52a7: https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38294617925 (on the VM:
+`C:\claude\realrange\ms`).
+
+Measured with Kontakt 8 + SSO on the Windows VM (`--verify-playback --verify-wav`, VM playback.ini preset Recommended,
+realRange by the score's metaTag), a dynamics ladder (`tools/playbackverify/make_dynamics_ladder.py`: each section ppp
+… fff held, then staccatos, at its check pitch), each section alone, the held note's sustain K-weighted, ppp → fff
+(pp → ff) in dB, off / on / rule D: Violins 1 10.3 (7.7) / 31.6 (23.2) / 31.8 (22.7); Violins 2 8.7 (6.4) / 31.8
+(23.3) / 31.8 (22.7); Violas 10.8 (6.7) / 27.9 (19.2) / 26.8 (19.2); Celli 8.6 (2.3) / 22.8 (12.8) / 21.3 (15.2);
+Basses 15.7 (9.3) / 20.7 (12.0) / 19.7 (14.1). Every violin / viola marking within 1.0 dB of rule D. Celli and Basses
+miss by up to 3.7 dB at single markings (Celli p -5.9 / mf -0.1 against -3.0 / +3.0; Basses p -6.5, mf -0.9): the
+same dips are in the off render (Celli mf 2.0 dB under mp, Basses mf 2.8 under), one note per marking, so round robins
+(sso_cc1_curves.json: up to ~4 dB apart at soft CC1) or the pitch, not the CC11. Staccatos follow the held notes (within
+~1.5 dB of them, both ways). Mp: everything 5.6 dB quieter (S': Violins 2's R 14.2 + M -2.66 puts it at +6).
+Whence (quarter tones; no written range: only mp in bar 9 Celli / Basses, every note at CC1 64): bars 5-12, on minus
+off, -0.08 … -0.14 dB per section (median), the mix -0.12 (a capped Celli short's +0.10 dB of headroom); dump the same.
+Audio for the owner: no-measure-bats/nmb-lvlpage/audio/realrange/ (`<section>_off|on.mp3`, mix, times.json; one gain per
+pair).
+
+Open for the owner: (1) listen to the ladder pairs and decide whether realRange goes into Recommended; (2) Whence has
+no dynamics to hear it in: a score with written dynamics is needed to judge it in music; (3) with realRange the whole
+mix plays ~5-6 dB quieter at mp (the violins' fff needs +18 dB over mp; Live's Volume top is +6) — fine for Kontakt,
+but louder playback means the Mixer's master; (4) each edit re-renders the score once to find R while realRange is on
+(a big score may lag after an edit); (5) Celli / Basses: the SSO side is measured every 3 semitones with ~4 dB round-robin
+spread at soft CC1: a denser or repeated measurement at the parts' common pitches would tighten them; (6) stage B (tone).
+
 ## Before a build goes to the owner (2026-10-09)
 
 Run the playback audit on *Whence* (the quarter-tone original, `Whence.mscz`, the standard score since 2026-10-11) with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`

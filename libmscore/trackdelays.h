@@ -73,6 +73,7 @@ struct Delays {
       // score's largest phrase gain G (a phrase plays its gain less G by CC11)
       std::map<QString, double> rule;         // patch -> dB
       double ruleTop { 0.0 };
+      double rangeTop { 0.0 };                // [levels] realRange: the part's R (its notes' CC11 play realDb less it)
       };
 
 // a track of the part: its Kontakt track ("<patch>"), a technique track ("<patch> / <technique>")

@@ -263,6 +263,7 @@ class NPlayEvent : public PlayEvent {
       bool _libSwitch = false;            // the library's articulation switch
       signed char _libPatch = 0;          // which of the part's library patches plays it
       bool _libDelayed = false;           // moved by its track's delay already (trackdelays.h)
+      bool _libLevel = false;             // a value a note's level set (rendermidi.cpp libraryNoteLevels), not as written
 
    public:
       NPlayEvent() : PlayEvent() {}
@@ -291,6 +292,8 @@ class NPlayEvent : public PlayEvent {
       int libraryPatch() const { return _libPatch; }
       void setLibraryDelayed(bool v) { _libDelayed = v; }
       bool libraryDelayed() const { return _libDelayed; }
+      void setLibraryLevel(bool v) { _libLevel = v; }
+      bool libraryLevel() const { return _libLevel; }
       void setPortamento(bool p) { _portamento = p; }
       bool portamento() const { 
             return (_portamento == true || 

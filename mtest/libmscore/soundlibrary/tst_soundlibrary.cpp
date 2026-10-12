@@ -126,6 +126,7 @@ class TestSoundLibrary : public QObject, public MTest
       void smoothOnset();
       void levelContext();
       void levelSectionBalance();
+      void levelRealRange();
       void playbackPresets();
       void renderKit();
       void renderKitRoll();
@@ -2553,6 +2554,191 @@ void TestSoundLibrary::levelSectionBalance()
             withLevel += li.sectionLevelDb != 0.0;
             }
       QVERIFY(withLevel > 5);
+      }
+
+//---------------------------------------------------------
+//   levelRealRange
+//    [levels] realRange (contextlevel.h › Real range): the map's realSpan / longLevel (the main patch's, its extras
+//    take them); realDb = steps(x) * span / 7 - long(x); each note's CC11 at ppp / mp / fff, a hairpin's CC11 following
+//    its CC1, the part's R as its patches' volume (+6 at most, the rest lower together), a capped short's rest by
+//    CC11; layers (default 0, the ini's 1, the score's 1 over the ini's 0); the presets leave it alone
+//---------------------------------------------------------
+
+void TestSoundLibrary::levelRealRange()
+      {
+      // span 28 (a step of 4 dB) at every pitch; the Long +4 dB at CC1 127, +3 at 112, -6 at 16 against 64:
+      // ppp -12 + 6 = -6, p -4 + 2 = -2, mp 0, f 8 - 2 = 6, fff 16 - 4 = 12
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin' realSpan='60:28 84:28'"
+         " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/84:-6 64/84:0 112/84:3 127/84:4'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' modifiers='performance'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::LibInstrument* violin = nullptr;
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            QCOMPARE(int(li.realSpan.size()), 2);                   // (the extra takes the main's)
+            QCOMPARE(int(li.longLevel.size()), 2);
+            if (li.name == "Violin")
+                  violin = &li;
+            }
+      QVERIFY(violin && ContextLevel::hasRealRange(violin));
+      QCOMPARE(ContextLevel::markingSteps(16), -3.0);
+      QCOMPARE(ContextLevel::markingSteps(1), -3.0);
+      QCOMPARE(ContextLevel::markingSteps(64), 0.0);
+      QCOMPARE(ContextLevel::markingSteps(112), 3.0);
+      QCOMPARE(ContextLevel::markingSteps(127), 4.0);
+      QVERIFY(std::fabs(ContextLevel::markingSteps(120) - (3 + 8 / 15.0)) < 1e-12);
+      const std::map<int, double> expected { { 16, -6 }, { 48, -2 }, { 64, 0 }, { 96, 6 }, { 127, 12 } };
+      for (const auto& e : expected)
+            for (int p : { 50, 72, 90 })        // (the nearest end's beyond the measured pitches)
+                  QVERIFY2(std::fabs(ContextLevel::realRangeDb(*violin, e.first, p) - e.second) < 1e-9,
+                           qPrintable(QString("cc %1 pitch %2: %3").arg(e.first).arg(p).arg(ContextLevel::realRangeDb(*violin, e.first, p))));
+      SoundLib::setCurrent(lib);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "real-range.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts()[0];
+      // per note-on: pitch -> (CC1, CC11) in force; every CC11 change after a CC1 change while F5 sounds
+      struct N { int cc1; int cc11; };
+      std::vector<std::pair<int, int>> hairpin;                     // (CC1, CC11) after each CC1 step under F5
+      auto render = [&]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::map<int, N> notes;
+            int cc1 = -1, cc11 = 127;
+            bool underF5 = false, afterCc1 = false;
+            hairpin.clear();
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const bool wasCc1 = afterCc1;
+                  afterCc1 = ev.type() == ME_CONTROLLER && ev.controller() == 1;
+                  if (afterCc1)
+                        cc1 = ev.value();
+                  else if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION) {
+                        cc11 = ev.value();
+                        if (underF5 && wasCc1)
+                              hairpin.push_back({ cc1, cc11 });
+                        }
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0) {
+                        notes[ev.pitch()] = { cc1, cc11 };
+                        underF5 = ev.pitch() == 77;
+                        }
+                  }
+            return notes;
+            };
+      auto cc11 = [](double db) { return qBound(1, int(std::lround(127 * std::pow(10.0, db / 20))), 127); };
+      // the default (0): the library's own range
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      QVERIFY(ContextLevel::volumes(score).empty());
+      QVERIFY(ContextLevel::realRangeTops(score).empty());
+      std::map<int, N> n = render();
+      for (const auto& x : n)
+            QCOMPARE(x.second.cc11, 127);
+      QCOMPARE(n[72].cc1, 16);
+      QCOMPARE(n[74].cc1, 64);
+      QCOMPARE(n[76].cc1, 127);
+      // on: R = 12 (fff), the patches +6 (Live's top), everything 6 lower; each note realDb - 12 by CC11
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" } });
+      const std::map<const Part*, double> tops = ContextLevel::realRangeTops(score);
+      QCOMPARE(int(tops.size()), 1);
+      QVERIFY2(std::fabs(tops.at(part) - 12) < 1e-9, qPrintable(QString::number(tops.at(part))));
+      std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
+      QCOMPARE(int(v.size()), 1);
+      QVERIFY(std::fabs(v[part].range - 12) < 1e-9);
+      QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
+      QVERIFY(!v[part].patchDb.count("Violin Legato") || std::fabs(v[part].patchDb["Violin Legato"] - 6) < 1e-9);
+      const TrackDelays::Delays d = TrackDelays::of(part, TrackDelays::read(score));
+      QVERIFY(std::fabs(d.rangeTop - 12) < 1e-9);
+      QVERIFY(std::fabs(TrackDelays::patchGain(*lib, d, "Violin") - std::pow(10.0, 6.0 / 20)) < 1e-9);
+      QCOMPARE(TrackDelays::write(score, TrackDelays::read(score)), QString());          // (never in the metaTag)
+      n = render();
+      QCOMPARE(n[72].cc11, cc11(-6 - 12));          // ppp
+      QCOMPARE(n[74].cc11, cc11(0 - 12));           // mp
+      QCOMPARE(n[76].cc11, 127);                    // fff
+      QCOMPARE(n[69].cc11, 127);                    // (the staccatos at fff: the same)
+      QCOMPARE(n[77].cc11, cc11(-2 - 12));          // p, the hairpin's start
+      QCOMPARE(n[79].cc11, cc11(6 - 12));           // f
+      for (int p : { 72, 74, 76, 77, 79 })
+            QCOMPARE(n[p].cc1, expected.count(n[p].cc1) ? n[p].cc1 : -1);       // (CC1 as written)
+      // the hairpin: CC1 rises, every step its CC11 (realDb at that CC1), rising with it
+      QVERIFY2(hairpin.size() >= 10, qPrintable(QString::number(hairpin.size())));
+      // (rising with CC1; MS4's expressionLevel sends 64 where the hairpin passes its "natural" level 5000: CC11 follows)
+      int last = 0, lastCc1 = 0;
+      QString seen;
+      for (const auto& h : hairpin)
+            seen += QString(" %1:%2").arg(h.first).arg(h.second);
+      for (const auto& h : hairpin) {
+            QCOMPARE(h.second, cc11(ContextLevel::realRangeDb(*violin, h.first, 77) - 12));
+            if (h.first >= lastCc1)
+                  QVERIFY2(h.second >= last, qPrintable(seen));
+            last = h.second;
+            lastCc1 = h.first;
+            }
+      QVERIFY(hairpin.back().first > 80 && hairpin.back().second > n[77].cc11);
+      // the score's 1 over the ini's 0
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      score->setMetaTag(Playback::metaTag, "levels/realRange=1");
+      QCOMPARE(render()[72].cc11, cc11(-18));
+      score->setMetaTag(Playback::metaTag, "");
+      QCOMPARE(render()[72].cc11, 127);
+      // calibrated: the staccato on velocity, as loud as the Long at fff only beyond 127 (Long -45 + 0.2 x, the staccato
+      // -50 + 0.1 x by ear): capped at 127, the rest (at least 17.7 dB less MS4's offset) by CC11, so it is the part's
+      // loudest (R) and the Long's fff 12 - R under it
+      auto line = [](const char* by, double a, double b) {
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = by;
+            for (int x : { 16, 32, 48, 64, 80, 96, 112, 127 }) {
+                  c.points.push_back({ x, a + b * x });
+                  c.perceived.push_back({ x, a + b * x });
+                  }
+            return c;
+            };
+      auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+      cal->setCurve("Violin", 1, line("controller", -45, 0.2));
+      cal->setCurve("Violin", 40, line("velocity", -50, 0.1));
+      SoundLib::setDynamicsCalibration(cal);
+      Playback::setIniValuesForTest({ { "levels/realRange", "1" } });
+      v = ContextLevel::volumes(score);
+      const double r = v[part].range;
+      QVERIFY2(r > 12 + 17.7 - 6, qPrintable(QString::number(r)));
+      n = render();
+      QCOMPARE(n[69].cc11, 127);
+      QCOMPARE(n[76].cc11, cc11(12 - r));
+      QCOMPARE(n[74].cc11, cc11(0 - r));
+      QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
+      delete score;
+      // the presets leave it alone (0 everywhere until the owner has heard it)
+      const Playback::Definition* def = Playback::definition("levels/realRange");
+      QVERIFY(def && def->value == 0.0 && def->perScore);
+      for (const Playback::Preset& p : Playback::presets())
+            for (const auto& kv : p.values)
+                  QVERIFY(QString(kv.first) != "levels/realRange");
+      // the shipped SSO map: the five string sections (and their extras) carry it, nothing else
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      const QStringList sections { "Violins 1", "Violins 2", "Violas", "Celli", "Basses" };
+      int with = 0;
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            const QString section = li.with.isEmpty() ? li.name : li.with;
+            QCOMPARE(ContextLevel::hasRealRange(&li), sections.contains(section));
+            if (!ContextLevel::hasRealRange(&li))
+                  continue;
+            ++with;
+            QCOMPARE(ContextLevel::realRangeDb(li, 64, 60), 0.0);                    // (mp: none, M stays)
+            QVERIFY(ContextLevel::realRangeDb(li, 127, li.realSpan.begin()->first) > 0);
+            }
+      QVERIFY(with >= 10);
       }
 
 //---------------------------------------------------------

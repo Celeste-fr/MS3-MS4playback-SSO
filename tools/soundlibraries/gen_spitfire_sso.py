@@ -1479,6 +1479,22 @@ def contextLevel(patch, sound):
 SECTION_FADERS = {'Violins 1': -3.81, 'Violins 2': -2.66, 'Violas': -2.12, 'Celli': 2.77, 'Basses': 5.81}
 def sectionLevel(name):
     return round(SECTION_FADERS[name], 3)
+# - realSpan= ("pitch:dB ...") and longLevel= ("cc/pitch:dB ..."), on the five string sections' main Instrument (their
+#   extras take them): [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A, rule D): a note
+#   plays (steps of its written dynamic from mp) x realSpan / 7 less (longLevel at its CC1) dB by CC11 and the patches'
+#   volumes. realSpan: one player's ff - pp sound power per semitone (Weinzierl et al. 2018, TU Berlin database v3),
+#   smoothed (local linear, +-k semitones, k by leave-one-out); longLevel: SSO's All techniques Long, the sustain's mean
+#   power less its CC1 64 level, every 3 semitones (sso_cc1_curves.json). Both from sso_real_range.json
+#   (real_range.py)
+REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
+def realRangeAttributes(name):
+    r = REAL_RANGE.get(name)
+    if not r:
+        return ''
+    span = ' '.join(f'{p}:{v:g}' for p, v in sorted(((int(p), v) for p, v in r['span'].items())))
+    long = ' '.join(f'{cc}/{p}:{v:g}' for p, per in sorted(((int(p), per) for p, per in r['long'].items()))
+                    for cc, v in sorted(((int(c), v) for c, v in per.items())))
+    return f' realSpan="{span}" longLevel="{long}"'
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0
@@ -1499,7 +1515,7 @@ for i, line in enumerate(out):
                 out[i] = line[:-len(end)] + f' bend="{b:g}"' + end
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
-                out[i] = out[i][:-len(end)] + f' sectionLevel="{sectionLevel(current):g}"' + end
+                out[i] = out[i][:-len(end)] + f' sectionLevel="{sectionLevel(current):g}"' + realRangeAttributes(current) + end
         continue
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:
