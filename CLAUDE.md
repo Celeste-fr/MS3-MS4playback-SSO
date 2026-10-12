@@ -129,7 +129,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   (1 in Recommended, the default; 0 in Library default) plays slurred notes of the five string sections as under staff
   text "performance" (`Want::slurPerformance`, `choosePerformance`: a plain choice and a legato with `attacks`; staff
   text "non performance" opts out, `TextState::performanceOff`), instead of `[slurs] quick`'s swap; a staccato before a
-  slur stays on All techniques, so the slur starts from silence. Off (Library default), SSO slurs play the All techniques
+  slur stays on All techniques, so the slur starts from silence. With **`[slurs] transitions`** (the owner, 2026-10-12; 1 in Recommended and by default, 0 in Library default) Auto plays a slurred note's transition fingered and a slur starting where the slur before ends (touching, no accent) as a bowed transition from it instead of a re-attack (`performanceNote`, `slurAt`; docs/PLAYBACK_SETTINGS.md). Off (Library default), SSO slurs play the All techniques
   longs, each note its own attack, early by its onset; a legato transition needs an articulation with `legato` first
   (`Articulation::playsTransitions`), which the SSO map has only under modifier `performance` (the Performance patches'
   Legato; Violas - Performance transitions at velocity 100, map `legatoVelocity`, approved with `[slurs] performance`;
@@ -337,14 +337,14 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   2026-10-09 (UNMEASURED 9, CAPPED 2, ARRIVAL 1 fail: the Celli's 2nd note, bar 1, LEVEL STEP 12 info).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
   violas (bars 8-16), violins and celli, UNMEASURED for every Long (Rachm.) / Spiccato / Long outside the fit files.
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): NN passed (2026-10-12: plainOwnTechnique; 2026-10-11: verifyExportMix, the verification renders at the patch volumes; liveTimingOverride, timing set in Live; plainWritten, three rows: written clips + Track Delay + the device's delays play every note-on / note-off of MuseScore's render; `dumpEvents` with `MS_DUMP_TIMING=<file>` writes each plain-set note's written and played times; plainTuned checks the glided bend envelope; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 31 passed with init and cleanup (2026-10-12: plainOwnTechnique; 2026-10-11: verifyExportMix, the verification renders at the patch volumes; liveTimingOverride, timing set in Live; plainWritten, three rows: written clips + Track Delay + the device's delays play every note-on / note-off of MuseScore's render; `dumpEvents` with `MS_DUMP_TIMING=<file>` writes each plain-set note's written and played times; plainTuned checks the glided bend envelope; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
   calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks, `MS_DUMP_LIVE` as Live's clips (plus kontakts.txt, routes.txt and multis.txt: the
   plain set's Kontakt instances and each slot's Tune); every dump writes routemap.txt (route, lane, cents, bend range)
   and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 62 with init and cleanup (2026-10-11, clipsTimingFromLive; 2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches; 2026-10-08:
-  allArticulations, textLevel, calibrated), `tst_performancetechnique` 20 (2026-10-12: onPerformancePatch, ownTechnique, duplicateNoteValues, duplicateAutomation (Ctrl+D over a time selection); 2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
+  allArticulations, textLevel, calibrated), `tst_performancetechnique` 21 (2026-10-12: slurTransitions, onPerformancePatch, ownTechnique, duplicateNoteValues, duplicateAutomation (Ctrl+D over a time selection); 2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
   rendered events, file round trip, undo; own velocity / join, the trace, the lanes' model `lanes`), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.

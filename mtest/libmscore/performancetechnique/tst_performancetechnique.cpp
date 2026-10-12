@@ -375,7 +375,7 @@ void TestPerformanceTechnique::trace()
       QCOMPARE(byPitch[72].joinMs, PerformanceTechnique::JOIN_AUTO);
       QCOMPARE(byPitch[74].performance, MidiRenderer::LibPerformance::ATTACK);
       QCOMPARE(byPitch[74].joinMs, -54);
-      QCOMPARE(byPitch[76].velocity, 93);
+      QCOMPARE(byPitch[76].velocity, 69);       // (fingered: [slurs] transitions)
       QCOMPARE(byPitch[76].performance, MidiRenderer::LibPerformance::TRANSITION);
       QCOMPARE(byPitch[76].joinMs, 24);
       QVERIFY(byPitch[76].dynamicVelocities.empty());           // (dynamics on the controller)
@@ -429,7 +429,7 @@ void TestPerformanceTechnique::overrides()
       QCOMPARE(k[72].velocity, 5);
       QCOMPARE(k[74].velocity, 10);
       QCOMPARE(k[76].velocity, 69);
-      QCOMPARE(k[77].velocity, 93);
+      QCOMPARE(k[77].velocity, 69);           // (Auto under a slur: fingered, [slurs] transitions)
       QCOMPARE(k[79].velocity, 69);
       auto within = [](double a, double b) { return std::abs(a - b) < 2.5; };
       QVERIFY2(within(ms(k[72].off - k[74].on), 24), qPrintable(QString::number(ms(k[72].off - k[74].on))));
@@ -723,8 +723,8 @@ void TestPerformanceTechnique::avoidBadSamples()
       std::map<int, Key> k = render(s, lib);
       QCOMPARE(k[72].velocity, 112);
       QCOMPARE(k[74].velocity, 90);
-      QCOMPARE(k[76].velocity, 93);
-      QCOMPARE(k[77].velocity, 93);
+      QCOMPARE(k[76].velocity, 69);           // (transitions, fingered: not steered)
+      QCOMPARE(k[77].velocity, 69);
       std::vector<Note*> n = notes(s);
       set({ n[1] }, Pid::LIBRARY_VELOCITY, 110);
       QCOMPARE(render(s, lib)[74].velocity, 110);
@@ -1055,7 +1055,8 @@ void TestPerformanceTechnique::duplicateAutomation()
 //    [C5 D5 E5 F5] [G5 A5 B5 C6] [D6> E6]. C5 after silence spiccato (112); the notes under a slur fingered (69), the
 //    note before ending 24 ms after them; G5, a slur's first note right after the slur before, a bowed transition (93)
 //    from F5 (F5 ending 24 ms after it, not cut); D6's accent keeps the accented attack (122), C6 ending 54 ms before
-//    it. 0: under a slur bowed (93), G5 a re-attack (106) with F5 ending 54 ms before it
+//    it; E6 goes on from it by a transition (until 2026-10-12 a re-attack: the accent made D6's choice other than
+//    "legato"). 0: under a slur bowed (93), G5 a re-attack (106) with F5 ending 54 ms before it
 //---------------------------------------------------------
 
 void TestPerformanceTechnique::slurTransitions()
@@ -1071,7 +1072,7 @@ void TestPerformanceTechnique::slurTransitions()
             QVERIFY(k.count(72) && k.count(88));
             QCOMPARE(k[72].velocity, 112);
             for (int p : { 74, 76, 77, 81, 83, 84, 88 })
-                  QCOMPARE(k[p].velocity, on ? 69 : 93);
+                  QVERIFY2(k[p].velocity == (on ? 69 : 93), qPrintable(QString("key %1: %2").arg(p).arg(k[p].velocity)));
             QCOMPARE(k[86].velocity, 122);
             QVERIFY2(within(ms(k[76].off - k[77].on), 24), qPrintable(QString::number(ms(k[76].off - k[77].on))));
             if (on) {

@@ -1606,7 +1606,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         else if (tr != PerformanceTechnique::Transition::AUTO && joinable
                             && (t = a->transition(PerformanceTechnique::transitionName(tr))))
                               transition = true;
-                        else if (at == PerformanceTechnique::Attack::AUTO && slurred) {
+                        else if (at == PerformanceTechnique::Attack::AUTO && (slurred || (joinable && slurGoesOn(joinable)))) {
+                              // (a slur going on from the note before on this patch: a transition, also after a slur's
+                              // first note chosen otherwise than "legato", e.g. accented)
                               t = autoTransition();
                               transition = t;
                               }
