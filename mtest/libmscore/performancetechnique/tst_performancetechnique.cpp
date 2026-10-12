@@ -58,9 +58,9 @@ class TestPerformanceTechnique : public QObject, public MTest
                   qWarning("%s", qPrintable(error));
             return lib;
             }
-      MasterScore* score(bool performance = true)
+      MasterScore* score(bool performance = true, const QString& file = "performancetechnique.musicxml")
             {
-            MasterScore* s = readScore(DIR + "performancetechnique.musicxml");
+            MasterScore* s = readScore(DIR + file);
             if (!s)
                   return nullptr;
             // the section (MusicXML's strings.group is ambiguous; "Violin" is SSO's Solo Violin)
@@ -173,6 +173,7 @@ class TestPerformanceTechnique : public QObject, public MTest
       void ownTechnique();
       void duplicateNoteValues();
       void duplicateAutomation();
+      void slurTransitions();
       };
 
 //---------------------------------------------------------
@@ -213,7 +214,8 @@ void TestPerformanceTechnique::map()
 //---------------------------------------------------------
 //   autoTechniques
 //    Auto plays the notation: C5 after silence spiccato (112); D5 starts the slur right after C5: a re-attack (106),
-//    C5 ending 54 ms before it; E5 and F5 bowed (93), the note before ending 24 ms after them; G5's accent accented
+//    C5 ending 54 ms before it; E5 and F5 fingered (69; [slurs] transitions 0: bowed, 93), the note before ending 24 ms
+//    after them; G5's accent accented
 //    (122), F5 ending 54 ms before it; A5 right after it a re-attack (106); B5 after the glissando portamento (10),
 //    A5 ending 24 ms after it
 //---------------------------------------------------------
@@ -227,8 +229,8 @@ void TestPerformanceTechnique::autoTechniques()
       QVERIFY(k.count(72) && k.count(83));
       QCOMPARE(k[72].velocity, 112);
       QCOMPARE(k[74].velocity, 106);
-      QCOMPARE(k[76].velocity, 93);
-      QCOMPARE(k[77].velocity, 93);
+      QCOMPARE(k[76].velocity, 69);           // (slurs/transitions: fingered under a slur; 0: bowed, 93)
+      QCOMPARE(k[77].velocity, 69);
       QCOMPARE(k[79].velocity, 122);
       QCOMPARE(k[81].velocity, 106);          // A5 right after G5: a re-attack
       QCOMPARE(k[83].velocity, 10);
@@ -1045,6 +1047,44 @@ void TestPerformanceTechnique::duplicateAutomation()
       // no room
       QVERIFY(!Automation::Edit::duplicateSpan(e, 3840, 5760, 5760));
       delete s;
+      }
+
+//---------------------------------------------------------
+//   slurTransitions
+//    [slurs] transitions (on by default, Recommended; the owner, 2026-10-12): slurs.musicxml, three slurs touching:
+//    [C5 D5 E5 F5] [G5 A5 B5 C6] [D6> E6]. C5 after silence spiccato (112); the notes under a slur fingered (69), the
+//    note before ending 24 ms after them; G5, a slur's first note right after the slur before, a bowed transition (93)
+//    from F5 (F5 ending 24 ms after it, not cut); D6's accent keeps the accented attack (122), C6 ending 54 ms before
+//    it. 0: under a slur bowed (93), G5 a re-attack (106) with F5 ending 54 ms before it
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::slurTransitions()
+      {
+      auto lib = sso();
+      QVERIFY(lib);
+      auto within = [](double a, double b) { return std::abs(a - b) < 2.5; };   // a tick each way, rounding
+      for (int on : { 1, 0 }) {
+            MasterScore* s = score(true, "slurs.musicxml");
+            QVERIFY(s);
+            s->setMetaTag(Playback::metaTag, on ? QString() : QString("slurs/transitions=0"));
+            std::map<int, Key> k = render(s, lib);
+            QVERIFY(k.count(72) && k.count(88));
+            QCOMPARE(k[72].velocity, 112);
+            for (int p : { 74, 76, 77, 81, 83, 84, 88 })
+                  QCOMPARE(k[p].velocity, on ? 69 : 93);
+            QCOMPARE(k[86].velocity, 122);
+            QVERIFY2(within(ms(k[76].off - k[77].on), 24), qPrintable(QString::number(ms(k[76].off - k[77].on))));
+            if (on) {
+                  QCOMPARE(k[79].velocity, 93);
+                  QVERIFY2(within(ms(k[77].off - k[79].on), 24), qPrintable(QString::number(ms(k[77].off - k[79].on))));
+                  }
+            else {
+                  QCOMPARE(k[79].velocity, 106);
+                  QVERIFY2(within(ms(k[79].on - k[77].off), 54), qPrintable(QString::number(ms(k[79].on - k[77].off))));
+                  }
+            QVERIFY2(within(ms(k[86].on - k[84].off), 54), qPrintable(QString::number(ms(k[86].on - k[84].off))));
+            delete s;
+            }
       }
 
 QTEST_MAIN(TestPerformanceTechnique)

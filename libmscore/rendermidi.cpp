@@ -1473,6 +1473,29 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         return false;
                         };
+                  // a slur (not a phrase mark) on the note's staff: one starting at its chord (startsAt) or, for the
+                  // end of its tie chain, one ending there (endsAt: under a slur that doesn't go on past it); [slurs]
+                  // transitions joins two such slurs (performanceNote)
+                  auto slurAt = [&](const Note* note, bool startsAt) {
+                        const Note* last = note;
+                        for (int guard = 0; !startsAt && last->tieFor() && last->tieFor()->endNote() && guard < 1000; ++guard) {
+                              const Note* next = last->tieFor()->endNote();
+                              if (next == last)
+                                    break;
+                              last = next;
+                              }
+                        const Chord* c = last->chord();
+                        const int t = c->tick().ticks();
+                        for (const auto& iv : score->spannerMap().findOverlapping(t, t)) {
+                              const Spanner* sp = iv.value;
+                              if (!sp->isSlur() || toSlur(sp)->phraseMark() || sp->staffIdx() != c->staffIdx())
+                                    continue;
+                              const int stop = ctx.dynamics.spannerStop(sp);
+                              if (startsAt ? (sp->tick().ticks() == t && stop > t) : (sp->tick().ticks() < t && stop <= t && stop >= t - c->actualTicks().ticks()))
+                                    return true;
+                              }
+                        return false;
+                        };
                   // where a note before (the first of its tie chain) starts as played: early or not (libPlayedOn),
                   // else as written
                   auto playedOn = [&](const Note* first) {
@@ -1533,7 +1556,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // 40 ms or more being a new attack on SSO; a transition: overlap ms after it). The note's own
                   // choice (the Inspector) first: a transition where a note of the patch comes just before, else
                   // an attack; Auto: a slurred note goes on by transition (after a glissando line portamento,
-                  // else bowed: the map's legatoVelocity where measured), else an attack: accented under an accent
+                  // else with [slurs] transitions fingered, without bowed: the map's legatoVelocity where measured);
+                  // with [slurs] transitions a slur's first note right after the slur before ends on its patch, without
+                  // an accent, by a bowed transition from it; else an attack: accented under an accent
                   // or marcato, a re-attack right after a note of its patch, spiccato after silence. A note's own join
                   // (the Join lane, Note::libraryJoin) right after a note of its patch: a transition up to legatoGap ms
                   // apart (none listed: overlapping or touching), else a re-attack; the note before ends that far from
@@ -1555,19 +1580,26 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const PerformanceTechnique::Attack at = note->performanceAttack();
                         const int join = joinable ? note->libraryJoin() : PerformanceTechnique::JOIN_AUTO;
                         const bool ownJoin = join != PerformanceTechnique::JOIN_AUTO;
-                        auto autoTransition = [&]() {
+                        // Auto: after a glissando line portamento; with [slurs] transitions (the owner, 2026-10-12, by ear
+                        // in Whence: "notes within a slur use fingered and two slurs adjacent to each other will use
+                        // bowed") fingered under a slur, bowed from a slur into the next; without, bowed
+                        const bool slurTransitions = Playback::on("slurs/transitions", score);
+                        auto autoTransition = [&](bool betweenSlurs = false) {
                               bool glissando = false;
                               for (const Spanner* sp : note->spannerBack())
                                     glissando |= sp->isGlissando();
-                              return a->transition(glissando ? "portamento" : "bowed");
+                              return a->transition(glissando ? "portamento" : (slurTransitions && !betweenSlurs) ? "fingered" : "bowed");
                               };
+                        bool accent = false;
+                        for (Ms4::Art art : r.arts)
+                              accent |= art == Ms4::Art::Accent || art == Ms4::Art::Marcato;
                         bool transition = false;
                         if (ownJoin) {
                               if (join >= -std::max(0.0, a->legatoGapMs)) {
                                     if (tr != PerformanceTechnique::Transition::AUTO)
                                           t = a->transition(PerformanceTechnique::transitionName(tr));
                                     if (!t)
-                                          t = autoTransition();
+                                          t = autoTransition(!slurred);       // (joined by hand from outside a slur: bowed)
                                     transition = t;
                                     }
                               }
@@ -1576,6 +1608,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               transition = true;
                         else if (at == PerformanceTechnique::Attack::AUTO && slurred) {
                               t = autoTransition();
+                              transition = t;
+                              }
+                        else if (slurTransitions && at == PerformanceTechnique::Attack::AUTO && joinable && !accent
+                                 && slurAt(note, true) && slurAt(joinable, false)) {
+                              t = autoTransition(true);           // (a slur right after a slur: no re-attack)
                               transition = t;
                               }
                         const int own = note->libraryVelocity();
@@ -1592,12 +1629,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         if (at != PerformanceTechnique::Attack::AUTO)
                               t = a->attack(PerformanceTechnique::attackName(at));
-                        else {
-                              bool accent = false;
-                              for (Ms4::Art art : r.arts)
-                                    accent |= art == Ms4::Art::Accent || art == Ms4::Art::Marcato;
+                        else
                               t = a->attack(accent ? "accented" : "spiccato");
-                              }
                         if (t)
                               p.velocity = (t->name == "spiccato" && joinable && a->reattackVelocity > 0) ? a->reattackVelocity : t->velocity;
                         if (own > 0)

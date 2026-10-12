@@ -84,6 +84,13 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: slurred notes of the string sections whose Performance legato has measured attacks (SSO: Violins 1 and 2, Violas, "
         "Celli, Basses) play as under staff text \"performance\" (staff text \"non performance\" opts out), instead of "
         "[slurs] quick's swap; 0: on the All techniques patch", true },
+      // (the owner, 2026-10-12, after trying it by hand in Whence's Velocity lane: "notes within a slur use fingered and two
+      // slurs adjacent to each other will use bowed"; Spitfire's Performance legato, slow: 20-84 slurred (fingered), 85-127
+      // bowed, support.spitfireaudio.com/en/articles/11815986)
+      { "slurs/transitions", 1, 0, 1, "on/off",
+        "1: on a Performance legato with listed techniques (SSO's string sections), Auto plays a slurred note's transition "
+        "fingered and the first note of a slur that starts where the slur before ends (same patch, no rest, no accent) as a "
+        "bowed transition from it, instead of a re-attack; 0: slurred notes bowed, each slur re-attacked", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -326,7 +333,7 @@ QString iniTemplate()
 //   presets
 //    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated,
 //    levels/context, levels/sectionBalance) and
-//    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance) differ between them. The other settings are not in the table because: legato/keepMs acts
+//    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance, slurs/transitions) differ between them. The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -339,12 +346,13 @@ const std::vector<Preset>& presets()
             // even early the new recommended": early, each patch by its median onset)
             // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; 2026-10-09, quickLevel re-measured in context:
             // "1 is the right balance, make it the recommended preset"; 2026-10-10: the strings' slurs on Performance, and the
-            // level rule: levels/context; 2026-10-11: the section balance M, levels/sectionBalance)
+            // level rule: levels/context; 2026-10-11: the section balance M, levels/sectionBalance; 2026-10-12: fingered within a slur,
+            // bowed between slurs, slurs/transitions)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
-                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 },
                                               { "levels/context", 1 }, { "levels/sectionBalance", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 } } },
             };
       return P;
