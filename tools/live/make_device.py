@@ -73,6 +73,9 @@ VEL_EXPR = ("expr ($i1>0)*(($f2==0)*$i1+($f2>=1)*(" + _R + "+(" + _R + "<1)*(1-"
 # rounded, modulo the ring (written without fmod's comma)
 _X = "floor($f1*" + str(PERIOD_TICKS) + ".+$f2+0.5)"
 VEL_INDEX = "expr " + _X + "-$f3*floor(" + _X + "/$f3)"
+# written clips: the cell of the song position in [buffer~ ---mslt], which holds the whole record from the song's start
+# (MuseScoreLink.js timFillAll): no ring; past the last cell ($f3, the script's "tlast": a 0, the default) it stays there
+TIM_INDEX = "expr " + _X + "-(" + _X + ">$f3)*(" + _X + "-$f3)"
 # written clips (MuseScoreLink.js › Written clips; libmscore/livetiming.h): a note's delay from the timing ring's codes at
 # its song position (channel 1 a note-on's, 2 a note-off's; code c > 0: c - 1 ms, 0: the track's default, "tdef on off"):
 # $i1 the velocity (0: a note-off), $f2 / $f3 the codes, $f4 / $f5 the defaults
@@ -280,17 +283,17 @@ def build(script):
     # --- written clips (MuseScoreLink.js › Written clips): the notes and controllers of a track whose clips hold the
     # written notes are delayed into MuseScore's played time (the track's Track Delay is the lookahead). [gate 2 2]
     # (the script's "tgate 1" with a timing record, "tgate 2", the initial state, without): outlet 2 straight on, as
-    # before; outlet 1: [t l l b]: first the song position (snapshot~ of the phasor) -> the ring's cell (TIM_INDEX = the
-    # velocity's, its bias "tbias") -> peek~ ---mslt channel 2 then 1 -> the note's expr's codes; then the velocity
+    # before; outlet 1: [t l l b]: first the song position (snapshot~ of the phasor) -> the cell (TIM_INDEX: the
+    # velocity's bias "tbias", stopping at "tlast") -> peek~ ---mslt channel 2 then 1 -> the codes; then the velocity
     # (unpack) -> TIM_NOTE_EXPR -> the delay into [pipe 0 0 0]'s right inlet; then the note -> pipe -> midiformat.
     # Controllers likewise with channel 1 (TIM_CC_EXPR) through a [pipe 0 0 0] of their own. The script fills
-    # [buffer~ ---mslt] (2 channels, the velocity ring's size).
+    # [buffer~ ---mslt] (2 channels) with the whole record once, from the song's start.
     tgate = p.obj("gate 2 2", 2, 2, 30, 300, outlettype=["", ""], varname="msl_tgate")
     p.connect(vpack, 0, tgate, 1)
     p.connect(tgate, 1, fmt, 0)
     tnt = p.obj("t l l b", 1, 3, 1000, 150, outlettype=["", "", "bang"])
     tsnap = p.obj("snapshot~", 2, 1, 1000, 180, outlettype=["float"])
-    tidx = p.obj(VEL_INDEX, 3, 1, 1000, 210, w=360, outlettype=[""])
+    tidx = p.obj(TIM_INDEX, 3, 1, 1000, 210, w=360, outlettype=[""])
     tff = p.obj("t f f", 1, 2, 1000, 240, outlettype=["float", "float"])
     p.obj("buffer~ ---mslt", 1, 2, 1400, 240, w=100, outlettype=["float", "bang"])
     tpk1 = p.obj("peek~ ---mslt 1", 3, 1, 1000, 270, w=100, outlettype=["float"])
@@ -303,7 +306,6 @@ def build(script):
     p.connect(tnt, 2, tsnap, 0)
     p.connect(phasor, 0, tsnap, 0)
     p.connect(tsnap, 0, tidx, 0)
-    p.connect(vring, 0, tidx, 2)
     p.connect(tidx, 0, tff, 0)
     p.connect(tff, 1, tpk2, 0)
     p.connect(tff, 0, tpk1, 0)
@@ -322,7 +324,7 @@ def build(script):
     p.connect(tcg, 1, fmt, 2)
     tct = p.obj("t l b", 1, 2, 1250, 150, outlettype=["", "bang"])
     tcsnap = p.obj("snapshot~", 2, 1, 1250, 180, outlettype=["float"])
-    tcidx = p.obj(VEL_INDEX, 3, 1, 1250, 210, w=360, outlettype=[""])
+    tcidx = p.obj(TIM_INDEX, 3, 1, 1250, 210, w=360, outlettype=[""])
     tcpk = p.obj("peek~ ---mslt 1", 3, 1, 1250, 270, w=100, outlettype=["float"])
     tcexpr = p.obj(TIM_CC_EXPR, 2, 1, 1250, 330, w=200, outlettype=[""])
     tcpipe = p.obj("pipe 0 0 0", 3, 2, 1250, 360, outlettype=["int", "int"])
@@ -331,7 +333,6 @@ def build(script):
     p.connect(tct, 1, tcsnap, 0)
     p.connect(phasor, 0, tcsnap, 0)
     p.connect(tcsnap, 0, tcidx, 0)
-    p.connect(vring, 0, tcidx, 2)
     p.connect(tcidx, 0, tcpk, 0)
     p.connect(tcpk, 0, tcexpr, 0)
     p.connect(tcexpr, 0, tcpipe, 2)
@@ -351,7 +352,7 @@ def build(script):
         pre_d = p.obj(f"prepend {word}", 1, 1, 820 + (k - 1) * 90, 90)
         p.connect(dsp, k, pre_d, 0)
         p.connect(pre_d, 0, js, 0)
-    vroute = p.obj("route bias log gate tgate tdef tbias", 1, 7, 820, 120, w=220, outlettype=[""] * 7)
+    vroute = p.obj("route bias log gate tgate tdef tbias tlast", 1, 8, 820, 120, w=250, outlettype=[""] * 8)
     p.connect(js, 9, vroute, 0)
     p.connect(vroute, 0, vidx, 1)
     p.connect(vroute, 2, cgate, 0)          # ("gate 1" / "gate 2": the carriers' gate)
@@ -365,6 +366,9 @@ def build(script):
     p.connect(tdef, 0, tcexpr, 1)
     p.connect(vroute, 5, tidx, 1)
     p.connect(vroute, 5, tcidx, 1)
+    # "tlast <cell>": the buffer's last cell (a 0), where the index stops
+    p.connect(vroute, 6, tidx, 2)
+    p.connect(vroute, 6, tcidx, 2)
     vlog = p.obj("pack 0 0. 0 0", 4, 1, 30, 330, outlettype=[""])
     p.connect(vunp, 0, vlog, 0)
     p.connect(vsnap, 0, vlog, 1)
@@ -378,6 +382,22 @@ def build(script):
     p.connect(vgate, 0, vpre, 0)
     p.connect(vpre, 0, vdl, 0)
     p.connect(vdl, 0, js, 0)
+    # (written clips) the same "log 0/1" opens the timing path's log: each note through the delays as "tlog <pitch> <phase>
+    # <delay ms> <velocity>" (the song position it read, the delay it took) -> deferlow -> the script (the "tlog" probe).
+    # [unpack]'s velocity (right) comes first, through TIM_NOTE_EXPR into the pack's cold inlets, then the pitch
+    tlog = p.obj("pack 0 0. 0. 0", 4, 1, 1000, 420, outlettype=[""])
+    p.connect(tunp, 1, tlog, 3)
+    p.connect(tsnap, 0, tlog, 1)
+    p.connect(texpr, 0, tlog, 2)
+    p.connect(tunp, 0, tlog, 0)
+    tlgate = p.obj("gate 1", 2, 1, 1000, 450, outlettype=[""])
+    p.connect(vroute, 1, tlgate, 0)
+    p.connect(tlog, 0, tlgate, 1)
+    tlpre = p.obj("prepend tlog", 1, 1, 1000, 480)
+    tldl = p.obj("deferlow", 1, 1, 1000, 510)
+    p.connect(tlgate, 0, tlpre, 0)
+    p.connect(tlpre, 0, tldl, 0)
+    p.connect(tldl, 0, js, 0)
     # outlet 8: what is kept in the set, to the MuseScore Envelopes script; its word that a track's values came, and a
     # velocity curve changed (the hub's messnamed), through deferlow
     p.connect(js, 8, p.obj("udpsend 127.0.0.1 9005", 1, 0, 650, 560), 0)

@@ -84,9 +84,13 @@ Open, for the owner:
 - *Live plays the score* (and the route set it uses): written clips there need each route track's Track Delay, which
   Live's API can't set and those tracks are often made by hand; left played. Decide whether to change it (the route set
   could write the Track Delay; hand-made tracks would need it typed in).
-- Only real Live 12.4 can confirm the device's side (LIVE.md › Create Live Set › What is tested: the Track Delay on a
-  MIDI track moving its MIDI To output, the song position the patcher sees under a negative Track Delay
-  (`TIM_SEES_TRACK_DELAY`), Bank / Sub through the device, `[pipe]`'s precision, the `"Timing"` store). Not run on the VM.
+- The device's side in real Live 12.4.6 (branch `link-device-fix`, 2026-10-12, the VM; LIVE.md › Create Live Set › What
+  is tested): the Track Delay moves a MIDI track's MIDI To output; the patcher sees the note's own song position
+  (`TIM_SEES_TRACK_DELAY` false; true had made every phrase-first Performance note late by its track's default); the
+  `"Timing"` store comes back from the set (all 28 copies' records); the timing record now goes into the buffer once
+  (the 1 s ring was outrun by the export). Export: phrase-first notes within 3.3 ms of MuseScore's time. Still open:
+  Bank / Sub through the device, `[pipe]`'s precision in playback (only the export was recorded). The device no longer
+  stalls Live with 28 copies (LIVE.md › Live plays the score › The device's load on Live).
 
 ## Section balance, `[levels] sectionBalance` (2026-10-11)
 

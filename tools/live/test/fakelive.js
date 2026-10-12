@@ -131,6 +131,12 @@ class FakeLive {
                   return this.objects[this.objects[this.thisDevice].track];
             return null;
             }
+      // Live's notification that a property of an object changed: its observers called back
+      notify(obj, prop) {
+            for (const x of (this.observers || []).slice())
+                  if (x.id === obj.id && x.prop === prop)
+                        x.cb([prop]);
+            }
       idList(l) {
             const out = [];
             for (const id of l)
@@ -151,6 +157,22 @@ function liveApiFor(live, deviceId) {
                               view: "Song.View", appview: "Application.View", param: "DeviceParameter", mixer: "MixerDevice" }[o.kind] : "";
             this.info = o ? "id " + o.id + "\ntype " + this.type + "\nproperty name str\ndone" : "No object";
             const self = this;
+            live.made = (live.made || 0) + 1;
+            // an observer (new LiveAPI(callback, path), then .property = name): Live calls back on each change
+            // (live.notify), and once when the property is set; "" stops it
+            if (typeof a === "function") {
+                  let prop = "";
+                  Object.defineProperty(this, "property", {
+                        get() { return prop; },
+                        set(v) {
+                              prop = String(v);
+                              live.observers = (live.observers || []).filter((x) => x.api !== self);
+                              if (prop && o) {
+                                    live.observers.push({ api: self, id: o.id, prop: prop, cb: a });
+                                    a([prop]);
+                                    }
+                              } });
+                  }
             this.getcount = function(what) {
                   if (o.kind === "song" && what === "tracks")
                         return o.tracks.length;
