@@ -17,6 +17,22 @@ a section there when you need the background of that topic. Commit messages desc
   never judged by ear at 69). Ask the owner to listen to Whence's Violas runs in build 422; if they smear, offer a
   measured tighter velocity inside the fingered band (20-84) as an option.
 
+## Dynamics like a real player (the owner's decisions, 2026-10-12)
+
+A written dynamic is one gesture (bow speed, pressure, contact point): tone and loudness change together. In SSO, CC1
+(and a short's velocity) picks the recording, mostly tone; CC11 / patch volume is loudness only. Plan:
+- **Stage A, loudness:** CC11 (with patch-volume headroom) makes each note as loud as the real player at its written
+  dynamic: Weinzierl et al. 2018 (TU Berlin, 3_Audio_Features.csv: SoundPower per pitch at pp and ff) plus section size
+  and section balance M, against SSO's measured loudness at that CC1 (sso_cc1_curves.json, after the Long calibration
+  fix, branch long-calibration). CC1 and CC11 move together (hairpins ramp both); the Performance gain follows hairpins;
+  shorts' velocity no longer capped silently (CC11 covers the rest). **Target: the real player's full range** (the
+  owner). **ppp and fff: decide after seeing data** (the TU Berlin set has only pp and ff; the owner wants to see data
+  before choosing how to extend to ppp / fff).
+- **Stage B, tone:** after A ("important for realism"): CC1 / short velocity chosen so the tone matches the dynamic
+  (brightness change pp -> ff of the real instrument, TU Berlin spectral centroids, against SSO's measured per CC1 /
+  velocity), loudness then entirely CC11.
+- Other sections than strings (woodwind / brass Performance transitions): later.
+
 ## Before a build goes to the owner (2026-10-09)
 
 Run the playback audit on *Whence* (the quarter-tone original, `Whence.mscz`, the standard score since 2026-10-11) with Recommended (VERIFY.md › Playback audit: `tst_playbackaudit auditScore`
