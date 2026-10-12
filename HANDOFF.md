@@ -190,6 +190,19 @@ Approved by the owner on A′ (2026-10-11; HANDOFF › No Performance patches' W
 - A/B (dry strings, bars 1-16, one common gain): `~/MuseScore/ms3fork/uploads/levelrule/` A (rule), B (R lowered), C
   (before).
 
+## Transition levels: the slur swell (2026-10-12, branch `transition-levels`, measurement only)
+
+The owner hears a swell in Whence 12-TET bar 2, Celli (`sso_slur_swell.json`) and wants it evened out eventually.
+`sso_transition_levels.json` (`transition_level_scan.py`, `transition_levels_report.py`; Windows VM, Kontakt 8 + SSO,
+kthost): every destination x interval (+-1..5, 7, 12) x fingered 69 / bowed 93 of the five string Performance patches
+in isolation (136 ms at CC1 64 / 32 / 112, 600 ms at 64), plus 30 slurred validation phrases per section as MuseScore
+plays Whence. Isolated, the interval moves a note's level by p50 0.4-0.8, p90 1.3-2.2 dB, repeatably; but in runs the
+table predicts the (very repeatable, 0.2-0.3 dB pass to pass) note-to-note pattern only at r 0.45-0.63: a per-note CC11
+from it doesn't narrow a slur's spread; half of it removes 10-23 % of the SD. Whence bar 2 reproduced in the runs
+(sso_slur_swell's window 34.1 37.1 37.2 34.1). Open, for the owner: a correction would need the passage's own context
+(render and measure in place, CC11 ramped across each transition, not stepped: the 2026-10-10 stepped try "sounds
+horrible"), or accept the half-table rule as a weak option (`[slurs] evenTransitions`, off) to try by ear.
+
 ## Performance legato for the strings' slurs in Recommended (2026-10-10)
 
 The owner (2026-10-10, after hand-building *Whence*'s Live set R): Recommended plays the five string sections' slurs on
