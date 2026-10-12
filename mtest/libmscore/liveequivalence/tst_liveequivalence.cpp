@@ -38,6 +38,8 @@
 #include "libmscore/automation.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/livesetwriter.h"
+#include "libmscore/livesetupdate.h"
+#include "libmscore/pitchspelling.h"
 #include "libmscore/livesetxml.h"
 #include "libmscore/liveset.h"
 #include "libmscore/livetracks.h"
@@ -120,6 +122,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveContextLevel();
       void liveSectionBalance();
       void liveTracksJson();
+      void updateLiveSet();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -3089,6 +3092,473 @@ void TestLiveEquivalence::liveSectionBalance()
             QVERIFY2(std::fabs(gains[e.first] - std::pow(10.0, e.second / 20)) < 1e-9,
                      qPrintable(QString("%1: %2 dB, expected %3").arg(e.first).arg(20 * std::log10(gains[e.first])).arg(e.second)));
       delete score;
+      }
+
+//---------------------------------------------------------
+//   updateLiveSet
+//    Update Live Set (livesetupdate.h, LIVE.md › Update Live Set): a plain set Create Live Set wrote, edited as the owner
+//    would in Live (an effect after Kontakt, a return track with sends, an audio track, a Kontakt's volume, a note moved in
+//    a technique clip, a technique track renamed), the score changed (a note's pitch, a new technique on a new patch, a
+//    technique no longer played, a part removed), updated in place: the owner's additions byte for byte, MuseScore's clips
+//    as a new Create Live Set's, the moved note's timing as its override, a backup; a second update changes nothing; a set
+//    without a part the score has gets its section, part and tracks
+//---------------------------------------------------------
+
+static QByteArray readSet(const QString& path)
+      {
+      QFile f(path);
+      if (!f.open(QIODevice::ReadOnly))
+            return QByteArray();
+      QString e;
+      return LiveSet::gunzip(f.readAll(), &e);
+      }
+
+static void writeSet(const QString& path, const QByteArray& xml)
+      {
+      QFile f(path);
+      if (f.open(QIODevice::WriteOnly))
+            f.write(LiveSetWriter::gzip(xml));
+      }
+
+static QByteArray fileBytes(const QString& path)
+      {
+      QFile f(path);
+      return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+      }
+
+// a set's track by its name (the first; of that kind when given), -1 none
+static int setTrack(const LiveSetUpdate::Xml& x, const QString& name, const char* kind = nullptr)
+      {
+      const int tracks = x.path(x.root(), { "LiveSet", "Tracks" });
+      for (int t : x.children(tracks))
+            if (x.childValue(x.child(t, "Name"), "EffectiveName") == name && (!kind || x.is(t, kind)))
+                  return t;
+      return -1;
+      }
+
+// the "Timing" entry of a device blob's text
+static QByteArray timingEntry(const QByteArray& blob)
+      {
+      const int k = blob.indexOf("\"Timing\"");
+      return k < 0 ? QByteArray() : blob.mid(k, blob.indexOf(']', k) - k + 1);
+      }
+
+static const char* const UPDATE_MAP =
+   "<SoundLibrary name='LiveU'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+   "<Instrument name='Violin' ids='violin'>"
+   "<Articulation name='Long' value='1' techniques='long legato' onset='60'/>"
+   "<Articulation name='Staccato' value='40' techniques='short' onset='20'/>"
+   "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo' onset='10'/>"
+   "</Instrument>"
+   "<Instrument name='Violin Marcato' with='Violin'>"
+   "<Articulation name='Marcato' value='52' techniques='marcato' onset='30'/>"
+   "</Instrument>"
+   "<Instrument name='Piano' ids='piano'><Switch type='none'/><Articulation name='Long' value='1' techniques='long'/></Instrument>"
+   "</SoundLibrary>";
+
+void TestLiveEquivalence::updateLiveSet()
+      {
+      qputenv("MSTESTSYNTH_INIT_MS", "40");
+      LiveHost host(this, "", { "Violin", "Violin Marcato", "Piano" }, UPDATE_MAP);
+      QVERIFY(host.ok);
+      LiveSetWriter::LinkDevice device;
+      device.path = "C:/Users/u/Music/Ableton/User Library/Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd";
+      device.userLibraryPath = "Presets/MIDI Effects/Max MIDI Effect/MuseScore Link.amxd";
+      device.size = 123456;
+      device.crc = 4321;
+      device.modified = 1759000000;
+      auto removePiano = [](MasterScore* s) {
+            s->startCmd();
+            s->cmdRemovePart(s->parts()[1]);
+            s->endCmd();
+            };
+      // Create Live Set as the dialog does (the device found in Live's User Library)
+      auto create = [&](MasterScore* s, const QString& path, LiveIntegration::LiveSetPlan* plan) {
+            QString error;
+            QVERIFY2(LiveIntegration::planLiveSet(s, *host.lib, LiveIntegration::LiveSetKind::PLAIN_LINKED, plan, &error), qPrintable(error));
+            plan->spec.link = device;
+            QDir().mkpath(QFileInfo(path).absolutePath());
+            QVERIFY2(LiveSetWriter::write(path, plan->spec, &error), qPrintable(error));
+            LiveIntegration::recordWritten(s, plan->spec, LiveSetWriter::xml(plan->spec), LiveSet::read(path), false);
+            };
+
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(score->parts().size(), 2);
+      // (bar 2's accent plays on the marcato patch: gone, so that the accent added below brings a new patch)
+      score->startCmd();
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            Element* el = s->element(0);
+            if (el && el->isChord() && el->tick().ticks() == 1920 + 1440) {
+                  const QVector<Articulation*> as = toChord(el)->articulations();
+                  for (Articulation* a : as)
+                        score->undoRemoveElement(a);
+                  }
+            }
+      score->endCmd();
+      const QString path = host.dir.path() + "/Song Project/Song.als";
+      LiveIntegration::LiveSetPlan plan;
+      create(score, path, &plan);
+      auto trackOf = [](const LiveSetWriter::Spec& spec, const QString& name) -> const LiveSetWriter::Track* {
+            for (const LiveSetWriter::Track& t : spec.tracks)
+                  if (t.name == name)
+                        return &t;
+            return nullptr;
+            };
+      const LiveSetWriter::Track* longTrack = trackOf(plan.spec, "Violin – Long");
+      QVERIFY(longTrack && trackOf(plan.spec, "Violin – Spiccato") && trackOf(plan.spec, "Piano"));
+      QVERIFY(!trackOf(plan.spec, "Violin – Violin Marcato"));
+      QVERIFY(longTrack->linkTiming.size() >= 5);
+      const LiveTracks::Data recorded = LiveTracks::read(score);
+      QVERIFY(!recorded.written.at(longTrack->annotation).notes.isEmpty());
+      QVERIFY(!recorded.written.at(longTrack->annotation).clips.isEmpty());
+      QCOMPARE(recorded.written.at("MuseScore: Strings / Violin / Violin").slotTunings, QString());
+      // the note the owner moves in Live: bar 4's E5 half note (Long)
+      const LiveSetWriter::Track::SourceNote* moved = nullptr;
+      for (const LiveSetWriter::Track::SourceNote& n : longTrack->sourceNotes)
+            if (n.note && n.pitch == 76 && n.note->chord()->tick().ticks() == 3 * 1920 + 960)
+                  moved = &n;
+      QVERIFY(moved);
+      const Note* movedNote = moved->note;
+      const int movedStart = moved->start, movedLength = moved->length;
+      LiveTiming::Track was;            // the Long track's timing as written (its device's record)
+      {
+            const std::vector<double>& r = longTrack->linkTiming;
+            was.lookaheadMs = r[1];
+            was.onMs = r[2];
+            was.offMs = r[3];
+            for (size_t i = 0; i + 4 < size_t(r[4]) * 5 + 5 && 5 + i * 5 + 4 < r.size(); ++i)
+                  was.exceptions.push_back({ int(r[5 + i * 5]), int(r[6 + i * 5]), int(r[7 + i * 5]), r[8 + i * 5], r[9 + i * 5] });
+      }
+      QVERIFY(was.lookaheadMs > 0);
+
+      //---------------------------------------------------------
+      //   in "Live": the owner's edits, saved
+      //---------------------------------------------------------
+      const QByteArray reverb = "<Reverb Id=\"1\">\r\n\t\t\t\t\t\t\t\t<LomId Value=\"0\" />\r\n\t\t\t\t\t\t\t\t<On>\r\n"
+                                "\t\t\t\t\t\t\t\t\t<Manual Value=\"true\" />\r\n\t\t\t\t\t\t\t\t\t<AutomationTarget Id=\"%1\">\r\n"
+                                "\t\t\t\t\t\t\t\t\t\t<LockEnvelope Value=\"0\" />\r\n\t\t\t\t\t\t\t\t\t</AutomationTarget>\r\n"
+                                "\t\t\t\t\t\t\t\t</On>\r\n\t\t\t\t\t\t\t\t<DecayTime Value=\"2400\" />\r\n\t\t\t\t\t\t\t</Reverb>";
+      QByteArray edited;
+      QByteArray reverbText, audioText, returnText;
+      {
+            const QByteArray xml = readSet(path);
+            LiveSetUpdate::Xml x(xml);
+            QVERIFY2(x.ok(), qPrintable(x.error()));
+            std::vector<LiveSetUpdate::Edit> e;
+            const int next = x.path(x.root(), { "LiveSet", "NextPointeeId" });
+            int id = x.value(next).toInt();
+            auto holder = [&id](double value) {
+                  const int target = id++;
+                  const int modulation = id++;
+                  QByteArray h = "<Sends><TrackSendHolder Id=\"0\"><Send><LomId Value=\"0\" /><Manual Value=\"" + QByteArray::number(value)
+                                 + "\" /><MidiControllerRange><Min Value=\"0.0003162277571\" /><Max Value=\"1\" /></MidiControllerRange>"
+                                 "<AutomationTarget Id=\"" + QByteArray::number(target) + "\"><LockEnvelope Value=\"0\" /></AutomationTarget>"
+                                 "<ModulationTarget Id=\"" + QByteArray::number(modulation) + "\"><LockEnvelope Value=\"0\" /></ModulationTarget>"
+                                 "</Send><Active Value=\"true\" /></TrackSendHolder></Sends>";
+                  return h;
+                  };
+            const int tracks = x.path(x.root(), { "LiveSet", "Tracks" });
+            bool movedDone = false;
+            for (int t : x.children(tracks)) {
+                  const QString name = x.childValue(x.child(t, "Name"), "EffectiveName");
+                  const int sends = x.path(t, { "DeviceChain", "Mixer", "Sends" });
+                  QVERIFY(sends >= 0);
+                  const bool violinKontakt = name == "Violin" && x.is(t, "MidiTrack");
+                  e.push_back({ x.at(sends).start, x.at(sends).end, holder(violinKontakt ? 0.5 : 0.0003162277571) });
+                  if (violinKontakt) {
+                        // an effect after Kontakt, the Kontakt's volume
+                        const int devices = x.path(t, { "DeviceChain", "DeviceChain", "Devices" });
+                        QVERIFY(x.child(devices, "PluginDevice") >= 0);
+                        reverbText = QString::fromUtf8(reverb).arg(id++).toUtf8();
+                        e.push_back({ x.at(devices).closeStart, x.at(devices).closeStart, reverbText + "\r\n\t\t\t\t\t\t\t" });
+                        const int volume = x.path(t, { "DeviceChain", "Mixer", "Volume", "Manual" });
+                        int a = 0, b = 0;
+                        QVERIFY(x.attrRange(volume, "Value", &a, &b));
+                        e.push_back({ a, b, "0.5" });
+                        // a point of its Controllers clip's first envelope (the dynamics) drawn again
+                        const int env = x.path(t, { "DeviceChain", "MainSequencer", "ClipTimeable", "ArrangerAutomation", "Events",
+                                                    "MidiClip", "Envelopes", "Envelopes", "ClipEnvelope" });
+                        const std::vector<int> points = x.children(x.path(env, { "Automation", "Events" }), "FloatEvent");
+                        QVERIFY(points.size() >= 2);
+                        QVERIFY(x.attrRange(points[1], "Value", &a, &b));
+                        e.push_back({ a, b, x.attr(points[1], "Value").toDouble() > 60 ? "20" : "100" });
+                        }
+                  if (name == "Violin – Staccato") {
+                        // a velocity changed in Live, on a track the score won't change
+                        const int n = x.find(t, "MidiNoteEvent");
+                        int a = 0, b = 0;
+                        QVERIFY(n >= 0 && x.attrRange(n, "Velocity", &a, &b));
+                        e.push_back({ a, b, "33" });
+                        }
+                  if (name == longTrack->name) {
+                        // renamed; the note moved 1/8 beat later (62.5 ms at 120 bpm)
+                        for (const char* tag : { "EffectiveName", "UserName" }) {
+                              int a = 0, b = 0;
+                              QVERIFY(x.attrRange(x.path(t, { "Name", tag }), "Value", &a, &b));
+                              e.push_back({ a, b, "My Long" });
+                              }
+                        const int events = x.path(t, { "DeviceChain", "MainSequencer", "ClipTimeable", "ArrangerAutomation", "Events" });
+                        for (int clip : x.children(events, "MidiClip")) {
+                              const double start = x.childValue(clip, "CurrentStart").toDouble();
+                              for (int kt : x.children(x.path(clip, { "Notes", "KeyTracks" }), "KeyTrack")) {
+                                    if (x.childValue(kt, "MidiKey").toInt() != 76)
+                                          continue;
+                                    for (int n : x.children(x.child(kt, "Notes"), "MidiNoteEvent")) {
+                                          const double time = x.attr(n, "Time").toDouble();
+                                          if (std::lround((start + time) * LiveClips::UNITS_PER_BEAT) != movedStart)
+                                                continue;
+                                          int a = 0, b = 0;
+                                          QVERIFY(x.attrRange(n, "Time", &a, &b));
+                                          e.push_back({ a, b, QByteArray::number(time + 0.125, 'g', 12) });
+                                          movedDone = true;
+                                          }
+                                    }
+                              }
+                        }
+                  }
+            QVERIFY(movedDone);
+            // an audio track and a return track (Live keeps the returns after the other tracks)
+            audioText = "<AudioTrack Id=\"900\">\r\n\t\t\t\t<Name>\r\n\t\t\t\t\t<EffectiveName Value=\"Vox\" />\r\n\t\t\t\t\t"
+                        "<UserName Value=\"Vox\" />\r\n\t\t\t\t\t<Annotation Value=\"\" />\r\n\t\t\t\t</Name>\r\n\t\t\t\t"
+                        "<TrackGroupId Value=\"-1\" />\r\n\t\t\t\t<DeviceChain><Mixer>" + holder(0.25) + "</Mixer>"
+                        "<DeviceChain><Devices><Eq8 Id=\"0\"><LomId Value=\"0\" /></Eq8></Devices></DeviceChain></DeviceChain>\r\n\t\t\t"
+                        "</AudioTrack>";
+            returnText = "<ReturnTrack Id=\"901\">\r\n\t\t\t\t<Name>\r\n\t\t\t\t\t<EffectiveName Value=\"A-Reverb\" />\r\n\t\t\t\t\t"
+                         "<UserName Value=\"\" />\r\n\t\t\t\t\t<Annotation Value=\"\" />\r\n\t\t\t\t</Name>\r\n\t\t\t\t"
+                         "<TrackGroupId Value=\"-1\" />\r\n\t\t\t\t<DeviceChain><Mixer>" + holder(0.0003162277571) + "</Mixer>"
+                         "<DeviceChain><Devices /></DeviceChain></DeviceChain>\r\n\t\t\t</ReturnTrack>";
+            int line = x.at(tracks).closeStart;
+            while (xml[line - 1] == '\t')
+                  --line;
+            e.push_back({ line, line, "\t\t\t" + audioText + "\r\n\t\t\t" + returnText + "\r\n" });
+            int a = 0, b = 0;
+            QVERIFY(x.attrRange(next, "Value", &a, &b));
+            e.push_back({ a, b, QByteArray::number(id) });
+            QVERIFY(LiveSetUpdate::apply(xml, e, &edited));
+            QCOMPARE(LiveSetWriter::validate(edited), QString());
+            writeSet(path, edited);
+      }
+      const QByteArray editedFile = fileBytes(path);
+      int pianoGroup = -1;
+      QByteArray pianoText;
+      {
+            const LiveSetUpdate::Xml x(edited);
+            pianoGroup = setTrack(x, "Piano", "GroupTrack");
+            QVERIFY(pianoGroup >= 0 && x.is(pianoGroup, "GroupTrack"));
+            pianoText = x.text(pianoGroup);
+      }
+
+      //---------------------------------------------------------
+      //   the score changed: a pitch, a marcato (the extra patch's), a staccatissimo gone, the piano part removed
+      //---------------------------------------------------------
+      Part* violin = score->parts()[0];
+      score->startCmd();
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            Element* el = s->element(0);
+            if (!el || !el->isChord())
+                  continue;
+            Chord* c = toChord(el);
+            const int tick = c->tick().ticks();
+            if (tick == 1920 + 1440) {           // (a short accented note: the marcato patch)
+                  Articulation* a = new Articulation(score);
+                  a->setSymId(SymId::articAccentAbove);
+                  a->setParent(c);
+                  a->setTrack(c->track());
+                  score->undoAddElement(a);
+                  }
+            else if (tick == 1920 + 960) {
+                  for (Articulation* a : c->articulations())
+                        if (a->symId() == SymId::articStaccatissimoAbove || a->symId() == SymId::articStaccatissimoBelow) {
+                              score->undoRemoveElement(a);
+                              break;
+                              }
+                  }
+            else if (tick == 3 * 1920 + 480)
+                  score->undoChangePitch(c->upNote(), 72, pitch2tpc(72, Key::C, Prefer::NEAREST), pitch2tpc(72, Key::C, Prefer::NEAREST));
+            }
+      score->cmdRemovePart(score->parts()[1]);
+      score->endCmd();
+      QCOMPARE(score->parts().size(), 1);
+
+      //---------------------------------------------------------
+      //   Update Live Set
+      //---------------------------------------------------------
+      LiveIntegration::UpdateResult res;
+      QString error;
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      const LiveSetUpdate::Report& r = res.report;
+      QVERIFY2(res.written, qPrintable(res.text()));
+      // the backup: the set as the owner saved it, in Live's Backup folder
+      QVERIFY2(res.backup.startsWith(host.dir.path() + "/Song Project/Backup/Song ["), qPrintable(res.backup));
+      QVERIFY(res.backup.endsWith("].als"));
+      QCOMPARE(fileBytes(res.backup), editedFile);
+      const QByteArray up = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(up), QString());
+      // the owner's additions, byte for byte
+      QVERIFY(up.contains(reverbText));
+      QVERIFY(up.contains(audioText));
+      QVERIFY(up.contains(returnText));
+      QVERIFY(up.contains(pianoText));                  // (a removed part: untouched)
+      QCOMPARE(r.userDevices, 2);
+      QCOMPARE(r.otherTracks, 1);
+      QCOMPARE(r.returnTracks, 1);
+      QVERIFY2(r.removedParts == QStringList({ "Piano" }), qPrintable(res.text()));
+      QVERIFY2(r.added.contains("Violin – Violin Marcato") && r.added.contains("Violin – Violin Marcato – Marcato"), qPrintable(res.text()));
+      QVERIFY2(r.cleared.contains("Violin – Spiccato"), qPrintable(res.text()));
+      QVERIFY2(r.skipped.isEmpty(), qPrintable(res.text()));
+      // Live's velocity kept (the score's Staccato notes unchanged); the drawn dynamics came back as a lane
+      QVERIFY2(r.keptLive == QStringList({ "Violin – Staccato" }), qPrintable(res.text()));
+      {
+            const LiveSetUpdate::Xml x(up);
+            const int n = x.find(setTrack(x, "Violin – Staccato"), "MidiNoteEvent");
+            QCOMPARE(x.attr(n, "Velocity"), QString("33"));
+            int clipLanes = 0;
+            for (const auto& pl : Automation::read(score))
+                  for (const Automation::Lane& l : pl.second)
+                        clipLanes += l.extra.contains("clipCC") ? 1 : 0;
+            QCOMPARE(clipLanes, 1);
+      }
+      const LiveSet::Set upSet = LiveSet::parse(up);
+      QVERIFY(upSet.error.isEmpty());
+      const LiveSetUpdate::Xml ux(up);
+      QVERIFY(ux.ok());
+      {
+            // the renamed track kept its name; the Kontakt its volume (and the part's Mixer took it)
+            QVERIFY(setTrack(ux, "My Long") >= 0);
+            const int kontakt = setTrack(ux, "Violin", "MidiTrack");
+            QCOMPARE(ux.value(ux.path(kontakt, { "DeviceChain", "Mixer", "Volume", "Manual" })), QString("0.5"));
+            QVERIFY(ux.path(kontakt, { "DeviceChain", "DeviceChain", "Devices", "Reverb" }) >= 0);
+            // the Spiccato track: no clips
+            const int spic = setTrack(ux, "Violin – Spiccato");
+            QVERIFY(spic >= 0);
+            QVERIFY(ux.children(ux.path(spic, { "DeviceChain", "MainSequencer", "ClipTimeable", "ArrangerAutomation", "Events" })).empty());
+            // the new Kontakt: in the Violin group, after its tracks; a send like the others', at -inf; its technique To it
+            const int mk = setTrack(ux, "Violin – Violin Marcato");
+            const int mt = setTrack(ux, "Violin – Violin Marcato – Marcato");
+            QVERIFY(mk >= 0 && mt > mk);
+            const int violinGroup = setTrack(ux, "Violin", "GroupTrack");
+            QVERIFY(violinGroup >= 0);
+            QCOMPARE(ux.childValue(mk, "TrackGroupId"), ux.attr(violinGroup, "Id"));
+            QCOMPARE(ux.childValue(mt, "TrackGroupId"), ux.attr(violinGroup, "Id"));
+            QCOMPARE(ux.value(ux.path(mt, { "DeviceChain", "MidiOutputRouting", "Target" })),
+                     QString("MidiOut/Track.%1/TrackIn").arg(ux.attr(mk, "Id")));
+            const int send = ux.path(mk, { "DeviceChain", "Mixer", "Sends", "TrackSendHolder", "Send", "Manual" });
+            QVERIFY(send >= 0);
+            QCOMPARE(ux.value(send), QString("0.0003162277571"));
+            QVERIFY(ux.path(mk, { "DeviceChain", "DeviceChain", "Devices", "PluginDevice" }) >= 0);
+            // (new ids: above every other track's)
+            QVERIFY(ux.attr(mk, "Id").toInt() > 901 && ux.attr(mt, "Id").toInt() > 901);
+      }
+      // the moved note: its timing in Live is its override (where Live played it, less its written place)
+      {
+            LiveClips::Note n;
+            n.pitch = 76;
+            n.start = movedStart + LiveClips::UNITS_PER_BEAT / 8;
+            n.length = movedLength;
+            const std::pair<double, double> at = LiveTiming::playedBy(was, n, 120);
+            QVERIFY2(LiveTimingOverride::isSet(movedNote->liveStart()) && LiveTimingOverride::isSet(movedNote->liveEnd()),
+                     qPrintable(res.text()));
+            QVERIFY2(std::fabs(movedNote->liveStart() - LiveTiming::unitsToMs(at.first - movedStart, 120)) < 0.02,
+                     qPrintable(QString("%1 against %2").arg(movedNote->liveStart()).arg(LiveTiming::unitsToMs(at.first - movedStart, 120))));
+            // (the end: after the written end of the note, its notated one: 120 bpm, a tick 8 units)
+            const int writtenEnd = (movedNote->chord()->tick().ticks() + movedNote->chord()->actualTicks().ticks())
+                                   * LiveClips::UNITS_PER_BEAT / 480;
+            QVERIFY(movedStart + movedLength <= writtenEnd);
+            QVERIFY2(std::fabs(movedNote->liveEnd() - LiveTiming::unitsToMs(at.second - writtenEnd, 120)) < 0.02,
+                     qPrintable(QString("%1 against %2").arg(movedNote->liveEnd()).arg(LiveTiming::unitsToMs(at.second - writtenEnd, 120))));
+            QCOMPARE(res.overrides, 2);
+      }
+      // MuseScore's clips and timing as a new Create Live Set's for the score now
+      LiveIntegration::LiveSetPlan now;
+      QVERIFY(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::PLAIN_LINKED, &now, &error));
+      now.spec.link = device;
+      const QByteArray fresh = LiveSetWriter::xml(now.spec);
+      const std::map<QString, LiveSetUpdate::Record> want = LiveSetUpdate::records(fresh);
+      const std::map<QString, LiveSetUpdate::Record> got = LiveSetUpdate::records(up);
+      QVERIFY(want.size() >= 4);
+      for (const auto& w : want) {
+            QVERIFY2(got.count(w.first), qPrintable(w.first));
+            if (w.first.endsWith(" / Staccato")) {            // (Live's velocity kept: the one difference)
+                  QVERIFY(got.at(w.first).clips != w.second.clips);
+                  continue;
+                  }
+            QVERIFY2(got.at(w.first).clips == w.second.clips, qPrintable(w.first));
+            QCOMPARE(got.at(w.first).notes, w.second.notes);
+            }
+      {
+            const LiveSetWriter::Track* t = trackOf(now.spec, "Violin – Long");
+            QVERIFY(t && !t->linkTiming.empty());
+            const QByteArray entry = timingEntry(LiveSetWriter::linkBlob(9001, t));
+            QVERIFY(!entry.isEmpty());
+            QVERIFY2(entry.contains(", " + QByteArray::number(movedStart) + ", "), entry.constData());   // (the moved note: an exception)
+            const int lt = setTrack(ux, "My Long");
+            const int blob = ux.path(ux.path(lt, { "DeviceChain", "DeviceChain", "Devices", "MxDeviceMidiEffect" }),
+                                     { "BlobSlot", "Value", "MxDBlob", "Blob" });
+            QVERIFY(blob >= 0);
+            QByteArray hex = up.mid(ux.at(blob).openEnd, ux.at(blob).closeStart - ux.at(blob).openEnd);
+            hex.replace("\r", "").replace("\n", "").replace("\t", "");
+            QCOMPARE(timingEntry(QByteArray::fromHex(hex)), entry);
+            // its Track Delay: the technique's own less the new lookahead
+            QCOMPARE(ux.childValue(ux.child(lt, "TrackDelay"), "Value").toDouble(), t->delayMs);
+      }
+
+      // a second update: nothing to do, nothing written, no backup
+      LiveIntegration::UpdateResult again;
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &again, &error), qPrintable(error));
+      QVERIFY2(!again.written && !again.report.changed, qPrintable(again.text()));
+      QCOMPARE(readSet(path), up);
+      QCOMPARE(QDir(host.dir.path() + "/Song Project/Backup").entryList(QDir::Files).size(), 1);
+      QCOMPARE(again.overrides, 0);
+      Q_UNUSED(violin);
+      delete score;
+
+      //---------------------------------------------------------
+      //   a part the set doesn't have: its section, part group, Kontakt and technique inserted
+      //---------------------------------------------------------
+      MasterScore* without = readScore(DIR + "articulations.musicxml");
+      QVERIFY(without);
+      without->rebuildMidiMapping();
+      removePiano(without);
+      const QString path2 = host.dir.path() + "/Two/Two.als";
+      LiveIntegration::LiveSetPlan plan2;
+      create(without, path2, &plan2);
+      const int before = int(plan2.spec.tracks.size());
+      delete without;
+      MasterScore* with = readScore(DIR + "articulations.musicxml");
+      QVERIFY(with);
+      with->rebuildMidiMapping();
+      LiveIntegration::UpdateResult res2;
+      QVERIFY2(LiveIntegration::updateLiveSet(with, *host.lib, path2, &res2, &error), qPrintable(error));
+      QVERIFY2(res2.written, qPrintable(res2.text()));
+      QVERIFY2(res2.report.added.contains("Piano"), qPrintable(res2.text()));
+      const QByteArray up2 = readSet(path2);
+      QCOMPARE(LiveSetWriter::validate(up2), QString());
+      const LiveSet::Set set2 = LiveSet::parse(up2);
+      QCOMPARE(int(set2.tracks.size()), before + res2.report.added.size());
+      std::set<int> ids;
+      for (const LiveSet::Track& t : set2.tracks) {
+            QVERIFY(ids.insert(t.id).second);
+            if (t.groupId >= 0)
+                  QVERIFY(ids.count(t.groupId));            // (its group before it)
+            }
+      LiveIntegration::LiveSetPlan now2;
+      QVERIFY(LiveIntegration::planLiveSet(with, *host.lib, LiveIntegration::LiveSetKind::PLAIN_LINKED, &now2, &error));
+      now2.spec.link = device;
+      const std::map<QString, LiveSetUpdate::Record> want2 = LiveSetUpdate::records(LiveSetWriter::xml(now2.spec));
+      const std::map<QString, LiveSetUpdate::Record> got2 = LiveSetUpdate::records(up2);
+      for (const auto& w : want2) {
+            QVERIFY2(got2.count(w.first), qPrintable(w.first));
+            QVERIFY2(got2.at(w.first).clips == w.second.clips, qPrintable(w.first));
+            }
+      // and the keys find the inserted tracks where Create Live Set would put them: Piano's Kontakt in its part group
+      const LiveSetUpdate::Xml x2(up2);
+      const int pg = setTrack(x2, "Piano", "GroupTrack");
+      const int pk = setTrack(x2, "Piano", "MidiTrack");
+      QVERIFY(pg >= 0 && pk > pg);
+      QCOMPARE(x2.childValue(pk, "TrackGroupId"), x2.attr(pg, "Id"));
+      delete with;
       }
 
 //---------------------------------------------------------

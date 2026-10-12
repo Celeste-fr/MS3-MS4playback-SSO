@@ -84,6 +84,9 @@ Data fromJson(const QString& json)
             w.patch = t.value("patch").toInt(0);
             w.delayKey = t.value("delayKey").toString();
             w.lookahead = t.value("lookahead").toDouble(0);
+            w.clips = t.value("clips").toString();
+            w.notes = t.value("notes").toString();
+            w.slotTunings = t.value("slots").toString();
             const QJsonObject h = t.value("hashes").toObject();
             for (auto hi = h.begin(); hi != h.end(); ++hi)
                   w.hashes[hi.key()] = hi.value().toString();
@@ -140,6 +143,12 @@ QString toJson(const Data& data)
                   w["delayKey"] = ws.second.delayKey;
             if (ws.second.lookahead != 0)
                   w["lookahead"] = ws.second.lookahead;
+            if (!ws.second.clips.isEmpty())
+                  w["clips"] = ws.second.clips;
+            if (!ws.second.notes.isEmpty())
+                  w["notes"] = ws.second.notes;
+            if (!ws.second.slotTunings.isEmpty())
+                  w["slots"] = ws.second.slotTunings;
             if (!ws.second.hashes.empty()) {
                   QJsonObject h;
                   for (const auto& hs : ws.second.hashes)

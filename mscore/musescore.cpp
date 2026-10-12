@@ -290,6 +290,7 @@ static bool liveSetMode = false;           // --create-live-set / --live-equival
 static QString liveSetOut;                 // --create-live-set <file.als>
 static QString liveEquivalenceOut;         // --live-equivalence <folder>
 static QString liveSetReadback;            // --live-set-readback <file.als>
+static QString liveSetUpdate;              // --update-live-set <file.als>
 static bool liveEquivalenceWav = false;    // --live-equivalence-wav
 static bool liveEquivalenceStrict = false; // --live-equivalence-strict: a deterministic plug-in's thresholds
 static bool startWithNewScore = false;
@@ -5222,7 +5223,7 @@ static bool liveSetInBackground(const QStringList& argv)
             return l && SoundLibraryHost::hasSetup(*l, li.name);
             });
       std::unique_ptr<MasterScore> score(argv.isEmpty() ? nullptr : mscore->readScore(argv[0]));
-      if (!score && (!liveSetOut.isEmpty() || !liveEquivalenceOut.isEmpty())) {
+      if (!score && (!liveSetOut.isEmpty() || !liveEquivalenceOut.isEmpty() || !liveSetUpdate.isEmpty())) {
             log("cannot read " + (argv.isEmpty() ? QString("the score") : argv[0]));
             return false;
             }
@@ -5245,6 +5246,29 @@ static bool liveSetInBackground(const QStringList& argv)
                   QFile f(liveSetOut + ".txt");       // (the console isn't seen on Windows)
                   if (f.open(QIODevice::WriteOnly | QIODevice::Text))
                         f.write((report + "\n\n" + preflight.join("\n") + "\n").toUtf8());
+                  }
+            }
+      // Update Live Set (livesetexport.h): the set edited in place, its backup, the report (also "<set>.update.txt"); the
+      // score saved when the update changed it (what the set has of MuseScore's, timings taken from Live), as the owner
+      // would save it after Update Live Set in the window
+      if (!liveSetUpdate.isEmpty()) {
+            LiveIntegration::UpdateResult r;
+            if (!LiveIntegration::updateLiveSet(score.get(), *library, liveSetUpdate, &r, &error)) {
+                  log(error);
+                  ok = false;
+                  }
+            else {
+                  QString text = r.text();
+                  if (!score->undoStack()->isClean()) {
+                        if (score->saveFile(false))
+                              text += "\n" + QString("The score was saved (%1).").arg(score->masterScore()->fileInfo()->absoluteFilePath());
+                        else
+                              text += "\n" + QString("The score could not be saved: %1").arg(MScore::lastError);
+                        }
+                  log(text);
+                  QFile f(liveSetUpdate + ".update.txt");
+                  if (f.open(QIODevice::WriteOnly | QIODevice::Text))
+                        f.write((text + "\n\n" + preflight.join("\n") + "\n").toUtf8());
                   }
             }
       if (!liveSetReadback.isEmpty()) {
@@ -9348,6 +9372,9 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("live-equivalence", "Compare the score's playback through the Live Set and its clips "
                                           "with MuseScore's own (liveequivalence.h); the score follows; the report goes to the "
                                           "folder", "folder"));
+      parser.addOption(QCommandLineOption("update-live-set", "Update a Live Set made by Create Live Set with the score, in place "
+                                          "(LIVE.md: Update Live Set; a backup in its Backup folder; the score saved when the "
+                                          "update changed it); the score follows", "file.als"));
       parser.addOption(QCommandLineOption("live-set-readback", "Load each plug-in state of a Live Set into the library's "
                                           "plug-in and read back the parameters Live's panel lists (with --create-live-set: "
                                           "the set it wrote)", "file.als"));
@@ -9462,10 +9489,12 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             verifyWav = parser.isSet("verify-wav");
             verifyShareable = parser.isSet("verify-shareable");
             }
-      if ((liveSetMode = parser.isSet("create-live-set") || parser.isSet("live-equivalence") || parser.isSet("live-set-readback"))) {
+      if ((liveSetMode = parser.isSet("create-live-set") || parser.isSet("live-equivalence") || parser.isSet("live-set-readback")
+                         || parser.isSet("update-live-set"))) {
             MScore::noGui = true;
             liveSetOut = parser.value("create-live-set");
             liveSetReadback = parser.value("live-set-readback");
+            liveSetUpdate = parser.value("update-live-set");
             liveEquivalenceOut = parser.value("live-equivalence");
             liveEquivalenceWav = parser.isSet("live-equivalence-wav");
             liveEquivalenceStrict = parser.isSet("live-equivalence-strict");

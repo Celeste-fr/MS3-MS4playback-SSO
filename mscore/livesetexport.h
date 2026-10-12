@@ -19,9 +19,12 @@
 //   resaved it, else made from the .nki; the voice limit as MuseScore sets it at load).
 //---------------------------------------------------------
 
+#include <functional>
+
 #include <QString>
 #include <QStringList>
 
+#include "libmscore/livesetupdate.h"
 #include "libmscore/livesetwriter.h"
 
 class QWidget;
@@ -29,6 +32,9 @@ class QWidget;
 namespace Ms {
 
 class MasterScore;
+namespace LiveSet {
+struct Set;
+}
 namespace SoundLib {
 class Library;
 }
@@ -48,6 +54,8 @@ struct LiveSetPlan {
       QStringList controllers;      // per part and patch: the Controllers set in its state ("Piano – Grand Piano: Mic 1 level 20 …")
       QString source;               // onlyMissing: how the tracks already in Live were found
       int routes { 0 };             // the score's routes (onlyMissing: the rest have a track)
+      // (Update Live Set) a Kontakt track whose plug-in state isn't needed: the set has it already (its state stays)
+      std::function<bool(const LiveSetWriter::Track&)> skipPlugin;
       };
 
 enum class LiveSetKind {
@@ -71,6 +79,39 @@ QString liveProjectSetPath(const QString& chosen, bool* createInfo);
 
 // the file dialog (default name "<title>.als"), the set written, the report
 void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing);
+
+// after Create Live Set or Update Live Set wrote a plain set: in the score (liveTracks, one undoable step with the lanes)
+// what it wrote (written: the XML MuseScore made for spec; file: the set as written, read back), the lanes Live had
+// MuseScore's again; keepOthers: the record of tracks not in spec kept (Update). How many lanes came back from Live
+int recordWritten(MasterScore* score, const LiveSetWriter::Spec& spec, const QByteArray& written, const LiveSet::Set& file,
+                  bool keepOthers);
+
+//---------------------------------------------------------
+//   Update Live Set (libmscore/livesetupdate.h; LIVE.md › Update Live Set): a plain set Create Live Set wrote, saved
+//   and worked on in Live since, brought up to date with the score in place. In order:
+//     1. read back as Import automation from Live Set does (importSet: lanes, Automation::merge, the mixer, track
+//        delays), then Live's timing edits of the technique clips as the notes' overrides (LiveSetUpdate::timingFromSet,
+//        one undo step "Timing from Live");
+//     2. the plain set planned for the score now (planLiveSet, no plug-in state for the Kontakts the set has);
+//     3. LiveSetUpdate::update: only what MuseScore owns replaced, new tracks inserted;
+//     4. when anything changed: the file copied to "Backup/<name> [<date time>].als" next to it (Live's convention),
+//        then written in one go (QSaveFile); what was written recorded in the score (liveTracks, as Create Live Set).
+//   The set must be closed in Live (Live keeps its own copy open and would save over the update).
+//---------------------------------------------------------
+
+struct UpdateResult {
+      bool written { false };       // the file changed (else nothing needed updating)
+      QString backup;               // the copy of the set as it was
+      int overrides { 0 };          // note timings taken from Live
+      QString importReport;         // the read-back's report
+      QStringList notes;            // what the read-back and the plan said
+      LiveSetUpdate::Report report;
+      QString text() const;
+      };
+bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const QString& path, UpdateResult* result,
+                   QString* error, QWidget* askParent = nullptr);
+// the file dialog (the score's linked set offered), the update, the report
+void updateLiveSetDialog(MasterScore* score, QWidget* parent);
 
 }     // namespace LiveIntegration
 }     // namespace Ms

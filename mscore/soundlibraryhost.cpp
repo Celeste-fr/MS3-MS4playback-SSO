@@ -2657,11 +2657,21 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                                   "finds them, MIDI From = the route's port and channel, with the MuseScore Link device and "
                                   "the library's plug-in holding the patch as MuseScore sets it up (UACC & UI only, 512 voices). "
                                   "Tempo and time signature: the score's first."));
+            // Update Live Set (livesetexport.h, LIVE.md › Update Live Set): a set Create Live Set wrote, brought up to date
+            // in place, keeping what was done in Live
+            QPushButton* update = new QPushButton(tr("Update Live Set…"), liveBox);
+            update->setToolTip(tr("Updates a Live Set made by Create Live Set (closed in Live) with this score, in place: first "
+                                  "reads back what you changed in Live that the score keeps (automation, mixer, track delays, "
+                                  "note timings), then replaces only what MuseScore wrote (technique clips, Controllers "
+                                  "clips, track delays, the MuseScore Link devices' timing) and adds tracks for new "
+                                  "techniques and parts. Your devices, return tracks, sends, other tracks and mixer stay; "
+                                  "the set as it was goes to its Backup folder."));
             QPushButton* missing = new QPushButton(tr("Add missing tracks…"), liveBox);
             missing->setToolTip(tr("Writes a small Live Set with only the routes that have no track in Live yet (from the "
                                    "MuseScore Link device's report when it answers, else from the linked set): drag its tracks "
                                    "into your set from Live's browser."));
             sets->addWidget(create);
+            sets->addWidget(update);
             sets->addWidget(missing);
             missing->setVisible(false);       // writes the route set (LiveSetKind), not the plain set Create Live Set writes
             sets->addStretch();
@@ -2678,6 +2688,10 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                   });
             connect(missing, &QPushButton::clicked, this, [this]() {
                   LiveIntegration::createLiveSetDialog(_score, this, true);
+                  });
+            connect(update, &QPushButton::clicked, this, [this]() {
+                  LiveIntegration::updateLiveSetDialog(_score, this);
+                  load();
                   });
             layout->addWidget(liveBox);
             LiveIntegration::LiveClipsLink* link = LiveIntegration::LiveClipsLink::instance();

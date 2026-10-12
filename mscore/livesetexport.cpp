@@ -27,9 +27,11 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QRegularExpression>
+#include <QSaveFile>
 #include <QStandardPaths>
 
 #include "libmscore/liveset.h"
+#include "libmscore/livetimingoverride.h"
 #include "libmscore/livetracks.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
@@ -248,6 +250,8 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
             if (!plugin)
                   break;
             if (t.group || t.midiTo >= 0)       // (the plain set's groups and technique tracks)
+                  continue;
+            if (plan->skipPlugin && plan->skipPlugin(t))
                   continue;
             if (!t.instrument || t.instrument->kit) {
                   plan->left << QObject::tr("%1: a kit has no patch of its own (its drums play on their own tracks)").arg(t.name);
@@ -512,6 +516,64 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
       }
 
 //---------------------------------------------------------
+//   recordWritten
+//    after a set is written (Create Live Set, Update Live Set): a new set has none of Live's automation: lanes that came
+//    from (or were marked as in) another set are MuseScore's to play there now, through the MuseScore Link device
+//    (automation.h: playedByLive). The plain set (livetracks.h): what was written (its clip controllers' hashes as the
+//    reader reads the XML MuseScore wrote: an unchanged one is MuseScore's own render when the set comes back; Update
+//    Live Set's records, livesetupdate.h), and the parameter lanes the file has as track automation (Live plays them:
+//    their liveHash); kept with the lanes in one undoable step. keepOthers: the written entries of tracks not written now
+//    stay (Update: tracks the score no longer plays). The lanes now MuseScore's again
+//---------------------------------------------------------
+
+int recordWritten(MasterScore* score, const LiveSetWriter::Spec& spec, const QByteArray& written, const LiveSet::Set& file,
+                  bool keepOthers)
+      {
+      std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+      std::set<std::pair<const Part*, QString>> wereLive;
+      for (auto& pl : all)
+            for (Automation::Lane& l : pl.second)
+                  if (l.playedByLive() || l.extra.contains("liveHash")) {
+                        l.extra.remove("source");
+                        l.extra.remove("liveHash");
+                        l.extra.remove("pointsHash");
+                        wereLive.insert({ pl.first, l.target });
+                        }
+      LiveTracks::Data data = LiveTracks::read(score);
+      const LiveSet::Set writtenSet = LiveSet::parse(written);
+      if (file.error.isEmpty() && writtenSet.error.isEmpty()) {
+            std::map<QString, LiveTracks::Written> w = LiveTracks::written(score, spec.tracks, writtenSet);
+            const std::map<QString, LiveSetUpdate::Record> records = LiveSetUpdate::records(written);
+            for (const LiveSetWriter::Track& t : spec.tracks) {
+                  auto wi = w.find(t.annotation);
+                  if (wi == w.end())
+                        continue;
+                  auto r = records.find(t.annotation);
+                  if (r != records.end()) {
+                        wi->second.clips = r->second.clips;
+                        wi->second.notes = r->second.notes;
+                        }
+                  if (!t.group && t.midiTo < 0)
+                        wi->second.slotTunings = LiveSetUpdate::slotsText(t.slotCents);
+                  }
+            if (keepOthers) {
+                  for (const auto& e : w)
+                        data.written[e.first] = e.second;
+                  }
+            else
+                  data.written = w;
+            LiveTracks::markWrittenLanes(spec.tracks, file, &all);
+            }
+      int fromLive = 0;
+      for (const auto& pl : all)
+            for (const Automation::Lane& l : pl.second)
+                  if (wereLive.count({ pl.first, l.target }) && !l.extra.contains("liveHash"))
+                        ++fromLive;
+      LiveTracks::undoWrite(score, data, &all);
+      return fromLive;
+      }
+
+//---------------------------------------------------------
 //   createLiveSetDialog
 //---------------------------------------------------------
 
@@ -579,29 +641,8 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       // MuseScore's own render when the set comes back), and the parameter lanes it has as track automation (Live plays
       // them: their liveHash); kept with the lanes in one undoable step
       int fromLive = 0;
-      if (!onlyMissing) {
-            std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
-            std::set<std::pair<const Part*, QString>> wereLive;
-            for (auto& pl : all)
-                  for (Automation::Lane& l : pl.second)
-                        if (l.playedByLive() || l.extra.contains("liveHash")) {
-                              l.extra.remove("source");
-                              l.extra.remove("liveHash");
-                              l.extra.remove("pointsHash");
-                              wereLive.insert({ pl.first, l.target });
-                              }
-            const LiveSet::Set readBack = LiveSet::read(path);
-            LiveTracks::Data data = LiveTracks::read(score);
-            if (readBack.error.isEmpty()) {
-                  data.written = LiveTracks::written(score, plan.spec.tracks, readBack);
-                  LiveTracks::markWrittenLanes(plan.spec.tracks, readBack, &all);
-                  }
-            for (const auto& pl : all)
-                  for (const Automation::Lane& l : pl.second)
-                        if (wereLive.count({ pl.first, l.target }) && !l.extra.contains("liveHash"))
-                              ++fromLive;
-            LiveTracks::undoWrite(score, data, &all);
-            }
+      if (!onlyMissing)
+            fromLive = recordWritten(score, plan.spec, LiveSetWriter::xml(plan.spec), LiveSet::read(path), false);
       if (fromLive)
             plan.notes << QObject::tr("%n automation lane(s) from a Live Set are MuseScore's now: the new set has them as track "
                                       "automation.", "", fromLive);
@@ -619,6 +660,212 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
               + " " + QObject::tr("Only Live can tell whether it opens as intended: see LIVE.md › Create Live Set.");
       box.setInformativeText(info);
       box.setDetailedText(reportText(plan, path, onlyMissing));
+      box.exec();
+      }
+
+//---------------------------------------------------------
+//   updateLiveSet
+//---------------------------------------------------------
+
+QString UpdateResult::text() const
+      {
+      QString s;
+      s += written ? QObject::tr("The set was updated; the set as it was is in %1.").arg(QDir::toNativeSeparators(backup))
+                   : QObject::tr("Nothing in the set needed updating: the file is unchanged.");
+      s += "\n";
+      if (overrides)
+            s += QObject::tr("%n note timing(s) set in Live kept as the notes' Start / End from Live.", "", overrides) + "\n";
+      s += "\n" + report.text();
+      if (!notes.isEmpty())
+            s += "\n" + notes.join("\n") + "\n";
+      if (!importReport.isEmpty())
+            s += "\n" + QObject::tr("Read back first:") + "\n" + importReport + "\n";
+      return s;
+      }
+
+bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const QString& path, UpdateResult* result,
+                   QString* error, QWidget* askParent)
+      {
+      if (!score) {
+            *error = QObject::tr("No score is open.");
+            return false;
+            }
+      QFile f(path);
+      if (!f.open(QIODevice::ReadOnly)) {
+            *error = QObject::tr("%1 could not be read: %2").arg(QDir::toNativeSeparators(path), f.errorString());
+            return false;
+            }
+      const QByteArray raw = f.readAll();
+      f.close();
+      QByteArray xml = raw;
+      if (raw.startsWith("\x1f\x8b")) {
+            QString err;
+            xml = LiveSet::gunzip(raw, &err);
+            if (xml.isEmpty()) {
+                  *error = QObject::tr("%1 could not be read: %2").arg(QDir::toNativeSeparators(path), err);
+                  return false;
+                  }
+            }
+      if (!xml.contains(QByteArray("<Annotation Value=\"") + PlainLiveSet::KEY_PREFIX)) {
+            *error = QObject::tr("%1 has no track MuseScore wrote (Create Live Set marks its tracks in their Info text): only "
+                                 "a set made by Create Live Set can be updated.").arg(QDir::toNativeSeparators(path));
+            return false;
+            }
+
+      // 1. read back: the lanes, the mixer, the track delays (as Import automation from Live Set), then the timing set in Live
+      bool autoReimport = false;
+      const QString linked = linkedSet(score, &autoReimport);
+      if (!importSet(score, path, linked == path && autoReimport, &result->importReport, askParent)) {
+            *error = result->importReport;
+            return false;
+            }
+      {
+            LiveSetPlan pre;
+            const std::vector<LiveSetWriter::Track> now = plainTracks(score, library, &pre, true);
+            const LiveTimingOverride::Result r = LiveSetUpdate::timingFromSet(score, xml, now, LiveTracks::read(score),
+                                                                              LiveClips::timeline(score).bpm, &result->notes);
+            if (!r.edits.empty()) {
+                  score->startCmd();
+                  result->overrides = LiveTimingOverride::apply(r);
+                  score->endCmd();
+                  }
+      }
+
+      // the lanes the read-back took from Live are MuseScore's to write into the set now (a render for Live leaves out
+      // lanes Live plays: Lane::playedByLive), else the Controllers clip written would lose the owner's edit
+      {
+            std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+            bool any = false;
+            for (auto& pl : all)
+                  for (Automation::Lane& l : pl.second)
+                        if (l.playedByLive() || l.extra.contains("liveHash")) {
+                              l.extra.remove("source");
+                              l.extra.remove("liveHash");
+                              l.extra.remove("pointsHash");
+                              any = true;
+                              }
+            if (any)
+                  LiveTracks::undoWrite(score, LiveTracks::read(score), &all);
+      }
+
+      // 2. the plain set for the score now (no plug-in state for the Kontakts the set has, unless their slots changed)
+      const LiveTracks::Data data = LiveTracks::read(score);
+      std::set<QString> inSet;
+      {
+            const LiveSet::Set set = LiveSet::parse(xml);
+            for (size_t i = 0; i < set.tracks.size(); ++i) {
+                  const QString k = LiveTracks::key(set, i, data);
+                  if (!k.isEmpty())
+                        inSet.insert(k);
+                  }
+      }
+      LiveSetPlan plan;
+      plan.skipPlugin = [&inSet, &data](const LiveSetWriter::Track& t) {
+            if (!inSet.count(t.annotation))
+                  return false;
+            auto w = data.written.find(t.annotation);
+            return w == data.written.end() || w->second.slotTunings == LiveSetUpdate::slotsText(t.slotCents);
+            };
+      if (!planLiveSet(score, library, LiveSetKind::PLAIN_LINKED, &plan, error))
+            return false;
+      result->notes << plan.left;
+
+      // 3. the file edited in place
+      const QByteArray out = LiveSetUpdate::update(xml, plan.spec, data, &result->report, error);
+      if (out.isEmpty())
+            return false;
+      if (result->report.changed) {
+            if (LiveSetWriter::validate(xml).isEmpty()) {            // (Live's own bookkeeping, as Create Live Set checks it)
+                  const QString problem = LiveSetWriter::validate(out);
+                  if (!problem.isEmpty()) {
+                        *error = QObject::tr("The updated set failed its check (%1): nothing written.").arg(problem);
+                        return false;
+                        }
+                  }
+            // 4. Live's backup convention, then the set in one go
+            QString backup = LiveSetUpdate::backupPath(path, QDateTime::currentDateTime());
+            QDir().mkpath(QFileInfo(backup).absolutePath());
+            for (int n = 2; QFileInfo::exists(backup) && n < 100; ++n)
+                  backup = LiveSetUpdate::backupPath(path, QDateTime::currentDateTime()).replace("].als", QString("] %1.als").arg(n));
+            if (!QFile::copy(path, backup)) {
+                  *error = QObject::tr("The backup %1 could not be written: nothing changed.").arg(QDir::toNativeSeparators(backup));
+                  return false;
+                  }
+            QSaveFile sf(path);
+            if (!sf.open(QIODevice::WriteOnly) || sf.write(LiveSetWriter::gzip(out)) < 0 || !sf.commit()) {
+                  *error = QObject::tr("%1 could not be written (%2); the set is as it was.").arg(QDir::toNativeSeparators(path),
+                                                                                                 sf.errorString());
+                  return false;
+                  }
+            result->written = true;
+            result->backup = backup;
+            }
+      // what the set has of MuseScore's now (an unchanged update records the same)
+      recordWritten(score, plan.spec, LiveSetWriter::xml(plan.spec), LiveSet::parse(out), true);
+      return true;
+      }
+
+//---------------------------------------------------------
+//   updateLiveSetDialog
+//---------------------------------------------------------
+
+void updateLiveSetDialog(MasterScore* score, QWidget* parent)
+      {
+      const QString title = QObject::tr("Update Live Set");
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!score || !library) {
+            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences › I/O › Sound library)."));
+            return;
+            }
+      QString start = linkedSet(score);
+      if (start.isEmpty() || !QFileInfo::exists(start)) {
+            start = score->fileInfo()->absolutePath();
+            if (start.isEmpty() || !QFileInfo(start).isDir())
+                  start = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+            }
+      QFileDialog d(parent, title, start, QObject::tr("Ableton Live Set") + " (*.als)");
+      d.setAcceptMode(QFileDialog::AcceptOpen);
+      d.setFileMode(QFileDialog::ExistingFile);
+      d.setLabelText(QFileDialog::Accept, QObject::tr("Update"));
+      if (QFileInfo(start).isFile())
+            d.selectFile(start);
+      if (QMessageBox::information(parent, title,
+                                   QObject::tr("Choose a Live Set made by Create Live Set. MuseScore first reads back what you "
+                                               "changed in Live that the score keeps (automation, mixer, track delays, note "
+                                               "timings), then replaces only what it wrote there (the technique clips, the "
+                                               "Controllers clips, track delays, the MuseScore Link devices' timing) and adds "
+                                               "tracks for new techniques and parts. Your devices, return tracks, sends, other "
+                                               "tracks and mixer stay. The set as it was is kept in its Backup folder.\n\n"
+                                               "Close the set in Live first (save it there): Live would save its own copy over "
+                                               "the update."),
+                                   QMessageBox::Ok | QMessageBox::Cancel) != QMessageBox::Ok)
+            return;
+      if (!d.exec() || d.selectedFiles().isEmpty())
+            return;
+      const QString path = d.selectedFiles().front();
+      UpdateResult result;
+      QString error;
+      QApplication::setOverrideCursor(Qt::WaitCursor);
+      const bool ok = updateLiveSet(score, *library, path, &result, &error, parent);
+      QApplication::restoreOverrideCursor();
+      if (!ok) {
+            QMessageBox::warning(parent, title, error);
+            return;
+            }
+      QMessageBox box(QMessageBox::Information, title, result.written ? QObject::tr("The Live Set was updated.")
+                                                                       : QObject::tr("The Live Set is up to date."),
+                      QMessageBox::Ok, parent);
+      const LiveSetUpdate::Report& r = result.report;
+      QString info = QObject::tr("%n track(s) updated", "", r.updated.size()) + ", " + QObject::tr("%n added", "", r.added.size())
+                     + ", " + QObject::tr("%n cleared", "", r.cleared.size()) + ". "
+                     + QObject::tr("Kept: %n device(s) you added", "", r.userDevices) + ", "
+                     + QObject::tr("%n other track(s)", "", r.otherTracks) + ", " + QObject::tr("%n return track(s)", "", r.returnTracks) + ".";
+      if (!r.skipped.isEmpty() || !r.removedParts.isEmpty())
+            info += "\n\n" + QObject::tr("See the details for what was skipped.");
+      if (result.written)
+            info += "\n\n" + QObject::tr("Open it in Live 12. Only Live can tell whether it opens as intended: see LIVE.md › Update Live Set.");
+      box.setInformativeText(info);
+      box.setDetailedText(result.text());
       box.exec();
       }
 
