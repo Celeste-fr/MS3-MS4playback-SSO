@@ -33,7 +33,7 @@ namespace LiveSetWriter {
 
 static const char* const BEFORE_EVERYTHING = "-63072000";
 
-static void automationEvents(Writer& w, const std::vector<std::pair<double, double>>& points)
+void automationEvents(Writer& w, const std::vector<std::pair<double, double>>& points)
       {
       w.open("Automation");
       w.open("Events");

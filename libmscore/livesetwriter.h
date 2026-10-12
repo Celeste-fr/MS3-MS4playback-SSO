@@ -49,6 +49,7 @@
 #include <QStringList>
 
 namespace Ms {
+class Note;
 class Part;
 class Score;
 namespace LiveSet {
@@ -180,6 +181,18 @@ struct Track {
       std::vector<double> linkTiming;
       double lookaheadMs { 0 };           // (not written) that timing's lookahead: delayMs is this much earlier than the
                                           // technique's own delay (livetracks.h adds it back when the set is read)
+      // (not written) a technique track's notes as the score has them (not keyswitches; Update Live Set: a note moved in
+      // Live becomes its timing override, livesetupdate.h): pitch, start and length in song units, velocity, as its clips
+      // hold them, each with the score's note and its note-on's utick (LiveClips::Note::source, utick)
+      struct SourceNote {
+            int pitch { 60 };
+            int start { 0 };
+            int length { 0 };
+            int velocity { 100 };
+            const Note* note { nullptr };
+            int utick { 0 };
+            };
+      std::vector<SourceNote> sourceNotes;
       // (not written)
       QString routeKey;                   // "<port>:<channel 1-16>", as LiveClips::Track::key
       QString part;                       // the part's name

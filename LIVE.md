@@ -673,6 +673,64 @@ render, `plainWritten`, `test_patch.js`, `test_timing.js`), only real Live 12.4 
 - The track colours: one per part, from a fixed list. By family (strings, woodwinds …) instead?
 - Return tracks (a reverb / delay like Live's default set): none, since SSO brings its own room. Wanted?
 
+## Update Live Set
+
+The task (2026-10-12): the owner works on the notes in MuseScore and on the production in Live (effects, sends, extra
+tracks, the mixer), and keeps revising the notes; creating the set again loses the Live side's work that the read-back
+doesn't carry. *Mixer › Advanced Options… › Ableton Live › **Update Live Set…*** (next to *Create Live Set…*), or
+`MuseScore3Evo --update-live-set <set.als> <score>`: a plain set Create Live Set wrote, **closed in Live** (Live keeps
+its own copy and would save it over the update), is brought up to date with the score **in place**. Design and rules:
+`libmscore/livesetupdate.h`; the steps: `mscore/livesetexport.h` › Update Live Set.
+
+1. **Read back first**, as *Import automation from Live Set* does (`importSet`: lanes by `Automation::merge`, a
+   conflict asked; the Kontakt's mixer as the part's Mixer, other tracks' mixer kept in `liveTracks`; track delays), then
+   **timing set in Live**: a note moved or trimmed in a technique clip becomes the note's override (*Start / End from
+   Live*, as in *Live plays the score*): where Live plays it (its clip place, the track's Track Delay and the device's
+   delays from the file's `"Timing"` store) less its written place. Which notes Live edited: Create Live Set and Update
+   record each technique track's notes (`liveTracks` › written › `notes`: one hash per note); a note of the file whose
+   hash isn't recorded was edited in Live, a recorded one the file lacks is that note as written, paired by key and the
+   nearest start within a beat; a note the score changed since isn't recorded, so a change in MuseScore is never taken
+   for a timing edit in Live. A set made before (no record): its timing edits aren't taken (reported).
+2. **The plain set for the score now** (`planLiveSet`, Kontakt states only for Kontakts the set doesn't have, or whose
+   slots' tunings changed).
+3. **What MuseScore owns is replaced, only where it differs**: a MuseScore track's arrangement clips (the technique
+   clips with their switch, the Controllers clips; the clip envelopes pointing at the track's own MidiControllers ids), its
+   Track Delay, a technique track's MuseScore Link `"Timing"` store (the device's other stores as Max saved them), the
+   Kontakt's parameter automation MuseScore writes (a parameter Live's panel doesn't list is reported), and a Kontakt's
+   state only when its slots' tunings changed (`liveTracks` › written › `slots`; its Kontakt-window settings are then
+   reset, the report says). **Live's own clip edits** (velocities, notes added or deleted) stay while the score's notes on
+   that track are unchanged since the last write (`liveTracks` › written › `clips`); changed in the score too, the score's
+   clip replaces them (reported). A main patch's Controllers clip is always the score's (its edits came back as lanes).
+4. **Everything else stays byte for byte**: devices added on any track (after Kontakt too), return tracks and sends,
+   other tracks, names (a renamed track is found by its Info text), colours, the mixer, automation MuseScore doesn't
+   write, locators, tempo, scenes, Live's version attributes. The file is edited as text (`LiveSetUpdate::Xml`: the tags
+   indexed by byte offsets, the edits spliced in), not written again; an update of an unchanged score writes nothing.
+5. **The score changed**: a new technique, patch, tuning copy, part or section: its tracks inserted at the end of
+   their group (a new section before the return tracks), as Create Live Set writes them, with new pointee ids
+   (`NextPointeeId` raised), Track Ids after the set's highest, TrackGroupId and MIDI To pointing at the set's tracks, a
+   Sends list like the set's other tracks' (each send at −inf) and a clip slot per scene of the set. A technique (or a
+   Kontakt) no longer played: its clips cleared and its device's timing removed, the track kept. A part no longer in the
+   score: reported, its tracks untouched. Two tracks with one Info text (duplicated in Live): the first is MuseScore's.
+6. **Safety**: before writing, the set is copied to `Backup/<name> [yyyy-MM-dd hhmmss].als` next to it (the convention
+   of Live's own backups), then written in one go (`QSaveFile`); a set that passed `LiveSetWriter::validate` before
+   must pass it after, else nothing is written. A report lists the tracks updated (and what: clips, Track Delay, timing,
+   automation, state), added, cleared, Live edits kept or replaced, removed parts, what was skipped, and how many of the
+   owner's devices, other tracks and return tracks were kept. The command line writes it to `<set>.update.txt` and saves
+   the score when the update changed it.
+
+Tested here (`tst_liveequivalence` `updateLiveSet`, the test synth as Kontakt): a set Create Live Set wrote, edited as
+in Live (an effect after Kontakt, a return track with a send on every track, an audio track with an EQ, a Kontakt's
+volume, a note moved 1/8 beat in a technique clip, the track renamed), the score changed (a pitch, a marcato on a new
+extra patch, a staccatissimo removed, the piano part removed): the owner's additions and the removed part's tracks
+byte for byte, the backup the saved file, the Spiccato track cleared, the new Kontakt and technique inside the part
+group with a send at −inf, every MuseScore track's clips as a new Create Live Set's, the moved note's override where
+Live played it (`playedBy`), the Long track's timing record the new one; a second update writes nothing; a set
+without the piano part gets its section, part group and tracks. **Only real Live 12.4 can show** (to check first, with
+a Windows build): that Live opens an updated set it saved itself (12.4's format, the inserted tracks written in 12.2's
+as Create Live Set writes them) without a message; that it keeps the inserted tracks' sends and the devices' saved data;
+that the clip envelopes' ControllerTargets ids taken from the file are still the ones Live 12.4 saved; how Live names
+its backups exactly (assumed `<name> [yyyy-MM-dd hhmmss].als`).
+
 ## Automation lanes in MuseScore and in Live
 
 The owner, 2026-09-30: "when you select a MIDI track, MuseScore lets you edit the notes AND show you automation
@@ -985,7 +1043,11 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 - **Track delays in the route set** (Add Missing Tracks, the Live-against-MuseScore check): its tracks carry none, and
   *Live plays the score*'s clips are rendered without them; only the plain set has them (as TrackDelay).
 - **Controllers and the Mixer changed after the set was written** don't follow: create the set again, or use Live's
-  panel and faders.
+  panel and faders. *Update Live Set* (below) doesn't carry them either: it reads Live's mixer back into the score (Live
+  wins) and keeps each Kontakt's state as Live saved it.
+- **Live's own clip edits kept by Update Live Set** (velocities, notes added or deleted in a technique clip whose notes
+  the score hasn't changed since; LIVE.md › Update Live Set): Live plays them, MuseScore doesn't (they are not in the
+  score). A note moved or trimmed is not one of them: it became its timing override, which both play.
 - The Play Panel's tempo slider (relTempo) and MuseScore's built-in (non-library) parts are not in Live.
 - The Mixer's volume 0: silence in MuseScore, -70 dB in Live (Live's lowest fader value).
 - Round robins: Kontakt picks its own on each render, in MuseScore and in Live alike (not a difference of the path,
@@ -1642,6 +1704,9 @@ tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from t
 `libmscore/livetimingoverride.*` (timing set in Live: a note's override, ms after its written start / end, metaTag
 `liveTimingOverrides`, Inspector › Note; found from the device's `/live/edited` report against what MuseScore wrote,
 `base` in `/ms/track`, protocol 10; played by `MidiRenderer::libraryTimingOverrides`),
+`libmscore/livesetupdate.*` + `mscore/livesetexport.*` › Update Live Set (a plain set brought up to date in place:
+read back, timing edits from the technique clips, only MuseScore's parts of the file replaced, new tracks inserted; the
+records in `liveTracks` › written: clips, notes, slots),
 `libmscore/plainliveset.*` (the plain set; its technique clips hold the written notes, `libmscore/livetiming.*` puts
 the played timing back by Track Delay and the device: `MidiRenderer::setWrittenTiming`, `LiveTiming::track`, the
 device's `"Timing"` store and `---mslt` ring, MuseScoreLink.js › Written clips), `libmscore/livetracks.*` (the plain set
@@ -1681,6 +1746,8 @@ curves in the track (`Track.set_data` through `/ms/keep`, the set marked changed
   (the editor's operations), `undoWrite`; `mscore/automationlanes.{h,cpp}`: the editor.
 - `mscore/liveintegration.{h,cpp}`: the Mixer switch, the import, the link, the watcher.
 - `mscore/liveclips.{h,cpp}`: Live plays the score (`LiveClipsLink`, which owns the UDP socket for both).
+- `libmscore/livesetupdate.{h,cpp}`: Update Live Set, the in-place edit of a saved set (`Xml`, `update`, `timingFromSet`,
+  `records`); `mscore/livesetexport.{h,cpp}` `updateLiveSet`: the read-back, the plan, the backup.
 - `libmscore/livesetwriter.{h,cpp}`: Create Live Set, the writer (and `validate`); `mscore/livesetexport.{h,cpp}`: the
   routes, the device, the states, the dialog. `tools/live/test/compare_als_skeleton.py`: a written set against one
   Live saved.

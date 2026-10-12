@@ -44,7 +44,8 @@
 //                       "envelopes": [{"target": "volume" | "pan" | "speaker", "initial": v,
 //                                      "events": [[time, value], [time, value, c1x, c1y, c2x, c2y], …]}]}},
 //      "written": {key: {"kind": "section" | "part" | "kontakt" | "copy" | "technique", "part": index, "patch": n,
-//                        "hashes": {"cc1": hash, …}, "delayKey": trackdelays.h key, "lookahead": ms}}}
+//                        "hashes": {"cc1": hash, …}, "delayKey": trackdelays.h key, "lookahead": ms,
+//                        "clips": hash, "notes": base64, "slots": "0.00 -50.00"}}}   (livesetupdate.h: Update Live Set)
 //   Track delays: each part's tracks' TrackDelay comes back as the part's delays (trackdelays.h; "part": its group's,
 //   "delayKey": a Kontakt's or technique's; a technique track's with its written notes' lookahead added back, livetiming.h:
 //   Create Live Set wrote it that much earlier); one in samples (Live's toggle) is reported, not imported.
@@ -99,6 +100,11 @@ struct Written {
       QString delayKey;             // a Kontakt or technique track's trackdelays.h key ("" a part group's: the part's)
       double lookahead { 0 };       // a technique track's written notes' lookahead (livetiming.h): its TrackDelay is that
                                     // much earlier than the technique's own delay
+      // what Update Live Set compares (livesetupdate.h): the hash of the track's clips as MuseScore wrote them, a technique's
+      // notes (each one's hash), a Kontakt's slots' tunings ("" one slot)
+      QString clips;
+      QString notes;
+      QString slotTunings;
       };
 
 struct Data {

@@ -233,7 +233,8 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `CHECK_VERSION` in soundlibrarycheck.cpp when old results go stale), `dynamics.json`, `load times.log` (qDebug
   doesn't show on Windows).
 - Background jobs (own setups copy, lock, log; their `.bat` files in `bin` only with `-DMSCORE_INSTALL_MEASUREMENT_SCRIPTS=ON`, off since 2026-10-02): `--check-dynamics`, `--scan-keys`,
-  `--measure-load-times`, `--verify-playback`, `--live-equivalence`, `--create-live-set`, `--live-set-readback`.
+  `--measure-load-times`, `--verify-playback`, `--live-equivalence`, `--create-live-set`, `--update-live-set`,
+  `--live-set-readback`.
   Each logs a **render preflight** (`libmscore/renderpreflight.h`: calibration files' path + SHA-256 and each
   patch's source, setups folder / copy, playback.ini + preset; in the verify report, VERIFY.md › Preflight); the
   copy is synced at start (`syncJobCopy`: verify mirrors the main calibration, measuring jobs keep their own and warn).
@@ -263,7 +264,14 @@ note moved or resized in such a clip keeps that timing as its override (`libmsco
 written start / end, metaTag `liveTimingOverrides`, Inspector › Note › Start / End from Live; the device reports an edited
 clip and doesn't write over it, `/ms/track` `base`, protocol 10; played by `MidiRenderer::libraryTimingOverrides`, so
 MuseScore plays it too; LIVE.md › Live plays the score › Timing you set in Live); read back by `livetracks.*` (track keys in the Info text; metaTag `liveTracks`: the
-written hashes, other tracks' mixer and its automation). Live plays the score as clips (`liveclips.*`), the route set (`livesetwriter.*`,
+written hashes, other tracks' mixer and its automation). **Update Live Set** (2026-10-12; Mixer › Advanced Options… ›
+Ableton Live, `--update-live-set <set> <score>`; `libmscore/livesetupdate.*`, `mscore/livesetexport.*` `updateLiveSet`;
+LIVE.md › Update Live Set): a saved plain set (closed in Live) edited in place as text: read back first (as the import,
+plus a note moved in a technique clip as its timing override, paired through `liveTracks` › written › `notes`), then
+only MuseScore's parts replaced where they differ (clips, Track Delay, the device's `"Timing"`, Kontakt parameter
+automation, a Kontakt's state only when its slots' tunings changed), new techniques / patches / parts inserted, unused
+techniques cleared, removed parts reported; the owner's devices, returns, sends, tracks and mixer byte for byte; a
+`Backup/<name> [date time].als` first; an unchanged score writes nothing. Untried in real Live. Live plays the score as clips (`liveclips.*`), the route set (`livesetwriter.*`,
 `livesetexport.*`), automation from a set (`liveset.*`), clip tabs that edit Live clips (`liveclipmodel.*`,
 `liveclipedit.*`, `cliptempo.*`), the Max for Live device and Control Surface script (`tools/live/`), Live helpers
 (`livehelpers.*`). **The full Live architecture map is in LIVE.md › Architecture map**: read it before changing any
@@ -342,7 +350,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   2026-10-09 (UNMEASURED 9, CAPPED 2, ARRIVAL 1 fail: the Celli's 2nd note, bar 1, LEVEL STEP 12 info).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
   violas (bars 8-16), violins and celli, UNMEASURED for every Long (Rachm.) / Spiccato / Long outside the fit files.
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 31 passed with init and cleanup (2026-10-12: plainOwnTechnique; 2026-10-11: verifyExportMix, the verification renders at the patch volumes; liveTimingOverride, timing set in Live; plainWritten, three rows: written clips + Track Delay + the device's delays play every note-on / note-off of MuseScore's render; `dumpEvents` with `MS_DUMP_TIMING=<file>` writes each plain-set note's written and played times; plainTuned checks the glided bend envelope; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 32 passed with init and cleanup (2026-10-12: updateLiveSet, Update Live Set on a set edited as in Live; plainOwnTechnique; 2026-10-11: verifyExportMix, the verification renders at the patch volumes; liveTimingOverride, timing set in Live; plainWritten, three rows: written clips + Track Delay + the device's delays play every note-on / note-off of MuseScore's render; `dumpEvents` with `MS_DUMP_TIMING=<file>` writes each plain-set note's written and played times; plainTuned checks the glided bend envelope; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
   calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks, `MS_DUMP_LIVE` as Live's clips (plus kontakts.txt, routes.txt and multis.txt: the

@@ -286,6 +286,8 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                         n.start = at;
                         n.velocity = e.velo();
                         n.muted = voiceOff(e);
+                        n.source = e.note();             // (Update Live Set: a timing edit in Live becomes its override)
+                        n.utick = item.first;
                         open[n.pitch].push_back({ t, n });
                         }
                   else if (off && !written) {
@@ -321,6 +323,8 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                               n.start = at;
                               n.velocity = e.velo();
                               n.muted = voiceOff(e);
+                              n.source = e.note();             // (Update Live Set: a timing edit in Live becomes its override)
+                              n.utick = item.first;
                               auto key = writtenKeys.find(&e);
                               auto span = key == writtenKeys.end() ? playedTimes.end() : playedTimes.find(key->second);
                               if (span != playedTimes.end()) {
@@ -772,6 +776,9 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                                     tt.delayMs -= tt.lookaheadMs;
                                     if (link && timing.any())
                                           tt.linkTiming = LiveTiming::record(timing);
+                                    for (const LiveClips::Note& n : kc.techniques[i].notes)
+                                          if (!n.muted)
+                                                tt.sourceNotes.push_back({ n.pitch, n.start, n.length, n.velocity, n.source, n.utick });
                                     tt.annotation = trackKey({ s.name, p.name, name, kc.techniques[i].name });
                                     out.push_back(tt);
                                     }

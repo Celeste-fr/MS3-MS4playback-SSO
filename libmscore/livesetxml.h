@@ -339,6 +339,8 @@ class Writer {
 // a group track (Live 12.2's, as the owner's sets have them): no devices, a group slot per scene; groupTrackId: the
 // group it is in (its track Id), -1: none
 void groupTrack(Writer& w, const Track& t, int trackId, int groupTrackId, int scenes);
+// an envelope's <Automation>: its events (beats, value) after Live's "before everything" event holding the first value
+void automationEvents(Writer& w, const std::vector<std::pair<double, double>>& points);
 // a track's AutomationEnvelopes: its plug-in parameters' automation and its mixer's; parameterTargets: the AutomationTarget
 // id of each of Plugin::parameters' ParameterValue (pluginDevice writes them with these ids); mixer: its mixer's (as
 // mixerTargets gave them, mixerStart writes them)
