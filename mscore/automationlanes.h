@@ -41,15 +41,20 @@
 //   menu has a submenu per Live device. Shown: the
 //   lanes with points and those added with "+" (an empty lane is hidden until then), all of them with
 //   "All"; "×" hides a lane (its points still play). "+" and "All" open a folded part.
-//   "Even" lays Continuous View out with every beat the same width (Score::lineEvenBeats, layoutlinear.cpp; the view
-//   only: not saved, not an undo step); the lanes follow the notes, so their grid is even too.
+//   The header row's controls, right-aligned (the owner, 2026-10-12: "the + and All buttons should be part of a same
+//   rounded rectangle, with a line separating them … the pencil icon should be in a round button, with a different
+//   color"): ( + | All ) one pill, both choosing which lanes are shown; (✎) Draw Mode, round, in the palette's highlight
+//   colour (filled while on); [Grid 1/4 ▾] the snap grid's value ("Off", "Bar", "1/8" …), its menu choosing it (radio)
+//   and "Even beat spacing": Continuous View laid out with every beat the same width (Score::lineEvenBeats,
+//   layoutlinear.cpp; the view only: not saved, not an undo step; the lanes follow the notes, so their grid is even
+//   too). Each control has a tooltip (hover).
 //
 //   Editing, as in Live 12 (manual 25.5.1-5; the owner, 2026-10-06: "mimic the behavior of how you edit automation
 //   curves in ableton"):
 //     the grid: fixed, one step per beat of the time signature at first (the owner, 2026-10-07: no adaptive grid);
 //       Ctrl+1 narrower (halves it, down to 1/64), Ctrl+2 wider (up to the beat, then the bar), Ctrl+4 snap on / off
-//       (Live's keys for its editing grid; while a lane has the focus); the header's grid button shows the value
-//       ("Off": no snap) and turns snap on / off; the lanes draw a line at each step;
+//       (Live's keys for its editing grid; while a lane has the focus); the header's Grid button shows the value
+//       ("Off": no snap), its menu sets it; the lanes draw a line at each step;
 //     click: a breakpoint (on the envelope's line: on it; elsewhere: at the mouse's value), snapped to the
 //       grid; Alt: no snap;
 //     drag a breakpoint: moves it (and the other selected ones); points passed over are removed; Shift: fine
@@ -264,6 +269,7 @@ class AutomationLanes : public QObject {
       double pixel() const;                                                  // a screen pixel in canvas units
       double barX(int tick) const;                                           // a bar's start (its bar line)
       int gridTicks(int tick) const;
+      int gridTicksAt(int tick, int level) const;              // (gridTicks at another level: the Grid menu)
       int snap(int tick, bool fine) const;
       void changeGrid(int by);                                 // Ctrl+1 (-1), Ctrl+2 (+1)
       void toggleSnap();                                       // Ctrl+4
@@ -282,7 +288,14 @@ class AutomationLanes : public QObject {
       QRectF headerRect(const Row& r) const;                                 // viewport
       QColor rowColor(const Row& r) const;                                   // a row's band
       double textPx() const;                                                 // the headers' text size on screen
-      QRectF buttonRect(const QRectF& header, int i) const;                  // the header row's +, All, pencil, Even
+      enum class Control : signed char { NONE, ADD, ALL, DRAW, GRID };      // the header row's controls
+      QRectF controlRect(const QRectF& header, Control c) const;             // viewport
+      Control controlAt(const QRectF& header, const QPointF& pixel) const;
+      double controlsWidth() const;                                          // from the first control to the right edge
+      QString controlTip(Control c) const;
+      void gridMenu(const QPoint& globalPos);                                // snap choices, Even beat spacing
+      void paintControls(QPainter& p, const Row& r, const QRectF& h) const;
+      bool _tipShown { false };
       QString headLabel(const Row& r) const;
       QString valueText(const QString& target, double v) const;     // (0-127; the Velocity lane: % or 1-127)
       void select(const Row& r, const std::vector<int>& sel);

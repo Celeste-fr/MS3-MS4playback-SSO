@@ -688,12 +688,14 @@ Live's track headers: a click on the header (its triangle or name) opens or fold
 open at once; Alt-click opens or folds every part's (to the clicked one's new state). All folded at first; the folding
 is the session's, per score (not saved, never marks the score changed; undo keeps it), and selecting in the score no
 longer changes it. Open, the lanes lie on the score's own time axis (a lane's point sits under the middle of its note's heads, the grid's bar lines on the staff's: since 2026-10-02,
-when they stood ~1 sp right of them). Header row: *+* adds a lane (Dynamics (CC1), Expression (CC11), and every
+when they stood ~1 sp right of them). Header row, right (the owner, 2026-10-12): the pill *( + | All )* chooses which lanes
+are shown: *+* adds a lane (Dynamics (CC1), Expression (CC11), and every
 control of the part's patches from the map: Vibrato, Mic Mix Distance, Mic 1-5, Release, Tightness, Mute …; a part
 Live plays also its Live track's parameters, "Live: Operator › Tone"; a clip tab only its track's Live parameters:
-below), *All* shows them all, the pencil is Draw Mode, *Even* lays the view out with every beat the same width (the
-owner, 2026-10-06; the view only, not saved; a bar line's room goes into the beat before it), the last button shows the
-grid (1/4 … 1/64, Bar; Off: no snap; a click turns snap on / off); *+* and *All* open a folded part. Empty lanes are hidden
+below), *All* shows them all (both open a folded part); the round pencil, in the theme's highlight colour (filled while on),
+is Draw Mode; *Grid 1/4 ▾* shows the snap grid (1/4 … 1/64, Bar; Off: no snap) and its menu sets it, with *Even beat
+spacing* (the owner, 2026-10-06: every beat the same width; the view only, not saved; a bar line's room goes into the
+beat before it). Each control has a tooltip. Empty lanes are hidden
 until added; × hides a lane (it still plays). The grid is fixed (the owner, 2026-10-07: no adaptive grid): one step per
 beat of the time signature at first, Ctrl+1 narrower, Ctrl+2 wider, Ctrl+4 snap on / off (Live's keys; while a lane has
 the focus, where they override MuseScore's Ctrl+1 / 2 / 4). Editing as in Live 12 (manual 25.5): click adds a breakpoint
