@@ -16,10 +16,16 @@
 //   the notes AND show you automation tracks for every possible parameter in SSO, in which you can draw
 //   automation curves just like you can in Ableton").
 //
-//   In Continuous View, a part the sound library plays shows its automation lanes under its staves when
-//   it is selected (any element of it): a header row, then one lane per controller, on the score's own
-//   time axis (each tick where its notes are). The notes stay editable as always. Room for them is made
-//   by the layout (Score::setAutomationSpace: the view's state, never saved; System::layout2).
+//   In Continuous View, every part the sound library plays (and an Edit-in-MuseScore clip tab's part) always shows its
+//   header row under its staves, "Automation · <part>" (the owner, 2026-10-12: "every instruments' automation rows get
+//   shown at the same time, and I can expand or contract them at will"), as Live's track headers: a click on the header
+//   (its "▸" / "▾" or name; not its buttons) opens or folds that part's lanes, several parts open at once; Alt-click
+//   every part's, to the clicked one's new state. Folded: the header row only. Which parts are open: lanefolds.h (per
+//   score, for the session, never saved; all folded at first; the score's selection doesn't change it). Open: one lane
+//   per controller under the header, on the score's own time axis (each tick where its notes are). The notes stay
+//   editable as always. Room for the rows is made by the layout (Score::setAutomationSpace: the view's state, never
+//   saved; System::layout2), checked after every layout (queueSpace: a part that comes to play the library gets its
+//   header). A lane's focus (its selected points, Delete, Ctrl+C …) is the lane last clicked, whichever part.
 //   What a lane shows and edits: libmscore/automation.h (Automation::Lane, Automation::Edit), stored in
 //   the score's metaTag "automation", one undoable step per gesture.
 //
@@ -34,16 +40,21 @@
 //   ("Live: Operator › Tone"); the device plays them in Live (liveclips.h), MuseScore's own playback can't. The "+"
 //   menu has a submenu per Live device. Shown: the
 //   lanes with points and those added with "+" (an empty lane is hidden until then), all of them with
-//   "All"; "×" hides a lane (its points still play). The header's "▾" folds the part's lanes ("▸" shows them again).
-//   "Even" lays Continuous View out with every beat the same width (Score::lineEvenBeats, layoutlinear.cpp; the view
-//   only: not saved, not an undo step); the lanes follow the notes, so their grid is even too.
+//   "All"; "×" hides a lane (its points still play). "+" and "All" open a folded part.
+//   The header row's controls, right-aligned (the owner, 2026-10-12: "the + and All buttons should be part of a same
+//   rounded rectangle, with a line separating them … the pencil icon should be in a round button, with a different
+//   color"): ( + | All ) one pill, both choosing which lanes are shown; (✎) Draw Mode, round, in the palette's highlight
+//   colour (filled while on); [Grid 1/4 ▾] the snap grid's value ("Off", "Bar", "1/8" …), its menu choosing it (radio)
+//   and "Even beat spacing": Continuous View laid out with every beat the same width (Score::lineEvenBeats,
+//   layoutlinear.cpp; the view only: not saved, not an undo step; the lanes follow the notes, so their grid is even
+//   too). Each control has a tooltip (hover).
 //
 //   Editing, as in Live 12 (manual 25.5.1-5; the owner, 2026-10-06: "mimic the behavior of how you edit automation
 //   curves in ableton"):
 //     the grid: fixed, one step per beat of the time signature at first (the owner, 2026-10-07: no adaptive grid);
 //       Ctrl+1 narrower (halves it, down to 1/64), Ctrl+2 wider (up to the beat, then the bar), Ctrl+4 snap on / off
-//       (Live's keys for its editing grid; while a lane has the focus); the header's grid button shows the value
-//       ("Off": no snap) and turns snap on / off; the lanes draw a line at each step;
+//       (Live's keys for its editing grid; while a lane has the focus); the header's Grid button shows the value
+//       ("Off": no snap), its menu sets it; the lanes draw a line at each step;
 //     click: a breakpoint (on the envelope's line: on it; elsewhere: at the mouse's value), snapped to the
 //       grid; Alt: no snap;
 //     drag a breakpoint: moves it (and the other selected ones); points passed over are removed; Shift: fine
@@ -70,7 +81,8 @@
 //   absolute and "shape while playing" / "write into the notes" (asks first).
 //   Time selection (Live's; the owner, 2026-10-12: "select all the automations in a bar, like I'm able to do in ableton,
 //   and just spam Ctrl+D to copy it over bars"): the score's range selection (click a measure, Shift-click to extend) on
-//   one part whose lanes are shown, rounded out to whole bars, is shown as a light band over all of the part's rows.
+//   one part with a header row (open or folded: whichever part it is on), rounded out to whole bars, is shown as a light
+//   band over all of the part's rows.
 //   Ctrl+D (with the focus in the score or in a lane) duplicates everything of the part's lanes in it to the bars after
 //   it, one undo step (Automation::duplicateTimeSelection): every lane of the part, shown or not (the target bars' points
 //   replaced, the envelope around them as before), and each note's attack, transition, velocity and join onto the note
@@ -93,6 +105,8 @@
 #include <QString>
 
 #include "libmscore/automation.h"
+#include "libmscore/soundlibrary.h"
+#include "lanefolds.h"
 
 class QContextMenuEvent;
 class QKeyEvent;
@@ -132,7 +146,7 @@ class AutomationLanes : public QObject {
       static bool enabled();
       static void setEnabled(bool on);
 
-      // the view's score changed (another score, undo / redo, a reload): selection and caches dropped
+      // the view's score changed (another score, undo / redo, a reload): selection and caches dropped (not the folding)
       void scoreChanged();
       void selectionChanged();
       void layoutChanged();
@@ -156,7 +170,9 @@ class AutomationLanes : public QObject {
       std::vector<Target> targets(const Part* part) const;
       double tickToX(int tick) const;
       int xToTick(double x) const;
-      void unfold(const Part* part, bool on = true);
+      void unfold(const Part* part, bool on = true);          // open / fold a part's lanes (lanefolds.h)
+      bool isOpen(const Part* part) const;
+      std::vector<const Part*> headerParts() const;           // the parts with a header row, in score order
       void showLane(const Part* part, const QString& target, bool on = true);
       void setDrawMode(bool on) { _drawMode = on; }
 
@@ -179,9 +195,8 @@ class AutomationLanes : public QObject {
 
       ScoreView* _view;
       NoteLanes* _notes;
-      std::set<const Part*> _unfolded;                         // view parts
-      std::set<const Part*> _folded;                           // view parts: the header row only ("▸")
-      const Part* _lastSelected { nullptr };
+      LaneFolds _folds;                                        // view parts whose lanes are open, per score
+      bool _spaceQueued { false };                             // updateSpace after the layout (queueSpace)
       std::map<const Part*, std::set<QString>> _added;         // master part -> empty lanes shown
       std::map<const Part*, std::set<QString>> _hidden;
       std::set<const Part*> _showAll;
@@ -232,6 +247,12 @@ class AutomationLanes : public QObject {
       mutable bool _rowsValid { false };
       mutable std::map<const Part*, std::vector<Target>> _targets;
       mutable int _targetsGeneration { -1 };
+      mutable std::vector<SoundLib::Route> _routes;            // the library's routes, once for all parts
+      mutable bool _routesValid { false };
+      void clearTargets() const;                               // (the targets and the routes)
+      const std::vector<SoundLib::Route>& libraryRoutes() const;
+      bool hasHeader(const Part* part) const;                  // a part with lanes (without rendering its notes)
+      void queueSpace();
       std::vector<Row> computeRows() const;
       std::vector<Target> computeTargets(const Part* part) const;
       std::vector<Target> libraryTargets(const Part* part) const;      // the sound library's controls (SSO's map)
@@ -248,6 +269,7 @@ class AutomationLanes : public QObject {
       double pixel() const;                                                  // a screen pixel in canvas units
       double barX(int tick) const;                                           // a bar's start (its bar line)
       int gridTicks(int tick) const;
+      int gridTicksAt(int tick, int level) const;              // (gridTicks at another level: the Grid menu)
       int snap(int tick, bool fine) const;
       void changeGrid(int by);                                 // Ctrl+1 (-1), Ctrl+2 (+1)
       void toggleSnap();                                       // Ctrl+4
@@ -266,7 +288,14 @@ class AutomationLanes : public QObject {
       QRectF headerRect(const Row& r) const;                                 // viewport
       QColor rowColor(const Row& r) const;                                   // a row's band
       double textPx() const;                                                 // the headers' text size on screen
-      QRectF buttonRect(const QRectF& header, int i) const;                  // the header row's +, All, pencil, Even
+      enum class Control : signed char { NONE, ADD, ALL, DRAW, GRID };      // the header row's controls
+      QRectF controlRect(const QRectF& header, Control c) const;             // viewport
+      Control controlAt(const QRectF& header, const QPointF& pixel) const;
+      double controlsWidth() const;                                          // from the first control to the right edge
+      QString controlTip(Control c) const;
+      void gridMenu(const QPoint& globalPos);                                // snap choices, Even beat spacing
+      void paintControls(QPainter& p, const Row& r, const QRectF& h) const;
+      bool _tipShown { false };
       QString headLabel(const Row& r) const;
       QString valueText(const QString& target, double v) const;     // (0-127; the Velocity lane: % or 1-127)
       void select(const Row& r, const std::vector<int>& sel);

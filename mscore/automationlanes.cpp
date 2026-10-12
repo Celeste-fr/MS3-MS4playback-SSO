@@ -40,6 +40,9 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QSettings>
+#include <QTimer>
+#include <QToolTip>
+#include <QActionGroup>
 
 namespace Ms {
 
@@ -86,7 +89,7 @@ void AutomationLanes::scoreChanged()
       _anchorsValid = false;
       _cachedTag = QString("\x01");           // read again
       _rowsValid = false;
-      _targets.clear();
+      clearTargets();
       _working = false;
       _work.clear();
       _drag = Drag::NONE;
@@ -105,10 +108,8 @@ void AutomationLanes::scoreChanged()
       if (s)
             for (const Part* p : s->parts())
                   parts.insert(p);
-      for (auto i = _unfolded.begin(); i != _unfolded.end(); )
-            i = parts.count(*i) ? std::next(i) : _unfolded.erase(i);
-      if (_lastSelected && !parts.count(_lastSelected))
-            _lastSelected = nullptr;
+      _folds.keepOnly(s, parts);          // (the folding stays: only parts gone are dropped)
+      queueSpace();                       // (a score opened: its headers)
       _view->update();
       }
 
@@ -116,17 +117,84 @@ void AutomationLanes::layoutChanged()
       {
       _anchorsValid = false;
       _rowsValid = false;
-      _targets.clear();
+      clearTargets();
       _notes->changed();
+      queueSpace();                 // (a part that came to play the library: its header; Continuous View on / off)
+      }
+
+// updateSpace once the layout is done (it may lay out again: not from within one)
+void AutomationLanes::queueSpace()
+      {
+      if (_spaceQueued)
+            return;
+      _spaceQueued = true;
+      QTimer::singleShot(0, this, [this]() {
+            _spaceQueued = false;
+            updateSpace();
+            });
+      }
+
+void AutomationLanes::clearTargets() const
+      {
+      _targets.clear();
+      _routesValid = false;
+      }
+
+// the library's routes, once for every part's header and targets (SoundLib::routes reads the whole score)
+const std::vector<SoundLib::Route>& AutomationLanes::libraryRoutes() const
+      {
+      if (!_routesValid) {
+            _routes.clear();
+            Score* s = score();
+            const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
+            if (s && lib)
+                  _routes = SoundLib::routes(s->masterScore(), *lib);
+            _routesValid = true;
+            }
+      return _routes;
+      }
+
+bool AutomationLanes::isOpen(const Part* part) const
+      {
+      return _folds.isOpen(score(), part);
       }
 
 void AutomationLanes::unfold(const Part* part, bool on)
       {
-      if (on)
-            _unfolded.insert(part);
-      else
-            _unfolded.erase(part);
+      _folds.setOpen(score(), part, on);
+      if (on && _notes->fresh())          // (the notes' lanes as the score is now)
+            clearTargets();
       updateSpace();
+      }
+
+// a header row: a part the library plays, a part Live plays with its track's parameters known, a clip tab's part; without
+// rendering the notes (targets() does, for the Velocity and Join lanes: called for open parts only)
+bool AutomationLanes::hasHeader(const Part* part) const
+      {
+      Score* s = score();
+      if (!s || !part)
+            return false;
+      if (LiveIntegration::LiveClipEditor::instance()->isClipScore(s))
+            return true;
+      const Part* master = PartPlaybackModes::masterPart(part);
+      for (const SoundLib::Route& r : libraryRoutes())
+            if (r.part == master && r.lane == 0 && r.instrument)
+                  return true;
+      const QString key = LiveIntegration::LiveClipsLink::instance()->routeKey(part);
+      const std::vector<LiveClipEdit::LiveParam>* lp = key.isEmpty() ? nullptr : LiveClipEdit::TrackParams::instance()->params(key);
+      return lp && !lp->empty();
+      }
+
+std::vector<const Part*> AutomationLanes::headerParts() const
+      {
+      std::vector<const Part*> out;
+      Score* s = score();
+      if (!s || !enabled() || !s->lineMode())
+            return out;
+      for (const Part* p : s->parts())
+            if (hasHeader(p))
+                  out.push_back(p);
+      return out;
       }
 
 void AutomationLanes::showLane(const Part* part, const QString& target, bool on)
@@ -143,32 +211,11 @@ void AutomationLanes::showLane(const Part* part, const QString& target, bool on)
       updateSpace();
       }
 
+// (the folding doesn't follow the selection: lanefolds.h; the time selection does, timeSelection)
 void AutomationLanes::selectionChanged()
       {
       _timeOff = false;             // (the score's selection is the newer one)
       _view->update();
-      Score* s = score();
-      if (!s || !enabled() || !s->lineMode())
-            return;
-      const Part* part = nullptr;
-      const Selection& sel = s->selection();
-      if (sel.isRange()) {
-            if (sel.staffStart() >= 0 && sel.staffStart() < s->nstaves()
-                && s->staff(sel.staffStart())->part() == s->staff(std::max(sel.staffStart(), sel.staffEnd() - 1))->part())
-                  part = s->staff(sel.staffStart())->part();
-            }
-      else if (sel.element() && sel.element()->staff())
-            part = sel.element()->staff()->part();
-      if (!part || part == _lastSelected)
-            return;
-      _lastSelected = part;
-      if (_notes->fresh())                // (the notes' lanes as the score is now)
-            _targets.clear();
-      if (targets(part).empty())
-            return;                 // (not a part the library plays)
-      _unfolded.clear();
-      _unfolded.insert(part);
-      updateSpace();
       }
 
 std::vector<AutomationLanes::Target> AutomationLanes::targets(const Part* part) const
@@ -176,7 +223,7 @@ std::vector<AutomationLanes::Target> AutomationLanes::targets(const Part* part) 
       const int gen = LiveClipEdit::TrackParams::instance()->generation();
       if (gen != _targetsGeneration) {          // (a Live track's parameters came, a clip tab's lanes became ready)
             _targetsGeneration = gen;
-            _targets.clear();
+            clearTargets();
             }
       auto cached = _targets.find(part);
       if (cached != _targets.end())
@@ -225,7 +272,7 @@ std::vector<AutomationLanes::Target> AutomationLanes::libraryTargets(const Part*
       const Part* master = PartPlaybackModes::masterPart(part);
       std::vector<SoundLib::Controller> ctrls;
       bool any = false;
-      for (const SoundLib::Route& r : SoundLib::routes(s->masterScore(), *lib)) {
+      for (const SoundLib::Route& r : libraryRoutes()) {
             if (r.part != master || r.lane != 0 || !r.instrument)
                   continue;
             any = true;
@@ -392,14 +439,10 @@ void AutomationLanes::updateSpace()
       if (!s)
             return;
       std::map<const Part*, qreal> space;
-      if (enabled() && s->lineMode()) {
-            for (const Part* p : _unfolded) {
-                  const std::vector<Target> t = targets(p);
-                  if (t.empty())
-                        continue;
-                  const size_t n = _folded.count(p) ? 0 : shownTargets(PartPlaybackModes::masterPart(p), t).size();
-                  space[p] = HEAD_SP + double(n) * (LANE_SP + GAP_SP);
-                  }
+      for (const Part* p : headerParts()) {
+            // (folded: the header row only; targets() for open parts only: it renders the notes once)
+            const size_t n = isOpen(p) ? shownTargets(PartPlaybackModes::masterPart(p), targets(p)).size() : 0;
+            space[p] = HEAD_SP + double(n) * (LANE_SP + GAP_SP);
             }
       _rowsValid = false;
       if (space == s->automationSpace()) {
@@ -454,7 +497,8 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
             if (lanesY < 0)
                   continue;
             const Part* master = PartPlaybackModes::masterPart(part);
-            const std::vector<Target> all = targets(part);
+            const bool open = isOpen(part);
+            const std::vector<Target> all = open ? targets(part) : std::vector<Target>();
             double y = origin.y() + lanesY;
             Row head;
             head.part = part;
@@ -463,7 +507,7 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
             head.rect = QRectF(x0, y, x1 - x0, HEAD_SP * sp);
             out.push_back(head);
             y += HEAD_SP * sp;
-            for (const QString& t : _folded.count(part) ? std::vector<QString>() : shownTargets(master, all)) {
+            for (const QString& t : open ? shownTargets(master, all) : std::vector<QString>()) {
                   Row r;
                   r.part = part;
                   r.master = master;
@@ -610,12 +654,17 @@ bool AutomationLanes::duplicateTimeSelection()
 // denominator), halved per level below 0 (at least 1/64: 30 ticks); level 1: the measure
 int AutomationLanes::gridTicks(int tick) const
       {
+      return gridTicksAt(tick, _gridLevel);
+      }
+
+int AutomationLanes::gridTicksAt(int tick, int level) const
+      {
       Score* s = score();
       const Measure* m = s ? s->tick2measure(Fraction::fromTicks(std::max(0, tick))) : nullptr;
-      if (_gridLevel > 0)
+      if (level > 0)
             return m ? m->ticks().ticks() : 1920;
       const int beat = 1920 / std::max(1, m ? m->timesig().denominator() : 4);
-      return std::max(30, beat >> -_gridLevel);
+      return std::max(30, beat >> -level);
       }
 
 // (the grid's label and limits are read at the mouse's time, else at the start)
@@ -702,7 +751,7 @@ QString AutomationLanes::valueText(const QString& target, double v) const
 // the header row's label, and its font (bold, as tall as the row allows)
 QString AutomationLanes::headLabel(const Row& r) const
       {
-      return QString::fromUtf8(_folded.count(r.part) ? "▸ " : "▾ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name;
+      return QString::fromUtf8(isOpen(r.part) ? "▾ " : "▸ ") + tr("Automation") + QString::fromUtf8(" · ") + r.name;
       }
 
 // the headers' text as large on screen as the score's instrument names (the owner, 2026-10-06: it was a fixed 9-13 px,
@@ -724,20 +773,170 @@ static QFont headFont(double px, bool bold)
       return f;
       }
 
-// the header row's buttons (+, All, the pencil, Even, the grid: its label from gridLabel()), right-aligned, as wide
-// as the longest label needs
-static const char* const HEAD_BUTTONS[] = { "+", "All", "✎", "Even", "" };
-static const int HEAD_BUTTON_COUNT = 5;
+// the header row's controls (automationlanes.h), right-aligned: ( + | All ), (✎), [Grid 1/4 ▾]; sizes from the text's
+static const double CONTROL_GAP_PX = 6.0;
 
-static double headButtonWidth(double textPx)
+static QString gridButtonText(const QString& value)
       {
-      return std::max(24.0, 2.6 * textPx);
+      return QCoreApplication::translate("Ms::AutomationLanes", "Grid") + " " + value + QString::fromUtf8(" ▾");
       }
 
-QRectF AutomationLanes::buttonRect(const QRectF& header, int i) const
+QRectF AutomationLanes::controlRect(const QRectF& header, Control c) const
       {
-      const double w = headButtonWidth(textPx());
-      return QRectF(header.right() - (w + 2) * (HEAD_BUTTON_COUNT - i) - 2, header.top() + 2, w, header.height() - 4);
+      const QFontMetricsF fm(headFont(textPx(), false));
+      const double h = header.height() - 4;
+      const double top = header.top() + 2;
+      // (the Grid button as wide as its widest label: it doesn't move while the value changes)
+      const double gridW = fm.horizontalAdvance(gridButtonText("1/64")) + 14;
+      const double drawW = h;
+      const double addW = std::max(20.0, fm.horizontalAdvance("+") + 14);
+      const double allW = fm.horizontalAdvance(tr("All")) + 14;
+      double x = header.right() - 2 - gridW;
+      if (c == Control::GRID)
+            return QRectF(x, top, gridW, h);
+      x -= CONTROL_GAP_PX + drawW;
+      if (c == Control::DRAW)
+            return QRectF(x, top, drawW, h);
+      x -= CONTROL_GAP_PX + allW;
+      if (c == Control::ALL)
+            return QRectF(x, top, allW, h);
+      x -= addW;
+      if (c == Control::ADD)
+            return QRectF(x, top, addW, h);
+      return QRectF();
+      }
+
+double AutomationLanes::controlsWidth() const
+      {
+      const QRectF h(0, 0, 10000, 2.2 * textPx());
+      return h.right() - controlRect(h, Control::ADD).left() + CONTROL_GAP_PX;
+      }
+
+AutomationLanes::Control AutomationLanes::controlAt(const QRectF& header, const QPointF& pixel) const
+      {
+      for (Control c : { Control::ADD, Control::ALL, Control::GRID })
+            if (controlRect(header, c).contains(pixel))
+                  return c;
+      // (the pencil: its circle)
+      const QRectF d = controlRect(header, Control::DRAW);
+      const QPointF v = pixel - d.center();
+      if (std::hypot(v.x(), v.y()) <= d.width() / 2 + 1)
+            return Control::DRAW;
+      return Control::NONE;
+      }
+
+QString AutomationLanes::controlTip(Control c) const
+      {
+      switch (c) {
+            case Control::ADD:  return tr("Add a lane");
+            case Control::ALL:  return tr("Show all lanes");
+            case Control::DRAW: return tr("Draw Mode: drag to draw steps as wide as the grid (Alt: a free line)");
+            case Control::GRID: return tr("Snap grid and beat spacing (Ctrl+1 narrower, Ctrl+2 wider, Ctrl+4 snap on / off)");
+            default:            return QString();
+            }
+      }
+
+void AutomationLanes::paintControls(QPainter& p, const Row& r, const QRectF& h) const
+      {
+      p.save();
+      p.setRenderHint(QPainter::Antialiasing, true);
+      p.setFont(headFont(textPx(), false));
+      const QColor line(150, 146, 140);
+      const QColor face(243, 242, 239);
+      const QColor onFace(220, 232, 246);
+      const QColor text(29, 31, 34);
+      const QColor onText(29, 79, 140);
+      const double radius = 4.0;
+      // ( + | All ): one pill, a line between them; All lit while every lane is shown
+      const QRectF add = controlRect(h, Control::ADD);
+      const QRectF all = controlRect(h, Control::ALL);
+      const QRectF pill = add.united(all).adjusted(0.5, 0.5, -0.5, -0.5);
+      QPainterPath pillPath;
+      pillPath.addRoundedRect(pill, radius, radius);
+      p.fillPath(pillPath, face);
+      const bool every = _showAll.count(r.master) > 0;
+      if (every) {
+            p.save();
+            p.setClipPath(pillPath);
+            p.fillRect(all, onFace);
+            p.restore();
+            }
+      p.setPen(QPen(line, 1.0));
+      p.setBrush(Qt::NoBrush);
+      p.drawPath(pillPath);
+      p.drawLine(QPointF(all.left(), pill.top() + 3), QPointF(all.left(), pill.bottom() - 3));
+      p.setPen(text);
+      p.drawText(add, Qt::AlignCenter, "+");
+      p.setPen(every ? onText : text);
+      p.drawText(all, Qt::AlignCenter, tr("All"));
+      // (✎): round, in the palette's highlight colour; filled while Draw Mode is on
+      const QColor accent = QApplication::palette().color(QPalette::Highlight);
+      const QRectF draw = controlRect(h, Control::DRAW).adjusted(0.5, 0.5, -0.5, -0.5);
+      QColor soft = accent;
+      soft.setAlpha(45);
+      p.setPen(QPen(accent, _drawMode ? 1.0 : 1.4));
+      p.setBrush(_drawMode ? accent : QColor(255, 255, 255));
+      p.drawEllipse(draw);
+      if (!_drawMode) {
+            p.setBrush(soft);
+            p.setPen(Qt::NoPen);
+            p.drawEllipse(draw);
+            }
+      p.setPen(_drawMode ? QApplication::palette().color(QPalette::HighlightedText) : accent.darker(125));
+      p.drawText(draw, Qt::AlignCenter, QString::fromUtf8("✎"));
+      // [Grid 1/4 ▾]: lit while Even beat spacing is on
+      const Score* sc = score();
+      const bool even = sc && sc->lineEvenBeats();
+      const QRectF grid = controlRect(h, Control::GRID).adjusted(0.5, 0.5, -0.5, -0.5);
+      p.setPen(QPen(line, 1.0));
+      p.setBrush(even ? onFace : face);
+      p.drawRoundedRect(grid, radius, radius);
+      p.setPen(even ? onText : text);
+      p.drawText(grid, Qt::AlignCenter, gridButtonText(gridLabel()));
+      p.restore();
+      }
+
+// the Grid button's menu: the snap (Off, Bar, the beat … 1/64 at the mouse's time signature) and Even beat spacing
+void AutomationLanes::gridMenu(const QPoint& globalPos)
+      {
+      QMenu menu;
+      QActionGroup* group = new QActionGroup(&menu);
+      group->setExclusive(true);
+      auto choice = [&](const QString& text, bool on, bool snap, int level) {
+            QAction* a = menu.addAction(text);
+            a->setCheckable(true);
+            a->setChecked(on);
+            a->setActionGroup(group);
+            QObject::connect(a, &QAction::triggered, this, [this, snap, level]() {
+                  _snapOn = snap;
+                  if (snap)
+                        _gridLevel = level;
+                  _view->update();
+                  });
+            };
+      choice(tr("Off"), !_snapOn, false, _gridLevel);
+      choice(tr("Bar"), _snapOn && _gridLevel > 0, true, 1);
+      const int tick = _hover.x() >= 0 ? xToTick(_hover.x()) : 0;
+      for (int level = 0; ; --level) {
+            const int t = gridTicksAt(tick, level);
+            choice(QString("1/%1").arg(1920 / t), _snapOn && _gridLevel == level, true, level);
+            if (t <= 30)
+                  break;
+            }
+      menu.addSeparator();
+      QAction* even = menu.addAction(tr("Even beat spacing"));
+      even->setCheckable(true);
+      Score* sc = score();
+      even->setChecked(sc && sc->lineEvenBeats());
+      even->setToolTip(tr("Every beat the same width in Continuous View (the view only)"));
+      QAction* a = menu.exec(globalPos);
+      if (a == even && (sc = score())) {
+            // (the view only, every beat the same width: not saved, not an undo step)
+            sc->setLineEvenBeats(!sc->lineEvenBeats());
+            sc->setLayoutAll();
+            sc->update();
+            updateSpace();
+            }
       }
 
 QRectF AutomationLanes::headerRect(const Row& r) const
@@ -755,7 +954,7 @@ QRectF AutomationLanes::headerRect(const Row& r) const
       // the header row as wide as its label needs (the part's name whole: "Automation · Violin" was cut to "Vio…"),
       // with room for its buttons; at most HEADER_MAX_PX (then the name is shortened in the middle)
       const int label = QFontMetrics(headFont(textPx(), true)).horizontalAdvance(headLabel(r));
-      const double buttons = HEAD_BUTTON_COUNT * (headButtonWidth(textPx()) + 2) + 6;
+      const double buttons = controlsWidth() + 6;
       return QRectF(0, vr.top(), std::max(HEADER_PX + buttons, std::min(HEADER_MAX_PX + buttons, 6 + label + 12 + buttons)), vr.height());
       }
 
@@ -985,23 +1184,11 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
       if (r.target.isEmpty()) {
             p.fillRect(h, QColor(214, 211, 206));
             p.setPen(QColor(29, 31, 34));
-            const double buttons = h.right() - buttonRect(h, 0).left();
+            const double buttons = controlsWidth();
             p.setFont(headFont(textPx(), true));
             p.drawText(h.adjusted(6, 0, -buttons, 0), Qt::AlignVCenter | Qt::AlignLeft,
                        QFontMetrics(p.font()).elidedText(headLabel(r), Qt::ElideMiddle, int(h.width() - 6 - buttons - 4)));
-            p.setFont(headFont(textPx(), false));
-            // + (add a lane), All, the pencil (Draw Mode), Even (every beat the same width)
-            const Score* sc = score();
-            for (int i = 0; i < HEAD_BUTTON_COUNT; ++i) {
-                  const QRectF b = buttonRect(h, i);
-                  const bool on = (i == 1 && _showAll.count(r.master)) || (i == 2 && _drawMode)
-                                  || (i == 3 && sc && sc->lineEvenBeats()) || (i == 4 && _snapOn);
-                  p.setPen(QColor(150, 146, 140));
-                  p.setBrush(on ? QColor(220, 232, 246) : QColor(243, 242, 239));
-                  p.drawRoundedRect(b, 3, 3);
-                  p.setPen(on ? QColor(29, 79, 140) : QColor(29, 31, 34));
-                  p.drawText(b, Qt::AlignCenter, i == 4 ? gridLabel() : QString::fromUtf8(HEAD_BUTTONS[i]));
-                  }
+            paintControls(p, r, h);
             return;
             }
       const Lane l = lane(r.master, r.target);
@@ -1076,45 +1263,36 @@ bool AutomationLanes::headerClick(const QPoint& pixel)
             if (!h.contains(pixel))
                   continue;
             if (r.target.isEmpty()) {
-                  for (int i = 0; i < HEAD_BUTTON_COUNT; ++i) {
-                        const QRectF b = buttonRect(h, i);
-                        if (!b.contains(pixel))
-                              continue;
-                        if (i == 0)
+                  const Control c = controlAt(h, pixel);
+                  if (c != Control::NONE) {
+                        const QRectF b = controlRect(h, c);
+                        QToolTip::hideText();
+                        if (c == Control::ADD)
                               addLaneMenu(r, _view->mapToGlobal(QPoint(int(b.left()), int(b.bottom()))));
-                        else if (i == 1) {
+                        else if (c == Control::ALL) {
                               if (_showAll.count(r.master))
                                     _showAll.erase(r.master);
                               else
                                     _showAll.insert(r.master);
-                              _folded.erase(r.part);
-                              updateSpace();
+                              unfold(r.part);
                               }
-                        else if (i == 2) {
+                        else if (c == Control::DRAW) {
                               _drawMode = !_drawMode;
                               _view->update();
                               }
-                        else if (i == 4)
-                              toggleSnap();
-                        else if (Score* sc = score()) {
-                              // Even: the view only, every beat the same width (not saved, not an undo step)
-                              sc->setLineEvenBeats(!sc->lineEvenBeats());
-                              sc->setLayoutAll();
-                              sc->update();
-                              updateSpace();
-                              }
-                        return true;
-                        }
-                  if (pixel.x() < h.left() + 6 + 1.6 * textPx()) {
-                        // ▾ folds the lanes away, ▸ shows them again; the header row stays (the owner, 2026-10-04: the
-                        // whole panel went, and selecting the part again didn't bring it back)
-                        if (_folded.count(r.part))
-                              _folded.erase(r.part);
                         else
-                              _folded.insert(r.part);
-                        updateSpace();
+                              gridMenu(_view->mapToGlobal(QPoint(int(b.left()), int(b.bottom()))));
                         return true;
                         }
+                  // the rest of the header (its ▸ / ▾ and name) opens or folds the part's lanes, as Live's track header;
+                  // Alt: every part's, to this one's new state (lanefolds.h)
+                  if (QApplication::keyboardModifiers() & Qt::AltModifier)
+                        _folds.toggleAll(score(), r.part, headerParts());
+                  else
+                        _folds.toggle(score(), r.part);
+                  if (isOpen(r.part) && _notes->fresh())      // (the notes' lanes as the score is now)
+                        clearTargets();
+                  updateSpace();
                   return true;
                   }
             if (pixel.x() >= h.right() - 1.6 * textPx() - 2) {
@@ -1153,7 +1331,7 @@ void AutomationLanes::addLaneMenu(const Row& r, const QPoint& globalPos)
             menu.addAction(tr("(every lane is shown)"))->setEnabled(false);
       QAction* a = menu.exec(globalPos);
       if (a && !a->data().toString().isEmpty()) {
-            _folded.erase(r.part);
+            _folds.setOpen(score(), r.part, true);
             showLane(r.part, a->data().toString(), true);
             }
       }
@@ -1510,6 +1688,24 @@ void AutomationLanes::hover(const QPoint& pos)
             }
       if (old != _hover || oldText != _hoverText)
             _view->update();
+      // a header row's control, or its name: a tooltip
+      QString tip;
+      if (r && r->target.isEmpty()) {
+            const QRectF h = headerRect(*r);
+            if (h.contains(pos)) {
+                  const Control c = controlAt(h, pos);
+                  tip = c != Control::NONE ? controlTip(c)
+                                           : tr("Click: open or fold this part's lanes; Alt+click: every part's");
+                  }
+            }
+      if (!tip.isEmpty()) {
+            QToolTip::showText(_view->mapToGlobal(pos), tip, _view);
+            _tipShown = true;
+            }
+      else if (_tipShown) {
+            QToolTip::hideText();
+            _tipShown = false;
+            }
       }
 
 bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)

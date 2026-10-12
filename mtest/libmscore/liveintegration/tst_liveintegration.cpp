@@ -57,6 +57,7 @@
 #include "mscore/liveclips.h"
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
+#include "mscore/lanefolds.h"
 #include "audio/midi/event.h"
 #include "mscore/livesetexport.h"
 #include "mtest/testutils.h"
@@ -117,6 +118,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipVelocityRecord();
       void clipEnvelopeMapping();
       void laneTimeAxis();
+      void laneFolds();
       void laneEvenBeats();
       void liveParamLanes();
       void clipTabMidi();
@@ -3164,6 +3166,72 @@ void TestLiveIntegration::clipEnvelopeMapping()
       QVERIFY(tp->accept({ "c9", 56, 0, 1, -1, 1, "Mixer › Pan", -1.0, 1.0, 0 }));   // a device removed in Live
       QCOMPARE(int(tp->params("c9")->size()), 1);
       tp->clear();
+      }
+
+//---------------------------------------------------------
+//   laneFolds
+//    the automation editor's folding (mscore/lanefolds.h; the owner, 2026-10-12: every part's header shown, each folded
+//    or open at will): all folded at first; several open at once; Alt-click sets every part to the clicked one's new
+//    state; per score; an edit and its undo keep it (the score isn't changed by it), a part removed is dropped
+//---------------------------------------------------------
+
+void TestLiveIntegration::laneFolds()
+      {
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      MasterScore* other = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(other);
+      QCOMPARE(score->parts().size(), 2);
+      const Part* violin = score->parts()[0];
+      const Part* flute = score->parts()[1];
+      const std::vector<const Part*> both { violin, flute };
+      auto parts = [](const Score* s) {
+            std::set<const Part*> out;
+            for (const Part* p : s->parts())
+                  out.insert(p);
+            return out;
+            };
+      LaneFolds f;
+      QVERIFY(!f.isOpen(score, violin) && !f.isOpen(score, flute) && !f.anyOpen(score));      // (folded at first)
+      QVERIFY(f.toggle(score, violin));
+      QVERIFY(f.toggle(score, flute));
+      QVERIFY(f.isOpen(score, violin) && f.isOpen(score, flute));                               // (both open)
+      QVERIFY(!f.toggle(score, violin));
+      QVERIFY(!f.isOpen(score, violin) && f.isOpen(score, flute));
+      // per score: the other score's parts as they were
+      QVERIFY(!f.anyOpen(other));
+      f.setOpen(other, other->parts()[0], true);
+      QVERIFY(f.isOpen(other, other->parts()[0]) && !f.isOpen(score, violin));
+      // Alt-click: on a folded part every part opens, on an open one every part folds
+      QVERIFY(f.toggleAll(score, violin, both));
+      QVERIFY(f.isOpen(score, violin) && f.isOpen(score, flute));
+      QVERIFY(!f.toggleAll(score, flute, both));
+      QVERIFY(!f.anyOpen(score));
+      QVERIFY(f.isOpen(other, other->parts()[0]));
+      // an edit and its undo: the parts are the same, the folding stays, the score isn't changed by folding
+      f.setOpen(score, flute, true);
+      const bool dirtyBefore = score->dirty();
+      f.toggle(score, violin);
+      QCOMPARE(score->dirty(), dirtyBefore);
+      score->startCmd();
+      score->undo(new ChangeMetaText(score, "laneFoldsTest", "1"));     // (any undoable step)
+      score->endCmd();
+      score->undoRedo(true, nullptr);
+      f.keepOnly(score, parts(score));
+      QVERIFY(f.isOpen(score, violin) && f.isOpen(score, flute));
+      // a part removed: dropped (its undo brings it back folded)
+      score->startCmd();
+      score->cmdRemovePart(const_cast<Part*>(flute));
+      score->endCmd();
+      QCOMPARE(score->parts().size(), 1);
+      f.keepOnly(score, parts(score));
+      QVERIFY(f.isOpen(score, violin) && !f.isOpen(score, flute));
+      score->undoRedo(true, nullptr);
+      QCOMPARE(score->parts().size(), 2);
+      f.keepOnly(score, parts(score));
+      QVERIFY(f.isOpen(score, violin) && !f.isOpen(score, flute));
+      delete other;
+      delete score;
       }
 
 //---------------------------------------------------------
