@@ -87,7 +87,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
-//               reattackGap="54" overlap="24"] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
+//               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
 //               [bendGlide="136:-8:100 300:70:230 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
@@ -215,6 +215,18 @@ bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arri
 double Articulation::onsetAt(int pitch) const
       {
       return keyedMsAt(onsets, onsetMs, pitch);
+      }
+
+double Articulation::Technique::onsetAt(int pitch) const
+      {
+      return keyedMsAt(onsets, onsetMs, pitch);
+      }
+
+double Articulation::startOnset(const Technique* attack, int pitch, bool byPitch) const
+      {
+      if (attack && attack->hasOnset())
+            return byPitch ? attack->onsetAt(pitch) : attack->onsetMs;
+      return byPitch ? onsetAt(pitch) : onsetMedian();
       }
 
 double Articulation::onsetMedian() const
@@ -416,6 +428,26 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             };
       if (!readTechniques("attacks", art.attacks) || !readTechniques("transitions", art.transitions))
             return false;
+      // attackOnset="name:median[;pitch:ms,…] …": an attack's own onset (ms >= 0), the attack listed in attacks=
+      if (a.hasAttribute("attackOnset")) {
+            for (const QString& t : a.value("attackOnset").toString().split(' ', QString::SkipEmptyParts)) {
+                  const int colon = t.indexOf(':');
+                  const QStringList parts = t.mid(colon + 1).split(';');
+                  Articulation::Technique* tq = nullptr;
+                  for (Articulation::Technique& x : art.attacks)
+                        if (x.name == t.left(colon))
+                              tq = &x;
+                  bool ok = false;
+                  const double median = parts.value(0).toDouble(&ok);
+                  if (colon <= 0 || !tq || !ok || median < 0 || parts.size() > 2)
+                        return false;
+                  double tableMedian = 0;
+                  if (parts.size() == 2 && (!parts[1].contains(':')
+                                            || !readKeyedMs(QString(parts[1]).replace(',', ' '), tableMedian, tq->onsets)))
+                        return false;
+                  tq->onsetMs = median;
+                  }
+            }
       // key[-key]:low-high:velocity …, the velocity outside its band
       if (a.hasAttribute("avoid")) {
             for (const QString& t : a.value("avoid").toString().split(' ', QString::SkipEmptyParts)) {

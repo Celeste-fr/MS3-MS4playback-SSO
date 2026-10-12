@@ -204,6 +204,11 @@ switch value of each articulation. For example:
     fingered:20-84:69 bowed:85-127:93" reattack="106" reattackGap="54" overlap="24" legatoGap="39"` (bands: Spitfire's article and
     measured on Violins 1 - Performance, as is legatoGap; velocities and times: the owner's own set, HANDOFF.md). A bowed transition
     plays at `legatoVelocity` where the map has one.
+  - `attackOnset="name:median[;pitch:ms,…] …"` on such an `Articulation`: an attack's own onset (ms after the note-on,
+    measured as `onset`: the median over the measured notes, optionally by played pitch). With `[slurs] smoothStart`
+    on, a note on that attack starts early by it (`[heldNotes] byPitch`: by pitch, else the median) instead of the
+    articulation's `onset`. SSO (`gen_spitfire_sso.py` from `sso_smooth_onset.json`): the smooth attack of the five
+    string sections' Performance Legato, e.g. Violas `attackOnset="smooth:236.2;50:198.3,59:259.5,…"`.
   - `avoid="keys:low-high:velocity …"` on such an `Articulation`: an attack (not a legato transition) at those keys
     (one key or `low-high`) with a velocity in the band plays at `velocity` instead, the nearest velocity measured
     clean: a faulty recording (a round robin with its own narrow tone). Not a note's own velocity; `[notes]

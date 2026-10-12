@@ -325,6 +325,20 @@ LEGATO_VELOCITY = {'Violas - Performance': 100}
 PERFORMANCE_TECHNIQUES = (' attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122"'
                           ' transitions="portamento:1-19:10 fingered:20-84:69 bowed:85-127:93"'
                           ' reattack="106" reattackGap="54" overlap="24" legatoGap="39"')
+# the smooth attack's own onset (attackOnset="smooth:median;pitch:ms,…"): a lone first note at velocity 5 is heard much
+# later than the onset= measured at velocity 80 (Violas 236 against 111 ms). Measured 2026-10-12 (kthost on the test VM,
+# CC1 64, 5 pitches x 2 repeats, the onset= method; sso_smooth_onset.json): the median over the 10 notes and each
+# pitch's mean. With [slurs] smoothStart (Recommended) a note on the smooth attack starts early by it; the other
+# attacks keep onset= (the owner, 2026-10-12)
+SMOOTH_ONSET = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_smooth_onset.json'),
+                              encoding='utf-8'))['sections']
+def attackOnset(patch):
+    """the attackOnset= text of a Performance patch (None: not measured)"""
+    m = SMOOTH_ONSET.get(patch)
+    if not m:
+        return None
+    by = sorted((int(k), v) for k, v in m['byPitch']['smooth'].items())
+    return f"smooth:{m['median']['smooth']:g};" + ','.join(f'{k}:{v:g}' for k, v in by)
 # velocities whose attack plays a faulty recording (avoid="keys:low-high:velocity …"): a round robin with its own narrow
 # tone, measured with kthost on the test VM (sso_bad_samples.json: the bands, the clean velocity next to them and the
 # renders; the owner, 2026-10-10, heard it in Whence's Celli)
@@ -1507,6 +1521,9 @@ for i, line in enumerate(out):
             extra += f' legatoVelocity="{LEGATO_VELOCITY[current]}"'
         if current in PERFORMANCE_TECHNIQUE_PATCHES:
             extra += PERFORMANCE_TECHNIQUES
+            ao = attackOnset(current)
+            if ao:
+                extra += f' attackOnset="{ao}"'
             if current in BAD_SAMPLES:
                 extra += ' avoid="' + ' '.join(
                     (f"{b['keys'][0]}" if b['keys'][0] == b['keys'][1] else f"{b['keys'][0]}-{b['keys'][1]}")

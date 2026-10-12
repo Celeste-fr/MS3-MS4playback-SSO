@@ -354,7 +354,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const SoundLib::Choice& c = p->trace->choice;
             const SoundLib::Articulation* a = c.articulation;
             return Playback::adjust("heldNotes.onset", p->trace->patch->name, a->name, pitch,
-                                    byPitchAll ? a->onsetAt(pitch) : a->onsetMedian());
+                                    a->startOnset(p->trace->attack, pitch, byPitchAll));   // (a smooth attack: its own)
             };
       std::map<const Note*, std::vector<int>> writtenOf;         // a note's rendered starts (sub-notes after the first)
       for (const auto& up : played)
@@ -368,7 +368,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const int len = p->note->chord()->actualTicks().ticks();
             p->sub = std::any_of(w.begin(), w.end(), [&](int x) { return x < p->written && p->written - x < len; });
             const SoundLib::Articulation* a = p->trace->choice.articulation;
-            p->hasOnset = a->onsetMs > 0 || !a->onsets.empty();
+            p->hasOnset = a->onsetMs > 0 || !a->onsets.empty() || p->trace->attack;
             if (p->hasOnset) {
                   p->onset = onsetOf(p, p->pitch);
                   p->arrival = ms(p->on) + p->onset - ms(p->written);

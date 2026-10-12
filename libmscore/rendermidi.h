@@ -192,6 +192,9 @@ class MidiRenderer {
             LibPerformance performance { LibPerformance::NONE };
             int joinMs { PerformanceTechnique::JOIN_AUTO };   // the note before ends this long after its note-on
                                                               // (< 0: before it); JOIN_AUTO: not joined
+            // a Performance attack with its own onset that timed the note's early start ([slurs] smoothStart: smooth;
+            // Articulation::startOnset); nullptr: the articulation's onset
+            const SoundLib::Articulation::Technique* attack { nullptr };
             double glideLeaveMs { -1 };                       // a bent transition's glide (libraryPitchBends), ms
             double glideArriveMs { -1 };                      // after its note-on; -1: none
             // a technique on velocity: the velocity a plain note of it plays at each MS4 dynamic (DYNAMIC_LEVELS, ppp

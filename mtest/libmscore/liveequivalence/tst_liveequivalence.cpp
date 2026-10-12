@@ -2188,18 +2188,23 @@ void TestLiveEquivalence::plainWritten_data()
       {
       QTest::addColumn<QString>("file");
       QTest::addColumn<QString>("byPitch");
-      QTest::newRow("legato-early by pitch") << "legato-early.musicxml" << "1";
-      QTest::newRow("legato-early median") << "legato-early.musicxml" << "0";
-      QTest::newRow("onset-longer") << "onset-longer.musicxml" << "1";
+      QTest::addColumn<bool>("performance");
+      QTest::newRow("legato-early by pitch") << "legato-early.musicxml" << "1" << false;
+      QTest::newRow("legato-early median") << "legato-early.musicxml" << "0" << false;
+      QTest::newRow("onset-longer") << "onset-longer.musicxml" << "1" << false;
+      // (2026-10-12: the slurs on a Performance patch, bar 2's A4 after silence on it smooth, early by the smooth
+      // attack's own onset, attackOnset, [slurs] smoothStart)
+      QTest::newRow("performance smooth") << "legato-early.musicxml" << "1" << true;
       }
 
 void TestLiveEquivalence::plainWritten()
       {
       QFETCH(QString, file);
       QFETCH(QString, byPitch);
+      QFETCH(bool, performance);
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
       Playback::setIniValuesForTest({ { "heldNotes/byPitch", byPitch } });
-      auto lib = loadMap(
+      auto lib = loadMap(QString(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
          "<Instrument name='Violin' ids='violin'>"
          "<Articulation name='Long' value='1' techniques='long' onset='84:150 72:50 60:200'/>"
@@ -2208,7 +2213,13 @@ void TestLiveEquivalence::plainWritten()
          "<Instrument name='Violin Legato' with='Violin'>"
          "<Switch type='none'/>"
          "<Articulation name='Legato' value='20' techniques='legato' legatoDelay='200' onset='100'/>"
-         "</Instrument></SoundLibrary>");
+         "</Instrument>%1</SoundLibrary>").arg(performance ?
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300;69:280,72:320'/>"
+         "</Instrument>" : ""));
       QVERIFY(lib);
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
@@ -2282,6 +2293,23 @@ void TestLiveEquivalence::plainWritten()
       QCOMPARE(notes, writtenOns);
       QVERIFY(onGrid >= notes);           // (each written note-on is a chord's tick: on the grid)
       QVERIFY(early > 0);                 // (the score has early notes: the test tests something)
+      if (performance) {
+            // the smooth A4 (bar 2, written at 5 s) played 280 ms early (its pitch's smooth onset), in the clip as written
+            bool smooth = false;
+            for (const PlainLiveSet::Section& s : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : s.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                              for (const PlainLiveSet::Technique& t : k.techniques)
+                                    for (const LiveClips::Note& n : t.notes) {
+                                          if (n.pitch == 69 && n.velocity == 5 && n.start == tl.units(2400)) {
+                                                smooth = true;
+                                                QCOMPARE(n.start, tl.units(2400));
+                                                const double earlyMs = (n.start - n.playedStart) * 60000.0 / tl.bpm / tl.units(480);
+                                                QVERIFY2(std::fabs(earlyMs - 280) < 3, qPrintable(QString::number(earlyMs)));
+                                                }
+                                          }
+            QVERIFY(smooth);
+            }
       QVERIFY(maxLook > 0);
       if (byPitch == "1")
             QVERIFY(exceptions > 0);      // (by pitch, capped, cut: the device's per-note delays)

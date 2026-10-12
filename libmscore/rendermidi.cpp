@@ -1562,9 +1562,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // or marcato, a re-attack right after a note of its patch, after silence spiccato (with [slurs] smoothStart smooth). A note's own join
                   // (the Join lane, Note::libraryJoin) right after a note of its patch: a transition up to legatoGap ms
                   // apart (none listed: overlapping or touching), else a re-attack; the note before ends that far from
-                  // it. Its own velocity (Note::libraryVelocity) replaces the technique's
+                  // it. Its own velocity (Note::libraryVelocity) replaces the technique's. timedAttack: with [slurs]
+                  // smoothStart, an attack with its own measured onset (<Articulation attackOnset>: SSO's smooth, 91-236 ms
+                  // where the articulation's onset=, at velocity 80, says 27-111): the note starts early by that onset
                   struct PerformanceNote { bool on = false; const Note* from = nullptr; int interval = 0; double lenBefore = 0;
-                                           int velocity = -1; const Note* before = nullptr; double endMs = 0; };
+                                           int velocity = -1; const Note* before = nullptr; double endMs = 0;
+                                           const SoundLib::Articulation::Technique* timedAttack = nullptr; };
                   auto performanceNote = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r) {
                         PerformanceNote p;
                         const SoundLib::Articulation* a = c ? c.articulation : nullptr;
@@ -1635,6 +1638,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               t = a->attack(accent ? "accented" : (!joinable && Playback::on("slurs/smoothStart", score)) ? "smooth" : "spiccato");
                         if (t)
                               p.velocity = (t->name == "spiccato" && joinable && a->reattackVelocity > 0) ? a->reattackVelocity : t->velocity;
+                        // (its own onset: a measured timing of an approved setting, so only with smoothStart on, the
+                        // Recommended preset; the owner, 2026-10-12)
+                        if (t && t->hasOnset() && Playback::on("slurs/smoothStart", score))
+                              p.timedAttack = t;
                         if (own > 0)
                               p.velocity = own;
                         if (ownJoin || (joinable && a->reattackGapMs > 0)) {
@@ -1823,6 +1830,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           t.velocity = libNote.velocity;
                                           t.performance = perf.from ? LibPerformance::TRANSITION : LibPerformance::ATTACK;
                                           t.joinMs = perf.before ? int(std::lround(perf.endMs)) : PerformanceTechnique::JOIN_AUTO;
+                                          t.attack = perf.timedAttack;
                                           }
                                     }
                               // an attack at a velocity whose recording at this key is faulty (the map's avoid: SSO's
@@ -1873,7 +1881,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           }
                                     }
                               else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
-                                       && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty())) {
+                                       && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty()
+                                           || perf.timedAttack)) {
                                     // a note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
                                     // the note-on, sul tasto / flautando / harmonics 175-440 ms; since 2026-10-08 every
                                     // measured technique, shorts too: pizzicato 3, staccato 8, marcato 33, Short 1.0 113 ms
@@ -1881,7 +1890,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // chord's latest so that its notes start together; [heldNotes] byPitch 0: the patch's
                                     // median onset for every pitch (one shift, a run's spacing as written), a [slurs]
                                     // quick swap (Choice::swapped) too (the owner, 2026-10-09: per-pitch Rachm. made
-                                    // Whence's first bars uneven); 1: each by its pitch's
+                                    // Whence's first bars uneven); 1: each by its pitch's. A Performance attack with its
+                                    // own onset (perf.timedAttack: smooth, [slurs] smoothStart) by that one
                                     const SoundLib::Articulation* oa = libChoice.articulation;
                                     const bool byPitch = libOnsetByPitch;
                                     double onsetMs = 0;
@@ -1889,8 +1899,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           if (n->play())
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
                                                                    libPatches[libChoice.patch]->name, oa->name,
-                                                                   n->ppitch(), byPitch ? oa->onsetAt(n->ppitch())
-                                                                                                : oa->onsetMedian()));
+                                                                   n->ppitch(), oa->startOnset(perf.timedAttack, n->ppitch(), byPitch)));
                                     // (a Performance re-attack: the note before ends its gap before this note-on,
                                     // so it keeps keepMs after that gap)
                                     const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
