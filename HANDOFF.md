@@ -202,6 +202,11 @@ from it doesn't narrow a slur's spread; half of it removes 10-23 % of the SD. Wh
 (sso_slur_swell's window 34.1 37.1 37.2 34.1). Open, for the owner: a correction would need the passage's own context
 (render and measure in place, CC11 ramped across each transition, not stepped: the 2026-10-10 stepped try "sounds
 horrible"), or accept the half-table rule as a weak option (`[slurs] evenTransitions`, off) to try by ear.
+In-place listening test (branch `even-levels-test`, `even_levels_test.py`, `sso_even_levels_test.json`; VM, kthost):
+Whence 12-TET bars 1-4 Celli, each note measured in context and corrected by CC11 moving as a step (S), a ramp over
+each transition (R) or a glide between notes (G): bars 2 / 4 slur range 3.7 -> 1.1 / 0.8 / 0.7 dB (floor ~1.0). The
+heard window lags the note-on by more than a sixteenth, so per-note values are solved against the envelope, not c.
+Waiting for the owner's ear; no renderer change.
 
 ## Performance legato for the strings' slurs in Recommended (2026-10-10)
 
