@@ -1565,6 +1565,32 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // it. Its own velocity (Note::libraryVelocity) replaces the technique's. timedAttack: with [slurs]
                   // smoothStart, an attack with its own measured onset (<Articulation attackOnset>: SSO's smooth, 91-236 ms
                   // where the articulation's onset=, at velocity 80, says 27-111): the note starts early by that onset
+                  // the same key struck again right after a note of the chord just before on its track, on the same
+                  // patch (legatoTransition's "struck again": no transition, but not after silence either)
+                  auto struckAgain = [&](const Note* note, const SoundLib::Choice& c) {
+                        Chord* ch = note->chord();
+                        if (note->tieBack() || ch->isGrace())
+                              return false;
+                        ChordRest* pcr = prevChordRest(ch, true);
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick())
+                              return false;
+                        const RepeatList& repeats = score->repeatList();
+                        auto rs = repeats.findRepeatSegmentFromUTick(ch->tick().ticks() + tickOffset);
+                        if (rs == repeats.end() || pcr->tick().ticks() < (*rs)->tick)
+                              return false;
+                        for (const Note* pn : toChord(pcr)->notes()) {
+                              if (pn->pitch() != note->pitch() || !pn->play())
+                                    continue;
+                              const Note* first = pn->firstTiedNote();
+                              const Chord* fc = first->chord();
+                              const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
+                              const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
+                              if (pc && pc.patch == c.patch)
+                                    return true;
+                              }
+                        return false;
+                        };
+
                   struct PerformanceNote { bool on = false; const Note* from = nullptr; int interval = 0; double lenBefore = 0;
                                            int velocity = -1; const Note* before = nullptr; double endMs = 0;
                                            const SoundLib::Articulation::Technique* timedAttack = nullptr; };
@@ -1635,7 +1661,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (at != PerformanceTechnique::Attack::AUTO)
                               t = a->attack(PerformanceTechnique::attackName(at));
                         else      // (after silence on this patch, [slurs] smoothStart: smooth; the owner, 2026-10-12)
-                              t = a->attack(accent ? "accented" : (!joinable && Playback::on("slurs/smoothStart", score)) ? "smooth" : "spiccato");
+                              t = a->attack(accent ? "accented" : (!joinable && !struckAgain(note, c)
+                                                                    && Playback::on("slurs/smoothStart", score)) ? "smooth" : "spiccato");
                         if (t)
                               p.velocity = (t->name == "spiccato" && joinable && a->reattackVelocity > 0) ? a->reattackVelocity : t->velocity;
                         // (its own onset: a measured timing of an approved setting, so only with smoothStart on, the

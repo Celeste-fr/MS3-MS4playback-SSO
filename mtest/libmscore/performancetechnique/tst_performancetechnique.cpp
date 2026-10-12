@@ -1091,6 +1091,22 @@ void TestPerformanceTechnique::slurTransitions()
             QVERIFY2(within(ms(k[86].on - k[84].off), 54), qPrintable(QString::number(ms(k[86].on - k[84].off))));
             delete s;
             }
+      // slur-repeat.musicxml: [C5 C5 D5 E5], the same key struck again under a slur: not after silence, so spiccato (112),
+      // not smooth (until 2026-10-12 smooth: smoothStart took "no transition" for silence)
+      MasterScore* s = score(true, "slur-repeat.musicxml");
+      QVERIFY(s);
+      QStringList all;
+      render(s, lib, &all);
+      QList<int> c5;
+      for (const QString& l : all) {
+            const QStringList f = l.split(' ');
+            if (f[1].toInt() == ME_NOTEON && f[2].toInt() == 72 && f[3].toInt() > 0 && f[4] == "0")
+                  c5 << f[3].toInt();
+            }
+      QVERIFY2(c5.size() == 2, qPrintable(all.join('\n')));
+      QCOMPARE(c5[0], 5);
+      QCOMPARE(c5[1], 112);       // (spiccato)
+      delete s;
       }
 
 QTEST_MAIN(TestPerformanceTechnique)

@@ -346,6 +346,9 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 - `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
   Playback audit). Whence (quarter tones), Recommended (2026-10-11, main cb073b6917): the same counts as Whence 12-TET
   below (OVERLAP 0, UNMEASURED 10, CAPPED 289, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0).
+  Whence, Recommended, integrate-1012 (2026-10-12: transitions, smoothStart, smooth onset): OVERLAP 0, UNMEASURED 9,
+  CAPPED 289, ARRIVAL 20 fail / 10 warn, LEVEL STEP 0; the 20th: the score's first note (Celli, smooth, 172 ms onset) can't
+  start before time 0 (a lead-in as `libraryDelayLead` gives negative delays would fix it).
   Whence 12-TET, Recommended (2026-10-10, `[slurs] performance`): OVERLAP 0, UNMEASURED 10 info,
   CAPPED 289 info, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0 (with the re-attack keep, 2026-10-10): the audit judges the Performance legato's transitions (on
   the beat) by the attack onset, having no model of a transition's arrival (HANDOFF.md); with `slurs/performance=0` as on
