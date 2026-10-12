@@ -209,6 +209,11 @@ void TestPerformanceTechnique::map()
       QCOMPARE(violins->reattackVelocity, 106);
       QCOMPARE(violins->reattackGapMs, 54.0);
       QCOMPARE(violins->overlapMs, 24.0);
+      // the smooth attack's own onset (sso_smooth_onset.json: the median, each pitch's mean); the others none
+      QCOMPARE(violins->attack("smooth")->onsetMs, 100.2);
+      QCOMPARE(violins->attack("smooth")->onsetAt(57), 86.1);
+      QVERIFY(!violins->attack("spiccato")->hasOnset());
+      QVERIFY(!violins->attack("accented")->hasOnset());
       }
 
 //---------------------------------------------------------

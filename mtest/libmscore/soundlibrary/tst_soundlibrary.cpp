@@ -43,6 +43,7 @@
 #include "libmscore/contextlevel.h"
 #include "libmscore/ms4playback.h"
 #include "libmscore/note.h"
+#include "libmscore/performancetechnique.h"
 #include "libmscore/chord.h"
 #include "libmscore/segment.h"
 #include "libmscore/livesetwriter.h"
@@ -122,6 +123,7 @@ class TestSoundLibrary : public QObject, public MTest
       void playbackSettingsIni();
       void playbackSettingsLayers();
       void slurPerformance();
+      void smoothOnset();
       void levelContext();
       void levelSectionBalance();
       void playbackPresets();
@@ -2004,6 +2006,101 @@ void TestSoundLibrary::playbackSettingsLayers()
       QCOMPARE(Playback::value("hosting/maxVoices", score), 512.0);
       score->setMetaTag(Playback::metaTag, "");
       Playback::setIniValuesForTest({});
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   smoothOnset
+//    an attack's own onset (<Articulation attackOnset>, SSO's smooth: sso_smooth_onset.json): with [slurs] smoothStart
+//    the Performance note after silence on its patch (legato-early.musicxml, bar 2's slurred A4: the unslurred G5
+//    before it on the main patch; 60 bpm, 0.48 ticks a ms, written at 2400) starts early by the smooth attack's onset
+//    (the median 300 ms; [heldNotes] byPitch 1: A4's 280), not the articulation's onset= (60); smoothStart 0
+//    (spiccato) and an attack chosen by hand without an onset as before; [heldNotes] early 0 as written; the score's
+//    first note (tick 0) not before the start. The map: the attack must be one of attacks=
+//---------------------------------------------------------
+
+void TestSoundLibrary::smoothOnset()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      const QString map = "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' %1/>"
+         "</Instrument></SoundLibrary>";
+      QVERIFY(!loadMap(map.arg("attackOnset='bowed:300'")));               // (not an attack)
+      QVERIFY(!loadMap(map.arg("attackOnset='smooth:x'")));
+      QVERIFY(!loadMap(map.arg("attackOnset='smooth:300;57'")));
+      auto lib = loadMap(map.arg("attackOnset='smooth:300;69:280,72:320'"));
+      QVERIFY(lib);
+      const SoundLib::Articulation& legato = lib->instruments[1].articulations[0];
+      QVERIFY(legato.attack("smooth")->hasOnset());
+      QVERIFY(!legato.attack("spiccato")->hasOnset());
+      QCOMPARE(legato.attack("smooth")->onsetMs, 300.0);                  // (the given median, not the table's)
+      QCOMPARE(legato.attack("smooth")->onsetAt(57), 280.0);
+      QCOMPARE(legato.attack("smooth")->onsetAt(90), 320.0);                 // (the nearest end beyond)
+      QCOMPARE(legato.startOnset(legato.attack("smooth"), 57, false), 300.0);
+      QCOMPARE(legato.startOnset(legato.attack("smooth"), 57, true), 280.0);
+      QCOMPARE(legato.startOnset(legato.attack("spiccato"), 57, true), 60.0);
+      QCOMPARE(legato.startOnset(nullptr, 57, false), 60.0);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      // each key's first note-on: tick and velocity
+      auto render = [score]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            std::map<int, std::pair<int, int>> on;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && !e.librarySwitch() && e.type() == ME_NOTEON && e.velo() > 0 && !on.count(e.pitch()))
+                        on[e.pitch()] = { te.first, e.velo() };
+                  }
+            return on;
+            };
+      auto within = [](int tick, int want) { return std::abs(tick - want) <= 1; };
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" } });
+      std::map<int, std::pair<int, int>> on = render();
+      QCOMPARE(on[69].second, 5);                                         // (smooth)
+      QVERIFY2(within(on[69].first, 2400 - 144), qPrintable(QString::number(on[69].first)));    // (300 ms)
+      QCOMPARE(on[72].first, 0);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "1" } });
+      on = render();
+      QVERIFY2(within(on[69].first, 2400 - 134), qPrintable(QString::number(on[69].first)));    // (280 ms)
+      // smoothStart 0: spiccato, the articulation's onset
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" }, { "slurs/smoothStart", "0" } });
+      on = render();
+      QCOMPARE(on[69].second, 112);
+      QVERIFY2(within(on[69].first, 2400 - 29), qPrintable(QString::number(on[69].first)));     // (60 ms)
+      // a spiccato chosen by hand under smoothStart: the articulation's onset; smooth by hand: its own
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" } });
+      Note* a4 = nullptr;
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s && !a4; s = s->next1(SegmentType::ChordRest))
+            if (s->tick().ticks() == 2400 && s->element(0) && s->element(0)->isChord())
+                  a4 = toChord(s->element(0))->upNote();
+      QVERIFY(a4);
+      score->startCmd();
+      a4->undoChangeProperty(Pid::PERFORMANCE_ATTACK, int(PerformanceTechnique::Attack::SPICCATO));
+      score->endCmd();
+      on = render();
+      QCOMPARE(on[69].second, 112);
+      QVERIFY2(within(on[69].first, 2400 - 29), qPrintable(QString::number(on[69].first)));
+      score->startCmd();
+      a4->undoChangeProperty(Pid::PERFORMANCE_ATTACK, int(PerformanceTechnique::Attack::SMOOTH));
+      score->endCmd();
+      on = render();
+      QCOMPARE(on[69].second, 5);
+      QVERIFY2(within(on[69].first, 2400 - 144), qPrintable(QString::number(on[69].first)));
+      // [heldNotes] early 0 (Library default's): as written
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/early", "0" } });
+      on = render();
+      QCOMPARE(on[69].first, 2400);
       delete score;
       }
 

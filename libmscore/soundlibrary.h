@@ -101,7 +101,18 @@ struct Articulation {
       // it plays with, the velocity of an attack right after a note of its patch, ms the note before ends before it /
       // lasts into it, the longest gap the patch still joins by transition (a note's own join: Note::libraryJoin);
       // performancetechnique.h, the renderer's performanceNote). Empty: the notes play as before
-      struct Technique { QString name; int low; int high; int velocity; };
+      // An attack may carry its own onset (<Articulation attackOnset="smooth:100.2;57:86.1,66:127.3 …">: name:the median
+      // over every measured note[;pitch:ms,… by played pitch], ms after the note-on, measured as onset=; SSO's smooth,
+      // sso_smooth_onset.json): with [slurs] smoothStart a held note on that attack starts early by it, not by the
+      // articulation's onset= (measured at velocity 80, it arrived late: Violas smooth 236 ms, onset= 111;
+      // startOnset()). -1: none (the articulation's onset)
+      struct Technique {
+            QString name; int low; int high; int velocity;
+            double onsetMs { -1 };
+            std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
+            bool hasOnset() const { return onsetMs >= 0; }
+            double onsetAt(int pitch) const;
+            };
       std::vector<Technique> attacks;
       std::vector<Technique> transitions;
       int reattackVelocity { -1 };
@@ -145,6 +156,10 @@ struct Articulation {
       std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
       double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
       double onsetMedian() const;         // the median of the measured onsets (onsetMs without a table)
+      // the onset that times a held note's early start: the attack's own (Technique::onsetAt / its median) where
+      // attack has one (the renderer passes the Performance attack it chose with [slurs] smoothStart on), else onsetAt /
+      // onsetMedian; byPitch: by pitch ([heldNotes] byPitch, a swap), else the median
+      double startOnset(const Technique* attack, int pitch, bool byPitch) const;
       // a held note is loudest this long after its note-on (<Articulation peak>, ms, the median of the measured
       // semitones); a slurred note shorter than it is all swell ([slurs] quick: choose); -1: unknown
       double peakMs { -1 };

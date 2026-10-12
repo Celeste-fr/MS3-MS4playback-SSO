@@ -36,7 +36,8 @@
 //                 transition): it arrives late by the cut. A report with the cut, ms (the note before then started
 //                 earlier than its own length: the old EARLY > NOTE)
 //     ARRIVAL     predicted arrival = sent time + the onset the map says for that note (as the renderer takes it:
-//                 onsetAt(pitch) for a swap or [heldNotes] byPitch, onsetMedian() otherwise, playback.ini's
+//                 onsetAt(pitch) for a swap or [heldNotes] byPitch, onsetMedian() otherwise, a smooth attack's own
+//                 onset under [slurs] smoothStart (LibTrace::attack, Articulation::startOnset), playback.ini's
 //                 [heldNotes.onset] applied) - written time; a chord's earliest arriving note against the note before
 //                 in its line (joined without a rest): more than 50 ms a fault, 30-50 ms a warning. Rasch (1979,
 //                 "Synchronization in performed ensemble music", Acustica 43) measured 30-50 ms asynchrony between the
