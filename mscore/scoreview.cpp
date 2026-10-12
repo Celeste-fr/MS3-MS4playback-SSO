@@ -12,6 +12,7 @@
 
 #include "breaksdialog.h"
 #include "continuouspanel.h"
+#include "barruler.h"
 #include "automationlanes.h"
 #include "drumroll.h"
 #include "editdrumset.h"
@@ -1123,6 +1124,8 @@ void ScoreView::paintEvent(QPaintEvent* ev)
             _continuousPanel->paint(ev->rect(), vp);
       if (_score->layoutMode() == LayoutMode::LINE)
             _lanes->paint(vp, ev->rect());
+      if (_score->layoutMode() == LayoutMode::LINE)
+            BarRuler::paint(this, vp, _continuousPanel);    // every bar's number (barruler.h)
 
       if (!lasso->bbox().isEmpty())
             lasso->draw(&vp);
@@ -1781,12 +1784,19 @@ void ScoreView::setLogicalZoom(ZoomIndex index, qreal logicalLevel, const QPoint
             dy = (int)lrint(p3.y() * newPhysicalLevel);
             }
 
+      // Continuous View: a score whose top was in view stays under the bar ruler (barruler.h) when zooming out
+      if (const int rh = BarRuler::height(this)) {
+            if (_matrix.dy() >= 0.0 && _matrix.dy() + dy < rh)
+                  dy = rh - (int)lrint(_matrix.dy());
+            }
       constraintCanvas(&dx, &dy);
       if (dx != 0 || dy != 0) {
             _matrix.setMatrix(_matrix.m11(), _matrix.m12(), _matrix.m13(), _matrix.m21(),
                _matrix.m22(), _matrix.m23(), _matrix.dx()+dx, _matrix.dy()+dy, _matrix.m33());
             imatrix = _matrix.inverted();
             scroll(dx, dy, QRect(0, 0, width(), height()));
+            if (const int rh = BarRuler::height(this))
+                  update(0, 0, width(), rh + qAbs(dy));
             emit offsetChanged(_matrix.dx(), _matrix.dy());
             }
 
@@ -3474,6 +3484,8 @@ void ScoreView::dragScoreView(QMouseEvent* ev)
          _matrix.m22(), _matrix.m23(), _matrix.dx()+dx, _matrix.dy()+dy, _matrix.m33());
       imatrix = _matrix.inverted();
       scroll(dx, dy, QRect(0, 0, width(), height()));
+      if (const int rh = BarRuler::height(this))      // the bar ruler stays at the top (barruler.h)
+            update(0, 0, width(), rh + qAbs(dy));
       // scroll schedules an update which is probably too small
       // hack around:
       if (dx > 0)
@@ -3843,7 +3855,8 @@ void ScoreView::pageTop()
       if (score()->paginatedMode())
             setConstrainedOffset(thinPadding, thinPadding);
       else
-            setOffset(thinPadding, score()->lineMode() ? 0.0 : thinPadding);
+            // Continuous View: the score starts under the bar ruler (barruler.h); setLogicalZoom keeps it there
+            setOffset(thinPadding, score()->lineMode() ? qreal(BarRuler::height(this)) : thinPadding);
 
       update();
       }

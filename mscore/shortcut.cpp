@@ -2443,6 +2443,13 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
+         "toggle-bar-ruler",
+         QT_TRANSLATE_NOOP("action","Bar Ruler"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Bar Ruler' (Continuous View: every bar's number along the top)")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "toggle-automation-lanes",
          QT_TRANSLATE_NOOP("action","Automation Lanes"),
          QT_TRANSLATE_NOOP("action","Toggle 'Automation Lanes' (Continuous View: a selected part's automation under its staves)")

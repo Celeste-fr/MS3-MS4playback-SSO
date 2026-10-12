@@ -62,6 +62,7 @@
 #include "scoretab.h"
 #include "scoreview.h"
 #include "automationlanes.h"
+#include "barruler.h"
 #include "searchComboBox.h"
 #include "selectdialog.h"
 #include "selectionwindow.h"
@@ -2248,6 +2249,11 @@ MuseScore::MuseScore()
       a = getAction("toggle-automation-lanes");
       a->setCheckable(true);
       a->setChecked(AutomationLanes::enabled());
+      menuView->addAction(a);
+      // every bar's number in Continuous View (barruler.h)
+      a = getAction("toggle-bar-ruler");
+      a->setCheckable(true);
+      a->setChecked(BarRuler::enabled());
       menuView->addAction(a);
       menuView->addSeparator();
 
@@ -7912,6 +7918,11 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                         cs->endCmd();
                         }
                   a->setChecked(cs && cs->scordaturaView());
+                  }
+            else if (cmd == "toggle-bar-ruler") {
+                  BarRuler::setEnabled(a->isChecked());
+                  if (cv)
+                        cv->update();
                   }
             else if (cmd == "toggle-automation-lanes") {
                   AutomationLanes::setEnabled(a->isChecked());

@@ -29,6 +29,7 @@ class ContinuousPanel {
       bool _active;            // Used to active or desactive the panel
       bool _visible;           // False if beginning of the score is visible
       qreal _width;           // Actual panel width (final or transitional)
+      qreal _panelWidth;      // The painted background's width (canvas units; the bar ruler starts after it)
 
    public:
       ContinuousPanel(ScoreView* sv);
@@ -40,6 +41,7 @@ class ContinuousPanel {
       bool visible()                 { return _active ? _visible : false; }
       void setScore(Score* s)        { _score = s;       }
       qreal width()                  { return _width;    }
+      qreal panelWidth() const       { return _panelWidth; }
 
       void paint(const QRect& r, QPainter& p);
       };
