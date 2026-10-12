@@ -177,7 +177,10 @@ Open:
   (Violins 2 up to +13, Basses about 0), rising with register and falling with IOI; CC1 127 can't give it in most cells.
   The owner chose the rule (2026-10-10): applied as `[levels] context`, above.
 
-## No Performance patches (2026-10-06)
+## No Performance patches (2026-10-06; superseded for Recommended 2026-10-10)
+
+Superseded: since 2026-10-10 Recommended plays the strings' slurs on the Performance patches (`[slurs] performance`,
+section "Performance legato for the strings' slurs in Recommended" above); Library default still plays as below.
 
 The owner: "NO using performance patches. with all technique patches we have control of release, tightness, CC
 mapped vel. … and sync to tempo". The SSO map has no Performance extras; slurs play the All techniques longs, each
@@ -242,7 +245,9 @@ sections' Performance patches not measured.
   5-8) 5.0 dB (-37.1 / -32.2). The Performance patch's short slur notes are no quieter than bars 3-8's (-42 against
   -40 … -44 dB raw); the staccatos (Spiccato 110) are what's louder. Offered +2.5 / +5.0 dB on Violas - Performance; the
   owner chose +5.0 (fader +7.0: slurs as loud as the staccatos). Raises bars 1-8's Violas slurs too.
-- **Performance levels move together, by lowering** (the owner, 2026-10-10: raising only Violas - Performance "makes the
+- **Performance levels move together, by lowering** (meaning, confirmed 2026-10-12: one shared gain for every
+  Performance patch, the rest lowered so nothing exceeds Live's +6 dB; section balance M, 2026-10-11, adds each
+  section's own offset on top, as intended) (the owner, 2026-10-10: raising only Violas - Performance "makes the
   volume unbalanced between the parts"; then chose the lowered version as "perfect on bars 1-12"): every string
   Performance track 5 dB over R against the All techniques tracks, done by lowering since Live's fader stops at +6 dB:
   Performance R - 0.7 (Violins 1 +2.3, Violas +1.3, Celli +6.0), All techniques R - 5.7 (Violins 1 -10.8, Violins 2
