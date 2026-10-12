@@ -314,6 +314,21 @@ gave four clips on four tracks found by name, locators at the right beats (60 th
 and a note moved up in MuseScore reached its clip about a second later, only that clip sent again;
 Live's Play from beat 4 started MuseScore at bar 2, its Stop stopped it.
 
+**The device's load on Live** (fixed 2026-10-12): with the plain set's 28 copies (one per technique track) Live 12.4.6's
+main thread sat near 100 % and the window stopped responding within a minute of opening the set (5 copies: ~40 % to
+100 % in 10 min). Max for Live's JS runs on Live's main thread, and every copy's heartbeat made new LiveAPI objects each
+second (its track, `live_set`, each of the track's 8 clip slots: ~13 a copy a second), the hub's transport report one 25
+times a second, and every copy with a timing record rewrote ~4000 buffer cells a second. Now the script keeps one LiveAPI
+object per Live object (`lom()`: `live_set`, `this_device …`, `id <n>`; existence checks through the parent's list),
+watches the track's clips and slots with observers (Carriers: arrangement_clips, clip_slots, each slot's has_clip, each
+clip's name; everything read again every 5 s in any case), reads nothing from Live on a copy with nothing to do, and
+fills the timing record once. Measured on the test VM (Live 12.4.6, Kontakt 8 + SSO, Whence's plain set with all 28
+copies, idle): with the first fixed build, 18 min after opening, Live's main thread 9 % of a core, the window responding
+throughout, the process ~12.5 s CPU per 10 s (a worker thread at ~95 %, not the main one); with the final build, 15 min,
+main thread 11 %, responding throughout, the process 3-5 s per 10 s; against ~22.5 s and "not responding" from the first
+minute with the old device (the previous agent's run the same day). Tests: `tools/live/test/test_load.js` (no LiveAPI object made in 120
+heartbeats of 28 copies: 43680 before; under 4 property reads a copy a second; none on an idle copy).
+
 Only real Live can show (to check first):
 - the device loads (the `.amxd` container is written by `make_device.py`; Max may want it opened
   and saved once) and its `v8` script runs;
@@ -369,9 +384,11 @@ in a section collapsible at the same time".
     MuseScoreLink.js › Written clips): most notes share one pair of delays (the note-ons 0, the note-offs the lookahead:
     the note was moved early, its end stays), the others (a capped or per-pitch start, a note before cut by the next
     one's early start, a Performance join) are listed by their written start. The record goes into the device's saved
-    data (`"Timing"`, `LiveSetWriter::linkBlob`), so the set plays it without MuseScore; the patcher reads the delays
-    from a ring the script fills each second (as the velocity shaper's), at the note's song tick, and plays the note
-    through a `[pipe]`. A technique's switch (the Bank / Sub Live sends at a run's clip start, a CC envelope's step, a
+    data (`"Timing"`, `LiveSetWriter::linkBlob`), so the set plays it without MuseScore; the script puts the whole
+    record into a buffer once (`[buffer~ ---mslt]`, a cell a tick from the song's start; until 2026-10-12 a ring it
+    filled each second two seconds ahead, which an offline export outran), the patcher reads the delays at the note's
+    own song tick (Live 12.4.6: the patcher sees the note's own song position, not the Track Delay's,
+    `TIM_SEES_TRACK_DELAY` false) and plays the note through a `[pipe]`. A technique's switch (the Bank / Sub Live sends at a run's clip start, a CC envelope's step, a
     keyswitch note) goes with the run's first note;
   - the Kontakt track's Controllers clip holds the controllers where MuseScore plays them (a note's dynamic, CC11 and
     bend right before its played note-on, a glide after it); the Kontakt track has no technique's delay, so they meet
@@ -379,8 +396,8 @@ in a section collapsible at the same time".
   Live then plays what MuseScore plays: `tst_liveequivalence` `plainWritten` takes every note-on and note-off of
   MuseScore's own render and finds it at the same time (within a unit, 0.13 ms at 120 bpm) from the written clips, the
   Track Delays and the device's delays, by pitch and by the median, with keepMs caps and an onset longer than the notes;
-  `tools/live/test/test_patch.js` › written clips runs the patcher's path on a model of Max's objects, `test_timing.js`
-  the script's ring. Without the device (`LiveSetKind::PLAIN`) the Track Delay is the technique's most common early
+  `tools/live/test/test_patch.js` › written clips runs the patcher's path on a model of Max's objects (and the whole
+  song with no work of the script, as an export), `test_timing.js` the script's buffer. Without the device (`LiveSetKind::PLAIN`) the Track Delay is the technique's most common early
   start and every note is as written, moved by it (step 2's numbers: HANDOFF.md › Written clips in the plain set). Read back
   (`livetracks.*`), a technique track's TrackDelay gets its lookahead added back (`Written::lookahead`), so the score's
   track delays stay the technique's own. A clip tab shows and edits the written notes; a note edited there (moved,
@@ -655,14 +672,24 @@ render, `plainWritten`, `test_patch.js`, `test_timing.js`), only real Live 12.4 
 12.4.6 with a recorder track taking each technique track's output, as on 2026-10-07):
 - that a negative Track Delay on a MIDI track moves what it sends MIDI To the Kontakt earlier (the manual: "every
   track"; untried), and that Live keeps a value with one decimal (−86.1 ms);
-- the song position the device's patcher sees for a note Live sends early by the Track Delay: the note's own less the
-  delay (`TIM_SEES_TRACK_DELAY` true, the cells read that far ahead) or the note's own (false): play a technique track
-  with a known exception and log the patcher's note-ons (the `vlog` probe);
+- ~~the song position the device's patcher sees for a note Live sends early by the Track Delay~~ **confirmed
+  2026-10-12** (Live 12.4.6 on the test VM, the plain set of Whence, 28 technique tracks, Track Delays 0 to −170.5 ms;
+  the `tlog` probe): the note's own song position less one signal vector (−1.43 to −1.45 ms) for all 310 logged
+  note-ons and 310 note-offs, in playback and in *Export All Individual Tracks*, so `TIM_SEES_TRACK_DELAY` is false.
+  With the old assumption (true) every exception whose neighbouring cells held the default took the default (the
+  measured +48 / +83 ms of Violins 1 / Violas − Performance's phrase-first notes, together with the ring an export
+  outran). With the fix every logged note took its record's delay (0 of 620 off), and in the export Violins 1 −
+  Performance's 3 isolated phrase-first notes landed within 0.9 ms and Violas − Performance's 6 within 3.3 ms (5 at
+  0.0) of the set without the device (where Live itself plays them at written + Track Delay, their MuseScore time);
+  30 isolated notes of 8 Kontakt tracks: median 0.0, max 3.3 ms; Violins 2 – Spiccato's default +5.77 measured +5.8.
+  Probes for a check in Live: `vlog on` (also the timing log), `tim ask` / `tim` (each copy's record, gates, bias),
+  `tlog <track id>`, `tsees 0|1` (override for a test);
+- a negative Track Delay on a MIDI track does move what it sends MIDI To the Kontakt earlier (the export without the
+  device: notes at written + Track Delay, 2026-10-12);
 - that a clip's Bank / Sub (the UACC switch) passes through the device before Kontakt (if Live sends it past the
   chain, a capped first note of a run would get its switch early: as before, the switch at the run's clip start);
-- how close `[pipe]` lands a delayed note to its time in Live's scheduler (the clip's own notes are sample-timed; a
-  recorder track shows the difference), in playback and in *Export Audio/Video* (offline: the scheduler follows the
-  render?);
+- how close `[pipe]` lands a delayed note to its time in Live's scheduler in playback (the export, 2026-10-12: within
+  3.3 ms on isolated notes, above; playback not recorded);
 - that the device's `"Timing"` store comes back from the set (`[pattr Timing]`, as the `"Lanes"` stores do) and that
   `peek~ ---mslt 2`, `buffer~` with two channels and `[pipe 0 0 0]` with its delay in the right inlet behave as
   modelled.
@@ -987,8 +1014,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 ### What still differs
 
 - **Written clips** (the plain set, 2026-10-11, above): the device's delays are kept to 0.01 ms and Live's Track Delay to
-  0.1 ms; the device reads its delays at the song position it sees, assumed to be the Track Delay before the note's
-  (`TIM_SEES_TRACK_DELAY`, only Live can confirm), a tick on each side tolerated; a note moved or added in Live (or in a
+  0.1 ms; the device reads its delays at the note's own song position (measured in Live 12.4.6, 2026-10-12), a tick on
+  each side tolerated; a note moved or added in Live (or in a
   clip tab) plays with its track's most common delays; Max's `[pipe]` runs in the scheduler, not sample-timed as the
   clip's own notes (only Live can say how close). A clip tab playing through its Live track (MuseScore's notes sent to
   the track at once, `/ms/midi`) plays the written notes as written (no onset): MuseScore plays a clip tab as notation.
@@ -1709,7 +1736,7 @@ read back, timing edits from the technique clips, only MuseScore's parts of the 
 records in `liveTracks` › written: clips, notes, slots),
 `libmscore/plainliveset.*` (the plain set; its technique clips hold the written notes, `libmscore/livetiming.*` puts
 the played timing back by Track Delay and the device: `MidiRenderer::setWrittenTiming`, `LiveTiming::track`, the
-device's `"Timing"` store and `---mslt` ring, MuseScoreLink.js › Written clips), `libmscore/livetracks.*` (the plain set
+device's `"Timing"` store and `---mslt` buffer, MuseScoreLink.js › Written clips), `libmscore/livetracks.*` (the plain set
 read back: track keys in the Info text, metaTag `liveTracks`; a technique's TrackDelay plus its lookahead), `libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
 `tools/live/test/compare_als_skeleton.py`), `mscore/liveequivalence.*`, `tools/live/` (Max for Live device, Node
 tests, `fake_live_server.js`). Plug-in parameter lanes MuseScore plays reach Live through the device (`/ms/params`,
