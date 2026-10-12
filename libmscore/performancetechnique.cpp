@@ -13,6 +13,8 @@
 #include "chord.h"
 #include "note.h"
 #include "segment.h"
+#include "measure.h"
+#include "part.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -143,6 +145,64 @@ QString write(const Score* score)
                   }
             }
       return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
+      }
+
+//---------------------------------------------------------
+//   duplicateNoteValues
+//---------------------------------------------------------
+
+int duplicateNoteValues(Score* score, const Part* part, int start, int end, int limit)
+      {
+      const int len = end - start;
+      Measure* m = score && part && len > 0 ? score->tick2measure(Fraction::fromTicks(start)) : nullptr;
+      if (!m)
+            return 0;
+      int changed = 0;
+      auto copy = [&changed](const Chord* from, const Chord* to) {
+            const std::vector<Note*>& a = from->notes();        // (by pitch, the lowest first)
+            const std::vector<Note*>& b = to->notes();
+            for (size_t i = 0; i < a.size() && i < b.size(); ++i) {
+                  const Note* src = a[i];
+                  Note* n = b[i];
+                  if (src->tieBack() || n->tieBack())
+                        continue;
+                  bool c = false;
+                  auto set = [n, &c](Pid pid, int v) {
+                        if (n->getProperty(pid).toInt() != v) {
+                              n->undoChangeProperty(pid, v);
+                              c = true;
+                              }
+                        };
+                  // (the technique first: a change of it resets the own values, set after it)
+                  set(Pid::PERFORMANCE_ATTACK, int(src->performanceAttack()));
+                  set(Pid::PERFORMANCE_TRANSITION, int(src->performanceTransition()));
+                  set(Pid::LIBRARY_VELOCITY, src->libraryVelocity());
+                  set(Pid::LIBRARY_JOIN, src->libraryJoin());
+                  changed += c ? 1 : 0;
+                  }
+            };
+      for (Segment* s = m->first(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+            const int tick = s->tick().ticks();
+            if (tick < start)
+                  continue;
+            if (tick >= end || tick + len >= limit)
+                  break;
+            Segment* t = score->tick2segment(Fraction::fromTicks(tick + len), true, SegmentType::ChordRest);
+            if (!t || t->tick().ticks() != tick + len)
+                  continue;
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* a = s->element(track);
+                  Element* b = t->element(track);
+                  if (!a || !b || !a->isChord() || !b->isChord())
+                        continue;
+                  const Chord* ca = toChord(a);
+                  const Chord* cb = toChord(b);
+                  for (int g = 0; g < ca->graceNotes().size() && g < cb->graceNotes().size(); ++g)
+                        copy(ca->graceNotes()[g], cb->graceNotes()[g]);
+                  copy(ca, cb);
+                  }
+            }
+      return changed;
       }
 
 }     // namespace PerformanceTechnique

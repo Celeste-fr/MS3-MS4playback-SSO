@@ -35,12 +35,16 @@
 //    library patch, the join on a Performance patch, where it also decides attack or transition: the note before
 //    overlapping it, or a gap up to the map's legatoGap ms (SSO: 39, measured), goes on by transition, a longer gap
 //    re-attacks (HANDOFF.md › How the Performance patches work). An Inspector technique sets them back to Auto.
+//
+//    Ctrl+D over a time selection of bars (mscore/automationlanes.h › Time selection) copies all four to the notes at the
+//    same places in the bars after (duplicateNoteValues).
 //---------------------------------------------------------
 
 #include <QString>
 
 namespace Ms {
 
+class Part;
 class Score;
 
 namespace PerformanceTechnique {
@@ -62,6 +66,14 @@ Transition transitionFromName(const QString& s);
 // the metaTag: to the notes after loading (and out of the tags), from them on saving; empty: none
 void read(Score* score);
 QString write(const Score* score);
+
+// Ctrl+D over a time selection (automation.h duplicateTimeSelection): each note's attack, transition, own velocity and
+// join in [start, end) on the part's tracks onto the note at its tick + (end - start) (before limit), same track, same
+// grace chord, same index in its chord from the bottom. A note found gets the source's values, Auto included (an attack
+// or transition first: Note::undoChangeProperty resets the own values, then they are set); none found, or either note
+// tied from the one before (a tie chain plays its first note's), left as it is. Undoable changes in the caller's
+// command (each note's linked ones too). Returns the notes changed
+int duplicateNoteValues(Score* score, const Part* part, int start, int end, int limit);
 
 }     // namespace PerformanceTechnique
 }     // namespace Ms

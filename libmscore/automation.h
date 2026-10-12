@@ -237,8 +237,27 @@ double shapeAt(Shape shape, double x);
 // (the points there replaced), the envelope after it as before
 std::vector<Point> copyPoints(const Lane& lane, const std::vector<int>& indices);
 std::vector<int> pastePoints(Lane& lane, int tick, const std::vector<Point>& clip);
+// Ctrl+D over a time selection (Live's Duplicate; duplicateTimeSelection below): the envelope in [start, end) copied to
+// [end, end + (end - start)), cut at limit (the score's end), as drawn: a ramp across start or the cut split (its shape
+// kept: addPoint), of a jump at start only the value it jumps to, before the lane's first point the first point's value
+// (the dashed line), the ramp arriving at the cut as it arrives there. The target span's points replaced, the envelope
+// before it arriving and after it going on as before, jumps where they differ (replaceSpan, as pastePoints). False:
+// nothing changed (no point in either span, or no room before limit)
+bool duplicateSpan(Lane& lane, int start, int end, int limit);
 
 }     // namespace Edit
+
+//---------------------------------------------------------
+//   duplicateTimeSelection
+//    Ctrl+D over a time selection (the owner, 2026-10-12: "select all the automations in a bar, like I'm able to do in
+//    ableton, and just spam Ctrl+D to copy it over bars"; mscore/automationlanes.h › Time selection): whole bars
+//    [start, end) of a part copied to [end, end + len), cut at the score's end (no measures added): every lane the part
+//    has (shown or not: Edit::duplicateSpan; a changed lane gets "edited" now, as the editor's edits) and its notes' own
+//    values (PerformanceTechnique::duplicateNoteValues), one undo step. Returns the next time selection: [end, cut)
+//    ({-1, -1}: nothing fits, nothing done)
+//---------------------------------------------------------
+
+std::pair<int, int> duplicateTimeSelection(MasterScore* score, const Part* part, int start, int end);
 
 }     // namespace Automation
 }     // namespace Ms

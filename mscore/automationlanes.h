@@ -57,7 +57,8 @@
 //     Draw Mode (the header's pencil): dragging draws steps as wide as the grid; with Alt the line follows the
 //       mouse, as breakpoints (straight or curved) within one MIDI step of the path (Automation::Edit::drawFree);
 //     Ctrl+C / Ctrl+X: the selected points; Ctrl+V: at the mouse's time in the lane under it (another
-//       parameter too, as Live allows), else after the copied ones; Ctrl+D: duplicated after themselves;
+//       parameter too, as Live allows), else after the copied ones; Ctrl+D: duplicated after themselves (without a
+//       time selection, below);
 //     right-click: Edit Value…, Delete, Step / Linear, Straight, Simplify Envelope (the selected points' span; none
 //       selected: the lane), Insert Shape ▸ sine, triangle, sawtooth, inverse, square (one cycle over the selected
 //       points' span, else the grid cell; the full range), Clear Lane, Hide Lane.
@@ -67,6 +68,17 @@
 //   Values are shown 0-127 (the map's controller scale; SSO's controls are 0-127); a clip tab's Velocity lane
 //   (liveclipmodel.h, offered first, always) in % (scale) or 1-127 (absolute), its right-click menu also choosing scale /
 //   absolute and "shape while playing" / "write into the notes" (asks first).
+//   Time selection (Live's; the owner, 2026-10-12: "select all the automations in a bar, like I'm able to do in ableton,
+//   and just spam Ctrl+D to copy it over bars"): the score's range selection (click a measure, Shift-click to extend) on
+//   one part whose lanes are shown, rounded out to whole bars, is shown as a light band over all of the part's rows.
+//   Ctrl+D (with the focus in the score or in a lane) duplicates everything of the part's lanes in it to the bars after
+//   it, one undo step (Automation::duplicateTimeSelection): every lane of the part, shown or not (the target bars' points
+//   replaced, the envelope around them as before), and each note's attack, transition, velocity and join onto the note
+//   at the same place (PerformanceTechnique::duplicateNoteValues); then the bars after are selected, so Ctrl+D again
+//   goes on, up to the score's end (no measures added). MuseScore 3 has no Ctrl+D shortcut (shortcuts.xml); the lanes
+//   take it (ShortcutOverride) only while there is a time selection or a lane has the focus. Points selected in a lane
+//   since the score's selection last changed take over: Ctrl+D then duplicates those (as before).
+//   Not here: a lane's rubber band as a time selection (it selects points).
 //   Under a library part's header row, first: the Velocity and Join lanes, a stem per note (notelanes.h).
 //   A lane Live's set has as it is (Automation::Lane::playedByLive) is marked "Live"; editing it here makes
 //   MuseScore's the newer one (automation.h).
@@ -148,6 +160,19 @@ class AutomationLanes : public QObject {
       void showLane(const Part* part, const QString& target, bool on = true);
       void setDrawMode(bool on) { _drawMode = on; }
 
+      // the time selection (above): whole bars [start, end) of a view part, from the score's range selection
+      struct TimeSelection {
+            const Part* part { nullptr };       // the view score's
+            int start { -1 };
+            int end { -1 };
+            int staffStart { -1 };              // the score's selection's staves
+            int staffEnd { -1 };
+            bool valid() const { return part && end > start; }
+            };
+      TimeSelection timeSelection() const;
+      // Ctrl+D over it (the bars after selected); false: no time selection
+      bool duplicateTimeSelection();
+
    private:
       friend class NoteLanes;       // (the Velocity and Join lanes: notelanes.h)
       enum class Drag : signed char { NONE, PENDING, MOVE, CURVE, RUBBER, DRAW, FREE, SEGMENT };
@@ -162,6 +187,7 @@ class AutomationLanes : public QObject {
       std::set<const Part*> _showAll;
       bool _drawMode { false };
       int _gridLevel { 0 };                                    // 0: the beat; -n: the beat / 2^n; 1: the bar
+      bool _timeOff { false };                                 // points selected since the score's selection changed
       bool _snapOn { true };
 
       // the lanes: as stored (cached by the metaTag's text), or the working copy during a gesture
@@ -220,6 +246,7 @@ class AutomationLanes : public QObject {
       void commit(const QString& what);
       std::vector<QString> shownTargets(const Part* master, const std::vector<Target>& all) const;
       double pixel() const;                                                  // a screen pixel in canvas units
+      double barX(int tick) const;                                           // a bar's start (its bar line)
       int gridTicks(int tick) const;
       int snap(int tick, bool fine) const;
       void changeGrid(int by);                                 // Ctrl+1 (-1), Ctrl+2 (+1)

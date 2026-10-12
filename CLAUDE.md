@@ -174,7 +174,10 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   (`Automation::merge`, newer edit wins, both changed: a dialog per lane). **Editor**: `mscore/automationlanes.*`
   (Continuous View, lanes under a selected library part, Live's gestures; header lists them), model
   `Automation::Edit`, one undo step per gesture (`undoWrite`); a Dynamics lane replaces the notation's CC1 from its
-  first point.
+  first point. **Time selection** (Live's): the score's range selection on a part whose lanes are shown (whole bars,
+  a light band over its rows); Ctrl+D (score or lane focus; MS3 has no Ctrl+D) copies every lane of the part and each
+  note's attack / transition / velocity / join to the bars after, one undo step, then selects them
+  (`Automation::duplicateTimeSelection`, `Edit::duplicateSpan`, `PerformanceTechnique::duplicateNoteValues`).
 - Percussion: `<Drum key name>` lists every hit of SSO's kits, one-drum patches and ensembles
   (`tools/soundlibraries/sso_percussion_hits.json`, from the owner's window pictures); a technique off at the
   defaults is `<Drum name default="off"/>` (no key, never played). The nine `"<patch> (all on)"` `<Patch>`es set
@@ -329,7 +332,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   plain set's Kontakt instances and each slot's Tune); every dump writes routemap.txt (route, lane, cents, bend range)
   and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 61 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches; 2026-10-08:
-  allArticulations, textLevel, calibrated), `tst_performancetechnique` 16 (2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
+  allArticulations, textLevel, calibrated), `tst_performancetechnique` 18 (2026-10-12: duplicateNoteValues, duplicateAutomation (Ctrl+D over a time selection); 2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
   rendered events, file round trip, undo; own velocity / join, the trace, the lanes' model `lanes`), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.
