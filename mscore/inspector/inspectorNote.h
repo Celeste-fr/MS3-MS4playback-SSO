@@ -34,6 +34,7 @@ class InspectorNote : public InspectorElementBase {
 
       void block(bool);
       void setTuningParts(const Note*);
+      void setPerformanceShown();
 
    private slots:
       void noteHeadSchemeChanged(int val);

@@ -136,7 +136,8 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `sso_legato_*.json` kept). There the five string sections' Performance
   Legato play each note's **Performance technique** (`libmscore/performancetechnique.h`: attack smooth / spiccato /
   accented, transition portamento / fingered / bowed, Auto from the notation; Inspector › Note, every selected note at
-  once, a choice resets the note's own values (`Note::undoChangeProperty`); each note's own velocity and join
+  once, shown only when one of them plays on a Performance patch as rendered (`NoteLane::onPerformancePatch`; values
+  kept), a choice resets the note's own values (`Note::undoChangeProperty`); each note's own velocity and join
   (`Pid::LIBRARY_VELOCITY` / `LIBRARY_JOIN`, in the same metaTag; a join down to the map's `legatoGap` still a transition),
   edited in the **Velocity and Join lanes** (`libmscore/notelane.h` the model, `mscore/notelanes.h` the lanes: a stem
   per note under the part's automation header, coloured by technique band or, on velocity techniques, by dynamic
@@ -329,7 +330,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   plain set's Kontakt instances and each slot's Tune); every dump writes routemap.txt (route, lane, cents, bend range)
   and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 61 with init and cleanup (2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches; 2026-10-08:
-  allArticulations, textLevel, calibrated), `tst_performancetechnique` 16 (2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
+  allArticulations, textLevel, calibrated), `tst_performancetechnique` 17 (2026-10-12: onPerformancePatch; 2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
   rendered events, file round trip, undo; own velocity / join, the trace, the lanes' model `lanes`), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.

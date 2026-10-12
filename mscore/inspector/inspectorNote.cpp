@@ -17,6 +17,7 @@
 #include "libmscore/beam.h"
 #include "libmscore/stem.h"
 #include "libmscore/hook.h"
+#include "libmscore/notelane.h"
 #include "libmscore/tuning.h"
 #include "libmscore/tuplet.h"
 #include "libmscore/staff.h"
@@ -188,6 +189,28 @@ void InspectorNote::setElement()
       n.fixedLine->setEnabled(n.fixed->isChecked());
       n.playWidget->setVisible(n.play->isChecked());
       setTuningParts(note);
+      setPerformanceShown();
+      }
+
+//---------------------------------------------------------
+//   setPerformanceShown
+//    Performance attack / transition act on a Performance legato patch only (performancetechnique.h): shown when one
+//    of the selected notes plays on one as playback renders it; hidden otherwise (the owner, 2026-10-12).
+//    A value set stays (it plays once the note is, say, slurred)
+//---------------------------------------------------------
+
+void InspectorNote::setPerformanceShown()
+      {
+      std::vector<Note*> notes;
+      for (Element* e : *inspector->el())
+            if (e->isNote())
+                  notes.push_back(toNote(e));
+      const bool on = !NoteLane::onPerformancePatch(std::vector<const Note*>(notes.begin(), notes.end())).empty();
+      for (QWidget* w : { static_cast<QWidget*>(n.label_performanceAttack), static_cast<QWidget*>(n.performanceAttack),
+                          static_cast<QWidget*>(n.resetPerformanceAttack),
+                          static_cast<QWidget*>(n.label_performanceTransition), static_cast<QWidget*>(n.performanceTransition),
+                          static_cast<QWidget*>(n.resetPerformanceTransition) })
+            w->setVisible(on);
       }
 
 //---------------------------------------------------------

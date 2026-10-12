@@ -157,6 +157,7 @@ class TestPerformanceTechnique : public QObject, public MTest
       void trace();
       void lanes();
       void avoidBadSamples();
+      void onPerformancePatch();
       };
 
 //---------------------------------------------------------
@@ -713,6 +714,60 @@ void TestPerformanceTechnique::avoidBadSamples()
       set({ n[1] }, Pid::LIBRARY_VELOCITY, 0);
       s->setMetaTag(Playback::metaTag, "notes/avoidBadSamples=0");
       QCOMPARE(render(s, lib)[74].velocity, 106);
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   onPerformancePatch
+//    which notes play on a Performance patch, as rendered (NoteLane::onPerformancePatch: the Inspector greys Performance
+//    attack / transition otherwise): at the defaults ([slurs] performance on) the slurred D5 E5 F5 and A5 B5, not the
+//    unslurred C5 and G5 (All techniques); a part's note as its master's; [slurs] performance off or no library: none
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::onPerformancePatch()
+      {
+      auto lib = sso();
+      MasterScore* s = score(false);
+      QVERIFY(lib && s);
+      s->setMetaTag(Playback::metaTag, QString());       // the defaults
+      std::vector<Note*> n = notes(s);
+      QCOMPARE(int(n.size()), 7);
+      const std::vector<const Note*> all(n.begin(), n.end());
+      auto pitches = [](const std::set<const Note*>& on) {
+            QStringList p;
+            for (const Note* x : on)
+                  p << QString::number(x->pitch());
+            p.sort();
+            return p.join(" ");
+            };
+      QCOMPARE(pitches(NoteLane::onPerformancePatch(all)), QString());        // no library
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      QCOMPARE(pitches(NoteLane::onPerformancePatch(all)), QString("74 76 77 81 83"));
+      QVERIFY(NoteLane::onPerformancePatch({ n[0] }).empty());
+      QVERIFY(NoteLane::onPerformancePatch({ n[4] }).empty());
+      QCOMPARE(int(NoteLane::onPerformancePatch({ n[0], n[1] }).size()), 1);
+      // a value set on an inert note stays and changes nothing there
+      set({ n[0] }, Pid::PERFORMANCE_ATTACK, int(Attack::ACCENTED));
+      QVERIFY(NoteLane::onPerformancePatch({ n[0] }).empty());
+      QCOMPARE(n[0]->performanceAttack(), Attack::ACCENTED);
+
+      // a part's notes: its master's
+      QList<Part*> parts;
+      parts.append(s->parts().at(0));
+      Score* nscore = new Score(s);
+      Excerpt* ex = new Excerpt(s);
+      ex->setPartScore(nscore);
+      ex->setParts(parts);
+      ex->setTitle(parts.front()->partName());
+      Excerpt::createExcerpt(ex);
+      s->excerpts().append(ex);
+      std::vector<Note*> pn = notes(nscore);
+      QCOMPARE(int(NoteLane::onPerformancePatch({ pn[0], pn[2] }).size()), 1);
+      QVERIFY(NoteLane::onPerformancePatch({ pn[2] }).count(pn[2]));
+
+      s->setMetaTag(Playback::metaTag, "slurs/performance=0");
+      QVERIFY(NoteLane::onPerformancePatch(all).empty());
       delete s;
       }
 
