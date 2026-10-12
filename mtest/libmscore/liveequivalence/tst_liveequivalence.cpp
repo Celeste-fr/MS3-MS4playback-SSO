@@ -45,6 +45,7 @@
 #include "libmscore/livetimingoverride.h"
 #include "libmscore/note.h"
 #include "libmscore/measure.h"
+#include "libmscore/note.h"
 #include "libmscore/plainliveset.h"
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
@@ -105,6 +106,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveMarcatoLevel();
       void plainLayout();
       void plainTuned();
+      void plainOwnTechnique();
       void plainSet();
       void plainSetLinked();
       void plainSetReadBack();
@@ -1173,6 +1175,69 @@ void TestLiveEquivalence::plainLayout()
       QCOMPARE(k2.techniques[1].notes[0].length, tl.units(480));
       delete score;
       SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   plainOwnTechnique
+//    a note's own technique (the Inspector's Technique, Note::libraryTechnique) reaches Live: the plain set puts the
+//    note on that technique's track (its switch before it in the renderer's events, Live's clips the same events)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainOwnTechnique()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Tremolo' value='11' techniques='tremolo'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "<Articulation name='Pizzicato' value='60' techniques='pizzicato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Note* own = nullptr;
+      for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg && !own; seg = seg->next1(SegmentType::ChordRest))
+            for (int track = 0; track < score->ntracks() && !own; ++track)
+                  if (seg->element(track) && seg->element(track)->isChord() && !SoundLib::ownTechniques(toChord(seg->element(track))->upNote()).empty())
+                        own = toChord(seg->element(track))->upNote();
+      QVERIFY(own);
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const int start = tl.units(own->chord()->tick().ticks());
+      // each technique's notes, and the technique of the note at own's place
+      auto layout = [&](QString* ownTechnique) {
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, tl);
+            std::map<QString, int> count;
+            if (l.sections.size() != 1)
+                  return count;
+            for (const PlainLiveSet::Technique& t : l.sections[0].parts[0].kontakts[0].techniques) {
+                  for (const LiveClips::Note& n : t.notes) {
+                        if (n.pitch == own->ppitch() && n.start == start)
+                              *ownTechnique = t.name;
+                        ++count[t.name];
+                        }
+                  }
+            return count;
+            };
+      QString before;
+      std::map<QString, int> autoCount = layout(&before);
+      QVERIFY(!before.isEmpty() && before != "Pizzicato");
+      score->startCmd();
+      own->undoChangeProperty(Pid::LIBRARY_TECHNIQUE, QString("Violin|Pizzicato"));
+      score->endCmd();
+      QString after;
+      std::map<QString, int> ownCount = layout(&after);
+      QCOMPARE(after, QString("Pizzicato"));
+      QCOMPARE(ownCount["Pizzicato"], autoCount["Pizzicato"] + 1);
+      QCOMPARE(ownCount[before], autoCount[before] - 1);
+      delete score;
       }
 
 //---------------------------------------------------------

@@ -368,6 +368,7 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::LIBRARY_JOIN,              P_TYPE::INT,            true,  "libraryJoin",            DUMMY_QT_TRANSLATE_NOOP("propertyName", "library join")                                  },
       { Pid::LIVE_START,                P_TYPE::REAL,           true,  "liveStart",              DUMMY_QT_TRANSLATE_NOOP("propertyName", "start from Live")                               },
       { Pid::LIVE_END,                  P_TYPE::REAL,           true,  "liveEnd",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "end from Live")                                 },
+      { Pid::LIBRARY_TECHNIQUE,         P_TYPE::STRING,         true,  "libraryTechnique",       DUMMY_QT_TRANSLATE_NOOP("propertyName", "technique")                                     },
 
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };

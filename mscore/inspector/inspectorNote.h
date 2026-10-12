@@ -34,6 +34,15 @@ class InspectorNote : public InspectorElementBase {
 
       void block(bool);
       void setTuningParts(const Note*);
+      std::vector<Note*> selectedNotes() const;
+      void setTechniques();
+      void setPerformanceShown();
+      void techniqueChosen(int index);
+
+      // Note › Technique (the note's own, Note::libraryTechnique): made here, its items the selected notes' own
+      QLabel* techniqueLabel { nullptr };
+      QComboBox* technique { nullptr };
+      ResetButton* resetTechnique { nullptr };
 
    private slots:
       void noteHeadSchemeChanged(int val);

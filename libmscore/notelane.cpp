@@ -15,6 +15,7 @@
 #include "note.h"
 #include "part.h"
 #include "partplayback.h"
+#include "repeatlist.h"
 #include "score.h"
 #include "synthesizerstate.h"
 
@@ -72,6 +73,56 @@ std::map<const Part*, std::vector<Mark>> marks(MasterScore* score)
             }
       for (auto& p : out)
             std::stable_sort(p.second.begin(), p.second.end(), [](const Mark& a, const Mark& b) { return a.tick < b.tick; });
+      return out;
+      }
+
+std::set<const Note*> onPerformancePatch(const std::vector<const Note*>& notes)
+      {
+      std::set<const Note*> out;
+      if (notes.empty() || !notes.front()->score() || !SoundLib::current())     // (no library: none renders on one)
+            return out;
+      MasterScore* master = notes.front()->score()->masterScore();
+      // each note as the renderer sees it: the master score's, its tie chain's first
+      std::map<const Note*, std::vector<const Note*>> played;     // master note -> the notes asked
+      for (const Note* n : notes) {
+            const Note* m = n;
+            if (n->score() != master) {
+                  m = nullptr;
+                  for (ScoreElement* l : n->linkList())
+                        if (l->isNote() && static_cast<Note*>(l)->score() == master)
+                              m = static_cast<Note*>(l);
+                  if (!m)
+                        continue;
+                  }
+            m = m->firstTiedNote();
+            played[m].push_back(n);
+            }
+      // (as Seq renders: its chunks)
+      MidiRenderer midi(master);
+      midi.setMinChunkSize(10);
+      std::set<int> chunkStarts;
+      std::vector<MidiRenderer::Chunk> chunks;
+      for (const auto& p : played) {
+            const MidiRenderer::Chunk ch = midi.getChunkAt(master->repeatList().tick2utick(p.first->chord()->tick().ticks()));
+            if (ch && chunkStarts.insert(ch.utick1()).second)
+                  chunks.push_back(ch);
+            }
+      std::vector<MidiRenderer::LibTrace> trace;
+      midi.setLibraryTrace(&trace);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx { ss };
+      ctx.metronome = false;
+      for (const MidiRenderer::Chunk& ch : chunks) {
+            EventMap events;
+            midi.renderChunk(ch, &events, ctx);
+            }
+      for (const MidiRenderer::LibTrace& t : trace) {
+            if (t.performance == MidiRenderer::LibPerformance::NONE)
+                  continue;
+            auto it = played.find(t.note);
+            if (it != played.end())
+                  out.insert(it->second.begin(), it->second.end());
+            }
       return out;
       }
 

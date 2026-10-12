@@ -17,11 +17,16 @@
 #include "libmscore/beam.h"
 #include "libmscore/stem.h"
 #include "libmscore/hook.h"
+#include "libmscore/notelane.h"
+#include "libmscore/soundlibrary.h"
 #include "libmscore/tuning.h"
 #include "libmscore/tuplet.h"
 #include "libmscore/staff.h"
 #include "inspector.h"
 #include "inspectorNote.h"
+#include "resetButton.h"
+
+#include <algorithm>
 
 namespace Ms {
 
@@ -141,6 +146,31 @@ InspectorNote::InspectorNote(QWidget* parent)
 
       connect(n.noteHeadScheme, SIGNAL(currentIndexChanged(int)), SLOT(noteHeadSchemeChanged(int)));
 
+      // Technique (the note's own, SoundLib::chooseOwn) above the Performance attack and transition
+      techniqueLabel = new QLabel(tr("Technique:"), n.playWidget);
+      technique = new QComboBox(n.playWidget);
+      technique->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+      technique->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+      technique->setMinimumContentsLength(6);
+      technique->setToolTip(tr("The library's technique the note plays. Auto: what the notation and the playback settings choose"));
+      technique->setAccessibleName(tr("Technique"));
+      techniqueLabel->setBuddy(technique);
+      resetTechnique = new ResetButton(n.playWidget);
+      resetTechnique->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+      resetTechnique->setMinimumSize(10, 0);
+      resetTechnique->setAccessibleName(tr("Reset 'Technique' value"));
+      n.gridLayout_2->addWidget(techniqueLabel, 7, 0);
+      n.gridLayout_2->addWidget(technique, 7, 1);
+      n.gridLayout_2->addWidget(resetTechnique, 7, 2);
+      n.gridLayout_2->addWidget(n.label_performanceAttack, 8, 0);
+      n.gridLayout_2->addWidget(n.performanceAttack, 8, 1);
+      n.gridLayout_2->addWidget(n.resetPerformanceAttack, 8, 2);
+      n.gridLayout_2->addWidget(n.label_performanceTransition, 9, 0);
+      n.gridLayout_2->addWidget(n.performanceTransition, 9, 1);
+      n.gridLayout_2->addWidget(n.resetPerformanceTransition, 9, 2);
+      connect(technique, QOverload<int>::of(&QComboBox::activated), this, &InspectorNote::techniqueChosen);
+      connect(resetTechnique, &ResetButton::resetClicked, this, [this] { techniqueChosen(-1); });
+
       connect(n.dot1,     SIGNAL(clicked()),     SLOT(dot1Clicked()));
       connect(n.dot2,     SIGNAL(clicked()),     SLOT(dot2Clicked()));
       connect(n.dot3,     SIGNAL(clicked()),     SLOT(dot3Clicked()));
@@ -190,6 +220,118 @@ void InspectorNote::setElement()
       n.fixedLine->setEnabled(n.fixed->isChecked());
       n.playWidget->setVisible(n.play->isChecked());
       setTuningParts(note);
+      setTechniques();
+      setPerformanceShown();
+      }
+
+//---------------------------------------------------------
+//   selectedNotes
+//---------------------------------------------------------
+
+std::vector<Note*> InspectorNote::selectedNotes() const
+      {
+      std::vector<Note*> notes;
+      for (Element* e : *inspector->el())
+            if (e->isNote())
+                  notes.push_back(toNote(e));
+      return notes;
+      }
+
+//---------------------------------------------------------
+//   setTechniques
+//    Technique: Auto, then the techniques every selected note's instrument has in the library's map (SoundLib::
+//    ownTechniques: those that sound); the row is hidden when no selected note plays the library. The selected notes'
+//    own value; blank when they differ (as MuseScore's other values of several elements)
+//---------------------------------------------------------
+
+void InspectorNote::setTechniques()
+      {
+      const std::vector<Note*> notes = selectedNotes();
+      std::vector<std::pair<QString, QString>> common;
+      bool any = false;
+      bool first = true;
+      for (const Note* note : notes) {
+            const std::vector<std::pair<QString, QString>> own = SoundLib::ownTechniques(note);
+            any |= !own.empty();
+            if (first)
+                  common = own;
+            else {
+                  std::vector<std::pair<QString, QString>> both;
+                  for (const auto& t : common)
+                        if (std::find(own.begin(), own.end(), t) != own.end())
+                              both.push_back(t);
+                  common = both;
+                  }
+            first = false;
+            }
+      for (QWidget* w : { static_cast<QWidget*>(techniqueLabel), static_cast<QWidget*>(technique), static_cast<QWidget*>(resetTechnique) })
+            w->setVisible(any);
+      if (!any)
+            return;
+      const QSignalBlocker block(technique);
+      technique->clear();
+      technique->addItem(tr("Auto"), QString());
+      for (const auto& t : common)
+            technique->addItem(t.second, t.first);
+      bool same = true;
+      bool own = false;
+      for (const Note* note : notes) {
+            same &= note->libraryTechnique() == notes.front()->libraryTechnique();
+            own |= !note->libraryTechnique().isEmpty();
+            }
+      int index = -1;
+      if (same) {
+            const QString value = notes.front()->libraryTechnique();
+            index = technique->findData(value);
+            if (index < 0) {        // (a technique its patches don't have: plays Auto)
+                  technique->addItem(tr("%1 (not on this part: plays Auto)").arg(value.section('|', 1)), value);
+                  index = technique->count() - 1;
+                  }
+            }
+      technique->setCurrentIndex(index);
+      resetTechnique->setEnabled(own);
+      }
+
+//---------------------------------------------------------
+//   techniqueChosen
+//    every selected note at once, one undo step; then what shows follows (a Performance technique shows the
+//    Performance attack and transition)
+//---------------------------------------------------------
+
+void InspectorNote::techniqueChosen(int index)
+      {
+      const std::vector<Note*> notes = selectedNotes();
+      if (notes.empty())
+            return;
+      const QString value = index < 0 ? QString() : technique->itemData(index).toString();
+      Score* score = notes.front()->score();
+      score->startCmd();
+      for (Note* note : notes)
+            if (note->libraryTechnique() != value)
+                  note->undoChangeProperty(Pid::LIBRARY_TECHNIQUE, value);
+      inspector->setInspectorEdit(true);
+      score->endCmd();
+      setTechniques();
+      setPerformanceShown();
+      }
+
+//---------------------------------------------------------
+//   setPerformanceShown
+//    Performance attack / transition act on a Performance legato patch only (performancetechnique.h): shown when one
+//    of the selected notes plays on one as playback renders it (its own technique included); hidden otherwise (the
+//    owner, 2026-10-12: "the performance notes would be unavailable and the technique drop down shows up instead").
+//    A value set stays (it plays once the note is, say, slurred)
+//---------------------------------------------------------
+
+void InspectorNote::setPerformanceShown()
+      {
+      const std::vector<Note*> notes = selectedNotes();
+      const bool on = !NoteLane::onPerformancePatch(std::vector<const Note*>(notes.begin(), notes.end())).empty();
+      for (QWidget* w : { static_cast<QWidget*>(n.label_performanceAttack), static_cast<QWidget*>(n.performanceAttack),
+                          static_cast<QWidget*>(n.resetPerformanceAttack),
+                          static_cast<QWidget*>(n.label_performanceTransition), static_cast<QWidget*>(n.performanceTransition),
+                          static_cast<QWidget*>(n.resetPerformanceTransition) })
+            w->setVisible(on);
       }
 
 //---------------------------------------------------------

@@ -18,6 +18,7 @@
 //---------------------------------------------------------
 
 #include <map>
+#include <set>
 #include <vector>
 #include <QString>
 
@@ -52,6 +53,12 @@ struct Mark {
 
 // each master part's library notes, by tick (rendered as playback renders: 10-measure chunks)
 std::map<const Part*, std::vector<Mark>> marks(MasterScore* score);
+
+// which of these notes (any score's: a part's are its master notes') play on a Performance legato patch
+// (performancetechnique.h: their attack / transition, their join act there only), as playback renders them: the
+// chunks holding them only (each note's first time through the repeats; a tied note as its chain's first). The
+// Inspector greys Note › Performance attack / transition when none does (the owner, 2026-10-12)
+std::set<const Note*> onPerformancePatch(const std::vector<const Note*>& notes);
 
 struct Band {
       enum class Kind : char { ATTACK, TRANSITION, DYNAMIC };

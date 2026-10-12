@@ -92,7 +92,7 @@ class TestPerformanceTechnique : public QObject, public MTest
             return list;
             }
       // every selected note at once, one undo step (as the Inspector does)
-      static void set(std::vector<Note*> list, Pid pid, int value)
+      static void set(std::vector<Note*> list, Pid pid, const QVariant& value)
             {
             Score* s = list.front()->score();
             s->startCmd();
@@ -157,6 +157,8 @@ class TestPerformanceTechnique : public QObject, public MTest
       void trace();
       void lanes();
       void avoidBadSamples();
+      void onPerformancePatch();
+      void ownTechnique();
       };
 
 //---------------------------------------------------------
@@ -714,6 +716,150 @@ void TestPerformanceTechnique::avoidBadSamples()
       s->setMetaTag(Playback::metaTag, "notes/avoidBadSamples=0");
       QCOMPARE(render(s, lib)[74].velocity, 106);
       delete s;
+      }
+
+//---------------------------------------------------------
+//   onPerformancePatch
+//    which notes play on a Performance patch, as rendered (NoteLane::onPerformancePatch: the Inspector greys Performance
+//    attack / transition otherwise): at the defaults ([slurs] performance on) the slurred D5 E5 F5 and A5 B5, not the
+//    unslurred C5 and G5 (All techniques); a part's note as its master's; [slurs] performance off or no library: none
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::onPerformancePatch()
+      {
+      auto lib = sso();
+      MasterScore* s = score(false);
+      QVERIFY(lib && s);
+      s->setMetaTag(Playback::metaTag, QString());       // the defaults
+      std::vector<Note*> n = notes(s);
+      QCOMPARE(int(n.size()), 7);
+      const std::vector<const Note*> all(n.begin(), n.end());
+      auto pitches = [](const std::set<const Note*>& on) {
+            QStringList p;
+            for (const Note* x : on)
+                  p << QString::number(x->pitch());
+            p.sort();
+            return p.join(" ");
+            };
+      QCOMPARE(pitches(NoteLane::onPerformancePatch(all)), QString());        // no library
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      QCOMPARE(pitches(NoteLane::onPerformancePatch(all)), QString("74 76 77 81 83"));
+      QVERIFY(NoteLane::onPerformancePatch({ n[0] }).empty());
+      QVERIFY(NoteLane::onPerformancePatch({ n[4] }).empty());
+      QCOMPARE(int(NoteLane::onPerformancePatch({ n[0], n[1] }).size()), 1);
+      // a value set on an inert note stays and changes nothing there
+      set({ n[0] }, Pid::PERFORMANCE_ATTACK, int(Attack::ACCENTED));
+      QVERIFY(NoteLane::onPerformancePatch({ n[0] }).empty());
+      QCOMPARE(n[0]->performanceAttack(), Attack::ACCENTED);
+
+      // a part's notes: its master's
+      QList<Part*> parts;
+      parts.append(s->parts().at(0));
+      Score* nscore = new Score(s);
+      Excerpt* ex = new Excerpt(s);
+      ex->setPartScore(nscore);
+      ex->setParts(parts);
+      ex->setTitle(parts.front()->partName());
+      Excerpt::createExcerpt(ex);
+      s->excerpts().append(ex);
+      std::vector<Note*> pn = notes(nscore);
+      QCOMPARE(int(NoteLane::onPerformancePatch({ pn[0], pn[2] }).size()), 1);
+      QVERIFY(NoteLane::onPerformancePatch({ pn[2] }).count(pn[2]));
+
+      s->setMetaTag(Playback::metaTag, "slurs/performance=0");
+      QVERIFY(NoteLane::onPerformancePatch(all).empty());
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   ownTechnique
+//    a note's own technique (Note::libraryTechnique, the Inspector's Technique): the list (sounding articulations, the
+//    Performance patch's with its name), the rendered choice replaced (the unslurred C5 on Pizzicato, then on the
+//    Performance Legato: an attack there, so its Performance fields apply), every selected note in one undo step, the
+//    metaTag through a save and load, a technique the part doesn't have plays Auto, a tied note as its chain's first
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::ownTechnique()
+      {
+      auto lib = sso();
+      MasterScore* s = score(false);
+      QVERIFY(lib && s);
+      s->setMetaTag(Playback::metaTag, QString());       // the defaults
+      std::vector<Note*> n = notes(s);
+      QVERIFY(SoundLib::ownTechniques(n[0]).empty());    // (no library)
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      auto traced = [&](MasterScore* sc) {
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> t;
+            PlaybackAudit::render(sc, &events, &t);
+            std::map<int, QString> byPitch;
+            for (const MidiRenderer::LibTrace& e : t)
+                  byPitch.emplace(e.note->pitch(), e.patch->name + "|" + e.choice.articulation->name
+                                  + (e.performance == MidiRenderer::LibPerformance::NONE ? "" : " perf"));
+            return byPitch;
+            };
+      const std::vector<std::pair<QString, QString>> list = SoundLib::ownTechniques(n[0]);
+      auto has = [&](const QString& key) {
+            for (const auto& t : list)
+                  if (t.first == key)
+                        return true;
+            return false;
+            };
+      QVERIFY(has("Violins 1|Long") && has("Violins 1|Pizzicato") && has("Violins 1 - Performance|Legato"));
+      QVERIFY(!has("Violins 1|Long Sul G"));             // (expect="silent")
+      for (const auto& t : list)
+            if (t.first == "Violins 1 - Performance|Legato")
+                  QCOMPARE(t.second, QString("Legato (Violins 1 - Performance)"));
+
+      QCOMPARE(traced(s)[72], QString("Violins 1|Long"));
+      const QString autoD5 = traced(s)[74];
+      set({ n[0], n[4] }, Pid::LIBRARY_TECHNIQUE, QString("Violins 1|Pizzicato"));
+      QCOMPARE(traced(s)[72], QString("Violins 1|Pizzicato"));
+      QCOMPARE(traced(s)[79], QString("Violins 1|Pizzicato"));
+      QCOMPARE(traced(s)[74], autoD5);
+      s->undoRedo(true, 0);                                // one step: both back
+      QVERIFY(n[0]->libraryTechnique().isEmpty() && n[4]->libraryTechnique().isEmpty());
+      QCOMPARE(traced(s)[72], QString("Violins 1|Long"));
+      s->undoRedo(false, 0);
+      QCOMPARE(n[4]->libraryTechnique(), QString("Violins 1|Pizzicato"));
+
+      set({ n[0] }, Pid::LIBRARY_TECHNIQUE, QString("Violins 1 - Performance|Legato"));
+      QCOMPARE(traced(s)[72], QString("Violins 1 - Performance|Legato perf"));
+      QVERIFY(NoteLane::onPerformancePatch({ n[0] }).count(n[0]));
+      set({ n[0] }, Pid::PERFORMANCE_ATTACK, int(Attack::SMOOTH));
+      const int smooth = render(s, lib)[72].velocity;
+      set({ n[0] }, Pid::PERFORMANCE_ATTACK, int(Attack::ACCENTED));
+      QVERIFY2(render(s, lib)[72].velocity > smooth, qPrintable(QString::number(smooth)));    // (its attack applies)
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+
+      // a technique the part's patches don't have: Auto
+      set({ n[1] }, Pid::LIBRARY_TECHNIQUE, QString("Celli|Pizzicato"));
+      QCOMPARE(traced(s)[74], autoD5);
+
+      // the metaTag
+      QVERIFY(saveScore(s, "performancetechnique-tech.mscx"));
+      const QString text = fileText("performancetechnique-tech.mscx");
+      QVERIFY2(text.contains("&quot;technique&quot;:&quot;Violins 1 - Performance|Legato&quot;"),
+               qPrintable(text.section("<metaTag name=\"performanceTechniques\">", 1).left(400)));
+      QVERIFY(!text.contains("<libraryTechnique>"));
+      MasterScore* again = readCreatedScore("performancetechnique-tech.mscx");
+      QVERIFY(again);
+      std::vector<Note*> m = notes(again);
+      QCOMPARE(m[0]->libraryTechnique(), QString("Violins 1 - Performance|Legato"));
+      QCOMPARE(m[0]->performanceAttack(), Attack::ACCENTED);
+      QCOMPARE(m[4]->libraryTechnique(), QString("Violins 1|Pizzicato"));
+      QVERIFY(m[2]->libraryTechnique().isEmpty());
+      again->rebuildMidiMapping();
+      QCOMPARE(traced(again)[79], QString("Violins 1|Pizzicato"));
+      QVERIFY(saveScore(again, "performancetechnique-tech2.mscx"));
+      QCOMPARE(fileText("performancetechnique-tech2.mscx"), text);
+      delete again;
+      delete s;
+      SoundLib::setCurrent(nullptr);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
       }
 
 QTEST_MAIN(TestPerformanceTechnique)

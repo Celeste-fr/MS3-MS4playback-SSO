@@ -293,6 +293,7 @@ class Note final : public Element {
       // its timing as set in Live's clip (livetimingoverride.h): ms after its written start / end; AUTO: as rendered
       double _liveStart { LiveTimingOverride::AUTO };
       double _liveEnd { LiveTimingOverride::AUTO };
+      QString _libraryTechnique;        // its own technique (SoundLib::chooseOwn); empty: Auto
 
       char _offTimeType    { 0 };    // compatibility only 1 - user(absolute), 2 - offset (%)
       char _onTimeType     { 0 };    // compatibility only 1 - user, 2 - offset
@@ -513,6 +514,8 @@ class Note final : public Element {
       void setLiveStart(double ms)                                        { _liveStart = ms;               }
       double liveEnd() const                                              { return _liveEnd;               }
       void setLiveEnd(double ms)                                          { _liveEnd = ms;                 }
+      const QString& libraryTechnique() const                             { return _libraryTechnique;      }
+      void setLibraryTechnique(const QString& t)                          { _libraryTechnique = t;         }
 
       void setOnTimeOffset(int v);
       void setOffTimeOffset(int v);

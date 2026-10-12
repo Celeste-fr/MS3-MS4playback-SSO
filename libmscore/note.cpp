@@ -732,6 +732,7 @@ Note::Note(const Note& n, bool link)
       _libraryJoin = n._libraryJoin;
       _liveStart = n._liveStart;
       _liveEnd = n._liveEnd;
+      _libraryTechnique = n._libraryTechnique;
       _headScheme        = n._headScheme;
       _headGroup         = n._headGroup;
       _headType          = n._headType;
@@ -1471,6 +1472,8 @@ void Note::write(XmlWriter& xml) const
                   xml.tag("liveStart", _liveStart);
             if (LiveTimingOverride::isSet(_liveEnd))
                   xml.tag("liveEnd", _liveEnd);
+            if (!_libraryTechnique.isEmpty())
+                  xml.tag("libraryTechnique", _libraryTechnique);
             }
 
       for (Spanner* e : _spannerFor)
@@ -1615,6 +1618,8 @@ bool Note::readProperties(XmlReader& e)
             setProperty(Pid::LIVE_START, e.readDouble());
       else if (tag == "liveEnd")
             setProperty(Pid::LIVE_END, e.readDouble());
+      else if (tag == "libraryTechnique")
+            _libraryTechnique = e.readElementText();
       else if (tag == "play")
             setPlay(e.readInt());
       else if (tag == "tuning")
@@ -3130,6 +3135,8 @@ QVariant Note::getProperty(Pid propertyId) const
                   return _liveStart;
             case Pid::LIVE_END:
                   return _liveEnd;
+            case Pid::LIBRARY_TECHNIQUE:
+                  return _libraryTechnique;
             case Pid::PLAY:
                   return play();
             case Pid::LINE:
@@ -3249,6 +3256,10 @@ bool Note::setProperty(Pid propertyId, const QVariant& v)
                   _liveEnd = LiveTimingOverride::clampMs(v.toDouble());
                   score()->setPlaylistDirty();
                   return true;
+            case Pid::LIBRARY_TECHNIQUE:
+                  _libraryTechnique = v.toString();
+                  score()->setPlaylistDirty();
+                  return true;
             case Pid::VISIBLE: {
                   setVisible(v.toBool());
                   if (m)
@@ -3329,6 +3340,8 @@ QVariant Note::propertyDefault(Pid propertyId) const
             case Pid::LIVE_START:
             case Pid::LIVE_END:
                   return LiveTimingOverride::AUTO;
+            case Pid::LIBRARY_TECHNIQUE:
+                  return QString();       // Auto
             case Pid::PLAY:
                   return true;
             case Pid::FIXED:

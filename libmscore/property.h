@@ -376,6 +376,7 @@ enum class Pid : short {
       LIBRARY_JOIN,           // ms the note before overlaps it (< 0: a gap) on a Performance patch (JOIN_AUTO: as rendered); likewise
       LIVE_START,             // ms a library note starts after its written start, as set in Live's clip (livetimingoverride.h; AUTO: as rendered)
       LIVE_END,               // ms it ends after its written end, likewise
+      LIBRARY_TECHNIQUE,      // a note's own technique on a library part ("<patch>|<articulation>", SoundLib::chooseOwn; empty: Auto); likewise
 
       END
       };
