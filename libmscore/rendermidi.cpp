@@ -1422,6 +1422,52 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (db != 0.0)
                               libLevels[note].volumeDb += db;
                         };
+                  // [levels] realRange (contextlevel.h › Real range): the note's CC11 by the dynamics CC in force as written
+                  // (realDb at its pitch), less its part's R (the patches' volumes play it: TrackDelays::patchGain); a
+                  // short whose calibrated velocity is capped (127 and still under the level it should have, or 1 and still
+                  // over it) gets the rest by CC11 (realExtra; not with the note's own velocity, the Velocity lane)
+                  const bool rangeOn = li && ContextLevel::realRange(score) && library->dynamicsCC >= 0
+                                       && library->dynamicsCC != CTRL_EXPRESSION;
+                  auto realRangeLevel = [&](const Note* note, const SoundLib::Choice& c, int velocity, const Ms4::NoteResult& r, int dynLevel) {
+                        if (!rangeOn || !c)
+                              return;
+                        const SoundLib::LibInstrument* patch = libPatches[c.patch];
+                        if (!ContextLevel::hasRealRange(patch))
+                              return;
+                        const std::pair<const SoundLib::LibInstrument*, int> key { patch, note->ppitch() };
+                        auto t = libRangeTables.find(key);
+                        if (t == libRangeTables.end()) {
+                              auto table = std::make_shared<std::vector<double>>(128, 0.0);
+                              for (int x = 0; x < 128; ++x)
+                                    (*table)[size_t(x)] = ContextLevel::realRangeDb(*patch, x, note->ppitch());
+                              t = libRangeTables.insert({ key, table }).first;
+                              }
+                        LibLevel& l = libLevels[note];
+                        l.range = t->second;
+                        l.rangePart = st1->part();
+                        auto d = libTrackDelays.find(st1->part());
+                        l.rangeTop = d == libTrackDelays.end() ? 0.0 : d->second.rangeTop;
+                        l.realExtra = 0.0;
+                        if (velocity <= 0 || !libHeld || note->libraryVelocity() > 0 || !lp->velocityDynamics.contains(c.base))
+                              return;
+                        const SoundLib::DynamicsCurve* cp = cal->curve(patch->name, c.articulation->value);
+                        const SoundLib::DynamicsCurve* rp = cal->curve(libPatches[libHeld.patch]->name, libHeld.articulation->value);
+                        if (!cp || !rp || (cp->drivenBy != "velocity" && cp->drivenBy != "both"))
+                              return;
+                        const SoundLib::DynamicsCurve own = cp->atPitch(note->ppitch());
+                        const SoundLib::DynamicsCurve ref = rp->atPitch(note->ppitch());
+                        if (own.points.size() < 2 || ref.points.size() < 2)
+                              return;
+                        const bool byEar = own.byEar() && ref.byEar();
+                        const int cc = Ms4::expressionLevel(dynLevel);
+                        // (what libVelocity and marcatoLevel aimed at: the held note at the dynamic, MS4's offset, the levels)
+                        const double target = (byEar ? ref.perceivedAt(cc) : ref.at(cc)) + 40.0 * std::log10(r.share)
+                                              + levelOf(note) + quickDb(note, c);
+                        const double reached = byEar ? own.perceivedAt(velocity) : own.at(velocity);
+                        const double miss = target - reached;
+                        if ((velocity >= 127 && miss > 0) || (velocity <= 1 && miss < 0))
+                              l.realExtra = miss;
+                        };
                   auto librarySwitch =[&](const Note* note, const std::vector<Ms4::ArtRef>& noteArts, int start, int length) {
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
                         if (c)
@@ -1805,6 +1851,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libNote.velocity = libVelocity(note, libChoice, r, level);
                                     marcatoLevel(note, libChoice, libNote.velocity, level);
                                     trackLevel(note, libChoice);
+                                    realRangeLevel(note, libChoice, libNote.velocity, r, level);
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
@@ -1989,6 +2036,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     trackLevel(note, libChoice);
+                                    realRangeLevel(note, libChoice, libNote.velocity, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
                                     }
@@ -3017,27 +3065,42 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
       const int utick2 = chunk.utick2();
       // (a library whose dynamics are CC11: no plain volume to add volumeDb to)
       const bool volume = library && library->dynamicsCC != CTRL_EXPRESSION;
+      // [levels] realRange: CC11 follows the dynamics CC in force (as written)
+      const int dynamicsCC = library && library->dynamicsCC >= 0 && library->dynamicsCC != CTRL_EXPRESSION ? library->dynamicsCC : -1;
       auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
       // the controllers a level sets
       auto controllersOf = [&](const LibLevel& l) {
             std::vector<int> cs;
             if (l.controller >= 0)
                   cs.push_back(l.controller);
-            if (volume && l.volumeDb != 0.0 && l.controller != CTRL_EXPRESSION)
+            if (volume && (l.volumeDb != 0.0 || (l.range && dynamicsCC >= 0)) && l.controller != CTRL_EXPRESSION)
                   cs.push_back(CTRL_EXPRESSION);
             return cs;
             };
       auto fallbackOf = [&](const LibLevel& l, int controller) {
             return controller == l.controller ? l.fallback : (library ? qBound(0, library->expressionValue, 127) : 127);
             };
-      auto mapOf = [&](const LibLevel& l, int controller, int x) {
+      // x the controller's value in force, dyn the dynamics CC's (as written: realRange)
+      auto mapOf = [&](const LibLevel& l, int controller, int x, int dyn) {
             int y = controller == l.controller && l.map ? l.map(x) : x;
-            if (volume && controller == CTRL_EXPRESSION && l.volumeDb != 0.0 && y > 0)
-                  y = qBound(1, int(std::lround(y * std::pow(10.0, l.volumeDb / 20.0))), 127);
+            double db = l.volumeDb;
+            if (volume && controller == CTRL_EXPRESSION && l.range && dynamicsCC >= 0) {
+                  const double real = (*l.range)[size_t(qBound(0, dyn, 127))] + l.realExtra;
+                  db += real - l.rangeTop;
+                  if (libRangeTops && l.rangePart) {
+                        auto t = libRangeTops->find(l.rangePart);
+                        if (t == libRangeTops->end())
+                              (*libRangeTops)[l.rangePart] = real;
+                        else
+                              t->second = std::max(t->second, real);
+                        }
+                  }
+            if (volume && controller == CTRL_EXPRESSION && db != 0.0 && y > 0)
+                  y = qBound(1, int(std::lround(y * std::pow(10.0, db / 20.0))), 127);
             return y;
             };
       std::map<std::pair<int, int>, int> inForce;           // route, controller -> the value in force (as written)
-      // the value in force at it (from before the chunk, or fallback)
+      // the value in force at it (from before the chunk, or fallback; not a value a level set)
       auto valueAt = [&](EventMap::iterator it, int route, int controller, int fallback) {
             auto f = inForce.find({ route, controller });
             if (f != inForce.end())
@@ -3046,8 +3109,8 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             while (it != events->begin()) {
                   --it;
                   const NPlayEvent& e = it->second;
-                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && e.controller() == controller
-                      && routeOf(e) == route) {
+                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && !e.libraryLevel()
+                      && e.controller() == controller && routeOf(e) == route) {
                         v = e.value();
                         break;
                         }
@@ -3055,11 +3118,20 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             inForce[{ route, controller }] = v;
             return v;
             };
+      auto dynAt = [&](EventMap::iterator it, int route) {
+            return dynamicsCC >= 0 ? valueAt(it, route, dynamicsCC, 64) : 64;
+            };
       auto controllerEvent = [](const NPlayEvent& like, int controller, int value) {
             NPlayEvent c(ME_CONTROLLER, like.channel(), controller, value);
             c.setExternal(like.extPort(), like.extChannel());
             c.setLibraryPatch(like.libraryPatch());
             c.setOriginatingStaff(like.getOriginatingStaff());
+            return c;
+            };
+      // a mapped CC11 value (flagged: valueAt and a later chunk take the value as written from before it)
+      auto levelEvent = [&](const NPlayEvent& like, int controller, int value) {
+            NPlayEvent c = controllerEvent(like, controller, value);
+            c.setLibraryLevel(controller == CTRL_EXPRESSION);
             return c;
             };
       struct Active { const LibLevel* level; int tick; NPlayEvent like; };
@@ -3077,22 +3149,32 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   return;
             for (int controller : controllersOf(*level)) {
                   const int v = valueAt(it, route, controller, fallbackOf(*level, controller));
-                  events->insert(it, std::make_pair(t, controllerEvent(like, controller, mapOf(*level, controller, v))));
+                  events->insert(it, std::make_pair(t, levelEvent(like, controller, mapOf(*level, controller, v, dynAt(it, route)))));
                   }
             active[route] = { level, tick, like };
             };
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
             NPlayEvent& ev = i->second;
-            if (!ev.isExternal() || ev.librarySwitch())
+            if (!ev.isExternal() || ev.librarySwitch() || ev.libraryLevel())
                   continue;
             const int route = routeOf(ev);
             if (ev.type() == ME_CONTROLLER) {
-                  inForce[{ route, ev.controller() }] = ev.value();
+                  const int written = ev.value();
+                  inForce[{ route, ev.controller() }] = written;
                   auto a = active.find(route);
                   if (a != active.end()) {
-                        const std::vector<int> cs = controllersOf(*a->second.level);
-                        if (std::find(cs.begin(), cs.end(), ev.controller()) != cs.end())
-                              ev.setValue(mapOf(*a->second.level, ev.controller(), ev.value()));
+                        const LibLevel& level = *a->second.level;
+                        const std::vector<int> cs = controllersOf(level);
+                        if (std::find(cs.begin(), cs.end(), ev.controller()) != cs.end()) {
+                              ev.setValue(mapOf(level, ev.controller(), written, dynAt(i, route)));
+                              ev.setLibraryLevel(ev.controller() == CTRL_EXPRESSION);
+                              }
+                        // [levels] realRange: a new dynamics value (a hairpin's step) moves the note's CC11 with it
+                        if (level.range && volume && dynamicsCC >= 0 && ev.controller() == dynamicsCC) {
+                              const int v = valueAt(i, route, CTRL_EXPRESSION, fallbackOf(level, CTRL_EXPRESSION));
+                              const NPlayEvent c = levelEvent(ev, CTRL_EXPRESSION, mapOf(level, CTRL_EXPRESSION, v, written));
+                              i = events->insert(std::next(i), std::make_pair(i->first, c));
+                              }
                         }
                   continue;
                   }
@@ -3109,10 +3191,18 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   }
             switchTo(i, i->first, route, &l->second, i->first, ev);
             }
+      // the chunk's end: the values in force again; a real range's CC11 keeps the note's (a note held over the chunk's
+      // end keeps its level; flagged, so the next chunk takes the value as written from before it)
       for (const auto& a : active) {
-            for (int controller : controllersOf(*a.second.level))
+            const LibLevel& level = *a.second.level;
+            for (int controller : controllersOf(level)) {
+                  const int written = inForce[{ a.first, controller }];
+                  const bool keep = level.range && controller == CTRL_EXPRESSION;
+                  const int dyn = dynamicsCC >= 0 ? inForce[{ a.first, dynamicsCC }] : 64;
                   events->insert(events->lower_bound(utick2),
-                                 std::make_pair(utick2, controllerEvent(a.second.like, controller, inForce[{ a.first, controller }])));
+                                 std::make_pair(utick2, keep ? levelEvent(a.second.like, controller, mapOf(level, controller, written, dyn))
+                                                              : controllerEvent(a.second.like, controller, written)));
+                  }
             }
       }
 
@@ -5110,6 +5200,7 @@ void MidiRenderer::updateState()
             libRoutes.clear();
             libTrackDelays.clear();
             libContextGain.clear();
+            libRangeTables.clear();
             libTrackRoutes.clear();
             libDelayLead = 0.0;
             libLanes.clear();

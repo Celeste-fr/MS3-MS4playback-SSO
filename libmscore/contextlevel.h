@@ -41,6 +41,33 @@
 //   rule a phrase plays gain + O, a staccato O, everything less S' = max(0, the loudest phrase's gain + O - 6): the rule
 //   with each section O apart, less one common constant (all the Performance tracks move together: none is capped). A part's Performance patch carries T = min(G, S' + 6 - O)
 //   (its phrases' CC11: gain less T; G where it fits under +6, so the CC11 values are the rule's). Off: the rule alone.
+//
+//   Real range (playback setting [levels] realRange; the owner, 2026-10-12, stage A of the dynamics plan, HANDOFF.md ›
+//   Dynamics like a real player; 0 everywhere until the owner has heard it): a written dynamic is one gesture. In SSO
+//   CC1 (and a short's velocity) picks the recording, mostly tone; CC11 and the patch's volume are loudness only. So
+//   each note of a section with the map's realSpan / longLevel (SSO's five string sections; <Instrument>, the extras take
+//   the main's) plays, by CC11, the real player's change from mp less what the library's held Long already changes:
+//       realDb(x, p) = steps(x) * span(p) / 7 - long(x, p)
+//   x the dynamics CC in force as written (Ms4::expressionLevel of the dynamic, so CC1 and CC11 move together: a
+//   hairpin ramps both), steps(x) its distance from mp in markings (ppp -3 .. fff +4: the inverse of expressionLevel,
+//   16 per marking, ff -> fff 15), span(p) one player's ff - pp sound power at the pitch (rule D: TU Berlin's pp / ff
+//   are the player's ppp / fff, the markings between in 7 equal dB steps; Weinzierl et al. 2018, smoothed:
+//   tools/soundlibraries/real_range.py), long(x, p) SSO's All techniques Long at CC1 x less at CC1 64 (the sustain's
+//   power, sso_cc1_curves.json; linear in CC1 and in pitch between the measured points, the nearest end's beyond). At
+//   mp (CC1 64, where the section balance M was set) realDb is 0: M stays as it is, on top.
+//   Every technique of the section takes it: a note on velocity (a short) is calibrated to the Long at its dynamic
+//   ([levels] calibrated), a Performance legato note to the Long by CC1 ([levels] calibrated) or, with [levels]
+//   context, by its phrase's gain, measured in the music at the written dynamic against the staccatos (which are the
+//   Long's level there): each is the Long's level at the written CC1, which already holds SSO's own change with CC1
+//   once; realDb takes that change away (- long) and puts the player's in (steps x span / 7), so SSO's change is
+//   counted once, not twice. A short whose calibrated velocity is capped (127 and still under its level, or 1 and still
+//   over it) gets the rest by CC11 (realExtra), no longer silently.
+//   Headroom: CC11 only lowers, so a part's notes play realDb less the part's largest R (Volumes::range, every note's
+//   realDb + realExtra over every CC1 value it meets, found by rendering the score once with the setting's CC11
+//   unbounded: realRangeTops) and every patch of the part R louder by its volume (TrackDelays::patchGain: the Kontakt
+//   slot hosted, the route set's and the plain set's Kontakt track Volume in Live), within the same S' as the level
+//   rule and the section balance (everything lower together past Live's Volume top, +6 dB). The CC11 values go through
+//   the renderer's per-note levels (libraryNoteLevels), so Live's clips and the plain set's CC11 lanes carry them.
 //---------------------------------------------------------
 
 #include <map>
@@ -70,10 +97,23 @@ bool has(const SoundLib::LibInstrument* patch);
 // (utick = tick + tickOffset)
 double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset);
 
+// whether [levels] realRange is on for the score
+bool realRange(const Score* score);
+// whether a patch has the real range's data (realSpan and longLevel)
+bool hasRealRange(const SoundLib::LibInstrument* patch);
+// a written dynamics CC value's distance from mp in markings (ppp -3 … fff +4)
+double markingSteps(int cc);
+// realDb (above) of a note at the pitch on the patch with the dynamics CC x in force as written
+double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch);
+
 struct Volumes {
-      std::map<QString, double> patchDb;    // patch -> its volume in dB (P or -S; section balance: O (+ the part's G) - S')
-      double top { 0.0 };                   // G (section balance: min(G, S' + MAX_DB - O))
+      std::map<QString, double> patchDb;    // patch -> its volume in dB (P or -S; section balance: O (+ the part's G) - S'; real range: + R)
+      double top { 0.0 };                   // G (section balance: min(G, S' + MAX_DB - O - R))
+      double range { 0.0 };                 // R: the real range's headroom (its notes' CC11 play realDb less it)
       };
+// the real range's largest realDb (+ realExtra) per part over the score (MidiRenderer::setRealRangeTops), the score
+// rendered once; empty: the setting off or no part with the data
+std::map<const Part*, double> realRangeTops(const MasterScore* score);
 // per library part (none: both settings off, no library, or the rule alone and no phrase on such an articulation)
 std::map<const Part*, Volumes> volumes(const MasterScore* score);
 

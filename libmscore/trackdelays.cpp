@@ -110,6 +110,7 @@ std::map<const Part*, Delays> read(const MasterScore* score)
             Delays& d = delays[v.first];
             d.rule = v.second.patchDb;
             d.ruleTop = v.second.top;
+            d.rangeTop = v.second.range;
             }
       return delays;
       }

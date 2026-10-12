@@ -169,6 +169,12 @@ class MidiRenderer {
             std::function<int(int)> map;      // the controller's value in force -> the note's
             int fallback { 127 };             // the value in force when the route has none before the note
             double volumeDb { 0.0 };          // more on the expression CC (CC11, a plain volume: x 10^(dB / 20))
+            // [levels] realRange (contextlevel.h › Real range): CC11 dB by the dynamics CC in force as written (0 … 127:
+            // realDb at the note's pitch), plus realExtra (a capped short's rest), less rangeTop (the part's R)
+            std::shared_ptr<const std::vector<double>> range;
+            double realExtra { 0.0 };
+            double rangeTop { 0.0 };
+            const Part* rangePart { nullptr };
             };
       std::map<const Note*, LibLevel> libLevels;
       // track delays and levels (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)
@@ -205,6 +211,9 @@ class MidiRenderer {
       static const char* const DYNAMIC_NAMES[8];
    private:
       std::vector<LibTrace>* libTrace { nullptr };
+      std::map<const Part*, double>* libRangeTops { nullptr };
+      // [levels] realRange: realDb by the dynamics CC value per (patch, pitch) (contextlevel.h)
+      std::map<std::pair<const SoundLib::LibInstrument*, int>, std::shared_ptr<const std::vector<double>>> libRangeTables;
 
    public:
       class Chunk {
@@ -293,6 +302,8 @@ class MidiRenderer {
       void setWrittenTiming(bool v) { writtenTiming = v; needUpdate = true; }
       void setMinChunkSize(int sizeMeasures) { minChunkSize = sizeMeasures; needUpdate = true; }
       void setLibraryTrace(std::vector<LibTrace>* trace) { libTrace = trace; }
+      // [levels] realRange's headroom (ContextLevel::realRangeTops): each part's largest realDb + realExtra as rendered
+      void setRealRangeTops(std::map<const Part*, double>* tops) { libRangeTops = tops; }
 
       Chunk getChunkAt(int utick);
 

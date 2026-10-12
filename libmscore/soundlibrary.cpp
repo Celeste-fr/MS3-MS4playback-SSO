@@ -690,6 +690,25 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.keyScan = a.value("keyScan").toString() == "1";
                   li.bendCents = std::max(0.0, a.value("bend").toDouble());
                   li.sectionLevelDb = a.value("sectionLevel").toDouble();
+                  // realSpan="pitch:dB ...", longLevel="cc/pitch:dB ..." ([levels] realRange)
+                  for (const QString& t : a.value("realSpan").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok1 = false, ok2 = false;
+                        const int p = t.section(':', 0, 0).toInt(&ok1);
+                        const double db = t.section(':', 1).toDouble(&ok2);
+                        if (!ok1 || !ok2)
+                              return fail(QString("%1:%2: bad realSpan \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        li.realSpan[p] = db;
+                        }
+                  for (const QString& t : a.value("longLevel").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok1 = false, ok2 = false, ok3 = false;
+                        const QString key = t.section(':', 0, 0);
+                        const int cc = key.section('/', 0, 0).toInt(&ok1);
+                        const int p = key.section('/', 1).toInt(&ok2);
+                        const double db = t.section(':', 1).toDouble(&ok3);
+                        if (!ok1 || !ok2 || !ok3 || !key.contains('/'))
+                              return fail(QString("%1:%2: bad longLevel \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        li.longLevel[p][cc] = db;
+                        }
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;
@@ -751,6 +770,10 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.ids = main->ids;
             if (li.sectionLevelDb == 0.0)
                   li.sectionLevelDb = main->sectionLevelDb;
+            if (li.realSpan.empty() && li.longLevel.empty()) {
+                  li.realSpan = main->realSpan;
+                  li.longLevel = main->longLevel;
+                  }
             main->extras.push_back(&li);
             }
       return lib;
