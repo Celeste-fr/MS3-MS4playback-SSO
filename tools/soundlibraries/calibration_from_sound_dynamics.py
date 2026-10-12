@@ -2,7 +2,7 @@
 """The shipped dynamics calibration of Spitfire Symphony Orchestra, from the repo's measurements.
 
     calibration_from_sound_dynamics.py [-d sso_sound_dynamics.json] [-r sso_rachm_register_curves.json]
-                                       [-m "<map>.xml"] [-o "<map>.dynamics.json"]
+                                       [-s sso_string_dynamics.json] [-m "<map>.xml"] [-o "<map>.dynamics.json"]
 
 MuseScore's own file (<dataPath>/soundlibraries/<library>/dynamics.json, written by Check articulations >
 Dynamics) holds the same numbers per patch name and articulation value (SoundLib::DynamicsCalibration::read,
@@ -14,6 +14,11 @@ techniques=), never drum hits, and the held note's expression curve; fields the 
 (expressionPerceived) are left out. Curves are rounded to 0.01 dB (the check writes 0.1).
 Techniques measured at several pitches (-r, sso_rachm_register_curves.json: Long (Rachm.)) also get "pitches":
 {"<pitch>": {"curve", "perceived"}}, each pitch's own curve (DynamicsCurve::atPitch); the one curve stays.
+Techniques measured again with repeats (-s, sso_string_dynamics.json, string_dynamics_sweep.py: the five string
+sections' Long and their velocity techniques, 2026-10-12): their Long (STRINGS_VALUES) replaces the same patch's measured
+sound of the same value (curve, perceived, drivenBy, expression; the check's attack and rise, which the sweep doesn't
+measure, go with it). Their velocity techniques were measured again only to check the scale: each within about 1 dB
+of the owner's (median over the points), so the owner's stay.
 Prints the measured sounds that match no patch/value of the map and the map's played articulations without data.
 """
 import argparse
@@ -27,6 +32,8 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 MAP = os.path.join(ROOT, "share", "soundlibraries", "Spitfire Symphony Orchestra.xml")
 SOURCE = "sso_sound_dynamics.json"
 REGISTERS = "sso_rachm_register_curves.json"
+STRINGS = "sso_string_dynamics.json"
+STRINGS_VALUES = (1,)          # the sounds of STRINGS used: Long (the others checked the scale)
 
 
 def r2(x):
@@ -47,8 +54,27 @@ def map_articulations(path):
     return out
 
 
-def convert(measured, arts, registers=None):
+def overlay(measured, strings):
+    """measured with each sound of strings["patches"] in place of the same patch's sound of the same value
+    -> (measured, [(patch, sound, value)] replaced)"""
+    out = {p: dict(s) for p, s in measured.items()}
+    replaced = []
+    for patch, sounds in (strings or {}).get("patches", {}).items():
+        mine = out.setdefault(patch, {})
+        for name, e in sounds.items():
+            if not isinstance(e, dict) or e.get("value") not in STRINGS_VALUES or "curve" not in e:
+                continue
+            for old in [n for n, o in mine.items() if isinstance(o, dict) and o.get("value") == e["value"]]:
+                del mine[old]
+            mine[name] = {k: e[k] for k in ("value", "pitch", "drivenBy", "curve", "perceived", "velocityDb",
+                                             "controllerDb", "expression") if k in e}
+            replaced.append((patch, name, e["value"]))
+    return out, replaced
+
+
+def convert(measured, arts, registers=None, strings=None):
     """-> (document, unmapped [(patch, sound, value, why)], missing [(patch, value)])"""
+    measured, _ = overlay(measured, strings)
     patches, unmapped = {}, []
     for patch, sounds in measured.items():
         for name, e in sounds.items():
@@ -77,9 +103,11 @@ def convert(measured, arts, registers=None):
                 patches.setdefault(patch, {})[str(value)] = c
     missing = [(p, v) for p, vs in arts.items() for v, played in sorted(vs.items())
                if played and str(v) not in patches.get(p, {})]
-    doc = {"source": "generated from %s%s by tools/soundlibraries/calibration_from_sound_dynamics.py "
-                     "(the owner's dynamics checks; curves in dB along velocity = CC1 = x)"
-                     % (SOURCE, " and " + REGISTERS if registers else ""),
+    doc = {"source": "generated from %s%s%s by tools/soundlibraries/calibration_from_sound_dynamics.py "
+                     "(the owner's dynamics checks%s; curves in dB along velocity = CC1 = x)"
+                     % (SOURCE, " and " + REGISTERS if registers else "", " and " + STRINGS if strings else "",
+                        "; the string sections' Long and velocity techniques measured again with repeats on the "
+                        "Windows test VM, 2026-10-12" if strings else ""),
            "patches": {p: patches[p] for p in sorted(patches)}}
     return doc, unmapped, missing
 
@@ -89,6 +117,8 @@ def main():
     ap.add_argument("-d", "--dynamics", default=os.path.join(HERE, SOURCE))
     ap.add_argument("-r", "--registers", default=os.path.join(HERE, REGISTERS),
                     help="per-pitch curves ('' for none)")
+    ap.add_argument("-s", "--strings", default=os.path.join(HERE, STRINGS),
+                    help="sounds measured again, in place of -d's ('' for none)")
     ap.add_argument("-m", "--map", default=MAP)
     ap.add_argument("-o", "--out")
     a = ap.parse_args()
@@ -99,7 +129,13 @@ def main():
     if a.registers:
         with open(a.registers) as f:
             registers = json.load(f)
-    doc, unmapped, missing = convert(measured, map_articulations(a.map), registers)
+    strings = None
+    if a.strings:
+        with open(a.strings) as f:
+            strings = json.load(f)
+        for r in overlay(measured, strings)[1]:
+            print("measured again: %s / %s (%d)" % r)
+    doc, unmapped, missing = convert(measured, map_articulations(a.map), registers, strings)
     with open(out, "w") as f:
         json.dump(doc, f, separators=(",", ":"))
         f.write("\n")

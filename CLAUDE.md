@@ -165,7 +165,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - **Play from a tick** (`libmscore/playstart.h`, `Seq::setPos`): notes that start early (onset, negative track delay) have their note-on, switch and controllers before their beat, so the transport starts at the earliest note-on of a note written at or after the tick (`PlayStart::start()`, a pre-roll) and skips the previous notes' note-ons/offs there (`skips`); the cursor stays at the tick (the owner, 2026-10-10: the first note of a selected measure sometimes silent).
 - Dynamics calibration (*Check articulations* › Dynamics or `--check-dynamics`) → `dynamics.json` (the patches checked so far);
   every patch it lacks from the shipped `share/soundlibraries/<library>.dynamics.json` (SSO's from `sso_sound_dynamics.json`
-  by `tools/soundlibraries/calibration_from_sound_dynamics.py`; `SoundLib::readCalibration`, since 2026-10-11: before, a
+  by `tools/soundlibraries/calibration_from_sound_dynamics.py`, the five string sections' Long from `sso_string_dynamics.json`
+  (`string_dynamics_sweep.py`, 2026-10-12: each point 4 times; the check's single notes caught alternating round robins,
+  Celli's Long came out flat and not monotonic: docs/PLAYBACK_SETTINGS.md › Calibrated levels); `SoundLib::readCalibration`, since 2026-10-11: before, a
   user's file replaced the shipped one whole, and the Windows VM's, Solo Violin 1 only, left the strings uncalibrated). Read for calibrated
   levels and the Inspector levels (the curve's inverse). A curve may carry per-pitch curves (`"pitches"`; SSO's
   strings' Long (Rachm.), `sso_rachm_register_curves.json`, `-r` of the script): `DynamicsCurve::atPitch` (linear in dB

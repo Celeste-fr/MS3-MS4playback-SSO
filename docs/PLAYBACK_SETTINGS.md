@@ -132,9 +132,10 @@ The exception (2026-10-10, with `[slurs] performance`): a Performance legato not
 on CC1, the value at which its patch sounds as loud as the part's Long at the CC1 in force
 (`SoundLib::calibratedController`, by ear where both are measured, the note's pitch's curve where measured; a LibLevel
 on the dynamics CC from right before its note-on, `rendermidi.cpp` `performanceLevel`): its notes are as loud as the
-All techniques notes around them. SSO's shipped curves (perceived, dB, Long less Performance at CC1 16 / 64 / 127):
-Violins 1 9.6 / 2.7 / -2.6, Violins 2 9.9 / 2.4 / -6.7, Violas 16.1 / 3.8 / -2.4, Celli 28.1 / 7.8 / -3.8, Basses
-5.8 / 3.1 / -1.1: louder at soft dynamics, softer at the loudest. An Inspector level on top: louder along its own curve
+All techniques notes around them. SSO's shipped curves (perceived, dB, Long less Performance at CC1 16 / 64 / 127;
+since 2026-10-12 with the Longs measured again, below): Violins 1 10.2 / 3.4 / -2.0, Violins 2 8.3 / 1.8 / -6.7, Violas
+16.5 / 4.5 / -2.3, Celli 30.2 / 9.1 / -2.8, Basses 4.1 / 1.9 / -0.8 (before: 9.6 / 2.7 / -2.6, 9.9 / 2.4 / -6.7,
+16.1 / 3.8 / -2.4, 28.1 / 7.8 / -3.8, 5.8 / 3.1 / -1.1): louder at soft dynamics, softer at the loudest. An Inspector level on top: louder along its own curve
 from the calibrated value, softer by CC11 (a plain volume on these patches, measured 2026-10-02: HANDOFF.md › Legato level balance). Its velocity (the
 attack or transition) is not changed. Live gets the same values: they are CC1 events, so the clips and the plain set's
 CC1 lanes carry them (`tst_liveequivalence::livePerformanceLevel`).
@@ -144,6 +145,17 @@ measured from it, every other patch from the shipped `share/soundlibraries/Spitf
 (`SoundLib::readCalibration`; until 2026-10-11 a user's file replaced the shipped one whole), made from the
 owner's checks in `tools/soundlibraries/sso_sound_dynamics.json` by
 `tools/soundlibraries/calibration_from_sound_dynamics.py` (105 patches, 492 curves; only what the map plays).
+**The five string sections' Long** (All techniques, value 1) comes instead from `sso_string_dynamics.json`
+(`string_dynamics_sweep.py`, 2026-10-12, Windows VM, Kontakt 8 + SSO through kthost): the check plays each point once,
+and SSO's string Longs alternate round robins up to ~4 dB apart at soft CC1, so Celli's came out "neither" and not
+monotonic (perceived 44.1, 51.0, 52.5, 49.5, 52.8, 52.2, 55.1, 53.3 at CC1 16 … 127): its velocity techniques were
+matched to a noisy reference. Measured again at the check's pitch with its measures and note lengths, each point 4 times
+(the median; CC1 1.0 s before the note-on): Celli 46.2, 49.0, 50.6, 50.8, 51.8, 53.2, 54.1, 54.4 (a range of 8.1 dB:
+the Celli's Long is that flat; sso_cc1_curves.json's loudest 50 ms over 17 pitches 7.3 dB), Violins 1 40.7 … 55.4,
+Violins 2 39.5 … 53.6, Violas 48.9 … 59.0, Basses 26.4 … 53.7, each rising by more than its repeats' spread. Their
+velocity techniques were measured in the same runs: each within about 1 dB of the owner's (median over the points), so
+those stay the owner's (the same scale). The Celli shorts still play at velocity ~95-127 at every dynamic: the Long they
+match is only 8 dB from ppp to fff, their own perceived range 70 dB.
 
 **Per-pitch curves** (2026-10-09, the owner: Long (Rachm.) gets per-register loudness curves so the notes `[slurs] quick`
 swaps can match Long): a curve may carry `"pitches": {"<pitch>": {"curve": [[cc, dB]...], "perceived": [...]}}` beside
