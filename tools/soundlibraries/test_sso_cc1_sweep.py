@@ -79,6 +79,35 @@ class Measures(unittest.TestCase):
         self.assertIn("Test", m["sections"])
         self.assertEqual(m["sections"]["Test"]["points"]["63"][0]["cc"], 32)
 
+    def test_brightness(self):
+        """--brightness: harmonic tones whose partials fall off less at higher CC1 read brighter; a short's window"""
+        import numpy as np
+        import soundfile as sf
+        _, notes = sw.make_events(57, 57, ccs=[32, 64, 96], repeats=2, note=0.5, gap=0.5, velocity=5)
+        self.assertTrue(all(n["velocity"] == 5 for n in notes["notes"]))
+        sr = 44100
+        x = np.zeros((int((notes["notes"][-1]["off"] + 1) * sr), 2), dtype="float32")
+        f0 = 220.0
+        for n in notes["notes"]:
+            i0, i1 = int(n["on"] * sr), int(n["off"] * sr)
+            t = np.arange(i1 - i0) / sr
+            roll = 0.3 + 0.5 * n["cc"] / 127
+            s = 0.01 * sum(roll ** k * np.sin(2 * np.pi * f0 * (k + 1) * t) for k in range(30))
+            x[i0:i1, 0] = s
+            x[i0:i1, 1] = s
+        with tempfile.TemporaryDirectory() as d:
+            wav = os.path.join(d, "r.wav")
+            sf.write(wav, x, sr, subtype="FLOAT")
+            out = sw.analyze(wav, notes, "Test", window=(0.05, 0.45), bright=True)
+        self.assertEqual(out["window"], [0.05, 0.45])
+        for k in ("hcPow", "hcAmp", "sharp"):
+            rel = {r[0]: r[1] for r in out["relative64"][k]}
+            self.assertLess(rel[32], 1.0, k)
+            self.assertGreater(rel[96], 1.0, k)
+            self.assertAlmostEqual(rel[64], 1.0)
+        row = {r["cc"]: r for r in out["points"]["57"]}[64]
+        self.assertAlmostEqual(row["hcPow"] * f0, row["scPow"], delta=1.0)
+
 
 if __name__ == "__main__":
     unittest.main()
