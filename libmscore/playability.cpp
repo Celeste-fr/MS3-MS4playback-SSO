@@ -170,6 +170,10 @@ class Pass {
       std::map<int, std::vector<HairpinSpan>> _hairpins;          // staff -> hairpins
       bool _spanners { false };                                   // collected
       mutable std::map<Part*, std::map<const Chord*, int>> _handTexts;     // handTexts, per part
+      int _orchestra { -1 };                                      // orchestraLayout, -1 = not yet known
+
+      bool orchestraLayout();
+      StringInstrument asLaidOut(StringInstrument si, const QString& name);
 
       int barOf(const Fraction& tick) const;
       int barOf(int tick) const { return barOf(Fraction::fromTicks(tick)); }
@@ -304,7 +308,7 @@ const StringInstrument& Pass::instrumentAt(Part* part, const Fraction& tick)
                   name = part->partName();
             }
       // the part's own tuning: its String Data (Staff/Part Properties › Edit String Data), low to high
-      StringInstrument si = lookup(id, name, arcoProgram(in));
+      StringInstrument si = asLaidOut(lookup(id, name, arcoProgram(in)), name);
       if (si.valid()) {
             std::vector<int> lowToHigh;
             for (const instrString& s : in->stringData()->stringList())
@@ -324,7 +328,36 @@ StringInstrument Pass::standardAt(Part* part, const Fraction& tick)
             id = part->instrumentId();
             name = part->longName();
             }
-      return lookup(id, name, arcoProgram(in));
+      return asLaidOut(lookup(id, name, arcoProgram(in)), name);
+      }
+
+// An orchestra, not chamber music (owner 2026-10-13): the score has a double bass, or a wind or brass
+// instrument. String quartets and trios keep singular names as single players.
+bool Pass::orchestraLayout()
+      {
+      if (_orchestra >= 0)
+            return _orchestra;
+      _orchestra = 0;
+      for (Part* p : _score->parts()) {
+            for (const auto& i : *p->instruments()) {
+                  const Instrument* in = i.second;
+                  const QString id = in->instrumentId();
+                  const QString name = in->longNames().isEmpty() ? p->longName() : in->longNames().front().name();
+                  if (id.startsWith("wind.") || id.startsWith("brass.")
+                      || lookup(id, name, arcoProgram(in)).name == "Double bass")
+                        _orchestra = 1;
+                  }
+            }
+      return _orchestra;
+      }
+
+// a string staff in an orchestra is a section unless its name says solo
+StringInstrument Pass::asLaidOut(StringInstrument si, const QString& name)
+      {
+      static const QRegularExpression SOLO("(^|[^a-z])(solo|soli)([^a-z]|$)");
+      if (si.valid() && !si.section && orchestraLayout() && !SOLO.match(plainText(name).toLower()).hasMatch())
+            si.section = true;
+      return si;
       }
 
 // the instrument at a tick with the scordatura in force there (the last scordatura text at or

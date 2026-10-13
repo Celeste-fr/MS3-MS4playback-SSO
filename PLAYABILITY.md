@@ -449,5 +449,8 @@ gave these fixes; tests `falseAlarms` (falsealarm-strings/-keys/-bars.mscx from 
 - S11: a slur over chords that carry a tremolo is not timed (the slur marks the tremolo), nor is a slur with one note
   (its ties followed) that alone lasts longer than the longest bow at its dynamic (a phrase slur).
 - N1: a repeated technique text in parentheses, or with no note since the first text, is not marked.
-- Left as they were (owner decisions pending): the x0.6 bow factor of cello and bass, section detection by plural names,
-  an accent dynamic (fz) as an entrance dynamic, the one-dot rule of slurred staccato.
+- Section vs single player (owner 2026-10-13): besides plural names, a string staff is a section when the score is
+  laid out as an orchestra (it has a double bass, or a wind or brass instrument), unless its name says solo / soli.
+  String quartets and trios keep singular names as single players.
+- Left as they were (owner decisions pending): the x0.6 bow factor of cello and bass, an accent dynamic (fz) as an
+  entrance dynamic, the one-dot rule of slurred staccato.
