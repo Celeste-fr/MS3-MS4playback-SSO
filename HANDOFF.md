@@ -200,9 +200,14 @@ note's level depends on ~2 notes before and 1 after (Basses ~4 before), nothing 
 (2026-10-13): **combine** a table of common contexts measured once (shipped) with measuring the rest locally in the
 background (only the edited note +-3), every measurement saved to the user's own table for reuse. **If play is pressed
 while a measurement runs: wait only when the passage being measured is in what is about to play** (a short countdown,
-then play; otherwise play at once; the owner: "the third"). Pending before the design: does the same exact local
-context give the same level in different phrases, and does it survive transposition (VM, branch `context-reuse`); how
-many contexts real scores use (offline count: Whence, Glazunov op. 97, Dvorak op. 22 ii).
+then play; otherwise play at once; the owner: "the third"). Checked (2026-10-13): the same exact local context (2 notes
+before, 1-2 after, their pitches and velocities) gives the same level in any phrase to ~0.2 dB (`sso_context_reuse.json`,
+VM, real SSO; the earlier 1.3 dB had unmatched velocities), but not transposed (+1 semitone already moves the shape
+0.74 / 1.77 dB p50 / p90): pitch stays in the key. Real scores barely share contexts (offline count, Whence + Glazunov
+op. 97 + Dvorak op. 22 ii: ~2,200 contexts for 90 % of 2,958 notes, 83-96 % heard once, Glazunov <-> Dvorak <= 1 %
+shared). So a shipped table would almost never be hit: the design is **background measuring near edits**, its results
+kept per exact context for reuse (edits and re-measures of the same score), no shipped table. Untested: whether note
+length / dynamic change the shape (the scans used 136 ms at CC1 64).
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
