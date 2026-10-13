@@ -452,5 +452,6 @@ gave these fixes; tests `falseAlarms` (falsealarm-strings/-keys/-bars.mscx from 
 - Section vs single player (owner 2026-10-13): besides plural names, a string staff is a section when the score is
   laid out as an orchestra (it has a double bass, or a wind or brass instrument), unless its name says solo / soli.
   String quartets and trios keep singular names as single players.
-- Left as they were (owner decisions pending): the x0.6 bow factor of cello and bass, an accent dynamic (fz) as an
-  entrance dynamic, the one-dot rule of slurred staccato.
+- An accent dynamic (fz, sfz …) at the first note does not count as the entrance dynamic: it gives no level (owner
+  2026-10-13).
+- Left as they were (owner decisions pending): the x0.6 bow factor of cello and bass, the one-dot rule of slurred staccato.
