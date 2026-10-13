@@ -8153,7 +8153,7 @@ void TestSoundLibrary::transportRestart()
             QFile f(log);
             if (!f.open(QIODevice::ReadOnly))
                   return QStringList();
-            return QString::fromUtf8(f.readAll()).split('\n', QString::SkipEmptyParts);
+            return QString::fromUtf8(f.readAll()).remove('\r').split('\n', QString::SkipEmptyParts);   // (Windows writes \r\n)
             };
       Vst3Synth vst;
       vst.init(rate);
