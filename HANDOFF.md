@@ -20,9 +20,11 @@ a section there when you need the background of that topic. Commit messages desc
   `realrange1`) A/Bs `[levels] realRange` on a ppp -> fff ladder per section; read the verdicts (ArtifactData) and put
   realRange into Recommended only for what the owner approves. A score with written dynamics is the next test (Whence has
   almost none).
-- **Transition levels** (2026-10-12, the owner: "I want it evened out eventually"): branch `transition-levels` measures each
-  Performance note's level by the interval / transition it is reached from (Whence 12-TET bar 2 Celli: note 2 ~2.2 dB over
-  note 1 in SSO itself, sso_slur_swell.json); then propose a per-note correction, off until heard.
+- **Even levels, to hear** (2026-10-13, branch `even-levels`, build https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38387460368):
+  the slur swell evened out as the owner chose in the blind test (Glide), built and **off everywhere** (`[levels]
+  evenLevels` 0, Recommended too). To hear it: open a score, *Tools › Even Out Levels…* (Kontakt + SSO measure it, ~1
+  min for Whence 12-TET's Celli), then Mixer › Advanced Options… › Playback adjustments › Even levels 1 (or the score's
+  playbackSettings). Ask: on in Recommended? See "Even levels" below.
 - **Try in the next build:** the automation headers for every part (fold at will; `( + | All )`, round Draw Mode button,
   Grid menu), the bar ruler (View > Bar Ruler), Update Live Set (Mixer > Advanced Options > Ableton Live), the MuseScore
   Link device fix (copy the new device from the build into the User Library; Live no longer stalls with 28 copies, phrase-
@@ -189,6 +191,24 @@ Approved by the owner on A′ (2026-10-11; HANDOFF › No Performance patches' W
   liveContextLevel`, Linux, test synth). The VM `--live-equivalence` run needs a Windows build of this branch: not run.
 - A/B (dry strings, bars 1-16, one common gain): `~/MuseScore/ms3fork/uploads/levelrule/` A (rule), B (R lowered), C
   (before).
+
+## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` 0 until the owner has heard it)
+
+Built from the listening test below (libmscore/evenlevels.h, mscore/evenlevelsjob.h, docs/PLAYBACK_SETTINGS.md › Even
+levels): *Tools › Even Out Levels…* / `--even-levels <score>` renders each slurred Performance-legato passage through the
+hosted plug-ins (3 passes), measures each note, fits the glide, renders again (once more above the 1 dB floor) and keeps
+each note's value + a hash of its context on the note (metaTag `evenLevels`; a changed context is stale, shown in
+Inspector › Note › Even level, not played). The renderer glides CC11 (Live's clips and the plain set too); each patch's
+notes play its largest value lower by CC11 (never cut at 127), its volume adds it back up to +6 dB, the rest lowers every
+library patch alike (`Delays::evenAll`).
+Windows VM, Kontakt 8 + SSO, Recommended (realRange on), build 38387460368: the job on Whence 12-TET Celli bars 1-8 (the
+passage), median slur range 2.11 -> 0.84 dB (round 1 kept); Whence (quarter tones) bars 1-8, Violins 1 / Violas / Celli
+2.54 / 1.96 / 1.54 -> 0.75 / 0.65 / 0.74. **MuseScore's own playback** (`--verify-playback --verify-wav` of the corrected
+score, Celli alone, `tools/soundlibraries/even_levels_check.py`): Whence 12-TET bars 2 / 4 slur range 3.6 dB uncorrected
+-> 0.60 (median of 3 renders; the listening test's G 0.7); a single render 0.9-1.6: SSO's pass-to-pass noise is ~0.6 dB
+per note (SD), so one hearing still varies. The first build (38382322224) cut the boosts at CC11 127 (Celli - Performance
+at +6 dB by the level rule): fixed. Open: the owner's ear (then Recommended?); the whole library plays quieter by the rest
+(Whence 12-TET Celli: 3.7 dB); the GUI path (Tools menu) is untried with Kontakt; correct whole scores, not just Whence.
 
 ## Transition levels: the slur swell (2026-10-12, branch `transition-levels`, measurement only)
 
