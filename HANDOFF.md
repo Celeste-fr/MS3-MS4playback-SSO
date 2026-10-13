@@ -277,6 +277,15 @@ Smoke test (Linux, headless MuseScore, Xvfb + PulseAudio null sink, the test syn
 Play pressed at once after opening waited 11.3 s with "Even levels: measuring … loading the plug-in, then ~n s", then
 played (status bar: Play, the position moving); Stop pressed during a 30 s wait: no start in the 4 s until it quit. Still untried in MuseScore with Kontakt / SSO (no Windows build).
 
+## Slow slurs need no correction (the owner, 2026-10-13)
+
+`swell_vs_length.py` measured slow slurs (500 ms-1 s notes) as uneven as fast ones by the job's short window, so a blind
+test (`slow_slur_test.py`, listening page db `slowslur1`: Celli and Violins 1 at 500 ms, Violas at 1 s; uncorrected /
+the short-window correction / a whole-note correction, loudness-matched): the owner marked every version Fine and every
+passage "All the same". So the background measurer and the job skip slurred passages whose every inter-onset interval
+is >= 500 ms (heard at 500 ms and 1 s; 136-500 ms untested by ear: still measured); a faster note inside a slow slur
+keeps its window measured.
+
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
 Built from the listening test below (libmscore/evenlevels.h, mscore/evenlevelsjob.h, docs/PLAYBACK_SETTINGS.md › Even
