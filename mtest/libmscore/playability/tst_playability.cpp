@@ -1481,7 +1481,7 @@ void TestPlayability::windTrills()
       MasterScore* score = readScore(DIR + "windtrill-tests.mscx");
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
-      auto row = [](int bar, const char* staff, const char* id, const char* notes, const char* extra = nullptr) {
+      auto row = [](int bar, const char* staff, const char* id, const QString& notes, const char* extra = nullptr) {
             const WindTrillRule* w = trillRule(id);
             QString text = QString(w->text) + (extra ? QString("; ") + extra : QString()) + " (" + w->source + ")";
             return rowText(bar, staff, w->kind == WindTrillKind::RED ? "impossible" : "risky", text, notes);
@@ -1495,9 +1495,9 @@ void TestPlayability::windTrills()
             row(1, "Flute", "W5-FL-LOW-A", "C4 tr Db4"), row(3, "Flute", "W5-FL-LOW-A", "Db4 tr Eb4"),
             row(4, "Flute", "W5-FL-LOW-B", "B3 tr C4"), row(5, "Flute", "W5-FL-LOW-B", "B3 tr C#4"),
             row(6, "Flute", "W5-FL-HIGH", "G6 tr A6"), row(6, "Flute", "W5-FL-HIGH", "D7 tr E7"),
-            row(7, "Flute", "W5-FL-LOW-A", qPrintable(trem("C4", "Eb4"))), row(8, "Flute", "W5-FL-LOW-A", qPrintable(trem("Eb4", "C4"))),
-            row(9, "Flute", "W5-FL-TREM-B3", qPrintable(trem("B3", "D4"))),
-            row(10, "Flute", "W5-FL-TREM-WIDE", qPrintable(trem("C4", "A4"))), row(11, "Flute", "W5-FL-TREM-WIDE", qPrintable(trem("B4", "G5"))),
+            row(7, "Flute", "W5-FL-LOW-A", trem("C4", "Eb4")), row(8, "Flute", "W5-FL-LOW-A", trem("Eb4", "C4")),
+            row(9, "Flute", "W5-FL-TREM-B3", trem("B3", "D4")),
+            row(10, "Flute", "W5-FL-TREM-WIDE", trem("C4", "A4")), row(11, "Flute", "W5-FL-TREM-WIDE", trem("B4", "G5")),
             row(15, "Flute", "W5-FL-LOW-A", "C4 tr Db4"),
             row(16, "Flute", "W5-FL-HIGH", "G6 tr A6"),
             // upper notes from the key signature (E major)
@@ -1505,7 +1505,7 @@ void TestPlayability::windTrills()
             // oboe
             row(1, "Oboe", "W5-OB-LOW", "A#3 tr B3"), row(2, "Oboe", "W5-OB-HALF", "B#3 tr C#4"),
             row(3, "Oboe", "W5-OB-HIGH", "Eb6 tr F6"), row(4, "Oboe", "W5-OB-CS5", "C#5 tr D#5"),
-            row(5, "Oboe", "W5-OB-LOW", qPrintable(trem("Bb3", "B3"))), row(6, "Oboe", "W5-OB-TREM", qPrintable(trem("C4", "G4"))),
+            row(5, "Oboe", "W5-OB-LOW", trem("Bb3", "B3")), row(6, "Oboe", "W5-OB-TREM", trem("C4", "G4")),
             // English horn and alto saxophone by written pitch, named sounding
             row(1, "English Horn", "W5-OB-LOW", "D#3 tr E3"), row(2, "English Horn", "W5-OB-HIGH", "Ab5 tr Bb5"),
             row(1, "Alto Saxophone", "W5-SAX-HIGH", "C#6 tr D6"), row(1, "Alto Saxophone", "W5-SAX-HIGH", "D6 tr Eb6"),
@@ -1520,9 +1520,9 @@ void TestPlayability::windTrills()
             row(6, "Bassoon", "W5-BSN-HIGH", "C5 tr D5"),
             row(10, "Bassoon", "W5-BSN-FLATS", "C#5 tr D#5"), row(10, "Bassoon", "W5-BSN-HIGH", "C#5 tr D#5"),
             row(11, "Bassoon", "W5-BSN-FLATS", "Eb5 tr F5"), row(11, "Bassoon", "W5-BSN-HIGH", "Eb5 tr F5"),
-            row(13, "Bassoon", "W5-BSN-TREM", qPrintable(trem("A2", "Eb3"))),
-            row(14, "Bassoon", "W5-BSN-LOW", qPrintable(trem("F2", "D3"))),
-            row(15, "Bassoon", "W5-BSN-LOW", qPrintable(trem("D#2", "C#2")), KEY) };
+            row(13, "Bassoon", "W5-BSN-TREM", trem("A2", "Eb3")),
+            row(14, "Bassoon", "W5-BSN-LOW", trem("F2", "D3")),
+            row(15, "Bassoon", "W5-BSN-LOW", trem("D#2", "C#2"), KEY) };
       want.sort();
       compare(got, want);
       QCOMPARE(got, want);
