@@ -54,6 +54,7 @@
 
 #ifdef USE_VST3
 #include "audio/vst3/articulationcheck.h"
+#include "audio/vst3/evenmeasure.h"
 #include "audio/vst3/vst3synth.h"
 #endif
 
@@ -538,63 +539,12 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                   // MS_EVEN_LEVELS_WAV: each render kept (mono float), "<part> round <r>.wav", with its pass starts
                   if (qEnvironmentVariableIsSet("MS_EVEN_LEVELS_WAV"))
                         writeMono(folder + QString("/%1 round %2.wav").arg(pp.first->partName()).arg(round), mono, rate, starts, from);
-                  double firstMs = 0;
-                  std::vector<double> env;
-                  {
-                        std::vector<float> stereo(mono.size() * 2);         // (perceivedEnvelope takes interleaved stereo)
-                        for (size_t k = 0; k < mono.size(); ++k)
-                              stereo[2 * k] = stereo[2 * k + 1] = mono[k];
-                        env = ArticulationCheck::perceivedEnvelope(stereo, rate, &firstMs);
-                  }
-                  const double hopMs = int(rate * 0.005) * 1000.0 / rate;
+                  const EvenMeasure::Envelope env = EvenMeasure::envelope(mono, rate);
                   log(QString("%1: %2, round %3: %4 s of audio rendered in %5 s").arg(name, pp.first->partName()).arg(round)
                       .arg(double(mono.size()) / rate, 0, 'f', 1).arg(rt.elapsed() / 1000.0, 0, 'f', 1));
-                  auto envAt = [&](double s) {
-                        const double x = (s * 1000.0 - firstMs) / hopMs;
-                        if (env.empty())
-                              return 0.0;
-                        if (x <= 0)
-                              return env.front();
-                        const size_t i = size_t(x);
-                        if (i + 1 >= env.size())
-                              return env.back();
-                        return env[i] + (env[i + 1] - env[i]) * (x - double(i));
-                        };
                   for (size_t k : mine) {
                         PassageRec& p = passages[k];
-                        const size_t n = p.notes.size();
-                        std::vector<std::vector<double>> per(n);
-                        for (double start : starts) {
-                              for (size_t j = 0; j < n; ++j) {
-                                    const double a = start + (p.fit.window[j] - from);
-                                    const double b = a + EvenLevels::WINDOW_MS / 1000.0;
-                                    double sum = 0;
-                                    int cnt = 0;
-                                    long i0 = std::max(0L, long(std::ceil((a * 1000.0 - firstMs) / hopMs)));
-                                    for (long i = i0; i < long(env.size()); ++i) {
-                                          const double ti = (firstMs + i * hopMs) / 1000.0;
-                                          if (ti >= b)
-                                                break;
-                                          if (ti >= a) {
-                                                sum += env[size_t(i)];
-                                                ++cnt;
-                                                }
-                                          }
-                                    per[j].push_back(cnt ? sum / cnt : envAt(a));
-                                    }
-                              }
-                        p.levels[round].assign(n, 0.0);
-                        for (size_t j = 0; j < n; ++j)
-                              p.levels[round][j] = median(per[j]);
-                        const int m = p.fit.gridSize();
-                        p.env[round].assign(size_t(std::max(0, m)), 0.0);
-                        for (int i = 0; i < m; ++i) {
-                              const double tg = p.fit.gridStart() + i * EvenLevels::STEP_MS / 1000.0;
-                              std::vector<double> v;
-                              for (double start : starts)
-                                    v.push_back(envAt(start + (tg - from)));
-                              p.env[round][size_t(i)] = median(v);
-                              }
+                        EvenMeasure::measure(env, starts, from, p.fit, &p.levels[round], &p.env[round]);
                         p.stats[round] = EvenLevels::slurStats(p.fit.slur, p.levels[round]);
                         p.measured[round] = true;
                         }

@@ -218,6 +218,19 @@ or one round leaves the worst notes 0.3-0.7 dB further off; ~0.5 s of rendering 
 **The owner (2026-10-13) chose the full method** (3 passes, 2 rounds, CC11's measured strength 1.28 built in): ~3 s per
 edit, parts in parallel. Branch `even-auto` builds it.
 
+**Built** (branch `even-auto`, 2026-10-13; not merged; no Windows build yet): libmscore/evenauto.h (the Session: render,
+cache, windows, rounds), audio/vst3/evenmeasure.h (render + measurement, shared with the job), mscore/evenautomeasurer.h
+(own plug-in instances on worker threads, triggers, Play's wait), docs/PLAYBACK_SETTINGS.md › Even levels. Tested on Linux
+only (tst_soundlibrary evenAutoWindows / evenAutoSession with a stand-in plug-in that answers CC11 by 1.28 / evenAutoTestSynth
+end to end on the test synth). **Untried with Kontakt and SSO**: the time per edit (the estimate ~3 s assumed ~2.1 s of audio
+per pass; the windows render the job's 3 s gap after the last note-off too, so ~5 s per pass at Whence's tempo, ~10-15 s of
+rendering per edit at the VM's 4.4x), memory (one more Kontakt per part and patch measured: ~85-90 MB each plus samples),
+Kontakt rendering offline on a worker thread while the main instances play nothing, the countdown's estimate, a full
+score's first measurement at open (every passage). On the VM: open Whence, edit a slurred note, press Play at once (the wait,
+then the corrected note), undo (no wait), compare a window's values with `--even-levels` on the same bars. Open choices for
+the owner: whether a first measurement at score open should wait for Play at all (a whole score at once), whether the 3 s
+gap may shrink (a measured release time per patch would be the source).
+
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
 Built from the listening test below (libmscore/evenlevels.h, mscore/evenlevelsjob.h, docs/PLAYBACK_SETTINGS.md › Even

@@ -367,10 +367,33 @@ the design.
   the level rule, the first VM run cut every boost at 127).
 - **Live**: the same CC11 events reach Live's clips and the plain set's CC11 lane; the headroom the Kontakt tracks' Volume
   (`tst_liveequivalence::liveEvenLevels`).
+- **Measured in the background near edits** (branch `even-auto`, 2026-10-13; libmscore/evenauto.h, mscore/evenautomeasurer.h;
+  no setting of its own: on whenever `[levels] evenLevels` plays for the score and the library plays through its
+  plug-in). The owner (2026-10-13): a note plays its **measured** correction or playback waits for it, never a predicted
+  one (a model of the swell failed: r 0.65 against 0.97 measured in place, `superposition_scan.py`). After an edit (once
+  edits pause, 0.6 s) and when a score is shown, MuseScore renders the score once and finds the passage notes without a
+  value or with a stale one. Each such note's value is looked up first in the user's cache (`<setups folder>/even
+  cache.json`: every value by the contexts of notes j-3 … j+3), so an **undo or redo restores values without rendering**;
+  the rest are measured in windows: the note +-3 measured, 2 notes before (the Basses 4: `sso_perturbation_scan.json`) and
+  2 after rendered with their values held, from 0.5 s before the first note-on, the whole passage when that reaches both
+  ends (`sso_even_fast_checks.json`: such a window matches the whole passage within the noise). The full method (the
+  owner's choice): 3 passes, round 1 = the fit / 1.28 (CC11's measured factor), round 2 the same again when the residual
+  stays above 1 dB, the round with the smallest median slur range kept; a note that needs none gets 0 dB (measured, current,
+  never measured again). Rendering: plug-in instances of MuseScore's own (one per part and patch measured, loaded on the
+  main thread when first needed, the same setup and controllers as playback's), each on a worker thread, offline; parts in
+  parallel; paused while MuseScore plays (an edit made while playing is measured after it stops; playback is never stopped).
+  Values go on the notes **without an undo step** (the score is marked modified until saved). **Play**: when a note being
+  measured has its note-on in what is about to play (from the transport's start, the pre-roll of early notes included, to
+  the loop's end, else the score's), playback waits with a countdown in the status bar ("playing in ~n s", from the speed
+  measured so far), then plays; Stop cancels; otherwise it plays at once. Passages with a note played twice (repeats,
+  ornaments) are left out, as by the job: they play uncorrected. *Tools › Even Out Levels…* stays (a whole-score
+  measurement as one undo step). Built and tested on Linux with the test synth; untried with Kontakt and SSO.
 
 Tests: `tst_performancetechnique::evenLevels` (contexts, stale and current, undo, the metaTag round trip, the fit's maths),
 `tst_soundlibrary::evenLevelsGlide` (the CC11 glide's shape, headroom, a track level, layers, a stale note, presets),
-`tst_liveequivalence::liveEvenLevels`.
+`tst_soundlibrary::evenAutoWindows` (windows, run-in, cache key and file, the wait decision), `evenAutoSession` (idle,
+first measurement, an edit's windows, undo / redo from the cache, results after an edit), `evenAutoTestSynth` (end to end
+on the test synth), `tst_liveequivalence::liveEvenLevels`.
 
 ## Inventory
 

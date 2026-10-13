@@ -51,7 +51,10 @@
 #include "libmscore/synthesizerstate.h"
 #include "mtest/testutils.h"
 
+#include "libmscore/evenauto.h"
+#include "libmscore/undo.h"
 #ifdef TESTSYNTH
+#include "audio/vst3/evenmeasure.h"
 #include "audio/vst3/articulationcheck.h"
 #include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/librarycontrollers.h"
@@ -129,6 +132,8 @@ class TestSoundLibrary : public QObject, public MTest
       void levelSectionBalance();
       void levelRealRange();
       void evenLevelsGlide();
+      void evenAutoWindows();
+      void evenAutoSession();
       void playbackPresets();
       void renderKit();
       void renderKitRoll();
@@ -136,6 +141,7 @@ class TestSoundLibrary : public QObject, public MTest
       void liveControllers();
       void partMix();
 #ifdef TESTSYNTH
+      void evenAutoTestSynth();
       void mixerSlot();
       void mixerScore();
       void liveSetTestSynth();
@@ -2946,6 +2952,361 @@ void TestSoundLibrary::evenLevelsGlide()
                         ++presets;
                         }
       QCOMPARE(presets, 2);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   even levels measured in the background (evenauto.h): helpers
+//---------------------------------------------------------
+
+static const char* const EVEN_AUTO_MAP =
+   "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+   "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+   "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
+   "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+   " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+   " reattack='106' reattackGap='54' overlap='24' legatoGap='39' legatoDelay='-12:220 -2:240 -1:230 +1:220 +2:200 +12:440'"
+   " onset='60'/>"
+   "</Instrument>"
+   "<Instrument name='Basses' ids='contrabass'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+   "<Instrument name='Basses - Performance' with='Basses'><Switch type='none'/>"
+   "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' transitions='fingered:1-127:69'/>"
+   "</Instrument></SoundLibrary>";
+
+// the passages as rendered: runs of three or more joined notes on a route
+static std::vector<std::vector<EvenLevels::NoteInfo>> evenPassages(MasterScore* score)
+      {
+      std::vector<EvenLevels::NoteInfo> in;
+      score->setPlaylistDirty();
+      MidiRenderer midi(score);
+      midi.setMinChunkSize(10);
+      midi.setEvenLevelsInfo(&in);
+      EventMap events;
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      ctx.renderHarmony = true;
+      midi.renderScore(&events, ctx);
+      std::map<int, std::vector<EvenLevels::NoteInfo>> by;
+      for (const EvenLevels::NoteInfo& n : in)
+            by[n.route].push_back(n);
+      std::vector<std::vector<EvenLevels::NoteInfo>> out;
+      for (auto& b : by) {
+            std::vector<EvenLevels::NoteInfo>& ns = b.second;
+            std::stable_sort(ns.begin(), ns.end(), [](const EvenLevels::NoteInfo& x, const EvenLevels::NoteInfo& y) { return x.on < y.on; });
+            for (size_t s = 0; s < ns.size();) {
+                  size_t e = s;
+                  while (e + 1 < ns.size() && ns[e + 1].joined)
+                        ++e;
+                  if (e - s + 1 >= 3)
+                        out.push_back(std::vector<EvenLevels::NoteInfo>(ns.begin() + long(s), ns.begin() + long(e) + 1));
+                  s = e + 1;
+                  }
+            }
+      return out;
+      }
+
+// a stand-in for the plug-in: a note is louder by 2 dB when its pitch is a multiple of 3 (the swell), and follows the
+// CC11 in force at the time by its dB times CC11_FACTOR (as SSO's measured response); the envelope on the window's grid
+// is the level of the note whose window started last, the note's level the envelope at its window's middle
+static EvenAuto::Result fakeMeasure(const EvenAuto::Job& j)
+      {
+      EvenAuto::Result r;
+      r.id = j.id;
+      r.round = j.round;
+      const EvenLevels::Passage& p = j.fit;
+      auto cc11At = [&j](double t) {
+            int v = 127;
+            for (size_t i = 0; i < j.events.size() && j.times[i] <= t + 1e-9; ++i)
+                  if (j.events[i].type() == ME_CONTROLLER && j.events[i].controller() == CTRL_EXPRESSION)
+                        v = j.events[i].value();
+            return 20 * std::log10(std::max(1, v) / 127.0);
+            };
+      std::vector<int> pitch(p.on.size(), 0);
+      for (size_t k = 0; k < p.on.size(); ++k)
+            for (size_t i = 0; i < j.events.size(); ++i)
+                  if (j.events[i].type() == ME_NOTEON && j.events[i].velo() > 0 && std::fabs(j.times[i] - p.on[k]) < 1e-6)
+                        pitch[k] = j.events[i].pitch();
+      auto envAt = [&](double t) {
+            size_t k = size_t(std::upper_bound(p.window.begin(), p.window.end(), t) - p.window.begin());
+            k = k == 0 ? 0 : k - 1;
+            return (pitch[k] % 3 == 0 ? 2.0 : 0.0) + EvenLevels::CC11_FACTOR * cc11At(t) - 20.0;
+            };
+      for (int i = 0; i < p.gridSize(); ++i)
+            r.env.push_back(envAt(p.gridStart() + i * EvenLevels::STEP_MS / 1000.0));
+      for (size_t k = 0; k < p.on.size(); ++k)
+            r.levels.push_back(envAt(p.window[k] + EvenLevels::WINDOW_MS / 2000.0));
+      r.ok = true;
+      r.audioSeconds = j.audioSeconds();
+      return r;
+      }
+
+//---------------------------------------------------------
+//   evenAutoWindows
+//    evenlevels.h › windows: an edited note +-3 measured, 2 notes before (the Basses 4) and 2 after rendered with them,
+//    windows whose renders meet joined, the whole passage when one reaches both ends; the cache key (the contexts of
+//    notes j-3 … j+3) and the cache file; the wait: a note being measured from the play start on, before the end
+//---------------------------------------------------------
+
+void TestSoundLibrary::evenAutoWindows()
+      {
+      auto needs = [](int n, std::vector<int> at) {
+            std::vector<bool> v(size_t(n), false);
+            for (int a : at)
+                  v[size_t(a)] = true;
+            return v;
+            };
+      std::vector<EvenLevels::Window> w = EvenLevels::windows(30, needs(30, { 15 }), EvenLevels::RUN_IN);
+      QCOMPARE(int(w.size()), 1);
+      QCOMPARE(w[0].measureFirst, 12);
+      QCOMPARE(w[0].measureLast, 18);
+      QCOMPARE(w[0].renderFirst, 10);
+      QCOMPARE(w[0].renderLast, 20);
+      // the Basses: 4 notes of run-in
+      w = EvenLevels::windows(30, needs(30, { 15 }), EvenLevels::RUN_IN_BASSES);
+      QCOMPARE(w[0].renderFirst, 8);
+      QCOMPARE(w[0].renderLast, 20);
+      // two edits far apart: two windows; near: one
+      w = EvenLevels::windows(40, needs(40, { 8, 30 }), EvenLevels::RUN_IN);
+      QCOMPARE(int(w.size()), 2);
+      QCOMPARE(w[1].measureFirst, 27);
+      w = EvenLevels::windows(40, needs(40, { 8, 16 }), EvenLevels::RUN_IN);
+      QCOMPARE(int(w.size()), 1);
+      QCOMPARE(w[0].measureFirst, 5);
+      QCOMPARE(w[0].measureLast, 19);
+      QCOMPARE(w[0].renderFirst, 3);
+      QCOMPARE(w[0].renderLast, 21);
+      // at the start: clipped; a short passage: whole, every note measured
+      w = EvenLevels::windows(30, needs(30, { 1 }), EvenLevels::RUN_IN);
+      QCOMPARE(w[0].measureFirst, 0);
+      QCOMPARE(w[0].renderFirst, 0);
+      QCOMPARE(w[0].measureLast, 4);
+      QCOMPARE(w[0].renderLast, 6);
+      w = EvenLevels::windows(10, needs(10, { 5 }), EvenLevels::RUN_IN);
+      QCOMPARE(w[0].measureFirst, 0);
+      QCOMPARE(w[0].measureLast, 9);
+      QCOMPARE(int(EvenLevels::windows(10, needs(10, {}), EvenLevels::RUN_IN).size()), 0);
+      // the Basses' run-in by the main patch's ids
+      auto lib = loadMap(EVEN_AUTO_MAP);
+      QVERIFY(lib);
+      const SoundLib::LibInstrument* violin = nullptr;
+      const SoundLib::LibInstrument* basses = nullptr;
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            if (li.name == "Violin - Performance")
+                  violin = &li;
+            if (li.name == "Basses - Performance")
+                  basses = &li;
+            }
+      QVERIFY(violin && basses);
+      QCOMPARE(EvenLevels::runInFor(*lib, violin), EvenLevels::RUN_IN);
+      QCOMPARE(EvenLevels::runInFor(*lib, basses), EvenLevels::RUN_IN_BASSES);
+      // the key: notes j-3 … j+3 only
+      std::vector<QString> c;
+      for (int k = 0; k < 12; ++k)
+            c.push_back(QString("p|%1").arg(k));
+      const QString k6 = EvenLevels::cacheKey(c, 6);
+      QVERIFY(k6 != EvenLevels::cacheKey(c, 5));
+      std::vector<QString> c2 = c;
+      c2[10] = "p|x";
+      c2[2] = "p|y";
+      QCOMPARE(EvenLevels::cacheKey(c2, 6), k6);
+      c2[9] = "p|z";
+      QVERIFY(EvenLevels::cacheKey(c2, 6) != k6);
+      QVERIFY(EvenLevels::cacheKey(c, 0) != EvenLevels::cacheKey(c, 1));
+      // the cache's file
+      QTemporaryDir tmp;
+      {
+            EvenLevels::Cache cache;
+            cache.load(tmp.path() + "/x/even cache.json");
+            cache.put(k6, 1.25);
+            cache.put("other", 0.0);
+            QVERIFY(cache.save());
+      }
+      {
+            EvenLevels::Cache cache;
+            cache.load(tmp.path() + "/x/even cache.json");
+            double db = -1;
+            QVERIFY(cache.get(k6, &db));
+            QCOMPARE(db, 1.25);
+            QVERIFY(cache.get("other", &db));
+            QCOMPARE(db, 0.0);
+            QVERIFY(!cache.get("none", &db));
+      }
+      // the wait: a note being measured in [from, to)
+      QVERIFY(!EvenLevels::mustWait({}, 0, 1e9));
+      QVERIFY(EvenLevels::mustWait({ 5.0, 6.0 }, 0, 1e9));
+      QVERIFY(EvenLevels::mustWait({ 5.0, 6.0 }, 5.5, 1e9));
+      QVERIFY(!EvenLevels::mustWait({ 5.0, 6.0 }, 6.5, 1e9));
+      QVERIFY(!EvenLevels::mustWait({ 5.0, 6.0 }, 0, 5.0));
+      QVERIFY(EvenLevels::mustWait({ 5.0, 6.0 }, 0, 5.01));
+      }
+
+//---------------------------------------------------------
+//   evenAutoSession
+//    EvenAuto::Session with a stand-in for the plug-in (fakeMeasure): idle without a plug-in library or with the
+//    setting off; every passage measured once at first (round 0, then rounds 1 / 2 with CC11's factor: the swell
+//    evened out), values on the notes without an undo step (the score modified), nothing again after; an edit: only
+//    the windows near it measured, playback waiting for them only when they are in what plays; undo and redo: the
+//    values back from the cache, nothing rendered; a result after an edit waits for detect(), its window goes on
+//---------------------------------------------------------
+
+void TestSoundLibrary::evenAutoSession()
+      {
+      auto lib = loadMap(EVEN_AUTO_MAP);
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" },
+                                      { "levels/evenLevels", "1" } });
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EvenLevels::Cache cache;
+      EvenAuto::Session session(score, &cache);
+      int renders = 0;
+      auto runAll = [&](std::vector<EvenAuto::Job> jobs) {
+            while (!jobs.empty()) {
+                  const EvenAuto::Job j = jobs.back();
+                  jobs.pop_back();
+                  ++renders;
+                  QVERIFY(!j.events.empty());
+                  QVERIFY(std::fabs(j.from - std::max(0.0, j.fit.on.front() - EvenLevels::LEAD_S)) < 1e-9);
+                  EvenAuto::Job next;
+                  if (session.result(fakeMeasure(j), &next))
+                        jobs.push_back(next);
+                  }
+            };
+      // idle: MIDI out (no plug-in), or the setting off
+      QVERIFY(!EvenAuto::active(score));
+      QVERIFY(session.detect().empty());
+      QVERIFY(!session.busy());
+      QVERIFY(!EvenLevels::mustWait(session.pendingOns(), 0, 1e9));
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      score->setMetaTag(Playback::metaTag, "levels/evenLevels=0");
+      QVERIFY(!EvenAuto::active(score));
+      QVERIFY(session.detect().empty());
+      score->setMetaTag(Playback::metaTag, QString());
+      QVERIFY(EvenAuto::active(score));
+
+      // at first: every passage
+      QVERIFY(!evenPassages(score).empty());
+      session.edited();
+      std::vector<EvenAuto::Job> jobs = session.detect();
+      QVERIFY(!jobs.empty());
+      QVERIFY(session.busy());
+      std::vector<double> ons = session.pendingOns();
+      QVERIFY(!ons.empty());
+      const double lastOn = *std::max_element(ons.begin(), ons.end());
+      const double firstOn = *std::min_element(ons.begin(), ons.end());
+      QVERIFY(EvenLevels::mustWait(ons, 0, 1e9));
+      QVERIFY(!EvenLevels::mustWait(ons, lastOn + 0.01, 1e9));       // (played from after them: at once)
+      QVERIFY(!EvenLevels::mustWait(ons, 0, firstOn));                // (a loop ending before them)
+      QVERIFY(!score->evenLevelsWritten());
+      const int firstJobs = int(jobs.size());
+      runAll(jobs);
+      QVERIFY(!session.busy());
+      QVERIFY(renders >= 2 * firstJobs);
+      QVERIFY(score->evenLevelsWritten());
+      QVERIFY(score->dirty());
+      QVERIFY(!score->undoStack()->canUndo());                         // (no undo step)
+      // every passage's notes: a value, current; the swell's notes lower
+      double swell = 0, rest = 0;
+      int nSwell = 0, nRest = 0;
+      std::map<const Note*, double> first;
+      for (const auto& p : evenPassages(score)) {
+            for (size_t k = 0; k < p.size(); ++k) {
+                  const Note* n = p[k].note;
+                  QVERIFY2(EvenLevels::isSet(n->evenLevel()), qPrintable(QString("note %1").arg(k)));
+                  QCOMPARE(n->evenContext(), p[k].context);
+                  QCOMPARE(EvenLevels::state(n), EvenLevels::State::CURRENT);
+                  first[n] = n->evenLevel();
+                  if (k == 0 || k + 1 == p.size())
+                        continue;
+                  if (p[k].pitch % 3 == 0) {
+                        swell += n->evenLevel();
+                        ++nSwell;
+                        }
+                  else {
+                        rest += n->evenLevel();
+                        ++nRest;
+                        }
+                  }
+            }
+      QVERIFY(nSwell > 0 && nRest > 0);
+      QVERIFY2(swell / nSwell < rest / nRest - 0.5, qPrintable(QString("%1 %2").arg(swell / nSwell).arg(rest / nRest)));
+      QCOMPARE(session.measured(), int(first.size()));
+      // nothing again
+      session.edited();
+      QVERIFY(session.detect().empty());
+
+      // an edit in the longest passage: only near it
+      std::vector<EvenLevels::NoteInfo> longest;
+      for (const auto& p : evenPassages(score))
+            if (p.size() > longest.size())
+                  longest = p;
+      const size_t mid = longest.size() / 2;
+      Note* edited = const_cast<Note*>(longest[mid].note);
+      score->startCmd();
+      edited->undoChangeProperty(Pid::LIBRARY_VELOCITY, 40);
+      score->endCmd();
+      session.edited();
+      jobs = session.detect();
+      QVERIFY(!jobs.empty());
+      ons = session.pendingOns();
+      QVERIFY(int(ons.size()) <= int(longest.size()));
+      for (double t : ons)
+            QVERIFY(t >= longest.front().on - 1.0 && t <= longest.back().on + 1.0);
+      const int before = renders;
+      runAll(jobs);
+      QVERIFY(renders > before);
+      std::map<const Note*, double> second;
+      for (const auto& p : evenPassages(score)) {
+            for (const EvenLevels::NoteInfo& n : p) {
+                  QCOMPARE(n.note->evenContext(), n.context);
+                  second[n.note] = n.note->evenLevel();
+                  }
+            }
+      QVERIFY(second.count(edited));
+
+      // undo: the values back from the cache, nothing rendered
+      score->undoRedo(true, nullptr);
+      session.edited();
+      QVERIFY(session.detect().empty());
+      for (const auto& p : evenPassages(score)) {
+            for (const EvenLevels::NoteInfo& n : p) {
+                  QVERIFY2(std::fabs(n.note->evenLevel() - first[n.note]) < 1e-6,
+                           qPrintable(QString("undo: %1 against %2").arg(n.note->evenLevel()).arg(first[n.note])));
+                  QCOMPARE(n.note->evenContext(), n.context);
+                  }
+            }
+      // redo: the edit's values back
+      score->undoRedo(false, nullptr);
+      session.edited();
+      QVERIFY(session.detect().empty());
+      for (const auto& p : evenPassages(score))
+            for (const EvenLevels::NoteInfo& n : p)
+                  QVERIFY(std::fabs(n.note->evenLevel() - second[n.note]) < 1e-6);
+      QVERIFY(session.fromCache() > 0);
+
+      // a result after an edit waits for detect(); its window goes on when its notes are the same
+      score->undoRedo(true, nullptr);
+      cache.clear();
+      for (const auto& p : evenPassages(score))
+            for (const EvenLevels::NoteInfo& n : p) {
+                  const_cast<Note*>(n.note)->setEvenLevel(EvenLevels::NONE);
+                  const_cast<Note*>(n.note)->setEvenContext(QString());
+                  }
+      session.edited();
+      jobs = session.detect();
+      QVERIFY(!jobs.empty());
+      session.edited();                                    // (an edit elsewhere: nothing changed for these notes)
+      EvenAuto::Job next;
+      QVERIFY(!session.result(fakeMeasure(jobs.front()), &next));        // (held until detect)
+      bool goesOn = false;
+      for (const EvenAuto::Job& j : session.detect())
+            goesOn = goesOn || (j.id == jobs.front().id && j.round == 1);
+      QVERIFY(goesOn);
       delete score;
       }
 
@@ -7567,6 +7928,73 @@ static double rms(const std::vector<float>& b, int side)
 static double dB(double a, double b)
       {
       return 20 * std::log10(a / b);
+      }
+
+//---------------------------------------------------------
+//   evenAutoTestSynth
+//    the background measurement end to end on the test synth (it ignores CC11, so no correction can work: what it
+//    shows is the path): each window's jobs rendered offline on an instance of its own (EvenMeasure::run: PASSES passes,
+//    the job's measurement), every passage note given a measured value with its context, the values within MAX_DB,
+//    nothing to measure after; a cancelled render gives no result
+//---------------------------------------------------------
+
+void TestSoundLibrary::evenAutoTestSynth()
+      {
+      auto lib = loadMap(EVEN_AUTO_MAP);
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" },
+                                      { "levels/evenLevels", "1" } });
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const int rate = 44100;
+      QString error;
+      Vst3Synth vst;
+      vst.init(rate);
+      vst.setPlugin(0, Vst3Plugin::load(TESTSYNTH, rate, 512, &error));
+      QVERIFY2(vst.plugin(0), qPrintable(error));
+      vst.beginExport(rate);
+      EvenLevels::Cache cache;
+      EvenAuto::Session session(score, &cache);
+      std::vector<EvenAuto::Job> jobs = session.detect();
+      QVERIFY(!jobs.empty());
+      // cancelled: nothing
+      {
+            const EvenAuto::Result r = EvenMeasure::run(&vst, jobs.front(), rate, []() { return false; });
+            QVERIFY(!r.ok);
+      }
+      int renders = 0;
+      while (!jobs.empty()) {
+            const EvenAuto::Job j = jobs.back();
+            jobs.pop_back();
+            const EvenAuto::Result r = EvenMeasure::run(&vst, j, rate);
+            QVERIFY2(r.ok, qPrintable(r.error));
+            QCOMPARE(r.levels.size(), j.fit.on.size());
+            QCOMPARE(int(r.env.size()), j.fit.gridSize());
+            QVERIFY(std::fabs(r.audioSeconds - j.audioSeconds()) < 0.05);
+            for (double l : r.levels)
+                  QVERIFY2(std::isfinite(l) && l > -60, qPrintable(QString::number(l)));     // (it sounds)
+            ++renders;
+            EvenAuto::Job next;
+            if (session.result(r, &next))
+                  jobs.push_back(next);
+            }
+      vst.endExport();
+      QVERIFY(renders >= 2);
+      for (const auto& p : evenPassages(score)) {
+            for (const EvenLevels::NoteInfo& n : p) {
+                  QVERIFY(EvenLevels::isSet(n.note->evenLevel()));
+                  QVERIFY(std::fabs(n.note->evenLevel()) <= EvenLevels::MAX_DB);
+                  QCOMPARE(n.note->evenContext(), n.context);
+                  }
+            }
+      QVERIFY(session.measured() > 0);
+      session.edited();
+      QVERIFY(session.detect().empty());
+      delete score;
       }
 
 //---------------------------------------------------------
