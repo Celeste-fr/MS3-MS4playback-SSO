@@ -236,6 +236,47 @@ or one round leaves the worst notes 0.3-0.7 dB further off; ~0.5 s of rendering 
 **The owner (2026-10-13) chose the full method** (3 passes, 2 rounds, CC11's measured strength 1.28 built in): ~3 s per
 edit, parts in parallel. Branch `even-auto` builds it.
 
+**Built** (branch `even-auto`, 2026-10-13; not merged; no Windows build yet): libmscore/evenauto.h (the Session: render,
+cache, windows, rounds), audio/vst3/evenmeasure.h (render + measurement, shared with the job), mscore/evenautomeasurer.h
+(own plug-in instances on worker threads, triggers, Play's wait), docs/PLAYBACK_SETTINGS.md › Even levels. Tested on Linux
+only (tst_soundlibrary evenAutoWindows / evenAutoSession with a stand-in plug-in that answers CC11 by 1.28 / evenAutoTestSynth
+end to end on the test synth). **Untried with Kontakt and SSO**: the time per edit (the estimate ~3 s assumed ~2.1 s of audio
+per pass; the windows render the job's 3 s gap after the last note-off too, so ~5 s per pass at Whence's tempo, ~10-15 s of
+rendering per edit at the VM's 4.4x), memory (one more Kontakt per part and patch measured: ~85-90 MB each plus samples),
+Kontakt rendering offline on a worker thread while the main instances play nothing, the countdown's estimate, a full
+score's first measurement at open (every passage). On the VM: open Whence, edit a slurred note, press Play at once (the wait,
+then the corrected note), undo (no wait), compare a window's values with `--even-levels` on the same bars. Open choices for
+the owner: whether a first measurement at score open should wait for Play at all (a whole score at once), whether the 3 s
+gap may shrink (a measured release time per patch would be the source).
+
+**The owner's decisions (2026-10-13)**, built on `even-auto`: (1) opening a score without values, **Play waits for the
+measurement** (countdown, Stop cancels) rather than playing uncorrected: the wait covers queued windows too (at opening
+every passage is queued; `Session::mustWait`), and each instance renders **from the play position forward first**
+(`EvenAuto::priority` / `next`: the windows reaching the focus or after it, earliest first, then those before it, nearest
+first; the focus is the play position at each detect, Play's start while it waits; instances load in the same order); the
+rest goes on in the background; running playback is never stopped. (2) **The gap may shrink** to what the VM shows
+doesn't change results: measured (`even_gap_check.py`, `sso_even_gap_check.json`; VM, kthost + Kontakt 8 + SSO, the
+measurer's windows of Whence 12-TET / Whence Celli, Violins 1, Violas, Basses = Whence Celli an octave lower; gaps 0.25-3 s,
+2-6 kthost processes x 4 renders x 3 passes each; the process is the unit of noise: a process shifts every note a little):
+from **1 s** (Violins 1, Violas, Celli) and **1.5 s** (Basses) every longer gap's per-note levels and fitted glides match
+3 s (mean z^2 under the chi-square 95 % bound, mean shift within t x SE; e.g. Celli 1 s: shift -0.003 +- 0.013 dB, z^2
+0.93 / 1.33; fit -0.016 +- 0.011, 1.04), 0.25 / 0.5 s do not (Celli 0.25: z^2 1.78, fit 1.91; effect ~0.1-0.2 dB rms).
+The release does not fall to -60 dB in 3 s (the -40 dB point is 2.4-3 s after the last note-off, Tree mic + Leader as
+shipped) but the next window's measured notes begin >= 0.5 s + 2 run-in notes later. Patches not measured keep 3 s.
+Also built: **early stop** (the owner's addition: 2 passes, a 3rd only above the 95th percentile of SSO's |pass 1 - pass
+2|: 0.67 / 0.74 / 1.26 / 1.49 dB; ~70 % stop at 2, 23-25 % of the passes saved; fits within always-3's 95 % interval,
+RMS error +0.01-0.02 dB), **4096-frame blocks** (12-16 % faster, levels the same), a transport restart per pass (as
+renderPasses). **Render speed** (the owner asked why 4.4x vs 17x): kthost's time goes with the seconds of *notes* (~0.2 s
+per second for Violas / Celli, 0.1 Basses, 0.3 Violins 1 in the earlier, colder runs), silence is nearly free; the VM
+streams SSO's samples over the network from the owner's PC, so one file took 31-65 s on different runs: 17x was a
+mostly silent scan, 4.4x dense passes with cold caches. 120 s idle after loading changed nothing; two processes at once ran
+each nearly as fast as alone. **Time per edit** (VM): ~0.4 s per pass (2 s of notes), ~2.3 passes, 2-3 rounds: ~1.5-2.5 s
+of rendering per edited part (before ~2.4-3.6 s), plus the plug-in's load at the first edit; the countdown starts from the
+VM's 8.9x audio (`RENDER_SPEED`) until a render here is timed. The round-2 rule is the job's (residual above 1 dB).
+Smoke test (Linux, headless MuseScore, Xvfb + PulseAudio null sink, the test synth as the library's plug-in, slow to load):
+Play pressed at once after opening waited 11.3 s with "Even levels: measuring … loading the plug-in, then ~n s", then
+played (status bar: Play, the position moving); Stop pressed during a 30 s wait: no start in the 4 s until it quit. Still untried in MuseScore with Kontakt / SSO (no Windows build).
+
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
 Built from the listening test below (libmscore/evenlevels.h, mscore/evenlevelsjob.h, docs/PLAYBACK_SETTINGS.md › Even

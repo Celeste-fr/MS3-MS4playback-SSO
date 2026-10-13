@@ -542,6 +542,7 @@ bool MasterScore::saveFile(bool generateBackup)
          | QFile::ReadGroup | QFile::ReadOther);
 
       undoStack()->setClean();
+      masterScore()->setEvenLevelsWritten(false);
       setSaved(true);
       info.refresh();
       update();

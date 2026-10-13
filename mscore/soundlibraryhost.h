@@ -266,6 +266,9 @@ class SoundLibraryExport {
       // command line); patches: slot -> the patch loaded there
       static std::shared_ptr<Vst3Synth> loadInstances(Score* score, float sampleRate, QString* error,
                                                       std::map<int, QString>* patches = nullptr);
+      // one route's patch, as loadInstances loads it, on slot 0 of an instance of its own (the even levels measured in
+      // the background: mscore/evenautomeasurer.h)
+      static std::shared_ptr<Vst3Synth> loadInstance(Score* score, const SoundLib::Route& route, float sampleRate, QString* error);
       void finish();                            // before the MasterSynthesizer goes
       bool play(const NPlayEvent& event);       // true: a library part's event, played here
       };

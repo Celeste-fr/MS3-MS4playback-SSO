@@ -1971,7 +1971,41 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             }
       return own;
       }
+
+std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const SoundLib::Route& r, float sampleRate, QString* error)
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!library || !r.instrument) {
+            if (error)
+                  *error = QObject::tr("No sound library");
+            return nullptr;
+            }
+      const QString path = SoundLibraryHost::pluginPath(*library, error);
+      if (path.isEmpty())
+            return nullptr;
+      std::shared_ptr<Vst3Synth> own(new Vst3Synth);
+      own->init(sampleRate);
+      own->setVarispeed(library->varispeed);
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
+      if (!p)
+            return nullptr;
+      QString e;
+      if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
+          && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e))
+            qWarning("Sound library: %s", qPrintable(e));
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      LibraryControllers::applyParameters(p.get(), r, PartControllers::read(score->masterScore()), nullptr);
+      own->setParameterIds(0, parameterIds(p.get(), r, routes));
+      own->setPlugin(0, std::move(p));
+      return own;
+      }
 #else
+std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score*, const SoundLib::Route&, float, QString* error)
+      {
+      if (error)
+            *error = QObject::tr("This MuseScore was built without plug-in hosting.");
+      return nullptr;
+      }
 std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score*, float, QString* error, std::map<int, QString>*)
       {
       if (error)

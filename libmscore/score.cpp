@@ -699,7 +699,7 @@ bool Score::readOnly() const
 
 bool Score::dirty() const
       {
-      return !undoStack()->isClean();
+      return !undoStack()->isClean() || (masterScore() && masterScore()->evenLevelsWritten());
       }
 
 //---------------------------------------------------------

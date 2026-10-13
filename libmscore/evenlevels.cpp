@@ -15,6 +15,10 @@
 #include <limits>
 
 #include <QCryptographicHash>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QSaveFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -383,7 +387,14 @@ static std::vector<double> solve(std::vector<std::vector<double>> A, std::vector
 std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<double>& level,
                              double* fitRms, double* envRms)
       {
+      return fitGlide(p, env, level, std::vector<bool>(), fitRms, envRms);
+      }
+
+std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<double>& level,
+                             const std::vector<bool>& fixed, double* fitRms, double* envRms)
+      {
       const size_t n = p.on.size();
+      auto held = [&fixed](size_t j) { return j < fixed.size() && fixed[j]; };
       const int m = std::min(p.gridSize(), int(env.size()));
       std::vector<double> du(n, 0.0);
       if (n < 3 || m <= 0)
@@ -421,6 +432,14 @@ std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, c
                   y += w[size_t(i)] * M[a][size_t(i)] * r[size_t(i)];
             b[a] = y;
             }
+      // a held note's value stays: its row the identity, no coupling, its change 0
+      for (size_t a = 0; a < n; ++a)
+            if (held(a)) {
+                  for (size_t c = 0; c < n; ++c)
+                        A[a][c] = A[c][a] = 0.0;
+                  A[a][a] = 1.0;
+                  b[a] = 0.0;
+                  }
       du = solve(A, b);
       double sw = 0, fit = 0, flat = 0;
       for (int i = 0; i < m; ++i) {
@@ -464,6 +483,188 @@ std::vector<double> windowChanges(const Passage& p, const std::vector<double>& v
             out[k] = cnt ? sum / cnt : 0.0;
             }
       return out;
+      }
+
+//---------------------------------------------------------
+//   windows
+//---------------------------------------------------------
+
+std::vector<Window> windows(int n, const std::vector<bool>& needs, int runIn, int runOut, int margin)
+      {
+      std::vector<Window> out;
+      for (int j = 0; j < n; ++j) {
+            if (j >= int(needs.size()) || !needs[size_t(j)])
+                  continue;
+            Window w;
+            w.measureFirst = std::max(0, j - margin);
+            w.measureLast = std::min(n - 1, j + margin);
+            w.renderFirst = std::max(0, w.measureFirst - runIn);
+            w.renderLast = std::min(n - 1, w.measureLast + runOut);
+            if (!out.empty() && w.renderFirst <= out.back().renderLast) {
+                  Window& b = out.back();
+                  b.measureLast = std::max(b.measureLast, w.measureLast);
+                  b.renderLast = std::max(b.renderLast, w.renderLast);
+                  }
+            else
+                  out.push_back(w);
+            }
+      for (Window& w : out) {
+            if (w.renderFirst == 0 && w.renderLast == n - 1) {
+                  w.measureFirst = 0;
+                  w.measureLast = n - 1;
+                  }
+            }
+      return out;
+      }
+
+int runInFor(const SoundLib::Library& library, const SoundLib::LibInstrument* patch)
+      {
+      if (!patch)
+            return RUN_IN;
+      const SoundLib::LibInstrument* main = patch;
+      if (!patch->with.isEmpty()) {
+            for (const SoundLib::LibInstrument& li : library.instruments)
+                  if (li.name == patch->with)
+                        main = &li;
+            }
+      for (const QString& id : main->ids)
+            if (id == "contrabass" || id == "contrabasses" || id == "double-bass")
+                  return RUN_IN_BASSES;
+      return RUN_IN;
+      }
+
+//---------------------------------------------------------
+//   gapFor / earlyStopFor
+//    the patches measured by tools/soundlibraries/even_gap_check.py (sso_even_gap_check.json; Windows test VM, kthost +
+//    Kontakt 8 + SSO, the windows the background measurer renders of Whence): the smallest gap whose levels and fitted
+//    glides matched the 3 s gap's, and the early stop's threshold (the 95th percentile of |pass 1 - pass 2| over the
+//    measured notes). Any other patch: the job's 3 s, always PASSES passes
+//---------------------------------------------------------
+
+static const struct Measured { const char* patch; double gap; double earlyStopDb; } MEASURED[] = {
+      { "Violins 1 - Performance", 1.0, 0.67 },
+      { "Violas - Performance", 1.0, 0.74 },
+      { "Celli - Performance", 1.0, 1.26 },
+      { "Basses - Performance", 1.5, 1.49 },  // (Whence's Celli bars 1-8 an octave lower: Whence has no slurred Basses)
+      };
+
+static const Measured* measured(const SoundLib::LibInstrument* patch)
+      {
+      if (!patch)
+            return nullptr;
+      for (const Measured& m : MEASURED)
+            if (patch->name == QLatin1String(m.patch))
+                  return &m;
+      return nullptr;
+      }
+
+double gapFor(const SoundLib::Library&, const SoundLib::LibInstrument* patch)
+      {
+      const Measured* m = measured(patch);
+      return m ? m->gap : GAP_S;
+      }
+
+double earlyStopFor(const SoundLib::Library&, const SoundLib::LibInstrument* patch)
+      {
+      const Measured* m = measured(patch);
+      return m ? m->earlyStopDb : 0.0;
+      }
+
+QString cacheKey(const std::vector<QString>& contexts, size_t j)
+      {
+      QStringList parts;
+      for (long k = long(j) - MARGIN; k <= long(j) + MARGIN; ++k)
+            parts << (k >= 0 && k < long(contexts.size()) ? contexts[size_t(k)] : QString("-"));
+      return QString::fromLatin1(QCryptographicHash::hash(parts.join('/').toUtf8(), QCryptographicHash::Sha1).toHex().left(24));
+      }
+
+bool mustWait(const std::vector<double>& pendingOns, double from, double to)
+      {
+      for (double t : pendingOns)
+            if (t >= from - 1e-9 && t < to)
+                  return true;
+      return false;
+      }
+
+//---------------------------------------------------------
+//   Cache
+//---------------------------------------------------------
+
+void Cache::load(const QString& file)
+      {
+      _file = file;
+      _entries.clear();
+      _clock = 0;
+      _changed = false;
+      if (file.isEmpty())
+            return;
+      QFile f(file);
+      if (!f.open(QIODevice::ReadOnly))
+            return;
+      const QJsonObject top = QJsonDocument::fromJson(f.readAll()).object();
+      const QJsonObject e = top.value("entries").toObject();
+      for (auto i = e.begin(); i != e.end(); ++i) {
+            const QJsonArray a = i.value().toArray();
+            if (a.size() < 2)
+                  continue;
+            const qint64 used = qint64(a[1].toDouble());
+            _entries[i.key()] = { clampDb(a[0].toDouble()), used };
+            _clock = std::max(_clock, used);
+            }
+      }
+
+bool Cache::save()
+      {
+      if (_file.isEmpty() || !_changed)
+            return true;
+      QJsonObject e;
+      for (const auto& x : _entries)
+            e[x.first] = QJsonArray { x.second.db, double(x.second.used) };
+      QJsonObject top;
+      top["about"] = QString("MuseScore's even-levels values by context (libmscore/evenlevels.h, Cache): measured in the "
+                             "background near edits; reused when a context comes back (undo, redo, the same passage again)");
+      top["entries"] = e;
+      QDir().mkpath(QFileInfo(_file).absolutePath());
+      QSaveFile f(_file);
+      if (!f.open(QIODevice::WriteOnly))
+            return false;
+      f.write(QJsonDocument(top).toJson(QJsonDocument::Compact));
+      if (!f.commit())
+            return false;
+      _changed = false;
+      return true;
+      }
+
+bool Cache::get(const QString& key, double* db)
+      {
+      auto i = _entries.find(key);
+      if (i == _entries.end())
+            return false;
+      i->second.used = ++_clock;
+      if (db)
+            *db = i->second.db;
+      return true;
+      }
+
+void Cache::put(const QString& key, double db)
+      {
+      Entry& e = _entries[key];
+      if (std::fabs(e.db - db) > 1e-9 || e.used == 0)
+            _changed = true;
+      e.db = db;
+      e.used = ++_clock;
+      if (int(_entries.size()) > MAX_ENTRIES) {
+            // the least recently used tenth goes
+            std::vector<qint64> uses;
+            uses.reserve(_entries.size());
+            for (const auto& x : _entries)
+                  uses.push_back(x.second.used);
+            std::nth_element(uses.begin(), uses.begin() + long(uses.size() / 10), uses.end());
+            const qint64 cut = uses[uses.size() / 10];
+            for (auto i = _entries.begin(); i != _entries.end();)
+                  i = i->second.used <= cut ? _entries.erase(i) : std::next(i);
+            _changed = true;
+            }
       }
 
 }     // namespace EvenLevels

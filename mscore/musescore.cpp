@@ -137,6 +137,7 @@
 #include "libmscore/soundlibrary.h"
 #include "libmscore/playbacksettings.h"
 #include "soundlibraryhost.h"
+#include "evenautomeasurer.h"
 #include "libmscore/renderpreflight.h"
 #include "liveintegration.h"
 #include "liveclips.h"
@@ -2682,6 +2683,9 @@ MuseScore::MuseScore()
       if (seq) {
             connect(seq, SIGNAL(started()), SLOT(seqStarted()));
             connect(seq, SIGNAL(stopped()), SLOT(seqStopped()));
+            // even levels measured in the background pause while MuseScore plays (evenautomeasurer.h)
+            connect(seq, &Seq::started, EvenAutoMeasurer::instance(), []() { EvenAutoMeasurer::instance()->playing(true); });
+            connect(seq, &Seq::stopped, EvenAutoMeasurer::instance(), []() { EvenAutoMeasurer::instance()->playing(false); });
             }
       loadScoreList();
 
@@ -3454,6 +3458,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
       if (seq)
             seq->setScoreView(cv);
       SoundLibraryHost::instance()->preloadSoon(cs);    // the sound library's instances, ahead of play
+      EvenAutoMeasurer::instance()->setScore(cs);       // even levels measured in the background (evenautomeasurer.h)
       LiveIntegration::Watcher::instance()->update();   // a linked Live Set, re-imported when Live saves it
       LiveIntegration::LiveClipsLink::instance()->setScore(cs ? cs->masterScore() : nullptr);  // Live plays the score
       LiveIntegration::LiveClipEditor::instance()->setCurrentScore(cs ? cs->masterScore() : nullptr);  // a Live clip edited here
@@ -6257,6 +6262,7 @@ void MuseScore::writeSettings()
             synthControl->writeSettings();
       settings.setValue("synthControlVisible", synthControl && synthControl->isVisible());
       settings.setValue("mixerVisible", mixer && mixer->isVisible());
+      EvenAutoMeasurer::instance()->shutdown();      // (its plug-in instances and workers, before the audio goes)
       if (seq) {
             seq->exit();
             }
@@ -7730,6 +7736,7 @@ void MuseScore::endCmd(bool undoRedo)
       if (MScore::_error != MS_NO_ERROR)
             showError();
       if (cs) {
+            EvenAutoMeasurer::instance()->edited(cs);    // (an edit: even levels near it measured in the background)
             setPos(cs->inputState().tick());
             updateInputState(cs);
             updateUndoRedo();

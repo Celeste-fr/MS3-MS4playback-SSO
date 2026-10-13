@@ -66,7 +66,7 @@ class MasterScore;
 class Note;
 class Part;
 class Score;
-namespace SoundLib { struct Articulation; struct LibInstrument; }
+namespace SoundLib { struct Articulation; struct LibInstrument; class Library; }
 
 namespace EvenLevels {
 
@@ -167,8 +167,74 @@ struct Passage {
 // level (slurStats); fitRms / envRms: the rms off target with the fit / without (on the weighted grid)
 std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<double>& level,
                              double* fitRms = nullptr, double* envRms = nullptr);
+// the same with some notes held (fixed[j]: its value stays, 0 change: a window's run-in and run-out notes, whose own
+// values play as measured before; evenauto.h)
+std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<double>& level,
+                             const std::vector<bool>& fixed, double* fitRms = nullptr, double* envRms = nullptr);
 // the change each note's window hears of a glide of values v (smoothed as the envelope)
 std::vector<double> windowChanges(const Passage& p, const std::vector<double>& v);
+
+//---------------------------------------------------------
+//   Measuring in the background near edits (libmscore/evenauto.h has the design; the owner, 2026-10-13)
+//---------------------------------------------------------
+
+constexpr double CC11_FACTOR = 1.28;    // K: a correction's measured change over the predicted (the job's round 1 on the VM
+                                        // and the listening test's G; sso_even_fast_checks.json): a fit divided by it
+constexpr int MARGIN = 3;               // an edited note +-3 measured (sso_perturbation_scan.json: a note's level depends
+                                        // on ~2 notes before and 1 after)
+constexpr int RUN_IN = 2;               // notes rendered before them (sso_even_fast_checks.json: run-in 2 or 4 within the
+constexpr int RUN_IN_BASSES = 4;        // noise of the whole passage, 1 not; the Basses depend on ~4 before)
+constexpr int RUN_OUT = 2;              // notes rendered after them (the window lag; even_fast_checks.py)
+constexpr double LEAD_S = 0.5;          // rendered before the first note-on (the controllers in force: the job's)
+constexpr double GAP_S = 3.0;           // after the last note-off, before the next pass (the job's; the background measurer:
+                                        // gapFor, 1 s / Basses 1.5 s where measured)
+constexpr double RENDER_SPEED = 8.9;    // audio seconds rendered per second: the measurer's windows at a 1 s gap (kthost +
+                                        // Kontakt 8 + SSO on the Windows test VM, median of 16 renders, 3.7-13.4;
+                                        // sso_even_gap_check.json): the wait's estimate until a render here is timed
+
+// a window over a passage of n joined notes (indices): its notes measured and rendered
+struct Window {
+      int renderFirst { 0 }, renderLast { -1 };
+      int measureFirst { 0 }, measureLast { -1 };
+      };
+// the windows for the notes that need measuring (needs[j]): each such note +-margin measured, runIn notes before and
+// runOut after rendered with them (their values held); windows whose renders meet are one; a window whose render
+// reaches both ends of the passage is the whole passage, every note measured
+std::vector<Window> windows(int n, const std::vector<bool>& needs, int runIn, int runOut = RUN_OUT, int margin = MARGIN);
+// the run-in for a patch: RUN_IN_BASSES for the double basses (the main patch serves "contrabass"…), else RUN_IN
+int runInFor(const SoundLib::Library& library, const SoundLib::LibInstrument* patch);
+
+// the background measurer's gap after a window's last note-off for a patch: the measured patches' (evenlevels.cpp ›
+// MEASURED, sso_even_gap_check.json), else GAP_S
+double gapFor(const SoundLib::Library& library, const SoundLib::LibInstrument* patch);
+
+// the early stop's threshold for a patch (EARLY_STOP_…; 0: a patch not measured, always PASSES passes)
+double earlyStopFor(const SoundLib::Library& library, const SoundLib::LibInstrument* patch);
+
+// a measured value's key: the contexts of notes j-3 … j+3 of its passage ("-" outside it)
+QString cacheKey(const std::vector<QString>& contexts, size_t j);
+
+// the user's values by key, kept across sessions (<dataPath>/soundlibraries/<library>/even cache.json): an undo or redo
+// that brings a context back restores its value without rendering. At most MAX_ENTRIES, the least recently used go
+class Cache {
+      struct Entry { double db; qint64 used; };
+      std::map<QString, Entry> _entries;
+      qint64 _clock { 0 };
+      QString _file;
+      bool _changed { false };
+   public:
+      static constexpr int MAX_ENTRIES = 50000;     // (a size bound: ~5 MB of JSON)
+      void load(const QString& file);               // (empty: kept in memory only)
+      bool save();
+      QString file() const { return _file; }
+      bool get(const QString& key, double* db);
+      void put(const QString& key, double db);
+      int size() const { return int(_entries.size()); }
+      void clear() { _entries.clear(); _changed = true; }
+      };
+
+// playback waits when a note being measured (its note-on, seconds) falls in what is about to play: [from, to)
+bool mustWait(const std::vector<double>& pendingOns, double from, double to);
 
 }     // namespace EvenLevels
 }     // namespace Ms
