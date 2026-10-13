@@ -97,6 +97,10 @@ class TestPlayability : public QObject, public MTest
       void vocalNotation();
       void vocalTessitura();
       void r1r4OnOldFixtures();
+      void clefs();
+      void tempoMarks();
+      void slurRepeats();
+      void c1c3OnOldFixtures();
       void noDynamic();
       };
 
@@ -114,12 +118,24 @@ static QStringList rows(const PlayabilityResult& r)
       return out;
       }
 
+// the playability rows alone (the plugin had no notation category)
+static QStringList playRows(const PlayabilityResult& r)
+      {
+      QStringList out;
+      for (const PlayabilityRow& row : r.rows)
+            if (!row.notation())
+                  out << rowText(row.bar, row.staff, row.verdict, row.reason, row.notes);
+      out.sort();
+      return out;
+      }
+
 static const char* markName(PlayMark m)
       {
       switch (m) {
             case PlayMark::OPEN: return "open";
             case PlayMark::OUT_OF_REACH: return "outOfReach";
             case PlayMark::IMPOSSIBLE: return "impossible";
+            case PlayMark::NOTATION: return "notation";
             default: return "none";
             }
       }
@@ -215,9 +231,11 @@ void TestPlayability::strings()
             wantMarks << QString("%1 | %2 | %3 | %4").arg(o["staff"].toString()).arg(o["tick"].toInt()).arg(o["pitch"].toInt())
                          .arg(colour.value(o["color"].toString().toLower(), "?"));
             }
+      // C2: test-strings.mscx has no tempo marking; its notation mark covers the first note's open-string mark
+      wantMarks.replaceInStrings(QRegularExpression("^Violin \\| 0 \\| 55 \\| open$"), "Violin | 0 | 55 | notation");
       wantRows.sort();
       wantMarks.sort();
-      compare(rows(r), wantRows);
+      compare(playRows(r), wantRows);
       compare(marks(score, r), wantMarks);
       QCOMPARE(r.open, 45);
       QCOMPARE(r.playable, 23);
@@ -247,7 +265,7 @@ void TestPlayability::harmonics()
             rowText(3, staff, "impossible", "no natural harmonic sounds this pitch", "F6 (" + dash + ")"),
             };
       want.sort();
-      compare(rows(r), want);
+      compare(playRows(r), want);         // + C2's no-tempo row (notation)
       QCOMPARE(r.harmonics, 13);
       delete score;
       }
@@ -264,7 +282,8 @@ void TestPlayability::microtones()
       PlayabilityResult r = Playability::analyse(score);
       QStringList got;
       for (const PlayabilityRow& row : r.rows)
-            got << QString("%1 %2 %3").arg(row.bar).arg(row.verdict, row.reason);
+            if (!row.notation())          // C2's no-tempo row
+                  got << QString("%1 %2 %3").arg(row.bar).arg(row.verdict, row.reason);
       got.sort();
       QCOMPARE(got, QStringList({ "3 impossible below the lowest string", "5 outOfReach stretch 6.5 st, max 6.4 here" }));
       bool named = false;
@@ -707,12 +726,13 @@ void TestPlayability::scordatura()
             if (i.value() == PlayMark::OPEN)
                   open << QString("%1:%2").arg(i.key()->chord()->tick().ticks()).arg(i.key()->pitch());
       open.sort();
-      // Eb5 open (String Data), F3 open twice and E5 open under "scord. F D A E", Eb5 again after "normal tuning"
-      QStringList want = { "0:75", "1920:53", "2400:53", "2880:76", "3840:75" };
+      // Eb5 open (String Data), F3 open twice and E5 open under "scord. F D A E", Eb5 again after "normal tuning";
+      // the first Eb5 carries C2's no-tempo notation mark instead
+      QStringList want = { "1920:53", "2400:53", "2880:76", "3840:75" };
       want.sort();
       QCOMPARE(open, want);
       const QString dash = QChar(0x2014);
-      QStringList rowsGot = rows(r);
+      QStringList rowsGot = playRows(r);
       QStringList rowsWant = {
             rowText(2, "Violin", "impossible", "same string (F)", "G3 (IV) + A3 (" + dash + ")"),
             rowText(3, "Violin", "impossible", "below the lowest string", "F3 (" + dash + ") + A4 (IV)"),
@@ -899,8 +919,8 @@ void TestPlayability::harp()
       QStringList m = markList(r);
       QVERIFY(m.contains("5 | 62 | impossible"));            // Ebb4
       QVERIFY(m.contains("2 | 61 | outOfReach"));            // C#4
-      for (const QString& x : m)                            // the clean bars have no mark
-            QVERIFY2(!QRegularExpression("^(1|3|9|11|14) \\|").match(x).hasMatch(), qPrintable(x));
+      for (const QString& x : m)                            // the clean bars have no playability mark (bar 1: C2's no tempo)
+            QVERIFY2(!QRegularExpression("^(1|3|9|11|14) \\|").match(x).hasMatch() || x.endsWith("notation"), qPrintable(x));
       QStringList want = {
             QString::fromUtf8("10 | Harp | risky | the right hand spans 11 strings, more than a 10th | E4 + A5"),
             QString::fromUtf8("12 | Harp | risky | right hand in the lowest octave | E1"),
@@ -1160,7 +1180,7 @@ void TestPlayability::brass()
       compare(got, want);
       // the clean bars (Tenor 1, 4, 8; Bass 1; Trombone with F 1; Alto 2; Trumpet 1, 3; Horn; Tuba 1;
       // Euphonium; Tuba in F 1, 4th valve by default) carry no mark
-      QStringList m = markList(r);
+      QStringList m = markList(r).filter(QRegularExpression("^(?!.*notation$)"));      // C2's no-tempo mark is notation
       QCOMPARE(m.size(), 10);
       for (const QString& x : m)
             QVERIFY2(x.endsWith("impossible") || x.startsWith("7 |"), qPrintable(x));
@@ -1330,9 +1350,13 @@ void TestPlayability::windDynamics()
             "Tenor Saxophone | 1920 | 44 | outOfReach",
             "Baritone Saxophone | 0 | 44 | impossible", "Baritone Saxophone | 2400 | 37 | outOfReach",
             "Soprano Saxophone | 0 | 56 | impossible",
-            // G7: more than 4 ledger lines (flute B6-D#7, oboe A#6; bassoon D#5-E5 in bass clef)
-            "Flute | 1440 | 99 | outOfReach", "Flute | 1920 | 95 | outOfReach", "Flute | 2400 | 98 | outOfReach",
-            "Oboe | 9120 | 94 | outOfReach", "Bassoon | 4800 | 75 | outOfReach", "Bassoon | 5280 | 76 | outOfReach" };
+            // G7 (notation): more than 4 ledger lines (flute B6-D#7, oboe A#6)
+            "Flute | 1440 | 99 | notation", "Flute | 1920 | 95 | notation", "Flute | 2400 | 98 | notation", "Oboe | 9120 | 94 | notation",
+            // C1-CLEF-CHANGE (notation, replaced G7 for the bassoon): G4 Ab4 Eb5 E5 in bass clef, 3+ ledger lines in a row
+            "Bassoon | 3840 | 67 | notation", "Bassoon | 4320 | 68 | notation", "Bassoon | 4800 | 75 | notation",
+            "Bassoon | 5280 | 76 | notation",
+            // C2: no tempo marking, the top staff's first chord
+            "Flute | 0 | 94 | notation" };
       wantMarks.sort();
       compare(m, wantMarks);
       QCOMPARE(m, wantMarks);
@@ -1514,13 +1538,13 @@ void TestPlayability::windTrills()
                                 mk("Bassoon", 9 * BAR + Q, 73, "impossible"),     // C#5: FLATS red, HIGH warning
                                 mk("Bassoon", 12 * BAR, 45, "outOfReach"), mk("Bassoon", 12 * BAR + 2 * Q, 51, "outOfReach") })
             QVERIFY2(m.contains(x), qPrintable(x));
-      // the high bassoon notes are written in bass clef: 5 ledger lines, G7's mark (not W5's)
-      const bool ledger9 = !htkRows(r, { "ledger" }).filter(QRegularExpression("^9 \\| Bassoon \\|")).isEmpty();
+      // the high bassoon notes are written in bass clef: C1-CLEF-CHANGE's notation mark (not W5's)
+      const bool ledger9 = true;
       for (const QString& x : m) {
             QVERIFY2(!x.startsWith("Clarinet"), qPrintable(x));
             QVERIFY2(!x.startsWith("Flute | " + QString::number(15 * BAR + 2 * Q)), qPrintable(x));   // the tied G6
             QVERIFY2(!x.startsWith("Flute | " + QString::number(5 * BAR + 3 * Q)), qPrintable(x));    // the mordent
-            QVERIFY2(!x.startsWith("Bassoon | " + QString::number(8 * BAR)) || ledger9, qPrintable(x)); // D#5-E5: panel only (G7 may mark it)
+            QVERIFY2(!x.startsWith("Bassoon | " + QString::number(8 * BAR)) || (ledger9 && x.endsWith("notation")), qPrintable(x)); // D#5-E5: panel only (C1 marks it)
             QVERIFY2(!x.startsWith("English Horn | " + QString::number(2 * BAR + Q)), qPrintable(x)); // written E#4-F#4
             }
 
@@ -1718,7 +1742,7 @@ void TestPlayability::chimes()
                            rowText(4, "Tubular Bells", "risky", why, "C4 + E4 + G4") };
       want.sort();
       QCOMPARE(got, want);
-      QCOMPARE(r.rows.size(), 3);                // the vibraphone chord and the first entrances add none
+      QCOMPARE(int(playRows(r).size()), 3);      // the vibraphone chord and the first entrances add none (C2's no tempo is notation)
       }
 
 void TestPlayability::ledgerLines()
@@ -1726,24 +1750,20 @@ void TestPlayability::ledgerLines()
       MasterScore* score = readScore(DIR + "ledger-divisi-tests.mscx");
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
-      const QString db = "3 or more ledger lines: consider a clef change (solo and section) (Adler p. 84)";
       const QString ott = "more than 4 ledger lines: consider 8va / 15ma / 8vb (solo and section) (Adler p. 767)";
-      QStringList got = htkRows(r, { "ledger" });
-      QStringList want = { rowText(2, "Double Bass", "risky", db, "G4"),           // bass clef, 3 above
-                           rowText(3, "Double Bass", "risky", db, "A1"),           // 3 below
-                           rowText(6, "Double Bass", "risky", db, "D5"),           // tenor clef, 3 above
-                           rowText(8, "Double Bass", "risky", db, "E6"),           // treble clef, 3 above
-                           rowText(2, "Violin", "risky", ott, "B6"),               // 5 above; under 8va (bar 3) clean
-                           rowText(2, "Piano", "risky", ott, "B2") };              // 5 below
-      want.sort();
+      QStringList got = htkRows(r, { "ledger", "clef" });
+      // SPEC-c1c3: the double-bass rule is replaced by C1-CLEF-CHANGE (the bass's single notes with 3 ledger lines are
+      // one or two in a row: clean), and the piano, a multi-clef instrument, is left to C1 (its B2 5 below: clean)
+      QStringList want = { rowText(2, "Violin", "notation", ott, "B6") };    // 5 above; under 8va (bar 3) clean
       QCOMPARE(got, want);
       QStringList m = markList(r);
-      for (const char* hit : { "2 | 67", "3 | 33", "6 | 74", "8 | 88", "2 | 95", "2 | 47" })
-            QVERIFY2(m.contains(QString(hit) + " | outOfReach"), hit);
-      // clean: bass E4, C2, C6 (2 ledger lines), violin A6 and piano C3 (4), the violin's B6 under 8va
-      for (const char* clean : { "1 | 64", "4 | 36", "7 | 84", "1 | 93", "1 | 48", "3 | 83" })
-            QVERIFY2(!m.contains(QString(clean) + " | outOfReach"), clean);
+      QVERIFY(m.contains("2 | 95 | notation"));
+      // clean: bass G4, A1, D5, E6 (3 ledger lines, alone), violin A6 (4), the violin's B6 under 8va, piano B2 and C3
+      for (const char* clean : { "2 | 67", "3 | 33", "6 | 74", "8 | 88", "1 | 93", "3 | 83", "2 | 47", "1 | 48" })
+            for (const char* what : { " | outOfReach", " | notation" })
+                  QVERIFY2(!m.contains(QString(clean) + what), clean);
       }
+
 
 void TestPlayability::windDivisi()
       {
@@ -1752,9 +1772,9 @@ void TestPlayability::windDivisi()
       PlayabilityResult r = Playability::analyse(score);
       const QString why = "divisi is for strings; use a 2 / 1. / 2. (solo and section) (Adler p. 179)";
       QStringList got = htkRows(r, { "divisi" });
-      QStringList want = { rowText(1, "Flute", "risky", why, "\"div.\""),
-                           rowText(2, "Flute", "risky", why, "\"divisi\""),
-                           rowText(5, "Flute", "risky", why, "\"non div.\"") };   // not "Dividing", "individual", nor the violin's "div."
+      QStringList want = { rowText(1, "Flute", "notation", why, "\"div.\""),
+                           rowText(2, "Flute", "notation", why, "\"divisi\""),
+                           rowText(5, "Flute", "notation", why, "\"non div.\"") };   // not "Dividing", "individual", nor the violin's "div."
       want.sort();
       QCOMPARE(got, want);
       }
@@ -1780,28 +1800,28 @@ void TestPlayability::techniqueCancels()
       const QString brass = "Adler pp. 322, 333-334; Kennan & Grantham p. 133; Blatter p. 143";
       QStringList got = htkRows(r, { "technique" });
       QStringList want = {
-            rowText(2, "Violin II", "risky", n1("pizz.", "arco", 1, "Adler p. 34; Kennan & Grantham p. 8; Sevsay p. 41; Blatter p. 27; Jacob p. 16"), "\"pizz.\""),
-            rowText(7, "Violin II", "risky", n1("special pizzicato", "arco / ord.", 6, "Kennan & Grantham p. 66"), "\"snap pizz.\""),
-            rowText(3, "Viola", "risky", n1("con sordino", "senza sordino", 1, "Kennan & Grantham p. 64; Sevsay p. 47; Blatter p. 36"), "\"con sord.\""),
-            rowText(7, "Viola", "risky", n1("senza / non vibrato", "con vibrato / normale / ord.", 6, vib), "\"non vibrato\""),
-            rowText(5, "Cello", "risky", n1("sul tasto", "ord. / naturale / normale", 4, legno), "\"sul tasto\""),
-            rowText(8, "Trumpet", "risky", n1("con sordino / gestopft", "senza sordino / open / offen", 7, brass), "\"con sord.\""),
-            rowText(4, "Horn 1", "risky", n1("stopped", "open / offen / aperto", 3, "Adler p. 323"), "\"chiuso\""),
-            rowText(7, "Horn 1", "risky", n1("con sordino", "senza sordino / open", 6, brass), "\"con sord.\""),
-            rowText(4, "Flute", "risky", n1("senza / non vibrato", "con vibrato / normale / ord.", 3, vib), "\"non vib.\""),
+            rowText(2, "Violin II", "notation", n1("pizz.", "arco", 1, "Adler p. 34; Kennan & Grantham p. 8; Sevsay p. 41; Blatter p. 27; Jacob p. 16"), "\"pizz.\""),
+            rowText(7, "Violin II", "notation", n1("special pizzicato", "arco / ord.", 6, "Kennan & Grantham p. 66"), "\"snap pizz.\""),
+            rowText(3, "Viola", "notation", n1("con sordino", "senza sordino", 1, "Kennan & Grantham p. 64; Sevsay p. 47; Blatter p. 36"), "\"con sord.\""),
+            rowText(7, "Viola", "notation", n1("senza / non vibrato", "con vibrato / normale / ord.", 6, vib), "\"non vibrato\""),
+            rowText(5, "Cello", "notation", n1("sul tasto", "ord. / naturale / normale", 4, legno), "\"sul tasto\""),
+            rowText(8, "Trumpet", "notation", n1("con sordino / gestopft", "senza sordino / open / offen", 7, brass), "\"con sord.\""),
+            rowText(4, "Horn 1", "notation", n1("stopped", "open / offen / aperto", 3, "Adler p. 323"), "\"chiuso\""),
+            rowText(7, "Horn 1", "notation", n1("con sordino", "senza sordino / open", 6, brass), "\"con sord.\""),
+            rowText(4, "Flute", "notation", n1("senza / non vibrato", "con vibrato / normale / ord.", 3, vib), "\"non vib.\""),
             // flutter-tongue tied into a plain eighth with no "ord." (bar 1); with "ord." (bar 2), untied (bar 3): clean
-            rowText(1, "Flute 2", "risky", "flutter-tongue tied into a plain note with no \"ord.\": mark where the flutter ends "
+            rowText(1, "Flute 2", "notation", "flutter-tongue tied into a plain note with no \"ord.\": mark where the flutter ends "
                     "(solo and section) (Gould, Behind Bars p. 247)", "C5") };
       want.sort();
       compare(got, want);
       // the text's first chord is marked: Violin II bar 2 (C5), Horn 1 bar 4 (F4)
       QStringList m = marks(score, r);
-      QVERIFY(m.contains("Violin II | 1920 | 72 | outOfReach"));
-      QVERIFY(m.contains("Horn 1 | 5760 | 65 | outOfReach"));
-      QVERIFY(!m.contains("Violin I | 5760 | 72 | outOfReach"));      // ends in pizz.: clean
-      QVERIFY(m.contains("Flute 2 | 960 | 72 | outOfReach"));         // the plain eighth
+      QVERIFY(m.contains("Violin II | 1920 | 72 | notation"));
+      QVERIFY(m.contains("Horn 1 | 5760 | 65 | notation"));
+      QVERIFY(!m.contains("Violin I | 5760 | 72 | notation"));      // ends in pizz.: clean
+      QVERIFY(m.contains("Flute 2 | 960 | 72 | notation"));         // the plain eighth
       for (const char* clean : { "Flute 2 | 0 | 72", "Flute 2 | 2880 | 72", "Flute 2 | 4800 | 76" })
-            QVERIFY2(!m.contains(QString(clean) + " | outOfReach"), clean);
+            QVERIFY2(!m.contains(QString(clean) + " | notation"), clean);
       }
 
 void TestPlayability::sharedAccidentals()
@@ -1811,15 +1831,15 @@ void TestPlayability::sharedAccidentals()
       PlayabilityResult r = Playability::analyse(score);
       const QString src = " in the bar has no accidental of its own: its part would lack it (solo and section) (Adler pp. 768-769; Sevsay p. 118)";
       QStringList got = htkRows(r, { "accidental" });
-      QStringList want = { rowText(1, "Oboes", "risky", "the 2nd player's first F#5" + src, "F#5"),     // voice 2, bar 1
-                           rowText(3, "Oboes", "risky", "the 1st player's first F#5" + src, "F#5") };   // upper note of the 2nd chord
+      QStringList want = { rowText(1, "Oboes", "notation", "the 2nd player's first F#5" + src, "F#5"),     // voice 2, bar 1
+                           rowText(3, "Oboes", "notation", "the 1st player's first F#5" + src, "F#5") };   // upper note of the 2nd chord
       want.sort();
       compare(got, want);
       QStringList m = marks(score, r);
-      QVERIFY(m.contains("Oboes | 960 | 78 | outOfReach"));
-      QVERIFY(m.contains("Oboes | 4800 | 78 | outOfReach"));
+      QVERIFY(m.contains("Oboes | 960 | 78 | notation"));
+      QVERIFY(m.contains("Oboes | 4800 | 78 | notation"));
       for (const char* clean : { "Oboes | 2880 | 78", "Oboes | 6720 | 78", "Oboes | 9600 | 78" })   // own sharps; the tied F#5
-            QVERIFY2(!m.contains(QString(clean) + " | outOfReach"), clean);
+            QVERIFY2(!m.contains(QString(clean) + " | notation"), clean);
       }
 
 void TestPlayability::stoppedHorn()
@@ -1931,19 +1951,19 @@ void TestPlayability::clarinetKey()
       QStringList got = htkRows(r, { "clarinetKey" });
       const QString toA = QString::fromUtf8(": the A clarinet is the better choice (solo and section) (Kennan & Grantham pp. 89-90, 117, 209)");
       QStringList want = {
-            rowText(2, "Clarinet in Bb", "risky", QString::fromUtf8("B♭ clarinet written in B major (5 sharps)") + toA, "5 sharps"),
-            rowText(3, "Clarinet in Bb", "risky", QString::fromUtf8("written in C♯ major (7 sharps): write it as D♭ major (5 flats) "
+            rowText(2, "Clarinet in Bb", "notation", QString::fromUtf8("B♭ clarinet written in B major (5 sharps)") + toA, "5 sharps"),
+            rowText(3, "Clarinet in Bb", "notation", QString::fromUtf8("written in C♯ major (7 sharps): write it as D♭ major (5 flats) "
                     "(solo and section) (Gould p. 252; Kennan & Grantham pp. 90, 117)"), "7 sharps"),       // not also "A clarinet"
-            rowText(4, "Clarinet in Bb", "risky", QString::fromUtf8("B♭ clarinet written in G♭ major (6 flats)") + toA, "6 flats"),
-            rowText(2, "Clarinet in A", "risky", QString::fromUtf8("A clarinet written in F♯ major (6 sharps): the B♭ clarinet is the "
+            rowText(4, "Clarinet in Bb", "notation", QString::fromUtf8("B♭ clarinet written in G♭ major (6 flats)") + toA, "6 flats"),
+            rowText(2, "Clarinet in A", "notation", QString::fromUtf8("A clarinet written in F♯ major (6 sharps): the B♭ clarinet is the "
                     "better choice (solo and section) (Kennan & Grantham pp. 90, 117, 209)"), "6 sharps"),
-            rowText(1, "Horn in F", "risky", QString::fromUtf8("instrument in F written in F♯ major (6 sharps): an instrument in a flat "
+            rowText(1, "Horn in F", "notation", QString::fromUtf8("instrument in F written in F♯ major (6 sharps): an instrument in a flat "
                     "key reads G♭ major (6 flats) (solo and section) (Gould p. 252)"), "6 sharps") };
       want.sort();
       compare(got, want);       // clean: B♭ in 4 sharps, A in 5 sharps, the horn's 6 flats, the flute's 7 sharps
       QStringList m = marks(score, r);
-      QVERIFY(m.contains("Clarinet in Bb | 1920 | 72 | outOfReach"));
-      QVERIFY(!m.contains("Clarinet in Bb | 0 | 72 | outOfReach"));
+      QVERIFY(m.contains("Clarinet in Bb | 1920 | 72 | notation"));
+      QVERIFY(!m.contains("Clarinet in Bb | 0 | 72 | notation"));
       }
 
 void TestPlayability::stringGliss()
@@ -1951,24 +1971,26 @@ void TestPlayability::stringGliss()
       MasterScore* score = readScore(DIR + "r1r4-tests.mscx");
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
-      QStringList got = htkRows(r, { "stringGliss" });
+      QStringList got = htkRows(r, { "stringGliss", "stringName", "harmonicString", "harmonicLine" });
       const QChar d(0x2013);
       const QString harm = "harmonic glissando with no string named (\"sul G\", I-IV): the harmonics depend on the string "
                            "(solo and section) (Gould p. 423)";
       QStringList want = {
-            rowText(1, "Viola", "risky", "\"sul E\": the viola has no E string (solo and section) (Gould p. 394; Adler p. 54)", "\"sul E\""),
+            rowText(1, "Viola", "notation", "\"sul E\": the viola has no E string (solo and section) (Gould p. 394; Adler p. 54)", "\"sul E\""),
             rowText(1, "Violin 2", "risky", "double-stop glissandos in contrary motion: only cellos and double basses play them "
                     "(solo and section) (Sevsay p. 39)", QString("A4") + d + "F4 + D5" + d + "F5"),
-            rowText(1, "Violin 3", "risky", harm, QString("D5") + d + "G5"),
-            rowText(3, "Violin 3", "risky", harm, QString("D5") + d + "G5"),        // "ord." ended "sul G"
-            rowText(2, "Violin 4", "risky", "artificial harmonic glissando with a line on only one note: draw it on both the stopped "
+            rowText(1, "Violin 3", "notation", harm, QString("D5") + d + "G5"),
+            rowText(3, "Violin 3", "notation", harm, QString("D5") + d + "G5"),        // "ord." ended "sul G"
+            rowText(2, "Violin 4", "notation", "artificial harmonic glissando with a line on only one note: draw it on both the stopped "
                     "note and the diamond (solo and section) (Gould p. 424)", QString("C4") + d + "D4") };
       want.sort();
       compare(got, want);       // clean: the violin's "sul E", the cello's contrary glissandos, under "sul G", both lines
       QStringList m = marks(score, r);
-      for (const char* hit : { "Viola | 0 | 60", "Violin 2 | 0 | 69", "Violin 2 | 0 | 74", "Violin 4 | 1920 | 60", "Violin 4 | 1920 | 65" })
+      for (const char* hit : { "Viola | 0 | 60", "Violin 4 | 1920 | 60", "Violin 4 | 1920 | 65" })
+            QVERIFY2(m.contains(QString(hit) + " | notation"), hit);
+      for (const char* hit : { "Violin 2 | 0 | 69", "Violin 2 | 0 | 74" })       // R3-CONTRARY is playability
             QVERIFY2(m.contains(QString(hit) + " | outOfReach"), hit);
-      QVERIFY(!m.contains("Violin | 0 | 72 | outOfReach"));
+      QVERIFY(!m.contains("Violin | 0 | 72 | notation"));
       }
 
 void TestPlayability::vocalNotation()
@@ -1978,15 +2000,15 @@ void TestPlayability::vocalNotation()
       PlayabilityResult r = Playability::analyse(score);
       QStringList got = htkRows(r, { "vocal" });
       QStringList want = {
-            rowText(2, "Soprano", "risky", "melisma with no slur: slur the notes of one syllable (solo and section) (Gould p. 435)", "\"la\""),
-            rowText(4, "Soprano", "risky", "final syllable held over more than one note with no extender line (solo and section) (Gould p. 447)", "\"Ah\""),
-            rowText(6, "Soprano", "risky", "extender line after a syllable the word goes on from: use a hyphen (solo and section) (Gould p. 448)", "\"a\""),
-            rowText(1, "Tenor", "risky", "tenor in a plain treble clef: use treble 8vb (solo and section) (Gould p. 433)", "treble clef") };
+            rowText(2, "Soprano", "notation", "melisma with no slur: slur the notes of one syllable (solo and section) (Gould p. 435)", "\"la\""),
+            rowText(4, "Soprano", "notation", "final syllable held over more than one note with no extender line (solo and section) (Gould p. 447)", "\"Ah\""),
+            rowText(6, "Soprano", "notation", "extender line after a syllable the word goes on from: use a hyphen (solo and section) (Gould p. 448)", "\"a\""),
+            rowText(1, "Tenor", "notation", "tenor in a plain treble clef: use treble 8vb (solo and section) (Gould p. 433)", "treble clef") };
       want.sort();
       compare(got, want);       // clean: the slurred melisma, a rest inside, the held syllable with an extender, Tenor 2 in G8vb
       QStringList m = marks(score, r);
-      QVERIFY(m.contains("Soprano | 1920 | 72 | outOfReach"));
-      QVERIFY(!m.contains("Soprano | 0 | 72 | outOfReach"));
+      QVERIFY(m.contains("Soprano | 1920 | 72 | notation"));
+      QVERIFY(!m.contains("Soprano | 0 | 72 | notation"));
       }
 
 void TestPlayability::vocalTessitura()
@@ -2018,12 +2040,132 @@ void TestPlayability::r1r4OnOldFixtures()
             MasterScore* score = readScore(DIR + f);
             QVERIFY2(score, f);
             PlayabilityResult r = Playability::analyse(score);
-            QStringList got = htkRows(r, { "malletChord", "clarinetKey", "stringGliss", "vocal", "tessitura" });
+            QStringList got = htkRows(r, { "malletChord", "clarinetKey", "stringGliss", "stringName", "harmonicString", "harmonicLine", "vocal", "tessitura" });
             for (const QString& g : got)
                   qWarning("%s: %s", f, qPrintable(g));
             QVERIFY2(got.isEmpty(), f);
             delete score;
             }
+      }
+
+//---------------------------------------------------------
+//   C1-C3 (SPEC-c1c3): c1c3-tests.mscx, c1c3-notempo.mscx from tools/playability/gen_c1c3_tests.py
+//---------------------------------------------------------
+
+void TestPlayability::clefs()
+      {
+      MasterScore* score = readScore(DIR + "c1c3-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString run = "3 notes in a row with 3 or more ledger lines: change clef (one or two such notes need not) "
+                          "(solo and section) (Sevsay p. 6; Adler p. 84; Gould pp. 7, 393)";
+      QStringList got = htkRows(r, { "clef", "ledger" });
+      QStringList want = {
+            rowText(1, "Flute", "notation", "Flute in a bass clef: it reads only the treble clef (solo and section) (Gould pp. 253, 260)", "bass clef"),
+            rowText(1, "Cello", "notation", "cello in the alto clef: the cello does not read it; use bass, tenor or treble "
+                    "(solo and section) (Kennan & Grantham p. 22)", "alto clef"),
+            rowText(1, "Cello 2", "notation", run, "G4 + A4"),
+            rowText(1, "Double Bass", "notation", run, "G3 + A3"),
+            rowText(1, "Violin", "notation", "more than 4 ledger lines: consider 8va / 15ma / 8vb (solo and section) (Adler p. 767)", "B6"),
+            rowText(1, "Horn in F", "notation", "horn in bass clef above written G3: write it in the treble clef (solo and section) "
+                    "(Blatter p. 152)", "A3"),
+            rowText(1, "Cello 3", "notation", "clef change inside a tie: change clef before the tied note or after it "
+                    "(solo and section) (Gould p. 9)", "C3") };
+      want.sort();
+      compare(got, want);       // clean: Flute 2 (treble), Trombone (treble), the two-note runs (bar 2), the horn's written G3
+      QStringList m = marks(score, r);
+      for (const char* hit : { "Flute | 0 | 60", "Cello | 0 | 60", "Cello 2 | 0 | 67", "Cello 2 | 480 | 69", "Cello 2 | 1440 | 67",
+                               "Double Bass | 0 | 55", "Violin | 0 | 95", "Horn in F | 0 | 50", "Cello 3 | 0 | 48", "Cello 3 | 960 | 48" })
+            QVERIFY2(m.contains(QString(hit) + " | notation"), hit);
+      for (const char* clean : { "Cello 2 | 1920 | 67", "Double Bass | 1920 | 55", "Horn in F | 1920 | 48", "Trombone | 0 | 72" })
+            QVERIFY2(!m.contains(QString(clean) + " | notation"), clean);
+      delete score;
+      }
+
+void TestPlayability::tempoMarks()
+      {
+      const QString none = "no tempo marking at the start: mark it above the top staff (solo and section) "
+                           "(Kennan & Grantham pp. 223, 370; Adler p. 758; Blatter p. 22)";
+      MasterScore* score = readScore(DIR + "c1c3-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      // a tempo at the start: clean; "Tempo I" with no metronome mark (bar 3)
+      compare(htkRows(r, { "tempo" }), { rowText(3, "Flute", "notation", "\"Tempo I\" with no metronome mark: give the metronome mark "
+                                                 "where it first returns (solo and section) (Gould p. 184)", "\"Tempo I\"") });
+      QVERIFY(marks(score, r).contains("Flute | 3840 | 60 | notation"));
+      delete score;
+      score = readScore(DIR + "c1c3-notempo.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      // no tempo at the start; "Tempo I" with a metronome mark: clean
+      compare(htkRows(r, { "tempo" }), { rowText(1, "Flute", "notation", none, "no tempo") });
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Flute | 0 | 72 | notation"));
+      QVERIFY(!m.contains("Flute | 1920 | 72 | notation"));
+      delete score;
+      }
+
+void TestPlayability::slurRepeats()
+      {
+      MasterScore* score = readScore(DIR + "c1c3-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString why = "repeated note under a slur with no articulation: add tenuto lines or staccato dots under the slur so it is "
+                          "rearticulated (solo and section) (Gould pp. 245, 401, 403; Kennan & Grantham p. 108)";
+      QStringList got = htkRows(r, { "slurRepeat" });
+      QStringList want = { rowText(1, "Oboe", "notation", why, "C5"), rowText(3, "Oboe", "notation", why, "Db5"),
+                           rowText(1, "Violin 2", "notation", why, "C5") };
+      want.sort();
+      compare(got, want);       // clean: the tenuto (bar 2), the tie (bar 4), the trumpet
+      QStringList m = marks(score, r);
+      QVERIFY(m.contains("Oboe | 480 | 72 | notation"));
+      QVERIFY(!m.contains("Oboe | 0 | 72 | notation"));
+      QVERIFY(!m.contains("Oboe | 2400 | 72 | notation"));
+      QVERIFY(!m.contains("Trumpet in Bb | 480 | 72 | notation"));
+      delete score;
+      }
+
+// the new checks on the older fixtures (c1c3OnOld: rows by fixture)
+void TestPlayability::c1c3OnOldFixtures()
+      {
+      QStringList got;
+      for (const char* f : { "test-strings.mscx", "harm-tests.mscx", "micro-tests.mscx", "bow-tests.mscx", "jete-tests.mscx",
+                             "fast-tests.mscx", "tremolo-tests.mscx", "harp-tests.mscx", "timp-tests.mscx", "keys-tests.mscx",
+                             "brass-tests.mscx", "wind-tests.mscx", "wind-dyn-tests.mscx", "windtrill-tests.mscx",
+                             "brassentry-tests.mscx", "brasstrill-tests.mscx", "chimes-tests.mscx", "entrance-tests.mscx",
+                             "scord-tests.mscx", "spell-tests.mscx", "ledger-divisi-tests.mscx", "n1n2t-tests.mscx", "r1r4-tests.mscx" }) {
+            MasterScore* score = readScore(DIR + f);
+            QVERIFY2(score, f);
+            PlayabilityResult r = Playability::analyse(score);
+            for (const QString& g : htkRows(r, { "clef", "slurRepeat" }))
+                  got << QString(f) + ": " + g;
+            int tempo = 0;
+            for (const PlayabilityRow& row : r.rows)
+                  tempo += row.kind == "tempo";
+            if (tempo != 1)
+                  got << QString(f) + QString(": %1 tempo rows").arg(tempo);
+            delete score;
+            }
+      for (const QString& g : got)
+            qWarning("%s", qPrintable(g));
+      const QString run = " notes in a row with 3 or more ledger lines: change clef (one or two such notes need not) "
+                          "(solo and section) (Sevsay p. 6; Adler p. 84; Gould pp. 7, 393)";
+      const QString slur = "repeated note under a slur with no articulation: add tenuto lines or staccato dots under the slur so it is "
+                           "rearticulated (solo and section) (Gould pp. 245, 401, 403; Kennan & Grantham p. 108)";
+      QStringList want = {
+            // fixtures with a tempo marking at the start
+            "bow-tests.mscx: 0 tempo rows", "fast-tests.mscx: 0 tempo rows", "timp-tests.mscx: 0 tempo rows",
+            "entrance-tests.mscx: 0 tempo rows",
+            // correct by the rules: low harp notes in bass clef, high bassoon passages in bass clef (C1-CLEF-CHANGE), the
+            // violin's three slurred A4s (C3-SLUR-REPEAT)
+            "harp-tests.mscx: " + rowText(6, "Harp", "notation", "4" + run, "B0 + Db1 + F#1"),
+            "wind-dyn-tests.mscx: " + rowText(3, "Bassoon", "notation", "4" + run, "G4 + Ab4 + Eb5 + E5"),
+            "windtrill-tests.mscx: " + rowText(5, "Bassoon", "notation", "11" + run, "Ab4 + G4 + C5 + B4 + C#5 + Eb5 + D5 + D#5"),
+            "entrance-tests.mscx: " + rowText(2, "Violin", "notation", slur, "A4"),
+            "entrance-tests.mscx: " + rowText(2, "Violin", "notation", slur, "A4") };
+      want.sort();
+      got.sort();
+      compare(got, want);
       }
 
 void TestPlayability::brassTrills()
@@ -2065,7 +2207,7 @@ void TestPlayability::brassTrills()
                                 mk("Contrabass Trombone", BAR, 36) })
             QVERIFY2(m.contains(x), qPrintable(x));
       for (const QString& x : m) {
-            QVERIFY2(!x.startsWith("Trumpet in C | 0 "), qPrintable(x));                                // 1 valve
+            QVERIFY2(!x.startsWith("Trumpet in C | 0 ") || x.endsWith("notation"), qPrintable(x));      // 1 valve (C2: no tempo)
             QVERIFY2(!x.startsWith("Trumpet in C | " + QString::number(5 * BAR)), qPrintable(x));       // m2 tremolo
             QVERIFY2(!x.startsWith("Trumpet in Bb | " + QString::number(BAR)), qPrintable(x));          // written Bb3-C4
             QVERIFY2(!x.startsWith("Horn in F | " + QString::number(Q)), qPrintable(x));                // Bb side: 1 valve
@@ -2107,16 +2249,20 @@ void TestPlayability::noDynamic()
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
       const QString entrance = "no dynamic marked at the first entrance (solo and section) (Kennan & Grantham p. 31)";
+      const QString slur = "repeated note under a slur with no articulation: add tenuto lines or staccato dots under the slur so it is "
+                           "rearticulated (solo and section) (Gould pp. 245, 401, 403; Kennan & Grantham p. 108)";
       const WindDynRule* w = windRule("W2-OB-LOW-A");
       QStringList want = {
             // the oboe: entrance warning, and the unmarked Bb3 is judged at mp (W2-OB-LOW-A is the p/mp rule)
-            rowText(1, "Oboe", "risky", entrance, "Bb3"),
+            rowText(1, "Oboe", "notation", entrance, "Bb3"),
             rowText(1, "Oboe", "risky", QString(w->text) + " (" + w->source + ")", "Bb3"),
             // the violin: entrance warning; the 7 s slur is at the p tier (max 6 s; at mf it would be red)
-            rowText(1, "Violin", "risky", entrance, "A4"),
+            rowText(1, "Violin", "notation", entrance, "A4"),
             rowText(1, "Violin", "outOfReach", "slur 7 s at p (max 6 s)", "A4 … A4 (3 notes)"),
             // the flute: its dynamic comes after the first note
-            rowText(1, "Flute", "risky", entrance, "C5") };
+            rowText(1, "Flute", "notation", entrance, "C5"),
+            // C3: the violin's three slurred A4s
+            rowText(2, "Violin", "notation", slur, "A4"), rowText(2, "Violin", "notation", slur, "A4") };
       want.sort();
       QStringList got = rows(r);
       compare(got, want);

@@ -38,7 +38,8 @@ enum class PlayMark : char {
       NONE,
       OPEN,             // played on an open string
       OUT_OF_REACH,     // a stretch, or risky: dark yellow, as MuseScore's "out of amateur range"
-      IMPOSSIBLE        // red, as MuseScore's "out of professional range"
+      IMPOSSIBLE,       // red, as MuseScore's "out of professional range"
+      NOTATION          // a notation finding (NOTATION_KINDS): teal; a playability mark wins over it
       };
 
 struct PlayabilityRow {
@@ -50,10 +51,11 @@ struct PlayabilityRow {
       QString staff;                // the part's long name
       QString staffShort;           // its short name, else an abbreviation of the long name
       QString kind;                 // "stop", "harmonic"
-      QString verdict;              // "impossible", "outOfReach", "risky"
+      QString verdict;              // "impossible", "outOfReach", "risky"; "notation" for a NOTATION_KINDS kind
       QString reason;
       QString notes;
       bool error() const { return verdict == "impossible"; }
+      bool notation() const { return verdict == "notation"; }
       };
 
 struct PlayabilityResult {
@@ -63,6 +65,7 @@ struct PlayabilityResult {
       int playable { 0 };
       int outOfReach { 0 };
       int impossible { 0 };
+      int notation { 0 };           // notation rows (counted apart from outOfReach)
       int div { 0 };
       int harmonics { 0 };
       };
@@ -194,6 +197,8 @@ extern QColor openStringColor;        // the owner's choice, 2026-09-27: slate g
 
 const QColor IMPOSSIBLE_COLOR = QColor(Qt::red);
 const QColor OUT_OF_REACH_COLOR = QColor(Qt::darkYellow);
+const QColor NOTATION_COLOR = QColor(0x00, 0x97, 0xa7);          // teal #0097a7: not red, dark yellow, the open-string grey or a voice colour
+bool isNotationKind(const QString& kind);
 
 // the whole pass; always runs (tests call it directly), whatever `enabled` says
 PlayabilityResult analyse(Score* score);

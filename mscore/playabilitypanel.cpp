@@ -166,6 +166,8 @@ PlayabilityPanel::PlayabilityPanel(QWidget* parent)
       _off = new QLabel;
       _off->setWordWrap(true);
       vl->addWidget(_off);
+      _summary = new QLabel;
+      vl->addWidget(_summary);
 
       _stack = new QStackedWidget;
       _stack->setMinimumSize(0, 0);
@@ -375,19 +377,20 @@ void PlayabilityPanel::rebuildTable()
       for (int i = 0; i < int(_rows.size()); ++i) {
             const PlayabilityRow& r = _rows[i];
             // what the row is: red for something unplayable, dark yellow for a stretch or a limit
-            // that is over, the colours the noteheads get
+            // that is over, teal for a notation finding: the colours the noteheads get
             QPixmap px(10, 10);
             px.fill(Qt::transparent);
             {
             QPainter p(&px);
             p.setRenderHint(QPainter::Antialiasing);
             p.setPen(Qt::NoPen);
-            p.setBrush(r.error() ? Playability::IMPOSSIBLE_COLOR : Playability::OUT_OF_REACH_COLOR);
+            p.setBrush(r.error() ? Playability::IMPOSSIBLE_COLOR : r.notation() ? Playability::NOTATION_COLOR : Playability::OUT_OF_REACH_COLOR);
             p.drawRoundedRect(QRectF(0, 0, 10, 10), 2, 2);
             }
             QTableWidgetItem* mark = new QTableWidgetItem(QIcon(px), "");
             mark->setData(ROLE_ROW, i);
-            mark->setToolTip(r.error() ? tr("Cannot be played") : tr("Hard to play, or over a limit"));
+            mark->setToolTip(r.error() ? tr("Cannot be played") : r.notation() ? tr("Notation: how it is written, not whether it can be played")
+                                                                         : tr("Hard to play, or over a limit"));
             _table->setItem(i, 0, mark);
             QTableWidgetItem* bar = new QTableWidgetItem(QString::number(r.bar));
             _table->setItem(i, 1, bar);
@@ -399,6 +402,19 @@ void PlayabilityPanel::rebuildTable()
             _table->setItem(i, 3, reason);
             }
       fitReasonColumn();
+      // the counts, playability and notation apart
+      int red = 0, warn = 0, notation = 0;
+      for (const PlayabilityRow& r : _rows)
+            ++(r.error() ? red : r.notation() ? notation : warn);
+      QStringList parts;
+      if (red)
+            parts << tr("%n cannot be played", "", red);
+      if (warn)
+            parts << tr("%n hard to play", "", warn);
+      if (notation)
+            parts << tr("%n notation", "", notation);
+      _summary->setText(parts.join(QString::fromUtf8(" · ")));
+      _summary->setVisible(!parts.isEmpty());
       }
 
 // Bar and Staff as wide as their longest entry; Reason as wide as its longest reason, or the rest

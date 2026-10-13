@@ -82,6 +82,7 @@ class PlayabilityPanel : public QDockWidget {
       Score* _score { nullptr };
       std::vector<PlayabilityRow> _rows;
       QLabel* _off;
+      QLabel* _summary;             // the rows counted: impossible · risky · notation
       QStackedWidget* _stack;
       QTableWidget* _table;
       DisplayListView* _board;

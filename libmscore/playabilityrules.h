@@ -442,8 +442,8 @@ constexpr int GLISSANDO_MAX = 6;                    // a tritone (Adler p. 347, 
 
 // G7 ledger lines (SPEC-g7g8, owner-approved 2026-10-11), counted from the note's displayed staff line on
 // 5-line pitched staves, the way Chord::addLedgerLines draws them
-constexpr int LEDGER_DB_CLEF_MIN = 3;               // double bass: 3 or more, a clef change (Adler p. 84)
-constexpr int LEDGER_OTTAVA_MAX = 4;                // every other pitched instrument: more than 4, 8va / 15ma / 8vb (Adler p. 767)
+// (the double-bass rule, 3 or more -> a clef change, is replaced by C1-CLEF-CHANGE below, SPEC-c1c3)
+constexpr int LEDGER_OTTAVA_MAX = 4;                // pitched instruments not in C1_MULTI_CLEF_IDS: more than 4, 8va / 15ma / 8vb (Adler p. 767)
 // G8: "div." / "div" / "divisi" as a whole word in a wind or brass staff's text (Adler p. 179)
 constexpr const char* WIND_DIVISI_WORDS = "\\b(div|divisi)\\b";
 
@@ -544,6 +544,49 @@ constexpr VoiceCentre R5_CENTRES[] = {
       { "voice.soprano", 70, 12 }, { "voice.child", 70, 12 }, { "voice.mezzo-soprano", 69, 17 },
       { "voice.alto", 67, 15 }, { "voice.countertenor", 67, 15 }, { "voice.tenor", 59, 19 },
       { "voice.baritone", 53, 13 }, { "voice.bass", 50, 16 } };
+
+
+//---------------------------------------------------------
+//   C1 clefs, C2 tempo marking, C3 slur over repeated notes (SPEC-c1c3, owner-approved 2026-10-13;
+//   research/c1c3-notes.md). Every row "risky"; the category of each kind is set in NOTATION_KINDS.
+//---------------------------------------------------------
+
+// C1-CLEF-SET: instruments with one clef (Gould pp. 253, 260, 262, 276, 279; Kennan & Grantham p. 22).
+// Treble = treble, treble 8vb / 8va / 15mb / 15ma; bass = bass and its octave clefs. Not marked, the books
+// conflicting: tenor trombone treble, bass trombone tenor / treble, bass clarinet bass clef.
+constexpr const char* C1_TREBLE_ONLY_IDS =          // flute, piccolo, oboe, clarinets (E♭, B♭, A), saxophones, trumpets
+      "^(wind\\.flutes\\.flute|wind\\.flutes\\.flute\\.piccolo|wind\\.reed\\.oboe|"
+      "wind\\.reed\\.clarinet(\\.(eflat|bflat|a))?|wind\\.reed\\.saxophone(\\..*)?|"
+      "brass\\.trumpet(\\.(bflat|c|d|piccolo|pocket))?)$";
+constexpr const char* C1_BASS_ONLY_IDS = "^brass\\.tuba(\\.bass)?$";                    // tuba (Gould p. 262)
+constexpr const char* C1_NO_ALTO_IDS = "^strings\\.cello$";                             // cello: never alto (Kennan & Grantham p. 22)
+constexpr const char* C1_NO_BASS_IDS = "^pitched-percussion\\.(glockenspiel|vibraphone)$";  // always treble (Gould p. 276)
+// unpitched percussion (a drumset instrument): no treble or bass clef (Gould p. 279)
+
+// C1-CLEF-CHANGE: instruments that read more than one clef (Sevsay p. 6; Adler p. 84; Gould pp. 7, 393)
+constexpr const char* C1_MULTI_CLEF_IDS =
+      "^(strings\\.(viola|cello|contrabass)|wind\\.reed\\.(bassoon|contrabassoon)|brass\\.french-horn|"
+      "brass\\.trombone(\\.(tenor|alto|bass|contrabass))?|brass\\.(euphonium|baritone-horn)|pluck\\.harp|"
+      "keyboard\\.(piano(\\..*)?|celesta|harpsichord|organ(\\..*)?|clavichord)|pitched-percussion\\.marimba(\\.bass)?)$";
+constexpr int C1_CLEF_LEDGER_MIN = 3;               // a note needing 3 or more ledger lines (Sevsay p. 6; Adler p. 84)
+constexpr int C1_CLEF_RUN_MIN = 3;                  // 3 such notes in a row; 1 or 2 are not marked (Sevsay p. 6)
+// C1-HORN-BASS: a horn note in bass clef written above G3 (Blatter p. 152)
+constexpr int C1_HORN_BASS_MAX = 55;                // written MIDI pitch, G3; higher is marked
+
+// C2-TEMPO-I: a return to the first tempo, confirmed with its metronome mark the first time (Gould p. 184)
+constexpr const char* C2_TEMPO_I_WORDS = "tempo\\s+(i|1|primo)";
+
+// C3-SLUR-REPEAT: a slurred repeated pitch needs an articulation (Gould pp. 245, 401, 403; Kennan & Grantham p. 108).
+// Articulations (SMuFL names) that rearticulate:
+constexpr const char* C3_ARTIC_NAMES = "^artic(Staccato|Staccatissimo|Tenuto|Accent|Marcato)";
+// the written-instruction alternative (Gould p. 245): a "legato" text at or after the slur's start
+constexpr const char* C3_LEGATO_WORDS = "legato";
+
+// The two categories (PLAYABILITY.md): every row kind listed here is a NOTATION finding (its own
+// colour and count); every other kind is playability. Re-tag a kind by moving it in or out of this list.
+constexpr const char* NOTATION_KINDS[] = {
+      "ledger", "clef", "divisi", "firstDynamic", "technique", "accidental", "clarinetKey",
+      "stringName", "harmonicString", "harmonicLine", "vocal", "tempo", "slurRepeat" };
 
 }     // namespace Playability
 }     // namespace Ms

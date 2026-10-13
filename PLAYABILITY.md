@@ -350,6 +350,46 @@ headless test scores and their checked results are the parity tests.
   Tests `malletChords`, `clarinetKey`, `stringGliss`, `vocalNotation`, `vocalTessitura` (r1r4-tests.mscx from
   `tools/playability/gen_r1r4_tests.py`, cases in its docstring) and `r1r4OnOldFixtures` (none of these kinds on the older
   fixtures, n1n2t-tests.mscx included). 52 pass, 1 skipped.
+- Clefs (C1, SPEC-c1c3, owner-approved 2026-10-13; `Pass::checkClefs`, kind `clef`). C1-CLEF-SET: the clef at the
+  start and at every change in the staff's clef list (as displayed), when its family changes: flute, piccolo, oboe,
+  E♭/B♭/A clarinets, saxophones, trumpets in anything but treble (`C1_TREBLE_ONLY_IDS`; Gould pp. 253, 260); tuba in
+  anything but bass (Gould p. 262); cello in alto (Kennan & Grantham p. 22); glockenspiel / vibraphone in bass (Gould
+  p. 276); unpitched (drumset) instruments in treble or bass (Gould p. 279). Treble / bass include their octave clefs.
+  Not marked (the books conflict): tenor trombone in treble, bass trombone in tenor / treble, bass clarinet in bass.
+  Marked on the first chord under the clef (a clef with no chord under it: no row). C1-CLEF-CHANGE: the multi-clef
+  instruments (`C1_MULTI_CLEF_IDS`: viola, cello, double bass, bassoon, contrabassoon, horn, trombones, euphonium /
+  baritone, harp, keyboards, marimba): 3 or more onsets in a row on a staff (all voices together, rests skipped)
+  each with a note of 3+ ledger lines, those notes marked, one row a run (Sevsay p. 6; Adler p. 84; Gould pp. 7,
+  393). C1-HORN-BASS: a horn note in a (written) bass clef above written G3 (Blatter p. 152). C1-TIE-CLEF: a clef
+  change inside a tie, both notes marked (Gould p. 9). G7 changed with it: the double-bass rule is gone and the
+  8va rule (more than 4 ledger lines) only checks instruments outside `C1_MULTI_CLEF_IDS`.
+- Tempo marking (C2, `Pass::checkTempoMarks`, kind `tempo`): no tempo text (TempoText, or a staff / system text in
+  the tempo style) in the first measure, a row on the top staff's first chord (Kennan & Grantham pp. 223, 370; Adler
+  p. 758; Blatter p. 22); the first "Tempo I" / "Tempo 1" / "Tempo primo" text with no metronome mark (a note
+  symbol and a number), a row on the first chord at it (Gould p. 184).
+- Slurred repeated notes (C3, `Pass::checkSlurRepeats`, kind `slurRepeat`): woodwinds, saxophones and bowed strings;
+  inside a slur (not its first chord), a note whose sounding pitch is in the voice's previous chord (no rest between),
+  not tied from it, with no staccato / staccatissimo / tenuto / portato / accent / marcato on the chord and no
+  "legato" text on the staff since the slur's start (Gould's written-instruction alternative, p. 245): marked (Gould
+  pp. 245, 401, 403; Kennan & Grantham p. 108). Brass, voices, keyboards, harp, percussion and grace notes are not
+  checked. Tests `clefs`, `tempoMarks`, `slurRepeats` (c1c3-tests.mscx, c1c3-notempo.mscx from
+  `tools/playability/gen_c1c3_tests.py`) and `c1c3OnOldFixtures`.
+- Two categories (owner 2026-10-12): playability (red "impossible", dark yellow "risky") and NOTATION, how the
+  music is written rather than whether it can be played: verdict `notation`, teal noteheads (`NOTATION_COLOR`
+  #0097a7, unlike red, the dark yellow, the open-string grey and the four voice colours), their own count
+  (`PlayabilityResult::notation`, and the panel's summary line "… · 3 notation") and their own colour and tooltip in
+  the panel rows. A note with both keeps the playability colour; red always wins; a notation mark covers an
+  open-string mark. The kinds that are notation are listed once, in `NOTATION_KINDS` (playabilityrules.h): G7
+  `ledger` and C1 `clef`, G8 `divisi`, the first entrance with no dynamic (`firstDynamic`, was `entrance`, which B3
+  keeps), N1 `technique` (with the flutter tie), N2 `accidental`, R2 `clarinetKey`, R3 `stringName`,
+  `harmonicString`, `harmonicLine` (R3-CONTRARY stays `stringGliss`, playability), R4 `vocal`, C2 `tempo`, C3
+  `slurRepeat`. Re-tagging a kind means moving it in or out of that list.
+  Older fixtures and tests (correct by the new rules, expectations adjusted): fixtures without a tempo marking get
+  C2's row on the top staff's first chord (plugin-parity tests compare the playability rows; test-strings' first
+  Violin G3 and scord-tests' first Eb5 show notation instead of the open-string mark); the harp's low run (bar 6),
+  the bassoon's high bass-clef runs (wind-dyn bar 3, windtrill bar 5) get C1-CLEF-CHANGE; entrance-tests' three
+  slurred A4s get C3; `ledgerLines` keeps only the violin's B6 (the double-bass rows and the piano's B2 are gone);
+  the G7 / N1 / N2 / R2 / R3 / R4 / G8 / first-dynamic tests expect `notation`. 56 pass, 1 skipped.
 - No dynamic in force (owner decision 2026-10-11): the level is MS4's "natural" (what the fork plays an
   unmarked part at, `Ms4::NATURAL`, 0.5 dB above mp), counted as mp = MuseScore's velocity 64
   (`NO_DYNAMIC_VELOCITY`; it was mf, 80). Everywhere: the string bow tiers use the p row, and the W2/B1
