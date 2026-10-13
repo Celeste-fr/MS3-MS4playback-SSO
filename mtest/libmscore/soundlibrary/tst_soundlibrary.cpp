@@ -3142,6 +3142,52 @@ void TestSoundLibrary::evenAutoWindows()
       QVERIFY(!EvenLevels::mustWait({ 5.0, 6.0 }, 6.5, 1e9));
       QVERIFY(!EvenLevels::mustWait({ 5.0, 6.0 }, 0, 5.0));
       QVERIFY(EvenLevels::mustWait({ 5.0, 6.0 }, 0, 5.01));
+      // the order (the owner, 2026-10-13: the wait as short as can be): from the focus, the windows reaching it or after
+      // it first, the earliest first (one straddling it at once), then those before it, the nearest first
+      auto job = [](int id, double a, double b) { EvenAuto::Job j; j.id = id; j.firstOn = a; j.lastOn = b; return j; };
+      auto order = [](std::vector<EvenAuto::Job> q, double focus) {
+            QList<int> out;
+            while (!q.empty()) {
+                  const int k = EvenAuto::next(q, focus);
+                  out << q[size_t(k)].id;
+                  q.erase(q.begin() + k);
+                  }
+            return out;
+            };
+      const std::vector<EvenAuto::Job> q { job(1, 0, 1), job(2, 2, 3), job(3, 4, 5), job(4, 6, 7), job(5, 8, 9) };
+      QCOMPARE(order(q, 0), QList<int>({ 1, 2, 3, 4, 5 }));
+      QCOMPARE(order(q, 4.5), QList<int>({ 3, 4, 5, 2, 1 }));
+      QCOMPARE(order(q, 3.5), QList<int>({ 3, 4, 5, 2, 1 }));
+      QCOMPARE(order(q, 20), QList<int>({ 5, 4, 3, 2, 1 }));
+      QCOMPARE(EvenAuto::next({}, 0), -1);
+      QCOMPARE(EvenAuto::priority(job(9, 4, 5), 4.5), 0.0);
+      // the gap after a pass: the measured sections' (sso_even_gap_check.json), else the job's
+      QCOMPARE(EvenLevels::gapFor(*lib, violin), EvenLevels::GAP_S);
+      QCOMPARE(EvenLevels::gapFor(*lib, nullptr), EvenLevels::GAP_S);
+      QCOMPARE(EvenLevels::earlyStopFor(*lib, violin), 0.0);
+      {
+            QString error;
+            auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+            QVERIFY2(sso, qPrintable(error));
+            auto patch = [&sso](const QString& name) -> const SoundLib::LibInstrument* {
+                  for (const SoundLib::LibInstrument& li : sso->instruments)
+                        if (li.name == name)
+                              return &li;
+                  return nullptr;
+                  };
+            const std::map<QString, std::pair<double, double>> measured { { "Violins 1 - Performance", { 1.0, 0.67 } },
+                  { "Violas - Performance", { 1.0, 0.74 } }, { "Celli - Performance", { 1.0, 1.26 } },
+                  { "Basses - Performance", { 1.5, 1.49 } } };
+            for (const auto& m : measured) {
+                  QVERIFY2(patch(m.first), qPrintable(m.first));
+                  QCOMPARE(EvenLevels::gapFor(*sso, patch(m.first)), m.second.first);
+                  QCOMPARE(EvenLevels::earlyStopFor(*sso, patch(m.first)), m.second.second);
+                  }
+            // not measured: the job's 3 s, always 3 passes
+            QVERIFY(patch("Violins 2 - Performance") && patch("Celli - Sul C - Performance"));
+            QCOMPARE(EvenLevels::gapFor(*sso, patch("Violins 2 - Performance")), EvenLevels::GAP_S);
+            QCOMPARE(EvenLevels::earlyStopFor(*sso, patch("Celli - Sul C - Performance")), 0.0);
+      }
       }
 
 //---------------------------------------------------------
@@ -3205,11 +3251,27 @@ void TestSoundLibrary::evenAutoSession()
       QVERIFY(EvenLevels::mustWait(ons, 0, 1e9));
       QVERIFY(!EvenLevels::mustWait(ons, lastOn + 0.01, 1e9));       // (played from after them: at once)
       QVERIFY(!EvenLevels::mustWait(ons, 0, firstOn));                // (a loop ending before them)
+      // at opening every window is queued, none rendered yet: Play waits for any of them in what it plays (the owner,
+      // 2026-10-13: "Wait for the measurement"), only the last measured note in range included
+      QVERIFY(session.mustWait(0, 1e9));
+      QVERIFY(session.mustWait(lastOn, 1e9));
+      QVERIFY(!session.mustWait(lastOn + 0.01, 1e9));
+      QVERIFY(!session.pendingText(0, 1e9).isEmpty());
+      QVERIFY(session.pendingAudioSeconds(0, 1e9) > 0);
+      QCOMPARE(session.pendingAudioSeconds(lastOn + 0.01, 1e9), 0.0);
+      // each queued job knows its measured notes' span (its rank from a focus)
+      for (const EvenAuto::Job& j : jobs) {
+            QVERIFY(j.firstOn <= j.lastOn);
+            QVERIFY(j.firstOn >= firstOn - 1e-9 && j.lastOn <= lastOn + 1e-9);
+            QVERIFY(std::find(ons.begin(), ons.end(), j.firstOn) != ons.end());
+            QVERIFY(j.gap >= EvenLevels::GAP_S - 1e-9);     // (the test map's patches: not measured)
+            }
       QVERIFY(!score->evenLevelsWritten());
       const int firstJobs = int(jobs.size());
       runAll(jobs);
       QVERIFY(!session.busy());
-      QVERIFY(renders >= 2 * firstJobs);
+      // round 2 only where round 1's residual stays above FLOOR_DB (as the job, evenlevelsjob): not every window
+      QVERIFY(renders >= 2 * firstJobs && renders < 3 * firstJobs);
       QVERIFY(score->evenLevelsWritten());
       QVERIFY(score->dirty());
       QVERIFY(!score->undoStack()->canUndo());                         // (no undo step)
@@ -8020,6 +8082,24 @@ void TestSoundLibrary::evenAutoTestSynth()
       {
             const EvenAuto::Result r = EvenMeasure::run(&vst, jobs.front(), rate, []() { return false; });
             QVERIFY(!r.ok);
+      }
+      // early stop: passes 1 and 2 within the threshold on every measured note: two passes, else PASSES
+      {
+            EvenAuto::Job j = jobs.front();
+            QCOMPARE(j.earlyStopDb, 0.0);          // (the test map's patches are not measured)
+            // (the test synth's passes differ by up to ~1 dB: its oscillators' phases)
+            j.earlyStopDb = 1e-6;
+            const EvenAuto::Result r3 = EvenMeasure::run(&vst, j, rate);
+            QVERIFY(r3.ok);
+            QCOMPARE(r3.passes, EvenLevels::PASSES);
+            j.earlyStopDb = 3.0;
+            const EvenAuto::Result r = EvenMeasure::run(&vst, j, rate);
+            QVERIFY(r.ok);
+            QCOMPARE(r.passes, 2);
+            QVERIFY(std::fabs(r.audioSeconds - j.audioSeconds() * 2 / EvenLevels::PASSES) < 0.05);
+            QVERIFY(!EvenMeasure::passesAlike({ 1.0, 2.0 }, { 1.0, 2.5 }, { false, false }, 0.3));
+            QVERIFY(EvenMeasure::passesAlike({ 1.0, 2.0 }, { 1.0, 2.5 }, { false, true }, 0.3));     // (a held note)
+            QVERIFY(!EvenMeasure::passesAlike({ 1.0 }, { 1.0 }, { false }, 0.0));
       }
       int renders = 0;
       while (!jobs.empty()) {

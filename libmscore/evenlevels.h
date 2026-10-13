@@ -186,7 +186,11 @@ constexpr int RUN_IN = 2;               // notes rendered before them (sso_even_
 constexpr int RUN_IN_BASSES = 4;        // noise of the whole passage, 1 not; the Basses depend on ~4 before)
 constexpr int RUN_OUT = 2;              // notes rendered after them (the window lag; even_fast_checks.py)
 constexpr double LEAD_S = 0.5;          // rendered before the first note-on (the controllers in force: the job's)
-constexpr double GAP_S = 3.0;           // after the last note-off, before the next pass (the job's)
+constexpr double GAP_S = 3.0;           // after the last note-off, before the next pass (the job's; the background measurer:
+                                        // gapFor, 1 s / Basses 1.5 s where measured)
+constexpr double RENDER_SPEED = 8.9;    // audio seconds rendered per second: the measurer's windows at a 1 s gap (kthost +
+                                        // Kontakt 8 + SSO on the Windows test VM, median of 16 renders, 3.7-13.4;
+                                        // sso_even_gap_check.json): the wait's estimate until a render here is timed
 
 // a window over a passage of n joined notes (indices): its notes measured and rendered
 struct Window {
@@ -199,6 +203,13 @@ struct Window {
 std::vector<Window> windows(int n, const std::vector<bool>& needs, int runIn, int runOut = RUN_OUT, int margin = MARGIN);
 // the run-in for a patch: RUN_IN_BASSES for the double basses (the main patch serves "contrabass"…), else RUN_IN
 int runInFor(const SoundLib::Library& library, const SoundLib::LibInstrument* patch);
+
+// the background measurer's gap after a window's last note-off for a patch: the measured patches' (evenlevels.cpp ›
+// MEASURED, sso_even_gap_check.json), else GAP_S
+double gapFor(const SoundLib::Library& library, const SoundLib::LibInstrument* patch);
+
+// the early stop's threshold for a patch (EARLY_STOP_…; 0: a patch not measured, always PASSES passes)
+double earlyStopFor(const SoundLib::Library& library, const SoundLib::LibInstrument* patch);
 
 // a measured value's key: the contexts of notes j-3 … j+3 of its passage ("-" outside it)
 QString cacheKey(const std::vector<QString>& contexts, size_t j);

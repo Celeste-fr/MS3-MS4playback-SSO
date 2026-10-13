@@ -115,69 +115,108 @@ void measure(const Envelope& en, const std::vector<double>& starts, double from,
 //   render
 //---------------------------------------------------------
 
+// one pass appended to mono (its start in *starts); false: cancelled (goOn)
+static bool renderPass(Vst3Synth* vst, const EvenAuto::Job& job, int rate, std::vector<float>* mono,
+                       std::vector<double>* starts, const std::function<bool()>& goOn)
+      {
+      auto isNote = [](const NPlayEvent& e) {
+            return (e.type() == ME_NOTEON || e.type() == ME_NOTEOFF) && !e.librarySwitch();
+            };
+      // (blocks of 4096, the plug-in's largest, events still at their sample: kthost on the VM rendered 12-16 % faster than
+      // in 512s, the levels the same; sso_even_gap_check.json › blockSize)
+      static const unsigned FRAMES = 4096;
+      std::vector<float> buf(FRAMES * 2);
+      float* buffer = buf.data();
+      const qint64 first = qint64(std::llround(job.from * rate));
+      const qint64 last = qint64(std::llround((job.to + job.gap) * rate));
+      // each pass is a playback (renderPasses: the plug-in sees the transport start again)
+      vst->restartTransport();
+      size_t i = 0;
+      for (; i < job.events.size() && job.times[i] < job.from; ++i)
+            if (!isNote(job.events[i]))
+                  vst->play(job.events[i]);
+      if (starts)
+            starts->push_back(double(mono->size()) / rate);
+      qint64 playTime = first;
+      while (playTime < last) {
+            if (goOn && !goOn()) {
+                  vst->allNotesOff(-1);
+                  return false;
+                  }
+            const unsigned block = unsigned(std::min<qint64>(FRAMES, last - playTime));   // (the last one to `last`)
+            unsigned frames = block;
+            std::fill(buf.begin(), buf.end(), 0.f);
+            const qint64 endTime = playTime + frames;
+            float* p = buffer;
+            for (; i < job.events.size(); ++i) {
+                  const double t = job.times[i];
+                  const qint64 f = qint64(t * rate);
+                  if (f >= endTime)
+                        break;
+                  const qint64 n = f - playTime;
+                  if (n > 0) {
+                        vst->process(unsigned(n), p, nullptr, nullptr);
+                        p += 2 * n;
+                        playTime += n;
+                        frames -= unsigned(n);
+                        }
+                  const NPlayEvent& e = job.events[i];
+                  if (e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch() && t >= job.to)
+                        continue;                   // (after the span: not this pass's)
+                  vst->play(e);
+                  }
+            if (frames) {
+                  vst->process(frames, p, nullptr, nullptr);
+                  playTime += frames;
+                  }
+            for (unsigned k = 0; k < block; ++k)
+                  mono->push_back(0.5f * (buffer[2 * k] + buffer[2 * k + 1]));
+            playTime = endTime;
+            }
+      vst->allNotesOff(-1);
+      return true;
+      }
+
+static bool ready(Vst3Synth* vst, const EvenAuto::Job& job)
+      {
+      if (!vst || job.events.empty() || job.events.size() != job.times.size())
+            return false;
+      vst->setExportMix(0, job.volume, job.pan, false, job.gain);
+      return true;
+      }
+
 std::vector<float> render(Vst3Synth* vst, const EvenAuto::Job& job, int rate, std::vector<double>* starts,
                           std::function<bool()> goOn)
       {
       std::vector<float> mono;
-      if (!vst || job.events.empty() || job.events.size() != job.times.size())
+      if (!ready(vst, job))
             return mono;
-      vst->setExportMix(0, job.volume, job.pan, false, job.gain);
-      auto isNote = [](const NPlayEvent& e) {
-            return (e.type() == ME_NOTEON || e.type() == ME_NOTEOFF) && !e.librarySwitch();
-            };
-      static const unsigned FRAMES = 512;
-      float buffer[FRAMES * 2];
-      const qint64 first = qint64(std::llround(job.from * rate));
-      const qint64 last = qint64(std::llround((job.to + job.gap) * rate));
-      mono.reserve(size_t(std::max<qint64>(0, last - first)) * size_t(EvenLevels::PASSES) + FRAMES);
+      mono.reserve(size_t(std::max(0.0, (job.to + job.gap - job.from) * rate)) * size_t(EvenLevels::PASSES) + 512);
       for (int pass = 0; pass < EvenLevels::PASSES; ++pass) {
-            size_t i = 0;
-            for (; i < job.events.size() && job.times[i] < job.from; ++i)
-                  if (!isNote(job.events[i]))
-                        vst->play(job.events[i]);
-            if (starts)
-                  starts->push_back(double(mono.size()) / rate);
-            qint64 playTime = first;
-            while (playTime < last) {
-                  if (goOn && !goOn()) {
-                        vst->allNotesOff(-1);
-                        mono.clear();
-                        if (starts)
-                              starts->clear();
-                        return mono;
-                        }
-                  unsigned frames = FRAMES;
-                  std::memset(buffer, 0, sizeof(buffer));
-                  const qint64 endTime = playTime + frames;
-                  float* p = buffer;
-                  for (; i < job.events.size(); ++i) {
-                        const double t = job.times[i];
-                        const qint64 f = qint64(t * rate);
-                        if (f >= endTime)
-                              break;
-                        const qint64 n = f - playTime;
-                        if (n > 0) {
-                              vst->process(unsigned(n), p, nullptr, nullptr);
-                              p += 2 * n;
-                              playTime += n;
-                              frames -= unsigned(n);
-                              }
-                        const NPlayEvent& e = job.events[i];
-                        if (e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch() && t >= job.to)
-                              continue;                   // (after the span: not this pass's)
-                        vst->play(e);
-                        }
-                  if (frames) {
-                        vst->process(frames, p, nullptr, nullptr);
-                        playTime += frames;
-                        }
-                  for (unsigned k = 0; k < FRAMES; ++k)
-                        mono.push_back(0.5f * (buffer[2 * k] + buffer[2 * k + 1]));
-                  playTime = endTime;
+            if (!renderPass(vst, job, rate, &mono, starts, goOn)) {
+                  mono.clear();
+                  if (starts)
+                        starts->clear();
+                  break;
                   }
-            vst->allNotesOff(-1);
             }
       return mono;
+      }
+
+//---------------------------------------------------------
+//   passesAlike
+//    early stop: passes 1 and 2 within job.earlyStopDb on every measured note (sso_even_gap_check.json: then their
+//    mean fits as the median of 3 does)
+//---------------------------------------------------------
+
+bool passesAlike(const std::vector<double>& a, const std::vector<double>& b, const std::vector<bool>& fixed, double db)
+      {
+      if (db <= 0 || a.size() != b.size())
+            return false;
+      for (size_t j = 0; j < a.size(); ++j)
+            if (!(j < fixed.size() && fixed[j]) && std::fabs(a[j] - b[j]) > db)
+                  return false;
+      return true;
       }
 
 //---------------------------------------------------------
@@ -192,11 +231,24 @@ EvenAuto::Result run(Vst3Synth* vst, const EvenAuto::Job& job, int rate, std::fu
       QElapsedTimer clock;
       clock.start();
       std::vector<double> starts;
-      const std::vector<float> mono = render(vst, job, rate, &starts, goOn);
+      std::vector<float> mono;
+      bool ok = ready(vst, job);
+      for (int pass = 0; ok && pass < EvenLevels::PASSES; ++pass) {
+            ok = renderPass(vst, job, rate, &mono, &starts, goOn);
+            if (ok && pass == 1 && job.earlyStopDb > 0) {
+                  const Envelope env = envelope(mono, rate);
+                  std::vector<double> a, b;
+                  measure(env, { starts[0] }, job.from, job.fit, &a, nullptr);
+                  measure(env, { starts[1] }, job.from, job.fit, &b, nullptr);
+                  if (passesAlike(a, b, job.fixed, job.earlyStopDb))
+                        break;
+                  }
+            }
       r.renderSeconds = clock.elapsed() / 1000.0;
       r.audioSeconds = double(mono.size()) / rate;
-      if (mono.empty() || starts.size() != size_t(EvenLevels::PASSES)) {
-            r.error = mono.empty() && goOn ? QString("cancelled") : QString("nothing rendered");
+      r.passes = int(starts.size());
+      if (!ok || mono.empty() || starts.size() < 2) {
+            r.error = !ok && goOn ? QString("cancelled") : QString("nothing rendered");
             return r;
             }
       measure(mono, rate, starts, job.from, job.fit, &r.levels, &r.env);

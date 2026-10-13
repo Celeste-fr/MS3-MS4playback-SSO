@@ -63,6 +63,7 @@ struct Session::Work {
       EvenLevels::Passage fit[3];
       std::vector<double> ons;          // the measured notes' note-ons (seconds)
       QString text;                     // "<part> bars a-b"
+      QString instance;                 // its plug-in instance (Job::instance)
       double audioSeconds { 0 };        // one round's
       };
 
@@ -130,6 +131,7 @@ Job Session::makeJob(Work& w, int round, const EventMap& events)
       j.partIndex = w.partIndex;
       j.patch = w.patch ? w.patch->name : QString();
       j.instance = QString("%1|%2").arg(w.partIndex).arg(j.patch);
+      w.instance = j.instance;
       j.route = w.route;
       auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
       const size_t n = w.notes.size();
@@ -178,7 +180,18 @@ Job Session::makeJob(Work& w, int round, const EventMap& events)
       j.from = std::max(0.0, f.on.front() - EvenLevels::LEAD_S);
       j.to = f.on.back() + 0.001;
       const double end = *std::max_element(f.off.begin(), f.off.end());
-      j.gap = std::max(0.0, end - j.to) + EvenLevels::GAP_S;
+      std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
+      j.gap = std::max(0.0, end - j.to) + (lib ? EvenLevels::gapFor(*lib, w.patch) : EvenLevels::GAP_S);
+      j.fixed = w.fixed;
+      j.earlyStopDb = lib ? EvenLevels::earlyStopFor(*lib, w.patch) : 0.0;
+      j.firstOn = 1e9;
+      j.lastOn = -1e9;
+      for (size_t k = 0; k < n; ++k) {
+            if (!w.fixed[k]) {
+                  j.firstOn = std::min(j.firstOn, f.on[k]);
+                  j.lastOn = std::max(j.lastOn, f.on[k]);
+                  }
+            }
       for (auto i = events.cbegin(); i != events.cend(); ++i) {
             const NPlayEvent& e = i->second;
             if (!e.isExternal() || routeOf(e) != w.route)
@@ -517,11 +530,49 @@ QStringList Session::pendingText(double from, double to) const
 
 double Session::pendingAudioSeconds(double from, double to) const
       {
-      double s = 0;
+      std::map<QString, double> by;
       for (const auto& w : _works)
             if (EvenLevels::mustWait(w.second->ons, from, to))
-                  s += w.second->audioSeconds * (3 - w.second->round);
+                  by[w.second->instance] += w.second->audioSeconds * (3 - w.second->round);
+      double s = 0;
+      for (const auto& b : by)
+            s = std::max(s, b.second);
       return s;
+      }
+
+std::vector<QString> Session::pendingInstances(double from, double to) const
+      {
+      std::set<QString> by;
+      for (const auto& w : _works)
+            if (EvenLevels::mustWait(w.second->ons, from, to))
+                  by.insert(w.second->instance);
+      return std::vector<QString>(by.begin(), by.end());
+      }
+
+//---------------------------------------------------------
+//   priority / next
+//---------------------------------------------------------
+
+double priority(const Job& job, double focus)
+      {
+      static const double BEFORE = 1e7;   // (after every window from the focus on: longer than any score)
+      if (job.lastOn >= focus - 1e-9)
+            return std::max(0.0, job.firstOn - focus);
+      return BEFORE + (focus - job.lastOn);
+      }
+
+int next(const std::vector<Job>& queue, double focus)
+      {
+      int best = -1;
+      double rank = 0;
+      for (size_t i = 0; i < queue.size(); ++i) {
+            const double r = priority(queue[i], focus);
+            if (best < 0 || r < rank - 1e-12) {
+                  best = int(i);
+                  rank = r;
+                  }
+            }
+      return best;
       }
 
 }     // namespace EvenAuto

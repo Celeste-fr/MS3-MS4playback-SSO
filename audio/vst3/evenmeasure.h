@@ -11,10 +11,13 @@
 //              note's level the envelope's mean over WINDOW_MS from its window start, the median over the passes; the
 //              envelope on the passage's grid (Passage::gridStart, STEP_MS), the median over the passes
 //    render    a Job (EvenAuto::Job): its events on slot 0 of a Vst3Synth in offline mode (the caller's beginExport, on
-//              the calling thread), PASSES passes in a row as renderPasses renders them: before each pass every
-//              controller, switch, bend and parameter before `from` at once, then from `from` to `to` (note-ons from
-//              `to` on left out) and `gap` seconds after; mono (the channels' mean)
-//    run       render + measure: a Result
+//              the calling thread), PASSES passes in a row as renderPasses renders them: each pass a playback (the
+//              transport restarted: Vst3Synth::restartTransport, as renderPasses), every controller, switch, bend and
+//              parameter before `from` at once, then from `from` to `to` (note-ons from `to` on left out) and `gap`
+//              seconds after; mono (the channels' mean)
+//    run       render + measure: a Result. Early stop (job.earlyStopDb > 0, the measured patches: EvenLevels::
+//              earlyStopFor): after 2 passes, a 3rd only when they differ on a measured note by more than it (else
+//              the 2 passes' median, their mean; sso_even_gap_check.json: the fits match the 3 passes' within noise)
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License version 3.
@@ -51,6 +54,8 @@ void measure(const std::vector<float>& mono, int rate, const std::vector<double>
 // goOn: asked between blocks (it may wait: paused while MuseScore plays); false: cancelled (an empty render)
 std::vector<float> render(Vst3Synth* vst, const EvenAuto::Job& job, int rate, std::vector<double>* starts,
                           std::function<bool()> goOn = nullptr);
+// two passes' levels alike on every measured note (not fixed) within db (> 0)
+bool passesAlike(const std::vector<double>& a, const std::vector<double>& b, const std::vector<bool>& fixed, double db);
 EvenAuto::Result run(Vst3Synth* vst, const EvenAuto::Job& job, int rate, std::function<bool()> goOn = nullptr);
 
 }     // namespace EvenMeasure

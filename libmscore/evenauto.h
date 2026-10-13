@@ -18,7 +18,10 @@
 //
 //   Rule (the owner): a note plays its MEASURED correction or playback waits for it, never a predicted one ("you would be
 //   hearing a 'fake' version for that moment … I'd rather just wait"). Measured only near edits, in the background; the
-//   full method: PASSES passes, two rounds, CC11's measured factor (CC11_FACTOR) built in.
+//   full method: PASSES passes (2 where they agree: early stop), two rounds, CC11's measured factor (CC11_FACTOR) built
+//   in. Between passes the silence after the last note-off is gapFor's (1 s, Basses 1.5 s, where measured: the levels and
+//   fits match the job's 3 s within SSO's own noise; sso_even_gap_check.json; the owner, 2026-10-13: "may shrink to the
+//   length the VM shows doesn't change results").
 //
 //   Session (one score; main thread): detect() renders the score as playback does ([levels] evenLevels as the score has
 //   it: the values that are current play) with every Performance legato note's context (MidiRenderer::setEvenLevelsInfo),
@@ -45,8 +48,13 @@
 //
 //   Edits: edited() holds results back until the next detect(), which keeps a Work whose rendered notes are all still
 //   there with the same contexts (its jobs go on) and drops the rest (their results are ignored). pendingOns(): the
-//   measured notes' note-ons (seconds) of the Works not done: playback waits when one is in what is about to play
-//   (EvenLevels::mustWait).
+//   measured notes' note-ons (seconds) of the Works not done, rendering or still queued (at a score's opening every
+//   passage is queued): playback waits when one is in what is about to play (mustWait; the owner, 2026-10-13: "Wait for
+//   the measurement" also at opening).
+//
+//   Order (the owner, 2026-10-13: the wait as short as possible): each plug-in instance renders its queued jobs by
+//   priority(): first the windows with measured notes from the focus on (the play position, or what Play waits for),
+//   the earliest first; then those before it, the nearest first. The rest of the score goes on in the background.
 //---------------------------------------------------------
 
 #include <functional>
@@ -83,8 +91,13 @@ struct Job {
       int route { -1 };             // port * 16 + channel (one route of instance: a lane's tuning by its events)
       std::vector<double> times;    // the route's events (seconds, in order) …
       std::vector<NPlayEvent> events;     // … each with its channel 0 (the instance's slot; never its note read)
-      double from { 0 }, to { 0 }, gap { EvenLevels::GAP_S };     // rendered from, note-ons before to, then gap
+      double from { 0 }, to { 0 }, gap { EvenLevels::GAP_S };     // rendered from, note-ons before to, then gap (from the
+                                                                  // last note-off on: EvenLevels::gapFor)
       EvenLevels::Passage fit;      // the window's notes: note-on, note-off, heard window (seconds), slur
+      double firstOn { 0 }, lastOn { 0 };   // the measured notes' first and last note-on (seconds): priority()
+      std::vector<bool> fixed;      // per note of fit: run-in / run-out (held, not measured)
+      double earlyStopDb { 0 };     // > 0: a 3rd pass only when passes 1 and 2 differ on a measured note by more
+                                    // (EvenLevels::earlyStopFor); 0: always PASSES
       int volume { 100 }, pan { 64 };     // the slot's export mix (SoundLibraryExport::setExportMix)
       float gain { 1.f };
       double audioSeconds() const { return (to - from + gap) * EvenLevels::PASSES; }
@@ -96,10 +109,18 @@ struct Result {
       bool ok { false };
       std::vector<double> levels;   // per note of the window
       std::vector<double> env;      // on the window's grid (Passage::gridStart, STEP_MS)
+      int passes { 0 };             // rendered (2 when early stopping found them alike, else PASSES)
       double renderSeconds { 0 };
       double audioSeconds { 0 };    // rendered (all passes)
       QString error;
       };
+
+// a queued job's rank (smaller first) with the focus at `focus` seconds: a window whose measured notes reach the focus
+// or lie after it ranks by how far its first one is after it (0 when it straddles it); one before it after all of
+// those, by how far its last one is before it
+double priority(const Job& job, double focus);
+// the index of the job to render next in `queue` (-1: empty)
+int next(const std::vector<Job>& queue, double focus);
 
 class Session {
       struct Work;
@@ -136,9 +157,14 @@ class Session {
       bool busy() const { return !_works.empty(); }
       std::vector<int> workIds() const;   // the Works going on (a job of another id is no longer wanted)
       std::vector<double> pendingOns() const;
+      // Play from `from` to `to` (seconds) waits: a Work not done (queued or rendering) measures a note there
+      bool mustWait(double from, double to) const { return EvenLevels::mustWait(pendingOns(), from, to); }
       // the Works not done in [from, to) (or all): "<part> bars a-b", for the wait's message
       QStringList pendingText(double from = -1e9, double to = 1e9) const;
-      double pendingAudioSeconds(double from = -1e9, double to = 1e9) const;   // still to render (rough: rounds left)
+      // still to render for the Works in [from, to), rounds left counted (rough: round 2 may not be needed): the
+      // instances render in parallel, so the largest of their sums
+      double pendingAudioSeconds(double from = -1e9, double to = 1e9) const;
+      std::vector<QString> pendingInstances(double from = -1e9, double to = 1e9) const;   // their plug-in instances
       int fromCache() const { return _fromCache; }    // notes given a value from the cache (so far)
       int measured() const { return _measured; }      // notes given a measured value (so far)
       };

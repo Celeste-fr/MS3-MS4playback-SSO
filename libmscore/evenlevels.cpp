@@ -533,6 +533,43 @@ int runInFor(const SoundLib::Library& library, const SoundLib::LibInstrument* pa
       return RUN_IN;
       }
 
+//---------------------------------------------------------
+//   gapFor / earlyStopFor
+//    the patches measured by tools/soundlibraries/even_gap_check.py (sso_even_gap_check.json; Windows test VM, kthost +
+//    Kontakt 8 + SSO, the windows the background measurer renders of Whence): the smallest gap whose levels and fitted
+//    glides matched the 3 s gap's, and the early stop's threshold (the 95th percentile of |pass 1 - pass 2| over the
+//    measured notes). Any other patch: the job's 3 s, always PASSES passes
+//---------------------------------------------------------
+
+static const struct Measured { const char* patch; double gap; double earlyStopDb; } MEASURED[] = {
+      { "Violins 1 - Performance", 1.0, 0.67 },
+      { "Violas - Performance", 1.0, 0.74 },
+      { "Celli - Performance", 1.0, 1.26 },
+      { "Basses - Performance", 1.5, 1.49 },  // (Whence's Celli bars 1-8 an octave lower: Whence has no slurred Basses)
+      };
+
+static const Measured* measured(const SoundLib::LibInstrument* patch)
+      {
+      if (!patch)
+            return nullptr;
+      for (const Measured& m : MEASURED)
+            if (patch->name == QLatin1String(m.patch))
+                  return &m;
+      return nullptr;
+      }
+
+double gapFor(const SoundLib::Library&, const SoundLib::LibInstrument* patch)
+      {
+      const Measured* m = measured(patch);
+      return m ? m->gap : GAP_S;
+      }
+
+double earlyStopFor(const SoundLib::Library&, const SoundLib::LibInstrument* patch)
+      {
+      const Measured* m = measured(patch);
+      return m ? m->earlyStopDb : 0.0;
+      }
+
 QString cacheKey(const std::vector<QString>& contexts, size_t j)
       {
       QStringList parts;

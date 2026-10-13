@@ -19,12 +19,17 @@
 //                when another score is shown, the setting goes off, or MuseScore quits
 //    playback    while MuseScore plays, the workers pause between blocks (Kontakt's real-time playback keeps the CPU);
 //                an edit made while playing is measured after it stops. Running playback is never stopped or held
-//    Play        Seq::start asks prepare() (an edit not yet looked at: detect now) and then holdPlay(): when a note
-//                being measured (queued or rendering) has its note-on in what is about to play, from the transport's
-//                start (PlayStart: the pre-roll of early notes included) to the loop's end (else the score's), playback
-//                waits: a countdown in the status bar ("playing in ~n s": the rendering still to do at the speed measured
-//                so far), then plays (resume: Seq::start again, now with the values). Stop (or Esc) cancels the wait.
-//                Otherwise it plays at once
+//    Play        Seq::start asks prepare() (an edit not yet looked at, or the score just opened: detect now) and then
+//                holdPlay(): when a note being measured (queued or rendering; at opening every passage is queued) has its
+//                note-on in what is about to play, from the transport's start (PlayStart: the pre-roll of early notes
+//                included) to the loop's end (else the score's), playback waits (the owner, 2026-10-13: "Wait for the
+//                measurement", also at opening): a countdown in the status bar ("playing in ~n s": the rendering still
+//                to do at the speed measured so far, or the VM's until one is; "loading" while a plug-in it needs
+//                loads), then plays (resume: Seq::start again, now with the values). Stop (or Esc) cancels the wait.
+//                Otherwise it plays at once. Running playback is never stopped
+//    order       each instance renders its queue by EvenAuto::priority from the focus: the play position (at each
+//                detect), or the start of what Play waits for: the windows there first, from it forward, then the
+//                rest of the score in the background; instances load in the same order
 //    values      written without an undo step (evenauto.h): the score is marked modified (MasterScore::
 //                setEvenLevelsWritten); the per-user cache (<setups folder>/even cache.json, EvenLevels::Cache) keeps every
 //                value by its context, so an undo or redo restores values without rendering
@@ -82,6 +87,7 @@ class EvenAutoMeasurer : public QObject {
       std::atomic<bool> _paused { false };
       std::mutex _liveMutex;
       std::set<int> _live;                            // the Works' ids still wanted (the workers skip the rest)
+      std::atomic<double> _focus { 0 };               // seconds: the jobs from here on first (EvenAuto::priority)
       double _speed { 0 };                            // audio seconds per second of rendering, as measured (0: none yet)
 
       bool _holding { false };
@@ -100,6 +106,8 @@ class EvenAutoMeasurer : public QObject {
       void countdownStep();
       void releaseInstances();
       void worker(Instance* in);
+      double playSeconds() const;                     // the score's play position (seconds)
+      bool loading(const std::vector<QString>& instances) const;     // one of them not loaded or not sounding yet
 
    public:
       ~EvenAutoMeasurer();
