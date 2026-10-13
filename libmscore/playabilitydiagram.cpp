@@ -346,19 +346,19 @@ DisplayList layoutValves(const ChordInfo& g, double w, double h)
                         n = std::max(n, v + 1);
             return n + (b.horn ? 1 : 0);
             };
-      std::vector<const BrassEntryInfo*> big, small;
+      std::vector<const BrassEntryInfo*> bigEntries, smallEntries;
       for (const BrassEntryInfo& e : b.entries)
-            (e.standard ? big : small).push_back(&e);
-      if (big.empty()) {
-            big.push_back(small.front());
-            small.erase(small.begin());
+            (e.standard ? bigEntries : smallEntries).push_back(&e);
+      if (bigEntries.empty()) {
+            bigEntries.push_back(smallEntries.front());
+            smallEntries.erase(smallEntries.begin());
             }
       // the standard set(s), large
-      double R = std::max(7.0, std::min(14.0, (w - 20) / (big.size() * 7.5)));
-      double colW = w / big.size();
+      double R = std::max(7.0, std::min(14.0, (w - 20) / (bigEntries.size() * 7.5)));
+      double colW = w / bigEntries.size();
       double y = 44;
-      for (size_t i = 0; i < big.size(); ++i) {
-            const BrassEntryInfo& e = *big[i];
+      for (size_t i = 0; i < bigEntries.size(); ++i) {
+            const BrassEntryInfo& e = *bigEntries[i];
             int n = buttonsFor(e);
             double width = R * 2 + (n - 1) * R * 2.5;
             double x = colW * i + (colW - width) / 2;
@@ -369,12 +369,12 @@ DisplayList layoutValves(const ChordInfo& g, double w, double h)
             QString l = e.labels.join(", ");
             items.push_back(text(colW * (i + 0.5), y + R + 13, l, 9, e.playable ? HTK::INK : IMPOSSIBLE_COLOR, 0));
             }
-      // the alternatives, small, in rows
+      // the alternatives, smallEntries, in rows
       double r = std::max(3.5, std::min(6.0, R * 0.45));
       double x = 8;
       y += R + 40;
       double rowH = r * 2 + 30;
-      for (const BrassEntryInfo* e : small) {
+      for (const BrassEntryInfo* e : smallEntries) {
             int n = buttonsFor(*e);
             double width = std::max(r * 2 + (n - 1) * r * 2.5, 52.0);
             if (x + width > w - 4 && x > 8) {

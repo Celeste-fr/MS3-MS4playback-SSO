@@ -1825,11 +1825,11 @@ void Pass::checkClarinetKey(Part* part, const QString& staffName)
                   const bool sharpKey = inKey == 9 || inKey == 2 || inKey == 7;
                   const bool flatKey = inKey == 10 || inKey == 5 || inKey == 3;
                   if ((sharpKey && fifths == -R2_RESPELL_6) || (flatKey && fifths == R2_RESPELL_6)) {
-                        static const char* const IN[] = { "", "", "D", "E♭", "", "F", "", "G", "", "A", "B♭", "" };
+                        static const char* const IN_KEY[] = { "", "", "D", "E♭", "", "F", "", "G", "", "A", "B♭", "" };
                         chordRow(s, st, staffName, "clarinetKey",
                                  QString::fromUtf8("instrument in %1 written in %2: an instrument in a %3 key reads %4 (%5) "
                                                    "(solo and section) (Gould p. 252)")
-                                 .arg(QString::fromUtf8(IN[inKey]), written, sharpKey ? "sharp" : "flat", keyName(-fifths), accidentalCount(-fifths)),
+                                 .arg(QString::fromUtf8(IN_KEY[inKey]), written, sharpKey ? "sharp" : "flat", keyName(-fifths), accidentalCount(-fifths)),
                                  accidentalCount(fifths));
                         }
                   }
@@ -2104,7 +2104,7 @@ void Pass::checkVocalTessitura(Part* part, const QString& staffName)
                   if (!e || !e->isChord())
                         continue;
                   Chord* c = toChord(e);
-                  std::vector<Note*> far;
+                  std::vector<Note*> farNotes;
                   for (Note* n : c->notes()) {
                         if (n->tieBack())
                               continue;
@@ -2114,11 +2114,11 @@ void Pass::checkVocalTessitura(Part* part, const QString& staffName)
                               inside += secs;
                         else {
                               outside += secs;
-                              far.push_back(n);
+                              farNotes.push_back(n);
                               }
                         }
-                  if (!far.empty())
-                        out.push_back({ c, far });
+                  if (!farNotes.empty())
+                        out.push_back({ c, farNotes });
                   }
       if (inside + outside <= 0 || inside / (inside + outside) >= R5_MIN_SHARE)
             return;
@@ -2329,7 +2329,7 @@ void Pass::checkClefs(Part* part, const QString& staffName)
                         closeRun();
                         continue;
                         }
-                  std::vector<Note*> far;
+                  std::vector<Note*> farNotes;
                   for (Chord* c : o.chords) {
                         Staff* ds = _score->staff(c->staffIdx() + c->staffMove());
                         if (!ds || ds->lines(tick) != 5)
@@ -2339,12 +2339,12 @@ void Pass::checkClefs(Part* part, const QString& staffName)
                               continue;
                         for (Note* n : c->notes())
                               if (ledgerLines(n, type->stepOffset()) >= C1_CLEF_LEDGER_MIN)
-                                    far.push_back(n);
+                                    farNotes.push_back(n);
                         }
-                  if (far.empty())
+                  if (farNotes.empty())
                         closeRun();
                   else
-                        run.push_back({ &o, far });
+                        run.push_back({ &o, farNotes });
                   }
             closeRun();
             // C1-HORN-BASS and C1-TIE-CLEF, chord by chord
