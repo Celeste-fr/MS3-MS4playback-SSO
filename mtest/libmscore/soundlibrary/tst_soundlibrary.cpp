@@ -2886,6 +2886,28 @@ void TestSoundLibrary::evenLevelsGlide()
       score->setMetaTag(TrackDelays::metaTag, "[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin - Performance\":-3}}]");
       check(-4.5, "track level");
       score->setMetaTag(TrackDelays::metaTag, QString());
+      // a correction above what the volume can add (+8 dB, Live's top +6): the notes 8 dB lower, so the glide's top is
+      // CC11 127, not cut; the rest (2 dB) lowers every patch of the score by its volume (evenAll), the balance kept
+      {
+            for (size_t k = s; k <= e; ++k)
+                  if ((k - s) % 2)
+                        const_cast<Note*>(in[k].note)->setEvenLevel(8.0);
+            for (size_t k = s; k <= e; ++k)
+                  dbs[k - s] = in[k].note->evenLevel();
+            check(-8.0, "above the top");
+            const std::map<const Part*, TrackDelays::Delays> d = TrackDelays::read(score);
+            QVERIFY(std::fabs(TrackDelays::patchGain(*lib, TrackDelays::of(part, d), "Violin - Performance") - std::pow(10.0, 6.0 / 20)) < 1e-9);
+            QVERIFY(std::fabs(TrackDelays::patchGain(*lib, TrackDelays::of(part, d), "Violin") - std::pow(10.0, -2.0 / 20)) < 1e-9);
+            int top = 0;
+            for (const auto& x : cc11s(render(nullptr)))
+                  top = std::max(top, x.second);
+            QCOMPARE(top, 127);
+            for (size_t k = s; k <= e; ++k)
+                  if ((k - s) % 2)
+                        const_cast<Note*>(in[k].note)->setEvenLevel(1.5);
+            for (size_t k = s; k <= e; ++k)
+                  dbs[k - s] = in[k].note->evenLevel();
+      }
       // the score's 1 over the ini's 0
       Playback::setIniValuesForTest(base);
       score->setMetaTag(Playback::metaTag, "levels/evenLevels=1");

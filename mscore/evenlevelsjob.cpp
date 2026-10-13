@@ -648,12 +648,23 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
       std::set<size_t> again;
       for (size_t k = 0; k < passages.size(); ++k) {
             PassageRec& p = passages[k];
-            // the measured change against the predicted (notes but the first and last)
+            // the measured change against the predicted (notes but the first and last; about their means: a change
+            // of the whole passage, TrackDelays::Delays::evenAll's, is not the corrections')
             const std::vector<double> pred = EvenLevels::windowChanges(p.fit, p.values[1]);
+            double mx = 0, my = 0;
+            size_t cnt = 0;
+            for (size_t j = 1; j + 1 < p.notes.size(); ++j, ++cnt) {
+                  mx += pred[j];
+                  my += p.levels[1][j] - p.levels[0][j];
+                  }
+            if (cnt) {
+                  mx /= double(cnt);
+                  my /= double(cnt);
+                  }
             double sxy = 0, sxx = 0;
             for (size_t j = 1; j + 1 < p.notes.size(); ++j) {
-                  const double x = pred[j];
-                  const double y = p.levels[1][j] - p.levels[0][j];
+                  const double x = pred[j] - mx;
+                  const double y = p.levels[1][j] - p.levels[0][j] - my;
                   sxy += x * y;
                   sxx += x * x;
                   }

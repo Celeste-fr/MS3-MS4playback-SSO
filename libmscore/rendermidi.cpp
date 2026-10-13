@@ -5467,7 +5467,7 @@ void MidiRenderer::updateState()
                   for (const SoundLib::Route& r : routes) {
                         libRoutePatches[r.port * 16 + r.channel] = { r.part, r.instrument };
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
-                        if (d.empty() && d.rule.empty() && d.even.empty())
+                        if (d.empty() && d.rule.empty() && d.even.empty() && d.evenAll == 0.0)
                               continue;
                         libTrackDelays[r.part] = d;
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };

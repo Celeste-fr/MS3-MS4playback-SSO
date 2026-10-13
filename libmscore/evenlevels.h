@@ -48,9 +48,11 @@
 //   track delays): on each route, a run of joined notes whose values are current plays the glide on top of the CC11
 //   schedule (libraryNoteLevels: the level rule, the section balance, [levels] realRange, track levels: dB add up),
 //   a message per STEP_MS where the value changes, the value held before the first and after the last middle, the
-//   CC11 in force again at the next note-on on the route (or the chunk's end). Headroom like the track levels': each
-//   patch's largest value (tops) plays louder by its volume (TrackDelays::patchGain, within Live's +6 dB), every note
-//   on the patch that much lower by CC11. The same events reach Live's clips and the plain set's CC11 lane.
+//   CC11 in force again at the next note-on on the route (or the chunk's end). Headroom: each
+//   patch's largest value (tops) plays louder by its volume (TrackDelays::patchGain), every note on the patch that
+//   much lower by CC11, so no correction is cut at CC11 127; what the volume can't add under Live's +6 dB lowers every
+//   library patch of the score alike, by its volume (TrackDelays::Delays::evenAll: the balance stays, the whole
+//   library plays that much quieter, as the 2026-10-12 listening test's shift did). The same events reach Live's clips and the plain set's CC11 lane.
 //---------------------------------------------------------
 
 #include <map>
