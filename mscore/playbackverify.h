@@ -37,12 +37,20 @@
 #define __PLAYBACKVERIFIER_H__
 
 #include <functional>
+#include <map>
+#include <memory>
+#include <vector>
 
 #include <QJsonObject>
 #include <QString>
 #include <QStringList>
 
 namespace Ms {
+
+class EventMap;
+class MasterScore;
+class NPlayEvent;
+class Vst3Synth;
 
 class PlaybackVerifier {
    public:
@@ -57,6 +65,19 @@ class PlaybackVerifier {
       static QStringList scoreFiles(const QStringList& inputs);
       // the report's folder, or empty on failure; log: progress lines
       static QString run(const Options& options, std::function<void(const QString&)> log, QString* zip = nullptr);
+
+      // (also for the even-levels measurement, evenlevelsjob.h; with plug-in hosting only)
+      // each patch loaded (slot -> patch) played a test note in real time until it sounds (Kontakt goes on loading samples
+      // after its state is set); what it waited in out ("soundWaitSeconds", "neverSounded")
+      static void waitUntilSounding(std::shared_ptr<Vst3Synth> vst, const std::map<int, QString>& patches, int rate,
+                                    const QString& name, std::function<void(const QString&)> log, QJsonObject* out);
+      // the events kept (keep: the library's, e.g. one part's slots) rendered on the instances from `from` to `to` seconds
+      // (note-ons from `to` on left out) and gap seconds after, passes times in a row (round robins advancing), as the
+      // export renders (SoundLibraryExport: the score's mix); before each pass every kept controller, switch, bend and
+      // parameter before `from` at once. Mono (the channels' mean); passStarts: each pass's `from` in the output, seconds
+      static std::vector<float> renderPasses(MasterScore* score, const EventMap& events, int rate, std::shared_ptr<Vst3Synth> vst,
+                                             std::function<bool(const NPlayEvent&)> keep, double from, double to, int passes,
+                                             double gap, std::vector<double>* passStarts);
       };
 
 } // namespace Ms

@@ -329,6 +329,46 @@ At a middle pitch (dB; realDb ppp / mp / fff against mp, CC11 before the headroo
 Test: `tst_soundlibrary::levelRealRange` (realDb, CC11 at ppp / mp / fff, a hairpin's CC11 following its CC1, R as
 volume, a capped short, the layers, the presets without it, the shipped map), `tst_liveequivalence::liveRealRange`.
 
+### Even levels
+
+SSO's Performance legato plays some slurred notes louder or quieter than others, deterministically and by context
+(Whence 12-TET bar 2, Celli: notes 2-3 ~3 dB over 1 and 4, the same within 0.2 dB pass to pass); a table per transition
+can't predict it (`sso_transition_levels.json`: r 0.45-0.63). The owner (2026-10-12) wants it evened out, and in a blind
+listening test (real SSO, loudness-matched; `even_levels_test.py`, `sso_even_levels_test.json`) chose the **glide**: CC11
+linear in dB between the middles of the notes' heard windows, a message every 5 ms (Ramp also liked, Step not chosen,
+uncorrected marked wrong). `[levels] evenLevels` (**0 everywhere, Recommended too, until the owner has heard it in
+MuseScore**; per score through `playbackSettings`) plays the corrections measured for the score; libmscore/evenlevels.h has
+the design.
+
+- **Measured in place, per score**: *Tools › Even Out Levels…* (the selection's parts and bars, else every library part;
+  a MuseScore of its own measures a copy, the result one undo step) or `MuseScore3Evo --even-levels <score>
+  [--even-levels-parts 4] [--even-levels-bars 1-8] [--even-levels-play] [--even-levels-out <folder>]` (mscore/evenlevelsjob.h).
+  Needs the library's plug-in (Kontakt + SSO). Every passage of three or more joined notes on a Performance legato patch is
+  rendered as playback renders it, through the hosted plug-ins, three passes; each note's level is the perceived envelope's
+  mean over 136.4 ms from its window start (a transition: the map's `legatoDelay` for its interval; an attack: its onset),
+  the median of the passes; the glide's values per note are fitted (least squares, ridge 0.5) so that the glide, smoothed
+  as the envelope (one pole, 35 ms), flattens the measured envelope to each slur's median (a slur: from an attack or a
+  bowed transition; the passage's first and last note left out of the statistics). Rendered and measured again with them;
+  where the residual (the largest |note - its slur's median|) stays above 1 dB (the test's noise floor), fitted once more
+  (scaled by the measured / predicted change of round 1: the test's first round overshot ~25 %); per passage the round
+  with the smallest median slur range is kept, none if uncorrected was smallest. `result.json` lists every note's levels.
+- **Kept on the note** (Inspector › Note › Even level, editable, with its state): the glide's value at the middle of its
+  window (dB) and what it was measured against: `"<patch>|<hash>"` of its rendered context (patch, pitch and tuning,
+  velocity, joined or not, length, the joined neighbours' pitches, velocities and timing, the dynamics CC in force; the
+  tempo through the times). Each render compares: a changed context is **stale**: not played, shown, until measured
+  again. Saved in the metaTag `evenLevels` (left out when no note has one; MuseScore 3.6 keeps it).
+- **Played** (`MidiRenderer::libraryEvenLevels`, after the per-note levels and Live timing overrides, before track delays):
+  a run of joined notes with current values glides on top of the route's CC11 schedule (the level rule, section balance,
+  realRange, track levels: dB add up), a message per 5 ms where the value changes, the CC11 in force again at the next
+  note-on. **Headroom** as the track levels': each patch's largest value plays by its volume (`TrackDelays::evenDb`,
+  `patchGain`, within Live's +6 dB), every note on the patch that much lower by CC11.
+- **Live**: the same CC11 events reach Live's clips and the plain set's CC11 lane; the headroom the Kontakt tracks' Volume
+  (`tst_liveequivalence::liveEvenLevels`).
+
+Tests: `tst_performancetechnique::evenLevels` (contexts, stale and current, undo, the metaTag round trip, the fit's maths),
+`tst_soundlibrary::evenLevelsGlide` (the CC11 glide's shape, headroom, a track level, layers, a stale note, presets),
+`tst_liveequivalence::liveEvenLevels`.
+
 ## Inventory
 
 Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitfire Symphony Orchestra.xml`, made by
@@ -362,6 +402,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' volumes, the rest of the part's patches lower together (above, Level rule; the owner, 2026-10-10) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a string section its map `sectionLevel` louder by its volume, with the level rule each phrase at gain + its section's level, all lower together so the loudest stays at +6 dB (above, Section balance; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::volumes`), `TrackDelays::patchGain`; data: map `sectionLevel` from `gen_spitfire_sso.py` `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
 | Real range: each note of the five string sections as loud as a real player at its written dynamic (rule D: TU Berlin's pp / ff are ppp / fff, 7 equal dB steps from mp), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 0 (everywhere, Recommended too, until the owner has heard it) | `contextlevel.cpp` (`realRangeDb`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |
+| Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' heard windows, every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 0 (everywhere, Recommended too, until the owner has heard it in MuseScore) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
 | Pedal changes after their chord (legato pedalling) | up one tick after, down the tick after (since 2026-10-06; the pianist's timing, `[pedal]`, removed 2026-10-07) | `renderSpanners` (pedal) | fixed |
 | A key struck again ends its sounding note just before | on | `finishLibraryEvents` | `[notes] sameKeyEndsFirst` |
 | An attack at a velocity whose recording at that key is faulty plays at the nearest clean velocity measured (map `avoid`, `tools/soundlibraries/sso_bad_samples.json`: SSO's Celli - Performance B2-C3 at 100-116, the spiccato attack's top layer and the re-attack 106, plays its 5th round robin of 6 with a narrow tone near 1184 Hz, +9 .. +11 dB over the other attacks there; 99 and below clean; kthost on the Windows VM, 2026-10-10). Not legato transitions, not a note's own velocity (the Velocity lane). The owner, 2026-10-10: "the weird square wave-y noise problem" in Whence's Celli under the level rule (its CC1 64 makes the recording stand out: at CC1 89 it is there too, +3 dB) | on | `rendermidi.cpp` (`libAvoidBad`), `Articulation::avoidVelocity` | `[notes] avoidBadSamples`; score: `playbackSettings` |

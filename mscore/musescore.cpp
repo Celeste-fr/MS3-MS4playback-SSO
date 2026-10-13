@@ -144,6 +144,7 @@
 #include "soundlibrarycheck.h"
 #include "soundlibraryloadtimes.h"
 #include "playbackverify.h"
+#include "evenlevelsjob.h"
 #include "liveequivalence.h"
 #include "livesetexport.h"
 #include "livehelpers.h"
@@ -287,6 +288,8 @@ static QString verifyAudio;                // --verify-audio
 static QString verifyLibrary;              // --verify-library
 static bool verifyWav = false;             // --verify-wav
 static bool verifyShareable = false;       // --verify-shareable
+static bool evenLevelsMode = false;        // --even-levels: measure a score's even-levels corrections (evenlevelsjob.h)
+static EvenLevelsJob::Options evenLevelsOptions;
 static bool liveSetMode = false;           // --create-live-set / --live-equivalence (a score's Live Set, headless)
 static QString liveSetOut;                 // --create-live-set <file.als>
 static QString liveEquivalenceOut;         // --live-equivalence <folder>
@@ -2427,6 +2430,7 @@ MuseScore::MuseScore()
       menuTools->addAction(getAction("transpose"));
       menuTools->addAction(getAction("tuning"));
       menuTools->addAction(getAction("adapt-keysigs-to-clefs"));
+      menuTools->addAction(getAction("even-levels"));
       menuTools->addSeparator();
       menuTools->addAction(getAction("explode"));
       menuTools->addAction(getAction("implode"));
@@ -2658,7 +2662,7 @@ MuseScore::MuseScore()
       Workspace::addMenuAndString(menuHelp,        "menu-help");
       Workspace::addMenuAndString(menuTours,       "menu-tours");
 
-      if (!extractMode && !verifyMode && !liveSetMode)    // (the background extract writes nothing of the working MuseScore's)
+      if (!extractMode && !verifyMode && !liveSetMode && !evenLevelsMode)    // (the background extract writes nothing of the working MuseScore's)
             Workspace::writeGlobalMenuBar(mb);
 
       if (!MScore::noGui) {
@@ -5187,6 +5191,80 @@ static bool verifyInBackground(const QStringList& argv)
       }
 
 //---------------------------------------------------------
+//   evenLevelsInBackground
+//    MuseScore --even-levels <score> [--even-levels-out <folder>] [--even-levels-parts …] [--even-levels-bars a-b]
+//    [--even-levels-play] [--verify-library <library>]: EvenLevelsJob (evenlevelsjob.h) as a process of its own, like the
+//    background verification (its setups copy and lock: one of them at a time), log "background even levels.log" and
+//    stderr (Tools › Even Out Levels… shows the last line)
+//---------------------------------------------------------
+
+static bool evenLevelsInBackground(const QStringList&)
+      {
+#ifdef Q_OS_WIN
+      SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+#endif
+      ArticulationCheckDialog::setBackgroundLog("background even levels.log");
+      auto log = [](const QString& line) {
+            ArticulationCheckDialog::logBackground(line);
+            fprintf(stderr, "%s\n", qPrintable(line));
+            fflush(stderr);
+            };
+      QString path = verifyLibrary;
+      if (!path.isEmpty() && !QFileInfo::exists(path))
+            path = mscoreGlobalShare + "soundlibraries/" + verifyLibrary + ".xml";
+      if (path.isEmpty()) {
+            path = preferences.getString(PREF_IO_SOUNDLIBRARY);
+            if (path.isEmpty())
+                  path = soundLibraryPath();
+            }
+      if (path.isEmpty() || !QFileInfo::exists(path)) {
+            log(QString("no sound library \"%1\" (share/soundlibraries has its maps)").arg(verifyLibrary));
+            return false;
+            }
+      QString error;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::Library::load(path, &error);
+      if (!library) {
+            log(error);
+            return false;
+            }
+      SoundLib::setCurrent(library);
+      const QString mine = SoundLibraryHost::setupsFolder(*library);
+      SoundLibraryHost::setDataFolder(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                      + "/MuseScore Sound Library Check/background verify setups");
+      const QString copy = SoundLibraryHost::setupsFolder(*library);
+      QDir().mkpath(copy);
+      QLockFile lock(copy + "/background playback verify.lock");
+      if (!lock.tryLock(0)) {
+            log("a playback verification or measurement is already running with these setups; this one waits");
+            if (!lock.lock()) {
+                  log("could not take the setups' lock");
+                  return false;
+                  }
+            }
+      const RenderPreflight::Setups synced = RenderPreflight::syncJobCopy(mine, copy, RenderPreflight::CopyMode::VERIFY,
+                                                                          SoundLibraryHost::makesSetups(*library));
+      RenderPreflight::setSetups(synced);
+      log(QString("even-levels measurement started; setups in %1 (%2 copied from %3)")
+          .arg(QDir::toNativeSeparators(copy)).arg(synced.copied).arg(QDir::toNativeSeparators(mine)));
+      SoundLibraryHost::loadCalibration();
+      for (const QString& line : RenderPreflight::lines("even-levels measurement"))
+            log(line);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
+            return l && SoundLibraryHost::hasSetup(*l, li.name);
+            });
+      QString folder;
+      {
+#ifdef Q_OS_WIN
+            DialogWatch watch;
+#endif
+            folder = EvenLevelsJob::run(evenLevelsOptions, log);
+      }
+      return !folder.isEmpty();
+      }
+
+//---------------------------------------------------------
 //   liveSetInBackground
 //    MuseScore --create-live-set <file.als> <score> [--verify-library <library>]: Create Live Set without a window
 //    (the Live Set the Mixer's Advanced Options write, and its report on the console);
@@ -5311,6 +5389,8 @@ static bool processNonGui(const QStringList& argv)
             return liveSetInBackground(argv);
       if (verifyMode)
             return verifyInBackground(argv);
+      if (evenLevelsMode)
+            return evenLevelsInBackground(argv);
       if (extractMode)
             return extractInBackground(argv);
       if (cliSaveOnline)
@@ -8010,6 +8090,8 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   d.exec();
                   }
             }
+      else if (cmd == "even-levels")
+            EvenLevelsJob::runFromGui(cs, this);
       else if (cmd == "adapt-keysigs-to-clefs") {
             if (cs) {
                   cs->startCmd();
@@ -9378,6 +9460,17 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("verify-wav", "Use with --verify-playback: also keep the full renders"));
       parser.addOption(QCommandLineOption("verify-shareable", "Use with --verify-playback: only report.json and summary.txt, no "
                                           "audio clips and no lists of every note (a report on your own scores to post)"));
+      parser.addOption(QCommandLineOption("even-levels", "Measure the score's slurred passages on Performance legato patches with "
+                                          "the sound library's plug-in and fit each note's even-levels correction (evenlevelsjob.h), "
+                                          "without a window: result.json and the score with them in Documents/MuseScore Sound "
+                                          "Library Check", "score"));
+      parser.addOption(QCommandLineOption("even-levels-out", "Use with --even-levels: the folder for the result", "folder"));
+      parser.addOption(QCommandLineOption("even-levels-parts", "Use with --even-levels: the parts (numbers from 1, or names, "
+                                          "comma separated); default: every library part", "parts"));
+      parser.addOption(QCommandLineOption("even-levels-bars", "Use with --even-levels: the bars, e.g. 1-8", "first-last"));
+      parser.addOption(QCommandLineOption("even-levels-ticks", "Use with --even-levels: the ticks, e.g. 0-7680", "from-to"));
+      parser.addOption(QCommandLineOption("even-levels-play", "Use with --even-levels: also a copy of the score with "
+                                          "[levels] evenLevels on in its playback settings"));
       parser.addOption(QCommandLineOption("create-live-set", "Write the score's Ableton Live Set (Create Live Set) without a "
                                           "window; the score follows (LIVE.md)", "file.als"));
       parser.addOption(QCommandLineOption("live-equivalence", "Compare the score's playback through the Live Set and its clips "
@@ -9499,6 +9592,27 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             verifyLibrary = parser.value("verify-library");
             verifyWav = parser.isSet("verify-wav");
             verifyShareable = parser.isSet("verify-shareable");
+            }
+      if ((evenLevelsMode = parser.isSet("even-levels"))) {
+            MScore::noGui = true;
+            evenLevelsOptions.score = parser.value("even-levels");
+            evenLevelsOptions.out = parser.value("even-levels-out");
+            if (parser.isSet("even-levels-parts"))
+                  for (const QString& p : parser.value("even-levels-parts").split(','))
+                        if (!p.trimmed().isEmpty())
+                              evenLevelsOptions.parts << p.trimmed();
+            const QStringList bars = parser.value("even-levels-bars").split('-');
+            if (bars.size() == 2) {
+                  evenLevelsOptions.firstBar = bars[0].toInt();
+                  evenLevelsOptions.lastBar = bars[1].toInt();
+                  }
+            const QStringList ticks = parser.value("even-levels-ticks").split('-');
+            if (ticks.size() == 2) {
+                  evenLevelsOptions.fromTick = ticks[0].toInt();
+                  evenLevelsOptions.toTick = ticks[1].toInt();
+                  }
+            evenLevelsOptions.playCopy = parser.isSet("even-levels-play");
+            verifyLibrary = parser.value("verify-library");
             }
       if ((liveSetMode = parser.isSet("create-live-set") || parser.isSet("live-equivalence") || parser.isSet("live-set-readback")
                          || parser.isSet("update-live-set"))) {
@@ -9672,7 +9786,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
 
       QStringList argv = parser.positionalArguments();
 
-      if (app && !converterMode && !pluginMode && !extractMode && !verifyMode && !liveSetMode) {
+      if (app && !converterMode && !pluginMode && !extractMode && !verifyMode && !liveSetMode && !evenLevelsMode) {
             if (!argv.isEmpty()) {
                   int ok = true;
                   for (const QString& message : qAsConst(argv)) {

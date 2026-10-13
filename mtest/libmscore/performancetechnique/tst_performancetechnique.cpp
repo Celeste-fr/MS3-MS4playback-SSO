@@ -14,6 +14,7 @@
 #include "libmscore/articulation.h"
 #include "libmscore/automation.h"
 #include "libmscore/chord.h"
+#include "libmscore/evenlevels.h"
 #include "libmscore/excerpt.h"
 #include "libmscore/glissando.h"
 #include "libmscore/instrtemplate.h"
@@ -174,6 +175,7 @@ class TestPerformanceTechnique : public QObject, public MTest
       void duplicateNoteValues();
       void duplicateAutomation();
       void slurTransitions();
+      void evenLevels();
       };
 
 //---------------------------------------------------------
@@ -1107,6 +1109,154 @@ void TestPerformanceTechnique::slurTransitions()
       QCOMPARE(c5[0], 5);
       QCOMPARE(c5[1], 112);       // (spiccato)
       delete s;
+      }
+
+//---------------------------------------------------------
+//   evenLevels
+//    [levels] evenLevels (evenlevels.h): slurs.musicxml under "performance" (SSO's Violins 1 - Performance): the
+//    renderer reports every note's context (joined, the slur starts: a bowed transition, the windows: the map's legato
+//    delay by interval); values set with their contexts are current; an edit nearby (a note's own velocity) makes that
+//    note and its joined neighbours stale, the others stay current, undo makes them current again; the metaTag
+//    "evenLevels" round trip (left out when none: the file otherwise unchanged); the headroom (tops); the fit's maths
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::evenLevels()
+      {
+      auto lib = sso();
+      QVERIFY(lib);
+      MasterScore* s = score(true, "slurs.musicxml");
+      QVERIFY(s);
+      auto infos = [&]() {
+            SoundLib::setCurrent(lib);
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            MidiRenderer midi(s);
+            midi.setMinChunkSize(10);
+            std::vector<EvenLevels::NoteInfo> in;
+            midi.setEvenLevelsInfo(&in);
+            EventMap events;
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            midi.renderScore(&events, ctx);
+            SoundLib::setCurrent(nullptr);
+            SoundLib::setOutput(SoundLib::Output::MIDI);
+            std::sort(in.begin(), in.end(), [](const EvenLevels::NoteInfo& a, const EvenLevels::NoteInfo& b) { return a.on < b.on; });
+            return in;
+            };
+      std::vector<EvenLevels::NoteInfo> in = infos();
+      QCOMPARE(int(in.size()), 10);
+      const std::vector<int> pitches { 72, 74, 76, 77, 79, 81, 83, 84, 86, 88 };
+      const SoundLib::Articulation* legato = nullptr;
+      for (const SoundLib::LibInstrument& li : lib->otherPatches)
+            if (li.name == "Violins 1 - Performance")
+                  legato = EvenLevels::legatoOf(&li);
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.name == "Violins 1 - Performance")
+                  legato = EvenLevels::legatoOf(&li);
+      QVERIFY(legato);
+      for (size_t k = 0; k < in.size(); ++k) {
+            QCOMPARE(in[k].pitch, pitches[k]);
+            QCOMPARE(in[k].joined, k != 0 && k != 8);                   // (D6: accented, a re-attack)
+            QCOMPARE(in[k].newSlur, k == 0 || k == 4 || k == 8);        // (G5: the slur touching, bowed)
+            QVERIFY(in[k].context.startsWith("Violins 1 - Performance|"));
+            if (in[k].joined)
+                  QCOMPARE(in[k].windowMs, legato->legatoDelayAt(pitches[k] - pitches[k - 1], pitches[k - 1]));
+            }
+      // contexts: the same each render, distinct from note to note
+      const std::vector<EvenLevels::NoteInfo> again = infos();
+      std::set<QString> distinct;
+      for (size_t k = 0; k < in.size(); ++k) {
+            QCOMPARE(again[k].context, in[k].context);
+            distinct.insert(in[k].context);
+            }
+      QCOMPARE(int(distinct.size()), 10);
+      // values with their contexts (one undo step)
+      std::vector<Note*> n = notes(s);
+      QCOMPARE(int(n.size()), 10);
+      s->startCmd();
+      for (size_t k = 0; k < 8; ++k) {
+            n[k]->undoChangeProperty(Pid::EVEN_LEVEL, k % 2 ? 1.25 : -0.5);
+            n[k]->undoChangeProperty(Pid::EVEN_LEVEL_CONTEXT, in[k].context);
+            }
+      s->endCmd();
+      QCOMPARE(EvenLevels::count(s), 8);
+      infos();
+      for (size_t k = 0; k < 10; ++k)
+            QCOMPARE(EvenLevels::state(n[k]), k < 8 ? EvenLevels::State::CURRENT : EvenLevels::State::NONE);
+      // headroom: the patch's largest value
+      const auto tops = EvenLevels::tops(s);
+      QCOMPARE(int(tops.size()), 1);
+      QCOMPARE(tops.begin()->second.at("Violins 1 - Performance"), 1.25);
+      // E5's own velocity: it and its joined neighbours stale, the rest current
+      set({ n[2] }, Pid::LIBRARY_VELOCITY, 40);
+      infos();
+      for (size_t k = 0; k < 8; ++k)
+            QVERIFY2(EvenLevels::state(n[k]) == (k >= 1 && k <= 3 ? EvenLevels::State::STALE : EvenLevels::State::CURRENT),
+                     qPrintable(QString("note %1").arg(k)));
+      s->undoRedo(true, 0);
+      infos();
+      for (size_t k = 0; k < 8; ++k)
+            QCOMPARE(EvenLevels::state(n[k]), EvenLevels::State::CURRENT);
+      // the file: the metaTag, nothing else; read back, written again the same
+      QVERIFY(saveScore(s, "evenlevels-saved.mscx"));
+      const QString text = fileText("evenlevels-saved.mscx");
+      QVERIFY(text.contains("<metaTag name=\"evenLevels\">[{&quot;context&quot;:&quot;Violins 1 - Performance|"));
+      QVERIFY(!text.contains("<evenLevel>"));
+      s->startCmd();
+      for (size_t k = 0; k < 8; ++k) {
+            n[k]->undoChangeProperty(Pid::EVEN_LEVEL, EvenLevels::NONE);
+            n[k]->undoChangeProperty(Pid::EVEN_LEVEL_CONTEXT, QString());
+            }
+      s->endCmd();
+      QCOMPARE(EvenLevels::count(s), 0);
+      QVERIFY(saveScore(s, "evenlevels-none.mscx"));
+      QString without = text;
+      without.remove(QRegularExpression("\\s*<metaTag name=\"evenLevels\">[^<]*</metaTag>"));
+      QCOMPARE(without, fileText("evenlevels-none.mscx"));
+      MasterScore* read = readCreatedScore("evenlevels-saved.mscx");
+      QVERIFY(read);
+      QVERIFY(read->metaTag(EvenLevels::metaTag).isEmpty());
+      std::vector<Note*> m = notes(read);
+      for (size_t k = 0; k < 10; ++k) {
+            QCOMPARE(m[k]->evenLevel(), k < 8 ? (k % 2 ? 1.25 : -0.5) : EvenLevels::NONE);
+            QCOMPARE(m[k]->evenContext(), k < 8 ? in[k].context : QString());
+            }
+      QVERIFY(saveScore(read, "evenlevels-saved2.mscx"));
+      QCOMPARE(fileText("evenlevels-saved2.mscx"), text);
+      delete read;
+      delete s;
+
+      // the maths: the glide (linear, the ends held), the slur statistics, a fit that flattens a swell
+      QCOMPARE(EvenLevels::glideAt({ 1.0, 2.0 }, { -1.0, 3.0 }, 0.5), -1.0);
+      QCOMPARE(EvenLevels::glideAt({ 1.0, 2.0 }, { -1.0, 3.0 }, 1.25), 0.0);
+      QCOMPARE(EvenLevels::glideAt({ 1.0, 2.0 }, { -1.0, 3.0 }, 9.0), 3.0);
+      const EvenLevels::Stats st = EvenLevels::slurStats({ 0, 0, 0, 0, 1, 1, 1, 1 }, { 9, 1, 4, 2, 5, 8, 6, 9 });
+      QCOMPARE(st.median.at(0), 2.0);                   // (1 4 2: the first note left out)
+      QCOMPARE(st.median.at(1), 6.5);                   // (5 8 6: the last left out)
+      QCOMPARE(int(st.ranges.size()), 2);
+      QCOMPARE(st.ranges[0], 3.0);
+      QCOMPARE(st.ranges[1], 3.0);
+      QCOMPARE(st.residual, 2.0);
+      EvenLevels::Passage p;
+      for (int k = 0; k < 8; ++k) {
+            p.on.push_back(0.136 * k);
+            p.off.push_back(0.136 * k + 0.16);
+            p.window.push_back(0.136 * k + 0.22);
+            p.slur.push_back(0);
+            }
+      // an envelope with notes 3 and 4 3 dB up (as Whence's Celli): the fit's rms off target well under the swell's
+      std::vector<double> level { 0, 0, 0, 3, 3, 0, 0, 0 };
+      std::vector<double> env(size_t(p.gridSize()), 0.0);
+      for (int i = 0; i < p.gridSize(); ++i) {
+            const double t = p.gridStart() + i * EvenLevels::STEP_MS / 1000.0;
+            env[size_t(i)] = (t >= p.window[3] && t < p.window[5]) ? 3.0 : 0.0;
+            }
+      double fitRms = 0, envRms = 0;
+      const std::vector<double> v = EvenLevels::fitGlide(p, env, level, &fitRms, &envRms);
+      QVERIFY2(envRms > 1.0 && fitRms < 0.6 * envRms, qPrintable(QString("%1 -> %2").arg(envRms).arg(fitRms)));
+      QVERIFY(v[3] < -1.0 && v[4] < -1.0 && std::fabs(v[1]) < 1.0);
+      const std::vector<double> heard = EvenLevels::windowChanges(p, v);
+      QVERIFY(heard[3] < -1.0 && heard[4] < -1.0);
       }
 
 QTEST_MAIN(TestPerformanceTechnique)

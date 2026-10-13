@@ -40,6 +40,7 @@
 #include "libmscore/playstart.h"
 #include "libmscore/tuning.h"
 #include "libmscore/trackdelays.h"
+#include "libmscore/evenlevels.h"
 #include "libmscore/contextlevel.h"
 #include "libmscore/ms4playback.h"
 #include "libmscore/note.h"
@@ -127,6 +128,7 @@ class TestSoundLibrary : public QObject, public MTest
       void levelContext();
       void levelSectionBalance();
       void levelRealRange();
+      void evenLevelsGlide();
       void playbackPresets();
       void renderKit();
       void renderKitRoll();
@@ -2739,6 +2741,163 @@ void TestSoundLibrary::levelRealRange()
             QVERIFY(ContextLevel::realRangeDb(li, 127, li.realSpan.begin()->first) > 0);
             }
       QVERIFY(with >= 10);
+      }
+
+//---------------------------------------------------------
+//   evenLevelsGlide
+//    [levels] evenLevels (evenlevels.h): legato-early.musicxml on a Performance legato patch, values on the longest run
+//    of joined notes (-1 / +1.5 dB in turn): off (the default) the events are the same as without values; on, every CC11
+//    on the run's route between its first note-on and the next note-on is the base (the per-note levels: here the
+//    headroom, 1.5 dB under 127) times the glide at its time (linear in dB between the windows' middles, ends held), a
+//    message at least ~5 ms apart, the base again after the run; the patch's volume carries the headroom; a track level
+//    adds in dB; the score's 1 over the ini's 0; a note whose context changed (stale) and its joined neighbours play no
+//    glide; the presets leave the setting alone
+//---------------------------------------------------------
+
+void TestSoundLibrary::evenLevelsGlide()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' legatoDelay='-12:220 -2:240 -1:230 +1:220 +2:200 +12:440'"
+         " onset='60'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      const std::map<QString, QString> base { { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" } };
+      Playback::setIniValuesForTest(base);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts()[0];
+      auto render = [&](std::vector<EvenLevels::NoteInfo>* in) {
+            score->setPlaylistDirty();
+            MidiRenderer midi(score);
+            midi.setMinChunkSize(10);
+            midi.setEvenLevelsInfo(in);
+            EventMap events;
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            midi.renderScore(&events, ctx);
+            return events;
+            };
+      auto text = [&](const EventMap& ev) {
+            QStringList l;
+            for (const auto& te : ev)
+                  if (te.second.isExternal())
+                        l << QString("%1 %2 %3 %4 %5").arg(te.first).arg(te.second.type()).arg(te.second.dataA()).arg(te.second.dataB())
+                             .arg(te.second.extPort() * 16 + te.second.extChannel());
+            return l;
+            };
+      std::vector<EvenLevels::NoteInfo> in;
+      const EventMap plain = render(&in);
+      std::sort(in.begin(), in.end(), [](const EvenLevels::NoteInfo& a, const EvenLevels::NoteInfo& b) { return a.on < b.on; });
+      // the longest run of joined notes on one route
+      size_t s = 0, e = 0;
+      for (size_t a = 0; a < in.size();) {
+            size_t b = a;
+            while (b + 1 < in.size() && in[b + 1].joined && in[b + 1].route == in[a].route)
+                  ++b;
+            if (b - a > e - s) {
+                  s = a;
+                  e = b;
+                  }
+            a = b + 1;
+            }
+      QVERIFY2(e - s + 1 >= 8, qPrintable(QString::number(e - s + 1)));
+      const int route = in[s].route;
+      std::vector<double> centres, dbs;
+      for (size_t k = s; k <= e; ++k) {
+            Note* note = const_cast<Note*>(in[k].note);
+            note->setEvenLevel((k - s) % 2 ? 1.5 : -1.0);
+            note->setEvenContext(in[k].context);
+            centres.push_back(in[k].on + (in[k].windowMs + EvenLevels::WINDOW_MS / 2) / 1000.0);
+            dbs.push_back(note->evenLevel());
+            }
+      const double tStart = in[s].on;
+      double tEnd = 1e9;
+      for (const EvenLevels::NoteInfo& n : in)
+            if (n.route == route && n.on > in[e].on)
+                  tEnd = std::min(tEnd, n.on);
+      // off (the default): nothing changes
+      QCOMPARE(text(render(nullptr)), text(plain));
+      // on
+      auto cc11s = [&](const EventMap& ev) {
+            std::vector<std::pair<double, int>> c;
+            for (const auto& te : ev) {
+                  const NPlayEvent& x = te.second;
+                  if (x.isExternal() && x.type() == ME_CONTROLLER && x.controller() == CTRL_EXPRESSION && x.extPort() * 16 + x.extChannel() == route)
+                        c.push_back({ score->utick2utime(te.first), x.value() });
+                  }
+            return c;
+            };
+      auto inForce = [](const std::vector<std::pair<double, int>>& c, double t) {
+            int v = -1;
+            for (const auto& x : c)
+                  if (x.first <= t + 1e-9)
+                        v = x.second;
+            return v;
+            };
+      auto check = [&](double baseDb, const QString& what) {
+            const std::vector<std::pair<double, int>> c = cc11s(render(nullptr));
+            const int b = int(std::lround(127 * std::pow(10.0, baseDb / 20)));
+            int inSpan = 0;
+            double last = -1;
+            double closest = 1e9;
+            for (const auto& x : c) {
+                  if (x.first < tStart - 1e-9 || x.first >= tEnd - 1e-9)
+                        continue;
+                  const int expected = qBound(1, int(std::lround(b * std::pow(10.0, EvenLevels::glideAt(centres, dbs, x.first) / 20))), 127);
+                  QVERIFY2(std::abs(x.second - expected) <= 1, qPrintable(QString("%1: %2 s: %3, expected %4").arg(what).arg(x.first).arg(x.second).arg(expected)));
+                  if (last >= 0 && x.first > last + 1e-9)
+                        closest = std::min(closest, x.first - last);
+                  last = x.first;
+                  ++inSpan;
+                  }
+            QVERIFY2(inSpan > 20, qPrintable(QString("%1: %2 CC11s").arg(what).arg(inSpan)));
+            QVERIFY2(closest > 0.0035, qPrintable(QString("%1: %2 s apart").arg(what).arg(closest)));
+            QCOMPARE(inForce(c, tEnd), b);                              // (the base again after the run)
+            if (s > 0)
+                  QCOMPARE(inForce(c, in[0].on), b);                    // (the patch's notes before it: the headroom)
+            };
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" }, { "levels/evenLevels", "1" } });
+      check(-1.5, "on");
+      QVERIFY(std::fabs(TrackDelays::patchGain(*lib, TrackDelays::of(part, TrackDelays::read(score)), "Violin - Performance")
+                        - std::pow(10.0, 1.5 / 20)) < 1e-9);
+      QCOMPARE(TrackDelays::write(score, TrackDelays::read(score)), QString());          // (never in the metaTag)
+      // a track level adds in dB
+      score->setMetaTag(TrackDelays::metaTag, "[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin - Performance\":-3}}]");
+      check(-4.5, "track level");
+      score->setMetaTag(TrackDelays::metaTag, QString());
+      // the score's 1 over the ini's 0
+      Playback::setIniValuesForTest(base);
+      score->setMetaTag(Playback::metaTag, "levels/evenLevels=1");
+      check(-1.5, "score");
+      // a note's context changed: it and its joined neighbours play no glide (the base there), the rest glide
+      Note* changed = const_cast<Note*>(in[s + 3].note);
+      changed->setLibraryVelocity(40);
+      const std::vector<std::pair<double, int>> c = cc11s(render(nullptr));
+      const int b = int(std::lround(127 * std::pow(10.0, -1.5 / 20)));
+      QCOMPARE(EvenLevels::state(changed), EvenLevels::State::STALE);
+      QCOMPARE(EvenLevels::state(in[s + 2].note), EvenLevels::State::STALE);
+      QCOMPARE(EvenLevels::state(in[s + 1].note), EvenLevels::State::CURRENT);
+      QCOMPARE(inForce(c, centres[3]), b);
+      QVERIFY(inForce(c, centres[e - s - 1]) != b);
+      changed->setLibraryVelocity(0);
+      score->setMetaTag(Playback::metaTag, QString());
+      // the setting: 0 by default, per score; no preset sets it
+      const Playback::Definition* def = Playback::definition("levels/evenLevels");
+      QVERIFY(def && def->value == 0.0 && def->perScore);
+      for (const Playback::Preset& p : Playback::presets())
+            for (const auto& kv : p.values)
+                  QVERIFY(QString(kv.first) != "levels/evenLevels");
+      delete score;
       }
 
 //---------------------------------------------------------

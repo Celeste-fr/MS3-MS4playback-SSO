@@ -22,6 +22,7 @@
 #include "key.h"
 #include "noteevent.h"
 #include "livetimingoverride.h"
+#include "evenlevels.h"
 #include "performancetechnique.h"
 #include "pitchspelling.h"
 #include "shape.h"
@@ -294,6 +295,9 @@ class Note final : public Element {
       double _liveStart { LiveTimingOverride::AUTO };
       double _liveEnd { LiveTimingOverride::AUTO };
       QString _libraryTechnique;        // its own technique (SoundLib::chooseOwn); empty: Auto
+      // its even-levels correction (evenlevels.h): dB at its window's middle, and what it was measured against
+      double _evenLevel { EvenLevels::NONE };
+      QString _evenContext;
 
       char _offTimeType    { 0 };    // compatibility only 1 - user(absolute), 2 - offset (%)
       char _onTimeType     { 0 };    // compatibility only 1 - user, 2 - offset
@@ -516,6 +520,10 @@ class Note final : public Element {
       void setLiveEnd(double ms)                                          { _liveEnd = ms;                 }
       const QString& libraryTechnique() const                             { return _libraryTechnique;      }
       void setLibraryTechnique(const QString& t)                          { _libraryTechnique = t;         }
+      double evenLevel() const                                            { return _evenLevel;             }
+      void setEvenLevel(double db)                                        { _evenLevel = db;               }
+      const QString& evenContext() const                                  { return _evenContext;           }
+      void setEvenContext(const QString& c)                               { _evenContext = c;              }
 
       void setOnTimeOffset(int v);
       void setOffTimeOffset(int v);

@@ -74,6 +74,9 @@ struct Delays {
       std::map<QString, double> rule;         // patch -> dB
       double ruleTop { 0.0 };
       double rangeTop { 0.0 };                // [levels] realRange: the part's R (its notes' CC11 play realDb less it)
+      // [levels] evenLevels (evenlevels.h; never in the metaTag): each patch's headroom for its notes' corrections (the
+      // largest, within what the patch's volume can still add under MAX_DB): on its volume, its notes' CC11 that much lower
+      std::map<QString, double> even;
       };
 
 // a track of the part: its Kontakt track ("<patch>"), a technique track ("<patch> / <technique>")
@@ -108,6 +111,8 @@ double noteDb(const Delays& d, const QString& patch, const QString& technique);
 // the patch's volume factor on top of the Mixer's: its headroom plus the level rule's volume (within MIN_DB .. MAX_DB)
 // as a gain (1 for a library whose dynamics are CC11)
 double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch);
+// [levels] evenLevels' headroom of the patch (0: none)
+double evenDb(const Delays& d, const QString& patch);
 
 }     // namespace TrackDelays
 }     // namespace Ms

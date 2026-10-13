@@ -1414,9 +1414,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // less the patch's headroom (its volume plays that: TrackDelays::patchGain)
                   auto trackLevel = [&](const Note* note, const SoundLib::Choice& c) {
                         auto d = c ? libTrackDelays.find(st1->part()) : libTrackDelays.end();
-                        if (d == libTrackDelays.end() || d->second.levels.empty())
+                        if (d == libTrackDelays.end())
                               return;
                         const SoundLib::LibInstrument* patch = libPatches[c.patch];
+                        // [levels] evenLevels' headroom (evenlevels.h): the patch's volume plays it, its notes that much lower
+                        const double even = TrackDelays::evenDb(d->second, patch->name);
+                        if (even > 0.0)
+                              libLevels[note].volumeDb -= even;
+                        if (d->second.levels.empty())
+                              return;
                         const double db = TrackDelays::noteDb(d->second, patch->name,
                                                           PlainLiveSet::techniqueName(patch, c.articulation->value));
                         if (db != 0.0)
@@ -2796,6 +2802,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       libraryNoteLevels(chunk, events);
       libraryPitchBends(chunk, events);
       libraryTimingOverrides(chunk, events);
+      libraryEvenLevels(chunk, events);
       libraryTrackDelays(chunk, events);
       }
 
@@ -3202,6 +3209,246 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   events->insert(events->lower_bound(utick2),
                                  std::make_pair(utick2, keep ? levelEvent(a.second.like, controller, mapOf(level, controller, written, dyn))
                                                               : controllerEvent(a.second.like, controller, written)));
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryEvenLevels
+//    [levels] evenLevels (evenlevels.h): every note-on on a Performance legato patch (one whose articulation has
+//    transitions) gets its context (EvenLevels::contextOf: its patch, pitch, tuning, velocity, whether joined, length,
+//    the joined neighbours, the dynamics CC in force), reported to the measurement (setEvenLevelsInfo) and, for a note
+//    with a value, to EvenLevels::rendered (stale or current). With the setting on, each run of joined notes on a route
+//    whose values are current plays the glide: CC11 times 10^(glide / 20) (the glide linear in dB between the middles of
+//    the notes' windows, held at the ends), on every CC11 the route gets there (the per-note levels' schedule) and a
+//    message every STEP_MS where the value changes; the CC11 in force again at the next note-on on the route (else the
+//    chunk's end). Flagged as a level (valueAt takes the value as written from before them). The chunk's own notes; a
+//    note-off after the chunk's end is looked for after it
+//---------------------------------------------------------
+
+void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
+      {
+      if (!library || libRoutePatches.empty())
+            return;
+      const int utick1 = chunk.utick1();
+      const int utick2 = chunk.utick2();
+      const int dynamicsCC = library->dynamicsCC >= 0 && library->dynamicsCC != CTRL_EXPRESSION ? library->dynamicsCC : -1;
+      // (a library whose dynamics are CC11: no plain volume for the glide)
+      const bool volume = library->dynamicsCC != CTRL_EXPRESSION;
+      auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
+      struct On {
+            EventMap::iterator it;
+            int tick;
+            const Note* note;
+            int pitch;
+            int velocity;
+            double on;
+            double off { -1 };
+            int dyn { -1 };
+            bool joined { false };
+            };
+      std::map<int, std::vector<On>> byRoute;
+      std::map<int, int> dynNow;                      // route -> the dynamics CC as sent last
+      // the value of a controller in force on the route before it (any event, as sent); fallback when none
+      auto valueBefore = [&](EventMap::iterator it, int route, int controller, int fallback) {
+            while (it != events->begin()) {
+                  --it;
+                  const NPlayEvent& e = it->second;
+                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && e.controller() == controller
+                      && routeOf(e) == route)
+                        return e.value();
+                  }
+            return fallback;
+            };
+      bool any = false;
+      auto legato = [&](int route) -> const SoundLib::Articulation* {
+            auto rp = libRoutePatches.find(route);
+            return rp == libRoutePatches.end() ? nullptr : EvenLevels::legatoOf(rp->second.second);
+            };
+      std::map<int, bool> isLegato;
+      auto legatoRoute = [&](int route) {
+            auto l = isLegato.find(route);
+            if (l == isLegato.end())
+                  l = isLegato.insert({ route, legato(route) != nullptr }).first;
+            return l->second;
+            };
+      int pending = 0;                                 // note-ons without their note-off yet
+      for (auto i = events->lower_bound(utick1); i != events->end() && (i->first < utick2 || pending > 0); ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.librarySwitch())
+                  continue;
+            const int route = routeOf(ev);
+            if (!legatoRoute(route))
+                  continue;
+            const bool inChunk = i->first < utick2;
+            if (ev.type() == ME_CONTROLLER && dynamicsCC >= 0 && ev.controller() == dynamicsCC) {
+                  if (inChunk)
+                        dynNow[route] = ev.value();
+                  continue;
+                  }
+            if (ev.type() == ME_NOTEON && ev.velo() > 0) {
+                  if (!inChunk || !ev.note())
+                        continue;
+                  On o { i, i->first, ev.note(), ev.pitch(), ev.velo(), score->utick2utime(i->first) };
+                  if (dynamicsCC >= 0) {
+                        auto d = dynNow.find(route);
+                        o.dyn = d != dynNow.end() ? d->second : (dynNow[route] = valueBefore(i, route, dynamicsCC, -1));
+                        }
+                  byRoute[route].push_back(o);
+                  ++pending;
+                  any = any || EvenLevels::isSet(ev.note()->evenLevel());
+                  continue;
+                  }
+            if (ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && ev.velo() == 0)) {
+                  auto r = byRoute.find(route);
+                  if (r == byRoute.end())
+                        continue;
+                  for (auto o = r->second.begin(); o != r->second.end(); ++o)
+                        if (o->pitch == ev.pitch() && o->off < 0 && o->tick <= i->first) {
+                              o->off = score->utick2utime(i->first);
+                              --pending;
+                              break;
+                              }
+                  }
+            }
+      if (!any && !evenInfo)
+            return;
+      for (auto& br : byRoute) {
+            const int route = br.first;
+            std::vector<On>& ns = br.second;
+            const SoundLib::LibInstrument* patch = libRoutePatches[route].second;
+            const SoundLib::Articulation* a = legato(route);
+            if (!a || ns.empty())
+                  continue;
+            // joined: the note before on the route still sounds at the note-on, or ended at most legatoGap before it
+            for (size_t k = 1; k < ns.size(); ++k) {
+                  const On& p = ns[k - 1];
+                  ns[k].joined = p.off >= 0 && (ns[k].on - p.off) * 1000.0 <= std::max(0.0, a->legatoGapMs) + 1e-6;
+                  }
+            std::vector<EvenLevels::NoteInfo> infos(ns.size());
+            std::vector<bool> applies(ns.size(), false);
+            bool anyHere = false;
+            for (size_t k = 0; k < ns.size(); ++k) {
+                  const On& o = ns[k];
+                  EvenLevels::ContextParts c;
+                  c.patch = patch->name;
+                  c.pitch = o.pitch;
+                  auto lc = libLaneCents.find(o.note);
+                  c.cents = lc == libLaneCents.end() ? 0.0 : lc->second;
+                  c.velocity = o.velocity;
+                  c.joined = o.joined;
+                  c.lengthMs = o.off >= 0 ? (o.off - o.on) * 1000.0 : -1.0;
+                  c.dynamics = o.dyn;
+                  if (o.joined) {
+                        const On& p = ns[k - 1];
+                        c.prevPitch = p.pitch;
+                        c.prevVelocity = p.velocity;
+                        c.prevOnMs = (o.on - p.on) * 1000.0;
+                        c.prevLengthMs = p.off >= 0 ? (p.off - p.on) * 1000.0 : -1.0;
+                        }
+                  if (k + 1 < ns.size() && ns[k + 1].joined) {
+                        const On& n = ns[k + 1];
+                        c.nextPitch = n.pitch;
+                        c.nextVelocity = n.velocity;
+                        c.nextOnMs = (n.on - o.on) * 1000.0;
+                        }
+                  EvenLevels::NoteInfo& in = infos[k];
+                  in.note = o.note;
+                  in.route = route;
+                  in.utick = o.tick;
+                  in.on = o.on;
+                  in.off = o.off;
+                  in.pitch = o.pitch;
+                  in.velocity = o.velocity;
+                  in.joined = o.joined;
+                  in.newSlur = !o.joined;
+                  if (o.joined) {
+                        for (const SoundLib::Articulation::Technique& t : a->transitions)
+                              if (o.velocity >= t.low && o.velocity <= t.high) {
+                                    in.newSlur = t.name == PerformanceTechnique::transitionName(PerformanceTechnique::Transition::BOWED);
+                                    break;
+                                    }
+                        }
+                  in.windowMs = EvenLevels::windowStartMs(*a, o.pitch, o.velocity, o.joined, o.joined ? ns[k - 1].pitch : -1);
+                  in.context = EvenLevels::contextOf(c);
+                  if (EvenLevels::isSet(o.note->evenLevel())) {
+                        EvenLevels::rendered(o.note, in.context);
+                        applies[k] = o.note->evenContext() == in.context;
+                        anyHere = anyHere || applies[k];
+                        }
+                  }
+            if (evenInfo)
+                  evenInfo->insert(evenInfo->end(), infos.begin(), infos.end());
+            if (!libEvenOn || !volume || !anyHere)
+                  continue;
+            const int fallback = qBound(0, library->expressionValue, 127);
+            auto controllerEvent = [&](const NPlayEvent& like, int value) {
+                  NPlayEvent c(ME_CONTROLLER, like.channel(), CTRL_EXPRESSION, value);
+                  c.setExternal(like.extPort(), like.extChannel());
+                  c.setLibraryPatch(like.libraryPatch());
+                  c.setOriginatingStaff(like.getOriginatingStaff());
+                  c.setLibraryLevel(true);
+                  return c;
+                  };
+            auto scaled = [](int base, double db) {
+                  return base <= 0 ? base : qBound(1, int(std::lround(base * std::pow(10.0, db / 20.0))), 127);
+                  };
+            for (size_t s = 0; s < ns.size();) {
+                  if (!applies[s]) {
+                        ++s;
+                        continue;
+                        }
+                  size_t e = s;
+                  while (e + 1 < ns.size() && applies[e + 1] && ns[e + 1].joined)
+                        ++e;
+                  std::vector<double> centres, dbs;
+                  for (size_t k = s; k <= e; ++k) {
+                        centres.push_back(ns[k].on + (infos[k].windowMs + EvenLevels::WINDOW_MS / 2.0) / 1000.0);
+                        dbs.push_back(ns[k].note->evenLevel());
+                        }
+                  const int startTick = ns[s].tick;
+                  const int endTick = e + 1 < ns.size() ? ns[e + 1].tick : utick2;
+                  const NPlayEvent like = ns[s].it->second;
+                  // the CC11s the route gets in the span (the per-note levels' schedule), and the value before it
+                  std::vector<EventMap::iterator> existing;
+                  for (auto i = events->lower_bound(startTick); i != events->end() && i->first < endTick; ++i) {
+                        const NPlayEvent& ev = i->second;
+                        if (ev.isExternal() && ev.type() == ME_CONTROLLER && !ev.librarySwitch() && ev.controller() == CTRL_EXPRESSION
+                            && routeOf(ev) == route)
+                              existing.push_back(i);
+                        }
+                  int base = valueBefore(events->lower_bound(startTick), route, CTRL_EXPRESSION, fallback);
+                  int out = -1;
+                  std::vector<std::pair<int, int>> inserts;          // (tick, value)
+                  const double tEnd = score->utick2utime(endTick);
+                  size_t x = 0;
+                  for (int step = 0;; ++step) {
+                        const double t = ns[s].on + step * EvenLevels::STEP_MS / 1000.0;
+                        const int tick = t < tEnd ? std::max(startTick, score->utime2utick(t)) : endTick;
+                        // the span's own CC11s up to here: the base, mapped by the glide at their time
+                        while (x < existing.size() && existing[x]->first <= tick && existing[x]->first < endTick) {
+                              NPlayEvent& ev = existing[x]->second;
+                              base = ev.value();
+                              out = scaled(base, EvenLevels::glideAt(centres, dbs, score->utick2utime(existing[x]->first)));
+                              ev.setValue(out);
+                              ev.setLibraryLevel(true);
+                              ++x;
+                              }
+                        if (tick >= endTick)
+                              break;
+                        if (x > 0 && existing[x - 1]->first == tick)
+                              continue;               // (a CC11 of the span's own at this tick: it plays)
+                        const int v = scaled(base, EvenLevels::glideAt(centres, dbs, t));
+                        if (v != out) {
+                              inserts.push_back({ tick, v });
+                              out = v;
+                              }
+                        }
+                  if (out != base)
+                        inserts.push_back({ endTick, base });
+                  for (const auto& in : inserts)
+                        events->insert(events->lower_bound(in.first), std::make_pair(in.first, controllerEvent(like, in.second)));
+                  s = e + 1;
                   }
             }
       }
@@ -5202,6 +5449,8 @@ void MidiRenderer::updateState()
             libContextGain.clear();
             libRangeTables.clear();
             libTrackRoutes.clear();
+            libRoutePatches.clear();
+            libEvenOn = Playback::on("levels/evenLevels", score);
             libDelayLead = 0.0;
             libLanes.clear();
             libLaneCents.clear();
@@ -5216,8 +5465,9 @@ void MidiRenderer::updateState()
                   const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
                   const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
                   for (const SoundLib::Route& r : routes) {
+                        libRoutePatches[r.port * 16 + r.channel] = { r.part, r.instrument };
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
-                        if (d.empty() && d.rule.empty())
+                        if (d.empty() && d.rule.empty() && d.even.empty())
                               continue;
                         libTrackDelays[r.part] = d;
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };

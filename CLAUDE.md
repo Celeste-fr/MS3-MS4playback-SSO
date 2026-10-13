@@ -157,6 +157,14 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   after a short note: `libFastDelay`) times only a bent transition's glide. HANDOFF.md has the open timing items.
   Per-note levels (a marcato's, track levels) share one CC11 / CC1 schedule per route, `libraryNoteLevels`
   (`libLevels`; dB add up).
+- **Even levels** (`libmscore/evenlevels.h`, `mscore/evenlevelsjob.h`; the owner, 2026-10-12, the blind test's Glide;
+  **`[levels] evenLevels` 0 everywhere, Recommended too, until the owner has heard it in MuseScore**): SSO's Performance
+  legato swells inside slurs by context (no table predicts it), so *Tools › Even Out Levels…* / `--even-levels <score>`
+  renders the slurred passages through the hosted plug-ins (3 passes), measures each note's perceived level in its window
+  and fits a per-note CC11 glide (linear in dB between window middles, every 5 ms), once more above the 1 dB floor; each
+  note keeps its value and a hash of its rendered context (`Note::evenLevel` / `evenContext`, metaTag `evenLevels`): a
+  changed context is stale (Inspector › Note › Even level), not played. `MidiRenderer::libraryEvenLevels` glides on top of
+  the CC11 schedule (headroom on the patch's volume, `TrackDelays::evenDb`); Live's clips and the plain set carry it.
 - **Playback adjustments are configurable** (`libmscore/playbacksettings.*`; **docs/PLAYBACK_SETTINGS.md** is the
   inventory): built-in defaults → `<dataPath>/playback.ini` (written with every key when missing; Edit › Reload
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older onset-early / lanes metaTags; removed

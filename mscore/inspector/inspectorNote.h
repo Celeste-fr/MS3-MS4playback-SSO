@@ -38,6 +38,13 @@ class InspectorNote : public InspectorElementBase {
       void setTechniques();
       void setPerformanceShown();
       void techniqueChosen(int index);
+      void setEvenShown();
+
+      // Note › Even level (Note::evenLevel, evenlevels.h): made here; its state (current, stale) below it
+      QLabel* evenLabel { nullptr };
+      QDoubleSpinBox* evenLevel { nullptr };
+      ResetButton* resetEvenLevel { nullptr };
+      QLabel* evenState { nullptr };
 
       // Note › Technique (the note's own, Note::libraryTechnique): made here, its items the selected notes' own
       QLabel* techniqueLabel { nullptr };

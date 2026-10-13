@@ -113,6 +113,30 @@ InspectorNote::InspectorNote(QWidget* parent)
       n.noteHeadType->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
       n.noteHeadType->setMinimumContentsLength(6);
 
+      // Even level (evenlevels.h): measured by Tools › Even Out Levels…, played with [levels] evenLevels on
+      evenLabel = new QLabel(tr("Even level:"), n.playWidget);
+      evenLevel = new QDoubleSpinBox(n.playWidget);
+      evenLevel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+      evenLevel->setRange(EvenLevels::NONE, EvenLevels::MAX_DB);
+      evenLevel->setDecimals(2);
+      evenLevel->setSingleStep(0.1);
+      evenLevel->setSuffix(tr(" dB"));
+      evenLevel->setSpecialValueText(tr("None"));
+      evenLevel->setToolTip(tr("The note's even-levels correction (Tools > Even Out Levels...): CC11 at the middle of its heard "
+                               "window, gliding to the next note's; played with the playback setting [levels] evenLevels on"));
+      evenLevel->setAccessibleName(tr("Even level"));
+      evenLabel->setBuddy(evenLevel);
+      resetEvenLevel = new ResetButton(n.playWidget);
+      resetEvenLevel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+      resetEvenLevel->setMinimumSize(10, 0);
+      resetEvenLevel->setAccessibleName(tr("Reset 'Even level' value"));
+      evenState = new QLabel(n.playWidget);
+      evenState->setWordWrap(true);
+      n.gridLayout_2->addWidget(evenLabel, 11, 0);
+      n.gridLayout_2->addWidget(evenLevel, 11, 1);
+      n.gridLayout_2->addWidget(resetEvenLevel, 11, 2);
+      n.gridLayout_2->addWidget(evenState, 12, 0, 1, 3);
+
       const std::vector<InspectorItem> iiList = {
             { Pid::SMALL,          0, n.isSmall,       n.resetSmall         },
             { Pid::HEAD_SCHEME,    0, n.noteHeadScheme, n.resetNoteHeadScheme },
@@ -127,6 +151,7 @@ InspectorNote::InspectorNote(QWidget* parent)
             { Pid::PERFORMANCE_TRANSITION, 0, n.performanceTransition, n.resetPerformanceTransition },
             { Pid::LIVE_START,     0, n.liveStart,     n.reset_liveStart    },
             { Pid::LIVE_END,       0, n.liveEnd,       n.reset_liveEnd      },
+            { Pid::EVEN_LEVEL,     0, evenLevel,       resetEvenLevel       },
             { Pid::FIXED,          0, n.fixed,         n.resetFixed         },
             { Pid::FIXED_LINE,     0, n.fixedLine,     n.resetFixedLine     },
 
@@ -222,6 +247,37 @@ void InspectorNote::setElement()
       setTuningParts(note);
       setTechniques();
       setPerformanceShown();
+      setEvenShown();
+      }
+
+//---------------------------------------------------------
+//   setEvenShown
+//    Even level: shown when a selected note has one; its state as the last render met it (EvenLevels::state)
+//---------------------------------------------------------
+
+void InspectorNote::setEvenShown()
+      {
+      int set = 0, stale = 0, unknown = 0;
+      for (const Note* note : selectedNotes()) {
+            if (!EvenLevels::isSet(note->evenLevel()))
+                  continue;
+            ++set;
+            const EvenLevels::State s = EvenLevels::state(note);
+            stale += s == EvenLevels::State::STALE ? 1 : 0;
+            unknown += s == EvenLevels::State::UNKNOWN ? 1 : 0;
+            }
+      for (QWidget* w : { static_cast<QWidget*>(evenLabel), static_cast<QWidget*>(evenLevel), static_cast<QWidget*>(resetEvenLevel),
+                          static_cast<QWidget*>(evenState) })
+            w->setVisible(set > 0);
+      if (!set)
+            return;
+      if (stale)
+            evenState->setText(tr("Stale (%1 of %2): the music around it changed since it was measured; not played until "
+                                  "measured again (Tools > Even Out Levels...)").arg(stale).arg(set));
+      else if (unknown)
+            evenState->setText(tr("Not checked since loading: checked when it is next played"));
+      else
+            evenState->setText(tr("Current: plays with the playback setting [levels] evenLevels on"));
       }
 
 //---------------------------------------------------------

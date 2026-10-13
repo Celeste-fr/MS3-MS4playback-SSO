@@ -377,6 +377,8 @@ enum class Pid : short {
       LIVE_START,             // ms a library note starts after its written start, as set in Live's clip (livetimingoverride.h; AUTO: as rendered)
       LIVE_END,               // ms it ends after its written end, likewise
       LIBRARY_TECHNIQUE,      // a note's own technique on a library part ("<patch>|<articulation>", SoundLib::chooseOwn; empty: Auto); likewise
+      EVEN_LEVEL,             // a note's even-levels correction in dB (evenlevels.h; NONE: none); likewise
+      EVEN_LEVEL_CONTEXT,     // what it was measured against ("<patch>|<hash>"); likewise
 
       END
       };

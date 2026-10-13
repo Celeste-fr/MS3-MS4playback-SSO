@@ -30,6 +30,7 @@
 #include "automation.h"
 #include "trackdelays.h"
 #include "performancetechnique.h"
+#include "evenlevels.h"
 #include <functional>
 #include <limits>
 
@@ -181,6 +182,11 @@ class MidiRenderer {
       std::map<const Part*, TrackDelays::Delays> libTrackDelays;
       std::map<std::pair<const Chord*, int>, double> libContextGain;  // [levels] context: a chord's phrase gain (contextlevel.h), per tickOffset
       std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>> libTrackRoutes;
+      // [levels] evenLevels (evenlevels.h): every route's part and patch, whether the setting is on, what the measurement
+      // reads (setEvenLevelsInfo)
+      std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>> libRoutePatches;
+      bool libEvenOn { false };
+      std::vector<EvenLevels::NoteInfo>* evenInfo { nullptr };
       double libDelayLead { 0.0 };      // ms everything plays later by, so the earliest negative delay fits (0: none)
       QString trackDelaysTag;
       int minChunkSize = 0;
@@ -275,6 +281,7 @@ class MidiRenderer {
       void libraryNoteLevels(const Chunk&, EventMap* events);
       void libraryTrackDelays(const Chunk&, EventMap* events);
       void libraryTimingOverrides(const Chunk&, EventMap* events);      // livetimingoverride.h
+      void libraryEvenLevels(const Chunk&, EventMap* events);           // evenlevels.h
       void libraryDelayLead(const Chunk&, EventMap* events);
 
    public:
@@ -302,6 +309,8 @@ class MidiRenderer {
       void setWrittenTiming(bool v) { writtenTiming = v; needUpdate = true; }
       void setMinChunkSize(int sizeMeasures) { minChunkSize = sizeMeasures; needUpdate = true; }
       void setLibraryTrace(std::vector<LibTrace>* trace) { libTrace = trace; }
+      // every note-on on a Performance legato patch as rendered, with its context (evenlevels.h; the measurement job)
+      void setEvenLevelsInfo(std::vector<EvenLevels::NoteInfo>* info) { evenInfo = info; }
       // [levels] realRange's headroom (ContextLevel::realRangeTops): each part's largest realDb + realExtra as rendered
       void setRealRangeTops(std::map<const Part*, double>* tops) { libRangeTops = tops; }
 

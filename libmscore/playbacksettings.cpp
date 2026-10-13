@@ -130,6 +130,14 @@ static const std::vector<Definition> DEFINITIONS = {
         "what the library's held note already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' "
         "volumes (everything lower together past Live's Volume top, +6 dB); a short at velocity 127 still under its "
         "calibrated level gets the rest by CC11; 0: the library's own range", true },
+      // (the owner, 2026-10-12: SSO's Performance legato plays some slurred notes louder than others, by context; evened
+      // out by a glide of CC11 measured in place, the blind listening test's choice. Off everywhere, Recommended too,
+      // until the owner has heard it in MuseScore; evenlevels.h)
+      { "levels/evenLevels", 0, 0, 1, "on/off",
+        "1: each slurred note with an even-levels correction (measured in place by Tools > Even Out Levels...) plays it: CC11 "
+        "gliding in dB between the notes' heard windows, every 5 ms, so a slur's notes sound equally loud; a correction "
+        "whose note's context changed since (an edit nearby) is stale and not played; the largest correction of a patch "
+        "by its volume (within Live's +6 dB); 0: as the library plays them", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },

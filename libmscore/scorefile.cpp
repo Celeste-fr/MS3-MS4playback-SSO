@@ -202,6 +202,10 @@ void Score::writeMovement(XmlWriter& xml, bool selectionOnly)
             const QString liveTiming = LiveTimingOverride::write(this);
             if (!liveTiming.isEmpty())
                   xml.tag(QString("metaTag name=\"%1\"").arg(LiveTimingOverride::metaTag), liveTiming);
+            // the notes' even-levels corrections (evenlevels.h), likewise
+            const QString even = EvenLevels::write(this);
+            if (!even.isEmpty())
+                  xml.tag(QString("metaTag name=\"%1\"").arg(EvenLevels::metaTag), even);
             }
 
       if (_scoreOrder && !_scoreOrder->isCustom()) {

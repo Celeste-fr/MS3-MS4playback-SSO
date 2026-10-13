@@ -372,12 +372,14 @@ bool MasterScore::read(XmlReader& e)
       MarcatoLevel::read(this);     // the marcatos' levels (articulation.h), likewise
       PerformanceTechnique::read(this);   // the notes' Performance techniques (performancetechnique.h), likewise
       LiveTimingOverride::read(this);     // the notes' timing set in Live (livetimingoverride.h), likewise
+      EvenLevels::read(this);             // the notes' even-levels corrections (evenlevels.h), likewise
       for (Excerpt* ex : excerpts()) {    // and each part's own lists (a part saved on its own has only those)
             if (ex->partScore()) {
                   PhraseMark::read(ex->partScore());
                   MarcatoLevel::read(ex->partScore());
                   PerformanceTechnique::read(ex->partScore());
                   LiveTimingOverride::read(ex->partScore());
+                  EvenLevels::read(ex->partScore());
                   }
             }
       for (Staff*& s : staves())
