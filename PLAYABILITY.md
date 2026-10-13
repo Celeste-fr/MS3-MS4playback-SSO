@@ -454,4 +454,6 @@ gave these fixes; tests `falseAlarms` (falsealarm-strings/-keys/-bars.mscx from 
   String quartets and trios keep singular names as single players.
 - An accent dynamic (fz, sfz …) at the first note does not count as the entrance dynamic: it gives no level (owner
   2026-10-13).
-- Left as they were (owner decisions pending): the x0.6 bow factor of cello and bass, the one-dot rule of slurred staccato.
+- S10: a section's slur counts as slurred staccato only when every note under it is dotted (owner 2026-10-13); one
+  dotted note at the end of a legato slur is a lifted ending, not staccato.
+- Left as it was (owner decision pending, sources being searched): the x0.6 bow factor of cello and bass.

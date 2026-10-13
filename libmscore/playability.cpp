@@ -740,7 +740,7 @@ void Pass::handle(Chord* chord, int grace, const QString& staffName, const Strin
 //    note, grace notes are not). Under pizz. there is no bow, over tremolo chords there is no one-bow
 //    stroke, and a slur with one note that alone outlasts the longest bow is a phrase slur: not timed. A section's dotted slur under a jeté
 //    text is jeté, judged by its note count; everything else is timed, and a section's slurred
-//    staccato (dots, no jeté text) also has a note limit. A note already red stays red.
+//    staccato (every note dotted, no jeté text) also has a note limit. A note already red stays red.
 //---------------------------------------------------------
 
 void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked)
@@ -763,11 +763,12 @@ void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffT
                   if (!in.valid())
                         continue;                 // not a bowed string here
                   std::vector<Chord*> chords;
-                  bool dotted = false;
+                  bool dotted = false, allDotted = true;
                   size_t first = std::lower_bound(w.ticks.begin(), w.ticks.end(), from) - w.ticks.begin();
                   for (size_t i = first; i < w.ticks.size() && w.ticks[i] <= to; ++i) {
                         chords.push_back(w.chords[i]);
                         dotted |= hasStaccato(w.chords[i]);
+                        allDotted &= hasStaccato(w.chords[i]);
                         }
                   int n = int(chords.size());
                   if (n < 2)
@@ -793,7 +794,8 @@ void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffT
                         }
                   else {
                         QString groupVerdict, groupReason, timedVerdict, timedReason;
-                        if (dotted && in.section && !jeteText) {
+                        // slurred staccato only when every note is dotted (owner 2026-10-13)
+                        if (allDotted && in.section && !jeteText) {
                               bool loud = isLoud(tx.dyn.valueAt(from, 0));
                               int gmax = loud ? GROUP_STACCATO_LOUD : GROUP_STACCATO_SOFT;
                               if (n > gmax) {

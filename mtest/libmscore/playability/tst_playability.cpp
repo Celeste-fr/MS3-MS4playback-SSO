@@ -2201,7 +2201,9 @@ void TestPlayability::falseAlarms()
             // the row's staff name is plain text
             "1 | Violin 3 solo | slurRepeat | notation | A4",
             // the melisma slurred from the tie continuation is clean, the unslurred one is not
-            "2 | Soprano | vocal | notation | \"ra\"" };
+            "2 | Soprano | vocal | notation | \"ra\"",
+            // slurred staccato only when every note is dotted: bar 1 (last note dotted) is clean
+            "2 | Violins | group | outOfReach | A4 B4 C5 D5 E5 D5 C5 B4" };
       QStringList got = kindRows(r, { "slur", "group", "slurRepeat", "technique" });
       for (const PlayabilityRow& row : r.rows)
             if (row.kind == "vocal" && row.reason.startsWith("melisma"))
@@ -2211,7 +2213,7 @@ void TestPlayability::falseAlarms()
       compare(got, want);
       // the summary counts every row once by its verdict
       QCOMPARE(r.impossible + r.outOfReach + r.notation, int(r.rows.size()));
-      QCOMPARE(r.outOfReach, 1);
+      QCOMPARE(r.outOfReach, 2);
       delete score;
 
       // keyboard: B2 tie continuation, R6 moved notes, R6b hand texts, R7 outermost clefs, R8 grand-staff dynamic

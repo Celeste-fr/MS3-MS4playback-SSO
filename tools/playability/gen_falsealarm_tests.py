@@ -15,6 +15,7 @@ falsealarm-strings.mscx (bar: what it holds, W = a row is expected)
   Violin 2   1 pizz. 2 "(pizz.)" clean 3 pizz. again W    4 con sord. on a rest 5 con sord. on the next note: clean
   Violin 3   long name with markup x, A4 A4 B4 slurred W: the row's staff is plain text
   Soprano    1 G4~G4 A4 C5, the slur begins on the tie continuation: clean   2 the same, no slur W
+  Violins    1 eight slurred eighths, only the last dotted: not slurred staccato, clean   2 all eight dotted W (section max 6)
 falsealarm-keys.mscx (Piano, bar: what it holds)
   1 dynamic on the upper staff only (the lower staff's first entrance: clean)
   2-3 F#1 tied into a bar with F#3: the left hand strikes F#3 only, clean
@@ -196,6 +197,16 @@ violin2 = fill([
     measure(text('con sord.') + w(['A4'])),
 ], N)
 
+# section: slurred staccato only when every note is dotted (owner 2026-10-13)
+E8 = ['A4', 'B4', 'C5', 'D5', 'E5', 'D5', 'C5', 'B4']
+def eighths(dots):
+    out = ''
+    for i, n in enumerate(E8):
+        pre = (slur_start(frac='7/8') if i == 0 else '') + (STAC if dots[i] else '') + (slur_end(frac='-7/8') if i == 7 else '')
+        out += chord('eighth', [n], pre=pre)
+    return out
+violins = fill([measure(head('G') + eighths([False] * 7 + [True])), measure(eighths([True] * 8))], N)
+
 violin3 = fill([measure(head('G') + q('A4', slur_start(frac='1/2')) + q('A4') + q('B4', slur_end(frac='-1/2')) + rest('quarter'))], N)
 
 
@@ -217,6 +228,7 @@ write('falsealarm-strings.mscx', [
     (part('Violin 2', 'strings.violin', ['G'], 40), [violin2]),
     (part('Violin 3', 'strings.violin', ['G'], 40, long_name='Violin 3\n<i>solo</i>'), [violin3]),
     (part('Soprano', 'voice.soprano', ['G'], 52), [soprano]),
+    (part('Violins', 'strings.violin', ['G'], 48), [violins]),
 ])
 
 # -------------------------------------------------------------------------------------------------------------- keys
