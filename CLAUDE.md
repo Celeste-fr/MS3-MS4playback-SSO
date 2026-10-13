@@ -158,7 +158,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Per-note levels (a marcato's, track levels) share one CC11 / CC1 schedule per route, `libraryNoteLevels`
   (`libLevels`; dB add up).
 - **Even levels** (`libmscore/evenlevels.h`, `mscore/evenlevelsjob.h`; the owner, 2026-10-12, the blind test's Glide;
-  **`[levels] evenLevels` 0 everywhere, Recommended too, until the owner has heard it in MuseScore**): SSO's Performance
+  **`[levels] evenLevels` 1 in Recommended and by default, 0 in Library default** (the owner, 2026-10-13)): SSO's Performance
   legato swells inside slurs by context (no table predicts it), so *Tools › Even Out Levels…* / `--even-levels <score>`
   renders the slurred passages through the hosted plug-ins (3 passes), measures each note's perceived level in its window
   and fits a per-note CC11 glide (linear in dB between window middles, every 5 ms), once more above the 1 dB floor; each

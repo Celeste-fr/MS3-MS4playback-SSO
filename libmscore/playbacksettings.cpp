@@ -132,9 +132,10 @@ static const std::vector<Definition> DEFINITIONS = {
         "volumes (everything lower together past Live's Volume top, +6 dB); a short at velocity 127 still under its "
         "calibrated level gets the rest by CC11; 0: the library's own range", true },
       // (the owner, 2026-10-12: SSO's Performance legato plays some slurred notes louder than others, by context; evened
-      // out by a glide of CC11 measured in place, the blind listening test's choice. Off everywhere, Recommended too,
-      // until the owner has heard it in MuseScore; evenlevels.h)
-      { "levels/evenLevels", 0, 0, 1, "on/off",
+      // out by a glide of CC11 measured in place, the blind listening test's choice; 2026-10-13, MuseScore's playback
+      // verified on the VM (3.6 -> 0.60 dB), the owner: "why is this not in recommended": on in Recommended and by default,
+      // off in Library default; it plays only corrections Tools > Even Out Levels... stored; evenlevels.h)
+      { "levels/evenLevels", 1, 0, 1, "on/off",
         "1: each slurred note with an even-levels correction (measured in place by Tools > Even Out Levels...) plays it: CC11 "
         "gliding in dB between the notes' heard windows, every 5 ms, so a slur's notes sound equally loud; a correction "
         "whose note's context changed since (an edit nearby) is stale and not played; the largest correction of a patch "
@@ -375,10 +376,12 @@ const std::vector<Preset>& presets()
             // player's range, levels/realRange)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 },
-                                              { "levels/context", 1 }, { "levels/sectionBalance", 1 }, { "levels/realRange", 1 } } },
+                                              { "levels/context", 1 }, { "levels/sectionBalance", 1 }, { "levels/realRange", 1 },
+                                              { "levels/evenLevels", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 },
-                                              { "levels/sectionBalance", 0 }, { "levels/realRange", 0 } } },
+                                              { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
+                                              { "levels/evenLevels", 0 } } },
             };
       return P;
       }
