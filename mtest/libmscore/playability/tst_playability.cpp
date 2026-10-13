@@ -102,6 +102,7 @@ class TestPlayability : public QObject, public MTest
       void slurRepeats();
       void c1c3OnOldFixtures();
       void noDynamic();
+      void dump();
       };
 
 static QString rowText(int bar, const QString& staff, const QString& verdict, const QString& reason, const QString& notes)
@@ -2268,6 +2269,25 @@ void TestPlayability::noDynamic()
       // Violin 2 starts with mf: clean
       for (const QString& x : got)
             QVERIFY(!x.contains("Violin 2"));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   dump: not a test. PLAYABILITY_DUMP=<absolute path of a score> prints every row of that score
+//   (bar | staff | verdict | reason | notes) and the totals; skipped when the variable is not set
+//---------------------------------------------------------
+
+void TestPlayability::dump()
+      {
+      const QString path = qEnvironmentVariable("PLAYABILITY_DUMP");
+      if (path.isEmpty())
+            QSKIP("PLAYABILITY_DUMP not set");
+      MasterScore* score = readCreatedScore(path);
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      for (const PlayabilityRow& row : r.rows)
+            printf("ROW %s\n", qPrintable(rowText(row.bar, row.staff, row.verdict, row.reason, row.notes)));
+      printf("TOTAL impossible %d, outOfReach %d, notation %d\n", r.impossible, r.outOfReach, r.notation);
       delete score;
       }
 
