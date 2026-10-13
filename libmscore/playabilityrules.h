@@ -564,6 +564,10 @@ constexpr const char* C1_MULTI_CLEF_IDS =
       "^(strings\\.(viola|cello|contrabass)|wind\\.reed\\.(bassoon|contrabassoon)|brass\\.french-horn|"
       "brass\\.trombone(\\.(tenor|alto|bass|contrabass))?|brass\\.(euphonium|baritone-horn)|pluck\\.harp|"
       "keyboard\\.(piano(\\..*)?|celesta|harpsichord|organ(\\..*)?|clavichord)|pitched-percussion\\.marimba(\\.bass)?)$";
+// of those, the ones whose outermost clefs are treble (above) and bass (below): no clef lies beyond them, so a note
+// above the treble clef or below the bass clef is not a clef-change case
+constexpr const char* C1_OUTER_CLEF_IDS =
+      "^(pluck\\.harp|keyboard\\.(piano(\\..*)?|celesta|harpsichord|organ(\\..*)?|clavichord)|pitched-percussion\\.marimba(\\.bass)?)$";
 constexpr int C1_CLEF_LEDGER_MIN = 3;               // a note needing 3 or more ledger lines (Sevsay p. 6; Adler p. 84)
 constexpr int C1_CLEF_RUN_MIN = 3;                  // 3 such notes in a row; 1 or 2 are not marked (Sevsay p. 6)
 // C1-HORN-BASS: a horn note in bass clef written above G3 (Blatter p. 152)

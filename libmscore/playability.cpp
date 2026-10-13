@@ -126,6 +126,7 @@ struct PartNote {
       int end;                      // tick its sound ends (ties followed); a grace note: its main chord's tick
       int hand;                     // the staff of the part it is shown on (cross-staff moves followed): 0 upper
       bool attack;                  // not tied from before
+      int own;                      // the staff it is written on (a hand text, L.H. / R.H., sets both)
       };
 
 struct PartMoment {
@@ -162,12 +163,13 @@ class Pass {
       Score* _score;
       ScoreTuning _tuning;
       PlayabilityResult& _res;
-      std::vector<Fraction> _barStarts;
+      std::vector<std::pair<Fraction, int>> _barStarts;      // measure start, displayed number
       std::map<const Instrument*, StringInstrument> _instruments;
       std::vector<std::pair<int, double>> _tempo;   // tick, quarter notes per second
       std::map<int, std::vector<std::pair<int, int>>> _slurs;     // track -> [from, to]
       std::map<int, std::vector<HairpinSpan>> _hairpins;          // staff -> hairpins
       bool _spanners { false };                                   // collected
+      mutable std::map<Part*, std::map<const Chord*, int>> _handTexts;     // handTexts, per part
 
       int barOf(const Fraction& tick) const;
       int barOf(int tick) const { return barOf(Fraction::fromTicks(tick)); }
@@ -204,6 +206,7 @@ class Pass {
                   const QString& reason, const QString& notes);
       // harp, timpani, keyboards (diagrams-spec-htk.md)
       std::vector<PartMoment> partMoments(Part* part) const;
+      const std::map<const Chord*, int>& handTexts(Part* part) const;
       void momentRow(const PartMoment& m, const std::vector<const PartNote*>& on, const QString& staff, const QString& kind,
                      bool red, const QString& reason);
       std::vector<HarpPlan> checkHarp(Part* part, const QString& staffName);
@@ -269,8 +272,9 @@ class Pass {
 
 int Pass::barOf(const Fraction& tick) const
       {
-      auto i = std::upper_bound(_barStarts.begin(), _barStarts.end(), tick);
-      return std::max(1, int(i - _barStarts.begin()));
+      auto i = std::upper_bound(_barStarts.begin(), _barStarts.end(), tick,
+                                [](const Fraction& t, const std::pair<Fraction, int>& b) { return t < b.first; });
+      return i == _barStarts.begin() ? 1 : std::max(1, (i - 1)->second);
       }
 
 // the sound an instrument plays when bowed: its "arco" channel, else its first
@@ -400,15 +404,18 @@ void Pass::collectSpanners()
             std::stable_sort(t.second.begin(), t.second.end());
       }
 
-// Tempo marks as the plugin reads them: every tempo text's quarter notes per second, the first
-// at a tick; ♩ = 120 before any.
+// Tempo marks as MuseScore plays them: every tempo text's quarter notes per second, the last
+// at a tick (TempoMap::setTempo overwrites); ♩ = 120 before any.
 void Pass::collectTempo()
       {
       for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
             for (Element* e : s->annotations())
-                  if (e->isTempoText() && toTempoText(e)->tempo() > 0
-                     && (_tempo.empty() || _tempo.back().first != s->tick().ticks()))
-                        _tempo.push_back({ s->tick().ticks(), toTempoText(e)->tempo() });
+                  if (e->isTempoText() && toTempoText(e)->tempo() > 0) {
+                        if (!_tempo.empty() && _tempo.back().first == s->tick().ticks())
+                              _tempo.back().second = toTempoText(e)->tempo();
+                        else
+                              _tempo.push_back({ s->tick().ticks(), toTempoText(e)->tempo() });
+                        }
       }
 
 // seconds from tick t0 to t1 (480 ticks to a quarter note)
@@ -697,7 +704,8 @@ void Pass::handle(Chord* chord, int grace, const QString& staffName, const Strin
 //---------------------------------------------------------
 //   checkSlurs (S10, S11)
 //    Every slur on a bowed string is one bow stroke; chords are counted (a double stop is one
-//    note, grace notes are not). Under pizz. there is no bow. A section's dotted slur under a jeté
+//    note, grace notes are not). Under pizz. there is no bow, over tremolo chords there is no one-bow
+//    stroke, and a slur with one note that alone outlasts the longest bow is a phrase slur: not timed. A section's dotted slur under a jeté
 //    text is jeté, judged by its note count; everything else is timed, and a section's slurred
 //    staccato (dots, no jeté text) also has a note limit. A note already red stays red.
 //---------------------------------------------------------
@@ -731,6 +739,16 @@ void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffT
                   int n = int(chords.size());
                   if (n < 2)
                         continue;
+                  // a slur over tremolo chords marks the tremolo, and one note (with its ties) that alone
+                  // outlasts the longest bow makes it a phrase slur: the bow changes inside: neither is timed
+                  bool tremolo = false, phrase = false;
+                  for (const Chord* c : chords) {
+                        tremolo |= c->tremolo() != nullptr;
+                        BowUse one = bowUse(in, tx.dyn, allHairpins, c->tick().ticks(), strokeEnd(c), {});
+                        phrase |= one.valid && one.red > 1 + 1e-9;
+                        }
+                  if (tremolo)
+                        continue;
                   QString verdict, reason, kind;
                   bool jeteText = tx.jete.on(from);
                   if (dotted && in.section && jeteText) {
@@ -756,7 +774,7 @@ void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffT
                         for (const Chord* c : chords)
                               cuts.push_back(c->tick().ticks());
                         BowUse use = bowUse(in, tx.dyn, allHairpins, from, endTick, cuts);
-                        if (use.valid && use.warn > 1 + 1e-9) {
+                        if (use.valid && !phrase && use.warn > 1 + 1e-9) {
                               bool red = use.red > 1 + 1e-9;
                               if (use.tiers.size() == 1) {
                                     BowLimit bl = bowLimit(in, use.tiers[0]);
@@ -883,10 +901,55 @@ static Family familyOf(Part* part)
       return Family::NONE;
       }
 
+// The hand a hand text (L.H., R.H., m.s., m.d.) gives the chords of the voice it is written in: from
+// its tick on, until the next hand text of that voice or a rest longer than a measure.
+const std::map<const Chord*, int>& Pass::handTexts(Part* part) const
+      {
+      auto found = _handTexts.find(part);
+      if (found != _handTexts.end())
+            return found->second;
+      std::map<const Chord*, int>& out = _handTexts[part];
+      static const QRegularExpression RH_TEXT("^(?:r\\.?\\s?h\\.?|m\\.?\\s?d\\.?)$", QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression LH_TEXT("^(?:l\\.?\\s?h\\.?|m\\.?\\s?s\\.?)$", QRegularExpression::CaseInsensitiveOption);
+      std::map<int, std::vector<std::pair<int, int>>> events;     // track -> [tick, hand]
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (Element* e : s->annotations()) {
+                  if (!e->isStaffText() || e->track() < part->startTrack() || e->track() >= part->endTrack())
+                        continue;
+                  QString t = plainText(toTextBase(e)->xmlText()).simplified();
+                  if (RH_TEXT.match(t).hasMatch())
+                        events[e->track()].push_back({ s->tick().ticks(), 0 });
+                  else if (LH_TEXT.match(t).hasMatch())
+                        events[e->track()].push_back({ s->tick().ticks(), 1 });
+                  }
+      for (const auto& ev : events) {
+            size_t next = 0;
+            int hand = -1, end = -1;
+            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
+                  Element* e = s->element(ev.first);
+                  if (!e || !e->isChord())
+                        continue;
+                  const int tick = s->tick().ticks();
+                  if (hand >= 0 && end >= 0 && tick - end > s->measure()->ticks().ticks())
+                        hand = -1;
+                  while (next < ev.second.size() && ev.second[next].first <= tick)
+                        hand = ev.second[next++].second;
+                  if (hand >= 0) {
+                        out[toChord(e)] = hand;
+                        for (Chord* g : toChord(e)->graceNotes())
+                              out[g] = hand;
+                        }
+                  end = tick + toChord(e)->actualTicks().ticks();
+                  }
+            }
+      return out;
+      }
+
 std::vector<PartMoment> Pass::partMoments(Part* part) const
       {
       std::map<std::pair<int, int>, PartMoment> byKey;
       int first = part->staff(0)->idx();
+      const std::map<const Chord*, int>& texts = handTexts(part);
       for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
             for (int track = part->startTrack(); track < part->endTrack(); ++track) {
                   Element* e = s->element(track);
@@ -894,7 +957,10 @@ std::vector<PartMoment> Pass::partMoments(Part* part) const
                         continue;
                   Chord* c = toChord(e);
                   int tick = c->tick().ticks();
-                  int hand = c->vStaffIdx() - first;
+                  int hand = c->vStaffIdx() - first, own = c->staffIdx() - first;
+                  auto text = texts.find(c);
+                  if (text != texts.end())
+                        hand = own = text->second;
                   auto add = [&](Chord* ch, int grace, int sub, int end) {
                         PartMoment& m = byKey[{ tick, sub }];
                         m.tick = tick;
@@ -905,7 +971,7 @@ std::vector<PartMoment> Pass::partMoments(Part* part) const
                                     const Chord* lc = n->lastTiedNote()->chord();
                                     e2 = (lc->tick() + lc->actualTicks()).ticks();
                                     }
-                              m.notes.push_back({ n, ch, grace, e2, hand, n->tieBack() == nullptr });
+                              m.notes.push_back({ n, ch, grace, e2, hand, n->tieBack() == nullptr, own });
                               }
                         };
                   const QVector<Chord*>& graces = c->graceNotes();
@@ -1253,8 +1319,9 @@ static int hornStopState(const QString& t)
 //   checkTechniqueCancels (N1)
 //    per staff, a technique switched on again by a text while it is still on (no cancel word in
 //    between): the player was never told to go back. The second "on" text is marked. A technique
-//    still on at the end, a cancel with nothing to cancel, and a second text saying the same at the
-//    very tick it was switched on, are not marked.
+//    still on at the end, a cancel with nothing to cancel, a second text saying the same at the
+//    very tick it was switched on, a repeat in parentheses and a repeat with no note since the first
+//    text, are not marked.
 //---------------------------------------------------------
 
 void Pass::checkTechniqueCancels(Part* part, const QString& staffName)
@@ -1296,6 +1363,7 @@ void Pass::checkTechniqueCancels(Part* part, const QString& staffName)
             int st = part->staff(si)->idx();
             Staff* staff = _score->staff(st);
             std::vector<int> onBar(TECHNIQUES.size(), -1), onTick(TECHNIQUES.size(), -1);
+            std::vector<Segment*> onSeg(TECHNIQUES.size(), nullptr);
             for (const TechText& t : techTexts(st)) {
                   const Fraction tick = Fraction::fromTicks(t.tick);
                   const bool trumpet = windFamily(part, t.tick) == "Trumpets";
@@ -1318,6 +1386,11 @@ void Pass::checkTechniqueCancels(Part* part, const QString& staffName)
                         else if (v == 1) {
                               if (onBar[k] >= 0 && t.tick == onTick[k])
                                     continue;           // two texts saying it at the same moment: one instruction
+                              // a reminder in parentheses, or with no note since the first text, cancels nothing
+                              const Chord* since = onBar[k] >= 0 ? firstChordFrom(onSeg[k], st) : nullptr;
+                              const bool reminder = t.text.startsWith('(') && t.text.endsWith(')');
+                              if (onBar[k] >= 0 && (reminder || !since || since->tick().ticks() >= t.tick))
+                                    continue;
                               if (onBar[k] >= 0)
                                     textRow(t, st, staffName, "technique",
                                             QString("\"%1\" again with no \"%2\" since bar %3: the player was never told to go back "
@@ -1325,6 +1398,7 @@ void Pass::checkTechniqueCancels(Part* part, const QString& staffName)
                               else {
                                     onBar[k] = barOf(tick);
                                     onTick[k] = t.tick;
+                                    onSeg[k] = t.seg;
                                     }
                               }
                         }
@@ -1986,7 +2060,7 @@ void Pass::checkStringGliss(Part* part, const QString& staffName)
 //    order. A syllable's span: its chord and the chords without a lyric after it, up to the next
 //    chord with one (rests passed over). R4-MELISMA-SLUR: one or more of them not tied
 //    continuations, no rest before the last, and no slur from the syllable's chord to the last
-//    (Gould p. 435). R4-EXTENDER: a lyric whose syllabic is single or end held over more than one
+//    (Gould p. 435; a slur beginning on a tie continuation of the syllable's note counts). R4-EXTENDER: a lyric whose syllabic is single or end held over more than one
 //    written note (its chord and the chords after it before a rest, ties included) with no extender
 //    (Lyrics::ticks(), the melisma line) (Gould p. 447). R4-HYPHEN: an extender on a begin or middle
 //    syllable (Gould p. 448). R4-TENOR-CLEF: a tenor staff (R4_TENOR_ID) with a treble clef, not
@@ -2061,7 +2135,10 @@ void Pass::checkVocalNotation(Part* part, const QString& staffName)
                         for (const Lyrics* l : c->lyrics())
                               if (l->no() < first->no())
                                     first = l;
-                        if (melisma && !restInside && !slurredOver(track, tick, last->tick().ticks()))
+                        // the slur may begin on a tie continuation of the syllable's own note
+                        const int tiedTo = c->notes().empty() ? tick : c->notes().front()->lastTiedNote()->chord()->tick().ticks();
+                        if (melisma && !restInside && !slurredOver(track, tick, last->tick().ticks())
+                            && !slurredOver(track, tiedTo, last->tick().ticks()))
                               row(first, "melisma with no slur: slur the notes of one syllable (solo and section) (Gould p. 435)");
                         for (const Lyrics* l : c->lyrics()) {
                               const bool extender = l->ticks() > Fraction(0, 1);
@@ -2219,6 +2296,7 @@ void Pass::checkClefs(Part* part, const QString& staffName)
       static const QRegularExpression BASS_ONLY(C1_BASS_ONLY_IDS);
       static const QRegularExpression NO_ALTO(C1_NO_ALTO_IDS);
       static const QRegularExpression NO_BASS(C1_NO_BASS_IDS);
+      static const QRegularExpression OUTER_CLEF(C1_OUTER_CLEF_IDS);
       for (int si = 0; si < part->nstaves(); ++si) {
             Staff* staff = part->staff(si);
             const int st = staff->idx();
@@ -2337,9 +2415,18 @@ void Pass::checkClefs(Part* part, const QString& staffName)
                         const StaffType* type = ds->staffType(tick);
                         if (!type || type->group() != StaffGroup::STANDARD)
                               continue;
-                        for (Note* n : c->notes())
-                              if (ledgerLines(n, type->stepOffset()) >= C1_CLEF_LEDGER_MIN)
-                                    farNotes.push_back(n);
+                        QString oid, oname;
+                        idNameAt(part, tick, &oid, &oname);
+                        const bool outer = OUTER_CLEF.match(oid).hasMatch();
+                        const char fam = clefFamily(ds->clef(tick));
+                        for (Note* n : c->notes()) {
+                              if (ledgerLines(n, type->stepOffset()) < C1_CLEF_LEDGER_MIN)
+                                    continue;
+                              const bool above = n->line() + type->stepOffset() < 0;
+                              if (outer && (above ? fam == 'G' : fam == 'F'))
+                                    continue;
+                              farNotes.push_back(n);
+                              }
                         }
                   if (farNotes.empty())
                         closeRun();
@@ -2426,9 +2513,9 @@ void Pass::checkTempoMarks()
             };
       auto staffNameOf = [&](int st) {
             Part* part = _score->staff(st)->part();
-            QString n = part->longName();
+            QString n = plainText(part->longName()).simplified();
             if (n.isEmpty())
-                  n = part->partName();
+                  n = plainText(part->partName()).simplified();
             return n.isEmpty() ? QString("staff %1").arg(st + 1) : n;
             };
       bool tempo = false, tempoI = false;
@@ -2442,7 +2529,11 @@ void Pass::checkTempoMarks()
                   if (tempoI || !TEMPO_I.match(plainText(xml).simplified()).hasMatch())
                         continue;
                   tempoI = true;
-                  if (hasMetronomeMark(xml))
+                  bool marked = hasMetronomeMark(xml);
+                  for (Element* o : s->annotations())       // the metronome mark may be a text of its own at the tick
+                        if (o != e && (o->isTempoText() || o->isStaffText() || o->isSystemText()) && hasMetronomeMark(toTextBase(o)->xmlText()))
+                              marked = true;
+                  if (marked)
                         continue;
                   const int st = std::max(0, e->staffIdx());
                   chordRow(s, st, staffNameOf(st), "tempo",
@@ -2462,8 +2553,11 @@ void Pass::checkTempoMarks()
 //    sounding pitch (ppitch: enharmonic spellings are equal) is in the previous chord of the voice
 //    (no rest between), not tied from it, the chord with no rearticulating mark (C3_ARTIC_NAMES)
 //    and no "legato" text (C3_LEGATO_WORDS) on the staff from the slur's start up to it: marked, one
-//    row a chord (Gould pp. 245, 401, 403; Kennan & Grantham p. 108). Brass, voices, keyboards,
-//    harp, percussion are not checked. Grace notes are not checked.
+//    row a chord (Gould pp. 245, 401, 403; Kennan & Grantham p. 108). The same mark on the previous
+//    chord, grace notes between the two chords, or another slur beginning at the chord or ending on
+//    the previous one also rearticulate it; a chord of several notes is flagged only when every
+//    note repeats. Brass, voices, keyboards, harp, percussion are not checked. Grace notes are not
+//    checked.
 //---------------------------------------------------------
 
 void Pass::checkSlurRepeats(Part* part, const QString& staffName)
@@ -2504,6 +2598,13 @@ void Pass::checkSlurRepeats(Part* part, const QString& staffName)
                         bool articulated = false;
                         for (const Articulation* a : c->articulations())
                               articulated |= ARTIC.match(Sym::id2name(a->symId())).hasMatch();
+                        // a mark on the previous chord, grace notes between, or an inner slur beginning at the
+                        // chord or ending on the previous one, say it is struck again
+                        for (const Articulation* a : prev->articulations())
+                              articulated |= ARTIC.match(Sym::id2name(a->symId())).hasMatch();
+                        articulated |= !c->graceNotesBefore().empty() || !prev->graceNotesAfter().empty();
+                        for (const auto& other : sl->second)
+                              articulated |= other.first == tick || other.second == prev->tick().ticks();
                         if (articulated)
                               continue;
                         bool legato = false;
@@ -2524,7 +2625,7 @@ void Pass::checkSlurRepeats(Part* part, const QString& staffName)
                                     names << tpcName(n->tpc1(), n->ppitch());
                                     }
                               }
-                        if (repeated.empty())
+                        if (repeated.empty() || repeated.size() < size_t(c->notes().size()))     // a double stop shares a common tone
                               continue;
                         done.insert(c);
                         for (Note* n : repeated)
@@ -3416,29 +3517,50 @@ static QString spanPhrase(int semitones)
       return (n.startsWith("o") ? "an " : "a ") + n;
       }
 
+// the hands that are over the warning limit when the notes are given to the staff they are shown on
+// (own false) or to the staff they are written on (own true): hand, notes, span
+struct HandSpan {
+      int hand;
+      std::vector<const PartNote*> notes;
+      int span;
+      };
+
+static std::vector<HandSpan> overspans(const PartMoment& m, bool own)
+      {
+      std::vector<HandSpan> out;
+      for (int hand = 0; hand < 2; ++hand) {
+            HandSpan h { hand, {}, 0 };
+            int lo = 1000, hi = -1000;
+            for (const PartNote& pn : m.notes)
+                  if (pn.attack && (own ? pn.own : pn.hand) == hand) {
+                        h.notes.push_back(&pn);
+                        lo = std::min(lo, pn.note->ppitch());
+                        hi = std::max(hi, pn.note->ppitch());
+                        }
+            h.span = hi - lo;
+            if (h.notes.size() >= 2 && !arpeggioOver(m, hand) && h.span > KEYBOARD_NINTH)
+                  out.push_back(h);
+            }
+      return out;
+      }
+
 void Pass::checkKeyboard(Part* part, const QString& staffName)
       {
       for (const PartMoment& m : partMoments(part)) {
             if (m.sub != 0 || !m.attack())
                   continue;
-            for (int hand = 0; hand < 2; ++hand) {
-                  std::vector<const PartNote*> notes;
-                  int lo = 1000, hi = -1000;
-                  for (const PartNote& pn : m.notes)
-                        if (pn.hand == hand) {
-                              notes.push_back(&pn);
-                              lo = std::min(lo, pn.note->ppitch());
-                              hi = std::max(hi, pn.note->ppitch());
-                              }
-                  if (notes.size() < 2 || arpeggioOver(m, hand))
-                        continue;
-                  int span = hi - lo;
-                  if (span > KEYBOARD_TENTH)
-                        momentRow(m, notes, staffName, "span", true,
-                                  QString("the %1 spans %2 semitones, more than a 10th").arg(handName(hand)).arg(span));
-                  else if (span > KEYBOARD_NINTH)
-                        momentRow(m, notes, staffName, "span", false,
-                                  QString("the %1 spans %2, more than a 9th").arg(handName(hand), spanPhrase(span)));
+            std::vector<HandSpan> over = overspans(m, false);
+            // notes moved to another staff may belong to the hand of their own staff: mark only
+            // when no assignment fits
+            if (!over.empty() && overspans(m, true).empty())
+                  continue;
+            for (const HandSpan& h : over) {
+                  if (h.span > KEYBOARD_TENTH)
+                        momentRow(m, h.notes, staffName, "span", true,
+                                  QString("the %1 spans %2 semitones, more than a 10th").arg(handName(h.hand)).arg(h.span));
+                  else
+                        momentRow(m, h.notes, staffName, "span", false,
+                                  QString("the %1 spans %2, more than a 9th").arg(handName(h.hand), spanPhrase(h.span)));
                   }
             }
       }
@@ -3458,7 +3580,7 @@ ChordInfo Pass::inspectFamily(Chord* chord, Family f)
             sub = chord->isGraceAfter() ? 1 + g : g - main->graceNotes().size();
             }
       Part* part = chord->part();
-      QString staffName = part->longName();
+      QString staffName = plainText(part->longName()).simplified();
       const QString dash = QString(" ") + QChar(0x2014) + " ";
       QStringList names;
       {
@@ -3823,16 +3945,16 @@ ChordInfo Pass::inspectBrass(Chord* chord)
 void Pass::run()
       {
       for (Measure* m = _score->firstMeasure(); m; m = m->nextMeasure())
-            _barStarts.push_back(m->tick());
+            _barStarts.push_back({ m->tick(), m->no() + 1 });
       collectSpanners();
       collectTempo();
 
       for (int st = 0; st < _score->nstaves(); ++st) {
             Staff* staff = _score->staff(st);
             Part* part = staff->part();
-            QString staffName = part->longName();
+            QString staffName = plainText(part->longName()).simplified();
             if (staffName.isEmpty())
-                  staffName = part->partName();
+                  staffName = plainText(part->partName()).simplified();
             if (staffName.isEmpty())
                   staffName = QString("staff %1").arg(st + 1);
 
@@ -3872,9 +3994,9 @@ void Pass::run()
             Family f = familyOf(part);
             if (f == Family::NONE)
                   continue;
-            QString staffName = part->longName();
+            QString staffName = plainText(part->longName()).simplified();
             if (staffName.isEmpty())
-                  staffName = part->partName();
+                  staffName = plainText(part->partName()).simplified();
             if (f == Family::HARP)
                   checkHarp(part, staffName);
             else if (f == Family::TIMPANI)
@@ -3885,9 +4007,9 @@ void Pass::run()
                   checkKeyboard(part, staffName);
             }
       for (Part* part : _score->parts()) {
-            QString staffName = part->longName();
+            QString staffName = plainText(part->longName()).simplified();
             if (staffName.isEmpty())
-                  staffName = part->partName();
+                  staffName = plainText(part->partName()).simplified();
             checkWindDynamics(part, staffName);
             checkWindTrills(part, staffName);
             checkBrassTrills(part, staffName);
@@ -3912,9 +4034,9 @@ void Pass::run()
       checkTempoMarks();
       for (int st = 0; st < _score->nstaves(); ++st) {
             Part* part = _score->staff(st)->part();
-            QString staffName = part->longName();
+            QString staffName = plainText(part->longName()).simplified();
             if (staffName.isEmpty())
-                  staffName = part->partName();
+                  staffName = plainText(part->partName()).simplified();
             if (staffName.isEmpty())
                   staffName = QString("staff %1").arg(st + 1);
             checkEntrance(st, staffName);
@@ -3922,13 +4044,17 @@ void Pass::run()
             }
       for (PlayabilityRow& r : _res.rows)
             r.staffShort = shortStaffName(_score->staff(r.track / VOICES)->part(), r.staff, r.tick);
+      // the counts are the panel's: every row once, by its verdict, whichever check added it
+      _res.impossible = _res.outOfReach = _res.notation = 0;
+      for (const PlayabilityRow& r : _res.rows)
+            ++(r.error() ? _res.impossible : r.notation() ? _res.notation : _res.outOfReach);
       }
 
 //---------------------------------------------------------
 //   checkEntrance
 //    the first sounding note of a staff with no dynamic in force there (a hairpin alone is none;
-//    the same dynamics as levelAt reads): Kennan & Grantham p. 31 (a dynamic must be marked below
-//    each staff), p. 369. One row per staff, risky; the note's chord, grace notes included.
+//    the same dynamics as levelAt reads; a dynamic on any staff of the part counts): Kennan & Grantham
+//    p. 31 (a dynamic must be marked below each staff), p. 369. One row per staff, risky; the note's chord, grace notes included.
 //---------------------------------------------------------
 
 void Pass::checkEntrance(int st, const QString& staffName)
@@ -3943,8 +4069,11 @@ void Pass::checkEntrance(int st, const QString& staffName)
       if (!first)
             return;
       int tick = first->tick().ticks();
-      if (staffTexts(st).dyn.index(tick) >= 0)
-            return;
+      // one dynamic covers the whole part: a grand staff's other staff counts
+      Part* part = _score->staff(st)->part();
+      for (int si = 0; si < part->nstaves(); ++si)
+            if (staffTexts(part->staff(si)->idx()).dyn.index(tick) >= 0)
+                  return;
       QStringList names;
       auto take = [&](Chord* c) {
             for (Note* n : c->notes()) {
