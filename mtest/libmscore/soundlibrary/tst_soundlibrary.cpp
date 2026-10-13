@@ -2821,10 +2821,14 @@ void TestSoundLibrary::evenLevelsGlide()
             dbs.push_back(note->evenLevel());
             }
       const double tStart = in[s].on;
+      // (to the next note-on on the route; none: the run's last note-off, the chunk's end restores the CC11 later)
       double tEnd = 1e9;
       for (const EvenLevels::NoteInfo& n : in)
             if (n.route == route && n.on > in[e].on)
                   tEnd = std::min(tEnd, n.on);
+      const bool nextNote = tEnd < 1e9;
+      if (!nextNote)
+            tEnd = in[e].off;
       // off (the default): nothing changes
       QCOMPARE(text(render(nullptr)), text(plain));
       // on
@@ -2832,8 +2836,14 @@ void TestSoundLibrary::evenLevelsGlide()
             std::vector<std::pair<double, int>> c;
             for (const auto& te : ev) {
                   const NPlayEvent& x = te.second;
-                  if (x.isExternal() && x.type() == ME_CONTROLLER && x.controller() == CTRL_EXPRESSION && x.extPort() * 16 + x.extChannel() == route)
-                        c.push_back({ score->utick2utime(te.first), x.value() });
+                  if (x.isExternal() && x.type() == ME_CONTROLLER && x.controller() == CTRL_EXPRESSION && x.extPort() * 16 + x.extChannel() == route) {
+                        // (several at one tick: the last plays, e.g. the note before's level restored, then this note's)
+                        const double t = score->utick2utime(te.first);
+                        if (!c.empty() && std::fabs(c.back().first - t) < 1e-9)
+                              c.back().second = x.value();
+                        else
+                              c.push_back({ t, x.value() });
+                        }
                   }
             return c;
             };
@@ -2862,7 +2872,8 @@ void TestSoundLibrary::evenLevelsGlide()
                   }
             QVERIFY2(inSpan > 20, qPrintable(QString("%1: %2 CC11s").arg(what).arg(inSpan)));
             QVERIFY2(closest > 0.0035, qPrintable(QString("%1: %2 s apart").arg(what).arg(closest)));
-            QCOMPARE(inForce(c, tEnd), b);                              // (the base again after the run)
+            if (nextNote)
+                  QCOMPARE(inForce(c, tEnd), b);                        // (the base again after the run)
             if (s > 0)
                   QCOMPARE(inForce(c, in[0].on), b);                    // (the patch's notes before it: the headroom)
             };

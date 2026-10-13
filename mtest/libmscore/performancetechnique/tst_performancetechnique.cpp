@@ -1232,7 +1232,7 @@ void TestPerformanceTechnique::evenLevels()
       QCOMPARE(EvenLevels::glideAt({ 1.0, 2.0 }, { -1.0, 3.0 }, 9.0), 3.0);
       const EvenLevels::Stats st = EvenLevels::slurStats({ 0, 0, 0, 0, 1, 1, 1, 1 }, { 9, 1, 4, 2, 5, 8, 6, 9 });
       QCOMPARE(st.median.at(0), 2.0);                   // (1 4 2: the first note left out)
-      QCOMPARE(st.median.at(1), 6.5);                   // (5 8 6: the last left out)
+      QCOMPARE(st.median.at(1), 6.0);                   // (5 8 6: the last left out)
       QCOMPARE(int(st.ranges.size()), 2);
       QCOMPARE(st.ranges[0], 3.0);
       QCOMPARE(st.ranges[1], 3.0);
