@@ -491,6 +491,9 @@ std::vector<float> PlaybackVerifier::renderPasses(MasterScore* score, const Even
       static const unsigned FRAMES = 512;
       float buffer[FRAMES * 2];
       for (int pass = 0; pass < passes; ++pass) {
+            // each pass is a playback: the plug-ins see the transport start again (round robins reset on it, as
+            // they do when the score is played), so the passes are alike
+            vst->restartTransport();
             // what is in force at from: every kept controller, switch, bend and parameter before it, at once
             auto i = events.cbegin();
             for (; i != events.cend() && score->utick2utime(i->first) < from; ++i) {

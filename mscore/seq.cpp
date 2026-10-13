@@ -1169,6 +1169,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   // External synth can have wrong values, for example
                   // if we switch between scores
                   initInstruments(true);
+                  // the library's plug-ins see a transport start with every playback (round robins reset on it)
+                  if (_synti)
+                        _synti->playbackStarted();
                   // Need to change state after calling collectEvents()
                   state = Transport::PLAY;
                   if (mscore->countIn() && cs->playMode() == PlayMode::SYNTHESIZER) {

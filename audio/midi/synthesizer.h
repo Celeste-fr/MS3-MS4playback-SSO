@@ -79,6 +79,7 @@ class Synthesizer {
 
       virtual void allSoundsOff(int /*channel*/) {}
       virtual void allNotesOff(int /*channel*/) {}
+      virtual void playbackStarted() {}      // the transport changed to play (realtime thread)
 
       virtual SynthesizerGui* gui()  { return _gui; }
 

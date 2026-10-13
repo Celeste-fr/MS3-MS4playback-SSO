@@ -31,6 +31,7 @@
 #include "slur.h"
 #include "staff.h"
 #include "synthesizerstate.h"
+#include "tuning.h"
 
 namespace Ms {
 namespace PlaybackAudit {
@@ -43,6 +44,8 @@ const char* kindName(Kind k)
             case Kind::CAPPED:     return "CAPPED";
             case Kind::ARRIVAL:    return "ARRIVAL";
             case Kind::LEVEL_STEP: return "LEVEL STEP";
+            case Kind::DROPPED:    return "DROPPED";
+            case Kind::LEAP:       return "LEAP";
             }
       return "";
       }
@@ -62,6 +65,12 @@ const char* severityName(Severity s)
 // the upper end fails, between the two it is at the edge
 static const double TIMING_WARN_MS = 30.0;
 static const double TIMING_FAIL_MS = 50.0;
+
+// SSO's legato engine (read privately, behaviour only): a legato note-on less than 15 ms after the previous legato
+// note-on on its channel, at velocity 64 or lower, isn't played; a step beyond an octave gets no transition
+static const double DROP_GAP_MS = 15.0;
+static const int DROP_MAX_VELOCITY = 64;
+static const double LEAP_MAX_CENTS = 1200.0;
 
 // Jesteadt, Wier & Green 1977 (JASA 61, 169-177), as Praat's manual (phonToDifferenceLimens) quotes it:
 // dI / I = 0.463 (I / I0)^-0.072; in dB: 10 log10(1 + dI / I)
@@ -145,7 +154,7 @@ QString Report::text(const QString& title) const
                      "Rasch 1979, warn > %3 ms, fail > %4 ms; level steps: values, proposed threshold (not enforced, owner to "
                      "approve) the difference limen at 60 dB SL, Jesteadt, Wier & Green 1977: %5 dB, marked \"> DL\"")
                      .arg(notes).arg(keepMs).arg(TIMING_WARN_MS).arg(TIMING_FAIL_MS).arg(differenceLimenDb(), 0, 'f', 2);
-      for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP })
+      for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP, Kind::DROPPED, Kind::LEAP })
             out << QString("  %1: %2 fail, %3 warn, %4 info").arg(kindName(k), -12).arg(count(k, Severity::FAIL))
                    .arg(count(k, Severity::WARN)).arg(count(k, Severity::INFO));
       std::vector<const Finding*> sorted;
@@ -561,6 +570,31 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                           .arg(howA.isEmpty() ? QString() : QString(" [before: %1]").arg(howA))
                           .arg(std::abs(step) > differenceLimenDb() ? " (> DL)" : ""), step);
                   }
+            }
+      // (f) legato transitions SSO doesn't play: dropped (a note-on within 15 ms of the legato note-on before on its route,
+      // velocity <= 64) and leaps (beyond an octave: a fresh attack)
+      ScoreTuning tuning(score);
+      std::map<int, const Played*> lastOn;                // route -> the previous note-on
+      for (const auto& up : played) {
+            const Played* p = up.get();
+            const Played* before = lastOn[p->route];
+            lastOn[p->route] = p;
+            if (!p->trace || !p->note || !p->trace->from || !p->trace->choice || !p->trace->choice.articulation->playsTransitions())
+                  continue;
+            if (before && before->trace && before->trace->choice && before->trace->choice.articulation->playsTransitions()
+                && before->note && before->note->chord() != p->note->chord()) {
+                  const double gap = ms(p->on) - ms(before->on);
+                  if (gap < DROP_GAP_MS && p->velocity <= DROP_MAX_VELOCITY)
+                        finding(Kind::DROPPED, Severity::FAIL, p, QString("velocity %1, %2 ms after the note-on before on its route "
+                                "(pitch %3): SSO's legato drops a note under %4 ms at velocity %5 or lower")
+                                .arg(p->velocity).arg(gap, 0, 'f', 1).arg(before->pitch).arg(DROP_GAP_MS).arg(DROP_MAX_VELOCITY), gap);
+                  }
+            const Note* from = p->trace->from;
+            const double cents = 100.0 * (p->note->ppitch() - from->ppitch()) + tuning.cents(p->note) - tuning.cents(from);
+            if (std::abs(cents) > LEAP_MAX_CENTS + 0.01)
+                  finding(Kind::LEAP, Severity::WARN, p, QString("transition from pitch %1: %2 semitones (%3 cents) beyond an octave, SSO "
+                          "attacks afresh (velocity %4); its Performance technique, legato delay and level calibration don't apply")
+                          .arg(from->ppitch()).arg(cents / 100.0, 0, 'f', 2).arg(cents, 0, 'f', 0).arg(p->velocity), cents);
             }
       return report;
       }

@@ -16,6 +16,7 @@
 #include <cstring>
 #include <QtEndian>
 #include <QtTest/QtTest>
+#include <QFile>
 #include <QTemporaryDir>
 #include <QCryptographicHash>
 #include <QJsonArray>
@@ -136,6 +137,7 @@ class TestSoundLibrary : public QObject, public MTest
       void evenAutoSession();
       void playbackPresets();
       void renderKit();
+      void renderKitMaxVelocity();
       void renderKitRoll();
       void controllers();
       void liveControllers();
@@ -143,6 +145,7 @@ class TestSoundLibrary : public QObject, public MTest
 #ifdef TESTSYNTH
       void evenAutoTestSynth();
       void mixerSlot();
+      void transportRestart();
       void mixerScore();
       void liveSetTestSynth();
       void liveParameters();
@@ -3643,6 +3646,58 @@ void TestSoundLibrary::renderKit()
       QVERIFY(unscanned);
       QVERIFY(SoundLib::routes(score, *unscanned).empty());
       delete score;
+      }
+
+//---------------------------------------------------------
+//   renderKitMaxVelocity
+//    <Instrument maxVelocity> (Kickstart plays 127 as a roll in the 13 metal patches that ship "Roll on high vel."
+//    ticked): a hit at 127 on such a patch is sent as 126, on another patch it stays 127, and the shipped map
+//    limits exactly those 13
+//---------------------------------------------------------
+
+void TestSoundLibrary::renderKitMaxVelocity()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Percussion' ids='drumset snare-drum' kit='1'/>"
+         "<Instrument name='Drums Low' with='Percussion' keyScan='1' maxVelocity='126'>"
+         "<Drum pitch='36' key='48' name='Bass drum' velocity='127'/><Drum pitch='35' key='48' name='Bass drum' velocity='127'/>"
+         "</Instrument>"
+         "<Instrument name='Drums High' with='Percussion' keyScan='1'>"
+         "<Drum pitch='38' key='62' name='Snare hit' velocity='127'/>"
+         "</Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "drums.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::map<int, int> loudest;               // key -> its loudest note-on
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (ev.type() == ME_NOTEON && ev.velo() > 0 && ev.isExternal())
+                  loudest[ev.pitch()] = std::max(loudest[ev.pitch()], ev.velo());
+            }
+      QCOMPARE(loudest[48], 126);               // Drums Low: limited
+      QCOMPARE(loudest[62], 127);               // Drums High: as it is
+      delete score;
+
+      // the shipped map: the 13 metal patches of Kickstart with the option ticked, no other
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      QStringList limited;
+      for (const SoundLib::LibInstrument& li : sso->instruments)
+            if (li.maxVelocity < 127) {
+                  QCOMPARE(li.maxVelocity, 126);
+                  limited << li.name.section(" - ", -1);
+                  }
+      limited.sort();
+      QCOMPARE(limited, QStringList({ "Anvil", "Cymbal Hi", "Cymbal Lo", "Cymbal Med", "Mark Tree", "Mini Anvil", "Rain Sheet",
+                                      "Rivet Cymbal", "Tam Tam", "Trash Metals", "Triangle 1", "Triangle 2", "Wind Gong" }));
       }
 
 //---------------------------------------------------------
@@ -7995,6 +8050,62 @@ void TestSoundLibrary::evenAutoTestSynth()
       session.edited();
       QVERIFY(session.detect().empty());
       delete score;
+      }
+
+//---------------------------------------------------------
+//   transportRestart
+//    each playback start is a transport start to the plug-in (SSO's scripts reset their round robins
+//    on one; Live's play does it every time): the host said "playing" in every block, so a plug-in saw
+//    one start, at load. Vst3Synth::playbackStarted (Seq's change to play) and beginExport (an export
+//    plays the score from its start) show a block with the transport stopped, then playing again;
+//    notes queued meanwhile play in the block after it, their sound unchanged
+//---------------------------------------------------------
+
+void TestSoundLibrary::transportRestart()
+      {
+      const int rate = 48000;
+      QString error;
+      QTemporaryDir dir;
+      QVERIFY(dir.isValid());
+      const QString log = dir.filePath("transport.log");
+      qputenv("MSTESTSYNTH_TRANSPORT_LOG", log.toLocal8Bit());
+      auto lines = [&log]() {
+            QFile f(log);
+            if (!f.open(QIODevice::ReadOnly))
+                  return QStringList();
+            return QString::fromUtf8(f.readAll()).split('\n', QString::SkipEmptyParts);
+            };
+      Vst3Synth vst;
+      vst.init(rate);
+      vst.setPlugin(0, Vst3Plugin::load(TESTSYNTH, rate, 256, &error));
+      QVERIFY2(vst.plugin(0), qPrintable(error));
+      vst.plugin(0)->settle();
+      // loaded and run: one start (the host said playing from the first block on)
+      run(vst, 2048);
+      QCOMPARE(lines(), QStringList({ "start" }));
+      run(vst, 2048);
+      QCOMPARE(lines().size(), 1);                    // (no further start by itself)
+
+      // a second playback start: stop, then start
+      vst.playbackStarted();
+      vst.play(PlayEvent(ME_NOTEON, 0, 69, 100));
+      std::vector<float> b = run(vst, 4800);
+      QCOMPARE(lines(), QStringList({ "start", "stop", "start" }));
+      QVERIFY(rms(b, 0) > 0.01);                      // (the note queued with the restart sounds)
+      run(vst, 2048);
+      QCOMPARE(lines().size(), 3);
+
+      // a third; and an export begins with one of its own
+      vst.allNotesOff(-1);
+      run(vst, 2048);
+      vst.playbackStarted();
+      run(vst, 512);
+      QCOMPARE(lines().size(), 5);
+      vst.beginExport(rate);
+      run(vst, 512);
+      vst.endExport();
+      QCOMPARE(lines().size(), 7);
+      qunsetenv("MSTESTSYNTH_TRANSPORT_LOG");
       }
 
 //---------------------------------------------------------

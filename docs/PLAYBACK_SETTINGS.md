@@ -397,6 +397,11 @@ on the test synth), `tst_liveequivalence::liveEvenLevels`.
 
 ## Inventory
 
+Not in the table, because they are corrections and not adjustments (no setting, the same in every preset): a percussion
+patch's `maxVelocity` (the 13 metal patches whose Kickstart option "Roll on high vel." is ticked are sent velocity 126 at
+most: 127 would play a roll the score did not ask for) and the transport restart (the hosted plug-ins see a transport
+start with every playback, export and verification pass, so SSO's round robins reset as they do in Live).
+
 Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitfire Symphony Orchestra.xml`, made by
 `tools/soundlibraries/gen_spitfire_sso.py` from the measurements (its comments say how each was measured).
 

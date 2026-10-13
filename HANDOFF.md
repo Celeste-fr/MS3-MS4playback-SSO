@@ -5,6 +5,23 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## SSO script fixes (2026-10-13, branch `sso-script-fixes`, from reading SSO's Kontakt scripts; untried with the real library)
+
+- **Round robins reset on every playback start**: SSO's All-techniques and single-technique patches reset their per-key
+  round-robin counters at a transport start; the host reported "playing" in every block, so Kontakt saw one start per session.
+  `Vst3Synth::playbackStarted` (called by `Seq::process` when the transport changes to play) / `restartTransport`: each
+  plug-in gets one block (`Vst3Plugin::TRANSPORT_STOP_FRAMES`) with the playing flag off, no events, output dropped, then
+  playing. Also at `beginExport` (exports, `--live-equivalence`, verify renders, even levels' library instance) and at the
+  start of each `PlaybackVerifier::renderPasses` pass (the even-levels measurement passes and any repeated pass: each is a
+  playback, so each starts from the same round robins). To check on the Windows VM when a build is made: play twice, the
+  same repeated note should sound the same sample sequence both times (Kontakt untested here; the test synth logs the
+  host's flag, `MSTESTSYNTH_TRANSPORT_LOG`, test `transportRestart`).
+- **Kickstart "Roll on high vel."**: ticked in 13 one-drum metal patches (Anvil, Cymbal Hi / Lo / Med, Mark Tree, Mini Anvil,
+  Rain Sheet, Rivet Cymbal, Tam Tam, Trash Metals, Triangle 1 / 2, Wind Gong), where velocity 127 plays a roll; elsewhere
+  Kickstart plays 127 as 126. Map attribute `<Instrument maxVelocity="126">` (generator `ROLL_ON_HIGH_VELOCITY`; README),
+  applied to every library note-on last (`MidiRenderer::libraryMaxVelocity`), so Live's clips and the plain set follow.
+  A correctness fix, not an adjustment (no setting, no preset). A roll the owner wants is the patch's Roll hit.
+
 ## Remind the owner (raise these at the start of the next conversation)
 
 - **Whence, Violin I's vibrato** (the owner, 2026-10-12: "record this so I can be reminded later"): the score's Violin I
@@ -88,6 +105,7 @@ with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every ARR
 named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to point out all of these issues?").
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
 Green 1977) the owner hasn't approved yet.
+DROPPED (fail: a legato note sent < 15 ms after the one before at velocity <= 64, which SSO drops) and LEAP (warn: a transition beyond an octave, which SSO attacks afresh) were added 2026-10-13: name any left in the hand-over.
 
 ## Timing set in Live (2026-10-11)
 
