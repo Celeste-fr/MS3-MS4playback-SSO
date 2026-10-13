@@ -352,6 +352,13 @@ the design.
   where the residual (the largest |note - its slur's median|) stays above 1 dB (the test's noise floor), fitted once more
   (scaled by the measured / predicted change of round 1: the test's first round overshot ~25 %); per passage the round
   with the smallest median slur range is kept, none if uncorrected was smallest. `result.json` lists every note's levels.
+- **Slow slurs are skipped** (the owner, 2026-10-13, blind test of real SSO: slow slurred passages sound the same uncorrected and
+  corrected; 500 ms and 1 s heard, 136-500 ms untested; HANDOFF.md > Slow slurs need no correction): a passage whose
+  every inter-onset interval between consecutive joined notes (seconds at the score's tempo, as rendered) is >= 500 ms
+  (`EvenLevels::SLOW_IOI_S`, `slowPassage`) is not measured by the job (its log counts them) nor in the background: no
+  render, no Work, no value, no wait for it, and the notes play as SSO plays them. One interval under 500 ms (499 ms
+  counts) measures the whole passage in the job, the notes around the edit in the background. Values already on a
+  slow passage stay and play (harmless). `tst_soundlibrary::evenAutoSlow`.
 - **Kept on the note** (Inspector › Note › Even level, editable, with its state): the glide's value at the middle of its
   window (dB) and what it was measured against: `"<patch>|<hash>"` of its rendered context (patch, pitch and tuning,
   velocity, joined or not, length, the joined neighbours' pitches, velocities and timing, the dynamics CC in force; the

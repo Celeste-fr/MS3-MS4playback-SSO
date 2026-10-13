@@ -135,6 +135,7 @@ class TestSoundLibrary : public QObject, public MTest
       void evenLevelsGlide();
       void evenAutoWindows();
       void evenAutoSession();
+      void evenAutoSlow();
       void playbackPresets();
       void renderKit();
       void renderKitMaxVelocity();
@@ -3208,7 +3209,7 @@ void TestSoundLibrary::evenAutoSession()
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" },
                                       { "levels/evenLevels", "1" } });
-      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      MasterScore* score = readScore(DIR + "even-auto.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
       EvenLevels::Cache cache;
@@ -8048,6 +8049,101 @@ static double dB(double a, double b)
       }
 
 //---------------------------------------------------------
+//   evenAutoSlow
+//    slow slurs need no correction (the owner's blind test, 2026-10-13; EvenLevels::SLOW_IOI_S): a passage whose every
+//    interval between joined notes is >= 500 ms is not measured (no Work, no render, no wait, no value); 499 ms, or one
+//    fast interval inside, is. even-slow.musicxml: bar 1 at 120 bpm (500 ms), bar 2 at 120.5 (499 ms), bar 3 with
+//    two eighths (250 ms); even-slow-all.musicxml: bar 1 only. EvenLevelsJob uses the same slowPassage (it needs a
+//    plug-in; no test here)
+//---------------------------------------------------------
+
+void TestSoundLibrary::evenAutoSlow()
+      {
+      auto lib = loadMap(EVEN_AUTO_MAP);
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" },
+                                      { "levels/evenLevels", "1" } });
+      QCOMPARE(EvenLevels::SLOW_IOI_S, 0.5);
+      {
+            // the rule on intervals
+            auto at = [](std::initializer_list<double> ons) {
+                  std::vector<EvenLevels::NoteInfo> v;
+                  for (double t : ons) {
+                        EvenLevels::NoteInfo n;
+                        n.on = t;
+                        v.push_back(n);
+                        }
+                  return v;
+                  };
+            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.5, 1.0 }), 0, 3));
+            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.4999999, 1.0 }), 0, 3));      // (tick rounding)
+            QVERIFY(!EvenLevels::slowPassage(at({ 0, 0.499, 1.0 }), 0, 3));
+            QVERIFY(!EvenLevels::slowPassage(at({ 0, 0.5, 1.0, 1.25 }), 0, 4));
+            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.1, 0.6, 1.1 }), 1, 4));       // (a range inside)
+            QVERIFY(!EvenLevels::slowPassage(at({ 0 }), 0, 1));
+            }
+      MasterScore* score = readScore(DIR + "even-slow.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const auto passages = evenPassages(score);
+      QCOMPARE(int(passages.size()), 3);
+      QVERIFY(EvenLevels::slowPassage(passages[0], 0, passages[0].size()));
+      QVERIFY(!EvenLevels::slowPassage(passages[1], 0, passages[1].size()));
+      QVERIFY(!EvenLevels::slowPassage(passages[2], 0, passages[2].size()));
+      const double bar2 = passages[1].front().on;
+      EvenLevels::Cache cache;
+      EvenAuto::Session session(score, &cache);
+      std::vector<EvenAuto::Job> jobs = session.detect();
+      QVERIFY(!jobs.empty());
+      // nothing of bar 1 is measured, nothing of it is waited for
+      for (const EvenAuto::Job& j : jobs)
+            QVERIFY(j.firstOn >= bar2 - 1e-6);
+      for (double on : session.pendingOns())
+            QVERIFY(on >= bar2 - 1e-6);
+      QVERIFY(!session.mustWait(0, bar2 - 0.01));
+      QVERIFY(session.mustWait(0, 1e9));
+      int renders = 0;
+      while (!jobs.empty()) {
+            const EvenAuto::Job j = jobs.back();
+            jobs.pop_back();
+            ++renders;
+            EvenAuto::Job next;
+            if (session.result(fakeMeasure(j), &next))
+                  jobs.push_back(next);
+            }
+      QVERIFY(renders >= 2);
+      QVERIFY(!session.busy());
+      for (const auto& n : passages[0])
+            QVERIFY(!EvenLevels::isSet(n.note->evenLevel()));     // (no value: plays as SSO plays it)
+      const auto after = evenPassages(score);
+      for (size_t k = 1; k < 3; ++k)
+            for (const auto& n : after[k])
+                  QVERIFY(EvenLevels::isSet(n.note->evenLevel()));
+      session.edited();
+      QVERIFY(session.detect().empty());
+      delete score;
+
+      // only slow passages: no job, no Work, no wait, no value
+      score = readScore(DIR + "even-slow-all.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EvenAuto::Session slow(score, &cache);
+      QCOMPARE(int(evenPassages(score).size()), 1);
+      QVERIFY(slow.detect().empty());
+      QVERIFY(!slow.busy());
+      QVERIFY(slow.pendingOns().empty());
+      QVERIFY(!slow.mustWait(0, 1e9));
+      const auto only = evenPassages(score);
+      for (const auto& n : only.front())
+            QVERIFY(!EvenLevels::isSet(n.note->evenLevel()));
+      QVERIFY(!score->evenLevelsWritten());
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   evenAutoTestSynth
 //    the background measurement end to end on the test synth (it ignores CC11, so no correction can work: what it
 //    shows is the path): each window's jobs rendered offline on an instance of its own (EvenMeasure::run: PASSES passes,
@@ -8064,7 +8160,7 @@ void TestSoundLibrary::evenAutoTestSynth()
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" },
                                       { "levels/evenLevels", "1" } });
-      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      MasterScore* score = readScore(DIR + "even-auto.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
       const int rate = 44100;

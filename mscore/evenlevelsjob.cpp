@@ -444,7 +444,7 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
       for (const NoteInfo& in : infos0)
             byRoute[in.route].push_back(in);
       std::vector<PassageRec> passages;
-      int leftTwice = 0;
+      int leftTwice = 0, leftSlow = 0;
       for (auto& br : byRoute) {
             std::vector<NoteInfo>& ns = br.second;
             std::stable_sort(ns.begin(), ns.end(), [](const NoteInfo& a, const NoteInfo& b) { return a.on < b.on; });
@@ -460,7 +460,9 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                         inParts = inParts || chosenParts.count(ns[k].note->part());
                         }
                   if (e - s + 1 >= 3 && inBars && inParts) {
-                        if (twice)
+                        if (EvenLevels::slowPassage(ns, s, e + 1))
+                              ++leftSlow;     // (every interval >= SLOW_IOI_S: needs no correction)
+                        else if (twice)
                               ++leftTwice;
                         else {
                               PassageRec p;
@@ -479,7 +481,8 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                   }
             }
       log(QString("%1: %2 slurred passage(s) on Performance legato patches to measure%3").arg(name).arg(passages.size())
-          .arg(leftTwice ? QString(" (%1 left out: a note played twice, a repeat or an ornament)").arg(leftTwice) : QString()));
+          .arg((leftTwice ? QString(" (%1 left out: a note played twice, a repeat or an ornament)").arg(leftTwice) : QString())
+               + (leftSlow ? QString(" (%1 slow passage(s) skipped: every interval >= %2 ms needs no correction)").arg(leftSlow).arg(int(EvenLevels::SLOW_IOI_S * 1000)) : QString())));
       if (passages.empty()) {
             score->setMetaTag(Playback::metaTag, originalSettings);
             log("nothing to measure: no passage of three or more joined notes on a Performance legato patch in the chosen parts and bars");

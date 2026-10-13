@@ -192,6 +192,15 @@ constexpr double RENDER_SPEED = 8.9;    // audio seconds rendered per second: th
                                         // Kontakt 8 + SSO on the Windows test VM, median of 16 renders, 3.7-13.4;
                                         // sso_even_gap_check.json): the wait's estimate until a render here is timed
 
+// Slow slurs need no correction (the owner's blind test, 2026-10-13, real SSO: slow slurred passages sound the same
+// uncorrected and corrected; 500 ms and 1 s heard, 136-500 ms untested; HANDOFF.md > Slow slurs need no correction): a
+// passage whose every inter-onset interval between consecutive joined notes (seconds, as rendered) is at least this is
+// not measured (the background measurer and Tools > Even Out Levels / --even-levels skip it) and its notes get no value
+constexpr double SLOW_IOI_S = 0.5;
+// true when every interval between the consecutive notes [first, last) of a passage is >= SLOW_IOI_S (1e-6 s slack
+// for the tick-to-seconds rounding); fewer than two notes: false
+bool slowPassage(const std::vector<NoteInfo>& notes, size_t first, size_t last);
+
 // a window over a passage of n joined notes (indices): its notes measured and rendered
 struct Window {
       int renderFirst { 0 }, renderLast { -1 };

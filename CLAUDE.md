@@ -166,6 +166,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   changed context is stale (Inspector › Note › Even level), not played. `MidiRenderer::libraryEvenLevels` glides on top of
   the CC11 schedule (the patch's notes lower by its largest value, never cut at 127; its volume adds what fits under +6 dB,
   the rest lowers every library patch alike: `TrackDelays::evenDb` / `evenAll`); Live's clips and the plain set carry it.
+  **Slow slurs are skipped** (the owner, 2026-10-13, blind test: slow slurs sound the same uncorrected and corrected; HANDOFF.md
+  > Slow slurs need no correction): a passage whose every interval between joined notes is >= `EvenLevels::SLOW_IOI_S`
+  (500 ms; `slowPassage`) is neither measured by the job nor in the background: no render, no value, no wait.
   **Measured in the background near edits** (`libmscore/evenauto.h` the Session, `audio/vst3/evenmeasure.h` the shared
   render + measurement, `mscore/evenautomeasurer.h` the threads, triggers and Play's wait; the owner, 2026-10-13: a note
   plays its measured value or playback waits for it, never a predicted one): whenever evenLevels plays and the library is
@@ -371,7 +374,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 90 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-13: evenAutoWindows (with the measured gaps, early stop, the order), evenAutoSession (the wait at opening: queued windows), evenAutoTestSynth (early stop), transportRestart, renderKitMaxVelocity, evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 91 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-13: evenAutoSlow (slow slurs skipped; evenAutoSession / evenAutoTestSynth now read even-auto.musicxml, legato-early at 240 bpm), evenAutoWindows (with the measured gaps, early stop, the order), evenAutoSession (the wait at opening: queued windows), evenAutoTestSynth (early stop), transportRestart, renderKitMaxVelocity, evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 8 passed, 1 skipped (2026-10-13, droppedFindings, leapFindings; 2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›

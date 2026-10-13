@@ -301,7 +301,8 @@ std::vector<Job> Session::detect()
                   bool twice = false;
                   for (size_t k = s; k <= e; ++k)
                         twice = twice || played[ns[k].note] > 1;
-                  if (e - s + 1 >= 3 && !twice) {
+                  // (a slow passage needs no correction: EvenLevels::SLOW_IOI_S; no value, no Work, no wait)
+                  if (e - s + 1 >= 3 && !twice && !EvenLevels::slowPassage(ns, s, e + 1)) {
                         Plan p;
                         p.route = br.first;
                         p.notes.assign(ns.begin() + long(s), ns.begin() + long(e) + 1);

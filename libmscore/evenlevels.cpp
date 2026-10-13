@@ -539,6 +539,16 @@ int runInFor(const SoundLib::Library& library, const SoundLib::LibInstrument* pa
 //    Kontakt 8 + SSO, the windows the background measurer renders of Whence): the smallest gap whose levels and fitted
 //    glides matched the 3 s gap's, and the early stop's threshold (the 95th percentile of |pass 1 - pass 2| over the
 //    measured notes). Any other patch: the job's 3 s, always PASSES passes
+bool slowPassage(const std::vector<NoteInfo>& notes, size_t first, size_t last)
+      {
+      if (last > notes.size() || last < first + 2)
+            return false;
+      for (size_t k = first + 1; k < last; ++k)
+            if (notes[k].on - notes[k - 1].on < SLOW_IOI_S - 1e-6)
+                  return false;
+      return true;
+      }
+
 //---------------------------------------------------------
 
 static const struct Measured { const char* patch; double gap; double earlyStopDb; } MEASURED[] = {
