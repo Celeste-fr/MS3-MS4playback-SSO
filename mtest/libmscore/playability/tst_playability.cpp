@@ -101,6 +101,7 @@ class TestPlayability : public QObject, public MTest
       void tempoMarks();
       void slurRepeats();
       void c1c3OnOldFixtures();
+      void falseAlarms();
       void noDynamic();
       void dump();
       };
@@ -958,8 +959,9 @@ void TestPlayability::keyboard()
       QStringList got = htkRows(r, { "span" });
       QStringList want = {
             QString::fromUtf8("2 | Piano | risky | the right hand spans a minor 10th, more than a 9th | C4 + D#5"),
-            QString::fromUtf8("3 | Piano | impossible | the left hand spans 17 semitones, more than a 10th | C3 + F4"),
-            QString::fromUtf8("5 | Piano | impossible | the right hand spans 17 semitones, more than a 10th | C4 + E4 + F5") };
+            QString::fromUtf8("3 | Piano | impossible | the left hand spans 17 semitones, more than a 10th | C3 + F4") };
+      // bar 5 (C4 E4 in the upper staff, F5 written in the lower staff and moved up) is clean: F5 can be the left
+      // hand's own note, so the right hand has C4 E4 and the left hand F5 alone (falseAlarms has the staffMove cases)
       compare(got, want);
       delete score;
       }
@@ -2156,9 +2158,8 @@ void TestPlayability::c1c3OnOldFixtures()
             // fixtures with a tempo marking at the start
             "bow-tests.mscx: 0 tempo rows", "fast-tests.mscx: 0 tempo rows", "timp-tests.mscx: 0 tempo rows",
             "entrance-tests.mscx: 0 tempo rows",
-            // correct by the rules: low harp notes in bass clef, high bassoon passages in bass clef (C1-CLEF-CHANGE), the
+            // correct by the rules: high bassoon passages in bass clef (C1-CLEF-CHANGE), the
             // violin's three slurred A4s (C3-SLUR-REPEAT)
-            "harp-tests.mscx: " + rowText(6, "Harp", "notation", "4" + run, "B0 + Db1 + F#1"),
             "wind-dyn-tests.mscx: " + rowText(3, "Bassoon", "notation", "4" + run, "G4 + Ab4 + Eb5 + E5"),
             "windtrill-tests.mscx: " + rowText(5, "Bassoon", "notation", "11" + run, "Ab4 + G4 + C5 + B4 + C#5 + Eb5 + D5 + D#5"),
             "entrance-tests.mscx: " + rowText(2, "Violin", "notation", slur, "A4"),
@@ -2166,6 +2167,78 @@ void TestPlayability::c1c3OnOldFixtures()
       want.sort();
       got.sort();
       compare(got, want);
+      }
+
+//---------------------------------------------------------
+//   false alarms found by a sweep of real scores (2026-10-13): tools/playability/gen_falsealarm_tests.py
+//---------------------------------------------------------
+
+// "bar | staff | kind | verdict | notes" of the rows of some kinds
+static QStringList kindRows(const PlayabilityResult& r, const QStringList& kinds)
+      {
+      QStringList out;
+      for (const PlayabilityRow& row : r.rows)
+            if (kinds.contains(row.kind))
+                  out << QString("%1 | %2 | %3 | %4 | %5").arg(row.bar).arg(row.staff, row.kind, row.verdict, row.notes);
+      out.sort();
+      return out;
+      }
+
+void TestPlayability::falseAlarms()
+      {
+      // strings: B1 tempo (bars 1-2), R2 phrase slur (3-6), R3 tremolo slur (7-8), C3 (R10, R11, B4), N1 (R9), B6, R12
+      MasterScore* score = readScore(DIR + "falsealarm-strings.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList want = {
+            // a slur over two untremolo'd wholes (4 s at mf): the control of the tremolo slur
+            "9 | Violin | slur | outOfReach | A4 \u2026 B4 (2 notes)",
+            // A4 A4 B4, and E4+B4 E4+B4 (every note repeats); the staccato, nested-slur, grace-note and common-tone bars are clean
+            "11 | Violin | slurRepeat | notation | A4",
+            "18 | Violin | slurRepeat | notation | E4 + B4",
+            // pizz. again after notes; the parenthesis and the con sord. with no note since are clean
+            "3 | Violin 2 | technique | notation | \"pizz.\"",
+            // the row's staff name is plain text
+            "1 | Violin 3 solo | slurRepeat | notation | A4",
+            // the melisma slurred from the tie continuation is clean, the unslurred one is not
+            "2 | Soprano | vocal | notation | \"ra\"" };
+      QStringList got = kindRows(r, { "slur", "group", "slurRepeat", "technique" });
+      for (const PlayabilityRow& row : r.rows)
+            if (row.kind == "vocal" && row.reason.startsWith("melisma"))
+                  got << QString("%1 | %2 | vocal | %3 | %4").arg(row.bar).arg(row.staff, row.verdict, row.notes);
+      want.sort();
+      got.sort();
+      compare(got, want);
+      // the summary counts every row once by its verdict
+      QCOMPARE(r.impossible + r.outOfReach + r.notation, int(r.rows.size()));
+      QCOMPARE(r.outOfReach, 1);
+      delete score;
+
+      // keyboard: B2 tie continuation, R6 moved notes, R6b hand texts, R7 outermost clefs, R8 grand-staff dynamic
+      score = readScore(DIR + "falsealarm-keys.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      got = kindRows(r, { "span", "clef", "firstDynamic" });
+      want = QStringList {
+            // a chord moved down a staff that is wide by itself, and a bass octave under it
+            "5 | Piano | span | impossible | C2 + C3 + C4 + G5",
+            // voice 2 marked R.H.
+            "8 | Piano | span | risky | G3 + B4",
+            // below the treble clef and above the bass clef a clef change helps
+            "10 | Piano | clef | notation | F3 + E3 + D3",
+            "10 | Piano | clef | notation | G4 + A4 + B4" };
+      want.sort();
+      compare(got, want);
+      QCOMPARE(r.impossible + r.outOfReach + r.notation, int(r.rows.size()));
+      delete score;
+
+      // a pickup does not count (B3), and "Tempo I" with the metronome mark in a text of its own at its tick is marked (B5)
+      score = readScore(DIR + "falsealarm-bars.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      QCOMPARE(kindRows(r, { "slurRepeat" }), QStringList({ "1 | Violin | slurRepeat | notation | A4" }));
+      QCOMPARE(kindRows(r, { "tempo" }), QStringList());
+      delete score;
       }
 
 void TestPlayability::brassTrills()
