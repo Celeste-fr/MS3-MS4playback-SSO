@@ -360,8 +360,11 @@ the design.
 - **Played** (`MidiRenderer::libraryEvenLevels`, after the per-note levels and Live timing overrides, before track delays):
   a run of joined notes with current values glides on top of the route's CC11 schedule (the level rule, section balance,
   realRange, track levels: dB add up), a message per 5 ms where the value changes, the CC11 in force again at the next
-  note-on. **Headroom** as the track levels': each patch's largest value plays by its volume (`TrackDelays::evenDb`,
-  `patchGain`, within Live's +6 dB), every note on the patch that much lower by CC11.
+  note-on. **Headroom**: every note on a patch plays its largest value lower by CC11 (`TrackDelays::evenDb`), so no
+  correction is cut at CC11 127; the patch's volume adds it back as far as it fits under Live's +6 dB (`patchGain`), and
+  the rest lowers every library patch of the score alike by its volume (`Delays::evenAll`): the balance stays, the
+  library plays that much quieter, as the listening test's shift did (2026-10-13: Celli - Performance already at +6 dB by
+  the level rule, the first VM run cut every boost at 127).
 - **Live**: the same CC11 events reach Live's clips and the plain set's CC11 lane; the headroom the Kontakt tracks' Volume
   (`tst_liveequivalence::liveEvenLevels`).
 
