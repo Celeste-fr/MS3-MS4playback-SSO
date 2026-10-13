@@ -115,6 +115,23 @@ SynthesizerGroup Vst3Synth::state() const
       return g;
       }
 
+// (any thread, no blocking) the slots' plug-ins see the transport stop and start; with the slots
+// changing, at the next block
+void Vst3Synth::restartTransport()
+      {
+      if (!mine())
+            return;
+      std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
+      if (!lock.owns_lock()) {
+            _transportPending = true;
+            return;
+            }
+      _transportPending = false;
+      for (auto& p : _slots)
+            if (p)
+                  p->restartTransport();
+      }
+
 // while exporting, only the exporting thread plays the plug-ins
 bool Vst3Synth::mine() const
       {
@@ -130,6 +147,10 @@ bool Vst3Synth::mine() const
 
 void Vst3Synth::playPending()
       {
+      if (_transportPending.exchange(false))
+            for (auto& p : _slots)
+                  if (p)
+                        p->restartTransport();
       if (_allOffPending.exchange(false)) {
             for (auto& p : _slots)
                   if (p)
@@ -487,6 +508,7 @@ void Vst3Synth::beginExport(float sampleRate)
                   p->allNotesOff();
                   p->setSampleRate(sampleRate);
                   p->setOffline(true);
+                  p->restartTransport();        // (an export plays the score from its start)
                   }
             }
       }

@@ -86,6 +86,13 @@ class Vst3Plugin {
       void setPitch(double cents, double glideSeconds = 0);
       double pitch() const;               // the target, cents
       void allNotesOff();
+      // (any thread, lock-free) a playback starts: the host reports the transport stopped for one block
+      // (TRANSPORT_STOP_FRAMES frames, no events, its output dropped) before the next, then playing again.
+      // Until now every block said "playing", so a plug-in saw one transport start, when it was loaded;
+      // SSO's scripts reset their round robins on a transport start (All techniques and single-technique
+      // patches), as Ableton Live's play does every time
+      static constexpr int TRANSPORT_STOP_FRAMES = 64;
+      void restartTransport();
 
       // GUI thread, not while process() runs
       bool setOffline(bool offline);      // process mode: offline for audio export

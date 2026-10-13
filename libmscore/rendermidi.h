@@ -277,6 +277,7 @@ class MidiRenderer {
       static void putLibrarySwitch(EventMap* events, const SoundLib::LibInstrument& li, int channel,
                                    const SoundLib::Choice& choice, int utick, int staffIdx);
       void finishLibraryEvents(const Chunk&, EventMap* events);
+      void libraryMaxVelocity(const Chunk&, EventMap* events);
       void libraryPitchBends(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);
       void libraryTrackDelays(const Chunk&, EventMap* events);
