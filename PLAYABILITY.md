@@ -120,7 +120,12 @@ headless test scores and their checked results are the parity tests.
   26″ 23″, the 20″ only when the part's names or a staff text name a fifth drum; each pitch on a
   free drum (one already tuned to it, else one that leaves 15 s, else the nearest middle); too many
   pitches, no drum, no free drum red; a retune under 15 s (tempo marks) a warning. Keyboard (K1):
-  a hand's span over a 9th a warning, over a 10th red, an arpeggio exempts; organ pedals left out.
+  a hand's span over a 9th a warning, over a 10th red, an arpeggio exempts; organ pedals left out. Only notes
+  struck count (tied continuations do not). A note moved to another staff goes to the hand of the staff it is shown
+  on; when a hand is over the limit that way, the moved notes are also tried in the hand of the staff they are
+  written on, and the moment is marked only if neither assignment fits. A staff text L.H. / R.H. / m.s. / m.d.
+  (any case, with or without the dots) gives the chords of the voice it is written in to that hand, from its tick
+  until the next hand text of that voice or a rest longer than a measure (`Pass::handTexts`).
   Rows of kind `pedals`, `harp hand`, `timpani`, `span`; marks as the others. The panel's diagram
   follows the selection: pedal diagram (changes highlighted), drums side by side with range, pitch,
   next retune and its time, keyboard strip with the octave, 9th and 10th from the lowest note
@@ -333,7 +338,8 @@ headless test scores and their checked results are the parity tests.
 - Vocal notation (R4): voice staves (`R4_VOICE_IDS`, MusicXML `voice.*` but the kazoo; the name when there is no
   id), each voice's chords and rests in order; a syllable's span is its chord and the chords without a lyric after
   it, up to the next chord with one (rests passed over). R4-MELISMA-SLUR: some of them not tied continuations, no
-  rest before the last, and no slur from the syllable's chord to the last (Gould p. 435). R4-EXTENDER: a lyric whose
+  rest before the last, and no slur from the syllable's chord (or the last note tied on from it) to the last (Gould
+  p. 435). R4-EXTENDER: a lyric whose
   syllabic is single or end over more than one written note (its chord and the chords after it before a rest, ties
   included) with no extender, i.e. `Lyrics::ticks()` 0 (MuseScore's melisma line) (Gould p. 447). R4-HYPHEN: a begin
   or middle syllable with `ticks()` > 0, drawn as an extender (Gould p. 448). R4-TENOR-CLEF: a `voice.tenor` staff with
@@ -360,19 +366,23 @@ headless test scores and their checked results are the parity tests.
   instruments (`C1_MULTI_CLEF_IDS`: viola, cello, double bass, bassoon, contrabassoon, horn, trombones, euphonium /
   baritone, harp, keyboards, marimba): 3 or more onsets in a row on a staff (all voices together, rests skipped)
   each with a note of 3+ ledger lines, those notes marked, one row a run (Sevsay p. 6; Adler p. 84; Gould pp. 7,
-  393). C1-HORN-BASS: a horn note in a (written) bass clef above written G3 (Blatter p. 152). C1-TIE-CLEF: a clef
+  393); on keyboards, harp and marimba (`C1_OUTER_CLEF_IDS`) notes above a treble clef or below a bass clef do not
+  count, since no clef lies beyond them. C1-HORN-BASS: a horn note in a (written) bass clef above written G3 (Blatter p. 152). C1-TIE-CLEF: a clef
   change inside a tie, both notes marked (Gould p. 9). G7 changed with it: the double-bass rule is gone and the
   8va rule (more than 4 ledger lines) only checks instruments outside `C1_MULTI_CLEF_IDS`.
 - Tempo marking (C2, `Pass::checkTempoMarks`, kind `tempo`): no tempo text (TempoText, or a staff / system text in
   the tempo style) in the first measure, a row on the top staff's first chord (Kennan & Grantham pp. 223, 370; Adler
   p. 758; Blatter p. 22); the first "Tempo I" / "Tempo 1" / "Tempo primo" text with no metronome mark (a note
-  symbol and a number), a row on the first chord at it (Gould p. 184).
+  symbol and a number, in the text itself or in another text at the same tick), a row on the first chord at it
+  (Gould p. 184).
 - Slurred repeated notes (C3, `Pass::checkSlurRepeats`, kind `slurRepeat`): woodwinds, saxophones and bowed strings;
   inside a slur (not its first chord), a note whose sounding pitch is in the voice's previous chord (no rest between),
   not tied from it, with no staccato / staccatissimo / tenuto / portato / accent / marcato on the chord and no
   "legato" text on the staff since the slur's start (Gould's written-instruction alternative, p. 245): marked (Gould
-  pp. 245, 401, 403; Kennan & Grantham p. 108). Brass, voices, keyboards, harp, percussion and grace notes are not
-  checked. Tests `clefs`, `tempoMarks`, `slurRepeats` (c1c3-tests.mscx, c1c3-notempo.mscx from
+  pp. 245, 401, 403; Kennan & Grantham p. 108). The chord is also taken as struck again when the previous chord has
+  one of those marks, when grace notes lie between the two chords, or when another slur of the voice begins at the
+  chord or ends on the previous chord; a chord of several notes is marked only when every note repeats. Brass,
+  voices, keyboards, harp, percussion and grace notes are not checked. Tests `clefs`, `tempoMarks`, `slurRepeats` (c1c3-tests.mscx, c1c3-notempo.mscx from
   `tools/playability/gen_c1c3_tests.py`) and `c1c3OnOldFixtures`.
 - Two categories (owner 2026-10-12): playability (red "impossible", dark yellow "risky") and NOTATION, how the
   music is written rather than whether it can be played: verdict `notation`, teal noteheads (`NOTATION_COLOR`
@@ -400,7 +410,8 @@ headless test scores and their checked results are the parity tests.
   staff of every instrument, the first sounding note (rests skipped, grace notes with their chord) with no
   Dynamic in force there (the same reading as `levelAt`; a hairpin alone is none) gets a "risky" row of kind
   `entrance`, "no dynamic marked at the first entrance (solo and section)", and a dark yellow mark. One row
-  per staff; a dynamic that comes after the first note still warns on that note.
+  per staff; a dynamic that comes after the first note still warns on that note. A dynamic on any staff of the
+  same part at that tick counts (one dynamic covers a grand staff).
 - Differences from the plugin: pitches are `ppitch()` (an 8va counts; the plugin read `pitch`), a
   harmonic circle is read per chord (the plugin's copy reader keyed it by the main chord's tick, so
   grace chords shared it), texts are read on every segment of the staff (the plugin only where voice 1
@@ -424,3 +435,19 @@ The owner: "stop maintaining the plugin". Nothing in this branch needs it any mo
 - The plugin's string references (fingerboard, rows) are frozen as they are; any change to that
   behaviour from now on is a fork-only change and updates those files by hand.
 
+
+## False alarms found by a sweep of real scores (2026-10-13)
+
+A sweep of 15 real scores (public domain, CC0 and CC BY-SA, `~/MuseScore/orchestration-checker/research/false-alarm-sweep.md`)
+gave these fixes; tests `falseAlarms` (falsealarm-strings/-keys/-bars.mscx from `tools/playability/gen_falsealarm_tests.py`).
+- Tempo: the last tempo text at a tick wins, as `TempoMap::setTempo` plays it (the checker kept the first).
+- The Bar column is the measure's displayed number (`Measure::no() + 1`: pickups and measures excluded from the count do
+  not shift it; a section break that restarts the numbering restarts it here too).
+- Row staff names are plain text (`plainText(...).simplified()`) everywhere.
+- The result's counts (`impossible`, `outOfReach`, `notation`) are made from the rows by verdict at the end of the pass,
+  as the panel's summary line counts them, so no kind of row (the slur rows were missing) is left out.
+- S11: a slur over chords that carry a tremolo is not timed (the slur marks the tremolo), nor is a slur with one note
+  (its ties followed) that alone lasts longer than the longest bow at its dynamic (a phrase slur).
+- N1: a repeated technique text in parentheses, or with no note since the first text, is not marked.
+- Left as they were (owner decisions pending): the x0.6 bow factor of cello and bass, section detection by plural names,
+  an accent dynamic (fz) as an entrance dynamic, the one-dot rule of slurred staccato.
