@@ -1999,7 +1999,7 @@
     <Drum key="101" name="Toms Swell 4 f"/>
     <Drum key="103" name="Toms Swell 5 f"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Anvil" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Anvil.nki" pitch="2">
+  <Instrument name="Percussion - Unpitched - Metal - Anvil" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Anvil.nki" pitch="2">
     <Switch type="none"/>
     <Drum key="48" name="Anvil Hit Rear"/>
     <Drum key="49" name="Anvil Steel Sheet"/>
@@ -2011,7 +2011,7 @@
     <Drum key="64" name="Anvil Horn Center"/>
     <Drum key="67" name="Anvil Horn Under"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Cymbal Hi" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Hi.nki" pitch="5">
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Hi" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Hi.nki" pitch="5">
     <Switch type="none"/>
     <Drum key="41" name="Cymbal Hi Swell mf"/>
     <Drum key="43" name="Cymbal Hi Swell f"/>
@@ -2022,7 +2022,7 @@
     <Drum key="72" name="Cymbal Hi FX Scrape"/>
     <Drum key="84" name="Cymbal Hi FX Bow"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Cymbal Lo" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Lo.nki" pitch="7">
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Lo" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Lo.nki" pitch="7">
     <Switch type="none"/>
     <Drum key="41" name="Cymbal Lo Swell mf"/>
     <Drum key="43" name="Cymbal Lo Swell f"/>
@@ -2033,7 +2033,7 @@
     <Drum key="72" name="Cymbal Lo FX Scrape"/>
     <Drum key="84" name="Cymbal Lo FX Bow"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Cymbal Med" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Med.nki" pitch="6">
+  <Instrument name="Percussion - Unpitched - Metal - Cymbal Med" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Cymbal Med.nki" pitch="6">
     <Switch type="none"/>
     <Drum key="41" name="Cymbal Med Swell mf"/>
     <Drum key="43" name="Cymbal Med Swell f"/>
@@ -2042,7 +2042,7 @@
     <Drum key="52" name="Cymbal Med Brush"/>
     <Drum key="61" name="Cymbal Med Roll"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Mark Tree" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Mark Tree.nki" pitch="4">
+  <Instrument name="Percussion - Unpitched - Metal - Mark Tree" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Mark Tree.nki" pitch="4">
     <Switch type="none"/>
     <Drum key="48" name="Mark Tree Long"/>
     <Drum key="49" name="Mark Tree Push"/>
@@ -2052,7 +2052,7 @@
     <Drum key="64" name="Mark Tree Sweep Mid"/>
     <Drum key="67" name="Mark Tree Sweep High"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Mini Anvil" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Mini Anvil.nki" pitch="4">
+  <Instrument name="Percussion - Unpitched - Metal - Mini Anvil" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Mini Anvil.nki" pitch="4">
     <Switch type="none"/>
     <Drum key="48" name="Mini Anvil Anvil 1"/>
     <Drum key="53" name="Mini Anvil Anvil 2"/>
@@ -2066,7 +2066,7 @@
     <Drum key="77" name="Piatti FX Scrape"/>
     <Drum key="84" name="Piatti FX Sizzle"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Rain Sheet" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Rain Sheet.nki" pitch="4">
+  <Instrument name="Percussion - Unpitched - Metal - Rain Sheet" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Rain Sheet.nki" pitch="4">
     <Switch type="none"/>
     <Drum key="41" name="Rain Sheet Swell mp"/>
     <Drum key="43" name="Rain Sheet Swell mf"/>
@@ -2076,13 +2076,13 @@
     <Drum key="61" name="Rain Sheet Roll"/>
     <Drum key="72" name="Rain Sheet Superball"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Rivet Cymbal" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Rivet Cymbal.nki" pitch="2">
+  <Instrument name="Percussion - Unpitched - Metal - Rivet Cymbal" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Rivet Cymbal.nki" pitch="2">
     <Switch type="none"/>
     <Drum key="41" name="Rivet Cymbal Swell"/>
     <Drum key="48" name="Rivet Cymbal Hit"/>
     <Drum key="61" name="Rivet Cymbal Roll"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Tam Tam" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Tam Tam.nki" pitch="4">
+  <Instrument name="Percussion - Unpitched - Metal - Tam Tam" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Tam Tam.nki" pitch="4">
     <Switch type="none"/>
     <Drum key="41" name="Tam Tam Swell mf"/>
     <Drum key="43" name="Tam Tam Swell f"/>
@@ -2092,7 +2092,7 @@
     <Drum key="72" name="Tam Tam Superball"/>
     <Drum key="89" name="Tam Tam FX Scrape"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Trash Metals" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Trash Metals.nki" pitch="12">
+  <Instrument name="Percussion - Unpitched - Metal - Trash Metals" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Trash Metals.nki" pitch="12">
     <Switch type="none"/>
     <Drum key="48" name="Trash Metals Brake 1"/>
     <Drum key="52" name="Trash Metals Brake 2"/>
@@ -2102,7 +2102,7 @@
     <Drum key="65" name="Trash Metals Spring Coil"/>
     <Drum key="71" name="Trash Metals Trash Can"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Triangle 1" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Triangle 1.nki" pitch="2">
+  <Instrument name="Percussion - Unpitched - Metal - Triangle 1" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Triangle 1.nki" pitch="2">
     <Switch type="none"/>
     <Drum pitch="81" key="48" name="Triangle 1 Open Hit 1" ids="triangle drumset percussion"/>
     <Drum pitch="80" key="49" name="Triangle 1 Closed Hit" ids="triangle drumset percussion"/>
@@ -2110,7 +2110,7 @@
     <Drum key="59" name="Triangle 1 Open Hit 3"/>
     <Drum key="64" name="Triangle 1 Open Hit 4"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Triangle 2" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Triangle 2.nki" pitch="2">
+  <Instrument name="Percussion - Unpitched - Metal - Triangle 2" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Triangle 2.nki" pitch="2">
     <Switch type="none"/>
     <Drum key="48" name="Triangle 2 Open Hit 1"/>
     <Drum key="49" name="Triangle 2 Closed Hit"/>
@@ -2118,7 +2118,7 @@
     <Drum key="59" name="Triangle 2 Open Hit 3"/>
     <Drum key="64" name="Triangle 2 Open Hit 4"/>
   </Instrument>
-  <Instrument name="Percussion - Unpitched - Metal - Wind Gong" with="Percussion" keyScan="1" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Wind Gong.nki" pitch="4">
+  <Instrument name="Percussion - Unpitched - Metal - Wind Gong" with="Percussion" keyScan="1" maxVelocity="126" nki="Instruments/Individual techniques/Percussion - Unpitched - Metal - Wind Gong.nki" pitch="4">
     <Switch type="none"/>
     <Drum key="43" name="Wind Gong Swell f"/>
     <Drum key="43" name="Wind Gong Swell mf"/>

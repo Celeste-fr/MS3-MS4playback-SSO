@@ -197,6 +197,12 @@ void MasterSynthesizer::allSoundsOff(int channel)
 //   allNotesOff
 //---------------------------------------------------------
 
+void MasterSynthesizer::playbackStarted()
+      {
+      for (Synthesizer* s : _synthesizer)
+            s->playbackStarted();
+      }
+
 void MasterSynthesizer::allNotesOff(int channel)
       {
       for (Synthesizer* s : _synthesizer)

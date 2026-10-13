@@ -2806,6 +2806,32 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       libraryTimingOverrides(chunk, events);
       libraryEvenLevels(chunk, events);
       libraryTrackDelays(chunk, events);
+      libraryMaxVelocity(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   libraryMaxVelocity
+//    a patch's loudest velocity (SoundLib::LibInstrument::maxVelocity): a note-on above it on its route is
+//    sent at it. Last, after every level and delay has had its say, so nothing raises a hit above it again
+//---------------------------------------------------------
+
+void MidiRenderer::libraryMaxVelocity(const Chunk& chunk, EventMap* events)
+      {
+      std::map<int, int> limit;                                   // route -> its patch's loudest velocity
+      for (const auto& r : libRoutePatches)
+            if (r.second.second && r.second.second->maxVelocity < 127)
+                  limit[r.first] = r.second.second->maxVelocity;
+      if (limit.empty())
+            return;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
+      for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+            NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.type() != ME_NOTEON || ev.librarySwitch() || ev.velo() == 0)
+                  continue;
+            auto l = limit.find(ev.extPort() * 16 + ev.extChannel());
+            if (l != limit.end() && ev.velo() > l->second)
+                  ev.setDataB(l->second);
+            }
       }
 
 //---------------------------------------------------------

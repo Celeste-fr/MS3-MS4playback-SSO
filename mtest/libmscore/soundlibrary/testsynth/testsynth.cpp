@@ -31,6 +31,7 @@
 
 #define _USE_MATH_DEFINES           // M_PI with MSVC
 #include <cstring>
+#include <cstdio>
 #include <vector>
 #include <cmath>
 #include <map>
@@ -197,6 +198,9 @@ class Processor : public AudioEffect {
                   streaming = false;
                   });
             }
+      bool transportLogRead { false };
+      bool wasPlaying { false };
+      std::string transportLog;
       long releaseSamples() const { return std::max(1L, long(processSetup.sampleRate * 0.01)); }
 
    public:
@@ -226,6 +230,24 @@ class Processor : public AudioEffect {
 
       tresult PLUGIN_API process(ProcessData& data) override
             {
+            // MSTESTSYNTH_TRANSPORT_LOG=<file>: a line "start" / "stop" appended at each change of the host's
+            // playing flag (a block without a process context counts as stopped), as SSO's scripts see the
+            // transport (they reset their round robins at a start)
+            if (!transportLogRead) {
+                  transportLogRead = true;
+                  if (const char* f = std::getenv("MSTESTSYNTH_TRANSPORT_LOG"))
+                        transportLog = f;
+                  }
+            if (!transportLog.empty()) {
+                  const bool playing = data.processContext && (data.processContext->state & ProcessContext::kPlaying);
+                  if (playing != wasPlaying) {
+                        wasPlaying = playing;
+                        if (FILE* f = std::fopen(transportLog.c_str(), "a")) {
+                              std::fputs(playing ? "start\n" : "stop\n", f);
+                              std::fclose(f);
+                              }
+                        }
+                  }
             if (IParameterChanges* changes = data.inputParameterChanges) {
                   for (int32 i = 0; i < changes->getParameterCount(); ++i) {
                         IParamValueQueue* q = changes->getParameterData(i);

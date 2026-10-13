@@ -1078,7 +1078,12 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 - The Play Panel's tempo slider (relTempo) and MuseScore's built-in (non-library) parts are not in Live.
 - The Mixer's volume 0: silence in MuseScore, -70 dB in Live (Live's lowest fader value).
 - Round robins: Kontakt picks its own on each render, in MuseScore and in Live alike (not a difference of the path,
-  but no two renders are sample-identical).
+  but no two renders are sample-identical). SSO's scripts reset their per-key round-robin counters on the transport
+  start (All techniques and single-technique patches; the Performance patches after 1.5 s of silence), which Live's Play
+  does every time; MuseScore's hosted plug-ins now see one on every playback start (`Vst3Synth::restartTransport`: a block
+  with the transport stopped, then playing; also at the start of an export and of each verification / even-levels pass),
+  so a play starts from the same round robins in both. (Before 2026-10-13 the host said "playing" in every block: one
+  start per session.) Not reproduced: Live's own stop-start on a loop or a locator jump.
 
 ### The check (`--live-equivalence`)
 

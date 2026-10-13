@@ -197,7 +197,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   a light band over its rows); Ctrl+D (score or lane focus; MS3 has no Ctrl+D) copies every lane of the part and each
   note's attack / transition / velocity / join to the bars after, one undo step, then selects them
   (`Automation::duplicateTimeSelection`, `Edit::duplicateSpan`, `PerformanceTechnique::duplicateNoteValues`).
-- Percussion: `<Drum key name>` lists every hit of SSO's kits, one-drum patches and ensembles
+- Percussion: `<Instrument maxVelocity="126">` on the 13 metal patches whose Kickstart option "Roll on high vel." is ticked
+  (127 would play a roll; `ROLL_ON_HIGH_VELOCITY` in the generator, `MidiRenderer::libraryMaxVelocity`; a correctness fix, not
+  an adjustment: docs/PLAYBACK_SETTINGS.md). `<Drum key name>` lists every hit of SSO's kits, one-drum patches and ensembles
   (`tools/soundlibraries/sso_percussion_hits.json`, from the owner's window pictures); a technique off at the
   defaults is `<Drum name default="off"/>` (no key, never played). The nine `"<patch> (all on)"` `<Patch>`es set
   Kickstart's arrays whole (`%c2lsa`, `%4jwcn`, `%x4jsr`, `$nd5ia=0`); `KontaktSetup::unpurgeSwitchedOn` loads the
@@ -234,7 +236,10 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `LiveSetWriter::kontaktVolume`), its notes' CC11 that much lower (`noteDb`).
 
 **Hosting (VST 3)** (`BUILD_VST3`, on except macOS; preference `io/soundLibrary`)
-- `audio/vst3/vst3plugin.*` (one instance; `settle()` after setState, or SSO's script resets parameters),
+- `audio/vst3/vst3plugin.*` (one instance; `settle()` after setState, or SSO's script resets parameters;
+  `restartTransport()`: every playback start, export and verification pass shows the plug-in the transport stopped for one
+  block, then playing, as Live's Play does, because SSO's scripts reset their round robins on a transport start;
+  `Vst3Synth::playbackStarted` from `Seq::process`),
   `vst3synth.*` (64 slots = port*16+channel; `idle` must not hold the slots' mutex while sending: missed events
   wait in `_pending`), `mscore/vst3editor.*`, `mscore/soundlibraryhost.*` (`sync`, preload at score open,
   `SoundLibraryExport`, *View › Sound Library…*). Plug-in modules stay loaded until exit.
@@ -350,7 +355,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 85 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-13: evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 87 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-13: transportRestart, renderKitMaxVelocity, evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 8 passed, 1 skipped (2026-10-13, droppedFindings, leapFindings; 2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›

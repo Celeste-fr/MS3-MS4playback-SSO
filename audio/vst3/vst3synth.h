@@ -58,6 +58,7 @@ class Vst3Synth : public Synthesizer {
       std::mutex _pendingMutex;
       std::vector<PlayEvent> _pending;
       std::atomic<bool> _allOffPending { false };
+      std::atomic<bool> _transportPending { false };
       std::atomic<bool> _exporting { false };
       std::thread::id _exportThread;
       QList<MidiPatch*> _patches;
@@ -101,6 +102,11 @@ class Vst3Synth : public Synthesizer {
       void process(unsigned frames, float* out, float*, float*) override;
       void allSoundsOff(int slot) override;
       void allNotesOff(int slot) override;
+      // a playback starts (Seq::process, the transport's change to play; an export begins by itself; the
+      // verification's and even levels' passes call it, each pass a playback): every plug-in sees the
+      // transport stop for a block, then start (Vst3Plugin::restartTransport). Realtime-safe
+      void restartTransport();
+      void playbackStarted() override { restartTransport(); }
 
       // a note's tuning as the speed of its slot (Vst3Plugin::setPitch), for a library whose plug-in
       // ignores a note's tuning: set at each note-on, at once when nothing sounds on the slot (the
