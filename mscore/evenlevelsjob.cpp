@@ -332,6 +332,37 @@ void actualTimes(MasterScore* score, const EventMap& events, std::vector<Passage
             }
       }
 
+// a mono float WAV, and next to it "<file>.json": the pass starts (seconds in the file) and the score time at each
+void writeMono(const QString& path, const std::vector<float>& mono, int rate, const std::vector<double>& starts, double from)
+      {
+      QFile f(path);
+      if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            return;
+      const quint32 bytes = quint32(mono.size() * 4);
+      auto u32 = [&f](quint32 v) { char b[4] = { char(v), char(v >> 8), char(v >> 16), char(v >> 24) }; f.write(b, 4); };
+      auto u16 = [&f](quint16 v) { char b[2] = { char(v), char(v >> 8) }; f.write(b, 2); };
+      f.write("RIFF", 4);
+      u32(36 + bytes);
+      f.write("WAVEfmt ", 8);
+      u32(16);
+      u16(3);
+      u16(1);
+      u32(quint32(rate));
+      u32(quint32(rate * 4));
+      u16(4);
+      u16(32);
+      f.write("data", 4);
+      u32(bytes);
+      f.write(reinterpret_cast<const char*>(mono.data()), qint64(bytes));
+      f.close();
+      QJsonArray a;
+      for (double s : starts)
+            a.append(s);
+      QFile j(path + ".json");
+      if (j.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            j.write(QJsonDocument(QJsonObject { { "passStarts", a }, { "from", from } }).toJson());
+      }
+
 double median(std::vector<double> v)
       {
       if (v.empty())
@@ -504,8 +535,17 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                   const std::vector<float> mono = PlaybackVerifier::renderPasses(score.get(), events, rate, vst,
                         [&partSlots](const NPlayEvent& e) { return e.isExternal() && partSlots.count(e.extPort() * 16 + e.extChannel()); },
                         from, to, EvenLevels::PASSES, gap, &starts);
+                  // MS_EVEN_LEVELS_WAV: each render kept (mono float), "<part> round <r>.wav", with its pass starts
+                  if (qEnvironmentVariableIsSet("MS_EVEN_LEVELS_WAV"))
+                        writeMono(folder + QString("/%1 round %2.wav").arg(pp.first->partName()).arg(round), mono, rate, starts, from);
                   double firstMs = 0;
-                  const std::vector<double> env = ArticulationCheck::perceivedEnvelope(mono, rate, &firstMs);
+                  std::vector<double> env;
+                  {
+                        std::vector<float> stereo(mono.size() * 2);         // (perceivedEnvelope takes interleaved stereo)
+                        for (size_t k = 0; k < mono.size(); ++k)
+                              stereo[2 * k] = stereo[2 * k + 1] = mono[k];
+                        env = ArticulationCheck::perceivedEnvelope(stereo, rate, &firstMs);
+                  }
                   const double hopMs = int(rate * 0.005) * 1000.0 / rate;
                   log(QString("%1: %2, round %3: %4 s of audio rendered in %5 s").arg(name, pp.first->partName()).arg(round)
                       .arg(double(mono.size()) / rate, 0, 'f', 1).arg(rt.elapsed() / 1000.0, 0, 'f', 1));
