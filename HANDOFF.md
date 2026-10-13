@@ -207,7 +207,12 @@ VM, real SSO; the earlier 1.3 dB had unmatched velocities), but not transposed (
 op. 97 + Dvorak op. 22 ii: ~2,200 contexts for 90 % of 2,958 notes, 83-96 % heard once, Glazunov <-> Dvorak <= 1 %
 shared). So a shipped table would almost never be hit: the design is **background measuring near edits**, its results
 kept per exact context for reuse (edits and re-measures of the same score), no shipped table. Untested: whether note
-length / dynamic change the shape (the scans used 136 ms at CC1 64).
+length / dynamic change the shape (the scans used 136 ms at CC1 64). **No predicted stand-in** (the owner, 2026-10-13:
+"you would be hearing a 'fake' version for that moment. that's not acceptable, I'd rather just wait"): a note plays its
+measured correction or waits for it, never a model's guess. To shorten the wait (estimate from the VM's render speeds,
+~1 s per edit): one pass instead of three, one round with CC11's measured strength (~25 % over the law) built in, only
+the edited note +-3 plus a run-in, parts in parallel; both "one pass" (MuseScore's renders vary ~0.6 dB per note, the
+scans 0.1-0.25) and "one round within ~1 dB" to check on the VM first.
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
