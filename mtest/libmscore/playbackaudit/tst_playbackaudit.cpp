@@ -16,6 +16,7 @@
 #include <QtTest/QtTest>
 #include <QTemporaryFile>
 #include <cmath>
+#include <set>
 
 #include "audio/midi/event.h"
 #include "libmscore/playbackaudit.h"
@@ -49,6 +50,8 @@ class TestPlaybackAudit : public QObject, public MTest
       void swapFindings();
       void swapByPitch();
       void cappedArrival();
+      void droppedFindings();
+      void leapFindings();
       void auditScore();
       };
 
@@ -364,6 +367,118 @@ void TestPlaybackAudit::cappedArrival()
       }
 
 //---------------------------------------------------------
+//   droppedFindings
+//    SSO's legato engine plays no legato note started less than 15 ms after the previous one's note-on at velocity
+//    64 or lower (fast-legato.musicxml: slurred 64th notes at 300 bpm, 12.5 ms apart, then slurred quarters): at
+//    the map's legatoVelocity 60 the three fast transitions are DROPPED fails; at 65, or at a slow tempo, none
+//---------------------------------------------------------
+
+void TestPlaybackAudit::droppedFindings()
+      {
+      recommended({ { "levels/calibrated", "0" } });
+      MasterScore* score = readScore(DIR + "fast-legato.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto audit = [&](int legatoVelocity) {
+            auto lib = loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long'/>"
+               "<Articulation name='Legato' value='20' techniques='legato long' legatoVelocity='%1'/>"
+               "</Instrument></SoundLibrary>").arg(legatoVelocity));
+            SoundLib::setCurrent(lib);
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> trace;
+            PlaybackAudit::render(score, &events, &trace);
+            return PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+            };
+      PlaybackAudit::Report r = audit(60);
+      QVERIFY2(r.count(PlaybackAudit::Kind::DROPPED, PlaybackAudit::Severity::FAIL) == 3, qPrintable(r.text()));
+      QCOMPARE(r.count(PlaybackAudit::Kind::LEAP), 0);
+      std::set<int> pitches;
+      for (const PlaybackAudit::Finding& f : r.findings)
+            if (f.kind == PlaybackAudit::Kind::DROPPED) {
+                  pitches.insert(f.pitch);
+                  QCOMPARE(f.part, QString("Violin"));
+                  QCOMPARE(f.bar, 1);
+                  QVERIFY2(std::abs(f.value - 12.5) < 1.0, qPrintable(f.text));
+                  QVERIFY2(f.text.contains("velocity 60"), qPrintable(f.text));
+                  }
+      QCOMPARE(pitches, (std::set<int> { 62, 64, 65 }));
+      QVERIFY2(r.text().contains("DROPPED"), qPrintable(r.text()));
+      r = audit(65);
+      QVERIFY2(r.count(PlaybackAudit::Kind::DROPPED) == 0, qPrintable(r.text()));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   leapFindings
+//    a transition beyond an octave gets no transition in SSO (a fresh attack): leap.musicxml's slurred C4 D4 E5 E4 F5
+//    G5 steps 2, 14, -12 (exactly an octave: fine), 13 and 2 semitones: LEAP warns at E5 and F5 only, on a plain
+//    legato articulation and on a Performance patch (a transition: perf.from), and nothing is DROPPED
+//---------------------------------------------------------
+
+void TestPlaybackAudit::leapFindings()
+      {
+      recommended({ { "levels/calibrated", "0" } });
+      MasterScore* score = readScore(DIR + "leap.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const char* plain =
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' legatoVelocity='70'/>"
+         "</Instrument></SoundLibrary>";
+      const char* performance =
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>";
+      for (const char* xml : { plain, performance }) {
+            SoundLib::setCurrent(loadMap(xml));
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> trace;
+            PlaybackAudit::render(score, &events, &trace);
+            int transitions = 0;
+            for (const MidiRenderer::LibTrace& t : trace)
+                  transitions += t.from != nullptr;
+            QVERIFY2(transitions >= 4, qPrintable(QString::number(transitions)));
+            const PlaybackAudit::Report r = PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+            const QString text = r.text();
+            QCOMPARE(r.count(PlaybackAudit::Kind::DROPPED), 0);
+            QVERIFY2(r.count(PlaybackAudit::Kind::LEAP, PlaybackAudit::Severity::WARN) == 2, qPrintable(text));
+            QCOMPARE(r.count(PlaybackAudit::Kind::LEAP), 2);
+            bool e5 = false, f5 = false;
+            for (const PlaybackAudit::Finding& f : r.findings)
+                  if (f.kind == PlaybackAudit::Kind::LEAP) {
+                        QCOMPARE(f.part, QString("Violin"));
+                        if (f.pitch == 76) {
+                              e5 = true;
+                              QCOMPARE(f.bar, 1);
+                              QCOMPARE(f.beat, 3.0);
+                              QCOMPARE(f.value, 1400.0);
+                              }
+                        if (f.pitch == 77) {
+                              f5 = true;
+                              QCOMPARE(f.bar, 2);
+                              QCOMPARE(f.value, 1300.0);
+                              }
+                        }
+            QVERIFY2(e5 && f5, qPrintable(text));
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   auditScore
 //    any score: MS_AUDIT_SCORE (.mscz/.mscx), MS_AUDIT_MAP (default: the shipped SSO map, with its shipped
 //    dynamics calibration), MS_AUDIT_SETTINGS (a preset id, default "recommended", or a playbackSettings metaTag
@@ -422,7 +537,8 @@ void TestPlaybackAudit::auditScore()
       else
             qInfo("%s", qPrintable(text));
       for (PlaybackAudit::Kind k : { PlaybackAudit::Kind::OVERLAP, PlaybackAudit::Kind::UNMEASURED, PlaybackAudit::Kind::CAPPED,
-                                     PlaybackAudit::Kind::ARRIVAL, PlaybackAudit::Kind::LEVEL_STEP })
+                                     PlaybackAudit::Kind::ARRIVAL, PlaybackAudit::Kind::LEVEL_STEP,
+                                     PlaybackAudit::Kind::DROPPED, PlaybackAudit::Kind::LEAP })
             qInfo("%s: %d fail, %d warn, %d info", PlaybackAudit::kindName(k), r.count(k, PlaybackAudit::Severity::FAIL),
                   r.count(k, PlaybackAudit::Severity::WARN), r.count(k, PlaybackAudit::Severity::INFO));
       const int overlaps = r.count(PlaybackAudit::Kind::OVERLAP);

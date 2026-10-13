@@ -88,6 +88,7 @@ with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every ARR
 named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to point out all of these issues?").
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
 Green 1977) the owner hasn't approved yet.
+DROPPED (fail: a legato note sent < 15 ms after the one before at velocity <= 64, which SSO drops) and LEAP (warn: a transition beyond an octave, which SSO attacks afresh) were added 2026-10-13: name any left in the hand-over.
 
 ## Timing set in Live (2026-10-11)
 

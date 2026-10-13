@@ -294,7 +294,8 @@ of these.
 events of a whole score checked against the map's own onsets (not the real sound) for overlaps on a route, unmeasured
 swapped / early techniques or no onset, capped early starts (the cut), predicted arrival against neighbours (sent +
 onset - written; Rasch 1979: > 50 ms fails) and level steps under a slur (values; proposed threshold 0.69 dB, Jesteadt,
-Wier & Green 1977, owner to approve). The renderer
+Wier & Green 1977, owner to approve), DROPPED (fail: a legato transition sent < 15 ms after the legato note-on before
+on its route at velocity <= 64: SSO doesn't play it) and LEAP (warn: a transition beyond an octave / 1200 cents: SSO attacks afresh). The renderer
 reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (quarter tones,
 `Whence.mscz`; Recommended) before any build goes to the owner.**
 
@@ -352,7 +353,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 - `tst_soundlibrary`: 85 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-13: evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
+- `tst_playbackaudit`: 8 passed, 1 skipped (2026-10-13, droppedFindings, leapFindings; 2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
   Playback audit). Whence (quarter tones), Recommended (2026-10-11, main cb073b6917): the same counts as Whence 12-TET
   below (OVERLAP 0, UNMEASURED 10, CAPPED 289, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0).
   Whence, Recommended, integrate-1012 (2026-10-12: transitions, smoothStart, smooth onset): OVERLAP 0, UNMEASURED 9,

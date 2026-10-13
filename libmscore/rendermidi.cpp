@@ -1956,6 +1956,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           }
                                     libGlide[note] = g;
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
+                                          libTrace->back().from = from;
+                                          libTrace->back().interval = interval;
                                           libTrace->back().glideLeaveMs = g.leaveMs;
                                           libTrace->back().glideArriveMs = g.arriveMs;
                                           }

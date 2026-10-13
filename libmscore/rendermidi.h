@@ -212,6 +212,10 @@ class MidiRenderer {
             // a technique on velocity: the velocity a plain note of it plays at each MS4 dynamic (DYNAMIC_LEVELS, ppp
             // … fff: libVelocity; without the articulations' Inspector levels); empty: its velocity is no dynamic
             std::vector<int> dynamicVelocities;
+            // played as a legato transition from this note (the first of its tie chain; legatoTransition /
+            // performanceNote), interval semitones from it (the playbackaudit's DROPPED and LEAP); nullptr: an attack
+            const Note* from { nullptr };
+            int interval { 0 };
             };
       static const int DYNAMIC_LEVELS[8];         // MS4's levels of ppp … fff (ms4playback.cpp's dynamic table)
       static const char* const DYNAMIC_NAMES[8];

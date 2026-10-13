@@ -157,6 +157,14 @@ sound: whether the onsets are right is the Windows VM's job (above). Checks:
   notes in dB (the shipped dynamics calibration). Proposed threshold, not enforced, owner to approve: the intensity
   difference limen of Jesteadt, Wier & Green 1977 (JASA 61, 169-177; dI/I = 0.463 (I/I0)^-0.072 as Praat's manual
   quotes it), 0.69 dB at 60 dB sensation level (0.93 at 40, 0.50 at 80); steps above it are marked "> DL".
+- **DROPPED** (fail): a legato transition (the renderer's `LibTrace::from`) on an articulation that plays transitions,
+  sent less than 15 ms after the previous legato note-on on its route, at velocity 64 or lower. SSO's legato engine
+  doesn't play such a note at all (behaviour from reading its script privately, not quoted). Notes of one chord are not
+  compared. Part, bar, beat, pitch, velocity, gap in ms.
+- **LEAP** (warn): a legato transition whose interval from the note before exceeds an octave (12 semitones; with
+  microtones 1200 cents by `ScoreTuning`). SSO gives it no transition: it releases the note before and attacks afresh,
+  so the note's Performance technique, `legatoDelay` timing and level calibration don't apply. Same fields plus the
+  interval.
 
 Run it on the standard score, *Whence* (quarter tones, `Whence.mscz`, since 2026-10-11; Recommended), through the
 worktree's wrappers:
