@@ -192,7 +192,19 @@ Approved by the owner on A′ (2026-10-11; HANDOFF › No Performance patches' W
 - A/B (dry strings, bars 1-16, one common gain): `~/MuseScore/ms3fork/uploads/levelrule/` A (rule), B (R lowered), C
   (before).
 
-## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` 0 until the owner has heard it)
+## Even levels without measuring by hand (2026-10-13, design pending two checks)
+
+Predicting the swell from the notes failed (offline, `predict/levels`: best model r 0.66, removes 20-30 % of the slur
+range against 65-80 % measured in place). The perturbation scan (`sso_perturbation_scan.json`, VM, real SSO) found a
+note's level depends on ~2 notes before and 1 after (Basses ~4 before), nothing further. The owner's direction
+(2026-10-13): **combine** a table of common contexts measured once (shipped) with measuring the rest locally in the
+background (only the edited note +-3), every measurement saved to the user's own table for reuse. **If play is pressed
+while a measurement runs: wait only when the passage being measured is in what is about to play** (a short countdown,
+then play; otherwise play at once; the owner: "the third"). Pending before the design: does the same exact local
+context give the same level in different phrases, and does it survive transposition (VM, branch `context-reuse`); how
+many contexts real scores use (offline count: Whence, Glazunov op. 97, Dvorak op. 22 ii).
+
+## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
 Built from the listening test below (libmscore/evenlevels.h, mscore/evenlevelsjob.h, docs/PLAYBACK_SETTINGS.md › Even
 levels): *Tools › Even Out Levels…* / `--even-levels <score>` renders each slurred Performance-legato passage through the
