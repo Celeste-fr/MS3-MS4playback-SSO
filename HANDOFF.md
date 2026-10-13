@@ -212,7 +212,11 @@ length / dynamic change the shape (the scans used 136 ms at CC1 64). **No predic
 measured correction or waits for it, never a model's guess. To shorten the wait (estimate from the VM's render speeds,
 ~1 s per edit): one pass instead of three, one round with CC11's measured strength (~25 % over the law) built in, only
 the edited note +-3 plus a run-in, parts in parallel; both "one pass" (MuseScore's renders vary ~0.6 dB per note, the
-scans 0.1-0.25) and "one round within ~1 dB" to check on the VM first.
+scans 0.1-0.25) and "one round within ~1 dB" to check on the VM first. Checked (`sso_even_fast_checks.json`, VM, kthost +
+SSO, MuseScore's events): a window of the edited note +-3 with 2 run-in / run-out notes matches the whole passage; one pass
+or one round leaves the worst notes 0.3-0.7 dB further off; ~0.5 s of rendering per part per pass-set (4.4x real time).
+**The owner (2026-10-13) chose the full method** (3 passes, 2 rounds, CC11's measured strength 1.28 built in): ~3 s per
+edit, parts in parallel. Branch `even-auto` builds it.
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
