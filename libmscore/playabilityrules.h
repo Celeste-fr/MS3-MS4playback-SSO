@@ -212,11 +212,7 @@ constexpr int GROUP_STACCATO_LOUD = 3;
 // S10 jeté, SECTIONS only: more than 6 notes on one stroke is a warning on every bowed string
 // (Sevsay p. 18, Wagner p. 40; the owner's choice, 2026-09-14). A single player's jeté is timed.
 constexpr int JETE_MAX = 6;
-// S12 fast passages, double bass SECTIONS only: notes under 0.1 s each, a run over 1.5 s (placed
-// between the composers' marked examples: Adler p. 84, Prout p. 27, Jadassohn p. 318 / 175,
-// Forsyth p. 454, Kennan p. 26; no source states them)
-constexpr double FAST_NOTE_SECONDS = 0.1;
-constexpr double FAST_RUN_SECONDS = 1.5;
+// S12 (fast double bass runs) dropped 2026-10-13: no source prints a speed or length (owner).
 
 // S13 fingered tremolo ("between notes"): fine on one string within span0 at that position or with
 // an open string; out of reach when both notes are stopped on two adjacent strings (Forsyth

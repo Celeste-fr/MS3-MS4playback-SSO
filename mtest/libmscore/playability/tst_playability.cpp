@@ -808,7 +808,7 @@ void TestPlayability::scordaturaView()
       }
 
 //---------------------------------------------------------
-//   bowing: slur timing, jeté and slurred staccato, fast bass runs, fingered tremolo
+//   bowing: slur timing, jeté and slurred staccato, fingered tremolo
 //---------------------------------------------------------
 
 void TestPlayability::bowing_data()
@@ -818,7 +818,6 @@ void TestPlayability::bowing_data()
       QTest::addColumn<QStringList>("kinds");
       QTest::newRow("bow") << QString("bow") << QStringList({ "slur", "group", "jete" });
       QTest::newRow("jete") << QString("jete") << QStringList({ "jete", "group", "slur" });
-      QTest::newRow("fast") << QString("fast") << QStringList({ "fast" });
       QTest::newRow("tremolo") << QString("tremolo") << QStringList({ "tremolo" });
       }
 

@@ -42,7 +42,7 @@ headless test scores and their checked results are the parity tests.
 
 1. Rules and the pass for stops, open strings, microtones, harmonics, div./unis.; marks drawn;
    preferences; `tst_playability` against the plugin's results on its test scores.
-2. Bowing: slur timing (S11), jeté and slurred staccato (S10), fast bass runs (S12), fingered
+2. Bowing: slur timing (S11), jeté and slurred staccato (S10), fingered
    tremolo (S13), section vs single player.
 3. The panel: table, sorting (bar, then staff), marks column, row → blue range box, score → row,
    Selected line with spelling and microtones.
@@ -66,7 +66,7 @@ headless test scores and their checked results are the parity tests.
 - **Phase 2 done (2026-09-28):** bowing in the same pass (`Pass::checkSlurs`, `checkTremolos`,
   `checkFastRuns`): every slur a bow stroke timed against the bow limit for its dynamics and
   hairpins at the score's tempo marks (S11), jeté and slurred staccato note limits for sections
-  (S10), fast double bass section runs (S12), fingered tremolos (S13), none under pizz.; a later
+  (S10), fingered tremolos (S13), none under pizz.; a later
   check never takes a note's red away. Slurs, hairpins, staccato dots and tremolos are read from
   the score (the plugin needed a copy of the file). Tests `roles` and `bowing` (bow, jete, fast,
   tremolo: the rows of the plugin's Python models, which the plugin matched): 12 pass. With bowing

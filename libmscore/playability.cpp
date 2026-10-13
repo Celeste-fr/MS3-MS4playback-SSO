@@ -200,7 +200,6 @@ class Pass {
                     int t0, int t1, const std::vector<int>& cuts) const;
       void checkSlurs(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked);
       void checkTremolos(int st, Part* part, const QString& staffName, const StaffTexts& tx, const Walked* walked);
-      void checkFastRuns(int st, Part* part, const QString& staffName, const StaffTexts& tx);
       void addRow(int tick, int tickEnd, int track, const QString& staff, const QString& kind, const QString& verdict,
                   const QString& reason, const QString& notes);
       // harp, timpani, keyboards (diagrams-spec-htk.md)
@@ -847,78 +846,6 @@ void Pass::checkTremolos(int st, Part* part, const QString& staffName, const Sta
                   addRow(t0, w.ticks[i + 1], trk, staffName, "tremolo", red ? "impossible" : "outOfReach", reason,
                          topName(a) + " " + QChar(0x2194) + " " + topName(b));
                   }
-            }
-      }
-
-//---------------------------------------------------------
-//   checkFastRuns (S12)
-//    double bass SECTION only: a run is a chain of bowed notes in one voice, each shorter than
-//    0.1 s and each starting where the last ended (a rest, a longer note or pizz. ends it; a
-//    tied-on note belongs to the note it continues); longer than 1.5 s is flagged
-//---------------------------------------------------------
-
-void Pass::checkFastRuns(int st, Part* part, const QString& staffName, const StaffTexts& tx)
-      {
-      auto isBassSection = [](const StringInstrument& in) { return in.valid() && in.section && in.name == "Double bass"; };
-      bool anyBass = false;
-      for (auto i = part->instruments()->begin(); i != part->instruments()->end(); ++i)
-            anyBass |= isBassSection(instrumentAt(part, Fraction::fromTicks(i->first)));
-      if (!anyBass)
-            return;
-      struct Item { Chord* chord; int tick; int end; };
-      for (int v = 0; v < VOICES; ++v) {
-            int trk = st * VOICES + v;
-            std::vector<Item> run;
-            int prevEnd = -1;
-            auto close = [&]() {
-                  std::vector<Item> r;
-                  r.swap(run);
-                  if (r.size() < 2)
-                        return;
-                  int t0 = r.front().tick, t1 = r.back().end, last = r.back().tick;
-                  double secs = secondsBetween(t0, t1);
-                  if (secs <= FAST_RUN_SECONDS + 1e-9)
-                        return;
-                  for (const Item& i : r)
-                        for (const Note* n : i.chord->notes())
-                              markOver(n, PlayMark::OUT_OF_REACH);
-                  double rate = std::floor(r.size() / secs * 10 + 0.5) / 10;
-                  addRow(t0, last, trk, staffName, "fast", "outOfReach",
-                         QString("fast passage: %1 notes/s for %2 (section max 10/s for 1.5 s)").arg(QString::number(rate, 'g', 12), fmtSeconds(secs)),
-                         topName(r.front().chord) + " " + QChar(0x2026) + " " + topName(r.back().chord) + QString(" (%1 notes)").arg(r.size()));
-                  };
-            for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
-                  Element* e = s->element(trk);
-                  if (!e)
-                        continue;
-                  if (!e->isChord()) {                  // a rest
-                        close();
-                        prevEnd = -1;
-                        continue;
-                        }
-                  Chord* c = toChord(e);
-                  int tick = s->tick().ticks();
-                  int end = tick + c->actualTicks().ticks();
-                  if (c->notes().front()->tieBack() && tick == prevEnd) {   // a tied-on note lengthens the last
-                        if (!run.empty()) {
-                              run.back().end = end;
-                              if (secondsBetween(run.back().tick, end) >= FAST_NOTE_SECONDS - 1e-9) {
-                                    run.pop_back();
-                                    close();
-                                    }
-                              }
-                        prevEnd = end;
-                        continue;
-                        }
-                  bool ok = isBassSection(instrumentAt(part, s->tick())) && !tx.pizz.on(tick)
-                            && secondsBetween(tick, end) < FAST_NOTE_SECONDS - 1e-9;
-                  if (!ok || tick != prevEnd)
-                        close();
-                  if (ok)
-                        run.push_back({ c, tick, end });
-                  prevEnd = end;
-                  }
-            close();
             }
       }
 
@@ -3940,7 +3867,6 @@ void Pass::run()
                   }
             checkSlurs(st, part, staffName, tx, walked);
             checkTremolos(st, part, staffName, tx, walked);
-            checkFastRuns(st, part, staffName, tx);
             }
       for (Part* part : _score->parts()) {
             Family f = familyOf(part);
