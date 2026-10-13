@@ -1835,22 +1835,22 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nsectionBalance=%6\ncontext=%6\ncalibrated=%3\n\n[slurs]\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\nrealRange=%6\nsectionBalance=%6\ncontext=%6\ncalibrated=%3\n\n[slurs]\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n"));
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n"));
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nrealRange=1\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nrealRange=1\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1880,7 +1880,7 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // quick left out: its default 2, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
@@ -1897,7 +1897,8 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                         { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 } }),
+                                         { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
+                                         { "levels/realRange", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 } }), QString());
@@ -1906,6 +1907,10 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 },
                                          { "levels/context", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 0 } }), QString());
+      // realRange left out: its default 1, Recommended's; Library default needs 0 (the owner, 2026-10-13)
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 },
+                                         { "levels/context", 0 }, { "levels/sectionBalance", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "levels/realRange", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({}), QString("recommended"));        // (left out: the map's 100)
       Playback::setIniPath(QString());
       Playback::setIniValuesForTest({});
@@ -2639,8 +2644,8 @@ void TestSoundLibrary::levelRealRange()
             return notes;
             };
       auto cc11 = [](double db) { return qBound(1, int(std::lround(127 * std::pow(10.0, db / 20))), 127); };
-      // the default (0): the library's own range
-      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      // 0 (Library default's): the library's own range
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "0" } });
       QVERIFY(ContextLevel::volumes(score).empty());
       QVERIFY(ContextLevel::realRangeTops(score).empty());
       std::map<int, N> n = render();
@@ -2688,7 +2693,7 @@ void TestSoundLibrary::levelRealRange()
             }
       QVERIFY(hairpin.back().first > 80 && hairpin.back().second > n[77].cc11);
       // the score's 1 over the ini's 0
-      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "0" } });
       score->setMetaTag(Playback::metaTag, "levels/realRange=1");
       QCOMPARE(render()[72].cc11, cc11(-18));
       score->setMetaTag(Playback::metaTag, "");
@@ -2719,12 +2724,17 @@ void TestSoundLibrary::levelRealRange()
       QCOMPARE(n[74].cc11, cc11(0 - r));
       QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
       delete score;
-      // the presets leave it alone (0 everywhere until the owner has heard it)
+      // on by default and in Recommended, off in Library default (the owner, 2026-10-13: "this sounds great")
       const Playback::Definition* def = Playback::definition("levels/realRange");
-      QVERIFY(def && def->value == 0.0 && def->perScore);
+      QVERIFY(def && def->value == 1.0 && def->perScore);
+      int presets = 0;
       for (const Playback::Preset& p : Playback::presets())
             for (const auto& kv : p.values)
-                  QVERIFY(QString(kv.first) != "levels/realRange");
+                  if (QString(kv.first) == "levels/realRange") {
+                        QCOMPARE(double(kv.second), QString(p.id) == "recommended" ? 1.0 : 0.0);
+                        ++presets;
+                        }
+      QCOMPARE(presets, 2);
       // the shipped SSO map: the five string sections (and their extras) carry it, nothing else
       QString error;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);

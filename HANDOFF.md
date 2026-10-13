@@ -16,7 +16,7 @@ a section there when you need the background of that topic. Commit messages desc
   until then they went at 100 (map `legatoVelocity`, chosen 2026-10-07 for timing: a run's arrival SD 54 -> 39 ms,
   never judged by ear at 69). Ask the owner to listen to Whence's Violas runs in build 422; if they smear, offer a
   measured tighter velocity inside the fingered band (20-84) as an option.
-- **Stage A verdict** (2026-10-12): the listening page https://claude.ai/artifact/PxWaWQ6cCA2K8f7kN5TK76 (db collection
+- **Stage A verdict** (2026-10-12): the listening page https://claude.ai/artifact/SYgoXqPuHmJpicoCRrTRpc (the owner's new account, 2026-10-13) (db collection
   `realrange1`) A/Bs `[levels] realRange` on a ppp -> fff ladder per section; read the verdicts (ArtifactData) and put
   realRange into Recommended only for what the owner approves. A score with written dynamics is the next test (Whence has
   almost none).
