@@ -1,0 +1,816 @@
+{
+ "method": {"source": "Weinzierl et al. (2024), A Database of Anechoic Microphone Array Measurements of Musical Instruments, v3, DepositOnce doi 10.14279/depositonce-19858, CC BY-NC-SA 4.0 (recordings of Weinzierl et al. 2018, JASA 144(3)); files 2_<Instrument>_modern_recordings.zip, one player each", "dynamics": "pp and ff as recorded (the players' softest / loudest); rule D (HANDOFF.md) reads them as ppp / fff", "stretch": "the database's SteadyPart of each note, all 32 microphones, power average of their spectra", "noise": "power spectrum of the quietest 0.25 s of the same file outside the steady part (50 ms grid) subtracted, bins under 3 dB above it dropped; snrDb = steady level - noise level (microphone power averages)", "measures": "Brightness measures of one steady stretch of a note, the same for the real players (TU Berlin's anechoic recordings,\nreal_brightness.py) and SSO (sso_cc1_sweep.py analyze --brightness), so that their CHANGES can be compared.\n\nEvery measure starts from the long-term power spectrum of the stretch: Welch's method (scipy.signal.welch, Hann\nwindow of NFFT = 8192 samples at 44.1 kHz (5.4 Hz bins), 50 % overlap, scaling \"density\"), times the bin width, so P[k]\nis the mean-square pressure in bin k and sum(P) the stretch's mean square (Parseval). Several channels (TU's 32\nmicrophones, SSO's left / right): P averaged over the channels (the power average: for TU the sphere's mean, which is\nwhat the sound power and a hall's diffuse field see).\n\n  scAmp   spectral centroid of the amplitude spectrum, Hz: sum(f A) / sum(A), A = sqrt(P), bins 20 Hz - 16 kHz\n          (Grey & Gordon 1978; the Timbre Toolbox's \"STFTmag\" centroid, Peeters et al. 2011, but on the long-term\n          spectrum, not a median of 23 ms frames)\n  scPow   the same on the power spectrum P (the Timbre Toolbox's \"STFTpow\")\n  hcAmp, hcPow   harmonic centroid: the centroid divided by the note's fundamental f0 (in harmonics)\n  sharp   sharpness, acum, DIN 45692:2009 weighting, from Zwicker's specific loudness (ISO 532-1 stationary, free\n          field), computed by MoSQITo 1.2.1 sharpness_din_freq on the RMS spectrum sqrt(P) with the stretch scaled to\n          SHARP_LEVEL dB SPL (so tone alone: sharpness grows with level by itself; level is CC11's job) -- tested\n          against DIN 45692's reference signals by test_brightness.py\n  sharpNative   the same at the recording's own level (TU: calibrated pascals; SSO: full scale 1 Pa = 94 dB SPL)\n  sone    ISO 532-1 stationary loudness (MoSQITo loudness_zwst_freq, free field) at the native level, sones\n  levelDb mean-square level of the stretch, dB re 20 uPa (TU: SPL at the microphones; SSO: full scale 1 Pa)\n", "principal": "principalMic: the microphone loudest in the steady part most often over the instrument's notes (the paper's rule for its features); perMic: [level dB, scAmp Hz, scPow Hz] of each microphone, no noise subtraction, for comparison with 3_Audio_Features.csv", "tool": "tools/soundlibraries/real_brightness.py (fetch, merge), brightness.py, httpzip.py", "measured": "2026-10-12 on the Linux dev VM from the published recordings"},
+ "instruments": {
+  "Cello": {
+   "sections": ["Celli"],
+   "principalMic": 4,
+   "tuning": 443.0,
+   "notes": {
+    "36": {
+     "ff": {"scAmp": 1301.8803, "scPow": 412.0182, "hcAmp": 19.7697, "hcPow": 6.2567, "levelDb": 73.2802, "sharp": 0.931, "sharpNative": 1.0094, "sone": 20.91, "snrDb": 18.09, "scPowNoNoiseSub": 408.0505, "scAmpNoNoiseSub": 1308.6716, "lw": 90.78, "loudestMic": 8, "principalScAmp": 1436.6, "principalScPow": 417.6},
+     "pp": {"scAmp": 698.3536, "scPow": 280.9176, "hcAmp": 10.6048, "hcPow": 4.2659, "levelDb": 52.2383, "sharp": 0.724, "sharpNative": 0.6852, "sone": 3.697, "snrDb": 20.93, "scPowNoNoiseSub": 290.0728, "scAmpNoNoiseSub": 2018.561, "lw": 69.52, "loudestMic": 8, "principalScAmp": 1912.4, "principalScPow": 290.0}
+    },
+    "37": {
+     "ff": {"scAmp": 1167.8364, "scPow": 365.8714, "hcAmp": 16.7388, "hcPow": 5.2441, "levelDb": 74.7854, "sharp": 0.8856, "sharpNative": 0.9713, "sone": 21.48, "snrDb": 32.93, "scPowNoNoiseSub": 365.8064, "scAmpNoNoiseSub": 1194.5651, "lw": 92.12, "loudestMic": 26, "principalScAmp": 1308.5, "principalScPow": 374.6},
+     "pp": {"scAmp": 729.6645, "scPow": 256.8547, "hcAmp": 10.4584, "hcPow": 3.6815, "levelDb": 51.198, "sharp": 0.7291, "sharpNative": 0.6781, "sone": 3.302, "snrDb": 21.8, "scPowNoNoiseSub": 267.6211, "scAmpNoNoiseSub": 2174.4284, "lw": 69.11, "loudestMic": 4, "principalScAmp": 2044.9, "principalScPow": 248.8}
+    },
+    "38": {
+     "ff": {"scAmp": 1188.8908, "scPow": 345.11, "hcAmp": 16.0842, "hcPow": 4.6689, "levelDb": 72.6597, "sharp": 0.8632, "sharpNative": 0.9197, "sone": 19.34, "snrDb": 42.43, "scPowNoNoiseSub": 345.191, "scAmpNoNoiseSub": 1253.0506, "lw": 90.05, "loudestMic": 4, "principalScAmp": 1308.8, "principalScPow": 357.4},
+     "pp": {"scAmp": 677.1321, "scPow": 326.2602, "hcAmp": 9.1607, "hcPow": 4.4139, "levelDb": 49.8843, "sharp": 0.672, "sharpNative": 0.6204, "sone": 2.899, "snrDb": 19.01, "scPowNoNoiseSub": 340.45, "scAmpNoNoiseSub": 2574.2398, "lw": 67.22, "loudestMic": 4, "principalScAmp": 2392.1, "principalScPow": 342.1}
+    },
+    "39": {
+     "ff": {"scAmp": 1148.8386, "scPow": 330.0296, "hcAmp": 14.67, "hcPow": 4.2143, "levelDb": 74.8669, "sharp": 0.854, "sharpNative": 0.9248, "sone": 21.94, "snrDb": 38.85, "scPowNoNoiseSub": 330.0515, "scAmpNoNoiseSub": 1182.957, "lw": 92.25, "loudestMic": 26, "principalScAmp": 1322.9, "principalScPow": 300.3},
+     "pp": {"scAmp": 586.8725, "scPow": 183.6129, "hcAmp": 7.494, "hcPow": 2.3446, "levelDb": 54.3775, "sharp": 0.6055, "sharpNative": 0.5741, "sone": 3.331, "snrDb": 24.2, "scPowNoNoiseSub": 189.4089, "scAmpNoNoiseSub": 2099.9906, "lw": 71.75, "loudestMic": 4, "principalScAmp": 1970.5, "principalScPow": 180.7}
+    },
+    "40": {
+     "ff": {"scAmp": 1092.1136, "scPow": 220.2019, "hcAmp": 13.163, "hcPow": 2.654, "levelDb": 77.204, "sharp": 0.7914, "sharpNative": 0.8686, "sone": 21.93, "snrDb": 47.36, "scPowNoNoiseSub": 220.2307, "scAmpNoNoiseSub": 1128.8622, "lw": 94.55, "loudestMic": 4, "principalScAmp": 1139.5, "principalScPow": 204.2},
+     "pp": {"scAmp": 576.9422, "scPow": 169.2891, "hcAmp": 6.9537, "hcPow": 2.0404, "levelDb": 57.9159, "sharp": 0.5949, "sharpNative": 0.5822, "sone": 4.301, "snrDb": 28.06, "scPowNoNoiseSub": 171.884, "scAmpNoNoiseSub": 1720.4884, "lw": 75.23, "loudestMic": 4, "principalScAmp": 1518.2, "principalScPow": 169.8}
+    },
+    "41": {
+     "ff": {"scAmp": 1154.363, "scPow": 319.0096, "hcAmp": 13.1323, "hcPow": 3.6291, "levelDb": 75.4031, "sharp": 0.8594, "sharpNative": 0.9302, "sone": 22.46, "snrDb": 34.93, "scPowNoNoiseSub": 318.9874, "scAmpNoNoiseSub": 1185.1649, "lw": 92.77, "loudestMic": 6, "principalScAmp": 1196.5, "principalScPow": 293.7},
+     "pp": {"scAmp": 685.7518, "scPow": 198.4121, "hcAmp": 7.8013, "hcPow": 2.2572, "levelDb": 55.1045, "sharp": 0.6732, "sharpNative": 0.6513, "sone": 4.09, "snrDb": 25.42, "scPowNoNoiseSub": 203.1979, "scAmpNoNoiseSub": 1925.9056, "lw": 72.47, "loudestMic": 4, "principalScAmp": 1739.8, "principalScPow": 192.3}
+    },
+    "42": {
+     "ff": {"scAmp": 1022.5573, "scPow": 231.1778, "hcAmp": 10.98, "hcPow": 2.4823, "levelDb": 76.691, "sharp": 0.8261, "sharpNative": 0.8924, "sone": 22.19, "snrDb": 46.29, "scPowNoNoiseSub": 231.211, "scAmpNoNoiseSub": 1057.9549, "lw": 94.05, "loudestMic": 4, "principalScAmp": 1087.8, "principalScPow": 217.2},
+     "pp": {"scAmp": 558.8945, "scPow": 142.9538, "hcAmp": 6.0013, "hcPow": 1.535, "levelDb": 58.876, "sharp": 0.6179, "sharpNative": 0.6127, "sone": 4.451, "snrDb": 28.2, "scPowNoNoiseSub": 145.0102, "scAmpNoNoiseSub": 1571.53, "lw": 76.23, "loudestMic": 4, "principalScAmp": 1444.7, "principalScPow": 136.3}
+    },
+    "43": {
+     "ff": {"scAmp": 1110.2319, "scPow": 307.1921, "hcAmp": 11.2523, "hcPow": 3.1134, "levelDb": 77.7998, "sharp": 0.9144, "sharpNative": 0.9987, "sone": 25.77, "snrDb": 26.02, "scPowNoNoiseSub": 306.8943, "scAmpNoNoiseSub": 1138.2794, "lw": 95.17, "loudestMic": 4, "principalScAmp": 1171.4, "principalScPow": 286.5},
+     "pp": {"scAmp": 552.9554, "scPow": 148.4242, "hcAmp": 5.6043, "hcPow": 1.5043, "levelDb": 58.3936, "sharp": 0.6871, "sharpNative": 0.6819, "sone": 4.393, "snrDb": 24.95, "scPowNoNoiseSub": 150.7561, "scAmpNoNoiseSub": 1733.7846, "lw": 75.75, "loudestMic": 4, "principalScAmp": 1680.1, "principalScPow": 136.1}
+    },
+    "44": {
+     "ff": {"scAmp": 1149.8193, "scPow": 329.3709, "hcAmp": 10.9995, "hcPow": 3.1508, "levelDb": 77.8938, "sharp": 0.9341, "sharpNative": 1.0229, "sone": 26.02, "snrDb": 25.89, "scPowNoNoiseSub": 329.364, "scAmpNoNoiseSub": 1175.6742, "lw": 95.27, "loudestMic": 4, "principalScAmp": 1205.0, "principalScPow": 282.7},
+     "pp": {"scAmp": 501.9916, "scPow": 217.056, "hcAmp": 4.8022, "hcPow": 2.0764, "levelDb": 56.9632, "sharp": 0.6289, "sharpNative": 0.6149, "sone": 4.266, "snrDb": 25.12, "scPowNoNoiseSub": 219.9905, "scAmpNoNoiseSub": 1731.5284, "lw": 74.25, "loudestMic": 4, "principalScAmp": 1580.7, "principalScPow": 197.4}
+    },
+    "45": {
+     "ff": {"scAmp": 1282.5783, "scPow": 437.6001, "hcAmp": 11.5808, "hcPow": 3.9512, "levelDb": 75.3613, "sharp": 0.9553, "sharpNative": 1.037, "sone": 23.88, "snrDb": 28.35, "scPowNoNoiseSub": 437.6353, "scAmpNoNoiseSub": 1312.3815, "lw": 92.75, "loudestMic": 26, "principalScAmp": 1392.1, "principalScPow": 443.9},
+     "pp": {"scAmp": 774.7351, "scPow": 269.0509, "hcAmp": 6.9954, "hcPow": 2.4294, "levelDb": 49.5283, "sharp": 0.7909, "sharpNative": 0.7444, "sone": 3.086, "snrDb": 19.16, "scPowNoNoiseSub": 285.3445, "scAmpNoNoiseSub": 2560.7325, "lw": 66.95, "loudestMic": 26, "principalScAmp": 2551.0, "principalScPow": 264.6}
+    },
+    "46": {
+     "ff": {"scAmp": 1353.6619, "scPow": 445.5411, "hcAmp": 11.5367, "hcPow": 3.7972, "levelDb": 73.7768, "sharp": 0.9631, "sharpNative": 1.0368, "sone": 22.28, "snrDb": 43.3, "scPowNoNoiseSub": 445.5953, "scAmpNoNoiseSub": 1391.2568, "lw": 91.15, "loudestMic": 4, "principalScAmp": 1429.9, "principalScPow": 461.5},
+     "pp": {"scAmp": 652.2416, "scPow": 274.9239, "hcAmp": 5.5588, "hcPow": 2.3431, "levelDb": 51.7867, "sharp": 0.6988, "sharpNative": 0.6635, "sone": 3.6, "snrDb": 18.49, "scPowNoNoiseSub": 283.2492, "scAmpNoNoiseSub": 2337.9839, "lw": 69.16, "loudestMic": 4, "principalScAmp": 2184.0, "principalScPow": 287.1}
+    },
+    "47": {
+     "ff": {"scAmp": 1336.6191, "scPow": 460.2328, "hcAmp": 10.7521, "hcPow": 3.7022, "levelDb": 73.9929, "sharp": 0.9578, "sharpNative": 1.0319, "sone": 23.26, "snrDb": 24.87, "scPowNoNoiseSub": 460.2849, "scAmpNoNoiseSub": 1376.8176, "lw": 91.36, "loudestMic": 4, "principalScAmp": 1366.5, "principalScPow": 473.1},
+     "pp": {"scAmp": 630.0958, "scPow": 237.7058, "hcAmp": 5.0686, "hcPow": 1.9122, "levelDb": 51.3453, "sharp": 0.6749, "sharpNative": 0.6292, "sone": 3.348, "snrDb": 21.58, "scPowNoNoiseSub": 248.4844, "scAmpNoNoiseSub": 2417.9199, "lw": 68.65, "loudestMic": 4, "principalScAmp": 2263.0, "principalScPow": 223.2}
+    },
+    "48": {
+     "ff": {"scAmp": 1613.404, "scPow": 575.1102, "hcAmp": 12.2502, "hcPow": 4.3667, "levelDb": 71.0626, "sharp": 1.0494, "sharpNative": 1.1095, "sone": 20.7, "snrDb": 24.87, "scPowNoNoiseSub": 573.4658, "scAmpNoNoiseSub": 1651.7171, "lw": 88.48, "loudestMic": 26, "principalScAmp": 1825.7, "principalScPow": 811.3},
+     "pp": {"scAmp": 712.6464, "scPow": 280.5558, "hcAmp": 5.4109, "hcPow": 2.1302, "levelDb": 50.1065, "sharp": 0.7056, "sharpNative": 0.6618, "sone": 3.244, "snrDb": 18.87, "scPowNoNoiseSub": 294.7653, "scAmpNoNoiseSub": 2572.2983, "lw": 67.42, "loudestMic": 4, "principalScAmp": 2561.4, "principalScPow": 270.3}
+    },
+    "49": {
+     "ff": {"scAmp": 1326.1849, "scPow": 502.7187, "hcAmp": 9.5042, "hcPow": 3.6028, "levelDb": 75.0466, "sharp": 0.9548, "sharpNative": 1.0379, "sone": 23.93, "snrDb": 43.38, "scPowNoNoiseSub": 502.7536, "scAmpNoNoiseSub": 1357.2429, "lw": 92.42, "loudestMic": 26, "principalScAmp": 1417.3, "principalScPow": 587.0},
+     "pp": {"scAmp": 694.0689, "scPow": 312.663, "hcAmp": 4.9741, "hcPow": 2.2407, "levelDb": 54.3727, "sharp": 0.7094, "sharpNative": 0.6866, "sone": 4.63, "snrDb": 24.12, "scPowNoNoiseSub": 317.8169, "scAmpNoNoiseSub": 2045.7976, "lw": 71.7, "loudestMic": 26, "principalScAmp": 1979.0, "principalScPow": 337.0}
+    },
+    "50": {
+     "ff": {"scAmp": 1349.0188, "scPow": 426.8623, "hcAmp": 9.1253, "hcPow": 2.8875, "levelDb": 77.5455, "sharp": 0.9645, "sharpNative": 1.0501, "sone": 28.77, "snrDb": 34.8, "scPowNoNoiseSub": 426.8592, "scAmpNoNoiseSub": 1370.4986, "lw": 95.05, "loudestMic": 16, "principalScAmp": 1504.6, "principalScPow": 437.6},
+     "pp": {"scAmp": 858.9105, "scPow": 303.1528, "hcAmp": 5.81, "hcPow": 2.0506, "levelDb": 51.2484, "sharp": 0.7894, "sharpNative": 0.7522, "sone": 3.942, "snrDb": 21.1, "scPowNoNoiseSub": 313.6031, "scAmpNoNoiseSub": 2441.4207, "lw": 68.64, "loudestMic": 6, "principalScAmp": 2512.4, "principalScPow": 249.2}
+    },
+    "51": {
+     "ff": {"scAmp": 1379.1506, "scPow": 283.884, "hcAmp": 8.8055, "hcPow": 1.8125, "levelDb": 78.1092, "sharp": 0.9313, "sharpNative": 1.0353, "sone": 26.73, "snrDb": 42.91, "scPowNoNoiseSub": 283.9043, "scAmpNoNoiseSub": 1398.9776, "lw": 95.46, "loudestMic": 4, "principalScAmp": 1428.1, "principalScPow": 264.6},
+     "pp": {"scAmp": 689.1359, "scPow": 209.9631, "hcAmp": 4.3999, "hcPow": 1.3406, "levelDb": 56.4464, "sharp": 0.6844, "sharpNative": 0.6673, "sone": 4.819, "snrDb": 26.51, "scPowNoNoiseSub": 213.3733, "scAmpNoNoiseSub": 2053.3657, "lw": 73.74, "loudestMic": 4, "principalScAmp": 1924.4, "principalScPow": 195.9}
+    },
+    "52": {
+     "ff": {"scAmp": 1172.6934, "scPow": 201.5587, "hcAmp": 7.0671, "hcPow": 1.2147, "levelDb": 79.887, "sharp": 0.8371, "sharpNative": 0.9588, "sone": 24.05, "snrDb": 48.62, "scPowNoNoiseSub": 201.5747, "scAmpNoNoiseSub": 1209.1903, "lw": 97.28, "loudestMic": 4, "principalScAmp": 1090.1, "principalScPow": 189.5},
+     "pp": {"scAmp": 695.1419, "scPow": 183.5538, "hcAmp": 4.1892, "hcPow": 1.1062, "levelDb": 59.9793, "sharp": 0.6644, "sharpNative": 0.6643, "sone": 5.247, "snrDb": 30.37, "scPowNoNoiseSub": 185.1081, "scAmpNoNoiseSub": 1861.931, "lw": 77.27, "loudestMic": 4, "principalScAmp": 1679.4, "principalScPow": 178.6}
+    },
+    "53": {
+     "ff": {"scAmp": 1523.0506, "scPow": 464.3219, "hcAmp": 8.6633, "hcPow": 2.6411, "levelDb": 73.3123, "sharp": 1.0191, "sharpNative": 1.0941, "sone": 21.48, "snrDb": 42.74, "scPowNoNoiseSub": 464.3826, "scAmpNoNoiseSub": 1573.6155, "lw": 90.65, "loudestMic": 6, "principalScAmp": 1548.7, "principalScPow": 392.3},
+     "pp": {"scAmp": 911.1935, "scPow": 341.8724, "hcAmp": 5.183, "hcPow": 1.9446, "levelDb": 55.1015, "sharp": 0.8129, "sharpNative": 0.792, "sone": 5.26, "snrDb": 25.81, "scPowNoNoiseSub": 346.3149, "scAmpNoNoiseSub": 2163.2093, "lw": 72.6, "loudestMic": 4, "principalScAmp": 1961.9, "principalScPow": 296.4}
+    },
+    "54": {
+     "ff": {"scAmp": 1324.9543, "scPow": 364.232, "hcAmp": 7.1135, "hcPow": 1.9555, "levelDb": 74.7131, "sharp": 0.9444, "sharpNative": 1.0346, "sone": 22.17, "snrDb": 43.61, "scPowNoNoiseSub": 364.2815, "scAmpNoNoiseSub": 1393.4173, "lw": 92.07, "loudestMic": 26, "principalScAmp": 1348.3, "principalScPow": 336.5},
+     "pp": {"scAmp": 790.2812, "scPow": 351.0906, "hcAmp": 4.2429, "hcPow": 1.885, "levelDb": 55.2757, "sharp": 0.7603, "sharpNative": 0.742, "sone": 5.263, "snrDb": 25.62, "scPowNoNoiseSub": 355.19, "scAmpNoNoiseSub": 2093.4368, "lw": 72.65, "loudestMic": 26, "principalScAmp": 1898.2, "principalScPow": 321.5}
+    },
+    "55": {
+     "ff": {"scAmp": 1734.004, "scPow": 640.4698, "hcAmp": 8.7871, "hcPow": 3.2456, "levelDb": 71.3467, "sharp": 1.1395, "sharpNative": 1.1985, "sone": 21.38, "snrDb": 34.75, "scPowNoNoiseSub": 640.4442, "scAmpNoNoiseSub": 1787.2822, "lw": 88.68, "loudestMic": 4, "principalScAmp": 1892.3, "principalScPow": 797.5},
+     "pp": {"scAmp": 965.2501, "scPow": 483.832, "hcAmp": 4.8915, "hcPow": 2.4518, "levelDb": 49.0803, "sharp": 0.8679, "sharpNative": 0.8238, "sone": 3.832, "snrDb": 17.89, "scPowNoNoiseSub": 497.5069, "scAmpNoNoiseSub": 2744.2842, "lw": 66.5, "loudestMic": 7, "principalScAmp": 2648.4, "principalScPow": 490.5}
+    },
+    "56": {
+     "ff": {"scAmp": 1615.9309, "scPow": 435.6994, "hcAmp": 7.7292, "hcPow": 2.084, "levelDb": 74.9175, "sharp": 1.0626, "sharpNative": 1.1476, "sone": 23.71, "snrDb": 44.49, "scPowNoNoiseSub": 435.7413, "scAmpNoNoiseSub": 1650.3895, "lw": 92.3, "loudestMic": 26, "principalScAmp": 1796.6, "principalScPow": 328.3},
+     "pp": {"scAmp": 872.0599, "scPow": 370.6638, "hcAmp": 4.1712, "hcPow": 1.7729, "levelDb": 52.4091, "sharp": 0.8248, "sharpNative": 0.8, "sone": 4.373, "snrDb": 22.85, "scPowNoNoiseSub": 378.4005, "scAmpNoNoiseSub": 2436.2699, "lw": 69.76, "loudestMic": 26, "principalScAmp": 2241.7, "principalScPow": 305.1}
+    },
+    "57": {
+     "ff": {"scAmp": 1876.2695, "scPow": 511.714, "hcAmp": 8.4707, "hcPow": 2.3102, "levelDb": 73.8931, "sharp": 1.1965, "sharpNative": 1.2637, "sone": 23.08, "snrDb": 40.69, "scPowNoNoiseSub": 511.7621, "scAmpNoNoiseSub": 1919.8226, "lw": 91.41, "loudestMic": 4, "principalScAmp": 1893.7, "principalScPow": 548.9},
+     "pp": {"scAmp": 1027.8171, "scPow": 375.6821, "hcAmp": 4.6403, "hcPow": 1.6961, "levelDb": 54.897, "sharp": 0.9268, "sharpNative": 0.9092, "sone": 5.357, "snrDb": 24.87, "scPowNoNoiseSub": 380.0859, "scAmpNoNoiseSub": 2341.6205, "lw": 72.27, "loudestMic": 8, "principalScAmp": 2164.3, "principalScPow": 428.8}
+    },
+    "58": {
+     "ff": {"scAmp": 1963.8656, "scPow": 740.0213, "hcAmp": 8.3686, "hcPow": 3.1534, "levelDb": 75.436, "sharp": 1.2054, "sharpNative": 1.2732, "sone": 27.68, "snrDb": 39.59, "scPowNoNoiseSub": 740.003, "scAmpNoNoiseSub": 1983.7766, "lw": 92.8, "loudestMic": 3, "principalScAmp": 2173.7, "principalScPow": 1059.8},
+     "pp": {"scAmp": 1003.0907, "scPow": 520.2005, "hcAmp": 4.2745, "hcPow": 2.2167, "levelDb": 54.126, "sharp": 0.9086, "sharpNative": 0.8857, "sone": 5.588, "snrDb": 24.29, "scPowNoNoiseSub": 525.1214, "scAmpNoNoiseSub": 2350.7431, "lw": 71.48, "loudestMic": 31, "principalScAmp": 2578.8, "principalScPow": 570.4}
+    },
+    "59": {
+     "ff": {"scAmp": 2310.3608, "scPow": 1009.6942, "hcAmp": 9.2925, "hcPow": 4.0611, "levelDb": 71.6533, "sharp": 1.3043, "sharpNative": 1.3442, "sone": 23.74, "snrDb": 40.37, "scPowNoNoiseSub": 1009.7169, "scAmpNoNoiseSub": 2330.9951, "lw": 88.98, "loudestMic": 8, "principalScAmp": 2426.5, "principalScPow": 1436.5},
+     "pp": {"scAmp": 1083.6022, "scPow": 582.2479, "hcAmp": 4.3584, "hcPow": 2.3419, "levelDb": 51.0825, "sharp": 0.9297, "sharpNative": 0.8954, "sone": 4.687, "snrDb": 21.46, "scPowNoNoiseSub": 591.3295, "scAmpNoNoiseSub": 2695.5565, "lw": 68.52, "loudestMic": 8, "principalScAmp": 2759.4, "principalScPow": 636.2}
+    },
+    "60": {
+     "ff": {"scAmp": 2404.4305, "scPow": 1307.5066, "hcAmp": 9.1281, "hcPow": 4.9638, "levelDb": 71.402, "sharp": 1.3562, "sharpNative": 1.3988, "sone": 23.75, "snrDb": 26.04, "scPowNoNoiseSub": 1305.5472, "scAmpNoNoiseSub": 2421.8613, "lw": 88.78, "loudestMic": 16, "principalScAmp": 2609.9, "principalScPow": 1850.8},
+     "pp": {"scAmp": 1261.4497, "scPow": 757.2804, "hcAmp": 4.7889, "hcPow": 2.8749, "levelDb": 49.2227, "sharp": 1.0166, "sharpNative": 0.9706, "sone": 4.525, "snrDb": 19.69, "scPowNoNoiseSub": 769.2205, "scAmpNoNoiseSub": 2927.4274, "lw": 66.57, "loudestMic": 16, "principalScAmp": 3029.8, "principalScPow": 871.3}
+    },
+    "61": {
+     "ff": {"scAmp": 2079.8899, "scPow": 686.1754, "hcAmp": 7.4529, "hcPow": 2.4588, "levelDb": 75.9707, "sharp": 1.2444, "sharpNative": 1.3093, "sone": 27.96, "snrDb": 43.16, "scPowNoNoiseSub": 686.1919, "scAmpNoNoiseSub": 2097.6855, "lw": 93.3, "loudestMic": 26, "principalScAmp": 2118.5, "principalScPow": 1081.2},
+     "pp": {"scAmp": 968.8834, "scPow": 495.5013, "hcAmp": 3.4718, "hcPow": 1.7755, "levelDb": 55.7911, "sharp": 0.874, "sharpNative": 0.8531, "sone": 5.787, "snrDb": 26.33, "scPowNoNoiseSub": 498.8769, "scAmpNoNoiseSub": 2269.9848, "lw": 73.13, "loudestMic": 26, "principalScAmp": 2358.4, "principalScPow": 733.9}
+    },
+    "62": {
+     "ff": {"scAmp": 2498.3458, "scPow": 1080.3348, "hcAmp": 8.4499, "hcPow": 3.6539, "levelDb": 72.7721, "sharp": 1.3953, "sharpNative": 1.4368, "sone": 25.59, "snrDb": 40.37, "scPowNoNoiseSub": 1080.3337, "scAmpNoNoiseSub": 2513.8163, "lw": 90.09, "loudestMic": 2, "principalScAmp": 2351.0, "principalScPow": 1107.2},
+     "pp": {"scAmp": 1355.0205, "scPow": 609.103, "hcAmp": 4.5829, "hcPow": 2.0601, "levelDb": 47.6426, "sharp": 1.049, "sharpNative": 0.994, "sone": 3.827, "snrDb": 18.01, "scPowNoNoiseSub": 628.9782, "scAmpNoNoiseSub": 3120.3836, "lw": 64.94, "loudestMic": 16, "principalScAmp": 2923.7, "principalScPow": 718.1}
+    },
+    "63": {
+     "ff": {"scAmp": 2410.0697, "scPow": 877.2413, "hcAmp": 7.6938, "hcPow": 2.8005, "levelDb": 72.6809, "sharp": 1.3865, "sharpNative": 1.4188, "sone": 24.74, "snrDb": 41.15, "scPowNoNoiseSub": 877.2723, "scAmpNoNoiseSub": 2431.086, "lw": 89.94, "loudestMic": 3, "principalScAmp": 2559.5, "principalScPow": 1163.4},
+     "pp": {"scAmp": 1259.3616, "scPow": 581.4056, "hcAmp": 4.0203, "hcPow": 1.8561, "levelDb": 50.3252, "sharp": 1.0308, "sharpNative": 0.9895, "sone": 4.479, "snrDb": 20.84, "scPowNoNoiseSub": 592.4502, "scAmpNoNoiseSub": 2910.3785, "lw": 67.71, "loudestMic": 3, "principalScAmp": 2956.1, "principalScPow": 682.9}
+    },
+    "64": {
+     "ff": {"scAmp": 2419.2408, "scPow": 1070.2611, "hcAmp": 7.2896, "hcPow": 3.2249, "levelDb": 72.7282, "sharp": 1.4022, "sharpNative": 1.4409, "sone": 25.34, "snrDb": 41.69, "scPowNoNoiseSub": 1070.2828, "scAmpNoNoiseSub": 2443.3901, "lw": 90.14, "loudestMic": 7, "principalScAmp": 2654.5, "principalScPow": 1712.9},
+     "pp": {"scAmp": 1296.8441, "scPow": 642.4667, "hcAmp": 3.9076, "hcPow": 1.9359, "levelDb": 53.0939, "sharp": 1.04, "sharpNative": 1.0075, "sone": 5.303, "snrDb": 23.49, "scPowNoNoiseSub": 648.0206, "scAmpNoNoiseSub": 2614.1636, "lw": 70.47, "loudestMic": 7, "principalScAmp": 2809.6, "principalScPow": 1027.2}
+    },
+    "65": {
+     "ff": {"scAmp": 2087.149, "scPow": 828.7624, "hcAmp": 5.936, "hcPow": 2.3571, "levelDb": 76.4206, "sharp": 1.326, "sharpNative": 1.3806, "sone": 27.91, "snrDb": 46.53, "scPowNoNoiseSub": 828.7822, "scAmpNoNoiseSub": 2106.7876, "lw": 93.88, "loudestMic": 3, "principalScAmp": 2313.6, "principalScPow": 1173.6},
+     "pp": {"scAmp": 1186.6348, "scPow": 640.7595, "hcAmp": 3.3749, "hcPow": 1.8224, "levelDb": 53.9426, "sharp": 1.0041, "sharpNative": 0.9797, "sone": 5.23, "snrDb": 24.36, "scPowNoNoiseSub": 645.4357, "scAmpNoNoiseSub": 2589.985, "lw": 71.32, "loudestMic": 31, "principalScAmp": 2760.8, "principalScPow": 646.5}
+    },
+    "66": {
+     "ff": {"scAmp": 2200.9113, "scPow": 850.838, "hcAmp": 5.9082, "hcPow": 2.284, "levelDb": 75.7669, "sharp": 1.3637, "sharpNative": 1.4059, "sone": 28.54, "snrDb": 45.8, "scPowNoNoiseSub": 850.86, "scAmpNoNoiseSub": 2218.8871, "lw": 93.05, "loudestMic": 8, "principalScAmp": 2238.1, "principalScPow": 934.1},
+     "pp": {"scAmp": 1129.6178, "scPow": 559.3306, "hcAmp": 3.0324, "hcPow": 1.5015, "levelDb": 56.3427, "sharp": 0.9965, "sharpNative": 0.9748, "sone": 6.124, "snrDb": 26.41, "scPowNoNoiseSub": 562.0441, "scAmpNoNoiseSub": 2354.6238, "lw": 73.69, "loudestMic": 2, "principalScAmp": 2261.8, "principalScPow": 536.1}
+    },
+    "67": {
+     "ff": {"scAmp": 2680.0474, "scPow": 1113.4054, "hcAmp": 6.7906, "hcPow": 2.8211, "levelDb": 71.9705, "sharp": 1.479, "sharpNative": 1.5054, "sone": 23.4, "snrDb": 29.89, "scPowNoNoiseSub": 1112.6628, "scAmpNoNoiseSub": 2696.9368, "lw": 89.36, "loudestMic": 4, "principalScAmp": 2470.5, "principalScPow": 1539.1},
+     "pp": {"scAmp": 1686.3393, "scPow": 799.6742, "hcAmp": 4.2728, "hcPow": 2.0262, "levelDb": 49.4804, "sharp": 1.2047, "sharpNative": 1.1454, "sone": 4.482, "snrDb": 19.49, "scPowNoNoiseSub": 809.5566, "scAmpNoNoiseSub": 3100.7707, "lw": 66.8, "loudestMic": 4, "principalScAmp": 2907.9, "principalScPow": 1181.5}
+    },
+    "68": {
+     "ff": {"scAmp": 2479.3395, "scPow": 916.9053, "hcAmp": 5.9295, "hcPow": 2.1928, "levelDb": 75.1305, "sharp": 1.4215, "sharpNative": 1.4675, "sone": 27.49, "snrDb": 45.43, "scPowNoNoiseSub": 916.9289, "scAmpNoNoiseSub": 2493.7343, "lw": 92.74, "loudestMic": 26, "principalScAmp": 2938.1, "principalScPow": 1511.8},
+     "pp": {"scAmp": 1389.0074, "scPow": 629.3586, "hcAmp": 3.3219, "hcPow": 1.5052, "levelDb": 55.2692, "sharp": 1.0846, "sharpNative": 1.0587, "sone": 5.927, "snrDb": 25.47, "scPowNoNoiseSub": 632.8802, "scAmpNoNoiseSub": 2566.4751, "lw": 72.59, "loudestMic": 26, "principalScAmp": 2860.9, "principalScPow": 851.5}
+    },
+    "69": {
+     "ff": {"scAmp": 2948.0981, "scPow": 1442.4533, "hcAmp": 6.6548, "hcPow": 3.2561, "levelDb": 70.13, "sharp": 1.6113, "sharpNative": 1.6384, "sone": 21.64, "snrDb": 40.15, "scPowNoNoiseSub": 1442.4776, "scAmpNoNoiseSub": 2968.5621, "lw": 87.57, "loudestMic": 26, "principalScAmp": 3257.0, "principalScPow": 2170.1},
+     "pp": {"scAmp": 1860.1056, "scPow": 1149.387, "hcAmp": 4.1989, "hcPow": 2.5946, "levelDb": 45.2158, "sharp": 1.3615, "sharpNative": 1.3051, "sone": 3.635, "snrDb": 15.89, "scPowNoNoiseSub": 1168.0889, "scAmpNoNoiseSub": 3458.5622, "lw": 62.85, "loudestMic": 26, "principalScAmp": 3663.7, "principalScPow": 1795.8}
+    },
+    "70": {
+     "ff": {"scAmp": 2774.3654, "scPow": 917.8179, "hcAmp": 5.9112, "hcPow": 1.9555, "levelDb": 74.4675, "sharp": 1.5118, "sharpNative": 1.5466, "sone": 26.35, "snrDb": 44.4, "scPowNoNoiseSub": 917.843, "scAmpNoNoiseSub": 2785.9765, "lw": 91.8, "loudestMic": 12, "principalScAmp": 3103.2, "principalScPow": 1694.9},
+     "pp": {"scAmp": 1566.0033, "scPow": 747.3828, "hcAmp": 3.3366, "hcPow": 1.5924, "levelDb": 50.1334, "sharp": 1.2043, "sharpNative": 1.157, "sone": 4.491, "snrDb": 20.56, "scPowNoNoiseSub": 757.0611, "scAmpNoNoiseSub": 3069.1322, "lw": 67.58, "loudestMic": 12, "principalScAmp": 3281.5, "principalScPow": 1185.5}
+    },
+    "71": {
+     "ff": {"scAmp": 2843.4545, "scPow": 1338.884, "hcAmp": 5.7184, "hcPow": 2.6926, "levelDb": 72.3403, "sharp": 1.585, "sharpNative": 1.61, "sone": 24.23, "snrDb": 38.56, "scPowNoNoiseSub": 1338.9045, "scAmpNoNoiseSub": 2859.4927, "lw": 89.74, "loudestMic": 4, "principalScAmp": 2627.1, "principalScPow": 1471.5},
+     "pp": {"scAmp": 1574.8071, "scPow": 925.9797, "hcAmp": 3.167, "hcPow": 1.8622, "levelDb": 48.2096, "sharp": 1.2041, "sharpNative": 1.1462, "sone": 3.775, "snrDb": 18.17, "scPowNoNoiseSub": 937.4932, "scAmpNoNoiseSub": 3190.0564, "lw": 65.59, "loudestMic": 26, "principalScAmp": 2929.9, "principalScPow": 921.8}
+    },
+    "72": {
+     "ff": {"scAmp": 2860.7299, "scPow": 1408.0462, "hcAmp": 5.4302, "hcPow": 2.6727, "levelDb": 71.3213, "sharp": 1.5887, "sharpNative": 1.616, "sone": 21.93, "snrDb": 41.02, "scPowNoNoiseSub": 1408.0585, "scAmpNoNoiseSub": 2879.2915, "lw": 88.66, "loudestMic": 4, "principalScAmp": 2616.5, "principalScPow": 1548.0},
+     "pp": {"scAmp": 1582.6892, "scPow": 970.5485, "hcAmp": 3.0042, "hcPow": 1.8423, "levelDb": 49.3296, "sharp": 1.2309, "sharpNative": 1.1904, "sone": 3.997, "snrDb": 19.2, "scPowNoNoiseSub": 978.9411, "scAmpNoNoiseSub": 3177.9228, "lw": 66.67, "loudestMic": 16, "principalScAmp": 2909.1, "principalScPow": 953.7}
+    },
+    "73": {
+     "ff": {"scAmp": 2664.8863, "scPow": 853.1871, "hcAmp": 4.7745, "hcPow": 1.5286, "levelDb": 75.6569, "sharp": 1.4613, "sharpNative": 1.5258, "sone": 25.43, "snrDb": 45.51, "scPowNoNoiseSub": 853.2082, "scAmpNoNoiseSub": 2677.301, "lw": 93.01, "loudestMic": 26, "principalScAmp": 2539.7, "principalScPow": 1120.5},
+     "pp": {"scAmp": 1400.2298, "scPow": 710.905, "hcAmp": 2.5087, "hcPow": 1.2737, "levelDb": 54.5506, "sharp": 1.1274, "sharpNative": 1.1073, "sone": 5.3, "snrDb": 24.96, "scPowNoNoiseSub": 714.6806, "scAmpNoNoiseSub": 2689.7198, "lw": 72.0, "loudestMic": 26, "principalScAmp": 2410.3, "principalScPow": 856.1}
+    },
+    "74": {
+     "ff": {"scAmp": 2885.2783, "scPow": 1138.4955, "hcAmp": 4.8793, "hcPow": 1.9253, "levelDb": 71.9062, "sharp": 1.5963, "sharpNative": 1.6229, "sone": 22.66, "snrDb": 41.08, "scPowNoNoiseSub": 1138.5192, "scAmpNoNoiseSub": 2902.1366, "lw": 89.35, "loudestMic": 6, "principalScAmp": 2689.3, "principalScPow": 1187.7},
+     "pp": {"scAmp": 1541.9866, "scPow": 856.9436, "hcAmp": 2.6076, "hcPow": 1.4492, "levelDb": 49.5774, "sharp": 1.218, "sharpNative": 1.1894, "sone": 4.103, "snrDb": 19.65, "scPowNoNoiseSub": 866.5475, "scAmpNoNoiseSub": 3145.2463, "lw": 66.85, "loudestMic": 7, "principalScAmp": 2852.2, "principalScPow": 988.0}
+    },
+    "75": {
+     "ff": {"scAmp": 3174.8528, "scPow": 1494.3327, "hcAmp": 5.0676, "hcPow": 2.3852, "levelDb": 69.8496, "sharp": 1.6953, "sharpNative": 1.7112, "sone": 19.88, "snrDb": 39.4, "scPowNoNoiseSub": 1494.355, "scAmpNoNoiseSub": 3196.1329, "lw": 87.21, "loudestMic": 6, "principalScAmp": 3798.0, "principalScPow": 2230.6},
+     "pp": {"scAmp": 1762.692, "scPow": 1145.4512, "hcAmp": 2.8136, "hcPow": 1.8283, "levelDb": 47.2829, "sharp": 1.2891, "sharpNative": 1.2433, "sone": 3.725, "snrDb": 17.81, "scPowNoNoiseSub": 1156.4324, "scAmpNoNoiseSub": 3323.4035, "lw": 64.87, "loudestMic": 6, "principalScAmp": 3440.9, "principalScPow": 1188.1}
+    },
+    "76": {
+     "ff": {"scAmp": 2991.6988, "scPow": 1372.412, "hcAmp": 4.5073, "hcPow": 2.0677, "levelDb": 73.1542, "sharp": 1.6688, "sharpNative": 1.6861, "sone": 24.12, "snrDb": 41.43, "scPowNoNoiseSub": 1372.4266, "scAmpNoNoiseSub": 3006.1673, "lw": 90.58, "loudestMic": 1, "principalScAmp": 3164.5, "principalScPow": 1750.5},
+     "pp": {"scAmp": 1860.1427, "scPow": 1175.9224, "hcAmp": 2.8025, "hcPow": 1.7716, "levelDb": 46.8768, "sharp": 1.3554, "sharpNative": 1.2868, "sone": 3.725, "snrDb": 17.29, "scPowNoNoiseSub": 1188.0755, "scAmpNoNoiseSub": 3315.392, "lw": 64.29, "loudestMic": 1, "principalScAmp": 3311.5, "principalScPow": 1458.1}
+    },
+    "77": {
+     "ff": {"scAmp": 2797.7376, "scPow": 1029.2329, "hcAmp": 3.9785, "hcPow": 1.4636, "levelDb": 72.7434, "sharp": 1.5561, "sharpNative": 1.6094, "sone": 20.97, "snrDb": 42.73, "scPowNoNoiseSub": 1029.2678, "scAmpNoNoiseSub": 2825.4532, "lw": 90.16, "loudestMic": 31, "principalScAmp": 3120.3, "principalScPow": 1755.1},
+     "pp": {"scAmp": 1640.8821, "scPow": 895.3891, "hcAmp": 2.3334, "hcPow": 1.2733, "levelDb": 52.4763, "sharp": 1.2549, "sharpNative": 1.2103, "sone": 4.665, "snrDb": 22.91, "scPowNoNoiseSub": 900.4554, "scAmpNoNoiseSub": 3032.8767, "lw": 69.86, "loudestMic": 31, "principalScAmp": 3267.8, "principalScPow": 1523.7}
+    },
+    "78": {
+     "ff": {"scAmp": 2880.6977, "scPow": 1194.6698, "hcAmp": 3.8665, "hcPow": 1.6035, "levelDb": 74.9865, "sharp": 1.612, "sharpNative": 1.6532, "sone": 25.15, "snrDb": 44.02, "scPowNoNoiseSub": 1194.6817, "scAmpNoNoiseSub": 2893.0044, "lw": 92.33, "loudestMic": 8, "principalScAmp": 3144.3, "principalScPow": 2077.8},
+     "pp": {"scAmp": 1748.7093, "scPow": 957.2677, "hcAmp": 2.3472, "hcPow": 1.2849, "levelDb": 51.4546, "sharp": 1.3199, "sharpNative": 1.2762, "sone": 4.644, "snrDb": 21.87, "scPowNoNoiseSub": 963.1147, "scAmpNoNoiseSub": 3087.2481, "lw": 68.72, "loudestMic": 8, "principalScAmp": 3261.1, "principalScPow": 1555.8}
+    },
+    "79": {
+     "ff": {"scAmp": 3448.3883, "scPow": 1403.4733, "hcAmp": 4.3687, "hcPow": 1.778, "levelDb": 69.4607, "sharp": 1.8168, "sharpNative": 1.8207, "sone": 19.17, "snrDb": 39.65, "scPowNoNoiseSub": 1403.5079, "scAmpNoNoiseSub": 3467.1365, "lw": 86.79, "loudestMic": 32, "principalScAmp": 3974.1, "principalScPow": 2137.0},
+     "pp": {"scAmp": 1952.6932, "scPow": 1224.9055, "hcAmp": 2.4738, "hcPow": 1.5518, "levelDb": 47.5996, "sharp": 1.4311, "sharpNative": 1.3757, "sone": 3.785, "snrDb": 18.17, "scPowNoNoiseSub": 1234.4964, "scAmpNoNoiseSub": 3452.8324, "lw": 65.1, "loudestMic": 25, "principalScAmp": 3724.3, "principalScPow": 2013.6}
+    },
+    "80": {
+     "ff": {"scAmp": 3295.403, "scPow": 1380.6068, "hcAmp": 3.9406, "hcPow": 1.6509, "levelDb": 72.5303, "sharp": 1.7515, "sharpNative": 1.7699, "sone": 22.06, "snrDb": 41.91, "scPowNoNoiseSub": 1380.6163, "scAmpNoNoiseSub": 3305.1261, "lw": 89.93, "loudestMic": 27, "principalScAmp": 3482.7, "principalScPow": 1518.4},
+     "pp": {"scAmp": 1887.1437, "scPow": 1121.7506, "hcAmp": 2.2566, "hcPow": 1.3414, "levelDb": 49.9238, "sharp": 1.3754, "sharpNative": 1.3156, "sone": 4.069, "snrDb": 20.52, "scPowNoNoiseSub": 1128.3288, "scAmpNoNoiseSub": 3273.9028, "lw": 67.38, "loudestMic": 27, "principalScAmp": 3461.2, "principalScPow": 1757.9}
+    },
+    "81": {
+     "ff": {"scAmp": 3638.89, "scPow": 1633.8778, "hcAmp": 4.1071, "hcPow": 1.8441, "levelDb": 67.0949, "sharp": 1.8241, "sharpNative": 1.8274, "sone": 16.41, "snrDb": 37.61, "scPowNoNoiseSub": 1633.8872, "scAmpNoNoiseSub": 3652.8001, "lw": 84.84, "loudestMic": 32, "principalScAmp": 3763.2, "principalScPow": 2101.8},
+     "pp": {"scAmp": 1739.8063, "scPow": 1026.2862, "hcAmp": 1.9637, "hcPow": 1.1583, "levelDb": 52.4821, "sharp": 1.3254, "sharpNative": 1.3042, "sone": 4.483, "snrDb": 22.96, "scPowNoNoiseSub": 1030.586, "scAmpNoNoiseSub": 3045.2803, "lw": 69.8, "loudestMic": 32, "principalScAmp": 3150.7, "principalScPow": 1076.0}
+    },
+    "82": {
+     "ff": {"scAmp": 3693.1567, "scPow": 1658.9329, "hcAmp": 3.9344, "hcPow": 1.7673, "levelDb": 67.4498, "sharp": 1.8834, "sharpNative": 1.8895, "sone": 16.68, "snrDb": 37.43, "scPowNoNoiseSub": 1658.9377, "scAmpNoNoiseSub": 3706.9798, "lw": 84.86, "loudestMic": 26, "principalScAmp": 4388.6, "principalScPow": 2850.0},
+     "pp": {"scAmp": 2104.4072, "scPow": 1356.4709, "hcAmp": 2.2419, "hcPow": 1.4451, "levelDb": 47.9284, "sharp": 1.5513, "sharpNative": 1.4576, "sone": 3.901, "snrDb": 18.48, "scPowNoNoiseSub": 1363.1894, "scAmpNoNoiseSub": 3329.3814, "lw": 65.4, "loudestMic": 26, "principalScAmp": 3627.6, "principalScPow": 2323.6}
+    },
+    "83": {
+     "ff": {"scAmp": 3574.0004, "scPow": 1564.3521, "hcAmp": 3.5938, "hcPow": 1.573, "levelDb": 72.7712, "sharp": 1.8789, "sharpNative": 1.882, "sone": 21.8, "snrDb": 42.73, "scPowNoNoiseSub": 1564.3585, "scAmpNoNoiseSub": 3577.3242, "lw": 90.1, "loudestMic": 26, "principalScAmp": 3716.3, "principalScPow": 2026.2},
+     "pp": {"scAmp": 2069.6681, "scPow": 1373.4865, "hcAmp": 2.0811, "hcPow": 1.3811, "levelDb": 48.4697, "sharp": 1.5455, "sharpNative": 1.4719, "sone": 3.764, "snrDb": 18.9, "scPowNoNoiseSub": 1379.7253, "scAmpNoNoiseSub": 3398.4777, "lw": 65.8, "loudestMic": 4, "principalScAmp": 3213.0, "principalScPow": 1742.8}
+    },
+    "84": {
+     "ff": {"scAmp": 3793.2898, "scPow": 1751.3845, "hcAmp": 3.6002, "hcPow": 1.6622, "levelDb": 70.4634, "sharp": 1.931, "sharpNative": 1.936, "sone": 18.66, "snrDb": 40.49, "scPowNoNoiseSub": 1751.3829, "scAmpNoNoiseSub": 3798.6995, "lw": 87.82, "loudestMic": 16, "principalScAmp": 3717.7, "principalScPow": 1759.9},
+     "pp": {"scAmp": 2212.2558, "scPow": 1282.1363, "hcAmp": 2.0996, "hcPow": 1.2169, "levelDb": 48.8268, "sharp": 1.5572, "sharpNative": 1.4838, "sone": 3.723, "snrDb": 19.18, "scPowNoNoiseSub": 1289.4169, "scAmpNoNoiseSub": 3416.8586, "lw": 66.13, "loudestMic": 16, "principalScAmp": 3341.2, "principalScPow": 1374.7}
+    },
+    "85": {
+     "ff": {"scAmp": 3688.4475, "scPow": 1803.7307, "hcAmp": 3.3042, "hcPow": 1.6158, "levelDb": 70.1053, "sharp": 1.9667, "sharpNative": 1.9552, "sone": 18.39, "snrDb": 39.33, "scPowNoNoiseSub": 1803.687, "scAmpNoNoiseSub": 3692.3034, "lw": 87.4, "loudestMic": 25, "principalScAmp": 3534.5, "principalScPow": 1650.4},
+     "pp": {"scAmp": 2309.1799, "scPow": 1487.0683, "hcAmp": 2.0686, "hcPow": 1.3322, "levelDb": 49.9392, "sharp": 1.5802, "sharpNative": 1.5054, "sone": 4.33, "snrDb": 20.36, "scPowNoNoiseSub": 1490.5088, "scAmpNoNoiseSub": 3306.7255, "lw": 67.38, "loudestMic": 4, "principalScAmp": 3057.3, "principalScPow": 1360.5}
+    },
+    "86": {
+     "ff": {"scAmp": 4062.3598, "scPow": 1861.3017, "hcAmp": 3.4349, "hcPow": 1.5738, "levelDb": 67.3793, "sharp": 1.9899, "sharpNative": 1.9897, "sone": 16.13, "snrDb": 37.37, "scPowNoNoiseSub": 1861.2472, "scAmpNoNoiseSub": 4059.3809, "lw": 84.72, "loudestMic": 32, "principalScAmp": 3630.4, "principalScPow": 1671.3},
+     "pp": {"scAmp": 2448.856, "scPow": 1515.3278, "hcAmp": 2.0706, "hcPow": 1.2813, "levelDb": 45.3039, "sharp": 1.7269, "sharpNative": 1.628, "sone": 3.206, "snrDb": 15.71, "scPowNoNoiseSub": 1522.3996, "scAmpNoNoiseSub": 3701.1259, "lw": 62.83, "loudestMic": 32, "principalScAmp": 3560.6, "principalScPow": 1621.3}
+    },
+    "87": {
+     "ff": {"scAmp": 3899.5339, "scPow": 2115.1876, "hcAmp": 3.1122, "hcPow": 1.6881, "levelDb": 68.3062, "sharp": 2.0499, "sharpNative": 2.0403, "sone": 16.34, "snrDb": 17.04, "scPowNoNoiseSub": 2115.1348, "scAmpNoNoiseSub": 3912.0683, "lw": 85.78, "loudestMic": 4, "principalScAmp": 3411.9, "principalScPow": 1894.7},
+     "pp": {"scAmp": 2362.6938, "scPow": 2002.4825, "hcAmp": 1.8856, "hcPow": 1.5982, "levelDb": 47.0946, "sharp": 1.6927, "sharpNative": 1.5901, "sone": 3.388, "snrDb": 17.51, "scPowNoNoiseSub": 1997.5281, "scAmpNoNoiseSub": 3687.6304, "lw": 64.56, "loudestMic": 6, "principalScAmp": 3716.2, "principalScPow": 1921.8}
+    },
+    "88": {
+     "ff": {"scAmp": 3753.5814, "scPow": 1690.4959, "hcAmp": 2.8276, "hcPow": 1.2734, "levelDb": 70.0733, "sharp": 2.0239, "sharpNative": 1.997, "sone": 16.86, "snrDb": 29.01, "scPowNoNoiseSub": 1690.4389, "scAmpNoNoiseSub": 3751.7838, "lw": 87.57, "loudestMic": 6, "principalScAmp": 4226.3, "principalScPow": 1771.9},
+     "pp": {"scAmp": 2468.8878, "scPow": 1474.156, "hcAmp": 1.8598, "hcPow": 1.1105, "levelDb": 49.8358, "sharp": 1.7215, "sharpNative": 1.6507, "sone": 3.801, "snrDb": 20.16, "scPowNoNoiseSub": 1478.0091, "scAmpNoNoiseSub": 3528.316, "lw": 67.21, "loudestMic": 26, "principalScAmp": 3696.8, "principalScPow": 1582.6}
+    },
+    "89": {
+     "ff": {"scAmp": 4159.5164, "scPow": 2142.1746, "hcAmp": 2.9575, "hcPow": 1.5231, "levelDb": 67.3677, "sharp": 2.0293, "sharpNative": 2.0309, "sone": 15.926, "snrDb": 36.93, "scPowNoNoiseSub": 2142.0551, "scAmpNoNoiseSub": 4154.0887, "lw": 84.7, "loudestMic": 4, "principalScAmp": 3712.5, "principalScPow": 1907.5},
+     "pp": {"scAmp": 2177.3252, "scPow": 1702.1927, "hcAmp": 1.5481, "hcPow": 1.2103, "levelDb": 48.5805, "sharp": 1.5848, "sharpNative": 1.5609, "sone": 3.903, "snrDb": 19.08, "scPowNoNoiseSub": 1703.0944, "scAmpNoNoiseSub": 3561.3204, "lw": 66.0, "loudestMic": 6, "principalScAmp": 3263.5, "principalScPow": 1670.2}
+    },
+    "90": {
+     "ff": {"scAmp": 4134.8787, "scPow": 1954.273, "hcAmp": 2.775, "hcPow": 1.3115, "levelDb": 68.749, "sharp": 2.1769, "sharpNative": 2.1357, "sone": 16.69, "snrDb": 38.84, "scPowNoNoiseSub": 1954.2228, "scAmpNoNoiseSub": 4134.1978, "lw": 86.13, "loudestMic": 25, "principalScAmp": 4552.0, "principalScPow": 2251.0},
+     "pp": {"scAmp": 2258.0804, "scPow": 1541.5673, "hcAmp": 1.5154, "hcPow": 1.0346, "levelDb": 49.344, "sharp": 1.6306, "sharpNative": 1.579, "sone": 3.397, "snrDb": 19.71, "scPowNoNoiseSub": 1544.6737, "scAmpNoNoiseSub": 3433.9066, "lw": 66.68, "loudestMic": 25, "principalScAmp": 3450.5, "principalScPow": 1564.6}
+    },
+    "91": {
+     "ff": {"scAmp": 4739.9974, "scPow": 2696.6994, "hcAmp": 3.0025, "hcPow": 1.7082, "levelDb": 64.5385, "sharp": 2.4, "sharpNative": 2.3643, "sone": 13.862, "snrDb": 33.96, "scPowNoNoiseSub": 2696.0684, "scAmpNoNoiseSub": 4718.6838, "lw": 82.0, "loudestMic": 32, "principalScAmp": 5087.5, "principalScPow": 3410.3},
+     "pp": {"scAmp": 2758.6781, "scPow": 2016.8316, "hcAmp": 1.7475, "hcPow": 1.2775, "levelDb": 46.8364, "sharp": 1.8155, "sharpNative": 1.75, "sone": 3.619, "snrDb": 17.43, "scPowNoNoiseSub": 2013.5375, "scAmpNoNoiseSub": 3794.0729, "lw": 64.33, "loudestMic": 26, "principalScAmp": 3858.1, "principalScPow": 2412.8}
+    }
+   }
+  },
+  "Double_bass": {
+   "sections": ["Basses"],
+   "principalMic": 6,
+   "tuning": 443.0,
+   "notes": {
+    "28": {
+     "ff": {"scAmp": 590.4644, "scPow": 135.0493, "hcAmp": 14.2334, "hcPow": 3.2554, "levelDb": 75.9061, "sharp": 0.4876, "sharpNative": 0.5995, "sone": 14.113, "snrDb": 35.72, "scPowNoNoiseSub": 135.0897, "scAmpNoNoiseSub": 660.3851, "lw": 93.11, "loudestMic": 6, "principalScAmp": 540.3, "principalScPow": 136.0},
+     "pp": {"scAmp": 223.3409, "scPow": 120.1737, "hcAmp": 5.3837, "hcPow": 2.8968, "levelDb": 58.0079, "sharp": 0.3509, "sharpNative": 0.3433, "sone": 2.943, "snrDb": 20.46, "scPowNoNoiseSub": 122.7797, "scAmpNoNoiseSub": 1489.2283, "lw": 75.67, "loudestMic": 6, "principalScAmp": 926.0, "principalScPow": 120.2}
+    },
+    "29": {
+     "ff": {"scAmp": 656.8136, "scPow": 155.2329, "hcAmp": 14.9442, "hcPow": 3.5319, "levelDb": 74.2415, "sharp": 0.5272, "sharpNative": 0.642, "sone": 13.613, "snrDb": 36.51, "scPowNoNoiseSub": 155.2849, "scAmpNoNoiseSub": 716.2728, "lw": 91.43, "loudestMic": 6, "principalScAmp": 598.4, "principalScPow": 162.0},
+     "pp": {"scAmp": 270.1951, "scPow": 129.6208, "hcAmp": 6.1476, "hcPow": 2.9492, "levelDb": 60.6432, "sharp": 0.3777, "sharpNative": 0.3807, "sone": 3.704, "snrDb": 22.58, "scPowNoNoiseSub": 130.9502, "scAmpNoNoiseSub": 1286.207, "lw": 78.22, "loudestMic": 6, "principalScAmp": 819.4, "principalScPow": 133.7}
+    },
+    "30": {
+     "ff": {"scAmp": 700.3042, "scPow": 155.9356, "hcAmp": 15.0394, "hcPow": 3.3488, "levelDb": 75.8054, "sharp": 0.5711, "sharpNative": 0.699, "sone": 15.084, "snrDb": 37.6, "scPowNoNoiseSub": 155.9696, "scAmpNoNoiseSub": 737.6828, "lw": 93.14, "loudestMic": 6, "principalScAmp": 709.6, "principalScPow": 155.5},
+     "pp": {"scAmp": 293.4834, "scPow": 124.3742, "hcAmp": 6.3027, "hcPow": 2.671, "levelDb": 58.3734, "sharp": 0.4274, "sharpNative": 0.4167, "sone": 3.135, "snrDb": 22.33, "scPowNoNoiseSub": 126.5863, "scAmpNoNoiseSub": 1510.7717, "lw": 75.69, "loudestMic": 6, "principalScAmp": 994.9, "principalScPow": 130.1}
+    },
+    "31": {
+     "ff": {"scAmp": 627.9468, "scPow": 143.6417, "hcAmp": 12.7286, "hcPow": 2.9116, "levelDb": 76.8759, "sharp": 0.5468, "sharpNative": 0.6766, "sone": 14.657, "snrDb": 40.48, "scPowNoNoiseSub": 143.6717, "scAmpNoNoiseSub": 670.3119, "lw": 94.29, "loudestMic": 6, "principalScAmp": 632.3, "principalScPow": 142.5},
+     "pp": {"scAmp": 304.7347, "scPow": 111.5634, "hcAmp": 6.177, "hcPow": 2.2614, "levelDb": 54.7342, "sharp": 0.4457, "sharpNative": 0.4222, "sone": 2.096, "snrDb": 16.05, "scPowNoNoiseSub": 116.5135, "scAmpNoNoiseSub": 1951.4535, "lw": 72.5, "loudestMic": 6, "principalScAmp": 1342.2, "principalScPow": 112.1}
+    },
+    "32": {
+     "ff": {"scAmp": 631.246, "scPow": 122.7865, "hcAmp": 12.0773, "hcPow": 2.3492, "levelDb": 78.8995, "sharp": 0.5579, "sharpNative": 0.6852, "sone": 15.402, "snrDb": 39.94, "scPowNoNoiseSub": 122.8033, "scAmpNoNoiseSub": 670.3818, "lw": 96.3, "loudestMic": 6, "principalScAmp": 584.4, "principalScPow": 129.0},
+     "pp": {"scAmp": 253.9428, "scPow": 111.7783, "hcAmp": 4.8586, "hcPow": 2.1386, "levelDb": 58.1187, "sharp": 0.4097, "sharpNative": 0.3935, "sone": 2.265, "snrDb": 21.35, "scPowNoNoiseSub": 114.2003, "scAmpNoNoiseSub": 1706.2872, "lw": 75.45, "loudestMic": 6, "principalScAmp": 1101.8, "principalScPow": 114.4}
+    },
+    "33": {
+     "ff": {"scAmp": 476.0671, "scPow": 119.884, "hcAmp": 8.5971, "hcPow": 2.1649, "levelDb": 83.2411, "sharp": 0.4388, "sharpNative": 0.582, "sone": 18.17, "snrDb": 43.66, "scPowNoNoiseSub": 119.8913, "scAmpNoNoiseSub": 508.0872, "lw": 100.57, "loudestMic": 6, "principalScAmp": 424.6, "principalScPow": 119.4},
+     "pp": {"scAmp": 237.6309, "scPow": 115.2444, "hcAmp": 4.2913, "hcPow": 2.0812, "levelDb": 65.1308, "sharp": 0.3797, "sharpNative": 0.3983, "sone": 3.999, "snrDb": 27.58, "scPowNoNoiseSub": 115.7181, "scAmpNoNoiseSub": 1134.4518, "lw": 82.5, "loudestMic": 6, "principalScAmp": 686.2, "principalScPow": 117.7}
+    },
+    "34": {
+     "ff": {"scAmp": 763.0787, "scPow": 174.4894, "hcAmp": 13.0068, "hcPow": 2.9742, "levelDb": 74.5698, "sharp": 0.5569, "sharpNative": 0.6929, "sone": 13.688, "snrDb": 34.77, "scPowNoNoiseSub": 174.5356, "scAmpNoNoiseSub": 813.6874, "lw": 91.8, "loudestMic": 6, "principalScAmp": 689.6, "principalScPow": 168.0},
+     "pp": {"scAmp": 300.7764, "scPow": 133.1987, "hcAmp": 5.1268, "hcPow": 2.2704, "levelDb": 58.7414, "sharp": 0.4289, "sharpNative": 0.4224, "sone": 3.103, "snrDb": 22.67, "scPowNoNoiseSub": 135.1583, "scAmpNoNoiseSub": 1577.2431, "lw": 76.43, "loudestMic": 6, "principalScAmp": 990.2, "principalScPow": 134.0}
+    },
+    "35": {
+     "ff": {"scAmp": 623.4414, "scPow": 155.2044, "hcAmp": 10.0302, "hcPow": 2.497, "levelDb": 76.8076, "sharp": 0.4823, "sharpNative": 0.6088, "sone": 14.805, "snrDb": 37.02, "scPowNoNoiseSub": 155.2302, "scAmpNoNoiseSub": 673.9467, "lw": 94.14, "loudestMic": 6, "principalScAmp": 593.0, "principalScPow": 156.0},
+     "pp": {"scAmp": 335.2669, "scPow": 167.5744, "hcAmp": 5.3939, "hcPow": 2.696, "levelDb": 55.0165, "sharp": 0.4909, "sharpNative": 0.4567, "sone": 3.034, "snrDb": 18.63, "scPowNoNoiseSub": 171.9696, "scAmpNoNoiseSub": 1817.3757, "lw": 72.34, "loudestMic": 6, "principalScAmp": 1097.4, "principalScPow": 171.6}
+    },
+    "36": {
+     "ff": {"scAmp": 661.8525, "scPow": 150.1076, "hcAmp": 10.0506, "hcPow": 2.2795, "levelDb": 75.9982, "sharp": 0.5058, "sharpNative": 0.6388, "sone": 14.93, "snrDb": 38.01, "scPowNoNoiseSub": 150.1397, "scAmpNoNoiseSub": 709.1883, "lw": 93.32, "loudestMic": 6, "principalScAmp": 641.0, "principalScPow": 141.3},
+     "pp": {"scAmp": 331.7331, "scPow": 126.0028, "hcAmp": 5.0375, "hcPow": 1.9134, "levelDb": 54.8056, "sharp": 0.4484, "sharpNative": 0.4311, "sone": 2.567, "snrDb": 19.77, "scPowNoNoiseSub": 130.9683, "scAmpNoNoiseSub": 1915.8531, "lw": 72.72, "loudestMic": 6, "principalScAmp": 1318.8, "principalScPow": 120.9}
+    },
+    "37": {
+     "ff": {"scAmp": 563.8627, "scPow": 95.061, "hcAmp": 8.082, "hcPow": 1.3625, "levelDb": 79.5707, "sharp": 0.4454, "sharpNative": 0.6093, "sone": 14.8, "snrDb": 40.95, "scPowNoNoiseSub": 95.0777, "scAmpNoNoiseSub": 600.728, "lw": 96.8, "loudestMic": 6, "principalScAmp": 498.5, "principalScPow": 96.4},
+     "pp": {"scAmp": 224.3818, "scPow": 75.4624, "hcAmp": 3.2161, "hcPow": 1.0816, "levelDb": 60.8038, "sharp": 0.3844, "sharpNative": 0.3853, "sone": 2.509, "snrDb": 24.03, "scPowNoNoiseSub": 76.8398, "scAmpNoNoiseSub": 1524.9534, "lw": 78.43, "loudestMic": 6, "principalScAmp": 959.2, "principalScPow": 75.3}
+    },
+    "38": {
+     "ff": {"scAmp": 791.1026, "scPow": 175.5372, "hcAmp": 10.7026, "hcPow": 2.3748, "levelDb": 75.7053, "sharp": 0.6047, "sharpNative": 0.7186, "sone": 17.1, "snrDb": 37.51, "scPowNoNoiseSub": 175.5693, "scAmpNoNoiseSub": 826.5015, "lw": 92.91, "loudestMic": 6, "principalScAmp": 755.0, "principalScPow": 151.9},
+     "pp": {"scAmp": 302.4148, "scPow": 125.3577, "hcAmp": 4.0913, "hcPow": 1.6959, "levelDb": 59.4315, "sharp": 0.4442, "sharpNative": 0.4393, "sone": 3.91, "snrDb": 21.58, "scPowNoNoiseSub": 127.0792, "scAmpNoNoiseSub": 1461.2827, "lw": 77.01, "loudestMic": 6, "principalScAmp": 982.6, "principalScPow": 105.3}
+    },
+    "39": {
+     "ff": {"scAmp": 929.4787, "scPow": 170.7658, "hcAmp": 11.8689, "hcPow": 2.1806, "levelDb": 74.1681, "sharp": 0.6438, "sharpNative": 0.7573, "sone": 16.17, "snrDb": 36.4, "scPowNoNoiseSub": 170.8161, "scAmpNoNoiseSub": 968.0457, "lw": 91.33, "loudestMic": 6, "principalScAmp": 878.2, "principalScPow": 187.7},
+     "pp": {"scAmp": 326.9743, "scPow": 107.8944, "hcAmp": 4.1753, "hcPow": 1.3777, "levelDb": 54.2575, "sharp": 0.4789, "sharpNative": 0.4208, "sone": 2.319, "snrDb": 16.88, "scPowNoNoiseSub": 113.5887, "scAmpNoNoiseSub": 2153.326, "lw": 71.82, "loudestMic": 6, "principalScAmp": 1388.0, "principalScPow": 108.9}
+    },
+    "40": {
+     "ff": {"scAmp": 1103.517, "scPow": 231.8032, "hcAmp": 13.3004, "hcPow": 2.7939, "levelDb": 70.4341, "sharp": 0.7122, "sharpNative": 0.7974, "sone": 14.344, "snrDb": 33.51, "scPowNoNoiseSub": 231.9128, "scAmpNoNoiseSub": 1151.9443, "lw": 87.57, "loudestMic": 6, "principalScAmp": 1030.6, "principalScPow": 233.6},
+     "pp": {"scAmp": 379.5025, "scPow": 129.8444, "hcAmp": 4.574, "hcPow": 1.565, "levelDb": 57.3989, "sharp": 0.4879, "sharpNative": 0.4689, "sone": 3.511, "snrDb": 19.7, "scPowNoNoiseSub": 132.5992, "scAmpNoNoiseSub": 1719.8131, "lw": 74.83, "loudestMic": 6, "principalScAmp": 1113.8, "principalScPow": 131.8}
+    },
+    "41": {
+     "ff": {"scAmp": 997.3783, "scPow": 217.5781, "hcAmp": 11.3464, "hcPow": 2.4752, "levelDb": 73.0893, "sharp": 0.6374, "sharpNative": 0.7438, "sone": 15.563, "snrDb": 35.68, "scPowNoNoiseSub": 217.6304, "scAmpNoNoiseSub": 1030.0618, "lw": 90.53, "loudestMic": 6, "principalScAmp": 928.4, "principalScPow": 220.2},
+     "pp": {"scAmp": 449.8671, "scPow": 143.9259, "hcAmp": 5.1178, "hcPow": 1.6373, "levelDb": 49.9379, "sharp": 0.5347, "sharpNative": 0.4904, "sone": 2.084, "snrDb": 14.62, "scPowNoNoiseSub": 158.2659, "scAmpNoNoiseSub": 2474.5331, "lw": 67.96, "loudestMic": 6, "principalScAmp": 1665.7, "principalScPow": 159.2}
+    },
+    "42": {
+     "ff": {"scAmp": 964.2639, "scPow": 204.5173, "hcAmp": 10.354, "hcPow": 2.1961, "levelDb": 74.3827, "sharp": 0.6276, "sharpNative": 0.744, "sone": 16.12, "snrDb": 35.48, "scPowNoNoiseSub": 204.5448, "scAmpNoNoiseSub": 993.8018, "lw": 91.77, "loudestMic": 6, "principalScAmp": 859.1, "principalScPow": 203.1},
+     "pp": {"scAmp": 326.8689, "scPow": 135.4342, "hcAmp": 3.5098, "hcPow": 1.4543, "levelDb": 53.63, "sharp": 0.482, "sharpNative": 0.4178, "sone": 2.269, "snrDb": 17.01, "scPowNoNoiseSub": 142.0287, "scAmpNoNoiseSub": 2279.3836, "lw": 70.77, "loudestMic": 6, "principalScAmp": 1436.3, "principalScPow": 153.0}
+    },
+    "43": {
+     "ff": {"scAmp": 1340.7069, "scPow": 262.4952, "hcAmp": 13.5882, "hcPow": 2.6604, "levelDb": 73.0046, "sharp": 0.9274, "sharpNative": 1.0065, "sone": 17.97, "snrDb": 35.96, "scPowNoNoiseSub": 262.543, "scAmpNoNoiseSub": 1362.5915, "lw": 90.22, "loudestMic": 6, "principalScAmp": 1331.5, "principalScPow": 331.2},
+     "pp": {"scAmp": 477.0808, "scPow": 199.2048, "hcAmp": 4.8353, "hcPow": 2.019, "levelDb": 51.2542, "sharp": 0.6039, "sharpNative": 0.5574, "sone": 2.642, "snrDb": 15.35, "scPowNoNoiseSub": 208.89, "scAmpNoNoiseSub": 2402.3884, "lw": 68.15, "loudestMic": 6, "principalScAmp": 1771.6, "principalScPow": 229.8}
+    },
+    "44": {
+     "ff": {"scAmp": 1075.4051, "scPow": 152.998, "hcAmp": 10.2876, "hcPow": 1.4636, "levelDb": 77.255, "sharp": 0.8128, "sharpNative": 0.9127, "sone": 18.22, "snrDb": 38.47, "scPowNoNoiseSub": 153.0244, "scAmpNoNoiseSub": 1096.2589, "lw": 94.41, "loudestMic": 6, "principalScAmp": 1006.4, "principalScPow": 170.6},
+     "pp": {"scAmp": 418.9532, "scPow": 159.0264, "hcAmp": 4.0078, "hcPow": 1.5213, "levelDb": 49.549, "sharp": 0.5963, "sharpNative": 0.5389, "sone": 1.934, "snrDb": 14.26, "scPowNoNoiseSub": 174.0173, "scAmpNoNoiseSub": 2655.4445, "lw": 67.44, "loudestMic": 6, "principalScAmp": 1787.4, "principalScPow": 180.4}
+    },
+    "45": {
+     "ff": {"scAmp": 1616.9706, "scPow": 237.4841, "hcAmp": 14.6002, "hcPow": 2.1443, "levelDb": 70.5624, "sharp": 0.999, "sharpNative": 1.0695, "sone": 14.932, "snrDb": 33.36, "scPowNoNoiseSub": 237.577, "scAmpNoNoiseSub": 1638.1038, "lw": 88.33, "loudestMic": 6, "principalScAmp": 1460.1, "principalScPow": 268.8},
+     "pp": {"scAmp": 505.4627, "scPow": 209.6185, "hcAmp": 4.564, "hcPow": 1.8927, "levelDb": 47.2431, "sharp": 0.6454, "sharpNative": 0.5587, "sone": 1.813, "snrDb": 10.12, "scPowNoNoiseSub": 232.4203, "scAmpNoNoiseSub": 2901.217, "lw": 65.19, "loudestMic": 6, "principalScAmp": 2019.8, "principalScPow": 226.7}
+    },
+    "46": {
+     "ff": {"scAmp": 1069.5611, "scPow": 148.1642, "hcAmp": 9.1154, "hcPow": 1.2627, "levelDb": 78.3549, "sharp": 0.7834, "sharpNative": 0.8942, "sone": 19.65, "snrDb": 37.06, "scPowNoNoiseSub": 148.1876, "scAmpNoNoiseSub": 1098.0297, "lw": 95.47, "loudestMic": 6, "principalScAmp": 977.3, "principalScPow": 176.1},
+     "pp": {"scAmp": 624.81, "scPow": 161.2611, "hcAmp": 5.325, "hcPow": 1.3744, "levelDb": 50.7944, "sharp": 0.7069, "sharpNative": 0.6506, "sone": 2.548, "snrDb": 12.77, "scPowNoNoiseSub": 171.8842, "scAmpNoNoiseSub": 2466.846, "lw": 68.48, "loudestMic": 6, "principalScAmp": 1683.0, "principalScPow": 193.0}
+    },
+    "47": {
+     "ff": {"scAmp": 1508.2805, "scPow": 292.0172, "hcAmp": 12.133, "hcPow": 2.3491, "levelDb": 71.8602, "sharp": 0.9311, "sharpNative": 1.0158, "sone": 17.3, "snrDb": 23.82, "scPowNoNoiseSub": 291.4321, "scAmpNoNoiseSub": 1531.8558, "lw": 89.34, "loudestMic": 8, "principalScAmp": 1453.7, "principalScPow": 378.6},
+     "pp": {"scAmp": 579.1294, "scPow": 258.2386, "hcAmp": 4.6587, "hcPow": 2.0773, "levelDb": 48.0145, "sharp": 0.6763, "sharpNative": 0.6018, "sone": 2.463, "snrDb": 10.19, "scPowNoNoiseSub": 274.6939, "scAmpNoNoiseSub": 2735.676, "lw": 65.66, "loudestMic": 16, "principalScAmp": 2099.5, "principalScPow": 292.8}
+    },
+    "48": {
+     "ff": {"scAmp": 1398.3213, "scPow": 321.3906, "hcAmp": 10.6171, "hcPow": 2.4402, "levelDb": 73.8131, "sharp": 0.8806, "sharpNative": 0.9811, "sone": 19.19, "snrDb": 35.91, "scPowNoNoiseSub": 321.4336, "scAmpNoNoiseSub": 1417.311, "lw": 91.16, "loudestMic": 8, "principalScAmp": 1318.8, "principalScPow": 391.7},
+     "pp": {"scAmp": 496.2237, "scPow": 185.8023, "hcAmp": 3.7677, "hcPow": 1.4107, "levelDb": 51.6279, "sharp": 0.6207, "sharpNative": 0.5398, "sone": 2.686, "snrDb": 13.01, "scPowNoNoiseSub": 193.891, "scAmpNoNoiseSub": 2460.0139, "lw": 69.03, "loudestMic": 8, "principalScAmp": 1807.3, "principalScPow": 199.9}
+    },
+    "49": {
+     "ff": {"scAmp": 1755.4153, "scPow": 291.5261, "hcAmp": 12.5804, "hcPow": 2.0892, "levelDb": 69.685, "sharp": 1.0065, "sharpNative": 1.0746, "sone": 15.341, "snrDb": 30.74, "scPowNoNoiseSub": 291.6136, "scAmpNoNoiseSub": 1771.4719, "lw": 87.12, "loudestMic": 4, "principalScAmp": 1764.3, "principalScPow": 462.3},
+     "pp": {"scAmp": 642.6675, "scPow": 184.9815, "hcAmp": 4.6057, "hcPow": 1.3257, "levelDb": 47.8006, "sharp": 0.6853, "sharpNative": 0.6165, "sone": 2.074, "snrDb": 11.47, "scPowNoNoiseSub": 205.891, "scAmpNoNoiseSub": 2952.4192, "lw": 65.58, "loudestMic": 4, "principalScAmp": 2252.6, "principalScPow": 254.6}
+    },
+    "50": {
+     "ff": {"scAmp": 1554.0024, "scPow": 290.5808, "hcAmp": 10.5118, "hcPow": 1.9656, "levelDb": 71.2404, "sharp": 0.8905, "sharpNative": 0.9801, "sone": 16.34, "snrDb": 33.5, "scPowNoNoiseSub": 290.6531, "scAmpNoNoiseSub": 1580.1031, "lw": 88.33, "loudestMic": 16, "principalScAmp": 1499.3, "principalScPow": 373.4},
+     "pp": {"scAmp": 417.9117, "scPow": 161.7796, "hcAmp": 2.8269, "hcPow": 1.0943, "levelDb": 50.4948, "sharp": 0.5264, "sharpNative": 0.4635, "sone": 1.993, "snrDb": 12.81, "scPowNoNoiseSub": 174.7181, "scAmpNoNoiseSub": 2809.5173, "lw": 67.98, "loudestMic": 6, "principalScAmp": 2148.3, "principalScPow": 180.6}
+    },
+    "51": {
+     "ff": {"scAmp": 1733.5051, "scPow": 361.022, "hcAmp": 11.0679, "hcPow": 2.305, "levelDb": 68.9078, "sharp": 0.9564, "sharpNative": 1.0179, "sone": 15.889, "snrDb": 30.57, "scPowNoNoiseSub": 361.1141, "scAmpNoNoiseSub": 1755.6174, "lw": 85.92, "loudestMic": 6, "principalScAmp": 1465.1, "principalScPow": 400.2},
+     "pp": {"scAmp": 594.1056, "scPow": 216.8281, "hcAmp": 3.7932, "hcPow": 1.3844, "levelDb": 46.9472, "sharp": 0.6603, "sharpNative": 0.5728, "sone": 2.23, "snrDb": 10.11, "scPowNoNoiseSub": 239.4462, "scAmpNoNoiseSub": 2999.8752, "lw": 65.2, "loudestMic": 6, "principalScAmp": 2079.0, "principalScPow": 254.0}
+    },
+    "52": {
+     "ff": {"scAmp": 1469.6189, "scPow": 216.445, "hcAmp": 8.8565, "hcPow": 1.3044, "levelDb": 73.8081, "sharp": 0.7812, "sharpNative": 0.8974, "sone": 16.61, "snrDb": 19.93, "scPowNoNoiseSub": 215.9475, "scAmpNoNoiseSub": 1481.9855, "lw": 91.01, "loudestMic": 6, "principalScAmp": 1267.6, "principalScPow": 221.5},
+     "pp": {"scAmp": 510.9999, "scPow": 196.0707, "hcAmp": 3.0795, "hcPow": 1.1816, "levelDb": 48.5957, "sharp": 0.593, "sharpNative": 0.5264, "sone": 1.869, "snrDb": 9.81, "scPowNoNoiseSub": 222.7097, "scAmpNoNoiseSub": 2987.4509, "lw": 65.94, "loudestMic": 6, "principalScAmp": 2114.0, "principalScPow": 226.6}
+    },
+    "53": {
+     "ff": {"scAmp": 1706.5535, "scPow": 398.593, "hcAmp": 9.7071, "hcPow": 2.2672, "levelDb": 70.6517, "sharp": 0.9289, "sharpNative": 1.0005, "sone": 17.18, "snrDb": 30.19, "scPowNoNoiseSub": 398.5148, "scAmpNoNoiseSub": 1723.3672, "lw": 87.85, "loudestMic": 8, "principalScAmp": 1550.3, "principalScPow": 419.6},
+     "pp": {"scAmp": 653.8729, "scPow": 297.1527, "hcAmp": 3.7193, "hcPow": 1.6902, "levelDb": 49.5216, "sharp": 0.6725, "sharpNative": 0.5999, "sone": 3.008, "snrDb": 8.39, "scPowNoNoiseSub": 303.6472, "scAmpNoNoiseSub": 2505.2551, "lw": 67.86, "loudestMic": 6, "principalScAmp": 1722.2, "principalScPow": 324.3}
+    },
+    "54": {
+     "ff": {"scAmp": 1443.2916, "scPow": 295.7545, "hcAmp": 7.7489, "hcPow": 1.5879, "levelDb": 74.5739, "sharp": 0.8641, "sharpNative": 0.9649, "sone": 19.35, "snrDb": 36.48, "scPowNoNoiseSub": 295.7884, "scAmpNoNoiseSub": 1465.0529, "lw": 91.57, "loudestMic": 6, "principalScAmp": 1321.8, "principalScPow": 253.5},
+     "pp": {"scAmp": 605.1159, "scPow": 241.2243, "hcAmp": 3.2488, "hcPow": 1.2951, "levelDb": 59.056, "sharp": 0.6077, "sharpNative": 0.599, "sone": 5.123, "snrDb": 18.62, "scPowNoNoiseSub": 242.0455, "scAmpNoNoiseSub": 1781.5672, "lw": 76.19, "loudestMic": 6, "principalScAmp": 1312.9, "principalScPow": 193.7}
+    },
+    "55": {
+     "ff": {"scAmp": 1256.3391, "scPow": 246.5793, "hcAmp": 6.3666, "hcPow": 1.2496, "levelDb": 74.3388, "sharp": 0.7877, "sharpNative": 0.8895, "sone": 17.25, "snrDb": 35.72, "scPowNoNoiseSub": 246.6242, "scAmpNoNoiseSub": 1298.2948, "lw": 91.59, "loudestMic": 6, "principalScAmp": 1230.5, "principalScPow": 250.9},
+     "pp": {"scAmp": 632.0421, "scPow": 381.0, "hcAmp": 3.2029, "hcPow": 1.9307, "levelDb": 51.1841, "sharp": 0.6882, "sharpNative": 0.6255, "sone": 2.901, "snrDb": 14.36, "scPowNoNoiseSub": 387.4516, "scAmpNoNoiseSub": 2665.5216, "lw": 68.49, "loudestMic": 5, "principalScAmp": 1945.8, "principalScPow": 391.3}
+    },
+    "56": {
+     "ff": {"scAmp": 1928.8999, "scPow": 319.3658, "hcAmp": 9.2262, "hcPow": 1.5276, "levelDb": 70.1822, "sharp": 1.0411, "sharpNative": 1.1165, "sone": 15.557, "snrDb": 31.4, "scPowNoNoiseSub": 319.4289, "scAmpNoNoiseSub": 1944.0772, "lw": 87.55, "loudestMic": 6, "principalScAmp": 1671.1, "principalScPow": 335.8},
+     "pp": {"scAmp": 612.3283, "scPow": 252.5448, "hcAmp": 2.9288, "hcPow": 1.208, "levelDb": 46.7532, "sharp": 0.6965, "sharpNative": 0.6076, "sone": 2.024, "snrDb": 9.92, "scPowNoNoiseSub": 273.5886, "scAmpNoNoiseSub": 3007.9568, "lw": 64.77, "loudestMic": 6, "principalScAmp": 2027.7, "principalScPow": 270.0}
+    },
+    "57": {
+     "ff": {"scAmp": 1831.5577, "scPow": 376.2461, "hcAmp": 8.2689, "hcPow": 1.6986, "levelDb": 71.569, "sharp": 1.0083, "sharpNative": 1.0832, "sone": 17.23, "snrDb": 22.76, "scPowNoNoiseSub": 375.4485, "scAmpNoNoiseSub": 1843.762, "lw": 88.95, "loudestMic": 6, "principalScAmp": 1451.4, "principalScPow": 350.5},
+     "pp": {"scAmp": 666.4578, "scPow": 331.3058, "hcAmp": 3.0088, "hcPow": 1.4957, "levelDb": 49.1313, "sharp": 0.7325, "sharpNative": 0.6454, "sone": 2.676, "snrDb": 12.08, "scPowNoNoiseSub": 342.2241, "scAmpNoNoiseSub": 2785.8298, "lw": 66.77, "loudestMic": 6, "principalScAmp": 1889.4, "principalScPow": 251.8}
+    },
+    "58": {
+     "ff": {"scAmp": 2254.563, "scPow": 587.4152, "hcAmp": 9.6073, "hcPow": 2.5031, "levelDb": 66.6406, "sharp": 1.1464, "sharpNative": 1.1858, "sone": 15.227, "snrDb": 19.46, "scPowNoNoiseSub": 584.528, "scAmpNoNoiseSub": 2254.7579, "lw": 83.94, "loudestMic": 6, "principalScAmp": 2001.2, "principalScPow": 736.7},
+     "pp": {"scAmp": 866.0665, "scPow": 380.6504, "hcAmp": 3.6906, "hcPow": 1.6221, "levelDb": 47.2995, "sharp": 0.8623, "sharpNative": 0.7619, "sone": 2.871, "snrDb": 10.69, "scPowNoNoiseSub": 396.1009, "scAmpNoNoiseSub": 2978.8773, "lw": 65.13, "loudestMic": 6, "principalScAmp": 2087.2, "principalScPow": 379.5}
+    },
+    "59": {
+     "ff": {"scAmp": 1966.2406, "scPow": 450.5824, "hcAmp": 7.9084, "hcPow": 1.8123, "levelDb": 69.6971, "sharp": 1.0636, "sharpNative": 1.1168, "sone": 16.98, "snrDb": 27.11, "scPowNoNoiseSub": 450.3164, "scAmpNoNoiseSub": 1987.8425, "lw": 87.4, "loudestMic": 6, "principalScAmp": 1769.1, "principalScPow": 594.3},
+     "pp": {"scAmp": 901.1656, "scPow": 403.5842, "hcAmp": 3.6246, "hcPow": 1.6233, "levelDb": 43.9977, "sharp": 0.9097, "sharpNative": 0.7586, "sone": 2.332, "snrDb": 8.29, "scPowNoNoiseSub": 430.9941, "scAmpNoNoiseSub": 3291.9745, "lw": 62.25, "loudestMic": 8, "principalScAmp": 2600.9, "principalScPow": 671.1}
+    },
+    "60": {
+     "ff": {"scAmp": 2125.3485, "scPow": 549.8443, "hcAmp": 8.0686, "hcPow": 2.0874, "levelDb": 70.3383, "sharp": 1.1122, "sharpNative": 1.1648, "sone": 18.13, "snrDb": 30.03, "scPowNoNoiseSub": 549.7172, "scAmpNoNoiseSub": 2135.6717, "lw": 87.77, "loudestMic": 8, "principalScAmp": 1886.3, "principalScPow": 802.9},
+     "pp": {"scAmp": 700.8763, "scPow": 339.3808, "hcAmp": 2.6608, "hcPow": 1.2884, "levelDb": 49.618, "sharp": 0.7379, "sharpNative": 0.6805, "sone": 3.124, "snrDb": 12.7, "scPowNoNoiseSub": 350.1958, "scAmpNoNoiseSub": 2795.821, "lw": 67.06, "loudestMic": 8, "principalScAmp": 2035.2, "principalScPow": 363.9}
+    },
+    "61": {
+     "ff": {"scAmp": 2604.769, "scPow": 758.7128, "hcAmp": 9.3337, "hcPow": 2.7187, "levelDb": 65.893, "sharp": 1.2395, "sharpNative": 1.2749, "sone": 15.089, "snrDb": 23.05, "scPowNoNoiseSub": 756.5958, "scAmpNoNoiseSub": 2604.7187, "lw": 83.23, "loudestMic": 4, "principalScAmp": 2378.6, "principalScPow": 1082.2},
+     "pp": {"scAmp": 908.4253, "scPow": 507.8904, "hcAmp": 3.2552, "hcPow": 1.8199, "levelDb": 44.8939, "sharp": 0.8805, "sharpNative": 0.7873, "sone": 2.679, "snrDb": 8.91, "scPowNoNoiseSub": 521.6248, "scAmpNoNoiseSub": 3166.2488, "lw": 62.8, "loudestMic": 4, "principalScAmp": 2428.2, "principalScPow": 591.3}
+    },
+    "62": {
+     "ff": {"scAmp": 2964.8376, "scPow": 684.9157, "hcAmp": 10.0276, "hcPow": 2.3165, "levelDb": 64.5721, "sharp": 1.3074, "sharpNative": 1.3285, "sone": 14.035, "snrDb": 27.2, "scPowNoNoiseSub": 684.6486, "scAmpNoNoiseSub": 2952.4649, "lw": 81.94, "loudestMic": 8, "principalScAmp": 2740.1, "principalScPow": 941.3},
+     "pp": {"scAmp": 973.6262, "scPow": 375.4017, "hcAmp": 3.293, "hcPow": 1.2697, "levelDb": 48.2778, "sharp": 0.9232, "sharpNative": 0.8271, "sone": 3.033, "snrDb": 12.51, "scPowNoNoiseSub": 387.4381, "scAmpNoNoiseSub": 2997.1302, "lw": 65.97, "loudestMic": 8, "principalScAmp": 2173.9, "principalScPow": 467.4}
+    },
+    "63": {
+     "ff": {"scAmp": 2185.6006, "scPow": 517.2525, "hcAmp": 6.9772, "hcPow": 1.6513, "levelDb": 68.6902, "sharp": 1.1257, "sharpNative": 1.1784, "sone": 15.649, "snrDb": 32.21, "scPowNoNoiseSub": 517.2869, "scAmpNoNoiseSub": 2202.9025, "lw": 86.11, "loudestMic": 8, "principalScAmp": 1931.5, "principalScPow": 852.6},
+     "pp": {"scAmp": 1126.3397, "scPow": 456.5078, "hcAmp": 3.5957, "hcPow": 1.4573, "levelDb": 47.6783, "sharp": 0.9675, "sharpNative": 0.8544, "sone": 3.219, "snrDb": 11.33, "scPowNoNoiseSub": 468.3416, "scAmpNoNoiseSub": 2972.9847, "lw": 65.6, "loudestMic": 8, "principalScAmp": 2388.3, "principalScPow": 596.8}
+    },
+    "64": {
+     "ff": {"scAmp": 2935.2414, "scPow": 886.0367, "hcAmp": 8.8444, "hcPow": 2.6698, "levelDb": 64.9505, "sharp": 1.3555, "sharpNative": 1.372, "sone": 14.026, "snrDb": 27.56, "scPowNoNoiseSub": 885.8464, "scAmpNoNoiseSub": 2923.1947, "lw": 82.24, "loudestMic": 6, "principalScAmp": 2414.5, "principalScPow": 999.7},
+     "pp": {"scAmp": 973.4286, "scPow": 396.7236, "hcAmp": 2.9331, "hcPow": 1.1954, "levelDb": 48.318, "sharp": 0.8572, "sharpNative": 0.7981, "sone": 2.949, "snrDb": 11.13, "scPowNoNoiseSub": 408.6087, "scAmpNoNoiseSub": 2970.9713, "lw": 65.95, "loudestMic": 8, "principalScAmp": 2232.3, "principalScPow": 550.8}
+    },
+    "65": {
+     "ff": {"scAmp": 2644.6815, "scPow": 629.8745, "hcAmp": 7.5216, "hcPow": 1.7914, "levelDb": 68.9162, "sharp": 1.2947, "sharpNative": 1.3417, "sone": 15.614, "snrDb": 32.77, "scPowNoNoiseSub": 629.8939, "scAmpNoNoiseSub": 2649.4702, "lw": 86.29, "loudestMic": 6, "principalScAmp": 2092.4, "principalScPow": 589.5},
+     "pp": {"scAmp": 961.4925, "scPow": 517.0209, "hcAmp": 2.7345, "hcPow": 1.4704, "levelDb": 45.2301, "sharp": 0.9253, "sharpNative": 0.8409, "sone": 2.604, "snrDb": 5.69, "scPowNoNoiseSub": 527.5538, "scAmpNoNoiseSub": 3179.5712, "lw": 63.45, "loudestMic": 8, "principalScAmp": 2320.0, "principalScPow": 574.1}
+    },
+    "66": {
+     "ff": {"scAmp": 2268.026, "scPow": 455.9939, "hcAmp": 6.0884, "hcPow": 1.2241, "levelDb": 71.4803, "sharp": 1.184, "sharpNative": 1.2456, "sone": 17.14, "snrDb": 34.43, "scPowNoNoiseSub": 456.0229, "scAmpNoNoiseSub": 2275.7834, "lw": 88.66, "loudestMic": 3, "principalScAmp": 2346.4, "principalScPow": 977.2},
+     "pp": {"scAmp": 883.9712, "scPow": 388.6015, "hcAmp": 2.373, "hcPow": 1.0432, "levelDb": 47.2549, "sharp": 0.9231, "sharpNative": 0.826, "sone": 2.217, "snrDb": 8.5, "scPowNoNoiseSub": 396.8034, "scAmpNoNoiseSub": 3096.3458, "lw": 65.97, "loudestMic": 6, "principalScAmp": 2126.7, "principalScPow": 407.4}
+    },
+    "67": {
+     "ff": {"scAmp": 2590.5419, "scPow": 482.7169, "hcAmp": 6.5638, "hcPow": 1.2231, "levelDb": 69.0047, "sharp": 1.2437, "sharpNative": 1.2913, "sone": 15.132, "snrDb": 31.06, "scPowNoNoiseSub": 482.7585, "scAmpNoNoiseSub": 2586.0846, "lw": 86.08, "loudestMic": 16, "principalScAmp": 2385.8, "principalScPow": 691.2},
+     "pp": {"scAmp": 630.0948, "scPow": 398.2604, "hcAmp": 1.5965, "hcPow": 1.0091, "levelDb": 49.122, "sharp": 0.8322, "sharpNative": 0.7559, "sone": 2.195, "snrDb": 8.81, "scPowNoNoiseSub": 404.093, "scAmpNoNoiseSub": 3147.6526, "lw": 67.07, "loudestMic": 5, "principalScAmp": 2321.1, "principalScPow": 447.9}
+    },
+    "68": {
+     "ff": {"scAmp": 2254.9915, "scPow": 482.0192, "hcAmp": 5.393, "hcPow": 1.1528, "levelDb": 71.3695, "sharp": 1.1944, "sharpNative": 1.2594, "sone": 16.82, "snrDb": 34.4, "scPowNoNoiseSub": 482.047, "scAmpNoNoiseSub": 2266.2684, "lw": 88.28, "loudestMic": 28, "principalScAmp": 2062.7, "principalScPow": 588.3},
+     "pp": {"scAmp": 1029.2195, "scPow": 464.5353, "hcAmp": 2.4614, "hcPow": 1.111, "levelDb": 48.1462, "sharp": 0.9283, "sharpNative": 0.8609, "sone": 2.797, "snrDb": 11.17, "scPowNoNoiseSub": 472.4647, "scAmpNoNoiseSub": 3026.4448, "lw": 65.89, "loudestMic": 28, "principalScAmp": 2202.7, "principalScPow": 561.0}
+    },
+    "69": {
+     "ff": {"scAmp": 2524.0214, "scPow": 641.5312, "hcAmp": 5.6976, "hcPow": 1.4482, "levelDb": 68.3403, "sharp": 1.2664, "sharpNative": 1.315, "sone": 15.089, "snrDb": 31.7, "scPowNoNoiseSub": 641.4938, "scAmpNoNoiseSub": 2522.07, "lw": 85.68, "loudestMic": 6, "principalScAmp": 2180.8, "principalScPow": 998.5},
+     "pp": {"scAmp": 1214.7139, "scPow": 472.817, "hcAmp": 2.742, "hcPow": 1.0673, "levelDb": 51.0215, "sharp": 1.0176, "sharpNative": 0.9489, "sone": 3.176, "snrDb": 14.21, "scPowNoNoiseSub": 477.8543, "scAmpNoNoiseSub": 2905.174, "lw": 69.17, "loudestMic": 4, "principalScAmp": 2494.3, "principalScPow": 1039.4}
+    },
+    "70": {
+     "ff": {"scAmp": 2603.9426, "scPow": 896.8216, "hcAmp": 5.5481, "hcPow": 1.9108, "levelDb": 68.6092, "sharp": 1.3595, "sharpNative": 1.3994, "sone": 16.79, "snrDb": 31.2, "scPowNoNoiseSub": 896.7252, "scAmpNoNoiseSub": 2605.4889, "lw": 86.12, "loudestMic": 6, "principalScAmp": 2239.0, "principalScPow": 1085.5},
+     "pp": {"scAmp": 1216.8977, "scPow": 647.8265, "hcAmp": 2.5928, "hcPow": 1.3803, "levelDb": 46.4117, "sharp": 1.0657, "sharpNative": 0.9829, "sone": 2.895, "snrDb": 8.24, "scPowNoNoiseSub": 646.6273, "scAmpNoNoiseSub": 3147.1877, "lw": 64.22, "loudestMic": 6, "principalScAmp": 2213.6, "principalScPow": 588.1}
+    },
+    "71": {
+     "ff": {"scAmp": 2811.2736, "scPow": 716.5118, "hcAmp": 5.6536, "hcPow": 1.4409, "levelDb": 69.1503, "sharp": 1.388, "sharpNative": 1.4169, "sone": 16.92, "snrDb": 30.95, "scPowNoNoiseSub": 716.4882, "scAmpNoNoiseSub": 2802.0426, "lw": 86.39, "loudestMic": 8, "principalScAmp": 2559.0, "principalScPow": 874.6},
+     "pp": {"scAmp": 1259.3724, "scPow": 533.7461, "hcAmp": 2.5327, "hcPow": 1.0734, "levelDb": 48.8987, "sharp": 1.081, "sharpNative": 1.0019, "sone": 3.09, "snrDb": 11.21, "scPowNoNoiseSub": 535.3771, "scAmpNoNoiseSub": 2941.9833, "lw": 66.35, "loudestMic": 8, "principalScAmp": 2321.7, "principalScPow": 613.6}
+    },
+    "72": {
+     "ff": {"scAmp": 2751.9666, "scPow": 703.5674, "hcAmp": 5.2237, "hcPow": 1.3355, "levelDb": 68.315, "sharp": 1.3939, "sharpNative": 1.4189, "sone": 15.597, "snrDb": 28.91, "scPowNoNoiseSub": 703.4647, "scAmpNoNoiseSub": 2750.4329, "lw": 85.56, "loudestMic": 8, "principalScAmp": 2730.6, "principalScPow": 1103.0},
+     "pp": {"scAmp": 1091.2888, "scPow": 529.1768, "hcAmp": 2.0715, "hcPow": 1.0045, "levelDb": 53.5217, "sharp": 0.9551, "sharpNative": 0.9135, "sone": 3.481, "snrDb": 14.74, "scPowNoNoiseSub": 530.587, "scAmpNoNoiseSub": 2680.8489, "lw": 70.47, "loudestMic": 8, "principalScAmp": 2243.7, "principalScPow": 562.0}
+    },
+    "73": {
+     "ff": {"scAmp": 2894.8583, "scPow": 829.2913, "hcAmp": 5.1866, "hcPow": 1.4858, "levelDb": 69.0309, "sharp": 1.4668, "sharpNative": 1.5009, "sone": 16.67, "snrDb": 29.34, "scPowNoNoiseSub": 829.2143, "scAmpNoNoiseSub": 2886.5797, "lw": 85.93, "loudestMic": 3, "principalScAmp": 3149.3, "principalScPow": 1539.5},
+     "pp": {"scAmp": 1384.7659, "scPow": 635.6971, "hcAmp": 2.481, "hcPow": 1.1389, "levelDb": 46.8759, "sharp": 1.1669, "sharpNative": 1.0792, "sone": 2.788, "snrDb": 10.72, "scPowNoNoiseSub": 638.1312, "scAmpNoNoiseSub": 3237.6156, "lw": 64.57, "loudestMic": 3, "principalScAmp": 2736.1, "principalScPow": 710.3}
+    },
+    "74": {
+     "ff": {"scAmp": 3465.8198, "scPow": 1125.8773, "hcAmp": 5.861, "hcPow": 1.904, "levelDb": 64.7359, "sharp": 1.5836, "sharpNative": 1.5998, "sone": 14.215, "snrDb": 25.29, "scPowNoNoiseSub": 1125.4868, "scAmpNoNoiseSub": 3445.2335, "lw": 82.26, "loudestMic": 6, "principalScAmp": 2925.8, "principalScPow": 1557.6},
+     "pp": {"scAmp": 1574.3707, "scPow": 731.4704, "hcAmp": 2.6624, "hcPow": 1.237, "levelDb": 43.9104, "sharp": 1.2672, "sharpNative": 1.1434, "sone": 2.568, "snrDb": 8.53, "scPowNoNoiseSub": 730.3823, "scAmpNoNoiseSub": 3462.2168, "lw": 62.19, "loudestMic": 28, "principalScAmp": 2758.5, "principalScPow": 1306.9}
+    },
+    "75": {
+     "ff": {"scAmp": 3366.4722, "scPow": 1361.8209, "hcAmp": 5.3735, "hcPow": 2.1737, "levelDb": 64.1939, "sharp": 1.6105, "sharpNative": 1.6215, "sone": 14.023, "snrDb": 25.05, "scPowNoNoiseSub": 1360.5174, "scAmpNoNoiseSub": 3313.823, "lw": 81.64, "loudestMic": 6, "principalScAmp": 2898.0, "principalScPow": 1780.1},
+     "pp": {"scAmp": 1477.6881, "scPow": 1002.1343, "hcAmp": 2.3587, "hcPow": 1.5996, "levelDb": 42.4866, "sharp": 1.2627, "sharpNative": 1.2019, "sone": 2.645, "snrDb": 6.46, "scPowNoNoiseSub": 959.4798, "scAmpNoNoiseSub": 3385.943, "lw": 61.38, "loudestMic": 6, "principalScAmp": 2626.3, "principalScPow": 1618.9}
+    },
+    "76": {
+     "ff": {"scAmp": 3239.3143, "scPow": 1378.6988, "hcAmp": 4.8803, "hcPow": 2.0771, "levelDb": 65.117, "sharp": 1.6245, "sharpNative": 1.6378, "sone": 14.532, "snrDb": 25.6, "scPowNoNoiseSub": 1377.8216, "scAmpNoNoiseSub": 3226.5932, "lw": 82.7, "loudestMic": 6, "principalScAmp": 2613.9, "principalScPow": 1368.1}
+    }
+   }
+  },
+  "Viola": {
+   "sections": ["Violas"],
+   "principalMic": 7,
+   "tuning": 442.0,
+   "notes": {
+    "48": {
+     "ff": {"scAmp": 1992.2889, "scPow": 883.1708, "hcAmp": 15.1612, "hcPow": 6.7209, "levelDb": 71.0201, "sharp": 1.2241, "sharpNative": 1.2527, "sone": 22.85, "snrDb": 39.49, "scPowNoNoiseSub": 883.2366, "scAmpNoNoiseSub": 2017.8042, "lw": 88.42, "loudestMic": 26, "principalScAmp": 2042.1, "principalScPow": 975.7},
+     "pp": {"scAmp": 1194.3418, "scPow": 488.6894, "hcAmp": 9.0888, "hcPow": 3.7189, "levelDb": 42.9195, "sharp": 0.9474, "sharpNative": 0.8594, "sone": 2.427, "snrDb": 13.38, "scPowNoNoiseSub": 557.909, "scAmpNoNoiseSub": 3438.8713, "lw": 60.49, "loudestMic": 4, "principalScAmp": 3445.9, "principalScPow": 548.5}
+    },
+    "49": {
+     "ff": {"scAmp": 1676.3541, "scPow": 622.3754, "hcAmp": 12.0409, "hcPow": 4.4704, "levelDb": 71.632, "sharp": 1.1129, "sharpNative": 1.1434, "sone": 19.96, "snrDb": 41.68, "scPowNoNoiseSub": 622.467, "scAmpNoNoiseSub": 1741.2755, "lw": 89.0, "loudestMic": 7, "principalScAmp": 1729.6, "principalScPow": 688.5},
+     "pp": {"scAmp": 969.1616, "scPow": 422.663, "hcAmp": 6.9613, "hcPow": 3.0359, "levelDb": 40.87, "sharp": 0.8622, "sharpNative": 0.7316, "sone": 1.533, "snrDb": 11.35, "scPowNoNoiseSub": 534.7274, "scAmpNoNoiseSub": 3846.7055, "lw": 58.63, "loudestMic": 25, "principalScAmp": 3852.5, "principalScPow": 522.3}
+    },
+    "50": {
+     "ff": {"scAmp": 1703.3829, "scPow": 654.9545, "hcAmp": 11.5484, "hcPow": 4.4404, "levelDb": 70.5265, "sharp": 1.1356, "sharpNative": 1.1672, "sone": 18.21, "snrDb": 40.76, "scPowNoNoiseSub": 655.0755, "scAmpNoNoiseSub": 1801.1772, "lw": 88.03, "loudestMic": 7, "principalScAmp": 1744.6, "principalScPow": 680.1},
+     "pp": {"scAmp": 1164.0729, "scPow": 531.3662, "hcAmp": 7.892, "hcPow": 3.6025, "levelDb": 40.6624, "sharp": 0.967, "sharpNative": 0.8902, "sone": 1.841, "snrDb": 11.17, "scPowNoNoiseSub": 640.7539, "scAmpNoNoiseSub": 3652.2677, "lw": 58.38, "loudestMic": 7, "principalScAmp": 3569.5, "principalScPow": 612.4}
+    },
+    "51": {
+     "ff": {"scAmp": 1916.1335, "scPow": 786.077, "hcAmp": 12.2616, "hcPow": 5.0302, "levelDb": 69.883, "sharp": 1.2033, "sharpNative": 1.2254, "sone": 19.4, "snrDb": 40.26, "scPowNoNoiseSub": 786.1933, "scAmpNoNoiseSub": 1956.9754, "lw": 87.35, "loudestMic": 7, "principalScAmp": 1909.0, "principalScPow": 744.4},
+     "pp": {"scAmp": 1116.9171, "scPow": 505.8682, "hcAmp": 7.1473, "hcPow": 3.2371, "levelDb": 40.7351, "sharp": 0.9514, "sharpNative": 0.8645, "sone": 1.835, "snrDb": 11.23, "scPowNoNoiseSub": 615.0306, "scAmpNoNoiseSub": 3663.551, "lw": 58.46, "loudestMic": 7, "principalScAmp": 3590.9, "principalScPow": 637.9}
+    },
+    "52": {
+     "ff": {"scAmp": 1891.5432, "scPow": 719.4821, "hcAmp": 11.4249, "hcPow": 4.3457, "levelDb": 71.1072, "sharp": 1.1835, "sharpNative": 1.2041, "sone": 20.92, "snrDb": 40.23, "scPowNoNoiseSub": 719.5704, "scAmpNoNoiseSub": 1932.3974, "lw": 88.48, "loudestMic": 4, "principalScAmp": 2057.9, "principalScPow": 792.4},
+     "pp": {"scAmp": 1053.5362, "scPow": 428.2456, "hcAmp": 6.3634, "hcPow": 2.5866, "levelDb": 40.4545, "sharp": 0.9105, "sharpNative": 0.8195, "sone": 1.563, "snrDb": 11.04, "scPowNoNoiseSub": 551.058, "scAmpNoNoiseSub": 3810.559, "lw": 58.45, "loudestMic": 4, "principalScAmp": 3884.1, "principalScPow": 586.0}
+    },
+    "53": {
+     "ff": {"scAmp": 1886.4677, "scPow": 770.2681, "hcAmp": 10.7548, "hcPow": 4.3913, "levelDb": 71.8297, "sharp": 1.208, "sharpNative": 1.227, "sone": 21.73, "snrDb": 41.58, "scPowNoNoiseSub": 770.3402, "scAmpNoNoiseSub": 1924.1641, "lw": 89.29, "loudestMic": 15, "principalScAmp": 1966.2, "principalScPow": 912.9},
+     "pp": {"scAmp": 1162.8169, "scPow": 422.3044, "hcAmp": 6.6292, "hcPow": 2.4076, "levelDb": 44.3033, "sharp": 0.9567, "sharpNative": 0.8681, "sone": 2.057, "snrDb": 14.84, "scPowNoNoiseSub": 475.4205, "scAmpNoNoiseSub": 3504.0834, "lw": 61.95, "loudestMic": 4, "principalScAmp": 3502.7, "principalScPow": 537.2}
+    },
+    "54": {
+     "ff": {"scAmp": 1628.4874, "scPow": 544.5788, "hcAmp": 8.7629, "hcPow": 2.9304, "levelDb": 75.9729, "sharp": 1.0949, "sharpNative": 1.1316, "sone": 25.26, "snrDb": 43.04, "scPowNoNoiseSub": 544.608, "scAmpNoNoiseSub": 1657.4243, "lw": 93.33, "loudestMic": 32, "principalScAmp": 1683.7, "principalScPow": 633.3},
+     "pp": {"scAmp": 1165.0441, "scPow": 524.8998, "hcAmp": 6.2691, "hcPow": 2.8245, "levelDb": 44.3426, "sharp": 0.9511, "sharpNative": 0.8879, "sone": 2.56, "snrDb": 14.63, "scPowNoNoiseSub": 574.2459, "scAmpNoNoiseSub": 3299.3356, "lw": 61.81, "loudestMic": 32, "principalScAmp": 3284.7, "principalScPow": 632.7}
+    },
+    "55": {
+     "ff": {"scAmp": 2059.5595, "scPow": 951.4233, "hcAmp": 10.4605, "hcPow": 4.8323, "levelDb": 73.1039, "sharp": 1.2475, "sharpNative": 1.2954, "sone": 25.47, "snrDb": 41.66, "scPowNoNoiseSub": 951.4473, "scAmpNoNoiseSub": 2085.3426, "lw": 90.44, "loudestMic": 26, "principalScAmp": 2223.2, "principalScPow": 1227.4},
+     "pp": {"scAmp": 1242.8538, "scPow": 766.9758, "hcAmp": 6.3125, "hcPow": 3.8955, "levelDb": 45.0857, "sharp": 1.0108, "sharpNative": 0.9708, "sone": 3.174, "snrDb": 15.24, "scPowNoNoiseSub": 801.629, "scAmpNoNoiseSub": 3265.7684, "lw": 62.6, "loudestMic": 32, "principalScAmp": 3324.3, "principalScPow": 869.8}
+    },
+    "56": {
+     "ff": {"scAmp": 1713.6833, "scPow": 554.051, "hcAmp": 8.2153, "hcPow": 2.6561, "levelDb": 76.7902, "sharp": 1.1008, "sharpNative": 1.1722, "sone": 26.61, "snrDb": 45.23, "scPowNoNoiseSub": 554.0762, "scAmpNoNoiseSub": 1742.6, "lw": 94.15, "loudestMic": 25, "principalScAmp": 1698.0, "principalScPow": 614.6},
+     "pp": {"scAmp": 1109.8282, "scPow": 484.8995, "hcAmp": 5.3205, "hcPow": 2.3246, "levelDb": 48.1619, "sharp": 0.9378, "sharpNative": 0.8816, "sone": 3.374, "snrDb": 18.5, "scPowNoNoiseSub": 506.5267, "scAmpNoNoiseSub": 3042.4187, "lw": 65.62, "loudestMic": 25, "principalScAmp": 3002.6, "principalScPow": 505.8}
+    },
+    "57": {
+     "ff": {"scAmp": 1726.2892, "scPow": 553.602, "hcAmp": 7.8113, "hcPow": 2.505, "levelDb": 76.5542, "sharp": 1.1029, "sharpNative": 1.1798, "sone": 27.63, "snrDb": 46.53, "scPowNoNoiseSub": 553.6321, "scAmpNoNoiseSub": 1753.6774, "lw": 93.96, "loudestMic": 25, "principalScAmp": 1737.8, "principalScPow": 577.7},
+     "pp": {"scAmp": 970.2827, "scPow": 360.4632, "hcAmp": 4.3904, "hcPow": 1.6311, "levelDb": 50.1898, "sharp": 0.8834, "sharpNative": 0.8401, "sone": 3.616, "snrDb": 20.11, "scPowNoNoiseSub": 375.1891, "scAmpNoNoiseSub": 2830.1718, "lw": 67.48, "loudestMic": 25, "principalScAmp": 2798.2, "principalScPow": 385.5}
+    },
+    "58": {
+     "ff": {"scAmp": 1703.6898, "scPow": 590.7237, "hcAmp": 7.2763, "hcPow": 2.5229, "levelDb": 77.1075, "sharp": 1.0987, "sharpNative": 1.1724, "sone": 29.49, "snrDb": 47.17, "scPowNoNoiseSub": 590.7489, "scAmpNoNoiseSub": 1723.2132, "lw": 94.43, "loudestMic": 25, "principalScAmp": 1633.8, "principalScPow": 567.9},
+     "pp": {"scAmp": 1031.2234, "scPow": 439.43, "hcAmp": 4.4043, "hcPow": 1.8768, "levelDb": 50.6727, "sharp": 0.907, "sharpNative": 0.8588, "sone": 4.174, "snrDb": 20.92, "scPowNoNoiseSub": 452.1195, "scAmpNoNoiseSub": 2753.0661, "lw": 68.09, "loudestMic": 10, "principalScAmp": 2743.4, "principalScPow": 448.0}
+    },
+    "59": {
+     "ff": {"scAmp": 1891.6399, "scPow": 820.9044, "hcAmp": 7.6256, "hcPow": 3.3092, "levelDb": 74.914, "sharp": 1.1743, "sharpNative": 1.2328, "sone": 27.46, "snrDb": 43.88, "scPowNoNoiseSub": 820.9362, "scAmpNoNoiseSub": 1919.0768, "lw": 92.14, "loudestMic": 7, "principalScAmp": 1771.5, "principalScPow": 808.4},
+     "pp": {"scAmp": 1023.7326, "scPow": 482.0004, "hcAmp": 4.1269, "hcPow": 1.943, "levelDb": 50.1638, "sharp": 0.8651, "sharpNative": 0.8144, "sone": 3.899, "snrDb": 20.32, "scPowNoNoiseSub": 495.7373, "scAmpNoNoiseSub": 2859.0739, "lw": 67.64, "loudestMic": 7, "principalScAmp": 2691.7, "principalScPow": 539.1}
+    },
+    "60": {
+     "ff": {"scAmp": 2292.7181, "scPow": 1175.9453, "hcAmp": 8.7237, "hcPow": 4.4744, "levelDb": 71.3825, "sharp": 1.3093, "sharpNative": 1.3501, "sone": 24.13, "snrDb": 39.99, "scPowNoNoiseSub": 1175.9673, "scAmpNoNoiseSub": 2317.7401, "lw": 88.79, "loudestMic": 7, "principalScAmp": 2186.1, "principalScPow": 1155.9},
+     "pp": {"scAmp": 1353.2738, "scPow": 628.8501, "hcAmp": 5.1492, "hcPow": 2.3928, "levelDb": 46.3601, "sharp": 1.0313, "sharpNative": 0.9818, "sone": 3.671, "snrDb": 16.61, "scPowNoNoiseSub": 658.3637, "scAmpNoNoiseSub": 3167.8482, "lw": 63.87, "loudestMic": 7, "principalScAmp": 3041.1, "principalScPow": 651.3}
+    },
+    "61": {
+     "ff": {"scAmp": 2510.9809, "scPow": 1217.3578, "hcAmp": 9.0179, "hcPow": 4.372, "levelDb": 70.6848, "sharp": 1.3649, "sharpNative": 1.404, "sone": 22.81, "snrDb": 40.26, "scPowNoNoiseSub": 1217.4025, "scAmpNoNoiseSub": 2525.8144, "lw": 88.08, "loudestMic": 25, "principalScAmp": 2536.6, "principalScPow": 1115.4},
+     "pp": {"scAmp": 1429.5483, "scPow": 568.6316, "hcAmp": 5.1341, "hcPow": 2.0422, "levelDb": 44.351, "sharp": 1.0629, "sharpNative": 0.9846, "sone": 2.923, "snrDb": 14.79, "scPowNoNoiseSub": 616.8445, "scAmpNoNoiseSub": 3375.6356, "lw": 61.92, "loudestMic": 10, "principalScAmp": 3415.2, "principalScPow": 559.9}
+    },
+    "62": {
+     "ff": {"scAmp": 2482.8435, "scPow": 1175.8021, "hcAmp": 8.4164, "hcPow": 3.9858, "levelDb": 70.9318, "sharp": 1.3975, "sharpNative": 1.4319, "sone": 23.07, "snrDb": 39.65, "scPowNoNoiseSub": 1175.8452, "scAmpNoNoiseSub": 2518.0445, "lw": 88.32, "loudestMic": 7, "principalScAmp": 2375.7, "principalScPow": 1627.8},
+     "pp": {"scAmp": 1515.3009, "scPow": 750.9845, "hcAmp": 5.1366, "hcPow": 2.5457, "levelDb": 46.1815, "sharp": 1.1303, "sharpNative": 1.0825, "sone": 3.8, "snrDb": 16.4, "scPowNoNoiseSub": 778.8469, "scAmpNoNoiseSub": 3319.5237, "lw": 63.68, "loudestMic": 10, "principalScAmp": 3282.6, "principalScPow": 875.2}
+    },
+    "63": {
+     "ff": {"scAmp": 2225.4187, "scPow": 1092.8474, "hcAmp": 7.1204, "hcPow": 3.4967, "levelDb": 72.6721, "sharp": 1.2995, "sharpNative": 1.3461, "sone": 24.29, "snrDb": 42.63, "scPowNoNoiseSub": 1092.8931, "scAmpNoNoiseSub": 2252.0133, "lw": 89.9, "loudestMic": 9, "principalScAmp": 2205.0, "principalScPow": 1110.3},
+     "pp": {"scAmp": 1472.5444, "scPow": 896.9417, "hcAmp": 4.7115, "hcPow": 2.8698, "levelDb": 47.5591, "sharp": 1.1203, "sharpNative": 1.0702, "sone": 4.054, "snrDb": 17.69, "scPowNoNoiseSub": 914.8285, "scAmpNoNoiseSub": 3233.279, "lw": 64.92, "loudestMic": 9, "principalScAmp": 3195.8, "principalScPow": 820.4}
+    },
+    "64": {
+     "ff": {"scAmp": 2417.5426, "scPow": 1029.86, "hcAmp": 7.301, "hcPow": 3.1102, "levelDb": 71.9498, "sharp": 1.3434, "sharpNative": 1.3867, "sone": 23.54, "snrDb": 41.94, "scPowNoNoiseSub": 1029.9143, "scAmpNoNoiseSub": 2439.5798, "lw": 89.41, "loudestMic": 30, "principalScAmp": 2569.1, "principalScPow": 1066.6},
+     "pp": {"scAmp": 1464.8779, "scPow": 671.6387, "hcAmp": 4.4239, "hcPow": 2.0283, "levelDb": 46.4877, "sharp": 1.0911, "sharpNative": 1.0323, "sone": 3.515, "snrDb": 16.9, "scPowNoNoiseSub": 699.9666, "scAmpNoNoiseSub": 3331.3808, "lw": 64.08, "loudestMic": 18, "principalScAmp": 3354.2, "principalScPow": 669.4}
+    },
+    "65": {
+     "ff": {"scAmp": 2162.5146, "scPow": 700.9371, "hcAmp": 6.1642, "hcPow": 1.998, "levelDb": 73.6184, "sharp": 1.2842, "sharpNative": 1.3496, "sone": 23.06, "snrDb": 43.19, "scPowNoNoiseSub": 700.9873, "scAmpNoNoiseSub": 2192.9255, "lw": 90.92, "loudestMic": 4, "principalScAmp": 2349.6, "principalScPow": 1133.0},
+     "pp": {"scAmp": 1337.6939, "scPow": 486.2332, "hcAmp": 3.8131, "hcPow": 1.386, "levelDb": 49.3177, "sharp": 1.062, "sharpNative": 1.0017, "sone": 3.575, "snrDb": 19.51, "scPowNoNoiseSub": 503.1242, "scAmpNoNoiseSub": 3196.9178, "lw": 66.72, "loudestMic": 4, "principalScAmp": 3289.5, "principalScPow": 663.6}
+    },
+    "66": {
+     "ff": {"scAmp": 2197.8669, "scPow": 766.9424, "hcAmp": 5.9134, "hcPow": 2.0635, "levelDb": 74.2476, "sharp": 1.2922, "sharpNative": 1.3514, "sone": 25.34, "snrDb": 44.09, "scPowNoNoiseSub": 766.9825, "scAmpNoNoiseSub": 2217.1597, "lw": 91.64, "loudestMic": 26, "principalScAmp": 2234.4, "principalScPow": 1048.7},
+     "pp": {"scAmp": 1452.558, "scPow": 632.2805, "hcAmp": 3.9081, "hcPow": 1.7012, "levelDb": 48.4682, "sharp": 1.1317, "sharpNative": 1.0697, "sone": 3.949, "snrDb": 18.59, "scPowNoNoiseSub": 650.5876, "scAmpNoNoiseSub": 3172.7288, "lw": 65.77, "loudestMic": 32, "principalScAmp": 3134.3, "principalScPow": 749.4}
+    },
+    "67": {
+     "ff": {"scAmp": 2745.8368, "scPow": 1275.5326, "hcAmp": 6.9731, "hcPow": 3.2392, "levelDb": 72.1984, "sharp": 1.4472, "sharpNative": 1.4853, "sone": 24.52, "snrDb": 42.01, "scPowNoNoiseSub": 1275.5662, "scAmpNoNoiseSub": 2752.2834, "lw": 89.52, "loudestMic": 13, "principalScAmp": 2818.4, "principalScPow": 1402.3},
+     "pp": {"scAmp": 1866.5918, "scPow": 1145.2812, "hcAmp": 4.7402, "hcPow": 2.9084, "levelDb": 45.1131, "sharp": 1.3478, "sharpNative": 1.2694, "sone": 3.803, "snrDb": 15.36, "scPowNoNoiseSub": 1169.0396, "scAmpNoNoiseSub": 3475.3975, "lw": 62.52, "loudestMic": 26, "principalScAmp": 3500.8, "principalScPow": 1138.2}
+    },
+    "68": {
+     "ff": {"scAmp": 2073.536, "scPow": 656.9182, "hcAmp": 4.9702, "hcPow": 1.5746, "levelDb": 77.9687, "sharp": 1.2911, "sharpNative": 1.3602, "sone": 28.33, "snrDb": 47.64, "scPowNoNoiseSub": 656.9389, "scAmpNoNoiseSub": 2091.9094, "lw": 95.3, "loudestMic": 7, "principalScAmp": 2029.2, "principalScPow": 851.2},
+     "pp": {"scAmp": 1376.777, "scPow": 647.7644, "hcAmp": 3.3001, "hcPow": 1.5527, "levelDb": 49.6548, "sharp": 1.1076, "sharpNative": 1.0737, "sone": 4.17, "snrDb": 19.91, "scPowNoNoiseSub": 661.5796, "scAmpNoNoiseSub": 3061.5357, "lw": 67.05, "loudestMic": 32, "principalScAmp": 3104.6, "principalScPow": 814.6}
+    },
+    "69": {
+     "ff": {"scAmp": 2407.9544, "scPow": 672.6588, "hcAmp": 5.4479, "hcPow": 1.5219, "levelDb": 79.8278, "sharp": 1.4894, "sharpNative": 1.5305, "sone": 32.08, "snrDb": 42.09, "scPowNoNoiseSub": 672.6645, "scAmpNoNoiseSub": 2420.4853, "lw": 97.22, "loudestMic": 25, "principalScAmp": 2429.8, "principalScPow": 788.6},
+     "pp": {"scAmp": 1609.9571, "scPow": 584.3236, "hcAmp": 3.6424, "hcPow": 1.322, "levelDb": 50.2899, "sharp": 1.2119, "sharpNative": 1.1268, "sone": 3.894, "snrDb": 20.5, "scPowNoNoiseSub": 597.1542, "scAmpNoNoiseSub": 3315.1173, "lw": 67.76, "loudestMic": 7, "principalScAmp": 3130.1, "principalScPow": 618.4}
+    },
+    "70": {
+     "ff": {"scAmp": 2835.3688, "scPow": 1076.6611, "hcAmp": 6.0548, "hcPow": 2.2992, "levelDb": 75.4691, "sharp": 1.602, "sharpNative": 1.6336, "sone": 29.31, "snrDb": 45.37, "scPowNoNoiseSub": 1076.684, "scAmpNoNoiseSub": 2850.0022, "lw": 92.84, "loudestMic": 7, "principalScAmp": 2752.6, "principalScPow": 1265.0},
+     "pp": {"scAmp": 1911.6069, "scPow": 866.2544, "hcAmp": 4.0822, "hcPow": 1.8499, "levelDb": 48.4472, "sharp": 1.3677, "sharpNative": 1.3031, "sone": 4.358, "snrDb": 18.55, "scPowNoNoiseSub": 881.4143, "scAmpNoNoiseSub": 3416.2464, "lw": 65.78, "loudestMic": 7, "principalScAmp": 3337.1, "principalScPow": 821.9}
+    },
+    "71": {
+     "ff": {"scAmp": 3235.4107, "scPow": 1427.0622, "hcAmp": 6.5213, "hcPow": 2.8764, "levelDb": 73.4432, "sharp": 1.7399, "sharpNative": 1.7568, "sone": 26.52, "snrDb": 42.23, "scPowNoNoiseSub": 1427.0759, "scAmpNoNoiseSub": 3248.5509, "lw": 90.8, "loudestMic": 25, "principalScAmp": 3441.2, "principalScPow": 1219.9},
+     "pp": {"scAmp": 2331.9529, "scPow": 1063.6906, "hcAmp": 4.7003, "hcPow": 2.144, "levelDb": 44.9243, "sharp": 1.5366, "sharpNative": 1.3765, "sone": 3.526, "snrDb": 15.22, "scPowNoNoiseSub": 1092.6395, "scAmpNoNoiseSub": 3867.9021, "lw": 62.37, "loudestMic": 10, "principalScAmp": 3816.2, "principalScPow": 1064.1}
+    },
+    "72": {
+     "ff": {"scAmp": 3349.9721, "scPow": 1998.2196, "hcAmp": 6.3733, "hcPow": 3.8016, "levelDb": 71.9923, "sharp": 1.8257, "sharpNative": 1.8288, "sone": 24.98, "snrDb": 35.54, "scPowNoNoiseSub": 1997.9129, "scAmpNoNoiseSub": 3362.7644, "lw": 89.27, "loudestMic": 7, "principalScAmp": 3187.7, "principalScPow": 1590.1},
+     "pp": {"scAmp": 2543.5706, "scPow": 1793.6878, "hcAmp": 4.8391, "hcPow": 3.4125, "levelDb": 46.5034, "sharp": 1.6213, "sharpNative": 1.58, "sone": 4.257, "snrDb": 16.79, "scPowNoNoiseSub": 1796.4374, "scAmpNoNoiseSub": 3776.8358, "lw": 63.99, "loudestMic": 7, "principalScAmp": 3490.4, "principalScPow": 1671.0}
+    },
+    "73": {
+     "ff": {"scAmp": 2758.0782, "scPow": 1163.3932, "hcAmp": 4.9527, "hcPow": 2.0891, "levelDb": 76.5284, "sharp": 1.576, "sharpNative": 1.6211, "sone": 29.31, "snrDb": 46.77, "scPowNoNoiseSub": 1163.4102, "scAmpNoNoiseSub": 2774.2808, "lw": 93.95, "loudestMic": 30, "principalScAmp": 3343.3, "principalScPow": 1243.2},
+     "pp": {"scAmp": 1925.5486, "scPow": 1132.3312, "hcAmp": 3.4577, "hcPow": 2.0333, "levelDb": 49.471, "sharp": 1.3742, "sharpNative": 1.2978, "sone": 4.627, "snrDb": 19.67, "scPowNoNoiseSub": 1141.8474, "scAmpNoNoiseSub": 3333.9028, "lw": 66.84, "loudestMic": 30, "principalScAmp": 3648.6, "principalScPow": 1293.3}
+    },
+    "74": {
+     "ff": {"scAmp": 3368.202, "scPow": 1499.6703, "hcAmp": 5.7088, "hcPow": 2.5418, "levelDb": 73.9062, "sharp": 1.7604, "sharpNative": 1.787, "sone": 27.08, "snrDb": 38.66, "scPowNoNoiseSub": 1499.609, "scAmpNoNoiseSub": 3376.0882, "lw": 91.2, "loudestMic": 25, "principalScAmp": 3596.4, "principalScPow": 1453.5},
+     "pp": {"scAmp": 2267.7695, "scPow": 1062.5806, "hcAmp": 3.8437, "hcPow": 1.801, "levelDb": 46.4601, "sharp": 1.5115, "sharpNative": 1.4578, "sone": 4.013, "snrDb": 16.76, "scPowNoNoiseSub": 1083.8435, "scAmpNoNoiseSub": 3692.5009, "lw": 63.92, "loudestMic": 15, "principalScAmp": 3833.4, "principalScPow": 1059.0}
+    },
+    "75": {
+     "ff": {"scAmp": 3250.4224, "scPow": 1568.7267, "hcAmp": 5.2, "hcPow": 2.5096, "levelDb": 74.5913, "sharp": 1.7663, "sharpNative": 1.7747, "sone": 27.5, "snrDb": 44.66, "scPowNoNoiseSub": 1568.7353, "scAmpNoNoiseSub": 3257.8609, "lw": 92.1, "loudestMic": 30, "principalScAmp": 3376.2, "principalScPow": 1454.0},
+     "pp": {"scAmp": 2219.7394, "scPow": 1136.4207, "hcAmp": 3.5511, "hcPow": 1.818, "levelDb": 50.6822, "sharp": 1.4729, "sharpNative": 1.4245, "sone": 5.077, "snrDb": 20.64, "scPowNoNoiseSub": 1143.535, "scAmpNoNoiseSub": 3421.3851, "lw": 67.89, "loudestMic": 30, "principalScAmp": 3461.7, "principalScPow": 1355.9}
+    },
+    "76": {
+     "ff": {"scAmp": 3327.922, "scPow": 1677.6303, "hcAmp": 5.0252, "hcPow": 2.5332, "levelDb": 74.215, "sharp": 1.7764, "sharpNative": 1.7988, "sone": 26.42, "snrDb": 43.78, "scPowNoNoiseSub": 1677.6367, "scAmpNoNoiseSub": 3337.1846, "lw": 91.62, "loudestMic": 18, "principalScAmp": 4486.3, "principalScPow": 2665.0},
+     "pp": {"scAmp": 2520.9255, "scPow": 1251.5486, "hcAmp": 3.8066, "hcPow": 1.8898, "levelDb": 48.2078, "sharp": 1.6172, "sharpNative": 1.5291, "sone": 4.347, "snrDb": 18.31, "scPowNoNoiseSub": 1262.479, "scAmpNoNoiseSub": 3717.0891, "lw": 65.6, "loudestMic": 18, "principalScAmp": 4050.3, "principalScPow": 2400.9}
+    },
+    "77": {
+     "ff": {"scAmp": 2940.3593, "scPow": 1233.1833, "hcAmp": 4.1907, "hcPow": 1.7576, "levelDb": 76.3477, "sharp": 1.7345, "sharpNative": 1.7543, "sone": 28.49, "snrDb": 46.34, "scPowNoNoiseSub": 1233.1999, "scAmpNoNoiseSub": 2955.3175, "lw": 93.65, "loudestMic": 15, "principalScAmp": 3086.8, "principalScPow": 1409.9},
+     "pp": {"scAmp": 2434.0119, "scPow": 1056.9423, "hcAmp": 3.4691, "hcPow": 1.5064, "levelDb": 53.0499, "sharp": 1.5669, "sharpNative": 1.5078, "sone": 5.804, "snrDb": 22.77, "scPowNoNoiseSub": 1060.9567, "scAmpNoNoiseSub": 3420.9895, "lw": 70.63, "loudestMic": 15, "principalScAmp": 3471.5, "principalScPow": 1693.8}
+    },
+    "78": {
+     "ff": {"scAmp": 2731.2403, "scPow": 1034.5315, "hcAmp": 3.6742, "hcPow": 1.3917, "levelDb": 79.3238, "sharp": 1.6364, "sharpNative": 1.681, "sone": 31.94, "snrDb": 49.37, "scPowNoNoiseSub": 1034.5418, "scAmpNoNoiseSub": 2742.2692, "lw": 96.63, "loudestMic": 26, "principalScAmp": 2502.9, "principalScPow": 858.6},
+     "pp": {"scAmp": 2147.7169, "scPow": 936.7829, "hcAmp": 2.8892, "hcPow": 1.2602, "levelDb": 55.5484, "sharp": 1.4471, "sharpNative": 1.4144, "sone": 6.416, "snrDb": 25.46, "scPowNoNoiseSub": 939.6116, "scAmpNoNoiseSub": 3098.3163, "lw": 72.88, "loudestMic": 7, "principalScAmp": 2881.6, "principalScPow": 879.6}
+    },
+    "79": {
+     "ff": {"scAmp": 3268.0662, "scPow": 1691.5211, "hcAmp": 4.1496, "hcPow": 2.1478, "levelDb": 75.3688, "sharp": 1.8467, "sharpNative": 1.8677, "sone": 28.24, "snrDb": 45.02, "scPowNoNoiseSub": 1691.5258, "scAmpNoNoiseSub": 3277.1729, "lw": 92.61, "loudestMic": 25, "principalScAmp": 3325.0, "principalScPow": 1564.3},
+     "pp": {"scAmp": 2581.2332, "scPow": 1453.0883, "hcAmp": 3.2775, "hcPow": 1.8451, "levelDb": 50.8072, "sharp": 1.6402, "sharpNative": 1.5782, "sone": 5.395, "snrDb": 20.86, "scPowNoNoiseSub": 1457.6106, "scAmpNoNoiseSub": 3580.948, "lw": 68.15, "loudestMic": 25, "principalScAmp": 3494.9, "principalScPow": 1883.9}
+    },
+    "80": {
+     "ff": {"scAmp": 3674.7519, "scPow": 1968.8434, "hcAmp": 4.4041, "hcPow": 2.3596, "levelDb": 74.215, "sharp": 1.9488, "sharpNative": 1.9668, "sone": 24.68, "snrDb": 44.04, "scPowNoNoiseSub": 1968.8389, "scAmpNoNoiseSub": 3675.7623, "lw": 91.52, "loudestMic": 30, "principalScAmp": 3950.1, "principalScPow": 2059.5},
+     "pp": {"scAmp": 2629.163, "scPow": 1968.9319, "hcAmp": 3.151, "hcPow": 2.3597, "levelDb": 51.5084, "sharp": 1.6907, "sharpNative": 1.6353, "sone": 5.301, "snrDb": 21.53, "scPowNoNoiseSub": 1969.0362, "scAmpNoNoiseSub": 3639.8202, "lw": 68.87, "loudestMic": 2, "principalScAmp": 4032.7, "principalScPow": 2546.0}
+    },
+    "81": {
+     "ff": {"scAmp": 3773.7821, "scPow": 1536.5422, "hcAmp": 4.269, "hcPow": 1.7382, "levelDb": 73.0075, "sharp": 2.0156, "sharpNative": 2.03, "sone": 22.6, "snrDb": 43.1, "scPowNoNoiseSub": 1536.5622, "scAmpNoNoiseSub": 3776.4115, "lw": 90.28, "loudestMic": 6, "principalScAmp": 4110.8, "principalScPow": 1950.8},
+     "pp": {"scAmp": 2308.1487, "scPow": 1207.5636, "hcAmp": 2.611, "hcPow": 1.366, "levelDb": 50.8358, "sharp": 1.5547, "sharpNative": 1.489, "sone": 4.645, "snrDb": 21.08, "scPowNoNoiseSub": 1213.9944, "scAmpNoNoiseSub": 3507.5656, "lw": 68.25, "loudestMic": 6, "principalScAmp": 3337.8, "principalScPow": 1164.4}
+    },
+    "82": {
+     "ff": {"scAmp": 3909.9818, "scPow": 2334.8532, "hcAmp": 4.1748, "hcPow": 2.493, "levelDb": 73.0962, "sharp": 2.0828, "sharpNative": 2.0977, "sone": 24.84, "snrDb": 43.21, "scPowNoNoiseSub": 2334.8319, "scAmpNoNoiseSub": 3906.9587, "lw": 90.48, "loudestMic": 26, "principalScAmp": 3729.4, "principalScPow": 2209.1},
+     "pp": {"scAmp": 2630.7061, "scPow": 1340.4705, "hcAmp": 2.8089, "hcPow": 1.4313, "levelDb": 53.6639, "sharp": 1.713, "sharpNative": 1.6914, "sone": 6.141, "snrDb": 23.82, "scPowNoNoiseSub": 1343.5072, "scAmpNoNoiseSub": 3500.0763, "lw": 71.12, "loudestMic": 4, "principalScAmp": 3726.6, "principalScPow": 1587.6}
+    },
+    "83": {
+     "ff": {"scAmp": 4018.5261, "scPow": 2298.6176, "hcAmp": 4.0499, "hcPow": 2.3166, "levelDb": 73.4726, "sharp": 2.1166, "sharpNative": 2.1146, "sone": 23.92, "snrDb": 43.73, "scPowNoNoiseSub": 2298.5999, "scAmpNoNoiseSub": 4014.6395, "lw": 90.9, "loudestMic": 30, "principalScAmp": 4268.7, "principalScPow": 2187.3},
+     "pp": {"scAmp": 2655.1598, "scPow": 1884.6715, "hcAmp": 2.6759, "hcPow": 1.8994, "levelDb": 53.6877, "sharp": 1.7324, "sharpNative": 1.7074, "sone": 6.278, "snrDb": 23.8, "scPowNoNoiseSub": 1885.1729, "scAmpNoNoiseSub": 3488.3067, "lw": 71.07, "loudestMic": 30, "principalScAmp": 3613.7, "principalScPow": 1832.9}
+    },
+    "84": {
+     "ff": {"scAmp": 4527.7678, "scPow": 2360.7639, "hcAmp": 4.307, "hcPow": 2.2457, "levelDb": 69.354, "sharp": 2.2325, "sharpNative": 2.2227, "sone": 18.99, "snrDb": 39.22, "scPowNoNoiseSub": 2360.6913, "scAmpNoNoiseSub": 4512.1283, "lw": 86.75, "loudestMic": 30, "principalScAmp": 5495.8, "principalScPow": 3338.6},
+     "pp": {"scAmp": 2833.6629, "scPow": 1587.7003, "hcAmp": 2.6955, "hcPow": 1.5103, "levelDb": 49.9132, "sharp": 1.7374, "sharpNative": 1.6772, "sone": 4.632, "snrDb": 19.94, "scPowNoNoiseSub": 1591.1556, "scAmpNoNoiseSub": 3755.3907, "lw": 67.36, "loudestMic": 7, "principalScAmp": 3493.7, "principalScPow": 1448.3}
+    },
+    "85": {
+     "ff": {"scAmp": 3949.5413, "scPow": 1672.4992, "hcAmp": 3.5461, "hcPow": 1.5017, "levelDb": 71.4504, "sharp": 2.0791, "sharpNative": 2.0889, "sone": 19.64, "snrDb": 40.95, "scPowNoNoiseSub": 1672.5061, "scAmpNoNoiseSub": 3948.9112, "lw": 88.8, "loudestMic": 25, "principalScAmp": 4739.2, "principalScPow": 2447.0},
+     "pp": {"scAmp": 2893.9216, "scPow": 1577.9206, "hcAmp": 2.5983, "hcPow": 1.4167, "levelDb": 51.7183, "sharp": 1.7865, "sharpNative": 1.7385, "sone": 5.282, "snrDb": 21.66, "scPowNoNoiseSub": 1580.6944, "scAmpNoNoiseSub": 3762.9303, "lw": 69.15, "loudestMic": 26, "principalScAmp": 4183.9, "principalScPow": 2593.5}
+    },
+    "86": {
+     "ff": {"scAmp": 4650.0434, "scPow": 2764.6304, "hcAmp": 3.9407, "hcPow": 2.3429, "levelDb": 68.162, "sharp": 2.3063, "sharpNative": 2.2968, "sone": 17.77, "snrDb": 38.03, "scPowNoNoiseSub": 2764.4704, "scAmpNoNoiseSub": 4637.474, "lw": 85.49, "loudestMic": 30, "principalScAmp": 5304.1, "principalScPow": 3124.8},
+     "pp": {"scAmp": 3323.8625, "scPow": 1902.1002, "hcAmp": 2.8168, "hcPow": 1.612, "levelDb": 48.9926, "sharp": 1.8797, "sharpNative": 1.8193, "sone": 4.635, "snrDb": 19.28, "scPowNoNoiseSub": 1903.8086, "scAmpNoNoiseSub": 4043.3339, "lw": 66.5, "loudestMic": 15, "principalScAmp": 4178.2, "principalScPow": 2683.9}
+    },
+    "87": {
+     "ff": {"scAmp": 4387.5563, "scPow": 2593.5731, "hcAmp": 3.5096, "hcPow": 2.0746, "levelDb": 68.9528, "sharp": 2.2164, "sharpNative": 2.2097, "sone": 17.3, "snrDb": 38.94, "scPowNoNoiseSub": 2593.4692, "scAmpNoNoiseSub": 4379.8056, "lw": 86.35, "loudestMic": 20, "principalScAmp": 4244.2, "principalScPow": 2410.8},
+     "pp": {"scAmp": 3102.4019, "scPow": 2011.4842, "hcAmp": 2.4816, "hcPow": 1.609, "levelDb": 51.7725, "sharp": 1.8828, "sharpNative": 1.8746, "sone": 5.37, "snrDb": 21.86, "scPowNoNoiseSub": 2011.504, "scAmpNoNoiseSub": 3850.6132, "lw": 69.13, "loudestMic": 10, "principalScAmp": 4176.5, "principalScPow": 1848.3}
+    },
+    "88": {
+     "ff": {"scAmp": 4086.0455, "scPow": 1735.2784, "hcAmp": 3.085, "hcPow": 1.3101, "levelDb": 71.0007, "sharp": 2.1553, "sharpNative": 2.1558, "sone": 17.62, "snrDb": 40.65, "scPowNoNoiseSub": 1735.2824, "scAmpNoNoiseSub": 4086.2019, "lw": 88.31, "loudestMic": 4, "principalScAmp": 4611.4, "principalScPow": 1934.8},
+     "pp": {"scAmp": 3465.9054, "scPow": 2120.0274, "hcAmp": 2.6168, "hcPow": 1.6006, "levelDb": 50.2347, "sharp": 1.9553, "sharpNative": 1.9047, "sone": 4.816, "snrDb": 20.45, "scPowNoNoiseSub": 2118.9844, "scAmpNoNoiseSub": 4125.6375, "lw": 67.66, "loudestMic": 2, "principalScAmp": 4189.5, "principalScPow": 2195.6}
+    },
+    "89": {
+     "ff": {"scAmp": 4291.1016, "scPow": 2313.4191, "hcAmp": 3.0579, "hcPow": 1.6486, "levelDb": 73.0186, "sharp": 2.1137, "sharpNative": 2.1294, "sone": 22.46, "snrDb": 42.06, "scPowNoNoiseSub": 2313.3743, "scAmpNoNoiseSub": 4279.0971, "lw": 90.2, "loudestMic": 30, "principalScAmp": 4470.2, "principalScPow": 2738.7},
+     "pp": {"scAmp": 3068.4968, "scPow": 1939.7865, "hcAmp": 2.1867, "hcPow": 1.3823, "levelDb": 49.3096, "sharp": 1.8942, "sharpNative": 1.8173, "sone": 4.458, "snrDb": 19.61, "scPowNoNoiseSub": 1941.3934, "scAmpNoNoiseSub": 4011.7648, "lw": 66.79, "loudestMic": 4, "principalScAmp": 3922.7, "principalScPow": 1752.6}
+    },
+    "90": {
+     "ff": {"scAmp": 4253.4982, "scPow": 2362.982, "hcAmp": 2.861, "hcPow": 1.5894, "levelDb": 70.5937, "sharp": 2.1726, "sharpNative": 2.1747, "sone": 19.17, "snrDb": 40.36, "scPowNoNoiseSub": 2362.9233, "scAmpNoNoiseSub": 4249.0002, "lw": 87.81, "loudestMic": 3, "principalScAmp": 4539.5, "principalScPow": 2289.9},
+     "pp": {"scAmp": 3478.3743, "scPow": 2509.3972, "hcAmp": 2.3397, "hcPow": 1.6879, "levelDb": 47.7925, "sharp": 2.0487, "sharpNative": 1.9983, "sone": 4.433, "snrDb": 18.12, "scPowNoNoiseSub": 2501.583, "scAmpNoNoiseSub": 4222.5684, "lw": 65.27, "loudestMic": 25, "principalScAmp": 4625.4, "principalScPow": 3646.5}
+    },
+    "91": {
+     "ff": {"scAmp": 4068.1404, "scPow": 1885.4092, "hcAmp": 2.5828, "hcPow": 1.197, "levelDb": 73.4319, "sharp": 2.186, "sharpNative": 2.1871, "sone": 19.45, "snrDb": 42.91, "scPowNoNoiseSub": 1885.4034, "scAmpNoNoiseSub": 4066.3877, "lw": 90.98, "loudestMic": 30, "principalScAmp": 4298.1, "principalScPow": 1888.1},
+     "pp": {"scAmp": 2958.6937, "scPow": 1872.943, "hcAmp": 1.8784, "hcPow": 1.1891, "levelDb": 55.2392, "sharp": 1.9106, "sharpNative": 1.9381, "sone": 6.124, "snrDb": 25.37, "scPowNoNoiseSub": 1873.5606, "scAmpNoNoiseSub": 3663.2794, "lw": 72.52, "loudestMic": 17, "principalScAmp": 3562.6, "principalScPow": 2186.1}
+    },
+    "92": {
+     "ff": {"scAmp": 4702.4162, "scPow": 2506.7513, "hcAmp": 2.8179, "hcPow": 1.5022, "levelDb": 69.827, "sharp": 2.3051, "sharpNative": 2.2955, "sone": 17.76, "snrDb": 39.17, "scPowNoNoiseSub": 2506.6682, "scAmpNoNoiseSub": 4684.4936, "lw": 87.09, "loudestMic": 30, "principalScAmp": 5046.8, "principalScPow": 2787.5},
+     "pp": {"scAmp": 3206.4753, "scPow": 2003.8012, "hcAmp": 1.9215, "hcPow": 1.2008, "levelDb": 54.6215, "sharp": 1.9584, "sharpNative": 1.9638, "sone": 5.975, "snrDb": 24.83, "scPowNoNoiseSub": 2003.8645, "scAmpNoNoiseSub": 3870.3303, "lw": 72.01, "loudestMic": 26, "principalScAmp": 4716.5, "principalScPow": 3878.3}
+    },
+    "93": {
+     "ff": {"scAmp": 4500.0581, "scPow": 2272.5711, "hcAmp": 2.5453, "hcPow": 1.2854, "levelDb": 70.9366, "sharp": 2.2537, "sharpNative": 2.2523, "sone": 18.55, "snrDb": 39.7, "scPowNoNoiseSub": 2272.472, "scAmpNoNoiseSub": 4489.193, "lw": 88.08, "loudestMic": 1, "principalScAmp": 4025.3, "principalScPow": 1918.7},
+     "pp": {"scAmp": 3732.4248, "scPow": 2701.1157, "hcAmp": 2.1111, "hcPow": 1.5278, "levelDb": 49.5208, "sharp": 2.1163, "sharpNative": 2.0864, "sone": 4.784, "snrDb": 19.63, "scPowNoNoiseSub": 2694.148, "scAmpNoNoiseSub": 4353.0792, "lw": 66.82, "loudestMic": 2, "principalScAmp": 4432.6, "principalScPow": 2586.9}
+    },
+    "94": {
+     "ff": {"scAmp": 4488.2211, "scPow": 2214.0439, "hcAmp": 2.3961, "hcPow": 1.182, "levelDb": 71.8973, "sharp": 2.3695, "sharpNative": 2.3522, "sone": 17.57, "snrDb": 41.79, "scPowNoNoiseSub": 2214.0142, "scAmpNoNoiseSub": 4477.1371, "lw": 89.31, "loudestMic": 26, "principalScAmp": 4423.6, "principalScPow": 2416.2},
+     "pp": {"scAmp": 3657.4518, "scPow": 2447.5937, "hcAmp": 1.9526, "hcPow": 1.3067, "levelDb": 53.7419, "sharp": 2.2023, "sharpNative": 2.1975, "sone": 6.025, "snrDb": 23.42, "scPowNoNoiseSub": 2445.9912, "scAmpNoNoiseSub": 4147.6668, "lw": 70.98, "loudestMic": 2, "principalScAmp": 3841.6, "principalScPow": 2387.5}
+    },
+    "95": {
+     "ff": {"scAmp": 4643.0853, "scPow": 2331.3274, "hcAmp": 2.3397, "hcPow": 1.1748, "levelDb": 70.8641, "sharp": 2.4624, "sharpNative": 2.4339, "sone": 15.795, "snrDb": 40.46, "scPowNoNoiseSub": 2331.262, "scAmpNoNoiseSub": 4618.238, "lw": 88.31, "loudestMic": 7, "principalScAmp": 4065.3, "principalScPow": 2153.1},
+     "pp": {"scAmp": 3454.2846, "scPow": 2187.511, "hcAmp": 1.7406, "hcPow": 1.1023, "levelDb": 54.5611, "sharp": 2.1022, "sharpNative": 2.0985, "sone": 5.297, "snrDb": 24.74, "scPowNoNoiseSub": 2187.2612, "scAmpNoNoiseSub": 3979.604, "lw": 71.97, "loudestMic": 7, "principalScAmp": 3626.8, "principalScPow": 2141.6}
+    },
+    "96": {
+     "ff": {"scAmp": 4603.0271, "scPow": 2369.7134, "hcAmp": 2.1893, "hcPow": 1.1271, "levelDb": 70.744, "sharp": 2.2864, "sharpNative": 2.2858, "sone": 14.824, "snrDb": 40.62, "scPowNoNoiseSub": 2369.6782, "scAmpNoNoiseSub": 4592.3343, "lw": 87.97, "loudestMic": 25, "principalScAmp": 5499.3, "principalScPow": 2834.8},
+     "pp": {"scAmp": 3758.5515, "scPow": 2265.69, "hcAmp": 1.7876, "hcPow": 1.0776, "levelDb": 54.5152, "sharp": 2.1106, "sharpNative": 2.123, "sone": 5.134, "snrDb": 24.75, "scPowNoNoiseSub": 2264.9793, "scAmpNoNoiseSub": 4178.3233, "lw": 72.02, "loudestMic": 2, "principalScAmp": 3941.8, "principalScPow": 2201.4}
+    },
+    "97": {
+     "ff": {"scAmp": 4639.4888, "scPow": 2794.4221, "hcAmp": 2.0828, "hcPow": 1.2545, "levelDb": 69.7267, "sharp": 2.3984, "sharpNative": 2.4139, "sone": 16.05, "snrDb": 39.67, "scPowNoNoiseSub": 2794.315, "scAmpNoNoiseSub": 4625.0995, "lw": 86.97, "loudestMic": 30, "principalScAmp": 4352.6, "principalScPow": 2494.9},
+     "pp": {"scAmp": 3708.9804, "scPow": 2583.606, "hcAmp": 1.6651, "hcPow": 1.1598, "levelDb": 50.9662, "sharp": 2.1659, "sharpNative": 2.2031, "sone": 4.83, "snrDb": 21.19, "scPowNoNoiseSub": 2579.6538, "scAmpNoNoiseSub": 4263.1558, "lw": 68.4, "loudestMic": 26, "principalScAmp": 4266.2, "principalScPow": 2779.6}
+    },
+    "98": {
+     "ff": {"scAmp": 4979.515, "scPow": 3038.0007, "hcAmp": 2.11, "hcPow": 1.2873, "levelDb": 69.7271, "sharp": 2.6361, "sharpNative": 2.6007, "sone": 15.716, "snrDb": 39.54, "scPowNoNoiseSub": 3037.8905, "scAmpNoNoiseSub": 4972.0923, "lw": 86.79, "loudestMic": 20, "principalScAmp": 5634.6, "principalScPow": 2850.3},
+     "pp": {"scAmp": 3753.3991, "scPow": 2845.8347, "hcAmp": 1.5904, "hcPow": 1.2059, "levelDb": 53.4412, "sharp": 2.3606, "sharpNative": 2.372, "sone": 5.47, "snrDb": 23.78, "scPowNoNoiseSub": 2842.3297, "scAmpNoNoiseSub": 4179.4103, "lw": 70.87, "loudestMic": 25, "principalScAmp": 4031.6, "principalScPow": 2773.6}
+    },
+    "99": {
+     "ff": {"scAmp": 5315.9403, "scPow": 2997.4047, "hcAmp": 2.1261, "hcPow": 1.1988, "levelDb": 68.6225, "sharp": 2.6887, "sharpNative": 2.6449, "sone": 13.778, "snrDb": 38.44, "scPowNoNoiseSub": 2997.2404, "scAmpNoNoiseSub": 5289.7437, "lw": 85.84, "loudestMic": 20, "principalScAmp": 5846.0, "principalScPow": 3614.2},
+     "pp": {"scAmp": 4100.5943, "scPow": 3291.1164, "hcAmp": 1.64, "hcPow": 1.3163, "levelDb": 52.0616, "sharp": 2.5678, "sharpNative": 2.6123, "sone": 5.005, "snrDb": 22.14, "scPowNoNoiseSub": 3282.6422, "scAmpNoNoiseSub": 4479.6404, "lw": 69.41, "loudestMic": 30, "principalScAmp": 4301.5, "principalScPow": 2975.1}
+    },
+    "100": {
+     "ff": {"scAmp": 5649.1231, "scPow": 3239.1418, "hcAmp": 2.1325, "hcPow": 1.2228, "levelDb": 65.4818, "sharp": 2.7058, "sharpNative": 2.6775, "sone": 11.614, "snrDb": 35.5, "scPowNoNoiseSub": 3238.7783, "scAmpNoNoiseSub": 5606.4397, "lw": 82.71, "loudestMic": 4, "principalScAmp": 5498.2, "principalScPow": 2979.7},
+     "pp": {"scAmp": 4274.4426, "scPow": 2943.1472, "hcAmp": 1.6136, "hcPow": 1.111, "levelDb": 53.3912, "sharp": 2.5067, "sharpNative": 2.5469, "sone": 5.124, "snrDb": 23.85, "scPowNoNoiseSub": 2939.1797, "scAmpNoNoiseSub": 4538.3435, "lw": 71.04, "loudestMic": 2, "principalScAmp": 4637.6, "principalScPow": 3166.2}
+    },
+    "101": {
+     "ff": {"scAmp": 4665.3278, "scPow": 2956.4776, "hcAmp": 1.6623, "hcPow": 1.0534, "levelDb": 65.275, "sharp": 2.3497, "sharpNative": 2.3281, "sone": 11.041, "snrDb": 34.97, "scPowNoNoiseSub": 2956.0509, "scAmpNoNoiseSub": 4620.8773, "lw": 82.47, "loudestMic": 1, "principalScAmp": 4511.6, "principalScPow": 2948.7},
+     "pp": {"scAmp": 3358.4488, "scPow": 2905.6016, "hcAmp": 1.1967, "hcPow": 1.0353, "levelDb": 54.9418, "sharp": 2.1869, "sharpNative": 2.1952, "sone": 5.726, "snrDb": 25.4, "scPowNoNoiseSub": 2902.8047, "scAmpNoNoiseSub": 3798.286, "lw": 72.59, "loudestMic": 2, "principalScAmp": 3621.3, "principalScPow": 2896.3}
+    }
+   }
+  },
+  "Violin": {
+   "sections": ["Violins 1", "Violins 2"],
+   "principalMic": 4,
+   "tuning": 443.0,
+   "notes": {
+    "55": {
+     "ff": {"scAmp": 2448.3521, "scPow": 1127.3243, "hcAmp": 12.4071, "hcPow": 5.7128, "levelDb": 70.451, "sharp": 1.3817, "sharpNative": 1.4213, "sone": 21.11, "snrDb": 40.78, "scPowNoNoiseSub": 1127.3767, "scAmpNoNoiseSub": 2464.0101, "lw": 87.97, "loudestMic": 10, "principalScAmp": 2696.4, "principalScPow": 1416.2},
+     "pp": {"scAmp": 1490.7685, "scPow": 813.6988, "hcAmp": 7.5545, "hcPow": 4.1235, "levelDb": 47.5226, "sharp": 1.1464, "sharpNative": 1.1006, "sone": 3.936, "snrDb": 17.84, "scPowNoNoiseSub": 830.3537, "scAmpNoNoiseSub": 3048.4236, "lw": 64.97, "loudestMic": 6, "principalScAmp": 3041.0, "principalScPow": 928.9}
+    },
+    "56": {
+     "ff": {"scAmp": 2590.7652, "scPow": 1130.7227, "hcAmp": 12.392, "hcPow": 5.4084, "levelDb": 69.7828, "sharp": 1.3859, "sharpNative": 1.4227, "sone": 20.96, "snrDb": 40.18, "scPowNoNoiseSub": 1130.7783, "scAmpNoNoiseSub": 2598.7951, "lw": 87.26, "loudestMic": 4, "principalScAmp": 2826.9, "principalScPow": 1414.8},
+     "pp": {"scAmp": 1576.5365, "scPow": 655.7256, "hcAmp": 7.5408, "hcPow": 3.1364, "levelDb": 44.8222, "sharp": 1.1522, "sharpNative": 1.0885, "sone": 3.033, "snrDb": 15.53, "scPowNoNoiseSub": 691.7619, "scAmpNoNoiseSub": 3421.7063, "lw": 62.62, "loudestMic": 7, "principalScAmp": 3493.2, "principalScPow": 786.7}
+    },
+    "57": {
+     "ff": {"scAmp": 2832.5345, "scPow": 1448.0369, "hcAmp": 12.788, "hcPow": 6.5374, "levelDb": 65.8519, "sharp": 1.4762, "sharpNative": 1.4941, "sone": 16.87, "snrDb": 36.23, "scPowNoNoiseSub": 1448.0576, "scAmpNoNoiseSub": 2851.5091, "lw": 83.37, "loudestMic": 10, "principalScAmp": 3056.5, "principalScPow": 1597.5},
+     "pp": {"scAmp": 1726.8382, "scPow": 790.335, "hcAmp": 7.7961, "hcPow": 3.5681, "levelDb": 40.8287, "sharp": 1.2128, "sharpNative": 1.1445, "sone": 2.356, "snrDb": 11.22, "scPowNoNoiseSub": 859.4719, "scAmpNoNoiseSub": 3711.2187, "lw": 58.29, "loudestMic": 10, "principalScAmp": 3747.8, "principalScPow": 999.9}
+    },
+    "58": {
+     "ff": {"scAmp": 2632.105, "scPow": 1121.4514, "hcAmp": 11.2161, "hcPow": 4.7788, "levelDb": 70.5141, "sharp": 1.3901, "sharpNative": 1.4215, "sone": 22.27, "snrDb": 40.57, "scPowNoNoiseSub": 1121.5072, "scAmpNoNoiseSub": 2640.4368, "lw": 87.75, "loudestMic": 25, "principalScAmp": 2962.2, "principalScPow": 1849.3},
+     "pp": {"scAmp": 1525.9587, "scPow": 706.6687, "hcAmp": 6.5025, "hcPow": 3.0113, "levelDb": 39.7536, "sharp": 1.1405, "sharpNative": 1.0478, "sone": 2.048, "snrDb": 10.5, "scPowNoNoiseSub": 805.8447, "scAmpNoNoiseSub": 3872.2497, "lw": 57.49, "loudestMic": 15, "principalScAmp": 3948.5, "principalScPow": 1071.0}
+    },
+    "59": {
+     "ff": {"scAmp": 2199.2769, "scPow": 709.51, "hcAmp": 8.8457, "hcPow": 2.8537, "levelDb": 75.9975, "sharp": 1.2116, "sharpNative": 1.2761, "sone": 26.37, "snrDb": 46.12, "scPowNoNoiseSub": 709.5345, "scAmpNoNoiseSub": 2208.6956, "lw": 93.26, "loudestMic": 25, "principalScAmp": 2644.1, "principalScPow": 992.5},
+     "pp": {"scAmp": 1457.8128, "scPow": 587.5322, "hcAmp": 5.8635, "hcPow": 2.3631, "levelDb": 44.9115, "sharp": 1.101, "sharpNative": 1.0179, "sone": 2.679, "snrDb": 15.12, "scPowNoNoiseSub": 623.4132, "scAmpNoNoiseSub": 3516.2415, "lw": 62.15, "loudestMic": 7, "principalScAmp": 3742.6, "principalScPow": 802.4}
+    },
+    "60": {
+     "ff": {"scAmp": 2049.0431, "scPow": 583.4875, "hcAmp": 7.7789, "hcPow": 2.2151, "levelDb": 77.8578, "sharp": 1.1373, "sharpNative": 1.2041, "sone": 26.81, "snrDb": 48.07, "scPowNoNoiseSub": 583.5049, "scAmpNoNoiseSub": 2056.5329, "lw": 95.28, "loudestMic": 10, "principalScAmp": 2492.3, "principalScPow": 737.9},
+     "pp": {"scAmp": 1244.7714, "scPow": 544.1291, "hcAmp": 4.7256, "hcPow": 2.0657, "levelDb": 49.6818, "sharp": 1.0034, "sharpNative": 0.9309, "sone": 3.207, "snrDb": 19.56, "scPowNoNoiseSub": 556.777, "scAmpNoNoiseSub": 3093.5056, "lw": 66.56, "loudestMic": 7, "principalScAmp": 3263.7, "principalScPow": 627.4}
+    },
+    "61": {
+     "ff": {"scAmp": 1967.7109, "scPow": 530.7074, "hcAmp": 7.0509, "hcPow": 1.9017, "levelDb": 76.96, "sharp": 1.1345, "sharpNative": 1.209, "sone": 27.65, "snrDb": 47.25, "scPowNoNoiseSub": 530.7301, "scAmpNoNoiseSub": 1978.7945, "lw": 94.36, "loudestMic": 4, "principalScAmp": 2211.6, "principalScPow": 529.5},
+     "pp": {"scAmp": 1085.1193, "scPow": 393.3924, "hcAmp": 3.8883, "hcPow": 1.4096, "levelDb": 49.7261, "sharp": 0.9572, "sharpNative": 0.8858, "sone": 3.601, "snrDb": 20.34, "scPowNoNoiseSub": 407.4106, "scAmpNoNoiseSub": 2963.8015, "lw": 67.47, "loudestMic": 4, "principalScAmp": 2914.7, "principalScPow": 395.2}
+    },
+    "62": {
+     "ff": {"scAmp": 2432.3857, "scPow": 595.9649, "hcAmp": 8.2268, "hcPow": 2.0157, "levelDb": 72.0926, "sharp": 1.2721, "sharpNative": 1.322, "sone": 21.87, "snrDb": 42.38, "scPowNoNoiseSub": 596.0315, "scAmpNoNoiseSub": 2444.5072, "lw": 89.53, "loudestMic": 4, "principalScAmp": 2625.4, "principalScPow": 637.6},
+     "pp": {"scAmp": 1488.7046, "scPow": 659.0252, "hcAmp": 5.0351, "hcPow": 2.2289, "levelDb": 44.0605, "sharp": 1.1388, "sharpNative": 1.0706, "sone": 3.093, "snrDb": 14.36, "scPowNoNoiseSub": 700.0979, "scAmpNoNoiseSub": 3566.5499, "lw": 61.42, "loudestMic": 4, "principalScAmp": 3473.1, "principalScPow": 764.2}
+    },
+    "63": {
+     "ff": {"scAmp": 2581.6661, "scPow": 993.9344, "hcAmp": 8.2416, "hcPow": 3.173, "levelDb": 71.4458, "sharp": 1.3552, "sharpNative": 1.3873, "sone": 23.37, "snrDb": 41.92, "scPowNoNoiseSub": 993.9829, "scAmpNoNoiseSub": 2586.6804, "lw": 88.99, "loudestMic": 26, "principalScAmp": 2993.2, "principalScPow": 1118.4},
+     "pp": {"scAmp": 1552.5711, "scPow": 681.5151, "hcAmp": 4.9564, "hcPow": 2.1756, "levelDb": 43.1353, "sharp": 1.1561, "sharpNative": 1.0742, "sone": 2.909, "snrDb": 13.38, "scPowNoNoiseSub": 730.7827, "scAmpNoNoiseSub": 3611.8873, "lw": 60.5, "loudestMic": 6, "principalScAmp": 3684.3, "principalScPow": 721.0}
+    },
+    "64": {
+     "ff": {"scAmp": 2867.7789, "scPow": 1473.0507, "hcAmp": 8.6411, "hcPow": 4.4386, "levelDb": 71.4827, "sharp": 1.4607, "sharpNative": 1.5, "sone": 24.22, "snrDb": 41.8, "scPowNoNoiseSub": 1473.0672, "scAmpNoNoiseSub": 2866.4263, "lw": 88.99, "loudestMic": 4, "principalScAmp": 3112.2, "principalScPow": 1810.2},
+     "pp": {"scAmp": 1610.806, "scPow": 810.1725, "hcAmp": 4.8537, "hcPow": 2.4412, "levelDb": 38.1182, "sharp": 1.2372, "sharpNative": 1.1411, "sone": 1.99, "snrDb": 9.21, "scPowNoNoiseSub": 933.8517, "scAmpNoNoiseSub": 4083.5758, "lw": 56.21, "loudestMic": 4, "principalScAmp": 4267.6, "principalScPow": 865.3}
+    },
+    "65": {
+     "ff": {"scAmp": 2939.0956, "scPow": 1418.3464, "hcAmp": 8.359, "hcPow": 4.0339, "levelDb": 68.6552, "sharp": 1.5138, "sharpNative": 1.5556, "sone": 19.99, "snrDb": 39.09, "scPowNoNoiseSub": 1418.3837, "scAmpNoNoiseSub": 2944.1711, "lw": 86.06, "loudestMic": 4, "principalScAmp": 3142.7, "principalScPow": 1657.6},
+     "pp": {"scAmp": 1690.7927, "scPow": 743.538, "hcAmp": 4.8087, "hcPow": 2.1147, "levelDb": 36.1663, "sharp": 1.2914, "sharpNative": 1.207, "sone": 1.516, "snrDb": 7.63, "scPowNoNoiseSub": 936.8291, "scAmpNoNoiseSub": 4244.5053, "lw": 54.68, "loudestMic": 4, "principalScAmp": 4190.9, "principalScPow": 970.1}
+    },
+    "66": {
+     "ff": {"scAmp": 2729.5358, "scPow": 1176.417, "hcAmp": 7.3273, "hcPow": 3.158, "levelDb": 69.5094, "sharp": 1.4555, "sharpNative": 1.4816, "sone": 20.42, "snrDb": 39.83, "scPowNoNoiseSub": 1176.4764, "scAmpNoNoiseSub": 2743.453, "lw": 86.91, "loudestMic": 7, "principalScAmp": 2994.0, "principalScPow": 1428.4},
+     "pp": {"scAmp": 1730.1466, "scPow": 734.3244, "hcAmp": 4.6445, "hcPow": 1.9713, "levelDb": 39.3576, "sharp": 1.2373, "sharpNative": 1.1312, "sone": 2.075, "snrDb": 9.85, "scPowNoNoiseSub": 837.7254, "scAmpNoNoiseSub": 4083.4043, "lw": 56.97, "loudestMic": 4, "principalScAmp": 4054.6, "principalScPow": 878.8}
+    },
+    "67": {
+     "ff": {"scAmp": 3310.251, "scPow": 2113.5656, "hcAmp": 8.3874, "hcPow": 5.3553, "levelDb": 65.7121, "sharp": 1.7081, "sharpNative": 1.7235, "sone": 17.02, "snrDb": 36.05, "scPowNoNoiseSub": 2113.4677, "scAmpNoNoiseSub": 3316.0362, "lw": 83.19, "loudestMic": 7, "principalScAmp": 3485.3, "principalScPow": 2341.1},
+     "pp": {"scAmp": 1691.0341, "scPow": 1010.1769, "hcAmp": 4.2847, "hcPow": 2.5596, "levelDb": 33.7862, "sharp": 1.3004, "sharpNative": 1.1778, "sone": 1.387, "snrDb": 5.47, "scPowNoNoiseSub": 1215.9705, "scAmpNoNoiseSub": 4435.6452, "lw": 52.72, "loudestMic": 4, "principalScAmp": 4393.8, "principalScPow": 1182.5}
+    },
+    "68": {
+     "ff": {"scAmp": 2732.2932, "scPow": 1267.4597, "hcAmp": 6.5345, "hcPow": 3.0312, "levelDb": 70.1455, "sharp": 1.4687, "sharpNative": 1.5042, "sone": 21.17, "snrDb": 40.47, "scPowNoNoiseSub": 1267.5036, "scAmpNoNoiseSub": 2743.9661, "lw": 87.53, "loudestMic": 7, "principalScAmp": 2853.3, "principalScPow": 1491.0},
+     "pp": {"scAmp": 1504.6163, "scPow": 821.4529, "hcAmp": 3.5984, "hcPow": 1.9646, "levelDb": 38.3725, "sharp": 1.2055, "sharpNative": 1.0788, "sone": 1.821, "snrDb": 8.72, "scPowNoNoiseSub": 938.6566, "scAmpNoNoiseSub": 4197.6841, "lw": 55.8, "loudestMic": 4, "principalScAmp": 4157.0, "principalScPow": 981.0}
+    },
+    "69": {
+     "ff": {"scAmp": 3460.2922, "scPow": 1829.3458, "hcAmp": 7.811, "hcPow": 4.1294, "levelDb": 64.2362, "sharp": 1.6972, "sharpNative": 1.7101, "sone": 15.46, "snrDb": 34.24, "scPowNoNoiseSub": 1829.3067, "scAmpNoNoiseSub": 3453.6731, "lw": 81.36, "loudestMic": 7, "principalScAmp": 3848.3, "principalScPow": 2617.3},
+     "pp": {"scAmp": 1739.1484, "scPow": 999.1387, "hcAmp": 3.9258, "hcPow": 2.2554, "levelDb": 39.5256, "sharp": 1.3623, "sharpNative": 1.2015, "sone": 2.115, "snrDb": 10.19, "scPowNoNoiseSub": 1073.0339, "scAmpNoNoiseSub": 4114.46, "lw": 57.33, "loudestMic": 7, "principalScAmp": 3975.6, "principalScPow": 1057.0}
+    },
+    "70": {
+     "ff": {"scAmp": 3040.4739, "scPow": 1226.2727, "hcAmp": 6.4782, "hcPow": 2.6127, "levelDb": 70.8583, "sharp": 1.5866, "sharpNative": 1.6193, "sone": 22.2, "snrDb": 40.93, "scPowNoNoiseSub": 1226.3082, "scAmpNoNoiseSub": 3042.3725, "lw": 88.1, "loudestMic": 18, "principalScAmp": 3308.5, "principalScPow": 1757.5},
+     "pp": {"scAmp": 1760.008, "scPow": 926.268, "hcAmp": 3.7499, "hcPow": 1.9735, "levelDb": 37.125, "sharp": 1.3528, "sharpNative": 1.2567, "sone": 1.835, "snrDb": 7.88, "scPowNoNoiseSub": 1052.8341, "scAmpNoNoiseSub": 4254.6306, "lw": 55.08, "loudestMic": 6, "principalScAmp": 4451.2, "principalScPow": 1661.6}
+    },
+    "71": {
+     "ff": {"scAmp": 2860.4699, "scPow": 683.0484, "hcAmp": 5.7526, "hcPow": 1.3737, "levelDb": 74.3706, "sharp": 1.5213, "sharpNative": 1.5641, "sone": 22.87, "snrDb": 43.45, "scPowNoNoiseSub": 683.0876, "scAmpNoNoiseSub": 2865.0357, "lw": 91.59, "loudestMic": 7, "principalScAmp": 3603.2, "principalScPow": 1111.7},
+     "pp": {"scAmp": 1579.594, "scPow": 596.6868, "hcAmp": 3.1767, "hcPow": 1.2, "levelDb": 42.0968, "sharp": 1.2174, "sharpNative": 1.0843, "sone": 2.103, "snrDb": 12.58, "scPowNoNoiseSub": 663.1809, "scAmpNoNoiseSub": 4004.9114, "lw": 59.69, "loudestMic": 7, "principalScAmp": 4311.4, "principalScPow": 966.0}
+    },
+    "72": {
+     "ff": {"scAmp": 2686.3851, "scPow": 817.9932, "hcAmp": 5.0993, "hcPow": 1.5527, "levelDb": 76.2293, "sharp": 1.4807, "sharpNative": 1.5411, "sone": 24.98, "snrDb": 46.44, "scPowNoNoiseSub": 818.0145, "scAmpNoNoiseSub": 2690.8727, "lw": 93.58, "loudestMic": 7, "principalScAmp": 3160.7, "principalScPow": 1623.3},
+     "pp": {"scAmp": 1424.3277, "scPow": 584.8619, "hcAmp": 2.7036, "hcPow": 1.1102, "levelDb": 47.5875, "sharp": 1.1729, "sharpNative": 1.0799, "sone": 2.607, "snrDb": 17.97, "scPowNoNoiseSub": 604.8869, "scAmpNoNoiseSub": 3620.1974, "lw": 65.11, "loudestMic": 10, "principalScAmp": 3975.7, "principalScPow": 784.0}
+    },
+    "73": {
+     "ff": {"scAmp": 3007.9922, "scPow": 1345.0586, "hcAmp": 5.3893, "hcPow": 2.4099, "levelDb": 72.9911, "sharp": 1.5879, "sharpNative": 1.6382, "sone": 23.91, "snrDb": 43.31, "scPowNoNoiseSub": 1345.0782, "scAmpNoNoiseSub": 3011.8159, "lw": 90.53, "loudestMic": 30, "principalScAmp": 3157.8, "principalScPow": 2001.8},
+     "pp": {"scAmp": 1953.4338, "scPow": 785.6323, "hcAmp": 3.4999, "hcPow": 1.4076, "levelDb": 39.7685, "sharp": 1.4334, "sharpNative": 1.2589, "sone": 1.929, "snrDb": 10.29, "scPowNoNoiseSub": 879.7043, "scAmpNoNoiseSub": 4207.5556, "lw": 57.47, "loudestMic": 10, "principalScAmp": 4458.6, "principalScPow": 1255.0}
+    },
+    "74": {
+     "ff": {"scAmp": 4271.8765, "scPow": 2166.1309, "hcAmp": 7.2241, "hcPow": 3.6631, "levelDb": 65.7348, "sharp": 1.9444, "sharpNative": 1.9512, "sone": 17.19, "snrDb": 35.93, "scPowNoNoiseSub": 2166.0064, "scAmpNoNoiseSub": 4253.4967, "lw": 83.33, "loudestMic": 4, "principalScAmp": 4141.3, "principalScPow": 2359.7},
+     "pp": {"scAmp": 2176.4472, "scPow": 1381.0708, "hcAmp": 3.6806, "hcPow": 2.3355, "levelDb": 32.9009, "sharp": 1.5732, "sharpNative": 1.4317, "sone": 1.324, "snrDb": 4.95, "scPowNoNoiseSub": 1499.5722, "scAmpNoNoiseSub": 4437.1783, "lw": 52.08, "loudestMic": 26, "principalScAmp": 4617.0, "principalScPow": 1910.8}
+    },
+    "75": {
+     "ff": {"scAmp": 3697.2344, "scPow": 2015.2337, "hcAmp": 5.9014, "hcPow": 3.2167, "levelDb": 67.2315, "sharp": 1.8438, "sharpNative": 1.8565, "sone": 17.67, "snrDb": 37.28, "scPowNoNoiseSub": 2015.1788, "scAmpNoNoiseSub": 3697.9295, "lw": 84.63, "loudestMic": 4, "principalScAmp": 3787.1, "principalScPow": 2586.6},
+     "pp": {"scAmp": 2326.2878, "scPow": 1395.8716, "hcAmp": 3.7132, "hcPow": 2.2281, "levelDb": 35.2537, "sharp": 1.5538, "sharpNative": 1.3995, "sone": 1.613, "snrDb": 6.52, "scPowNoNoiseSub": 1469.477, "scAmpNoNoiseSub": 4302.3393, "lw": 53.68, "loudestMic": 10, "principalScAmp": 4545.4, "principalScPow": 1968.3}
+    },
+    "76": {
+     "ff": {"scAmp": 3805.4869, "scPow": 1855.1191, "hcAmp": 5.7333, "hcPow": 2.7949, "levelDb": 74.6286, "sharp": 1.9087, "sharpNative": 1.9151, "sone": 27.82, "snrDb": 44.44, "scPowNoNoiseSub": 1855.1162, "scAmpNoNoiseSub": 3803.9989, "lw": 91.82, "loudestMic": 7, "principalScAmp": 3235.2, "principalScPow": 1656.2},
+     "pp": {"scAmp": 2490.2167, "scPow": 1654.1221, "hcAmp": 3.7517, "hcPow": 2.4921, "levelDb": 39.0037, "sharp": 1.6228, "sharpNative": 1.4199, "sone": 2.189, "snrDb": 9.94, "scPowNoNoiseSub": 1674.4101, "scAmpNoNoiseSub": 4255.7875, "lw": 57.07, "loudestMic": 7, "principalScAmp": 4508.3, "principalScPow": 1753.3}
+    },
+    "77": {
+     "ff": {"scAmp": 3791.3173, "scPow": 2301.3387, "hcAmp": 5.3914, "hcPow": 3.2726, "levelDb": 71.2448, "sharp": 1.9458, "sharpNative": 1.9672, "sone": 23.16, "snrDb": 41.48, "scPowNoNoiseSub": 2301.2944, "scAmpNoNoiseSub": 3794.6888, "lw": 88.6, "loudestMic": 29, "principalScAmp": 3408.0, "principalScPow": 2244.6},
+     "pp": {"scAmp": 2428.2997, "scPow": 1209.5693, "hcAmp": 3.4531, "hcPow": 1.72, "levelDb": 41.6996, "sharp": 1.5667, "sharpNative": 1.4175, "sone": 2.612, "snrDb": 12.25, "scPowNoNoiseSub": 1243.2204, "scAmpNoNoiseSub": 4119.9461, "lw": 59.43, "loudestMic": 7, "principalScAmp": 4521.9, "principalScPow": 1777.0}
+    },
+    "78": {
+     "ff": {"scAmp": 4053.7679, "scPow": 1988.0446, "hcAmp": 5.441, "hcPow": 2.6684, "levelDb": 68.5141, "sharp": 1.9976, "sharpNative": 2.0095, "sone": 19.54, "snrDb": 38.85, "scPowNoNoiseSub": 1988.0181, "scAmpNoNoiseSub": 4060.0092, "lw": 86.0, "loudestMic": 10, "principalScAmp": 4039.3, "principalScPow": 2256.7},
+     "pp": {"scAmp": 2240.5399, "scPow": 1186.52, "hcAmp": 3.0073, "hcPow": 1.5926, "levelDb": 37.2201, "sharp": 1.578, "sharpNative": 1.3958, "sone": 1.811, "snrDb": 8.18, "scPowNoNoiseSub": 1279.3162, "scAmpNoNoiseSub": 4304.2978, "lw": 55.25, "loudestMic": 10, "principalScAmp": 4581.0, "principalScPow": 1547.6}
+    },
+    "79": {
+     "ff": {"scAmp": 4009.369, "scPow": 2009.7963, "hcAmp": 5.0794, "hcPow": 2.5462, "levelDb": 71.737, "sharp": 1.9772, "sharpNative": 1.9832, "sone": 23.26, "snrDb": 42.1, "scPowNoNoiseSub": 2009.782, "scAmpNoNoiseSub": 4006.223, "lw": 89.2, "loudestMic": 4, "principalScAmp": 3600.0, "principalScPow": 1832.3},
+     "pp": {"scAmp": 2111.9942, "scPow": 1181.4259, "hcAmp": 2.6757, "hcPow": 1.4967, "levelDb": 35.4157, "sharp": 1.5338, "sharpNative": 1.3901, "sone": 1.488, "snrDb": 6.89, "scPowNoNoiseSub": 1316.01, "scAmpNoNoiseSub": 4437.5869, "lw": 53.98, "loudestMic": 4, "principalScAmp": 4457.8, "principalScPow": 1243.6}
+    },
+    "80": {
+     "ff": {"scAmp": 3722.1281, "scPow": 1565.3716, "hcAmp": 4.4509, "hcPow": 1.8718, "levelDb": 72.7968, "sharp": 1.894, "sharpNative": 1.9186, "sone": 23.24, "snrDb": 3.58, "scPowNoNoiseSub": 1565.3858, "scAmpNoNoiseSub": 3729.4641, "lw": 90.11, "loudestMic": 7, "principalScAmp": 3171.5, "principalScPow": 1172.1},
+     "pp": {"scAmp": 2048.2239, "scPow": 1155.9437, "hcAmp": 2.4492, "hcPow": 1.3823, "levelDb": 38.778, "sharp": 1.4715, "sharpNative": 1.3491, "sone": 1.834, "snrDb": 9.82, "scPowNoNoiseSub": 1224.4832, "scAmpNoNoiseSub": 4188.6496, "lw": 56.88, "loudestMic": 4, "principalScAmp": 4126.2, "principalScPow": 949.4}
+    },
+    "81": {
+     "ff": {"scAmp": 4448.8804, "scPow": 2651.622, "hcAmp": 5.0213, "hcPow": 2.9928, "levelDb": 67.5092, "sharp": 2.1884, "sharpNative": 2.1824, "sone": 17.94, "snrDb": 36.29, "scPowNoNoiseSub": 2651.3689, "scAmpNoNoiseSub": 4437.1801, "lw": 84.56, "loudestMic": 4, "principalScAmp": 3854.4, "principalScPow": 2216.6},
+     "pp": {"scAmp": 2196.2379, "scPow": 1479.4157, "hcAmp": 2.4788, "hcPow": 1.6698, "levelDb": 33.7866, "sharp": 1.6467, "sharpNative": 1.4354, "sone": 1.25, "snrDb": 6.15, "scPowNoNoiseSub": 1549.3388, "scAmpNoNoiseSub": 4377.4888, "lw": 53.28, "loudestMic": 7, "principalScAmp": 4390.9, "principalScPow": 1483.5}
+    },
+    "82": {
+     "ff": {"scAmp": 3872.0061, "scPow": 1757.8687, "hcAmp": 4.1249, "hcPow": 1.8727, "levelDb": 71.6981, "sharp": 1.9806, "sharpNative": 1.9887, "sone": 21.55, "snrDb": 42.2, "scPowNoNoiseSub": 1757.8692, "scAmpNoNoiseSub": 3873.197, "lw": 89.24, "loudestMic": 4, "principalScAmp": 3458.2, "principalScPow": 2231.5},
+     "pp": {"scAmp": 2130.8424, "scPow": 1243.7638, "hcAmp": 2.27, "hcPow": 1.325, "levelDb": 37.3279, "sharp": 1.6064, "sharpNative": 1.374, "sone": 1.623, "snrDb": 8.39, "scPowNoNoiseSub": 1322.6241, "scAmpNoNoiseSub": 4262.7064, "lw": 55.41, "loudestMic": 5, "principalScAmp": 4436.9, "principalScPow": 1224.6}
+    },
+    "83": {
+     "ff": {"scAmp": 3842.77, "scPow": 2200.5327, "hcAmp": 3.864, "hcPow": 2.2127, "levelDb": 59.7105, "sharp": 1.9262, "sharpNative": 1.9257, "sone": 11.707, "snrDb": -1.05, "scPowNoNoiseSub": 2185.7403, "scAmpNoNoiseSub": 3898.5412, "lw": 86.11, "loudestMic": 32, "principalScAmp": 3983.6, "principalScPow": 2628.0},
+     "pp": {"scAmp": 2235.5423, "scPow": 1530.4512, "hcAmp": 2.2479, "hcPow": 1.5389, "levelDb": 36.7364, "sharp": 1.6954, "sharpNative": 1.504, "sone": 1.658, "snrDb": 8.05, "scPowNoNoiseSub": 1567.6107, "scAmpNoNoiseSub": 4284.6997, "lw": 55.13, "loudestMic": 6, "principalScAmp": 4329.4, "principalScPow": 1410.9}
+    },
+    "84": {
+     "ff": {"scAmp": 4163.0255, "scPow": 2483.7742, "hcAmp": 3.9511, "hcPow": 2.3573, "levelDb": 70.7055, "sharp": 2.128, "sharpNative": 2.1377, "sone": 19.97, "snrDb": 40.93, "scPowNoNoiseSub": 2483.7149, "scAmpNoNoiseSub": 4168.0405, "lw": 88.09, "loudestMic": 29, "principalScAmp": 3886.8, "principalScPow": 2443.4},
+     "pp": {"scAmp": 2210.9759, "scPow": 1408.8278, "hcAmp": 2.0984, "hcPow": 1.3371, "levelDb": 36.8845, "sharp": 1.6358, "sharpNative": 1.4736, "sone": 1.59, "snrDb": 7.81, "scPowNoNoiseSub": 1467.4677, "scAmpNoNoiseSub": 4299.1223, "lw": 54.91, "loudestMic": 6, "principalScAmp": 4674.1, "principalScPow": 2033.9}
+    },
+    "85": {
+     "ff": {"scAmp": 4114.2625, "scPow": 2378.4253, "hcAmp": 3.6857, "hcPow": 2.1307, "levelDb": 69.7911, "sharp": 2.0756, "sharpNative": 2.0844, "sone": 17.97, "snrDb": 40.1, "scPowNoNoiseSub": 2378.3653, "scAmpNoNoiseSub": 4125.3392, "lw": 87.41, "loudestMic": 30, "principalScAmp": 3559.7, "principalScPow": 2409.5},
+     "pp": {"scAmp": 2554.5338, "scPow": 1847.6469, "hcAmp": 2.2884, "hcPow": 1.6552, "levelDb": 36.8819, "sharp": 1.73, "sharpNative": 1.5949, "sone": 1.763, "snrDb": 8.03, "scPowNoNoiseSub": 1825.0144, "scAmpNoNoiseSub": 4199.5154, "lw": 55.14, "loudestMic": 1, "principalScAmp": 4261.2, "principalScPow": 1560.3}
+    },
+    "86": {
+     "ff": {"scAmp": 4342.0194, "scPow": 2390.3962, "hcAmp": 3.6714, "hcPow": 2.0212, "levelDb": 69.1778, "sharp": 2.2297, "sharpNative": 2.2281, "sone": 18.4, "snrDb": 38.83, "scPowNoNoiseSub": 2390.3013, "scAmpNoNoiseSub": 4337.6419, "lw": 86.54, "loudestMic": 25, "principalScAmp": 4940.1, "principalScPow": 2414.7},
+     "pp": {"scAmp": 2320.9731, "scPow": 1585.3032, "hcAmp": 1.9625, "hcPow": 1.3404, "levelDb": 35.5313, "sharp": 1.7911, "sharpNative": 1.5782, "sone": 1.441, "snrDb": 6.68, "scPowNoNoiseSub": 1617.2747, "scAmpNoNoiseSub": 4296.9481, "lw": 53.84, "loudestMic": 2, "principalScAmp": 4412.1, "principalScPow": 1544.0}
+    },
+    "87": {
+     "ff": {"scAmp": 4674.304, "scPow": 3333.3193, "hcAmp": 3.7305, "hcPow": 2.6603, "levelDb": 68.2677, "sharp": 2.4353, "sharpNative": 2.4267, "sone": 16.97, "snrDb": 38.45, "scPowNoNoiseSub": 3333.1153, "scAmpNoNoiseSub": 4676.9962, "lw": 85.73, "loudestMic": 7, "principalScAmp": 4917.5, "principalScPow": 3764.1},
+     "pp": {"scAmp": 3062.9446, "scPow": 2393.7275, "hcAmp": 2.4445, "hcPow": 1.9104, "levelDb": 36.4175, "sharp": 2.0671, "sharpNative": 1.8811, "sone": 1.648, "snrDb": 7.54, "scPowNoNoiseSub": 2280.5262, "scAmpNoNoiseSub": 4541.3908, "lw": 54.6, "loudestMic": 26, "principalScAmp": 4750.7, "principalScPow": 2613.6}
+    },
+    "88": {
+     "ff": {"scAmp": 4916.6339, "scPow": 2829.2062, "hcAmp": 3.7037, "hcPow": 2.1312, "levelDb": 65.4749, "sharp": 2.3472, "sharpNative": 2.3397, "sone": 14.309, "snrDb": 35.5, "scPowNoNoiseSub": 2828.9382, "scAmpNoNoiseSub": 4905.2678, "lw": 82.78, "loudestMic": 20, "principalScAmp": 4514.6, "principalScPow": 2149.8},
+     "pp": {"scAmp": 2395.6189, "scPow": 1984.0165, "hcAmp": 1.8046, "hcPow": 1.4946, "levelDb": 34.213, "sharp": 1.7209, "sharpNative": 1.652, "sone": 1.313, "snrDb": 5.65, "scPowNoNoiseSub": 1925.6682, "scAmpNoNoiseSub": 4407.5827, "lw": 52.77, "loudestMic": 8, "principalScAmp": 4565.6, "principalScPow": 2211.9}
+    },
+    "89": {
+     "ff": {"scAmp": 4365.9664, "scPow": 2596.1661, "hcAmp": 3.1043, "hcPow": 1.8459, "levelDb": 69.1874, "sharp": 2.2288, "sharpNative": 2.2308, "sone": 18.04, "snrDb": 39.72, "scPowNoNoiseSub": 2596.0633, "scAmpNoNoiseSub": 4352.4124, "lw": 86.8, "loudestMic": 20, "principalScAmp": 3946.1, "principalScPow": 2594.3},
+     "pp": {"scAmp": 2526.2861, "scPow": 1791.0157, "hcAmp": 1.7962, "hcPow": 1.2734, "levelDb": 40.0745, "sharp": 1.7803, "sharpNative": 1.7165, "sone": 2.116, "snrDb": 11.03, "scPowNoNoiseSub": 1792.9181, "scAmpNoNoiseSub": 4202.0098, "lw": 58.06, "loudestMic": 32, "principalScAmp": 4594.8, "principalScPow": 2643.2}
+    },
+    "90": {
+     "ff": {"scAmp": 4616.3166, "scPow": 2793.1692, "hcAmp": 3.0981, "hcPow": 1.8745, "levelDb": 67.2809, "sharp": 2.3822, "sharpNative": 2.3776, "sone": 16.11, "snrDb": 37.6, "scPowNoNoiseSub": 2792.9869, "scAmpNoNoiseSub": 4626.3107, "lw": 84.73, "loudestMic": 2, "principalScAmp": 4327.2, "principalScPow": 2882.3},
+     "pp": {"scAmp": 2867.0576, "scPow": 2128.8977, "hcAmp": 1.9241, "hcPow": 1.4287, "levelDb": 34.9866, "sharp": 1.9467, "sharpNative": 1.8303, "sone": 1.591, "snrDb": 6.53, "scPowNoNoiseSub": 2043.2708, "scAmpNoNoiseSub": 4523.5308, "lw": 53.61, "loudestMic": 26, "principalScAmp": 4693.2, "principalScPow": 2475.9}
+    },
+    "91": {
+     "ff": {"scAmp": 4883.5837, "scPow": 3104.051, "hcAmp": 3.0935, "hcPow": 1.9662, "levelDb": 66.7216, "sharp": 2.3987, "sharpNative": 2.3941, "sone": 14.821, "snrDb": 37.01, "scPowNoNoiseSub": 3103.7571, "scAmpNoNoiseSub": 4868.5223, "lw": 84.21, "loudestMic": 1, "principalScAmp": 4584.8, "principalScPow": 2670.5},
+     "pp": {"scAmp": 2894.2397, "scPow": 2160.0297, "hcAmp": 1.8333, "hcPow": 1.3683, "levelDb": 37.2865, "sharp": 1.9759, "sharpNative": 1.8317, "sone": 1.754, "snrDb": 8.28, "scPowNoNoiseSub": 2111.1854, "scAmpNoNoiseSub": 4438.6588, "lw": 55.31, "loudestMic": 1, "principalScAmp": 4596.0, "principalScPow": 2153.4}
+    }
+   }
+  }
+ }
+}

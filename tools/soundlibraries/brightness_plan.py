@@ -14,8 +14,8 @@ The rule (an algorithm, not a measurement; HANDOFF.md › Dynamics like a real p
   in brightness: equal steps of log B, so marking i (ppp 0 … fff 7, mp 3) has the real brightness B_pp * R^(i / 7), and
   against mp R^((i - 3) / 7). (Only pp and ff are measured: whether brightness grows evenly in log B with the
   markings is not known; it is the same reading of "equal steps" as stage A's in dB.)
-- R(p): the median of log R over the TU notes within +-2 semitones of p that have both pp and ff (a 5-semitone running
-  median against one player's note-to-note scatter).
+- R(p): the median of log R over the TU notes within +-2 semitones of p that have both pp and ff, each at least 3 dB
+  over its noise (a 5-semitone running median against one player's note-to-note scatter).
 - SSO: log q(cc) made non-decreasing in CC1 (pool-adjacent-violators, weights equal) and inverted by straight lines
   between the measured CC1 values; a target beyond q(16) or q(127) is out of reach: the end value, flagged.
 - Per section and marking: the median over pitches of the CC1 found (and the pitches out of reach).
@@ -36,6 +36,8 @@ TODAY = [16, 32, 48, 64, 80, 96, 112, 127]       # MuseScore's CC1 for ppp … f
 MEASURES = ["sharp", "hcPow", "hcAmp"]          # brightness measures planned (scX / hcX give the same ratios)
 INSTRUMENT = {"Violins 1": "Violin", "Violins 2": "Violin", "Violas": "Viola", "Celli": "Cello", "Basses": "Double_bass"}
 HALF = 2                                          # semitones each side for the real running median
+MIN_SNR = 3.0     # dB: a TU note counts only when its steady part is 3 dB over its noise (the noise gate's 3 dB);
+                  # one file (Violin ff B5) reads -1 dB: its steady part is quieter than the rest of the file
 
 
 def real_ratio(real, inst, measure, p):
@@ -43,7 +45,8 @@ def real_ratio(real, inst, measure, p):
     v = []
     for q in range(p - HALF, p + HALF + 1):
         n = notes.get(str(q))
-        if n and "pp" in n and "ff" in n and n["pp"].get(measure, 0) > 0 and n["ff"].get(measure, 0) > 0:
+        if n and "pp" in n and "ff" in n and n["pp"].get(measure, 0) > 0 and n["ff"].get(measure, 0) > 0 \
+                and min(n["pp"].get("snrDb", 99), n["ff"].get("snrDb", 99)) >= MIN_SNR:
             v.append(math.log(n["ff"][measure] / n["pp"][measure]))
     return (statistics.median(v), len(v)) if v else (None, 0)
 

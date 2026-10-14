@@ -90,7 +90,7 @@ def measure(x, sr, on, off, meter=None, sones=True, window=SUSTAIN, bright=False
     s0, s1 = int(round((on + window[0]) * sr)), int(round((on + window[1]) * sr))
     seg = x[s0:s1].astype("float64")
     r = {"rmsDb": round(db(float((seg ** 2).mean())), 2)}
-    if meter is not None:
+    if meter is not None and i1 - i0 > int(0.4 * sr):   # BS.1770's 400 ms block: a short note has no integrated LUFS
         v = meter.integrated_loudness(x[i0:i1].astype("float64"))
         r["lufs"] = round(float(v), 2) if np.isfinite(v) else -200.0
     if sones:
