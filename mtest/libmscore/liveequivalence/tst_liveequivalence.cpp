@@ -2244,13 +2244,23 @@ void TestLiveEquivalence::plainWritten()
       const LiveClips::Timeline tl = LiveClips::timeline(score);
       const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
 
-      // MuseScore's played note-ons and note-offs, by route and key (units): what Live must play
+      // MuseScore's played note-ons and note-offs, by route and key (units): what Live must play. A note whose early
+      // start the score's start cut (EventMap::startEarlyMs: the first notes) its whole onset early, as MuseScore plays
+      // it with the start lead (MidiRenderer::libraryDelayLead: everything else later instead)
       std::multiset<std::tuple<int, int, int, bool>> want;          // (route, key, units, on)
+      int startEarly = 0;
       for (const auto& te : played) {
             const NPlayEvent& e = te.second;
             if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF))
                   continue;
-            want.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), e.type() == ME_NOTEON && e.velo() > 0));
+            const bool on = e.type() == ME_NOTEON && e.velo() > 0;
+            int units = tl.units(te.first);
+            auto s = on && te.first == 0 ? played.startEarlyMs.find(e.note()) : played.startEarlyMs.end();
+            if (s != played.startEarlyMs.end()) {
+                  units -= int(std::lround(LiveTiming::msToUnits(s->second, tl.bpm)));
+                  ++startEarly;
+                  }
+            want.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), units, on));
             }
       // what the set plays: each written note at its written place, the technique track's Track Delay (-lookahead) and
       // the device's delays (LiveTiming::playedBy)
@@ -2295,6 +2305,8 @@ void TestLiveEquivalence::plainWritten()
       QCOMPARE(notes, writtenOns);
       QVERIFY(onGrid >= notes);           // (each written note-on is a chord's tick: on the grid)
       QVERIFY(early > 0);                 // (the score has early notes: the test tests something)
+      if (file == "legato-early.musicxml")
+            QVERIFY(startEarly > 0);      // (its first note, at tick 0, starts early: before the clip's start)
       if (performance) {
             // the smooth A4 (bar 2, written at 5 s) played 280 ms early (its pitch's smooth onset), in the clip as written
             bool smooth = false;
@@ -2471,13 +2483,19 @@ void TestLiveEquivalence::liveTimingOverride()
       check(after, true);
 
       // MuseScore's playback plays every note-on and note-off where the clips have them (by route, key, units)
+      // (without the start lead MuseScore plays everything later by, for the score's first note: the clips have none,
+      // their first note can't start before the clip, MidiRenderer::libraryDelayLead; that note is left out below)
       std::multiset<std::tuple<int, int, int, bool>> played, inClips;
-      for (const auto& te : render(score, false)) {
+      const EventMap playback = render(score, false);
+      const double lead = playback.startLeadMs / 1000.0;
+      for (const auto& te : playback) {
             const NPlayEvent& e = te.second;
-            if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF) || tl.units(te.first) < 64
-                || e.pitch() >= LiveClips::CARRIER_LOW)
+            const double at = score->utick2utime(te.first) - lead;
+            if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF) || at < 0
+                || tl.units(score->utime2utick(at)) < 64 || e.pitch() >= LiveClips::CARRIER_LOW)
                   continue;
-            played.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), e.type() == ME_NOTEON && e.velo() > 0));
+            played.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(score->utime2utick(at)),
+                                          e.type() == ME_NOTEON && e.velo() > 0));
             }
       for (const LiveClips::Track& c : after)
             for (const LiveClips::Note& n : c.notes) {

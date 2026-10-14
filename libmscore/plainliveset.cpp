@@ -329,7 +329,8 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                               auto span = key == writtenKeys.end() ? playedTimes.end() : playedTimes.find(key->second);
                               if (span != playedTimes.end()) {
                                     n.timed = true;
-                                    n.playedStart = tl.units(span->second.on);
+                                    n.playedStart = tl.units(span->second.on)
+                                                    - int(std::lround(LiveTiming::msToUnits(span->second.earlyMs, tl.bpm)));
                                     n.playedEnd = tl.units(span->second.off);
                                     }
                               wopen[n.pitch].push_back({ techniqueFor(wvalue), n });

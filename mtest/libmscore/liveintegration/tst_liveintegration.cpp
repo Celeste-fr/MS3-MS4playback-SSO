@@ -897,7 +897,18 @@ void TestLiveIntegration::clipsOnsetEarly()
       score->rebuildMidiMapping();
       score->setExpandRepeats(true);
       const LiveClips::Timeline tl = LiveClips::timeline(score);
-      const std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      // (rendered as Live's clips are, LiveClipsLink::renderEvents: no start lead, which MuseScore's playback has)
+      EventMap events;
+      {
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      ctx.renderHarmony = true;
+      r.renderScore(&events, ctx);
+      }
+      const std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl);
       QCOMPARE(int(tracks.size()), 2);
       const std::vector<LiveClips::Note> notes = realNotes(tracks[0].notes);
       QVERIFY2(notes.size() == 6, qPrintable(describe(tracks[0].notes)));

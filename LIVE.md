@@ -1022,7 +1022,9 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   *Live plays the score*'s clips (and so the route set and `--live-equivalence`) still hold the played timing: their
   tracks are found or made by hand and Live's API (the Live Object Model) has no Track Delay to set, so written notes
   there would play late by each route's lookahead until the owner set every track's Track Delay by hand (the owner to
-  decide; HANDOFF.md › Written clips in the plain set).
+  decide; HANDOFF.md › Written clips in the plain set). For the same reason their first note can't start before the clip:
+  a note at the score's start whose onset MuseScore plays early by the start lead (`libraryDelayLead`, 2026-10-14;
+  Whence's first Celli note, 172 ms) starts at 0 there, late by its onset; the plain set plays it early (Track Delay).
 
 - **Host-only playback settings** (docs/PLAYBACK_SETTINGS.md; playback.ini `[hosting]`): `settleSeconds` (how long a
   freshly loaded patch runs before MuseScore sets its controllers) acts
