@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!-- slow slurs need no correction (tst_soundlibrary::evenAutoSlow): bar 1 three slurred quarters at 120 bpm (every interval
+     500 ms: skipped), (bar 1 only; the other bars of even-slow.musicxml) bar 2 the same at 120.5 bpm (499 ms: measured), bar 3 two quarters and two eighths at 120 (one
+     interval 250 ms: measured) -->
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1">
+      <part-name>Violin</part-name>
+      <score-instrument id="P1-I1"><instrument-name>Violin</instrument-name><instrument-sound>strings.violin</instrument-sound></score-instrument>
+      <midi-instrument id="P1-I1"><midi-channel>1</midi-channel><midi-program>41</midi-program></midi-instrument>
+    </score-part>
+  </part-list>
+    <part id="P1">
+    <measure number="1">
+      <attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>120</per-minute></metronome></direction-type><sound tempo="120"/></direction>
+      <note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type><notations><slur type="start" number="1"/></notations></note>
+      <note><pitch><step>D</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type></note>
+      <note><pitch><step>E</step><octave>5</octave></pitch><duration>4</duration><type>quarter</type><notations><slur type="stop" number="1"/></notations></note>
+      <note><rest/><duration>4</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>

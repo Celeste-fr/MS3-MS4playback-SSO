@@ -316,7 +316,7 @@ add_library(mscoreapp STATIC
       liveequivalence.cpp liveequivalence.h
       liveclipmodel.cpp liveclipmodel.h liveclipedit.cpp liveclipedit.h cliptempo.cpp cliptempo.h livemidiout.cpp livemidiout.h livehelpers.cpp livehelpers.h
       soundlibrarycheck.cpp soundlibrarycheck.h
-      playbackverify.cpp playbackverify.h
+      playbackverify.cpp playbackverify.h evenlevelsjob.cpp evenlevelsjob.h evenautomeasurer.cpp evenautomeasurer.h
       tuningdialog.cpp tuningdialog.h
       playbackmode.cpp playbackmode.h
 

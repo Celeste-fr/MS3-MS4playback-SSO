@@ -122,14 +122,24 @@ static const std::vector<Definition> DEFINITIONS = {
         "context the Performance patches' volume carries the section's largest slur gain too; everything lower together so the "
         "loudest stays at Live's Volume top, +6 dB); 0: every section at the same level", true },
       // (the owner, 2026-10-12, stage A of the dynamics plan: each note as loud as a real player at its written dynamic,
-      // the player's full range; rule D: TU Berlin's pp / ff are ppp / fff, 7 equal dB steps, relative to mp. Off everywhere,
-      // Recommended too, until the owner has heard and approved it; contextlevel.h › Real range)
-      { "levels/realRange", 0, 0, 1, "on/off",
+      // the player's full range; rule D: TU Berlin's pp / ff are ppp / fff, 7 equal dB steps, relative to mp; 2026-10-13,
+      // heard on the ladder: "this sounds great": on in Recommended and by default, off in Library default; contextlevel.h ›
+      // Real range)
+      { "levels/realRange", 1, 0, 1, "on/off",
         "1: each note of a section with a map realSpan (SSO's five string sections) as loud as a real player at its written "
         "dynamic: ppp .. fff in 7 equal steps of the player's measured pp .. ff range (Weinzierl et al. 2018) from mp, less "
         "what the library's held note already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' "
         "volumes (everything lower together past Live's Volume top, +6 dB); a short at velocity 127 still under its "
         "calibrated level gets the rest by CC11; 0: the library's own range", true },
+      // (the owner, 2026-10-12: SSO's Performance legato plays some slurred notes louder than others, by context; evened
+      // out by a glide of CC11 measured in place, the blind listening test's choice; 2026-10-13, MuseScore's playback
+      // verified on the VM (3.6 -> 0.60 dB), the owner: "why is this not in recommended": on in Recommended and by default,
+      // off in Library default; it plays only corrections Tools > Even Out Levels... stored; evenlevels.h)
+      { "levels/evenLevels", 1, 0, 1, "on/off",
+        "1: each slurred note with an even-levels correction (measured in place by Tools > Even Out Levels...) plays it: CC11 "
+        "gliding in dB between the notes' heard windows, every 5 ms, so a slur's notes sound equally loud; a correction "
+        "whose note's context changed since (an edit nearby) is stale and not played; the largest correction of a patch "
+        "by its volume (within Live's +6 dB); 0: as the library plays them", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
@@ -347,7 +357,7 @@ QString iniTemplate()
 //---------------------------------------------------------
 //   presets
 //    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated,
-//    levels/context, levels/sectionBalance) and
+//    levels/context, levels/sectionBalance, levels/realRange) and
 //    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance, slurs/transitions, slurs/smoothStart) differ between them. The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
@@ -362,13 +372,16 @@ const std::vector<Preset>& presets()
             // (2026-10-08: "let's make slurs quick = 2 the recommended preset"; 2026-10-09, quickLevel re-measured in context:
             // "1 is the right balance, make it the recommended preset"; 2026-10-10: the strings' slurs on Performance, and the
             // level rule: levels/context; 2026-10-11: the section balance M, levels/sectionBalance; 2026-10-12: fingered within a slur,
-            // bowed between slurs, slurs/transitions; a phrase's first note smooth, slurs/smoothStart)
+            // bowed between slurs, slurs/transitions; a phrase's first note smooth, slurs/smoothStart; 2026-10-13: the real
+            // player's range, levels/realRange)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 },
-                                              { "levels/context", 1 }, { "levels/sectionBalance", 1 } } },
+                                              { "levels/context", 1 }, { "levels/sectionBalance", 1 }, { "levels/realRange", 1 },
+                                              { "levels/evenLevels", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 },
-                                              { "levels/sectionBalance", 0 } } },
+                                              { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
+                                              { "levels/evenLevels", 0 } } },
             };
       return P;
       }

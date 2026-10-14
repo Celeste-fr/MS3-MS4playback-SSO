@@ -5,6 +5,23 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## SSO script fixes (2026-10-13, branch `sso-script-fixes`, from reading SSO's Kontakt scripts; untried with the real library)
+
+- **Round robins reset on every playback start**: SSO's All-techniques and single-technique patches reset their per-key
+  round-robin counters at a transport start; the host reported "playing" in every block, so Kontakt saw one start per session.
+  `Vst3Synth::playbackStarted` (called by `Seq::process` when the transport changes to play) / `restartTransport`: each
+  plug-in gets one block (`Vst3Plugin::TRANSPORT_STOP_FRAMES`) with the playing flag off, no events, output dropped, then
+  playing. Also at `beginExport` (exports, `--live-equivalence`, verify renders, even levels' library instance) and at the
+  start of each `PlaybackVerifier::renderPasses` pass (the even-levels measurement passes and any repeated pass: each is a
+  playback, so each starts from the same round robins). To check on the Windows VM when a build is made: play twice, the
+  same repeated note should sound the same sample sequence both times (Kontakt untested here; the test synth logs the
+  host's flag, `MSTESTSYNTH_TRANSPORT_LOG`, test `transportRestart`).
+- **Kickstart "Roll on high vel."**: ticked in 13 one-drum metal patches (Anvil, Cymbal Hi / Lo / Med, Mark Tree, Mini Anvil,
+  Rain Sheet, Rivet Cymbal, Tam Tam, Trash Metals, Triangle 1 / 2, Wind Gong), where velocity 127 plays a roll; elsewhere
+  Kickstart plays 127 as 126. Map attribute `<Instrument maxVelocity="126">` (generator `ROLL_ON_HIGH_VELOCITY`; README),
+  applied to every library note-on last (`MidiRenderer::libraryMaxVelocity`), so Live's clips and the plain set follow.
+  A correctness fix, not an adjustment (no setting, no preset). A roll the owner wants is the patch's Roll hit.
+
 ## Remind the owner (raise these at the start of the next conversation)
 
 - **Whence, Violin I's vibrato** (the owner, 2026-10-12: "record this so I can be reminded later"): the score's Violin I
@@ -16,13 +33,16 @@ a section there when you need the background of that topic. Commit messages desc
   until then they went at 100 (map `legatoVelocity`, chosen 2026-10-07 for timing: a run's arrival SD 54 -> 39 ms,
   never judged by ear at 69). Ask the owner to listen to Whence's Violas runs in build 422; if they smear, offer a
   measured tighter velocity inside the fingered band (20-84) as an option.
-- **Stage A verdict** (2026-10-12): the listening page https://claude.ai/artifact/PxWaWQ6cCA2K8f7kN5TK76 (db collection
+- **Stage A verdict** (2026-10-12): the listening page https://claude.ai/artifact/SYgoXqPuHmJpicoCRrTRpc (the owner's new account, 2026-10-13) (db collection
   `realrange1`) A/Bs `[levels] realRange` on a ppp -> fff ladder per section; read the verdicts (ArtifactData) and put
   realRange into Recommended only for what the owner approves. A score with written dynamics is the next test (Whence has
   almost none).
-- **Transition levels** (2026-10-12, the owner: "I want it evened out eventually"): branch `transition-levels` measures each
-  Performance note's level by the interval / transition it is reached from (Whence 12-TET bar 2 Celli: note 2 ~2.2 dB over
-  note 1 in SSO itself, sso_slur_swell.json); then propose a per-note correction, off until heard.
+- **Even levels in Whence** (2026-10-14, build 431 https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38567243409,
+  integrate-1012 e07750c20a, artifact MuseScore-soundlibrary-win64-e07750c): Recommended now measures in the
+  background (no Tools step), with the mid-note fix and the 350 ms skip. The owner listens to Whence's slurred string
+  passages with Recommended, then with Even levels 0 (Mixer › Advanced Options… › Playback adjustments) for comparison,
+  in the music rather than test passages (the 180 ms note-3 swell is SSO's tone and borderline: HANDOFF › Where the
+  correction works). Ask: how it sounds, how long the waits at Play are, any swell left that matters.
 - **Try in the next build:** the automation headers for every part (fold at will; `( + | All )`, round Draw Mode button,
   Grid menu), the bar ruler (View > Bar Ruler), Update Live Set (Mixer > Advanced Options > Ableton Live), the MuseScore
   Link device fix (copy the new device from the build into the User Library; Live no longer stalls with 28 copies, phrase-
@@ -86,6 +106,7 @@ with `MS_AUDIT_SCORE`) and read its report: no OVERLAP may remain, and every ARR
 named in the hand-over with its reason (the owner, 2026-10-09: "why do I have to point out all of these issues?").
 LEVEL STEP: values, marked against a proposed threshold (the difference limen, 0.69 dB at 60 dB SL, Jesteadt, Wier &
 Green 1977) the owner hasn't approved yet.
+DROPPED (fail: a legato note sent < 15 ms after the one before at velocity <= 64, which SSO drops) and LEAP (warn: a transition beyond an octave, which SSO attacks afresh) were added 2026-10-13: name any left in the hand-over.
 
 ## Timing set in Live (2026-10-11)
 
@@ -189,6 +210,176 @@ Approved by the owner on A′ (2026-10-11; HANDOFF › No Performance patches' W
   liveContextLevel`, Linux, test synth). The VM `--live-equivalence` run needs a Windows build of this branch: not run.
 - A/B (dry strings, bars 1-16, one common gain): `~/MuseScore/ms3fork/uploads/levelrule/` A (rule), B (R lowered), C
   (before).
+
+## Even levels without measuring by hand (2026-10-13, design pending two checks)
+
+Predicting the swell from the notes failed (offline, `predict/levels`: best model r 0.66, removes 20-30 % of the slur
+range against 65-80 % measured in place). The perturbation scan (`sso_perturbation_scan.json`, VM, real SSO) found a
+note's level depends on ~2 notes before and 1 after (Basses ~4 before), nothing further. The owner's direction
+(2026-10-13): **combine** a table of common contexts measured once (shipped) with measuring the rest locally in the
+background (only the edited note +-3), every measurement saved to the user's own table for reuse. **If play is pressed
+while a measurement runs: wait only when the passage being measured is in what is about to play** (a short countdown,
+then play; otherwise play at once; the owner: "the third"). Checked (2026-10-13): the same exact local context (2 notes
+before, 1-2 after, their pitches and velocities) gives the same level in any phrase to ~0.2 dB (`sso_context_reuse.json`,
+VM, real SSO; the earlier 1.3 dB had unmatched velocities), but not transposed (+1 semitone already moves the shape
+0.74 / 1.77 dB p50 / p90): pitch stays in the key. Real scores barely share contexts (offline count, Whence + Glazunov
+op. 97 + Dvorak op. 22 ii: ~2,200 contexts for 90 % of 2,958 notes, 83-96 % heard once, Glazunov <-> Dvorak <= 1 %
+shared). So a shipped table would almost never be hit: the design is **background measuring near edits**, its results
+kept per exact context for reuse (edits and re-measures of the same score), no shipped table. Untested: whether note
+length / dynamic change the shape (the scans used 136 ms at CC1 64). **No predicted stand-in** (the owner, 2026-10-13:
+"you would be hearing a 'fake' version for that moment. that's not acceptable, I'd rather just wait"): a note plays its
+measured correction or waits for it, never a model's guess. To shorten the wait (estimate from the VM's render speeds,
+~1 s per edit): one pass instead of three, one round with CC11's measured strength (~25 % over the law) built in, only
+the edited note +-3 plus a run-in, parts in parallel; both "one pass" (MuseScore's renders vary ~0.6 dB per note, the
+scans 0.1-0.25) and "one round within ~1 dB" to check on the VM first. Checked (`sso_even_fast_checks.json`, VM, kthost +
+SSO, MuseScore's events): a window of the edited note +-3 with 2 run-in / run-out notes matches the whole passage; one pass
+or one round leaves the worst notes 0.3-0.7 dB further off; ~0.5 s of rendering per part per pass-set (4.4x real time).
+**The owner (2026-10-13) chose the full method** (3 passes, 2 rounds, CC11's measured strength 1.28 built in): ~3 s per
+edit, parts in parallel. Branch `even-auto` builds it.
+
+**Built** (branch `even-auto`, 2026-10-13; not merged; no Windows build yet): libmscore/evenauto.h (the Session: render,
+cache, windows, rounds), audio/vst3/evenmeasure.h (render + measurement, shared with the job), mscore/evenautomeasurer.h
+(own plug-in instances on worker threads, triggers, Play's wait), docs/PLAYBACK_SETTINGS.md › Even levels. Tested on Linux
+only (tst_soundlibrary evenAutoWindows / evenAutoSession with a stand-in plug-in that answers CC11 by 1.28 / evenAutoTestSynth
+end to end on the test synth). **Untried with Kontakt and SSO**: the time per edit (the estimate ~3 s assumed ~2.1 s of audio
+per pass; the windows render the job's 3 s gap after the last note-off too, so ~5 s per pass at Whence's tempo, ~10-15 s of
+rendering per edit at the VM's 4.4x), memory (one more Kontakt per part and patch measured: ~85-90 MB each plus samples),
+Kontakt rendering offline on a worker thread while the main instances play nothing, the countdown's estimate, a full
+score's first measurement at open (every passage). On the VM: open Whence, edit a slurred note, press Play at once (the wait,
+then the corrected note), undo (no wait), compare a window's values with `--even-levels` on the same bars. Open choices for
+the owner: whether a first measurement at score open should wait for Play at all (a whole score at once), whether the 3 s
+gap may shrink (a measured release time per patch would be the source).
+
+**The owner's decisions (2026-10-13)**, built on `even-auto`: (1) opening a score without values, **Play waits for the
+measurement** (countdown, Stop cancels) rather than playing uncorrected: the wait covers queued windows too (at opening
+every passage is queued; `Session::mustWait`), and each instance renders **from the play position forward first**
+(`EvenAuto::priority` / `next`: the windows reaching the focus or after it, earliest first, then those before it, nearest
+first; the focus is the play position at each detect, Play's start while it waits; instances load in the same order); the
+rest goes on in the background; running playback is never stopped. (2) **The gap may shrink** to what the VM shows
+doesn't change results: measured (`even_gap_check.py`, `sso_even_gap_check.json`; VM, kthost + Kontakt 8 + SSO, the
+measurer's windows of Whence 12-TET / Whence Celli, Violins 1, Violas, Basses = Whence Celli an octave lower; gaps 0.25-3 s,
+2-6 kthost processes x 4 renders x 3 passes each; the process is the unit of noise: a process shifts every note a little):
+from **1 s** (Violins 1, Violas, Celli) and **1.5 s** (Basses) every longer gap's per-note levels and fitted glides match
+3 s (mean z^2 under the chi-square 95 % bound, mean shift within t x SE; e.g. Celli 1 s: shift -0.003 +- 0.013 dB, z^2
+0.93 / 1.33; fit -0.016 +- 0.011, 1.04), 0.25 / 0.5 s do not (Celli 0.25: z^2 1.78, fit 1.91; effect ~0.1-0.2 dB rms).
+The release does not fall to -60 dB in 3 s (the -40 dB point is 2.4-3 s after the last note-off, Tree mic + Leader as
+shipped) but the next window's measured notes begin >= 0.5 s + 2 run-in notes later. Patches not measured keep 3 s.
+Also built: **early stop** (the owner's addition: 2 passes, a 3rd only above the 95th percentile of SSO's |pass 1 - pass
+2|: 0.67 / 0.74 / 1.26 / 1.49 dB; ~70 % stop at 2, 23-25 % of the passes saved; fits within always-3's 95 % interval,
+RMS error +0.01-0.02 dB), **4096-frame blocks** (12-16 % faster, levels the same), a transport restart per pass (as
+renderPasses). **Render speed** (the owner asked why 4.4x vs 17x): kthost's time goes with the seconds of *notes* (~0.2 s
+per second for Violas / Celli, 0.1 Basses, 0.3 Violins 1 in the earlier, colder runs), silence is nearly free; the VM
+streams SSO's samples over the network from the owner's PC, so one file took 31-65 s on different runs: 17x was a
+mostly silent scan, 4.4x dense passes with cold caches. 120 s idle after loading changed nothing; two processes at once ran
+each nearly as fast as alone. **Time per edit** (VM): ~0.4 s per pass (2 s of notes), ~2.3 passes, 2-3 rounds: ~1.5-2.5 s
+of rendering per edited part (before ~2.4-3.6 s), plus the plug-in's load at the first edit; the countdown starts from the
+VM's 8.9x audio (`RENDER_SPEED`) until a render here is timed. The round-2 rule is the job's (residual above 1 dB).
+Smoke test (Linux, headless MuseScore, Xvfb + PulseAudio null sink, the test synth as the library's plug-in, slow to load):
+Play pressed at once after opening waited 11.3 s with "Even levels: measuring … loading the plug-in, then ~n s", then
+played (status bar: Play, the position moving); Stop pressed during a 30 s wait: no start in the 4 s until it quit. Still untried in MuseScore with Kontakt / SSO (no Windows build).
+
+## Slow slurs need no correction (the owner, 2026-10-13)
+
+`swell_vs_length.py` measured slow slurs (500 ms-1 s notes) as uneven as fast ones by the job's short window, so a blind
+test (`slow_slur_test.py`, listening page db `slowslur1`: Celli and Violins 1 at 500 ms, Violas at 1 s; uncorrected /
+the short-window correction / a whole-note correction, loudness-matched): the owner marked every version Fine and every
+passage "All the same". So the background measurer and the job skip slurred passages whose every inter-onset interval
+is >= 500 ms (heard at 500 ms and 1 s; 136-500 ms untested by ear: still measured); a faster note inside a slow slur
+keeps its window measured.
+**Lowered to 350 ms** (the owner, 2026-10-14, "sure"): the tempo-line test heard 350 and 500 ms the same corrected or not,
+neither wrong, figure and line; the owner had held the limit until the correction worked at 250 ms (the mid-note fix:
+fine 4 / 4). `EvenLevels::SLOW_IOI_S` 0.35; `even-slow.musicxml` bars at 350 / 348.8 / 250 ms.
+
+## Where the correction works (the owner's blind test, 2026-10-13, db `tempoline1`)
+
+`tempo_line_test.py` (Celli, mf; U uncorrected vs C as Even levels corrects, loudness-matched): 136 ms repeating
+figure U wrong; 136 ms line **C wrong**; 180 ms figure both wrong (C: notes 1 and 3 swell, U: note 3); 180 ms line
+neither, U preferred; 250 ms figure "same", **both wrong**; 250 ms line U wrong (C preferred); 350 and 500 ms (both
+kinds): no difference, neither wrong. The owner: keep the skip at 500 ms until the correction is reliable at 136-250 ms
+("if we can't even consistently do corrections, seems like we need to figure that part out first"). Suspect: each
+note's window starts at its arrival (note-on + legatoDelay 170-440 ms), i.e. while the next notes sound. Branch
+`even-window` investigates.
+**Found** (`even_window_check.py`, `sso_even_window_check.json`; earlier renders + VM, kthost + Kontakt 8 + SSO): the
+CC11 acts as modelled (r 0.88-0.98, lag 10-15 ms); the measure is wrong. SSO's level peak of a transition comes before
+the pitch arrives, so the arrival windows straddle peaks and dips and come out flat while each note keeps a 60-120 ms
+dip-then-rise; the owner hears that rise ("swell": the largest rise of the perceived envelope within [note-on, next
+note-on)): it ranks 180R as the owner did (U note 3; C notes 3 and 1) and matches 7 of 8 checks on the mp3s heard (the
+job's measure 4). New correction N: flatten the envelope to each slur's median with glide nodes every 40 ms (not one
+per note), 2 rounds: swell p75 136R 2.4 -> 1.4, 180R 3.3 -> 1.7, 250R 4.4 -> 1.7, L 1.8-2.9 -> 1.3-1.8 (C left them
+at 1.6-4.0). Blind set U / C / N at 136 / 180 / 250 ms × R / L ready for the owner; no renderer change until he has
+heard it (C++ would store glide nodes, not per-note values).
+**The owner's blind test of U / C / N** (2026-10-13, db `evenwindow1`; "new correction is horrible, it has a really obv
+wobbly sound", picked out every time): N wrong in 6 of 6, **dropped**. C fine in 5 of 6 (136R, 136L, 180L, 250R, 250L;
+250L "dwelt on this a lot"), wrong only at 180R; U wrong 4 of 6 (fine 136L, 180L). Across both tests C failed at 180R
+twice, 136L and 250R once each (fresh renders each test: SSO's per-play randomness may account for the single failures).
+The swell measure ranked N best: it does not hear N's 40 ms wobble, so it can't stand in for the owner's ear. Open: the
+180 ms repeating figure, where C still swells (notes 1 and 3).
+**180 ms figure** (branch `even-180`, `even_180_check.py`, `sso_even_180_check.json`; VM, kthost + Kontakt 8 + SSO, 6
+takes): consistent, not randomness (C's largest swells notes 1 and 3 in 6 of 6). Note 3: SSO's own E3->Eb3 transition
+(dip ~66 ms, rise 4-4.5 dB by ~125 ms, in U too), beyond one value per note. Note 1: C's doing: each node sits 270-310
+ms after its note-on, inside the next note, so C ramps up through note 1. Candidate S: each node at note-on + IOI/2;
+swell note 1 2.67 -> 1.61, note 3 4.20 -> 3.89, note 4 1.17 -> 1.71 dB; 250R p75 4.01 -> 3.29, 250L 2.48 -> 2.77
+(worse). Blind test C vs S (db `evenfig1`): 3 pairs 180R (one a hidden repeat with letters swapped), 2 pairs 250R.
+The owner: 180R both wrong and "all the same" in every pair (the repeat agrees), 250R S fine once, wrong once: S not
+heard at 180 ms. The owner then asked whether the "swell" is the bowed transition itself (each slur's note 1 in this
+figure is a bowed transition, velocity 93, from the touching slur before): the page now marks the bowed notes.
+With the marks (re-answered): the swell is **note 3** (E3 -> Eb3, fingered), not the bowed note 1 ("why do the 3s all
+swell"). 250R: S fine 2 / 2, C wrong 2 / 2 ("A swells at 3"); 180R: both swell at 3, the same, every pair. Open: is
+note 3's dip-and-rise that transition sample or the fast overlap (measurement on `even-180`).
+**Answer: the sample** (`note3_check.py`, `sso_note3_check.json`, bf091c1b9c on `even-180`; VM, kthost + Kontakt 8 + SSO,
+U, 14 passages × 3 takes): E3 -> Eb3 swells wherever it sits (rotated cycle, same overlaps: as note 1 / 2 / 3 / 4 3.60 /
+3.76 / 4.49 / 3.70 dB; in a line 4.21; the cycle's other transitions 0.3-2.8), also with 600 ms notes (7.2 first, then
+3.2-3.3), less into other pitches (F3 3.80, Ab3 2.44, C3 2.01). By IOI: 136 3.21, 180 4.49 (rise in ~55 ms), 250 7.34
+(~200 ms), 350 6.39 (~265 ms): why S works at 250 and can't at 180. No fix within one value per note at 180 ms; left:
+another transition kind or velocity for such notes (not measured). The owner: no changing the transition; asked for an
+elegant levels-only solution.
+**Rule R** (branch `even-rule`, c6a56a0ed4, `even_rule_check.py`, `sso_even_rule_check.json`; VM kthost + Kontakt 8 + SSO
+renders, MOSQITO 1.2.1 on Linux): N wobbled because flattening the low bands' swell with a broadband CC11 moved the
+upper bands (12-24 Bark), whose fluctuation strength (Zwicker & Fastl, ISO 532-1) rose 11-30% above U and C in 6 / 6
+passages (180R U .207 C .221 N .288): ranks N worst as the owner did; not noise (repeatable up to 64 Hz), not timing
+(CC11 = gain 1.048, 40 ms one-pole, 4 ms lag, r 0.994). R: CC11 cancels the repeatable part of each slur's loudness swell
+at the strength (0.25-1 sweep) minimising fluctuation strength summed over bands; a continuous curve (5 ms), not one value
+per note (storage would change). Real renders, swell p75 / upper-band FS: 180R S 2.45 / .227, R 1.65 / .210 (note 3
+3.07 -> 1.84); 250R S 2.54 / .177, R 2.08 / .179; 250L S 2.09 / .194, R 1.13 / .209. Blind S vs R (db `evenrule1`):
+180R, 250L, 250R, 180R repeated with letters swapped.
+The owner (2026-10-14): 180R both wrong, "both swell at 3" (the repeat agrees): R's 40% smaller loudness rise is not
+heard; 250L both fine, R preferred; 250R both fine, S preferred. So R isn't worth its storage change; S is fine at 250
+ms in 4 of 4 pairs. Note 3's swell may be timbre (the sample brightening), which no CC11 curve removes: not measured.
+**Measured: both, and what's left is tone** (`note3_tone_check.py`, `sso_note3_tone_check.json`, cb81baf1ea on
+`note3-tone`; the VM's note-3 renders + 6 heard mp3s, MOSQITO 1.2.1, Bark bands, Boersma HNR). U note 3 dip -> peak (75 ->
+134 ms): +5.0 phon, lowest band (< ~400 Hz) +12.1 dB, middle +2.0-4.6, top +0.3; centroid -45% (darker), HNR +7.1 dB
+(bow noise -> pitched), f0 still sliding; notes 1 / 2 tone spread 1.96 / 2.24 dB against 4.17. Heard clips, band-weighted
+level change S / C / R 6.52 / 5.77 / 1.91 dB, tone spread 4.40 / 4.20 / 3.67, centroid -46 / -45 / -44%: R removed the level
+part; the tone part (lowest band +8 dB against the rest, noise turning to tone) is what the owner hears and CC11 (a broadband
+gain) can't reach. It follows the sample (same step as note 1 or in a line alike; into F3 less, C3 hardly). **Closed on the
+levels side**: the 180 ms note 3 is SSO's sample.
+Demo page (2026-10-14, not blind: 4 slurs of the R / S clips looping, -16 LUFS, R level-flattened, below / above 400 Hz,
+`nmb-tonedemo.py` untracked): the owner, "both R and S sound fine here". So the swell is borderline: heard when hunting
+faults over the whole 8 s passage, not in a short known excerpt. Left as SSO plays it; judge in Whence with the next build.
+**S built** (the owner, 2026-10-14: "do 1"; branch `even-midnote`): the job and the background measurer fit as
+`even_180_check.py`'s S (nodes halfway from each note-on to the next, `EvenLevels::nodeTime`, the renderer's glide too;
+target each slur's median of the envelope over its span; basis lagged 12 ms; round 1 / 1.28, round 2 always, the job's
+by the envelope's measured gain, the background's / 1.28; round kept by envelope rms). Old values stale (contextOf's
+version). Linux tests only (test synth): untried with SSO in MuseScore; the background now renders 3 rounds per window
+(was 2 where the residual stayed under 1 dB).
+
+## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
+
+Built from the listening test below (libmscore/evenlevels.h, mscore/evenlevelsjob.h, docs/PLAYBACK_SETTINGS.md › Even
+levels): *Tools › Even Out Levels…* / `--even-levels <score>` renders each slurred Performance-legato passage through the
+hosted plug-ins (3 passes), measures each note, fits the glide, renders again (once more above the 1 dB floor) and keeps
+each note's value + a hash of its context on the note (metaTag `evenLevels`; a changed context is stale, shown in
+Inspector › Note › Even level, not played). The renderer glides CC11 (Live's clips and the plain set too); each patch's
+notes play its largest value lower by CC11 (never cut at 127), its volume adds it back up to +6 dB, the rest lowers every
+library patch alike (`Delays::evenAll`).
+Windows VM, Kontakt 8 + SSO, Recommended (realRange on), build 38387460368: the job on Whence 12-TET Celli bars 1-8 (the
+passage), median slur range 2.11 -> 0.84 dB (round 1 kept); Whence (quarter tones) bars 1-8, Violins 1 / Violas / Celli
+2.54 / 1.96 / 1.54 -> 0.75 / 0.65 / 0.74. **MuseScore's own playback** (`--verify-playback --verify-wav` of the corrected
+score, Celli alone, `tools/soundlibraries/even_levels_check.py`): Whence 12-TET bars 2 / 4 slur range 3.6 dB uncorrected
+-> 0.60 (median of 3 renders; the listening test's G 0.7); a single render 0.9-1.6: SSO's pass-to-pass noise is ~0.6 dB
+per note (SD), so one hearing still varies. The first build (38382322224) cut the boosts at CC11 127 (Celli - Performance
+at +6 dB by the level rule): fixed. Open: the owner's ear (then Recommended?); the whole library plays quieter by the rest
+(Whence 12-TET Celli: 3.7 dB); the GUI path (Tools menu) is untried with Kontakt; correct whole scores, not just Whence.
 
 ## Transition levels: the slur swell (2026-10-12, branch `transition-levels`, measurement only)
 

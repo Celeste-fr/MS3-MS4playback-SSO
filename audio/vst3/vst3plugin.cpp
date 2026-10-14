@@ -318,6 +318,10 @@ class Vst3PluginPrivate {
       ParameterChanges inChanges { 512 };
       ParameterChanges outChanges { 512 };
       ProcessContext context {};
+      // restartTransport(): the next processDirect first runs a block with the transport stopped
+      std::atomic<bool> restartPending { false };
+      Steinberg::Vst::EventList noEvents { 1 };
+      ParameterChanges noChanges { 1 };
       std::vector<std::pair<ParamID, ParamValue>> fromProcessor;      // for the controller (idle)
       std::vector<std::pair<ParamID, ParamValue>> reported;           // the processor's own, for takeReported()
       std::mutex fromProcessorMutex;
@@ -749,6 +753,11 @@ double Vst3Plugin::pitch() const
       return 1200.0 * std::log2(d->targetRatio);
       }
 
+void Vst3Plugin::restartTransport()
+      {
+      d->restartPending = true;
+      }
+
 void Vst3Plugin::process(int frames, float* buffer)
       {
       if (!d->active || frames <= 0)
@@ -809,6 +818,26 @@ void Vst3Plugin::processDirect(int frames, float* buffer)
                   d->handler.edits.clear();
                   }
       }
+      if (d->restartPending.exchange(false)) {
+            // the transport stops, to start again with the blocks that follow: one block with the playing
+            // flag off (no events, its output dropped), so a sampler's script sees a transport start
+            const int n = std::min(d->maxBlock, TRANSPORT_STOP_FRAMES);
+            d->context.state = ProcessContext::kTempoValid;
+            d->context.sampleRate = d->sampleRate;
+            d->context.tempo = 120.0;
+            d->data.processMode = d->offline ? kOffline : kRealtime;
+            d->data.numSamples = n;
+            d->data.inputEvents = &d->noEvents;
+            d->data.inputParameterChanges = &d->noChanges;
+            d->data.outputParameterChanges = &d->outChanges;
+            d->data.processContext = &d->context;
+            d->processor->process(d->data);
+            d->sinceState += n;
+            d->context.projectTimeSamples += n;
+            d->outChanges.clearQueue();
+            d->data.inputEvents = &d->events;
+            d->data.inputParameterChanges = &d->inChanges;
+            }
       int done = 0;
       while (done < frames) {
             const int n = std::min(frames - done, d->maxBlock);

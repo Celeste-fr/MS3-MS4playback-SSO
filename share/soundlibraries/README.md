@@ -276,6 +276,13 @@ switch value of each articulation. For example:
     heard reaches the tuning at the arrival: the note before's tuning until the leave, one value from the leave to
     the arrival (from where the heard bend is: (target - heard e) / (1 - e), e = exp(-(arrive - leave) / tau)),
     then the tuning. Left out: the glide is sent as the straight path itself.
+  - `maxVelocity` on an `Instrument` (1-127, left out: 127): the loudest velocity MuseScore sends to the patch;
+    a louder note-on is sent at this. For a patch whose own script turns the top velocity into a different
+    sound: SSO's percussion script (Kickstart) plays velocity 127 as a roll where its option "Roll on high
+    vel." is ticked, which 13 one-drum metal patches ship with, so those say `maxVelocity="126"` (the
+    generator's `ROLL_ON_HIGH_VELOCITY`). A correctness fix, not a playback adjustment: no preset turns it off.
+    Applied to every library note-on after levels and delays (`MidiRenderer::libraryMaxVelocity`), so Live's
+    clips and the plain set carry it.
   - `sectionLevel` on an `Instrument` (dB): with playback setting `[levels] sectionBalance`, every patch of
     the section (the main patch and its `with` patches, which take its value) plays this much louder, by
     its volume (`libmscore/contextlevel.h`). SSO's five string sections: a real orchestra's balance at mp

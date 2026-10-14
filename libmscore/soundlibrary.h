@@ -240,6 +240,11 @@ struct LibInstrument {
       // microtones by the patch's own pitch bend (<Instrument bend>: cents at full deflection, either way, the
       // bend linear; measured): a lane's tuning within it is played by pitch bend, not varispeed. 0: it doesn't bend
       double bendCents { 0 };
+      // the loudest velocity sent to the patch (<Instrument maxVelocity>): a percussion patch whose script turns
+      // velocity 127 into something else (Kickstart's "Roll on high vel.", ticked in 13 metal patches: a roll
+      // the score did not ask for) is sent 126. A correctness fix of the map, not an adjustment: set in every
+      // preset, for every library event (so in Live's clips and the plain set too). 127: none
+      int maxVelocity { 127 };
       // [levels] sectionBalance (contextlevel.h): every patch of the section plays this many dB louder, by its volume
       // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's M,
       // 2026-10-11, gen_spitfire_sso.py SECTION_FADERS). 0: none

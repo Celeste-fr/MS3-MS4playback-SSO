@@ -3227,6 +3227,16 @@ Shortcut Shortcut::_sc[] = {
          },
       {
          MsWidget::MAIN_WINDOW,
+         STATE_NORMAL,
+         "even-levels",
+         QT_TRANSLATE_NOOP("action","Even Out Levels…"),
+         0,
+         QT_TRANSLATE_NOOP("action","Even out levels: measure the slurred passages of the selection (or the score) with the sound library's plug-in, and even out their notes' levels"),
+         Icons::Invalid_ICON,
+         Qt::WindowShortcut
+         },
+      {
+         MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY,
          "adapt-keysigs-to-clefs",
          QT_TRANSLATE_NOOP("action","Adapt Key Signatures to Clefs"),

@@ -733,6 +733,8 @@ Note::Note(const Note& n, bool link)
       _liveStart = n._liveStart;
       _liveEnd = n._liveEnd;
       _libraryTechnique = n._libraryTechnique;
+      _evenLevel = n._evenLevel;
+      _evenContext = n._evenContext;
       _headScheme        = n._headScheme;
       _headGroup         = n._headGroup;
       _headType          = n._headType;
@@ -1474,6 +1476,10 @@ void Note::write(XmlWriter& xml) const
                   xml.tag("liveEnd", _liveEnd);
             if (!_libraryTechnique.isEmpty())
                   xml.tag("libraryTechnique", _libraryTechnique);
+            if (EvenLevels::isSet(_evenLevel)) {        // (evenlevels.h: a file keeps it in its metaTag)
+                  xml.tag("evenLevel", _evenLevel);
+                  xml.tag("evenContext", _evenContext);
+                  }
             }
 
       for (Spanner* e : _spannerFor)
@@ -1620,6 +1626,10 @@ bool Note::readProperties(XmlReader& e)
             setProperty(Pid::LIVE_END, e.readDouble());
       else if (tag == "libraryTechnique")
             _libraryTechnique = e.readElementText();
+      else if (tag == "evenLevel")
+            setProperty(Pid::EVEN_LEVEL, e.readDouble());
+      else if (tag == "evenContext")
+            _evenContext = e.readElementText();
       else if (tag == "play")
             setPlay(e.readInt());
       else if (tag == "tuning")
@@ -3137,6 +3147,10 @@ QVariant Note::getProperty(Pid propertyId) const
                   return _liveEnd;
             case Pid::LIBRARY_TECHNIQUE:
                   return _libraryTechnique;
+            case Pid::EVEN_LEVEL:
+                  return _evenLevel;
+            case Pid::EVEN_LEVEL_CONTEXT:
+                  return _evenContext;
             case Pid::PLAY:
                   return play();
             case Pid::LINE:
@@ -3260,6 +3274,14 @@ bool Note::setProperty(Pid propertyId, const QVariant& v)
                   _libraryTechnique = v.toString();
                   score()->setPlaylistDirty();
                   return true;
+            case Pid::EVEN_LEVEL:
+                  _evenLevel = EvenLevels::clampDb(v.toDouble());
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::EVEN_LEVEL_CONTEXT:
+                  _evenContext = v.toString();
+                  score()->setPlaylistDirty();
+                  return true;
             case Pid::VISIBLE: {
                   setVisible(v.toBool());
                   if (m)
@@ -3342,6 +3364,10 @@ QVariant Note::propertyDefault(Pid propertyId) const
                   return LiveTimingOverride::AUTO;
             case Pid::LIBRARY_TECHNIQUE:
                   return QString();       // Auto
+            case Pid::EVEN_LEVEL:
+                  return EvenLevels::NONE;
+            case Pid::EVEN_LEVEL_CONTEXT:
+                  return QString();
             case Pid::PLAY:
                   return true;
             case Pid::FIXED:

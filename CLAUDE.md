@@ -124,7 +124,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   the part's Long at the same dynamic (measured curves, by ear: perceived loudness where measured), plus MS4.7.5's offset for its articulations (marcato's too),
   plus the Inspector's levels (`libVelocity`, `SoundLib::calibratedVelocity`; docs/PLAYBACK_SETTINGS.md › Calibrated
   levels); techniques on CC1 keep the library's balance, except Performance legato notes (since 2026-10-10: by CC1, as
-  loud as Long, `SoundLib::calibratedController`, `performanceLevel` in rendermidi.cpp; with **`[levels] context`** (the level rule, the owner 2026-10-10: the same written dynamic equally loud in every string part and technique, in the music; 1 in Recommended and by default, 0 in Library default) CC1 at the written dynamic instead and one gain per slur from the map's `<Articulation contextLevel>` (by dynamic, median IOI and pitch; `level_rule.py` from `sso_performance_context.json`), by CC11 and patch volumes: the score's largest gain G puts the Performance patches at G - S and every other patch of the library's parts at -S, S = max(0, G - 6) (`libmscore/contextlevel.h`, `TrackDelays::patchGain`; docs/PLAYBACK_SETTINGS.md › Level rule); with **`[levels] sectionBalance`** (the owner 2026-10-11: M; on in Recommended and by default, 0 in Library default) each string section's patches also play the map's `<Instrument sectionLevel>` O louder (`gen_spitfire_sso.py` `SECTION_FADERS`: M, a real orchestra's balance at CC1 64 from Weinzierl et al. 2018's sound power and SSO's section sizes, less SSO's measured `sso_cc1_curves.json`, centred: Violins 1 -3.81, Violins 2 -2.66, Violas -2.12, Celli +2.77, Basses +5.81 dB), a phrase at gain + O, all lower by S' = max(0, loudest gain + O - 6) (docs/PLAYBACK_SETTINGS.md › Section balance); with **`[levels] realRange`** (stage A of the dynamics plan, rule D, the owner 2026-10-12; **0 everywhere, Recommended too, until the owner has heard it**) each note of the five string sections also plays realDb = steps(written CC1) x span / 7 - SSO Long's change from CC1 64 by CC11, following CC1 through hairpins (map `<Instrument realSpan longLevel>`: Weinzierl et al. 2018's ff - pp per pitch, smoothed, and `sso_cc1_curves.json`, by `real_range.py`; a capped short's rest by CC11), its part's largest R (found by rendering the score once, `ContextLevel::realRangeTops`) as the patches' volume within the same S' (`libmscore/contextlevel.h` › Real range; docs/PLAYBACK_SETTINGS.md › Real range)). `[slurs] quick` (2 in Recommended, the default; 0 in Library default; in Recommended it acts only under staff text
+  loud as Long, `SoundLib::calibratedController`, `performanceLevel` in rendermidi.cpp; with **`[levels] context`** (the level rule, the owner 2026-10-10: the same written dynamic equally loud in every string part and technique, in the music; 1 in Recommended and by default, 0 in Library default) CC1 at the written dynamic instead and one gain per slur from the map's `<Articulation contextLevel>` (by dynamic, median IOI and pitch; `level_rule.py` from `sso_performance_context.json`), by CC11 and patch volumes: the score's largest gain G puts the Performance patches at G - S and every other patch of the library's parts at -S, S = max(0, G - 6) (`libmscore/contextlevel.h`, `TrackDelays::patchGain`; docs/PLAYBACK_SETTINGS.md › Level rule); with **`[levels] sectionBalance`** (the owner 2026-10-11: M; on in Recommended and by default, 0 in Library default) each string section's patches also play the map's `<Instrument sectionLevel>` O louder (`gen_spitfire_sso.py` `SECTION_FADERS`: M, a real orchestra's balance at CC1 64 from Weinzierl et al. 2018's sound power and SSO's section sizes, less SSO's measured `sso_cc1_curves.json`, centred: Violins 1 -3.81, Violins 2 -2.66, Violas -2.12, Celli +2.77, Basses +5.81 dB), a phrase at gain + O, all lower by S' = max(0, loudest gain + O - 6) (docs/PLAYBACK_SETTINGS.md › Section balance); with **`[levels] realRange`** (stage A of the dynamics plan, rule D, the owner 2026-10-12; **1 in Recommended and by default, 0 in Library default**: the owner, 2026-10-13, heard on the ladder) each note of the five string sections also plays realDb = steps(written CC1) x span / 7 - SSO Long's change from CC1 64 by CC11, following CC1 through hairpins (map `<Instrument realSpan longLevel>`: Weinzierl et al. 2018's ff - pp per pitch, smoothed, and `sso_cc1_curves.json`, by `real_range.py`; a capped short's rest by CC11), its part's largest R (found by rendering the score once, `ContextLevel::realRangeTops`) as the patches' volume within the same S' (`libmscore/contextlevel.h` › Real range; docs/PLAYBACK_SETTINGS.md › Real range)). `[slurs] quick` (2 in Recommended, the default; 0 in Library default; in Recommended it acts only under staff text
 "non performance", `[slurs] performance` taking the strings' slurs: Whence dump 2026-10-12, no Long (Rachm.)) plays short slurred notes on a quicker technique (Long (Rachm.)), early by its own onset, by `[heldNotes] byPitch` as every note (since 2026-10-09; `Choice::swapped`, `sso_rachm_onset_fit.json`) and, with `[slurs] quickLevel` (1 in Recommended, the default), as loud as the held one (map `quickLevel`: perceived, `sso_rachm_levels.json`; `quickDb`). Violins 1 / 2 only: Violas' and Celli's in-context entries in both files are measured but not used (`RACHM_UNUSED` in the generator; the owner, 2026-10-09: Whence bars 1-2 Celli ~8 dB louder and pulsing), their Rachm. as at 25a3dcbbeb. Exception: notes start
   early by their articulation's median measured onset (held notes, and since 2026-10-08 every measured technique, shorts too) (`[heldNotes] byPitch` 1: each by its pitch's)
   (`<Onset early>` 100 since 2026-10-07; the owner: plain Long for everything, lined up within Rasch's 30-50 ms between
@@ -157,6 +157,37 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   after a short note: `libFastDelay`) times only a bent transition's glide. HANDOFF.md has the open timing items.
   Per-note levels (a marcato's, track levels) share one CC11 / CC1 schedule per route, `libraryNoteLevels`
   (`libLevels`; dB add up).
+- **Even levels** (`libmscore/evenlevels.h`, `mscore/evenlevelsjob.h`; the owner, 2026-10-12, the blind test's Glide;
+  **`[levels] evenLevels` 1 in Recommended and by default, 0 in Library default** (the owner, 2026-10-13)): SSO's Performance
+  legato swells inside slurs by context (no table predicts it), so *Tools › Even Out Levels…* / `--even-levels <score>`
+  renders the slurred passages through the hosted plug-ins (3 passes), measures the perceived envelope and fits a per-note
+  CC11 glide flattening it to each slur's median (linear in dB between nodes halfway from each note-on to the next,
+  `EvenLevels::nodeTime`, every 5 ms; the owner, 2026-10-14: S, `even_180_check.py`, before the nodes sat in the next
+  note), / 1.28, then once more, the round whose envelope lies closest to its slurs' medians kept; each
+  note keeps its value and a hash of its rendered context (`Note::evenLevel` / `evenContext`, metaTag `evenLevels`): a
+  changed context is stale (Inspector › Note › Even level), not played. `MidiRenderer::libraryEvenLevels` glides on top of
+  the CC11 schedule (the patch's notes lower by its largest value, never cut at 127; its volume adds what fits under +6 dB,
+  the rest lowers every library patch alike: `TrackDelays::evenDb` / `evenAll`); Live's clips and the plain set carry it.
+  **Slow slurs are skipped** (the owner, 2026-10-13, blind test: slow slurs sound the same uncorrected and corrected; HANDOFF.md
+  > Slow slurs need no correction): a passage whose every interval between joined notes is >= `EvenLevels::SLOW_IOI_S`
+  (350 ms since 2026-10-14, was 500: the owner heard 350 / 500 ms the same corrected or not; `slowPassage`) is neither
+  measured by the job nor in the background: no render, no value, no wait.
+  **Measured in the background near edits** (`libmscore/evenauto.h` the Session, `audio/vst3/evenmeasure.h` the shared
+  render + measurement, `mscore/evenautomeasurer.h` the threads, triggers and Play's wait; the owner, 2026-10-13: a note
+  plays its measured value or playback waits for it, never a predicted one): whenever evenLevels plays and the library is
+  hosted, after an edit (debounced, `MuseScore::endCmd`) and at score open the score is rendered once; notes without a
+  current value take the user's cache first (`<setups folder>/even cache.json`, keyed by the contexts of notes j-3 … j+3:
+  undo / redo restore without rendering), the rest are measured in windows (note +-3, run-in 2 / Basses 4, run-out 2, 0.5 s
+  lead; rounds 1 / 2 = fit / 1.28, always both; each pass a transport restart; 2 passes, a 3rd only
+  when they differ by more than the patch's `earlyStopFor`; a gap of 1 s / Basses 1.5 s after the last note-off,
+  `gapFor`, 3 s and always 3 passes for patches not measured: `sso_even_gap_check.json`; blocks of 4096) on plug-in
+  instances of MuseScore's own (one per part and patch, a worker thread each, offline, paused while playing; each renders
+  its queue by `EvenAuto::priority`: from the play position / Play's start forward first); values written without an undo
+  step (`MasterScore::setEvenLevelsWritten` marks the score modified), 0 dB when none is needed. `Seq::start` waits
+  (status-bar countdown, Stop cancels; the owner, 2026-10-13: also at score open, "Wait for the measurement") only when a
+  note being measured, queued or rendering, is in what is about to play (`PlayStart` to the loop's / score's end). VM:
+  ~1.5-2.5 s of rendering per edited part. Untried in MuseScore with Kontakt / SSO (headless with the test synth: waits,
+  then plays).
 - **Playback adjustments are configurable** (`libmscore/playbacksettings.*`; **docs/PLAYBACK_SETTINGS.md** is the
   inventory): built-in defaults → `<dataPath>/playback.ini` (written with every key when missing; Edit › Reload
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older onset-early / lanes metaTags; removed
@@ -188,7 +219,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   a light band over its rows); Ctrl+D (score or lane focus; MS3 has no Ctrl+D) copies every lane of the part and each
   note's attack / transition / velocity / join to the bars after, one undo step, then selects them
   (`Automation::duplicateTimeSelection`, `Edit::duplicateSpan`, `PerformanceTechnique::duplicateNoteValues`).
-- Percussion: `<Drum key name>` lists every hit of SSO's kits, one-drum patches and ensembles
+- Percussion: `<Instrument maxVelocity="126">` on the 13 metal patches whose Kickstart option "Roll on high vel." is ticked
+  (127 would play a roll; `ROLL_ON_HIGH_VELOCITY` in the generator, `MidiRenderer::libraryMaxVelocity`; a correctness fix, not
+  an adjustment: docs/PLAYBACK_SETTINGS.md). `<Drum key name>` lists every hit of SSO's kits, one-drum patches and ensembles
   (`tools/soundlibraries/sso_percussion_hits.json`, from the owner's window pictures); a technique off at the
   defaults is `<Drum name default="off"/>` (no key, never played). The nine `"<patch> (all on)"` `<Patch>`es set
   Kickstart's arrays whole (`%c2lsa`, `%4jwcn`, `%x4jsr`, `$nd5ia=0`); `KontaktSetup::unpurgeSwitchedOn` loads the
@@ -225,7 +258,10 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `LiveSetWriter::kontaktVolume`), its notes' CC11 that much lower (`noteDb`).
 
 **Hosting (VST 3)** (`BUILD_VST3`, on except macOS; preference `io/soundLibrary`)
-- `audio/vst3/vst3plugin.*` (one instance; `settle()` after setState, or SSO's script resets parameters),
+- `audio/vst3/vst3plugin.*` (one instance; `settle()` after setState, or SSO's script resets parameters;
+  `restartTransport()`: every playback start, export and verification pass shows the plug-in the transport stopped for one
+  block, then playing, as Live's Play does, because SSO's scripts reset their round robins on a transport start;
+  `Vst3Synth::playbackStarted` from `Seq::process`),
   `vst3synth.*` (64 slots = port*16+channel; `idle` must not hold the slots' mutex while sending: missed events
   wait in `_pending`), `mscore/vst3editor.*`, `mscore/soundlibraryhost.*` (`sync`, preload at score open,
   `SoundLibraryExport`, *View › Sound Library…*). Plug-in modules stay loaded until exit.
@@ -285,7 +321,8 @@ of these.
 events of a whole score checked against the map's own onsets (not the real sound) for overlaps on a route, unmeasured
 swapped / early techniques or no onset, capped early starts (the cut), predicted arrival against neighbours (sent +
 onset - written; Rasch 1979: > 50 ms fails) and level steps under a slur (values; proposed threshold 0.69 dB, Jesteadt,
-Wier & Green 1977, owner to approve). The renderer
+Wier & Green 1977, owner to approve), DROPPED (fail: a legato transition sent < 15 ms after the legato note-on before
+on its route at velocity <= 64: SSO doesn't play it) and LEAP (warn: a transition beyond an octave / 1200 cents: SSO attacks afresh). The renderer
 reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (quarter tones,
 `Whence.mscz`; Recommended) before any build goes to the owner.**
 
@@ -340,10 +377,10 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 84 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 91 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-13: evenAutoSlow (slow slurs skipped; evenAutoSession / evenAutoTestSynth now read even-auto.musicxml, legato-early at 240 bpm), evenAutoWindows (with the measured gaps, early stop, the order), evenAutoSession (the wait at opening: queued windows), evenAutoTestSynth (early stop), transportRestart, renderKitMaxVelocity, evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_playbackaudit`: 6 passed, 1 skipped (2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
+- `tst_playbackaudit`: 8 passed, 1 skipped (2026-10-13, droppedFindings, leapFindings; 2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
   Playback audit). Whence (quarter tones), Recommended (2026-10-11, main cb073b6917): the same counts as Whence 12-TET
   below (OVERLAP 0, UNMEASURED 10, CAPPED 289, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0).
   Whence, Recommended, integrate-1012 (2026-10-12: transitions, smoothStart, smooth onset): OVERLAP 0, UNMEASURED 9,
@@ -355,14 +392,14 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   2026-10-09 (UNMEASURED 9, CAPPED 2, ARRIVAL 1 fail: the Celli's 2nd note, bar 1, LEVEL STEP 12 info).
   On Whence 12-TET, Recommended (2026-10-09): no OVERLAP (12 with cc1c9dcd2b's fix reverted), TIMING fails in the
   violas (bars 8-16), violins and celli, UNMEASURED for every Long (Rachm.) / Spiccato / Long outside the fit files.
-- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 34 passed with init and cleanup (2026-10-12: liveRealRange, `dumpEvents` writes headroom.txt; plainWritten's "performance smooth" row; updateLiveSet, Update Live Set on a set edited as in Live; plainOwnTechnique; 2026-10-11: verifyExportMix, the verification renders at the patch volumes; liveTimingOverride, timing set in Live; plainWritten, three rows: written clips + Track Delay + the device's delays play every note-on / note-off of MuseScore's render; `dumpEvents` with `MS_DUMP_TIMING=<file>` writes each plain-set note's written and played times; plainTuned checks the glided bend envelope; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
+- `tst_liveequivalence` (links mscoreapp; uses tst_soundlibrary's test synth): 35 passed with init and cleanup (2026-10-13: liveEvenLevels; 2026-10-12: liveRealRange, `dumpEvents` writes headroom.txt; plainWritten's "performance smooth" row; updateLiveSet, Update Live Set on a set edited as in Live; plainOwnTechnique; 2026-10-11: verifyExportMix, the verification renders at the patch volumes; liveTimingOverride, timing set in Live; plainWritten, three rows: written clips + Track Delay + the device's delays play every note-on / note-off of MuseScore's render; `dumpEvents` with `MS_DUMP_TIMING=<file>` writes each plain-set note's written and played times; plainTuned checks the glided bend envelope; 2026-10-10: liveContextLevel, plainTuned, livePerformanceLevel; 2026-10-08: delayedTrackLevel; 2026-10-07: liveEquivalenceLegatoLevel removed, plainSetLinked added; 2026-10-08: liveMarcatoLevel's
   calibrated row), `dumpEvents` skipped (a
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks, `MS_DUMP_LIVE` as Live's clips (plus kontakts.txt, routes.txt and multis.txt: the
   plain set's Kontakt instances and each slot's Tune); every dump writes routemap.txt (route, lane, cents, bend range)
   and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 63 with init and cleanup (2026-10-12, laneFolds; 2026-10-11, clipsTimingFromLive; 2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`: events regenerated 2026-10-06, no Performance patches; 2026-10-08:
-  allArticulations, textLevel, calibrated), `tst_performancetechnique` 21 (2026-10-12: slurTransitions, onPerformancePatch, ownTechnique, duplicateNoteValues, duplicateAutomation (Ctrl+D over a time selection); 2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
+  allArticulations, textLevel, calibrated), `tst_performancetechnique` 22 (2026-10-13: evenLevels; 2026-10-12: slurTransitions, onPerformancePatch, ownTechnique, duplicateNoteValues, duplicateAutomation (Ctrl+D over a time selection); 2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
   rendered events, file round trip, undo; own velocity / join, the trace, the lanes' model `lanes`), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without
   `PLAYABILITY_BIG`), 2026-10-02. `tst_timesig` 14 passed (2026-10-04). Node tests in
   `tools/live/test` and the Python tests in `tools/soundlibraries` pass.

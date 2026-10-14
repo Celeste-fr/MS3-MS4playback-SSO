@@ -677,6 +677,17 @@ STILL_OFF = {
  'Unpitched - Wood': '(not yet known)',
  'Other - Toys': 'Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll',
  }
+# Kickstart (the percussion scripts) plays velocity 127 as 126 unless its option "Roll on high vel." is ticked, in which
+# case a hit at 127 plays a roll the score did not ask for. Thirteen one-drum metal patches ship with the option ticked
+# (read from the saved control values of the owner's .nki files, 2026-10-13; every other percussion patch, the kits
+# and ensembles included, has it off). MuseScore sends them at most MAX_PERCUSSION_VELOCITY (<Instrument maxVelocity>,
+# share/soundlibraries/README.md): a correctness fix, not an adjustment.
+ROLL_ON_HIGH_VELOCITY = ['Anvil', 'Cymbal Hi', 'Cymbal Lo', 'Cymbal Med', 'Mark Tree', 'Mini Anvil', 'Rain Sheet',
+                         'Rivet Cymbal', 'Tam Tam', 'Trash Metals', 'Triangle 1', 'Triangle 2', 'Wind Gong']
+MAX_PERCUSSION_VELOCITY = 126
+def maxVelocity(name):
+    return (f' maxVelocity="{MAX_PERCUSSION_VELOCITY}"'
+            if name.startswith('Percussion - Unpitched - Metal - ') and name.rsplit(' - ', 1)[1] in ROLL_ON_HIGH_VELOCITY else '')
 out.append(f'  <Instrument name="Percussion" ids={q(KIT_IDS)} kit="1"/>')
 for name in PERCUSSION:
     drums = DRUMS.get(name, [])
@@ -688,7 +699,7 @@ for name in PERCUSSION:
     drums = [d for d in drums if hits[d[1]][1]]
     offNames = [n for k, (n, on) in sorted(hits.items()) if not on]
     # (sounds chosen by key: nothing to switch)
-    out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
+    out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1"{maxVelocity(name)}>')
     out.append('    <Switch type="none"/>')
     out += patchControllers(name)
     for pitch, key, n, ids in drums:
@@ -769,7 +780,7 @@ for kit in PERCUSSION:
         assert name in SINGLE_HITS, name                 # (every one-drum patch's list is known)
         hits = SINGLE_HITS[name]
         drums = SINGLE_DRUMS.get(name, [])
-        out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
+        out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1"{maxVelocity(name)}>')
         out.append('    <Switch type="none"/>')
         for pitch, key, n, ids in drums:
             assert (key, n, 1) in hits, (name, key, n)

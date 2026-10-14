@@ -30,6 +30,7 @@
 #include "automation.h"
 #include "trackdelays.h"
 #include "performancetechnique.h"
+#include "evenlevels.h"
 #include <functional>
 #include <limits>
 
@@ -181,6 +182,11 @@ class MidiRenderer {
       std::map<const Part*, TrackDelays::Delays> libTrackDelays;
       std::map<std::pair<const Chord*, int>, double> libContextGain;  // [levels] context: a chord's phrase gain (contextlevel.h), per tickOffset
       std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>> libTrackRoutes;
+      // [levels] evenLevels (evenlevels.h): every route's part and patch, whether the setting is on, what the measurement
+      // reads (setEvenLevelsInfo)
+      std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>> libRoutePatches;
+      bool libEvenOn { false };
+      std::vector<EvenLevels::NoteInfo>* evenInfo { nullptr };
       double libDelayLead { 0.0 };      // ms everything plays later by, so the earliest negative delay fits (0: none)
       QString trackDelaysTag;
       int minChunkSize = 0;
@@ -206,6 +212,10 @@ class MidiRenderer {
             // a technique on velocity: the velocity a plain note of it plays at each MS4 dynamic (DYNAMIC_LEVELS, ppp
             // … fff: libVelocity; without the articulations' Inspector levels); empty: its velocity is no dynamic
             std::vector<int> dynamicVelocities;
+            // played as a legato transition from this note (the first of its tie chain; legatoTransition /
+            // performanceNote), interval semitones from it (the playbackaudit's DROPPED and LEAP); nullptr: an attack
+            const Note* from { nullptr };
+            int interval { 0 };
             };
       static const int DYNAMIC_LEVELS[8];         // MS4's levels of ppp … fff (ms4playback.cpp's dynamic table)
       static const char* const DYNAMIC_NAMES[8];
@@ -271,10 +281,12 @@ class MidiRenderer {
       static void putLibrarySwitch(EventMap* events, const SoundLib::LibInstrument& li, int channel,
                                    const SoundLib::Choice& choice, int utick, int staffIdx);
       void finishLibraryEvents(const Chunk&, EventMap* events);
+      void libraryMaxVelocity(const Chunk&, EventMap* events);
       void libraryPitchBends(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);
       void libraryTrackDelays(const Chunk&, EventMap* events);
       void libraryTimingOverrides(const Chunk&, EventMap* events);      // livetimingoverride.h
+      void libraryEvenLevels(const Chunk&, EventMap* events);           // evenlevels.h
       void libraryDelayLead(const Chunk&, EventMap* events);
 
    public:
@@ -302,6 +314,8 @@ class MidiRenderer {
       void setWrittenTiming(bool v) { writtenTiming = v; needUpdate = true; }
       void setMinChunkSize(int sizeMeasures) { minChunkSize = sizeMeasures; needUpdate = true; }
       void setLibraryTrace(std::vector<LibTrace>* trace) { libTrace = trace; }
+      // every note-on on a Performance legato patch as rendered, with its context (evenlevels.h; the measurement job)
+      void setEvenLevelsInfo(std::vector<EvenLevels::NoteInfo>* info) { evenInfo = info; }
       // [levels] realRange's headroom (ContextLevel::realRangeTops): each part's largest realDb + realExtra as rendered
       void setRealRangeTops(std::map<const Part*, double>* tops) { libRangeTops = tops; }
 

@@ -369,6 +369,8 @@ static constexpr PropertyMetaData propertyList[] = {
       { Pid::LIVE_START,                P_TYPE::REAL,           true,  "liveStart",              DUMMY_QT_TRANSLATE_NOOP("propertyName", "start from Live")                               },
       { Pid::LIVE_END,                  P_TYPE::REAL,           true,  "liveEnd",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "end from Live")                                 },
       { Pid::LIBRARY_TECHNIQUE,         P_TYPE::STRING,         true,  "libraryTechnique",       DUMMY_QT_TRANSLATE_NOOP("propertyName", "technique")                                     },
+      { Pid::EVEN_LEVEL,                P_TYPE::REAL,           true,  "evenLevel",              DUMMY_QT_TRANSLATE_NOOP("propertyName", "even level")                                    },
+      { Pid::EVEN_LEVEL_CONTEXT,        P_TYPE::STRING,         true,  "evenContext",            DUMMY_QT_TRANSLATE_NOOP("propertyName", "even level context")                            },
 
       { Pid::END,                       P_TYPE::INT,            false, "++end++",                DUMMY_QT_TRANSLATE_NOOP("propertyName", "<invalid property>")                            }
       };

@@ -52,6 +52,14 @@
 //                 level", JASA 61, 169-177), dI/I = 0.463 (I/I0)^-0.072 (as quoted by Praat's manual,
 //                 phonToDifferenceLimens): at 60 dB sensation level 10 log10(1 + 0.463 * 10^(-0.072 * 6)) = 0.69 dB
 //                 (40 dB SL: 0.93, 80 dB SL: 0.50). Pure tones heard one after the other; the level is the owner's
+//     DROPPED     a legato transition (LibTrace::from) on an articulation that plays transitions, sent less than 15 ms
+//                 after the previous note-on on its route (also a legato note) at velocity 64 or lower: SSO's legato
+//                 engine doesn't play it at all (from reading its script; behaviour only). A fault. (Notes of one chord
+//                 are not compared.) Part, bar, beat, pitch, velocity, gap
+//     LEAP        a legato transition whose interval from the note before exceeds an octave (12 semitones; with
+//                 microtones 1200 cents, ScoreTuning): SSO gives it no transition, it releases the note before and
+//                 attacks afresh, so its Performance technique, legatoDelay timing and level calibration don't apply.
+//                 A warning, with the interval
 //   Run: tst_playbackaudit (fixtures; MS_AUDIT_SCORE for any score, VERIFY.md › Playback audit)
 //---------------------------------------------------------
 
@@ -70,7 +78,7 @@ class Score;
 
 namespace PlaybackAudit {
 
-enum class Kind : signed char { OVERLAP, UNMEASURED, CAPPED, ARRIVAL, LEVEL_STEP };
+enum class Kind : signed char { OVERLAP, UNMEASURED, CAPPED, ARRIVAL, LEVEL_STEP, DROPPED, LEAP };
 // LEVEL_STEP's proposed threshold (not enforced; owner to approve): Jesteadt, Wier & Green 1977 at sensationLevel dB
 double differenceLimenDb(double sensationLevel = 60.0);
 enum class Severity : signed char { FAIL, WARN, INFO };

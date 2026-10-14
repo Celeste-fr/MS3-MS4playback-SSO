@@ -54,6 +54,8 @@
 #include "libmscore/staff.h"
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
+#include "evenautomeasurer.h"
+#include "libmscore/playstart.h"
 #include "liveclips.h"
 #include "livemidiout.h"
 #include "libmscore/tempo.h"
@@ -443,6 +445,9 @@ void Seq::start()
       _libOutsStale = true;
       _libSent.clear();
       libraryMixerChanged();
+      // even levels (evenautomeasurer.h): an edit not looked at yet, now (values from the cache are written at once)
+      if (state != Transport::PLAY)
+            EvenAutoMeasurer::instance()->prepare(cs);
 
       allowBackgroundRendering = true;
       // (a change made outside a command marks the playlist dirty after its endCmd, which sends no playlistChanged:
@@ -455,6 +460,19 @@ void Seq::start()
             cs->masterScore()->setPlaylistClean();
             }
       collectEvents(getPlayStartUtick());
+      // a note being measured in what is about to play (from the transport's start, the pre-roll of early notes
+      // included, to the loop's end, else the score's): playback waits for its measured value, then starts here again
+      // (the owner, 2026-10-13: "I'd rather just wait"). Never while playing (a loop's restart)
+      if (state != Transport::PLAY) {
+            const int from = PlayStart(cs, events, getPlayStartUtick()).start();
+            const double to = mscore->loop() ? cs->utick2utime(cs->repeatList().tick2utick(cs->loopOutTick().ticks())) : 1e9;
+            if (EvenAutoMeasurer::instance()->holdPlay(cs, cs->utick2utime(from), to, [this]() {
+                  QAction* play = getAction("play");
+                  if (cs && state == Transport::STOP && play && play->isChecked())
+                        start();
+                  }))
+                  return;
+            }
       if (cs->playMode() == PlayMode::AUDIO) {
             if (!oggInit) {
                   vorbisData.pos  = 0;
@@ -486,6 +504,7 @@ void Seq::start()
 
 void Seq::stop()
       {
+      EvenAutoMeasurer::instance()->cancelHold();     // (Stop while playback waits for even levels)
       const bool seqStopped = (state == Transport::STOP);
       if (!seqStopped)
             LiveIntegration::LiveClipsLink::instance()->stopRequested();     // (Live plays the score: Live stops too)
@@ -1150,6 +1169,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   // External synth can have wrong values, for example
                   // if we switch between scores
                   initInstruments(true);
+                  // the library's plug-ins see a transport start with every playback (round robins reset on it)
+                  if (_synti)
+                        _synti->playbackStarted();
                   // Need to change state after calling collectEvents()
                   state = Transport::PLAY;
                   if (mscore->countIn() && cs->playMode() == PlayMode::SYNTHESIZER) {

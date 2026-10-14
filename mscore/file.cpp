@@ -1966,6 +1966,7 @@ bool MuseScore::saveAs(Score* cs_, bool saveCopy, const QString& path, const QSt
                   cs_->masterScore()->fileInfo()->setFile(fn);
                   updateWindowTitle(cs_);
                   cs_->undoStack()->setClean();
+                  cs_->masterScore()->setEvenLevelsWritten(false);
                   dirtyChanged(cs_);
                   cs_->setCreated(false);
                   scoreCmpTool->updateScoreVersions(cs_);

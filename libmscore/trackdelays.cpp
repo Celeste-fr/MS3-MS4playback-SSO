@@ -10,6 +10,8 @@
 
 #include "trackdelays.h"
 #include "contextlevel.h"
+#include "evenlevels.h"
+#include "playbacksettings.h"
 #include "partplayback.h"
 #include "part.h"
 #include "score.h"
@@ -112,6 +114,27 @@ std::map<const Part*, Delays> read(const MasterScore* score)
             d.ruleTop = v.second.top;
             d.rangeTop = v.second.range;
             }
+      // [levels] evenLevels: each patch's largest correction on its volume, its notes that much lower; the rest that
+      // doesn't fit under MAX_DB lowers every library patch of the score alike (evenAll)
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (library && library->dynamicsCC != CTRL_EXPRESSION && Playback::on("levels/evenLevels", score)) {
+            double rest = 0.0;
+            for (const auto& pt : EvenLevels::tops(score)) {
+                  for (const auto& t : pt.second) {
+                        if (t.second <= 0.0)
+                              continue;
+                        Delays& d = delays[pt.first];
+                        auto r = d.rule.find(t.first);
+                        const double now = std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, t.first) + (r == d.rule.end() ? 0.0 : r->second)));
+                        d.even[t.first] = t.second;
+                        rest = std::max(rest, t.second - (MAX_DB - now));
+                        }
+                  }
+            if (rest > 0.0) {
+                  for (const Part* part : score->parts())
+                        delays[part].evenAll = -rest;
+                  }
+            }
       return delays;
       }
 
@@ -212,7 +235,18 @@ double patchGain(const SoundLib::Library& library, const Delays& d, const QStrin
             return 1.0;
       auto r = d.rule.find(patch);
       const double rule = r == d.rule.end() ? 0.0 : r->second;
-      return std::pow(10.0, std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, patch) + rule)) / 20.0);
+      return std::pow(10.0, std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, patch) + rule)) / 20.0 + evenVolumeDb(d, patch) / 20.0);
+      }
+
+double evenDb(const Delays& d, const QString& patch)
+      {
+      auto e = d.even.find(patch);
+      return e == d.even.end() ? 0.0 : e->second;
+      }
+
+double evenVolumeDb(const Delays& d, const QString& patch)
+      {
+      return evenDb(d, patch) + d.evenAll;
       }
 
 }     // namespace TrackDelays
