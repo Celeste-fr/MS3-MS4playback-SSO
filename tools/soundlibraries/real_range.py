@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """The real player's dynamic range against SSO's, for [levels] realRange (libmscore/contextlevel.h › Real range).
 
-    python3 -I real_range.py <3_Audio_Features.csv> <sso_cc1_curves.json> <out sso_real_range.json>
+    python3 -I real_range.py <3_Audio_Features.csv> <sso_cc1_curves.json> <out sso_real_range.json> [<sso_winds_cc1_curves.json>]
+
+With the winds' curves (2026-10-14) the woodwinds' and brass' main patches (WINDS) are written too, under
+"instruments", the same way: their own k by leave-one-out pooled over their twelve database instruments, SSO's Long
+from the winds' sweep (sso_winds_cc1_curves.json, same measure). The strings' "sections" don't change.
 
 Stage A of the dynamics plan (HANDOFF.md › Dynamics like a real player; the owner, 2026-10-12): each note of SSO's five
 string sections as loud as a real player at its written dynamic, the player's full range, by CC11 and the patches'
@@ -33,17 +37,32 @@ import sys
 
 SECTIONS = {'Violins 1': 'Violin modern', 'Violins 2': 'Violin modern', 'Violas': 'Viola modern',
             'Celli': 'Cello modern', 'Basses': 'Double bass modern'}
+# woodwinds and brass (2026-10-14): SSO's main patch (solo, a2, a6) -> the database's instrument; the a2 / a6 patches take
+# one player's span (rule D is per player: a section's dynamic range is the player's). SSO's patches the database lacks
+# stay at the library's default: Piccolo, Alto Flute, Bass Flute, Contrabass Clarinet, Cimbasso Solo / Cimbassi a2,
+# Contrabass Trombone, Contrabass Tuba (its "Tuba modern" is a bass tuba), and the Motif a3 / a4 / a5 patches (not measured)
+WINDS = {'Flute Solo': 'Transverse flute modern', 'Flutes a2': 'Transverse flute modern',
+         'Oboe Solo': 'Oboe modern', 'Oboes a2': 'Oboe modern', 'Cor Anglais': 'English horn modern',
+         'Clarinet Solo': 'Clarinet modern', 'Clarinets a2': 'Clarinet modern', 'Bass Clarinet': 'Bass clarinet modern',
+         'Bassoon Solo': 'Bassoon modern', 'Bassoons a2': 'Bassoon modern', 'Contrabassoon': 'Contrabassoon modern',
+         'Horn Solo': 'French horn modern', 'Horns a2': 'French horn modern', 'Horns a6': 'French horn modern',
+         'Trumpet Solo': 'Trumpet modern', 'Trumpets a2': 'Trumpet modern', 'Trumpets a6': 'Trumpet modern',
+         'Tenor Trombone Solo': 'Tenor trombone modern', 'Tenor Trombones a2': 'Tenor trombone modern',
+         'Trombones a6': 'Tenor trombone modern', 'Bass Trombone Solo': 'Bass trombone modern',
+         'Bass Trombones a2': 'Bass trombone modern', 'Tuba Solo': 'Tuba modern'}
+NO_DATA = ['Piccolo', 'Alto Flute', 'Bass Flute', 'Contrabass Clarinet', 'Cimbasso Solo', 'Cimbassi a2',
+           'Contrabass Trombone', 'Contrabass Tuba', 'Motif Horns a4', 'Motif Trumpets a3', 'Motif Trombones a5']
 KMAX = 12
 
 
-def spans(path):
+def spans(path, labels=None):
     """{database label: {midi: ff - pp}} (pitches with both)"""
     pc = {'c': 0, 'd': 2, 'e': 4, 'f': 5, 'g': 7, 'a': 9, 'b': 11}
     rows = list(csv.reader(open(path, encoding='utf-8')))
     head = rows[1]
     col = head.index('SoundPower in dB')
     out = {}
-    for lab in set(SECTIONS.values()):
+    for lab in set(labels or SECTIONS.values()):
         lv = {'pp': {}, 'ff': {}}
         for r in rows[2:]:
             if len(r) > col and r[1] == lab and '_et_' in r[0] and r[4] in lv:
@@ -87,10 +106,10 @@ def chooseK(data):
     return best, table
 
 
-def sso(path):
+def sso(path, names=SECTIONS):
     d = json.load(open(path, encoding='utf-8'))
     out = {}
-    for s in SECTIONS:
+    for s in names:
         pts = d['sections'][s]['points']
         per = {}
         for p, rows in pts.items():
@@ -102,8 +121,46 @@ def sso(path):
     return out
 
 
+def entry(lab, span, measured, long):
+    mid = sorted(span)[len(span) // 2]
+    return {
+        'instrument': lab,
+        'span': {str(p): v for p, v in span.items()},
+        'spanMeasured': {str(p): round(v, 2) for p, v in measured.items()},
+        'long': {str(p): {str(cc): v for cc, v in per.items()} for p, per in long.items()},
+        'midPitch': mid,
+        'midStep': round(span[mid] / 7, 2),
+    }
+
+
+def winds(csvPath, windsPath, k):
+    """k: the strings' (their own leave-one-out picks k = 1 by 0.06 dB over k = 5, a flat curve, and leaves semitone
+    jumps of the span up to 7.6 dB: Clarinet; at k = 5 at most 2.5 dB)"""
+    data = spans(csvPath, set(WINDS.values()))
+    kOwn, cv = chooseK(data)
+    smooth = {lab: {p: round(localLinear(pts, p, k), 2) for p in range(min(pts), max(pts) + 1)}
+              for lab, pts in data.items()}
+    names = [n for n in WINDS if n in json.load(open(windsPath, encoding='utf-8'))['sections']]
+    ssoRel = sso(windsPath, names)
+    inst = {n: entry(WINDS[n], smooth[WINDS[n]], data[WINDS[n]], ssoRel[n]) for n in names}
+    method = {
+        'what': 'as the sections: rule D with one player\'s span (an a2 / a6 patch takes its instrument\'s), long = SSO\'s '
+                'All techniques Long (UACC 1), rmsDb less CC1 64\'s',
+        'smoothing': 'local linear least squares over +-k semitones, k the strings\' (by their leave-one-out); the winds\' '
+                     'own leave-one-out, pooled over their twelve instruments (k = 1 .. %d), picks kOwn by a flat curve '
+                     '(cvRmsDb) and leaves semitone jumps of the span up to 7.6 dB (Clarinet): not used' % KMAX,
+        'k': k,
+        'kOwn': kOwn,
+        'cvRmsDb': {str(i): round(v, 3) for i, v in cv.items()},
+        'sso': 'sso_winds_cc1_curves.json, rmsDb (mean power 1.5-3.0 s after the note-on), each pitch less its CC1 64',
+        'noData': NO_DATA,
+    }
+    return method, inst
+
+
 def main():
     csvPath, curvesPath, outPath = sys.argv[1:4]
+    windsPath = sys.argv[4] if len(sys.argv) > 4 else None
     data = spans(csvPath)
     k, cv = chooseK(data)
     smooth = {lab: {p: round(localLinear(pts, p, k), 2) for p in range(min(pts), max(pts) + 1)}
@@ -136,6 +193,13 @@ def main():
         },
         'sections': sections,
     }
+    if windsPath:
+        wm, wi = winds(csvPath, windsPath, k)
+        out['methodInstruments'] = wm
+        out['instruments'] = wi
+        print('winds k', wm['k'], 'own', wm['kOwn'], 'cv', {i: round(float(v), 2) for i, v in wm['cvRmsDb'].items()})
+        for n, v in wi.items():
+            print(n, 'mid', v['midPitch'], 'span', v['span'][str(v['midPitch'])], 'step', v['midStep'])
     with open(outPath, 'w', encoding='utf-8') as f:
         json.dump(out, f, indent=1)
         f.write('\n')
