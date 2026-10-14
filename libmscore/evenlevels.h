@@ -27,15 +27,22 @@
 //   slurred passage of the chosen parts rendered offline through the hosted plug-ins as playback renders it, three
 //   passes (round robins advancing), the median per note of the perceived envelope (ArticulationCheck::
 //   perceivedEnvelope, ~dB) over WINDOW_MS from the note's window start (windowStartMs: a transition's measured legato
-//   delay by interval, an attack's onset); fitGlide solves the per-note values (least squares, ridge RIDGE) so that the
-//   glide, smoothed as the envelope is (one pole, SMOOTH_MS), flattens the measured envelope to each slur's median
-//   (slurStats; a passage's first note, an attack from silence, and its last, whose window falls in its release, are
-//   left out of the slur statistics, as in the test); rendered again with the values, and fitted once more when the
-//   residual (the largest |note - its slur's median|) stays above FLOOR_DB (the test's noise floor), the better of
-//   the rounds kept (none, if the passage measured flatter uncorrected).
+//   delay by interval, an attack's onset; the slur statistics and the logs). fitGlide solves the per-note values (least
+//   squares, ridge RIDGE) so that the glide, smoothed as the envelope is (one pole, SMOOTH_MS) and LAG_MS late (CC11's
+//   measured lag), flattens the measured envelope to each slur's median of the envelope over the slur's span (from note
+//   2's note-on to the last note-on: a passage's first note, an attack from silence, left out); rendered again with the
+//   values (round 1: the fit / CC11_FACTOR), fitted once more from that measurement (round 2: + the fit / the measured
+//   gain, envelopeGain), and the round whose envelope lies closest to its slurs' medians kept (envelopeRms; none, if the
+//   passage measured flatter uncorrected).
 //
-//   The values. Note::evenLevel (Pid::EVEN_LEVEL, dB; NONE: none) is the glide's value at the middle of the note's
-//   window (not the change heard in that window: the window lags the note-on by more than a sixteenth). With it,
+//   The glide's nodes: each note's at the middle of its own span (nodeTime: halfway from its note-on to the next joined
+//   note-on). Until 2026-10-14 they were the middles of the heard windows (window start + WINDOW_MS / 2), 270-310 ms
+//   after the note-on at 180 ms notes, inside the NEXT note: the glide ramped up through each slur's first note, which
+//   the owner heard swell (blind, twice). With nodes in their own notes (S, tools/soundlibraries/even_180_check.py,
+//   sso_even_180_check.json; branch even-180) the owner heard 250 ms slurs fine in 4 of 4 pairs where the old nodes
+//   were wrong in 2 of 2 (180 ms: no difference; HANDOFF.md > Where the correction works).
+//
+//   The values. Note::evenLevel (Pid::EVEN_LEVEL, dB; NONE: none) is the glide's value at the note's node. With it,
 //   Note::evenContext (Pid::EVEN_LEVEL_CONTEXT): "<patch>|<hash>", what the value was measured against: a hash of the
 //   note's rendered context (contextOf: the patch, its pitch and tuning, its velocity, whether it is joined, its
 //   length, the joined neighbours' pitches, velocities and timing, the dynamics CC in force; the tempo through the
@@ -81,8 +88,9 @@ double clampDb(double db);              // NONE, or within MAX_DB, to 0.01 dB
 constexpr double WINDOW_MS = 136.4;     // sso_slur_swell.json's window
 constexpr double STEP_MS = 5.0;         // the glide's message spacing, the fit's grid
 constexpr double SMOOTH_MS = 35.0;      // the envelope's smoothing as modelled (one pole)
+constexpr double LAG_MS = 12.0;         // CC11 acts 10-15 ms late (tools/soundlibraries/even_window_check.py,
+                                        // sso_even_window_check.json): the fit's model of a glide as heard
 constexpr double RIDGE = 0.5;
-constexpr double FLOOR_DB = 1.0;        // the noise floor of a slur's range (bars 1 and 3: ~1.0 uncorrected and corrected)
 constexpr int PASSES = 3;
 
 // the metaTag: to the notes after loading (and out of the tags), from them on saving; empty: none
@@ -152,27 +160,36 @@ struct Stats {
       };
 Stats slurStats(const std::vector<int>& slur, const std::vector<double>& level);
 
-// the glide through (centre seconds, dB) nodes at t, linear, the ends held
+// the glide through (node seconds, dB) nodes at t, linear, the ends held
 double glideAt(const std::vector<double>& centres, const std::vector<double>& db, double t);
+// a note's node: halfway from its note-on to the next joined note's (nextOn < 0: none, halfway to its own note-off)
+double nodeTime(double on, double off, double nextOn);
 
 // a passage for the fit: per note its note-on, note-off, window start (seconds, from the passage's own origin) and slur
 struct Passage {
       std::vector<double> on, off, window;
       std::vector<int> slur;
+      double lastNext { -1.0 };         // the note-on of the joined note after the last (a window inside a longer
+                                        // passage; < 0: none)
       double gridStart() const;         // the grid: from the first note-on - 0.2 s, STEP_MS apart
       int gridSize() const;             // to the last note-off + 1 s
-      std::vector<double> centres() const;   // each window's middle
+      std::vector<double> centres() const;   // each note's node (nodeTime)
       };
 // per-note glide values (dB) that flatten env (the measured envelope on the passage's grid) to each slur's median of
-// level (slurStats); fitRms / envRms: the rms off target with the fit / without (on the weighted grid)
-std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<double>& level,
-                             double* fitRms = nullptr, double* envRms = nullptr);
+// the envelope over its span; fitRms / envRms: the rms off target with the fit / without (on the weighted grid)
+std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, double* fitRms = nullptr,
+                             double* envRms = nullptr);
 // the same with some notes held (fixed[j]: its value stays, 0 change: a window's run-in and run-out notes, whose own
 // values play as measured before; evenauto.h)
-std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<double>& level,
-                             const std::vector<bool>& fixed, double* fitRms = nullptr, double* envRms = nullptr);
-// the change each note's window hears of a glide of values v (smoothed as the envelope)
-std::vector<double> windowChanges(const Passage& p, const std::vector<double>& v);
+std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<bool>& fixed,
+                             double* fitRms = nullptr, double* envRms = nullptr);
+// how far env lies from its slurs' medians (the rms over the fit's weighted grid): the rounds' measure
+double envelopeRms(const Passage& p, const std::vector<double>& env);
+// the measured change of the envelope (env1 - env0) over the predicted one of a glide of values v, on the fit's
+// weighted grid, about their means (a change of the whole passage, TrackDelays::Delays::evenAll's, is not the
+// corrections'); at least 0.5, 1 when it can't be told
+double envelopeGain(const Passage& p, const std::vector<double>& env0, const std::vector<double>& env1,
+                    const std::vector<double>& v);
 
 //---------------------------------------------------------
 //   Measuring in the background near edits (libmscore/evenauto.h has the design; the owner, 2026-10-13)

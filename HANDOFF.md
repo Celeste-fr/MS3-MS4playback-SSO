@@ -341,6 +341,12 @@ per note (storage would change). Real renders, swell p75 / upper-band FS: 180R S
 The owner (2026-10-14): 180R both wrong, "both swell at 3" (the repeat agrees): R's 40% smaller loudness rise is not
 heard; 250L both fine, R preferred; 250R both fine, S preferred. So R isn't worth its storage change; S is fine at 250
 ms in 4 of 4 pairs. Note 3's swell may be timbre (the sample brightening), which no CC11 curve removes: not measured.
+**S built** (the owner, 2026-10-14: "do 1"; branch `even-midnote`): the job and the background measurer fit as
+`even_180_check.py`'s S (nodes halfway from each note-on to the next, `EvenLevels::nodeTime`, the renderer's glide too;
+target each slur's median of the envelope over its span; basis lagged 12 ms; round 1 / 1.28, round 2 always, the job's
+by the envelope's measured gain, the background's / 1.28; round kept by envelope rms). Old values stale (contextOf's
+version). Linux tests only (test synth): untried with SSO in MuseScore; the background now renders 3 rounds per window
+(was 2 where the residual stayed under 1 dB).
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 

@@ -50,6 +50,7 @@ struct Session::Work {
       int partIndex { -1 };
       const SoundLib::LibInstrument* patch { nullptr };
       std::vector<const Note*> notes;   // rendered: run-in, measured, run-out
+      const Note* next { nullptr };     // the passage's joined note after them (its note-on sets the last note's node)
       std::vector<QString> contexts;
       std::vector<QString> keys;
       std::vector<bool> fixed;          // run-in / run-out: values held
@@ -59,6 +60,7 @@ struct Session::Work {
       std::vector<double> levels[3];
       std::vector<double> env[3];
       EvenLevels::Stats stats[3];
+      double rms[3] { 0, 0, 0 };         // each round's envelope off its slurs' medians (EvenLevels::envelopeRms)
       bool measured[3] { false, false, false };
       EvenLevels::Passage fit[3];
       std::vector<double> ons;          // the measured notes' note-ons (seconds)
@@ -166,6 +168,12 @@ Job Session::makeJob(Work& w, int round, const EventMap& events)
                         break;
                         }
                   }
+            }
+      // the last note's node: halfway to the next joined note's note-on (EvenLevels::nodeTime, as the renderer's glide)
+      if (w.next) {
+            auto o = ons.find(w.next);
+            if (o != ons.end() && !o->second.empty())
+                  f.lastNext = _score->utick2utime(o->second.front()->first);
             }
       // windows and slurs from the renderer's report (evenInfo: windowMs, newSlur), kept from detect()
       for (size_t k = 0; k < n; ++k)
@@ -385,6 +393,8 @@ std::vector<Job> Session::detect()
                         const bool current = EvenLevels::isSet(note->evenLevel()) && note->evenContext() == in.context;
                         w->values[0].push_back(current ? note->evenLevel() : 0.0);
                         }
+                  if (size_t(win.renderLast) + 1 < p.notes.size())
+                        w->next = p.notes[size_t(win.renderLast) + 1].note;
                   const Measure* m0 = w->notes[size_t(win.measureFirst - win.renderFirst)]->chord()->measure();
                   const Measure* m1 = w->notes[size_t(win.measureLast - win.renderFirst)]->chord()->measure();
                   w->text = QString("%1, bars %2-%3").arg(route.part->partName()).arg(m0 ? m0->no() + 1 : 0).arg(m1 ? m1->no() + 1 : 0);
@@ -430,11 +440,12 @@ bool Session::process(const Result& r, Job* next)
       w.levels[round] = r.levels;
       w.env[round] = r.env;
       w.stats[round] = EvenLevels::slurStats(w.fit[round].slur, r.levels);
+      w.rms[round] = EvenLevels::envelopeRms(w.fit[round], r.env);
       w.measured[round] = true;
       int nextRound = -1;
-      if (round == 0 || (round == 1 && w.stats[1].residual > EvenLevels::FLOOR_DB)) {
+      if (round < 2) {
             // the fit, divided by CC11's measured factor; run-in / run-out held
-            const std::vector<double> du = EvenLevels::fitGlide(w.fit[round], w.env[round], w.levels[round], w.fixed);
+            const std::vector<double> du = EvenLevels::fitGlide(w.fit[round], w.env[round], w.fixed);
             w.values[round + 1] = w.values[round];
             for (size_t j = 0; j < n && j < du.size(); ++j)
                   if (!w.fixed[j])
@@ -442,8 +453,8 @@ bool Session::process(const Result& r, Job* next)
             nextRound = round + 1;
             }
       if (_log)
-            _log(QString("even levels: %1, round %2: median slur range %3 dB, residual %4 dB").arg(w.text).arg(round)
-                 .arg(w.stats[round].rangeMedian, 0, 'f', 2).arg(w.stats[round].residual, 0, 'f', 2));
+            _log(QString("even levels: %1, round %2: envelope off its slurs' medians %3 dB, median slur range %4 dB")
+                 .arg(w.text).arg(round).arg(w.rms[round], 0, 'f', 2).arg(w.stats[round].rangeMedian, 0, 'f', 2));
       if (nextRound < 0) {
             finish(w);
             _works.erase(it);
@@ -471,15 +482,15 @@ bool Session::process(const Result& r, Job* next)
 
 //---------------------------------------------------------
 //   finish
-//    the round with the smallest median slur range: its values on the measured notes (0 dB where it is round 0 and
-//    the note had none)
+//    the round whose envelope lies closest to its slurs' medians (envelopeRms): its values on the measured notes (0 dB
+//    where it is round 0 and the note had none)
 //---------------------------------------------------------
 
 void Session::finish(Work& w)
       {
       int chosen = 0;
       for (int r = 1; r < 3; ++r)
-            if (w.measured[r] && w.stats[r].rangeMedian < w.stats[chosen].rangeMedian - 1e-9)
+            if (w.measured[r] && w.rms[r] < w.rms[chosen] - 1e-9)
                   chosen = r;
       int count = 0;
       for (size_t j = 0; j < w.notes.size(); ++j) {
@@ -496,8 +507,8 @@ void Session::finish(Work& w)
             }
       _measured += count;
       if (_log)
-            _log(QString("even levels: %1 done: round %2 kept (median slur range %3 -> %4 dB)").arg(w.text).arg(chosen)
-                 .arg(w.stats[0].rangeMedian, 0, 'f', 2).arg(w.stats[chosen].rangeMedian, 0, 'f', 2));
+            _log(QString("even levels: %1 done: round %2 kept (envelope off its slurs' medians %3 -> %4 dB)").arg(w.text).arg(chosen)
+                 .arg(w.rms[0], 0, 'f', 2).arg(w.rms[chosen], 0, 'f', 2));
       }
 
 //---------------------------------------------------------

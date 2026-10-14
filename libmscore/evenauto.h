@@ -39,9 +39,11 @@
 //   (a worker thread on plug-in instances of its own: mscore/evenautomeasurer.h; the tests: synchronously) and come back
 //   as Results (each note's level, the envelope on the passage's grid: audio/vst3/evenmeasure.h, the job's measurement).
 //   Rounds: 0 as it plays now (round 0's values: the current ones, 0 where none or stale); round 1 = round 0's values +
-//   fitGlide / CC11_FACTOR (run-in and run-out notes held); round 2 (when round 1's residual stays above FLOOR_DB) =
-//   round 1 + its fit / CC11_FACTOR; a round's events rendered with its values on the window's notes (set for the render
-//   and put back: the score is the main thread's). The round with the smallest median slur range is kept (round 0: its
+//   fitGlide / CC11_FACTOR (run-in and run-out notes held); round 2 = round 1 + its fit / CC11_FACTOR (always: the owner's
+//   full method; the fit's nodes halfway from each note-on to the next, the window's last note's to the passage's next
+//   note: Passage::lastNext); a round's events rendered with its values on the window's notes (set for the render
+//   and put back: the score is the main thread's). The round whose envelope lies closest to its slurs' medians
+//   (envelopeRms) is kept (round 0: its
 //   values, 0 dB on a note that had none: "measured, needs none", so it is current and never measured again). Values go
 //   on the notes with their contexts WITHOUT an undo step (MasterScore::setEvenLevelsWritten marks the score modified),
 //   and into the Cache.

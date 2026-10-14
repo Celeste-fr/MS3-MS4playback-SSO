@@ -18,11 +18,12 @@
 //  reaching into them taken whole; a passage with a note played twice, a repeat or an ornament, left out); each chosen
 //  part alone rendered through the hosted plug-ins (PlaybackVerifier::renderPasses: the span of its passages, PASSES
 //  times in a row, the export's mix), each note's level measured (the perceived envelope's mean over its window, the
-//  median of the passes), the glide fitted (EvenLevels::fitGlide); rendered and measured again with the values
-//  ([levels] evenLevels on); a passage whose residual is still above FLOOR_DB fitted once more from that measurement (the
-//  change scaled by the measured / predicted ratio of the first round: the test's first round overshot ~25 %),
-//  rendered and measured again; per passage the round with the smallest median slur range kept (none when the
-//  uncorrected one was smallest). Each value goes on its note with the note's context (Pid::EVEN_LEVEL / _CONTEXT).
+//  median of the passes), the glide fitted to the envelope (EvenLevels::fitGlide; nodes halfway from each note-on to the
+//  next, nodeTime) and divided by CC11_FACTOR; rendered and measured again with the values ([levels] evenLevels on);
+//  every passage fitted once more from that measurement (the change scaled by the measured / predicted change of the
+//  envelope in the first round, envelopeGain: the test's first round overshot ~25 %), rendered and measured again; per
+//  passage the round whose envelope lies closest to its slurs' medians kept (envelopeRms; none when the uncorrected
+//  one was closest; the S of tools/soundlibraries/even_180_check.py, 2026-10-14). Each value goes on its note with the note's context (Pid::EVEN_LEVEL / _CONTEXT).
 //
 //  Output (in <folder>, default Documents/MuseScore Sound Library Check/Even levels <date>): result.json (every
 //  passage's notes, their levels per round, the values, the statistics, the render preflight), "<score> even.mscz"

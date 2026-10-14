@@ -2838,7 +2838,8 @@ void TestSoundLibrary::evenLevelsGlide()
             Note* note = const_cast<Note*>(in[k].note);
             note->setEvenLevel((k - s) % 2 ? 1.5 : -1.0);
             note->setEvenContext(in[k].context);
-            centres.push_back(in[k].on + (in[k].windowMs + EvenLevels::WINDOW_MS / 2) / 1000.0);
+            centres.push_back(EvenLevels::nodeTime(in[k].on, in[k].off,
+                                                   k + 1 < in.size() && in[k + 1].joined && in[k + 1].route == in[k].route ? in[k + 1].on : -1.0));
             dbs.push_back(note->evenLevel());
             }
       const double tStart = in[s].on;
@@ -3012,7 +3013,9 @@ static std::vector<std::vector<EvenLevels::NoteInfo>> evenPassages(MasterScore* 
 
 // a stand-in for the plug-in: a note is louder by 2 dB when its pitch is a multiple of 3 (the swell), and follows the
 // CC11 in force at the time by its dB times CC11_FACTOR (as SSO's measured response); the envelope on the window's grid
-// is the level of the note whose window started last, the note's level the envelope at its window's middle
+// is the level of the note sounded last (its own span, from its note-on: SSO's level arrives before its pitch,
+// even_window_check.py; until 2026-10-14 the note whose window started last), the note's level the envelope at its
+// window's middle
 static EvenAuto::Result fakeMeasure(const EvenAuto::Job& j)
       {
       EvenAuto::Result r;
@@ -3032,7 +3035,7 @@ static EvenAuto::Result fakeMeasure(const EvenAuto::Job& j)
                   if (j.events[i].type() == ME_NOTEON && j.events[i].velo() > 0 && std::fabs(j.times[i] - p.on[k]) < 1e-6)
                         pitch[k] = j.events[i].pitch();
       auto envAt = [&](double t) {
-            size_t k = size_t(std::upper_bound(p.window.begin(), p.window.end(), t) - p.window.begin());
+            size_t k = size_t(std::upper_bound(p.on.begin(), p.on.end(), t) - p.on.begin());
             k = k == 0 ? 0 : k - 1;
             return (pitch[k] % 3 == 0 ? 2.0 : 0.0) + EvenLevels::CC11_FACTOR * cc11At(t) - 20.0;
             };
@@ -3271,8 +3274,8 @@ void TestSoundLibrary::evenAutoSession()
       const int firstJobs = int(jobs.size());
       runAll(jobs);
       QVERIFY(!session.busy());
-      // round 2 only where round 1's residual stays above FLOOR_DB (as the job, evenlevelsjob): not every window
-      QVERIFY(renders >= 2 * firstJobs && renders < 3 * firstJobs);
+      // every window rounds 0, 1 and 2 (the owner's full method, the S of even_180_check.py)
+      QCOMPARE(renders, 3 * firstJobs);
       QVERIFY(score->evenLevelsWritten());
       QVERIFY(score->dirty());
       QVERIFY(!score->undoStack()->canUndo());                         // (no undo step)
