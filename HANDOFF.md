@@ -319,6 +319,9 @@ swell note 1 2.67 -> 1.61, note 3 4.20 -> 3.89, note 4 1.17 -> 1.71 dB; 250R p75
 The owner: 180R both wrong and "all the same" in every pair (the repeat agrees), 250R S fine once, wrong once: S not
 heard at 180 ms. The owner then asked whether the "swell" is the bowed transition itself (each slur's note 1 in this
 figure is a bowed transition, velocity 93, from the touching slur before): the page now marks the bowed notes.
+With the marks (re-answered): the swell is **note 3** (E3 -> Eb3, fingered), not the bowed note 1 ("why do the 3s all
+swell"). 250R: S fine 2 / 2, C wrong 2 / 2 ("A swells at 3"); 180R: both swell at 3, the same, every pair. Open: is
+note 3's dip-and-rise that transition sample or the fast overlap (measurement on `even-180`).
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
