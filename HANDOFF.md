@@ -304,6 +304,12 @@ job's measure 4). New correction N: flatten the envelope to each slur's median w
 per note), 2 rounds: swell p75 136R 2.4 -> 1.4, 180R 3.3 -> 1.7, 250R 4.4 -> 1.7, L 1.8-2.9 -> 1.3-1.8 (C left them
 at 1.6-4.0). Blind set U / C / N at 136 / 180 / 250 ms × R / L ready for the owner; no renderer change until he has
 heard it (C++ would store glide nodes, not per-note values).
+**The owner's blind test of U / C / N** (2026-10-13, db `evenwindow1`; "new correction is horrible, it has a really obv
+wobbly sound", picked out every time): N wrong in 6 of 6, **dropped**. C fine in 5 of 6 (136R, 136L, 180L, 250R, 250L;
+250L "dwelt on this a lot"), wrong only at 180R; U wrong 4 of 6 (fine 136L, 180L). Across both tests C failed at 180R
+twice, 136L and 250R once each (fresh renders each test: SSO's per-play randomness may account for the single failures).
+The swell measure ranked N best: it does not hear N's 40 ms wobble, so it can't stand in for the owner's ear. Open: the
+180 ms repeating figure, where C still swells (notes 1 and 3).
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
