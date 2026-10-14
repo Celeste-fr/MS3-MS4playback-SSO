@@ -322,6 +322,12 @@ figure is a bowed transition, velocity 93, from the touching slur before): the p
 With the marks (re-answered): the swell is **note 3** (E3 -> Eb3, fingered), not the bowed note 1 ("why do the 3s all
 swell"). 250R: S fine 2 / 2, C wrong 2 / 2 ("A swells at 3"); 180R: both swell at 3, the same, every pair. Open: is
 note 3's dip-and-rise that transition sample or the fast overlap (measurement on `even-180`).
+**Answer: the sample** (`note3_check.py`, `sso_note3_check.json`, bf091c1b9c on `even-180`; VM, kthost + Kontakt 8 + SSO,
+U, 14 passages × 3 takes): E3 -> Eb3 swells wherever it sits (rotated cycle, same overlaps: as note 1 / 2 / 3 / 4 3.60 /
+3.76 / 4.49 / 3.70 dB; in a line 4.21; the cycle's other transitions 0.3-2.8), also with 600 ms notes (7.2 first, then
+3.2-3.3), less into other pitches (F3 3.80, Ab3 2.44, C3 2.01). By IOI: 136 3.21, 180 4.49 (rise in ~55 ms), 250 7.34
+(~200 ms), 350 6.39 (~265 ms): why S works at 250 and can't at 180. No fix within one value per note at 180 ms; left:
+another transition kind or velocity for such notes (not measured).
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
