@@ -205,8 +205,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   strings' Long (Rachm.), `sso_rachm_register_curves.json`, `-r` of the script): `DynamicsCurve::atPitch` (linear in dB
   between the nearest measured pitches), `raise` (the lowest CC1 reaching the level: crosses dips); quickLevel from
   `sso_rachm_context_match.json` by `rachm_quick_levels.py` (docs/PLAYBACK_SETTINGS.md › Calibrated levels). The strings' All techniques
-  Long against CC1 16-127, every 3 semitones (VM, 2026-10-11): `sso_cc1_curves.json` by `sso_cc1_sweep.py` (the section
-  balance's SSO side; not read by MuseScore).
+  Long against CC1 16-127, every 3 semitones, Celli and Basses every semitone (VM, 2026-10-11 / 10-14, with each round
+  robin's takes): `sso_cc1_curves.json` by `sso_cc1_sweep.py` (the section balance's SSO side and, by `real_range.py`,
+  the map's longLevel; not read by MuseScore).
 - Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing
   (`ControllersWindow`, `audio/vst3/librarycontrollers.*`). Automation: `libmscore/automation.*`, metaTag
   `automation` (points step / linear, a ramp may carry Live's Bézier control points). Every lane is editable;
