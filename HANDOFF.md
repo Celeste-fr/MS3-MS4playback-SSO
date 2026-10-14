@@ -295,6 +295,15 @@ kinds): no difference, neither wrong. The owner: keep the skip at 500 ms until t
 ("if we can't even consistently do corrections, seems like we need to figure that part out first"). Suspect: each
 note's window starts at its arrival (note-on + legatoDelay 170-440 ms), i.e. while the next notes sound. Branch
 `even-window` investigates.
+**Found** (`even_window_check.py`, `sso_even_window_check.json`; earlier renders + VM, kthost + Kontakt 8 + SSO): the
+CC11 acts as modelled (r 0.88-0.98, lag 10-15 ms); the measure is wrong. SSO's level peak of a transition comes before
+the pitch arrives, so the arrival windows straddle peaks and dips and come out flat while each note keeps a 60-120 ms
+dip-then-rise; the owner hears that rise ("swell": the largest rise of the perceived envelope within [note-on, next
+note-on)): it ranks 180R as the owner did (U note 3; C notes 3 and 1) and matches 7 of 8 checks on the mp3s heard (the
+job's measure 4). New correction N: flatten the envelope to each slur's median with glide nodes every 40 ms (not one
+per note), 2 rounds: swell p75 136R 2.4 -> 1.4, 180R 3.3 -> 1.7, 250R 4.4 -> 1.7, L 1.8-2.9 -> 1.3-1.8 (C left them
+at 1.6-4.0). Blind set U / C / N at 136 / 180 / 250 ms × R / L ready for the owner; no renderer change until he has
+heard it (C++ would store glide nodes, not per-note values).
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
