@@ -132,6 +132,7 @@ class TestSoundLibrary : public QObject, public MTest
       void levelContext();
       void levelSectionBalance();
       void levelRealRange();
+      void noLevelSpikes();
       void evenLevelsGlide();
       void evenAutoWindows();
       void evenAutoSession();
@@ -2761,6 +2762,85 @@ void TestSoundLibrary::levelRealRange()
             QVERIFY(ContextLevel::realRangeDb(li, 127, li.realSpan.begin()->first) > 0);
             }
       QVERIFY(with >= 10);
+      }
+
+//---------------------------------------------------------
+//   noLevelSpikes
+//    the per-note levels' schedule (libraryNoteLevels) sends no value that lasts no time: at a note-on with a level of
+//    its own, the value in force is not put back first and the note before's is not moved by the new dynamic (before,
+//    every note-on carried CC11 X, 127, Y at one tick: harmless hosted, a spike on a MIDI port and in Live's clips). Per
+//    route, the CC11 messages at one tick with no note-on of the route between them all carry the last one's value;
+//    the notes' CC11 in force stay those levelRealRange checks. Hosted and as Live's clips render
+//---------------------------------------------------------
+
+void TestSoundLibrary::noLevelSpikes()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin' realSpan='60:28 84:28'"
+         " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/84:-6 64/84:0 112/84:3 127/84:4'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' modifiers='performance'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" } });
+      MasterScore* score = readScore(DIR + "real-range.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto check = [](const EventMap& events, const char* what) {
+            // route -> the CC11 values at the current tick since the route's last note-on
+            std::map<int, std::vector<int>> run;
+            int tick = -1, cc11 = 0;
+            auto checkRun = [&](int route) {
+                  const std::vector<int>& r = run[route];
+                  for (size_t k = 0; k + 1 < r.size(); ++k)
+                        QVERIFY2(r[k] == r.back(), qPrintable(QString("%1: tick %2 route %3: CC11 %4 then %5")
+                                                              .arg(what).arg(tick).arg(route).arg(r[k]).arg(r.back())));
+                  };
+            auto flush = [&]() {
+                  for (const auto& r : run)
+                        checkRun(r.first);
+                  run.clear();
+                  };
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  if (te.first != tick) {
+                        flush();
+                        tick = te.first;
+                        }
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION) {
+                        run[route].push_back(ev.value());
+                        ++cc11;
+                        }
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0) {
+                        checkRun(route);
+                        run.erase(route);
+                        }
+                  }
+            flush();
+            QVERIFY2(cc11 > 10, qPrintable(QString("%1: %2 CC11").arg(what).arg(cc11)));
+            };
+      score->setPlaylistDirty();
+      EventMap hosted;
+      SynthesizerState ss;
+      score->renderMidi(&hosted, false, true, ss);
+      check(hosted, "hosted");
+      EventMap clips;
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      r.renderScore(&clips, ctx);
+      check(clips, "Live's clips");
+      delete score;
       }
 
 //---------------------------------------------------------

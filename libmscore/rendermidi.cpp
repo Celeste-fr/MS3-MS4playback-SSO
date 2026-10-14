@@ -3172,12 +3172,15 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
       struct Active { const LibLevel* level; int tick; NPlayEvent like; };
       std::map<int, Active> active;                         // route -> the note level in force
       // at it (tick t, inserted before it): the level in force on the route goes (the values in force again), the
-      // note's comes (nullptr: none)
+      // note's comes (nullptr: none). A controller the note's level sets too is not put back first: at the same tick
+      // the value in force would last no time and only reach a MIDI port or Live's clip as a spike (CC11 14, 127, 15)
       auto switchTo = [&](EventMap::iterator it, int t, int route, const LibLevel* level, int tick, const NPlayEvent& like) {
             auto a = active.find(route);
             if (a != active.end()) {
+                  const std::vector<int> next = level ? controllersOf(*level) : std::vector<int>();
                   for (int controller : controllersOf(*a->second.level))
-                        events->insert(it, std::make_pair(t, controllerEvent(like, controller, inForce[{ route, controller }])));
+                        if (std::find(next.begin(), next.end(), controller) == next.end())
+                              events->insert(it, std::make_pair(t, controllerEvent(like, controller, inForce[{ route, controller }])));
                   active.erase(a);
                   }
             if (!level)
@@ -3187,6 +3190,15 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   events->insert(it, std::make_pair(t, levelEvent(like, controller, mapOf(*level, controller, v, dynAt(it, route)))));
                   }
             active[route] = { level, tick, like };
+            };
+      // a note-on follows it on the route at its tick (that note switches the level: switchTo)
+      auto levelNoteFollows = [&](EventMap::iterator it, int route) {
+            for (auto j = std::next(it); j != events->end() && j->first == it->first; ++j) {
+                  const NPlayEvent& e = j->second;
+                  if (e.isExternal() && !e.librarySwitch() && routeOf(e) == route && e.type() == ME_NOTEON && e.velo() > 0)
+                        return true;
+                  }
+            return false;
             };
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
             NPlayEvent& ev = i->second;
@@ -3204,8 +3216,11 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                               ev.setValue(mapOf(level, ev.controller(), written, dynAt(i, route)));
                               ev.setLibraryLevel(ev.controller() == CTRL_EXPRESSION);
                               }
-                        // [levels] realRange: a new dynamics value (a hairpin's step) moves the note's CC11 with it
-                        if (level.range && volume && dynamicsCC >= 0 && ev.controller() == dynamicsCC) {
+                        // [levels] realRange: a new dynamics value (a hairpin's step) moves the note's CC11 with it;
+                        // not when a note-on with a level of its own follows on the route at this tick (a new dynamic at a
+                        // note: its CC11 comes with it, the note before's would last no time)
+                        if (level.range && volume && dynamicsCC >= 0 && ev.controller() == dynamicsCC
+                            && !levelNoteFollows(i, route)) {
                               const int v = valueAt(i, route, CTRL_EXPRESSION, fallbackOf(level, CTRL_EXPRESSION));
                               const NPlayEvent c = levelEvent(ev, CTRL_EXPRESSION, mapOf(level, CTRL_EXPRESSION, v, written));
                               i = events->insert(std::next(i), std::make_pair(i->first, c));
