@@ -77,8 +77,11 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   the render, the first note-on is at 0.245 s; the page's jumps and my per-note measurement ran 0.955 s late (fixed). At
   the true starts fff is loudest and down matches up within ~2 dB (Violins 1 ff +13.1, fff +17.9, ff +12.9 dB vs mp);
   the Recommended events are as intended. Left: uneven steps by pitch (Celli p +1.2 over mp, Violas mf ~ f, Basses f
-  -2.0 under mf: SSO's per-pitch dips, Stage A open item (5)); every library note-on carries a same-tick CC11 X, 127, Y
-  (e.g. 14, 127, 15): inaudible hosted, may blip on MIDI out / in Live: not investigated.
+  -2.0 under mf: SSO's per-pitch dips, Stage A open item (5)). The same-tick CC11 X, 127, Y at every library note-on
+  (e.g. 14, 127, 15) is **fixed** (branch `gaps-1012`): `libraryNoteLevels` put the value in force back before the next
+  note's own value, and realRange moved the note before's CC11 with a dynamic at the next note; both now left out, every
+  value after each tick unchanged (they reached MIDI out, Live's clips and the plain set's CC11 lane; hosted, zero
+  duration). Test `noLevelSpikes`.
 - **Stage B, tone:** after A ("important for realism"): CC1 / short velocity chosen so the tone matches the dynamic
   (brightness change pp -> ff of the real instrument, TU Berlin spectral centroids, against SSO's measured per CC1 /
   velocity), loudness then entirely CC11.
