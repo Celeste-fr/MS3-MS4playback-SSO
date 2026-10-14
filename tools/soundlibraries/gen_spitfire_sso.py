@@ -1496,11 +1496,13 @@ def sectionLevel(name):
 #   volumes. realSpan: one player's ff - pp sound power per semitone (Weinzierl et al. 2018, TU Berlin database v3),
 #   smoothed (local linear, +-k semitones, k by leave-one-out); longLevel: SSO's All techniques Long, the sustain's mean
 #   power less its CC1 64 level, every 3 semitones, Celli and Basses every semitone (sso_cc1_curves.json). Both from
-#   sso_real_range.json
-#   (real_range.py)
+#   sso_real_range.json (real_range.py). The woodwinds' and brass' main patches the database has (real_range.py WINDS;
+#   2026-10-14) take them too, without a sectionLevel: their Long from sso_winds_cc1_curves.json, an a2 / a6 patch one
+#   player's span
 REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
+REAL_RANGE_WINDS = loadFit('sso_real_range.json').get('instruments', {})
 def realRangeAttributes(name):
-    r = REAL_RANGE.get(name)
+    r = REAL_RANGE.get(name) or REAL_RANGE_WINDS.get(name)
     if not r:
         return ''
     span = ' '.join(f'{p}:{v:g}' for p, v in sorted(((int(p), v) for p, v in r['span'].items())))
@@ -1528,6 +1530,9 @@ for i, line in enumerate(out):
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + f' sectionLevel="{sectionLevel(current):g}"' + realRangeAttributes(current) + end
+            elif current in REAL_RANGE_WINDS:
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + realRangeAttributes(current) + end
         continue
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:
