@@ -128,6 +128,8 @@ void render(MasterScore* score, EventMap* events, std::vector<MidiRenderer::LibT
             EventMap part;
             midi.renderChunk(chunk, &part, ctx);
             events->insert(part.begin(), part.end());
+            events->startLeadMs = part.startLeadMs;               // (the start lead: the same in every chunk)
+            events->startEarlyMs.insert(part.startEarlyMs.begin(), part.startEarlyMs.end());
             }
       }
 
@@ -227,6 +229,9 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
       report.keepMs = Playback::value("legato/keepMs", score);
       const double keepMs = report.keepMs;
       auto ms = [score](int utick) { return score->utick2utime(utick) * 1000.0; };
+      // a note's note-on, ms on the score's time: without the start lead everything plays later by
+      // (MidiRenderer::libraryDelayLead; a first note started its whole onset early comes out before its written time)
+      auto sent = [&](const auto* p) { return ms(p->on) - events.startLeadMs; };
 
       std::map<const Note*, std::vector<const MidiRenderer::LibTrace*>> traces;
       for (const MidiRenderer::LibTrace& t : trace)
@@ -380,7 +385,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             p->hasOnset = a->onsetMs > 0 || !a->onsets.empty() || p->trace->attack;
             if (p->hasOnset) {
                   p->onset = onsetOf(p, p->pitch);
-                  p->arrival = ms(p->on) + p->onset - ms(p->written);
+                  p->arrival = sent(p) + p->onset - ms(p->written);
                   }
             }
 
@@ -391,7 +396,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const Played* p = up.get();
             if (!p->trace || !p->note || p->written < 0)
                   continue;
-            const double early = ms(p->written) - ms(p->on);
+            const double early = ms(p->written) - sent(p);
             const SoundLib::Choice& c = p->trace->choice;
             const QString inst = p->trace->patch->name;
             const QString art = c.articulation->name;
@@ -475,7 +480,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   finding(Kind::ARRIVAL, std::abs(d) > TIMING_FAIL_MS ? Severity::FAIL : Severity::WARN, p,
                           QString("%1 ms against the note before (arrives %2 ms off its written time: sent %3, onset %4; the note "
                                   "before, pitch %5 %6, %7 ms)").arg(d, 0, 'f', 1).arg(p->arrival, 0, 'f', 1)
-                          .arg(ms(p->on) - ms(p->written), 0, 'f', 1).arg(p->onset, 0, 'f', 1).arg(q->pitch)
+                          .arg(sent(p) - ms(p->written), 0, 'f', 1).arg(p->onset, 0, 'f', 1).arg(q->pitch)
                           .arg(techniqueOf(*q)).arg(q->arrival, 0, 'f', 1)
                           + QString("; onsets fitted in context: %1").arg(onsetFitted(p) ? (onsetFitted(q) ? "both" : "this only")
                                                                           : (onsetFitted(q) ? "the note before only" : "neither")), d);

@@ -67,6 +67,8 @@ struct Key {
 struct Span {
       int on { 0 };                 // uticks
       int off { 0 };                // its note-off (first on, first off by route and key, as the clips pair them)
+      double earlyMs { 0 };         // how much earlier than on it starts: what the score's start cut off its early start
+                                    // (EventMap::startEarlyMs; the plain set plays it there, Live's Track Delay allows it)
       };
 // each note-on of a note a render plays on an external route (the library's), in time order; keys: each note-on
 // event's Key

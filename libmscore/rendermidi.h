@@ -188,6 +188,14 @@ class MidiRenderer {
       bool libEvenOn { false };
       std::vector<EvenLevels::NoteInfo>* evenInfo { nullptr };
       double libDelayLead { 0.0 };      // ms everything plays later by, so the earliest negative delay fits (0: none)
+      // the start lead (libraryDelayLead): the ms a note's early start (its onset) would go before the score's start,
+      // per note (filled where the start cuts it: the first chunk's notes), their largest, known once the first chunk
+      // is rendered (a later chunk rendered first renders it once more for this: libProbing)
+      std::map<const Note*, double> libStartLost;
+      double libStartLead { 0.0 };
+      bool libStartKnown { false };
+      bool libProbing { false };
+      std::map<int, double> startLostByRoute(const EventMap* events) const;
       QString trackDelaysTag;
       int minChunkSize = 0;
 

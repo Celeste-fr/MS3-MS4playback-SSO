@@ -370,6 +370,10 @@ class EventList : public QList<Event> {
 class EventMap : public std::multimap<int, NPlayEvent> {
       int _highestChannel = 15;
    public:
+      // a library note whose early start (its onset) the score's start cut off: the ms it should have started before
+      // its note-on at tick 0 (MidiRenderer: the start lead; Live's clips, the plain set: livetiming.h)
+      std::map<const Note*, double> startEarlyMs;
+      double startLeadMs { 0 };     // what everything plays later by for them (the start lead; 0 in Live's clips)
       void fixupMIDI();
       void registerChannel(int c) { if (c > _highestChannel) _highestChannel = c; }
       };

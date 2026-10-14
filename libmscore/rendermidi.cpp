@@ -108,6 +108,7 @@ struct SndConfig {
       int libPatch = 0;           // a sound library part: the patch that plays the note
       double libEarly = 0;        // seconds a held note starts early (its onset)
       int libEarliest = 0;        // … but not before this utick
+      std::map<const Note*, double>* libLost = nullptr;   // where the score's start cuts that: the ms cut (the start lead)
       int* libOn = nullptr;       // where the note starts, as written and as played (libEarly)
       int* libWrittenOn = nullptr;
       int* libPlayed = nullptr;   // where a library note starts as played (any note, early or not)
@@ -550,8 +551,13 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             if (config.libEarly > 0) {
                   // a held note: early by its onset in time, at the tempo there (the note-off stays)
                   Score* sc = note->score();
+                  const double lost = config.libEarly - sc->utick2utime(on);
                   const int early = sc->utime2utick(sc->utick2utime(on) - config.libEarly);
                   on = qMin(on, qMax(config.libEarliest, early));
+                  // (the earliest 0: the score's start, no chunk, repeat or note before to keep; the note-on there, the
+                  // rest of its early start the start lead's: MidiRenderer::libraryDelayLead)
+                  if (config.libLost && config.libEarliest == 0 && lost > 0)
+                        (*config.libLost)[note] = lost * 1000.0;
                   }
             if (config.libOn)
                   *config.libOn = on;
@@ -1990,6 +1996,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     if (earliest >= 0 && earlyMs > 0) {
                                           config.libEarly = earlyMs / 1000.0;
                                           config.libEarliest = earliest;
+                                          config.libLost = &libStartLost;
                                           config.libOn = &libShiftOn;
                                           config.libWrittenOn = &libShiftWritten;
                                           libShiftOn = libShiftWritten = -1;
@@ -2965,6 +2972,7 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
       const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
       std::map<int, int> value;                                     // route -> the switch in force
       std::map<std::pair<int, int>, std::deque<double>> sounding;   // (route, pitch) -> the delays of its note-ons
+      const std::map<int, double> lost = startLostByRoute(events);
       std::vector<std::pair<int, NPlayEvent>> moved;
       // (the switches in force: from the start, as a technique set long before still holds)
       for (auto i = events->begin(); i != events->end();) {
@@ -3036,7 +3044,12 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
                   ms = TrackDelays::ms(d->second, patch, noteTechnique());
             else
                   ms = TrackDelays::ms(d->second, patch);
-            ms += libDelayLead;
+            ms += libDelayLead + libStartLead;
+            if (i->first == 0) {
+                  auto l = lost.find(route);
+                  if (l != lost.end())
+                        ms -= l->second;
+                  }
             ev.setLibraryDelayed(true);
             if (std::fabs(ms) < 1e-6) {
                   ++i;
@@ -3056,13 +3069,38 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
 //    with a negative track delay everything else plays later by the earliest one (libDelayLead), as a negative
 //    delay can't go before the start: the delayed track's first notes are early too (the owner, 2026-10-07: at
 //    -40 ms the first note "doesn't have a negative delay"). libraryTrackDelays adds it to the delayed routes'
-//    events; here every other event of the chunk (other parts, routes without delays, the metronome), each once
+//    events; here every other event of the chunk (other parts, routes without delays, the metronome), each once.
+//    Plus the start lead (libStartLead): a note that starts early by its onset can't start before the score's start
+//    either (Whence's first note, Celli, smooth, 172 ms: sent at 0, heard 172 ms late), so everything plays later by
+//    the most the start cut off such a note, and that note's route's events at tick 0 (its switch, controllers,
+//    note-on) by that much less: each of those notes starts its whole onset early. Not for Live's clips: the plain
+//    set plays such a note before its written place by Live's Track Delay (EventMap::startEarlyMs, livetiming.h)
 //---------------------------------------------------------
+
+std::map<int, double> MidiRenderer::startLostByRoute(const EventMap* events) const
+      {
+      std::map<int, double> lost;
+      if (libStartLost.empty())
+            return lost;
+      for (auto i = events->lower_bound(0); i != events->end() && i->first == 0; ++i) {
+            const NPlayEvent& e = i->second;
+            if (!e.isExternal() || e.type() != ME_NOTEON || e.velo() == 0 || !e.note())
+                  continue;
+            auto l = libStartLost.find(e.note());
+            if (l == libStartLost.end())
+                  continue;
+            double& v = lost[e.extPort() * 16 + e.extChannel()];
+            v = std::max(v, l->second);
+            }
+      return lost;
+      }
 
 void MidiRenderer::libraryDelayLead(const Chunk& chunk, EventMap* events)
       {
-      if (libDelayLead <= 0.0 || forLiveClips)
+      const double lead = libDelayLead + libStartLead;
+      if (lead <= 0.0 || forLiveClips)
             return;
+      const std::map<int, double> lost = startLostByRoute(events);
       const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
       std::vector<std::pair<int, NPlayEvent>> moved;
       for (auto i = events->lower_bound(from); i != events->end();) {
@@ -3072,7 +3110,13 @@ void MidiRenderer::libraryDelayLead(const Chunk& chunk, EventMap* events)
                   }
             NPlayEvent ev = i->second;
             ev.setLibraryDelayed(true);
-            moved.emplace_back(score->utime2utick(score->utick2utime(i->first) + libDelayLead / 1000.0), ev);
+            double ms = lead;
+            if (i->first == 0 && ev.isExternal()) {
+                  auto l = lost.find(ev.extPort() * 16 + ev.extChannel());
+                  if (l != lost.end())
+                        ms -= l->second;
+                  }
+            moved.emplace_back(score->utime2utick(score->utick2utime(i->first) + ms / 1000.0), ev);
             i = events->erase(i);
             }
       for (const auto& m : moved)
@@ -5305,6 +5349,26 @@ void MidiRenderer::renderScore(EventMap* events, const Context& ctx)
 
 void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Context& ctx)
       {
+      // the start lead (libraryDelayLead) comes from the score's first notes: a later chunk rendered before the first
+      // (playback from a later bar) renders the first once for it, writing nowhere
+      if (library && !libStartKnown && !libProbing && !writtenTiming && chunk.utick1() > 0) {
+            const Chunk first = getChunkAt(0);
+            if (first) {
+                  EventMap probe;
+                  std::vector<LibTrace>* trace = libTrace;
+                  std::vector<EvenLevels::NoteInfo>* info = evenInfo;
+                  std::map<const Part*, double>* tops = libRangeTops;
+                  libTrace = nullptr;
+                  evenInfo = nullptr;
+                  libRangeTops = nullptr;
+                  libProbing = true;
+                  renderChunk(first, &probe, ctx);
+                  libProbing = false;
+                  libTrace = trace;
+                  evenInfo = info;
+                  libRangeTops = tops;
+                  }
+            }
       // TODO: avoid doing it multiple times for the same measures
       score->createPlayEvents(chunk.startMeasure(), chunk.endMeasure());
       const ScoreTuningScope tuning(score);     // each note's tuning: temperament, accidental, its own (tuning.h)
@@ -5395,6 +5459,14 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             sctx.renderHarmony = ctx.renderHarmony;
             renderStaffChunk(chunk, events, sctx);
             }
+      if (chunk.utick1() == 0) {
+            libStartLead = 0.0;
+            for (const auto& l : libStartLost)
+                  libStartLead = std::max(libStartLead, l.second);
+            libStartKnown = true;
+            events->startEarlyMs = libStartLost;
+            }
+      events->startLeadMs = forLiveClips ? 0.0 : libStartLead;
       ms4Mode = !ms4Active.empty();
       if (ms4Mode)
             renderMs4Dynamics(chunk, events);
@@ -5496,6 +5568,9 @@ void MidiRenderer::updateState()
             libRoutePatches.clear();
             libEvenOn = Playback::on("levels/evenLevels", score);
             libDelayLead = 0.0;
+            libStartLost.clear();
+            libStartLead = 0.0;
+            libStartKnown = false;
             libLanes.clear();
             libLaneCents.clear();
             libBend.clear();

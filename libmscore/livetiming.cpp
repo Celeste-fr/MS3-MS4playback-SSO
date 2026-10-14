@@ -38,6 +38,9 @@ std::map<Key, Span> noteTimes(const EventMap& events, std::map<const void*, Key>
                         continue;
                   const Key k = count.next(e.note(), e.pitch());
                   out[k] = { te.first, te.first };
+                  auto early = events.startEarlyMs.find(e.note());
+                  if (te.first == 0 && k.k == 0 && early != events.startEarlyMs.end())
+                        out[k].earlyMs = early->second;
                   if (keys)
                         (*keys)[&e] = k;
                   open[rk].push_back(k);

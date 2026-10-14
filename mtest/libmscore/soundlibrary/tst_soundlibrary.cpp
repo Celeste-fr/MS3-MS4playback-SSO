@@ -133,6 +133,7 @@ class TestSoundLibrary : public QObject, public MTest
       void levelSectionBalance();
       void levelRealRange();
       void noLevelSpikes();
+      void startLead();
       void evenLevelsGlide();
       void evenAutoWindows();
       void evenAutoSession();
@@ -1433,12 +1434,26 @@ void TestSoundLibrary::legatoOctaveByStartPitch()
       }
 
 //---------------------------------------------------------
+//   unlead
+//    a rendered tick on the score's time: without the start lead everything plays later by (EventMap::startLeadMs,
+//    MidiRenderer::libraryDelayLead); before the lead (the first notes' early start) negative, at the start's tempo
+//---------------------------------------------------------
+
+static int unlead(const Score* score, const EventMap& events, int tick)
+      {
+      const double lead = events.startLeadMs / 1000.0;
+      const double at = score->utick2utime(tick);
+      return at >= lead ? score->utime2utick(at - lead) : tick - score->utime2utick(lead);
+      }
+
+//---------------------------------------------------------
 //   onsetEarly
 //    a held note that is not a legato transition (a lone held note, a slur's first note) starts early by its
 //    articulation's onset (<Articulation onset>, by pitch; <Onset early> percent; SSO's longs are heard 10-60
 //    ms after the note-on, sul tasto / flautando / harmonics up to 440): capped by the note before on the
-//    same patch as transitions are, not before the score's start; what ends on its patch in between ends at
-//    the new start, its switch moves with it. legato-early.musicxml; transitions play on the beat
+//    same patch as transitions are; at the score's start too, by the start lead (everything else later); what
+//    ends on its patch in between ends at the new start, its switch moves with it. legato-early.musicxml;
+//    transitions play on the beat. Ticks without the start lead (unlead)
 //---------------------------------------------------------
 
 void TestSoundLibrary::onsetEarly()
@@ -1483,15 +1498,15 @@ void TestSoundLibrary::onsetEarly()
                   if (!ev.isExternal())
                         continue;
                   if (ev.type() == ME_CONTROLLER && ev.controller() == 32)
-                        switches.push_back(te.first);
+                        switches.push_back(unlead(score, events, te.first));
                   if (ev.type() != ME_NOTEON)
                         continue;
                   if (ev.velo() > 0)
-                        notes.push_back({ te.first, -1, ev.pitch(), ev.extChannel() });
+                        notes.push_back({ unlead(score, events, te.first), -1, ev.pitch(), ev.extChannel() });
                   else {
                         for (N& n : notes)
                               if (n.pitch == ev.pitch() && n.channel == ev.extChannel() && n.off < 0)
-                                    n.off = te.first;
+                                    n.off = unlead(score, events, te.first);
                         }
                   }
             std::stable_sort(notes.begin(), notes.end(), [](const N& a, const N& b) { return a.on < b.on; });
@@ -1502,7 +1517,7 @@ void TestSoundLibrary::onsetEarly()
       // patch's fresh notes 100 ms; transitions on the beat
       const double g5 = (50 + 100 * 7 / 12.0) * 0.48;
       const std::vector<std::pair<int, double>> written = {
-            { 0, 0 }, { Q, 0 }, { 2 * Q, 0 }, { 3 * Q, 0 },             // the slur's first at the score's start: not earlier
+            { 0, 48 }, { Q, 0 }, { 2 * Q, 0 }, { 3 * Q, 0 },            // the slur's first at the score's start too (start lead)
             { 4 * Q, g5 }, { 5 * Q, 48 }, { 6 * Q, 48 }, { 7 * Q, 0 },   // G5 unslurred, A4 a slur's first, A4 again, B4
             { 8 * Q, 48 },                                              // C5 at 120, a slur's first: its 100 ms are at 60 bpm
             { 9 * Q, 0 }, { 10 * Q, 0 }, { 11 * Q, 0 },                 // transitions
@@ -2079,7 +2094,7 @@ void TestSoundLibrary::smoothOnset()
             for (const auto& te : events) {
                   const NPlayEvent& e = te.second;
                   if (e.isExternal() && !e.librarySwitch() && e.type() == ME_NOTEON && e.velo() > 0 && !on.count(e.pitch()))
-                        on[e.pitch()] = { te.first, e.velo() };
+                        on[e.pitch()] = { unlead(score, events, te.first), e.velo() };
                   }
             return on;
             };
@@ -2088,7 +2103,8 @@ void TestSoundLibrary::smoothOnset()
       std::map<int, std::pair<int, int>> on = render();
       QCOMPARE(on[69].second, 5);                                         // (smooth)
       QVERIFY2(within(on[69].first, 2400 - 144), qPrintable(QString::number(on[69].first)));    // (300 ms)
-      QCOMPARE(on[72].first, 0);
+      QVERIFY2(within(on[72].first, -144), qPrintable(QString::number(on[72].first)));         // (the first: smooth too,
+                                                                                                // before the start: the start lead)
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "1" } });
       on = render();
       QVERIFY2(within(on[69].first, 2400 - 134), qPrintable(QString::number(on[69].first)));    // (280 ms)
@@ -2840,6 +2856,107 @@ void TestSoundLibrary::noLevelSpikes()
       ctx.metronome = false;
       r.renderScore(&clips, ctx);
       check(clips, "Live's clips");
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   startLead
+//    a note at the score's start that starts early by its onset (legato-early.musicxml's C5 at tick 0, Long 172 ms):
+//    the start can't come before 0, so everything plays later by the start lead (MidiRenderer::libraryDelayLead) and
+//    that note's note-on starts at 0, its whole onset before the rest. Hosted: every note-on and note-off as Live's
+//    clips' played render (no lead: the plain set plays the note early by Track Delay, EventMap::startEarlyMs) 172 ms
+//    later, the C5's note-on at 0; a later chunk rendered first (playback from bar 3) plays as when the chunks come in
+//    order
+//---------------------------------------------------------
+
+void TestSoundLibrary::startLead()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='172'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccato staccatissimo' onset='8'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      SynthesizerState ss;
+      // note-ons / note-offs by (pitch, on, n-th): seconds
+      auto notes = [score](const EventMap& events) {
+            std::map<std::tuple<int, bool, int>, double> out;
+            std::map<std::pair<int, bool>, int> count;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF))
+                        continue;
+                  const bool on = e.type() == ME_NOTEON && e.velo() > 0;
+                  out[std::make_tuple(e.pitch(), on, count[{ e.pitch(), on }]++)] = score->utick2utime(te.first);
+                  }
+            return out;
+            };
+      score->setPlaylistDirty();
+      EventMap hosted;
+      score->renderMidi(&hosted, false, true, ss);
+      EventMap clips;
+      {
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      r.renderScore(&clips, ctx);
+      }
+      QCOMPARE(int(clips.startEarlyMs.size()), 1);
+      QVERIFY(std::fabs(clips.startEarlyMs.begin()->second - 172.0) < 0.5);
+      const auto h = notes(hosted);
+      const auto c = notes(clips);
+      QCOMPARE(h.size(), c.size());
+      QVERIFY(h.size() > 10);
+      for (const auto& n : c) {
+            auto hn = h.find(n.first);
+            QVERIFY(hn != h.end());
+            const bool first = std::get<0>(n.first) == 72 && std::get<1>(n.first) && std::get<2>(n.first) == 0;
+            const double want = first ? 0.0 : n.second + 0.172;
+            QVERIFY2(std::fabs(hn->second - want) < 0.003, qPrintable(QString("pitch %1 %2: %3 s, want %4")
+                     .arg(std::get<0>(n.first)).arg(std::get<1>(n.first) ? "on" : "off").arg(hn->second).arg(want)));
+            }
+
+      // a later chunk first (it renders the first for the lead), then the rest; and the chunks in order
+      auto chunked = [&](bool laterFirst) {
+            MidiRenderer r(score);
+            r.setMinChunkSize(1);
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            std::vector<MidiRenderer::Chunk> chunks;
+            for (int utick = 0;;) {
+                  const MidiRenderer::Chunk ch = r.getChunkAt(utick);
+                  if (!ch)
+                        break;
+                  chunks.push_back(ch);
+                  utick = ch.utick2();
+                  }
+            if (laterFirst)
+                  std::rotate(chunks.begin(), chunks.begin() + 1, chunks.end());
+            EventMap events;
+            for (const MidiRenderer::Chunk& ch : chunks)
+                  r.renderChunk(ch, &events, ctx);
+            return std::make_pair(notes(events), int(chunks.size()));
+            };
+      const auto inOrder = chunked(false);
+      const auto later = chunked(true);
+      QVERIFY(inOrder.second > 1);
+      QCOMPARE(later.first.size(), inOrder.first.size());
+      auto a = later.first.begin();
+      for (auto b = inOrder.first.begin(); b != inOrder.first.end(); ++a, ++b) {
+            QVERIFY(a->first == b->first);
+            QVERIFY2(std::fabs(a->second - b->second) < 1e-6, qPrintable(QString("pitch %1: %2 s against %3 s")
+                     .arg(std::get<0>(b->first)).arg(a->second).arg(b->second)));
+            }
+      auto first = inOrder.first.find(std::make_tuple(72, true, 0));
+      QVERIFY(first != inOrder.first.end());
+      QVERIFY(first->second < 1e-6);
       delete score;
       }
 
