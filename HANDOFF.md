@@ -349,6 +349,9 @@ level change S / C / R 6.52 / 5.77 / 1.91 dB, tone spread 4.40 / 4.20 / 3.67, ce
 part; the tone part (lowest band +8 dB against the rest, noise turning to tone) is what the owner hears and CC11 (a broadband
 gain) can't reach. It follows the sample (same step as note 1 or in a line alike; into F3 less, C3 hardly). **Closed on the
 levels side**: the 180 ms note 3 is SSO's sample.
+Demo page (2026-10-14, not blind: 4 slurs of the R / S clips looping, -16 LUFS, R level-flattened, below / above 400 Hz,
+`nmb-tonedemo.py` untracked): the owner, "both R and S sound fine here". So the swell is borderline: heard when hunting
+faults over the whole 8 s passage, not in a short known excerpt. Left as SSO plays it; judge in Whence with the next build.
 **S built** (the owner, 2026-10-14: "do 1"; branch `even-midnote`): the job and the background measurer fit as
 `even_180_check.py`'s S (nodes halfway from each note-on to the next, `EvenLevels::nodeTime`, the renderer's glide too;
 target each slur's median of the envelope over its span; basis lagged 12 ms; round 1 / 1.28, round 2 always, the job's
