@@ -129,6 +129,12 @@ ladder (check pitches already on the old grid) stays up to 1.4 / 3.9 dB off rule
 median 0.6-1.3 dB (Celli) / 1.1-2.5 dB (Basses, max 5.5), and every other note plays the other one. Closing that needs
 the renderer to predict each note's round robin (deterministic since the transport restart; the per-take data is in the
 file): a C++ step, proposed to the owner. Whence unchanged (all its Celli / Basses notes at mp).
+**Not wanted** (the owner, 2026-10-14, blind A/B, https://claude.ai/artifact/7RrZnLvhhFmUo9drMrqCpC, real SSO on the VM,
+branch `rr-test` `rr_blind_test.py`): 8 repeated quarters + a line, Basses E1 / A1 / D2, Celli C4 / G4, as recorded
+against a best-case per-note CC11 evening (the clip's own per-take levels; repeats' spread 3-8 dB → 0.1-2.3): the owner
+preferred as recorded on all 5 (sure on the three Basses, guessing on the Celli). So no round-robin correction. Found on
+the way: SSO's CC11 is 20 log10 (as `rendermidi.h`), and in quarter notes the Basses' two takes differ more than in held
+notes (up to 7.7 dB against 5.0) and rise differently (one fast, one slow swell).
 
 ## Before a build goes to the owner (2026-10-09)
 
