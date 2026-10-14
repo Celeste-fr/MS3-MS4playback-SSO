@@ -52,6 +52,7 @@ class TestPlaybackAudit : public QObject, public MTest
       void cappedArrival();
       void droppedFindings();
       void leapFindings();
+      void transitionArrival();
       void auditScore();
       };
 
@@ -475,6 +476,57 @@ void TestPlaybackAudit::leapFindings()
                         }
             QVERIFY2(e5 && f5, qPrintable(text));
             }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   transitionArrival
+//    a legato transition arrives when it reaches the new pitch, as the renderer models it (LibTrace::glideArriveMs: here
+//    the map's legatoDelay, 120 ms at every interval, after notes long enough for the whole of it), not by the attack's
+//    onset: leap.musicxml's slur on a Performance legato patch (onset 60) starts on time (sent 60 ms early), each
+//    transition (sent on the beat) 120 ms late: one ARRIVAL, the D4 against the C4, 120 ms; the transitions after it
+//    arrive alike
+//---------------------------------------------------------
+
+void TestPlaybackAudit::transitionArrival()
+      {
+      recommended({ { "levels/calibrated", "0" } });
+      MasterScore* score = readScore(DIR + "leap.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      SoundLib::setCurrent(loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='60'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " legatoDelay='-12:120 +14:120'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>"));
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;
+      PlaybackAudit::render(score, &events, &trace);
+      int transitions = 0;
+      for (const MidiRenderer::LibTrace& t : trace)
+            if (t.from) {
+                  ++transitions;
+                  QVERIFY2(std::fabs(t.glideArriveMs - 120) < 0.5, qPrintable(QString::number(t.glideArriveMs)));
+                  }
+      QCOMPARE(transitions, 5);
+      const PlaybackAudit::Report r = PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+      const QString text = r.text();
+      QVERIFY2(r.count(PlaybackAudit::Kind::ARRIVAL) == 1, qPrintable(text));
+      for (const PlaybackAudit::Finding& f : r.findings)
+            if (f.kind == PlaybackAudit::Kind::ARRIVAL) {
+                  QCOMPARE(f.pitch, 62);
+                  QCOMPARE(f.severity, PlaybackAudit::Severity::FAIL);
+                  QVERIFY2(std::fabs(f.value - 120) < 1.5, qPrintable(text));
+                  QVERIFY2(f.text.contains("transition arrives 120.0 after its note-on"), qPrintable(f.text));
+                  }
       delete score;
       }
 

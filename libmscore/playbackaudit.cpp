@@ -204,7 +204,9 @@ struct Played {
       bool sub { false };           // an ornament's (or glissando's) later sub-note: never started early
       bool hasOnset { false };      // its technique has an onset in the map
       double onset { 0 };           // ms, the map's for this note, as the renderer takes it
-      double arrival { 0 };         // ms, predicted: sent + onset - written
+      double arrival { 0 };         // ms, predicted: sent + onset - written (a transition: + its arrival instead)
+      bool transition { false };    // played as a legato transition with a known arrival (LibTrace::glideArriveMs)
+      bool hasArrival { false };    // arrival is known: an onset, or a transition's arrival
       };
 
 struct Group {                      // a chord's notes attacked together on a line (track)
@@ -386,7 +388,19 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             if (p->hasOnset) {
                   p->onset = onsetOf(p, p->pitch);
                   p->arrival = sent(p) + p->onset - ms(p->written);
+                  p->hasArrival = true;
                   }
+            // a legato transition isn't an attack: it arrives when the transition reaches the new pitch, as the renderer
+            // models it for the note's bend (LibTrace::glideArriveMs: the patch's measured bendGlide by the note before's
+            // length, else its legatoDelay by interval, an octave by its start pitch, quicker after a short note:
+            // libFastDelay; playback.ini [legato.delay]); unknown (no delay in the map): no arrival
+            if (p->trace->from && p->trace->glideArriveMs >= 0) {
+                  p->transition = true;
+                  p->hasArrival = true;
+                  p->arrival = sent(p) + p->trace->glideArriveMs - ms(p->written);
+                  }
+            else if (p->trace->from)
+                  p->hasArrival = false;
             }
 
       // (b) swapped or early without an in-context measurement, or no onset at all, per instrument; (c) capped
@@ -454,8 +468,13 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             report.findings.push_back(f);
             }
 
-      // (d) predicted arrival: a chord's earliest arriving note (with an onset in the map) against the note before it in
-      // its line, joined without a rest
+      // (d) predicted arrival: a chord's earliest arriving note (with an onset in the map, or a legato transition with
+      // its modelled arrival) against the note before it in its line, joined without a rest
+      auto how = [&](const Played* p) {
+            return p->transition ? QString("sent %1, transition arrives %2 after its note-on")
+                                   .arg(sent(p) - ms(p->written), 0, 'f', 1).arg(p->trace->glideArriveMs, 0, 'f', 1)
+                                 : QString("sent %1, onset %2").arg(sent(p) - ms(p->written), 0, 'f', 1).arg(p->onset, 0, 'f', 1);
+            };
       for (auto& line : lines) {
             std::vector<Group*> gs;
             for (auto& g : line.second)
@@ -463,7 +482,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             auto first = [](const Group* g) -> const Played* {
                   const Played* f = nullptr;
                   for (const Played* p : g->notes)
-                        if (p->hasOnset && (!f || p->arrival < f->arrival))
+                        if (p->hasArrival && (!f || p->arrival < f->arrival))
                               f = p;
                   return f;
                   };
@@ -478,10 +497,9 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   if (std::abs(d) <= TIMING_WARN_MS)
                         continue;
                   finding(Kind::ARRIVAL, std::abs(d) > TIMING_FAIL_MS ? Severity::FAIL : Severity::WARN, p,
-                          QString("%1 ms against the note before (arrives %2 ms off its written time: sent %3, onset %4; the note "
-                                  "before, pitch %5 %6, %7 ms)").arg(d, 0, 'f', 1).arg(p->arrival, 0, 'f', 1)
-                          .arg(sent(p) - ms(p->written), 0, 'f', 1).arg(p->onset, 0, 'f', 1).arg(q->pitch)
-                          .arg(techniqueOf(*q)).arg(q->arrival, 0, 'f', 1)
+                          QString("%1 ms against the note before (arrives %2 ms off its written time: %3; the note "
+                                  "before, pitch %4 %5, %6 ms: %7)").arg(d, 0, 'f', 1).arg(p->arrival, 0, 'f', 1)
+                          .arg(how(p)).arg(q->pitch).arg(techniqueOf(*q)).arg(q->arrival, 0, 'f', 1).arg(how(q))
                           + QString("; onsets fitted in context: %1").arg(onsetFitted(p) ? (onsetFitted(q) ? "both" : "this only")
                                                                           : (onsetFitted(q) ? "the note before only" : "neither")), d);
                   }
