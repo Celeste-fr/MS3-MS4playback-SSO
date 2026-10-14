@@ -286,6 +286,16 @@ passage "All the same". So the background measurer and the job skip slurred pass
 is >= 500 ms (heard at 500 ms and 1 s; 136-500 ms untested by ear: still measured); a faster note inside a slow slur
 keeps its window measured.
 
+## Where the correction works (the owner's blind test, 2026-10-13, db `tempoline1`)
+
+`tempo_line_test.py` (Celli, mf; U uncorrected vs C as Even levels corrects, loudness-matched): 136 ms repeating
+figure U wrong; 136 ms line **C wrong**; 180 ms figure both wrong (C: notes 1 and 3 swell, U: note 3); 180 ms line
+neither, U preferred; 250 ms figure "same", **both wrong**; 250 ms line U wrong (C preferred); 350 and 500 ms (both
+kinds): no difference, neither wrong. The owner: keep the skip at 500 ms until the correction is reliable at 136-250 ms
+("if we can't even consistently do corrections, seems like we need to figure that part out first"). Suspect: each
+note's window starts at its arrival (note-on + legatoDelay 170-440 ms), i.e. while the next notes sound. Branch
+`even-window` investigates.
+
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
 Built from the listening test below (libmscore/evenlevels.h, mscore/evenlevelsjob.h, docs/PLAYBACK_SETTINGS.md › Even
