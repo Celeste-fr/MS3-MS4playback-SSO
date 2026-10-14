@@ -63,6 +63,13 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   91.4 dB, 2.7 dB a step), relative to mp, where M was set. Rejected: A (beyond the measured extremes), C (ppp = pp,
   fff = ff: two pairs of markings alike), E (Edinburgh's 30 dB exceeds the cellists' measured 19.1). No source measures
   ff against fff (only pp / ff exist for strings), so the steps' sizes come from the rule; stage B adds the tone.
+- **Stage B blind test** (2026-10-14, db `stageb1`, branch `stage-b-brightness` bb13144e0a has the measurements, HANDOFF
+  there › Stage B measured): the owner picked SSO's CC1 127 brighter in 10 / 10 (Violins 1 4, Violas 4, Celli 13 / 14);
+  Celli 15 / 16 (127 measured darker) and Basses 21 / 22 / 24 (centroid within 1 Hz) "sound exactly the same"; the 8
+  real-player clips (TU Berlin, anechoic, one mic, 0.65-2 s) "don't sound like strings at all": unanswered. The owner:
+  "maybe it IS only 2-10%, but side by side it's obv": audible is not large; the measured share stands. Test flaws: half
+  the 24 clips repeat (05=06, 09=11, 13=14, 15=16, 17=18, 19=23, 20=21, 22=24). Open: a reference the ear can compare
+  (a section in a hall at pp / ff), then CC1 by tone for the upper strings plus another control (tilt EQ?) for the rest.
 - **Stage B, tone:** after A ("important for realism"): CC1 / short velocity chosen so the tone matches the dynamic
   (brightness change pp -> ff of the real instrument, TU Berlin spectral centroids, against SSO's measured per CC1 /
   velocity), loudness then entirely CC11.
