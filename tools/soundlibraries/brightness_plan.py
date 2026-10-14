@@ -96,10 +96,14 @@ def section_plan(real, part, section, measure):
         ccs = sorted(c for c in by if by[c].get(measure, 0) > 0)
         logq = [math.log(by[c][measure] / by[64][measure]) for c in ccs]
         lr, n = real_ratio(real, inst, measure, p)
-        if lr is None:
+        if lr is None or len(ccs) < 2:
             continue
         cc_i, flags = [], []
         for i in range(8):
+            if i == 3:                  # mp is the anchor: CC1 64 by definition (the fit may pool 64 with a neighbour)
+                cc_i.append(64.0)
+                flags.append(0)
+                continue
             c, fl = invert(ccs, logq, lr * (i - 3) / 7)
             cc_i.append(round(c, 1))
             flags.append(fl)
@@ -113,8 +117,11 @@ def section_plan(real, part, section, measure):
              "above127": [sum(1 for r in rows if r["outOfReach"][i] > 0) for i in range(8)]}
     real_all = statistics.median(r["realRatio"] for r in rows)
     sso_span = statistics.median(r["ssoRatio127"] / r["ssoRatio16"] for r in rows)
+    # coverage: how much of the real player's pp -> ff change (in log B) SSO's CC1 16 -> 127 gives, median over pitches
+    cov = statistics.median(math.log(r["ssoRatio127"] / r["ssoRatio16"]) / math.log(r["realRatio"])
+                            for r in rows if r["realRatio"] != 1)
     return {"cc": med, "pitches": len(rows), "reach": reach, "realRatioMedian": round(real_all, 4),
-            "ssoRatio127over16Median": round(sso_span, 4), "perPitch": rows}
+            "ssoRatio127over16Median": round(sso_span, 4), "coverage": round(cov, 3), "perPitch": rows}
 
 
 def long_db(long_part, cc_values):
@@ -217,7 +224,7 @@ def plan(real_path, sso_path):
         for tech, t in sec.items():
             for m in MEASURES:
                 if m in t:
-                    print(f"{section:10s} {tech:22s} {m:6s} CC1 {t[m]['cc']}  real ff/pp {t[m]['realRatioMedian']}"
+                    print(f"{section:10s} {tech:20s} {m:6s} CC1 {t[m]['cc']} cover {t[m]['coverage']:.2f} real ff/pp {t[m]['realRatioMedian']}"
                           f"  SSO 127/16 {t[m]['ssoRatio127over16Median']}  >127 {t[m]['reach']['above127']}"
                           f"  <16 {t[m]['reach']['below16']}")
 
