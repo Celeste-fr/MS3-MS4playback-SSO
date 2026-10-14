@@ -1495,7 +1495,8 @@ def sectionLevel(name):
 #   plays (steps of its written dynamic from mp) x realSpan / 7 less (longLevel at its CC1) dB by CC11 and the patches'
 #   volumes. realSpan: one player's ff - pp sound power per semitone (Weinzierl et al. 2018, TU Berlin database v3),
 #   smoothed (local linear, +-k semitones, k by leave-one-out); longLevel: SSO's All techniques Long, the sustain's mean
-#   power less its CC1 64 level, every 3 semitones (sso_cc1_curves.json). Both from sso_real_range.json
+#   power less its CC1 64 level, every 3 semitones, Celli and Basses every semitone (sso_cc1_curves.json). Both from
+#   sso_real_range.json
 #   (real_range.py)
 REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
 def realRangeAttributes(name):

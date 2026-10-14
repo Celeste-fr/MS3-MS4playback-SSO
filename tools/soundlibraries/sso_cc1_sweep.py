@@ -5,7 +5,7 @@ rest check only CC1 32 / 80 / 112).
 
     sso_cc1_sweep.py events <out.txt> <out.notes.json> --low L --high H [--step 3] [--extra P ...] [--switch 1]
                      [--cc 16 32 48 64 80 96 112 127] [--repeats 4] [--note 3.0] [--gap 1.5]
-    sso_cc1_sweep.py analyze <render.wav> <notes.json> [--name NAME] -o <part.json>
+    sso_cc1_sweep.py analyze <render.wav> <notes.json> [--name NAME] [--takes] -o <part.json>
     sso_cc1_sweep.py merge <part.json> ... -o tools/soundlibraries/sso_cc1_curves.json
 
 events: a score of MIDI events for the VM's offline host (kthost: "time on|off|cc a b"): the switch (CC32, UACC) and CC11
@@ -92,7 +92,7 @@ def measure(x, sr, on, off, meter=None, sones=True):
     return r
 
 
-def analyze(wav, notes, name=None, sones=True):
+def analyze(wav, notes, name=None, sones=True, takes=False):
     import soundfile as sf
     import pyloudnorm
     x, sr = sf.read(wav, dtype="float32", always_2d=True)
@@ -109,6 +109,9 @@ def analyze(wav, notes, name=None, sones=True):
             if vs:
                 row[k] = round(statistics.median(vs), 4 if k == "sones" else 2)
                 row[k + "Spread"] = round(max(vs) - min(vs), 4 if k == "sones" else 2)
+        if takes:
+            # each take's rmsDb in the order played (the repeats on one key alternate SSO's round robins: even / odd)
+            row["rmsDbTakes"] = [m["rmsDb"] for m in ms]
         points.setdefault(str(p), []).append(row)
     out = {"name": name, "sampleRate": sr, "pitches": notes["pitches"], "ccs": notes["ccs"],
            "repeats": notes["repeats"], "note": notes["note"], "switch": notes["switch"], "points": points}
@@ -172,6 +175,7 @@ def main(argv=None):
     a.add_argument("notes")
     a.add_argument("--name")
     a.add_argument("-o", "--out", required=True)
+    a.add_argument("--takes", action="store_true", help="also each take's rmsDb (rmsDbTakes), in the order played")
     m = sub.add_parser("merge")
     m.add_argument("parts", nargs="+")
     m.add_argument("-o", "--out", required=True)
@@ -188,7 +192,7 @@ def main(argv=None):
     elif args.cmd == "analyze":
         with open(args.notes) as f:
             notes = json.load(f)
-        out = analyze(args.wav, notes, args.name)
+        out = analyze(args.wav, notes, args.name, takes=args.takes)
         with open(args.out, "w") as f:
             json.dump(out, f)
         for k, rows in out["relative64"].items():

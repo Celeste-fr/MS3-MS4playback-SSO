@@ -21,11 +21,14 @@ pitch (uniform weights), k chosen by leave-one-out cross-validation (the k with 
 each measured span from the others, pooled over the four instruments, k = 1 .. 12). Written at every semitone of the
 database's range per instrument; MuseScore takes the nearest end's beyond it.
 
-SSO side: sso_cc1_curves.json (Windows test VM, Kontakt 8 + SSO, 2026-10-11): All techniques Long at CC1 = velocity
-16 .. 127, every 3 semitones, median of 4. The measure: rmsDb, the mean power of the sustain 1.5-3.0 s after the
-note-on (like for like with the database's sound power of a held tone; loudDb, the loudest 50 ms, is the dynamics
-check's peak measure). Written as each measured pitch's level less its level at CC1 64 (mp), unsmoothed (the repeats'
-spread, ~1 dB, is the noise; between pitches MuseScore interpolates linearly).
+SSO side: sso_cc1_curves.json (Windows test VM, Kontakt 8 + SSO, 2026-10-11; Celli and Basses again 2026-10-14):
+All techniques Long at CC1 = velocity 16 .. 127, median of 4 (two round robins, each twice), Violins and Violas every 3
+semitones, Celli and Basses every semitone (between the old points the 3-semitone grid's interpolation was up to 2.2 /
+7.3 dB off). The measure: rmsDb, the mean power of the sustain 1.5-3.0 s after the note-on (like for like with the
+database's sound power of a held tone; loudDb, the loudest 50 ms, is the dynamics check's peak measure). Written as
+each measured pitch's level less its level at CC1 64 (mp), unsmoothed (offline a round robin's takes are identical, so
+the median of 4 is the two round robins' mean; they differ by ~1 dB, Basses up to 5.5; between pitches MuseScore
+interpolates linearly).
 """
 import csv
 import json
