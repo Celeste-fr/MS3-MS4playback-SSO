@@ -3247,8 +3247,8 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
 //    transitions) gets its context (EvenLevels::contextOf: its patch, pitch, tuning, velocity, whether joined, length,
 //    the joined neighbours, the dynamics CC in force), reported to the measurement (setEvenLevelsInfo) and, for a note
 //    with a value, to EvenLevels::rendered (stale or current). With the setting on, each run of joined notes on a route
-//    whose values are current plays the glide: CC11 times 10^(glide / 20) (the glide linear in dB between the middles of
-//    the notes' windows, held at the ends), on every CC11 the route gets there (the per-note levels' schedule) and a
+//    whose values are current plays the glide: CC11 times 10^(glide / 20) (the glide linear in dB between the notes' nodes,
+//    EvenLevels::nodeTime: halfway from each note-on to the next joined one; held at the ends), on every CC11 the route gets there (the per-note levels' schedule) and a
 //    message every STEP_MS where the value changes; the CC11 in force again at the next note-on on the route (else the
 //    chunk's end). Flagged as a level (valueAt takes the value as written from before them). The chunk's own notes; a
 //    note-off after the chunk's end is looked for after it
@@ -3431,7 +3431,8 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                         ++e;
                   std::vector<double> centres, dbs;
                   for (size_t k = s; k <= e; ++k) {
-                        centres.push_back(ns[k].on + (infos[k].windowMs + EvenLevels::WINDOW_MS / 2.0) / 1000.0);
+                        centres.push_back(EvenLevels::nodeTime(ns[k].on, ns[k].off,
+                                                               k + 1 < ns.size() && ns[k + 1].joined ? ns[k + 1].on : -1.0));
                         dbs.push_back(ns[k].note->evenLevel());
                         }
                   const int startTick = ns[s].tick;

@@ -349,6 +349,12 @@ level change S / C / R 6.52 / 5.77 / 1.91 dB, tone spread 4.40 / 4.20 / 3.67, ce
 part; the tone part (lowest band +8 dB against the rest, noise turning to tone) is what the owner hears and CC11 (a broadband
 gain) can't reach. It follows the sample (same step as note 1 or in a line alike; into F3 less, C3 hardly). **Closed on the
 levels side**: the 180 ms note 3 is SSO's sample.
+**S built** (the owner, 2026-10-14: "do 1"; branch `even-midnote`): the job and the background measurer fit as
+`even_180_check.py`'s S (nodes halfway from each note-on to the next, `EvenLevels::nodeTime`, the renderer's glide too;
+target each slur's median of the envelope over its span; basis lagged 12 ms; round 1 / 1.28, round 2 always, the job's
+by the envelope's measured gain, the background's / 1.28; round kept by envelope rms). Old values stale (contextOf's
+version). Linux tests only (test synth): untried with SSO in MuseScore; the background now renders 3 rounds per window
+(was 2 where the residual stayed under 1 dB).
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 

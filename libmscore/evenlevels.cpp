@@ -210,6 +210,8 @@ QString contextOf(const ContextParts& c)
       {
       auto ms = [](double x) { return QString::number(std::lround(x)); };
       QStringList parts;
+      // the method's version: values measured with the nodes at the windows' middles (before 2026-10-14) are stale
+      parts << "s";
       parts << QString::number(c.pitch) << QString::number(std::lround(c.cents * 10.0)) << QString::number(c.velocity)
             << (c.joined ? "j" : "a") << ms(c.lengthMs) << QString::number(c.dynamics);
       if (c.prevPitch >= 0)
@@ -312,11 +314,19 @@ int Passage::gridSize() const
       return int(std::floor((last + 1.0 - gridStart()) / (STEP_MS / 1000.0))) + 1;
       }
 
+double nodeTime(double on, double off, double nextOn)
+      {
+      if (nextOn > on)
+            return 0.5 * (on + nextOn);
+      return off > on ? 0.5 * (on + off) : on;
+      }
+
 std::vector<double> Passage::centres() const
       {
       std::vector<double> c;
-      for (double w : window)
-            c.push_back(w + WINDOW_MS / 2000.0);
+      const size_t n = on.size();
+      for (size_t k = 0; k < n; ++k)
+            c.push_back(nodeTime(on[k], k < off.size() ? off[k] : on[k], k + 1 < n ? on[k + 1] : lastNext));
       return c;
       }
 
@@ -333,7 +343,19 @@ static std::vector<double> smooth(const std::vector<double>& g)
       return out;
       }
 
-// the smoothed glide of each note's unit value: columns of the grid x notes matrix
+// a curve on the grid LAG_MS later (its first value before)
+static std::vector<double> lagged(const std::vector<double>& g)
+      {
+      const size_t k = size_t(std::lround(LAG_MS / STEP_MS));
+      if (k == 0 || g.empty())
+            return g;
+      std::vector<double> out(g.size(), g[0]);
+      for (size_t i = k; i < g.size(); ++i)
+            out[i] = g[i - k];
+      return out;
+      }
+
+// the glide of each note's unit value as heard (smoothed, lagged): columns of the grid x notes matrix
 static std::vector<std::vector<double>> unitResponses(const Passage& p)
       {
       const size_t n = p.on.size();
@@ -347,9 +369,87 @@ static std::vector<std::vector<double>> unitResponses(const Passage& p)
             std::vector<double> g(size_t(std::max(0, m)));
             for (int i = 0; i < m; ++i)
                   g[size_t(i)] = glideAt(c, e, t0 + i * STEP_MS / 1000.0);
-            cols[j] = smooth(g);
+            cols[j] = lagged(smooth(g));
             }
       return cols;
+      }
+
+// the fit's target on the grid: from note 2's note-on to the last note-on, each slur's median of env over its span
+// (the samples whose latest note-on is one of its notes); w[i] 1 there, else 0
+static void targetOf(const Passage& p, const std::vector<double>& env, std::vector<double>* w, std::vector<double>* T)
+      {
+      const size_t n = p.on.size();
+      const int m = std::min(p.gridSize(), int(env.size()));
+      w->assign(size_t(std::max(0, m)), 0.0);
+      T->assign(size_t(std::max(0, m)), 0.0);
+      if (n < 3 || m <= 0)
+            return;
+      const double t0 = p.gridStart();
+      std::vector<int> slurAt(size_t(m), -1);
+      std::map<int, std::vector<double>> by;
+      for (int i = 0; i < m; ++i) {
+            const double t = t0 + i * STEP_MS / 1000.0;
+            if (t < p.on[1] || t >= p.on[n - 1] || !std::isfinite(env[size_t(i)]))
+                  continue;
+            const size_t k = size_t(std::upper_bound(p.on.begin(), p.on.end(), t) - p.on.begin()) - 1;
+            slurAt[size_t(i)] = p.slur[k];
+            by[p.slur[k]].push_back(env[size_t(i)]);
+            }
+      std::map<int, double> med;
+      for (const auto& b : by)
+            med[b.first] = median(b.second);
+      for (int i = 0; i < m; ++i) {
+            if (slurAt[size_t(i)] < 0)
+                  continue;
+            (*w)[size_t(i)] = 1.0;
+            (*T)[size_t(i)] = med[slurAt[size_t(i)]];
+            }
+      }
+
+double envelopeRms(const Passage& p, const std::vector<double>& env)
+      {
+      std::vector<double> w, T;
+      targetOf(p, env, &w, &T);
+      double sum = 0, cnt = 0;
+      for (size_t i = 0; i < w.size(); ++i)
+            if (w[i] > 0) {
+                  sum += (env[i] - T[i]) * (env[i] - T[i]);
+                  cnt += 1;
+                  }
+      return cnt > 0 ? std::sqrt(sum / cnt) : 0.0;
+      }
+
+double envelopeGain(const Passage& p, const std::vector<double>& env0, const std::vector<double>& env1,
+                    const std::vector<double>& v)
+      {
+      std::vector<double> w, T;
+      targetOf(p, env0, &w, &T);
+      const std::vector<std::vector<double>> M = unitResponses(p);
+      std::vector<double> x, y;
+      for (size_t i = 0; i < w.size() && i < env1.size(); ++i) {
+            if (w[i] <= 0 || !std::isfinite(env1[i]))
+                  continue;
+            double pred = 0;
+            for (size_t j = 0; j < M.size() && j < v.size(); ++j)
+                  pred += M[j][i] * v[j];
+            x.push_back(pred);
+            y.push_back(env1[i] - env0[i]);
+            }
+      if (x.empty())
+            return 1.0;
+      double mx = 0, my = 0;
+      for (size_t i = 0; i < x.size(); ++i) {
+            mx += x[i];
+            my += y[i];
+            }
+      mx /= double(x.size());
+      my /= double(x.size());
+      double sxx = 0, sxy = 0;
+      for (size_t i = 0; i < x.size(); ++i) {
+            sxx += (x[i] - mx) * (x[i] - mx);
+            sxy += (x[i] - mx) * (y[i] - my);
+            }
+      return sxx > 1e-9 && sxy > 0 ? std::max(0.5, sxy / sxx) : 1.0;
       }
 
 // solves A x = b (A n x n, symmetric positive definite here) by Gaussian elimination with partial pivoting
@@ -384,38 +484,26 @@ static std::vector<double> solve(std::vector<std::vector<double>> A, std::vector
       return x;
       }
 
-std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<double>& level,
-                             double* fitRms, double* envRms)
+std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, double* fitRms, double* envRms)
       {
-      return fitGlide(p, env, level, std::vector<bool>(), fitRms, envRms);
+      return fitGlide(p, env, std::vector<bool>(), fitRms, envRms);
       }
 
-std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<double>& level,
-                             const std::vector<bool>& fixed, double* fitRms, double* envRms)
+std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<bool>& fixed,
+                             double* fitRms, double* envRms)
       {
       const size_t n = p.on.size();
       auto held = [&fixed](size_t j) { return j < fixed.size() && fixed[j]; };
-      const int m = std::min(p.gridSize(), int(env.size()));
       std::vector<double> du(n, 0.0);
+      std::vector<double> w, T;
+      targetOf(p, env, &w, &T);
+      const int m = int(w.size());
       if (n < 3 || m <= 0)
             return du;
-      const Stats s = slurStats(p.slur, level);
-      const double t0 = p.gridStart();
-      const double lastOff = p.off.back();
-      std::vector<double> w(size_t(m), 0.0), r(size_t(m), 0.0);
-      for (int i = 0; i < m; ++i) {
-            const double t = t0 + i * STEP_MS / 1000.0;
-            if (t < p.window[1] || t >= lastOff)
-                  continue;
-            // the note whose window started last before t: its slur's median is the target
-            size_t k = size_t(std::upper_bound(p.window.begin(), p.window.end(), t) - p.window.begin());
-            k = k == 0 ? 0 : k - 1;
-            auto med = s.median.find(p.slur[k]);
-            if (med == s.median.end() || !std::isfinite(env[size_t(i)]))
-                  continue;
-            w[size_t(i)] = 1.0;
-            r[size_t(i)] = med->second - env[size_t(i)];
-            }
+      std::vector<double> r(size_t(m), 0.0);
+      for (int i = 0; i < m; ++i)
+            if (w[size_t(i)] > 0)
+                  r[size_t(i)] = T[size_t(i)] - env[size_t(i)];
       const std::vector<std::vector<double>> M = unitResponses(p);
       std::vector<std::vector<double>> A(n, std::vector<double>(n, 0.0));
       std::vector<double> b(n, 0.0);
@@ -457,32 +545,6 @@ std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, c
       if (envRms)
             *envRms = sw > 0 ? std::sqrt(flat / sw) : 0.0;
       return du;
-      }
-
-std::vector<double> windowChanges(const Passage& p, const std::vector<double>& v)
-      {
-      const size_t n = p.on.size();
-      const int m = p.gridSize();
-      const double t0 = p.gridStart();
-      const std::vector<double> c = p.centres();
-      std::vector<double> g(size_t(std::max(0, m)));
-      for (int i = 0; i < m; ++i)
-            g[size_t(i)] = glideAt(c, v, t0 + i * STEP_MS / 1000.0);
-      g = smooth(g);
-      std::vector<double> out(n, 0.0);
-      for (size_t k = 0; k < n; ++k) {
-            double sum = 0;
-            int cnt = 0;
-            for (int i = 0; i < m; ++i) {
-                  const double t = t0 + i * STEP_MS / 1000.0;
-                  if (t >= p.window[k] && t < p.window[k] + WINDOW_MS / 1000.0) {
-                        sum += g[size_t(i)];
-                        ++cnt;
-                        }
-                  }
-            out[k] = cnt ? sum / cnt : 0.0;
-            }
-      return out;
       }
 
 //---------------------------------------------------------

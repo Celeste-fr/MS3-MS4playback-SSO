@@ -233,6 +233,7 @@ struct PassageRec {
       EvenLevels::Stats stats[3];
       bool measured[3] { false, false, false };
       double fitRms[3] { 0, 0, 0 }, envRms[3] { 0, 0, 0 };
+      double rms[3] { 0, 0, 0 };        // each round's envelope off its slurs' medians (EvenLevels::envelopeRms)
       double gain { 1.0 };              // round 1: measured / predicted change
       int chosen { 0 };
       };
@@ -549,6 +550,7 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                         PassageRec& p = passages[k];
                         EvenMeasure::measure(env, starts, from, p.fit, &p.levels[round], &p.env[round]);
                         p.stats[round] = EvenLevels::slurStats(p.fit.slur, p.levels[round]);
+                        p.rms[round] = EvenLevels::envelopeRms(p.fit, p.env[round]);
                         p.measured[round] = true;
                         }
                   }
@@ -567,14 +569,20 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
             for (const PassageRec& p : passages)
                   if (p.measured[round])
                         r.push_back(p.stats[round].rangeMedian);
-            return QString("median slur range over passages %1 dB").arg(median(r), 0, 'f', 2);
+            std::vector<double> e;
+            for (const PassageRec& p : passages)
+                  if (p.measured[round])
+                        e.push_back(p.rms[round]);
+            return QString("median slur range over passages %1 dB, envelope off its slurs' medians %2 dB")
+                   .arg(median(r), 0, 'f', 2).arg(median(e), 0, 'f', 2);
             };
 
       measure(events0, 0, {});
       for (PassageRec& p : passages) {
-            p.values[1] = EvenLevels::fitGlide(p.fit, p.env[0], p.levels[0], &p.fitRms[0], &p.envRms[0]);
+            // (the fit / CC11's measured factor, as the background measurer's)
+            p.values[1] = EvenLevels::fitGlide(p.fit, p.env[0], &p.fitRms[0], &p.envRms[0]);
             for (double& v : p.values[1])
-                  v = EvenLevels::clampDb(v);
+                  v = EvenLevels::clampDb(v / EvenLevels::CC11_FACTOR);
             }
       log(QString("%1: round 0 (uncorrected): %2").arg(name, rangeText(0)));
 
@@ -597,38 +605,18 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
       measure(events1, 1, {});
       log(QString("%1: round 1: %2").arg(name, rangeText(1)));
 
-      // round 2 where the residual stays above the floor
+      // round 2: fitted again from round 1's measurement, scaled by round 1's measured / predicted change of the envelope
       std::set<size_t> again;
       for (size_t k = 0; k < passages.size(); ++k) {
             PassageRec& p = passages[k];
-            // the measured change against the predicted (notes but the first and last; about their means: a change
-            // of the whole passage, TrackDelays::Delays::evenAll's, is not the corrections')
-            const std::vector<double> pred = EvenLevels::windowChanges(p.fit, p.values[1]);
-            double mx = 0, my = 0;
-            size_t cnt = 0;
-            for (size_t j = 1; j + 1 < p.notes.size(); ++j, ++cnt) {
-                  mx += pred[j];
-                  my += p.levels[1][j] - p.levels[0][j];
-                  }
-            if (cnt) {
-                  mx /= double(cnt);
-                  my /= double(cnt);
-                  }
-            double sxy = 0, sxx = 0;
-            for (size_t j = 1; j + 1 < p.notes.size(); ++j) {
-                  const double x = pred[j] - mx;
-                  const double y = p.levels[1][j] - p.levels[0][j] - my;
-                  sxy += x * y;
-                  sxx += x * x;
-                  }
-            p.gain = sxx > 1e-9 && sxy > 0 ? sxy / sxx : 1.0;
-            if (p.stats[1].residual > EvenLevels::FLOOR_DB) {
-                  const std::vector<double> du = EvenLevels::fitGlide(p.fit, p.env[1], p.levels[1], &p.fitRms[1], &p.envRms[1]);
-                  p.values[2] = p.values[1];
-                  for (size_t j = 0; j < du.size(); ++j)
-                        p.values[2][j] = EvenLevels::clampDb(p.values[1][j] + du[j] / p.gain);
-                  again.insert(k);
-                  }
+            if (!p.measured[1])
+                  continue;
+            p.gain = EvenLevels::envelopeGain(p.fit, p.env[0], p.env[1], p.values[1]);
+            const std::vector<double> du = EvenLevels::fitGlide(p.fit, p.env[1], &p.fitRms[1], &p.envRms[1]);
+            p.values[2] = p.values[1];
+            for (size_t j = 0; j < du.size(); ++j)
+                  p.values[2][j] = EvenLevels::clampDb(p.values[1][j] + du[j] / p.gain);
+            again.insert(k);
             }
       if (!again.empty()) {
             for (size_t k = 0; k < passages.size(); ++k)
@@ -638,14 +626,13 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
             EventMap events2;
             renderEvents(score.get(), true, &events2, nullptr);
             measure(events2, 2, again);
-            log(QString("%1: round 2 (%2 passage(s) above the %3 dB floor): %4").arg(name).arg(again.size())
-                .arg(EvenLevels::FLOOR_DB).arg(rangeText(2)));
+            log(QString("%1: round 2 (%2 passage(s)): %3").arg(name).arg(again.size()).arg(rangeText(2)));
             }
       // the best round per passage
       for (PassageRec& p : passages) {
             p.chosen = 0;
             for (int r = 1; r < 3; ++r)
-                  if (p.measured[r] && p.stats[r].rangeMedian < p.stats[p.chosen].rangeMedian - 1e-9)
+                  if (p.measured[r] && p.rms[r] < p.rms[p.chosen] - 1e-9)
                         p.chosen = r;
             for (size_t j = 0; j < p.notes.size(); ++j) {
                   Note* note = const_cast<Note*>(p.notes[j].info.note);
@@ -667,11 +654,12 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
             o["bars"] = QString("%1-%2").arg(m0 ? m0->no() + 1 : 0).arg(m1 ? m1->no() + 1 : 0);
             o["chosen"] = p.chosen;
             o["gain"] = std::round(p.gain * 1000) / 1000;
-            QJsonArray rm, res, rngs, lv, vals, fit;
+            QJsonArray rm, res, rngs, lv, vals, fit, er;
             for (int r = 0; r < 3; ++r) {
                   if (!p.measured[r])
                         continue;
                   rm.append(std::round(p.stats[r].rangeMedian * 100) / 100);
+                  er.append(std::round(p.rms[r] * 100) / 100);
                   res.append(std::round(p.stats[r].residual * 100) / 100);
                   rngs.append(rounded(p.stats[r].ranges));
                   lv.append(rounded(p.levels[r]));
@@ -681,6 +669,7 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                         vals.append(rounded(p.values[r]));
             fit.append(QJsonObject { { "envRms", std::round(p.envRms[0] * 100) / 100 }, { "fitRms", std::round(p.fitRms[0] * 100) / 100 } });
             o["rangeMedian"] = rm;
+            o["envelopeRms"] = er;
             o["residual"] = res;
             o["slurRanges"] = rngs;
             o["levels"] = lv;
@@ -715,12 +704,13 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
       top["created"] = QDateTime::currentDateTime().toString(Qt::ISODate);
       top["museScore"] = QString(VERSION) + " " + QString(MUSESCORE_REVISION);
       top["library"] = library->name;
-      top["method"] = QString("evenlevels.h: perceived envelope over %1 ms from each note's window start, median of %2 passes; "
-                              "glide fitted per passage (ridge %3, smoothing %4 ms, grid %5 ms); round 2 where the residual "
-                              "> %6 dB, scaled by the measured / predicted change of round 1; per passage the round with the "
-                              "smallest median slur range kept (0: none)")
-                      .arg(EvenLevels::WINDOW_MS).arg(EvenLevels::PASSES).arg(EvenLevels::RIDGE).arg(EvenLevels::SMOOTH_MS)
-                      .arg(EvenLevels::STEP_MS).arg(EvenLevels::FLOOR_DB);
+      top["method"] = QString("evenlevels.h: perceived envelope, median of %1 passes; glide nodes halfway from each note-on to "
+                              "the next (nodeTime), fitted per passage to each slur's median of the envelope (ridge %2, "
+                              "smoothing %3 ms, lag %4 ms, grid %5 ms); round 1 the fit / %6, round 2 + the fit / round 1's "
+                              "measured gain (envelopeGain); per passage the round with the smallest envelope rms kept (0: "
+                              "none); levels: each note's mean over %7 ms from its window start (statistics only)")
+                      .arg(EvenLevels::PASSES).arg(EvenLevels::RIDGE).arg(EvenLevels::SMOOTH_MS).arg(EvenLevels::LAG_MS)
+                      .arg(EvenLevels::STEP_MS).arg(EvenLevels::CC11_FACTOR).arg(EvenLevels::WINDOW_MS);
       top["changedContexts"] = changedContexts;
       top["soundWait"] = waited;
       top["preflight"] = RenderPreflight::json();

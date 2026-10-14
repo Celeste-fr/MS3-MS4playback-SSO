@@ -1244,19 +1244,35 @@ void TestPerformanceTechnique::evenLevels()
             p.window.push_back(0.136 * k + 0.22);
             p.slur.push_back(0);
             }
-      // an envelope with notes 3 and 4 3 dB up (as Whence's Celli): the fit's rms off target well under the swell's
-      std::vector<double> level { 0, 0, 0, 3, 3, 0, 0, 0 };
+      // the nodes: halfway from each note-on to the next (the last: to its note-off; a window's last: to Passage::lastNext)
+      QCOMPARE(EvenLevels::nodeTime(1.0, 1.5, 1.2), 1.1);
+      QCOMPARE(EvenLevels::nodeTime(1.0, 1.5, -1.0), 1.25);
+      QCOMPARE(EvenLevels::nodeTime(1.0, -1.0, -1.0), 1.0);
+      std::vector<double> c = p.centres();
+      QVERIFY(std::fabs(c[2] - (0.272 + 0.068)) < 1e-9);
+      QVERIFY(std::fabs(c[7] - (0.952 + 0.08)) < 1e-9);
+      p.lastNext = 0.952 + 0.2;
+      QVERIFY(std::fabs(p.centres()[7] - (0.952 + 0.1)) < 1e-9);
+      p.lastNext = -1.0;
+      // an envelope with notes 3 and 4 3 dB up (as Whence's Celli): the fit's rms off target well under the swell's,
+      // the two notes' values lower
       std::vector<double> env(size_t(p.gridSize()), 0.0);
       for (int i = 0; i < p.gridSize(); ++i) {
             const double t = p.gridStart() + i * EvenLevels::STEP_MS / 1000.0;
-            env[size_t(i)] = (t >= p.window[3] && t < p.window[5]) ? 3.0 : 0.0;
+            env[size_t(i)] = (t >= p.on[3] && t < p.on[5]) ? 3.0 : 0.0;
             }
       double fitRms = 0, envRms = 0;
-      const std::vector<double> v = EvenLevels::fitGlide(p, env, level, &fitRms, &envRms);
+      const std::vector<double> v = EvenLevels::fitGlide(p, env, &fitRms, &envRms);
       QVERIFY2(envRms > 1.0 && fitRms < 0.6 * envRms, qPrintable(QString("%1 -> %2").arg(envRms).arg(fitRms)));
-      QVERIFY(v[3] < -1.0 && v[4] < -1.0 && std::fabs(v[1]) < 1.0);
-      const std::vector<double> heard = EvenLevels::windowChanges(p, v);
-      QVERIFY(heard[3] < -1.0 && heard[4] < -1.0);
+      QVERIFY2(v[3] < -1.0 && v[4] < -1.0 && std::fabs(v[1]) < 1.0,
+               qPrintable(QString("%1 %2 %3").arg(v[1]).arg(v[3]).arg(v[4])));
+      QVERIFY(std::fabs(EvenLevels::envelopeRms(p, env) - envRms) < 1e-9);
+      // the measured gain: no change measured, none told (1); the envelope as flat as the fit says: closer
+      QCOMPARE(EvenLevels::envelopeGain(p, env, env, v), 1.0);
+      std::vector<double> flat(env.size(), 0.0);
+      QVERIFY(EvenLevels::envelopeRms(p, flat) < envRms);
+      const double g = EvenLevels::envelopeGain(p, env, flat, v);
+      QVERIFY2(g >= 0.5 && g < 3.0, qPrintable(QString::number(g)));
       }
 
 QTEST_MAIN(TestPerformanceTechnique)

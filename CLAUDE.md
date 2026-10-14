@@ -160,8 +160,10 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - **Even levels** (`libmscore/evenlevels.h`, `mscore/evenlevelsjob.h`; the owner, 2026-10-12, the blind test's Glide;
   **`[levels] evenLevels` 1 in Recommended and by default, 0 in Library default** (the owner, 2026-10-13)): SSO's Performance
   legato swells inside slurs by context (no table predicts it), so *Tools › Even Out Levels…* / `--even-levels <score>`
-  renders the slurred passages through the hosted plug-ins (3 passes), measures each note's perceived level in its window
-  and fits a per-note CC11 glide (linear in dB between window middles, every 5 ms), once more above the 1 dB floor; each
+  renders the slurred passages through the hosted plug-ins (3 passes), measures the perceived envelope and fits a per-note
+  CC11 glide flattening it to each slur's median (linear in dB between nodes halfway from each note-on to the next,
+  `EvenLevels::nodeTime`, every 5 ms; the owner, 2026-10-14: S, `even_180_check.py`, before the nodes sat in the next
+  note), / 1.28, then once more, the round whose envelope lies closest to its slurs' medians kept; each
   note keeps its value and a hash of its rendered context (`Note::evenLevel` / `evenContext`, metaTag `evenLevels`): a
   changed context is stale (Inspector › Note › Even level), not played. `MidiRenderer::libraryEvenLevels` glides on top of
   the CC11 schedule (the patch's notes lower by its largest value, never cut at 127; its volume adds what fits under +6 dB,
@@ -175,7 +177,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   hosted, after an edit (debounced, `MuseScore::endCmd`) and at score open the score is rendered once; notes without a
   current value take the user's cache first (`<setups folder>/even cache.json`, keyed by the contexts of notes j-3 … j+3:
   undo / redo restore without rendering), the rest are measured in windows (note +-3, run-in 2 / Basses 4, run-out 2, 0.5 s
-  lead; rounds 1 / 2 = fit / 1.28, round 2 only above the 1 dB floor; each pass a transport restart; 2 passes, a 3rd only
+  lead; rounds 1 / 2 = fit / 1.28, always both; each pass a transport restart; 2 passes, a 3rd only
   when they differ by more than the patch's `earlyStopFor`; a gap of 1 s / Basses 1.5 s after the last note-off,
   `gapFor`, 3 s and always 3 passes for patches not measured: `sso_even_gap_check.json`; blocks of 4096) on plug-in
   instances of MuseScore's own (one per part and patch, a worker thread each, offline, paused while playing; each renders
