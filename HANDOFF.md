@@ -310,6 +310,12 @@ wobbly sound", picked out every time): N wrong in 6 of 6, **dropped**. C fine in
 twice, 136L and 250R once each (fresh renders each test: SSO's per-play randomness may account for the single failures).
 The swell measure ranked N best: it does not hear N's 40 ms wobble, so it can't stand in for the owner's ear. Open: the
 180 ms repeating figure, where C still swells (notes 1 and 3).
+**180 ms figure** (branch `even-180`, `even_180_check.py`, `sso_even_180_check.json`; VM, kthost + Kontakt 8 + SSO, 6
+takes): consistent, not randomness (C's largest swells notes 1 and 3 in 6 of 6). Note 3: SSO's own E3->Eb3 transition
+(dip ~66 ms, rise 4-4.5 dB by ~125 ms, in U too), beyond one value per note. Note 1: C's doing: each node sits 270-310
+ms after its note-on, inside the next note, so C ramps up through note 1. Candidate S: each node at note-on + IOI/2;
+swell note 1 2.67 -> 1.61, note 3 4.20 -> 3.89, note 4 1.17 -> 1.71 dB; 250R p75 4.01 -> 3.29, 250L 2.48 -> 2.77
+(worse). Blind test C vs S (db `evenfig1`): 3 pairs 180R (one a hidden repeat with letters swapped), 2 pairs 250R.
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
