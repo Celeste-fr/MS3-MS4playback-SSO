@@ -361,12 +361,14 @@ the design.
   pairs where the old nodes were wrong in 2 of 2; at 180 ms both swell on the figure's note 3, SSO's own E3 -> Eb3
   transition (`sso_note3_check.json`), which no value per note reaches. Values measured with the old nodes are stale
   (the context's hash changed) and measured again.
-- **Slow slurs are skipped** (the owner, 2026-10-13, blind test of real SSO: slow slurred passages sound the same uncorrected and
-  corrected; 500 ms and 1 s heard, 136-500 ms untested; HANDOFF.md > Slow slurs need no correction): a passage whose
-  every inter-onset interval between consecutive joined notes (seconds at the score's tempo, as rendered) is >= 500 ms
-  (`EvenLevels::SLOW_IOI_S`, `slowPassage`) is not measured by the job (its log counts them) nor in the background: no
-  render, no Work, no value, no wait for it, and the notes play as SSO plays them. One interval under 500 ms (499 ms
-  counts) measures the whole passage in the job, the notes around the edit in the background. Values already on a
+- **Slow slurs are skipped** (the owner's blind tests of real SSO: 2026-10-13, slow slurred passages sound the same
+  uncorrected and corrected at 500 ms and 1 s; the tempo-line test, 350 and 500 ms, figure and line: no difference,
+  neither wrong; the limit lowered from 500 to 350 ms by the owner, 2026-10-14, once the mid-note correction was fine at
+  250 ms; HANDOFF.md > Slow slurs need no correction): a passage whose every inter-onset interval between consecutive
+  joined notes (seconds at the score's tempo, as rendered) is >= 350 ms (`EvenLevels::SLOW_IOI_S`, `slowPassage`) is
+  not measured by the job (its log counts them) nor in the background: no render, no Work, no value, no wait for it,
+  and the notes play as SSO plays them. One interval under 350 ms (349 ms counts) measures the whole passage in the
+  job, the notes around the edit in the background. Values already on a
   slow passage stay and play (harmless). `tst_soundlibrary::evenAutoSlow`.
 - **Kept on the note** (Inspector › Note › Even level, editable, with its state): the glide's value at its node (dB) and
   what it was measured against: `"<patch>|<hash>"` of its rendered context (patch, pitch and tuning,

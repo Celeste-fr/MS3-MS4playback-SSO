@@ -170,7 +170,8 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   the rest lowers every library patch alike: `TrackDelays::evenDb` / `evenAll`); Live's clips and the plain set carry it.
   **Slow slurs are skipped** (the owner, 2026-10-13, blind test: slow slurs sound the same uncorrected and corrected; HANDOFF.md
   > Slow slurs need no correction): a passage whose every interval between joined notes is >= `EvenLevels::SLOW_IOI_S`
-  (500 ms; `slowPassage`) is neither measured by the job nor in the background: no render, no value, no wait.
+  (350 ms since 2026-10-14, was 500: the owner heard 350 / 500 ms the same corrected or not; `slowPassage`) is neither
+  measured by the job nor in the background: no render, no value, no wait.
   **Measured in the background near edits** (`libmscore/evenauto.h` the Session, `audio/vst3/evenmeasure.h` the shared
   render + measurement, `mscore/evenautomeasurer.h` the threads, triggers and Play's wait; the owner, 2026-10-13: a note
   plays its measured value or playback waits for it, never a predicted one): whenever evenLevels plays and the library is

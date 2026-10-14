@@ -8053,11 +8053,11 @@ static double dB(double a, double b)
 
 //---------------------------------------------------------
 //   evenAutoSlow
-//    slow slurs need no correction (the owner's blind test, 2026-10-13; EvenLevels::SLOW_IOI_S): a passage whose every
-//    interval between joined notes is >= 500 ms is not measured (no Work, no render, no wait, no value); 499 ms, or one
-//    fast interval inside, is. even-slow.musicxml: bar 1 at 120 bpm (500 ms), bar 2 at 120.5 (499 ms), bar 3 with
-//    two eighths (250 ms); even-slow-all.musicxml: bar 1 only. EvenLevelsJob uses the same slowPassage (it needs a
-//    plug-in; no test here)
+//    slow slurs need no correction (the owner's blind tests, 2026-10-13 / 14; EvenLevels::SLOW_IOI_S): a passage whose
+//    every interval between joined notes is >= 350 ms is not measured (no Work, no render, no wait, no value); 349 ms,
+//    or one fast interval inside, is. even-slow.musicxml: bar 1 at 171.428571 bpm (350 ms), bar 2 at 172 (348.8 ms),
+//    bar 3 at 120 with two eighths (250 ms); even-slow-all.musicxml: bar 1 only, at 120 (500 ms). EvenLevelsJob uses
+//    the same slowPassage (it needs a plug-in; no test here)
 //---------------------------------------------------------
 
 void TestSoundLibrary::evenAutoSlow()
@@ -8069,7 +8069,7 @@ void TestSoundLibrary::evenAutoSlow()
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" },
                                       { "levels/evenLevels", "1" } });
-      QCOMPARE(EvenLevels::SLOW_IOI_S, 0.5);
+      QCOMPARE(EvenLevels::SLOW_IOI_S, 0.35);
       {
             // the rule on intervals
             auto at = [](std::initializer_list<double> ons) {
@@ -8081,11 +8081,11 @@ void TestSoundLibrary::evenAutoSlow()
                         }
                   return v;
                   };
-            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.5, 1.0 }), 0, 3));
-            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.4999999, 1.0 }), 0, 3));      // (tick rounding)
-            QVERIFY(!EvenLevels::slowPassage(at({ 0, 0.499, 1.0 }), 0, 3));
-            QVERIFY(!EvenLevels::slowPassage(at({ 0, 0.5, 1.0, 1.25 }), 0, 4));
-            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.1, 0.6, 1.1 }), 1, 4));       // (a range inside)
+            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.35, 0.7 }), 0, 3));
+            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.3499999, 0.7 }), 0, 3));      // (tick rounding)
+            QVERIFY(!EvenLevels::slowPassage(at({ 0, 0.349, 0.7 }), 0, 3));
+            QVERIFY(!EvenLevels::slowPassage(at({ 0, 0.35, 0.7, 0.95 }), 0, 4));
+            QVERIFY(EvenLevels::slowPassage(at({ 0, 0.1, 0.45, 0.8 }), 1, 4));      // (a range inside)
             QVERIFY(!EvenLevels::slowPassage(at({ 0 }), 0, 1));
             }
       MasterScore* score = readScore(DIR + "even-slow.musicxml");

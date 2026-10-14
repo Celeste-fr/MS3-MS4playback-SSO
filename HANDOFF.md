@@ -37,11 +37,11 @@ a section there when you need the background of that topic. Commit messages desc
   `realrange1`) A/Bs `[levels] realRange` on a ppp -> fff ladder per section; read the verdicts (ArtifactData) and put
   realRange into Recommended only for what the owner approves. A score with written dynamics is the next test (Whence has
   almost none).
-- **Even levels, to hear** (2026-10-13, branch `even-levels`, build https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38387460368):
-  the slur swell evened out as the owner chose in the blind test (Glide), built and **off everywhere** (`[levels]
-  evenLevels` 0, Recommended too). To hear it: open a score, *Tools › Even Out Levels…* (Kontakt + SSO measure it, ~1
-  min for Whence 12-TET's Celli), then Mixer › Advanced Options… › Playback adjustments › Even levels 1 (or the score's
-  playbackSettings). Ask: on in Recommended? See "Even levels" below.
+- **Even levels in Whence** (2026-10-14, the build after 430 from integrate-1012): Recommended now measures in the
+  background (no Tools step), with the mid-note fix and the 350 ms skip. The owner listens to Whence's slurred string
+  passages with Recommended, then with Even levels 0 (Mixer › Advanced Options… › Playback adjustments) for comparison,
+  in the music rather than test passages (the 180 ms note-3 swell is SSO's tone and borderline: HANDOFF › Where the
+  correction works). Ask: how it sounds, how long the waits at Play are, any swell left that matters.
 - **Try in the next build:** the automation headers for every part (fold at will; `( + | All )`, round Draw Mode button,
   Grid menu), the bar ruler (View > Bar Ruler), Update Live Set (Mixer > Advanced Options > Ableton Live), the MuseScore
   Link device fix (copy the new device from the build into the User Library; Live no longer stalls with 28 copies, phrase-
@@ -285,6 +285,9 @@ the short-window correction / a whole-note correction, loudness-matched): the ow
 passage "All the same". So the background measurer and the job skip slurred passages whose every inter-onset interval
 is >= 500 ms (heard at 500 ms and 1 s; 136-500 ms untested by ear: still measured); a faster note inside a slow slur
 keeps its window measured.
+**Lowered to 350 ms** (the owner, 2026-10-14, "sure"): the tempo-line test heard 350 and 500 ms the same corrected or not,
+neither wrong, figure and line; the owner had held the limit until the correction worked at 250 ms (the mid-note fix:
+fine 4 / 4). `EvenLevels::SLOW_IOI_S` 0.35; `even-slow.musicxml` bars at 350 / 348.8 / 250 ms.
 
 ## Where the correction works (the owner's blind test, 2026-10-13, db `tempoline1`)
 
