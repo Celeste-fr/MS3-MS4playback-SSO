@@ -68,6 +68,35 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   velocity), loudness then entirely CC11.
 - Other sections than strings (woodwind / brass Performance transitions): later.
 
+### Stage B measured (branch `stage-b-brightness`, 2026-10-14; measurement and plan only, no MuseScore change)
+
+Data: `tools/soundlibraries/real_brightness.json` (TU Berlin's recordings themselves, not the CSV: its centroid
+columns are Timbre Toolbox values in normalized frequency that the recordings don't reproduce, and they have ff
+duller than pp at most pitches, the pp noise floor; commit 085fbac7fe has the evidence), `sso_brightness.json`
+(VM, Kontakt 8 + SSO in kthost, library defaults: Long, Performance legato, Spiccato, Pizzicato, CC1 16-127, every
+3 semitones, both round robins; its `plan` from `brightness_plan.py`). Measures (`brightness.py`): DIN 45692 sharpness
+at 60 dB SPL (MoSQITo; within 2.1 % of the standard's 41 reference signals, `test_brightness.py`), harmonic centroids,
+loudness. Only changes are compared (TU: one player, anechoic, 32 mics; SSO: a section in a hall).
+
+What it shows (sharpness, CC1 127 / 16 against the real ff / pp; the share of the real change SSO covers):
+- **Long: Violins 1 / 2, Violas, Celli 1.00-1.02 against 1.22-1.30 (2-10 %)**: SSO's CC1 changes their level
+  (9-12 dB) but hardly their tone (Violins 1 A4: +2-4 dB above 2 kHz relative, the real violin +5 / +11 dB at 2-4 / 4-8
+  kHz). Basses 1.23 / 1.37 (58 %).
+- Performance legato 14-57 % (upper strings least); Spiccato 21-60 % (Celli most); Pizzicato not monotonic in velocity.
+- So **no CC1 mapping can give the real tone change** for the upper strings: rule D read in log brightness (mp = CC1
+  64) asks for more than CC1 16 / 127 give, and the mapping saturates (ppp-p 16, f-fff 127). Usable only for the
+  Basses (Long 16 18 27 64 87 103 127 127; Performance 16 31 45 64 109 127 127 127) and Celli spiccato
+  (16 16 18 64 97 108 118 127). Stage A's CC11 would then take SSO's level at the new CC1 (`longDbAtCC1`): with
+  realRange the loudness stays right whatever CC1 does.
+- Still unknown: whether the owner hears SSO's CC1 as a tone change at all (blind test below); whether rule D's
+  equal steps hold for brightness (only pp / ff measured); the mic mix (Close mics brighter) as another tone control,
+  unmeasured; one player per instrument, the pp noise floor (bins under 3 dB over the noise dropped).
+- **Blind test** (clips not published: `no-measure-bats/nmb-lvlpage/audio/stageb/stageb_01-24.wav`, key
+  `~/.claude/jobs/ed934dfd/tmp/stageb_key.json`, `.sbwork/mkabx.py` on the branch's worktree): 24 pairs at -23 LUFS,
+  "which is brighter?": per section (Violins 1 A4, Violas D4, Celli D3, Basses D2) 4 SSO pairs CC1 16 / 127 and 2 real
+  pp / ff (control). If the owner picks SSO's 127 at chance while the real ff is found, CC1 can't carry the tone and
+  stage B needs another means (a tilt EQ that also reaches Live, or the mic mix), which is the owner's decision.
+
 ### Stage A built: `[levels] realRange` (branch `real-range`, 2026-10-12; 0 everywhere until the owner has heard it)
 
 Design: contextlevel.h › Real range, docs/PLAYBACK_SETTINGS.md › Real range. Each string note plays by CC11
