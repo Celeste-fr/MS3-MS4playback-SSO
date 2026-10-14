@@ -82,7 +82,12 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
 - **Stage B, tone:** after A ("important for realism"): CC1 / short velocity chosen so the tone matches the dynamic
   (brightness change pp -> ff of the real instrument, TU Berlin spectral centroids, against SSO's measured per CC1 /
   velocity), loudness then entirely CC11.
-- Other sections than strings (woodwind / brass Performance transitions): later.
+- Other sections than strings (woodwind / brass Performance transitions): later. **Woodwinds and brass started
+  2026-10-14** (the owner: "research and measure winds and brass"; research: TU Berlin covers every standard modern wind
+  and brass instrument at pp / ff, spans flute ~6 … clarinet ~31 dB; SSO has one measured CC1 pitch per wind patch).
+- **Phrasing and vibrato: not automatic** (the owner, 2026-10-14: "they are something I should manually edit in the
+  automation curves anyway"; research done: KTH phrase arch ~1 dB, near threshold; vibrato data only for register).
+  Don't propose automatic phrasing or vibrato; the automation lanes are the tool.
 
 ### Stage A built: `[levels] realRange` (branch `real-range`, 2026-10-12; 0 everywhere until the owner has heard it)
 
