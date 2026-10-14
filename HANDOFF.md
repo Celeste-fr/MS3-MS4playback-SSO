@@ -341,6 +341,14 @@ per note (storage would change). Real renders, swell p75 / upper-band FS: 180R S
 The owner (2026-10-14): 180R both wrong, "both swell at 3" (the repeat agrees): R's 40% smaller loudness rise is not
 heard; 250L both fine, R preferred; 250R both fine, S preferred. So R isn't worth its storage change; S is fine at 250
 ms in 4 of 4 pairs. Note 3's swell may be timbre (the sample brightening), which no CC11 curve removes: not measured.
+**Measured: both, and what's left is tone** (`note3_tone_check.py`, `sso_note3_tone_check.json`, cb81baf1ea on
+`note3-tone`; the VM's note-3 renders + 6 heard mp3s, MOSQITO 1.2.1, Bark bands, Boersma HNR). U note 3 dip -> peak (75 ->
+134 ms): +5.0 phon, lowest band (< ~400 Hz) +12.1 dB, middle +2.0-4.6, top +0.3; centroid -45% (darker), HNR +7.1 dB
+(bow noise -> pitched), f0 still sliding; notes 1 / 2 tone spread 1.96 / 2.24 dB against 4.17. Heard clips, band-weighted
+level change S / C / R 6.52 / 5.77 / 1.91 dB, tone spread 4.40 / 4.20 / 3.67, centroid -46 / -45 / -44%: R removed the level
+part; the tone part (lowest band +8 dB against the rest, noise turning to tone) is what the owner hears and CC11 (a broadband
+gain) can't reach. It follows the sample (same step as note 1 or in a line alike; into F3 less, C3 hardly). **Closed on the
+levels side**: the 180 ms note 3 is SSO's sample.
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
