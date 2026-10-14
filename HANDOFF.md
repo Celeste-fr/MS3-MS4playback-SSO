@@ -338,6 +338,9 @@ at the strength (0.25-1 sweep) minimising fluctuation strength summed over bands
 per note (storage would change). Real renders, swell p75 / upper-band FS: 180R S 2.45 / .227, R 1.65 / .210 (note 3
 3.07 -> 1.84); 250R S 2.54 / .177, R 2.08 / .179; 250L S 2.09 / .194, R 1.13 / .209. Blind S vs R (db `evenrule1`):
 180R, 250L, 250R, 180R repeated with letters swapped.
+The owner (2026-10-14): 180R both wrong, "both swell at 3" (the repeat agrees): R's 40% smaller loudness rise is not
+heard; 250L both fine, R preferred; 250R both fine, S preferred. So R isn't worth its storage change; S is fine at 250
+ms in 4 of 4 pairs. Note 3's swell may be timbre (the sample brightening), which no CC11 curve removes: not measured.
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
