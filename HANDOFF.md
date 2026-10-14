@@ -70,6 +70,11 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   "maybe it IS only 2-10%, but side by side it's obv": audible is not large; the measured share stands. Test flaws: half
   the 24 clips repeat (05=06, 09=11, 13=14, 15=16, 17=18, 19=23, 20=21, 22=24). Open: a reference the ear can compare
   (a section in a hall at pp / ff), then CC1 by tone for the upper strings plus another control (tilt EQ?) for the rest.
+  Option 1 (CC1 by tone) is today's mapping already (16 … 127). **Option 2, tilt EQ, dropped** (branch `stage-b-tilt`
+  fa2e4a931b, `tilt_eq.py`, `sso_tilt_eq.json`: per band real pp -> ff minus SSO CC1 16 -> 127, applied offline at 0 /
+  0.5 / 1 to a ppp-fff-ppp scale on real SSO; db `tilt1`): the owner, "all the same" in all four sections. Found on the
+  way: in that phrase **fff is quieter than ff** in every section and the way down is much quieter than the way up at the
+  same marking (Violins 1 ff +14.7 up, +6.0 down; investigation running).
 - **Stage B, tone:** after A ("important for realism"): CC1 / short velocity chosen so the tone matches the dynamic
   (brightness change pp -> ff of the real instrument, TU Berlin spectral centroids, against SSO's measured per CC1 /
   velocity), loudness then entirely CC11.
