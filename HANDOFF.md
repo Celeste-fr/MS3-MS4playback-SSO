@@ -72,9 +72,13 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   (a section in a hall at pp / ff), then CC1 by tone for the upper strings plus another control (tilt EQ?) for the rest.
   Option 1 (CC1 by tone) is today's mapping already (16 … 127). **Option 2, tilt EQ, dropped** (branch `stage-b-tilt`
   fa2e4a931b, `tilt_eq.py`, `sso_tilt_eq.json`: per band real pp -> ff minus SSO CC1 16 -> 127, applied offline at 0 /
-  0.5 / 1 to a ppp-fff-ppp scale on real SSO; db `tilt1`): the owner, "all the same" in all four sections. Found on the
-  way: in that phrase **fff is quieter than ff** in every section and the way down is much quieter than the way up at the
-  same marking (Violins 1 ff +14.7 up, +6.0 down; investigation running).
+  0.5 / 1 to a ppp-fff-ppp scale on real SSO; db `tilt1`): the owner, "all the same" in all four sections. The owner's
+  "fff quieter than ff" was **a timing error of mine, not playback**: tilt-key.json's `start` 1.2 s is what was cut from
+  the render, the first note-on is at 0.245 s; the page's jumps and my per-note measurement ran 0.955 s late (fixed). At
+  the true starts fff is loudest and down matches up within ~2 dB (Violins 1 ff +13.1, fff +17.9, ff +12.9 dB vs mp);
+  the Recommended events are as intended. Left: uneven steps by pitch (Celli p +1.2 over mp, Violas mf ~ f, Basses f
+  -2.0 under mf: SSO's per-pitch dips, Stage A open item (5)); every library note-on carries a same-tick CC11 X, 127, Y
+  (e.g. 14, 127, 15): inaudible hosted, may blip on MIDI out / in Live: not investigated.
 - **Stage B, tone:** after A ("important for realism"): CC1 / short velocity chosen so the tone matches the dynamic
   (brightness change pp -> ff of the real instrument, TU Berlin spectral centroids, against SSO's measured per CC1 /
   velocity), loudness then entirely CC11.
