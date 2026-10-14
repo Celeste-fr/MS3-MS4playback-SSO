@@ -122,6 +122,13 @@ mix plays ~5-6 dB quieter at mp (the violins' fff needs +18 dB over mp; Live's V
 but louder playback means the Mixer's master; (4) each edit re-renders the score once to find R while realRange is on
 (a big score may lag after an edit); (5) Celli / Basses: the SSO side is measured every 3 semitones with ~4 dB round-robin
 spread at soft CC1: a denser or repeated measurement at the parts' common pitches would tighten them; (6) stage B (tone).
+**(5) measured** (2026-10-14, branch `cb-curves` 2a084db5bb, merged): Celli / Basses Long at every semitone, 4 takes (each
+of SSO's two round robins twice; offline takes of one round robin are identical), map `longLevel` regenerated (nothing
+else changed). Between the old 3-semitone points the old curves were off by up to 2.2 dB (Celli) / 7.3 dB (Basses). The
+ladder (check pitches already on the old grid) stays up to 1.4 / 3.9 dB off rule D: the two round robins differ by a
+median 0.6-1.3 dB (Celli) / 1.1-2.5 dB (Basses, max 5.5), and every other note plays the other one. Closing that needs
+the renderer to predict each note's round robin (deterministic since the transport restart; the per-take data is in the
+file): a C++ step, proposed to the owner. Whence unchanged (all its Celli / Basses notes at mp).
 
 ## Before a build goes to the owner (2026-10-09)
 
