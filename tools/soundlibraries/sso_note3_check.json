@@ -1,0 +1,868 @@
+{
+ "_about": "SSO Celli - Performance, uncorrected (CC1 64, CC11 127): note 3 of the 180 ms figure Eb3 E3 Eb3 C#3 against rotations of the figure (E3 -> Eb3 at slur positions 1-4), transpositions, a non-repeating line with E3 -> Eb3 at position 3, other note lengths and 600 ms notes. note3_check.py (its header has the cells). Windows test VM, kthost + Kontakt 8 + SSO, MuseScore's resaved setup (library defaults), a fresh process per take, 44.1 kHz; perceived loudness (tools/playbackverify/loudness.py, ~dB). Per passage, per note group (slur position, interval from the note before, pitch; bowed = velocity 93), over takes x 3 passes, the passage's lead and last notes left out: swell (largest rise of the envelope within [note-on, note-on + IOI), mean, sd), dip and peak times after the note-on (median ms), level (mean over the span, relative to the passage's groups' mean). Measurement only: the renderer does not read this file.",
+ "passages": {
+  "fig180": {
+   "ioi": 180,
+   "slurs": [
+    "C#3",
+    "Eb3 E3 Eb3 C#3",
+    "Eb3 E3 Eb3 C#3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> Eb3 bowed": {
+     "n": 99,
+     "swell": 0.79,
+     "swellSd": 0.52,
+     "dipMs": 137,
+     "peakMs": 172,
+     "meanRel": -0.25
+    },
+    "pos2 +1 -> E3": {
+     "n": 99,
+     "swell": 2.59,
+     "swellSd": 0.79,
+     "dipMs": 42,
+     "peakMs": 132,
+     "meanRel": -1.37
+    },
+    "pos3 -1 -> Eb3": {
+     "n": 99,
+     "swell": 4.49,
+     "swellSd": 0.58,
+     "dipMs": 67,
+     "peakMs": 122,
+     "meanRel": -0.55
+    },
+    "pos4 -2 -> C#3": {
+     "n": 90,
+     "swell": 2.22,
+     "swellSd": 0.49,
+     "dipMs": 2,
+     "peakMs": 94,
+     "meanRel": 2.15
+    }
+   }
+  },
+  "rot1_180": {
+   "ioi": 180,
+   "slurs": [
+    "E3",
+    "Eb3 C#3 Eb3 E3",
+    "Eb3 C#3 Eb3 E3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 -1 -> Eb3 bowed": {
+     "n": 99,
+     "swell": 3.6,
+     "swellSd": 0.76,
+     "dipMs": 93,
+     "peakMs": 178,
+     "meanRel": 0.4
+    },
+    "pos2 -2 -> C#3": {
+     "n": 99,
+     "swell": 1.75,
+     "swellSd": 0.61,
+     "dipMs": 103,
+     "peakMs": 173,
+     "meanRel": 0.73
+    },
+    "pos3 +2 -> Eb3": {
+     "n": 99,
+     "swell": 0.32,
+     "swellSd": 0.22,
+     "dipMs": 138,
+     "peakMs": 178,
+     "meanRel": -0.76
+    },
+    "pos4 +1 -> E3": {
+     "n": 90,
+     "swell": 2.28,
+     "swellSd": 0.43,
+     "dipMs": 3,
+     "peakMs": 133,
+     "meanRel": -0.36
+    }
+   }
+  },
+  "rot2_180": {
+   "ioi": 180,
+   "slurs": [
+    "Eb3",
+    "E3 Eb3 C#3 Eb3",
+    "E3 Eb3 C#3 Eb3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +1 -> E3 bowed": {
+     "n": 99,
+     "swell": 1.67,
+     "swellSd": 0.5,
+     "dipMs": 99,
+     "peakMs": 179,
+     "meanRel": -1.26
+    },
+    "pos2 -1 -> Eb3": {
+     "n": 99,
+     "swell": 3.76,
+     "swellSd": 0.94,
+     "dipMs": 54,
+     "peakMs": 124,
+     "meanRel": 0.55
+    },
+    "pos3 -2 -> C#3": {
+     "n": 99,
+     "swell": 2.08,
+     "swellSd": 0.49,
+     "dipMs": 64,
+     "peakMs": 174,
+     "meanRel": 1.23
+    },
+    "pos4 +2 -> Eb3": {
+     "n": 90,
+     "swell": 0.39,
+     "swellSd": 0.29,
+     "dipMs": 144,
+     "peakMs": 179,
+     "meanRel": -0.53
+    }
+   }
+  },
+  "rot4_180": {
+   "ioi": 180,
+   "slurs": [
+    "Eb3",
+    "C#3 Eb3 E3 Eb3",
+    "C#3 Eb3 E3 Eb3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 -2 -> C#3 bowed": {
+     "n": 99,
+     "swell": 0.85,
+     "swellSd": 0.48,
+     "dipMs": 4,
+     "peakMs": 104,
+     "meanRel": 2.11
+    },
+    "pos2 +2 -> Eb3": {
+     "n": 99,
+     "swell": 1.49,
+     "swellSd": 0.37,
+     "dipMs": 79,
+     "peakMs": 144,
+     "meanRel": -2.08
+    },
+    "pos3 +1 -> E3": {
+     "n": 99,
+     "swell": 2.83,
+     "swellSd": 0.78,
+     "dipMs": 29,
+     "peakMs": 179,
+     "meanRel": -1.21
+    },
+    "pos4 -1 -> Eb3": {
+     "n": 90,
+     "swell": 3.7,
+     "swellSd": 0.84,
+     "dipMs": 69,
+     "peakMs": 119,
+     "meanRel": 1.19
+    }
+   }
+  },
+  "up2_180": {
+   "ioi": 180,
+   "slurs": [
+    "Eb3",
+    "F3 F#3 F3 Eb3",
+    "F3 F#3 F3 Eb3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> F3 bowed": {
+     "n": 99,
+     "swell": 2.13,
+     "swellSd": 0.75,
+     "dipMs": 74,
+     "peakMs": 149,
+     "meanRel": -0.51
+    },
+    "pos2 +1 -> F#3": {
+     "n": 99,
+     "swell": 3.18,
+     "swellSd": 1.05,
+     "dipMs": 64,
+     "peakMs": 159,
+     "meanRel": -0.76
+    },
+    "pos3 -1 -> F3": {
+     "n": 99,
+     "swell": 3.8,
+     "swellSd": 1.23,
+     "dipMs": 69,
+     "peakMs": 144,
+     "meanRel": -0.19
+    },
+    "pos4 -2 -> Eb3": {
+     "n": 90,
+     "swell": 1.93,
+     "swellSd": 0.4,
+     "dipMs": 9,
+     "peakMs": 84,
+     "meanRel": 1.47
+    }
+   }
+  },
+  "dn3_180": {
+   "ioi": 180,
+   "slurs": [
+    "Bb2",
+    "C3 C#3 C3 Bb2",
+    "C3 C#3 C3 Bb2"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> C3 bowed": {
+     "n": 99,
+     "swell": 1.04,
+     "swellSd": 0.34,
+     "dipMs": 57,
+     "peakMs": 147,
+     "meanRel": 0.16
+    },
+    "pos2 +1 -> C#3": {
+     "n": 99,
+     "swell": 1.16,
+     "swellSd": 0.57,
+     "dipMs": 92,
+     "peakMs": 122,
+     "meanRel": -0.11
+    },
+    "pos3 -1 -> C3": {
+     "n": 99,
+     "swell": 2.01,
+     "swellSd": 0.74,
+     "dipMs": 17,
+     "peakMs": 157,
+     "meanRel": -0.09
+    },
+    "pos4 -2 -> Bb2": {
+     "n": 90,
+     "swell": 1.65,
+     "swellSd": 0.46,
+     "dipMs": 72,
+     "peakMs": 132,
+     "meanRel": 0.05
+    }
+   }
+  },
+  "up5_180": {
+   "ioi": 180,
+   "slurs": [
+    "F#3",
+    "Ab3 A3 Ab3 F#3",
+    "Ab3 A3 Ab3 F#3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> Ab3 bowed": {
+     "n": 99,
+     "swell": 4.35,
+     "swellSd": 1.13,
+     "dipMs": 1,
+     "peakMs": 156,
+     "meanRel": 2.22
+    },
+    "pos2 +1 -> A3": {
+     "n": 99,
+     "swell": 0.32,
+     "swellSd": 0.26,
+     "dipMs": 106,
+     "peakMs": 121,
+     "meanRel": 0.72
+    },
+    "pos3 -1 -> Ab3": {
+     "n": 99,
+     "swell": 2.44,
+     "swellSd": 0.51,
+     "dipMs": 86,
+     "peakMs": 141,
+     "meanRel": -1.56
+    },
+    "pos4 -2 -> F#3": {
+     "n": 90,
+     "swell": 1.94,
+     "swellSd": 0.49,
+     "dipMs": 86,
+     "peakMs": 176,
+     "meanRel": -1.38
+    }
+   }
+  },
+  "line180": {
+   "ioi": 180,
+   "slurs": [
+    "D3",
+    "G3 E3 Eb3 F3",
+    "C3 E3 Eb3 D3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +0 -> F3 bowed": {
+     "n": 9,
+     "swell": 1.36,
+     "swellSd": 0.5,
+     "dipMs": 76,
+     "peakMs": 171,
+     "meanRel": -0.94
+    },
+    "pos1 +10 -> Bb3 bowed": {
+     "n": 9,
+     "swell": 1.17,
+     "swellSd": 0.34,
+     "dipMs": 1,
+     "peakMs": 136,
+     "meanRel": 0.41
+    },
+    "pos1 +2 -> A3 bowed": {
+     "n": 9,
+     "swell": 0.23,
+     "swellSd": 0.17,
+     "dipMs": 106,
+     "peakMs": 131,
+     "meanRel": -0.69
+    },
+    "pos1 +3 -> C#3 bowed": {
+     "n": 9,
+     "swell": 2.15,
+     "swellSd": 0.59,
+     "dipMs": 61,
+     "peakMs": 176,
+     "meanRel": -1.07
+    },
+    "pos1 +4 -> F#3 bowed": {
+     "n": 9,
+     "swell": 0.69,
+     "swellSd": 0.34,
+     "dipMs": 16,
+     "peakMs": 36,
+     "meanRel": 0.2
+    },
+    "pos1 +5 -> G3 bowed": {
+     "n": 9,
+     "swell": 1.38,
+     "swellSd": 0.45,
+     "dipMs": 1,
+     "peakMs": 86,
+     "meanRel": 3.24
+    },
+    "pos1 +6 -> G3 bowed": {
+     "n": 9,
+     "swell": 0.93,
+     "swellSd": 0.35,
+     "dipMs": 131,
+     "peakMs": 176,
+     "meanRel": -0.45
+    },
+    "pos1 +7 -> A3 bowed": {
+     "n": 9,
+     "swell": 1.14,
+     "swellSd": 0.21,
+     "dipMs": 101,
+     "peakMs": 141,
+     "meanRel": 0.69
+    },
+    "pos1 -10 -> B2 bowed": {
+     "n": 9,
+     "swell": 0.29,
+     "swellSd": 0.18,
+     "dipMs": 156,
+     "peakMs": 171,
+     "meanRel": -0.31
+    },
+    "pos1 -5 -> C3 bowed": {
+     "n": 9,
+     "swell": 1.17,
+     "swellSd": 0.3,
+     "dipMs": 116,
+     "peakMs": 171,
+     "meanRel": -0.39
+    },
+    "pos1 -5 -> D3 bowed": {
+     "n": 9,
+     "swell": 1.07,
+     "swellSd": 0.45,
+     "dipMs": 101,
+     "peakMs": 151,
+     "meanRel": -0.91
+    },
+    "pos2 +2 -> E3": {
+     "n": 9,
+     "swell": 2.47,
+     "swellSd": 0.59,
+     "dipMs": 91,
+     "peakMs": 171,
+     "meanRel": -1.15
+    },
+    "pos2 +3 -> E3": {
+     "n": 9,
+     "swell": 0.39,
+     "swellSd": 0.11,
+     "dipMs": 161,
+     "peakMs": 176,
+     "meanRel": -1.71
+    },
+    "pos2 +4 -> E3": {
+     "n": 9,
+     "swell": 1.13,
+     "swellSd": 0.54,
+     "dipMs": 126,
+     "peakMs": 166,
+     "meanRel": -1.55
+    },
+    "pos2 +5 -> E3": {
+     "n": 9,
+     "swell": 1.72,
+     "swellSd": 0.33,
+     "dipMs": 56,
+     "peakMs": 171,
+     "meanRel": -2.46
+    },
+    "pos2 -1 -> E3": {
+     "n": 9,
+     "swell": 1.23,
+     "swellSd": 0.16,
+     "dipMs": 71,
+     "peakMs": 176,
+     "meanRel": -1.45
+    },
+    "pos2 -2 -> E3": {
+     "n": 9,
+     "swell": 1.77,
+     "swellSd": 0.97,
+     "dipMs": 1,
+     "peakMs": 136,
+     "meanRel": 0.24
+    },
+    "pos2 -3 -> E3": {
+     "n": 18,
+     "swell": 0.96,
+     "swellSd": 0.5,
+     "dipMs": 101,
+     "peakMs": 158,
+     "meanRel": -0.81
+    },
+    "pos2 -5 -> E3": {
+     "n": 18,
+     "swell": 2.73,
+     "swellSd": 0.89,
+     "dipMs": 76,
+     "peakMs": 168,
+     "meanRel": -0.96
+    },
+    "pos2 -6 -> E3": {
+     "n": 9,
+     "swell": 1.44,
+     "swellSd": 0.4,
+     "dipMs": 71,
+     "peakMs": 176,
+     "meanRel": -0.89
+    },
+    "pos3 -1 -> Eb3": {
+     "n": 99,
+     "swell": 4.21,
+     "swellSd": 1.29,
+     "dipMs": 26,
+     "peakMs": 126,
+     "meanRel": 0.97
+    },
+    "pos4 +2 -> F3": {
+     "n": 18,
+     "swell": 1.25,
+     "swellSd": 0.53,
+     "dipMs": 81,
+     "peakMs": 156,
+     "meanRel": 1.1
+    },
+    "pos4 +4 -> G3": {
+     "n": 18,
+     "swell": 1.07,
+     "swellSd": 0.5,
+     "dipMs": 68,
+     "peakMs": 156,
+     "meanRel": 1.37
+    },
+    "pos4 +6 -> A3": {
+     "n": 9,
+     "swell": 1.64,
+     "swellSd": 0.49,
+     "dipMs": 66,
+     "peakMs": 156,
+     "meanRel": 1.44
+    },
+    "pos4 -1 -> D3": {
+     "n": 18,
+     "swell": 0.91,
+     "swellSd": 0.3,
+     "dipMs": 41,
+     "peakMs": 86,
+     "meanRel": 2.25
+    },
+    "pos4 -2 -> C#3": {
+     "n": 9,
+     "swell": 1.56,
+     "swellSd": 0.38,
+     "dipMs": 111,
+     "peakMs": 161,
+     "meanRel": 2.18
+    },
+    "pos4 -3 -> C3": {
+     "n": 9,
+     "swell": 1.57,
+     "swellSd": 0.32,
+     "dipMs": 76,
+     "peakMs": 116,
+     "meanRel": 0.68
+    },
+    "pos4 -5 -> Bb2": {
+     "n": 9,
+     "swell": 1.24,
+     "swellSd": 0.28,
+     "dipMs": 81,
+     "peakMs": 111,
+     "meanRel": 0.95
+    }
+   }
+  },
+  "fig136": {
+   "ioi": 136,
+   "slurs": [
+    "C#3",
+    "Eb3 E3 Eb3 C#3",
+    "Eb3 E3 Eb3 C#3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> Eb3 bowed": {
+     "n": 126,
+     "swell": 0.22,
+     "swellSd": 0.66,
+     "dipMs": 3,
+     "peakMs": 7,
+     "meanRel": 0.34
+    },
+    "pos2 +1 -> E3": {
+     "n": 126,
+     "swell": 2.02,
+     "swellSd": 0.64,
+     "dipMs": 53,
+     "peakMs": 133,
+     "meanRel": -2.06
+    },
+    "pos3 -1 -> Eb3": {
+     "n": 126,
+     "swell": 3.21,
+     "swellSd": 0.98,
+     "dipMs": 45,
+     "peakMs": 121,
+     "meanRel": 0.07
+    },
+    "pos4 -2 -> C#3": {
+     "n": 117,
+     "swell": 1.14,
+     "swellSd": 0.54,
+     "dipMs": 49,
+     "peakMs": 134,
+     "meanRel": 1.65
+    }
+   }
+  },
+  "fig250": {
+   "ioi": 250,
+   "slurs": [
+    "C#3",
+    "Eb3 E3 Eb3 C#3",
+    "Eb3 E3 Eb3 C#3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> Eb3 bowed": {
+     "n": 72,
+     "swell": 1.07,
+     "swellSd": 0.33,
+     "dipMs": 47,
+     "peakMs": 77,
+     "meanRel": -0.42
+    },
+    "pos2 +1 -> E3": {
+     "n": 72,
+     "swell": 2.01,
+     "swellSd": 0.47,
+     "dipMs": 107,
+     "peakMs": 222,
+     "meanRel": -1.98
+    },
+    "pos3 -1 -> Eb3": {
+     "n": 72,
+     "swell": 7.34,
+     "swellSd": 0.61,
+     "dipMs": 12,
+     "peakMs": 212,
+     "meanRel": 1.28
+    },
+    "pos4 -2 -> C#3": {
+     "n": 63,
+     "swell": 1.54,
+     "swellSd": 0.19,
+     "dipMs": 122,
+     "peakMs": 167,
+     "meanRel": 1.1
+    }
+   }
+  },
+  "fig350": {
+   "ioi": 350,
+   "slurs": [
+    "C#3",
+    "Eb3 E3 Eb3 C#3",
+    "Eb3 E3 Eb3 C#3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> Eb3 bowed": {
+     "n": 54,
+     "swell": 2.74,
+     "swellSd": 0.97,
+     "dipMs": 2,
+     "peakMs": 112,
+     "meanRel": -0.27
+    },
+    "pos2 +1 -> E3": {
+     "n": 54,
+     "swell": 3.95,
+     "swellSd": 1.16,
+     "dipMs": 122,
+     "peakMs": 202,
+     "meanRel": -2.71
+    },
+    "pos3 -1 -> Eb3": {
+     "n": 54,
+     "swell": 6.39,
+     "swellSd": 0.58,
+     "dipMs": 2,
+     "peakMs": 267,
+     "meanRel": 1.84
+    },
+    "pos4 -2 -> C#3": {
+     "n": 45,
+     "swell": 1.76,
+     "swellSd": 0.25,
+     "dipMs": 82,
+     "peakMs": 122,
+     "meanRel": 1.16
+    }
+   }
+  },
+  "iso600": {
+   "ioi": 600,
+   "slurs": [
+    "D3",
+    "E3 Eb3 E3 Eb3 E3 Eb3 E3 Eb3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> E3 bowed": {
+     "n": 9,
+     "swell": 1.5,
+     "swellSd": 0.33,
+     "dipMs": 276,
+     "peakMs": 416,
+     "meanRel": -1.26
+    },
+    "pos2 -1 -> Eb3": {
+     "n": 9,
+     "swell": 7.19,
+     "swellSd": 0.43,
+     "dipMs": 106,
+     "peakMs": 361,
+     "meanRel": -0.34
+    },
+    "pos3 +1 -> E3": {
+     "n": 9,
+     "swell": 6.29,
+     "swellSd": 0.91,
+     "dipMs": 326,
+     "peakMs": 511,
+     "meanRel": -0.44
+    },
+    "pos4 -1 -> Eb3": {
+     "n": 9,
+     "swell": 3.19,
+     "swellSd": 0.49,
+     "dipMs": 46,
+     "peakMs": 171,
+     "meanRel": 1.49
+    },
+    "pos5 +1 -> E3": {
+     "n": 9,
+     "swell": 6.51,
+     "swellSd": 1.1,
+     "dipMs": 326,
+     "peakMs": 521,
+     "meanRel": -0.5
+    },
+    "pos6 -1 -> Eb3": {
+     "n": 9,
+     "swell": 3.26,
+     "swellSd": 0.39,
+     "dipMs": 51,
+     "peakMs": 171,
+     "meanRel": 1.5
+    },
+    "pos7 +1 -> E3": {
+     "n": 9,
+     "swell": 6.28,
+     "swellSd": 0.96,
+     "dipMs": 326,
+     "peakMs": 521,
+     "meanRel": -0.47
+    }
+   }
+  },
+  "isoUp2_600": {
+   "ioi": 600,
+   "slurs": [
+    "E3",
+    "F#3 F3 F#3 F3 F#3 F3 F#3 F3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> F#3 bowed": {
+     "n": 9,
+     "swell": 3.36,
+     "swellSd": 0.45,
+     "dipMs": 248,
+     "peakMs": 428,
+     "meanRel": -0.14
+    },
+    "pos2 -1 -> F3": {
+     "n": 9,
+     "swell": 4.36,
+     "swellSd": 0.63,
+     "dipMs": 88,
+     "peakMs": 373,
+     "meanRel": 0.87
+    },
+    "pos3 +1 -> F#3": {
+     "n": 9,
+     "swell": 2.64,
+     "swellSd": 0.43,
+     "dipMs": 373,
+     "peakMs": 428,
+     "meanRel": -0.9
+    },
+    "pos4 -1 -> F3": {
+     "n": 9,
+     "swell": 6.53,
+     "swellSd": 0.45,
+     "dipMs": 38,
+     "peakMs": 328,
+     "meanRel": 1.01
+    },
+    "pos5 +1 -> F#3": {
+     "n": 9,
+     "swell": 2.66,
+     "swellSd": 0.43,
+     "dipMs": 373,
+     "peakMs": 428,
+     "meanRel": -0.93
+    },
+    "pos6 -1 -> F3": {
+     "n": 9,
+     "swell": 6.2,
+     "swellSd": 0.78,
+     "dipMs": 38,
+     "peakMs": 373,
+     "meanRel": 0.99
+    },
+    "pos7 +1 -> F#3": {
+     "n": 9,
+     "swell": 2.83,
+     "swellSd": 0.27,
+     "dipMs": 373,
+     "peakMs": 428,
+     "meanRel": -0.92
+    }
+   }
+  },
+  "isoDn3_600": {
+   "ioi": 600,
+   "slurs": [
+    "B2",
+    "C#3 C3 C#3 C3 C#3 C3 C#3 C3"
+   ],
+   "takes": 3,
+   "notes": {
+    "pos1 +2 -> C#3 bowed": {
+     "n": 9,
+     "swell": 0.93,
+     "swellSd": 0.3,
+     "dipMs": 427,
+     "peakMs": 502,
+     "meanRel": 3.19
+    },
+    "pos2 -1 -> C3": {
+     "n": 9,
+     "swell": 3.04,
+     "swellSd": 0.33,
+     "dipMs": 432,
+     "peakMs": 597,
+     "meanRel": -2.0
+    },
+    "pos3 +1 -> C#3": {
+     "n": 9,
+     "swell": 6.07,
+     "swellSd": 0.59,
+     "dipMs": 237,
+     "peakMs": 567,
+     "meanRel": 0.03
+    },
+    "pos4 -1 -> C3": {
+     "n": 9,
+     "swell": 2.92,
+     "swellSd": 0.6,
+     "dipMs": 452,
+     "peakMs": 597,
+     "meanRel": -0.44
+    },
+    "pos5 +1 -> C#3": {
+     "n": 9,
+     "swell": 6.01,
+     "swellSd": 1.03,
+     "dipMs": 167,
+     "peakMs": 572,
+     "meanRel": -0.16
+    },
+    "pos6 -1 -> C3": {
+     "n": 9,
+     "swell": 2.83,
+     "swellSd": 0.44,
+     "dipMs": 517,
+     "peakMs": 597,
+     "meanRel": -0.51
+    },
+    "pos7 +1 -> C#3": {
+     "n": 9,
+     "swell": 5.99,
+     "swellSd": 0.79,
+     "dipMs": 237,
+     "peakMs": 572,
+     "meanRel": -0.1
+    }
+   }
+  }
+ }
+}
