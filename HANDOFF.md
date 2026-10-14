@@ -327,7 +327,17 @@ U, 14 passages × 3 takes): E3 -> Eb3 swells wherever it sits (rotated cycle, sa
 3.76 / 4.49 / 3.70 dB; in a line 4.21; the cycle's other transitions 0.3-2.8), also with 600 ms notes (7.2 first, then
 3.2-3.3), less into other pitches (F3 3.80, Ab3 2.44, C3 2.01). By IOI: 136 3.21, 180 4.49 (rise in ~55 ms), 250 7.34
 (~200 ms), 350 6.39 (~265 ms): why S works at 250 and can't at 180. No fix within one value per note at 180 ms; left:
-another transition kind or velocity for such notes (not measured).
+another transition kind or velocity for such notes (not measured). The owner: no changing the transition; asked for an
+elegant levels-only solution.
+**Rule R** (branch `even-rule`, c6a56a0ed4, `even_rule_check.py`, `sso_even_rule_check.json`; VM kthost + Kontakt 8 + SSO
+renders, MOSQITO 1.2.1 on Linux): N wobbled because flattening the low bands' swell with a broadband CC11 moved the
+upper bands (12-24 Bark), whose fluctuation strength (Zwicker & Fastl, ISO 532-1) rose 11-30% above U and C in 6 / 6
+passages (180R U .207 C .221 N .288): ranks N worst as the owner did; not noise (repeatable up to 64 Hz), not timing
+(CC11 = gain 1.048, 40 ms one-pole, 4 ms lag, r 0.994). R: CC11 cancels the repeatable part of each slur's loudness swell
+at the strength (0.25-1 sweep) minimising fluctuation strength summed over bands; a continuous curve (5 ms), not one value
+per note (storage would change). Real renders, swell p75 / upper-band FS: 180R S 2.45 / .227, R 1.65 / .210 (note 3
+3.07 -> 1.84); 250R S 2.54 / .177, R 2.08 / .179; 250L S 2.09 / .194, R 1.13 / .209. Blind S vs R (db `evenrule1`):
+180R, 250L, 250R, 180R repeated with letters swapped.
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
