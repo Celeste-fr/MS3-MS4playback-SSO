@@ -2,23 +2,28 @@
 """Blind-test clips: SSO's two alternating round robins as they are (OFF) against evened out by a per-note CC11 (ON).
 
 SSO's strings play two round robins per key, alternating from a transport start (take A on a key's 1st, 3rd ... press,
-B on its 2nd, 4th ...; offline a round robin's takes are identical). sso_cc1_curves.json has each take's level (rmsDbTakes,
-even = A, odd = B) per pitch and CC1 for Celli and Basses. ON sets each note's CC11 just before its note-on so that its
-predicted take plays at the mean of the two: offset = (A + B) / 2 - take dB, CC11 = base * 10^(offset / 20). SSO's CC11 is
-a plain gain, dB = 20 log10(cc11 / 127) (measured 2026-10-14 with this script, within 0.02 dB; a first run with 40 log10
-corrected only half). OFF sends the same base CC11 throughout.
+B on its 2nd, 4th ...; offline a round robin's takes are identical). ON sets each note's CC11 10 ms before its note-on so
+that its take plays at the mean of the two: CC11 = base * 10^(offset / 20) (SSO's CC11 is a plain gain, 20 log10: measured
+2026-10-14 with this script, within 0.02 dB). OFF sends the base CC11 throughout.
 
-Measured 2026-10-14 (VM, Kontakt 8 + SSO, kthost): the alternation is predicted exactly, but in these short notes (q = 96,
-level 0.10-0.55 s after the note-on) the takes differ by up to ~5 dB more than in the sweep's sustain (1.5-3.0 s): Basses'
-two takes have different attack envelopes, so sustain levels don't predict short notes.
+Where the offsets come from:
+  sustain (default): sso_cc1_curves.json's per-take levels (rmsDbTakes, even = A, odd = B; 1.5-3.0 s into 3 s notes).
+      Measured 2026-10-14: too weak for these short notes (Basses' two takes have different attack envelopes; the
+      takes differ by up to ~5 dB more in the first 0.55 s than in the sustain).
+  --from <levels.json> --version off|on: a render's own measured levels (best case): per pitch with both takes in the
+      phrase, each take moves to the mean of the two takes' measured means, added to the offsets that render had
+      (one refinement pass: --version on). Pitches heard on one take only keep offset 0. If a CC11 would pass 127 the
+      item's offsets all move down together (a plain gain: the clips are loudness-matched anyway).
 
-    rr_blind_test.py events <items.json> <outdir>       kthost event files <item>_off.txt / _on.txt and <item>.notes.json
-    rr_blind_test.py analyze <items.json> <wavdir> -o <levels.json>   per-note levels of both renders, spreads
-    rr_blind_test.py clips <levels.json> <wavdir> <audiodir> --key <key.json> [--seed N]   blind mp3s and the key
+    rr_blind_test.py events <items.json> <outdir> [--from <levels.json> --version off|on]
+        kthost event files <item>_off.txt / _on.txt, <item>.notes.json (the ON plan), list.txt
+    rr_blind_test.py analyze <items.json> <evdir> <wavdir> -o <levels.json>   per-note levels of both renders, spreads
+    rr_blind_test.py clips <levels.json> <wavdir> <audiodir> --key <key.json> [--items a b ...] [--seed N]
 
 items.json: {"<item>": {"section": "Basses", "pitch": 28, "cc": 80, "line": [28, 31, ...], "warm": 48}, ...}
 Phrase: 8 quarter notes on the pitch at q = 96 (each 90 % long), a half rest, the 8-note line, all at one CC1
-(velocity = CC1, as MuseScore sends a Long). A warm-up note on another key (not in the clip) first, as the sweep did.
+(velocity = CC1, as MuseScore sends a Long). A warm-up note on another key (not in the clip) first, as the sweep did;
+render with kthost --probe-pitch <warm> so the readiness probe hits no key of the clip.
 """
 import argparse
 import json
@@ -36,19 +41,13 @@ LEN = 0.9 * Q
 START = 5.0          # first phrase note-on, s
 LEAD = 0.5           # clip lead before it
 TAIL = 2.5           # after the last note-off
-BASE = 90            # CC11 for every note OFF, the centre ON (room for +3 dB under 127)
+BASE = 90            # CC11 for every note OFF, the centre ON
 WINDOW = (0.10, 0.55)  # per-note level window after the note-on, s (note-off at 0.5625)
 NAMES = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 
 
 def name(p):
     return f"{NAMES[p % 12]}{p // 12 - 1}"
-
-
-def takes(section, pitch, cc, curves):
-    row = next(r for r in curves["sections"][section]["points"][str(pitch)] if r["cc"] == cc)
-    t = row["rmsDbTakes"]
-    return st.mean(t[0::2]), st.mean(t[1::2])
 
 
 def phrase(item):
@@ -60,20 +59,52 @@ def phrase(item):
     return ons
 
 
-def plan(item, curves):
-    """per note: on, pitch, press count on its key, predicted take, offset dB, CC11 ON"""
+def sustain_offsets(item, curves):
+    out = {}
+    for _, p in phrase(item):
+        row = next(r for r in curves["sections"][item["section"]]["points"][str(p)] if r["cc"] == item["cc"])
+        t = row["rmsDbTakes"]
+        a, b = st.mean(t[0::2]), st.mean(t[1::2])
+        out[p] = {"A": (a + b) / 2 - a, "B": (a + b) / 2 - b}
+    return out
+
+
+def measured_offsets(rec, version):
+    """offsets from a render's measured levels, on top of the offsets it had"""
+    notes, lv = rec["notes"], rec[version]["levelsDb"]
+    had = rec["notes"] if version == "on" else None
+    by = {}
+    for n, l in zip(notes, lv):
+        prev = n["offsetDb"] if had else 0.0
+        by.setdefault(n["pitch"], {}).setdefault(n["take"], []).append((l, prev))
+    out = {}
+    for p, t in by.items():
+        if "A" in t and "B" in t:
+            m = {k: st.mean(x[0] for x in v) for k, v in t.items()}
+            prev = {k: st.mean(x[1] for x in v) for k, v in t.items()}
+            target = (m["A"] + m["B"]) / 2
+            out[p] = {k: prev[k] + target - m[k] for k in ("A", "B")}
+    return out
+
+
+def plan(item, offsets):
+    """per note: on, pitch, press count on its key, take, offset dB, CC11 ON"""
     count = {}
     out = []
     for on, p in phrase(item):
         k = count.get(p, 0)
         count[p] = k + 1
-        a, b = takes(item["section"], p, item["cc"], curves)
         take = "A" if k % 2 == 0 else "B"
-        off = (a + b) / 2 - (a if take == "A" else b)
-        cc11 = max(1, min(127, int(round(BASE * 10 ** (off / 20)))))
-        out.append({"on": round(on, 4), "pitch": p, "press": k, "take": take, "takeA": round(a, 2), "takeB": round(b, 2),
-                    "offsetDb": round(off, 2), "cc11": cc11, "cc11Db": round(20 * math.log10(cc11 / BASE), 2)})
-    return out
+        out.append({"on": round(on, 4), "pitch": p, "press": k, "take": take,
+                    "wantDb": offsets.get(p, {}).get(take, 0.0)})
+    top = max(n["wantDb"] for n in out)
+    shift = min(0.0, 20 * math.log10(127 / BASE) - top)  # keep the loudest under 127
+    for n in out:
+        n["offsetDb"] = round(n["wantDb"] + shift, 2)
+        n["cc11"] = max(1, min(127, int(round(BASE * 10 ** (n["offsetDb"] / 20)))))
+        n["cc11Db"] = round(20 * math.log10(n["cc11"] / BASE), 2)
+        n["wantDb"] = round(n["wantDb"], 2)
+    return out, round(shift, 2)
 
 
 def events(item, notes, on_version):
@@ -88,8 +119,8 @@ def events(item, notes, on_version):
     return "".join(f"{e[0]:.4f} {e[1]} {e[2]} {e[3]}\n" for e in ev)
 
 
-def level(x, sr, on):
-    i0, i1 = int(round((on + WINDOW[0]) * sr)), int(round((on + WINDOW[1]) * sr))
+def level(x, sr, on, w=WINDOW):
+    i0, i1 = int(round((on + w[0]) * sr)), int(round((on + w[1]) * sr))
     seg = x[i0:i1].astype("float64")
     return 10 * math.log10(float((seg ** 2).mean()))
 
@@ -98,14 +129,27 @@ def spread(vs):
     return {"maxMinusMin": round(max(vs) - min(vs), 2), "sd": round(st.pstdev(vs), 2)}
 
 
+def attack(x, sr, notes, pitch):
+    """per take on the repeated pitch: mean level 0.15-0.30 s and 0.40-0.55 s after the note-on (dB) and the rise"""
+    out = {}
+    for t in ("A", "B"):
+        e = [level(x, sr, n["on"], (0.15, 0.30)) for n in notes[:8] if n["take"] == t]
+        l = [level(x, sr, n["on"], (0.40, 0.55)) for n in notes[:8] if n["take"] == t]
+        out[t] = {"early": round(st.mean(e), 2), "late": round(st.mean(l), 2), "riseDb": round(st.mean(l) - st.mean(e), 2)}
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("events")
     e.add_argument("items")
     e.add_argument("outdir")
+    e.add_argument("--from", dest="src")
+    e.add_argument("--version", choices=["off", "on"], default="off")
     a = sub.add_parser("analyze")
     a.add_argument("items")
+    a.add_argument("evdir")
     a.add_argument("wavdir")
     a.add_argument("-o", "--out", required=True)
     c = sub.add_parser("clips")
@@ -113,23 +157,30 @@ def main(argv=None):
     c.add_argument("wavdir")
     c.add_argument("audiodir")
     c.add_argument("--key", required=True)
+    c.add_argument("--items", nargs="*")
     c.add_argument("--seed", type=int)
     args = ap.parse_args(argv)
-    with open(CURVES) as f:
-        curves = json.load(f)
     if args.cmd == "events":
         with open(args.items) as f:
             items = json.load(f)
+        src = None
+        if args.src:
+            with open(args.src) as f:
+                src = json.load(f)
+        else:
+            with open(CURVES) as f:
+                curves = json.load(f)
         lst = []
         for k, it in items.items():
-            notes = plan(it, curves)
+            offs = measured_offsets(src[k], args.version) if src else sustain_offsets(it, curves)
+            notes, shift = plan(it, offs)
             for v in ("off", "on"):
                 with open(os.path.join(args.outdir, f"{k}_{v}.txt"), "w", newline="\r\n") as f:
                     f.write(events(it, notes, v == "on"))
-                lst.append(f"{k}_{v}|{it['section']}")
+                lst.append(f"{k}_{v}|{it['section']}|{it['warm']}")
             with open(os.path.join(args.outdir, f"{k}.notes.json"), "w") as f:
-                json.dump(notes, f, indent=1)
-            print(k, it["section"], name(it["pitch"]), "CC1", it["cc"], "cc11", [n["cc11"] for n in notes])
+                json.dump({"shiftDb": shift, "source": f"{args.src}:{args.version}" if src else "sustain", "notes": notes}, f, indent=1)
+            print(k, it["section"], name(it["pitch"]), "CC1", it["cc"], "shift", shift, "cc11", [n["cc11"] for n in notes])
         with open(os.path.join(args.outdir, "list.txt"), "w", newline="\r\n") as f:
             f.write("\n".join(lst) + "\n")
     elif args.cmd == "analyze":
@@ -138,23 +189,23 @@ def main(argv=None):
             items = json.load(f)
         res = {}
         for k, it in items.items():
-            notes = plan(it, curves)
-            r = {"item": it, "notes": notes}
+            with open(os.path.join(args.evdir, f"{k}.notes.json")) as f:
+                pl = json.load(f)
+            notes = pl["notes"]
+            r = {"item": it, "notes": notes, "shiftDb": pl["shiftDb"], "source": pl["source"]}
             for v in ("off", "on"):
                 x, sr = sf.read(os.path.join(args.wavdir, f"{k}_{v}.wav"), dtype="float32", always_2d=True)
                 lv = [round(level(x, sr, n["on"]), 2) for n in notes]
-                r[v] = {"levelsDb": lv, "repeated": spread(lv[:8]),
-                        "returns": spread([l for l, n in zip(lv, notes) if n["pitch"] == it["pitch"]]),
-                        # the line's notes measured against their own prediction (each pitch's two takes' mean + CC11)
-                        "lineVsMean": [round(l - (n["takeA"] + n["takeB"]) / 2, 2) for l, n in zip(lv[8:], notes[8:])]}
-            # how the short-note level difference of the takes compares with the sustain's (from OFF's repeats)
-            offr = r["off"]["levelsDb"][:8]
-            r["shortTakeDiffDb"] = round(st.mean(offr[0::2]) - st.mean(offr[1::2]), 2)
-            r["sustainTakeDiffDb"] = round(notes[0]["takeA"] - notes[0]["takeB"], 2)
+                ret = [l for l, n in zip(lv, notes) if n["pitch"] == it["pitch"]]
+                r[v] = {"levelsDb": lv, "repeated": spread(lv[:8]), "returns": spread(ret),
+                        "takeDiffDb": round(st.mean(lv[:8][0::2]) - st.mean(lv[:8][1::2]), 2),
+                        "attack": attack(x, sr, notes, it["pitch"])}
+            r["halved"] = r["on"]["repeated"]["maxMinusMin"] <= r["off"]["repeated"]["maxMinusMin"] / 2
             res[k] = r
-            print(f"{k:8s} {it['section']:6s} {name(it['pitch']):4s} CC1 {it['cc']:3d}  A-B sustain {r['sustainTakeDiffDb']:+.2f}"
-                  f" short {r['shortTakeDiffDb']:+.2f}  repeated OFF {r['off']['repeated']} ON {r['on']['repeated']}"
-                  f"  returns OFF {r['off']['returns']['maxMinusMin']} ON {r['on']['returns']['maxMinusMin']}")
+            print(f"{k:8s} {it['section']:6s} {name(it['pitch']):4s} CC1 {it['cc']:3d}  A-B OFF {r['off']['takeDiffDb']:+.2f}"
+                  f" ON {r['on']['takeDiffDb']:+.2f}  repeated OFF {r['off']['repeated']} ON {r['on']['repeated']}"
+                  f"  returns OFF {r['off']['returns']['maxMinusMin']} ON {r['on']['returns']['maxMinusMin']}"
+                  f"  halved {r['halved']}")
         with open(args.out, "w") as f:
             json.dump(res, f, indent=1)
     else:
@@ -164,14 +215,21 @@ def main(argv=None):
         with open(args.levels) as f:
             res = json.load(f)
         rng = random.Random(args.seed)
-        key = {"what": "blind A/B: SSO All techniques Long, the two alternating round robins as they are (off) or evened out "
-                       "by a per-note CC11 predicted from the per-take levels (on); q = 96, 8 repeated quarters then an 8-note line",
+        key = {"what": "blind A/B: SSO All techniques Long (Celli / Basses), the two alternating round robins as they are "
+                       "(off) or evened out by a per-note CC11 (on, best case: offsets from the clip's own measured per-take "
+                       "levels, refined once); q = 96, 8 repeated quarters (90 % long), a half rest, an 8-note line",
+               "rendered": "2026-10-14, Windows test VM, Kontakt Player 8 + SSO, kthost offline (probe on the warm-up key), "
+                           "MuseScore's unedited setups",
                "matching": "each clip gained to -20 LUFS integrated (ITU-R BS.1770-4, pyloudnorm), mp3 192 kb/s, "
-                           f"{LEAD} s lead before the first note", "ccBase": BASE,
+                           f"{LEAD} s lead before the first note", "ccBase": BASE, "cc11Law": "dB = 20 log10(cc11 / 90)",
                "levelWindow": f"per note: mean power of both channels {WINDOW[0]}-{WINDOW[1]} s after the note-on, dB FS, before the gain",
+               "attack": "per take on the repeated pitch, OFF: mean level 0.15-0.30 s and 0.40-0.55 s after the note-on; "
+                         "the takes' attack shapes differ and ON leaves them as they are (one gain per note)",
                "items": {}}
         os.makedirs(args.audiodir, exist_ok=True)
         for k, r in res.items():
+            if args.items and k not in args.items:
+                continue
             it, notes = r["item"], r["notes"]
             first = notes[0]["on"]
             t0 = first - LEAD
@@ -179,16 +237,19 @@ def main(argv=None):
             letters = ["a", "b"]
             rng.shuffle(letters)
             ver = dict(zip(letters, ["off", "on"]))
-            ent = {"section": it["section"], "patch": it["section"] + " (All techniques), Long", "pitch": it["pitch"],
-                   "pitchName": name(it["pitch"]), "cc1": it["cc"], "line": it["line"],
+            ent = {"section": it["section"], "patch": it["section"] + " (All techniques), Long (UACC 1)", "pitch": it["pitch"],
+                   "pitchName": name(it["pitch"]), "cc1": it["cc"], "velocity": it["cc"], "line": it["line"],
                    "lineNames": [name(p) for p in it["line"]], "letters": ver,
-                   "takeLevelsDb": {"A": notes[0]["takeA"], "B": notes[0]["takeB"]},
+                   "takeLevelsOffDb": {t: round(st.mean(l for l, n in zip(r["off"]["levelsDb"][:8], notes[:8]) if n["take"] == t), 2)
+                                       for t in ("A", "B")},
+                   "attackOff": r["off"]["attack"], "attackOn": r["on"]["attack"],
                    "noteOnsS": [round(n["on"] - t0, 4) for n in notes],
                    "repeatedS": [round(notes[0]["on"] - t0, 4), round(notes[7]["on"] + LEN - t0, 4)],
                    "lineS": [round(notes[8]["on"] - t0, 4), round(notes[15]["on"] + LEN - t0, 4)],
-                   "notes": [{"pitch": n["pitch"], "press": n["press"], "take": n["take"], "cc11On": n["cc11"],
-                              "offsetDb": n["offsetDb"]} for n in notes],
-                   "shortTakeDiffDb": r["shortTakeDiffDb"], "sustainTakeDiffDb": r["sustainTakeDiffDb"], "clips": {}}
+                   "onShiftDb": r["shiftDb"], "offsetSource": r["source"],
+                   "notes": [{"pitch": n["pitch"], "name": name(n["pitch"]), "press": n["press"], "take": n["take"],
+                              "cc11On": n["cc11"], "offsetDb": n["offsetDb"]} for n in notes],
+                   "clips": {}}
             for letter, v in ver.items():
                 x, sr = sf.read(os.path.join(args.wavdir, f"{k}_{v}.wav"), dtype="float64", always_2d=True)
                 y = x[int(round(t0 * sr)):int(round(t1 * sr))].copy()
@@ -206,7 +267,7 @@ def main(argv=None):
                 ent["clips"][letter] = {"version": v, "file": f"rr/{k}_{letter}.mp3", "lufsBefore": round(lufs, 2),
                                         "gainDb": round(g, 2), "peakDb": round(20 * math.log10(float(np.abs(y).max())), 2),
                                         "levelsDb": r[v]["levelsDb"], "repeatedSpread": r[v]["repeated"],
-                                        "returnsSpread": r[v]["returns"], "lineVsMeanDb": r[v]["lineVsMean"]}
+                                        "returnsSpread": r[v]["returns"], "takeDiffDb": r[v]["takeDiffDb"]}
             key["items"][k] = ent
             print(k, ver)
         with open(args.key, "w") as f:
