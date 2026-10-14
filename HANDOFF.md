@@ -316,6 +316,9 @@ takes): consistent, not randomness (C's largest swells notes 1 and 3 in 6 of 6).
 ms after its note-on, inside the next note, so C ramps up through note 1. Candidate S: each node at note-on + IOI/2;
 swell note 1 2.67 -> 1.61, note 3 4.20 -> 3.89, note 4 1.17 -> 1.71 dB; 250R p75 4.01 -> 3.29, 250L 2.48 -> 2.77
 (worse). Blind test C vs S (db `evenfig1`): 3 pairs 180R (one a hidden repeat with letters swapped), 2 pairs 250R.
+The owner: 180R both wrong and "all the same" in every pair (the repeat agrees), 250R S fine once, wrong once: S not
+heard at 180 ms. The owner then asked whether the "swell" is the bowed transition itself (each slur's note 1 in this
+figure is a bowed transition, velocity 93, from the touching slur before): the page now marks the bowed notes.
 
 ## Even levels (2026-10-13, branch `even-levels`; `[levels] evenLevels` on in Recommended since 02614c9eb3)
 
