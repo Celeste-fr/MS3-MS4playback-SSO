@@ -37,7 +37,8 @@ a section there when you need the background of that topic. Commit messages desc
   `realrange1`) A/Bs `[levels] realRange` on a ppp -> fff ladder per section; read the verdicts (ArtifactData) and put
   realRange into Recommended only for what the owner approves. A score with written dynamics is the next test (Whence has
   almost none).
-- **Even levels in Whence** (2026-10-14, the build after 430 from integrate-1012): Recommended now measures in the
+- **Even levels in Whence** (2026-10-14, build 431 https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38567243409,
+  integrate-1012 e07750c20a, artifact MuseScore-soundlibrary-win64-e07750c): Recommended now measures in the
   background (no Tools step), with the mid-note fix and the 350 ms skip. The owner listens to Whence's slurred string
   passages with Recommended, then with Even levels 0 (Mixer › Advanced Options… › Playback adjustments) for comparison,
   in the music rather than test passages (the 180 ms note-3 swell is SSO's tone and borderline: HANDOFF › Where the
