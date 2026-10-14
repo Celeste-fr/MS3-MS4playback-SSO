@@ -436,10 +436,21 @@ move the transitions 50 ms early, which MuseScore doesn't. R's own clips sit on 
 only early start.
 
 Open:
-- **The playback audit has no model of a transition's arrival**: it judges Performance transitions by the attack
-  onset, so on *Whence 12-TET* (Recommended) ARRIVAL reads 19 fail / 136 warn (before: 1 fail) and CAPPED 289 info (226 transitions, nearly
-  all on the beat, and 63 re-attacks held back by the keep below). It needs the measured transition delays (`sso_legato_*.json`, `legatoDelay`) before
-  those counts mean anything.
+- **The audit's transitions** (branch `gaps-1012`, 2026-10-14): a legato transition now arrives by the renderer's own
+  model (`LibTrace::glideArriveMs`: measured bendGlide, else `legatoDelay` + `libFastDelay`), not the attack onset.
+  *Whence* (quarter tones, Recommended): ARRIVAL 33 fail / 6 warn (was 20 / 10), all three kinds from transitions
+  played on the beat (the owner, 2026-10-07): (1) 15 fails, a slur's first transition 100-208 ms after the attack
+  before it, which starts early by its onset and lands on time (Violas 130 / 173 ms, Violins 1 100 / 208, Celli 128;
+  Violas bars 3, 9-16, Violins 1 5, 13-16, Celli 1); (2) 3 fails + 6 warns, neighbouring transitions' delays differing
+  (Violins 1 bars 13-15 208 then 100, Violas 9-11 / 13-15 173 then 130); (3) 15 fails, the on-time attack after a
+  slur's late last transition (follows from 1). Open, for the owner: transitions early by their modelled arrival (as
+  attacks by their onset) would clear 1-3 by the model, but it compares a pitch arrival (f0 nine tenths of the way)
+  with a loudness onset (15 dB under the peak); untested by ear.
+- **The score's first note starts early** (`gaps-1012`, 2026-10-14): the start lead (`libraryDelayLead`) plays
+  everything later by the most the score's start cut a note's early start (Whence: the Celli's smooth 172 ms), that
+  note at 0. The plain set plays it before its written place by Track Delay; *Live plays the score*'s clips can't.
+  Untried with Kontakt / SSO and in Live. Left at 0 s on its route: CC11 127 then the note's level at the same instant
+  (the score-start value before the first note's, nothing sounding).
 - **A re-attack keeps the note before** (fixed 2026-10-10, integrate-2026-10-10): a slur's last sixteenth (136 ms at
   *Whence*'s tempo) followed by a new attack on the same Performance patch sounded 1.1 ms (Violas: the attack 87.5 ms
   early, the map's reattackGap 54 ms), 11.4 ms (Celli) and 31.8 ms (Violins 1): 63 notes. `onsetEarliest` now keeps

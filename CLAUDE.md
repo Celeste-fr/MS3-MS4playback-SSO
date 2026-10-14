@@ -252,6 +252,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   per patch / technique (added up, as Live adds a group's and its tracks'); `MidiRenderer::libraryTrackDelays` moves
   the library events (not for Live's clips; a note's CC11 / dynamic at its tick with the note, in the plain set's lanes too); with a negative delay everything else plays later by the earliest one
   (`libraryDelayLead`), so nothing is clamped at the start; the plain set writes them as TrackDelay, `livetracks.*` reads them back.
+  **Start lead** (2026-10-14): a note whose early start (onset, smooth attackOnset) the score's start would cut plays its
+  whole onset early, everything else later by the most cut (`libStartLead`, added to the track lead; the first chunk
+  rendered once more when a later one comes first); Live's clips have no lead: the plain set plays that note before its
+  written place by Track Delay (`EventMap::startEarlyMs`, `LiveTiming::Span::earlyMs`); the audit removes it
+  (`EventMap::startLeadMs`). *Live plays the score*'s route clips still start it at 0 (LIVE.md › What still differs).
   Track levels (same metaTag, `levels`; same dialog): dB per patch / technique, added up, by CC11 per note
   (`libLevels`, `libraryNoteLevels`), so in Live's clips and the plain set's CC11 lane too; -42.08 .. +6 dB (Live's
   Volume top): a patch's loudest level is its headroom, played by its volume (slot / Kontakt track: `TrackDelays::patchGain`,
@@ -377,15 +382,17 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 91 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-13: evenAutoSlow (slow slurs skipped; evenAutoSession / evenAutoTestSynth now read even-auto.musicxml, legato-early at 240 bpm), evenAutoWindows (with the measured gaps, early stop, the order), evenAutoSession (the wait at opening: queued windows), evenAutoTestSynth (early stop), transportRestart, renderKitMaxVelocity, evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 93 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-14: noLevelSpikes, startLead; 2026-10-13: evenAutoSlow (slow slurs skipped; evenAutoSession / evenAutoTestSynth now read even-auto.musicxml, legato-early at 240 bpm), evenAutoWindows (with the measured gaps, early stop, the order), evenAutoSession (the wait at opening: queued windows), evenAutoTestSynth (early stop), transportRestart, renderKitMaxVelocity, evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
-- `tst_playbackaudit`: 8 passed, 1 skipped (2026-10-13, droppedFindings, leapFindings; 2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
+- `tst_playbackaudit`: 9 passed, 1 skipped (2026-10-14, transitionArrival; 2026-10-13, droppedFindings, leapFindings; 2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
   Playback audit). Whence (quarter tones), Recommended (2026-10-11, main cb073b6917): the same counts as Whence 12-TET
   below (OVERLAP 0, UNMEASURED 10, CAPPED 289, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0).
   Whence, Recommended, integrate-1012 (2026-10-12: transitions, smoothStart, smooth onset): OVERLAP 0, UNMEASURED 9,
-  CAPPED 289, ARRIVAL 20 fail / 10 warn, LEVEL STEP 0; the 20th: the score's first note (Celli, smooth, 172 ms onset) can't
-  start before time 0 (a lead-in as `libraryDelayLead` gives negative delays would fix it).
+  CAPPED 289, ARRIVAL 20 fail / 10 warn, LEVEL STEP 0. Branch `gaps-1012` (2026-10-14: the start lead, transitions by
+  their modelled arrival, `LibTrace::glideArriveMs`): OVERLAP 0, UNMEASURED 10, CAPPED 288, ARRIVAL 33 fail / 6 warn
+  (15 a slur's first transition 100-208 ms after its on-time attack, 3 + 6 neighbouring transitions' delays differing,
+  15 the on-time attack after a slur's late last transition: HANDOFF.md › The audit's transitions), LEVEL STEP 0.
   Whence 12-TET, Recommended (2026-10-10, `[slurs] performance`): OVERLAP 0, UNMEASURED 10 info,
   CAPPED 289 info, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0 (with the re-attack keep, 2026-10-10): the audit judges the Performance legato's transitions (on
   the beat) by the attack onset, having no model of a transition's arrival (HANDOFF.md); with `slurs/performance=0` as on

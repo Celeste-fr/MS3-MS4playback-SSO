@@ -152,7 +152,12 @@ sound: whether the onsets are right is the Windows VM's job (above). Checks:
   swap or `[heldNotes] byPitch`, else the median; playback.ini's `[heldNotes.onset]` applied) - written time; a chord's
   earliest against the note before in its line (joined without a rest): more than 50 ms fails, 30-50 ms warns (Rasch
   1979's ensemble asynchrony, applied within a line). With the full early start it is ~0 by construction; what shows
-  is CAPPED notes and `<Onset early>` below 100.
+  is CAPPED notes and `<Onset early>` below 100. A legato transition (the renderer's `LibTrace::from`) is no attack:
+  it arrives at sent + the transition's arrival the renderer models for its bend (`LibTrace::glideArriveMs`: the
+  patch's measured bendGlide by the note before's length, else `legatoDelay` by interval, quicker after a short note)
+  - written (2026-10-14; before, its articulation's onset); no delay in the map, no arrival. That compares a pitch
+  arrival with an attack's loudness onset. Sent times are on the score's time: the start lead
+  (`EventMap::startLeadMs`) taken off.
 - **LEVEL STEP** (values): under one slur at an unchanged written dynamic, the change of level between neighbouring
   notes in dB (the shipped dynamics calibration). Proposed threshold, not enforced, owner to approve: the intensity
   difference limen of Jesteadt, Wier & Green 1977 (JASA 61, 169-177; dI/I = 0.463 (I/I0)^-0.072 as Praat's manual
