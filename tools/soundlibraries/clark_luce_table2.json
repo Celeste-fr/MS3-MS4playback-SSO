@@ -1,5 +1,5 @@
 {
- "method": "    python3 -I clark_luce_table2.py <clark_luce_levels.json> <out clark_luce_table2.json>\n\nFig. 2 (clark_luce_levels.json `levels`) is the mean over \"all notes of all scales played at a particular dynamic\nmarking whether with or without vibrato and whether by one or the other of the two performers\". Check: the mean in dB of\nTable II's parabolas over n = 0 .. N (N the one unknown: how many notes each player played) reproduces Fig. 2 for all\ntwelve other instruments within 0.05 .. 1.05 dB rms (ten within 0.5; N 33 .. 45), but not the French horn (best 3.3 dB\nrms, pp / mf / ff -1.7 / +4.3 / -3.4 dB at N 41): its two players differ by 14 .. 22 dB (Table III: the worst player\nagreement of the study, 9.7 dB), and\nplayer 2's parabolas start at 15 (pp) / 34 (mf) dB SPL at 10 m, 20 .. 40 dB under player 1 and under every other wind\ninstrument's lowest notes. Fig. 2's horn follows player 2 (mf 57.8 / ff 71.0 against player 2's 58.1 / 70.8, power mean\nover n = 0 .. 30).\nThe horn's balance therefore takes player 1 (vibrato pp and mf: the scales he played; he has no ff), by the same mean\nover n = 0 .. N with N the median of the other instruments' fitted N, the spread over their N its uncertainty. Player 1\nagainst the trumpets (Fig. 2) at pp, as sound power with TU Berlin's DI_max: -6.2 dB; TU Berlin's single notes -0.3,\nMeyer 2009's in-play pp -3 (Fig. 2's horn: -16.1). His pp -> mf, 10.7 dB, is three of the five equal steps pp -> ff of\n[levels] realRange 2, i.e. a pp -> ff of 17.8 dB, Table I's horn span, which stays.\nNumbers only (the coefficients as printed, J. Audio Eng. Soc. 13(2) 151-157, pp. 154-155); read from the scan,\nreview page https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2 (the owner to check).",
+ "method": "    python3 -I clark_luce_table2.py <clark_luce_levels.json> <out clark_luce_table2.json>\n\nFig. 2 (clark_luce_levels.json `levels`) is the mean over \"all notes of all scales played at a particular dynamic\nmarking whether with or without vibrato and whether by one or the other of the two performers\". Check: the mean in dB of\nTable II's parabolas over n = 0 .. N (N the one unknown: how many notes each player played) reproduces Fig. 2 for all\ntwelve other instruments within 0.05 .. 1.05 dB rms (ten within 0.5; N 33 .. 45), but not the French horn (best 3.3 dB\nrms, pp / mf / ff -1.7 / +4.3 / -3.4 dB at N 41): its two players differ by 14 .. 22 dB (Table III: the worst player\nagreement of the study, 9.7 dB), and\nplayer 2's parabolas start at 15 (pp) / 34 (mf) dB SPL at 10 m, 20 .. 40 dB under player 1 and under every other wind\ninstrument's lowest notes. Fig. 2's horn follows player 2 (mf 57.8 / ff 71.0 against player 2's 58.1 / 70.8, power mean\nover n = 0 .. 30).\nThe horn's balance therefore takes player 1 (vibrato pp and mf: the scales he played; he has no ff), by the same mean\nover n = 0 .. N with N the median of the other instruments' fitted N, the spread over their N its uncertainty. Player 1\nagainst the trumpets (Fig. 2) at pp, as sound power with TU Berlin's DI_max: -6.2 dB; TU Berlin's single notes -0.3,\nMeyer 2009's in-play pp -3 (Fig. 2's horn: -16.1). His pp -> mf, 10.7 dB, is three of the five equal steps pp -> ff of\n[levels] realRange 2, i.e. a pp -> ff of 17.8 dB, Table I's horn span, which stays.\nplayerWeight (since 2026-10-15, iteration 3): Fig. 2 weighs every scale alike, so a player who played both styles\ncounts twice; per instrument and marking, the mean of the two players' means less the mean of the scales (Table II, the\nsame N), which section_balance_cl.py adds to Fig. 2: the tuba +1.4 dB at mp (its quieter player 2 played two scales,\nplayer 1 one; TU Berlin, Meyer and Spheres all put the tuba higher than Fig. 2), the others -0.7 .. +0.5.\nNumbers only (the coefficients as printed, J. Audio Eng. Soc. 13(2) 151-157, pp. 154-155); read from the scan,\nreview page https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2 (the owner to check).",
  "fig2Check": {
   "Violin": {
    "N": 34,
@@ -117,6 +117,68 @@
     "mf": 4.31,
     "ff": -3.4
    }
+  }
+ },
+ "playerWeight": {
+  "Violin": {
+   "pp": -0.0,
+   "mf": 0.0,
+   "ff": 0.0
+  },
+  "Viola": {
+   "pp": 0.0,
+   "mf": -0.66,
+   "ff": -0.14
+  },
+  "Cello": {
+   "pp": -0.2,
+   "mf": 0.07,
+   "ff": -1.0
+  },
+  "Double bass": {
+   "pp": 0.15,
+   "mf": -0.58,
+   "ff": -0.62
+  },
+  "Flute": {
+   "pp": 0.03,
+   "mf": 0.1,
+   "ff": -0.02
+  },
+  "Clarinet": {
+   "pp": -0.86,
+   "mf": -0.66,
+   "ff": -0.68
+  },
+  "Oboe": {
+   "pp": 0.0,
+   "mf": -0.0,
+   "ff": 0.0
+  },
+  "English horn": {
+   "pp": 0.0,
+   "mf": -0.45,
+   "ff": -0.0
+  },
+  "Bassoon": {
+   "pp": -0.0,
+   "mf": -0.0,
+   "ff": -0.0
+  },
+  "Trumpet": {
+   "pp": 0.0,
+   "mf": 0.0,
+   "ff": 0.0
+  },
+  "Trombone": {
+   "pp": 0.06,
+   "mf": 0.79,
+   "ff": -0.06
+  },
+  "Tuba": {
+   "pp": 1.37,
+   "mf": 1.44,
+   "ff": 1.12
   }
  },
  "French horn": {

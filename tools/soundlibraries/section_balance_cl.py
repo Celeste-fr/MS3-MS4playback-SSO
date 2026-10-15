@@ -20,6 +20,7 @@ included), +4.2 / +12.2 in forte passages; sectionLevel (TU single notes + Meyer
 The French horn (since 2026-10-15, docs/BALANCE_LOG.md): Fig. 2's horn is not the mean of its Table II scales (every
 other instrument's is) and follows player 2, whose levels are 20 .. 40 dB under player 1's; its pp / mf are player 1's
 (clark_luce_table2.py: Table II, the same mean as Fig. 2's), mp from them as above; no ff (player 1 played none).
+Each player counted once (since 2026-10-15, iteration 3): Fig. 2 + clark_luce_table2.json's playerWeight.
 Patches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2): their family member's
 change from sectionLevel to sectionLevel2 added to their sectionLevel (FAMILY: an assumption, "plays like its family").
 Patches without sectionLevel (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 2; before, they played SSO's own level
@@ -84,10 +85,12 @@ def at64(section):
 
 
 def lw(levels, inst, table2):
-    """one player's sound power (dB re 1 pW) at pp / mp / mf / ff (the horn: player 1's pp / mf, no ff)"""
+    """one player's sound power (dB re 1 pW) at pp / mp / mf / ff (the horn: player 1's pp / mf, no ff); Fig. 2 with
+    each player counted once (table2's playerWeight)"""
     v = levels[inst]
     t = table2.get(inst)
-    lp = {'pp': t['pp'], 'mf': t['mf']} if t else {'pp': v['pp'], 'mf': v['mf'], 'ff': v['ff']}
+    w = table2.get('playerWeight', {}).get(inst, {})
+    lp = {'pp': t['pp'], 'mf': t['mf']} if t else {m: v[m] + w.get(m, 0.0) for m in ('pp', 'mf', 'ff')}
     lp['mp'] = lp['pp'] + 2 / 3 * (lp['mf'] - lp['pp'])
     return {d: x + 20 * math.log10(10) + 11 - v['diMax'] for d, x in lp.items()}
 
@@ -96,7 +99,7 @@ def main():
     levelsPath, table2Path, curvesPath, windsPath, balancePath, dynamicsPath, outPath = sys.argv[1:8]
     dynamics = json.load(open(dynamicsPath, encoding='utf-8'))
     levels = json.load(open(levelsPath, encoding='utf-8'))['levels']
-    table2 = {k: v for k, v in json.load(open(table2Path, encoding='utf-8')).items() if k in levels}
+    table2 = {k: v for k, v in json.load(open(table2Path, encoding='utf-8')).items() if k in levels or k == 'playerWeight'}
     strings = json.load(open(curvesPath, encoding='utf-8'))['sections']
     winds = json.load(open(windsPath, encoding='utf-8'))['sections']
     balance = json.load(open(balancePath, encoding='utf-8'))

@@ -18,6 +18,10 @@ over n = 0 .. N with N the median of the other instruments' fitted N, the spread
 against the trumpets (Fig. 2) at pp, as sound power with TU Berlin's DI_max: -6.2 dB; TU Berlin's single notes -0.3,
 Meyer 2009's in-play pp -3 (Fig. 2's horn: -16.1). His pp -> mf, 10.7 dB, is three of the five equal steps pp -> ff of
 [levels] realRange 2, i.e. a pp -> ff of 17.8 dB, Table I's horn span, which stays.
+playerWeight (since 2026-10-15, iteration 3): Fig. 2 weighs every scale alike, so a player who played both styles
+counts twice; per instrument and marking, the mean of the two players' means less the mean of the scales (Table II, the
+same N), which section_balance_cl.py adds to Fig. 2: the tuba +1.4 dB at mp (its quieter player 2 played two scales,
+player 1 one; TU Berlin, Meyer and Spheres all put the tuba higher than Fig. 2), the others -0.7 .. +0.5.
 Numbers only (the coefficients as printed, J. Audio Eng. Soc. 13(2) 151-157, pp. 154-155); read from the scan,
 review page https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2 (the owner to check).
 """
@@ -99,6 +103,18 @@ def main():
         n, r, e = fit(inst, fig2[inst])
         out['fig2Check'][inst] = {'N': n, 'rms': round(r, 2), 'error': {m: round(x, 2) for m, x in zip(MARKS, e)}}
         print('%-13s N %2d  rms %.2f  (%s)' % (inst, n, r, ' '.join('%s %+.1f' % (m, x) for m, x in zip(MARKS, e))))
+    # each player once: Fig. 2 weighs every scale alike, so a player with two styles counts twice (tuba: the quieter
+    # player 2 two scales, player 1 one); playerWeight = the mean of the players' means - the mean of the scales, at N
+    out['playerWeight'] = {}
+    for inst, v in out['fig2Check'].items():
+        if inst == 'French horn':
+            continue
+        n = v['N']
+        delta = {}
+        for m in MARKS:
+            ps = [x for x in (mean(inst, m, n, 1), mean(inst, m, n, 2)) if x is not None]
+            delta[m] = round(sum(ps) / len(ps) - mean(inst, m, n), 2)
+        out['playerWeight'][inst] = delta
     others = sorted(v['N'] for k, v in out['fig2Check'].items() if k != 'French horn')
     n = int(statistics.median(others))
     lv = {m: mean('French horn', m, n, 1) for m in ('pp', 'mf')}
