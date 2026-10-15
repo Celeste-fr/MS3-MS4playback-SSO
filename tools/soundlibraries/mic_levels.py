@@ -8,6 +8,17 @@ micDefault>, written by gen_spitfire_sso.py from sso_mic_levels.json).
                                                     perf) for the Windows VM (run.cmd: "tag|patch|kthost args" per line)
     mic_levels.py analyze <folder> -o tools/soundlibraries/sso_mic_levels.json
                                                     <folder>: the lists' .json, the notes files and the renders <tag>.wav
+    mic_levels.py extra <meas.json> <jobs.json> -o tools/soundlibraries/sso_mic_levels.json
+                                                    adds patches measured later (the file's other entries kept): meas.json
+                                                    {tag: {pitch: {measure: [takes]}}}, jobs.json [[tag, patch, cfg]]
+
+Added 2026-10-15 (balance-refine, docs/BALANCE_LOG.md): the 15 patches that got a section level in the balance's
+iteration 2 (Solo Violin 1 / 2, Solo Viola, Solo Cello: 3 mics; Motif Horns a4 / Trumpets a3 / Trombones a5, Piccolo, Alto /
+Bass Flute, Contrabass Clarinet, Contrabass Trombone, Cimbasso Solo, Cimbassi a2, Contrabass Tuba: 4), their pitches the
+quartiles of sso_gap_cc1_curves.json's; and Harp and Timpani (3 mics), which decay: their notes 6.0 s apart and their level
+the energy of the note and its tail (both channels' mean square from the note-on to 6.0 s after it, "levelMeasure"), the
+same window for every mic; Harp at MIDI 42 / 60 / 78, Timpani at keys 50 / 54 / 58 (key 50 sounds D2). The percussion
+patches have no mic Controllers in the map (MuseScore never changes their mics): not measured.
 
 Method (Windows test VM, kthost: Kontakt 8.13.1 + SSO, one process per render, offline, 44.1 kHz; copies of MuseScore's
 resaved setups, the strings' from MuseScore's setups folder, the winds' and brass' from the dynamics check's): SSO's All
@@ -373,6 +384,48 @@ def analyze(folder, out):
           f'median {res["predictionChecks"]["medianAbsErrorDb"]} dB')
 
 
+def extra(measPath, jobsPath, out):
+    meas = json.load(open(measPath))
+    by = {}
+    for tag, patch, cfg in json.load(open(jobsPath)):
+        if tag in meas:
+            by.setdefault(patch, {})[tag.rsplit('_', 1)[1]] = tag
+    res = json.load(open(out))
+    for patch, t in by.items():
+        decaying = patch in ('Harp', 'Timpani')
+        lv = 'energyDb' if decaying else 'rmsDb'
+        med = lambda tag, k: {p: statistics.median(v[k]) for p, v in meas[tag].items()}
+
+        def rel(tag, k):
+            a, b = med(tag, k), med(t['def'], k)
+            d = [a[p] - b[p] for p in sorted(a, key=int) if a[p] > -150 and b[p] > -150]
+            return (round(statistics.median(d), 2) if d else None), [round(v, 2) for v in d]
+        ref = meas[t['def']]
+        rec = {'pitches': [int(p) for p in sorted(ref, key=int)], 'defaultRmsDb': med(t['def'], lv),
+               'defaultSpread': round(max(max(v[lv]) - min(v[lv]) for v in ref.values()), 2), 'mics': {}, 'perPitch': {}}
+        if decaying:
+            rec['levelMeasure'] = 'energyDb (stored as rmsDb): the note and its tail, 0 .. 6.0 s after the note-on'
+        n = sum(1 for k in t if k.startswith('a'))
+        for i in range(1, n + 1):
+            # a mic alone at about -80 dB rms or less at every pitch is an empty signal (samples not loaded offline), not a level
+            if all(statistics.median(v['rmsDb']) < -80 for v in meas[t[f'a{i}']].values()):
+                rec['mics'][MICS[i - 1]] = {'rmsDb': None, 'lufs': None, 'loudDb': None}
+                rec.setdefault('unmeasured', {})[MICS[i - 1]] = (
+                    'the mic alone rendered an empty signal (under -80 dB rms at every pitch): its samples were not loaded in '
+                    'the offline render; not a level, left out (a mic without a level is not compensated)')
+                continue
+            rec['mics'][MICS[i - 1]] = {'rmsDb': rel(t[f'a{i}'], lv)[0], 'lufs': rel(t[f'a{i}'], 'lufs')[0],
+                                        'loudDb': rel(t[f'a{i}'], 'loudDb')[0]}
+            rec['perPitch'][MICS[i - 1]] = rel(t[f'a{i}'], lv)[1]
+        z = rel(t['z2'], lv)[0]
+        rec['treeOff'] = z
+        tree = rec['mics']['Tree']['rmsDb']
+        rec['default'] = {'Tree': 127} if z is None and tree is not None and abs(tree) < 0.05 else None
+        res['patches'][patch] = rec
+        print('%-22s %s  tree off %s  default %s' % (patch, {m: v['rmsDb'] for m, v in rec['mics'].items()}, z, rec['default']))
+    json.dump(res, open(out, 'w'), indent=1)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='cmd', required=True)
@@ -381,9 +434,15 @@ def main():
     a = sub.add_parser('analyze')
     a.add_argument('folder')
     a.add_argument('-o', '--out', required=True)
+    x = sub.add_parser('extra')
+    x.add_argument('meas')
+    x.add_argument('jobs')
+    x.add_argument('-o', '--out', required=True)
     args = ap.parse_args()
     if args.cmd == 'events':
         write_events(args.folder)
+    elif args.cmd == 'extra':
+        extra(args.meas, args.jobs, args.out)
     else:
         analyze(args.folder, args.out)
 

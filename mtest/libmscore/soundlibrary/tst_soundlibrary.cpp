@@ -3023,6 +3023,14 @@ void TestSoundLibrary::levelMicCompensation()
       for (const SoundLib::LibInstrument& li : sso->instruments)
             if (li.name == "Violins 1 - Sul G - Performance")
                   QVERIFY(li.hasMicLevels && li.micLevelDb[0] == v1->micLevelDb[0]);
+      // every patch the balance levels has its mics measured (balance-refine, 2026-10-15: the 15 swept patches too), and the
+      // harp and timpani; the timpani's Close mic rendered empty offline, so it has no level (not compensated)
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            if (li.hasSectionLevel2 || li.name == "Harp" || li.name == "Timpani")
+                  QVERIFY2(li.hasMicLevels, qPrintable(li.name));
+            if (li.name == "Timpani")
+                  QVERIFY(std::isnan(li.micLevelDb[0]) && li.micLevelDb[1] == 0.0);
+            }
       }
 
 //---------------------------------------------------------

@@ -1548,7 +1548,9 @@ def realRangeAttributes(name):
 #   (mic_levels.py): each mic alone at its full fader against the patch's default mix (SSO's Long at CC1 64, the sustain's
 #   power, median over three pitches), the default faders (SSO: the Tree alone at 127), the faders' law and Mic Mix
 #   Distance's (Close / Tree / Ambient). Measured: the 28 patches with a section level and the strings' Performance
-#   patches; another extra takes its main's (soundlibrary.cpp: an assumption, the same recording's mics), other patches none
+#   patches, and (balance-refine, 2026-10-15, `mic_levels.py extra`) the 15 patches swept for the balance, the harp and the
+#   timpani (their decaying notes by energy, 0 .. 6 s; the timpani's Close mic rendered empty offline, left out); the
+#   percussion kits have no mic Controllers, so MuseScore never changes their mics; another extra takes its main's (soundlibrary.cpp: an assumption, the same recording's mics), other patches none
 MIC = loadFit('sso_mic_levels.json')
 MIC_NAMES = ['Close', 'Tree', 'Ambient', 'Outrigger', 'Leader']
 def micAttributes(name):

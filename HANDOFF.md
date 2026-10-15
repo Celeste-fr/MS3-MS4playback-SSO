@@ -24,9 +24,18 @@ improve anymore". `sectionBalance` 2 refined from data in three iterations, each
 from Clark & Luce's player 1 (Fig. 2's horn was player 2's alone; Trumpets a2 over Horns a2 at mp 17.9 -> 4.5 dB), a
 `sectionLevel2` for the 15 patches that had none (solo strings, Motif brass, piccolo, alto / bass flute, contrabass
 clarinet / trombone / tuba, cimbassi; SSO side from the one-pitch dynamics check, ±2.3 dB; 8 by a family member's level,
-an assumption), each Clark & Luce player counted once (tuba +1.6 dB). Open: the owner to check the Table II readings
-(https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2); real range for the 15 patches needs a 4-take CC1 sweep on the
-Windows VM (unreachable 2026-10-15: needs its new address); pitch dependence checked, no change. Not heard (data decide).
+an assumption), each Clark & Luce player counted once (tuba +1.6 dB). Iterations 4-8 (same day, VM): the 15 patches
+swept against CC1 (`sso_gap_cc1_curves.json`; 7 with their own real range, 8 their family's span, marked); every marking
+checked as MuseScore sends it (43 patches, median error 0.05 dB, 42 in order; Cor Anglais' round robins spread 4.5 dB
+against its 1.04 dB step); bass clarinet / contrabassoon / bass trombones by TU Berlin's ratio to their sibling (bass
+clarinet ±5 dB); the harp by TU's sound power for decaying tones (fast-weighted energy, `tu_transient.py`; -9.81 dB,
+±4 dB); **timpani not applied** (TU's D2 has unlabelled dynamics); the percussion group inside Skålevik 2019's range (no
+change); each marking's own directivity from TU's pp recordings (`tu_directivity.json`; horns +3.5 dB); mic levels of
+the 15 patches and the harp (`sso_mic_levels.json`). **Found, not fixed** (not balance): SSO's timpani keys sound an
+octave under their MIDI number (key 50 = D2), so a written D2 (MIDI 38) hits a silent key. Open: the owner to check the
+Table II readings (https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2) and Skålevik's
+(https://claude.ai/artifact/JKYSTkAFHEv4hjZviRhCEn); summary https://claude.ai/artifact/X4jyPthyHEgqYiGyhpPTvP. Not
+heard (data decide).
 
 ## SSO script fixes (2026-10-13, branch `sso-script-fixes`, from reading SSO's Kontakt scripts; untried with the real library)
 

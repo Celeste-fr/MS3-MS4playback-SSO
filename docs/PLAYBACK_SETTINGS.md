@@ -732,9 +732,13 @@ default**) makes the change up, so the section stays at its balance whatever mic
   127, Outrigger 64), +1.39 dB (Basses, all five mics): mics of one recording are partly coherent, so a sum of
   several close mics comes out up to ~1.4 dB louder in the model than measured. A take-to-take spread (SSO's two round
   robins) of up to 5 dB (Tuba Solo) is why each value is a median of 4 takes at 3 pitches.
-- **Which patches**: the 28 with a section level and the five string sections' Performance patches, measured; any other
-  `with` patch takes its main patch's values (`soundlibrary.cpp`: an assumption, the same recording's mics); other
-  patches none (no compensation).
+- **Which patches**: the 28 with a section level and the five string sections' Performance patches, measured; since
+  2026-10-15 (balance-refine, `mic_levels.py extra`, same method) also the 15 patches swept for the balance (solo
+  strings, Motif brass, piccolo, alto / bass flute, contrabass clarinet / trombone / tuba, cimbassi), the harp and the
+  timpani (decaying notes by their energy 0 .. 6 s after the note-on; the timpani's Close mic rendered empty offline,
+  about -92 dB rms in every take: no level, so not compensated); every patch with a section level is covered. The
+  percussion kits have no mic Controllers, so their mics never change. Any other `with` patch takes its main patch's
+  values (`soundlibrary.cpp`: an assumption, the same recording's mics); other patches none (no compensation).
 - **Not covered / untested**: a mic change by staff text (mic Controllers have none). With Mic Mix Distance set, a mic
   value changed alone later (the Controllers window while playing, a mic lane's point) reaches Kontakt in a block of its
   own and may play, where the model keeps Mic Mix Distance's mix until playback starts again (only values sent together

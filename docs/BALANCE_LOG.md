@@ -220,6 +220,20 @@ power as before. The harp's TU-to-Clark & Luce offset recomputed with it (-128.3
 -0.05, Cor Anglais -0.97, strings -0.13 .. +0.10, Harp -10.41 -> -9.81. One brass player against one string player at pp
 / mf: +11.4 / +13.5 -> +14.8 / +14.5 dB; the Spheres dataset's whole sections (independent) +14.3: now closer.
 
+## Mic levels for the added patches (2026-10-15)
+
+The mic-compensation work (`[levels] micCompensation`) measured each mic alone for the 28 patches that had a section
+level then. The 15 patches given a level in iterations 2 and 4, the harp and the timpani had none, so a mic change on
+them changed their balance. Measured on the Windows VM the same way (`mic_levels.py extra`, kthost, Kontakt 8 + SSO,
+offline): the Long at CC1 64, or the hit at MuseScore's mf velocity 80 for the harp (keys 42 / 60 / 78) and timpani
+(keys 50 / 54 / 58), 3 pitches x 4 takes, each mic alone at its full fader against the default mix (96 renders,
+`sso_mic_levels.json`); decaying notes by energy, 0 .. 6 s after the note-on. All 17 have SSO's default mix the Tree
+alone at 127 (silent with the Tree at 0), as the mic agent found for the others. The timpani's Close mic rendered an
+empty signal (about -92 dB rms, every take the same: its samples weren't loaded offline), so it has no level and isn't
+compensated (`extra` now leaves out a mic under -80 dB rms at every pitch). The percussion kits have no mic Controllers
+in the map, so MuseScore never changes their mics: not measured. No sectionLevel2 changed; the map gains `micLevels`
+on the 17. tst_soundlibrary checks that every patch with a sectionLevel2, the harp and the timpani have mic levels.
+
 ## Investigated, no change (2026-10-15)
 
 - **Pitch dependence.** Each patch has one offset over its range, so SSO's level against pitch stays as recorded. Linear

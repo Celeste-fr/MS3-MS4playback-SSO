@@ -202,8 +202,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   faders' law and Mic Mix Distance's (map `<Mics fader mix>`; with Mic Mix Distance set the mic values sent with it
   don't play: SSO's script overrides them). By the patches' volumes as the section level (`Volumes::micTop`, within S'),
   automated mics each note's own C at its start by CC11 (`trackLevel`); Live's sets and clips carry both. Measured on
-  the VM (`tools/soundlibraries/mic_levels.py` -> `sso_mic_levels.json` -> `gen_spitfire_sso.py`): the 28 patches with a
-  section level and the strings' Performance patches; other extras take their main's (an assumption); power-sum
+  the VM (`tools/soundlibraries/mic_levels.py` -> `sso_mic_levels.json` -> `gen_spitfire_sso.py`): every patch with a
+  section level (44), the strings' Performance patches, the harp and the timpani (not its Close mic: empty offline);
+  other extras take their main's (an assumption); power-sum
   error <= 1.4 dB, Mic Mix Distance's fit 2.05 dB leave-one-out (docs/PLAYBACK_SETTINGS.md › Mic compensation).
 - **Playback adjustments are configurable** (`libmscore/playbacksettings.*`; **docs/PLAYBACK_SETTINGS.md** is the
   inventory): built-in defaults → `<dataPath>/playback.ini` (written with every key when missing; Edit › Reload
