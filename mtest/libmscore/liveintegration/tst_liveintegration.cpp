@@ -96,6 +96,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEditDrums();
       void clipEditInstrument();
       void clipEditBands();
+      void clipBandsDrawn();
       void clipEditOutside();
       void clipEditPackets();
       void clipTitleUnnamed();
@@ -1954,6 +1955,128 @@ void TestLiveIntegration::clipEditBands()
             QCOMPARE(score->parts()[0]->instrument()->getId(), QString("violoncello"));
             QVERIFY(score->parts()[0]->instrument()->minPitchP() > 0);
             QVERIFY(shownStaves(score) == std::vector<int>({ 2 }));
+            delete score;
+      }
+      }
+
+//---------------------------------------------------------
+//   clipBandsDrawn: every note of a band part drawn (in the page's items, as Score::print and the score view
+//   take them) on a shown staff, where its band staff is, although the staff it belongs to may be hidden
+//   (the owner's arrangement clip "16-BuzzWave", 2026-10-04: G0-E3, two staves of rests and no notes)
+//---------------------------------------------------------
+
+// what is wrong with the drawing, or "" when every note, stem, beam and tie is drawn on its band's shown staff,
+// every drawn rest is on a shown staff, and every shown staff but an empty clip's treble has a chord drawn on it
+static QString drawnWrong(MasterScore* score)
+      {
+      score->doLayout();
+      Page* page = score->pages().front();
+      System* sys = score->systems().front();
+      const QList<Element*> items = page->items(page->abbox());
+      const std::set<const Element*> drawn(items.begin(), items.end());
+      std::vector<Note*> notes;
+      signatures(score, &notes);
+      std::set<int> drawnOn;
+      for (Note* n : notes) {
+            Chord* c = n->chord();
+            const int v = c->vStaffIdx();
+            drawnOn.insert(v);
+            const QString what = QString("note %1 at %2").arg(n->ppitch()).arg(n->tick().ticks());
+            if (!sys->staff(v)->show())
+                  return what + ": its band staff hidden";
+            if (!drawn.count(n))
+                  return what + ": not drawn";
+            if (c->stem() && !drawn.count(c->stem()))
+                  return what + ": stem not drawn";
+            if (c->beam() && !drawn.count(c->beam()))
+                  return what + ": beam not drawn";
+            if (n->tieFor() && !n->tieFor()->segmentsEmpty() && !drawn.count(n->tieFor()->frontSegment()))
+                  return what + ": tie not drawn";
+            const qreal top = sys->staffYpage(v);
+            const qreal sp = score->spatium();
+            const qreal y = n->pagePos().y();
+            if (y < top - 8 * sp || y > top + score->staff(v)->height() + 8 * sp)
+                  return what + QString(": drawn at %1, its staff at %2").arg(y).arg(top);
+            }
+      for (const Element* e : items)
+            if (e->isRest() && !sys->staff(e->staffIdx())->show())
+                  return QString("a rest drawn on hidden staff %1").arg(e->staffIdx());
+      for (int i = 0; i < score->nstaves(); ++i)
+            if (sys->staff(i)->show() && !drawnOn.count(i) && !(notes.empty() && i == 1))
+                  return QString("staff %1 shown with nothing drawn on it").arg(i);
+      return QString();
+      }
+
+void TestLiveIntegration::clipBandsDrawn()
+      {
+      struct Case {
+            const char* what;
+            std::vector<int> pitches;
+            };
+      const std::vector<Case> cases {
+            // G0-E3, as the owner's clip: nothing on the first staff (treble 15ma), the notes' own
+            { "low", { 19, 24, 31, 36, 43, 48, 52, 40, 28, 19, 31, 43, 52, 36, 24, 19 } },
+            { "wide", { 48, 55, 60, 64, 72, 79, 43, 76 } },
+            { "high", { 88, 91, 96, 100, 103, 108, 96, 88 } },
+            { "all four", { 12, 19, 24, 31, 36, 43, 48, 55, 60, 64, 67, 72, 79, 88, 96, 100 } },
+            };
+      for (const Case& c : cases) {
+            Clip clip = bandClip("16-BuzzWave", c.pitches);
+            clip.notes.push_back(ln(90, 24, 7.0, 1.0, 80));       // a chord over two bands (split into voices)
+            clip.notes.push_back(ln(91, 55, 7.0, 1.0, 80));
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY2(score, c.what);
+            QVERIFY(score->lineHidesEmptyStaves());
+            const QString wrong = drawnWrong(score);
+            QVERIFY2(wrong.isEmpty(), qPrintable(QString(c.what) + ": " + wrong));
+            if (QString(c.what) == "low")
+                  QVERIFY(!score->systems().front()->staff(0)->show());
+            if (qEnvironmentVariableIsSet("MS_CLIPBANDS_PNG"))
+                  QVERIFY(renderPng(score, qEnvironmentVariable("MS_CLIPBANDS_PNG") + QString("/clip-bands-drawn-%1.png").arg(c.what)));
+            delete score;
+            }
+
+      // editing: a note moved over a band border, tied, undone and redone, deleted: still every note drawn
+      {
+            const Clip clip = bandClip("16-BuzzWave", { 19, 24, 31, 36, 43, 48, 52, 40 });
+            MasterScore* score = importClip(clip, nullptr);
+            QVERIFY(score);
+            const Baseline b = match(clip, score);
+            Note* n = noteAt(score, 0, 19);
+            QVERIFY(n);
+            score->startCmd();
+            score->undoChangePitch(n, 50, n->tpc1(), n->tpc2());
+            score->endCmd();
+            QCOMPARE(n->chord()->vStaffIdx(), 2);
+            QVERIFY2(drawnWrong(score).isEmpty(), qPrintable(drawnWrong(score)));
+            score->undoRedo(true, nullptr);
+            QCOMPARE(n->chord()->vStaffIdx(), 3);
+            QVERIFY2(drawnWrong(score).isEmpty(), qPrintable(drawnWrong(score)));
+            QVERIFY(diff(b, signatures(score)).empty());
+            score->undoRedo(false, nullptr);
+            QVERIFY2(drawnWrong(score).isEmpty(), qPrintable(drawnWrong(score)));
+            score->undoRedo(true, nullptr);
+            // a tie between the first two notes after making them the same pitch
+            Note* m = noteAt(score, 240, 24);
+            QVERIFY(m);
+            score->startCmd();
+            score->undoChangePitch(m, 19, n->tpc1(), n->tpc2());
+            score->endCmd();
+            score->select(n);
+            score->startCmd();
+            score->cmdAddTie();
+            score->endCmd();
+            QVERIFY(n->tieFor());
+            QVERIFY2(drawnWrong(score).isEmpty(), qPrintable(drawnWrong(score)));
+            // every note deleted: rests only, the treble shown
+            score->startCmd();
+            score->cmdSelectAll();
+            score->cmdDeleteSelection();
+            score->endCmd();
+            QVERIFY2(drawnWrong(score).isEmpty(), qPrintable(drawnWrong(score)));
+            QVERIFY(shownStaves(score) == std::vector<int>({ 1 }));
+            score->undoRedo(true, nullptr);
+            QVERIFY2(drawnWrong(score).isEmpty(), qPrintable(drawnWrong(score)));
             delete score;
       }
       }

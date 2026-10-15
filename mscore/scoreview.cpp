@@ -799,6 +799,34 @@ void ScoreView::moveControlCursorNearCursor()
 //    move cursor in note input mode
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   cursorStaff
+//    the staff the note input cursor is drawn on: the track's, or (lineHidesEmptyStaves, a Live clip tab's band
+//    staves) while that one is hidden, the staff where the track's chord there, else the one before it, is drawn
+//    (Score::hideStavesNothingIsDrawnOn), else the part's first shown staff
+//---------------------------------------------------------
+
+static int cursorStaff(Segment* segment, int track, System* system)
+      {
+      const int staffIdx = track / VOICES;
+      Score* score = segment->score();
+      if (!score->lineHidesEmptyStaves() || staffIdx >= int(system->staves()->size()) || system->staff(staffIdx)->show())
+            return staffIdx;
+      for (Segment* s = segment; s; s = s->prev1(SegmentType::ChordRest)) {
+            Element* e = s->element(track);
+            if (e && e->isChord()) {
+                  const int v = toChord(e)->vStaffIdx();
+                  if (v >= 0 && v < int(system->staves()->size()) && system->staff(v)->show())
+                        return v;
+                  break;
+                  }
+            }
+      for (Staff* st : *score->staff(staffIdx)->part()->staves())
+            if (st->idx() < int(system->staves()->size()) && system->staff(st->idx())->show())
+                  return st->idx();
+      return staffIdx;
+      }
+
 void ScoreView::moveCursor()
       {
       const InputState& is = _score->inputState();
@@ -826,7 +854,7 @@ void ScoreView::moveCursor()
             return;
             }
       double x        = segment->canvasPos().x();
-      double y        = system->staffYpage(staffIdx) + system->page()->pos().y();
+      double y        = system->staffYpage(cursorStaff(segment, track, system)) + system->page()->pos().y();
       double _spatium = score()->spatium();
       x              -= qMin(segment->pos().x() - score()->styleP(Sid::barNoteDistance), 0.0);
 
