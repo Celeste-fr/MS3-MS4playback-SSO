@@ -296,10 +296,10 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Cor Anglais | -3.86 | +4.39 | 81.4 |
 | Clarinet Solo | -2.79 | +3.43 | 82.0 |
 | Clarinets a2 | -4.73 | +1.49 | 85.1 |
-| Bass Clarinet (family) | +0.38 | +1.20 | 86.9 |
+| Bass Clarinet (TU ratio) | +0.38 | +1.20 | 86.9 |
 | Bassoon Solo | -15.00 | -2.76 | 81.2 |
 | Bassoons a2 | -2.52 | +9.72 | 84.2 |
-| Contrabassoon (family) | -14.56 | -3.14 | 76.7 |
+| Contrabassoon (TU ratio) | -14.56 | -3.14 | 76.7 |
 | Horn Solo | +0.57 | +3.97 | 94.8 |
 | Horns a2 | +7.17 | +10.57 | 97.8 |
 | Horns a6 | +10.95 | +14.35 | 102.5 |
@@ -309,8 +309,8 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Tenor Trombone Solo | -0.35 | +4.67 | 89.8 |
 | Tenor Trombones a2 | +6.31 | +11.33 | 92.8 |
 | Trombones a6 | +16.00 | +20.07 | 97.5 |
-| Bass Trombone Solo (family) | +3.24 | +6.67 | 91.5 |
-| Bass Trombones a2 (family) | +6.80 | +10.22 | 94.5 |
+| Bass Trombone Solo (TU ratio) | +3.24 | +6.67 | 91.5 |
+| Bass Trombones a2 (TU ratio) | +6.80 | +10.22 | 94.5 |
 | Tuba Solo | -1.12 | +8.56 | 95.1 |
 | Solo Violin 1 | +0.00 | - | 77.9 |
 | Solo Violin 2 | -0.23 | - | 77.9 |
@@ -329,11 +329,13 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Contrabass Tuba (tuba) | -3.24 | - | 95.1 |
 | Harp | -9.81 | - | - |
 
-The last 15 rows (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 2) had no section level and played SSO's own
-level; their SSO side is the dynamics check's Long at CC1 64 at one test pitch (`sso_sound_dynamics.json`) + 1.50 dB
-(the median full-range - dynamics-check difference of the 24 patches that have both; there it reproduces M2 within SD
-2.3 dB, max 4.1). In brackets: the family member whose real level the patch takes (an assumption). Strings Ensemble
-has none (which sections sound at its test pitch isn't known), nor do harp, keyboards and percussion (no source).
+The 15 rows from Solo Violin 1 to Contrabass Tuba (since 2026-10-15, docs/BALANCE_LOG.md › Iterations 2 and 4) had no
+section level and played SSO's own level; since Iteration 4 their SSO side is their own sweep, as every other patch's
+(until then the dynamics check at one test pitch + 1.50 dB, ±2.3 dB). In brackets: the family member whose real level
+and span the patch takes (an assumption); "TU ratio": the sibling's Clark & Luce level plus TU Berlin's difference
+(Iteration 5). The harp: Iteration 6 (above). Strings Ensemble has none (which sections sound at a given note isn't
+known), nor do the timpani (Iteration 6: no marking for TU's levels), keyboards and the other percussion (Iteration 7:
+SSO's group already inside Skålevik's range).
 
 Biggest moves from `sectionLevel`: Bassoon Solo -12.5 dB (TU's single notes put it far louder than orchestral players
 play it), Horn Solo -7.1, Violas -3.7; the trumpets barely move.
