@@ -6,6 +6,7 @@
                                      <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <sso_sound_dynamics.json>
                                      <sso_gap_cc1_curves.json> <3_Audio_Features.csv> <tu_directivity.json | ->
                                      <tu_decaying.json> <sso_percussion_levels.json> <out sso_cl_section_balance.json>
+                                     [<sso_strings_ensemble.json>]
 
 The owner, 2026-10-14: "I prefer all the balance levels and the dynamic levels loudness to be based on real data".
 Real side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in
@@ -57,8 +58,15 @@ the clarinet, Contrabass Trombone and Cimbasso by the trombone, Contrabass Tuba 
 sso_winds_cc1_curves.json), linear in dB between measured pitches, its mean over every semitone of the sweep (no
 database range to meet: Clark & Luce's levels are scales over the whole playing range). Iteration 2's stand-in (the
 dynamics check's Long at CC1 64 at the test pitch plus the median of (full-range mean - dynamics check) over the
-patches that have both) is kept as a check only ("standIn", each gap patch's "standInM2"). Strings Ensemble stays
-without: which sections sound at each pitch isn't known.
+patches that have both) is kept as a check only ("standIn", each gap patch's "standInM2").
+Strings Ensemble (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 9; before, it played SSO's own level): its Long is
+the five sections' own samples mixed, each section where it has the note, faded in and out at its range's ends
+(sso_strings_ensemble.json, strings_ensemble.py: cross-correlation with each section's recording and a harmonic-by-
+harmonic fit). Per key p (every even key 24 .. 96): target = the power sum over the sections in it of (the section's
+Long at p, loudDb, + its M2 + its weightDb: how far the ensemble has it faded there), the balanced sections playing what
+the ensemble plays; M2(p) = target - the ensemble's loudDb at p; the patch's M2 the mean over the keys (as every patch's:
+one offset over the range). Checks in "ensemble": "binary" (every section in at full level, faded or not), "rms" (the
+sustain's power instead of loudDb), the keys' SD.
 """
 import json
 import math
@@ -223,9 +231,28 @@ def group(perc, strings):
     return out
 
 
+def ensemble(ens, m2):
+    """Strings Ensemble's M2 from the sections it plays at each key (Iteration 9)"""
+    rows, variants = [], {'binary': [], 'rms': []}
+    for p, row in sorted(ens['keys'].items(), key=lambda kv: int(kv[0])):
+        parts = row['weights']
+        target = psum(row['parts'][n]['loudDb'] + m2[n] + w for n, w in parts.items())
+        m = target - row['loudDb']
+        rows.append({'pitch': int(p), 'sections': parts, 'targetDb': round(target, 2), 'ssoDb': row['loudDb'], 'M2': round(m, 2)})
+        variants['binary'].append(psum(row['parts'][n]['loudDb'] + m2[n] for n in parts) - row['loudDb'])
+        variants['rms'].append(psum(row['parts'][n]['rmsDb'] + m2[n] + w for n, w in parts.items()) - row['rmsDb'])
+    ms = [r['M2'] for r in rows]
+    mean = statistics.mean(ms)
+    return {'M2': round(mean, 2), 'M1': None, 'instrument': 'the five string sections (Iteration 9)', 'players': 60,
+            'keys': rows, 'keySd': round(statistics.pstdev(ms), 2), 'keyRange': [round(min(ms), 2), round(max(ms), 2)],
+            'binary': round(statistics.mean(variants['binary']), 2), 'rms': round(statistics.mean(variants['rms']), 2),
+            'uncertaintyDb': 'the sections\' own (their M2, about +-2) plus the mean\'s: keys\' SD / sqrt(37), the variants'}
+
+
 def main():
     (levelsPath, table2Path, curvesPath, windsPath, balancePath, dynamicsPath, gapPath, csvPath, diPath, tuDecayPath,
      percPath, outPath) = sys.argv[1:13]
+    ensPath = sys.argv[13] if len(sys.argv) > 13 else None
     power = sbw.power(csvPath)
     di = None
     if diPath != '-':
@@ -282,6 +309,9 @@ def main():
     out['patches']['Harp'], out['decayingNotApplied'] = decaying(tuD, perc, out, balance)
     out['decayingNotApplied'] = {'Timpani': out['decayingNotApplied']}
     out['percussionGroup'] = group(perc, {s: sso64[s] + out['patches'][s]['M2'] for s in STRINGS})
+    if ensPath:
+        out['patches']['Strings Ensemble'] = ensemble(json.load(open(ensPath, encoding='utf-8')),
+                                                      {s: out['patches'][s]['M2'] for s in STRINGS})
     with open(outPath, 'w', encoding='utf-8') as fh:
         json.dump(out, fh, indent=1)
         fh.write('\n')
@@ -296,6 +326,10 @@ def main():
         h['D'], h['dPitchSd'], h['offset']['value'], h['offset']['rms'], h['M2'], t['M2']))
     print('percussion group re strings: peak %+.2f, energy 1 s %+.2f, ring %+.2f: %s' % (
         g['peakReStrings'], g['energy1sReStrings'], g['energyRingReStrings'], g['decision']))
+    if 'Strings Ensemble' in out['patches']:
+        e = out['patches']['Strings Ensemble']
+        print('Strings Ensemble M2 %+.2f (keys SD %.2f, %+.2f .. %+.2f; binary %+.2f, rms %+.2f)' % (
+            e['M2'], e['keySd'], e['keyRange'][0], e['keyRange'][1], e['binary'], e['rms']))
     print('stand-in: %+.2f dB, SD %.2f, max %.2f over %d patches' % (standIn, out['standIn']['sd'], out['standIn']['max'], len(both)))
 
 

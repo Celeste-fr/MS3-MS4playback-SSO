@@ -2795,7 +2795,8 @@ void TestSoundLibrary::levelSectionBalance()
       QVERIFY(withLevel > 5);
       // sectionLevel2 (Clark & Luce at playing levels, [levels] sectionBalance 2; section_balance_cl.py ->
       // sso_cl_section_balance.json -> gen_spitfire_sso.py): the same 28 sections, every patch of one its main patch's;
-      // since 2026-10-15 also the 15 patches without sectionLevel (section_balance_cl.py GAP: solo strings, Motif brass, family)
+      // since 2026-10-15 also the 15 patches without sectionLevel (section_balance_cl.py GAP: solo strings, Motif brass, family),
+      // the harp (TU Berlin) and Strings Ensemble (Iteration 9: the sections it mixes at each key, sso_strings_ensemble.json)
       const std::map<QString, double> M2 { { "Violins 1", -0.03 }, { "Violins 2", 1.12 }, { "Violas", -7.08 },
                  { "Celli", 2.56 }, { "Basses", 3.43 }, { "Flute Solo", -2.04 }, { "Flutes a2", -3.87 },
                  { "Oboe Solo", -6.67 }, { "Oboes a2", -9.03 }, { "Cor Anglais", -3.86 }, { "Clarinet Solo", -2.79 },
@@ -2808,8 +2809,8 @@ void TestSoundLibrary::levelSectionBalance()
                  { "Motif Horns a4", 12.82 }, { "Motif Trumpets a3", 13.57 }, { "Motif Trombones a5", 8.28 },
                  { "Piccolo", -4.26 }, { "Alto Flute", 1.93 }, { "Bass Flute", -2.90 }, { "Contrabass Clarinet", -0.77 },
                  { "Contrabass Trombone", -1.88 }, { "Cimbasso Solo", 4.74 }, { "Cimbassi a2", 14.69 },
-                 { "Contrabass Tuba", -3.24 }, { "Harp", -9.81 } };
-      QCOMPARE(int(M2.size()), 44);
+                 { "Contrabass Tuba", -3.24 }, { "Harp", -9.81 }, { "Strings Ensemble", 11.93 } };
+      QCOMPARE(int(M2.size()), 45);
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
             QCOMPARE(li.hasSectionLevel2, M2.count(section) == 1);

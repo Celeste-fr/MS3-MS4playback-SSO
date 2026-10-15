@@ -245,7 +245,7 @@
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
     <Controller id="mic5" name="Mic 5 (Leader)" param="Mic 5 level"/>
   </Instrument>
-  <Instrument name="Strings Ensemble" ids="strings" nki="Instruments/Symphonic Strings/Ensembles - All techniques.nki" setup="$iooxo=3" pitch="61">
+  <Instrument name="Strings Ensemble" ids="strings" nki="Instruments/Symphonic Strings/Ensembles - All techniques.nki" setup="$iooxo=3" pitch="61" sectionLevel2="11.93" micLevels="Close:-4.07 Tree:0 Ambient:-5.28 Outrigger:-5.81" micDefault="Tree:127">
     <Articulation name="Long" value="1" techniques="long legato" release="1295" onset="24:215 37:205 38:140 45:130 50:90 68:70 78:95 82:50 96:55" peak="993"/>
     <Articulation name="Long CS" value="7" techniques="long legato" modifiers="muted" release="1800" onset="24:185 33:245 46:195 50:235 51:305 54:305 55:240 62:270 63:210 70:240 79:175 94:160 96:215" peak="1248"/>
     <Articulation name="Long Flautando" value="8" techniques="long legato" modifiers="flautando" release="1455" onset="24:315 26:285 27:455 28:440 29:790 30:760 31:425 33:355 34:355 35:300 36:285 37:225 38:215 39:415 40:400 41:460 42:430 43:505 46:395 47:305 48:280 49:475 50:445 51:695 52:655 53:495 54:465 55:385 56:385 57:545 58:605 59:420 60:395 61:545 62:510 63:595 66:535 67:585 70:475 71:520 72:490 73:565 76:505 77:560 78:530 79:535 82:445 83:545 84:515 85:525 86:490 87:560 88:680 89:480 90:515 91:405 92:380 93:500 94:470 95:550 96:520" peak="1398"/>
