@@ -74,6 +74,9 @@ struct Delays {
       std::map<QString, double> rule;         // patch -> dB
       double ruleTop { 0.0 };
       double rangeTop { 0.0 };                // [levels] realRange: the part's R (its notes' CC11 play realDb less it)
+      // [levels] micCompensation (contextlevel.h › Mics): each patch's largest C, in rule (automated mics: a note plays its
+      // own C less it by CC11)
+      std::map<QString, double> micTop;
       // [levels] evenLevels (evenlevels.h; never in the metaTag): each patch's headroom for its notes' corrections, its
       // largest one (EvenLevels::tops): its notes' CC11 that much lower, its volume that much louder; where the volume
       // can't (MAX_DB, Live's Volume top), every library patch of the score plays lower by the largest rest, evenAll (<= 0),

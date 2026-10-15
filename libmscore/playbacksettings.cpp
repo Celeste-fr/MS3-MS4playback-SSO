@@ -149,6 +149,15 @@ static const std::vector<Definition> DEFINITIONS = {
         "ppp / fff one step more (a patch without realSteps as 1); 1: the Meyer rule: ppp / fff the player's "
         "softest / loudest single note (Weinzierl et al. 2018), pp / ff the levels of normal playing (Meyer 2009; else "
         "ppp .. fff in 7 equal steps), p .. f equal steps between; 0: the library's own range", true },
+      // (the owner, 2026-10-15: "mic changes then only affect tone and sense of space, never the balance": a part's mic
+      // Controllers / lanes give another mix, its patches' volumes make up the measured level change; contextlevel.h › Mics,
+      // sso_mic_levels.json; on in Recommended and by default, off in Library default)
+      { "levels/micCompensation", 1, 0, 1, "on/off",
+        "1: a part whose mic controllers (Mic 1-5 level, Mic Mix Distance: values or automation) give another mix than the "
+        "patch's default plays as loud as the default mix (each mic's measured level, the faders' measured law, mics added as "
+        "powers), by the patches' volumes (everything lower together past Live's Volume top, +6 dB); automated mics: the "
+        "largest change by the volume, each note's own at its start by CC11; the mics then change tone and space, not the "
+        "balance; 0: the mix's own level", true },
       // (the owner, 2026-10-12: SSO's Performance legato plays some slurred notes louder than others, by context; evened
       // out by a glide of CC11 measured in place, the blind listening test's choice; 2026-10-13, MuseScore's playback
       // verified on the VM (3.6 -> 0.60 dB), the owner: "why is this not in recommended": on in Recommended and by default,
@@ -393,15 +402,16 @@ const std::vector<Preset>& presets()
             // level rule: levels/context; 2026-10-11: the section balance M, levels/sectionBalance; 2026-10-12: fingered within a slur,
             // bowed between slurs, slurs/transitions; a phrase's first note smooth, slurs/smoothStart; 2026-10-13: the real
             // player's range, levels/realRange; 2026-10-14: slurs/transitionsEarly 0 in both until the owner approves it;
-            // levels/realRange 2 and levels/sectionBalance 2: the balance and the markings' levels from real data)
+            // levels/realRange 2 and levels/sectionBalance 2: the balance and the markings' levels from real data; 2026-10-15:
+            // levels/micCompensation, the mics never change the balance)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 0 },
                                               { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
-                                              { "levels/evenLevels", 0 } } },
+                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 } } },
             };
       return P;
       }

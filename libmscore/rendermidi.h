@@ -38,6 +38,7 @@ namespace Ms {
 
 class EventMap;
 class MasterScore;
+namespace ContextLevel { struct MicValues; }
 class Staff;
 class SynthesizerState;
 
@@ -245,6 +246,8 @@ class MidiRenderer {
       std::map<const Part*, double>* libRangeTops { nullptr };
       // [levels] realRange: realDb by the dynamics CC value per (patch, pitch) (contextlevel.h)
       std::map<std::pair<const SoundLib::LibInstrument*, int>, std::shared_ptr<const std::vector<double>>> libRangeTables;
+      // [levels] micCompensation: the automated mics of each (part, patch) (contextlevel.h › Mics)
+      std::map<std::pair<const Part*, const SoundLib::LibInstrument*>, std::shared_ptr<const ContextLevel::MicValues>> libMics;
 
    public:
       class Chunk {

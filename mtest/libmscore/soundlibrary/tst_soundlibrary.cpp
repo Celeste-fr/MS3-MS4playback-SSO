@@ -132,6 +132,7 @@ class TestSoundLibrary : public QObject, public MTest
       void transitionsEarly();
       void levelContext();
       void levelSectionBalance();
+      void levelMicCompensation();
       void levelRealRange();
       void noLevelSpikes();
       void startLead();
@@ -1862,22 +1863,22 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1).arg(2));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n"));
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n"));
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1907,7 +1908,7 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // quick left out: its default 2, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
@@ -1925,7 +1926,7 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                          { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
-                                         { "levels/realRange", 0 }, { "levels/evenLevels", 0 } }),
+                                         { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 } }), QString());
@@ -2842,6 +2843,186 @@ void TestSoundLibrary::levelSectionBalance()
                                       { "levels/sectionBalance", "0" } });
       QVERIFY(ContextLevel::volumes(score).empty());
       delete score;
+      }
+
+//---------------------------------------------------------
+//   levelMicCompensation
+//    [levels] micCompensation (contextlevel.h › Mics): the map's <Mics fader mix> and <Instrument micLevels micDefault>
+//    (an extra takes its main's); the level of a mix by the fader law (linear in dB between points, in amplitude below
+//    the first), the power sum, Mic Mix Distance's law (the mic values sent with it not played) and silence; a part's mic Controllers value
+//    as its patches' volume (within S', the rest lower together), a patch without micLevels left alone; a lane on a mic:
+//    the volume at the part's largest C, each note its own C at its start by CC11; layers (off by the ini, the presets)
+//---------------------------------------------------------
+
+void TestSoundLibrary::levelMicCompensation()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Mics fader='16:-30 32:-23 64:-13 96:-5.5' mix='0:-/-/0 32:-/-6/-8 64:-/0/- 127:0/-/-'/>"
+         "<Controller id='micmix' name='Mic Mix Distance' param='Mic Mix Distance'/>"
+         "<Controller id='mic1' name='Mic 1 (Close)' param='Mic 1 level'/>"
+         "<Controller id='mic2' name='Mic 2 (Tree)' param='Mic 2 level'/>"
+         "<Controller id='mic3' name='Mic 3 (Ambient)' param='Mic 3 level'/>"
+         "<Controller id='mic5' name='Mic 5 (Leader)' param='Mic 5 level'/>"
+         "<Instrument name='Violin' ids='violin' micLevels='Close:-3 Tree:0 Ambient:-3 Leader:-14' micDefault='Tree:127'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(int(lib->micFader.size()), 4);
+      QCOMPARE(int(lib->micMix.size()), 4);
+      QVERIFY(std::isinf(lib->micMix.at(0)[0]) && lib->micMix.at(0)[2] == 0.0);
+      for (const SoundLib::LibInstrument& li : lib->instruments) {
+            QCOMPARE(li.hasMicLevels, li.name.startsWith("Violin"));       // (the extra takes its main's)
+            if (li.hasMicLevels) {
+                  QCOMPARE(li.micLevelDb[0], -3.0);
+                  QVERIFY(std::isnan(li.micLevelDb[3]));                   // (no Outrigger)
+                  QCOMPARE(li.micDefault[1], 127);
+                  QCOMPARE(li.micDefault[0], 0);
+                  }
+            }
+      const SoundLib::LibInstrument& vn = lib->instruments[0];
+      auto level = [&](std::array<double, 6> f) { return ContextLevel::micLevelDb(vn, *lib, f); };
+      auto same = [](double a, double b) { return std::fabs(a - b) < 1e-9; };
+      const double own = -1;
+      QVERIFY(same(level({ own, own, own, own, own, own }), 0.0));                       // the default mix
+      QVERIFY(same(level({ own, 64, own, own, own, own }), -13.0));
+      QVERIFY(same(level({ own, 80, own, own, own, own }), -9.25));                      // (linear in dB between 64 and 96)
+      QVERIFY(same(level({ own, 112, own, own, own, own }), -5.5 * 15 / 31.0));          // (to 0 dB at 127)
+      QVERIFY(same(level({ own, 8, own, own, own, own }), -30.0 + 20 * std::log10(0.5)));  // (amplitude below 16)
+      QVERIFY(same(level({ 127, 64, own, own, own, own }), 10 * std::log10(std::pow(10.0, -0.3) + std::pow(10.0, -1.3))));
+      QVERIFY(same(level({ own, own, own, own, 127, own }), 10 * std::log10(1 + std::pow(10.0, -1.4))));
+      QVERIFY(same(level({ own, own, own, own, own, 32 }), 10 * std::log10(std::pow(10.0, -0.6) + std::pow(10.0, -1.1))));
+      QVERIFY(same(level({ own, 127, own, own, 127, 32 }), level({ own, own, own, own, own, 32 })));   // (with it, mic values don't play)
+      // (Mic Mix Distance 48: half way from 32 to 64 in amplitude, Close silent at both)
+      const double tree48 = 20 * std::log10((std::pow(10.0, -6 / 20.0) + 1) / 2), amb48 = 20 * std::log10(std::pow(10.0, -11 / 20.0) / 2);
+      QVERIFY(same(level({ own, own, own, own, own, 48 }), 10 * std::log10(std::pow(10.0, tree48 / 10) + std::pow(10.0, amb48 / 10))));
+      QVERIFY(std::isnan(level({ 0, 0, 0, 0, 0, own })));                                // silent: no compensation
+      QVERIFY(same(ContextLevel::micOffsetDb(vn, *lib, { 0, 0, 0, 0, 0, own }), 0.0));
+      QVERIFY(same(ContextLevel::micOffsetDb(vn, *lib, { own, 64, own, own, own, own }), 13.0));
+      QVERIFY(std::isnan(ContextLevel::micLevelDb(lib->instruments[1], *lib, { own, 64, own, own, own, own })));
+
+      SoundLib::setCurrent(lib);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* violin = score->parts()[0];
+      const Part* viola = score->parts()[1];
+      auto levels = [&]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::map<int, const SoundLib::Route*> byRoute;
+            const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *SoundLib::current());
+            for (const SoundLib::Route& r : routes)
+                  byRoute[r.port * 16 + r.channel] = &r;
+            const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+            std::map<int, int> cc11;
+            std::map<int, double> out;          // pitch -> dB
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION)
+                        cc11[route] = ev.value();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0 && byRoute.count(route)) {
+                        const SoundLib::Route* r = byRoute[route];
+                        const double gain = TrackDelays::patchGain(*SoundLib::current(), TrackDelays::of(r->part, delays), r->instrument->name);
+                        out[ev.pitch()] = 20 * std::log10((cc11.count(route) ? cc11[route] : 127) / 127.0) + 20 * std::log10(gain);
+                        }
+                  }
+            return out;
+            };
+      auto check = [&](const std::map<int, double>& got, const std::vector<int>& pitches, double expected) {
+            for (int p : pitches) {
+                  QVERIFY2(got.count(p), qPrintable(QString("pitch %1 not played").arg(p)));
+                  QVERIFY2(std::fabs(got.at(p) - expected) < 0.35, qPrintable(QString("pitch %1: %2 dB, expected %3").arg(p).arg(got.at(p)).arg(expected)));
+                  }
+            };
+      const std::vector<int> bar1V { 72, 74, 76, 79 }, bar2V { 69, 71 }, violaAll { 57, 60, 62, 64 };
+      const std::map<QString, QString> others { { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "0" },
+                                                { "levels/realRange", "0" }, { "levels/evenLevels", "0" } };
+      Playback::setIniValuesForTest(others);
+      // the default mix: nothing to make up
+      QVERIFY(ContextLevel::volumes(score).empty());
+      const std::map<int, double> plain = levels();
+      check(plain, bar1V, 0);
+      // the Violin's Tree at 64: C +13 on both its patches, S' 7: the Violin +6, the Viola -7
+      std::map<const Part*, PartControllers::Values> values;
+      values[violin] = { { "mic2", 64 } };
+      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
+      QCOMPARE(int(v.size()), 2);
+      QVERIFY(same(v[violin].patchDb["Violin"], 6));                     // (the Performance patch: not routed here)
+      QVERIFY(same(v[violin].micTop["Violin"], 13) && same(v[viola].patchDb["Viola"], -7) && v[viola].micTop.empty());
+      std::map<int, double> got = levels();
+      check(got, bar1V, 6);
+      check(got, bar2V, 6);
+      check(got, violaAll, -7);
+      // off by the ini, on by the score over it; Library default off, Recommended on
+      Playback::setIniValuesForTest({ { "levels/micCompensation", "0" }, { "levels/calibrated", "0" }, { "levels/context", "0" },
+                                      { "levels/sectionBalance", "0" }, { "levels/realRange", "0" }, { "levels/evenLevels", "0" } });
+      QVERIFY(ContextLevel::volumes(score).empty());
+      check(levels(), bar1V, 0);
+      score->setMetaTag(Playback::metaTag, "levels/micCompensation=1");
+      check(levels(), bar1V, 6);
+      score->setMetaTag(Playback::metaTag, "");
+      bool inLibrary = false, inRecommended = false;
+      for (const Playback::Preset& p : Playback::presets())
+            for (const auto& kv : p.values)
+                  if (QString(kv.first) == "levels/micCompensation") {
+                        if (QString(p.id) == "library")
+                              inLibrary = kv.second == 0;
+                        if (QString(p.id) == "recommended")
+                              inRecommended = kv.second == 1;
+                        }
+      QVERIFY(inLibrary && inRecommended);
+      QCOMPARE(Playback::definition("levels/micCompensation")->value, 1.0);
+      // a lane on the Violin's Tree: 127 in bar 1, 64 from bar 2: C 0 then +13; the volume +13 - S' (7), bar 1 by CC11 -13
+      Playback::setIniValuesForTest(others);
+      score->setMetaTag(PartControllers::metaTag, "");
+      Automation::Lane lane;
+      lane.target = "mic2";
+      lane.points.push_back({ 0, 1.0, Automation::Curve::STEP });
+      lane.points.push_back({ 1920, 64 / 127.0, Automation::Curve::STEP });
+      std::map<const Part*, Automation::PartLanes> lanes;
+      lanes[violin] = { lane };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
+      v = ContextLevel::volumes(score);
+      // (a lane keeps its values to 1e-4: 64 / 127 plays 63.995, 0.0015 dB off)
+      QVERIFY(std::fabs(v[violin].micTop["Violin"] - 13) < 0.01 && std::fabs(v[violin].patchDb["Violin"] - 6) < 0.01);
+      got = levels();
+      check(got, bar1V, -7);
+      check(got, bar2V, 6);
+      check(got, violaAll, -7);
+      score->setMetaTag(Automation::metaTag, "");
+      delete score;
+
+      // the shipped map (sso_mic_levels.json, measured): the laws; the Tree alone the default mix; Violins 1's Tree at 64
+      // plays C +12.88, its Close alone at full C +3.3; another extra (Violins 1 - Sul G - Performance) takes its main's
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      QCOMPARE(int(sso->micFader.size()), 8);
+      QCOMPARE(int(sso->micMix.size()), 9);
+      const SoundLib::LibInstrument* v1 = nullptr;
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            if (li.name == "Violins 1")
+                  v1 = &li;
+            if (li.hasMicLevels)
+                  QCOMPARE(li.micDefault[1], 127);
+            }
+      QVERIFY(v1 && v1->hasMicLevels);
+      QVERIFY(std::fabs(ContextLevel::micOffsetDb(*v1, *sso, { own, 64, own, own, own, own }) - 12.88) < 1e-9);
+      QVERIFY(std::fabs(ContextLevel::micOffsetDb(*v1, *sso, { 127, 0, own, own, own, own }) - 3.3) < 1e-9);
+      for (const SoundLib::LibInstrument& li : sso->instruments)
+            if (li.name == "Violins 1 - Sul G - Performance")
+                  QVERIFY(li.hasMicLevels && li.micLevelDb[0] == v1->micLevelDb[0]);
       }
 
 //---------------------------------------------------------

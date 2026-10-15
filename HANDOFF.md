@@ -5,6 +5,18 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Mic compensation (2026-10-15, branch `mic-compensation`, on integrate-1012 c6b1ec53f2)
+
+The owner, 2026-10-15 ("sure"): measure each patch through each mic on the VM and compensate, so that changing a part's
+mics changes tone and space, never the balance. `[levels] micCompensation` (1 in Recommended and by default, 0 in Library
+default; docs/PLAYBACK_SETTINGS.md › Mic compensation): measured with kthost on the VM (Kontakt 8 + SSO), 33 patches (the
+28 balance patches, the strings' Performance patches), the fader law and Mic Mix Distance's (`mic_levels.py` ->
+`sso_mic_levels.json`). Found: SSO's default mix is the Tree alone; mic values sent with Mic Mix Distance don't play.
+Open: the 15 patches balance-refine gave a `sectionLevel2` (solo strings, Motif brass, piccolo …) and every other patch
+have no mic values of their own (an extra takes its main's, others none: 5 renders each on the VM, `mic_levels.py
+events`); a mic changed alone later while Mic Mix Distance is set (live, or a lane point) is untested in Kontakt. Not
+heard; untried in MuseScore / Live with the real library (tests: the test synth and the renderer).
+
 ## Balance refinement (2026-10-15, branch `balance-refine`, from integrate-1012 44cfae4a5e; not merged)
 
 The owner, 2026-10-15: "recursively try to improve our current level balance until you think it's impossible to

@@ -1417,12 +1417,20 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         libLevels[note] = l;
                         };
                   // the track levels of the note's patch and technique (trackdelays.h; after marcatoLevel: they add up),
-                  // less the patch's headroom (its volume plays that: TrackDelays::patchGain)
+                  // less the patch's headroom (its volume plays that: TrackDelays::patchGain); [levels] micCompensation with
+                  // automated mics: the note's C at its start less the patch's largest (its volume plays that)
                   auto trackLevel = [&](const Note* note, const SoundLib::Choice& c) {
                         auto d = c ? libTrackDelays.find(st1->part()) : libTrackDelays.end();
                         if (d == libTrackDelays.end())
                               return;
                         const SoundLib::LibInstrument* patch = libPatches[c.patch];
+                        auto mt = d->second.micTop.find(patch->name);
+                        if (mt != d->second.micTop.end()) {
+                              auto m = libMics.find({ st1->part(), patch });
+                              if (m != libMics.end())
+                                    libLevels[note].volumeDb += ContextLevel::micOffsetDb(*patch, *library, m->second->at(note->chord()->tick().ticks()))
+                                                                - mt->second;
+                              }
                         // [levels] evenLevels' headroom (evenlevels.h): the patch's volume plays it, its notes that much lower
                         const double even = TrackDelays::evenDb(d->second, patch->name);
                         if (even > 0.0)
@@ -5614,6 +5622,7 @@ void MidiRenderer::updateState()
             libTrackDelays.clear();
             libContextGain.clear();
             libRangeTables.clear();
+            libMics.clear();
             libTrackRoutes.clear();
             libRoutePatches.clear();
             libEvenOn = Playback::on("levels/evenLevels", score);
@@ -5641,6 +5650,15 @@ void MidiRenderer::updateState()
                         libTrackDelays[r.part] = d;
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };
                         libDelayLead = std::max(libDelayLead, -TrackDelays::earliest(d));
+                        }
+                  if (ContextLevel::micCompensation(score) && !library->micFader.empty()) {
+                        for (const SoundLib::Route& r : routes) {
+                              if (r.lane != 0 || !r.instrument->hasMicLevels || libMics.count({ r.part, r.instrument }))
+                                    continue;
+                              auto v = std::make_shared<ContextLevel::MicValues>(ContextLevel::micValues(r.part, *r.instrument, values, allLanes));
+                              if (v->automated())
+                                    libMics[{ r.part, r.instrument }] = v;
+                              }
                         }
                   for (const SoundLib::Route& r : routes) {
                         if (r.patch != 0 || r.lane != 0)

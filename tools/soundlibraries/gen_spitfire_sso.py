@@ -386,7 +386,8 @@ SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', '
 # defaults: until a part is given a value, the patch keeps its own (the owner, 2026-09-27: values
 # belong to the score, the library's default is SSO's own). Mic 1-5 are Close, Tree, Ambient,
 # Outrigger, Leader (the owner saw them move in Kontakt, 2026-09-27). Mic Mix Distance sets all the
-# mic levels (0: Ambient only, 127: Close only), so it comes first and a mic level ticked wins.
+# mic levels (0: Ambient only, 127: Close only), so it comes first; measured 2026-10-15 (mic_levels.py): mic levels sent
+# with it in one block are overridden by SSO's script, so with it set the mic values don't play.
 def _p(cid, name, title=None):
     return (cid, name, None, title or name, None, [])
 MICS = ['Close', 'Tree', 'Ambient', 'Outrigger', 'Leader']
@@ -1540,6 +1541,32 @@ def realRangeAttributes(name):
     play = f' realPlay="{r["fractions"]["pp"]:g} {r["fractions"]["ff"]:g}"' if r.get('rule') == 'meyer' else ''
     steps = f' realSteps="{r["sectionSpan"]["db"]:g}"' if r.get('sectionSpan') else ''
     return f' realSpan="{span}" longLevel="{long}"' + play + steps
+# - <Mics fader= mix=> and micLevels= / micDefault= ([levels] micCompensation, contextlevel.h › Mics; the owner, 2026-10-15:
+#   "mic changes then only affect tone and sense of space, never the balance"): measured on the VM, sso_mic_levels.json
+#   (mic_levels.py): each mic alone at its full fader against the patch's default mix (SSO's Long at CC1 64, the sustain's
+#   power, median over three pitches), the default faders (SSO: the Tree alone at 127), the faders' law and Mic Mix
+#   Distance's (Close / Tree / Ambient). Measured: the 28 patches with a section level and the strings' Performance
+#   patches; another extra takes its main's (soundlibrary.cpp: an assumption, the same recording's mics), other patches none
+MIC = loadFit('sso_mic_levels.json')
+MIC_NAMES = ['Close', 'Tree', 'Ambient', 'Outrigger', 'Leader']
+def micAttributes(name):
+    r = MIC.get('patches', {}).get(name)
+    if not r or not r.get('default'):
+        return ''
+    levels = ' '.join(f'{m}:{r["mics"][m]["rmsDb"]:g}' for m in MIC_NAMES if m in r['mics'] and r['mics'][m]['rmsDb'] is not None)
+    default = ' '.join(f'{m}:{v}' for m, v in r['default'].items())
+    return f' micLevels="{levels}" micDefault="{default}"'
+if MIC.get('faderLaw'):
+    fader = ' '.join(f'{int(x)}:{v:g}' for x, v in sorted(((int(x), v) for x, v in MIC['faderLaw']['db'].items()), reverse=False))
+    mix = ' '.join(f'{int(m)}:' + '/'.join('-' if v is None else f'{v:g}' for v in vs)
+                   for m, vs in sorted((int(m), vs) for m, vs in MIC['mixLaw']['db'].items()))
+    at = out.index('  <Tuning method="varispeed"/>') - 6
+    out[at:at] = [
+        '  <!-- mics ([levels] micCompensation): a mic\'s level at a fader value against 127 (fader=, 0 silent) and what Mic Mix',
+        '       Distance sets Close / Tree / Ambient to (mix=, each against its full fader, - silent); measured on SSO with',
+        '       Kontakt 8 (tools/soundlibraries/sso_mic_levels.json, mic_levels.py); micLevels= on an Instrument: each mic alone',
+        '       at its full fader against the patch\'s default mix (micDefault=: its default faders, the others 0) -->',
+        f'  <Mics fader="{fader}" mix="{mix}"/>']
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0
@@ -1569,6 +1596,9 @@ for i, line in enumerate(out):
                 # a patch with Clark & Luce's balance only (section_balance_cl.py GAP: no sectionLevel)
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + f' sectionLevel2="{round(SECTION_LEVEL2[current], 3):g}"' + end
+        if current and micAttributes(current):
+            end = '/>' if out[i].endswith('/>') else '>'
+            out[i] = out[i][:-len(end)] + micAttributes(current) + end
         continue
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:
