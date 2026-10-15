@@ -470,6 +470,27 @@ move the transitions 50 ms early, which MuseScore doesn't. R's own clips sit on 
 only early start.
 
 Open:
+- **Transitions early, to A/B** (branch `transitions-early`, 2026-10-14; the owner: "sure let's hear them started
+  early"; **0, off, by default and in both presets until he approves one by ear**): `[slurs] transitionsEarly` sends a
+  Performance legato transition early: 1 by its modelled arrival (new pitch arrives on the beat), 2 by the measured
+  bendGlide leave + 23.5 ms (the change heard on the beat: Polfreman 2013, ISMIR, a bowed legato note perceived 23.5 ms,
+  SD 22.8, after its pitch change starts), 3 the glide's middle on the beat (docs/PLAYBACK_SETTINGS.md › Transitions
+  early). Capped so the note before keeps keepMs (40) and never under 15 ms (DROPPED); the overlap, switch, controllers
+  and bend follow the moved note-on; Live's plain set plays it by LiveTiming (tested), *Live plays the score*'s clips
+  carry it. *Whence* (quarter tones, Recommended + the mode; `MS_AUDIT_SETTINGS=slurs/transitionsEarly=<n>`): 288
+  transitions; mode 1 median 127.9 ms early (94.9-207.4), 1 capped (Celli bar 1, the 2nd note after the score's first
+  smooth note: 94.9 of 128.2); mode 2 median 15.4 (14.2-80.2: the measured leave is about -8 ms for most), 0 capped;
+  mode 3 median 59.7 (46.1-132.4), 0 capped; no patch fell back (every Performance patch in Whence has a bendGlide).
+  Audit counts (OVERLAP / UNMEASURED / CAPPED / ARRIVAL fail-warn / LEVEL STEP / DROPPED): 0: 0 / 10 / 288 / 33-6 / 0 / 0
+  (as today); 1: 0 / 10 / 1 / 0-2 / 0 / 0 (the 2 warns: the capped Celli note and the one after it, 33 ms); 2: 0 / 10 / 0
+  / 30-3 / 0 / 0; 3: 0 / 10 / 0 / 30-0 / 0 / 0. ARRIVAL still compares the modelled pitch arrival, so modes 2 / 3 show
+  their transitions arrive - shift late (Violas 115 / 69 ms) by design, not a fault. Mode 0's CAPPED 288 are the
+  transitions judged by the attack onset (the old quirk, unchanged). Even levels' measured values are tied to the
+  rendered context, so a mode change makes them stale (re-measured in the background). **How to A/B in the next
+  build:** Mixer › Advanced Options… › Playback adjustments › `[slurs] transitionsEarly` 0 / 1 / 2 / 3 (playback goes on,
+  re-rendered), or `transitionsEarly=<n>` under `[slurs]` in `<dataPath>/playback.ini` then Edit › Reload Playback
+  Settings; the Preset box shows "(Custom)" while it isn't 0. Untried with Kontakt / SSO and in Live (headless dumps and
+  the test synth only).
 - **The audit's transitions** (branch `gaps-1012`, 2026-10-14): a legato transition now arrives by the renderer's own
   model (`LibTrace::glideArriveMs`: measured bendGlide, else `legatoDelay` + `libFastDelay`), not the attack onset.
   *Whence* (quarter tones, Recommended): ARRIVAL 33 fail / 6 warn (was 20 / 10), all three kinds from transitions

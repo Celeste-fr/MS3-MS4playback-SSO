@@ -52,6 +52,10 @@
 //                 level", JASA 61, 169-177), dI/I = 0.463 (I/I0)^-0.072 (as quoted by Praat's manual,
 //                 phonToDifferenceLimens): at 60 dB sensation level 10 log10(1 + 0.463 * 10^(-0.072 * 6)) = 0.69 dB
 //                 (40 dB SL: 0.93, 80 dB SL: 0.50). Pure tones heard one after the other; the level is the owner's
+//                 With [slurs] transitionsEarly a legato transition is meant its mode's shift early instead (CAPPED
+//                 when the note before keeps keepMs; Report::transitionShiftsMs, transitionsCapped) and is not
+//                 UNMEASURED for that early start (the transition's delay is the measured legato grid / bendGlide).
+//                 ARRIVAL still compares the modelled arrival: ~0 in mode 1, arrive - shift late in modes 2 / 3 (by design)
 //     DROPPED     a legato transition (LibTrace::from) on an articulation that plays transitions, sent less than 15 ms
 //                 after the previous note-on on its route (also a legato note) at velocity 64 or lower: SSO's legato
 //                 engine doesn't play it at all (from reading its script; behaviour only). A fault. (Notes of one chord
@@ -116,6 +120,11 @@ struct Report {
       std::vector<Finding> findings;
       double keepMs { 0 };
       int notes { 0 };              // library note-ons looked at
+      // [slurs] transitionsEarly: each legato transition's early start as sent (ms), and how many were capped
+      std::vector<double> transitionShiftsMs;
+      int transitionsCapped { 0 };
+      int transitionsEarlyMode { 0 };
+      std::set<QString> transitionsFallback;      // patches without a measured glide (modes 2 / 3: the arrival instead)
       int count(Kind k, Severity s) const;
       int count(Kind k) const;
       QString text(const QString& title = QString()) const;

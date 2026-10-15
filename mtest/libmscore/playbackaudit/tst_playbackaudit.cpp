@@ -527,6 +527,36 @@ void TestPlaybackAudit::transitionArrival()
                   QVERIFY2(std::fabs(f.value - 120) < 1.5, qPrintable(text));
                   QVERIFY2(f.text.contains("transition arrives 120.0 after its note-on"), qPrintable(f.text));
                   }
+      QVERIFY(r.transitionShiftsMs.empty());
+      // [slurs] transitionsEarly (2026-10-14): each transition sent its arrival (120 ms) early arrives on its beat: no
+      // ARRIVAL, none capped (500 ms apart), none DROPPED, none CAPPED by the onset
+      score->setMetaTag(Playback::metaTag, "slurs/transitionsEarly=1");
+      EventMap early;
+      std::vector<MidiRenderer::LibTrace> earlyTrace;
+      PlaybackAudit::render(score, &early, &earlyTrace);
+      const PlaybackAudit::Report e = PlaybackAudit::audit(score, early, earlyTrace, PlaybackAudit::Measured());
+      const QString earlyText = e.text();
+      QVERIFY2(e.count(PlaybackAudit::Kind::ARRIVAL) == 0, qPrintable(earlyText));
+      QVERIFY2(e.count(PlaybackAudit::Kind::DROPPED) == 0, qPrintable(earlyText));
+      QVERIFY2(e.count(PlaybackAudit::Kind::OVERLAP) == 0, qPrintable(earlyText));
+      QCOMPARE(int(e.transitionShiftsMs.size()), 5);
+      QCOMPARE(e.transitionsCapped, 0);
+      for (double shift : e.transitionShiftsMs)
+            QVERIFY2(std::fabs(shift - 120) < 1.5, qPrintable(QString::number(shift)));
+      QVERIFY2(earlyText.contains("[slurs] transitionsEarly 1: 5 transitions started early"), qPrintable(earlyText));
+      QVERIFY(e.transitionsFallback.empty());
+      // mode 2 (heard on the beat) on a patch without a measured glide (no bendGlide): mode 1's arrival, the patch listed
+      score->setMetaTag(Playback::metaTag, "slurs/transitionsEarly=2");
+      EventMap two;
+      std::vector<MidiRenderer::LibTrace> twoTrace;
+      PlaybackAudit::render(score, &two, &twoTrace);
+      const PlaybackAudit::Report r2 = PlaybackAudit::audit(score, two, twoTrace, PlaybackAudit::Measured());
+      QCOMPARE(int(r2.transitionShiftsMs.size()), 5);
+      for (double shift : r2.transitionShiftsMs)
+            QVERIFY2(std::fabs(shift - 120) < 1.5, qPrintable(QString::number(shift)));
+      QVERIFY(r2.transitionsFallback.count("Violin - Performance"));
+      QVERIFY2(r2.text().contains("fell back to the arrival): Violin - Performance"), qPrintable(r2.text()));
+      score->setMetaTag(Playback::metaTag, "");
       delete score;
       }
 
