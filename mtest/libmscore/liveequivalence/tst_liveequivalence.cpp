@@ -3295,11 +3295,11 @@ void TestLiveEquivalence::liveSectionBalance()
 
 void TestLiveEquivalence::liveRealRange()
       {
-      // span 28 (4 dB a step), the Long +4 at 127, +3 at 112, -6 at 16: ppp -6, mp 0, fff +12 (R), so CC11 -18 / -12 / 0
-      // dB, the patch +6
+      // the Meyer rule: span 30, written pp / ff at 0.4 / 0.9 of it (3 dB a step pp .. ff), ppp at 0, fff at 1; the Long +4
+      // at 127, +3 at 112, -6 at 16: ppp -18 + 6 = -12, mp 0, fff 12 - 4 = +8 (R), so CC11 -20 / -8 / 0 dB, the patch +6
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
-         "<Instrument name='Violin' ids='violin' realSpan='60:28 84:28'"
+         "<Instrument name='Violin' ids='violin' realSpan='60:30 84:30' realPlay='0.4 0.9'"
          " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/84:-6 64/84:0 112/84:3 127/84:4'>"
          "<Articulation name='Long' value='1' techniques='long legato'/>"
          "<Articulation name='Staccato' value='40' techniques='short'/>"
@@ -3312,8 +3312,8 @@ void TestLiveEquivalence::liveRealRange()
       MasterScore* score = readScore(DIR + "real-range.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
-      const int ppp = int(std::lround(127 * std::pow(10.0, -18.0 / 20)));
-      const int mp = int(std::lround(127 * std::pow(10.0, -12.0 / 20)));
+      const int ppp = int(std::lround(127 * std::pow(10.0, -20.0 / 20)));
+      const int mp = int(std::lround(127 * std::pow(10.0, -8.0 / 20)));
       EventMap events;
       score->renderMidi(&events, false, true, SynthesizerState());
 

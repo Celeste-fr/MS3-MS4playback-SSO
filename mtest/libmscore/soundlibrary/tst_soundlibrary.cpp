@@ -2593,9 +2593,12 @@ void TestSoundLibrary::levelSectionBalance()
 //---------------------------------------------------------
 //   levelRealRange
 //    [levels] realRange (contextlevel.h › Real range): the map's realSpan / longLevel (the main patch's, its extras
-//    take them); realDb = steps(x) * span / 7 - long(x); each note's CC11 at ppp / mp / fff, a hairpin's CC11 following
-//    its CC1, the part's R as its patches' volume (+6 at most, the rest lower together), a capped short's rest by
-//    CC11; layers (default 0, the ini's 1, the score's 1 over the ini's 0); the presets leave it alone
+//    take them); rule D (no realPlay): realDb = steps(x) * span / 7 - long(x); the Meyer rule (realPlay="a b", the
+//    owner 2026-10-14): written pp / ff at a / b of the span, p .. f in 5 equal steps, ppp 0, fff 1, by hand; each
+//    note's CC11 at ppp / mp / fff under both, a hairpin's CC11 following its CC1, the part's R as its patches' volume
+//    (+6 at most, the rest lower together), a capped short's rest by CC11; layers (default 0, the ini's 1, the score's 1
+//    over the ini's 0); the presets leave it alone; the shipped map: the strings, woodwinds and brass by Meyer, the
+//    instruments without Meyer figures by rule D
 //---------------------------------------------------------
 
 void TestSoundLibrary::levelRealRange()
@@ -2632,6 +2635,41 @@ void TestSoundLibrary::levelRealRange()
             for (int p : { 50, 72, 90 })        // (the nearest end's beyond the measured pitches)
                   QVERIFY2(std::fabs(ContextLevel::realRangeDb(*violin, e.first, p) - e.second) < 1e-9,
                            qPrintable(QString("cc %1 pitch %2: %3").arg(e.first).arg(p).arg(ContextLevel::realRangeDb(*violin, e.first, p))));
+      // rule D is the Meyer rule at 1/7, 6/7 (the default without realPlay)
+      QCOMPARE(violin->realPlayPp, 1.0 / 7.0);
+      QCOMPARE(violin->realPlayFf, 6.0 / 7.0);
+      for (double st = -3.0; st <= 4.0; st += 0.25)
+            QVERIFY(std::fabs(ContextLevel::realFraction(st, 1.0 / 7, 6.0 / 7) - (st + 3) / 7) < 1e-12);
+      // the Meyer rule: span 30, pp / ff at 0.4 / 0.9 (3 dB a step between): the player ppp -18, pp -6, p -3, mp 0, mf +3,
+      // f +6, ff +9, fff +12 from mp; less the Long (-6 at 16, -5 at 24, -4 at 32, -2 at 48, +1 at 80, +2 at 96, +3 at 112,
+      // +4 at 127): ppp -12, pp -2, p -1, mf +2, f +4, ff +6, fff +8; between ppp and pp (CC1 24: steps -2.5, 0.2 of the
+      // span) -12 + 5 = -7; CC1 120 (steps 3 + 8/15: 0.9533 of the span) 10.6 - 3.5333 = 7.0667
+      auto meyerMap = [this](const char* play) {
+            return loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+               "<Instrument name='Violin' ids='violin' realSpan='60:30 84:30' realPlay='%1'"
+               " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/84:-6 64/84:0 112/84:3 127/84:4'>"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "<Articulation name='Staccato' value='40' techniques='short'/>"
+               "</Instrument>"
+               "<Instrument name='Violin Legato' with='Violin'><Switch type='none'/>"
+               "<Articulation name='Legato' value='20' techniques='legato' modifiers='performance'/></Instrument>"
+               "</SoundLibrary>").arg(play));
+            };
+      auto meyer = meyerMap("0.4 0.9");
+      QVERIFY(meyer);
+      for (const SoundLib::LibInstrument& li : meyer->instruments) {       // (the extra takes the main's)
+            QCOMPARE(li.realPlayPp, 0.4);
+            QCOMPARE(li.realPlayFf, 0.9);
+            const std::map<int, double> want { { 16, -12 }, { 24, -7 }, { 32, -2 }, { 48, -1 }, { 64, 0 }, { 80, 2 },
+                                               { 96, 4 }, { 112, 6 }, { 120, 10.6 - (3 + 8 / 15.0) }, { 127, 8 } };
+            for (const auto& e : want)
+                  QVERIFY2(std::fabs(ContextLevel::realRangeDb(li, e.first, 70) - e.second) < 1e-9,
+                           qPrintable(QString("%1 cc %2: %3, expected %4").arg(li.name).arg(e.first)
+                                      .arg(ContextLevel::realRangeDb(li, e.first, 70)).arg(e.second)));
+            }
+      for (const char* bad : { "0.9 0.4", "0.4", "-0.1 0.5", "0.4 1.2", "a b" })
+            QVERIFY2(!meyerMap(bad), bad);
       SoundLib::setCurrent(lib);
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); Playback::setIniValuesForTest({}); } } reset;
       MasterScore* score = readScore(DIR + "real-range.musicxml");
@@ -2750,6 +2788,30 @@ void TestSoundLibrary::levelRealRange()
       QCOMPARE(n[76].cc11, cc11(12 - r));
       QCOMPARE(n[74].cc11, cc11(0 - r));
       QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
+      // the Meyer rule's map (above): R = 8 (fff), the patches +6, everything 2 lower; ppp -12, mp 0, p -1, f +4 less R
+      SoundLib::setDynamicsCalibration(nullptr);
+      SoundLib::setCurrent(meyer);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" } });
+      v = ContextLevel::volumes(score);
+      QVERIFY2(std::fabs(v[part].range - 8) < 1e-9, qPrintable(QString::number(v[part].range)));
+      QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
+      n = render();
+      QCOMPARE(n[72].cc11, cc11(-12 - 8));          // ppp
+      QCOMPARE(n[74].cc11, cc11(0 - 8));            // mp
+      QCOMPARE(n[76].cc11, 127);                    // fff
+      QCOMPARE(n[77].cc11, cc11(-1 - 8));           // p
+      QCOMPARE(n[79].cc11, cc11(4 - 8));            // f
+      QVERIFY2(hairpin.size() >= 10, qPrintable(QString::number(hairpin.size())));
+      last = 0;
+      lastCc1 = 0;
+      for (const auto& h : hairpin) {
+            QCOMPARE(h.second, cc11(ContextLevel::realRangeDb(meyer->instruments.front(), h.first, 77) - 8));
+            if (h.first >= lastCc1)
+                  QVERIFY(h.second >= last);
+            last = h.second;
+            lastCc1 = h.first;
+            }
+      SoundLib::setCurrent(lib);
       delete score;
       // on by default and in Recommended, off in Library default (the owner, 2026-10-13: "this sounds great")
       const Playback::Definition* def = Playback::definition("levels/realRange");
@@ -2762,22 +2824,55 @@ void TestSoundLibrary::levelRealRange()
                         ++presets;
                         }
       QCOMPARE(presets, 2);
-      // the shipped SSO map: the five string sections (and their extras) carry it, nothing else
+      // the shipped SSO map: the five string sections and the woodwinds' / brass' main patches the TU Berlin database has
+      // (and their extras) carry it, nothing else; by the Meyer rule except the instruments Meyer gives no extremes for
       QString error;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
       QVERIFY2(sso, qPrintable(error));
-      const QStringList sections { "Violins 1", "Violins 2", "Violas", "Celli", "Basses" };
+      const QStringList sections { "Violins 1", "Violins 2", "Violas", "Celli", "Basses",
+                                   "Flute Solo", "Flutes a2", "Oboe Solo", "Oboes a2", "Cor Anglais", "Clarinet Solo",
+                                   "Clarinets a2", "Bass Clarinet", "Bassoon Solo", "Bassoons a2", "Contrabassoon",
+                                   "Horn Solo", "Horns a2", "Horns a6", "Trumpet Solo", "Trumpets a2", "Trumpets a6",
+                                   "Tenor Trombone Solo", "Tenor Trombones a2", "Trombones a6", "Bass Trombone Solo",
+                                   "Bass Trombones a2", "Tuba Solo" };
+      const QStringList ruleD { "Cor Anglais", "Bass Clarinet", "Contrabassoon", "Bass Trombone Solo", "Bass Trombones a2" };
+      // Meyer 2009 ch. 3, (P - X_lo) / (X_hi - X_lo): Celli (74 - 63) / 35, (96 - 63) / 35 (3.3.3.2); Violins (74 - 58) / 41,
+      // (94 - 58) / 41 (3.3.1.2); Clarinet (77 - 57) / 49, (97 - 57) / 49 (3.2.3.2)
+      const std::map<QString, std::pair<double, double>> fractions { { "Celli", { 11 / 35.0, 33 / 35.0 } },
+            { "Violins 1", { 16 / 41.0, 36 / 41.0 } }, { "Clarinet Solo", { 20 / 49.0, 40 / 49.0 } } };
       int with = 0;
+      QStringList mains;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
-            QCOMPARE(ContextLevel::hasRealRange(&li), sections.contains(section));
+            QVERIFY2(ContextLevel::hasRealRange(&li) == sections.contains(section), qPrintable(li.name));
             if (!ContextLevel::hasRealRange(&li))
                   continue;
             ++with;
+            if (!mains.contains(section))
+                  mains << section;
             QCOMPARE(ContextLevel::realRangeDb(li, 64, 60), 0.0);                    // (mp: none, M stays)
-            QVERIFY(ContextLevel::realRangeDb(li, 127, li.realSpan.begin()->first) > 0);
+            if (ruleD.contains(section)) {
+                  QCOMPARE(li.realPlayPp, 1.0 / 7.0);
+                  QCOMPARE(li.realPlayFf, 6.0 / 7.0);
+                  }
+            else
+                  QVERIFY2(li.realPlayPp > 0.29 && li.realPlayPp < 0.46 && li.realPlayFf > 0.75 && li.realPlayFf < 0.95,
+                           qPrintable(li.name));
+            if (fractions.count(section)) {
+                  QVERIFY(std::fabs(li.realPlayPp - fractions.at(section).first) < 1e-4);
+                  QVERIFY(std::fabs(li.realPlayFf - fractions.at(section).second) < 1e-4);
+                  }
             }
-      QVERIFY(with >= 10);
+      QCOMPARE(mains.size(), sections.size());
+      QVERIFY(with >= 40);
+      // Celli at E4 (64; span and Long measured there): span 21.75, fractions 11/35 and 33/35, mp at 0.5657: the player
+      // ppp -12.30, fff +9.45 from mp, less the Long at CC1 16 / 127 against 64 (-5.55 / +4.54): real_range.py's
+      // realDbMid, ppp -6.75 and fff +4.91
+      for (const SoundLib::LibInstrument& li : sso->instruments)
+            if (li.name == "Celli") {
+                  const double lo = ContextLevel::realRangeDb(li, 16, 64), hi = ContextLevel::realRangeDb(li, 127, 64);
+                  QVERIFY2(std::fabs(lo + 6.75) < 0.006 && std::fabs(hi - 4.91) < 0.006, qPrintable(QString("%1 %2").arg(lo).arg(hi)));
+                  }
       }
 
 //---------------------------------------------------------

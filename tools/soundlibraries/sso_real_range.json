@@ -1,6 +1,12 @@
 {
  "method": {
-  "what": "Rule D (the owner, 2026-10-12): the TU Berlin database's pp / ff are the player's ppp / fff, the markings between in 7 equal dB steps of span / 7 at each pitch, relative to mp; span = ff - pp of one player's sound power, smoothed; long = SSO's All techniques Long, rmsDb less CC1 64's",
+  "what": "The Meyer rule (the owner, 2026-10-14) where an entry has \"fractions\", else rule D: the TU Berlin database's pp / ff (single notes as softly / loudly as possible) are the player's ppp / fff. Meyer: written pp / ff at fractions a / b of each pitch's span above its pp, a = (P_pp - X_lo) / (X_hi - X_lo), b = (P_ff - X_lo) / (X_hi - X_lo), X single-note extremes, P rapid two-octave scales (J. Meyer, Acoustics and the Performance of Music, Springer 2009, chapter 3; each entry's \"meyer\" has the section and figures), p .. f in 5 equal dB steps pp -> ff, ppp -> pp and ff -> fff one step each. Rule D (the owner, 2026-10-12): 7 equal steps of span / 7 (a = 1/7, b = 6/7). Both relative to mp; span = ff - pp of one player's sound power, smoothed; long = SSO's All techniques Long, rmsDb less CC1 64's. marksMid: the player's dB from mp at midPitch, both rules; realDbMid: less long at the marking's CC1 (16 .. 127): MuseScore's CC11 before the headroom",
+  "meyerNone": {
+   "English horn modern": "3.2.2.4: only the limits pp 79 / ff 94 (narrower than the oboe), no scales against single notes",
+   "Bass clarinet modern": "3.2.3.4: only single notes (pp 59 low register, ff about 97), no in-play levels",
+   "Contrabassoon modern": "3.2.4.6: in-play pp 86 / ff 96, single notes only as a range (\"up to 15 dB\"), no levels",
+   "Bass trombone modern": "3.1.3.4: tone colour only, no levels"
+  },
   "real": "Weinzierl et al. 2018, JASA 144(3), TU Berlin database v3, 3_Audio_Features.csv, SoundPower in dB, _et_ files, mean over files per pitch",
   "smoothing": "local linear least squares over +-k semitones, k by leave-one-out cross-validation pooled over violin, viola, cello, double bass (k = 1 .. 12)",
   "k": 5,
@@ -254,7 +260,67 @@
     }
    },
    "midPitch": 73,
-   "midStep": 4.4
+   "midStep": 4.4,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3902,
+    "ff": 0.878
+   },
+   "meyer": {
+    "section": "3.3.1.2",
+    "extremes": [
+     58,
+     99
+    ],
+    "inPlay": [
+     74,
+     94
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -13.21,
+     "pp": -8.81,
+     "p": -4.4,
+     "mp": 0.0,
+     "mf": 4.4,
+     "f": 8.81,
+     "ff": 13.21,
+     "fff": 17.61
+    },
+    "meyer": {
+     "ppp": -18.04,
+     "pp": -6.01,
+     "p": -3.01,
+     "mp": 0.0,
+     "mf": 3.01,
+     "f": 6.01,
+     "ff": 9.02,
+     "fff": 12.78
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -7.42,
+     "pp": -5.72,
+     "p": -3.33,
+     "mp": 0.0,
+     "mf": 2.71,
+     "f": 5.57,
+     "ff": 8.97,
+     "fff": 13.12
+    },
+    "meyer": {
+     "ppp": -12.25,
+     "pp": -2.92,
+     "p": -1.94,
+     "mp": 0.0,
+     "mf": 1.32,
+     "f": 2.77,
+     "ff": 4.78,
+     "fff": 8.29
+    }
+   }
   },
   "Violins 2": {
    "instrument": "Violin modern",
@@ -489,7 +555,67 @@
     }
    },
    "midPitch": 73,
-   "midStep": 4.4
+   "midStep": 4.4,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3902,
+    "ff": 0.878
+   },
+   "meyer": {
+    "section": "3.3.1.2",
+    "extremes": [
+     58,
+     99
+    ],
+    "inPlay": [
+     74,
+     94
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -13.21,
+     "pp": -8.81,
+     "p": -4.4,
+     "mp": 0.0,
+     "mf": 4.4,
+     "f": 8.81,
+     "ff": 13.21,
+     "fff": 17.61
+    },
+    "meyer": {
+     "ppp": -18.04,
+     "pp": -6.01,
+     "p": -3.01,
+     "mp": 0.0,
+     "mf": 3.01,
+     "f": 6.01,
+     "ff": 9.02,
+     "fff": 12.78
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -7.2,
+     "pp": -5.64,
+     "p": -3.36,
+     "mp": 0.0,
+     "mf": 2.89,
+     "f": 5.89,
+     "ff": 9.37,
+     "fff": 13.54
+    },
+    "meyer": {
+     "ppp": -12.03,
+     "pp": -2.84,
+     "p": -1.97,
+     "mp": 0.0,
+     "mf": 1.5,
+     "f": 3.09,
+     "ff": 5.18,
+     "fff": 8.71
+    }
+   }
   },
   "Violas": {
    "instrument": "Viola modern",
@@ -758,7 +884,67 @@
     }
    },
    "midPitch": 75,
-   "midStep": 3.63
+   "midStep": 3.63,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3125,
+    "ff": 0.875
+   },
+   "meyer": {
+    "section": "3.3.2.2",
+    "extremes": [
+     63,
+     95
+    ],
+    "inPlay": [
+     73,
+     91
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -10.88,
+     "pp": -7.25,
+     "p": -3.63,
+     "mp": 0.0,
+     "mf": 3.63,
+     "f": 7.25,
+     "ff": 10.88,
+     "fff": 14.51
+    },
+    "meyer": {
+     "ppp": -13.65,
+     "pp": -5.71,
+     "p": -2.86,
+     "mp": 0.0,
+     "mf": 2.86,
+     "f": 5.71,
+     "ff": 8.57,
+     "fff": 11.74
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -4.39,
+     "pp": -3.59,
+     "p": -2.22,
+     "mp": 0.0,
+     "mf": 1.75,
+     "f": 3.75,
+     "ff": 6.38,
+     "fff": 9.76
+    },
+    "meyer": {
+     "ppp": -7.16,
+     "pp": -2.05,
+     "p": -1.45,
+     "mp": 0.0,
+     "mf": 0.98,
+     "f": 2.21,
+     "ff": 4.07,
+     "fff": 6.99
+    }
+   }
   },
   "Celli": {
    "instrument": "Cello modern",
@@ -1341,7 +1527,67 @@
     }
    },
    "midPitch": 64,
-   "midStep": 3.11
+   "midStep": 3.11,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3143,
+    "ff": 0.9429
+   },
+   "meyer": {
+    "section": "3.3.3.2",
+    "extremes": [
+     63,
+     98
+    ],
+    "inPlay": [
+     74,
+     96
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -9.32,
+     "pp": -6.21,
+     "p": -3.11,
+     "mp": 0.0,
+     "mf": 3.11,
+     "f": 6.21,
+     "ff": 9.32,
+     "fff": 12.43
+    },
+    "meyer": {
+     "ppp": -12.3,
+     "pp": -5.47,
+     "p": -2.73,
+     "mp": 0.0,
+     "mf": 2.73,
+     "f": 5.47,
+     "ff": 8.2,
+     "fff": 9.45
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -3.77,
+     "pp": -3.28,
+     "p": -2.11,
+     "mp": 0.0,
+     "mf": 1.42,
+     "f": 2.93,
+     "ff": 5.03,
+     "fff": 7.89
+    },
+    "meyer": {
+     "ppp": -6.75,
+     "pp": -2.54,
+     "p": -1.73,
+     "mp": 0.0,
+     "mf": 1.04,
+     "f": 2.19,
+     "ff": 3.91,
+     "fff": 4.91
+    }
+   }
   },
   "Basses": {
    "instrument": "Double bass modern",
@@ -1758,11 +2004,71 @@
     }
    },
    "midPitch": 52,
-   "midStep": 3.08
+   "midStep": 3.08,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3824,
+    "ff": 0.8824
+   },
+   "meyer": {
+    "section": "3.3.4.2",
+    "extremes": [
+     66,
+     100
+    ],
+    "inPlay": [
+     79,
+     96
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -9.23,
+     "pp": -6.15,
+     "p": -3.08,
+     "mp": 0.0,
+     "mf": 3.08,
+     "f": 6.15,
+     "ff": 9.23,
+     "fff": 12.31
+    },
+    "meyer": {
+     "ppp": -12.54,
+     "pp": -4.31,
+     "p": -2.15,
+     "mp": 0.0,
+     "mf": 2.15,
+     "f": 4.31,
+     "ff": 6.46,
+     "fff": 9.0
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 0.34,
+     "pp": -1.51,
+     "p": -1.87,
+     "mp": 0.0,
+     "mf": 3.18,
+     "f": 2.22,
+     "ff": 1.16,
+     "fff": 2.95
+    },
+    "meyer": {
+     "ppp": -2.97,
+     "pp": 0.33,
+     "p": -0.94,
+     "mp": 0.0,
+     "mf": 2.25,
+     "f": 0.38,
+     "ff": -1.61,
+     "fff": -0.36
+    }
+   }
   }
  },
  "methodInstruments": {
-  "what": "as the sections: rule D with one player's span (an a2 / a6 patch takes its instrument's), long = SSO's All techniques Long (UACC 1), rmsDb less CC1 64's",
+  "what": "as the sections: the Meyer rule (rule D without Meyer figures) with one player's span (an a2 / a6 patch takes its instrument's), long = SSO's All techniques Long (UACC 1), rmsDb less CC1 64's",
   "smoothing": "local linear least squares over +-k semitones, k the strings' (by their leave-one-out); the winds' own leave-one-out, pooled over their twelve instruments (k = 1 .. 12), picks kOwn by a flat curve (cvRmsDb) and leaves semitone jumps of the span up to 7.6 dB (Clarinet): not used",
   "k": 5,
   "kOwn": 1,
@@ -2016,7 +2322,67 @@
     }
    },
    "midPitch": 77,
-   "midStep": 0.85
+   "midStep": 0.85,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4545,
+    "ff": 0.8182
+   },
+   "meyer": {
+    "section": "3.2.1.2",
+    "extremes": [
+     67,
+     100
+    ],
+    "inPlay": [
+     82,
+     94
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -2.55,
+     "pp": -1.7,
+     "p": -0.85,
+     "mp": 0.0,
+     "mf": 0.85,
+     "f": 1.7,
+     "ff": 2.55,
+     "fff": 3.4
+    },
+    "meyer": {
+     "ppp": -3.57,
+     "pp": -0.87,
+     "p": -0.43,
+     "mp": 0.0,
+     "mf": 0.43,
+     "f": 0.87,
+     "ff": 1.3,
+     "fff": 2.38
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 9.31,
+     "pp": 3.48,
+     "p": 0.42,
+     "mp": 0.0,
+     "mf": 2.01,
+     "f": 3.7,
+     "ff": 2.13,
+     "fff": 1.71
+    },
+    "meyer": {
+     "ppp": 8.29,
+     "pp": 4.31,
+     "p": 0.84,
+     "mp": 0.0,
+     "mf": 1.59,
+     "f": 2.87,
+     "ff": 0.88,
+     "fff": 0.69
+    }
+   }
   },
   "Flutes a2": {
    "instrument": "Transverse flute modern",
@@ -2238,7 +2604,67 @@
     }
    },
    "midPitch": 77,
-   "midStep": 0.85
+   "midStep": 0.85,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4545,
+    "ff": 0.8182
+   },
+   "meyer": {
+    "section": "3.2.1.2",
+    "extremes": [
+     67,
+     100
+    ],
+    "inPlay": [
+     82,
+     94
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -2.55,
+     "pp": -1.7,
+     "p": -0.85,
+     "mp": 0.0,
+     "mf": 0.85,
+     "f": 1.7,
+     "ff": 2.55,
+     "fff": 3.4
+    },
+    "meyer": {
+     "ppp": -3.57,
+     "pp": -0.87,
+     "p": -0.43,
+     "mp": 0.0,
+     "mf": 0.43,
+     "f": 0.87,
+     "ff": 1.3,
+     "fff": 2.38
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 4.47,
+     "pp": 2.6,
+     "p": 0.43,
+     "mp": 0.0,
+     "mf": 1.94,
+     "f": 3.47,
+     "ff": 1.98,
+     "fff": 1.58
+    },
+    "meyer": {
+     "ppp": 3.45,
+     "pp": 3.43,
+     "p": 0.85,
+     "mp": 0.0,
+     "mf": 1.52,
+     "f": 2.64,
+     "ff": 0.73,
+     "fff": 0.56
+    }
+   }
   },
   "Oboe Solo": {
    "instrument": "Oboe modern",
@@ -2435,7 +2861,67 @@
     }
    },
    "midPitch": 74,
-   "midStep": 1.94
+   "midStep": 1.94,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3939,
+    "ff": 0.7576
+   },
+   "meyer": {
+    "section": "3.2.2.2",
+    "extremes": [
+     70,
+     103
+    ],
+    "inPlay": [
+     83,
+     95
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -5.82,
+     "pp": -3.88,
+     "p": -1.94,
+     "mp": 0.0,
+     "mf": 1.94,
+     "f": 3.88,
+     "ff": 5.82,
+     "fff": 7.75
+    },
+    "meyer": {
+     "ppp": -7.32,
+     "pp": -1.97,
+     "p": -0.99,
+     "mp": 0.0,
+     "mf": 0.99,
+     "f": 1.97,
+     "ff": 2.96,
+     "fff": 6.25
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 5.34,
+     "pp": 0.68,
+     "p": -0.95,
+     "mp": 0.0,
+     "mf": 1.54,
+     "f": 0.62,
+     "ff": 0.43,
+     "fff": 1.4
+    },
+    "meyer": {
+     "ppp": 3.84,
+     "pp": 2.59,
+     "p": 0.0,
+     "mp": 0.0,
+     "mf": 0.59,
+     "f": -1.29,
+     "ff": -2.43,
+     "fff": -0.1
+    }
+   }
   },
   "Oboes a2": {
    "instrument": "Oboe modern",
@@ -2622,7 +3108,67 @@
     }
    },
    "midPitch": 74,
-   "midStep": 1.94
+   "midStep": 1.94,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3939,
+    "ff": 0.7576
+   },
+   "meyer": {
+    "section": "3.2.2.2",
+    "extremes": [
+     70,
+     103
+    ],
+    "inPlay": [
+     83,
+     95
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -5.82,
+     "pp": -3.88,
+     "p": -1.94,
+     "mp": 0.0,
+     "mf": 1.94,
+     "f": 3.88,
+     "ff": 5.82,
+     "fff": 7.75
+    },
+    "meyer": {
+     "ppp": -7.32,
+     "pp": -1.97,
+     "p": -0.99,
+     "mp": 0.0,
+     "mf": 0.99,
+     "f": 1.97,
+     "ff": 2.96,
+     "fff": 6.25
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 6.77,
+     "pp": 3.05,
+     "p": -0.21,
+     "mp": 0.0,
+     "mf": 2.45,
+     "f": 5.68,
+     "ff": 6.57,
+     "fff": 7.77
+    },
+    "meyer": {
+     "ppp": 5.27,
+     "pp": 4.96,
+     "p": 0.74,
+     "mp": 0.0,
+     "mf": 1.5,
+     "f": 3.77,
+     "ff": 3.71,
+     "fff": 6.27
+    }
+   }
   },
   "Cor Anglais": {
    "instrument": "English horn modern",
@@ -2815,7 +3361,33 @@
     }
    },
    "midPitch": 67,
-   "midStep": 1.68
+   "midStep": 1.68,
+   "rule": "D",
+   "meyerNone": "3.2.2.4: only the limits pp 79 / ff 94 (narrower than the oboe), no scales against single notes",
+   "marksMid": {
+    "D": {
+     "ppp": -5.04,
+     "pp": -3.36,
+     "p": -1.68,
+     "mp": 0.0,
+     "mf": 1.68,
+     "f": 3.36,
+     "ff": 5.04,
+     "fff": 6.71
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 1.47,
+     "pp": 0.83,
+     "p": 0.92,
+     "mp": 0.0,
+     "mf": 3.24,
+     "f": 4.53,
+     "ff": 4.25,
+     "fff": 3.87
+    }
+   }
   },
   "Clarinet Solo": {
    "instrument": "Clarinet modern",
@@ -3066,7 +3638,67 @@
     }
    },
    "midPitch": 72,
-   "midStep": 4.54
+   "midStep": 4.54,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4082,
+    "ff": 0.8163
+   },
+   "meyer": {
+    "section": "3.2.3.2",
+    "extremes": [
+     57,
+     106
+    ],
+    "inPlay": [
+     77,
+     97
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -13.63,
+     "pp": -9.09,
+     "p": -4.54,
+     "mp": 0.0,
+     "mf": 4.54,
+     "f": 9.09,
+     "ff": 13.63,
+     "fff": 18.18
+    },
+    "meyer": {
+     "ppp": -18.18,
+     "pp": -5.19,
+     "p": -2.6,
+     "mp": 0.0,
+     "mf": 2.6,
+     "f": 5.19,
+     "ff": 7.79,
+     "fff": 13.63
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -6.05,
+     "pp": -4.22,
+     "p": -3.18,
+     "mp": 0.0,
+     "mf": 4.83,
+     "f": 6.5,
+     "ff": 8.67,
+     "fff": 12.2
+    },
+    "meyer": {
+     "ppp": -10.6,
+     "pp": -0.32,
+     "p": -1.24,
+     "mp": 0.0,
+     "mf": 2.89,
+     "f": 2.6,
+     "ff": 2.83,
+     "fff": 7.65
+    }
+   }
   },
   "Clarinets a2": {
    "instrument": "Clarinet modern",
@@ -3317,7 +3949,67 @@
     }
    },
    "midPitch": 72,
-   "midStep": 4.54
+   "midStep": 4.54,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4082,
+    "ff": 0.8163
+   },
+   "meyer": {
+    "section": "3.2.3.2",
+    "extremes": [
+     57,
+     106
+    ],
+    "inPlay": [
+     77,
+     97
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -13.63,
+     "pp": -9.09,
+     "p": -4.54,
+     "mp": 0.0,
+     "mf": 4.54,
+     "f": 9.09,
+     "ff": 13.63,
+     "fff": 18.18
+    },
+    "meyer": {
+     "ppp": -18.18,
+     "pp": -5.19,
+     "p": -2.6,
+     "mp": 0.0,
+     "mf": 2.6,
+     "f": 5.19,
+     "ff": 7.79,
+     "fff": 13.63
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -4.66,
+     "pp": -4.88,
+     "p": -3.64,
+     "mp": 0.0,
+     "mf": 4.89,
+     "f": 6.89,
+     "ff": 9.19,
+     "fff": 12.76
+    },
+    "meyer": {
+     "ppp": -9.21,
+     "pp": -0.98,
+     "p": -1.7,
+     "mp": 0.0,
+     "mf": 2.95,
+     "f": 2.99,
+     "ff": 3.35,
+     "fff": 8.21
+    }
+   }
   },
   "Bass Clarinet": {
    "instrument": "Bass clarinet modern",
@@ -3572,7 +4264,33 @@
     }
    },
    "midPitch": 55,
-   "midStep": 3.25
+   "midStep": 3.25,
+   "rule": "D",
+   "meyerNone": "3.2.3.4: only single notes (pp 59 low register, ff about 97), no in-play levels",
+   "marksMid": {
+    "D": {
+     "ppp": -9.75,
+     "pp": -6.5,
+     "p": -3.25,
+     "mp": 0.0,
+     "mf": 3.25,
+     "f": 6.5,
+     "ff": 9.75,
+     "fff": 12.99
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -7.74,
+     "pp": -6.18,
+     "p": -3.45,
+     "mp": 0.0,
+     "mf": 4.05,
+     "f": 1.82,
+     "ff": 2.16,
+     "fff": 4.26
+    }
+   }
   },
   "Bassoon Solo": {
    "instrument": "Bassoon modern",
@@ -3819,7 +4537,67 @@
     }
    },
    "midPitch": 55,
-   "midStep": 1.83
+   "midStep": 1.83,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3,
+    "ff": 0.8
+   },
+   "meyer": {
+    "section": "3.2.4.2",
+    "extremes": [
+     72,
+     102
+    ],
+    "inPlay": [
+     81,
+     96
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -5.5,
+     "pp": -3.67,
+     "p": -1.83,
+     "mp": 0.0,
+     "mf": 1.83,
+     "f": 3.67,
+     "ff": 5.5,
+     "fff": 7.34
+    },
+    "meyer": {
+     "ppp": -6.42,
+     "pp": -2.57,
+     "p": -1.28,
+     "mp": 0.0,
+     "mf": 1.28,
+     "f": 2.57,
+     "ff": 3.85,
+     "fff": 6.42
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 4.84,
+     "pp": 1.55,
+     "p": 0.41,
+     "mp": 0.0,
+     "mf": 3.81,
+     "f": 6.07,
+     "ff": 6.23,
+     "fff": 5.89
+    },
+    "meyer": {
+     "ppp": 3.92,
+     "pp": 2.65,
+     "p": 0.96,
+     "mp": 0.0,
+     "mf": 3.26,
+     "f": 4.97,
+     "ff": 4.58,
+     "fff": 4.97
+    }
+   }
   },
   "Bassoons a2": {
    "instrument": "Bassoon modern",
@@ -4066,7 +4844,67 @@
     }
    },
    "midPitch": 55,
-   "midStep": 1.83
+   "midStep": 1.83,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3,
+    "ff": 0.8
+   },
+   "meyer": {
+    "section": "3.2.4.2",
+    "extremes": [
+     72,
+     102
+    ],
+    "inPlay": [
+     81,
+     96
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -5.5,
+     "pp": -3.67,
+     "p": -1.83,
+     "mp": 0.0,
+     "mf": 1.83,
+     "f": 3.67,
+     "ff": 5.5,
+     "fff": 7.34
+    },
+    "meyer": {
+     "ppp": -6.42,
+     "pp": -2.57,
+     "p": -1.28,
+     "mp": 0.0,
+     "mf": 1.28,
+     "f": 2.57,
+     "ff": 3.85,
+     "fff": 6.42
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 1.39,
+     "pp": -0.37,
+     "p": -0.11,
+     "mp": 0.0,
+     "mf": 2.2,
+     "f": 1.45,
+     "ff": 0.38,
+     "fff": -0.05
+    },
+    "meyer": {
+     "ppp": 0.47,
+     "pp": 0.73,
+     "p": 0.44,
+     "mp": 0.0,
+     "mf": 1.65,
+     "f": 0.35,
+     "ff": -1.27,
+     "fff": -0.97
+    }
+   }
   },
   "Contrabassoon": {
    "instrument": "Contrabassoon modern",
@@ -4276,7 +5114,33 @@
     }
    },
    "midPitch": 37,
-   "midStep": 1.66
+   "midStep": 1.66,
+   "rule": "D",
+   "meyerNone": "3.2.4.6: in-play pp 86 / ff 96, single notes only as a range (\"up to 15 dB\"), no levels",
+   "marksMid": {
+    "D": {
+     "ppp": -4.97,
+     "pp": -3.31,
+     "p": -1.66,
+     "mp": 0.0,
+     "mf": 1.66,
+     "f": 3.31,
+     "ff": 4.97,
+     "fff": 6.63
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 2.59,
+     "pp": 1.12,
+     "p": 0.79,
+     "mp": 0.0,
+     "mf": 3.09,
+     "f": 3.34,
+     "ff": 2.32,
+     "fff": 1.66
+    }
+   }
   },
   "Horn Solo": {
    "instrument": "French horn modern",
@@ -4519,7 +5383,67 @@
     }
    },
    "midPitch": 58,
-   "midStep": 3.24
+   "midStep": 3.24,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4038,
+    "ff": 0.8077
+   },
+   "meyer": {
+    "section": "3.1.1.2",
+    "extremes": [
+     65,
+     117
+    ],
+    "inPlay": [
+     86,
+     107
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -9.71,
+     "pp": -6.47,
+     "p": -3.24,
+     "mp": 0.0,
+     "mf": 3.24,
+     "f": 6.47,
+     "ff": 9.71,
+     "fff": 12.94
+    },
+    "meyer": {
+     "ppp": -12.81,
+     "pp": -3.66,
+     "p": -1.83,
+     "mp": 0.0,
+     "mf": 1.83,
+     "f": 3.66,
+     "ff": 5.49,
+     "fff": 9.84
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 1.99,
+     "pp": -1.3,
+     "p": -1.13,
+     "mp": 0.0,
+     "mf": 2.17,
+     "f": 3.84,
+     "ff": 2.39,
+     "fff": 4.27
+    },
+    "meyer": {
+     "ppp": -1.11,
+     "pp": 1.51,
+     "p": 0.28,
+     "mp": 0.0,
+     "mf": 0.76,
+     "f": 1.03,
+     "ff": -1.83,
+     "fff": 1.17
+    }
+   }
   },
   "Horns a2": {
    "instrument": "French horn modern",
@@ -4762,7 +5686,67 @@
     }
    },
    "midPitch": 58,
-   "midStep": 3.24
+   "midStep": 3.24,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4038,
+    "ff": 0.8077
+   },
+   "meyer": {
+    "section": "3.1.1.2",
+    "extremes": [
+     65,
+     117
+    ],
+    "inPlay": [
+     86,
+     107
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -9.71,
+     "pp": -6.47,
+     "p": -3.24,
+     "mp": 0.0,
+     "mf": 3.24,
+     "f": 6.47,
+     "ff": 9.71,
+     "fff": 12.94
+    },
+    "meyer": {
+     "ppp": -12.81,
+     "pp": -3.66,
+     "p": -1.83,
+     "mp": 0.0,
+     "mf": 1.83,
+     "f": 3.66,
+     "ff": 5.49,
+     "fff": 9.84
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 3.87,
+     "pp": 0.05,
+     "p": -0.33,
+     "mp": 0.0,
+     "mf": 2.19,
+     "f": 3.66,
+     "ff": 2.51,
+     "fff": 4.37
+    },
+    "meyer": {
+     "ppp": 0.77,
+     "pp": 2.86,
+     "p": 1.08,
+     "mp": 0.0,
+     "mf": 0.78,
+     "f": 0.85,
+     "ff": -1.71,
+     "fff": 1.27
+    }
+   }
   },
   "Horns a6": {
    "instrument": "French horn modern",
@@ -5025,7 +6009,67 @@
     }
    },
    "midPitch": 58,
-   "midStep": 3.24
+   "midStep": 3.24,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4038,
+    "ff": 0.8077
+   },
+   "meyer": {
+    "section": "3.1.1.2",
+    "extremes": [
+     65,
+     117
+    ],
+    "inPlay": [
+     86,
+     107
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -9.71,
+     "pp": -6.47,
+     "p": -3.24,
+     "mp": 0.0,
+     "mf": 3.24,
+     "f": 6.47,
+     "ff": 9.71,
+     "fff": 12.94
+    },
+    "meyer": {
+     "ppp": -12.81,
+     "pp": -3.66,
+     "p": -1.83,
+     "mp": 0.0,
+     "mf": 1.83,
+     "f": 3.66,
+     "ff": 5.49,
+     "fff": 9.84
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -4.09,
+     "pp": -5.3,
+     "p": -2.46,
+     "mp": 0.0,
+     "mf": 2.21,
+     "f": 4.32,
+     "ff": 6.45,
+     "fff": 8.68
+    },
+    "meyer": {
+     "ppp": -7.19,
+     "pp": -2.49,
+     "p": -1.05,
+     "mp": 0.0,
+     "mf": 0.8,
+     "f": 1.51,
+     "ff": 2.23,
+     "fff": 5.58
+    }
+   }
   },
   "Trumpet Solo": {
    "instrument": "Trumpet modern",
@@ -5228,7 +6272,67 @@
     }
    },
    "midPitch": 72,
-   "midStep": 3.21
+   "midStep": 3.21,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3333,
+    "ff": 0.7879
+   },
+   "meyer": {
+    "section": "3.1.2.2",
+    "extremes": [
+     78,
+     111
+    ],
+    "inPlay": [
+     89,
+     104
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -9.63,
+     "pp": -6.42,
+     "p": -3.21,
+     "mp": 0.0,
+     "mf": 3.21,
+     "f": 6.42,
+     "ff": 9.63,
+     "fff": 12.85
+    },
+    "meyer": {
+     "ppp": -11.58,
+     "pp": -4.09,
+     "p": -2.04,
+     "mp": 0.0,
+     "mf": 2.04,
+     "f": 4.09,
+     "ff": 6.13,
+     "fff": 10.9
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 0.95,
+     "pp": -1.47,
+     "p": 0.52,
+     "mp": 0.0,
+     "mf": -2.02,
+     "f": 1.53,
+     "ff": 4.74,
+     "fff": 4.19
+    },
+    "meyer": {
+     "ppp": -1.0,
+     "pp": 0.86,
+     "p": 1.69,
+     "mp": 0.0,
+     "mf": -3.19,
+     "f": -0.8,
+     "ff": 1.24,
+     "fff": 2.24
+    }
+   }
   },
   "Trumpets a2": {
    "instrument": "Trumpet modern",
@@ -5441,7 +6545,67 @@
     }
    },
    "midPitch": 72,
-   "midStep": 3.21
+   "midStep": 3.21,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3333,
+    "ff": 0.7879
+   },
+   "meyer": {
+    "section": "3.1.2.2",
+    "extremes": [
+     78,
+     111
+    ],
+    "inPlay": [
+     89,
+     104
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -9.63,
+     "pp": -6.42,
+     "p": -3.21,
+     "mp": 0.0,
+     "mf": 3.21,
+     "f": 6.42,
+     "ff": 9.63,
+     "fff": 12.85
+    },
+    "meyer": {
+     "ppp": -11.58,
+     "pp": -4.09,
+     "p": -2.04,
+     "mp": 0.0,
+     "mf": 2.04,
+     "f": 4.09,
+     "ff": 6.13,
+     "fff": 10.9
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -2.01,
+     "pp": -4.72,
+     "p": -2.5,
+     "mp": 0.0,
+     "mf": -1.56,
+     "f": 1.7,
+     "ff": 1.23,
+     "fff": 0.3
+    },
+    "meyer": {
+     "ppp": -3.96,
+     "pp": -2.39,
+     "p": -1.33,
+     "mp": 0.0,
+     "mf": -2.73,
+     "f": -0.63,
+     "ff": -2.27,
+     "fff": -1.65
+    }
+   }
   },
   "Trumpets a6": {
    "instrument": "Trumpet modern",
@@ -5644,7 +6808,67 @@
     }
    },
    "midPitch": 72,
-   "midStep": 3.21
+   "midStep": 3.21,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.3333,
+    "ff": 0.7879
+   },
+   "meyer": {
+    "section": "3.1.2.2",
+    "extremes": [
+     78,
+     111
+    ],
+    "inPlay": [
+     89,
+     104
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -9.63,
+     "pp": -6.42,
+     "p": -3.21,
+     "mp": 0.0,
+     "mf": 3.21,
+     "f": 6.42,
+     "ff": 9.63,
+     "fff": 12.85
+    },
+    "meyer": {
+     "ppp": -11.58,
+     "pp": -4.09,
+     "p": -2.04,
+     "mp": 0.0,
+     "mf": 2.04,
+     "f": 4.09,
+     "ff": 6.13,
+     "fff": 10.9
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -7.41,
+     "pp": -5.56,
+     "p": -2.25,
+     "mp": 0.0,
+     "mf": -1.44,
+     "f": -0.75,
+     "ff": 1.42,
+     "fff": 4.18
+    },
+    "meyer": {
+     "ppp": -9.36,
+     "pp": -3.23,
+     "p": -1.08,
+     "mp": 0.0,
+     "mf": -2.61,
+     "f": -3.08,
+     "ff": -2.08,
+     "fff": 2.23
+    }
+   }
   },
   "Tenor Trombone Solo": {
    "instrument": "Tenor trombone modern",
@@ -5898,7 +7122,67 @@
     }
    },
    "midPitch": 54,
-   "midStep": 4.6
+   "midStep": 4.6,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4,
+    "ff": 0.8
+   },
+   "meyer": {
+    "section": "3.1.3.2",
+    "extremes": [
+     73,
+     113
+    ],
+    "inPlay": [
+     89,
+     105
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -13.8,
+     "pp": -9.2,
+     "p": -4.6,
+     "mp": 0.0,
+     "mf": 4.6,
+     "f": 9.2,
+     "ff": 13.8,
+     "fff": 18.41
+    },
+    "meyer": {
+     "ppp": -18.04,
+     "pp": -5.15,
+     "p": -2.58,
+     "mp": 0.0,
+     "mf": 2.58,
+     "f": 5.15,
+     "ff": 7.73,
+     "fff": 14.17
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 5.08,
+     "pp": 2.48,
+     "p": 2.62,
+     "mp": 0.0,
+     "mf": 3.0,
+     "f": 3.88,
+     "ff": 7.3,
+     "fff": 11.67
+    },
+    "meyer": {
+     "ppp": 0.84,
+     "pp": 6.53,
+     "p": 4.64,
+     "mp": 0.0,
+     "mf": 0.98,
+     "f": -0.17,
+     "ff": 1.23,
+     "fff": 7.43
+    }
+   }
   },
   "Tenor Trombones a2": {
    "instrument": "Tenor trombone modern",
@@ -6162,7 +7446,67 @@
     }
    },
    "midPitch": 54,
-   "midStep": 4.6
+   "midStep": 4.6,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4,
+    "ff": 0.8
+   },
+   "meyer": {
+    "section": "3.1.3.2",
+    "extremes": [
+     73,
+     113
+    ],
+    "inPlay": [
+     89,
+     105
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -13.8,
+     "pp": -9.2,
+     "p": -4.6,
+     "mp": 0.0,
+     "mf": 4.6,
+     "f": 9.2,
+     "ff": 13.8,
+     "fff": 18.41
+    },
+    "meyer": {
+     "ppp": -18.04,
+     "pp": -5.15,
+     "p": -2.58,
+     "mp": 0.0,
+     "mf": 2.58,
+     "f": 5.15,
+     "ff": 7.73,
+     "fff": 14.17
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -4.87,
+     "pp": -4.32,
+     "p": -0.51,
+     "mp": 0.0,
+     "mf": 1.49,
+     "f": -0.29,
+     "ff": 2.56,
+     "fff": 6.86
+    },
+    "meyer": {
+     "ppp": -9.11,
+     "pp": -0.27,
+     "p": 1.51,
+     "mp": 0.0,
+     "mf": -0.53,
+     "f": -4.34,
+     "ff": -3.51,
+     "fff": 2.62
+    }
+   }
   },
   "Trombones a6": {
    "instrument": "Tenor trombone modern",
@@ -6396,7 +7740,67 @@
     }
    },
    "midPitch": 54,
-   "midStep": 4.6
+   "midStep": 4.6,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4,
+    "ff": 0.8
+   },
+   "meyer": {
+    "section": "3.1.3.2",
+    "extremes": [
+     73,
+     113
+    ],
+    "inPlay": [
+     89,
+     105
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -13.8,
+     "pp": -9.2,
+     "p": -4.6,
+     "mp": 0.0,
+     "mf": 4.6,
+     "f": 9.2,
+     "ff": 13.8,
+     "fff": 18.41
+    },
+    "meyer": {
+     "ppp": -18.04,
+     "pp": -5.15,
+     "p": -2.58,
+     "mp": 0.0,
+     "mf": 2.58,
+     "f": 5.15,
+     "ff": 7.73,
+     "fff": 14.17
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -11.51,
+     "pp": -8.27,
+     "p": -3.56,
+     "mp": 0.0,
+     "mf": -0.17,
+     "f": 1.89,
+     "ff": 5.44,
+     "fff": 9.6
+    },
+    "meyer": {
+     "ppp": -15.75,
+     "pp": -4.22,
+     "p": -1.54,
+     "mp": 0.0,
+     "mf": -2.19,
+     "f": -2.16,
+     "ff": -0.63,
+     "fff": 5.36
+    }
+   }
   },
   "Bass Trombone Solo": {
    "instrument": "Bass trombone modern",
@@ -6633,7 +8037,33 @@
     }
    },
    "midPitch": 47,
-   "midStep": 4.78
+   "midStep": 4.78,
+   "rule": "D",
+   "meyerNone": "3.1.3.4: tone colour only, no levels",
+   "marksMid": {
+    "D": {
+     "ppp": -14.35,
+     "pp": -9.57,
+     "p": -4.78,
+     "mp": 0.0,
+     "mf": 4.78,
+     "f": 9.57,
+     "ff": 14.35,
+     "fff": 19.14
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -2.44,
+     "pp": 1.28,
+     "p": 2.36,
+     "mp": 0.0,
+     "mf": 2.38,
+     "f": 6.27,
+     "ff": 9.96,
+     "fff": 13.99
+    }
+   }
   },
   "Bass Trombones a2": {
    "instrument": "Bass trombone modern",
@@ -6860,7 +8290,33 @@
     }
    },
    "midPitch": 47,
-   "midStep": 4.78
+   "midStep": 4.78,
+   "rule": "D",
+   "meyerNone": "3.1.3.4: tone colour only, no levels",
+   "marksMid": {
+    "D": {
+     "ppp": -14.35,
+     "pp": -9.57,
+     "p": -4.78,
+     "mp": 0.0,
+     "mf": 4.78,
+     "f": 9.57,
+     "ff": 14.35,
+     "fff": 19.14
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": -4.57,
+     "pp": -4.1,
+     "p": -0.35,
+     "mp": 0.0,
+     "mf": 0.68,
+     "f": -1.31,
+     "ff": 1.92,
+     "fff": 6.34
+    }
+   }
   },
   "Tuba Solo": {
    "instrument": "Tuba modern",
@@ -7119,7 +8575,67 @@
     }
    },
    "midPitch": 45,
-   "midStep": 3.39
+   "midStep": 3.39,
+   "rule": "meyer",
+   "fractions": {
+    "pp": 0.4571,
+    "ff": 0.8857
+   },
+   "meyer": {
+    "section": "3.1.4.2",
+    "extremes": [
+     77,
+     112
+    ],
+    "inPlay": [
+     93,
+     108
+    ]
+   },
+   "marksMid": {
+    "D": {
+     "ppp": -10.18,
+     "pp": -6.79,
+     "p": -3.39,
+     "mp": 0.0,
+     "mf": 3.39,
+     "f": 6.79,
+     "ff": 10.18,
+     "fff": 13.57
+    },
+    "meyer": {
+     "ppp": -14.93,
+     "pp": -4.07,
+     "p": -2.04,
+     "mp": 0.0,
+     "mf": 2.04,
+     "f": 4.07,
+     "ff": 6.11,
+     "fff": 8.82
+    }
+   },
+   "realDbMid": {
+    "D": {
+     "ppp": 4.85,
+     "pp": -1.0,
+     "p": -2.04,
+     "mp": 0.0,
+     "mf": 4.46,
+     "f": 7.34,
+     "ff": 7.5,
+     "fff": 9.61
+    },
+    "meyer": {
+     "ppp": 0.1,
+     "pp": 1.72,
+     "p": -0.69,
+     "mp": 0.0,
+     "mf": 3.11,
+     "f": 4.62,
+     "ff": 3.43,
+     "fff": 4.86
+    }
+   }
   }
  }
 }

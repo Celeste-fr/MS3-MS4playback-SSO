@@ -249,12 +249,17 @@ struct LibInstrument {
       // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's M,
       // 2026-10-11, gen_spitfire_sso.py SECTION_FADERS). 0: none
       double sectionLevelDb { 0 };
-      // [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A, rule D), on the main patch, its
+      // [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A), on the main patch, its
       // extras take them: one real player's ff - pp in dB per pitch (<Instrument realSpan="pitch:dB ...">: Weinzierl et al.
       // 2018, smoothed; gen_spitfire_sso.py, real_range.py), and the patch's held Long's level against CC1 64 per CC1 and
       // pitch (<Instrument longLevel="cc/pitch:dB ...">: sso_cc1_curves.json). Empty: none
       std::map<int, double> realSpan;                       // pitch -> dB
       std::map<int, std::map<int, double>> longLevel;       // pitch -> cc -> dB
+      // the Meyer rule (the owner, 2026-10-14, replacing rule D; <Instrument realPlay="a b">, the extras take it): written
+      // pp and ff as fractions of realSpan above the single-note pp (J. Meyer 2009, ch. 3: rapid scales against single-note
+      // extremes); missing: rule D, 1/7 and 6/7
+      double realPlayPp { 1.0 / 7.0 };
+      double realPlayFf { 6.0 / 7.0 };
       QString scan;                      // a <Patch> with several articulations (read from its files): "values"
                                           // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;
