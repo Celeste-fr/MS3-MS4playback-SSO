@@ -233,14 +233,19 @@ double realFraction(double steps, double pp, double ff)
       return std::min(1.0, ff + (steps - 3.0) * (1.0 - ff));
       }
 
+double longLevelDb(const SoundLib::LibInstrument& patch, int x, int pitch)
+      {
+      const double cc = std::max(0, std::min(127, x));
+      return between(patch.longLevel, pitch, [cc](const std::map<int, double>& byCc) {
+            return between(byCc, cc, [](double v) { return v; });
+            });
+      }
+
 double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch, bool spans)
       {
       if (!hasRealRange(&patch))
             return 0.0;
-      const double cc = std::max(0, std::min(127, x));
-      const double sso = between(patch.longLevel, pitch, [cc](const std::map<int, double>& byCc) {
-            return between(byCc, cc, [](double v) { return v; });
-            });
+      const double sso = longLevelDb(patch, x, pitch);
       // Clark & Luce spans: equal steps of S / 5 from mp, ppp / fff one step more (markingSteps -3 .. +4)
       if (spans && patch.realStepsDb > 0.0)
             return markingSteps(x) * patch.realStepsDb / 5.0 - sso;

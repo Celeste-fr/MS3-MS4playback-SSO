@@ -467,9 +467,16 @@ void TestMarcatoLevel::velocityPath()
       c.points = { { 16, -60.2 }, { 32, -46 }, { 48, -40.8 }, { 64, -37.2 }, { 80, -33.1 }, { 96, -27.6 }, { 112, -25.2 }, { 127, -21.3 } };
       cal->setCurve("Trumpet Solo", 52, c);
       SoundLib::setDynamicsCalibration(cal);
+      // ([levels] calibrated 1 without the held note's curve, and 0: the marcato at the plain level, the Inspector's on top)
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=1");
       QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 56);
+      // 2 (the default): MS4's +4.39 dB along its own curve first: -28.7 dB at 93, -6 dB from there (-34.6) at 74
+      s->setMetaTag(Playback::metaTag, QString());
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 74);
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=1");
       setLevel(marcato(s, 1, 0), 6);
       QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 99);      // -27.1 dB
+      s->setMetaTag(Playback::metaTag, QString());
       delete s;
       }
 
@@ -616,7 +623,7 @@ void TestMarcatoLevel::textLevel()
 
 //---------------------------------------------------------
 //   calibrated
-//    [levels] calibrated (on by default): SSO's Trumpet Solo marcato (Marcato, on velocity) at the velocity where its
+//    [levels] calibrated 1 (2 by default since 2026-10-15): SSO's Trumpet Solo marcato (Marcato, on velocity) at the velocity where its
 //    measured curve is as loud as the held note's (Long, on CC1) at mf's CC1 80, plus MS4's offset for a marcato
 //    (40 log10(103 / 80): MS4 plays it at 103 where a plain note plays at 80); the Inspector's level from there.
 //    Off, or without the held note's curve: as before (velocityPath). Test curves (straight lines: the result
@@ -640,6 +647,7 @@ void TestMarcatoLevel::calibrated()
       marc.points = { { 32, -30 }, { 80, -20 }, { 127, -10 } };
       cal->setCurve("Trumpet Solo", 52, marc);
       SoundLib::setDynamicsCalibration(cal);
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=1");
 
       // -30 dB + 4.39 dB = -25.61 dB: velocity 32 + 4.39 * 4.8 = 53.1
       const int expected = int(std::lround(32 + 40 * std::log10(103.0 / 80) * 4.8));
@@ -670,7 +678,7 @@ void TestMarcatoLevel::calibrated()
       // off (Library default): mf's 80, as before
       s->setMetaTag(Playback::metaTag, "levels/calibrated=0");
       QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 80);
-      s->setMetaTag(Playback::metaTag, QString());
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=1");
 
       // the shipped measurements (share/soundlibraries/..dynamics.json, tools/soundlibraries/
       // calibration_from_sound_dynamics.py): Trumpet Solo's Long and Marcato are there
@@ -683,6 +691,51 @@ void TestMarcatoLevel::calibrated()
       const int v = noteOn(render(s, lib, 0, 1), 72);
       const int w = SoundLib::calibratedVelocity(shipped, "Trumpet Solo", 52, "Trumpet Solo", 1, 80, 40 * std::log10(103.0 / 80));
       QCOMPARE(v, qBound(1, w, 127));
+
+      // 2 (the default since 2026-10-15: the library's own balance): mf's 80 as the velocity, MS4's +4.39 dB along the
+      // Marcato's own curve (the held note plays no part): -20 + 4.39 = -15.61 dB between 80 and 127: 80 + 4.39 * 4.7 = 100.6
+      s->setMetaTag(Playback::metaTag, QString());
+      held.perceived.clear();
+      marc.perceived.clear();
+      cal->setCurve("Trumpet Solo", 1, held);
+      cal->setCurve("Trumpet Solo", 52, marc);
+      SoundLib::setDynamicsCalibration(cal);
+      const double ms4 = 40 * std::log10(103.0 / 80);
+      const int own = int(std::lround(80 + ms4 * 4.7));
+      QCOMPARE(own, 101);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), own);
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=2");
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), own);
+      // a much softer held note changes nothing (1 would follow it)
+      SoundLib::DynamicsCurve soft = held;
+      soft.points = { { 32, -60 }, { 80, -50 }, { 127, -40 } };
+      cal->setCurve("Trumpet Solo", 1, soft);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), own);
+      cal->setCurve("Trumpet Solo", 1, held);
+      // the Inspector's -6 dB along its own curve: at(101) = -20 + 21 / 4.7 = -15.53, -21.53 dB between 32 and 80:
+      // 80 - 1.53 * 4.8 = 72.6
+      setLevel(marcato(s, 1, 0), -6);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), int(std::lround(80 + (double(own - 80) / 4.7 - 6) * 4.8)));
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 73);
+      setLevel(marcato(s, 1, 0), 0);
+      // by ear where its own curve has it (perceived; the held note's isn't needed): -35 + 4.39 on -35 .. -15 between
+      // 80 and 127: 80 + 4.39 * 2.35 = 90.3
+      marc.perceived = { { 32, -45 }, { 80, -35 }, { 127, -15 } };
+      cal->setCurve("Trumpet Solo", 52, marc);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), int(std::lround(80 + ms4 * 2.35)));
+      // its own curve unmeasured: as 0, the marcato at the plain 80 (the library's marcato is its accent)
+      auto heldOnly = std::make_shared<SoundLib::DynamicsCalibration>();
+      heldOnly->setCurve("Trumpet Solo", 1, held);
+      SoundLib::setDynamicsCalibration(heldOnly);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 80);
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=0");
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 80);
+      // the shipped measurements: the Marcato's own curve from 80, by ear where measured
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=2");
+      SoundLib::setDynamicsCalibration(std::make_shared<SoundLib::DynamicsCalibration>(shipped));
+      const SoundLib::DynamicsCurve shippedMarc = shipped.curve("Trumpet Solo", 52)->atPitch(72);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), qBound(80, shippedMarc.louder(80, ms4), 127));
+      s->setMetaTag(Playback::metaTag, QString());
       delete s;
       }
 
