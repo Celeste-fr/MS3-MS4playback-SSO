@@ -144,6 +144,7 @@ class MidiRenderer {
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
       bool libAvoidBad = true;                                    // [notes] avoidBadSamples (the map's avoid)
+      int libTransitionsEarly = 0;                                // [slurs] transitionsEarly 0-3 (this chunk; not written timing)
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]
@@ -224,7 +225,19 @@ class MidiRenderer {
             // performanceNote), interval semitones from it (the playbackaudit's DROPPED and LEAP); nullptr: an attack
             const Note* from { nullptr };
             int interval { 0 };
+            // [slurs] transitionsEarly: how early the transition was meant to start (ms; -1: not moved), and whether its patch
+            // has no measured glide so that modes 2 / 3 fell back to the arrival (mode 1's model)
+            double earlyMeantMs { -1 };
+            bool earlyFallback { false };
             };
+      // SSO's Performance legato doesn't play a legato note-on less than this after the legato note-on before on its
+      // route (at velocity 64 or lower; from reading its script, behaviour only): the audit's DROPPED, and the least a
+      // transition started early ([slurs] transitionsEarly) leaves the note before
+      static constexpr double TRANSITION_MIN_GAP_MS = 15.0;
+      // [slurs] transitionsEarly 2: a legato note on a bowed string is heard this long after its pitch change starts
+      // (Polfreman 2013, "Comparing onset detection and perceptual attack time", ISMIR 2013: a modelled bowed string,
+      // 23.5 ms, SD 22.8)
+      static constexpr double HEARD_AFTER_LEAVE_MS = 23.5;
       static const int DYNAMIC_LEVELS[8];         // MS4's levels of ppp … fff (ms4playback.cpp's dynamic table)
       static const char* const DYNAMIC_NAMES[8];
    private:

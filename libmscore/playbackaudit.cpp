@@ -68,7 +68,7 @@ static const double TIMING_FAIL_MS = 50.0;
 
 // SSO's legato engine (read privately, behaviour only): a legato note-on less than 15 ms after the previous legato
 // note-on on its channel, at velocity 64 or lower, isn't played; a step beyond an octave gets no transition
-static const double DROP_GAP_MS = 15.0;
+static const double DROP_GAP_MS = MidiRenderer::TRANSITION_MIN_GAP_MS;
 static const int DROP_MAX_VELOCITY = 64;
 static const double LEAP_MAX_CENTS = 1200.0;
 
@@ -159,6 +159,20 @@ QString Report::text(const QString& title) const
       for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP, Kind::DROPPED, Kind::LEAP })
             out << QString("  %1: %2 fail, %3 warn, %4 info").arg(kindName(k), -12).arg(count(k, Severity::FAIL))
                    .arg(count(k, Severity::WARN)).arg(count(k, Severity::INFO));
+      if (!transitionShiftsMs.empty()) {
+            std::vector<double> v = transitionShiftsMs;
+            std::sort(v.begin(), v.end());
+            const double median = v.size() % 2 ? v[v.size() / 2] : (v[v.size() / 2 - 1] + v[v.size() / 2]) / 2;
+            out << QString("  [slurs] transitionsEarly %6: %1 transitions started early, median %2 ms (%3 - %4), %5 capped")
+                   .arg(v.size()).arg(median, 0, 'f', 1).arg(v.front(), 0, 'f', 1).arg(v.back(), 0, 'f', 1).arg(transitionsCapped)
+                   .arg(transitionsEarlyMode);
+            if (!transitionsFallback.empty()) {
+                  QStringList names;
+                  for (const QString& n : transitionsFallback)
+                        names << n;
+                  out << QString("    no measured glide (mode 2 / 3 fell back to the arrival): %1").arg(names.join(", "));
+                  }
+            }
       std::vector<const Finding*> sorted;
       for (const Finding& f : findings)
             sorted.push_back(&f);
@@ -366,6 +380,8 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
       std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
       const bool byPitchAll = Playback::on("heldNotes/byPitch", score);
       const int onsetEarlyPct = lib ? SoundLib::onsetEarly(score, *lib) : 0;
+      const bool transitionsEarly = Playback::value("slurs/transitionsEarly", score) >= 0.5;
+      report.transitionsEarlyMode = int(std::lround(Playback::value("slurs/transitionsEarly", score)));
       auto onsetOf = [&](const Played* p, int pitch) {
             const SoundLib::Choice& c = p->trace->choice;
             const SoundLib::Articulation* a = c.articulation;
@@ -414,7 +430,23 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const SoundLib::Choice& c = p->trace->choice;
             const QString inst = p->trace->patch->name;
             const QString art = c.articulation->name;
-            if (p->hasOnset && !p->sub && !p->note->tieBack() && onsetEarlyPct > 0) {
+            // ([slurs] transitionsEarly: a transition is meant its modelled arrival early, not its onset: capped when the
+            // note before keeps keepMs (or SSO's 15 ms) as played, TRANSITION_MIN_GAP_MS; its shift is listed in the report)
+            if (transitionsEarly && p->transition && !p->sub && p->trace->earlyMeantMs >= 0) {
+                  const double meant = p->trace->earlyMeantMs;
+                  if (p->trace->earlyFallback)
+                        report.transitionsFallback.insert(p->trace->patch->name);
+                  const double cut = meant - std::max(0.0, early);
+                  const double tickMs = p->written > 0 ? ms(p->written) - ms(p->written - 1) : ms(1) - ms(0);
+                  report.transitionShiftsMs.push_back(std::max(0.0, early));
+                  if (cut > tickMs) {
+                        ++report.transitionsCapped;
+                        finding(Kind::CAPPED, Severity::INFO, p, QString("transition started %1 ms early, meant %2 ([slurs] transitionsEarly): "
+                                                                         "cut by %3 ms, the note before on its patch keeps [legato] keepMs")
+                                .arg(std::max(0.0, early), 0, 'f', 1).arg(meant, 0, 'f', 1).arg(cut, 0, 'f', 1), cut);
+                        }
+                  }
+            else if (p->hasOnset && !p->sub && !p->note->tieBack() && onsetEarlyPct > 0) {
                   double chordOnset = 0;
                   for (const Note* n : p->note->chord()->notes())
                         if (n->play())
@@ -443,6 +475,8 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   }
             if (!c.swapped && early <= 0.5 && p->hasOnset)
                   continue;
+            if (transitionsEarly && p->transition && !c.swapped)
+                  continue;         // (early by the transition's modelled arrival, not by an onset)
             QStringList what;
             if (!p->hasOnset)
                   what << "no onset in the map (arrival unknown)";

@@ -1743,7 +1743,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // this note's note-on the note before ends (a Performance re-attack's reattackGap, performanceNote):
                   // it keeps keepMs after that (without, Whence's slurs' last sixteenths on Violas - Performance
                   // sounded 1 ms: 136 ms written, the next attack 87.5 ms early, the gap 54 ms)
-                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c, double gapMs) -> int {
+                  // (atLeast: the cap rounded up to a whole tick, so the note before keeps at least that time: a transition's
+                  // 15 ms, TRANSITION_MIN_GAP_MS; utime2utick rounds down)
+                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c, double gapMs, bool atLeast = false) -> int {
                         Chord* ch = note->chord();
                         if (ch->isGrace() || !ch->graceNotesBefore().empty() || ch->arpeggio())
                               return -1;
@@ -1766,7 +1768,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.patch != c.patch)
                                     continue;
-                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep + gapMs / 1000.0);
+                              const double keepTo = score->utick2utime(playedOn(first)) + libKeep + gapMs / 1000.0;
+                              int cap = score->utime2utick(keepTo);
+                              if (atLeast && score->utick2utime(cap) < keepTo - 1e-9)
+                                    ++cap;
                               return std::max(earliest, cap);
                               }
                         return earliest;
@@ -1951,7 +1956,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // octaveDown; playback.ini [legato.delay] by patch: an offset or its own table); after
                                     // a short note SSO's transition is quicker ([legato] fastShare, fastFullMs)
                                     LibGlide g;
-                                    if (libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs))
+                                    const bool glideMeasured = libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs);
+                                    if (glideMeasured)
                                           g.smoothingMs = libChoice.articulation->bendSmoothingMs;
                                     else {
                                           g.arriveMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
@@ -1966,6 +1972,48 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           libTrace->back().interval = interval;
                                           libTrace->back().glideLeaveMs = g.leaveMs;
                                           libTrace->back().glideArriveMs = g.arriveMs;
+                                          }
+                                    // [slurs] transitionsEarly (the owner, 2026-10-14: "sure let's hear them started early"; 0, off, in
+                                    // every preset until approved by ear): a Performance legato transition is sent early by
+                                    //   1: its modelled arrival (g.arriveMs: the patch's measured bendGlide by the note before's
+                                    //      length, else its legatoDelay by interval, libFastDelay after a short note; the audit's
+                                    //      model): its new pitch ARRIVES on the beat;
+                                    //   2: the measured leave (bendGlide: when SSO's f0 leaves the note before) + 23.5 ms: the
+                                    //      change is HEARD on the beat. A legato note on a bowed string is perceived about 23.5 ms
+                                    //      after its pitch change starts (Polfreman 2013, "Comparing onset detection and perceptual
+                                    //      attack time", ISMIR 2013: a modelled bowed string, SD 22.8 ms); players time that moment;
+                                    //   3: the middle of the measured glide (leave to arrival) on the beat.
+                                    //   A patch without a measured glide (no bendGlide): 2 and 3 fall back to 1's model
+                                    //   (LibTrace::earlyFallback; the audit lists them).
+                                    // By the same mechanism as an early attack (collectNote's libEarly, libShifts): its switch and
+                                    // the chord's controllers move with it, the note before ends at the new note-on and its join
+                                    // (overlap ms after it, libJoins) still makes it a transition. Capped in every mode
+                                    // (onsetEarliest): the note before on its patch keeps [legato] keepMs as played, never less
+                                    // than SSO's 15 ms (TRANSITION_MIN_GAP_MS: a legato note-on closer to the one before isn't
+                                    // played, the audit's DROPPED); not before the chunk or the pass. The bend's glide (ms after
+                                    // the note-on as played) moves with it. Written timing (Live's clips): as written, LiveTiming
+                                    // puts it back at playback
+                                    if (libTransitionsEarly > 0 && perf.on && perf.from && offset == 0 && g.arriveMs > 0) {
+                                          double shiftMs = g.arriveMs;
+                                          const bool fallback = libTransitionsEarly >= 2 && !glideMeasured;
+                                          if (libTransitionsEarly == 2 && glideMeasured)
+                                                shiftMs = g.leaveMs + HEARD_AFTER_LEAVE_MS;
+                                          else if (libTransitionsEarly == 3 && glideMeasured)
+                                                shiftMs = (g.leaveMs + g.arriveMs) / 2.0;
+                                          if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
+                                                libTrace->back().earlyMeantMs = shiftMs;
+                                                libTrace->back().earlyFallback = fallback;
+                                                }
+                                          const double gapMs = std::max(0.0, TRANSITION_MIN_GAP_MS - libKeep * 1000.0);
+                                          const int earliest = onsetEarliest(note, libChoice, gapMs, true);
+                                          if (earliest >= 0 && shiftMs > 0) {
+                                                config.libEarly = shiftMs / 1000.0;
+                                                config.libEarliest = earliest;
+                                                config.libLost = &libStartLost;
+                                                config.libOn = &libShiftOn;
+                                                config.libWrittenOn = &libShiftWritten;
+                                                libShiftOn = libShiftWritten = -1;
+                                                }
                                           }
                                     }
                               else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
@@ -5443,6 +5491,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libOnsetByPitch = Playback::on("heldNotes/byPitch", score);
       libAvoidBad = Playback::on("notes/avoidBadSamples", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
+      libTransitionsEarly = library && !writtenTiming ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();

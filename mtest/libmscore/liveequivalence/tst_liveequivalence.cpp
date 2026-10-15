@@ -2191,12 +2191,16 @@ void TestLiveEquivalence::plainWritten_data()
       QTest::addColumn<QString>("file");
       QTest::addColumn<QString>("byPitch");
       QTest::addColumn<bool>("performance");
-      QTest::newRow("legato-early by pitch") << "legato-early.musicxml" << "1" << false;
-      QTest::newRow("legato-early median") << "legato-early.musicxml" << "0" << false;
-      QTest::newRow("onset-longer") << "onset-longer.musicxml" << "1" << false;
+      QTest::addColumn<bool>("transitionsEarly");
+      QTest::newRow("legato-early by pitch") << "legato-early.musicxml" << "1" << false << false;
+      QTest::newRow("legato-early median") << "legato-early.musicxml" << "0" << false << false;
+      QTest::newRow("onset-longer") << "onset-longer.musicxml" << "1" << false << false;
       // (2026-10-12: the slurs on a Performance patch, bar 2's A4 after silence on it smooth, early by the smooth
       // attack's own onset, attackOnset, [slurs] smoothStart)
-      QTest::newRow("performance smooth") << "legato-early.musicxml" << "1" << true;
+      QTest::newRow("performance smooth") << "legato-early.musicxml" << "1" << true << false;
+      // (2026-10-14: [slurs] transitionsEarly, the Performance legato's transitions sent their modelled arrival early:
+      // legatoDelay 200, quicker after a short note, libFastDelay)
+      QTest::newRow("performance transitions early") << "legato-early.musicxml" << "1" << true << true;
       }
 
 void TestLiveEquivalence::plainWritten()
@@ -2204,8 +2208,9 @@ void TestLiveEquivalence::plainWritten()
       QFETCH(QString, file);
       QFETCH(QString, byPitch);
       QFETCH(bool, performance);
+      QFETCH(bool, transitionsEarly);
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
-      Playback::setIniValuesForTest({ { "heldNotes/byPitch", byPitch } });
+      Playback::setIniValuesForTest({ { "heldNotes/byPitch", byPitch }, { "slurs/transitionsEarly", transitionsEarly ? "1" : "0" } });
       auto lib = loadMap(QString(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
          "<Instrument name='Violin' ids='violin'>"
@@ -2220,8 +2225,8 @@ void TestLiveEquivalence::plainWritten()
          "<Switch type='none'/>"
          "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
          " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
-         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300;69:280,72:320'/>"
-         "</Instrument>" : ""));
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300;69:280,72:320'%2/>"
+         "</Instrument>" : "").arg(transitionsEarly ? " legatoDelay='200'" : ""));
       QVERIFY(lib);
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
@@ -2323,6 +2328,25 @@ void TestLiveEquivalence::plainWritten()
                                                 }
                                           }
             QVERIFY(smooth);
+            }
+      if (transitionsEarly) {
+            // bar 1's D5 (written at 1 s, 60 bpm, a slurred transition after a 1 s note: the whole 200 ms) in the clip as
+            // written, played 200 ms early; its note before (C5) ends after it (overlap): a transition in Live too
+            bool d5 = false;
+            for (const PlainLiveSet::Section& s : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : s.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                              for (const PlainLiveSet::Technique& t : k.techniques)
+                                    for (const LiveClips::Note& n : t.notes)
+                                          if (n.pitch == 74 && n.start == tl.units(480)) {
+                                                d5 = true;
+                                                const double earlyMs = (n.start - n.playedStart) * 60000.0 / tl.bpm / tl.units(480);
+                                                QVERIFY2(std::fabs(earlyMs - 200) < 3, qPrintable(QString::number(earlyMs)));
+                                                for (const LiveClips::Note& c : t.notes)
+                                                      if (c.pitch == 72 && c.start == 0)
+                                                            QVERIFY(c.playedEnd > n.playedStart);
+                                                }
+            QVERIFY(d5);
             }
       QVERIFY(maxLook > 0);
       if (byPitch == "1")
