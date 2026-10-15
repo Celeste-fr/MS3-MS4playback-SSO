@@ -922,8 +922,9 @@ void TestLiveEquivalence::liveEquivalenceAutomation()
 //    Marcato is as loud as Long at mf, plus MS4's marcato offset for the part's family, -6 dB: the trumpet's
 //    40 log10(103 / 80) (winds) gives 24 (tst_marcatolevel's calibrated works it out), the violins' strings marcato
 //    (MS4's pattern peaks higher: 7000 against 6000) more; Live's clips the same. "calibrated" plays [levels] calibrated 1;
-//    "technique balance" 2 (the default since 2026-10-15): mf's 80, MS4's offset along Marcato's own curve, then -6 dB
-//    along it: the trumpet's 101 - 6 dB = 73, the violins' by their share; Live's clips the same
+//    "technique balance" 2 (the default since 2026-10-15, option B): matched to the Long, D (+10: the Marcato's level at 127
+//    less the Long's) and MS4's offset on top, then -6 dB along its curve: the trumpet's 101 - 6 dB = 73, the violins' by
+//    their share; Live's clips the same
 //---------------------------------------------------------
 
 void TestLiveEquivalence::liveMarcatoLevel_data()
@@ -1055,7 +1056,10 @@ void TestLiveEquivalence::liveMarcatoLevel()
             const int mf = 5250;
             const double strings = Ms4::note(Ms4::Family::Strings, { { Ms4::Art::Marcato, false } }, mf, true).share;
             const SoundLib::DynamicsCurve& marc = *SoundLib::dynamicsCalibration()->curve("Violin", 52);
-            const int v1 = qBound(80, marc.louder(80, 40 * std::log10(strings)), 127);
+            const double d = SoundLib::loudEndDb(*SoundLib::dynamicsCalibration(), "Violin", 52, "Violin", 1);
+            QVERIFY(std::fabs(d - 10) < 1e-9);                         // (the Marcato 10 dB over the Long at 127)
+            const int v1 = qBound(1, SoundLib::calibratedVelocity(*SoundLib::dynamicsCalibration(), "Violin", 52, "Violin", 1, 80,
+                                                                  d + 40 * std::log10(strings)), 127);
             const int violin = qMin(v1, marc.louder(v1, -6));
             QVERIFY2(all.contains(QString("67 %1").arg(violin)), qPrintable(all + QString::number(violin)));   // the violins' G4
             QVERIFY2(all.contains("72 73"), qPrintable(all));            // the trumpet's C5: 101, then -6 dB

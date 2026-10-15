@@ -15,6 +15,7 @@
 #include "libmscore/chord.h"
 #include "libmscore/excerpt.h"
 #include "libmscore/measure.h"
+#include "libmscore/ms4playback.h"
 #include "libmscore/undo.h"
 #include "libmscore/instrument.h"
 #include "libmscore/part.h"
@@ -481,9 +482,9 @@ void TestMarcatoLevel::velocityPath()
       // ([levels] calibrated 1 without the held note's curve, and 0: the marcato at the plain level, the Inspector's on top)
       s->setMetaTag(Playback::metaTag, "levels/calibrated=1");
       QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 56);
-      // 2 (the default): MS4's +4.39 dB along its own curve first: -28.7 dB at 93, -6 dB from there (-34.6) at 74
+      // 2 (the default) likewise: without the held note's curve there is no match and no D
       s->setMetaTag(Playback::metaTag, QString());
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 74);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 56);
       s->setMetaTag(Playback::metaTag, "levels/calibrated=1");
       setLevel(marcato(s, 1, 0), 6);
       QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 99);      // -27.1 dB
@@ -704,49 +705,78 @@ void TestMarcatoLevel::calibrated()
       const int w = SoundLib::calibratedVelocity(shipped, "Trumpet Solo", 52, "Trumpet Solo", 1, 80, 40 * std::log10(103.0 / 80));
       QCOMPARE(v, qBound(1, w, 127));
 
-      // 2 (the default since 2026-10-15: the library's own balance): mf's 80 as the velocity, MS4's +4.39 dB along the
-      // Marcato's own curve (the held note plays no part): -20 + 4.39 = -15.61 dB between 80 and 127: 80 + 4.39 * 4.7 = 100.6
+      // 2 (the default since 2026-10-15, option B: matched + the recorded loud-end difference D): a Marcato not parallel to
+      // the Long: -40 / -25 / -10 at 32 / 80 / 127, D = -10 - (-20) = +10; mf: the Long's -30 + 10 + 4.39 = -15.61 dB,
+      // between 80 and 127 on the Marcato: 80 + 9.39 * 47 / 15 = 109.4 (1: -25.61 at 78; A, its own curve from 80: 94)
       s->setMetaTag(Playback::metaTag, QString());
       held.perceived.clear();
       marc.perceived.clear();
+      marc.points = { { 32, -40 }, { 80, -25 }, { 127, -10 } };
       cal->setCurve("Trumpet Solo", 1, held);
       cal->setCurve("Trumpet Solo", 52, marc);
       SoundLib::setDynamicsCalibration(cal);
-      const double ms4 = 40 * std::log10(103.0 / 80);
-      const int own = int(std::lround(80 + ms4 * 4.7));
-      QCOMPARE(own, 101);
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), own);
+      // (MS4's winds marcato at mf: 103 / 80 as MS4 rounds it, the unrounded share here: about 4.4 dB)
+      const double ms4 = 40 * std::log10(Ms4::note(Ms4::Family::Winds, { { Ms4::Art::Marcato, false } }, 5250, true).share);
+      QVERIFY(std::fabs(ms4 - 40 * std::log10(103.0 / 80)) < 0.1);
+      QVERIFY(std::fabs(SoundLib::loudEndDb(*cal, "Trumpet Solo", 52, "Trumpet Solo", 1) - 10) < 1e-9);
+      QVERIFY(std::isnan(SoundLib::loudEndDb(*cal, "Trumpet Solo", 1, "Trumpet Solo", 1)));      // (not on velocity)
+      const int b = int(std::lround(80 + (10 + ms4 - 5) * 47 / 15.0));
+      QVERIFY(b == 109 || b == 110);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), b);
       s->setMetaTag(Playback::metaTag, "levels/calibrated=2");
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), own);
-      // a much softer held note changes nothing (1 would follow it)
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), b);
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=1");
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), int(std::lround(32 + (ms4 + 10) * 48 / 15.0)));
+      s->setMetaTag(Playback::metaTag, QString());
+      // a held note 20 dB softer everywhere changes nothing: D takes it back (1 would follow it)
       SoundLib::DynamicsCurve soft = held;
       soft.points = { { 32, -60 }, { 80, -50 }, { 127, -40 } };
       cal->setCurve("Trumpet Solo", 1, soft);
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), own);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), b);
       cal->setCurve("Trumpet Solo", 1, held);
-      // the Inspector's -6 dB along its own curve: at(101) = -20 + 21 / 4.7 = -15.53, -21.53 dB between 32 and 80:
-      // 80 - 1.53 * 4.8 = 72.6
+      // the Inspector's -6 dB along its own curve: at(109) = -25 + 29 * 15 / 47 = -15.74, -21.74 dB: 80 + 3.26 * 47 / 15 = 90.2
       setLevel(marcato(s, 1, 0), -6);
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), int(std::lround(80 + (double(own - 80) / 4.7 - 6) * 4.8)));
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 73);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), int(std::lround(80 + ((-25 + (b - 80) * 15 / 47.0) - 6 + 25) * 47 / 15.0)));
       setLevel(marcato(s, 1, 0), 0);
-      // by ear where its own curve has it (perceived; the held note's isn't needed): -35 + 4.39 on -35 .. -15 between
-      // 80 and 127: 80 + 4.39 * 2.35 = 90.3
+      // by ear where both have it: the Long -50 / -40 / -30, the Marcato -45 / -35 / -15: D = 15, -40 + 15 + 4.39 = -20.61,
+      // 80 + 14.39 * 47 / 20 = 113.8
+      held.perceived = { { 32, -50 }, { 80, -40 }, { 127, -30 } };
       marc.perceived = { { 32, -45 }, { 80, -35 }, { 127, -15 } };
+      cal->setCurve("Trumpet Solo", 1, held);
       cal->setCurve("Trumpet Solo", 52, marc);
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), int(std::lround(80 + ms4 * 2.35)));
+      QVERIFY(std::fabs(SoundLib::loudEndDb(*cal, "Trumpet Solo", 52, "Trumpet Solo", 1) - 15) < 1e-9);
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), int(std::lround(80 + (ms4 + 15 - 5) * 47 / 20.0)));
+      // under its lowest measured point: a Marcato only 3 dB from 64 to 127 (-70 / -67), D = -47: -30 - 47 + 4.39 = -72.61,
+      // 2.61 under its lowest point: velocity 64, the rest by CC11 right before it (127 x 10^(-2.61 / 20) = 94.0), the level
+      // settings off
+      held.perceived.clear();
+      marc.perceived.clear();
+      marc.points = { { 64, -70 }, { 127, -67 } };
+      cal->setCurve("Trumpet Solo", 1, held);
+      cal->setCurve("Trumpet Solo", 52, marc);
+      s->setMetaTag(Playback::metaTag, QString(noLevelSettings()).replace("levels/calibrated=0", "levels/calibrated=2"));
+      {
+      size_t at = 0;
+      const std::vector<Ev> ev = render(s, lib, 0, 1);
+      QCOMPARE(noteOn(ev, 72, nullptr, &at), 64);
+      const int expect = int(std::lround(127 * std::pow(10.0, (-30 - 47 + ms4 + 70) / 20)));
+      QVERIFY2(std::abs(controllerBefore(ev, at, 11) - expect) <= 1, qPrintable(QString("%1, %2").arg(controllerBefore(ev, at, 11)).arg(expect)));
+      }
       // its own curve unmeasured: as 0, the marcato at the plain 80 (the library's marcato is its accent)
+      s->setMetaTag(Playback::metaTag, "levels/calibrated=2");
       auto heldOnly = std::make_shared<SoundLib::DynamicsCalibration>();
       heldOnly->setCurve("Trumpet Solo", 1, held);
       SoundLib::setDynamicsCalibration(heldOnly);
       QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 80);
       s->setMetaTag(Playback::metaTag, "levels/calibrated=0");
       QCOMPARE(noteOn(render(s, lib, 0, 1), 72), 80);
-      // the shipped measurements: the Marcato's own curve from 80, by ear where measured
+      // the shipped measurements: the match plus Trumpet Solo Marcato's D, by ear where measured
       s->setMetaTag(Playback::metaTag, "levels/calibrated=2");
       SoundLib::setDynamicsCalibration(std::make_shared<SoundLib::DynamicsCalibration>(shipped));
-      const SoundLib::DynamicsCurve shippedMarc = shipped.curve("Trumpet Solo", 52)->atPitch(72);
-      QCOMPARE(noteOn(render(s, lib, 0, 1), 72), qBound(80, shippedMarc.louder(80, ms4), 127));
+      const double d = SoundLib::loudEndDb(shipped, "Trumpet Solo", 52, "Trumpet Solo", 1, 72);
+      QVERIFY(!std::isnan(d));
+      QCOMPARE(noteOn(render(s, lib, 0, 1), 72),
+               qBound(1, SoundLib::calibratedVelocity(shipped, "Trumpet Solo", 52, "Trumpet Solo", 1, 80, d + ms4, 72), 127));
       s->setMetaTag(Playback::metaTag, QString());
       delete s;
       }

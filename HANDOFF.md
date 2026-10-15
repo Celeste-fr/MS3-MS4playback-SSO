@@ -7,23 +7,19 @@ a section there when you need the background of that topic. Commit messages desc
 
 ## Technique balance, `[levels] calibrated` 2 (2026-10-15, branch `technique-balance`, from integrate-1012)
 
-The owner approved (2026-10-15): techniques on velocity play SSO's own balance against the held note instead of being
-matched to it. `[levels] calibrated` 2 (the default and Recommended's; 1, the match, kept by hand; 0 unchanged): the
-written dynamic's velocity, MS4's articulation offset along the technique's own curve, the Inspector's levels on top;
-with `realRange` it takes the Long's realDb at its marking, so SSO's balance holds at every marking (taking its own
-change from mp away instead would need up to +24 dB at pp, Celli pizzicato: measured, not done; docs/PLAYBACK_SETTINGS.md
-› Calibrated levels, › Real range › Velocity techniques under calibrated 2). The Performance legato stays matched to the Long (the level rule's business).
-**Untried in Kontakt / SSO and not heard**: tests ran on the renderer and the test synth (Linux). To do: cross-check
-against the research on technique levels (con sordino, harmonics, pizzicato: corroborated, PLAYBACK_SETTINGS › Calibrated
-levels; col legno, tremolo, ponticello, spiccato: no source yet), and listen to Whence on the VM.
-**Raise with the owner**: in Whence every staccato (109 Spiccato notes, the only velocity notes) changes: velocity 105-127
--> 64-85, by SSO's perceived curves 13-21 dB softer (Basses 5.7), because SSO's Spiccato at mp lies that far under its
-Long. That conflicts with the level rule (2026-10-10: "the same written dynamic equally loud in every string part and
-technique", its slur gains fitted against the staccatos at 1's matched level): with 2 the slurs stand 13-21 dB over the
-staccatos. Also check whether the perceived peak of a short note against a sustained Long (the calibration's measure)
-overstates the gap; the 50 ms RMS curves give 9-16 dB (Violins 1 -9.9, Violins 2 -14.6, Violas -15.5, Celli -14.5,
-Basses -8.6 at 64). Choose between 1 and 2 for the shorts, or adapt the level
-rule.
+The owner chose option B (2026-10-15, "yes this makes sense"): a velocity technique is matched to the part's Long at its
+marking (as 1), then plays D louder along its own curve, D = its perceived level at velocity 127 less the Long's at 127
+(both recordings of players playing loud), then MS4's offset and the Inspector's (docs/PLAYBACK_SETTINGS.md › Calibrated
+levels: the D table, why A failed). 2 is the default and Recommended's; 1 by hand; 0 unchanged. Past 127 the rest by the
+capped-short top-up (realRange on only); under a curve's lowest point by CC11. The level rule follows: every slur gain +
+D of the section's Spiccato, so slurs stay 1.3 dB over the staccatos (Whence: +2.84 / +5.88 / +1.57 dB for Violins 1 /
+Violas / Celli against D 2.9 / 6.0 / 1.6). realRange: the Long's realDb applies to technique notes too.
+The first 2 (A, the written dynamic's velocity on the technique's own curve) made Whence's staccatos 13-21 dB too soft
+and was replaced the same day. The shipped calibration's D differs from `sso_sound_dynamics.json`'s by one offset per
+section (0 for Violins 2, up to 1.1 dB Celli: the string Longs re-measured 2026-10-12).
+**Untried in Kontakt / SSO and not heard**: tests on the renderer and the test synth (Linux). To do: listen to Whence on
+the VM (its 108 changed staccatos and the shifted slurs); cross-check against the research on technique levels (con
+sordino, harmonics, cello pizzicato corroborated; col legno, tremolo, ponticello, spiccato: no source yet).
 
 ## Mic compensation (2026-10-15, branch `mic-compensation`, merged into integrate-1012)
 

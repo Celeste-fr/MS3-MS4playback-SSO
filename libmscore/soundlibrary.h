@@ -514,6 +514,16 @@ int calibratedController(const DynamicsCalibration& cal, const QString& patch, i
 // (pitch: the note's, for a technique measured at several pitches; -1: its one curve)
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
                        const QString& refPatch, int refValue, int cc, double db, int pitch = -1);
+// [levels] calibrated 2 (option B, the owner 2026-10-15): D, the technique's level at velocity 127 less the held note's
+// at its CC 127: at the loudest layers both recordings are the players playing loud, so their relation is recorded data
+// (the curves in between are the library's mapping). By ear where both curves are (as calibratedVelocity), the
+// loudest 50 ms else; at the pitch's curves where measured. NAN: a curve missing or the technique not on velocity
+double loudEndDb(const DynamicsCalibration& cal, const QString& patch, int value, const QString& refPatch, int refValue,
+                 int pitch = -1);
+// calibratedVelocity, but not extrapolated under the technique's lowest measured point: there that point's velocity,
+// and *under the dB still to go (< 0; else 0), which the renderer plays by CC11
+int calibratedVelocityFloored(const DynamicsCalibration& cal, const QString& patch, int value,
+                              const QString& refPatch, int refValue, int cc, double db, int pitch, double* under);
 
 //---------------------------------------------------------
 //   Route

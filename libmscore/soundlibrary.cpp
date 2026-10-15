@@ -1482,6 +1482,43 @@ int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int
       return c.inverse(ref.at(cc) + db);
       }
 
+double loudEndDb(const DynamicsCalibration& cal, const QString& patch, int value, const QString& refPatch, int refValue, int pitch)
+      {
+      const DynamicsCurve* cp = cal.curve(patch, value);
+      const DynamicsCurve* rp = cal.curve(refPatch, refValue);
+      if (!cp || !rp || (cp->drivenBy != "velocity" && cp->drivenBy != "both"))
+            return NAN;
+      const DynamicsCurve c = cp->atPitch(pitch);
+      const DynamicsCurve ref = rp->atPitch(pitch);
+      if (c.points.size() < 2 || ref.points.size() < 2)
+            return NAN;
+      if (c.byEar() && ref.byEar())
+            return c.perceivedAt(127) - ref.perceivedAt(127);
+      return c.at(127) - ref.at(127);
+      }
+
+int calibratedVelocityFloored(const DynamicsCalibration& cal, const QString& patch, int value,
+                              const QString& refPatch, int refValue, int cc, double db, int pitch, double* under)
+      {
+      if (under)
+            *under = 0.0;
+      const int v = calibratedVelocity(cal, patch, value, refPatch, refValue, cc, db, pitch);
+      if (v < 0)
+            return v;
+      const DynamicsCurve c = cal.curve(patch, value)->atPitch(pitch);
+      const DynamicsCurve ref = cal.curve(refPatch, refValue)->atPitch(pitch);
+      const bool byEar = c.byEar() && ref.byEar();
+      const std::vector<std::pair<int, double>>& pts = byEar ? c.perceived : c.points;
+      const double target = (byEar ? ref.perceivedAt(cc) : ref.at(cc)) + db;
+      auto lowest = std::min_element(pts.begin(), pts.end());       // (the lowest velocity measured)
+      if (lowest != pts.end() && target < lowest->second && v <= lowest->first) {
+            if (under)
+                  *under = target - lowest->second;
+            return std::max(1, lowest->first);
+            }
+      return v;
+      }
+
 const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches)
       {
       const Choice held = choose(patches, Want { { "long" }, {} });

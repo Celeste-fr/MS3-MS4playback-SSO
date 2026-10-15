@@ -77,14 +77,14 @@ selectable).
 
 | Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel | slurs/performance | slurs/transitions | slurs/smoothStart | levels/context | levels/sectionBalance | levels/realRange | levels/evenLevels | levels/micCompensation |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 2: techniques on velocity at the library's own balance, MS4's offset along their own curves (below, Calibrated levels; the owner, 2026-10-15; 1, as loud as the held note, Recommended 2026-10-08 to 10-15, by hand: "(Custom)") | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: Auto fingered within a slur, bowed from a slur into the next (the owner, 2026-10-12) | 1: a phrase's first note smooth (the owner, 2026-10-12) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) | 2: each section at its level from Clark & Luce's orchestral scales, `sectionLevel2` (below, Section balance; the owner, 2026-10-14: real data; 1, the TU Berlin M, by hand: "(Custom)") | 2: each note at the real player's level for its written dynamic, the markings in equal steps of the instrument's pp -> ff as orchestral players play it (below, Real range › Clark & Luce spans; the owner, 2026-10-13 on, 2026-10-14 the spans; 1, the Meyer rule, by hand: "(Custom)") | 1: slurred passages evened out by measurement (below, Even levels; the owner, 2026-10-13) | 1: a part's mics change tone and space, not its level (below, Mic compensation; the owner, 2026-10-15) |
+| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 2: techniques on velocity matched to the held note plus their recorded loud-end difference D, MS4's offset on top (below, Calibrated levels; the owner, 2026-10-15, option B; 1, the match alone, Recommended 2026-10-08 to 10-15, by hand: "(Custom)") | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: Auto fingered within a slur, bowed from a slur into the next (the owner, 2026-10-12) | 1: a phrase's first note smooth (the owner, 2026-10-12) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) | 2: each section at its level from Clark & Luce's orchestral scales, `sectionLevel2` (below, Section balance; the owner, 2026-10-14: real data; 1, the TU Berlin M, by hand: "(Custom)") | 2: each note at the real player's level for its written dynamic, the markings in equal steps of the instrument's pp -> ff as orchestral players play it (below, Real range › Clark & Luce spans; the owner, 2026-10-13 on, 2026-10-14 the spans; 1, the Meyer rule, by hand: "(Custom)") | 1: slurred passages evened out by measurement (below, Even levels; the owner, 2026-10-13) | 1: a part's mics change tone and space, not its level (below, Mic compensation; the owner, 2026-10-15) |
 | Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) | 0: on the All techniques patch | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 `byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
 run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
 
 `levels/calibrated` 1 (as loud as the held note) is in neither preset since 2026-10-15 (Recommended plays 2, the
-library's own technique balance): set by hand it shows "(Custom)".
+match plus the recorded loud-end difference): set by hand it shows "(Custom)".
 
 `levels/realRange` 1 (the Meyer rule) is in neither preset since 2026-10-14 (Recommended plays 2, Clark & Luce
 spans): set by hand it shows "(Custom)".
@@ -126,44 +126,64 @@ requirement that whatever notation that caused the technique can change the dyna
 `[levels] calibrated` (**2 by default and in Recommended since 2026-10-15**, 0 in Library default, 1 by hand: "(Custom)";
 per score through `playbackSettings`).
 
-**2: the library's own technique balance** (the owner, 2026-10-15, approved: levels from real data). SSO's techniques
-within one patch were recorded by the same players in the same room through the same mics, so their differences are
-real players' differences: 1308 measured technique / held-note pairs from -35 dB (Violas Col Legno) to +25 dB (Horns a2
-Rip), median -2.6 (`derived_numbers.py levels`), not normalised. 1 made pizzicato and col legno as loud as arco. With 2 a
-note on a velocity technique plays the velocity MuseScore sends for its written dynamic without matching (the dynamic's
-level on CC1's scale, 0's base: `Ms4::expressionLevel`), then MuseScore 4.7.5's offset for its articulations, the same
-dB as 1 adds (40 log10 of MS4's velocity over a plain note's: marcato's and accents' too), along the technique's **own**
-measured curve from that velocity (`DynamicsCurve::louder`, by ear where its curve has perceived points); where it has no
-curve, as 0 (the level x MS4's accent share by SoundFont 2's law, but a marcato at the plain level: the library's marcato
-sample is its accent, 2026-10-02; with a curve, 1 and 2 both add MS4's marcato offset, the owner 2026-10-08: "MuseScore
-4.7.5's articulation profiles for everything incl. marcato"; every velocity technique the SSO map plays has a shipped
-curve). The Inspector's levels on top, along its own curve, as with 1. Unchanged by 2: techniques
-on the dynamics CC (they keep the library's balance anyway); the Performance legato (`calibratedController`,
-`performanceLevel`) plays as with 1, matched to the Long by CC1: that belongs to the level rule (`[levels] context`,
-below), not to this balance; `[slurs] quickLevel` and Long (Rachm.)'s quickDb. With `[levels] realRange` a velocity
-technique takes the Long's realDb at its marking, keeping SSO's balance at each (Real range › Velocity techniques under
-calibrated 2).
-Live gets the same: the velocities are the render's, so Live's clips and the plain set carry them
-(`tst_liveequivalence::liveMarcatoLevel` "technique balance"). Untried in Kontakt / SSO (HANDOFF.md › Technique balance).
+**2: matched + the recorded loud-end difference** (option B; the owner, 2026-10-15: "yes this makes sense"). A note on a
+velocity technique first gets 1's velocity (as loud as the part's Long at the same marking, along the measured perceived
+curves, at the note's pitch where curves have pitches), then plays **D** dB louder along its own curve (negative: softer),
+then MuseScore 4.7.5's offset for its articulations and the Inspector's levels, as with 1 (one inverse of its curve:
+`SoundLib::calibratedVelocity` with D + the offset). **D** = the technique's level at velocity 127 less the Long's at CC1
+127, from the same calibration (`SoundLib::loudEndDb`: perceived where both curves have it, the loudest 50 ms else, as 1
+falls back; per pitch where both have pitches). Why: at the loudest layers both recordings are the players playing loud,
+so their relation is recorded data; Spitfire's velocity curve in between is the library's mapping, not a measurement of
+how loud players play each marking. Past 127 (D > 0 at loud markings) the rest goes by the capped-short top-up (CC11 /
+the patch headroom: `realRange`'s realExtra, so only with realRange on); under the curve's lowest measured point the note
+plays that point's velocity and the rest by CC11 (`SoundLib::calibratedVelocityFloored`, not extrapolated). Without
+either curve: as 0.
+
+D from the shipped calibration (perceived, dB; `tst_soundlibrary::levelTechniqueBalance` prints it):
+
+| Section | Spiccato | Short 0.5 | Pizzicato | Pizzicato Bartók | Col Legno |
+|---|---|---|---|---|---|
+| Violins 1 | +2.9 | +1.4 | -0.9 | +9.4 | -15.8 |
+| Violins 2 | +6.0 | +7.2 | +1.7 | +6.5 | -19.1 |
+| Violas | +6.0 | +5.5 | -1.0 | +4.9 | -23.3 |
+| Celli | +1.6 | +4.4 | -0.5 | +4.4 | -12.1 |
+| Basses | +9.2 | +0.1 | +4.1 | +13.2 | +7.2 |
+
+(`sso_sound_dynamics.json`'s one-pass Longs give 0.1-1.1 dB more for Violins 1, Violas, Celli and Basses, the same for all
+five techniques of a section: the calibration's string Longs are the 2026-10-12 sweep's, 4 takes each; Violins 2 the same.)
+Corroboration: cello pizzicato equal to arco at ff (Meyer; here -0.5); mutes and harmonics agree where measured (they
+play on CC1, unchanged by this setting: con sordino -4 .. -8 dB against Meyer's about -6, viola -4, Evangelista & Freire
+2025, *Acta Acustica* 9:45, a violin performance mute -2.3 .. -2.9 at ff; harmonics -9 .. -15, Meyer's violin -15). Violin
+pizzicato about 0 against Meyer's -9 (from Burghauser & Spelda 1971: another setup and metric, not used). Col legno,
+tremolo, ponticello and spiccato: no source.
+
+**Why the first 2 (A, the same day) failed**: it played the written dynamic's velocity on the technique's own curve, so
+SSO's mapping between the layers decided the balance: Whence's staccatos came out 13-21 dB under the Long (Violins 1 107 ->
+64 at mp), far from any player's difference. B keeps the match at every marking and takes from the recordings only their
+relation at the loud end.
+
+**The level rule follows** (`[levels] context`, below): its slur gains were fitted against the staccatos at 1's level
+(`level_rule.py`: gain = st - pfd + 1.3, st the Spiccato at the calibrated velocity; the owner approved slurs 1.3 dB over
+the staccatos around them). Under 2 the section's staccatos play D_spiccato louder, so every slur gain of the section takes
+D_spiccato too (`ContextLevel::staccatoShiftDb`, in `ContextLevel::volumes` and the renderer's `contextDb`): the relation
+stays 1.3 dB, G and S follow (`tst_soundlibrary::levelContext`).
+
+Unchanged by 2: techniques on the dynamics CC; the Performance legato outside the level rule (`calibratedController`,
+`performanceLevel`, as with 1); `[slurs] quickLevel` and Long (Rachm.)'s quickDb. With `[levels] realRange` a velocity
+technique takes the Long's realDb at its marking (it is tied to the Long at every marking). Live gets the same: the
+velocities and CC11 are the render's (`tst_liveequivalence::liveMarcatoLevel` "technique balance"). Untried in Kontakt /
+SSO (HANDOFF.md › Technique balance).
 
 What it changes in *Whence* (Recommended, `dumpEvents` chunked, the shipped map and calibration, 1 against 2, 2026-10-15):
-109 of the 454 library notes are on velocity, all Spiccato (the strings' staccatos), and every one changes, velocity
-median -43 (-15 … -53): Violins 1 107 -> 64 at mp, Violins 2 105 -> 64, Violas 111 -> 64, Celli 127 -> 74, Basses
-100 -> 85. By the shipped perceived curves SSO's Spiccato at velocity 64 lies under its Long at CC1 64 by 13.4 (Violins
-1), 19.7 (Violins 2), 18.1 (Violas), 21.1 (Celli), 5.7 dB (Basses): Whence's staccatos play that much softer than with 1.
-Every other note is unchanged (the Performance legato, the Longs); Celli's real-range headroom 0.104 -> 0 dB (a capped
-short under 1). **Open, for the owner**: the level rule (below, step 1) set the Performance slurs' gains against the
-staccatos *at 1's matched velocity* ("the same written dynamic equally loud in every technique", 2026-10-10); with 2 the
-slurs stand 13-21 dB over Whence's staccatos instead of ~1.3 dB. Both rules can't hold at once for the staccatos.
+109 of the 454 library notes are on velocity, all Spiccato (the strings' staccatos); 108 change, each louder by its
+section's D: Violins 1 +7 .. +8 velocities (21 notes, D +2.9 dB), Violins 2 +9 .. +14 (45, +6.0), Violas +6 .. +11 (41,
++6.0), Basses +17 (1, +9.2); the Celli's one is at 127 under both (capped: its rest by CC11, the Celli's real-range top
+0.10 -> 1.75 dB; Violas' 0 -> 2.47, Violins 2's 0 -> 0.11). The slurs follow (the level rule): the score's G 15.29 ->
+16.94 dB, every patch's volume 1.65-3.3 dB lower together (S'), and each slur against its section's All techniques patch
++2.84 (Violins 1), +5.88 (Violas), +1.57 dB (Celli), the D of its Spiccato within CC11's rounding: the slurs stay 1.3 dB
+over the staccatos. The audit unchanged (OVERLAP 0, UNMEASURED 10, CAPPED 288, ARRIVAL 33 / 6, the rest 0).
 
-The research cross-check (SSO's perceived level against its Long at CC1 / velocity 127, `sso_sound_dynamics.json`):
-con sordino -4 .. -8 dB (Meyer about -6, viola -4; Evangelista & Freire 2025, *Acta Acustica* 9:45: a violin
-performance mute -2.3 .. -2.9 dB at ff); harmonics -9 .. -15 (Meyer, violin: -15); cello pizzicato +0.6 (Meyer: equal at
-ff); violin pizzicato about 0 (Meyer -9, from Burghauser & Spelda 1971: another setup and metric, not used). Col legno,
-tremolo, ponticello and spiccato: no source found. So 2 stands as SSO's recording of real players, corroborated where
-data exist.
-
-**1: as loud as the held note** (2026-10-08 to 2026-10-15 the default):
+**1: as loud as the held note** (2026-10-08 to 2026-10-15 the default; 2 is this plus D):
 a library note whose technique is on velocity (the map's `<Dynamics velocity>`: SSO's shorts, staccatissimo,
 spiccato, marcato, tenuto, pizzicato, Bartók, col legno) plays at the velocity at which its measured curve is as loud
 as the part's plain held note ("long": SSO's Long) at the same dynamic's CC1 (`SoundLib::calibratedVelocity`), plus
@@ -250,6 +270,9 @@ and in Recommended, 0 in Library default; per score through `playbackSettings`; 
   Kontakt track Volume in Live), the CC11 through the per-note levels (`libraryNoteLevels`): Live's clips and the plain
   set's CC11 lanes carry it. They are not kept in the `trackDelays` metaTag; the Mixer's own track levels add.
 - An Inspector level on top: louder along the patch's own curve from the written value (CC1), softer by CC11.
+- With `[levels] calibrated` 2 (2026-10-15) every slur gain of a section + D of its Spiccato, the staccatos' loud-end
+  difference (`ContextLevel::staccatoShiftDb`): the gains below were fitted against the staccatos at 1's level, and 2 plays
+  them D louder, so the slurs stay 1.3 dB over them (Calibrated levels › 2).
 
 The gains (`tools/soundlibraries/performance_context/level_rule.py`, from the measured cells of
 `tools/soundlibraries/sso_performance_context.json`, the real Kontakt + SSO on the Windows VM, 2026-10-10; metric L:
@@ -592,20 +615,12 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   at the written dynamic against the staccatos (which are the Long's level there). Each is the Long's level at the written
   CC1, which already holds SSO's own change with CC1 once; realDb takes it away (- long) and puts the player's in, so it is
   counted once.
-- **Velocity techniques under [levels] calibrated 2** (2026-10-15): a short, pizzicato, col legno, spiccato ... plays its
-  own velocity layers (Calibrated levels › 2) and takes **the same realDb as the Long** at its marking (the table's,
-  `- long(x)`). Why: realDb is one gain per marking; the technique's layer at velocity x and the Long at CC1 x are SSO's
-  renderings of the same written marking, so the same gain keeps SSO's balance against the Long at every marking, which
-  is what 2 means, while the Long (and with it the whole patch) moves by the player's span. The realDb the strings' velocity
-  techniques get (Clark & Luce spans, at the patch's test pitch, pp / mp / ff): Violins 1 -2.55 / 0 / +3.97 dB, Violins 2
-  -3.28 / 0 / +4.56, Violas -3.44 / 0 / +5.63, Celli -4.91 / 0 / +4.49, Basses -1.76 / 0 / +0.96. Considered and not
-  done: taking each technique's own change from mp away instead (`long(x) - (own(x) - own(64))` more), which holds mp's
-  balance at every marking and gives every technique the arco player's span (Clark & Luce measured arco; no source for
-  pizzicato, col legno or spiccato spans) at the cost of large corrections, because SSO's velocity layers span far more
-  than its Longs' CC1: pizzicato at pp / ff Violins 1 +14.0 / -7.1 dB, Violins 2 +7.9 / -10.8, Violas -7.3 / -6.1, Celli
-  +24.0 / -6.6, Basses -3.7 / -3.0; spiccato Violas +17.0 / -11.8 (`tst_soundlibrary::levelTechniqueBalance` prints every
-  patch's, from the shipped map and calibration). It also breaks the corroboration at ff (cello pizzicato equal to arco
-  at ff, Meyer; SSO +0.6 dB at 127). A capped velocity's rest by CC11 as with 1, against the technique's own target.
+- **Velocity techniques under [levels] calibrated 2** (2026-10-15, option B): a short, pizzicato, col legno, spiccato ...
+  is matched to the Long at its marking and plays a constant D more (Calibrated levels › 2), so it follows the Long's change
+  and takes the same realDb as the Long. (Under the first 2, A, the technique played its own velocity layers; taking its own
+  change from mp away instead would have needed up to +24 dB at pp, Celli pizzicato: measured, not done.) The realDb the
+  strings' velocity techniques get (Clark & Luce spans, at the patch's test pitch, pp / mp / ff): Violins 1 -2.55 / 0 / +3.97
+  dB, Violins 2 -3.28 / 0 / +4.56, Violas -3.44 / 0 / +5.63, Celli -4.91 / 0 / +4.49, Basses -1.76 / 0 / +0.96.
 - **Capped shorts**: a short whose calibrated velocity is 127 and still under its level (or 1 and still over) gets the
   rest by CC11 (`realExtra`, rendermidi.cpp `realRangeLevel`); before, it stayed under silently. Not with the note's own
   velocity (the Velocity lane).
@@ -859,7 +874,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 |---|---|---|---|
 | Phrase marks: a slur that plays no legato | per slur | `slur.h` Phrase marks, metaTag `phraseMarks` | per slur (Alt+S, Inspector) |
 | Level (marcato only until 2026-10-08): an articulation sign, or a staff text that changes the technique, louder or softer than the technique plays (above, Calibrated levels). A note on velocity: the velocity at which its measured curve (dynamics.json) is that many dB away, else SoundFont 2's law 40 log10(v/127); a note on the dynamics CC (SSO's strings' Marcato Attack): softer by CC11 (the held note's expression curve, else the law), louder by CC1 (its own curve, else the law; up to 127), on its route from right before its note-on to right before the route's next note-on; built-in synthesizer (MS3 and MS4 modes): the velocity by the law | "Library default" (0 dB: no change) | `articulation.h` MarcatoLevel, `rendermidi.cpp` (`levelOf`, `marcatoLevel`, `libraryNoteLevels`, `playNote`), `SoundLib::TextState::db`, metaTag `marcatoLevels` | per sign: Inspector › Articulation › *Level*; per text: Inspector › Staff text › *Level* (−35.5 … +35.5 dB, 0.5 steps; several selected: all; the range: above). Until 2026-10-08 −18.5 … +12.5, what SSO's marcatos span (`derived_numbers.py marcato`) |
-| Calibrated levels: 2 (2026-10-15): a technique on velocity at the library's own balance (the written dynamic's velocity), MuseScore 4's offset for its articulations (marcato's too) along its own curve; 1: as loud as the part's held note at the same dynamic, plus that offset; 1 and 2: a Performance legato note by CC1 as loud as the held note (2026-10-10) | 2 (Recommended; Library default: 0) | `rendermidi.cpp` `libVelocity`, `SoundLib::calibratedVelocity`; data: dynamics.json per patch, else the shipped `Spitfire Symphony Orchestra.dynamics.json` | `[levels] calibrated`; score: `playbackSettings` |
+| Calibrated levels: 2 (2026-10-15, option B): a technique on velocity as loud as the part's held note at the same dynamic plus D (its level at velocity 127 less the held note's at 127), plus MuseScore 4's offset for its articulations (marcato's too); with the level rule every slur gain + its section's Spiccato D; 1: without D; 1 and 2: a Performance legato note by CC1 as loud as the held note (2026-10-10) | 2 (Recommended; Library default: 0) | `rendermidi.cpp` `libVelocity`, `SoundLib::calibratedVelocity`; data: dynamics.json per patch, else the shipped `Spitfire Symphony Orchestra.dynamics.json` | `[levels] calibrated`; score: `playbackSettings` |
 | Track delay: a library part (and each of its patches and techniques, added to the part's) plays this many ms later, negative earlier, as Live's Track Delay; every library event of the track moved in time, the tempo followed; with a negative delay everything else (other parts, the metronome) plays later by the earliest one (`libraryDelayLead`), so the track is early from its first note (2026-10-07; before: clamped at the start); likewise a note whose own early start (onset) the score's start would cut: everything later by the most cut, the start lead (not a setting; 2026-10-14); a note and its switch by the technique's sum, and so do the controllers and bends right before it at its tick (its track level's CC11, a dynamic; 2026-10-08), other controllers by the patch's | 0 ms (none) | `trackdelays.h`, `rendermidi.cpp` `libraryTrackDelays`, metaTag `trackDelays` | per part: Mixer › *Track delay*, *Tracks…* (−1000 … 1000 ms: a tutorial's figure for Live, its manual gives none); the plain Live set writes it as TrackDelay and reads it back |
 | Track level: a library part's patch and technique each play this many dB softer or louder (added up), by CC11 (expression) from right before each of the technique's notes, the value in force again before the next note without one; adds to a marcato's level (2026-10-07). Louder (2026-10-08): the patch's loudest level is its headroom, played by its volume (hosted: the slot's; Live: the Kontakt track's Volume), its notes' CC11 that much lower | 0 dB (none) | `trackdelays.h` (`headroomDb`, `noteDb`, `patchGain`), `rendermidi.cpp` `trackLevel` / `libraryNoteLevels`, `soundlibraryhost.cpp` `applyMixer`, `LiveSetWriter::kontaktVolume`, metaTag `trackDelays` (`levels`) | per part: Mixer › *Tracks…* › Level (−42.08 … +6 dB: 1 of 127 is −42.08 dB; +6 dB is Live's track Volume top, the owner's choice 2026-10-08); in Live's clips and the plain set's CC11 lane alike |
 | Legato transition velocity: a legato transition plays at the map's velocity, whatever the note's (Spitfire's Performance legato picks the transition by velocity: fast 85-127 "with accent", slow 85-127 bowed; Spitfire support article 11815986). Measured 2026-10-07 (Violas - Performance, Whence's violas bars 3-7, 80 slurred sixteenths at 110 bpm, three passes, kthost on the test VM): arrival - written SD 49 ms at velocity 64, 41 ms at 100 (37-38 against 45-46 on the notes heard in every render); 159 of 180 transitions detected against 133; median arrival 68 ms against 88; median note peak 1.5 dB lower. Per-note shifts made it no tighter (HANDOFF.md). Same passage on every family (moved by octaves near each patch's test note), SD at 64 / at 100 (ms): Violas 54 / 39, Violins 1 53 / 65, Celli 53 / 70, Basses 39 / 65, Flute 35 / 65, Trumpet 26 / 35; Oboe 29, Clarinet 31, Bassoon 98, Horn 29, Tenor Trombone 31, Tuba 55 render the same at both. So only Violas - Performance gets 100; the others keep the note's own (Violins 1 at 30 / 50 / 84: 53 / 50 / 53). Only under staff text "performance" (SSO) | map `legatoVelocity` (SSO: Violas - Performance 100; other maps: the note's own) | `collect` (`libTransitionFrom`) | map only (`[legato] velocity` removed 2026-10-07) |

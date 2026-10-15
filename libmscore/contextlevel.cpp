@@ -335,6 +335,22 @@ double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dyna
       return a.contextLevelAt(cc, median(iois), median(pitches));
       }
 
+double staccatoShiftDb(const std::vector<const SoundLib::LibInstrument*>& patches, const Score* score)
+      {
+      if (std::lround(Playback::value("levels/calibrated", score)) != 2)
+            return 0.0;
+      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+      if (!cal)
+            return 0.0;
+      const SoundLib::Choice st = SoundLib::choose(patches, SoundLib::Want { { "spiccato" }, {} });
+      const SoundLib::Choice held = SoundLib::choose(patches, SoundLib::Want { { "long" }, {} });
+      if (!st || !held || st.base != "spiccato")
+            return 0.0;
+      const double d = SoundLib::loudEndDb(*cal, patches[size_t(st.patch)]->name, st.articulation->value,
+                                           patches[size_t(held.patch)]->name, held.articulation->value);
+      return std::isnan(d) ? 0.0 : d;
+      }
+
 static std::map<const Part*, Volumes> compute(const MasterScore* score, const SoundLib::Library& library, bool context, int sectionMode,
                                               const std::map<const Part*, double>& ranges, bool mics);
 
@@ -488,6 +504,7 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
             Part* part = const_cast<Part*>(pp.first);
             Ms4::Dynamics dynamics;
             dynamics.build(const_cast<MasterScore*>(score), part);
+            const double shift = staccatoShiftDb(pp.second, score);      // ([levels] calibrated 2: the staccatos' D)
             // every slur's phrase ([slurs] performance plays slurs on it: a superset of what plays on it). A note on
             // it outside slurs (staff text "performance") is not counted: louder than G it plays at G (the renderer)
             std::set<const Slur*> done;
@@ -499,7 +516,7 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
                         const Slur* s = slurOf(toChord(e));
                         if (!s || !done.insert(s).second)
                               continue;
-                        const double g = gain(*a, toChord(e), dynamics, 0);
+                        const double g = gain(*a, toChord(e), dynamics, 0) + shift;
                         top = std::max(top, g);
                         auto t = partTop.find(pp.first);
                         if (t == partTop.end())
