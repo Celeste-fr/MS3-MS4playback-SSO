@@ -1,160 +1,160 @@
 {
- "method": "    python3 -I section_balance_cl.py <clark_luce_levels.json> <clark_luce_table2.json> <sso_cc1_curves.json>\n                                     <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <sso_sound_dynamics.json>\n                                     <sso_gap_cc1_curves.json> <3_Audio_Features.csv> <tu_directivity.json | ->\n                                     <tu_decaying.json> <sso_percussion_levels.json> <out sso_cl_section_balance.json>\n\nThe owner, 2026-10-14: \"I prefer all the balance levels and the dynamic levels loudness to be based on real data\".\nReal side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in\norchestral music, dB SPL at 10 m in its loudest direction; to sound power Lw = Lp + 20 log10(10 m) + 11 - DI_max\n(DI_max: TU Berlin's directivity in that loudest direction, ff); mp = pp + 2/3 (mf - pp) (mp two of the three equal\nsteps from pp to mf); a patch = one player + 10 log10 N (strings 16 / 14 / 12 / 10 / 8, solo 1, a2 2, a6 6). SSO side:\nthe same as sectionLevel (section_balance_winds.py): the patch's Long at CC1 64 (loudDb), linear in dB between measured\npitches, its mean over the semitones of that patch's \"common\" range in sso_winds_section_balance.json. D = SSO - real,\nM = -(D - the five string sections' mean D) (the strings centred, the winds on their scale), as sectionLevel.\nCorroboration (one player against a string player: woodwind / brass): this +2.6..+4.0 / +11.3..+11.9 (pp..mf); the\nSpheres dataset's sections +1.4 / +14.3; Skaalevik 2019 (orchestra dosimetry fit) +3.2 / +4.2 in average sessions (rests\nincluded), +4.2 / +12.2 in forte passages; sectionLevel (TU single notes + Meyer mp) +11.9 / +18.9.\nThe French horn (since 2026-10-15, docs/BALANCE_LOG.md): Fig. 2's horn is not the mean of its Table II scales (every\nother instrument's is) and follows player 2, whose levels are 20 .. 40 dB under player 1's; its pp / mf are player 1's\n(clark_luce_table2.py: Table II, the same mean as Fig. 2's), mp from them as above; no ff (player 1 played none).\nEach player counted once (since 2026-10-15, iteration 3): Fig. 2 + clark_luce_table2.json's playerWeight.\nDirectivity by dynamic (since 2026-10-15, iteration 5, docs/BALANCE_LOG.md; with tu_directivity.json, \"-\": ff's for\nevery marking as before): each marking's own DI in the same direction, the receiver loudest at ff (Clark & Luce kept one\nmicrophone direction per instrument): pp's DI at pp, ff's at ff, mf's linear in dB between them at mf's place on the\ninstrument's Table I span ((mf - pp) / S); mp from the markings' Lw as before.\nPatches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2; since 2026-10-15,\niteration 6, docs/BALANCE_LOG.md): their sibling's Clark & Luce levels plus the TU Berlin database's difference between\nthe two instruments' sound power at mp (each placed between its own pp and ff as sectionLevel places it,\nsection_balance_winds.py mpFrac), averaged over the semitones both played (SIBLING_TU, \"tuRatio\": one source's ratio,\nmeasured the same way for both, not an assumption). Before: the family member's change from sectionLevel to\nsectionLevel2 added to their sectionLevel (an assumption, \"plays like its family\").\nDecaying instruments (since 2026-10-15, iteration 6, docs/BALANCE_LOG.md): the harp from TU Berlin's sound power on the\nClark & Luce scale. TU's measure for a decaying tone is the fast-weighted (125 ms) pressure squared averaged over the\nwhole recording (tu_transient.py: it reproduces the CSV's harp values within 0.005 dB), so per note the energy (that\nlevel x the recording's length) is window-free; SSO's harp (sso_percussion_levels.json) at mp's velocity 64 the same\nenergy over the same span after the note-on as TU's recording after its onset; TU's mp by rule D between its pp and ff\n(sectionLevel's placement for an instrument Meyer has no figures for), D = SSO - TU averaged over SSO's measured pitches.\nTU to Clark & Luce: M2 = median over OFFSET_SET of (M2 + sectionLevel's D, sso_winds_section_balance.json) - D: the nine\nsolo winds with a Clark & Luce instrument of their own (single players like the harp; TU against Clark & Luce agrees\nbetter there, RMS 3.6 dB, than over every patch with both, 4.3; the patches whose real side comes from TU, SIBLING_TU,\nare left out). Uncertainty about +-4 dB. The timpani are computed the same way (\"decayingNotApplied\") but not applied:\nTU's D2 series are \"6 dynamics\" without markings, so mp's place (step 3 of 6, if pp .. ff) is unknown by a whole step\n(about 7 dB), more than the correction.\nPercussion group check (iteration 7, \"percussionGroup\", not applied): SSO's six-player section (Timpani at key 50 = D2,\nBass Drum, Piatti, Snare 1, Tam Tam, Triangle 1, each one hit at mf's velocity 80) energetically summed against the string\nfamily (the five sections' Long at CC1 64, loudDb as above, + their M2) by the 50 ms peak and by the energy over 1 s and\nthe whole ring; Skaalevik 2019's percussion re strings -8 .. -2 dB (median -3.5): a group offset only outside that range.\nPatches without sectionLevel (since 2026-10-15, docs/BALANCE_LOG.md \u203a Iteration 2; before, they played SSO's own level\nagainst an orchestra whose levels are all corrected): GAP. Real side: their Clark & Luce instrument (the solo strings,\nthe Motif brass) or a family member's (an assumption: Piccolo, Alto / Bass Flute by the flute, Contrabass Clarinet by\nthe clarinet, Contrabass Trombone and Cimbasso by the trombone, Contrabass Tuba by the tuba). SSO side (since\n2026-10-15, iteration 4): the patch's Long at CC1 64 (loudDb) from its own sweep (sso_gap_cc1_curves.json, made as\nsso_winds_cc1_curves.json), linear in dB between measured pitches, its mean over every semitone of the sweep (no\ndatabase range to meet: Clark & Luce's levels are scales over the whole playing range). Iteration 2's stand-in (the\ndynamics check's Long at CC1 64 at the test pitch plus the median of (full-range mean - dynamics check) over the\npatches that have both) is kept as a check only (\"standIn\", each gap patch's \"standInM2\"). Strings Ensemble stays\nwithout: which sections sound at each pitch isn't known.",
+ "method": "    python3 -I section_balance_cl.py <clark_luce_levels.json> <clark_luce_table2.json> <sso_cc1_curves.json>\n                                     <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <sso_sound_dynamics.json>\n                                     <sso_gap_cc1_curves.json> <3_Audio_Features.csv> <tu_directivity.json | ->\n                                     <tu_decaying.json> <sso_percussion_levels.json> <out sso_cl_section_balance.json>\n\nThe owner, 2026-10-14: \"I prefer all the balance levels and the dynamic levels loudness to be based on real data\".\nReal side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in\norchestral music, dB SPL at 10 m in its loudest direction; to sound power Lw = Lp + 20 log10(10 m) + 11 - DI_max\n(DI_max: TU Berlin's directivity in that loudest direction, ff); mp = pp + 2/3 (mf - pp) (mp two of the three equal\nsteps from pp to mf); a patch = one player + 10 log10 N (strings 16 / 14 / 12 / 10 / 8, solo 1, a2 2, a6 6). SSO side:\nthe same as sectionLevel (section_balance_winds.py): the patch's Long at CC1 64 (loudDb), linear in dB between measured\npitches, its mean over the semitones of that patch's \"common\" range in sso_winds_section_balance.json. D = SSO - real,\nM = -(D - the five string sections' mean D) (the strings centred, the winds on their scale), as sectionLevel.\nCorroboration (one player against a string player: woodwind / brass): this +2.6..+4.0 / +11.3..+11.9 (pp..mf; since\niteration 8's directivity by dynamic, the solo patches' Lw against the strings' per player: +4.2 / +2.3 woodwind, +14.8 /\n+14.5 brass at pp / mf, before +3.9 / +2.2 and +11.4 / +13.5); the Spheres dataset's sections +1.4 / +14.3; Skaalevik 2019 (orchestra dosimetry fit) +3.2 / +4.2 in average sessions (rests\nincluded), +4.2 / +12.2 in forte passages; sectionLevel (TU single notes + Meyer mp) +11.9 / +18.9.\nThe French horn (since 2026-10-15, docs/BALANCE_LOG.md): Fig. 2's horn is not the mean of its Table II scales (every\nother instrument's is) and follows player 2, whose levels are 20 .. 40 dB under player 1's; its pp / mf are player 1's\n(clark_luce_table2.py: Table II, the same mean as Fig. 2's), mp from them as above; no ff (player 1 played none).\nEach player counted once (since 2026-10-15, iteration 3): Fig. 2 + clark_luce_table2.json's playerWeight.\nDirectivity by dynamic (since 2026-10-15, iteration 5, docs/BALANCE_LOG.md; with tu_directivity.json, \"-\": ff's for\nevery marking as before): each marking's own DI in the same direction, the receiver loudest at ff (Clark & Luce kept one\nmicrophone direction per instrument): pp's DI at pp, ff's at ff, mf's linear in dB between them at mf's place on the\ninstrument's Table I span ((mf - pp) / S); mp from the markings' Lw as before.\nPatches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2; since 2026-10-15,\niteration 6, docs/BALANCE_LOG.md): their sibling's Clark & Luce levels plus the TU Berlin database's difference between\nthe two instruments' sound power at mp (each placed between its own pp and ff as sectionLevel places it,\nsection_balance_winds.py mpFrac), averaged over the semitones both played (SIBLING_TU, \"tuRatio\": one source's ratio,\nmeasured the same way for both, not an assumption). Before: the family member's change from sectionLevel to\nsectionLevel2 added to their sectionLevel (an assumption, \"plays like its family\").\nDecaying instruments (since 2026-10-15, iteration 6, docs/BALANCE_LOG.md): the harp from TU Berlin's sound power on the\nClark & Luce scale. TU's measure for a decaying tone is the fast-weighted (125 ms) pressure squared averaged over the\nwhole recording (tu_transient.py: it reproduces the CSV's harp values within 0.005 dB), so per note the energy (that\nlevel x the recording's length) is window-free; SSO's harp (sso_percussion_levels.json) at mp's velocity 64 the same\nenergy over the same span after the note-on as TU's recording after its onset; TU's mp by rule D between its pp and ff\n(sectionLevel's placement for an instrument Meyer has no figures for), D = SSO - TU averaged over SSO's measured pitches.\nTU to Clark & Luce: M2 = median over OFFSET_SET of (M2 + sectionLevel's D, sso_winds_section_balance.json) - D: the nine\nsolo winds with a Clark & Luce instrument of their own (single players like the harp; TU against Clark & Luce agrees\nbetter there, RMS 3.6 dB, than over every patch with both, 4.3; the patches whose real side comes from TU, SIBLING_TU,\nare left out). Uncertainty about +-4 dB. The timpani are computed the same way (\"decayingNotApplied\") but not applied:\nTU's D2 series are \"6 dynamics\" without markings, so mp's place (step 3 of 6, if pp .. ff) is unknown by a whole step\n(about 7 dB), more than the correction.\nPercussion group check (iteration 7, \"percussionGroup\", not applied): SSO's six-player section (Timpani at key 50 = D2,\nBass Drum, Piatti, Snare 1, Tam Tam, Triangle 1, each one hit at mf's velocity 80) energetically summed against the string\nfamily (the five sections' Long at CC1 64, loudDb as above, + their M2) by the 50 ms peak and by the energy over 1 s and\nthe whole ring; Skaalevik 2019's percussion re strings -8 .. -2 dB (median -3.5): a group offset only outside that range.\nPatches without sectionLevel (since 2026-10-15, docs/BALANCE_LOG.md \u203a Iteration 2; before, they played SSO's own level\nagainst an orchestra whose levels are all corrected): GAP. Real side: their Clark & Luce instrument (the solo strings,\nthe Motif brass) or a family member's (an assumption: Piccolo, Alto / Bass Flute by the flute, Contrabass Clarinet by\nthe clarinet, Contrabass Trombone and Cimbasso by the trombone, Contrabass Tuba by the tuba). SSO side (since\n2026-10-15, iteration 4): the patch's Long at CC1 64 (loudDb) from its own sweep (sso_gap_cc1_curves.json, made as\nsso_winds_cc1_curves.json), linear in dB between measured pitches, its mean over every semitone of the sweep (no\ndatabase range to meet: Clark & Luce's levels are scales over the whole playing range). Iteration 2's stand-in (the\ndynamics check's Long at CC1 64 at the test pitch plus the median of (full-range mean - dynamics check) over the\npatches that have both) is kept as a check only (\"standIn\", each gap patch's \"standInM2\"). Strings Ensemble stays\nwithout: which sections sound at each pitch isn't known.",
  "patches": {
   "Violins 1": {
-   "M2": -0.13,
+   "M2": -0.03,
    "M1": -2.6,
    "instrument": "Violin",
    "players": 16,
    "lw": {
-    "pp": 86.32,
-    "mf": 91.12,
-    "ff": 100.22,
-    "mp": 89.52
+    "pp": 86.91,
+    "mf": 91.5,
+    "ff": 100.21,
+    "mp": 89.97
    }
   },
   "Violins 2": {
-   "M2": 1.02,
+   "M2": 1.12,
    "M1": -1.45,
    "instrument": "Violin",
    "players": 14,
    "lw": {
-    "pp": 85.74,
-    "mf": 90.54,
-    "ff": 99.64,
-    "mp": 88.94
+    "pp": 86.33,
+    "mf": 90.92,
+    "ff": 99.63,
+    "mp": 89.39
    }
   },
   "Violas": {
-   "M2": -7.03,
+   "M2": -7.08,
    "M1": -3.08,
    "instrument": "Viola",
    "players": 12,
    "lw": {
-    "pp": 81.27,
-    "mf": 88.01,
-    "ff": 97.33,
-    "mp": 85.77
+    "pp": 81.69,
+    "mf": 88.25,
+    "ff": 97.31,
+    "mp": 86.06
    }
   },
   "Celli": {
-   "M2": 2.69,
+   "M2": 2.56,
    "M1": 1.89,
    "instrument": "Cello",
    "players": 10,
    "lw": {
-    "pp": 87.06,
-    "mf": 95.23,
-    "ff": 100.46,
-    "mp": 92.51
+    "pp": 87.44,
+    "mf": 95.37,
+    "ff": 100.42,
+    "mp": 92.72
    }
   },
   "Basses": {
-   "M2": 3.45,
+   "M2": 3.43,
    "M1": 5.24,
    "instrument": "Double bass",
    "players": 8,
    "lw": {
-    "pp": 85.76,
-    "mf": 92.93,
-    "ff": 99.19,
-    "mp": 90.54
+    "pp": 86.28,
+    "mf": 93.16,
+    "ff": 99.14,
+    "mp": 90.87
    }
   },
   "Flute Solo": {
-   "M2": -2.72,
+   "M2": -2.04,
    "M1": 7.35,
    "instrument": "Flute",
    "players": 1,
    "lw": {
-    "pp": 77.82,
-    "mf": 82.39,
-    "ff": 85.57,
-    "mp": 80.87
+    "pp": 79.57,
+    "mf": 83.06,
+    "ff": 85.55,
+    "mp": 81.9
    }
   },
   "Flutes a2": {
-   "M2": -4.55,
+   "M2": -3.87,
    "M1": 5.52,
    "instrument": "Flute",
    "players": 2,
    "lw": {
-    "pp": 80.83,
-    "mf": 85.4,
-    "ff": 88.58,
-    "mp": 83.88
+    "pp": 82.58,
+    "mf": 86.07,
+    "ff": 88.56,
+    "mp": 84.91
    }
   },
   "Oboe Solo": {
-   "M2": -6.62,
+   "M2": -6.67,
    "M1": -0.37,
    "instrument": "Oboe",
    "players": 1,
    "lw": {
-    "pp": 80.99,
-    "mf": 86.89,
-    "ff": 88.59,
-    "mp": 84.92
+    "pp": 81.67,
+    "mf": 87.0,
+    "ff": 88.56,
+    "mp": 85.23
    }
   },
   "Oboes a2": {
-   "M2": -8.99,
+   "M2": -9.03,
    "M1": -2.73,
    "instrument": "Oboe",
    "players": 2,
    "lw": {
-    "pp": 84.0,
-    "mf": 89.9,
-    "ff": 91.6,
-    "mp": 87.93
+    "pp": 84.68,
+    "mf": 90.01,
+    "ff": 91.57,
+    "mp": 88.24
    }
   },
   "Cor Anglais": {
-   "M2": -2.89,
+   "M2": -3.86,
    "M1": 4.39,
    "instrument": "English horn",
    "players": 1,
    "lw": {
-    "pp": 79.5,
-    "mf": 83.35,
-    "ff": 84.9,
-    "mp": 82.07
+    "pp": 78.29,
+    "mf": 83.02,
+    "ff": 84.88,
+    "mp": 81.44
    }
   },
   "Clarinet Solo": {
-   "M2": -3.4,
+   "M2": -2.79,
    "M1": 3.43,
    "instrument": "Clarinet",
    "players": 1,
    "lw": {
-    "pp": 77.69,
-    "mf": 82.79,
-    "ff": 86.27,
-    "mp": 81.09
+    "pp": 79.33,
+    "mf": 83.42,
+    "ff": 86.26,
+    "mp": 82.05
    }
   },
   "Clarinets a2": {
-   "M2": -5.35,
+   "M2": -4.73,
    "M1": 1.49,
    "instrument": "Clarinet",
    "players": 2,
    "lw": {
-    "pp": 80.7,
-    "mf": 85.8,
-    "ff": 89.28,
-    "mp": 84.1
+    "pp": 82.34,
+    "mf": 86.43,
+    "ff": 89.27,
+    "mp": 85.06
    }
   },
   "Bass Clarinet": {
-   "M2": -0.24,
+   "M2": 0.38,
    "M1": 1.2,
    "instrument": "Clarinet",
    "players": 1,
    "lw": {
-    "pp": 82.57,
-    "mf": 87.67,
-    "ff": 91.15,
-    "mp": 85.97
+    "pp": 84.21,
+    "mf": 88.3,
+    "ff": 91.14,
+    "mp": 86.93
    },
    "tuRatio": {
     "mp": 4.88,
@@ -173,39 +173,39 @@
    }
   },
   "Bassoon Solo": {
-   "M2": -15.14,
+   "M2": -15.0,
    "M1": -2.76,
    "instrument": "Bassoon",
    "players": 1,
    "lw": {
-    "pp": 76.81,
-    "mf": 82.61,
-    "ff": 87.01,
-    "mp": 80.68
+    "pp": 77.6,
+    "mf": 82.95,
+    "ff": 87.0,
+    "mp": 81.16
    }
   },
   "Bassoons a2": {
-   "M2": -2.66,
+   "M2": -2.52,
    "M1": 9.72,
    "instrument": "Bassoon",
    "players": 2,
    "lw": {
-    "pp": 79.82,
-    "mf": 85.62,
-    "ff": 90.02,
-    "mp": 83.69
+    "pp": 80.61,
+    "mf": 85.96,
+    "ff": 90.01,
+    "mp": 84.17
    }
   },
   "Contrabassoon": {
-   "M2": -14.7,
+   "M2": -14.56,
    "M1": -3.14,
    "instrument": "Bassoon",
    "players": 1,
    "lw": {
-    "pp": 72.35,
-    "mf": 78.15,
-    "ff": 82.55,
-    "mp": 76.22
+    "pp": 73.14,
+    "mf": 78.49,
+    "ff": 82.54,
+    "mp": 76.7
    },
    "tuRatio": {
     "mp": -4.46,
@@ -224,120 +224,120 @@
    }
   },
   "Horn Solo": {
-   "M2": -2.92,
+   "M2": 0.57,
    "M1": 3.97,
    "instrument": "French horn",
    "players": 1,
    "lw": {
-    "pp": 83.78,
-    "mf": 94.49,
-    "mp": 90.92
+    "pp": 90.23,
+    "mf": 97.03,
+    "mp": 94.76
    }
   },
   "Horns a2": {
-   "M2": 3.68,
+   "M2": 7.17,
    "M1": 10.57,
    "instrument": "French horn",
    "players": 2,
    "lw": {
-    "pp": 86.79,
-    "mf": 97.5,
-    "mp": 93.93
+    "pp": 93.24,
+    "mf": 100.04,
+    "mp": 97.77
    }
   },
   "Horns a6": {
-   "M2": 7.46,
+   "M2": 10.95,
    "M1": 14.35,
    "instrument": "French horn",
    "players": 6,
    "lw": {
-    "pp": 91.56,
-    "mf": 102.27,
-    "mp": 98.7
+    "pp": 98.01,
+    "mf": 104.81,
+    "mp": 102.54
    }
   },
   "Trumpet Solo": {
-   "M2": 8.26,
+   "M2": 9.04,
    "M1": 8.82,
    "instrument": "Trumpet",
    "players": 1,
    "lw": {
-    "pp": 90.52,
-    "mf": 97.92,
-    "ff": 99.42,
-    "mp": 95.45
+    "pp": 93.37,
+    "mf": 98.2,
+    "ff": 99.21,
+    "mp": 96.59
    }
   },
   "Trumpets a2": {
-   "M2": 13.47,
+   "M2": 14.26,
    "M1": 14.04,
    "instrument": "Trumpet",
    "players": 2,
    "lw": {
-    "pp": 93.53,
-    "mf": 100.93,
-    "ff": 102.43,
-    "mp": 98.46
+    "pp": 96.38,
+    "mf": 101.21,
+    "ff": 102.22,
+    "mp": 99.6
    }
   },
   "Trumpets a6": {
-   "M2": 19.67,
+   "M2": 20.45,
    "M1": 19.66,
    "instrument": "Trumpet",
    "players": 6,
    "lw": {
-    "pp": 98.3,
-    "mf": 105.7,
-    "ff": 107.2,
-    "mp": 103.23
+    "pp": 101.15,
+    "mf": 105.98,
+    "ff": 106.99,
+    "mp": 104.37
    }
   },
   "Tenor Trombone Solo": {
-   "M2": -2.12,
+   "M2": -0.35,
    "M1": 4.67,
    "instrument": "Trombone",
    "players": 1,
    "lw": {
-    "pp": 79.96,
-    "mf": 91.49,
-    "ff": 96.74,
-    "mp": 87.65
+    "pp": 83.9,
+    "mf": 92.69,
+    "ff": 96.64,
+    "mp": 89.76
    }
   },
   "Tenor Trombones a2": {
-   "M2": 4.55,
+   "M2": 6.31,
    "M1": 11.33,
    "instrument": "Trombone",
    "players": 2,
    "lw": {
-    "pp": 82.97,
-    "mf": 94.5,
-    "ff": 99.75,
-    "mp": 90.66
+    "pp": 86.91,
+    "mf": 95.7,
+    "ff": 99.65,
+    "mp": 92.77
    }
   },
   "Trombones a6": {
-   "M2": 14.23,
+   "M2": 16.0,
    "M1": 20.07,
    "instrument": "Trombone",
    "players": 6,
    "lw": {
-    "pp": 87.74,
-    "mf": 99.27,
-    "ff": 104.52,
-    "mp": 95.43
+    "pp": 91.68,
+    "mf": 100.47,
+    "ff": 104.42,
+    "mp": 97.54
    }
   },
   "Bass Trombone Solo": {
-   "M2": 1.48,
+   "M2": 3.24,
    "M1": 6.67,
    "instrument": "Trombone",
    "players": 1,
    "lw": {
-    "pp": 81.67,
-    "mf": 93.2,
-    "ff": 98.45,
-    "mp": 89.36
+    "pp": 85.61,
+    "mf": 94.4,
+    "ff": 98.35,
+    "mp": 91.47
    },
    "tuRatio": {
     "mp": 1.71,
@@ -356,15 +356,15 @@
    }
   },
   "Bass Trombones a2": {
-   "M2": 5.03,
+   "M2": 6.8,
    "M1": 10.22,
    "instrument": "Trombone",
    "players": 2,
    "lw": {
-    "pp": 84.68,
-    "mf": 96.21,
-    "ff": 101.46,
-    "mp": 92.37
+    "pp": 88.62,
+    "mf": 97.41,
+    "ff": 101.36,
+    "mp": 94.48
    },
    "tuRatio": {
     "mp": 1.71,
@@ -383,243 +383,243 @@
    }
   },
   "Tuba Solo": {
-   "M2": -2.36,
+   "M2": -1.12,
    "M1": 8.56,
    "instrument": "Tuba",
    "players": 1,
    "lw": {
-    "pp": 89.89,
-    "mf": 95.36,
-    "ff": 102.34,
-    "mp": 93.54
+    "pp": 92.15,
+    "mf": 96.6,
+    "ff": 102.28,
+    "mp": 95.12
    }
   },
   "Solo Violin 1": {
-   "M2": -0.1,
+   "M2": 0.0,
    "M1": null,
    "instrument": "Violin",
    "players": 1,
    "familyAssumption": false,
    "sso": "sweep, pitches 55-100",
-   "standInM2": 1.85,
+   "standInM2": 1.95,
    "lw": {
-    "pp": 74.28,
-    "mf": 79.08,
-    "ff": 88.18,
-    "mp": 77.48
+    "pp": 74.87,
+    "mf": 79.46,
+    "ff": 88.17,
+    "mp": 77.93
    }
   },
   "Solo Violin 2": {
-   "M2": -0.33,
+   "M2": -0.23,
    "M1": null,
    "instrument": "Violin",
    "players": 1,
    "familyAssumption": false,
    "sso": "sweep, pitches 53-98",
-   "standInM2": 0.45,
+   "standInM2": 0.55,
    "lw": {
-    "pp": 74.28,
-    "mf": 79.08,
-    "ff": 88.18,
-    "mp": 77.48
+    "pp": 74.87,
+    "mf": 79.46,
+    "ff": 88.17,
+    "mp": 77.93
    }
   },
   "Solo Viola": {
-   "M2": -3.64,
+   "M2": -3.69,
    "M1": null,
    "instrument": "Viola",
    "players": 1,
    "familyAssumption": false,
    "sso": "sweep, pitches 48-96",
-   "standInM2": -2.26,
+   "standInM2": -2.31,
    "lw": {
-    "pp": 70.48,
-    "mf": 77.22,
-    "ff": 86.54,
-    "mp": 74.97
+    "pp": 70.9,
+    "mf": 77.45,
+    "ff": 86.52,
+    "mp": 75.27
    }
   },
   "Solo Cello": {
-   "M2": 3.71,
+   "M2": 3.58,
    "M1": null,
    "instrument": "Cello",
    "players": 1,
    "familyAssumption": false,
    "sso": "sweep, pitches 36-87",
-   "standInM2": -0.42,
+   "standInM2": -0.55,
    "lw": {
-    "pp": 77.06,
-    "mf": 85.23,
-    "ff": 90.46,
-    "mp": 82.51
+    "pp": 77.44,
+    "mf": 85.37,
+    "ff": 90.42,
+    "mp": 82.72
    }
   },
   "Motif Horns a4": {
-   "M2": 9.33,
+   "M2": 12.82,
    "M1": null,
    "instrument": "French horn",
    "players": 4,
    "familyAssumption": false,
    "sso": "sweep, pitches 30-75",
-   "standInM2": 10.71,
+   "standInM2": 14.2,
    "lw": {
-    "pp": 89.8,
-    "mf": 100.51,
-    "mp": 96.94
+    "pp": 96.25,
+    "mf": 103.05,
+    "mp": 100.78
    }
   },
   "Motif Trumpets a3": {
-   "M2": 12.79,
+   "M2": 13.57,
    "M1": null,
    "instrument": "Trumpet",
    "players": 3,
    "familyAssumption": false,
    "sso": "sweep, pitches 51-84",
-   "standInM2": 11.49,
+   "standInM2": 12.28,
    "lw": {
-    "pp": 95.29,
-    "mf": 102.69,
-    "ff": 104.19,
-    "mp": 100.22
+    "pp": 98.14,
+    "mf": 102.97,
+    "ff": 103.98,
+    "mp": 101.36
    }
   },
   "Motif Trombones a5": {
-   "M2": 6.52,
+   "M2": 8.28,
    "M1": null,
    "instrument": "Trombone",
    "players": 5,
    "familyAssumption": false,
    "sso": "sweep, pitches 30-69",
-   "standInM2": 9.11,
+   "standInM2": 10.87,
    "lw": {
-    "pp": 86.95,
-    "mf": 98.48,
-    "ff": 103.73,
-    "mp": 94.64
+    "pp": 90.89,
+    "mf": 99.68,
+    "ff": 103.63,
+    "mp": 96.75
    }
   },
   "Piccolo": {
-   "M2": -4.95,
+   "M2": -4.26,
    "M1": null,
    "instrument": "Flute",
    "players": 1,
    "familyAssumption": true,
    "sso": "sweep, pitches 74-104",
-   "standInM2": -3.66,
+   "standInM2": -2.98,
    "lw": {
-    "pp": 77.82,
-    "mf": 82.39,
-    "ff": 85.57,
-    "mp": 80.87
+    "pp": 79.57,
+    "mf": 83.06,
+    "ff": 85.55,
+    "mp": 81.9
    }
   },
   "Alto Flute": {
-   "M2": 1.24,
+   "M2": 1.93,
    "M1": null,
    "instrument": "Flute",
    "players": 1,
    "familyAssumption": true,
    "sso": "sweep, pitches 55-91",
-   "standInM2": 3.74,
+   "standInM2": 4.42,
    "lw": {
-    "pp": 77.82,
-    "mf": 82.39,
-    "ff": 85.57,
-    "mp": 80.87
+    "pp": 79.57,
+    "mf": 83.06,
+    "ff": 85.55,
+    "mp": 81.9
    }
   },
   "Bass Flute": {
-   "M2": -3.58,
+   "M2": -2.9,
    "M1": null,
    "instrument": "Flute",
    "players": 1,
    "familyAssumption": true,
    "sso": "sweep, pitches 48-84",
-   "standInM2": -1.96,
+   "standInM2": -1.28,
    "lw": {
-    "pp": 77.82,
-    "mf": 82.39,
-    "ff": 85.57,
-    "mp": 80.87
+    "pp": 79.57,
+    "mf": 83.06,
+    "ff": 85.55,
+    "mp": 81.9
    }
   },
   "Contrabass Clarinet": {
-   "M2": -1.38,
+   "M2": -0.77,
    "M1": null,
    "instrument": "Clarinet",
    "players": 1,
    "familyAssumption": true,
    "sso": "sweep, pitches 22-58",
-   "standInM2": -2.84,
+   "standInM2": -2.22,
    "lw": {
-    "pp": 77.69,
-    "mf": 82.79,
-    "ff": 86.27,
-    "mp": 81.09
+    "pp": 79.33,
+    "mf": 83.42,
+    "ff": 86.26,
+    "mp": 82.05
    }
   },
   "Contrabass Trombone": {
-   "M2": -3.65,
+   "M2": -1.88,
    "M1": null,
    "instrument": "Trombone",
    "players": 1,
    "familyAssumption": true,
    "sso": "sweep, pitches 24-54",
-   "standInM2": -7.08,
+   "standInM2": -5.32,
    "lw": {
-    "pp": 79.96,
-    "mf": 91.49,
-    "ff": 96.74,
-    "mp": 87.65
+    "pp": 83.9,
+    "mf": 92.69,
+    "ff": 96.64,
+    "mp": 89.76
    }
   },
   "Cimbasso Solo": {
-   "M2": 2.97,
+   "M2": 4.74,
    "M1": null,
    "instrument": "Trombone",
    "players": 1,
    "familyAssumption": true,
    "sso": "sweep, pitches 24-60",
-   "standInM2": 3.12,
+   "standInM2": 4.88,
    "lw": {
-    "pp": 79.96,
-    "mf": 91.49,
-    "ff": 96.74,
-    "mp": 87.65
+    "pp": 83.9,
+    "mf": 92.69,
+    "ff": 96.64,
+    "mp": 89.76
    }
   },
   "Cimbassi a2": {
-   "M2": 12.92,
+   "M2": 14.69,
    "M1": null,
    "instrument": "Trombone",
    "players": 2,
    "familyAssumption": true,
    "sso": "sweep, pitches 24-51",
-   "standInM2": 10.83,
+   "standInM2": 12.59,
    "lw": {
-    "pp": 82.97,
-    "mf": 94.5,
-    "ff": 99.75,
-    "mp": 90.66
+    "pp": 86.91,
+    "mf": 95.7,
+    "ff": 99.65,
+    "mp": 92.77
    }
   },
   "Contrabass Tuba": {
-   "M2": -4.47,
+   "M2": -3.24,
    "M1": null,
    "instrument": "Tuba",
    "players": 1,
    "familyAssumption": true,
    "sso": "sweep, pitches 24-54",
-   "standInM2": -9.09,
+   "standInM2": -7.86,
    "lw": {
-    "pp": 89.89,
-    "mf": 95.36,
-    "ff": 102.34,
-    "mp": 93.54
+    "pp": 92.15,
+    "mf": 96.6,
+    "ff": 102.28,
+    "mp": 95.12
    }
   },
   "Harp": {
-   "M2": -10.41,
+   "M2": -9.81,
    "M1": null,
    "instrument": "Double action harp modern (TU Berlin)",
    "players": 1,
@@ -733,7 +733,7 @@
     }
    ],
    "offset": {
-    "value": -128.95,
+    "value": -128.35,
     "set": [
      "Flute Solo",
      "Oboe Solo",
@@ -745,8 +745,8 @@
      "Tenor Trombone Solo",
      "Tuba Solo"
     ],
-    "rms": 3.29,
-    "max": 6.33
+    "rms": 3.54,
+    "max": 6.51
    },
    "uncertaintyDb": "about +-4 (the offset's RMS 3.6, the pitches' SD / sqrt(n), mp placed by rule D)"
   }
@@ -759,7 +759,7 @@
  },
  "decayingNotApplied": {
   "Timpani": {
-   "M2": 1.65,
+   "M2": 2.25,
    "D": -130.6,
    "tuMp": 94.24,
    "tuSeries": [
@@ -777,7 +777,7 @@
  },
  "percussionGroup": {
   "velocity": 80,
-  "stringsFamilyLoudDb": -24.97,
+  "stringsFamilyLoudDb": -24.99,
   "skaalevik": {
    "re strings": [
     -8,
@@ -825,9 +825,9 @@
     "energyRing": -48.42
    }
   },
-  "peakReStrings": 1.84,
-  "energy1sReStrings": -3.56,
-  "energyRingReStrings": -1.97,
+  "peakReStrings": 1.86,
+  "energy1sReStrings": -3.54,
+  "energyRingReStrings": -1.95,
   "decision": "no change: the energy (Skaalevik's are Leq, energy) within -8 .. -2"
  }
 }

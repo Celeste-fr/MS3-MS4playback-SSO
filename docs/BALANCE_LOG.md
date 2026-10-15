@@ -194,6 +194,32 @@ peaks 25 .. 30 dB under the other hits (not affecting the sum: bass drum, timpan
 at the median -3.5; the whole ring: -2.0, at the edge). Only the peak measure is outside (+1.8), and a peak is not what a
 dosimeter integrates. The owner accepts about 2 .. 3 dB balance error: no refinement.
 
+## Iteration 8 (2026-10-15): directivity by dynamic
+
+**Weakest link.** Clark & Luce measured sound pressure in each instrument's loudest direction; turning it into sound power
+used one directivity index per instrument, TU Berlin's at ff, for every marking. The 1a single-tone files hold ff only
+(every one says "dynamic = ff", whatever the documentation's Table 1 implies), so pp was never checked.
+
+**Evidence.** TU Berlin's 32-channel recordings (component 2) hold every note at pp and ff. `tu_directivity.py` read all 16
+modern instruments' archives remotely (about 25 GB by HTTP range requests, nothing stored): per note each channel's mean
+square over the recording's steady part, DI per receiver against the sphere's Voronoi-weighted mean, the loudest direction
+the receiver with the highest mean ff DI. The method reproduces 1a's ff values within 0.21 dB at the same receiver for
+all 16 (and 1a itself, re-run, gives the stored diMax of all 13 Clark & Luce instruments exactly). In that same direction
+(Clark & Luce kept one microphone direction per instrument for every marking) the pp DI is lower for the brass: horn 3.24
+against 9.71 dB at ff, tenor trombone 3.06 / 7.10, bass trombone 2.68 / 7.24, trumpet 4.33 / 7.39, tuba 4.02 / 6.34;
+woodwinds and strings within -1.8 .. +1.2 dB (cor anglais higher at pp). pp's own loudest direction differs from ff's for
+the flute, contrabassoon, horn, bass clarinet and clarinet (not used: one direction per instrument).
+
+**Decision.** Each marking's own DI (`tu_directivity.json`, section_balance_cl.py `lw`): pp's at pp, ff's at ff, mf's
+linear in dB between them at mf's place on the instrument's Table I span ((mf - pp) / S); mp from the markings' sound
+power as before. The harp's TU-to-Clark & Luce offset recomputed with it (-128.35, RMS 3.54 over the nine solo winds).
+
+**Before -> after** (`sectionLevel2`, dB): horns +3.49 (Horn Solo -2.92 -> +0.57, Horns a6 +7.46 -> +10.95, Motif Horns a4
++9.33 -> +12.82), trombones +1.77 (Trombones a6 +14.23 -> +16.00, Cimbassi a2 +12.92 -> +14.69), tubas +1.24, trumpets
++0.78 (Trumpets a6 +19.67 -> +20.45, still the loudest: S' 14.45), flutes +0.68, clarinets +0.61, bassoons +0.14, oboes
+-0.05, Cor Anglais -0.97, strings -0.13 .. +0.10, Harp -10.41 -> -9.81. One brass player against one string player at pp
+/ mf: +11.4 / +13.5 -> +14.8 / +14.5 dB; the Spheres dataset's whole sections (independent) +14.3: now closer.
+
 ## Investigated, no change (2026-10-15)
 
 - **Pitch dependence.** Each patch has one offset over its range, so SSO's level against pitch stays as recorded. Linear

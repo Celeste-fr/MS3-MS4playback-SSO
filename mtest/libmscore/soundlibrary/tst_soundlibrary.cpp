@@ -2795,19 +2795,19 @@ void TestSoundLibrary::levelSectionBalance()
       // sectionLevel2 (Clark & Luce at playing levels, [levels] sectionBalance 2; section_balance_cl.py ->
       // sso_cl_section_balance.json -> gen_spitfire_sso.py): the same 28 sections, every patch of one its main patch's;
       // since 2026-10-15 also the 15 patches without sectionLevel (section_balance_cl.py GAP: solo strings, Motif brass, family)
-      const std::map<QString, double> M2 { { "Violins 1", -0.13 }, { "Violins 2", 1.02 }, { "Violas", -7.03 },
-                 { "Celli", 2.69 }, { "Basses", 3.45 }, { "Flute Solo", -2.72 }, { "Flutes a2", -4.55 },
-                 { "Oboe Solo", -6.62 }, { "Oboes a2", -8.99 }, { "Cor Anglais", -2.89 }, { "Clarinet Solo", -3.40 },
-                 { "Clarinets a2", -5.35 }, { "Bass Clarinet", -0.24 }, { "Bassoon Solo", -15.14 },
-                 { "Bassoons a2", -2.66 }, { "Contrabassoon", -14.70 }, { "Horn Solo", -2.92 }, { "Horns a2", 3.68 },
-                 { "Horns a6", 7.46 }, { "Trumpet Solo", 8.26 }, { "Trumpets a2", 13.47 }, { "Trumpets a6", 19.67 },
-                 { "Tenor Trombone Solo", -2.12 }, { "Tenor Trombones a2", 4.55 }, { "Trombones a6", 14.23 },
-                 { "Bass Trombone Solo", 1.48 }, { "Bass Trombones a2", 5.03 }, { "Tuba Solo", -2.36 },
-                 { "Solo Violin 1", -0.10 }, { "Solo Violin 2", -0.33 }, { "Solo Viola", -3.64 }, { "Solo Cello", 3.71 },
-                 { "Motif Horns a4", 9.33 }, { "Motif Trumpets a3", 12.79 }, { "Motif Trombones a5", 6.52 },
-                 { "Piccolo", -4.95 }, { "Alto Flute", 1.24 }, { "Bass Flute", -3.58 }, { "Contrabass Clarinet", -1.38 },
-                 { "Contrabass Trombone", -3.65 }, { "Cimbasso Solo", 2.97 }, { "Cimbassi a2", 12.92 },
-                 { "Contrabass Tuba", -4.47 }, { "Harp", -10.41 } };
+      const std::map<QString, double> M2 { { "Violins 1", -0.03 }, { "Violins 2", 1.12 }, { "Violas", -7.08 },
+                 { "Celli", 2.56 }, { "Basses", 3.43 }, { "Flute Solo", -2.04 }, { "Flutes a2", -3.87 },
+                 { "Oboe Solo", -6.67 }, { "Oboes a2", -9.03 }, { "Cor Anglais", -3.86 }, { "Clarinet Solo", -2.79 },
+                 { "Clarinets a2", -4.73 }, { "Bass Clarinet", 0.38 }, { "Bassoon Solo", -15.00 }, { "Bassoons a2", -2.52 },
+                 { "Contrabassoon", -14.56 }, { "Horn Solo", 0.57 }, { "Horns a2", 7.17 }, { "Horns a6", 10.95 },
+                 { "Trumpet Solo", 9.04 }, { "Trumpets a2", 14.26 }, { "Trumpets a6", 20.45 },
+                 { "Tenor Trombone Solo", -0.35 }, { "Tenor Trombones a2", 6.31 }, { "Trombones a6", 16.00 },
+                 { "Bass Trombone Solo", 3.24 }, { "Bass Trombones a2", 6.80 }, { "Tuba Solo", -1.12 },
+                 { "Solo Violin 1", 0.00 }, { "Solo Violin 2", -0.23 }, { "Solo Viola", -3.69 }, { "Solo Cello", 3.58 },
+                 { "Motif Horns a4", 12.82 }, { "Motif Trumpets a3", 13.57 }, { "Motif Trombones a5", 8.28 },
+                 { "Piccolo", -4.26 }, { "Alto Flute", 1.93 }, { "Bass Flute", -2.90 }, { "Contrabass Clarinet", -0.77 },
+                 { "Contrabass Trombone", -1.88 }, { "Cimbasso Solo", 4.74 }, { "Cimbassi a2", 14.69 },
+                 { "Contrabass Tuba", -3.24 }, { "Harp", -9.81 } };
       QCOMPARE(int(M2.size()), 44);
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
@@ -2833,10 +2833,10 @@ void TestSoundLibrary::levelSectionBalance()
       QCOMPARE(int(v.size()), 2);
       QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 6.31) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
       QVERIFY2(std::fabs(v[score->parts()[1]].patchDb["Trumpets a6"] - 6) < 1e-9, qPrintable(QString::number(v[score->parts()[1]].patchDb["Trumpets a6"])));
-      // 2 (the default, Clark & Luce): S' = 19.67 - 6 = 13.67, the trumpets at +6, the flute at -2.72 - 13.67 = -16.39
+      // 2 (the default, Clark & Luce): S' = 20.45 - 6 = 14.45, the trumpets at +6, the flute at -2.04 - 14.45 = -16.49
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" } });
       v = ContextLevel::volumes(score);
-      QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 16.39) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
+      QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 16.49) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
       QVERIFY2(std::fabs(v[score->parts()[1]].patchDb["Trumpets a6"] - 6) < 1e-9, qPrintable(QString::number(v[score->parts()[1]].patchDb["Trumpets a6"])));
       // off: no volumes
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },

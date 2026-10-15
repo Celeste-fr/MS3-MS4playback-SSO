@@ -15,8 +15,9 @@ steps from pp to mf); a patch = one player + 10 log10 N (strings 16 / 14 / 12 / 
 the same as sectionLevel (section_balance_winds.py): the patch's Long at CC1 64 (loudDb), linear in dB between measured
 pitches, its mean over the semitones of that patch's "common" range in sso_winds_section_balance.json. D = SSO - real,
 M = -(D - the five string sections' mean D) (the strings centred, the winds on their scale), as sectionLevel.
-Corroboration (one player against a string player: woodwind / brass): this +2.6..+4.0 / +11.3..+11.9 (pp..mf); the
-Spheres dataset's sections +1.4 / +14.3; Skaalevik 2019 (orchestra dosimetry fit) +3.2 / +4.2 in average sessions (rests
+Corroboration (one player against a string player: woodwind / brass): this +2.6..+4.0 / +11.3..+11.9 (pp..mf; since
+iteration 8's directivity by dynamic, the solo patches' Lw against the strings' per player: +4.2 / +2.3 woodwind, +14.8 /
++14.5 brass at pp / mf, before +3.9 / +2.2 and +11.4 / +13.5); the Spheres dataset's sections +1.4 / +14.3; Skaalevik 2019 (orchestra dosimetry fit) +3.2 / +4.2 in average sessions (rests
 included), +4.2 / +12.2 in forte passages; sectionLevel (TU single notes + Meyer mp) +11.9 / +18.9.
 The French horn (since 2026-10-15, docs/BALANCE_LOG.md): Fig. 2's horn is not the mean of its Table II scales (every
 other instrument's is) and follows player 2, whose levels are 20 .. 40 dB under player 1's; its pp / mf are player 1's

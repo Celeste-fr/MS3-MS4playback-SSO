@@ -269,7 +269,7 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   TU's measure for a decaying tone (the fast-weighted pressure squared averaged over the recording: `tu_transient.py`
   reproduces the CSV's harp values within 0.005 dB) as an energy, SSO's harp (`sso_percussion_levels.json`, velocity 64)
   over the same span after the note-on; TU's mp by rule D; to Clark & Luce's scale by the median (M2 + sectionLevel's D)
-  over the nine solo winds with their own Clark & Luce instrument (RMS 3.3 dB): -10.41 dB, about ±4 dB. The timpani
+  over the nine solo winds with their own Clark & Luce instrument (RMS 3.3 dB; -9.81 since iteration 8's directivity): -10.41 dB, about ±4 dB. The timpani
   were measured the same way (+1.65) but are not applied: TU's D2 series name no markings, so mp's step is unknown by
   about 7 dB. The percussion section (Iteration 7): SSO's six-player group at mf against the string family lies within
   Skålevik 2019's -8 .. -2 dB by energy (-3.6 / -2.0, peak +1.8): no offset.
@@ -279,55 +279,55 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   2019 (JASA 146, 2802, orchestra dosimetry fit; readings by eye ±0.5 dB, owner to review) +3.2 / +4.2 in average
   sessions, +4.2 / +12.2 in forte passages; `sectionLevel` (TU single notes at Meyer's mp) +11.9 / +18.9, the outlier.
 - Uncertainties: two players per instrument, who disagree by up to 10.0 (violin), 11.5 (horn) dB over the range (Clark
-  & Luce Table III); absolute levels differ by up to 9.7 dB (horn) between them; directivity measured at ff only (brass
+  & Luce Table III); absolute levels differ by up to 9.7 dB (horn) between them; directivity by marking since 2026-10-15 (TU's recordings, pp and ff: the brass 2-6.5 dB less directional at pp; docs/BALANCE_LOG.md › Iteration 8; before: ff only (brass
   at pp may be 3-4 dB more directional); instrument families stand for each patch's instrument.
 
 | Patch | sectionLevel2 (dB, 2) | sectionLevel (dB, 1) | real Lw at mp (dB re 1 pW) |
 |---|---|---|---|
-| Violins 1 | -0.13 | -2.60 | 89.5 |
-| Violins 2 | +1.02 | -1.45 | 88.9 |
-| Violas | -7.03 | -3.08 | 85.8 |
-| Celli | +2.69 | +1.89 | 92.5 |
-| Basses | +3.45 | +5.24 | 90.5 |
-| Flute Solo | -2.72 | +7.35 | 80.9 |
-| Flutes a2 | -4.55 | +5.52 | 83.9 |
-| Oboe Solo | -6.62 | -0.37 | 84.9 |
-| Oboes a2 | -8.99 | -2.73 | 87.9 |
-| Cor Anglais | -2.89 | +4.39 | 82.1 |
-| Clarinet Solo | -3.40 | +3.43 | 81.1 |
-| Clarinets a2 | -5.35 | +1.49 | 84.1 |
-| Bass Clarinet (family) | -0.24 | +1.20 | 86.0 |
-| Bassoon Solo | -15.14 | -2.76 | 80.7 |
-| Bassoons a2 | -2.66 | +9.72 | 83.7 |
-| Contrabassoon (family) | -14.70 | -3.14 | 76.2 |
-| Horn Solo | -2.92 | +3.97 | 90.9 |
-| Horns a2 | +3.68 | +10.57 | 93.9 |
-| Horns a6 | +7.46 | +14.35 | 98.7 |
-| Trumpet Solo | +8.26 | +8.82 | 95.5 |
-| Trumpets a2 | +13.47 | +14.04 | 98.5 |
-| Trumpets a6 | +19.67 | +19.66 | 103.2 |
-| Tenor Trombone Solo | -2.12 | +4.67 | 87.7 |
-| Tenor Trombones a2 | +4.55 | +11.33 | 90.7 |
-| Trombones a6 | +14.23 | +20.07 | 95.4 |
-| Bass Trombone Solo (family) | +1.48 | +6.67 | 89.4 |
-| Bass Trombones a2 (family) | +5.03 | +10.22 | 92.4 |
-| Tuba Solo | -2.36 | +8.56 | 93.5 |
-| Solo Violin 1 | -0.10 | - | 77.5 |
-| Solo Violin 2 | -0.33 | - | 77.5 |
-| Solo Viola | -3.64 | - | 75.0 |
-| Solo Cello | +3.71 | - | 82.5 |
-| Motif Horns a4 | +9.33 | - | 96.9 |
-| Motif Trumpets a3 | +12.79 | - | 100.2 |
-| Motif Trombones a5 | +6.52 | - | 94.6 |
-| Piccolo (flute) | -4.95 | - | 80.9 |
-| Alto Flute (flute) | +1.24 | - | 80.9 |
-| Bass Flute (flute) | -3.58 | - | 80.9 |
-| Contrabass Clarinet (clarinet) | -1.38 | - | 81.1 |
-| Contrabass Trombone (trombone) | -3.65 | - | 87.7 |
-| Cimbasso Solo (trombone) | +2.97 | - | 87.7 |
-| Cimbassi a2 (trombone) | +12.92 | - | 90.7 |
-| Contrabass Tuba (tuba) | -4.47 | - | 93.5 |
-| Harp | -10.41 | - | - |
+| Violins 1 | -0.03 | -2.60 | 90.0 |
+| Violins 2 | +1.12 | -1.45 | 89.4 |
+| Violas | -7.08 | -3.08 | 86.1 |
+| Celli | +2.56 | +1.89 | 92.7 |
+| Basses | +3.43 | +5.24 | 90.9 |
+| Flute Solo | -2.04 | +7.35 | 81.9 |
+| Flutes a2 | -3.87 | +5.52 | 84.9 |
+| Oboe Solo | -6.67 | -0.37 | 85.2 |
+| Oboes a2 | -9.03 | -2.73 | 88.2 |
+| Cor Anglais | -3.86 | +4.39 | 81.4 |
+| Clarinet Solo | -2.79 | +3.43 | 82.0 |
+| Clarinets a2 | -4.73 | +1.49 | 85.1 |
+| Bass Clarinet (family) | +0.38 | +1.20 | 86.9 |
+| Bassoon Solo | -15.00 | -2.76 | 81.2 |
+| Bassoons a2 | -2.52 | +9.72 | 84.2 |
+| Contrabassoon (family) | -14.56 | -3.14 | 76.7 |
+| Horn Solo | +0.57 | +3.97 | 94.8 |
+| Horns a2 | +7.17 | +10.57 | 97.8 |
+| Horns a6 | +10.95 | +14.35 | 102.5 |
+| Trumpet Solo | +9.04 | +8.82 | 96.6 |
+| Trumpets a2 | +14.26 | +14.04 | 99.6 |
+| Trumpets a6 | +20.45 | +19.66 | 104.4 |
+| Tenor Trombone Solo | -0.35 | +4.67 | 89.8 |
+| Tenor Trombones a2 | +6.31 | +11.33 | 92.8 |
+| Trombones a6 | +16.00 | +20.07 | 97.5 |
+| Bass Trombone Solo (family) | +3.24 | +6.67 | 91.5 |
+| Bass Trombones a2 (family) | +6.80 | +10.22 | 94.5 |
+| Tuba Solo | -1.12 | +8.56 | 95.1 |
+| Solo Violin 1 | +0.00 | - | 77.9 |
+| Solo Violin 2 | -0.23 | - | 77.9 |
+| Solo Viola | -3.69 | - | 75.3 |
+| Solo Cello | +3.58 | - | 82.7 |
+| Motif Horns a4 | +12.82 | - | 100.8 |
+| Motif Trumpets a3 | +13.57 | - | 101.4 |
+| Motif Trombones a5 | +8.28 | - | 96.8 |
+| Piccolo (flute) | -4.26 | - | 81.9 |
+| Alto Flute (flute) | +1.93 | - | 81.9 |
+| Bass Flute (flute) | -2.90 | - | 81.9 |
+| Contrabass Clarinet (clarinet) | -0.77 | - | 82.0 |
+| Contrabass Trombone (trombone) | -1.88 | - | 89.8 |
+| Cimbasso Solo (trombone) | +4.74 | - | 89.8 |
+| Cimbassi a2 (trombone) | +14.69 | - | 92.8 |
+| Contrabass Tuba (tuba) | -3.24 | - | 95.1 |
+| Harp | -9.81 | - | - |
 
 The last 15 rows (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 2) had no section level and played SSO's own
 level; their SSO side is the dynamics check's Long at CC1 64 at one test pitch (`sso_sound_dynamics.json`) + 1.50 dB
