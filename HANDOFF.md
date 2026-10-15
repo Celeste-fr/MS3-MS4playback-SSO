@@ -73,7 +73,8 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   pp / ff at Meyer's fractions a / b of TU Berlin's span, p .. f equal steps between (Meyer's own method), ppp -> pp and
   ff -> fff one step each. Effect at mid pitch: the violins' pp -> ff 22.0 → 15.0 dB, ppp -> fff unchanged (30.8); realDb fff
   +13.1 → +8.3 (Violins 1), so R and with it the mix's drop at mp shrink by ~3-5 dB on string scores. Rule D stays (no
-  Meyer extremes): Cor Anglais, Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2. Cross-check: the Beethoven 8
+  Meyer extremes): Cor Anglais, Contrabassoon (Bass Clarinet and Bass Trombone Solo / a2 take their sibling's
+  fractions since 2026-10-14: an owner-approved assumption, Section balance › Winds). Cross-check: the Beethoven 8
   orchestra check (branch `orchestra-markings` 5c57d9687a) finds the clarinet within ~2 dB of the oboe at p / pp; the
   Meyer rule moves one player's levels that way without closing the gap (clarinet p minus oboe p, TU Berlin unsmoothed,
   F4 / A4 / C5 / E5 / G5: rule D median -12.9 dB, Meyer -8.6); the B8 score readings await the owner's review
@@ -228,6 +229,37 @@ on minus off, is O - 2.77 exactly, hosted (454 notes, chunked) and in the plain 
 454 note-ons on and off; each Kontakt track's volume O - 2.77 dB apart, tuning copies too). So the sections are M apart
 and the whole mix is 2.77 dB quieter than without the balance (only the Celli keep their level). Nothing above +6, no
 CC11 over 127, nothing near the -42.08 floor. Playback audit identical on and off. Not yet heard by the owner as M.
+
+**Since 2026-10-14 the strings' M is -2.60 / -1.45 / -3.08 / +1.89 / +5.24** (the owner, "sure": one rule for every
+section, mp where realRange's Meyer rule plays it instead of 0.4 of pp -> ff; today's curves, Celli / Basses every
+semitone; computed by `section_balance_winds.py`, read by `gen_spitfire_sso.py`). The figures above are the 2026-10-11 M's.
+Whence now: Celli - Performance still the top (+6), the mix 1.89 dB quieter than without the balance; against the
+2026-10-11 M Violins 1 / 2 +2.09, Violas -0.08, Celli 0, Basses +0.31 dB (dumpEvents). Not heard.
+
+### Winds (2026-10-14, branch `winds-balance`)
+
+The owner, 2026-10-14: woodwinds and brass get an M from the solo data (TU Berlin sound power with Meyer's levels)
+"until we can find better non-solo data". 23 patches, `section_balance_winds.py` -> `sso_winds_section_balance.json`
+-> `gen_spitfire_sso.py` (`SECTION_FADERS_WINDS`) -> map `sectionLevel` (table: docs/PLAYBACK_SETTINGS.md › Section
+balance). The C++ already applied `sectionLevel` to any patch (`ContextLevel::volumes`); test `levelSectionBalance`
+now also plays a flute and Trumpets a6 on the shipped map.
+
+- **One rule for strings and winds** (the owner, 2026-10-14, "sure"): first the winds went on the 2026-10-11 strings'
+  scale (mp 0.4), which put them 4.39 dB higher than Meyer's own mp would; then the strings moved to Meyer's mp too
+  (above), the winds with them (-3.14 Contrabassoon … +20.07 Trombones a6).
+- **Headroom**: S' = max(0, loudest O + R + gain - 6) lowers every patch alike. A full orchestra (a2 woodwinds, a6
+  brass, tuba, five string sections; bar 1 fff, strings slurred, bar 2 mp; `dumpEvents`, Recommended, against the map
+  without winds' M and with the 2026-10-11 strings): Trombones a6 (O 20.07 + R 5.39) now sets the top, everything **11.47
+  dB lower** plus its own M change: the strings 10.26-12.43 dB lower (Celli - Performance +6.00 -> -6.35, Violins 1
+  -3.03 -> -13.29), the brass up (Trombones a6 -2.60 -> +6.00). A score with a6 brass is that much quieter; CC11 lowers
+  further below the volumes (the -42.08 floor not reached here, not checked on long scores). Whence: above.
+- **Open: better non-solo data.** The only ensemble measurement is the Beethoven 8 orchestra check (branch
+  `orchestra-markings` 5c57d9687a; clarinet within ~2 dB of the oboe at p / pp), its score readings unreviewed
+  (https://claude.ai/artifact/H8bXsxgU8ZtXZhEzdmTXhT). With M the clarinet minus the oboe moves +3.80 dB at every
+  marking (before -6.8 / -5.2 / -1.9 at p / mp / f near pitch 73, now about -3.0 / -1.4 / +1.9).
+- **Bass clarinet, bass trombones: sibling's fractions** (the owner, 2026-10-14, "sure": an assumption, "plays like its
+  family", not a measurement; `real_range.py` `SIBLING`): Bass Clarinet the clarinet's, Bass Trombone Solo / a2 the
+  tenor trombone's. Cor Anglais and Contrabassoon stay on rule D (the owner not asked).
 
 ## The level rule, `[levels] context` (2026-10-10)
 

@@ -1484,12 +1484,20 @@ def contextLevel(patch, sound):
 #   - SSO side: measured on the Windows test VM, All techniques Long at CC1 = velocity 64, the loudest 50 ms of the note
 #     (loudDb), every 3 semitones, median of 4 (sso_cc1_curves.json, commit 329681d3a2), linear in dB between them;
 #   - every semitone of the Long's range the database also measured, equal weights; M = -(SSO - real section), centred.
-#   The session's m_final.py, key M_loudDb, 0.01 dB (variants not used: by the sustain's RMS -3.69 -3.00 -1.47 +2.60
-#   +5.56, by LUFS -4.63 -3.66 -2.46 +2.99 +7.75). Listening (ABX, blind, the owner, 2026-10-11): the basses' 1.6-3.6 dB
-#   differences heard soloed 14/14, not in the full mix (5/8); the owner chose M for its model.
-SECTION_FADERS = {'Violins 1': -3.81, 'Violins 2': -2.66, 'Violas': -2.12, 'Celli': 2.77, 'Basses': 5.81}
+#   The session's m_final.py, key M_loudDb, 0.01 dB: -3.81 -2.66 -2.12 +2.77 +5.81 (variants not used: by the sustain's
+#   RMS -3.69 -3.00 -1.47 +2.60 +5.56, by LUFS -4.63 -3.66 -2.46 +2.99 +7.75). Listening (ABX, blind, the owner,
+#   2026-10-11): the basses' 1.6-3.6 dB differences heard soloed 14/14, not in the full mix (5/8); the owner chose M for
+#   its model.
+#   2026-10-14 (the owner): the woodwinds and brass get M too, from the solo data "until we can find better non-solo
+#   data", and ("sure") everything by one rule: mp where [levels] realRange plays it (the Meyer rule, f = a + 2 (b - a) / 5
+#   of pp -> ff; rule D's 3 / 7 for Cor Anglais and Contrabassoon) instead of 0.4, the strings re-centred on it (today's
+#   sso_cc1_curves.json, Celli / Basses every semitone), the winds on the strings' scale, not re-centred. Computed by
+#   section_balance_winds.py -> sso_winds_section_balance.json ("strings", "instruments"), read here
+SECTION_BALANCE = loadFit('sso_winds_section_balance.json')
+SECTION_FADERS = {n: v['M'] for n, v in SECTION_BALANCE.get('strings', {}).items()}
+SECTION_FADERS_WINDS = {n: v['M'] for n, v in SECTION_BALANCE.get('instruments', {}).items()}
 def sectionLevel(name):
-    return round(SECTION_FADERS[name], 3)
+    return round(SECTION_FADERS.get(name, SECTION_FADERS_WINDS.get(name)), 3)
 # - realSpan= ("pitch:dB ...") and longLevel= ("cc/pitch:dB ..."), on the five string sections' main Instrument (their
 #   extras take them): [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A): a note
 #   plays its written dynamic's level from mp (realPlay below; rule D: steps x realSpan / 7) less (longLevel at its CC1) dB by CC11 and the patches'
@@ -1497,12 +1505,13 @@ def sectionLevel(name):
 #   smoothed (local linear, +-k semitones, k by leave-one-out); longLevel: SSO's All techniques Long, the sustain's mean
 #   power less its CC1 64 level, every 3 semitones, Celli and Basses every semitone (sso_cc1_curves.json). Both from
 #   sso_real_range.json (real_range.py). The woodwinds' and brass' main patches the database has (real_range.py WINDS;
-#   2026-10-14) take them too, without a sectionLevel: their Long from sso_winds_cc1_curves.json, an a2 / a6 patch one
+#   2026-10-14) take them too, with their sectionLevel (above): their Long from sso_winds_cc1_curves.json, an a2 / a6 patch one
 #   player's span
 # - realPlay= ("a b"; the Meyer rule, the owner 2026-10-14, replacing rule D): written pp and ff as fractions of realSpan
 #   above the single-note pp (J. Meyer 2009, ch. 3: in-play levels of rapid scales against single-note extremes, per
 #   instrument); p .. f in 5 equal steps between, ppp / fff at 0 / 1. Missing: rule D (a = 1/7, b = 6/7), for the
-#   instruments Meyer gives no extremes for (real_range.py MEYER_NONE)
+#   instruments Meyer gives no extremes for (real_range.py MEYER_NONE: Cor Anglais, Contrabassoon); the bass clarinet and the bass
+#   trombones take their sibling's (real_range.py SIBLING: an assumption, "plays like its family", the owner 2026-10-14)
 REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
 REAL_RANGE_WINDS = loadFit('sso_real_range.json').get('instruments', {})
 def realRangeAttributes(name):
@@ -1537,7 +1546,8 @@ for i, line in enumerate(out):
                 out[i] = out[i][:-len(end)] + f' sectionLevel="{sectionLevel(current):g}"' + realRangeAttributes(current) + end
             elif current in REAL_RANGE_WINDS:
                 end = '/>' if out[i].endswith('/>') else '>'
-                out[i] = out[i][:-len(end)] + realRangeAttributes(current) + end
+                level = f' sectionLevel="{sectionLevel(current):g}"' if current in SECTION_FADERS_WINDS else ''
+                out[i] = out[i][:-len(end)] + level + realRangeAttributes(current) + end
         continue
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:
