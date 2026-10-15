@@ -2,8 +2,8 @@
 """The section balance at playing levels, [levels] sectionBalance 2 ("Clark & Luce balance"): the map's sectionLevel2
 (gen_spitfire_sso.py reads this script's output).
 
-    python3 -I section_balance_cl.py <clark_luce_levels.json> <sso_cc1_curves.json> <sso_winds_cc1_curves.json>
-                                     <sso_winds_section_balance.json> <out sso_cl_section_balance.json>
+    python3 -I section_balance_cl.py <clark_luce_levels.json> <clark_luce_table2.json> <sso_cc1_curves.json>
+                                     <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <out sso_cl_section_balance.json>
 
 The owner, 2026-10-14: "I prefer all the balance levels and the dynamic levels loudness to be based on real data".
 Real side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in
@@ -16,6 +16,9 @@ M = -(D - the five string sections' mean D) (the strings centred, the winds on t
 Corroboration (one player against a string player: woodwind / brass): this +2.6..+4.0 / +11.3..+11.9 (pp..mf); the
 Spheres dataset's sections +1.4 / +14.3; Skaalevik 2019 (orchestra dosimetry fit) +3.2 / +4.2 in average sessions (rests
 included), +4.2 / +12.2 in forte passages; sectionLevel (TU single notes + Meyer mp) +11.9 / +18.9.
+The French horn (since 2026-10-15, docs/BALANCE_LOG.md): Fig. 2's horn is not the mean of its Table II scales (every
+other instrument's is) and follows player 2, whose levels are 20 .. 40 dB under player 1's; its pp / mf are player 1's
+(clark_luce_table2.py: Table II, the same mean as Fig. 2's), mp from them as above; no ff (player 1 played none).
 Patches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2): their family member's
 change from sectionLevel to sectionLevel2 added to their sectionLevel (FAMILY: an assumption, "plays like its family").
 """
@@ -63,16 +66,19 @@ def at64(section):
             if pt['cc'] == 64 and pt.get('loudDb') is not None}
 
 
-def lw(levels, inst):
-    """one player's sound power (dB re 1 pW) at pp / mp / mf / ff"""
+def lw(levels, inst, table2):
+    """one player's sound power (dB re 1 pW) at pp / mp / mf / ff (the horn: player 1's pp / mf, no ff)"""
     v = levels[inst]
-    lp = {'pp': v['pp'], 'mf': v['mf'], 'ff': v['ff'], 'mp': v['pp'] + 2 / 3 * (v['mf'] - v['pp'])}
+    t = table2.get(inst)
+    lp = {'pp': t['pp'], 'mf': t['mf']} if t else {'pp': v['pp'], 'mf': v['mf'], 'ff': v['ff']}
+    lp['mp'] = lp['pp'] + 2 / 3 * (lp['mf'] - lp['pp'])
     return {d: x + 20 * math.log10(10) + 11 - v['diMax'] for d, x in lp.items()}
 
 
 def main():
-    levelsPath, curvesPath, windsPath, balancePath, outPath = sys.argv[1:6]
+    levelsPath, table2Path, curvesPath, windsPath, balancePath, outPath = sys.argv[1:7]
     levels = json.load(open(levelsPath, encoding='utf-8'))['levels']
+    table2 = {k: v for k, v in json.load(open(table2Path, encoding='utf-8')).items() if k in levels}
     strings = json.load(open(curvesPath, encoding='utf-8'))['sections']
     winds = json.load(open(windsPath, encoding='utf-8'))['sections']
     balance = json.load(open(balancePath, encoding='utf-8'))
@@ -88,7 +94,7 @@ def main():
         lo, hi = b['common']
         sso = at64(curve)
         meanSso = sum(interp(sso, p) for p in range(lo, hi + 1)) / (hi - lo + 1)
-        real[name] = {k: x + 10 * math.log10(n) for k, x in lw(levels, inst).items()}
+        real[name] = {k: x + 10 * math.log10(n) for k, x in lw(levels, inst, table2).items()}
         d[name] = meanSso - real[name]['mp']
     centre = sum(d[s] for s in STRINGS) / len(STRINGS)
     out = {'method': __doc__.strip().split('\n\n', 1)[1], 'patches': {}}

@@ -1,0 +1,151 @@
+{
+ "method": "    python3 -I clark_luce_table2.py <clark_luce_levels.json> <out clark_luce_table2.json>\n\nFig. 2 (clark_luce_levels.json `levels`) is the mean over \"all notes of all scales played at a particular dynamic\nmarking whether with or without vibrato and whether by one or the other of the two performers\". Check: the mean in dB of\nTable II's parabolas over n = 0 .. N (N the one unknown: how many notes each player played) reproduces Fig. 2 for all\ntwelve other instruments within 0.05 .. 1.05 dB rms (ten within 0.5; N 33 .. 45), but not the French horn (best 3.3 dB\nrms, pp / mf / ff -1.7 / +4.3 / -3.4 dB at N 41): its two players differ by 14 .. 22 dB (Table III: the worst player\nagreement of the study, 9.7 dB), and\nplayer 2's parabolas start at 15 (pp) / 34 (mf) dB SPL at 10 m, 20 .. 40 dB under player 1 and under every other wind\ninstrument's lowest notes. Fig. 2's horn follows player 2 (mf 57.8 / ff 71.0 against player 2's 58.1 / 70.8, power mean\nover n = 0 .. 30).\nThe horn's balance therefore takes player 1 (vibrato pp and mf: the scales he played; he has no ff), by the same mean\nover n = 0 .. N with N the median of the other instruments' fitted N, the spread over their N its uncertainty. Player 1\nagainst the trumpets (Fig. 2) at pp, as sound power with TU Berlin's DI_max: -6.2 dB; TU Berlin's single notes -0.3,\nMeyer 2009's in-play pp -3 (Fig. 2's horn: -16.1). His pp -> mf, 10.7 dB, is three of the five equal steps pp -> ff of\n[levels] realRange 2, i.e. a pp -> ff of 17.8 dB, Table I's horn span, which stays.\nNumbers only (the coefficients as printed, J. Audio Eng. Soc. 13(2) 151-157, pp. 154-155); read from the scan,\nreview page https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2 (the owner to check).",
+ "fig2Check": {
+  "Violin": {
+   "N": 34,
+   "rms": 0.07,
+   "error": {
+    "pp": -0.03,
+    "mf": 0.1,
+    "ff": 0.05
+   }
+  },
+  "Viola": {
+   "N": 38,
+   "rms": 0.17,
+   "error": {
+    "pp": 0.06,
+    "mf": -0.05,
+    "ff": -0.27
+   }
+  },
+  "Cello": {
+   "N": 33,
+   "rms": 1.05,
+   "error": {
+    "pp": 0.86,
+    "mf": 1.03,
+    "ff": -1.21
+   }
+  },
+  "Double bass": {
+   "N": 34,
+   "rms": 0.05,
+   "error": {
+    "pp": 0.0,
+    "mf": -0.09,
+    "ff": 0.01
+   }
+  },
+  "Flute": {
+   "N": 39,
+   "rms": 0.06,
+   "error": {
+    "pp": -0.04,
+    "mf": -0.04,
+    "ff": 0.08
+   }
+  },
+  "Clarinet": {
+   "N": 45,
+   "rms": 0.08,
+   "error": {
+    "pp": 0.08,
+    "mf": 0.01,
+    "ff": -0.11
+   }
+  },
+  "Oboe": {
+   "N": 38,
+   "rms": 0.07,
+   "error": {
+    "pp": 0.11,
+    "mf": 0.02,
+    "ff": -0.04
+   }
+  },
+  "English horn": {
+   "N": 33,
+   "rms": 0.29,
+   "error": {
+    "pp": -0.06,
+    "mf": -0.3,
+    "ff": -0.39
+   }
+  },
+  "Bassoon": {
+   "N": 37,
+   "rms": 0.45,
+   "error": {
+    "pp": -0.1,
+    "mf": -0.71,
+    "ff": -0.32
+   }
+  },
+  "Trumpet": {
+   "N": 34,
+   "rms": 0.12,
+   "error": {
+    "pp": 0.13,
+    "mf": -0.06,
+    "ff": -0.14
+   }
+  },
+  "Trombone": {
+   "N": 35,
+   "rms": 0.19,
+   "error": {
+    "pp": 0.21,
+    "mf": -0.23,
+    "ff": -0.1
+   }
+  },
+  "Tuba": {
+   "N": 34,
+   "rms": 0.49,
+   "error": {
+    "pp": -0.01,
+    "mf": -0.1,
+    "ff": -0.85
+   }
+  },
+  "French horn": {
+   "N": 41,
+   "rms": 3.31,
+   "error": {
+    "pp": -1.67,
+    "mf": 4.31,
+    "ff": -3.4
+   }
+  }
+ },
+ "French horn": {
+  "player": 1,
+  "N": 34,
+  "Nothers": [
+   33,
+   33,
+   34,
+   34,
+   34,
+   34,
+   35,
+   37,
+   38,
+   38,
+   39,
+   45
+  ],
+  "pp": 62.47,
+  "mf": 73.18,
+  "mpRange": [
+   69.47,
+   70.89
+  ],
+  "player2": {
+   "pp": 41.44,
+   "mf": 52.56,
+   "ff": 65.0
+  }
+ }
+}

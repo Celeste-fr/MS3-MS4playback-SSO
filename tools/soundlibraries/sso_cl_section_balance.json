@@ -1,5 +1,5 @@
 {
- "method": "    python3 -I section_balance_cl.py <clark_luce_levels.json> <sso_cc1_curves.json> <sso_winds_cc1_curves.json>\n                                     <sso_winds_section_balance.json> <out sso_cl_section_balance.json>\n\nThe owner, 2026-10-14: \"I prefer all the balance levels and the dynamic levels loudness to be based on real data\".\nReal side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in\norchestral music, dB SPL at 10 m in its loudest direction; to sound power Lw = Lp + 20 log10(10 m) + 11 - DI_max\n(DI_max: TU Berlin's directivity in that loudest direction, ff); mp = pp + 2/3 (mf - pp) (mp two of the three equal\nsteps from pp to mf); a patch = one player + 10 log10 N (strings 16 / 14 / 12 / 10 / 8, solo 1, a2 2, a6 6). SSO side:\nthe same as sectionLevel (section_balance_winds.py): the patch's Long at CC1 64 (loudDb), linear in dB between measured\npitches, its mean over the semitones of that patch's \"common\" range in sso_winds_section_balance.json. D = SSO - real,\nM = -(D - the five string sections' mean D) (the strings centred, the winds on their scale), as sectionLevel.\nCorroboration (one player against a string player: woodwind / brass): this +2.6..+4.0 / +11.3..+11.9 (pp..mf); the\nSpheres dataset's sections +1.4 / +14.3; Skaalevik 2019 (orchestra dosimetry fit) +3.2 / +4.2 in average sessions (rests\nincluded), +4.2 / +12.2 in forte passages; sectionLevel (TU single notes + Meyer mp) +11.9 / +18.9.\nPatches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2): their family member's\nchange from sectionLevel to sectionLevel2 added to their sectionLevel (FAMILY: an assumption, \"plays like its family\").",
+ "method": "    python3 -I section_balance_cl.py <clark_luce_levels.json> <clark_luce_table2.json> <sso_cc1_curves.json>\n                                     <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <out sso_cl_section_balance.json>\n\nThe owner, 2026-10-14: \"I prefer all the balance levels and the dynamic levels loudness to be based on real data\".\nReal side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in\norchestral music, dB SPL at 10 m in its loudest direction; to sound power Lw = Lp + 20 log10(10 m) + 11 - DI_max\n(DI_max: TU Berlin's directivity in that loudest direction, ff); mp = pp + 2/3 (mf - pp) (mp two of the three equal\nsteps from pp to mf); a patch = one player + 10 log10 N (strings 16 / 14 / 12 / 10 / 8, solo 1, a2 2, a6 6). SSO side:\nthe same as sectionLevel (section_balance_winds.py): the patch's Long at CC1 64 (loudDb), linear in dB between measured\npitches, its mean over the semitones of that patch's \"common\" range in sso_winds_section_balance.json. D = SSO - real,\nM = -(D - the five string sections' mean D) (the strings centred, the winds on their scale), as sectionLevel.\nCorroboration (one player against a string player: woodwind / brass): this +2.6..+4.0 / +11.3..+11.9 (pp..mf); the\nSpheres dataset's sections +1.4 / +14.3; Skaalevik 2019 (orchestra dosimetry fit) +3.2 / +4.2 in average sessions (rests\nincluded), +4.2 / +12.2 in forte passages; sectionLevel (TU single notes + Meyer mp) +11.9 / +18.9.\nThe French horn (since 2026-10-15, docs/BALANCE_LOG.md): Fig. 2's horn is not the mean of its Table II scales (every\nother instrument's is) and follows player 2, whose levels are 20 .. 40 dB under player 1's; its pp / mf are player 1's\n(clark_luce_table2.py: Table II, the same mean as Fig. 2's), mp from them as above; no ff (player 1 played none).\nPatches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2): their family member's\nchange from sectionLevel to sectionLevel2 added to their sectionLevel (FAMILY: an assumption, \"plays like its family\").",
  "patches": {
   "Violins 1": {
    "M2": -0.29,
@@ -170,39 +170,36 @@
    }
   },
   "Horn Solo": {
-   "M2": -16.46,
+   "M2": -3.08,
    "M1": 3.97,
    "instrument": "French horn",
    "players": 1,
    "lw": {
-    "pp": 74.41,
-    "mf": 79.11,
-    "ff": 92.31,
-    "mp": 77.54
+    "pp": 83.78,
+    "mf": 94.49,
+    "mp": 90.92
    }
   },
   "Horns a2": {
-   "M2": -9.86,
+   "M2": 3.52,
    "M1": 10.57,
    "instrument": "French horn",
    "players": 2,
    "lw": {
-    "pp": 77.42,
-    "mf": 82.12,
-    "ff": 95.32,
-    "mp": 80.55
+    "pp": 86.79,
+    "mf": 97.5,
+    "mp": 93.93
    }
   },
   "Horns a6": {
-   "M2": -6.08,
+   "M2": 7.3,
    "M1": 14.35,
    "instrument": "French horn",
    "players": 6,
    "lw": {
-    "pp": 82.19,
-    "mf": 86.89,
-    "ff": 100.09,
-    "mp": 85.32
+    "pp": 91.56,
+    "mf": 102.27,
+    "mp": 98.7
    }
   },
   "Trumpet Solo": {

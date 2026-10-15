@@ -242,8 +242,8 @@ on real data"; the same source as `[levels] realRange` 2's spans). 0 off (Librar
 (TU Berlin single notes at Meyer's mp, below), 2 the map's `sectionLevel2` (a patch without it plays its
 `sectionLevel`). Both are applied the same way (How it plays, below); only the real side differs.
 
-Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` with `clark_luce_levels.json` ->
-`sso_cl_section_balance.json` -> `gen_spitfire_sso.py` `SECTION_LEVEL2` -> the map):
+Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` with `clark_luce_levels.json` and
+`clark_luce_table2.json` -> `sso_cl_section_balance.json` -> `gen_spitfire_sso.py` `SECTION_LEVEL2` -> the map):
 
 - Real side: M. Clark, D. Luce, "Intensities of orchestral instrument scales played at prescribed dynamic markings",
   J. Audio Eng. Soc. 13(2), 1965, Fig. 2: each instrument's scales played pp / mf / ff as in orchestral music, dB SPL at
@@ -251,6 +251,10 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   power: Lw = Lp + 20 log10(10 m) + 11 - DI_max (DI_max: the TU Berlin database's directivity index in that loudest
   direction, at ff: violin 2.62 … horn 9.69 dB). mp = pp + 2/3 (mf - pp). A patch = one player + 10 log10 N (strings
   16 / 14 / 12 / 10 / 8, solo 1, a2 2, a6 6).
+- The French horn (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 1): Fig. 2's horn isn't the mean of its Table II
+  scales (every other instrument's is, within 0.05 .. 1.05 dB) but follows player 2, whose scales lie 20 .. 40 dB under
+  player 1's; the horn takes player 1's pp and mf (`clark_luce_table2.py`, Table II read from the scan, review page
+  https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2, owner to check). One player: about ±4 dB.
 - SSO side and M: as `sectionLevel` (below): SSO's Long at CC1 64 over the patch's common range, D = SSO - real,
   M = -(D - the strings' mean D) (strings centred, winds on their scale).
 - Family assumption (no Clark & Luce instrument): Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2 take their
@@ -280,9 +284,9 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Clarinets a2 | -4.78 | +1.49 | 84.8 |
 | Bassoon Solo | -15.30 | -2.76 | 80.7 |
 | Bassoons a2 | -2.82 | +9.72 | 83.7 |
-| Horn Solo | -16.46 | +3.97 | 77.5 |
-| Horns a2 | -9.86 | +10.57 | 80.5 |
-| Horns a6 | -6.08 | +14.35 | 85.3 |
+| Horn Solo | -3.08 | +3.97 | 90.9 |
+| Horns a2 | +3.52 | +10.57 | 93.9 |
+| Horns a6 | +7.30 | +14.35 | 98.7 |
 | Trumpet Solo | +8.10 | +8.82 | 95.5 |
 | Trumpets a2 | +13.31 | +14.04 | 98.5 |
 | Trumpets a6 | +19.51 | +19.66 | 103.2 |
@@ -295,8 +299,8 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Bass Trombone Solo (family) | -0.82 | +6.67 | - |
 | Bass Trombones a2 (family) | +2.73 | +10.22 | - |
 
-Biggest moves from `sectionLevel`: Horn Solo -20.4 and Bassoon Solo -12.5 dB (TU's single notes put them far louder
-than orchestral players play them), Violas -3.7; the trumpets barely move.
+Biggest moves from `sectionLevel`: Bassoon Solo -12.5 dB (TU's single notes put it far louder than orchestral players
+play it), Horn Solo -7.1, Violas -3.7; the trumpets barely move.
 
 #### The TU Berlin balance (`sectionLevel`, sectionBalance 1)
 
