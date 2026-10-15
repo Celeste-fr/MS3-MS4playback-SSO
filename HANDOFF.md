@@ -5,6 +5,17 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Balance refinement (2026-10-15, branch `balance-refine`, from integrate-1012 44cfae4a5e; not merged)
+
+The owner, 2026-10-15: "recursively try to improve our current level balance until you think it's impossible to
+improve anymore". `sectionBalance` 2 refined from data in three iterations, each in docs/BALANCE_LOG.md: the French horn
+from Clark & Luce's player 1 (Fig. 2's horn was player 2's alone; Trumpets a2 over Horns a2 at mp 17.9 -> 4.5 dB), a
+`sectionLevel2` for the 15 patches that had none (solo strings, Motif brass, piccolo, alto / bass flute, contrabass
+clarinet / trombone / tuba, cimbassi; SSO side from the one-pitch dynamics check, ±2.3 dB; 8 by a family member's level,
+an assumption), each Clark & Luce player counted once (tuba +1.6 dB). Open: the owner to check the Table II readings
+(https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2); real range for the 15 patches needs a 4-take CC1 sweep on the
+Windows VM (unreachable 2026-10-15: needs its new address); pitch dependence checked, no change. Not heard (data decide).
+
 ## SSO script fixes (2026-10-13, branch `sso-script-fixes`, from reading SSO's Kontakt scripts; untried with the real library)
 
 - **Round robins reset on every playback start**: SSO's All-techniques and single-technique patches reset their per-key
