@@ -41,6 +41,10 @@
 //   rule a phrase plays gain + O, a staccato O, everything less S' = max(0, the loudest phrase's gain + O - 6): the rule
 //   with each section O apart, less one common constant (all the Performance tracks move together: none is capped). A part's Performance patch carries T = min(G, S' + 6 - O)
 //   (its phrases' CC11: gain less T; G where it fits under +6, so the CC11 values are the rule's). Off: the rule alone.
+//   Which O (sectionBalanceMode, LibInstrument::sectionLevelFor; the owner, 2026-10-14: levels from real data): 1 the
+//   map's sectionLevel (above), 2 (Recommended, the default) its sectionLevel2, the same method with the real side from
+//   M. Clark, D. Luce, J. Audio Eng. Soc. 13(2), 1965: orchestral players' scales at mp as sound power
+//   (section_balance_cl.py); a patch without sectionLevel2 plays its sectionLevel.
 //
 //   Real range (playback setting [levels] realRange; the owner, 2026-10-12, stage A of the dynamics plan, HANDOFF.md ›
 //   Dynamics like a real player): a written dynamic is one gesture. In SSO CC1 (and a short's velocity) picks the
@@ -101,6 +105,8 @@ namespace ContextLevel {
 bool on(const Score* score);
 // whether [levels] sectionBalance is on for the score
 bool sectionBalance(const Score* score);
+// which: 0 none, 1 sectionLevel (TU Berlin single notes, Meyer mp), 2 sectionLevel2 (Clark & Luce at playing levels)
+int sectionBalanceMode(const Score* score);
 // whether the articulation has a measured context level
 bool has(const SoundLib::Articulation* a);
 // whether a patch has an articulation with one (a Performance patch)

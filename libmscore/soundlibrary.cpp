@@ -692,6 +692,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   if (a.hasAttribute("maxVelocity"))
                         li.maxVelocity = qBound(1, a.value("maxVelocity").toInt(), 127);
                   li.sectionLevelDb = a.value("sectionLevel").toDouble();
+                  li.hasSectionLevel2 = a.hasAttribute("sectionLevel2");
+                  li.sectionLevel2Db = a.value("sectionLevel2").toDouble();
                   // realSpan="pitch:dB ...", longLevel="cc/pitch:dB ..." ([levels] realRange)
                   for (const QString& t : a.value("realSpan").toString().split(' ', QString::SkipEmptyParts)) {
                         bool ok1 = false, ok2 = false;
@@ -788,6 +790,10 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.ids = main->ids;
             if (li.sectionLevelDb == 0.0)
                   li.sectionLevelDb = main->sectionLevelDb;
+            if (!li.hasSectionLevel2) {
+                  li.hasSectionLevel2 = main->hasSectionLevel2;
+                  li.sectionLevel2Db = main->sectionLevel2Db;
+                  }
             if (li.realSpan.empty() && li.longLevel.empty()) {
                   li.realSpan = main->realSpan;
                   li.longLevel = main->longLevel;

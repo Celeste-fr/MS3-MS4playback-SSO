@@ -290,6 +290,10 @@ switch value of each articulation. For example:
     centred (the owner's M, 2026-10-11; since 2026-10-14 with mp where `realPlay` places it). SSO's woodwinds' and
     brass' patches the database has (the owner, 2026-10-14: from the solo data until ensemble data exists): the same
     on the strings' scale. All from `tools/soundlibraries/section_balance_winds.py` through `gen_spitfire_sso.py`.
+  - `sectionLevel2` on an `Instrument` (dB): the same, played by `[levels] sectionBalance` 2 (Recommended and the default
+    since 2026-10-14) instead of `sectionLevel`; a section without it plays its `sectionLevel`. SSO: the real side from
+    Clark & Luce 1965's orchestral scales at mp as sound power (TU Berlin's directivity), against the same SSO levels
+    (`tools/soundlibraries/section_balance_cl.py` -> `sso_cl_section_balance.json` -> `gen_spitfire_sso.py`).
   - `realSpan`, `longLevel` and `realPlay` on an `Instrument` (the main patch; its `with` patches take them): with
     playback setting `[levels] realRange` each note plays, by CC11 and the patches' volumes, a real player's level at
     its written dynamic less what the patch's held Long already changes with CC1 (`libmscore/contextlevel.h` › Real

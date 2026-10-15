@@ -250,6 +250,13 @@ struct LibInstrument {
       // 2026-10-11, mp by the Meyer rule since 2026-10-14; SSO's woodwinds and brass too since then, on the strings'
       // scale, section_balance_winds.py). 0: none
       double sectionLevelDb { 0 };
+      // [levels] sectionBalance 2, "Clark & Luce balance" (the owner, 2026-10-14: balance from real data): the same, with
+      // the real side at playing levels (<Instrument sectionLevel2>: Clark & Luce 1965 scales as sound power with TU
+      // Berlin's directivity; section_balance_cl.py). Without the attribute mode 2 plays sectionLevel
+      double sectionLevel2Db { 0 };
+      bool hasSectionLevel2 { false };
+      // the section level [levels] sectionBalance plays: 0 none, 1 sectionLevel, 2 sectionLevel2 (else sectionLevel)
+      double sectionLevelFor(int mode) const { return mode <= 0 ? 0.0 : mode == 2 && hasSectionLevel2 ? sectionLevel2Db : sectionLevelDb; }
       // [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A), on the main patch, its
       // extras take them: one real player's ff - pp in dB per pitch (<Instrument realSpan="pitch:dB ...">: Weinzierl et al.
       // 2018, smoothed; gen_spitfire_sso.py, real_range.py), and the patch's held Long's level against CC1 64 per CC1 and

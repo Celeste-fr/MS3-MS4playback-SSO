@@ -223,6 +223,25 @@ Open, for the owner:
   Bank / Sub through the device, `[pipe]`'s precision in playback (only the export was recorded). The device no longer
   stalls Live with 28 copies (LIVE.md › Live plays the score › The device's load on Live).
 
+## Clark & Luce balance, `[levels] sectionBalance` 2 (2026-10-14, branch `cl-balance`)
+
+The owner, 2026-10-14: "honestly I don't trust my ears, I prefer all the balance levels and the dynamic levels loudness
+to be based on real data". Recommended and the default now play sectionBalance 2: the map's `sectionLevel2`, Clark &
+Luce 1965's orchestral scales (pp / mf / ff, mp = pp + 2/3 (mf - pp)) as sound power (+31 - TU Berlin's DI_max) against
+SSO's Long at CC1 64, centred on the strings as before (`section_balance_cl.py`; table and sources:
+docs/PLAYBACK_SETTINGS.md › Section balance). Three independent sources agree on the woodwind / brass levels against
+the strings (C&L, the Spheres sections, Skålevik 2019); the TU single-note balance (sectionLevel, 1) was the outlier.
+1 stays selectable ("Custom"). Assumption: bass clarinet, contrabassoon, bass trombones by their family member's change.
+Open: the owner to review the Skålevik readings (https://claude.ai/artifact/JKYSTkAFHEv4hjZviRhCEn) and the C&L
+readings (https://claude.ai/artifact/67i6bLfUGkfrkLVLWQdT2e). Not heard by the owner (by their rule, data decides).
+Checked (dumpEvents on the Linux dev machine, no Kontakt; Recommended): every one of the 28 sections at the default
+dynamic (CC1 64, CC11 127) plays SSO's measured Long level at CC1 64 + its volume = the real section's sound power at mp
+- 135.6 dB, within 0.05 dB (Trumpets a6 at +6, the loudest; Horn Solo -29.97 the lowest volume). Headroom: Whence
+(quarter tones) Celli - Performance still the top (+6), Violins 1 / 2 +1.65, Violas -4.33, Basses -2.27 dB against
+sectionBalance 1; a full orchestra ppp -> fff (a2 woodwinds, a6 brass, tuba, strings): Trumpets a6 set the top (+6),
+note levels -25.93 .. +6 dB, CC11 20 .. 127; nothing over +6 dB or CC11 127, nothing near the -42.08 floor. Whence audit
+unchanged (OVERLAP 0, UNMEASURED 10, CAPPED 288, ARRIVAL 33 / 6, LEVEL STEP 0, DROPPED 0).
+
 ## Section balance, `[levels] sectionBalance` (2026-10-11)
 
 Branch `section-balance-m` (from main; section-balance's mechanism + `sso-cc1-curves`'s measurements): the owner chose

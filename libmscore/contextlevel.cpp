@@ -44,6 +44,11 @@ bool sectionBalance(const Score* score)
       return Playback::on("levels/sectionBalance", score);
       }
 
+int sectionBalanceMode(const Score* score)
+      {
+      return qBound(0, int(Playback::value("levels/sectionBalance", score) + 0.5), 2);
+      }
+
 bool realRange(const Score* score)
       {
       return Playback::on("levels/realRange", score);
@@ -192,7 +197,7 @@ double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dyna
       return a.contextLevelAt(cc, median(iois), median(pitches));
       }
 
-static std::map<const Part*, Volumes> compute(const MasterScore* score, const SoundLib::Library& library, bool context, bool section,
+static std::map<const Part*, Volumes> compute(const MasterScore* score, const SoundLib::Library& library, bool context, int sectionMode,
                                               const std::map<const Part*, double>& ranges);
 
 // (realRangeTops renders the score, and the renderer reads the volumes: inside it, the volumes without the real range)
@@ -235,7 +240,8 @@ std::map<const Part*, Volumes> volumes(const MasterScore* score)
       if (!score || !library)
             return std::map<const Part*, Volumes>();
       const bool context = on(score) && Playback::on("slurs/performance", score);
-      const bool section = sectionBalance(score);
+      const int sectionMode = sectionBalanceMode(score);
+      const bool section = sectionMode > 0;
       const bool real = realRange(score) && !rangePass;
       if (!context && !section && !real)
             return std::map<const Part*, Volumes>();
@@ -244,7 +250,7 @@ std::map<const Part*, Volumes> volumes(const MasterScore* score)
                           .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
                           .arg(score->metaTag(Playback::metaTag)).arg(score->metaTag(PartPlaybackModes::metaTag))
                           + QString("|%1|%2|%3%4").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves())
-                          .arg(int(context)).arg(int(section)) + QString("|%1").arg(int(real));
+                          .arg(int(context)).arg(sectionMode) + QString("|%1").arg(int(real));
       static QMutex mutex;
       static std::map<const MasterScore*, std::pair<QString, std::map<const Part*, Volumes>>> cache;
       {
@@ -260,12 +266,12 @@ std::map<const Part*, Volumes> volumes(const MasterScore* score)
       QMutexLocker lock(&mutex);
       if (cache.size() > 16)
             cache.clear();
-      std::map<const Part*, Volumes> out = compute(score, *library, context, section, ranges);
+      std::map<const Part*, Volumes> out = compute(score, *library, context, sectionMode, ranges);
       cache[score] = { key, out };
       return out;
       }
 
-static std::map<const Part*, Volumes> compute(const MasterScore* score, const SoundLib::Library& library, bool context, bool section,
+static std::map<const Part*, Volumes> compute(const MasterScore* score, const SoundLib::Library& library, bool context, int sectionMode,
                                               const std::map<const Part*, double>& ranges)
       {
       std::map<const Part*, Volumes> out;
@@ -278,8 +284,8 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
       bool levels = false;
       for (const auto& pp : patches)
             for (const SoundLib::LibInstrument* p : pp.second)
-                  levels = levels || p->sectionLevelDb != 0.0;
-      section = section && levels;
+                  levels = levels || p->sectionLevelFor(sectionMode) != 0.0;
+      const bool section = sectionMode > 0 && levels;
       const bool real = !ranges.empty();
       if (!context && !section && !real)
             return out;
@@ -344,7 +350,7 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
       // text "performance" alone) T = S' + MAX_DB - O.
       // [levels] realRange: every patch of a part also its R louder (the part's largest realDb: its notes' CC11 play
       // realDb - R), within the same S' (T = min(G, S' + MAX_DB - O - R)). Section balance off: O = 0
-      auto levelOf = [section](const SoundLib::LibInstrument* p) { return section ? p->sectionLevelDb : 0.0; };
+      auto levelOf = [section, sectionMode](const SoundLib::LibInstrument* p) { return section ? p->sectionLevelFor(sectionMode) : 0.0; };
       auto rangeOf = [&ranges](const Part* part) {
             auto r = ranges.find(part);
             return r == ranges.end() ? 0.0 : r->second;

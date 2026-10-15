@@ -1,0 +1,123 @@
+{
+ "source": "Clark & Luce 1965, 'Intensities of Orchestral Instrument Scales Played at Prescribed Dynamic Markings', J. Audio Eng. Soc. 13(2) 151-157, Fig. 2: each instrument's average level of chromatic scales played pp / mf / ff 'as in typical orchestral music' (two players, with and without vibrato), dB SPL re 20 uPa at 10 m in the instrument's loudest direction (anechoic, inverse-square to 10 m). Read from the 300 dpi scan by pixel position (ticks 40..80 dB, 14.39 px/dB; the bar caps' and the dot's centres); each bar's ff - pp agrees with the printed Table I dynamic range within 0.3 dB (tableI). Review page: https://claude.ai/artifact/67i6bLfUGkfrkLVLWQdT2e",
+ "directivity": "diMax: directivity index (dB) in the instrument's loudest direction, derived from TU Berlin's single-tone directivities (Ackermann, Boehm, Brinkmann & Weinzierl, TU Berlin, 1a_DirectivitiesSingleTones_SOFA, CC BY-NC-SA 4.0; derived numbers only): RMS pressure at 32 receivers on a 2.06 m sphere, ff, steady part; DI_r = L_r - 10 log10(sum w_r p_r^2), spherical Voronoi weights; one receiver per instrument, the one with the highest mean DI over its notes (Clark & Luce kept one mic direction per instrument); diNotes notes",
+ "levels": {
+  "Violin": {
+   "pp": 45.9,
+   "mf": 50.7,
+   "ff": 59.8,
+   "tableI": 13.8,
+   "tu": "Violin_modern",
+   "diMax": 2.62,
+   "diNotes": 37
+  },
+  "Viola": {
+   "pp": 41.8,
+   "mf": 49.2,
+   "ff": 58.0,
+   "tableI": 15.9,
+   "tu": "Viola_modern",
+   "diMax": 2.32,
+   "diNotes": 54
+  },
+  "Cello": {
+   "pp": 48.9,
+   "mf": 56.8,
+   "ff": 63.1,
+   "tableI": 14.1,
+   "tu": "Cello_modern",
+   "diMax": 2.64,
+   "diNotes": 56
+  },
+  "Double bass": {
+   "pp": 50.2,
+   "mf": 58.1,
+   "ff": 64.4,
+   "tableI": 14.1,
+   "tu": "Double_bass_modern",
+   "diMax": 4.62,
+   "diNotes": 49
+  },
+  "Flute": {
+   "pp": 49.9,
+   "mf": 54.4,
+   "ff": 57.7,
+   "tableI": 7.5,
+   "tu": "Transverse_flute_modern",
+   "diMax": 3.11,
+   "diNotes": 36
+  },
+  "Clarinet": {
+   "pp": 51.7,
+   "mf": 56.6,
+   "ff": 60.1,
+   "tableI": 8.3,
+   "tu": "Clarinet_modern",
+   "diMax": 4.15,
+   "diNotes": 45
+  },
+  "Oboe": {
+   "pp": 54.3,
+   "mf": 60.2,
+   "ff": 61.9,
+   "tableI": 7.4,
+   "tu": "Oboe_modern",
+   "diMax": 4.31,
+   "diNotes": 36
+  },
+  "English horn": {
+   "pp": 51.8,
+   "mf": 56.1,
+   "ff": 57.2,
+   "tableI": 5.2,
+   "tu": "English_horn_modern",
+   "diMax": 3.3,
+   "diNotes": 31
+  },
+  "Bassoon": {
+   "pp": 50.0,
+   "mf": 55.8,
+   "ff": 60.2,
+   "tableI": 10.2,
+   "tu": "Bassoon_modern",
+   "diMax": 4.19,
+   "diNotes": 43
+  },
+  "Trumpet": {
+   "pp": 66.7,
+   "mf": 74.1,
+   "ff": 75.6,
+   "tableI": 8.8,
+   "tu": "Trumpet_modern",
+   "diMax": 7.18,
+   "diNotes": 36
+  },
+  "Trombone": {
+   "pp": 55.9,
+   "mf": 66.7,
+   "ff": 72.8,
+   "tableI": 17.0,
+   "tu": "Tenor_trombone_modern",
+   "diMax": 7.0,
+   "diNotes": 46
+  },
+  "Tuba": {
+   "pp": 63.8,
+   "mf": 69.2,
+   "ff": 76.5,
+   "tableI": 12.5,
+   "tu": "Tuba_modern",
+   "diMax": 6.28,
+   "diNotes": 54
+  },
+  "French horn": {
+   "pp": 53.1,
+   "mf": 57.8,
+   "ff": 71.0,
+   "tableI": 17.7,
+   "tu": "French_horn_modern",
+   "diMax": 9.69,
+   "diNotes": 41
+  }
+ }
+}

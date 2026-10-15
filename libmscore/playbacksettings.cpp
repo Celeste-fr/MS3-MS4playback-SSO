@@ -124,12 +124,17 @@ static const std::vector<Definition> DEFINITIONS = {
         "every other patch of the library's parts lower together (Live's Volume top, +6 dB); 0: [levels] calibrated's CC1", true },
       // (the owner, 2026-10-11: M, the real orchestra's balance at CC1 64 (Weinzierl et al. 2018's sound power, SSO's
       // section sizes) against SSO's measured one (sso_cc1_curves.json); on in Recommended, off in Library default;
-      // contextlevel.h, gen_spitfire_sso.py SECTION_FADERS)
-      { "levels/sectionBalance", 1, 0, 1, "on/off",
-        "1: every patch of a section with a map sectionLevel (SSO's string sections, woodwinds and brass: a real orchestra's balance at mp, "
-        "from measured sound power and section sizes, against SSO's measured levels) plays that many dB louder, staccatos and Performance alike, by the patches' volumes (with [levels] "
-        "context the Performance patches' volume carries the section's largest slur gain too; everything lower together so the "
-        "loudest stays at Live's Volume top, +6 dB); 0: every section at the same level", true },
+      // contextlevel.h, gen_spitfire_sso.py SECTION_FADERS; 2026-10-14, the owner: "I prefer all the balance levels and the
+      // dynamic levels loudness to be based on real data": 2, Clark & Luce balance, in Recommended and by default;
+      // section_balance_cl.py)
+      { "levels/sectionBalance", 2, 0, 2, "",
+        "every patch of a section with a map section level (SSO's string sections, woodwinds and brass) plays that many dB "
+        "louder, staccatos and Performance alike, by the patches' volumes: a real orchestra's balance at mp against SSO's "
+        "measured levels (with [levels] context the Performance patches' volume carries the section's largest slur gain too; "
+        "everything lower together so the loudest stays at Live's Volume top, +6 dB). 2: Clark & Luce balance (sectionLevel2: "
+        "scales played at the markings as in orchestral music, Clark & Luce 1965, as sound power with TU Berlin's directivity, "
+        "+ section size; agrees per family with the Spheres dataset's sections and Skaalevik 2019's orchestra measurements); "
+        "1: TU Berlin's single notes at Meyer's mp (sectionLevel); 0: every section at the same level", true },
       // (the owner, 2026-10-12, stage A of the dynamics plan: each note as loud as a real player at its written dynamic,
       // the player's full range; rule D: TU Berlin's pp / ff are ppp / fff, 7 equal dB steps, relative to mp; 2026-10-13,
       // heard on the ladder: "this sounds great": on in Recommended and by default, off in Library default; contextlevel.h ›
@@ -387,10 +392,11 @@ const std::vector<Preset>& presets()
             // "1 is the right balance, make it the recommended preset"; 2026-10-10: the strings' slurs on Performance, and the
             // level rule: levels/context; 2026-10-11: the section balance M, levels/sectionBalance; 2026-10-12: fingered within a slur,
             // bowed between slurs, slurs/transitions; a phrase's first note smooth, slurs/smoothStart; 2026-10-13: the real
-            // player's range, levels/realRange; 2026-10-14: slurs/transitionsEarly 0 in both until the owner approves it)
+            // player's range, levels/realRange; 2026-10-14: slurs/transitionsEarly 0 in both until the owner approves it;
+            // levels/realRange 2 and levels/sectionBalance 2: the balance and the markings' levels from real data)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 0 },
-                                              { "levels/context", 1 }, { "levels/sectionBalance", 1 }, { "levels/realRange", 2 },
+                                              { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "levels/context", 0 },

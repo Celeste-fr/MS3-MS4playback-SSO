@@ -3172,13 +3172,14 @@ void TestLiveEquivalence::liveEvenLevels()
 //   liveSectionBalance
 //    [levels] sectionBalance (contextlevel.h) reaches Live: Live's clips carry the CC11 MuseScore renders (per route:
 //    the notes, the CC11 values in order), the plain set's Kontakt tracks and the route set's (LiveSetWriter::tracks)
-//    the patches' volumes: each section's level on top, the loudest at +6 dB
+//    the patches' volumes: each section's level on top, the loudest at +6 dB (sectionBalance 2: sectionLevel2)
 //---------------------------------------------------------
 
 void TestLiveEquivalence::liveSectionBalance()
       {
       // gain = 8 + (pitch - 60) / 2: the Violin's slurs 15 dB (C5 D5 E5) and 13 dB (A4 B4), the Viola's 9 dB (C4 D4 E4);
-      // levels Violin -1.5, Viola +2: S' = 15 - 1.5 - 6 = 7.5; Violin - Performance +6, Violin -9, Viola - Performance
+      // levels (sectionLevel2, played by sectionBalance 2, Recommended's; sectionLevel decoys) Violin -1.5, Viola +2:
+      // S' = 15 - 1.5 - 6 = 7.5; Violin - Performance +6, Violin -9, Viola - Performance
       // +6 (T 11.5: its slur's CC11 -2.5 dB), Viola -5.5; the Violin's softer slur 2 dB under by CC11
       QString grid;
       for (int cc : { 1, 127 })
@@ -3191,8 +3192,8 @@ void TestLiveEquivalence::liveSectionBalance()
          " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='" + grid.trimmed() + "'/>";
       auto lib = loadMap(QString(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
-         "<Instrument name='Violin' ids='violin' sectionLevel='-1.5'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
-         "<Instrument name='Viola' ids='viola' sectionLevel='2'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Violin' ids='violin' sectionLevel='4' sectionLevel2='-1.5'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Viola' ids='viola' sectionLevel='-3' sectionLevel2='2'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
          "<Instrument name='Violin - Performance' with='Violin'>%1</Instrument>"
          "<Instrument name='Viola - Performance' with='Viola'>%1</Instrument>"
          "</SoundLibrary>").arg(perf));
@@ -3201,7 +3202,7 @@ void TestLiveEquivalence::liveSectionBalance()
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "1" },
-                                      { "levels/sectionBalance", "1" } });
+                                      { "levels/sectionBalance", "2" } });
       MasterScore* score = readScore(DIR + "section-balance.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();

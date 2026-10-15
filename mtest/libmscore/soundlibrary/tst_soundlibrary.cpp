@@ -1862,7 +1862,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nevenLevels=%6\nrealRange=%7\nsectionBalance=%6\ncontext=%6\ncalibrated=%3\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1).arg(2));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
@@ -1873,11 +1873,11 @@ void TestSoundLibrary::playbackPresets()
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=2\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=2\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1930,10 +1930,12 @@ void TestSoundLibrary::playbackPresets()
       // context left out: its default 1, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/context", 0 } }), QString());
-      // sectionBalance left out: its default 1, Recommended's; Library default needs 0
+      // sectionBalance left out: its default 2 (Clark & Luce, since 2026-10-14), Recommended's; Library default needs 0; 1 is neither
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 },
                                          { "levels/context", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 1 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 2 } }), QString("recommended"));
       // realRange left out: its default 2, Recommended's; Library default needs 0 (the owner, 2026-10-13; 2 since
       // 2026-10-14); 1 (the Meyer rule) is neither
       QCOMPARE(Playback::detectPreset({ { "levels/realRange", 1 } }), QString());
@@ -2724,6 +2726,28 @@ void TestSoundLibrary::levelSectionBalance()
       QCOMPARE(levels().at(57), balanced.at(57));
       score->setMetaTag(Playback::metaTag, "");
       delete score;
+      // sectionLevel2 ([levels] sectionBalance 2): the extras take the main's; 2 plays it, 1 sectionLevel; a patch
+      // without sectionLevel2 plays its sectionLevel under 2 (the rule off: the levels alone, S' 0)
+      auto lib2 = map(" sectionLevel='-1.5' sectionLevel2='3'", " sectionLevel='2'");
+      QVERIFY(lib2);
+      for (const SoundLib::LibInstrument& li : lib2->instruments) {
+            QCOMPARE(li.hasSectionLevel2, li.name.startsWith("Violin"));
+            QCOMPARE(li.sectionLevelFor(2), li.name.startsWith("Violin") ? 3.0 : 2.0);
+            QCOMPARE(li.sectionLevelFor(1), li.name.startsWith("Violin") ? -1.5 : 2.0);
+            }
+      SoundLib::setCurrent(lib2);
+      score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "2" } });
+      v = ContextLevel::volumes(score);
+      QVERIFY(std::fabs(v[score->parts()[0]].patchDb["Violin - Performance"] - 3) < 1e-9 && std::fabs(v[score->parts()[0]].patchDb["Violin"] - 3) < 1e-9);
+      QVERIFY(std::fabs(v[score->parts()[1]].patchDb["Viola"] - 2) < 1e-9);
+      check(levels(), plainV, 3);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "1" } });
+      v = ContextLevel::volumes(score);
+      QVERIFY(std::fabs(v[score->parts()[0]].patchDb["Violin"] + 1.5) < 1e-9);
+      delete score;
       // a map without levels: on plays the rule's
       auto plain = map("", "");
       QVERIFY(plain);
@@ -2767,11 +2791,32 @@ void TestSoundLibrary::levelSectionBalance()
             withLevel += li.sectionLevelDb != 0.0;
             }
       QVERIFY(withLevel > 5);
+      // sectionLevel2 (Clark & Luce at playing levels, [levels] sectionBalance 2; section_balance_cl.py ->
+      // sso_cl_section_balance.json -> gen_spitfire_sso.py): the same 28 sections, every patch of one its main patch's
+      const std::map<QString, double> M2 { { "Violins 1", -0.29 }, { "Violins 2", 0.86 }, { "Violas", -6.75 }, { "Celli", 2.55 },
+                 { "Basses", 3.63 }, { "Flute Solo", -2.96 }, { "Flutes a2", -4.79 }, { "Oboe Solo", -6.78 }, { "Oboes a2", -9.14 },
+                 { "Cor Anglais", -2.75 }, { "Clarinet Solo", -2.84 }, { "Clarinets a2", -4.78 }, { "Bass Clarinet", -5.07 },
+                 { "Bassoon Solo", -15.30 }, { "Bassoons a2", -2.82 }, { "Contrabassoon", -15.68 }, { "Horn Solo", -16.46 },
+                 { "Horns a2", -9.86 }, { "Horns a6", -6.08 }, { "Trumpet Solo", 8.10 }, { "Trumpets a2", 13.31 },
+                 { "Trumpets a6", 19.51 }, { "Tenor Trombone Solo", -2.82 }, { "Tenor Trombones a2", 3.84 },
+                 { "Trombones a6", 13.53 }, { "Bass Trombone Solo", -0.82 }, { "Bass Trombones a2", 2.73 }, { "Tuba Solo", -3.93 } };
+      QCOMPARE(int(M2.size()), 28);
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            const QString section = li.with.isEmpty() ? li.name : li.with;
+            QCOMPARE(li.hasSectionLevel2, M2.count(section) == 1);
+            const double expected = M2.count(section) ? M2.at(section) : 0.0;
+            QVERIFY2(std::fabs(li.sectionLevel2Db - expected) < 1e-9, qPrintable(QString("%1: %2 dB, expected %3")
+                                                                                .arg(li.name).arg(li.sectionLevel2Db).arg(expected)));
+            QCOMPARE(li.sectionLevelFor(2), li.hasSectionLevel2 ? li.sectionLevel2Db : li.sectionLevelDb);
+            QCOMPARE(li.sectionLevelFor(1), li.sectionLevelDb);
+            QCOMPARE(li.sectionLevelFor(0), 0.0);
+            }
       // a woodwind and a brass section play theirs (nothing in the code is the strings' only): a flute and Trumpets a6
-      // on the shipped map, the rule and the real range off: S' = 19.66 - 6 = 13.66, the trumpets at +6, the flute at
-      // 7.35 - 13.66 = -6.31
+      // on the shipped map, the rule and the real range off, sectionBalance 1: S' = 19.66 - 6 = 13.66, the trumpets at
+      // +6, the flute at 7.35 - 13.66 = -6.31
       SoundLib::setCurrent(sso);
-      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" } });
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },
+                                      { "levels/sectionBalance", "1" } });
       score = readScore(DIR + "section-balance-winds.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
@@ -2779,6 +2824,11 @@ void TestSoundLibrary::levelSectionBalance()
       v = ContextLevel::volumes(score);
       QCOMPARE(int(v.size()), 2);
       QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 6.31) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
+      QVERIFY2(std::fabs(v[score->parts()[1]].patchDb["Trumpets a6"] - 6) < 1e-9, qPrintable(QString::number(v[score->parts()[1]].patchDb["Trumpets a6"])));
+      // 2 (the default, Clark & Luce): S' = 19.51 - 6 = 13.51, the trumpets at +6, the flute at -2.96 - 13.51 = -16.47
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" } });
+      v = ContextLevel::volumes(score);
+      QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 16.47) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
       QVERIFY2(std::fabs(v[score->parts()[1]].patchDb["Trumpets a6"] - 6) < 1e-9, qPrintable(QString::number(v[score->parts()[1]].patchDb["Trumpets a6"])));
       // off: no volumes
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },

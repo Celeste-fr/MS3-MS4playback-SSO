@@ -1498,6 +1498,18 @@ SECTION_FADERS = {n: v['M'] for n, v in SECTION_BALANCE.get('strings', {}).items
 SECTION_FADERS_WINDS = {n: v['M'] for n, v in SECTION_BALANCE.get('instruments', {}).items()}
 def sectionLevel(name):
     return round(SECTION_FADERS.get(name, SECTION_FADERS_WINDS.get(name)), 3)
+# - sectionLevel2= (dB; [levels] sectionBalance 2, "Clark & Luce balance", the owner 2026-10-14: "I prefer all the balance
+#   levels and the dynamic levels loudness to be based on real data"): the same M with the real side at playing levels:
+#   Clark & Luce 1965 Fig. 2 (scales at pp / mf / ff as in orchestral music, one direction at 10 m) as sound power with
+#   TU Berlin's directivity in that direction, mp between pp and mf, one player + 10 log10 N; corroborated per family by the
+#   Spheres dataset's sections and Skaalevik 2019's orchestra dosimetry fit. Bass Clarinet, Contrabassoon, Bass Trombone
+#   Solo / a2: their family member's change (an assumption). section_balance_cl.py -> sso_cl_section_balance.json
+SECTION_LEVEL2 = {n: v['M2'] for n, v in loadFit('sso_cl_section_balance.json').get('patches', {}).items()}
+def sectionLevelAttributes(name):
+    out = f' sectionLevel="{sectionLevel(name):g}"'
+    if name in SECTION_LEVEL2:
+        out += f' sectionLevel2="{round(SECTION_LEVEL2[name], 3):g}"'
+    return out
 # - realSpan= ("pitch:dB ...") and longLevel= ("cc/pitch:dB ..."), on the five string sections' main Instrument (their
 #   extras take them): [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A): a note
 #   plays its written dynamic's level from mp (realPlay below; rule D: steps x realSpan / 7) less (longLevel at its CC1) dB by CC11 and the patches'
@@ -1548,10 +1560,10 @@ for i, line in enumerate(out):
                 out[i] = line[:-len(end)] + f' bend="{b:g}"' + end
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
-                out[i] = out[i][:-len(end)] + f' sectionLevel="{sectionLevel(current):g}"' + realRangeAttributes(current) + end
+                out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) + end
             elif current in REAL_RANGE_WINDS:
                 end = '/>' if out[i].endswith('/>') else '>'
-                level = f' sectionLevel="{sectionLevel(current):g}"' if current in SECTION_FADERS_WINDS else ''
+                level = sectionLevelAttributes(current) if current in SECTION_FADERS_WINDS else ''
                 out[i] = out[i][:-len(end)] + level + realRangeAttributes(current) + end
         continue
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
