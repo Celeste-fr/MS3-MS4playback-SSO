@@ -2332,7 +2332,7 @@ void TestSoundLibrary::slurPerformance()
       score->rebuildMidiMapping();
       // (measure 1: C5 D5 E5 F5 slurred; measure 2: G5, then A4 A4 B4 slurred)
       struct N { int tick; int pitch; int velo; int patch; int cc1; };
-      auto render = [score]() {
+      auto render = [&score]() {  // (by reference: the score is replaced below)
             score->setPlaylistDirty();
             EventMap events;
             SynthesizerState ss;
