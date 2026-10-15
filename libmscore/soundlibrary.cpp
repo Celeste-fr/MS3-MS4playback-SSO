@@ -627,6 +627,33 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   lib->onsetEarly = qBound(0, a.value("early").toInt(), 200);
                   r.skipCurrentElement();
                   }
+            else if (r.name() == "Mics") {
+                  // <Mics fader="16:-30.27 ... 127:0" mix="0:-/-/0 ... 127:0/-/-"/> ([levels] micCompensation)
+                  for (const QString& t : a.value("fader").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok1 = false, ok2 = false;
+                        const int v = t.section(':', 0, 0).toInt(&ok1);
+                        const double db = t.section(':', 1).toDouble(&ok2);
+                        if (!ok1 || !ok2 || v < 1 || v > 127 || db > 0.0)
+                              return fail(QString("%1:%2: bad Mics fader \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        lib->micFader[v] = db;
+                        }
+                  for (const QString& t : a.value("mix").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const int v = t.section(':', 0, 0).toInt(&ok);
+                        const QStringList dbs = t.section(':', 1).split('/');
+                        if (!ok || v < 0 || v > 127 || dbs.size() != 3)
+                              return fail(QString("%1:%2: bad Mics mix \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        std::array<double, 3> m;
+                        for (int i = 0; i < 3; ++i) {
+                              bool okd = false;
+                              m[size_t(i)] = dbs[i] == "-" ? -INFINITY : dbs[i].toDouble(&okd);
+                              if (dbs[i] != "-" && !okd)
+                                    return fail(QString("%1:%2: bad Mics mix \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                              }
+                        lib->micMix[v] = m;
+                        }
+                  r.skipCurrentElement();
+                  }
             else if (r.name() == "Dynamics") {
                   if (a.hasAttribute("cc"))
                         lib->dynamicsCC = a.value("cc").toInt();
@@ -729,6 +756,25 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         if (!ok || !(li.realStepsDb > 0.0))
                               return fail(QString("%1:%2: bad realSteps \"%3\"").arg(path).arg(r.lineNumber()).arg(a.value("realSteps").toString()));
                         }
+                  // micLevels="Close:dB Tree:dB ...", micDefault="Tree:127" ([levels] micCompensation)
+                  static const QStringList micNames { "Close", "Tree", "Ambient", "Outrigger", "Leader" };
+                  for (const QString& t : a.value("micLevels").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const int i = micNames.indexOf(t.section(':', 0, 0));
+                        const double db = t.section(':', 1).toDouble(&ok);
+                        if (i < 0 || !ok)
+                              return fail(QString("%1:%2: bad micLevels \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        li.micLevelDb[size_t(i)] = db;
+                        li.hasMicLevels = true;
+                        }
+                  for (const QString& t : a.value("micDefault").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const int i = micNames.indexOf(t.section(':', 0, 0));
+                        const int v = t.section(':', 1).toInt(&ok);
+                        if (i < 0 || !ok || v < 0 || v > 127)
+                              return fail(QString("%1:%2: bad micDefault \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        li.micDefault[size_t(i)] = v;
+                        }
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;
@@ -800,6 +846,11 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.realPlayPp = main->realPlayPp;
                   li.realPlayFf = main->realPlayFf;
                   li.realStepsDb = main->realStepsDb;
+                  }
+            if (!li.hasMicLevels) {
+                  li.hasMicLevels = main->hasMicLevels;
+                  li.micLevelDb = main->micLevelDb;
+                  li.micDefault = main->micDefault;
                   }
             main->extras.push_back(&li);
             }

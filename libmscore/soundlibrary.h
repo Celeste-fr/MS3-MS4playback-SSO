@@ -35,6 +35,8 @@
 #ifndef __SOUNDLIBRARY_H__
 #define __SOUNDLIBRARY_H__
 
+#include <array>
+#include <cmath>
 #include <functional>
 #include <map>
 #include <memory>
@@ -272,6 +274,14 @@ struct LibInstrument {
       // the instrument's written pp -> ff in dB as orchestral players play it (Clark & Luce 1965, Table I), the markings
       // in equal steps of S / 5 around mp. 0: none (realRange 2 plays the Meyer rule for the patch)
       double realStepsDb { 0.0 };
+      // [levels] micCompensation (contextlevel.h › Mics; the owner, 2026-10-15): each mic alone at its full fader (the
+      // plug-in parameter "Mic N level" at 1.0, the others at 0), dB against the patch's default mix (<Instrument
+      // micLevels="Close:dB Tree:dB Ambient:dB Outrigger:dB Leader:dB">: Mic 1-5, a mic the patch lacks left out), and
+      // its default faders 0-127 (<Instrument micDefault="Tree:127">, a mic not listed: 0); measured,
+      // sso_mic_levels.json. The extras take the main's when they have none of their own. NaN: no such mic
+      std::array<double, 5> micLevelDb { { NAN, NAN, NAN, NAN, NAN } };
+      std::array<int, 5> micDefault { { 0, 0, 0, 0, 0 } };
+      bool hasMicLevels { false };
       QString scan;                      // a <Patch> with several articulations (read from its files): "values"
                                           // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;
@@ -337,6 +347,13 @@ class Library {
       // a held note (not a legato transition) starts early by this share of its articulation's onset (<Onset
       // early>, percent; the score's own: onsetEarly())
       int onsetEarly { 0 };
+      // the mics' laws ([levels] micCompensation, contextlevel.h › Mics; <Mics fader mix>, measured: sso_mic_levels.json):
+      // a mic's level at a fader value 0-127 against 127 (fader="value:dB ...": linear in dB between the measured values,
+      // linear in amplitude from silence at 0 to the first), and what Mic Mix Distance 0-127 sets Close, Tree and Ambient
+      // to (mix="value:close/tree/ambient ...", each dB against the mic's full fader, "-" silent; linear in amplitude
+      // between the measured values). Empty: no compensation
+      std::map<int, double> micFader;
+      std::map<int, std::array<double, 3>> micMix;
       std::vector<Controller> controllers;          // for all its instruments
       std::vector<LibInstrument> instruments;
       // the library's other patches (<Patch>): none of the map's, but set up and checked (Check

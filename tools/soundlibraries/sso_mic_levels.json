@@ -1,0 +1,2443 @@
+{
+ "about": "SSO's mics, measured (2026-10-15; the owner: \"mic changes then only affect tone and sense of space, never the balance\"): how loud each patch is through each mic alone against its default mix, the mic faders' law and Mic Mix Distance's, for [levels] micCompensation (libmscore/contextlevel.h \u203a Mics; the map's <Mics> and <Instrument micLevels micDefault>, written by gen_spitfire_sso.py from sso_mic_levels.json).",
+ "method": "tools/soundlibraries/mic_levels.py (its header). Levels: rmsDb (sso_cc1_sweep.measure: the sustain's mean power 1.5-3.0 s after the note-on), median of 4 takes per pitch, the median over the 3 pitches of the difference against the patch's default render; lufs and loudDb the same way, for reference.",
+ "faderLaw": {
+  "db": {
+   "120": -1.16,
+   "112": -2.54,
+   "96": -5.55,
+   "80": -8.96,
+   "64": -12.88,
+   "48": -17.49,
+   "32": -23.11,
+   "16": -30.27
+  },
+  "spread": {
+   "120": 0.0,
+   "112": 0.0,
+   "96": 0.0,
+   "80": 0.0,
+   "64": 0.0,
+   "48": 0.0,
+   "32": 0.0,
+   "16": 0.0
+  },
+  "curves": {
+   "Flute Solo Ambient": {
+    "120": -1.16,
+    "112": -2.54,
+    "96": -5.55,
+    "80": -8.96,
+    "64": -12.88,
+    "48": -17.49,
+    "32": -23.11,
+    "16": -30.27
+   },
+   "Horn Solo Close": {
+    "120": -1.16,
+    "112": -2.54,
+    "96": -5.55,
+    "80": -8.96,
+    "64": -12.88,
+    "48": -17.49,
+    "32": -23.11,
+    "16": -30.27
+   },
+   "Horn Solo Tree": {
+    "96": -5.55,
+    "64": -12.88,
+    "32": -23.11
+   },
+   "Violins 1 Tree": {
+    "112": -2.54,
+    "96": -5.55,
+    "80": -8.96,
+    "64": -12.88,
+    "48": -17.49,
+    "32": -23.11,
+    "16": -30.27
+   }
+  },
+  "note": "a mic alone at a fader value against itself at 127; the median of the curves; 0 is silent"
+ },
+ "mixLaw": {
+  "db": {
+   "0": [
+    null,
+    null,
+    0.0
+   ],
+   "16": [
+    null,
+    -13.15,
+    -1.82
+   ],
+   "32": [
+    null,
+    -5.27,
+    -10.72
+   ],
+   "48": [
+    null,
+    -1.43,
+    null
+   ],
+   "64": [
+    null,
+    0.0,
+    null
+   ],
+   "80": [
+    -16.07,
+    -1.93,
+    -14.23
+   ],
+   "96": [
+    -7.18,
+    -7.86,
+    -13.13
+   ],
+   "112": [
+    -1.61,
+    -22.25,
+    null
+   ],
+   "127": [
+    0.0,
+    null,
+    null
+   ]
+  },
+  "checks": {
+   "orderCheck (0, then Ambient 0)": -2.69,
+   "32 with Outrigger 127 against 32 alone": 0.0,
+   "32 with Leader 127 against 32 alone": 0.0,
+   "32 with Tree 127 against 32 alone": 0.0
+  },
+  "fit": {
+   "Violins 1": {
+    "16": {
+     "measuredDb": -4.08,
+     "fittedDb": -3.95,
+     "leaveOneOutDb": -3.92
+    },
+    "32": {
+     "measuredDb": -5.06,
+     "fittedDb": -4.65,
+     "leaveOneOutDb": -4.5
+    },
+    "48": {
+     "measuredDb": -1.47,
+     "fittedDb": -1.43,
+     "leaveOneOutDb": -1.42
+    },
+    "80": {
+     "measuredDb": -1.64,
+     "fittedDb": -1.72,
+     "leaveOneOutDb": -1.77
+    },
+    "96": {
+     "measuredDb": -5.16,
+     "fittedDb": -5.54,
+     "leaveOneOutDb": -5.76
+    },
+    "112": {
+     "measuredDb": -4.46,
+     "fittedDb": -4.83,
+     "leaveOneOutDb": -4.94
+    }
+   },
+   "Horn Solo": {
+    "16": {
+     "measuredDb": -0.53,
+     "fittedDb": -0.57,
+     "leaveOneOutDb": -0.63
+    },
+    "32": {
+     "measuredDb": -3.86,
+     "fittedDb": -3.94,
+     "leaveOneOutDb": -4.22
+    },
+    "48": {
+     "measuredDb": -1.53,
+     "fittedDb": -1.43,
+     "leaveOneOutDb": -1.41
+    },
+    "80": {
+     "measuredDb": -1.48,
+     "fittedDb": -1.52,
+     "leaveOneOutDb": -1.68
+    },
+    "96": {
+     "measuredDb": -4.35,
+     "fittedDb": -4.54,
+     "leaveOneOutDb": -5.09
+    },
+    "112": {
+     "measuredDb": -3.81,
+     "fittedDb": -3.34,
+     "leaveOneOutDb": -2.88
+    }
+   },
+   "Flute Solo": {
+    "16": {
+     "measuredDb": -4.44,
+     "fittedDb": -4.33,
+     "leaveOneOutDb": -3.86
+    },
+    "32": {
+     "measuredDb": -4.82,
+     "fittedDb": -4.7,
+     "leaveOneOutDb": -4.18
+    },
+    "48": {
+     "measuredDb": -1.46,
+     "fittedDb": -1.43,
+     "leaveOneOutDb": -1.43
+    },
+    "80": {
+     "measuredDb": -1.35,
+     "fittedDb": -1.4,
+     "leaveOneOutDb": -1.72
+    },
+    "96": {
+     "measuredDb": -1.03,
+     "fittedDb": -1.65,
+     "leaveOneOutDb": -3.08
+    },
+    "112": {
+     "measuredDb": 2.76,
+     "fittedDb": 2.54,
+     "leaveOneOutDb": 2.27
+    }
+   },
+   "Celli": {
+    "16": {
+     "measuredDb": -2.19,
+     "fittedDb": -2.28,
+     "leaveOneOutDb": -2.32
+    },
+    "32": {
+     "measuredDb": -4.22,
+     "fittedDb": -4.35,
+     "leaveOneOutDb": -4.4
+    },
+    "48": {
+     "measuredDb": -1.44,
+     "fittedDb": -1.43,
+     "leaveOneOutDb": -1.43
+    },
+    "80": {
+     "measuredDb": -1.61,
+     "fittedDb": -1.5,
+     "leaveOneOutDb": -1.45
+    },
+    "96": {
+     "measuredDb": -3.85,
+     "fittedDb": -3.2,
+     "leaveOneOutDb": -2.75
+    },
+    "112": {
+     "measuredDb": -0.02,
+     "fittedDb": -0.01,
+     "leaveOneOutDb": -0.01
+    }
+   },
+   "Basses": {
+    "16": {
+     "measuredDb": -5.72,
+     "fittedDb": -5.84,
+     "leaveOneOutDb": -6.17
+    },
+    "32": {
+     "measuredDb": -4.44,
+     "fittedDb": -4.89,
+     "leaveOneOutDb": -5.48
+    },
+    "48": {
+     "measuredDb": -1.25,
+     "fittedDb": -1.43,
+     "leaveOneOutDb": -1.49
+    },
+    "80": {
+     "measuredDb": -1.81,
+     "fittedDb": -1.77,
+     "leaveOneOutDb": -1.69
+    },
+    "96": {
+     "measuredDb": -5.8,
+     "fittedDb": -5.61,
+     "leaveOneOutDb": -5.2
+    },
+    "112": {
+     "measuredDb": -4.52,
+     "fittedDb": -4.56,
+     "leaveOneOutDb": -4.58
+    }
+   }
+  },
+  "leaveOneOutMaxAbsErrorDb": 2.05,
+  "note": "Mic Mix Distance value: Close / Tree / Ambient each against itself alone at 1.0 (null: silent), fitted (non-negative least squares on the powers) to the totals of Violins 1, Horn Solo, Flute Solo, Celli and Basses; 0, 64, 127: Ambient / Tree / Close alone at 1.0 (renders equal to 0.00 dB). With it the part's mic values are not played (checks): Outrigger and Leader stay at their default 0"
+ },
+ "predictionChecks": {
+  "checks": [
+   {
+    "patch": "Violins 1",
+    "setting": "Close 100, Tree 127, Ambient 80",
+    "predictedDb": 0.88,
+    "measuredDb": 0.94,
+    "errorDb": -0.06
+   },
+   {
+    "patch": "Violins 1",
+    "setting": "Tree 90, Leader 127",
+    "predictedDb": -6.1,
+    "measuredDb": -6.18,
+    "errorDb": 0.08
+   },
+   {
+    "patch": "Horn Solo",
+    "setting": "Close 127, Ambient 127, Outrigger 64",
+    "predictedDb": 4.67,
+    "measuredDb": 3.73,
+    "errorDb": 0.94
+   },
+   {
+    "patch": "Horn Solo",
+    "setting": "Tree 64, Ambient 96",
+    "predictedDb": -3.95,
+    "measuredDb": -3.9,
+    "errorDb": -0.05
+   },
+   {
+    "patch": "Basses",
+    "setting": "Close 110, Tree 100, Ambient 110, Outrigger 90, Leader 60",
+    "predictedDb": -0.97,
+    "measuredDb": -2.36,
+    "errorDb": 1.39
+   }
+  ],
+  "maxAbsErrorDb": 1.39,
+  "medianAbsErrorDb": 0.08
+ },
+ "patches": {
+  "Violins 1": {
+   "pitches": [
+    64,
+    76,
+    88
+   ],
+   "defaultRmsDb": {
+    "64": -36.815,
+    "76": -39.65,
+    "88": -39.230000000000004
+   },
+   "defaultSpread": 0.89,
+   "mics": {
+    "Close": {
+     "rmsDb": -3.3,
+     "lufs": -3.12,
+     "loudDb": -3.21
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -2.69,
+     "lufs": -3.04,
+     "loudDb": -3.84
+    },
+    "Outrigger": {
+     "rmsDb": -4.48,
+     "lufs": -4.56,
+     "loudDb": -5.63
+    },
+    "Leader": {
+     "rmsDb": -14.24,
+     "lufs": -13.63,
+     "loudDb": -13.11
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -4.26,
+     -3.3,
+     -2.67
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -4.23,
+     -2.48,
+     -2.69
+    ],
+    "Outrigger": [
+     -5.71,
+     -4.48,
+     -4.3
+    ],
+    "Leader": [
+     -14.24,
+     -14.34,
+     -11.09
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Violins 2": {
+   "pitches": [
+    64,
+    76,
+    88
+   ],
+   "defaultRmsDb": {
+    "64": -37.980000000000004,
+    "76": -40.105000000000004,
+    "88": -40.485
+   },
+   "defaultSpread": 0.59,
+   "mics": {
+    "Close": {
+     "rmsDb": -2.77,
+     "lufs": -2.54,
+     "loudDb": -0.81
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -4.73,
+     "lufs": -4.95,
+     "loudDb": -5.02
+    },
+    "Outrigger": {
+     "rmsDb": -6.5,
+     "lufs": -6.79,
+     "loudDb": -6.01
+    },
+    "Leader": {
+     "rmsDb": -13.12,
+     "lufs": -12.88,
+     "loudDb": -12.5
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -2.95,
+     -1.94,
+     -2.77
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -4.57,
+     -4.95,
+     -4.73
+    ],
+    "Outrigger": [
+     -5.56,
+     -6.5,
+     -6.95
+    ],
+    "Leader": [
+     -14.07,
+     -13.04,
+     -13.12
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Violas": {
+   "pitches": [
+    57,
+    69,
+    81
+   ],
+   "defaultRmsDb": {
+    "57": -29.19,
+    "69": -31.495,
+    "81": -34.83
+   },
+   "defaultSpread": 0.76,
+   "mics": {
+    "Close": {
+     "rmsDb": -7.82,
+     "lufs": -7.16,
+     "loudDb": -6.93
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -5.69,
+     "lufs": -5.78,
+     "loudDb": -5.63
+    },
+    "Outrigger": {
+     "rmsDb": -6.9,
+     "lufs": -7.05,
+     "loudDb": -7.01
+    },
+    "Leader": {
+     "rmsDb": -12.23,
+     "lufs": -11.6,
+     "loudDb": -10.38
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -7.82,
+     -7.99,
+     -6.95
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -4.2,
+     -6.32,
+     -5.69
+    ],
+    "Outrigger": [
+     -6.79,
+     -7.93,
+     -6.9
+    ],
+    "Leader": [
+     -12.23,
+     -12.94,
+     -10.83
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Celli": {
+   "pitches": [
+    47,
+    59,
+    70
+   ],
+   "defaultRmsDb": {
+    "47": -34.405,
+    "59": -37.42,
+    "70": -39.1
+   },
+   "defaultSpread": 1.86,
+   "mics": {
+    "Close": {
+     "rmsDb": 1.57,
+     "lufs": 0.92,
+     "loudDb": -0.32
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -0.83,
+     "lufs": -1.31,
+     "loudDb": -1.8
+    },
+    "Outrigger": {
+     "rmsDb": -5.71,
+     "lufs": -5.77,
+     "loudDb": -6.37
+    },
+    "Leader": {
+     "rmsDb": -2.58,
+     "lufs": -2.06,
+     "loudDb": -3.29
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -1.09,
+     1.57,
+     2.35
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -0.83,
+     -0.21,
+     -1.01
+    ],
+    "Outrigger": [
+     -6.7,
+     -4.77,
+     -5.71
+    ],
+    "Leader": [
+     -4.25,
+     -2.58,
+     -1.09
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Basses": {
+   "pitches": [
+    31,
+    39,
+    47
+   ],
+   "defaultRmsDb": {
+    "31": -34.129999999999995,
+    "39": -37.135000000000005,
+    "47": -43.67
+   },
+   "defaultSpread": 3.04,
+   "mics": {
+    "Close": {
+     "rmsDb": -3.02,
+     "lufs": -2.69,
+     "loudDb": -3.91
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -4.91,
+     "lufs": -5.45,
+     "loudDb": -5.89
+    },
+    "Outrigger": {
+     "rmsDb": -6.52,
+     "lufs": -6.1,
+     "loudDb": -5.89
+    },
+    "Leader": {
+     "rmsDb": -12.95,
+     "lufs": -14.52,
+     "loudDb": -14.86
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -2.41,
+     -4.28,
+     -3.02
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -5.32,
+     -4.91,
+     -4.78
+    ],
+    "Outrigger": [
+     -7.21,
+     -6.52,
+     -4.05
+    ],
+    "Leader": [
+     -11.53,
+     -12.95,
+     -17.22
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Flute Solo": {
+   "pitches": [
+    69,
+    78,
+    87
+   ],
+   "defaultRmsDb": {
+    "69": -39.785,
+    "78": -43.13,
+    "87": -38.805
+   },
+   "defaultSpread": 2.23,
+   "mics": {
+    "Close": {
+     "rmsDb": 4.14,
+     "lufs": 4.14,
+     "loudDb": 3.34
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -3.12,
+     "lufs": -2.47,
+     "loudDb": -3.28
+    },
+    "Outrigger": {
+     "rmsDb": -5.55,
+     "lufs": -5.08,
+     "loudDb": -5.53
+    }
+   },
+   "perPitch": {
+    "Close": [
+     4.14,
+     -1.23,
+     8.02
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -1.37,
+     -4.9,
+     -3.12
+    ],
+    "Outrigger": [
+     -7.94,
+     -5.41,
+     -5.55
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Flutes a2": {
+   "pitches": [
+    69,
+    78,
+    87
+   ],
+   "defaultRmsDb": {
+    "69": -41.365,
+    "78": -38.18,
+    "87": -36.099999999999994
+   },
+   "defaultSpread": 2.38,
+   "mics": {
+    "Close": {
+     "rmsDb": -2.33,
+     "lufs": -1.52,
+     "loudDb": -1.61
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -0.28,
+     "lufs": -0.63,
+     "loudDb": 0.18
+    },
+    "Outrigger": {
+     "rmsDb": -1.44,
+     "lufs": -1.94,
+     "loudDb": -1.94
+    }
+   },
+   "perPitch": {
+    "Close": [
+     7.85,
+     -2.73,
+     -2.33
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -0.28,
+     -0.1,
+     -1.48
+    ],
+    "Outrigger": [
+     -1.44,
+     -1.38,
+     -6.27
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Oboe Solo": {
+   "pitches": [
+    67,
+    76,
+    85
+   ],
+   "defaultRmsDb": {
+    "67": -36.375,
+    "76": -26.99,
+    "85": -35.92
+   },
+   "defaultSpread": 1.18,
+   "mics": {
+    "Close": {
+     "rmsDb": 1.8,
+     "lufs": 2.78,
+     "loudDb": 0.78
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -2.16,
+     "lufs": -2.03,
+     "loudDb": -2.61
+    },
+    "Outrigger": {
+     "rmsDb": -4.64,
+     "lufs": -4.25,
+     "loudDb": -5.4
+    }
+   },
+   "perPitch": {
+    "Close": [
+     1.8,
+     -8.22,
+     3.03
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -1.25,
+     -3.3,
+     -2.16
+    ],
+    "Outrigger": [
+     -3.13,
+     -4.64,
+     -5.74
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Oboes a2": {
+   "pitches": [
+    64,
+    73,
+    82
+   ],
+   "defaultRmsDb": {
+    "64": -27.41,
+    "73": -27.29,
+    "82": -30.15
+   },
+   "defaultSpread": 0.0,
+   "mics": {
+    "Close": {
+     "rmsDb": 1.48,
+     "lufs": 2.0,
+     "loudDb": 2.45
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -3.82,
+     "lufs": -4.71,
+     "loudDb": -4.97
+    },
+    "Outrigger": {
+     "rmsDb": -5.67,
+     "lufs": -5.91,
+     "loudDb": -6.14
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -2.51,
+     1.48,
+     3.59
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -3.67,
+     -5.08,
+     -3.82
+    ],
+    "Outrigger": [
+     -5.67,
+     -4.81,
+     -6.65
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Cor Anglais": {
+   "pitches": [
+    61,
+    67,
+    76
+   ],
+   "defaultRmsDb": {
+    "61": -41.379999999999995,
+    "67": -37.065,
+    "76": -43.44
+   },
+   "defaultSpread": 0.6,
+   "mics": {
+    "Close": {
+     "rmsDb": -6.43,
+     "lufs": -7.11,
+     "loudDb": -6.86
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -3.56,
+     "lufs": -3.5,
+     "loudDb": -2.32
+    },
+    "Outrigger": {
+     "rmsDb": -5.05,
+     "lufs": -5.11,
+     "loudDb": -4.59
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -6.43,
+     -8.6,
+     -5.64
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -1.98,
+     -3.56,
+     -4.17
+    ],
+    "Outrigger": [
+     -3.91,
+     -5.05,
+     -5.61
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Clarinet Solo": {
+   "pitches": [
+    59,
+    68,
+    80
+   ],
+   "defaultRmsDb": {
+    "59": -41.46,
+    "68": -41.5,
+    "80": -39.84
+   },
+   "defaultSpread": 0.0,
+   "mics": {
+    "Close": {
+     "rmsDb": -1.36,
+     "lufs": -1.22,
+     "loudDb": -1.95
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 0.24,
+     "lufs": 0.12,
+     "loudDb": -0.15
+    },
+    "Outrigger": {
+     "rmsDb": -2.84,
+     "lufs": -3.92,
+     "loudDb": -3.78
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -1.36,
+     1.92,
+     -2.2
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     0.24,
+     -1.64,
+     5.61
+    ],
+    "Outrigger": [
+     -5.37,
+     -2.84,
+     -0.39
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Clarinets a2": {
+   "pitches": [
+    59,
+    68,
+    80
+   ],
+   "defaultRmsDb": {
+    "59": -36.58,
+    "68": -32.835,
+    "80": -34.614999999999995
+   },
+   "defaultSpread": 1.07,
+   "mics": {
+    "Close": {
+     "rmsDb": 0.14,
+     "lufs": 0.45,
+     "loudDb": 1.39
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -2.06,
+     "lufs": -1.45,
+     "loudDb": -2.83
+    },
+    "Outrigger": {
+     "rmsDb": -6.89,
+     "lufs": -6.16,
+     "loudDb": -6.7
+    }
+   },
+   "perPitch": {
+    "Close": [
+     0.68,
+     -6.58,
+     0.14
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -2.06,
+     -6.46,
+     -0.54
+    ],
+    "Outrigger": [
+     -7.19,
+     -6.89,
+     -4.49
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Bass Clarinet": {
+   "pitches": [
+    46,
+    55,
+    67
+   ],
+   "defaultRmsDb": {
+    "46": -42.445,
+    "55": -39.32,
+    "67": -37.57
+   },
+   "defaultSpread": 3.66,
+   "mics": {
+    "Close": {
+     "rmsDb": -2.1,
+     "lufs": -1.53,
+     "loudDb": -1.87
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -1.27,
+     "lufs": -2.2,
+     "loudDb": -1.85
+    },
+    "Outrigger": {
+     "rmsDb": -4.46,
+     "lufs": -3.35,
+     "loudDb": -4.63
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -2.1,
+     -1.69,
+     -2.4
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -2.71,
+     -0.66,
+     -1.27
+    ],
+    "Outrigger": [
+     -1.6,
+     -6.79,
+     -4.46
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Bassoon Solo": {
+   "pitches": [
+    43,
+    53,
+    64
+   ],
+   "defaultRmsDb": {
+    "43": -32.075,
+    "53": -23.560000000000002,
+    "64": -29.705
+   },
+   "defaultSpread": 3.24,
+   "mics": {
+    "Close": {
+     "rmsDb": 1.11,
+     "lufs": 0.48,
+     "loudDb": -1.56
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -4.77,
+     "lufs": -4.65,
+     "loudDb": -3.64
+    },
+    "Outrigger": {
+     "rmsDb": -3.52,
+     "lufs": -3.47,
+     "loudDb": -4.7
+    }
+   },
+   "perPitch": {
+    "Close": [
+     2.49,
+     -0.99,
+     1.11
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -0.08,
+     -5.51,
+     -4.77
+    ],
+    "Outrigger": [
+     -2.21,
+     -5.9,
+     -3.52
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Bassoons a2": {
+   "pitches": [
+    43,
+    52,
+    64
+   ],
+   "defaultRmsDb": {
+    "43": -37.79,
+    "52": -36.905,
+    "64": -33.035
+   },
+   "defaultSpread": 1.92,
+   "mics": {
+    "Close": {
+     "rmsDb": -0.04,
+     "lufs": 0.56,
+     "loudDb": 0.14
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -3.91,
+     "lufs": -3.74,
+     "loudDb": -3.41
+    },
+    "Outrigger": {
+     "rmsDb": -6.96,
+     "lufs": -6.91,
+     "loudDb": -6.46
+    }
+   },
+   "perPitch": {
+    "Close": [
+     3.38,
+     -0.04,
+     -2.26
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -2.28,
+     -3.91,
+     -8.98
+    ],
+    "Outrigger": [
+     -6.96,
+     -2.52,
+     -7.84
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Contrabassoon": {
+   "pitches": [
+    31,
+    40,
+    49
+   ],
+   "defaultRmsDb": {
+    "31": -33.235,
+    "40": -33.0,
+    "49": -24.67
+   },
+   "defaultSpread": 1.12,
+   "mics": {
+    "Close": {
+     "rmsDb": -1.05,
+     "lufs": -0.21,
+     "loudDb": -1.49
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -0.26,
+     "lufs": -0.0,
+     "loudDb": -0.42
+    },
+    "Outrigger": {
+     "rmsDb": -4.66,
+     "lufs": -4.59,
+     "loudDb": -4.67
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -1.05,
+     -0.02,
+     -4.83
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -0.28,
+     -0.26,
+     -0.23
+    ],
+    "Outrigger": [
+     -2.78,
+     -4.66,
+     -6.72
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Horn Solo": {
+   "pitches": [
+    47,
+    58,
+    68
+   ],
+   "defaultRmsDb": {
+    "47": -33.225,
+    "58": -31.115000000000002,
+    "68": -27.22
+   },
+   "defaultSpread": 4.6,
+   "mics": {
+    "Close": {
+     "rmsDb": -1.79,
+     "lufs": -1.05,
+     "loudDb": -1.52
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 1.0,
+     "lufs": 0.72,
+     "loudDb": 0.04
+    },
+    "Outrigger": {
+     "rmsDb": -6.26,
+     "lufs": -5.98,
+     "loudDb": -5.89
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -2.98,
+     -1.79,
+     2.31
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -0.91,
+     1.0,
+     2.68
+    ],
+    "Outrigger": [
+     -6.65,
+     -6.26,
+     0.94
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Horns a2": {
+   "pitches": [
+    47,
+    58,
+    68
+   ],
+   "defaultRmsDb": {
+    "47": -36.974999999999994,
+    "58": -35.43,
+    "68": -30.02
+   },
+   "defaultSpread": 2.16,
+   "mics": {
+    "Close": {
+     "rmsDb": -2.41,
+     "lufs": -2.84,
+     "loudDb": -3.11
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -1.59,
+     "lufs": -0.74,
+     "loudDb": -1.56
+    },
+    "Outrigger": {
+     "rmsDb": -4.53,
+     "lufs": -4.0,
+     "loudDb": -4.25
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -4.28,
+     -2.41,
+     -2.11
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -1.66,
+     -1.59,
+     -1.55
+    ],
+    "Outrigger": [
+     -5.23,
+     -2.77,
+     -4.53
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Horns a6": {
+   "pitches": [
+    43,
+    54,
+    64
+   ],
+   "defaultRmsDb": {
+    "43": -39.745000000000005,
+    "54": -33.739999999999995,
+    "64": -30.66
+   },
+   "defaultSpread": 1.28,
+   "mics": {
+    "Close": {
+     "rmsDb": -2.54,
+     "lufs": -2.1,
+     "loudDb": -2.49
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 0.48,
+     "lufs": 0.6,
+     "loudDb": -0.19
+    },
+    "Outrigger": {
+     "rmsDb": -2.11,
+     "lufs": -1.71,
+     "loudDb": -1.77
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -2.54,
+     -2.74,
+     -0.07
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     0.58,
+     0.48,
+     0.46
+    ],
+    "Outrigger": [
+     -1.5,
+     -2.34,
+     -2.11
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Trumpet Solo": {
+   "pitches": [
+    60,
+    69,
+    78
+   ],
+   "defaultRmsDb": {
+    "60": -44.39,
+    "69": -37.760000000000005,
+    "78": -30.775
+   },
+   "defaultSpread": 1.21,
+   "mics": {
+    "Close": {
+     "rmsDb": -6.44,
+     "lufs": -6.47,
+     "loudDb": -6.89
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 2.29,
+     "lufs": 2.29,
+     "loudDb": 2.74
+    },
+    "Outrigger": {
+     "rmsDb": -4.43,
+     "lufs": -5.22,
+     "loudDb": -4.33
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -4.1,
+     -7.33,
+     -6.44
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     2.51,
+     2.29,
+     2.14
+    ],
+    "Outrigger": [
+     -3.19,
+     -4.43,
+     -4.69
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Trumpets a2": {
+   "pitches": [
+    60,
+    67,
+    75
+   ],
+   "defaultRmsDb": {
+    "60": -43.52,
+    "67": -38.855000000000004,
+    "75": -38.225
+   },
+   "defaultSpread": 1.95,
+   "mics": {
+    "Close": {
+     "rmsDb": -1.08,
+     "lufs": -1.1,
+     "loudDb": -1.81
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -0.01,
+     "lufs": -0.27,
+     "loudDb": 0.52
+    },
+    "Outrigger": {
+     "rmsDb": -4.32,
+     "lufs": -4.87,
+     "loudDb": -4.99
+    }
+   },
+   "perPitch": {
+    "Close": [
+     0.31,
+     -1.44,
+     -1.08
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -0.01,
+     -1.08,
+     0.94
+    ],
+    "Outrigger": [
+     -3.87,
+     -5.23,
+     -4.32
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Trumpets a6": {
+   "pitches": [
+    63,
+    70,
+    78
+   ],
+   "defaultRmsDb": {
+    "63": -45.025000000000006,
+    "70": -41.225,
+    "78": -37.415000000000006
+   },
+   "defaultSpread": 0.59,
+   "mics": {
+    "Close": {
+     "rmsDb": 0.66,
+     "lufs": 0.84,
+     "loudDb": 1.98
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -0.34,
+     "lufs": -0.43,
+     "loudDb": -0.11
+    },
+    "Outrigger": {
+     "rmsDb": -1.92,
+     "lufs": -1.97,
+     "loudDb": -1.79
+    }
+   },
+   "perPitch": {
+    "Close": [
+     0.66,
+     0.52,
+     0.75
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     0.33,
+     -0.34,
+     -0.82
+    ],
+    "Outrigger": [
+     -1.92,
+     -1.45,
+     -2.4
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Tenor Trombone Solo": {
+   "pitches": [
+    40,
+    51,
+    61
+   ],
+   "defaultRmsDb": {
+    "40": -38.34,
+    "51": -33.45,
+    "61": -31.585
+   },
+   "defaultSpread": 1.55,
+   "mics": {
+    "Close": {
+     "rmsDb": -3.77,
+     "lufs": -3.34,
+     "loudDb": -3.6
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 1.65,
+     "lufs": 1.59,
+     "loudDb": 1.45
+    },
+    "Outrigger": {
+     "rmsDb": -3.65,
+     "lufs": -3.85,
+     "loudDb": -3.49
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -3.77,
+     -3.33,
+     -4.87
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     1.65,
+     2.01,
+     0.65
+    ],
+    "Outrigger": [
+     -3.8,
+     -2.28,
+     -3.65
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Tenor Trombones a2": {
+   "pitches": [
+    41,
+    50,
+    62
+   ],
+   "defaultRmsDb": {
+    "41": -42.155,
+    "50": -38.055,
+    "62": -34.644999999999996
+   },
+   "defaultSpread": 1.69,
+   "mics": {
+    "Close": {
+     "rmsDb": -2.53,
+     "lufs": -2.25,
+     "loudDb": -2.18
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 0.92,
+     "lufs": 0.62,
+     "loudDb": 0.81
+    },
+    "Outrigger": {
+     "rmsDb": -6.21,
+     "lufs": -6.04,
+     "loudDb": -5.29
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -2.53,
+     -2.18,
+     -5.27
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     2.26,
+     0.92,
+     -0.27
+    ],
+    "Outrigger": [
+     -4.44,
+     -6.21,
+     -8.01
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Trombones a6": {
+   "pitches": [
+    37,
+    46,
+    55
+   ],
+   "defaultRmsDb": {
+    "37": -48.599999999999994,
+    "46": -43.175,
+    "55": -41.0
+   },
+   "defaultSpread": 0.94,
+   "mics": {
+    "Close": {
+     "rmsDb": 1.84,
+     "lufs": 2.09,
+     "loudDb": 2.21
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 2.99,
+     "lufs": 3.06,
+     "loudDb": 3.29
+    },
+    "Outrigger": {
+     "rmsDb": 2.72,
+     "lufs": 2.84,
+     "loudDb": 2.65
+    }
+   },
+   "perPitch": {
+    "Close": [
+     4.28,
+     1.84,
+     1.67
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     2.99,
+     4.01,
+     2.72
+    ],
+    "Outrigger": [
+     2.72,
+     3.42,
+     1.95
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Bass Trombone Solo": {
+   "pitches": [
+    36,
+    47,
+    57
+   ],
+   "defaultRmsDb": {
+    "36": -42.32,
+    "47": -35.085,
+    "57": -29.33
+   },
+   "defaultSpread": 2.84,
+   "mics": {
+    "Close": {
+     "rmsDb": -0.65,
+     "lufs": -0.54,
+     "loudDb": -0.53
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 1.43,
+     "lufs": 1.28,
+     "loudDb": 1.31
+    },
+    "Outrigger": {
+     "rmsDb": -4.67,
+     "lufs": -4.62,
+     "loudDb": -4.36
+    }
+   },
+   "perPitch": {
+    "Close": [
+     0.19,
+     -0.65,
+     -1.26
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     2.33,
+     1.43,
+     -0.49
+    ],
+    "Outrigger": [
+     -3.26,
+     -4.67,
+     -6.41
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Bass Trombones a2": {
+   "pitches": [
+    36,
+    48,
+    57
+   ],
+   "defaultRmsDb": {
+    "36": -39.0,
+    "48": -39.93,
+    "57": -35.81
+   },
+   "defaultSpread": 1.46,
+   "mics": {
+    "Close": {
+     "rmsDb": -9.45,
+     "lufs": -8.95,
+     "loudDb": -8.46
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 0.59,
+     "lufs": 1.19,
+     "loudDb": 1.64
+    },
+    "Outrigger": {
+     "rmsDb": -5.06,
+     "lufs": -5.48,
+     "loudDb": -4.76
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -10.37,
+     -9.45,
+     -8.14
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -0.75,
+     2.05,
+     0.59
+    ],
+    "Outrigger": [
+     -6.69,
+     -5.06,
+     -3.5
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Tuba Solo": {
+   "pitches": [
+    33,
+    45,
+    54
+   ],
+   "defaultRmsDb": {
+    "33": -32.465,
+    "45": -27.025,
+    "54": -26.52
+   },
+   "defaultSpread": 5.09,
+   "mics": {
+    "Close": {
+     "rmsDb": -11.47,
+     "lufs": -11.48,
+     "loudDb": -11.06
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 3.29,
+     "lufs": 3.59,
+     "loudDb": 3.59
+    },
+    "Outrigger": {
+     "rmsDb": -5.09,
+     "lufs": -4.58,
+     "loudDb": -4.93
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -12.42,
+     -11.47,
+     -10.86
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     3.29,
+     4.07,
+     -3.79
+    ],
+    "Outrigger": [
+     -5.09,
+     -7.3,
+     -2.98
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Violins 1 - Performance": {
+   "pitches": [
+    64,
+    76,
+    88
+   ],
+   "defaultRmsDb": {
+    "64": -41.03,
+    "76": -42.48,
+    "88": -42.86
+   },
+   "defaultSpread": 0.0,
+   "mics": {
+    "Close": {
+     "rmsDb": 1.46,
+     "lufs": 1.81,
+     "loudDb": 0.96
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -3.46,
+     "lufs": -3.61,
+     "loudDb": -3.6
+    },
+    "Outrigger": {
+     "rmsDb": -2.5,
+     "lufs": -2.39,
+     "loudDb": -1.84
+    },
+    "Leader": {
+     "rmsDb": -14.02,
+     "lufs": -15.15,
+     "loudDb": -13.92
+    }
+   },
+   "perPitch": {
+    "Close": [
+     1.46,
+     2.51,
+     1.33
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -3.64,
+     -3.38,
+     -3.46
+    ],
+    "Outrigger": [
+     -3.4,
+     -2.5,
+     -2.39
+    ],
+    "Leader": [
+     -14.02,
+     -16.1,
+     -13.8
+    ]
+   },
+   "treeOff": null,
+   "leaderOnly": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Violins 2 - Performance": {
+   "pitches": [
+    64,
+    76,
+    88
+   ],
+   "defaultRmsDb": {
+    "64": -41.0,
+    "76": -45.15,
+    "88": -43.43
+   },
+   "defaultSpread": 0.0,
+   "mics": {
+    "Close": {
+     "rmsDb": -3.19,
+     "lufs": -2.68,
+     "loudDb": -2.61
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -3.3,
+     "lufs": -2.68,
+     "loudDb": -2.87
+    },
+    "Outrigger": {
+     "rmsDb": -5.22,
+     "lufs": -5.51,
+     "loudDb": -5.65
+    },
+    "Leader": {
+     "rmsDb": -11.74,
+     "lufs": -10.87,
+     "loudDb": -10.91
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -3.51,
+     -2.94,
+     -3.19
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -3.3,
+     -2.65,
+     -3.31
+    ],
+    "Outrigger": [
+     -5.22,
+     -5.2,
+     -6.67
+    ],
+    "Leader": [
+     -12.5,
+     -11.74,
+     -11.55
+    ]
+   },
+   "treeOff": null,
+   "leaderOnly": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Violas - Performance": {
+   "pitches": [
+    57,
+    69,
+    81
+   ],
+   "defaultRmsDb": {
+    "57": -37.53,
+    "69": -36.3,
+    "81": -41.34
+   },
+   "defaultSpread": 0.0,
+   "mics": {
+    "Close": {
+     "rmsDb": -7.47,
+     "lufs": -6.67,
+     "loudDb": -7.86
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -4.93,
+     "lufs": -4.81,
+     "loudDb": -5.38
+    },
+    "Outrigger": {
+     "rmsDb": -5.82,
+     "lufs": -5.78,
+     "loudDb": -6.96
+    },
+    "Leader": {
+     "rmsDb": -17.17,
+     "lufs": -17.82,
+     "loudDb": -17.2
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -8.36,
+     -7.47,
+     -6.76
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -4.4,
+     -5.56,
+     -4.93
+    ],
+    "Outrigger": [
+     -5.64,
+     -6.61,
+     -5.82
+    ],
+    "Leader": [
+     -17.17,
+     -17.76,
+     -17.04
+    ]
+   },
+   "treeOff": null,
+   "leaderOnly": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Celli - Performance": {
+   "pitches": [
+    47,
+    59,
+    70
+   ],
+   "defaultRmsDb": {
+    "47": -45.21,
+    "59": -45.81,
+    "70": -44.65
+   },
+   "defaultSpread": 0.0,
+   "mics": {
+    "Close": {
+     "rmsDb": -1.3,
+     "lufs": -1.7,
+     "loudDb": -2.04
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": 0.07,
+     "lufs": -0.16,
+     "loudDb": -0.82
+    },
+    "Outrigger": {
+     "rmsDb": -4.68,
+     "lufs": -4.56,
+     "loudDb": -4.3
+    },
+    "Leader": {
+     "rmsDb": -7.18,
+     "lufs": -6.52,
+     "loudDb": -7.37
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -1.3,
+     -1.09,
+     -2.57
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     0.07,
+     -0.39,
+     0.12
+    ],
+    "Outrigger": [
+     -5.74,
+     -4.15,
+     -4.68
+    ],
+    "Leader": [
+     -5.23,
+     -7.18,
+     -7.33
+    ]
+   },
+   "treeOff": null,
+   "leaderOnly": null,
+   "default": {
+    "Tree": 127
+   }
+  },
+  "Basses - Performance": {
+   "pitches": [
+    31,
+    39,
+    47
+   ],
+   "defaultRmsDb": {
+    "31": -39.7,
+    "39": -35.89,
+    "47": -43.24
+   },
+   "defaultSpread": 0.0,
+   "mics": {
+    "Close": {
+     "rmsDb": -5.53,
+     "lufs": -4.64,
+     "loudDb": -5.56
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -7.36,
+     "lufs": -6.94,
+     "loudDb": -5.56
+    },
+    "Outrigger": {
+     "rmsDb": -4.24,
+     "lufs": -5.05,
+     "loudDb": -7.29
+    },
+    "Leader": {
+     "rmsDb": -18.51,
+     "lufs": -15.53,
+     "loudDb": -13.02
+    }
+   },
+   "perPitch": {
+    "Close": [
+     0.27,
+     -6.79,
+     -5.53
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -6.29,
+     -11.48,
+     -7.36
+    ],
+    "Outrigger": [
+     -2.35,
+     -8.07,
+     -4.24
+    ],
+    "Leader": [
+     -12.15,
+     -19.08,
+     -18.51
+    ]
+   },
+   "treeOff": null,
+   "leaderOnly": null,
+   "default": {
+    "Tree": 127
+   }
+  }
+ }
+}

@@ -27,6 +27,7 @@
 #include "synthesizerstate.h"
 #include "undo.h"
 #include <QMutex>
+#include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
 #include <set>
@@ -57,6 +58,135 @@ bool realRange(const Score* score)
 bool clarkLuceSpans(const Score* score)
       {
       return Playback::value("levels/realRange", score) >= 1.5;
+      }
+
+//---------------------------------------------------------
+//   Mics ([levels] micCompensation, contextlevel.h › Mics)
+//---------------------------------------------------------
+
+bool micCompensation(const Score* score)
+      {
+      return Playback::on("levels/micCompensation", score);
+      }
+
+// which of Mic 1-5, Mic Mix Distance a controller sets (-1: none)
+static int micIndex(const SoundLib::Controller& c)
+      {
+      if (c.param == "Mic Mix Distance")
+            return 5;
+      static const QRegularExpression re("^Mic ([1-5]) level$");
+      const QRegularExpressionMatch m = re.match(c.param);
+      return m.hasMatch() ? m.captured(1).toInt() - 1 : -1;
+      }
+
+bool MicValues::automated() const
+      {
+      return std::any_of(hasLane.begin(), hasLane.end(), [](bool b) { return b; });
+      }
+
+std::array<double, 6> MicValues::at(int tick) const
+      {
+      std::array<double, 6> f;
+      for (size_t i = 0; i < 6; ++i) {
+            const double l = hasLane[i] ? lanes[i].valueAt(tick) : -1.0;
+            f[i] = l >= 0.0 ? 127.0 * std::min(1.0, l) : part[i];
+            }
+      return f;
+      }
+
+MicValues micValues(const Part* part, const SoundLib::LibInstrument& patch,
+                    const std::map<const Part*, PartControllers::Values>& values,
+                    const std::map<const Part*, Automation::PartLanes>& lanes)
+      {
+      MicValues v;
+      const Automation::PartLanes own = Automation::lanes(part, lanes);
+      for (const SoundLib::Controller& c : patch.allControllers) {
+            const int i = micIndex(c);
+            if (i < 0)
+                  continue;
+            v.part[size_t(i)] = PartControllers::value(part, c, values);
+            for (const Automation::Lane& l : own)
+                  if (l.target == c.id && !l.points.empty()) {
+                        v.lanes[size_t(i)] = l;
+                        v.hasLane[size_t(i)] = true;
+                        }
+            }
+      return v;
+      }
+
+double micFaderDb(const SoundLib::Library& library, double fader)
+      {
+      const std::map<int, double>& law = library.micFader;
+      if (fader <= 0.0 || law.empty())
+            return -INFINITY;
+      if (fader >= 127.0)
+            return 0.0;
+      auto hi = law.lower_bound(int(std::ceil(fader)));
+      if (hi == law.begin()) {
+            // (below the first measured value: linear in amplitude down to silence at 0)
+            return hi->second + 20.0 * std::log10(fader / hi->first);
+            }
+      // (127 is 0 dB whether listed or not)
+      const std::pair<int, double> b = hi == law.end() ? std::make_pair(127, 0.0) : std::make_pair(hi->first, hi->second);
+      const std::pair<int, double> a(std::prev(hi)->first, std::prev(hi)->second);
+      if (b.first == a.first)
+            return a.second;
+      return a.second + (b.second - a.second) * (fader - a.first) / (b.first - a.first);
+      }
+
+// what Mic Mix Distance m sets Close, Tree, Ambient to, dB against their full faders (linear in amplitude between the
+// measured values); false: no law
+static bool micMixDb(const SoundLib::Library& library, double m, std::array<double, 3>& out)
+      {
+      const auto& law = library.micMix;
+      if (law.empty())
+            return false;
+      auto hi = law.lower_bound(int(std::ceil(m)));
+      if (hi == law.end())
+            hi = std::prev(law.end());
+      if (hi == law.begin() || hi->first == m) {
+            out = hi->second;
+            return true;
+            }
+      const auto lo = std::prev(hi);
+      const double t = (m - lo->first) / double(hi->first - lo->first);
+      for (size_t i = 0; i < 3; ++i) {
+            const double a = std::isinf(lo->second[i]) ? 0.0 : std::pow(10.0, lo->second[i] / 20.0);
+            const double b = std::isinf(hi->second[i]) ? 0.0 : std::pow(10.0, hi->second[i] / 20.0);
+            const double g = a + (b - a) * t;
+            out[i] = g > 0.0 ? 20.0 * std::log10(g) : -INFINITY;
+            }
+      return true;
+      }
+
+double micLevelDb(const SoundLib::LibInstrument& patch, const SoundLib::Library& library, const std::array<double, 6>& faders)
+      {
+      if (!patch.hasMicLevels || library.micFader.empty())
+            return NAN;
+      std::array<double, 3> mix;
+      const bool mixed = faders[5] >= 0.0 && micMixDb(library, faders[5], mix);
+      double power = 0.0;
+      for (size_t i = 0; i < 5; ++i) {
+            if (std::isnan(patch.micLevelDb[i]))
+                  continue;
+            // (with Mic Mix Distance the mic values sent with it are not played: measured, sso_mic_levels.json)
+            double g;
+            if (mixed)
+                  g = i < 3 ? mix[i] : micFaderDb(library, patch.micDefault[i]);
+            else if (faders[i] >= 0.0)
+                  g = micFaderDb(library, faders[i]);
+            else
+                  g = micFaderDb(library, patch.micDefault[i]);
+            if (!std::isinf(g))
+                  power += std::pow(10.0, (patch.micLevelDb[i] + g) / 10.0);
+            }
+      return power > 0.0 ? 10.0 * std::log10(power) : NAN;
+      }
+
+double micOffsetDb(const SoundLib::LibInstrument& patch, const SoundLib::Library& library, const std::array<double, 6>& faders)
+      {
+      const double l = micLevelDb(patch, library, faders);
+      return std::isnan(l) ? 0.0 : -l;
       }
 
 bool hasRealRange(const SoundLib::LibInstrument* patch)
@@ -201,7 +331,7 @@ double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dyna
       }
 
 static std::map<const Part*, Volumes> compute(const MasterScore* score, const SoundLib::Library& library, bool context, int sectionMode,
-                                              const std::map<const Part*, double>& ranges);
+                                              const std::map<const Part*, double>& ranges, bool mics);
 
 // (realRangeTops renders the score, and the renderer reads the volumes: inside it, the volumes without the real range)
 static thread_local int rangePass = 0;
@@ -246,14 +376,16 @@ std::map<const Part*, Volumes> volumes(const MasterScore* score)
       const int sectionMode = sectionBalanceMode(score);
       const bool section = sectionMode > 0;
       const bool real = realRange(score) && !rangePass;
-      if (!context && !section && !real)
+      const bool mics = micCompensation(score) && !library->micFader.empty();
+      if (!context && !section && !real && !mics)
             return std::map<const Part*, Volumes>();
       const UndoStack* undo = score->undoStack();
       const QString key = QString("%1|%2|%3|%4|%5|%6|%7").arg(quintptr(library.get())).arg(SoundLib::routesGeneration())
                           .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
                           .arg(score->metaTag(Playback::metaTag)).arg(score->metaTag(PartPlaybackModes::metaTag))
                           + QString("|%1|%2|%3%4").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves())
-                          .arg(int(context)).arg(sectionMode) + QString("|%1").arg(int(real));
+                          .arg(int(context)).arg(sectionMode) + QString("|%1|%2").arg(int(real)).arg(int(mics))
+                          + (mics ? "|" + score->metaTag(PartControllers::metaTag) + "|" + score->metaTag(Automation::metaTag) : QString());
       static QMutex mutex;
       static std::map<const MasterScore*, std::pair<QString, std::map<const Part*, Volumes>>> cache;
       {
@@ -264,18 +396,56 @@ std::map<const Part*, Volumes> volumes(const MasterScore* score)
       }
       // (the real range's headroom renders the score, which reads the volumes again: not under the lock)
       const std::map<const Part*, double> ranges = real ? realRangeTops(score) : std::map<const Part*, double>();
-      if (!context && !section && ranges.empty())
+      if (!context && !section && ranges.empty() && !mics)
             return std::map<const Part*, Volumes>();
       QMutexLocker lock(&mutex);
       if (cache.size() > 16)
             cache.clear();
-      std::map<const Part*, Volumes> out = compute(score, *library, context, sectionMode, ranges);
+      std::map<const Part*, Volumes> out = compute(score, *library, context, sectionMode, ranges, mics);
       cache[score] = { key, out };
       return out;
       }
 
+// [levels] micCompensation: each part's patches' C (contextlevel.h › Mics), the largest over the part's notes when its mics
+// are automated; only those not 0
+static std::map<const Part*, std::map<const SoundLib::LibInstrument*, double>> micTops(
+      const MasterScore* score, const SoundLib::Library& library,
+      const std::map<const Part*, std::vector<const SoundLib::LibInstrument*>>& patches)
+      {
+      std::map<const Part*, std::map<const SoundLib::LibInstrument*, double>> out;
+      const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score);
+      const std::map<const Part*, Automation::PartLanes> lanes = Automation::read(score);
+      for (const auto& pp : patches) {
+            std::set<int> ticks;          // (the part's note starts, when automated)
+            for (const SoundLib::LibInstrument* p : pp.second) {
+                  if (!p->hasMicLevels)
+                        continue;
+                  const MicValues v = micValues(pp.first, *p, values, lanes);
+                  double top = micOffsetDb(*p, library, v.at(0));
+                  if (v.automated()) {
+                        if (ticks.empty()) {
+                              for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
+                                    for (int track = pp.first->startTrack(); track < pp.first->endTrack(); ++track) {
+                                          const Element* e = seg->element(track);
+                                          if (e && e->isChord())
+                                                ticks.insert(seg->tick().ticks());
+                                          }
+                              }
+                        if (!ticks.empty()) {
+                              top = -1e9;
+                              for (int t : ticks)
+                                    top = std::max(top, micOffsetDb(*p, library, v.at(t)));
+                              }
+                        }
+                  if (top != 0.0)
+                        out[pp.first][p] = top;
+                  }
+            }
+      return out;
+      }
+
 static std::map<const Part*, Volumes> compute(const MasterScore* score, const SoundLib::Library& library, bool context, int sectionMode,
-                                              const std::map<const Part*, double>& ranges)
+                                              const std::map<const Part*, double>& ranges, bool mics)
       {
       std::map<const Part*, Volumes> out;
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library);
@@ -290,7 +460,10 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
                   levels = levels || p->sectionLevelFor(sectionMode) != 0.0;
       const bool section = sectionMode > 0 && levels;
       const bool real = !ranges.empty();
-      if (!context && !section && !real)
+      const std::map<const Part*, std::map<const SoundLib::LibInstrument*, double>> micC
+            = mics ? micTops(score, library, patches) : std::map<const Part*, std::map<const SoundLib::LibInstrument*, double>>();
+      const bool mic = !micC.empty();
+      if (!context && !section && !real && !mic)
             return out;
       // the rule ([levels] context): the largest slur gain of each part with the articulation, and of the score (G)
       std::map<const Part*, double> partTop;
@@ -331,7 +504,7 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
                         }
                   }
             }
-      if (!section && !real) {
+      if (!section && !real && !mic) {
             // the rule alone: the score's largest gain G on every Performance patch, every other patch -S
             if (partTop.empty())
                   return out;
@@ -353,6 +526,14 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
       // text "performance" alone) T = S' + MAX_DB - O.
       // [levels] realRange: every patch of a part also its R louder (the part's largest realDb: its notes' CC11 play
       // realDb - R), within the same S' (T = min(G, S' + MAX_DB - O - R)). Section balance off: O = 0
+      // [levels] micCompensation: each patch's C too, as its section level
+      auto micOf = [&micC](const Part* part, const SoundLib::LibInstrument* p) {
+            auto m = micC.find(part);
+            if (m == micC.end())
+                  return 0.0;
+            auto c = m->second.find(p);
+            return c == m->second.end() ? 0.0 : c->second;
+            };
       auto levelOf = [section, sectionMode](const SoundLib::LibInstrument* p) { return section ? p->sectionLevelFor(sectionMode) : 0.0; };
       auto rangeOf = [&ranges](const Part* part) {
             auto r = ranges.find(part);
@@ -362,7 +543,7 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
       for (const auto& pp : patches) {
             auto t = partTop.find(pp.first);
             for (const SoundLib::LibInstrument* p : pp.second)
-                  loudest = std::max(loudest, levelOf(p) + rangeOf(pp.first) + (t != partTop.end() && has(p) ? t->second : 0.0));
+                  loudest = std::max(loudest, levelOf(p) + micOf(pp.first, p) + rangeOf(pp.first) + (t != partTop.end() && has(p) ? t->second : 0.0));
             }
       const double s = std::max(0.0, loudest - TrackDelays::MAX_DB);
       for (const auto& pp : patches) {
@@ -371,9 +552,12 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
             const bool rule = ruled.count(pp.first);
             for (const SoundLib::LibInstrument* p : pp.second)
                   if (rule && has(p))
-                        v.top = std::min(partTop.empty() ? 1e9 : top, s + TrackDelays::MAX_DB - levelOf(p) - v.range);
-            for (const SoundLib::LibInstrument* p : pp.second)
-                  v.patchDb[p->name] = levelOf(p) + v.range + (rule && has(p) ? v.top : 0.0) - s;
+                        v.top = std::min(partTop.empty() ? 1e9 : top, s + TrackDelays::MAX_DB - levelOf(p) - micOf(pp.first, p) - v.range);
+            for (const SoundLib::LibInstrument* p : pp.second) {
+                  v.patchDb[p->name] = levelOf(p) + micOf(pp.first, p) + v.range + (rule && has(p) ? v.top : 0.0) - s;
+                  if (micOf(pp.first, p) != 0.0)
+                        v.micTop[p->name] = micOf(pp.first, p);
+                  }
             out[pp.first] = v;
             }
       return out;

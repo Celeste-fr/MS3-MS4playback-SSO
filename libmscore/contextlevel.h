@@ -85,10 +85,32 @@
 //   slot hosted, the route set's and the plain set's Kontakt track Volume in Live), within the same S' as the level
 //   rule and the section balance (everything lower together past Live's Volume top, +6 dB). The CC11 values go through
 //   the renderer's per-note levels (libraryNoteLevels), so Live's clips and the plain set's CC11 lanes carry them.
+//
+//   Mics (playback setting [levels] micCompensation; the owner, 2026-10-15: changing a part's mics changes its tone and
+//   sense of space, never the balance): every level above is measured at the patch's default mix (SSO: the Tree alone
+//   at its full fader). A part whose mic Controllers (the plug-in parameters "Mic 1-5 level" and "Mic Mix Distance",
+//   partcontrollers.h, or their automation lanes) give another mix plays C = -(the new mix's level against the default)
+//   dB more, so the section stays at its balance:
+//       level = 10 log10 sum_i 10^((micLevel_i + fader(v_i)) / 10)
+//   micLevel_i the mic alone at its full fader against the default mix (<Instrument micLevels>), v_i its fader 0-127:
+//   the part's value, else the patch's default (<Instrument micDefault>); fader(v) the measured law (<Mics fader>). With
+//   Mic Mix Distance set the plug-in plays its mix whatever the mic values sent with it (measured: in one block, as a
+//   part's values go, SSO's script overrides them, Outrigger and Leader included): Close, Tree, Ambient by its law
+//   (<Mics mix>), Outrigger and Leader at their default. Mics add as powers (Kontakt sums their sample groups; measured: sso_mic_levels.json has the
+//   prediction's error). A mix in which no mic sounds is left silent (C = 0). The measure: the sustain's power (rmsDb,
+//   as the real range's longLevel), SSO's Long at CC1 64, median over three pitches.
+//   C goes where the section level goes: the patches' volumes (Volumes::patchDb, within the same S'), so with fixed
+//   values nothing else changes, in Live too (the Kontakt track's Volume). Automated mics change C over time: the
+//   volume carries the part's largest C over its notes (Volumes::micTop), each note plays its own C at its start less
+//   that by CC11 (the renderer's per-note levels: Live's clips and the plain set carry it); a note held through a mic
+//   change keeps its start's C.
 //---------------------------------------------------------
 
+#include <array>
 #include <map>
 #include <QString>
+#include "automation.h"
+#include "partcontrollers.h"
 
 namespace Ms {
 
@@ -132,8 +154,32 @@ double realFraction(double steps, double pp, double ff);
 // spans (realRange 2) where the patch has realSteps, the player's level steps(x) x S / 5 instead of the Meyer rule's
 double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch, bool spans = false);
 
+// whether [levels] micCompensation is on for the score
+bool micCompensation(const Score* score);
+// a part's mic faders for a patch (Mics above): Mic 1-5 and Mic Mix Distance, the part's Controllers values (-1: the
+// patch's own) and their automation lanes (a lane's value in force wins)
+struct MicValues {
+      std::array<int, 6> part { { -1, -1, -1, -1, -1, -1 } };
+      std::array<Automation::Lane, 6> lanes;
+      std::array<bool, 6> hasLane { { false, false, false, false, false, false } };
+      bool automated() const;
+      // the faders 0-127 at tick (-1: the patch's own)
+      std::array<double, 6> at(int tick) const;
+      };
+MicValues micValues(const Part* part, const SoundLib::LibInstrument& patch,
+                    const std::map<const Part*, PartControllers::Values>& values,
+                    const std::map<const Part*, Automation::PartLanes>& lanes);
+// a fader value's level against its full fader (<Mics fader>; -inf at 0)
+double micFaderDb(const SoundLib::Library& library, double fader);
+// the patch's level against its default mix with these faders (Mic 1-5, Mic Mix Distance; -1: the patch's own); NAN: no
+// mic sounds, or no data (the patch without micLevels, the library without <Mics>)
+double micLevelDb(const SoundLib::LibInstrument& patch, const SoundLib::Library& library, const std::array<double, 6>& faders);
+// the compensation C (-micLevelDb; 0 where that is NAN)
+double micOffsetDb(const SoundLib::LibInstrument& patch, const SoundLib::Library& library, const std::array<double, 6>& faders);
+
 struct Volumes {
       std::map<QString, double> patchDb;    // patch -> its volume in dB (P or -S; section balance: O (+ the part's G) - S'; real range: + R)
+      std::map<QString, double> micTop;     // [levels] micCompensation: patch -> its largest C over the part's notes (in patchDb)
       double top { 0.0 };                   // G (section balance: min(G, S' + MAX_DB - O - R))
       double range { 0.0 };                 // R: the real range's headroom (its notes' CC11 play realDb less it)
       };

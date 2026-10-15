@@ -308,6 +308,17 @@ switch value of each articulation. For example:
     it, the markings in equal steps of S / 5 around mp, ppp / fff one step more, in place of `realPlay`'s fractions
     (Clark & Luce 1965, Table I; the bass clarinet, contrabassoon and bass trombones their family's, an assumption).
     Must be above 0.
+  - `micLevels` and `micDefault` on an `Instrument`, `<Mics fader mix>` (top level): with playback setting
+    `[levels] micCompensation`, a part whose mic controllers (the plug-in parameters `Mic 1-5 level`, `Mic Mix
+    Distance`: Controllers values or automation lanes) give another mix than the patch's default plays as loud as the
+    default mix, by its patches' volumes (`libmscore/contextlevel.h` › Mics). `micLevels="Close:dB Tree:dB Ambient:dB
+    Outrigger:dB Leader:dB"`: each mic (Mic 1-5) alone at its full fader against the default mix; `micDefault="Tree:127"`:
+    the default faders 0-127 (a mic not listed 0); a `with` patch without its own takes its main's. `<Mics
+    fader="value:dB …" mix="value:close/tree/ambient …"/>`: a mic's level at a fader value against 127 (0 silent; linear
+    in dB between the values, in amplitude below the first) and what Mic Mix Distance sets Close, Tree and Ambient to,
+    each against its full fader (`-` silent; linear in amplitude between the values); with Mic Mix Distance set the mic
+    values are not played (SSO's script overrides them), Outrigger and Leader stay at their default. The level of a mix: the mics' powers added. SSO's measured on the VM (`tools/soundlibraries/mic_levels.py`
+    -> `sso_mic_levels.json` -> `gen_spitfire_sso.py`).
 
   ```xml
   <Onset early="100"/>

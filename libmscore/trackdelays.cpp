@@ -113,6 +113,7 @@ std::map<const Part*, Delays> read(const MasterScore* score)
             d.rule = v.second.patchDb;
             d.ruleTop = v.second.top;
             d.rangeTop = v.second.range;
+            d.micTop = v.second.micTop;
             }
       // [levels] evenLevels: each patch's largest correction on its volume, its notes that much lower; the rest that
       // doesn't fit under MAX_DB lowers every library patch of the score alike (evenAll)
