@@ -255,6 +255,10 @@ SPITFIRE_ADD['Grand Piano'] = [('Direct', 1, ALL, ''), ('Tape', 2, '', '')]
 # Roll, Roll Muted, Swell mf, Swell f, keyswitches marked from C-2), to be confirmed by it.
 KEYSCAN = {'Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraphone', 'Crotales',
            'Tubular Bells', 'Desk Bells'}
+# Keys that sound an octave off the MIDI number (<Instrument keyShift>, semitones added to the key sent): the timpani's
+# zones span keys 46 .. 74; key 50 sounds 72.8 Hz = D2, key 62 146.5 Hz = D3 (f0 of kthost renders on the Windows VM,
+# Kontakt Player 8.13.1 + SSO, 2026-10-15, sso_percussion_levels.json), so a written D2 (38) goes on key 50.
+KEY_SHIFT = {'Timpani': 12}
 KEYSWITCHED = {'Timpani', 'Celeste', 'Glockenspiel', 'Marimba', 'Vibraphone', 'Tubular Bells'}
 # one sound, no technique list in their window: nothing to switch
 UNSWITCHED = {'Xylophone', 'Crotales', 'Desk Bells'}
@@ -458,6 +462,7 @@ for bank,name,ids,pn in I:
     attrs=f'name={q(name)} ids={q(ids)}'
     if pn: attrs+=f' partName={q(pn)}'
     if name in KEYSCAN: attrs+=' keyScan="1"'
+    if name in KEY_SHIFT: attrs+=f' keyShift="{KEY_SHIFT[name]}"'
     out.append(f'  <Instrument {attrs}>')
     if name in KEYSWITCHED:
         out.append('    <Switch type="keyswitch"/>')

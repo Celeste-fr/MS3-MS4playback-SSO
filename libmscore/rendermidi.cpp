@@ -1880,6 +1880,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     realRangeLevel(note, libChoice, libNote.velocity, r, level);
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
+                                    // a patch whose keys sound an octave off (SSO's timpani): the key sent is shifted
+                                    if (libChoice.patch >= 0 && libPatches[libChoice.patch]->keyShift != 0)
+                                          libNote.key = qBound(0, note->ppitch() + libPatches[libChoice.patch]->keyShift, 127);
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
                                           LibTrace& t = libTrace->back();
                                           t.velocity = libNote.velocity;
@@ -2111,6 +2114,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     realRangeLevel(note, libChoice, libNote.velocity, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
+                                    // a patch whose keys sound an octave off (SSO's timpani): the key sent is shifted
+                                    if (libChoice.patch >= 0 && libPatches[libChoice.patch]->keyShift != 0)
+                                          libNote.key = qBound(0, note->ppitch() + pitchOffset + libPatches[libChoice.patch]->keyShift, 127);
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {

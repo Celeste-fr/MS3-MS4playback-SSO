@@ -990,7 +990,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Timpani" ids="timpani" keyScan="1" nki="Instruments/Symphonic Percussion/Tuned - Timpani.nki" pitch="60" bend="195.2" micLevels="Tree:0 Ambient:-0.58" micDefault="Tree:127">
+  <Instrument name="Timpani" ids="timpani" keyScan="1" keyShift="12" nki="Instruments/Symphonic Percussion/Tuned - Timpani.nki" pitch="60" bend="195.2" micLevels="Tree:0 Ambient:-0.58" micDefault="Tree:127">
     <Switch type="keyswitch"/>
     <Articulation name="Timpani" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
     <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>

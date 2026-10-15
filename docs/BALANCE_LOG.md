@@ -174,8 +174,12 @@ is unknown by a whole step (about 7 dB), more than the +1.65 correction; the mea
 **Before -> after**: Harp none -> -10.41. Every other patch unchanged.
 
 **Found on the way, not a balance matter.** SSO's timpani keys sound an octave under their MIDI number: a written D2
-(MIDI 38) goes to a key SSO leaves silent (keys 42 .. 45 measured silent; 46 is the lowest that sounds). Not checked
-further here.
+(MIDI 38) goes to a key SSO leaves silent (keys 42 .. 45 measured silent; 46 is the lowest that sounds). **Fixed
+2026-10-15** (`<Instrument keyShift="12">` on the Timpani, the generator's `KEY_SHIFT`; the key sent is the written pitch
++ 12, note-on and note-off, Live's clips and the plain set follow): the existing f0 reads agree key by key (keys 50 / 55 /
+58 / 62 sound 72.8 / 99 / 115.6 / 146.5 Hz = D2 / G2 / Bb2 / D3, i.e. 12 semitones under the number; the other keys'
+peaks were a fifth-up partial), and a fresh kthost render on the VM (Kontakt Player 8.13.1 + SSO, velocity 80, two takes
+each) gave key 50 73.2 / 73.0 Hz (D2 73.4) and key 57 109.2 / 109.2 Hz (A2 110), so a written D2 and A2 now land on them.
 
 ## Iteration 7 (2026-10-15): the percussion section against Skaalevik 2019, no change
 

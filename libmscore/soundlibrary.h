@@ -247,6 +247,10 @@ struct LibInstrument {
       // the score did not ask for) is sent 126. A correctness fix of the map, not an adjustment: set in every
       // preset, for every library event (so in Live's clips and the plain set too). 127: none
       int maxVelocity { 127 };
+      // semitones added to a note's MIDI pitch to get the key sent to the patch (<Instrument keyShift>): SSO's timpani
+      // sound an octave under their key (key 50 = 72.8 Hz = D2, measured 2026-10-15), so a written D2 (38) is sent on
+      // key 50 (keyShift 12). Only the key sent: pitch tables, tuning and bends stay by the written pitch. 0: none
+      int keyShift { 0 };
       // [levels] sectionBalance (contextlevel.h): every patch of the section plays this many dB louder, by its volume
       // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's M,
       // 2026-10-11, mp by the Meyer rule since 2026-10-14; SSO's woodwinds and brass too since then, on the strings'

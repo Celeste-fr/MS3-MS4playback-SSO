@@ -143,6 +143,7 @@ class TestSoundLibrary : public QObject, public MTest
       void playbackPresets();
       void renderKit();
       void renderKitMaxVelocity();
+      void keyShift();
       void renderKitRoll();
       void controllers();
       void liveControllers();
@@ -4585,6 +4586,49 @@ void TestSoundLibrary::renderKitMaxVelocity()
       limited.sort();
       QCOMPARE(limited, QStringList({ "Anvil", "Cymbal Hi", "Cymbal Lo", "Cymbal Med", "Mark Tree", "Mini Anvil", "Rain Sheet",
                                       "Rivet Cymbal", "Tam Tam", "Trash Metals", "Triangle 1", "Triangle 2", "Wind Gong" }));
+      }
+
+//---------------------------------------------------------
+//   keyShift
+//    <Instrument keyShift> (SSO's timpani keys sound an octave under their number: key 50 = 72.8 Hz = D2): a written
+//    D2 (38) is sent on key 50 and A2 (45) on key 57, each note-off on the same key; a patch without it sends the
+//    written pitch; the shipped map shifts the Timpani by 12 and no other patch
+//---------------------------------------------------------
+
+void TestSoundLibrary::keyShift()
+      {
+      for (int shift : { 12, 0 }) {
+            auto lib = loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Timpani' ids='timpani' keyShift='%1'><Switch type='keyswitch'/>"
+               "<Articulation name='Timpani' value='0' techniques='long short'/></Instrument>"
+               "</SoundLibrary>").arg(shift));
+            QVERIFY(lib);
+            SoundLib::setCurrent(lib);
+            MasterScore* score = readScore(DIR + "timpani.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<int> ons, offs;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.type() != ME_NOTEON || !ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  (ev.velo() > 0 ? ons : offs).push_back(ev.pitch());
+                  }
+            QCOMPARE(ons, std::vector<int>({ 38 + shift, 45 + shift }));
+            QCOMPARE(offs, ons);
+            delete score;
+            }
+      SoundLib::setCurrent(nullptr);
+
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      for (const SoundLib::LibInstrument& li : sso->instruments)
+            QCOMPARE(li.keyShift, li.name == "Timpani" ? 12 : 0);
       }
 
 //---------------------------------------------------------

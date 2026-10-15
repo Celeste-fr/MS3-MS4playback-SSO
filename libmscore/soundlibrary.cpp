@@ -716,6 +716,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.kit = a.value("kit").toString() == "1";
                   li.keyScan = a.value("keyScan").toString() == "1";
                   li.bendCents = std::max(0.0, a.value("bend").toDouble());
+                  if (a.hasAttribute("keyShift"))
+                        li.keyShift = qBound(-48, a.value("keyShift").toInt(), 48);
                   if (a.hasAttribute("maxVelocity"))
                         li.maxVelocity = qBound(1, a.value("maxVelocity").toInt(), 127);
                   li.sectionLevelDb = a.value("sectionLevel").toDouble();

@@ -276,6 +276,12 @@ switch value of each articulation. For example:
     heard reaches the tuning at the arrival: the note before's tuning until the leave, one value from the leave to
     the arrival (from where the heard bend is: (target - heard e) / (1 - e), e = exp(-(arrive - leave) / tau)),
     then the tuning. Left out: the glide is sent as the straight path itself.
+  - `keyShift` on an `Instrument` (semitones, -48 .. 48, left out: 0): added to a note's MIDI pitch to get the key
+    sent to the patch, for a patch whose keys sound off their number. SSO's timpani sound an octave under it (key 50
+    = 72.8 Hz = D2; its keys 46 .. 74 all sound 12 semitones down), so it says `keyShift="12"` (the
+    generator's `KEY_SHIFT`): a written D2 (38) goes on key 50. Only the key sent shifts (note-on and note-off, so
+    Live's clips and the plain set too); the keyswitches, pitch tables, tunings and bends stay by the written pitch.
+    A correctness fix of the map, not a playback adjustment.
   - `maxVelocity` on an `Instrument` (1-127, left out: 127): the loudest velocity MuseScore sends to the patch;
     a louder note-on is sent at this. For a patch whose own script turns the top velocity into a different
     sound: SSO's percussion script (Kickstart) plays velocity 127 as a roll where its option "Roll on high
