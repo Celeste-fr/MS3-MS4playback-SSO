@@ -4,7 +4,8 @@
 
     python3 -I section_balance_cl.py <clark_luce_levels.json> <clark_luce_table2.json> <sso_cc1_curves.json>
                                      <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <sso_sound_dynamics.json>
-                                     <sso_gap_cc1_curves.json> <out sso_cl_section_balance.json>
+                                     <sso_gap_cc1_curves.json> <3_Audio_Features.csv> <tu_directivity.json | ->
+                                     <tu_decaying.json> <sso_percussion_levels.json> <out sso_cl_section_balance.json>
 
 The owner, 2026-10-14: "I prefer all the balance levels and the dynamic levels loudness to be based on real data".
 Real side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in
@@ -21,8 +22,32 @@ The French horn (since 2026-10-15, docs/BALANCE_LOG.md): Fig. 2's horn is not th
 other instrument's is) and follows player 2, whose levels are 20 .. 40 dB under player 1's; its pp / mf are player 1's
 (clark_luce_table2.py: Table II, the same mean as Fig. 2's), mp from them as above; no ff (player 1 played none).
 Each player counted once (since 2026-10-15, iteration 3): Fig. 2 + clark_luce_table2.json's playerWeight.
-Patches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2): their family member's
-change from sectionLevel to sectionLevel2 added to their sectionLevel (FAMILY: an assumption, "plays like its family").
+Directivity by dynamic (since 2026-10-15, iteration 5, docs/BALANCE_LOG.md; with tu_directivity.json, "-": ff's for
+every marking as before): each marking's own DI in the same direction, the receiver loudest at ff (Clark & Luce kept one
+microphone direction per instrument): pp's DI at pp, ff's at ff, mf's linear in dB between them at mf's place on the
+instrument's Table I span ((mf - pp) / S); mp from the markings' Lw as before.
+Patches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2; since 2026-10-15,
+iteration 6, docs/BALANCE_LOG.md): their sibling's Clark & Luce levels plus the TU Berlin database's difference between
+the two instruments' sound power at mp (each placed between its own pp and ff as sectionLevel places it,
+section_balance_winds.py mpFrac), averaged over the semitones both played (SIBLING_TU, "tuRatio": one source's ratio,
+measured the same way for both, not an assumption). Before: the family member's change from sectionLevel to
+sectionLevel2 added to their sectionLevel (an assumption, "plays like its family").
+Decaying instruments (since 2026-10-15, iteration 6, docs/BALANCE_LOG.md): the harp from TU Berlin's sound power on the
+Clark & Luce scale. TU's measure for a decaying tone is the fast-weighted (125 ms) pressure squared averaged over the
+whole recording (tu_transient.py: it reproduces the CSV's harp values within 0.005 dB), so per note the energy (that
+level x the recording's length) is window-free; SSO's harp (sso_percussion_levels.json) at mp's velocity 64 the same
+energy over the same span after the note-on as TU's recording after its onset; TU's mp by rule D between its pp and ff
+(sectionLevel's placement for an instrument Meyer has no figures for), D = SSO - TU averaged over SSO's measured pitches.
+TU to Clark & Luce: M2 = median over OFFSET_SET of (M2 + sectionLevel's D, sso_winds_section_balance.json) - D: the nine
+solo winds with a Clark & Luce instrument of their own (single players like the harp; TU against Clark & Luce agrees
+better there, RMS 3.6 dB, than over every patch with both, 4.3; the patches whose real side comes from TU, SIBLING_TU,
+are left out). Uncertainty about +-4 dB. The timpani are computed the same way ("decayingNotApplied") but not applied:
+TU's D2 series are "6 dynamics" without markings, so mp's place (step 3 of 6, if pp .. ff) is unknown by a whole step
+(about 7 dB), more than the correction.
+Percussion group check (iteration 7, "percussionGroup", not applied): SSO's six-player section (Timpani at key 50 = D2,
+Bass Drum, Piatti, Snare 1, Tam Tam, Triangle 1, each one hit at mf's velocity 80) energetically summed against the string
+family (the five sections' Long at CC1 64, loudDb as above, + their M2) by the 50 ms peak and by the energy over 1 s and
+the whole ring; Skaalevik 2019's percussion re strings -8 .. -2 dB (median -3.5): a group offset only outside that range.
 Patches without sectionLevel (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 2; before, they played SSO's own level
 against an orchestra whose levels are all corrected): GAP. Real side: their Clark & Luce instrument (the solo strings,
 the Motif brass) or a family member's (an assumption: Piccolo, Alto / Bass Flute by the flute, Contrabass Clarinet by
@@ -37,14 +62,28 @@ without: which sections sound at each pitch isn't known.
 import json
 import math
 import statistics
+import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import section_balance_winds as sbw  # noqa: E402
 
 STRINGS = {'Violins 1': ('Violin', 16), 'Violins 2': ('Violin', 14), 'Violas': ('Viola', 12), 'Celli': ('Cello', 10),
            'Basses': ('Double bass', 8)}
 CL = [('flute', 'Flute'), ('oboe', 'Oboe'), ('cor anglais', 'English horn'), ('clarinet', 'Clarinet'),
       ('bassoon', 'Bassoon'), ('horn', 'French horn'), ('trumpet', 'Trumpet'), ('trombone', 'Trombone'), ('tuba', 'Tuba')]
-FAMILY = {'Bass Clarinet': 'Clarinet Solo', 'Contrabassoon': 'Bassoon Solo', 'Bass Trombone Solo': 'Tenor Trombone Solo',
-          'Bass Trombones a2': 'Tenor Trombones a2'}
+# patch: (its TU database instrument, its sibling's) for the tuRatio; the Clark & Luce instrument is the sibling's
+OFFSET_SET = ['Flute Solo', 'Oboe Solo', 'Cor Anglais', 'Clarinet Solo', 'Bassoon Solo', 'Horn Solo', 'Trumpet Solo',
+              'Tenor Trombone Solo', 'Tuba Solo']
+GROUP = [('Timpani', 50), ('Bass Drum', 48), ('Piatti', 48), ('Snare 1', 48), ('Tam Tam', 48), ('Triangle 1', 48)]
+SKAALEVIK = {'re strings': [-8, -4, -2, -3], 'columns': ['quiet', 'average', 'loud sessions', 'forte passages'],
+             'source': 'Skaalevik 2019, slide 19 (review page https://claude.ai/artifact/JKYSTkAFHEv4hjZviRhCEn): '
+                       'family totals re the whole orchestra, strings (50) -3 / -4 / -4 / -8, percussion (6) -11 / -8 / '
+                       '-6 / -11'}
+SIBLING_TU = {'Bass Clarinet': ('Bass clarinet modern', 'Clarinet modern'),
+              'Contrabassoon': ('Contrabassoon modern', 'Bassoon modern'),
+              'Bass Trombone Solo': ('Bass trombone modern', 'Tenor trombone modern'),
+              'Bass Trombones a2': ('Bass trombone modern', 'Tenor trombone modern')}
 # patch: (Clark & Luce instrument, players, family assumption)
 GAP = {'Solo Violin 1': ('Violin', 1, False), 'Solo Violin 2': ('Violin', 1, False), 'Solo Viola': ('Viola', 1, False),
        'Solo Cello': ('Cello', 1, False), 'Motif Horns a4': ('French horn', 4, False), 'Motif Trumpets a3': ('Trumpet', 3, False),
@@ -62,8 +101,6 @@ def players(name):
 
 
 def instrument(name):
-    if name in FAMILY:
-        return None
     n = name.lower()
     return next((inst for key, inst in CL if key in n), None)
 
@@ -86,19 +123,113 @@ def at64(section):
             if pt['cc'] == 64 and pt.get('loudDb') is not None}
 
 
-def lw(levels, inst, table2):
+def lw(levels, inst, table2, di=None):
     """one player's sound power (dB re 1 pW) at pp / mp / mf / ff (the horn: player 1's pp / mf, no ff); Fig. 2 with
-    each player counted once (table2's playerWeight)"""
+    each player counted once (table2's playerWeight); di: {TU label: {'pp': DI, 'ff': DI}} (each marking's own DI), else
+    diMax (ff's) for every marking"""
     v = levels[inst]
     t = table2.get(inst)
     w = table2.get('playerWeight', {}).get(inst, {})
     lp = {'pp': t['pp'], 'mf': t['mf']} if t else {m: v[m] + w.get(m, 0.0) for m in ('pp', 'mf', 'ff')}
-    lp['mp'] = lp['pp'] + 2 / 3 * (lp['mf'] - lp['pp'])
-    return {d: x + 20 * math.log10(10) + 11 - v['diMax'] for d, x in lp.items()}
+    d = di.get(v['tu']) if di else None
+    if d:
+        dis = {'pp': d['pp'], 'ff': d['ff'], 'mf': d['pp'] + (lp['mf'] - lp['pp']) / v['tableI'] * (d['ff'] - d['pp'])}
+    else:
+        dis = {m: v['diMax'] for m in ('pp', 'mf', 'ff')}
+    out = {m: x + 20 * math.log10(10) + 11 - dis[m] for m, x in lp.items()}
+    out['mp'] = out['pp'] + 2 / 3 * (out['mf'] - out['pp'])
+    return out
+
+
+def tuRatio(power, lab, sib):
+    """the TU database's sound power of lab less sib's, at mp (sectionLevel's placement) and at pp / ff, averaged over
+    the semitones both played at both dynamics"""
+    a, b = power[lab], power[sib]
+    lo = max(min(a['pp']), min(a['ff']), min(b['pp']), min(b['ff']))
+    hi = min(max(a['pp']), max(a['ff']), max(b['pp']), max(b['ff']))
+    fa, fb = sbw.mpFrac(lab), sbw.mpFrac(sib)
+    mp = lambda t, f, p: interp(t['pp'], p) + f * (interp(t['ff'], p) - interp(t['pp'], p))
+    ps = range(lo, hi + 1)
+    out = {'mp': sum(mp(a, fa, p) - mp(b, fb, p) for p in ps) / len(ps)}
+    for dyn in ('pp', 'ff'):
+        out[dyn] = sum(interp(a[dyn], p) - interp(b[dyn], p) for p in ps) / len(ps)
+    out = {k: round(v, 2) for k, v in out.items()}
+    out.update({'common': [lo, hi], 'mpFrac': [round(fa, 4), round(fb, 4)], 'instrument': lab, 'sibling': sib})
+    return out
+
+
+def psum(xs):
+    return 10 * math.log10(sum(10 ** (x / 10) for x in xs))
+
+
+def energyAt(note, cumT, w):
+    return note['cumE'][min(range(len(cumT)), key=lambda j: abs(cumT[j] - w))]
+
+
+def decaying(tuD, perc, out, balance):
+    """(harp entry, timpani entry): the decaying instruments on the Clark & Luce scale"""
+    dtu = {k: v['D'] for k, v in balance['instruments'].items()}
+    x = [out['patches'][n]['M2'] + dtu[n] for n in OFFSET_SET]
+    off = statistics.median(x)
+    res = [v - off for v in x]
+    offset = {'value': round(off, 2), 'set': OFFSET_SET, 'rms': round((sum(r * r for r in res) / len(res)) ** 0.5, 2),
+              'max': round(max(map(abs, res)), 2)}
+    harp, cumT = perc['patches']['Harp']['notes'], perc['patches']['Harp']['cumT']
+    tu = {int(k): v for k, v in tuD['harp'].items() if 'pp' in v and 'ff' in v}
+    frac = sbw.mpFrac('Double action harp modern')
+    rows = []
+    for p in sorted({n['pitch'] for n in harp}):
+        k = min(tu, key=lambda q: abs(q - p))
+        if abs(k - p) > 1:
+            continue
+        t = tu[k]
+        w = statistics.mean(t[d]['lengthS'] - t[d]['onsetS'] for d in ('pp', 'ff'))
+        e = statistics.median(energyAt(n, cumT, w) for n in harp if n['pitch'] == p and n['velocity'] == 64)
+        mp = t['pp']['energy'] + frac * (t['ff']['energy'] - t['pp']['energy'])
+        rows.append({'pitch': p, 'tuPitch': k, 'windowS': round(w, 2), 'sso': round(e, 2), 'tuMp': round(mp, 2),
+                     'd': round(e - mp, 2)})
+    d = statistics.mean(r['d'] for r in rows)
+    h = {'M2': round(off - d, 2), 'M1': None, 'instrument': 'Double action harp modern (TU Berlin)', 'players': 1,
+         'D': round(d, 2), 'dPitchSd': round(statistics.pstdev(r['d'] for r in rows), 2), 'mpFrac': round(frac, 4),
+         'pitches': rows, 'offset': offset, 'uncertaintyDb': 'about +-4 (the offset\'s RMS 3.6, the pitches\' SD / sqrt(n), '
+                                                              'mp placed by rule D)'}
+    tim, cumT = perc['patches']['Timpani']['notes'], perc['patches']['Timpani']['cumT']
+    steps = [v for k, v in tuD['timpani'].items() if '6 dynamics' in v['description'] and k.endswith('_03')]
+    w = min(statistics.mean(v['lengthS'] - v['onsetS'] for v in steps), cumT[-1])
+    e = statistics.median(energyAt(n, cumT, w) for n in tim if n['pitch'] == 50 and n['velocity'] == 64)
+    mp = statistics.mean(v['energy'] for v in steps)
+    t = {'M2': round(off - (e - mp), 2), 'D': round(e - mp, 2), 'tuMp': round(mp, 2),
+         'tuSeries': [v['energy'] for v in steps], 'sso': round(e, 2), 'key': 50, 'windowS': round(w, 2),
+         'why': 'not applied: TU\'s six steps carry no markings; step 3 as mp is a guess worth a whole step (about 7 dB)'}
+    return h, t
+
+
+def group(perc, strings):
+    """the percussion group against the string family, by three measures (not applied)"""
+    out = {'velocity': 80, 'stringsFamilyLoudDb': round(psum(strings.values()), 2), 'skaalevik': SKAALEVIK, 'hits': {}}
+    for name, key in GROUP:
+        ns = [n for n in perc['patches'][name]['notes'] if n['pitch'] == key and n['velocity'] == 80]
+        cumT = perc['patches'][name]['cumT']
+        out['hits'][name] = {'peak': statistics.median(n['loudDb'] for n in ns),
+                             'energy1s': statistics.median(energyAt(n, cumT, 1.0) for n in ns),
+                             'energyRing': statistics.median(n['cumE'][-1] for n in ns)}
+    fam = out['stringsFamilyLoudDb']
+    for m in ('peak', 'energy1s', 'energyRing'):
+        out[m + 'ReStrings'] = round(psum(v[m] for v in out['hits'].values()) - fam, 2)
+    lo, hi = min(SKAALEVIK['re strings']), max(SKAALEVIK['re strings'])
+    out['decision'] = ('no change: the energy (Skaalevik\'s are Leq, energy) within %d .. %d' % (lo, hi)
+                       if lo <= out['energy1s' + 'ReStrings'] <= hi else 'outside: an offset is due')
+    return out
 
 
 def main():
-    levelsPath, table2Path, curvesPath, windsPath, balancePath, dynamicsPath, gapPath, outPath = sys.argv[1:9]
+    (levelsPath, table2Path, curvesPath, windsPath, balancePath, dynamicsPath, gapPath, csvPath, diPath, tuDecayPath,
+     percPath, outPath) = sys.argv[1:13]
+    power = sbw.power(csvPath)
+    di = None
+    if diPath != '-':
+        di = {k: {'pp': v['diPp'], 'ff': v['diFf']} for k, v in json.load(open(diPath, encoding='utf-8'))['instruments'].items()}
+    ratio = {name: tuRatio(power, *labs) for name, labs in SIBLING_TU.items()}
     gap = json.load(open(gapPath, encoding='utf-8'))['sections']
     dynamics = json.load(open(dynamicsPath, encoding='utf-8'))
     levels = json.load(open(levelsPath, encoding='utf-8'))['levels']
@@ -118,11 +249,12 @@ def main():
         lo, hi = b['common']
         sso = at64(curve)
         sso64[name] = sum(interp(sso, p) for p in range(lo, hi + 1)) / (hi - lo + 1)
-        real[name] = {k: x + 10 * math.log10(n) for k, x in lw(levels, inst, table2).items()}
+        add = ratio[name]['mp'] if name in ratio else 0.0
+        real[name] = {k: x + 10 * math.log10(n) + add for k, x in lw(levels, inst, table2, di).items()}
         d[name] = sso64[name] - real[name]['mp']
     centre = sum(d[s] for s in STRINGS) / len(STRINGS)
     check = lambda name: dict(dynamics[name]['Long']['curve'])[64]
-    both = [name for name in sso64 if 'Long' in dynamics.get(name, {})]
+    both = [name for name in sso64 if 'Long' in dynamics.get(name, {}) and name not in ratio]
     standIn = statistics.median(sso64[name] - check(name) for name in both)
     err = [check(name) + standIn - sso64[name] for name in both]
     out = {'method': __doc__.strip().split('\n\n', 1)[1], 'patches': {}}
@@ -131,15 +263,12 @@ def main():
             m = -(d[name] - centre)
             out['patches'][name] = {'M2': round(m, 2), 'M1': b['M'], 'instrument': inst, 'players': n,
                                     'lw': {k: round(x, 2) for k, x in real[name].items()}}
-    for name, fam in FAMILY.items():
-        if name in patches:
-            f = out['patches'][fam]
-            out['patches'][name] = {'M2': round(patches[name][3]['M'] + f['M2'] - f['M1'], 2), 'M1': patches[name][3]['M'],
-                                    'instrument': None, 'family': fam, 'players': players(name)}
+            if name in ratio:
+                out['patches'][name]['tuRatio'] = ratio[name]
     out['standIn'] = {'db': round(standIn, 2), 'patches': len(both), 'sd': round(statistics.pstdev(err), 2),
                       'max': round(max(map(abs, err)), 2)}
     for name, (inst, n, family) in GAP.items():
-        r = {k: x + 10 * math.log10(n) for k, x in lw(levels, inst, table2).items()}
+        r = {k: x + 10 * math.log10(n) for k, x in lw(levels, inst, table2, di).items()}
         sso = at64(gap[name])
         lo, hi = min(sso), max(sso)
         mean = sum(interp(sso, p) for p in range(lo, hi + 1)) / (hi - lo + 1)
@@ -147,13 +276,25 @@ def main():
                                 'players': n, 'familyAssumption': family, 'sso': 'sweep, pitches %d-%d' % (lo, hi),
                                 'standInM2': round(-(check(name) + standIn - r['mp'] - centre), 2),
                                 'lw': {k: round(x, 2) for k, x in r.items()}}
+    tuD = json.load(open(tuDecayPath, encoding='utf-8'))
+    perc = json.load(open(percPath, encoding='utf-8'))
+    out['patches']['Harp'], out['decayingNotApplied'] = decaying(tuD, perc, out, balance)
+    out['decayingNotApplied'] = {'Timpani': out['decayingNotApplied']}
+    out['percussionGroup'] = group(perc, {s: sso64[s] + out['patches'][s]['M2'] for s in STRINGS})
     with open(outPath, 'w', encoding='utf-8') as fh:
         json.dump(out, fh, indent=1)
         fh.write('\n')
     for name, v in out['patches'].items():
         print('%-22s M1 %6s -> M2 %+6.2f%s' % (name, '%+.2f' % v['M1'] if v['M1'] is not None else '-', v['M2'],
-                                                '  (family: %s)' % v['family'] if v.get('family') else
+                                                '  (TU ratio to %s: %+.2f at mp, %+.2f pp, %+.2f ff)' % (
+                                                    v['tuRatio']['sibling'], v['tuRatio']['mp'], v['tuRatio']['pp'],
+                                                    v['tuRatio']['ff']) if v.get('tuRatio') else
                                                 '  (family assumption: %s)' % v['instrument'] if v.get('familyAssumption') else ''))
+    h, t, g = out['patches']['Harp'], out['decayingNotApplied']['Timpani'], out['percussionGroup']
+    print('harp D %+.2f (pitch SD %.2f), offset %.2f (rms %.2f) -> M2 %+.2f; timpani (not applied) M2 %+.2f' % (
+        h['D'], h['dPitchSd'], h['offset']['value'], h['offset']['rms'], h['M2'], t['M2']))
+    print('percussion group re strings: peak %+.2f, energy 1 s %+.2f, ring %+.2f: %s' % (
+        g['peakReStrings'], g['energy1sReStrings'], g['energyRingReStrings'], g['decision']))
     print('stand-in: %+.2f dB, SD %.2f, max %.2f over %d patches' % (standIn, out['standIn']['sd'], out['standIn']['max'], len(both)))
 
 

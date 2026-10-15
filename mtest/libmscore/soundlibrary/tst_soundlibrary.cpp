@@ -2798,17 +2798,17 @@ void TestSoundLibrary::levelSectionBalance()
       const std::map<QString, double> M2 { { "Violins 1", -0.13 }, { "Violins 2", 1.02 }, { "Violas", -7.03 },
                  { "Celli", 2.69 }, { "Basses", 3.45 }, { "Flute Solo", -2.72 }, { "Flutes a2", -4.55 },
                  { "Oboe Solo", -6.62 }, { "Oboes a2", -8.99 }, { "Cor Anglais", -2.89 }, { "Clarinet Solo", -3.40 },
-                 { "Clarinets a2", -5.35 }, { "Bassoon Solo", -15.14 }, { "Bassoons a2", -2.66 }, { "Horn Solo", -2.92 },
-                 { "Horns a2", 3.68 }, { "Horns a6", 7.46 }, { "Trumpet Solo", 8.26 }, { "Trumpets a2", 13.47 },
-                 { "Trumpets a6", 19.67 }, { "Tenor Trombone Solo", -2.12 }, { "Tenor Trombones a2", 4.55 },
-                 { "Trombones a6", 14.23 }, { "Tuba Solo", -2.36 }, { "Bass Clarinet", -5.63 }, { "Contrabassoon", -15.52 },
-                 { "Bass Trombone Solo", -0.12 }, { "Bass Trombones a2", 3.44 }, { "Solo Violin 1", -0.10 },
-                 { "Solo Violin 2", -0.33 }, { "Solo Viola", -3.64 }, { "Solo Cello", 3.71 }, { "Motif Horns a4", 9.33 },
-                 { "Motif Trumpets a3", 12.79 }, { "Motif Trombones a5", 6.52 }, { "Piccolo", -4.95 },
-                 { "Alto Flute", 1.24 }, { "Bass Flute", -3.58 }, { "Contrabass Clarinet", -1.38 },
+                 { "Clarinets a2", -5.35 }, { "Bass Clarinet", -0.24 }, { "Bassoon Solo", -15.14 },
+                 { "Bassoons a2", -2.66 }, { "Contrabassoon", -14.70 }, { "Horn Solo", -2.92 }, { "Horns a2", 3.68 },
+                 { "Horns a6", 7.46 }, { "Trumpet Solo", 8.26 }, { "Trumpets a2", 13.47 }, { "Trumpets a6", 19.67 },
+                 { "Tenor Trombone Solo", -2.12 }, { "Tenor Trombones a2", 4.55 }, { "Trombones a6", 14.23 },
+                 { "Bass Trombone Solo", 1.48 }, { "Bass Trombones a2", 5.03 }, { "Tuba Solo", -2.36 },
+                 { "Solo Violin 1", -0.10 }, { "Solo Violin 2", -0.33 }, { "Solo Viola", -3.64 }, { "Solo Cello", 3.71 },
+                 { "Motif Horns a4", 9.33 }, { "Motif Trumpets a3", 12.79 }, { "Motif Trombones a5", 6.52 },
+                 { "Piccolo", -4.95 }, { "Alto Flute", 1.24 }, { "Bass Flute", -3.58 }, { "Contrabass Clarinet", -1.38 },
                  { "Contrabass Trombone", -3.65 }, { "Cimbasso Solo", 2.97 }, { "Cimbassi a2", 12.92 },
-                 { "Contrabass Tuba", -4.47 } };
-      QCOMPARE(int(M2.size()), 43);
+                 { "Contrabass Tuba", -4.47 }, { "Harp", -10.41 } };
+      QCOMPARE(int(M2.size()), 44);
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
             QCOMPARE(li.hasSectionLevel2, M2.count(section) == 1);

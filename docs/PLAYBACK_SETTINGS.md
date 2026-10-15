@@ -260,8 +260,19 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   `playerWeight` (the players' mean less the scales' mean, from Table II): the tuba +1.4 dB at mp, the rest -0.7 .. +0.8.
 - SSO side and M: as `sectionLevel` (below): SSO's Long at CC1 64 over the patch's common range, D = SSO - real,
   M = -(D - the strings' mean D) (strings centred, winds on their scale).
-- Family assumption (no Clark & Luce instrument): Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2 take their
-  family member's (clarinet's, bassoon's, tenor trombone's) change from `sectionLevel` to `sectionLevel2`.
+- No Clark & Luce instrument (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 5): Bass Clarinet, Contrabassoon, Bass
+  Trombone Solo / a2 take their sibling's (clarinet's, bassoon's, tenor trombone's) Clark & Luce level plus the TU Berlin
+  database's difference between the two at mp over the semitones both played (+4.88, -4.46, +1.71 dB): one source's
+  ratio, not an assumption; the bass clarinet's is uncertain by about ±5 dB (TU's difference +10.7 at pp, +0.5 at ff).
+  Before: their family member's change from `sectionLevel` to `sectionLevel2` (an assumption).
+- The harp (since 2026-10-15, Iteration 6): TU Berlin's sound power (no Clark & Luce figure) on Clark & Luce's scale:
+  TU's measure for a decaying tone (the fast-weighted pressure squared averaged over the recording: `tu_transient.py`
+  reproduces the CSV's harp values within 0.005 dB) as an energy, SSO's harp (`sso_percussion_levels.json`, velocity 64)
+  over the same span after the note-on; TU's mp by rule D; to Clark & Luce's scale by the median (M2 + sectionLevel's D)
+  over the nine solo winds with their own Clark & Luce instrument (RMS 3.3 dB): -10.41 dB, about ±4 dB. The timpani
+  were measured the same way (+1.65) but are not applied: TU's D2 series name no markings, so mp's step is unknown by
+  about 7 dB. The percussion section (Iteration 7): SSO's six-player group at mf against the string family lies within
+  Skålevik 2019's -8 .. -2 dB by energy (-3.6 / -2.0, peak +1.8): no offset.
 - Corroboration (one player against a string player, woodwind / brass, dB): Clark & Luce + directivity +2.6 .. +4.0 /
   +11.3 .. +11.9 (pp .. mf; at ff -1.9 / +8.3); the Spheres dataset's whole sections +1.4 / +14.3 (its claps showed no
   gain change between sessions: +2.1 / +1.9 / +3.0 dB L / R / C, SD ~3.8, so the sessions stand as measured); Skålevik
@@ -285,8 +296,10 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Cor Anglais | -2.89 | +4.39 | 82.1 |
 | Clarinet Solo | -3.40 | +3.43 | 81.1 |
 | Clarinets a2 | -5.35 | +1.49 | 84.1 |
+| Bass Clarinet (family) | -0.24 | +1.20 | 86.0 |
 | Bassoon Solo | -15.14 | -2.76 | 80.7 |
 | Bassoons a2 | -2.66 | +9.72 | 83.7 |
+| Contrabassoon (family) | -14.70 | -3.14 | 76.2 |
 | Horn Solo | -2.92 | +3.97 | 90.9 |
 | Horns a2 | +3.68 | +10.57 | 93.9 |
 | Horns a6 | +7.46 | +14.35 | 98.7 |
@@ -296,11 +309,9 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Tenor Trombone Solo | -2.12 | +4.67 | 87.7 |
 | Tenor Trombones a2 | +4.55 | +11.33 | 90.7 |
 | Trombones a6 | +14.23 | +20.07 | 95.4 |
+| Bass Trombone Solo (family) | +1.48 | +6.67 | 89.4 |
+| Bass Trombones a2 (family) | +5.03 | +10.22 | 92.4 |
 | Tuba Solo | -2.36 | +8.56 | 93.5 |
-| Bass Clarinet (family) | -5.63 | +1.20 | - |
-| Contrabassoon (family) | -15.52 | -3.14 | - |
-| Bass Trombone Solo (family) | -0.12 | +6.67 | - |
-| Bass Trombones a2 (family) | +3.44 | +10.22 | - |
 | Solo Violin 1 | -0.10 | - | 77.5 |
 | Solo Violin 2 | -0.33 | - | 77.5 |
 | Solo Viola | -3.64 | - | 75.0 |
@@ -316,6 +327,7 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Cimbasso Solo (trombone) | +2.97 | - | 87.7 |
 | Cimbassi a2 (trombone) | +12.92 | - | 90.7 |
 | Contrabass Tuba (tuba) | -4.47 | - | 93.5 |
+| Harp | -10.41 | - | - |
 
 The last 15 rows (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 2) had no section level and played SSO's own
 level; their SSO side is the dynamics check's Long at CC1 64 at one test pitch (`sso_sound_dynamics.json`) + 1.50 dB

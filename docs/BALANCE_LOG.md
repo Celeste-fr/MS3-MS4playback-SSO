@@ -121,6 +121,79 @@ Contrabass Clarinet -2.84 -> -1.38, Contrabass Trombone -7.08 -> -3.65, Cimbasso
 +10.83 -> +12.92, Contrabass Tuba -9.09 -> -4.47 (within the stand-in's stated error, as expected). Every other patch
 unchanged. The markings of the 15 now play as real players' (steps x S / 5 from mp).
 
+## Iteration 5 (2026-10-15): the bass clarinet, contrabassoon and bass trombones by TU Berlin's ratio
+
+**Weakest link.** Clark & Luce measured no bass clarinet, contrabassoon or bass trombone: these four patches took their
+family member's change from sectionLevel to sectionLevel2, an assumption ("plays like its family").
+
+**Evidence.** The TU Berlin database measured each of them and its sibling the same way (single tones, pp and ff, sound
+power): their difference at mp (each placed between its own pp and ff as sectionLevel places it,
+`section_balance_winds.py` mpFrac), averaged over the semitones both played: bass clarinet - clarinet +4.88 dB (MIDI
+50 .. 75), contrabassoon - bassoon -4.46 (34 .. 51), bass trombone - tenor trombone +1.71 (31 .. 65). At pp / ff the
+differences are +10.73 / +0.50, -4.47 / -2.70, +2.32 / +1.22: the bass clarinet's depends strongly on the dynamic (TU's
+bass clarinettist's softest notes are far louder than the clarinettist's; Meyer 2009, 3.2.3.4, gives the bass clarinet's
+single-note pp 59 dB against the clarinet's 57, about +2), so its value is uncertain by about +-5 dB; the other two agree
+within 1.8 dB across dynamics.
+
+**Decision.** Real side = the sibling's Clark & Luce level + that TU difference at mp (`SIBLING_TU`, "tuRatio" in
+`sso_cl_section_balance.json`): one source's ratio, measured the same way for both instruments, not an assumption. Their
+realSteps stay their family's (Clark & Luce has no span for them; TU's single-note extremes are not written markings).
+
+**Before -> after** (`sectionLevel2`, dB): Bass Clarinet -5.63 -> -0.24, Contrabassoon -15.52 -> -14.70, Bass Trombone
+Solo -0.12 -> +1.48, Bass Trombones a2 +3.44 -> +5.03. Every other patch unchanged.
+
+## Iteration 6 (2026-10-15): the harp from TU Berlin; the timpani measured, not applied
+
+**Weakest link.** The harp and the timpani had no section level: they played SSO's own level against an orchestra whose
+levels are all corrected. Clark & Luce measured neither; the owner approved TU Berlin's sound power if it does better than
+no correction (the coordinator's check at c6b1ec53f2: TU against Clark & Luce errs by 4.5 dB RMS after a constant offset,
+no correction by 7.8).
+
+**Evidence.** *TU's measure for a decaying tone.* The documentation (section 3) says transient sounds' squared pressure
+was "time-weighted (fast)" before averaging, and decaying tones have no steady part (SteadyPart [0 0]). Recomputed from
+the 32-channel recordings (`tu_transient.py`, the files read remotely, nothing stored): the fast-weighted pressure squared
+averaged over the whole recording reproduces the CSV's "SoundPower in dB" for all 156 harp recordings within 0.005 dB
+(without the weighting up to 0.65 dB off at pp; the fast maximum 6.8 dB off on average). That level depends on where the
+recording was cut, so the comparison uses the energy (level x the recording's length, `tu_decaying.json`) and SSO's
+energy over the same span after the note-on as TU's recording after its onset. *SSO* (Windows VM, Kontakt + SSO, kthost,
+`sso_percussion_levels.json`): the harp (Normale) every 6 semitones MIDI 24 .. 96 at velocity 16 .. 127, 4 takes (spread
+1 .. 4 dB); the timpani keys 46 .. 62. *Harp*: SSO at mp's velocity 64 less TU at mp (rule D, 3/7 of the way pp -> ff,
+sectionLevel's placement where Meyer gives no figures): -118.54 dB, SD 3.25 over 13 pitches. *To the Clark & Luce
+scale*: the median of (M2 + sectionLevel's D) over the nine solo winds with their own Clark & Luce instrument, -128.95
+(RMS 3.29, max 6.3; over all 28 patches with both 4.3 / 9.0, the strings off by up to 9 dB: the solo winds are the
+better-matched set, and single players like the harp). *Timpani*: TU has D2 only (Timpani and Pedal timpani, five series
+of "6 dynamics" by mallet, the markings not named), the CSV none; SSO's keys sound an octave under their MIDI number (key
+46 58.5 Hz, key 50 72.8 Hz = D2). Step 3 of 6 as mp (if the six are pp .. ff): 94.2 dB re 1 pW s (series 90.1 .. 97.2),
+SSO key 50 at velocity 64: M2 +1.65.
+
+**Decision.** Harp: `sectionLevel2` -10.41 dB, uncertainty about +-4 dB (the offset's RMS 3.3, the pitches' SD / sqrt(13)
+0.9, mp's placement by rule D). No real range (no Clark & Luce span). Timpani: not applied: which of TU's six steps is mp
+is unknown by a whole step (about 7 dB), more than the +1.65 correction; the measurement is in the file
+(`decayingNotApplied`).
+
+**Before -> after**: Harp none -> -10.41. Every other patch unchanged.
+
+**Found on the way, not a balance matter.** SSO's timpani keys sound an octave under their MIDI number: a written D2
+(MIDI 38) goes to a key SSO leaves silent (keys 42 .. 45 measured silent; 46 is the lowest that sounds). Not checked
+further here.
+
+## Iteration 7 (2026-10-15): the percussion section against Skaalevik 2019, no change
+
+**Question.** Does SSO's percussion section, uncorrected, sit where an orchestra's does against its strings?
+
+**Evidence.** Skaalevik 2019, slide 19 (review page https://claude.ai/artifact/JKYSTkAFHEv4hjZviRhCEn, the owner to
+review): family totals re the whole orchestra, strings (50 players) -3 / -4 / -4 / -8, percussion (6) -11 / -8 / -6 / -11
+(quiet / average / loud sessions / forte passages), so percussion re strings -8 / -4 / -2 / -3 dB (dosimetry: Leq, energy
+over sessions, rests included, repertoire-dependent). SSO (same VM run): a six-player section, one hit each at mf's
+velocity 80 (Timpani key 50 = D2, Bass Drum Hit, Piatti Hit, Snare 1 Hit, Tam Tam Hit, Triangle 1 Open Hit 1),
+energetically summed, against the string family as the balance plays it (the five sections' Long at CC1 64, loudDb, +
+their sectionLevel2, summed): 50 ms peak +1.84 dB, energy over 1 s -3.56, over the whole ring (8.5 s) -1.97. Piatti Hit
+peaks 25 .. 30 dB under the other hits (not affecting the sum: bass drum, timpani and tam-tam dominate).
+
+**Decision.** No change: Skaalevik's figures are energy (Leq), and SSO's group by energy is inside -8 .. -2 (1 s: -3.6,
+at the median -3.5; the whole ring: -2.0, at the edge). Only the peak measure is outside (+1.8), and a peak is not what a
+dosimeter integrates. The owner accepts about 2 .. 3 dB balance error: no refinement.
+
 ## Investigated, no change (2026-10-15)
 
 - **Pitch dependence.** Each patch has one offset over its range, so SSO's level against pitch stays as recorded. Linear
