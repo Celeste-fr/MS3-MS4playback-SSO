@@ -44,7 +44,13 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
 - **Say what was tested with what**: the Linux dev machine can't hear Kontakt, SSO or Windows. Results come from
   a stand-in (test synth `mstestsynth.vst3`, sfizz), the Windows VM (VERIFY.md › With the real library) or the
   owner. Say which.
-- **The owner decides what is heard**: measure, then offer (often "try both, decide by ear"). Kontakt patches keep
+- **Balance and dynamic levels come from real data** (the owner, 2026-10-14: "I don't trust my ears, I prefer all the
+  balance levels and the dynamic levels loudness to be based on real data"): the balance between sections / instruments
+  and how loud each marking plays are set from measurements of real players and orchestras, chosen between sources by
+  data quality (one consistent method across instruments, independent corroboration, player agreement), with the
+  uncertainty stated; no listening test decides them (earlier ABX results, e.g. the basses of 2026-10-11, don't override
+  data). A gap without data is marked as an assumption.
+- **The owner decides what is heard** (everything else: timing, techniques, tone): measure, then offer (often "try both, decide by ear"). Kontakt patches keep
   the library's defaults: values change only through MuseScore (Controllers, automation), never saved from
   Kontakt's window; every patch MuseScore sets up gets 512 voices (approved).
 
