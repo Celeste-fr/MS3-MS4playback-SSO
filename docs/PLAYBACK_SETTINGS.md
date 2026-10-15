@@ -298,6 +298,27 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Contrabassoon (family) | -15.68 | -3.14 | - |
 | Bass Trombone Solo (family) | -0.82 | +6.67 | - |
 | Bass Trombones a2 (family) | +2.73 | +10.22 | - |
+| Solo Violin 1 | +1.69 | - | 77.5 |
+| Solo Violin 2 | +0.29 | - | 77.5 |
+| Solo Viola | -1.98 | - | 75.4 |
+| Solo Cello | -0.56 | - | 82.5 |
+| Motif Horns a4 | +10.55 | - | 96.9 |
+| Motif Trumpets a3 | +11.34 | - | 100.2 |
+| Motif Trombones a5 | +8.40 | - | 94.1 |
+| Piccolo (flute) | -3.90 | - | 80.8 |
+| Alto Flute (flute) | +3.50 | - | 80.8 |
+| Bass Flute (flute) | -2.20 | - | 80.8 |
+| Contrabass Clarinet (clarinet) | -2.27 | - | 81.8 |
+| Contrabass Trombone (trombone) | -7.79 | - | 87.1 |
+| Cimbasso Solo (trombone) | +2.41 | - | 87.1 |
+| Cimbassi a2 (trombone) | +10.12 | - | 90.1 |
+| Contrabass Tuba (tuba) | -10.67 | - | 92.1 |
+
+The last 15 rows (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 2) had no section level and played SSO's own
+level; their SSO side is the dynamics check's Long at CC1 64 at one test pitch (`sso_sound_dynamics.json`) + 1.50 dB
+(the median full-range - dynamics-check difference of the 24 patches that have both; there it reproduces M2 within SD
+2.3 dB, max 4.1). In brackets: the family member whose real level the patch takes (an assumption). Strings Ensemble
+has none (which sections sound at its test pitch isn't known), nor do harp, keyboards and percussion (no source).
 
 Biggest moves from `sectionLevel`: Bassoon Solo -12.5 dB (TU's single notes put it far louder than orchestral players
 play it), Horn Solo -7.1, Violas -3.7; the trumpets barely move.

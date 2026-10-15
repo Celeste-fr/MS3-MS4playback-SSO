@@ -2792,15 +2792,20 @@ void TestSoundLibrary::levelSectionBalance()
             }
       QVERIFY(withLevel > 5);
       // sectionLevel2 (Clark & Luce at playing levels, [levels] sectionBalance 2; section_balance_cl.py ->
-      // sso_cl_section_balance.json -> gen_spitfire_sso.py): the same 28 sections, every patch of one its main patch's
+      // sso_cl_section_balance.json -> gen_spitfire_sso.py): the same 28 sections, every patch of one its main patch's;
+      // since 2026-10-15 also the 15 patches without sectionLevel (section_balance_cl.py GAP: solo strings, Motif brass, family)
       const std::map<QString, double> M2 { { "Violins 1", -0.29 }, { "Violins 2", 0.86 }, { "Violas", -6.75 }, { "Celli", 2.55 },
                  { "Basses", 3.63 }, { "Flute Solo", -2.96 }, { "Flutes a2", -4.79 }, { "Oboe Solo", -6.78 }, { "Oboes a2", -9.14 },
                  { "Cor Anglais", -2.75 }, { "Clarinet Solo", -2.84 }, { "Clarinets a2", -4.78 }, { "Bass Clarinet", -5.07 },
                  { "Bassoon Solo", -15.30 }, { "Bassoons a2", -2.82 }, { "Contrabassoon", -15.68 }, { "Horn Solo", -3.08 },
                  { "Horns a2", 3.52 }, { "Horns a6", 7.30 }, { "Trumpet Solo", 8.10 }, { "Trumpets a2", 13.31 },
                  { "Trumpets a6", 19.51 }, { "Tenor Trombone Solo", -2.82 }, { "Tenor Trombones a2", 3.84 },
-                 { "Trombones a6", 13.53 }, { "Bass Trombone Solo", -0.82 }, { "Bass Trombones a2", 2.73 }, { "Tuba Solo", -3.93 } };
-      QCOMPARE(int(M2.size()), 28);
+                 { "Trombones a6", 13.53 }, { "Bass Trombone Solo", -0.82 }, { "Bass Trombones a2", 2.73 }, { "Tuba Solo", -3.93 },
+                 { "Solo Violin 1", 1.69 }, { "Solo Violin 2", 0.29 }, { "Solo Viola", -1.98 }, { "Solo Cello", -0.56 },
+                 { "Motif Horns a4", 10.55 }, { "Motif Trumpets a3", 11.34 }, { "Motif Trombones a5", 8.40 }, { "Piccolo", -3.90 },
+                 { "Alto Flute", 3.50 }, { "Bass Flute", -2.20 }, { "Contrabass Clarinet", -2.27 }, { "Contrabass Trombone", -7.79 },
+                 { "Cimbasso Solo", 2.41 }, { "Cimbassi a2", 10.12 }, { "Contrabass Tuba", -10.67 } };
+      QCOMPARE(int(M2.size()), 43);
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
             QCOMPARE(li.hasSectionLevel2, M2.count(section) == 1);

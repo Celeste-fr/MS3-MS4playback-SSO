@@ -273,7 +273,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Solo Violin 1" ids="violin" nki="Instruments/Solo Strings/Solo Violin - All techniques.nki" setup="$iooxo=3" pitch="77">
+  <Instrument name="Solo Violin 1" ids="violin" nki="Instruments/Solo Strings/Solo Violin - All techniques.nki" setup="$iooxo=3" pitch="77" sectionLevel2="1.69">
     <Articulation name="Long" value="1" techniques="long legato" release="855" onset="55:105 56:110 58:200 62:200 64:220 65:290 69:290 71:270 72:215 75:200 76:120 87:120 91:190 95:90 96:30 100:30" peak="1238"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo" onset="5"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo" onset="10"/>
@@ -286,7 +286,7 @@
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
-  <Instrument name="Solo Violin 2" ids="violin" partName="\b(2|II)\b|\bsecond\b|\b2nd\b" nki="Instruments/Solo Strings/Solo Violin 2 - All techniques.nki" setup="$iooxo=3" pitch="77">
+  <Instrument name="Solo Violin 2" ids="violin" partName="\b(2|II)\b|\bsecond\b|\b2nd\b" nki="Instruments/Solo Strings/Solo Violin 2 - All techniques.nki" setup="$iooxo=3" pitch="77" sectionLevel2="0.29">
     <Articulation name="Long" value="1" techniques="long legato" release="955" onset="53:120 54:125 56:210 60:210 62:250 63:325 66:330 69:310 70:235 73:220 74:135 85:140 89:220 93:105 94:35 98:30" peak="1338"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo" onset="5"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo" onset="10"/>
@@ -299,7 +299,7 @@
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
-  <Instrument name="Solo Viola" ids="viola" nki="Instruments/Solo Strings/Solo Viola - All techniques.nki" setup="$iooxo=3" pitch="71">
+  <Instrument name="Solo Viola" ids="viola" nki="Instruments/Solo Strings/Solo Viola - All techniques.nki" setup="$iooxo=3" pitch="71" sectionLevel2="-1.98">
     <Articulation name="Long" value="1" techniques="long legato" release="2260" onset="48:35 52:60 53:95 55:65 58:95 59:65 71:20 96:5" peak="903"/>
     <Articulation name="Spiccato" value="42" techniques="spiccato staccatissimo" onset="0"/>
     <Articulation name="staccato" value="40" techniques="short staccatissimo" onset="5"/>
@@ -312,7 +312,7 @@
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
-  <Instrument name="Solo Cello" ids="violoncello" nki="Instruments/Solo Strings/Solo Cello - All techniques.nki" setup="$iooxo=3" pitch="61" bend="195.1">
+  <Instrument name="Solo Cello" ids="violoncello" nki="Instruments/Solo Strings/Solo Cello - All techniques.nki" setup="$iooxo=3" pitch="61" bend="195.1" sectionLevel2="-0.56">
     <Articulation name="Long" value="1" techniques="long legato" release="2535" onset="36:295 37:225 41:280 49:200 62:215 63:145 69:100 80:115 81:60 88:50" peak="748"/>
     <Articulation name="Spiccato" value="42" techniques="short spiccato staccatissimo" onset="5"/>
     <Articulation name="Pizzicato" value="56" techniques="pizzicato" onset="0"/>
@@ -324,7 +324,7 @@
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
-  <Instrument name="Piccolo" ids="piccolo" nki="Instruments/Symphonic Woodwinds/Piccolo Flute - All techniques.nki" setup="$iooxo=3" pitch="89">
+  <Instrument name="Piccolo" ids="piccolo" nki="Instruments/Symphonic Woodwinds/Piccolo Flute - All techniques.nki" setup="$iooxo=3" pitch="89" sectionLevel2="-3.9">
     <Articulation name="Long" value="1" techniques="long legato" release="1080" onset="74:40 92:35 104:65" peak="1263"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo" release="1225" onset="74:85 80:70 81:40 84:75 88:70 89:30 104:25"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" expect="ignored" release="760" onset="91:45 93:40 94:90 97:70 98:115 101:110" peak="1278"/>
@@ -388,7 +388,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Alto Flute" ids="alto-flute" nki="Instruments/Symphonic Woodwinds/Alto Flute - All techniques.nki" setup="$iooxo=3" pitch="72">
+  <Instrument name="Alto Flute" ids="alto-flute" nki="Instruments/Symphonic Woodwinds/Alto Flute - All techniques.nki" setup="$iooxo=3" pitch="72" sectionLevel2="3.5">
     <Articulation name="Long" value="1" techniques="long legato" release="1140" onset="55:130 60:85 73:115 74:80 78:35 91:55" peak="1018"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo" release="2000" onset="55:170 56:170 58:85 64:45 69:55 72:105 75:105 78:60 87:60 90:90 91:125"/>
     <Articulation name="Long Harmonics" value="10" techniques="long legato" modifiers="harmonics" expect="ignored" release="2255" onset="72:160 74:145 75:40 76:135 77:70 79:75 80:130 81:70 82:90 83:65 85:115 86:75 88:145" peak="628"/>
@@ -408,7 +408,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Bass Flute" ids="bass-flute" nki="Instruments/Symphonic Woodwinds/Bass Flute - All techniques.nki" setup="$iooxo=3" pitch="65">
+  <Instrument name="Bass Flute" ids="bass-flute" nki="Instruments/Symphonic Woodwinds/Bass Flute - All techniques.nki" setup="$iooxo=3" pitch="65" sectionLevel2="-2.2">
     <Articulation name="Long" value="1" techniques="long legato" release="1500" onset="48:265 49:260 51:150 53:130 64:140 72:100 73:70 84:75" peak="933"/>
     <Articulation name="Long Flutter" value="11" techniques="tremolo" release="1665" onset="48:175 54:175 56:145 58:190 64:195 67:125 68:55 86:35"/>
     <Articulation name="Long Overblown" value="9" techniques="" release="1205" onset="35"/>
@@ -523,7 +523,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Contrabass Clarinet" ids="contrabass-clarinet" nki="Instruments/Symphonic Woodwinds/Contrabass Clarinet - All techniques.nki" setup="$iooxo=3" pitch="37">
+  <Instrument name="Contrabass Clarinet" ids="contrabass-clarinet" nki="Instruments/Symphonic Woodwinds/Contrabass Clarinet - All techniques.nki" setup="$iooxo=3" pitch="37" sectionLevel2="-2.27">
     <Articulation name="Long" value="1" techniques="long legato" release="2965" onset="22:195 23:230 30:150 31:80 34:80 35:200 36:215 39:215 41:130 44:130 45:295 49:280 51:190 54:190 55:250 60:250" peak="1188"/>
     <Articulation name="Marcato" value="52" techniques="marcato" onset="22:140 28:100 29:55 43:35 44:40 45:135 48:165 52:165 54:150 55:110 59:95 60:60"/>
     <Articulation name="Tenuto" value="50" techniques="tenuto" onset="22:150 25:145 27:100 30:90 31:35 38:20 46:45 48:80 49:135 59:125 60:75"/>
@@ -635,7 +635,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Motif Horns a4" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*4\b" nki="Instruments/Motif Brass/Horns a4 - All techniques.nki" setup="$iooxo=3" pitch="52">
+  <Instrument name="Motif Horns a4" ids="horn f-horn c-horn d-horn e-horn eb-horn g-horn a-horn ab-horn bb-horn-basso c-horn-alto bb-horn-alto c-horn-bass vienna-horn" partName="\ba\s*4\b" nki="Instruments/Motif Brass/Horns a4 - All techniques.nki" setup="$iooxo=3" pitch="52" sectionLevel2="10.55">
     <Articulation name="Long" value="1" techniques="long legato" release="1775" onset="30:50 35:60 40:110 47:120 50:155 55:100 61:100 62:150 67:150 68:100 75:70" peak="1038"/>
     <Articulation name="Short Staccato" value="40" techniques="short" onset="35"/>
     <Articulation name="Short Staccatissimo" value="42" techniques="staccatissimo spiccato" onset="25"/>
@@ -718,7 +718,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Motif Trumpets a3" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*3\b" nki="Instruments/Motif Brass/Trumpets a3 - All techniques.nki" setup="$iooxo=3" pitch="67">
+  <Instrument name="Motif Trumpets a3" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" partName="\ba\s*3\b" nki="Instruments/Motif Brass/Trumpets a3 - All techniques.nki" setup="$iooxo=3" pitch="67" sectionLevel2="11.34">
     <Articulation name="Long" value="1" techniques="long legato" release="2580" onset="51:65 60:85 65:60 84:65" peak="1078"/>
     <Articulation name="Short Staccato" value="40" techniques="short" onset="10"/>
     <Articulation name="Short Staccatissimo" value="42" techniques="staccatissimo spiccato" expect="unclear" onset="5"/>
@@ -797,7 +797,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Motif Trombones a5" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*5\b" nki="Instruments/Motif Brass/Trombones a5 - All techniques.nki" setup="$iooxo=3" pitch="49">
+  <Instrument name="Motif Trombones a5" ids="trombone tenor-trombone alto-trombone" partName="\ba\s*5\b" nki="Instruments/Motif Brass/Trombones a5 - All techniques.nki" setup="$iooxo=3" pitch="49" sectionLevel2="8.4">
     <Articulation name="Long" value="1" techniques="long legato" release="1990" onset="30:175 37:115 52:130 62:105 63:55 70:70" peak="1108"/>
     <Articulation name="Short Staccato" value="40" techniques="short" onset="20"/>
     <Articulation name="Short Staccatissimo" value="42" techniques="staccatissimo spiccato" onset="30:30 43:40 70:10"/>
@@ -870,7 +870,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Contrabass Trombone" ids="contrabass-trombone" nki="Instruments/Symphonic Brass/Contrabass Trombone Solo - All techniques.nki" setup="$iooxo=3" pitch="39">
+  <Instrument name="Contrabass Trombone" ids="contrabass-trombone" nki="Instruments/Symphonic Brass/Contrabass Trombone Solo - All techniques.nki" setup="$iooxo=3" pitch="39" sectionLevel2="-7.79">
     <Articulation name="Long" value="1" techniques="long legato" release="950" onset="24:40 28:40 32:85 38:90 40:60 45:90 54:95" peak="1013"/>
     <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre" release="1270" onset="55" peak="798"/>
     <Articulation name="Long Stopped" value="7" techniques="long legato" modifiers="muted" release="1210" onset="24:90 30:80 31:50 44:40 50:50 51:100 54:110" peak="813"/>
@@ -889,7 +889,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Cimbasso Solo" ids="cimbasso" nki="Instruments/Symphonic Brass/Cimbasso Solo - All techniques.nki" setup="$iooxo=3" pitch="41">
+  <Instrument name="Cimbasso Solo" ids="cimbasso" nki="Instruments/Symphonic Brass/Cimbasso Solo - All techniques.nki" setup="$iooxo=3" pitch="41" sectionLevel2="2.41">
     <Articulation name="Long" value="1" techniques="long legato" release="2090" onset="24:70 29:30 34:35 35:65 60:35" peak="518"/>
     <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre" release="1150" onset="24:45 42:75 54:50 56:60 57:140 60:155" peak="443"/>
     <Articulation name="Marcato" value="52" techniques="marcato" onset="15"/>
@@ -905,7 +905,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Cimbassi a2" ids="cimbasso" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b" nki="Instruments/Symphonic Brass/Cimbassi a2 - All techniques.nki" setup="$iooxo=3" pitch="37">
+  <Instrument name="Cimbassi a2" ids="cimbasso" partName="\ba\s*2\b|\b1\s*[.&amp;+-]?\s*2\b|\bI\s*[.&amp;+-]?\s*II\b" nki="Instruments/Symphonic Brass/Cimbassi a2 - All techniques.nki" setup="$iooxo=3" pitch="37" sectionLevel2="10.12">
     <Articulation name="Long" value="1" techniques="long legato" release="1035" onset="24:50 27:90 36:75 37:120 41:140 44:110 52:110" peak="1118"/>
     <Articulation name="Long Cuivre" value="9" techniques="long legato" modifiers="cuivre" release="1240" onset="24:25 27:50 36:50 38:75 52:40" peak="1208"/>
     <Articulation name="Marcato" value="52" techniques="marcato" onset="35"/>
@@ -939,7 +939,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Contrabass Tuba" ids="tuba f-tuba eb-tuba c-tuba bb-tuba bass-f-tuba bass-eb-tuba" partName="\bcontra" nki="Instruments/Symphonic Brass/Contrabass Tuba Solo - All techniques.nki" setup="$iooxo=3" pitch="39">
+  <Instrument name="Contrabass Tuba" ids="tuba f-tuba eb-tuba c-tuba bb-tuba bass-f-tuba bass-eb-tuba" partName="\bcontra" nki="Instruments/Symphonic Brass/Contrabass Tuba Solo - All techniques.nki" setup="$iooxo=3" pitch="39" sectionLevel2="-10.67">
     <Articulation name="Long" value="1" techniques="long legato" release="1055" onset="24:85 50:100 51:145 56:145" peak="818"/>
     <Articulation name="Marcato" value="52" techniques="marcato" onset="70"/>
     <Articulation name="Tenuto" value="50" techniques="tenuto" onset="24:70 39:40 56:45"/>

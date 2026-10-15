@@ -38,3 +38,31 @@ is three of realRange 2's five equal steps, a pp -> ff of 17.8 dB. Tools: `clark
 **Before -> after** (`sectionLevel2`, dB): Horn Solo -16.46 -> -3.08, Horns a2 -9.86 -> +3.52, Horns a6 -6.08 -> +7.30;
 nothing else moves. Horn Solo Lw at mp 77.5 -> 90.9. Trumpets a2 over Horns a2 at mp: 17.9 -> 4.5 dB; horn - trumpet
 (one player) at mp: -17.9 -> -4.5.
+
+## Iteration 2 (2026-10-15): patches without a section level
+
+**Weakest link.** 15 main patches had no `sectionLevel` / `sectionLevel2` and played SSO's own level, against an
+orchestra whose levels are all corrected (strings centred at 0, Trumpets a6 +19.51): the Motif brass (Horns a4,
+Trumpets a3, Trombones a5) about 8 .. 11 dB too quiet, Contrabass Tuba about 11 dB and Contrabass Trombone about 8 dB
+too loud, Cimbassi a2 about 10 dB too quiet.
+
+**Evidence.** Real side: Clark & Luce has the solo strings' and the Motif brass's instruments (one player + 10 log10 N,
+as every other patch). SSO side: no full-range measurement exists for these patches, but the dynamics check
+(`sso_sound_dynamics.json`) measured every patch's Long against CC1 at one test pitch. On the 24 patches that have both,
+the dynamics check at CC1 64 + 1.50 dB (their median difference) reproduces their M2 within SD 2.27 dB (max 4.14); at the
+same pitch the two measurements agree within SD 1.3 dB, so most of the spread is the patch's level changing with pitch.
+
+**Decision.** Give the 15 patches a `sectionLevel2` by the same method, SSO side from the dynamics check (± 2.3 dB).
+Real side by their own instrument (Solo Violin 1 / 2, Solo Viola, Solo Cello, Motif Horns a4 / Trumpets a3 / Trombones
+a5) or, an assumption marked in the map's source, by a family member's per-player level: Piccolo, Alto Flute, Bass Flute
+by the flute; Contrabass Clarinet by the clarinet; Contrabass Trombone, Cimbasso Solo, Cimbassi a2 by the (tenor)
+trombone (the cimbasso: a valved contrabass trombone); Contrabass Tuba by the tuba. Checks of the family assumption
+where data exist: Spheres' piccolo per player 1.2 dB over its flutes (same session); nothing for the others. Left
+without: Strings Ensemble (which sections sound at its test pitch isn't known), harp, keyboards, percussion (no source
+measured them as orchestral players play).
+
+**Before -> after** (`sectionLevel2`, dB; before: none, played as 0): Solo Violin 1 +1.69, Solo Violin 2 +0.29, Solo
+Viola -1.98, Solo Cello -0.56, Motif Horns a4 +10.55, Motif Trumpets a3 +11.34, Motif Trombones a5 +8.40, Piccolo -3.90,
+Alto Flute +3.50, Bass Flute -2.20, Contrabass Clarinet -2.27, Contrabass Trombone -7.79, Cimbasso Solo +2.41, Cimbassi
+a2 +10.12, Contrabass Tuba -10.67. Trumpets a6 stay the loudest patch (S' unchanged). One solo violin against Violins 1
+(16) at mp: -12.0 dB real; played before -13.7, now -12.0 (± 2.3).

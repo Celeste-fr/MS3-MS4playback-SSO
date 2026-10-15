@@ -1565,6 +1565,10 @@ for i, line in enumerate(out):
                 end = '/>' if out[i].endswith('/>') else '>'
                 level = sectionLevelAttributes(current) if current in SECTION_FADERS_WINDS else ''
                 out[i] = out[i][:-len(end)] + level + realRangeAttributes(current) + end
+            elif current in SECTION_LEVEL2:
+                # a patch with Clark & Luce's balance only (section_balance_cl.py GAP: no sectionLevel)
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + f' sectionLevel2="{round(SECTION_LEVEL2[current], 3):g}"' + end
         continue
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:
