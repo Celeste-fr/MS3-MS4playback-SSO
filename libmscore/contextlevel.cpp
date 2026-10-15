@@ -61,7 +61,8 @@ bool clarkLuceSpans(const Score* score)
 
 bool hasRealRange(const SoundLib::LibInstrument* patch)
       {
-      return patch && !patch->realSpan.empty() && !patch->longLevel.empty();
+      // (a patch with no database instrument has realSteps only, its family's: realRange 2 plays it, realRangeDb gives 1 none)
+      return patch && !patch->longLevel.empty() && (!patch->realSpan.empty() || patch->realStepsDb > 0.0);
       }
 
 double markingSteps(int x)
@@ -113,6 +114,8 @@ double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch, bool 
       // Clark & Luce spans: equal steps of S / 5 from mp, ppp / fff one step more (markingSteps -3 .. +4)
       if (spans && patch.realStepsDb > 0.0)
             return markingSteps(x) * patch.realStepsDb / 5.0 - sso;
+      if (patch.realSpan.empty())
+            return 0.0;
       const double span = between(patch.realSpan, pitch, [](double v) { return v; });
       const double player = realFraction(markingSteps(x), patch.realPlayPp, patch.realPlayFf)
                             - realFraction(0.0, patch.realPlayPp, patch.realPlayFf);

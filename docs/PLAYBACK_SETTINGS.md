@@ -301,21 +301,21 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Contrabassoon (family) | -15.52 | -3.14 | - |
 | Bass Trombone Solo (family) | -0.12 | +6.67 | - |
 | Bass Trombones a2 (family) | +3.44 | +10.22 | - |
-| Solo Violin 1 | +1.85 | - | 77.5 |
-| Solo Violin 2 | +0.45 | - | 77.5 |
-| Solo Viola | -2.26 | - | 75.0 |
-| Solo Cello | -0.42 | - | 82.5 |
-| Motif Horns a4 | +10.71 | - | 96.9 |
-| Motif Trumpets a3 | +11.49 | - | 100.2 |
-| Motif Trombones a5 | +9.11 | - | 94.6 |
-| Piccolo (flute) | -3.66 | - | 80.9 |
-| Alto Flute (flute) | +3.74 | - | 80.9 |
-| Bass Flute (flute) | -1.96 | - | 80.9 |
-| Contrabass Clarinet (clarinet) | -2.84 | - | 81.1 |
-| Contrabass Trombone (trombone) | -7.08 | - | 87.7 |
-| Cimbasso Solo (trombone) | +3.12 | - | 87.7 |
-| Cimbassi a2 (trombone) | +10.83 | - | 90.7 |
-| Contrabass Tuba (tuba) | -9.09 | - | 93.5 |
+| Solo Violin 1 | -0.10 | - | 77.5 |
+| Solo Violin 2 | -0.33 | - | 77.5 |
+| Solo Viola | -3.64 | - | 75.0 |
+| Solo Cello | +3.71 | - | 82.5 |
+| Motif Horns a4 | +9.33 | - | 96.9 |
+| Motif Trumpets a3 | +12.79 | - | 100.2 |
+| Motif Trombones a5 | +6.52 | - | 94.6 |
+| Piccolo (flute) | -4.95 | - | 80.9 |
+| Alto Flute (flute) | +1.24 | - | 80.9 |
+| Bass Flute (flute) | -3.58 | - | 80.9 |
+| Contrabass Clarinet (clarinet) | -1.38 | - | 81.1 |
+| Contrabass Trombone (trombone) | -3.65 | - | 87.7 |
+| Cimbasso Solo (trombone) | +2.97 | - | 87.7 |
+| Cimbassi a2 (trombone) | +12.92 | - | 90.7 |
+| Contrabass Tuba (tuba) | -4.47 | - | 93.5 |
 
 The last 15 rows (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 2) had no section level and played SSO's own
 level; their SSO side is the dynamics check's Long at CC1 64 at one test pitch (`sso_sound_dynamics.json`) + 1.50 dB
@@ -430,28 +430,33 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
 
   | Instrument (SSO patches) | S, dB | Spheres cross-check (whole section, 3+ dynamics) |
   |---|---|---|
-  | violin (Violins 1, 2) | 13.8 | Violin 2 13.7 |
-  | viola (Violas) | 15.9 | |
-  | cello (Celli) | 14.1 | Cello 15.8 |
+  | violin (Violins 1, 2, Solo Violin 1, 2) | 13.8 | Violin 2 13.7 |
+  | viola (Violas, Solo Viola) | 15.9 | |
+  | cello (Celli, Solo Cello) | 14.1 | Cello 15.8 |
   | double bass (Basses) | 14.1 | |
-  | flute (Flute Solo, Flutes a2) | 7.5 | |
+  | flute (Flute Solo, Flutes a2; Piccolo, Alto Flute, Bass Flute: family) | 7.5 | |
   | oboe (Oboe Solo, Oboes a2) | 7.4 | |
   | English horn (Cor Anglais) | 5.2 | |
-  | clarinet (Clarinet Solo, Clarinets a2; Bass Clarinet: family) | 8.3 | |
+  | clarinet (Clarinet Solo, Clarinets a2; Bass Clarinet, Contrabass Clarinet: family) | 8.3 | |
   | bassoon (Bassoon Solo, Bassoons a2; Contrabassoon: family) | 10.2 | |
-  | horn (Horn Solo, Horns a2, a6) | 17.7 | |
-  | trumpet (Trumpet Solo, Trumpets a2, a6) | 8.8 | Trumpet 10.6 |
-  | trombone (Tenor Trombone Solo, a2, Trombones a6; Bass Trombone Solo, a2: family) | 17.0 | Trombone 14.3 |
-  | tuba (Tuba Solo) | 12.5 | |
+  | horn (Horn Solo, Horns a2, a6, Motif Horns a4) | 17.7 | |
+  | trumpet (Trumpet Solo, Trumpets a2, a6, Motif Trumpets a3) | 8.8 | Trumpet 10.6 |
+  | trombone (Tenor Trombone Solo, a2, Trombones a6, Motif Trombones a5; Bass Trombone Solo, a2, Contrabass Trombone, Cimbasso Solo, Cimbassi a2: family) | 17.0 | Trombone 14.3 |
+  | tuba (Tuba Solo; Contrabass Tuba: family) | 12.5 | |
 
   *Family* is an assumption, not a measurement ("plays like its family"). The cross-check: the Spheres dataset (Colibrì
   Ensemble, Pescara; arXiv 2511.21247, Zenodo 17347681, CC BY-SA 4.0), each section of a chamber orchestra recorded alone
   playing chromatic scales in a studio; a section's loudest less its quietest full scale (median note level at the main
   pair), only where its recording has 3 or more section scales; the dynamics are not labelled in the dataset (two-scale
   sections' spans may not reach pp / ff and are not used). Where it has them it agrees with Clark & Luce within ~2 dB:
-  independent support, not used in the map (one source for every instrument). Patches with no realSpan / longLevel
-  (Piccolo, alto / bass flute, contrabass clarinet, cimbassi, contrabass trombone / tuba, Motif patches) get no real range
-  at all, either rule.
+  independent support, not used in the map (one source for every instrument). Since 2026-10-15 (docs/BALANCE_LOG.md ›
+  Iteration 4) the 15 patches without a section level before also have a real range: their Long swept the same way
+  (`sso_gap_cc1_curves.json`); the solo strings and the Motif patches with their database instrument's realSpan (both
+  rules), the eight family patches (Piccolo, Alto / Bass Flute, Contrabass Clarinet, Contrabass Trombone, Cimbasso Solo /
+  a2, Contrabass Tuba) with realSteps only (realRange 2; realRange 1 leaves them as SSO plays them). Checked in Kontakt
+  (all 43 patches with a real range, each marking at its test pitch as MuseScore sends it): the steps from mp within
+  0.05 dB RMS (median) of steps x S / 5, every patch in order except Cor Anglais, whose round robins (4.5 dB apart at pp)
+  exceed its 1.04 dB step. Strings Ensemble, the harp, keyboards and percussion have none.
 
   At a middle pitch, realDb (dB from mp, the CC11 before the headroom; ppp / pp / p / mp / mf / f / ff / fff;
   `sso_real_range.json` `realDbMid`), Clark & Luce spans against the Meyer rule (rule D for Cor Anglais):

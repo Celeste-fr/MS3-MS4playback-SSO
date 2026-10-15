@@ -120,7 +120,8 @@ double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dyna
 bool realRange(const Score* score);
 // whether it plays Clark & Luce spans (2) for the score
 bool clarkLuceSpans(const Score* score);
-// whether a patch has the real range's data (realSpan and longLevel)
+// whether a patch has the real range's data (longLevel, and realSpan or realSteps: a patch with no database instrument
+// has its family's realSteps only, an assumption; realRangeDb without spans gives it none)
 bool hasRealRange(const SoundLib::LibInstrument* patch);
 // a written dynamics CC value's distance from mp in markings (ppp -3 … fff +4)
 double markingSteps(int cc);

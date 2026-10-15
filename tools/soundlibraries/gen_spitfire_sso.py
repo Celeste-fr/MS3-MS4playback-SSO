@@ -1518,7 +1518,8 @@ def sectionLevelAttributes(name):
 #   power less its CC1 64 level, every 3 semitones, Celli and Basses every semitone (sso_cc1_curves.json). Both from
 #   sso_real_range.json (real_range.py). The woodwinds' and brass' main patches the database has (real_range.py WINDS;
 #   2026-10-14) take them too, with their sectionLevel (above): their Long from sso_winds_cc1_curves.json, an a2 / a6 patch one
-#   player's span
+#   player's span; since 2026-10-15 the gap patches too (real_range.py GAP_OWN as the winds, their Long from
+#   sso_gap_cc1_curves.json; GAP_FAMILY longLevel and their family's realSteps only, no realSpan: an assumption)
 # - realPlay= ("a b"; the Meyer rule, the owner 2026-10-14, replacing rule D): written pp and ff as fractions of realSpan
 #   above the single-note pp (J. Meyer 2009, ch. 3: in-play levels of rapid scales against single-note extremes, per
 #   instrument); p .. f in 5 equal steps between, ppp / fff at 0 / 1. Missing: rule D (a = 1/7, b = 6/7), for the
@@ -1534,12 +1535,13 @@ def realRangeAttributes(name):
     r = REAL_RANGE.get(name) or REAL_RANGE_WINDS.get(name)
     if not r:
         return ''
-    span = ' '.join(f'{p}:{v:g}' for p, v in sorted(((int(p), v) for p, v in r['span'].items())))
+    # (real_range.py GAP_FAMILY: no database instrument, so no realSpan; realSteps their family's, an assumption)
+    span = ' '.join(f'{p}:{v:g}' for p, v in sorted(((int(p), v) for p, v in r.get('span', {}).items())))
     long = ' '.join(f'{cc}/{p}:{v:g}' for p, per in sorted(((int(p), per) for p, per in r['long'].items()))
                     for cc, v in sorted(((int(c), v) for c, v in per.items())))
     play = f' realPlay="{r["fractions"]["pp"]:g} {r["fractions"]["ff"]:g}"' if r.get('rule') == 'meyer' else ''
     steps = f' realSteps="{r["sectionSpan"]["db"]:g}"' if r.get('sectionSpan') else ''
-    return f' realSpan="{span}" longLevel="{long}"' + play + steps
+    return (f' realSpan="{span}"' if span else '') + f' longLevel="{long}"' + play + steps
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0
@@ -1563,7 +1565,9 @@ for i, line in enumerate(out):
                 out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) + end
             elif current in REAL_RANGE_WINDS:
                 end = '/>' if out[i].endswith('/>') else '>'
-                level = sectionLevelAttributes(current) if current in SECTION_FADERS_WINDS else ''
+                # (the gap patches, section_balance_cl.py GAP, real_range.py GAP_OWN / GAP_FAMILY: sectionLevel2 only)
+                level = sectionLevelAttributes(current) if current in SECTION_FADERS_WINDS else \
+                    f' sectionLevel2="{round(SECTION_LEVEL2[current], 3):g}"' if current in SECTION_LEVEL2 else ''
                 out[i] = out[i][:-len(end)] + level + realRangeAttributes(current) + end
             elif current in SECTION_LEVEL2:
                 # a patch with Clark & Luce's balance only (section_balance_cl.py GAP: no sectionLevel)

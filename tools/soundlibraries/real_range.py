@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The real player's dynamic range against SSO's, for [levels] realRange (libmscore/contextlevel.h › Real range).
 
-    python3 -I real_range.py [--rule-d] <3_Audio_Features.csv> <sso_cc1_curves.json> <out sso_real_range.json> [<sso_winds_cc1_curves.json>]
+    python3 -I real_range.py [--rule-d] <3_Audio_Features.csv> <sso_cc1_curves.json> <out sso_real_range.json> [<sso_winds_cc1_curves.json>
+                             [<sso_gap_cc1_curves.json>]]
 
 --rule-d: every instrument by rule D (the comparison; the map then gets no realPlay). Both rules' levels at each entry's
 middle pitch are written either way ("marksMid", "realDbMid").
@@ -9,6 +10,13 @@ middle pitch are written either way ("marksMid", "realDbMid").
 With the winds' curves (2026-10-14) the woodwinds' and brass' main patches (WINDS) are written too, under
 "instruments", the same way: their own k by leave-one-out pooled over their twelve database instruments, SSO's Long
 from the winds' sweep (sso_winds_cc1_curves.json, same measure). The strings' "sections" don't change.
+
+With the gap patches' curves (2026-10-15, docs/BALANCE_LOG.md › Iteration 4) the 15 patches that had no section level
+before iteration 2 (section_balance_cl.py GAP) are written under "instruments" too: those with their own database
+instrument (GAP_OWN: the solo strings, the Motif brass; a Motif a3 / a4 / a5 one player's span) as the winds; those
+without (GAP_FAMILY) with their family's Clark & Luce span only (an ASSUMPTION, not a measurement: plays like its
+family) and no span ("realSpan"): realRange 2 plays them, realRange 1 (the Meyer rule, which needs the database's
+span) leaves them at the library's level. SSO's Long from sso_gap_cc1_curves.json, the same measure.
 
 Stage A of the dynamics plan (HANDOFF.md › Dynamics like a real player; the owner, 2026-10-12): each note of SSO's five
 string sections as loud as a real player at its written dynamic, the player's full range, by CC11 and the patches'
@@ -78,6 +86,17 @@ WINDS = {'Flute Solo': 'Transverse flute modern', 'Flutes a2': 'Transverse flute
          'Bass Trombones a2': 'Bass trombone modern', 'Tuba Solo': 'Tuba modern'}
 NO_DATA = ['Piccolo', 'Alto Flute', 'Bass Flute', 'Contrabass Clarinet', 'Cimbasso Solo', 'Cimbassi a2',
            'Contrabass Trombone', 'Contrabass Tuba', 'Motif Horns a4', 'Motif Trumpets a3', 'Motif Trombones a5']
+# The patches without a section level before 2026-10-15 (section_balance_cl.py GAP), their Long swept 2026-10-15
+# (sso_gap_cc1_curves.json). Their own database instrument (one player's span, as the a2 / a6 patches):
+GAP_OWN = {'Solo Violin 1': 'Violin modern', 'Solo Violin 2': 'Violin modern', 'Solo Viola': 'Viola modern',
+           'Solo Cello': 'Cello modern', 'Motif Horns a4': 'French horn modern', 'Motif Trumpets a3': 'Trumpet modern',
+           'Motif Trombones a5': 'Tenor trombone modern'}
+# No database instrument and no Clark & Luce span of their own: their family's span (an ASSUMPTION, not a measurement:
+# plays like its family; the same families as their section level, section_balance_cl.py GAP); no realSpan
+GAP_FAMILY = {'Piccolo': 'Transverse flute modern', 'Alto Flute': 'Transverse flute modern',
+              'Bass Flute': 'Transverse flute modern', 'Contrabass Clarinet': 'Clarinet modern',
+              'Contrabass Trombone': 'Tenor trombone modern', 'Cimbasso Solo': 'Tenor trombone modern',
+              'Cimbassi a2': 'Tenor trombone modern', 'Contrabass Tuba': 'Tuba modern'}
 KMAX = 12
 # Meyer 2009, chapter 3: database instrument -> (section, X single-note extremes (lo, hi), P rapid scales (pp, ff)), dB
 # sound power. Viola's X_lo: 63 on the D / A strings (67 low); clarinet's X_lo: 57 in the fifth octave (65 typical);
@@ -197,7 +216,7 @@ def marks(e, ab, sectionDb=None):
     """({marking: the player's dB from mp}, {marking: realDb}) at the entry's middle pitch; sectionDb: the section
     spans' rule (steps x S / 5) instead of fractions ab of the span"""
     p = e['midPitch']
-    span = e['span'][str(p)]
+    span = e['span'][str(p)] if sectionDb is None else None
     longs = {int(q): {int(c): v for c, v in per.items()} for q, per in e['long'].items()}
     player, real = {}, {}
     for i, (mk, cc) in enumerate(zip(MARKS, MARK_CC)):
@@ -338,11 +357,48 @@ def winds(csvPath, windsPath, k):
     return method, inst
 
 
+def gap(csvPath, gapPath, k, ruleD):
+    """the gap patches (GAP_OWN as the winds, GAP_FAMILY their family's Clark & Luce span only)"""
+    swept = json.load(open(gapPath, encoding='utf-8'))['sections']
+    names = [n for n in list(GAP_OWN) + list(GAP_FAMILY) if n in swept]
+    ssoRel = sso(gapPath, names)
+    data = spans(csvPath, set(GAP_OWN.values()))
+    smooth = {lab: {p: round(localLinear(pts, p, k), 2) for p in range(min(pts), max(pts) + 1)}
+              for lab, pts in data.items()}
+    inst = {}
+    for n in names:
+        if n in GAP_OWN:
+            lab = GAP_OWN[n]
+            inst[n] = addRule(entry(lab, smooth[lab], data[lab], ssoRel[n]), ruleD)
+            continue
+        lab = GAP_FAMILY[n]
+        s, src = SPANS[lab]
+        ps = sorted(ssoRel[n])
+        e = {'instrument': None, 'family': lab,
+             'long': {str(p): {str(cc): v for cc, v in per.items()} for p, per in ssoRel[n].items()},
+             'midPitch': ps[len(ps) // 2], 'rule': None,
+             'sectionSpan': {'db': s, 'source': src + "; the " + lab + "'s, an assumption, not a measurement (plays like "
+                                                     "its family; the database has no such instrument)"}}
+        md, rd = marks(e, None, s)
+        e['marksMid'], e['realDbMid'] = {'spans': md}, {'spans': rd}
+        inst[n] = e
+    method = {
+        'what': 'the 15 patches without a section level before 2026-10-15 (section_balance_cl.py GAP): GAP_OWN as the '
+                'winds (their own database instrument, one player\'s span); GAP_FAMILY their family\'s Clark & Luce span '
+                'only (an assumption: plays like its family), no realSpan (realRange 1 leaves them alone)',
+        'own': GAP_OWN,
+        'family': GAP_FAMILY,
+        'sso': 'sso_gap_cc1_curves.json, rmsDb (mean power 1.5-3.0 s after the note-on), each pitch less its CC1 64',
+    }
+    return method, inst
+
+
 def main():
     args = [a for a in sys.argv[1:] if a != '--rule-d']
     ruleD = len(args) != len(sys.argv) - 1
     csvPath, curvesPath, outPath = args[:3]
     windsPath = args[3] if len(args) > 3 else None
+    gapPath = args[4] if len(args) > 4 else None
     data = spans(csvPath)
     k, cv = chooseK(data)
     smooth = {lab: {p: round(localLinear(pts, p, k), 2) for p in range(min(pts), max(pts) + 1)}
@@ -396,6 +452,12 @@ def main():
         print('winds k', wm['k'], 'own', wm['kOwn'], 'cv', {i: round(float(v), 2) for i, v in wm['cvRmsDb'].items()})
         for n, v in wi.items():
             print(n, 'mid', v['midPitch'], 'span', v['span'][str(v['midPitch'])], 'rule', v['rule'], 'realDb D', v['realDbMid']['D'], 'meyer', v['realDbMid'].get('meyer'))
+        if gapPath:
+            gm, gi = gap(csvPath, gapPath, k, ruleD)
+            out['methodGap'] = gm
+            out['instruments'].update(gi)
+            for n, v in gi.items():
+                print(n, 'mid', v['midPitch'], 'rule', v['rule'], 'S', v['sectionSpan']['db'], 'realDb spans', v['realDbMid']['spans'])
     with open(outPath, 'w', encoding='utf-8') as f:
         json.dump(out, f, indent=1)
         f.write('\n')

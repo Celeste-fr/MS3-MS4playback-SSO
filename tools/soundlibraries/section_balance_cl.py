@@ -4,7 +4,7 @@
 
     python3 -I section_balance_cl.py <clark_luce_levels.json> <clark_luce_table2.json> <sso_cc1_curves.json>
                                      <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <sso_sound_dynamics.json>
-                                     <out sso_cl_section_balance.json>
+                                     <sso_gap_cc1_curves.json> <out sso_cl_section_balance.json>
 
 The owner, 2026-10-14: "I prefer all the balance levels and the dynamic levels loudness to be based on real data".
 Real side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in
@@ -26,11 +26,13 @@ change from sectionLevel to sectionLevel2 added to their sectionLevel (FAMILY: a
 Patches without sectionLevel (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 2; before, they played SSO's own level
 against an orchestra whose levels are all corrected): GAP. Real side: their Clark & Luce instrument (the solo strings,
 the Motif brass) or a family member's (an assumption: Piccolo, Alto / Bass Flute by the flute, Contrabass Clarinet by
-the clarinet, Contrabass Trombone and Cimbasso by the trombone, Contrabass Tuba by the tuba). SSO side: the dynamics
-check's Long at CC1 64 at the patch's test pitch (sso_sound_dynamics.json; no full-range measurement exists for them),
-plus the median of (full-range mean - dynamics check) over the patches that have both (`standIn`): on those, the
-stand-in's M2 differs from the real one by SD 2.3 dB. Strings Ensemble stays without: which sections sound at its test
-pitch isn't known.
+the clarinet, Contrabass Trombone and Cimbasso by the trombone, Contrabass Tuba by the tuba). SSO side (since
+2026-10-15, iteration 4): the patch's Long at CC1 64 (loudDb) from its own sweep (sso_gap_cc1_curves.json, made as
+sso_winds_cc1_curves.json), linear in dB between measured pitches, its mean over every semitone of the sweep (no
+database range to meet: Clark & Luce's levels are scales over the whole playing range). Iteration 2's stand-in (the
+dynamics check's Long at CC1 64 at the test pitch plus the median of (full-range mean - dynamics check) over the
+patches that have both) is kept as a check only ("standIn", each gap patch's "standInM2"). Strings Ensemble stays
+without: which sections sound at each pitch isn't known.
 """
 import json
 import math
@@ -96,7 +98,8 @@ def lw(levels, inst, table2):
 
 
 def main():
-    levelsPath, table2Path, curvesPath, windsPath, balancePath, dynamicsPath, outPath = sys.argv[1:8]
+    levelsPath, table2Path, curvesPath, windsPath, balancePath, dynamicsPath, gapPath, outPath = sys.argv[1:9]
+    gap = json.load(open(gapPath, encoding='utf-8'))['sections']
     dynamics = json.load(open(dynamicsPath, encoding='utf-8'))
     levels = json.load(open(levelsPath, encoding='utf-8'))['levels']
     table2 = {k: v for k, v in json.load(open(table2Path, encoding='utf-8')).items() if k in levels or k == 'playerWeight'}
@@ -137,8 +140,12 @@ def main():
                       'max': round(max(map(abs, err)), 2)}
     for name, (inst, n, family) in GAP.items():
         r = {k: x + 10 * math.log10(n) for k, x in lw(levels, inst, table2).items()}
-        out['patches'][name] = {'M2': round(-(check(name) + standIn - r['mp'] - centre), 2), 'M1': None, 'instrument': inst,
-                                'players': n, 'familyAssumption': family, 'sso': 'dynamics check, pitch %d' % dynamics[name]['pitch'],
+        sso = at64(gap[name])
+        lo, hi = min(sso), max(sso)
+        mean = sum(interp(sso, p) for p in range(lo, hi + 1)) / (hi - lo + 1)
+        out['patches'][name] = {'M2': round(-(mean - r['mp'] - centre), 2), 'M1': None, 'instrument': inst,
+                                'players': n, 'familyAssumption': family, 'sso': 'sweep, pitches %d-%d' % (lo, hi),
+                                'standInM2': round(-(check(name) + standIn - r['mp'] - centre), 2),
                                 'lw': {k: round(x, 2) for k, x in r.items()}}
     with open(outPath, 'w', encoding='utf-8') as fh:
         json.dump(out, fh, indent=1)

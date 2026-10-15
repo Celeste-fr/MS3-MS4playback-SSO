@@ -86,6 +86,41 @@ printed) stay: the same weighting would move them by -0.9 (tuba) .. +0.2 dB, wit
 +0.7, Clarinet Solo -2.84 -> -3.40, Violas -6.75 -> -7.03, every other patch within ±0.3 (the strings' centre moved
 -0.16). Trumpets a6 +19.51 -> +19.67, still the loudest patch (S' 13.67).
 
+## Iteration 4 (2026-10-15): the 15 gap patches swept; their real range; the markings checked in Kontakt
+
+**Weakest link.** Iteration 2 gave the 15 patches without a section level a balance from a stand-in for SSO's side (the
+dynamics check's one note at CC1 64 plus the median difference to the full sweep: SD 2.3, max 4.1 dB on the patches that
+have both), and no real range at all: their markings played at SSO's own levels.
+
+**Evidence.** The same sweep as `sso_winds_cc1_curves.json` (Windows VM, Kontakt 8.13.1 + SSO, kthost, the library's
+setups: every 3 semitones over each Long's range + the test pitch, CC1 16 .. 127, 4 takes) for all 15:
+`sso_gap_cc1_curves.json`. The solo strings and the three Motif patches play one sample per point; the other eight
+alternate two round robins (A - B median 0.7 .. 1.5 dB). Several Longs barely rise above mp: Contrabass Tuba +0.9 dB from
+CC1 64 to 127, Contrabass Trombone and Cimbassi a2 dip at CC1 80. **The marking check**: every patch with a real range
+(the 28 before and these 15) rendered in Kontakt at its test pitch, the eight markings as MuseScore sends them with
+realRange 2 (CC1 = velocity = the marking; CC11 = realDb less the patch's top), 4 takes: the measured steps from mp
+against steps x S / 5: median RMS error 0.05 dB, 42 of 43 in order. So CC11 is a plain 20 log10 volume on the All
+techniques Longs too (measured before only on the Performance patches). Cor Anglais is the exception: pp +1.2 and ff
++1.0 dB off, pp above p, its round robins 4.5 dB apart at those points against a marking step of 1.04 dB (S 5.2): one
+note can't be put in order there. Solo Cello pp +1.1 dB, still in order.
+
+**Decision.** SSO's side of the 15 patches' sectionLevel2 from their own sweep (loudDb at CC1 64, mean over every swept
+semitone: Clark & Luce's levels are scales over the whole range); the stand-in stays in the file as a check
+(`standInM2`). Real range (realRange 2): longLevel from the sweep; realSteps their own Clark & Luce instrument's (solo
+violins 13.8, viola 15.9, cello 14.1, Motif horns 17.7, trumpets 8.8, trombones 17.0) or, an assumption marked as such,
+their family's (Piccolo, Alto / Bass Flute the flute's 7.5, Contrabass Clarinet the clarinet's 8.3, Contrabass Trombone
+and Cimbasso Solo / a2 the trombone's 17.0, Contrabass Tuba the tuba's 12.5; `real_range.py` GAP_FAMILY). The seven with
+a database instrument also get realSpan (TU Berlin's span) and realPlay, so realRange 1 plays them too; the eight family
+ones have no realSpan and realRange 1 leaves them as before (`ContextLevel::hasRealRange`: longLevel and realSpan or
+realSteps).
+
+**Before -> after** (`sectionLevel2`, dB, stand-in -> sweep): Solo Violin 1 +1.85 -> -0.10, Solo Violin 2 +0.45 ->
+-0.33, Solo Viola -2.26 -> -3.64, Solo Cello -0.42 -> +3.71, Motif Horns a4 +10.71 -> +9.33, Motif Trumpets a3 +11.49 ->
++12.79, Motif Trombones a5 +9.11 -> +6.52, Piccolo -3.66 -> -4.95, Alto Flute +3.74 -> +1.24, Bass Flute -1.96 -> -3.58,
+Contrabass Clarinet -2.84 -> -1.38, Contrabass Trombone -7.08 -> -3.65, Cimbasso Solo +3.12 -> +2.97, Cimbassi a2
++10.83 -> +12.92, Contrabass Tuba -9.09 -> -4.47 (within the stand-in's stated error, as expected). Every other patch
+unchanged. The markings of the 15 now play as real players' (steps x S / 5 from mp).
+
 ## Investigated, no change (2026-10-15)
 
 - **Pitch dependence.** Each patch has one offset over its range, so SSO's level against pitch stays as recorded. Linear
@@ -95,13 +130,6 @@ printed) stay: the same weighting would move them by -0.9 (tuba) .. +0.2 dB, wit
   (SSO +3.8 / +4.4 against +5.7 and +7.4), Basses (-6.4 against -4.1 and -2.7) and Trumpet Solo (+7.6 against +5.9 and
   +3.3) deviate on the same side in both, by about 2 .. 4 dB at their range ends, within the two sources' own
   disagreement. A per-pitch correction would need its own map data and code; the data don't justify it.
-- **Real range for the 15 patches of iteration 2.** They have no `longLevel` (SSO's change with CC1), so `realRange` 2
-  leaves their markings at SSO's own levels. The dynamics check has their CC1 response at one pitch, with one note per
-  point: against the full sweep (4 takes) of the 28 measured patches it differs by SD 1.4 .. 2.3 dB per CC1 value (it caught
-  alternating round robins), as large as one marking's step (S / 5 = 1.5 .. 3.5 dB): markings could play out of order. The
-  data to do it: the same sweep as `sso_winds_cc1_curves.json` for these 15 patches on the Windows VM (pitches every 6
-  semitones, 8 CC1 values, 2 takes: about 7 minutes each). The VM wasn't reachable on 2026-10-15 (the dev machine's
-  network moved to 192.168.4.x); it needs the VM's new address.
 - **Clarinet / trombone / tuba and flute / oboe against Spheres** (3 .. 6 dB apart at mp): no third source referees
   them per instrument at mp (TU and Meyer are single-note or forte values), and Clark & Luce shows no fault there (its
   players agree within 0.4 .. 4.2 dB); Clark & Luce stays (one method for every instrument).

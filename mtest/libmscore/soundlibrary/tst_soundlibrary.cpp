@@ -2801,12 +2801,12 @@ void TestSoundLibrary::levelSectionBalance()
                  { "Horns a2", 3.68 }, { "Horns a6", 7.46 }, { "Trumpet Solo", 8.26 }, { "Trumpets a2", 13.47 },
                  { "Trumpets a6", 19.67 }, { "Tenor Trombone Solo", -2.12 }, { "Tenor Trombones a2", 4.55 },
                  { "Trombones a6", 14.23 }, { "Tuba Solo", -2.36 }, { "Bass Clarinet", -5.63 }, { "Contrabassoon", -15.52 },
-                 { "Bass Trombone Solo", -0.12 }, { "Bass Trombones a2", 3.44 }, { "Solo Violin 1", 1.85 },
-                 { "Solo Violin 2", 0.45 }, { "Solo Viola", -2.26 }, { "Solo Cello", -0.42 }, { "Motif Horns a4", 10.71 },
-                 { "Motif Trumpets a3", 11.49 }, { "Motif Trombones a5", 9.11 }, { "Piccolo", -3.66 },
-                 { "Alto Flute", 3.74 }, { "Bass Flute", -1.96 }, { "Contrabass Clarinet", -2.84 },
-                 { "Contrabass Trombone", -7.08 }, { "Cimbasso Solo", 3.12 }, { "Cimbassi a2", 10.83 },
-                 { "Contrabass Tuba", -9.09 } };
+                 { "Bass Trombone Solo", -0.12 }, { "Bass Trombones a2", 3.44 }, { "Solo Violin 1", -0.10 },
+                 { "Solo Violin 2", -0.33 }, { "Solo Viola", -3.64 }, { "Solo Cello", 3.71 }, { "Motif Horns a4", 9.33 },
+                 { "Motif Trumpets a3", 12.79 }, { "Motif Trombones a5", 6.52 }, { "Piccolo", -4.95 },
+                 { "Alto Flute", 1.24 }, { "Bass Flute", -3.58 }, { "Contrabass Clarinet", -1.38 },
+                 { "Contrabass Trombone", -3.65 }, { "Cimbasso Solo", 2.97 }, { "Cimbassi a2", 12.92 },
+                 { "Contrabass Tuba", -4.47 } };
       QCOMPARE(int(M2.size()), 43);
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
@@ -3137,7 +3137,8 @@ void TestSoundLibrary::levelRealRange()
                         }
       QCOMPARE(presets, 2);
       // the shipped SSO map: the five string sections and the woodwinds' / brass' main patches the TU Berlin database has
-      // (and their extras) carry it, nothing else; by the Meyer rule except the instruments Meyer gives no extremes for
+      // (and their extras) carry it, and since 2026-10-15 the gap patches (real_range.py GAP_OWN / GAP_FAMILY), nothing
+      // else; by the Meyer rule except the instruments Meyer gives no extremes for
       QString error;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
       QVERIFY2(sso, qPrintable(error));
@@ -3146,7 +3147,14 @@ void TestSoundLibrary::levelRealRange()
                                    "Clarinets a2", "Bass Clarinet", "Bassoon Solo", "Bassoons a2", "Contrabassoon",
                                    "Horn Solo", "Horns a2", "Horns a6", "Trumpet Solo", "Trumpets a2", "Trumpets a6",
                                    "Tenor Trombone Solo", "Tenor Trombones a2", "Trombones a6", "Bass Trombone Solo",
-                                   "Bass Trombones a2", "Tuba Solo" };
+                                   "Bass Trombones a2", "Tuba Solo",
+                                   "Solo Violin 1", "Solo Violin 2", "Solo Viola", "Solo Cello", "Motif Horns a4",
+                                   "Motif Trumpets a3", "Motif Trombones a5", "Piccolo", "Alto Flute", "Bass Flute",
+                                   "Contrabass Clarinet", "Contrabass Trombone", "Cimbasso Solo", "Cimbassi a2",
+                                   "Contrabass Tuba" };
+      // (no database instrument: their family's realSteps only, an assumption; realRange 1 plays them as before)
+      const QStringList family { "Piccolo", "Alto Flute", "Bass Flute", "Contrabass Clarinet", "Contrabass Trombone",
+                                 "Cimbasso Solo", "Cimbassi a2", "Contrabass Tuba" };
       // (the bass clarinet and the bass trombones take their sibling's fractions: the owner, 2026-10-14, an assumption)
       const QStringList ruleD { "Cor Anglais", "Contrabassoon" };
       // Meyer 2009 ch. 3, (P - X_lo) / (X_hi - X_lo): Celli (74 - 63) / 35, (96 - 63) / 35 (3.3.3.2); Violins (74 - 58) / 41,
@@ -3161,7 +3169,9 @@ void TestSoundLibrary::levelRealRange()
             { "Celli", 14.1 }, { "Basses", 14.1 }, { "Flute Solo", 7.5 }, { "Oboe Solo", 7.4 }, { "Cor Anglais", 5.2 },
             { "Clarinet Solo", 8.3 }, { "Bass Clarinet", 8.3 }, { "Bassoon Solo", 10.2 }, { "Contrabassoon", 10.2 },
             { "Horns a6", 17.7 }, { "Trumpets a6", 8.8 }, { "Trombones a6", 17.0 }, { "Bass Trombones a2", 17.0 },
-            { "Tuba Solo", 12.5 } };
+            { "Tuba Solo", 12.5 }, { "Solo Violin 1", 13.8 }, { "Solo Viola", 15.9 }, { "Solo Cello", 14.1 },
+            { "Motif Horns a4", 17.7 }, { "Motif Trumpets a3", 8.8 }, { "Motif Trombones a5", 17.0 }, { "Piccolo", 7.5 },
+            { "Bass Flute", 7.5 }, { "Contrabass Clarinet", 8.3 }, { "Cimbassi a2", 17.0 }, { "Contrabass Tuba", 12.5 } };
       int with = 0;
       QStringList mains;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
@@ -3173,7 +3183,12 @@ void TestSoundLibrary::levelRealRange()
             if (!mains.contains(section))
                   mains << section;
             QCOMPARE(ContextLevel::realRangeDb(li, 64, 60), 0.0);                    // (mp: none, M stays)
-            if (ruleD.contains(section)) {
+            QCOMPARE(li.realSpan.empty(), family.contains(section));
+            if (family.contains(section)) {
+                  QCOMPARE(ContextLevel::realRangeDb(li, 127, 60), 0.0);
+                  QVERIFY2(ContextLevel::realRangeDb(li, 127, 60, true) != 0.0, qPrintable(li.name));
+                  }
+            else if (ruleD.contains(section)) {
                   QCOMPARE(li.realPlayPp, 1.0 / 7.0);
                   QCOMPARE(li.realPlayFf, 6.0 / 7.0);
                   }
