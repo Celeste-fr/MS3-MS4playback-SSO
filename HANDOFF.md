@@ -78,7 +78,7 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   orchestra check (branch `orchestra-markings` 5c57d9687a) finds the clarinet within ~2 dB of the oboe at p / pp; the
   Meyer rule moves one player's levels that way without closing the gap (clarinet p minus oboe p, TU Berlin unsmoothed,
   F4 / A4 / C5 / E5 / G5: rule D median -12.9 dB, Meyer -8.6); the B8 score readings await the owner's review
-  (https://claude.ai/artifact/H8bXsxgU8ZtXZhEzdmTXhT) and are not used as numbers. Not yet heard: a ladder or a score
+  (https://claude.ai/artifact/1Eyi6i8tTt8wkzXaEtUZE9) and are not used as numbers. Not yet heard: a ladder or a score
   with written dynamics, both rules, for the owner (`real_range.py --rule-d` regenerates rule D for the comparison).
 - **Stage B blind test** (2026-10-14, db `stageb1`, branch `stage-b-brightness` bb13144e0a has the measurements, HANDOFF
   there › Stage B measured): the owner picked SSO's CC1 127 brighter in 10 / 10 (Violins 1 4, Violas 4, Celli 13 / 14);
@@ -255,7 +255,7 @@ now also plays a flute and Trumpets a6 on the shipped map.
   further below the volumes (the -42.08 floor not reached here, not checked on long scores). Whence: above.
 - **Open: better non-solo data.** The only ensemble measurement is the Beethoven 8 orchestra check (branch
   `orchestra-markings` 5c57d9687a; clarinet within ~2 dB of the oboe at p / pp), its score readings unreviewed
-  (https://claude.ai/artifact/H8bXsxgU8ZtXZhEzdmTXhT). With M the clarinet minus the oboe moves +3.80 dB at every
+  (https://claude.ai/artifact/1Eyi6i8tTt8wkzXaEtUZE9). With M the clarinet minus the oboe moves +3.80 dB at every
   marking (before -6.8 / -5.2 / -1.9 at p / mp / f near pitch 73, now about -3.0 / -1.4 / +1.9).
 - **Bass clarinet, bass trombones: sibling's fractions** (the owner, 2026-10-14, "sure": an assumption, "plays like its
   family", not a measurement; `real_range.py` `SIBLING`): Bass Clarinet the clarinet's, Bass Trombone Solo / a2 the
