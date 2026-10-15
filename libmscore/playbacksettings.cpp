@@ -109,7 +109,6 @@ static const std::vector<Definition> DEFINITIONS = {
         "every Kontakt patch MuseScore sets up gets this voice limit (0: the patch's own; MS_KONTAKT_MAX_VOICES wins); also in the Live Set", false },
       { "hosting/settleSeconds", 1.0, 0, 10, "s",
         "a patch just loaded runs this long before its controllers are set (its script initialises)", false },
-      { "hosting/mixSmoothingMs", 5, 0, 100, "ms", "the Mixer's volume, pan and mute glide over this long (no clicks)", false },
       };
 
 const std::vector<Definition>& definitions()
@@ -194,6 +193,8 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
             // (the fast-note ramp, replaced on 2026-10-02 by keepMs, fastShare / fastFullMs and fastTechnique: fast slurs on time)
             if (id == "legato/rampFromMs" || id == "legato/rampToMs" || id == "legato/rampMaxShare")
                   i.warnings << QString("%1 is no longer used (since 2026-10-02: legato/keepMs, fastShare, fastFullMs, fastTechnique; delete the line)").arg(id);
+            else if (id == "hosting/mixSmoothingMs")
+                  i.warnings << QString("%1 is no longer used (since 2026-10-03: the Mixer's gains apply at once; delete the line)").arg(id);
             else
                   i.warnings << QString("unknown key %1 (ignored)").arg(id);
             return;

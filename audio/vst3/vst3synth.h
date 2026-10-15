@@ -9,7 +9,7 @@
 //  master effects, as the library brings its own room.
 //
 //  The Mixer (volume, pan, mute, solo of the part a slot plays) is applied here, in the host, to
-//  each slot's stereo output before the slots are summed: setMix(), smoothed, so it works for any
+//  each slot's stereo output before the slots are summed: setMix(), applied at once, so it works for any
 //  plug-in (one may ignore MIDI CC7 / CC10: Spitfire's scripts), live and in an audio export alike.
 //  CC7 / CC10 are not sent to the plug-ins (a plug-in that follows them would apply them twice).
 //
@@ -44,17 +44,14 @@ class Vst3Synth : public Synthesizer {
                                                     // controller index (ME_PARAMETER events), -1: none
       std::atomic<bool> _varispeed { false };
       // the Mixer, per slot: the target gains of the left and right output (volume × pan, 0 muted),
-      // live and for an export (its own: an export plays mute but not solo, as MuseScore's), and
-      // the gains now (the audio or exporting thread: they glide to the targets, MIX_SMOOTHING)
+      // live and for an export (its own: an export plays mute but not solo, as MuseScore's); applied at once
       struct Mix {
             std::atomic<float> left { 1.f };
             std::atomic<float> right { 1.f };
             };
       std::array<Mix, 64> _mix;
       std::array<Mix, 64> _exportMix;
-      std::vector<std::array<float, 2>> _gain;
       std::vector<float> _scratch;
-      void snapGains(const std::array<Mix, 64>& mix);
       // what the audio thread couldn't play while the GUI thread had the slots: played with the next
       // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
       std::mutex _pendingMutex;
@@ -123,7 +120,6 @@ class Vst3Synth : public Synthesizer {
       void setExportMix(int slot, int volume, int pan, bool muted);
       static float volumeGain(int volume);
       static void panGains(int pan, float* left, float* right);
-      static constexpr double MIX_SMOOTHING = 0.005;   // seconds: the gains' time constant (no clicks)
 
       // GUI thread
       Vst3Plugin* plugin(int slot) const;

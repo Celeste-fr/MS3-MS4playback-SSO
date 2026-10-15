@@ -6068,7 +6068,7 @@ void TestSoundLibrary::mixerSlot()
       const double l0 = rms(ref, 0);
       const double r0 = rms(ref, 1);
       QVERIFY(l0 > 0.01 && std::fabs(l0 - r0) < 1e-6);
-      auto settled = [&]() { run(vst, 4800); return run(vst, 4800); };   // 100 ms: the glide is over
+      auto settled = [&]() { run(vst, 4800); return run(vst, 4800); };   // (gains apply at once)
 
       // volume: 50 is -12.04 dB, 127 +4.15 dB, 0 silent
       vst.setMix(0, 50, 64, false);
@@ -6097,20 +6097,12 @@ void TestSoundLibrary::mixerSlot()
       const double power = rms(b, 0) * rms(b, 0) + rms(b, 1) * rms(b, 1);
       QVERIFY(std::fabs(10 * std::log10(power / (l0 * l0 + r0 * r0))) < 0.01);
 
-      // mute: silent, gliding there (no click: the first samples barely change), and back
+      // mute: silent at once, and back
       vst.setMix(0, 100, 64, false);
       settled();
       vst.setMix(0, 100, 64, true);
       b = run(vst, 4800);
-      double early = 0;                             // the first 110 frames (a period of A4): the gain 1 -> 0.6
-      for (int i = 0; i < 110; ++i)
-            early += double(b[2 * size_t(i)]) * b[2 * size_t(i)];
-      early = std::sqrt(early / 110);
-      QVERIFY2(early > 0.6 * l0 && early < 0.95 * l0, qPrintable(QString("%1 %2").arg(early).arg(l0)));
-      double tail = 0;
-      for (size_t i = b.size() - 960; i < b.size(); ++i)
-            tail = std::max(tail, double(std::fabs(b[i])));
-      QVERIFY(tail < 1e-4 * l0);
+      QCOMPARE(rms(b, 0), 0.0);
       QCOMPARE(rms(run(vst, 4800), 0), 0.0);
       vst.setMix(0, 100, 64, false);
       b = settled();
