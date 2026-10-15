@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""The section balance M for SSO's woodwinds and brass on the strings' scale (the map's sectionLevel since 2026-10-14:
-gen_spitfire_sso.py reads the "instruments" of its output).
+"""The section balance M for SSO's string sections, woodwinds and brass, one rule for all (the map's sectionLevel:
+gen_spitfire_sso.py reads its output's "strings" and "instruments").
 
     python3 -I section_balance_winds.py <3_Audio_Features.csv> <sso_sound_range.json> <sso_cc1_curves.json>
                                         <sso_winds_cc1_curves.json> <out sso_winds_section_balance.json>
 
 The owner, 2026-10-14: the woodwinds and brass get a section balance M from the solo data (TU Berlin sound power, with
-Meyer's levels) "until we can find better non-solo data". The strings' M (gen_spitfire_sso.py SECTION_FADERS, the
-owner's choice 2026-10-11) by its own method, then the same for every measured wind and brass patch WITHOUT re-centring:
+Meyer's levels) "until we can find better non-solo data"; then ("sure") the strings' M to Meyer's mp too, so one rule
+covers everything. The strings' M by the method the owner chose 2026-10-11 (centred over the five), then the same for
+every measured wind and brass patch WITHOUT re-centring:
 each patch's D = SSO - real (mean over the semitones of the Long's range the database also measured), M = -(D - the
 strings' mean D), so a wind's M is the dB it plays louder by beside the strings.
   - SSO side: the Long at CC1 = velocity 64, loudDb (the loudest 50 ms of the note and 0.5 s of its release), median of
@@ -15,13 +16,12 @@ strings' mean D), so a wind's M is the dB it plays louder by beside the strings.
   - real side: Weinzierl et al. 2018, TU Berlin database v3, SoundPower in dB of single tones (_et_), per MIDI pitch,
     linear in dB between measured pitches (pp, ff as measured, not smoothed); a patch = one player + 10 log10 N, N its
     players (solo 1, a2 2, a6 6; strings 16 / 14 / 12 / 10 / 8, SSO's product page);
-  - mp: a wind at mp as [levels] realRange plays it (2026-10-14): pp + f (ff - pp), f = a + 2 (b - a) / 5 by the Meyer
-    rule (real_range.fractions: the bass clarinet's and bass trombones' their sibling's, an assumption), 3 / 7 by rule D
-    (Cor Anglais, Contrabassoon). The strings' approved M placed mp at f = 0.4 (CC1 64 = level 4750 on MuseScore's pp
-    3750 .. ff 6250); recomputed with the Meyer rule's f they would move by up to 1.21 dB (stringsMove), more than
-    MOVE_MAX, so the approved strings stay and the winds go on their scale: the centre is the strings' mean D at f = 0.4
-    on today's curves (stringsMp04: within 0.14 dB of the approved values: Celli and Basses re-measured 2026-10-14).
-    meyerScaleShift: what every wind's M would change by with the strings' Meyer M instead (a choice for the owner).
+  - mp: every patch at mp as [levels] realRange plays it (2026-10-14): pp + f (ff - pp), f = a + 2 (b - a) / 5 by the
+    Meyer rule (real_range.fractions: the bass clarinet's and bass trombones' their sibling's, an assumption), 3 / 7 by
+    rule D (Cor Anglais, Contrabassoon). Until 2026-10-14 the strings' M (APPROVED_20261011, the owner's ABX-backed
+    choice) placed mp at f = 0.4 (CC1 64 = level 4750 on MuseScore's pp 3750 .. ff 6250); stringsMp04 is that method on
+    today's curves (Celli and Basses re-measured every semitone 2026-10-14), stringsMove the Meyer M less the 2026-10-11
+    values, meyerScaleShift the winds' change from the f = 0.4 scale to Meyer's.
 The CSV is CC BY-NC-SA 4.0: derived numbers only.
 """
 import csv
@@ -34,9 +34,8 @@ import real_range  # noqa: E402
 
 STRINGS = {'Violins 1': ('Violin modern', 16), 'Violins 2': ('Violin modern', 14), 'Violas': ('Viola modern', 12),
            'Celli': ('Cello modern', 10), 'Basses': ('Double bass modern', 8)}
-FRAC = 0.4          # the approved strings' M (2026-10-11): mp 0.4 of the way pp -> ff
-APPROVED = {'Violins 1': -3.81, 'Violins 2': -2.66, 'Violas': -2.12, 'Celli': 2.77, 'Basses': 5.81}
-MOVE_MAX = 0.5      # the strings take the recomputed M if every section moves by at most this (2026-10-14)
+FRAC = 0.4          # the strings' M of 2026-10-11: mp 0.4 of the way pp -> ff (history, stringsMp04)
+APPROVED_20261011 = {'Violins 1': -3.81, 'Violins 2': -2.66, 'Violas': -2.12, 'Celli': 2.77, 'Basses': 5.81}
 
 
 def mpFrac(lab):
@@ -118,18 +117,18 @@ def main():
     centre = sum(d.values()) / len(d)
     strM04 = {s: round(-(d04[s] - c04), 2) for s in STRINGS}
     strM = {s: round(-(d[s] - centre), 2) for s in STRINGS}
-    moves = {s: round(strM[s] - APPROVED[s], 2) for s in STRINGS}
-    meyerStrings = all(abs(v) <= MOVE_MAX for v in moves.values())
+    moves = {s: round(strM[s] - APPROVED_20261011[s], 2) for s in STRINGS}
+    meyerStrings = True     # the owner, 2026-10-14 ("sure"): the strings by Meyer's mp too
     # (with the strings' Meyer M every wind would play this much louder against the strings' mean: the scales' offset)
     shift = round(centre - c04, 2)
     if not meyerStrings:
         centre = c04        # the approved strings kept: the winds on their scale (the approved method's centre)
-    out = {'method': __doc__.strip().split('\n\n', 1)[1], 'approved': APPROVED, 'stringsMp04': strM04,
+    out = {'method': __doc__.strip().split('\n\n', 1)[1], 'approved20261011': APPROVED_20261011, 'stringsMp04': strM04,
            'meyerScaleShift': shift,
            'stringsMeyer': strM, 'stringsMove': moves, 'stringsTake': 'meyer' if meyerStrings else 'approved',
            'strings': {}, 'instruments': {}}
     for s in STRINGS:
-        out['strings'][s] = {'M': strM[s] if meyerStrings else APPROVED[s], 'D': round(d[s], 2),
+        out['strings'][s] = {'M': strM[s] if meyerStrings else APPROVED_20261011[s], 'D': round(d[s], 2),
                              'mpFrac': round(mpFrac(STRINGS[s][0]), 4), 'players': STRINGS[s][1], 'common': common[s]}
     for name, lab in real_range.WINDS.items():
         if name not in winds:
@@ -144,7 +143,7 @@ def main():
         f.write('\n')
     print('strings mp 0.4  ', ' '.join('%s %+.2f' % (s, v) for s, v in strM04.items()))
     print('strings Meyer   ', ' '.join('%s %+.2f' % (s, v) for s, v in strM.items()))
-    print('move vs approved', moves, '->', out['stringsTake'])
+    print('move vs 2026-10-11', moves, '->', out['stringsTake'])
     for name, v in out['instruments'].items():
         print('%-22s M %+6.2f  (N %d, %s, %s mp %.3f, %d-%d)' % (name, v['M'], v['players'], v['instrument'], v['rule'],
                                                                v['mpFrac'], *v['common']))

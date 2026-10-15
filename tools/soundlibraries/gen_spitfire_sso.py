@@ -1484,15 +1484,18 @@ def contextLevel(patch, sound):
 #   - SSO side: measured on the Windows test VM, All techniques Long at CC1 = velocity 64, the loudest 50 ms of the note
 #     (loudDb), every 3 semitones, median of 4 (sso_cc1_curves.json, commit 329681d3a2), linear in dB between them;
 #   - every semitone of the Long's range the database also measured, equal weights; M = -(SSO - real section), centred.
-#   The session's m_final.py, key M_loudDb, 0.01 dB (variants not used: by the sustain's RMS -3.69 -3.00 -1.47 +2.60
-#   +5.56, by LUFS -4.63 -3.66 -2.46 +2.99 +7.75). Listening (ABX, blind, the owner, 2026-10-11): the basses' 1.6-3.6 dB
-#   differences heard soloed 14/14, not in the full mix (5/8); the owner chose M for its model.
-#   The woodwinds and brass (the owner, 2026-10-14: from the solo data "until we can find better non-solo data"): the
-#   same method on the strings' scale, their real mp where [levels] realRange plays it (the Meyer rule; rule D for Cor
-#   Anglais and Contrabassoon), from sso_winds_section_balance.json (section_balance_winds.py; its "instruments"). The
-#   strings keep their approved M: by the Meyer rule's mp they would move by up to 1.21 dB (that file's stringsMove)
-SECTION_FADERS = {'Violins 1': -3.81, 'Violins 2': -2.66, 'Violas': -2.12, 'Celli': 2.77, 'Basses': 5.81}
-SECTION_FADERS_WINDS = {n: v['M'] for n, v in loadFit('sso_winds_section_balance.json').get('instruments', {}).items()}
+#   The session's m_final.py, key M_loudDb, 0.01 dB: -3.81 -2.66 -2.12 +2.77 +5.81 (variants not used: by the sustain's
+#   RMS -3.69 -3.00 -1.47 +2.60 +5.56, by LUFS -4.63 -3.66 -2.46 +2.99 +7.75). Listening (ABX, blind, the owner,
+#   2026-10-11): the basses' 1.6-3.6 dB differences heard soloed 14/14, not in the full mix (5/8); the owner chose M for
+#   its model.
+#   2026-10-14 (the owner): the woodwinds and brass get M too, from the solo data "until we can find better non-solo
+#   data", and ("sure") everything by one rule: mp where [levels] realRange plays it (the Meyer rule, f = a + 2 (b - a) / 5
+#   of pp -> ff; rule D's 3 / 7 for Cor Anglais and Contrabassoon) instead of 0.4, the strings re-centred on it (today's
+#   sso_cc1_curves.json, Celli / Basses every semitone), the winds on the strings' scale, not re-centred. Computed by
+#   section_balance_winds.py -> sso_winds_section_balance.json ("strings", "instruments"), read here
+SECTION_BALANCE = loadFit('sso_winds_section_balance.json')
+SECTION_FADERS = {n: v['M'] for n, v in SECTION_BALANCE.get('strings', {}).items()}
+SECTION_FADERS_WINDS = {n: v['M'] for n, v in SECTION_BALANCE.get('instruments', {}).items()}
 def sectionLevel(name):
     return round(SECTION_FADERS.get(name, SECTION_FADERS_WINDS.get(name)), 3)
 # - realSpan= ("pitch:dB ...") and longLevel= ("cc/pitch:dB ..."), on the five string sections' main Instrument (their

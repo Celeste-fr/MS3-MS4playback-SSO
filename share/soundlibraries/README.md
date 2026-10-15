@@ -287,9 +287,9 @@ switch value of each articulation. For example:
     the section (the main patch and its `with` patches, which take its value) plays this much louder, by
     its volume (`libmscore/contextlevel.h`). SSO's five string sections: a real orchestra's balance at mp
     (Weinzierl et al. 2018's sound power, SSO's section sizes) against SSO's measured levels at CC1 64,
-    centred (the owner's M, 2026-10-11; `gen_spitfire_sso.py` `SECTION_FADERS` has the source). SSO's woodwinds'
-    and brass' patches the database has (the owner, 2026-10-14: from the solo data until ensemble data exists):
-    the same on the strings' scale, mp where `realPlay` places it (`tools/soundlibraries/section_balance_winds.py`).
+    centred (the owner's M, 2026-10-11; since 2026-10-14 with mp where `realPlay` places it). SSO's woodwinds' and
+    brass' patches the database has (the owner, 2026-10-14: from the solo data until ensemble data exists): the same
+    on the strings' scale. All from `tools/soundlibraries/section_balance_winds.py` through `gen_spitfire_sso.py`.
   - `realSpan`, `longLevel` and `realPlay` on an `Instrument` (the main patch; its `with` patches take them): with
     playback setting `[levels] realRange` each note plays, by CC11 and the patches' volumes, a real player's level at
     its written dynamic less what the patch's held Long already changes with CC1 (`libmscore/contextlevel.h` › Real

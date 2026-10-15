@@ -2568,27 +2568,28 @@ void TestSoundLibrary::levelSectionBalance()
       v = ContextLevel::volumes(score);
       QVERIFY(std::fabs(v[score->parts()[1]].top - 15) < 1e-9 && std::fabs(v[score->parts()[1]].patchDb["Viola"] + 9) < 1e-9);
       delete score;
-      // the shipped SSO map: the owner's M (2026-10-11, gen_spitfire_sso.py SECTION_FADERS), centred (the five add up
-      // to 0), and the woodwinds' and brass' on the strings' scale (the owner, 2026-10-14: from the solo data;
-      // section_balance_winds.py -> sso_winds_section_balance.json), every patch of a section with its main patch's
-      // level, nothing else with one
+      // the shipped SSO map: the strings' M, centred (the five add up to 0), and the woodwinds' and brass' on the strings'
+      // scale, all with mp where [levels] realRange plays it (the owner, 2026-10-14: the Meyer rule for everything; the
+      // strings' M of 2026-10-11, mp at 0.4, was -3.81 -2.66 -2.12 +2.77 +5.81; section_balance_winds.py ->
+      // sso_winds_section_balance.json -> gen_spitfire_sso.py), every patch of a section with its main patch's level,
+      // nothing else with one
       QString error;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
       QVERIFY2(sso, qPrintable(error));
-      const std::map<QString, double> strings { { "Violins 1", -3.81 }, { "Violins 2", -2.66 }, { "Violas", -2.12 },
-                                                { "Celli", 2.77 }, { "Basses", 5.81 } };
+      const std::map<QString, double> strings { { "Violins 1", -2.60 }, { "Violins 2", -1.45 }, { "Violas", -3.08 },
+                                                { "Celli", 1.89 }, { "Basses", 5.24 } };
       double sum = 0;
       for (const auto& m : strings)
             sum += m.second;
       QVERIFY(std::fabs(sum) < 0.011);
       std::map<QString, double> M = strings;
-      M.insert({ { "Flute Solo", 11.75 }, { "Flutes a2", 9.92 }, { "Oboe Solo", 4.02 }, { "Oboes a2", 1.66 },
-                 { "Cor Anglais", 8.78 }, { "Clarinet Solo", 7.82 }, { "Clarinets a2", 5.88 }, { "Bass Clarinet", 5.6 },
-                 { "Bassoon Solo", 1.63 }, { "Bassoons a2", 14.11 }, { "Contrabassoon", 1.26 }, { "Horn Solo", 8.36 },
-                 { "Horns a2", 14.96 }, { "Horns a6", 18.74 }, { "Trumpet Solo", 13.21 }, { "Trumpets a2", 18.43 },
-                 { "Trumpets a6", 24.05 }, { "Tenor Trombone Solo", 9.06 }, { "Tenor Trombones a2", 15.72 },
-                 { "Trombones a6", 24.46 }, { "Bass Trombone Solo", 11.06 }, { "Bass Trombones a2", 14.61 },
-                 { "Tuba Solo", 12.95 } });
+      M.insert({ { "Flute Solo", 7.35 }, { "Flutes a2", 5.52 }, { "Oboe Solo", -0.37 }, { "Oboes a2", -2.73 },
+                 { "Cor Anglais", 4.39 }, { "Clarinet Solo", 3.43 }, { "Clarinets a2", 1.49 }, { "Bass Clarinet", 1.2 },
+                 { "Bassoon Solo", -2.76 }, { "Bassoons a2", 9.72 }, { "Contrabassoon", -3.14 }, { "Horn Solo", 3.97 },
+                 { "Horns a2", 10.57 }, { "Horns a6", 14.35 }, { "Trumpet Solo", 8.82 }, { "Trumpets a2", 14.04 },
+                 { "Trumpets a6", 19.66 }, { "Tenor Trombone Solo", 4.67 }, { "Tenor Trombones a2", 11.33 },
+                 { "Trombones a6", 20.07 }, { "Bass Trombone Solo", 6.67 }, { "Bass Trombones a2", 10.22 },
+                 { "Tuba Solo", 8.56 } });
       QCOMPARE(int(M.size()), 28);
       int withLevel = 0;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
@@ -2600,8 +2601,8 @@ void TestSoundLibrary::levelSectionBalance()
             }
       QVERIFY(withLevel > 5);
       // a woodwind and a brass section play theirs (nothing in the code is the strings' only): a flute and Trumpets a6
-      // on the shipped map, the rule and the real range off: S' = 24.05 - 6 = 18.05, the trumpets at +6, the flute at
-      // 11.75 - 18.05 = -6.30
+      // on the shipped map, the rule and the real range off: S' = 19.66 - 6 = 13.66, the trumpets at +6, the flute at
+      // 7.35 - 13.66 = -6.31
       SoundLib::setCurrent(sso);
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" } });
       score = readScore(DIR + "section-balance-winds.musicxml");
@@ -2610,7 +2611,7 @@ void TestSoundLibrary::levelSectionBalance()
       QCOMPARE(score->parts().size(), 2);
       v = ContextLevel::volumes(score);
       QCOMPARE(int(v.size()), 2);
-      QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 6.30) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
+      QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 6.31) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
       QVERIFY2(std::fabs(v[score->parts()[1]].patchDb["Trumpets a6"] - 6) < 1e-9, qPrintable(QString::number(v[score->parts()[1]].patchDb["Trumpets a6"])));
       // off: no volumes
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },
