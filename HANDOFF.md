@@ -5,19 +5,18 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
-## Mic compensation (2026-10-15, branch `mic-compensation`, on integrate-1012 c6b1ec53f2)
+## Mic compensation (2026-10-15, branch `mic-compensation`, merged into integrate-1012)
 
 The owner, 2026-10-15 ("sure"): measure each patch through each mic on the VM and compensate, so that changing a part's
 mics changes tone and space, never the balance. `[levels] micCompensation` (1 in Recommended and by default, 0 in Library
 default; docs/PLAYBACK_SETTINGS.md › Mic compensation): measured with kthost on the VM (Kontakt 8 + SSO), 33 patches (the
 28 balance patches, the strings' Performance patches), the fader law and Mic Mix Distance's (`mic_levels.py` ->
 `sso_mic_levels.json`). Found: SSO's default mix is the Tree alone; mic values sent with Mic Mix Distance don't play.
-Open: the 15 patches balance-refine gave a `sectionLevel2` (solo strings, Motif brass, piccolo …) and every other patch
-have no mic values of their own (an extra takes its main's, others none: 5 renders each on the VM, `mic_levels.py
-events`); a mic changed alone later while Mic Mix Distance is set (live, or a lane point) is untested in Kontakt. Not
+Since balance-refine's mic levels (657fab36a9) every patch with a section level has its own (the timpani's Close mic
+rendered silent; the percussion patches have no mic controls in the map). Open: a mic changed alone later while Mic Mix Distance is set (live, or a lane point) is untested in Kontakt. Not
 heard; untried in MuseScore / Live with the real library (tests: the test synth and the renderer).
 
-## Balance refinement (2026-10-15, branch `balance-refine`, from integrate-1012 44cfae4a5e; not merged)
+## Balance refinement (2026-10-15, branch `balance-refine`, merged into integrate-1012 at 657fab36a9; the owner approved each step)
 
 The owner, 2026-10-15: "recursively try to improve our current level balance until you think it's impossible to
 improve anymore". `sectionBalance` 2 refined from data in three iterations, each in docs/BALANCE_LOG.md: the French horn
@@ -31,8 +30,10 @@ against its 1.04 dB step); bass clarinet / contrabassoon / bass trombones by TU 
 clarinet ±5 dB); the harp by TU's sound power for decaying tones (fast-weighted energy, `tu_transient.py`; -9.81 dB,
 ±4 dB); **timpani not applied** (TU's D2 has unlabelled dynamics); the percussion group inside Skålevik 2019's range (no
 change); each marking's own directivity from TU's pp recordings (`tu_directivity.json`; horns +3.5 dB); mic levels of
-the 15 patches and the harp (`sso_mic_levels.json`). **Found, not fixed** (not balance): SSO's timpani keys sound an
-octave under their MIDI number (key 50 = D2), so a written D2 (MIDI 38) hits a silent key. Open: the owner to check the
+the 15 patches and the harp (`sso_mic_levels.json`). **Timpani octave, fixed** (341ac3dd84): SSO's timpani keys sound an
+octave under their MIDI number (key 50 = D2), so a written D2 (MIDI 38) hit a silent key and every timpani note played
+an octave low; map `<Instrument keyShift="12">` (`KEY_SHIFT` in the generator), checked in Kontakt on the VM (written D2
+73.2 Hz, A2 109.2 Hz). Open: the owner to check the
 Table II readings (https://claude.ai/artifact/5W2xDamjK9vLRcJ4S6cFC2) and Skålevik's
 (https://claude.ai/artifact/JKYSTkAFHEv4hjZviRhCEn); summary https://claude.ai/artifact/X4jyPthyHEgqYiGyhpPTvP. Not
 heard (data decide).
@@ -69,6 +70,11 @@ heard (data decide).
   `realrange1`) A/Bs `[levels] realRange` on a ppp -> fff ladder per section; read the verdicts (ArtifactData) and put
   realRange into Recommended only for what the owner approves. A score with written dynamics is the next test (Whence has
   almost none).
+- **Build 434 for the owner** (2026-10-15, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38692403474,
+  integrate-1012 44cfae4a5e, artifact MuseScore-soundlibrary-win64-44cfae4): Clark & Luce spans (`realRange` 2) and
+  balance (`sectionBalance` 2). Since then on integrate-1012 (341ac3dd84, no Windows build yet): balance refinement
+  iterations 1-8, mic compensation, the timpani octave. Whence audit on 341ac3dd84 unchanged (OVERLAP 0, UNMEASURED 10,
+  CAPPED 288, ARRIVAL 33 fail / 6 warn, LEVEL STEP 0, DROPPED 0, LEAP 0).
 - **Build 433 for the owner** (2026-10-14, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38667271676,
   integrate-1012 2496da477c, artifact MuseScore-soundlibrary-win64-2496da4; build 432 crashed in a test's use-after-free,
   fixed): the Meyer rule for realRange, section balance for woodwinds and brass (Meyer's mp), `[slurs] transitionsEarly`
