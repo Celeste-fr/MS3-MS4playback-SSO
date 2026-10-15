@@ -63,6 +63,22 @@ A written dynamic is one gesture (bow speed, pressure, contact point): tone and 
   91.4 dB, 2.7 dB a step), relative to mp, where M was set. Rejected: A (beyond the measured extremes), C (ppp = pp,
   fff = ff: two pairs of markings alike), E (Edinburgh's 30 dB exceeds the cellists' measured 19.1). No source measures
   ff against fff (only pp / ff exist for strings), so the steps' sizes come from the rule; stage B adds the tone.
+- **The Meyer rule replaces rule D** (the owner, 2026-10-14: "replace rule D with this, this is clearly better"; branch
+  `meyer-rule`, for the strings and the woodwinds / brass): TU Berlin's single-note pp / ff stay ppp / fff, but written
+  pp / ff are the levels of normal playing. Source: J. Meyer, Acoustics and the Performance of Music (Springer 2009),
+  chapter 3, sound power of rapid two-octave scales (each note sounded) against single-note extremes, per instrument
+  (figures and sections in docs/PLAYBACK_SETTINGS.md › Real range; the book's text stays out of the repo, copyrighted).
+  Why: under rule D pp and ff were one step from the extremes, so a written ff asked a violin for nearly its loudest
+  single note; Meyer measures players' ff in music 5 dB under it and their pp 16 dB over the softest note. Per pitch:
+  pp / ff at Meyer's fractions a / b of TU Berlin's span, p .. f equal steps between (Meyer's own method), ppp -> pp and
+  ff -> fff one step each. Effect at mid pitch: the violins' pp -> ff 22.0 → 15.0 dB, ppp -> fff unchanged (30.8); realDb fff
+  +13.1 → +8.3 (Violins 1), so R and with it the mix's drop at mp shrink by ~3-5 dB on string scores. Rule D stays (no
+  Meyer extremes): Cor Anglais, Bass Clarinet, Contrabassoon, Bass Trombone Solo / a2. Cross-check: the Beethoven 8
+  orchestra check (branch `orchestra-markings` 5c57d9687a) finds the clarinet within ~2 dB of the oboe at p / pp; the
+  Meyer rule moves one player's levels that way without closing the gap (clarinet p minus oboe p, TU Berlin unsmoothed,
+  F4 / A4 / C5 / E5 / G5: rule D median -12.9 dB, Meyer -8.6); the B8 score readings await the owner's review
+  (https://claude.ai/artifact/H8bXsxgU8ZtXZhEzdmTXhT) and are not used as numbers. Not yet heard: a ladder or a score
+  with written dynamics, both rules, for the owner (`real_range.py --rule-d` regenerates rule D for the comparison).
 - **Stage B blind test** (2026-10-14, db `stageb1`, branch `stage-b-brightness` bb13144e0a has the measurements, HANDOFF
   there › Stage B measured): the owner picked SSO's CC1 127 brighter in 10 / 10 (Violins 1 4, Violas 4, Celli 13 / 14);
   Celli 15 / 16 (127 measured darker) and Basses 21 / 22 / 24 (centroid within 1 Hz) "sound exactly the same"; the 8

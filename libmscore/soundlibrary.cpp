@@ -711,6 +711,16 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               return fail(QString("%1:%2: bad longLevel \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
                         li.longLevel[p][cc] = db;
                         }
+                  if (a.hasAttribute("realPlay")) {
+                        const QStringList ab = a.value("realPlay").toString().split(' ', QString::SkipEmptyParts);
+                        bool ok1 = false, ok2 = false;
+                        const double pp = ab.size() == 2 ? ab[0].toDouble(&ok1) : 0.0;
+                        const double ff = ab.size() == 2 ? ab[1].toDouble(&ok2) : 0.0;
+                        if (!ok1 || !ok2 || !(pp >= 0.0 && pp < ff && ff <= 1.0))
+                              return fail(QString("%1:%2: bad realPlay \"%3\"").arg(path).arg(r.lineNumber()).arg(a.value("realPlay").toString()));
+                        li.realPlayPp = pp;
+                        li.realPlayFf = ff;
+                        }
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;
@@ -775,6 +785,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
             if (li.realSpan.empty() && li.longLevel.empty()) {
                   li.realSpan = main->realSpan;
                   li.longLevel = main->longLevel;
+                  li.realPlayPp = main->realPlayPp;
+                  li.realPlayFf = main->realPlayFf;
                   }
             main->extras.push_back(&li);
             }

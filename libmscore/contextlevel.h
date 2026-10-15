@@ -43,23 +43,30 @@
 //   (its phrases' CC11: gain less T; G where it fits under +6, so the CC11 values are the rule's). Off: the rule alone.
 //
 //   Real range (playback setting [levels] realRange; the owner, 2026-10-12, stage A of the dynamics plan, HANDOFF.md ›
-//   Dynamics like a real player; 0 everywhere until the owner has heard it): a written dynamic is one gesture. In SSO
-//   CC1 (and a short's velocity) picks the recording, mostly tone; CC11 and the patch's volume are loudness only. So
-//   each note of a section with the map's realSpan / longLevel (SSO's five string sections; <Instrument>, the extras take
-//   the main's) plays, by CC11, the real player's change from mp less what the library's held Long already changes:
-//       realDb(x, p) = steps(x) * span(p) / 7 - long(x, p)
+//   Dynamics like a real player): a written dynamic is one gesture. In SSO CC1 (and a short's velocity) picks the
+//   recording, mostly tone; CC11 and the patch's volume are loudness only. So each note of a patch with the map's
+//   realSpan / longLevel (SSO's five string sections and the woodwinds' / brass' main patches the database has;
+//   <Instrument>, the extras take the main's) plays, by CC11, the real player's change from mp less what the library's
+//   held Long already changes:
+//       realDb(x, p) = (F(steps(x)) - F(0)) * span(p) - long(x, p)
 //   x the dynamics CC in force as written (Ms4::expressionLevel of the dynamic, so CC1 and CC11 move together: a
 //   hairpin ramps both), steps(x) its distance from mp in markings (ppp -3 .. fff +4: the inverse of expressionLevel,
-//   16 per marking, ff -> fff 15), span(p) one player's ff - pp sound power at the pitch (rule D: TU Berlin's pp / ff
-//   are the player's ppp / fff, the markings between in 7 equal dB steps; Weinzierl et al. 2018, smoothed:
-//   tools/soundlibraries/real_range.py), long(x, p) SSO's All techniques Long at CC1 x less at CC1 64 (the sustain's
-//   power, sso_cc1_curves.json; linear in CC1 and in pitch between the measured points, the nearest end's beyond). At
-//   mp (CC1 64, where the section balance M was set) realDb is 0: M stays as it is, on top.
+//   16 per marking, ff -> fff 15), span(p) one player's ff - pp sound power at the pitch (Weinzierl et al. 2018, TU
+//   Berlin's single notes as softly / loudly as possible: the player's ppp and fff; smoothed: real_range.py), F the
+//   level as a fraction of the span above that pp (realFraction). The Meyer rule (the owner, 2026-10-14, replacing rule
+//   D: "this is clearly better"): written pp and ff are what players produce in normal playing, at the instrument's
+//   fractions a / b of the span (<Instrument realPlay="a b">: a = (P_pp - X_lo) / (X_hi - X_lo), b likewise with P_ff;
+//   J. Meyer, Acoustics and the Performance of Music, 2009, ch. 3: P rapid scales, X single-note extremes); p, mp, mf,
+//   f in equal dB steps between pp and ff (Meyer's own method), ppp -> pp and ff -> fff one step each, linear in steps
+//   between, so continuous in CC1. Without realPlay rule D (the owner, 2026-10-12): a = 1/7, b = 6/7, 7 equal steps of
+//   span / 7 (instruments Meyer gives no extremes for). long(x, p) SSO's All techniques Long at CC1 x less at CC1 64
+//   (the sustain's power, sso_cc1_curves.json; linear in CC1 and in pitch between the measured points, the nearest end's
+//   beyond). At mp (CC1 64, where the section balance M was set) realDb is 0: M stays as it is, on top.
 //   Every technique of the section takes it: a note on velocity (a short) is calibrated to the Long at its dynamic
 //   ([levels] calibrated), a Performance legato note to the Long by CC1 ([levels] calibrated) or, with [levels]
 //   context, by its phrase's gain, measured in the music at the written dynamic against the staccatos (which are the
 //   Long's level there): each is the Long's level at the written CC1, which already holds SSO's own change with CC1
-//   once; realDb takes that change away (- long) and puts the player's in (steps x span / 7), so SSO's change is
+//   once; realDb takes that change away (- long) and puts the player's in ((F(steps) - F(0)) x span), so SSO's change is
 //   counted once, not twice. A short whose calibrated velocity is capped (127 and still under its level, or 1 and still
 //   over it) gets the rest by CC11 (realExtra), no longer silently.
 //   Headroom: CC11 only lowers, so a part's notes play realDb less the part's largest R (Volumes::range, every note's
@@ -103,6 +110,9 @@ bool realRange(const Score* score);
 bool hasRealRange(const SoundLib::LibInstrument* patch);
 // a written dynamics CC value's distance from mp in markings (ppp -3 … fff +4)
 double markingSteps(int cc);
+// the player's level at a marking step (markingSteps) as a fraction of realSpan above the single-note pp: ppp 0, pp the
+// patch's realPlayPp, p .. f in 5 equal steps to ff's realPlayFf, fff 1; linear between (rule D: 1/7, 6/7: (steps + 3) / 7)
+double realFraction(double steps, double pp, double ff);
 // realDb (above) of a note at the pitch on the patch with the dynamics CC x in force as written
 double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch);
 

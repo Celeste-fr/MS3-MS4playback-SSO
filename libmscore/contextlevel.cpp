@@ -82,6 +82,16 @@ static double between(const std::map<int, V>& m, double x, F value)
       return value(lo->second) + t * (value(hi->second) - value(lo->second));
       }
 
+double realFraction(double steps, double pp, double ff)
+      {
+      // ppp 0 -> pp: one step; pp -> ff: 5 equal steps (p, mp, mf, f); ff -> fff 1: one step
+      if (steps <= -2.0)
+            return std::max(0.0, (steps + 3.0) * pp);
+      if (steps <= 3.0)
+            return pp + (steps + 2.0) * (ff - pp) / 5.0;
+      return std::min(1.0, ff + (steps - 3.0) * (1.0 - ff));
+      }
+
 double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch)
       {
       if (!hasRealRange(&patch))
@@ -91,7 +101,9 @@ double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch)
       const double sso = between(patch.longLevel, pitch, [cc](const std::map<int, double>& byCc) {
             return between(byCc, cc, [](double v) { return v; });
             });
-      return markingSteps(x) * span / 7.0 - sso;
+      const double player = realFraction(markingSteps(x), patch.realPlayPp, patch.realPlayFf)
+                            - realFraction(0.0, patch.realPlayPp, patch.realPlayFf);
+      return player * span - sso;
       }
 
 bool has(const SoundLib::Articulation* a)
