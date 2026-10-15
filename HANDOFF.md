@@ -42,6 +42,15 @@ a section there when you need the background of that topic. Commit messages desc
   fixed): the Meyer rule for realRange, section balance for woodwinds and brass (Meyer's mp), `[slurs] transitionsEarly`
   0-3 to A/B by hand (off in both presets), and everything of build 431 below. Ask how the winds and brass sit against
   the strings, and which transitionsEarly sounds most like players. Merge integrate-1012 into main once the owner confirms.
+- **Clark & Luce spans, not yet in a Windows build** (2026-10-14, branch `section-spans`, merged into integrate-1012;
+  the owner: "let's use the section data wherever it's reliable", then one source for every instrument): `[levels]
+  realRange` 2 (Recommended and the default; 1 the Meyer rule by hand): each written marking one step of S / 5 from mp,
+  S Clark & Luce 1965's Table I pp -> ff per instrument (map `realSteps`; docs/PLAYBACK_SETTINGS.md › Real range ›
+  Clark & Luce spans). The Spheres dataset (whole sections, arXiv 2511.21247) agrees within ~2 dB where a section
+  recorded 3+ dynamics: a cross-check, not used. Its section balance is not used either (one chamber orchestra, players
+  per stem partly unknown, basses against three other sources; a 5.3 dB question between its two sessions, being checked
+  with the sessions' hand claps). Ask after the next build how the dynamics sound, mostly ppp (now one step under pp,
+  not the single-note extreme) and the horns' / trombones' wider range.
 - **Even levels in Whence** (2026-10-14, build 431 https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38567243409,
   integrate-1012 e07750c20a, artifact MuseScore-soundlibrary-win64-e07750c): Recommended now measures in the
   background (no Tools step), with the mid-note fix and the 350 ms skip. The owner listens to Whence's slurred string

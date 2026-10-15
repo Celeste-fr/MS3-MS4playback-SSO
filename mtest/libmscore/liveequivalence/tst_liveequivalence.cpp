@@ -122,6 +122,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveContextLevel();
       void liveEvenLevels();
       void liveSectionBalance();
+      void liveRealRange_data();
       void liveRealRange();
       void liveTracksJson();
       void updateLiveSet();
@@ -3314,16 +3315,28 @@ void TestLiveEquivalence::liveSectionBalance()
 //   liveRealRange
 //    [levels] realRange (contextlevel.h › Real range) reaches Live: Live's clips carry the CC11 MuseScore renders (per
 //    route: the notes, the CC11 values in order, a hairpin's following its CC1), the route set's and the plain set's
-//    Kontakt tracks the part's R as volume (+6, the rest lower together), the plain set's CC11 lane every value
+//    Kontakt tracks the part's R as volume (+6, the rest lower together), the plain set's CC11 lane every value; by the
+//    Meyer rule (realRange 1) and by Clark & Luce spans (2)
 //---------------------------------------------------------
+
+void TestLiveEquivalence::liveRealRange_data()
+      {
+      QTest::addColumn<QString>("mode");
+      QTest::addColumn<double>("pppDb");
+      // the Meyer rule: span 30, written pp / ff at 0.4 / 0.9 of it (3 dB a step pp .. ff), ppp at 0, fff at 1; the Long
+      // +4 at 127, +3 at 112, -6 at 16: ppp -18 + 6 = -12, mp 0, fff 12 - 4 = +8 (R), so CC11 -20 / -8 / 0 dB, the patch +6
+      QTest::newRow("meyer") << "1" << -20.0;
+      // Clark & Luce spans: realSteps 15, 3 dB a step from mp: ppp -9 + 6 = -3, fff 12 - 4 = +8 (R): CC11 -11 / -8 / 0 dB
+      QTest::newRow("clark & luce spans") << "2" << -11.0;
+      }
 
 void TestLiveEquivalence::liveRealRange()
       {
-      // the Meyer rule: span 30, written pp / ff at 0.4 / 0.9 of it (3 dB a step pp .. ff), ppp at 0, fff at 1; the Long +4
-      // at 127, +3 at 112, -6 at 16: ppp -18 + 6 = -12, mp 0, fff 12 - 4 = +8 (R), so CC11 -20 / -8 / 0 dB, the patch +6
+      QFETCH(QString, mode);
+      QFETCH(double, pppDb);
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
-         "<Instrument name='Violin' ids='violin' realSpan='60:30 84:30' realPlay='0.4 0.9'"
+         "<Instrument name='Violin' ids='violin' realSpan='60:30 84:30' realPlay='0.4 0.9' realSteps='15'"
          " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/84:-6 64/84:0 112/84:3 127/84:4'>"
          "<Articulation name='Long' value='1' techniques='long legato'/>"
          "<Articulation name='Staccato' value='40' techniques='short'/>"
@@ -3332,11 +3345,11 @@ void TestLiveEquivalence::liveRealRange()
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
-      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" } });
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", mode } });
       MasterScore* score = readScore(DIR + "real-range.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
-      const int ppp = int(std::lround(127 * std::pow(10.0, -20.0 / 20)));
+      const int ppp = int(std::lround(127 * std::pow(10.0, pppDb / 20)));
       const int mp = int(std::lround(127 * std::pow(10.0, -8.0 / 20)));
       EventMap events;
       score->renderMidi(&events, false, true, SynthesizerState());

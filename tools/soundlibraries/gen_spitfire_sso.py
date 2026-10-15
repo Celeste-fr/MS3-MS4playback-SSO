@@ -1512,6 +1512,10 @@ def sectionLevel(name):
 #   instrument); p .. f in 5 equal steps between, ppp / fff at 0 / 1. Missing: rule D (a = 1/7, b = 6/7), for the
 #   instruments Meyer gives no extremes for (real_range.py MEYER_NONE: Cor Anglais, Contrabassoon); the bass clarinet and the bass
 #   trombones take their sibling's (real_range.py SIBLING: an assumption, "plays like its family", the owner 2026-10-14)
+# - realSteps= ("S", dB; [levels] realRange 2, Clark & Luce spans, the owner 2026-10-14): the instrument's written
+#   pp -> ff, the markings in equal steps of S / 5 around mp (ppp / fff one step more): Clark & Luce 1965, Table I, for
+#   every instrument (one source; the Spheres dataset's sections agree within ~2 dB, a cross-check only); the bass
+#   clarinet, contrabassoon and bass trombones their family's (an assumption). real_range.py SPANS
 REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
 REAL_RANGE_WINDS = loadFit('sso_real_range.json').get('instruments', {})
 def realRangeAttributes(name):
@@ -1522,7 +1526,8 @@ def realRangeAttributes(name):
     long = ' '.join(f'{cc}/{p}:{v:g}' for p, per in sorted(((int(p), per) for p, per in r['long'].items()))
                     for cc, v in sorted(((int(c), v) for c, v in per.items())))
     play = f' realPlay="{r["fractions"]["pp"]:g} {r["fractions"]["ff"]:g}"' if r.get('rule') == 'meyer' else ''
-    return f' realSpan="{span}" longLevel="{long}"' + play
+    steps = f' realSteps="{r["sectionSpan"]["db"]:g}"' if r.get('sectionSpan') else ''
+    return f' realSpan="{span}" longLevel="{long}"' + play + steps
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0

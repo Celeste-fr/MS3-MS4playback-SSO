@@ -299,7 +299,11 @@ switch value of each articulation. For example:
     owner 2026-10-14: J. Meyer 2009, chapter 3, rapid scales against single-note extremes; p … f in equal steps
     between); left out: rule D (1/7, 6/7, seven equal steps). SSO's from `tools/soundlibraries/real_range.py`; the bass
     clarinet's and bass trombones' `realPlay` are the clarinet's and tenor trombone's, an assumption ("plays like its
-    family", the owner 2026-10-14), not a measurement (Meyer gives them no levels).
+    family", the owner 2026-10-14), not a measurement (Meyer gives them no levels). `realSteps="S"` (dB; `realRange`
+    2, Clark & Luce spans, the default since 2026-10-14): the instrument's written pp -> ff as orchestral players play
+    it, the markings in equal steps of S / 5 around mp, ppp / fff one step more, in place of `realPlay`'s fractions
+    (Clark & Luce 1965, Table I; the bass clarinet, contrabassoon and bass trombones their family's, an assumption).
+    Must be above 0.
 
   ```xml
   <Onset early="100"/>

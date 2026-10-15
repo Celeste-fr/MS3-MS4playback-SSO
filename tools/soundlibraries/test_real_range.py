@@ -39,6 +39,26 @@ class RealRange(unittest.TestCase):
         self.assertEqual(real['p'], -1.0)
         self.assertEqual(real['fff'], 8.0)
 
+    def test_clark_luce_spans(self):
+        # Clark & Luce 1965, Table I, one source for every instrument; the family's for the bass clarinet, contrabassoon
+        # and bass trombone (an assumption); none for an instrument outside the table
+        self.assertEqual(rr.sectionSpan('Violin modern')[0], 13.8)
+        self.assertEqual(rr.sectionSpan('Trumpet modern')[0], 8.8)
+        self.assertEqual(rr.sectionSpan('Tenor trombone modern')[0], 17.0)
+        self.assertEqual(rr.sectionSpan('Bass trombone modern')[0], 17.0)
+        self.assertEqual(rr.sectionSpan('Contrabassoon modern')[0], 10.2)
+        self.assertIn('assumption', rr.sectionSpan('Bass clarinet modern')[1])
+        self.assertIsNone(rr.sectionSpan('Piccolo modern'))
+        self.assertTrue(all(src.startswith('Clark & Luce') for _, src in rr.SPANS.values()))
+        # equal steps of S / 5 from mp, ppp / fff one step more; less the Long as before
+        e = {'instrument': 'x', 'midPitch': 60, 'span': {'60': 30.0},
+             'long': {'60': {'16': -6, '64': 0, '112': 3, '127': 4}}}
+        player, real = rr.marks(e, None, 15.0)
+        self.assertEqual(player, {'ppp': -9.0, 'pp': -6.0, 'p': -3.0, 'mp': 0.0, 'mf': 3.0, 'f': 6.0, 'ff': 9.0,
+                                  'fff': 12.0})
+        self.assertEqual(real['ppp'], -3.0)
+        self.assertEqual(real['fff'], 8.0)
+
 
 if __name__ == '__main__':
     unittest.main()

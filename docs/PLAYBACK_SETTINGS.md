@@ -77,11 +77,14 @@ selectable).
 
 | Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel | slurs/performance | slurs/transitions | slurs/smoothStart | levels/context | levels/sectionBalance | levels/realRange | levels/evenLevels |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 1: techniques on velocity as loud as the held note, plus MS4's offset (below, Calibrated levels; 2026-10-08) | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: Auto fingered within a slur, bowed from a slur into the next (the owner, 2026-10-12) | 1: a phrase's first note smooth (the owner, 2026-10-12) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) | 1: each section at its level, M (below, Section balance; the strings: the owner, 2026-10-11; every section by Meyer's mp, 2026-10-14) | 1: each note at the real player's level for its written dynamic (below, Real range; the owner, 2026-10-13; Meyer's in-play pp / ff, 2026-10-14) | 1: slurred passages evened out by measurement (below, Even levels; the owner, 2026-10-13) |
+| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 1: techniques on velocity as loud as the held note, plus MS4's offset (below, Calibrated levels; 2026-10-08) | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: Auto fingered within a slur, bowed from a slur into the next (the owner, 2026-10-12) | 1: a phrase's first note smooth (the owner, 2026-10-12) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) | 1: each section at its level, M (below, Section balance; the strings: the owner, 2026-10-11; every section by Meyer's mp, 2026-10-14) | 2: each note at the real player's level for its written dynamic, the markings in equal steps of the instrument's pp -> ff as orchestral players play it (below, Real range › Clark & Luce spans; the owner, 2026-10-13 on, 2026-10-14 the spans; 1, the Meyer rule, by hand: "(Custom)") | 1: slurred passages evened out by measurement (below, Even levels; the owner, 2026-10-13) |
 | Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) | 0: on the All techniques patch | 0 | 0 | 0 | 0 | 0 | 0 |
 
 `byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
 run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
+
+`levels/realRange` 1 (the Meyer rule) is in neither preset since 2026-10-14 (Recommended plays 2, Clark & Luce
+spans): set by hand it shows "(Custom)".
 
 `slurs/transitionsEarly` is 0 in both presets (the owner, 2026-10-14: to hear first, below, Transitions early), so
 either preset turns it off; 1-3 by hand shows "(Custom)".
@@ -315,12 +318,73 @@ levels, the shipped map's M for all 28 patches, a flute and Trumpets a6 on it), 
 
 Stage A of the dynamics plan (HANDOFF.md › Dynamics like a real player; the owner, 2026-10-12): a written dynamic is one
 gesture; in SSO, CC1 (and a short's velocity) mostly picks the recording (tone), CC11 and the patch's volume are
-loudness only. `[levels] realRange` (**1 in Recommended and by default, 0 in Library default**: the owner, 2026-10-13, heard on the ladder, "this sounds great"; per
-score through `playbackSettings`) makes each note of the five string sections (and, since 2026-10-14, the woodwinds' and
+loudness only. `[levels] realRange` (**2 in Recommended and by default, 0 in Library default**: the owner, 2026-10-13, heard on the ladder, "this sounds great";
+2026-10-14 the section data where it's reliable, one source for every instrument: 2, Clark & Luce spans, below; 1 the
+Meyer rule, by hand; per score through `playbackSettings`) makes each note of the five string sections (and, since 2026-10-14, the woodwinds' and
 brass' main patches the database has) as loud as a real player at its written dynamic, the player's full range, by CC11
 and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
 
-- **The Meyer rule** (the owner, 2026-10-14, replacing rule D: "this is clearly better"): TU Berlin's pp and ff ("as
+- **Clark & Luce spans** (`realRange` 2, Recommended and the default since 2026-10-14; the owner: "let's use the section
+  data wherever it's reliable", then one source for every instrument, not mixed): each written marking is one equal step
+  of S / 5 from mp, S the instrument's written pp -> ff as orchestral players play it, whatever its single-note span:
+  pp = mp - 2S/5 … ff = mp + 3S/5, ppp / fff one step more (-3S/5, +4S/5), linear in CC1 between (continuous through
+  hairpins); less SSO's Long's own change with CC1 as below. S from M. Clark, D. Luce, "Intensities of Orchestral
+  Instrument Scales Played at Prescribed Dynamic Markings", *J. Audio Eng. Soc.* 13(2), 1965, 151-157, Table I
+  "Dynamic Range" (printed numbers: two players per instrument, chromatic scales at pp, mf and ff as they would play those
+  markings in orchestral music, anechoic, the average ff scale less the average pp scale). Meyer's in-play pp / ff (the
+  Meyer rule, below) are the softest / loudest *possible* during fast scales, limits, not the markings; Clark & Luce
+  measured the markings. Map `<Instrument realSteps="S">` (`real_range.py` `SPANS` → `sso_real_range.json`
+  `sectionSpan` → `gen_spitfire_sso.py`); a patch without it plays the Meyer rule.
+
+  | Instrument (SSO patches) | S, dB | Spheres cross-check (whole section, 3+ dynamics) |
+  |---|---|---|
+  | violin (Violins 1, 2) | 13.8 | Violin 2 13.7 |
+  | viola (Violas) | 15.9 | |
+  | cello (Celli) | 14.1 | Cello 15.8 |
+  | double bass (Basses) | 14.1 | |
+  | flute (Flute Solo, Flutes a2) | 7.5 | |
+  | oboe (Oboe Solo, Oboes a2) | 7.4 | |
+  | English horn (Cor Anglais) | 5.2 | |
+  | clarinet (Clarinet Solo, Clarinets a2; Bass Clarinet: family) | 8.3 | |
+  | bassoon (Bassoon Solo, Bassoons a2; Contrabassoon: family) | 10.2 | |
+  | horn (Horn Solo, Horns a2, a6) | 17.7 | |
+  | trumpet (Trumpet Solo, Trumpets a2, a6) | 8.8 | Trumpet 10.6 |
+  | trombone (Tenor Trombone Solo, a2, Trombones a6; Bass Trombone Solo, a2: family) | 17.0 | Trombone 14.3 |
+  | tuba (Tuba Solo) | 12.5 | |
+
+  *Family* is an assumption, not a measurement ("plays like its family"). The cross-check: the Spheres dataset (Colibrì
+  Ensemble, Pescara; arXiv 2511.21247, Zenodo 17347681, CC BY-SA 4.0), each section of a chamber orchestra recorded alone
+  playing chromatic scales in a studio; a section's loudest less its quietest full scale (median note level at the main
+  pair), only where its recording has 3 or more section scales; the dynamics are not labelled in the dataset (two-scale
+  sections' spans may not reach pp / ff and are not used). Where it has them it agrees with Clark & Luce within ~2 dB:
+  independent support, not used in the map (one source for every instrument). Patches with no realSpan / longLevel
+  (Piccolo, alto / bass flute, contrabass clarinet, cimbassi, contrabass trombone / tuba, Motif patches) get no real range
+  at all, either rule.
+
+  At a middle pitch, realDb (dB from mp, the CC11 before the headroom; ppp / pp / p / mp / mf / f / ff / fff;
+  `sso_real_range.json` `realDbMid`), Clark & Luce spans against the Meyer rule (rule D for Cor Anglais):
+
+  | Patch | pitch | S | realDb, Clark & Luce spans | realDb, Meyer rule |
+  |---|---|---|---|---|
+  | Violins 1 | 73 | 13.8 | -2.5 / -2.4 / -1.7 / 0 / +1.1 / +2.3 / +4.0 / +6.5 | -12.2 / -2.9 / -1.9 / 0 / +1.3 / +2.8 / +4.8 / +8.3 |
+  | Violas | 75 | 15.9 | -3.0 / -2.7 / -1.8 / 0 / +1.3 / +2.9 / +5.0 / +8.0 | -7.2 / -2.0 / -1.4 / 0 / +1.0 / +2.2 / +4.1 / +7.0 |
+  | Celli | 64 | 14.1 | -2.9 / -2.7 / -1.8 / 0 / +1.1 / +2.4 / +4.2 / +6.7 | -6.8 / -2.5 / -1.7 / 0 / +1.0 / +2.2 / +3.9 / +4.9 |
+  | Basses | 52 | 14.1 | +1.1 / -1.0 / -1.6 / 0 / +2.9 / +1.7 / +0.4 / +1.9 | -3.0 / +0.3 / -0.9 / 0 / +2.2 / +0.4 / -1.6 / -0.4 |
+  | Flute Solo | 77 | 7.5 | +7.4 / +2.2 / -0.2 / 0 / +2.7 / +5.0 / +4.1 / +4.3 | +8.3 / +4.3 / +0.8 / 0 / +1.6 / +2.9 / +0.9 / +0.7 |
+  | Oboe Solo | 74 | 7.4 | +6.7 / +1.6 / -0.5 / 0 / +1.1 / -0.3 / -0.9 / -0.4 | +3.8 / +2.6 / 0 / 0 / +0.6 / -1.3 / -2.4 / -0.1 |
+  | Cor Anglais | 67 | 5.2 | +3.4 / +2.1 / +1.6 / 0 / +2.6 / +3.2 / +2.3 / +1.3 | (rule D) +1.5 / +0.8 / +0.9 / 0 / +3.2 / +4.5 / +4.2 / +3.9 |
+  | Clarinet Solo | 72 | 8.3 | +2.6 / +1.6 / -0.3 / 0 / +1.9 / +0.7 / 0 / +0.7 | -10.6 / -0.3 / -1.2 / 0 / +2.9 / +2.6 / +2.8 / +7.7 |
+  | Bassoon Solo | 55 | 10.2 | +4.2 / +1.1 / +0.2 / 0 / +4.0 / +6.5 / +6.8 / +6.7 | +3.9 / +2.6 / +1.0 / 0 / +3.3 / +5.0 / +4.6 / +5.0 |
+  | Horn Solo | 58 | 17.7 | +1.1 / -1.9 / -1.4 / 0 / +2.5 / +4.5 / +3.3 / +5.5 | -1.1 / +1.5 / +0.3 / 0 / +0.8 / +1.0 / -1.8 / +1.2 |
+  | Trumpet Solo | 72 | 8.8 | +5.3 / +1.4 / +2.0 / 0 / -3.5 / -1.4 / +0.4 / -1.6 | -1.0 / +0.9 / +1.7 / 0 / -3.2 / -0.8 / +1.2 / +2.2 |
+  | Tenor Trombone Solo | 54 | 17.0 | +8.7 / +4.9 / +3.8 / 0 / +1.8 / +1.5 / +3.7 / +6.9 | +0.8 / +6.5 / +4.6 / 0 / +1.0 / -0.2 / +1.2 / +7.4 |
+  | Tuba Solo | 45 | 12.5 | +7.5 / +0.8 / -1.1 / 0 / +3.6 / +5.5 / +4.8 / +6.0 | +0.1 / +1.7 / -0.7 / 0 / +3.1 / +4.6 / +3.4 / +4.9 |
+
+  The big changes: ppp no longer at the single-note extreme (violins -12.2 → -2.5 dB, clarinet -10.6 → +2.6: Clark &
+  Luce's ppp is one marking step under pp), the horn's and trombones' wider ranges (horn ff -1.8 → +3.3), the flute's
+  (+0.9 → +4.1 at ff). realDb is the player's change less SSO's own, so where SSO's Long already changes more than the
+  player (the flute's, the oboe's soft end) it runs against the marking.
+- **The Meyer rule** (`realRange` 1; the owner, 2026-10-14, replacing rule D: "this is clearly better"; Recommended until Clark & Luce spans the same day): TU Berlin's pp and ff ("as
   softly / loudly as possible", single notes) stay the player's ppp and fff. Written pp and ff are what players produce in
   normal playing: J. Meyer, *Acoustics and the Performance of Music* (Springer 2009), chapter 3, gives per instrument
   the sound power of single-note extremes X (the softest pp, the loudest ff) and of rapid two-octave scales P (pp, ff,
@@ -409,9 +473,10 @@ where SSO's Long already spans more than the player, realDb runs against the mar
 Long at F5, CC1 16, is 11.9 dB under its 64, the real flute's ppp only 3.6). The ppp -> pp and ff -> fff steps are larger than the
 steps between under the Meyer rule (a violin's ppp is 12 dB under its pp, its p .. f 3 dB apart).
 
-Test: `tst_soundlibrary::levelRealRange` (realDb by both rules by hand, CC11 at ppp / mp / fff, a hairpin's CC11
+Test: `tst_soundlibrary::levelRealRange` (realDb by both rules and by Clark & Luce spans by hand, realRange 2 without
+realSteps playing the Meyer rule, each shipped patch's realSteps, CC11 at ppp / mp / fff, a hairpin's CC11
 following its CC1, R as volume, a capped short, the layers, the presets without it, the shipped map's patches and
-fractions), `tst_liveequivalence::liveRealRange` (the Meyer rule in Live's clips and both sets), `test_real_range.py`.
+fractions), `tst_liveequivalence::liveRealRange` (the Meyer rule and Clark & Luce spans in Live's clips and both sets), `test_real_range.py`.
 
 ### Even levels
 
@@ -586,7 +651,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' volumes, the rest of the part's patches lower together (above, Level rule; the owner, 2026-10-10) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a string section its map `sectionLevel` louder by its volume, with the level rule each phrase at gain + its section's level, all lower together so the loudest stays at +6 dB (above, Section balance; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::volumes`), `TrackDelays::patchGain`; data: map `sectionLevel` from `gen_spitfire_sso.py` `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
 | Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' nodes (halfway from each note-on to the next, since 2026-10-14), every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
-| Real range: each note of the five string sections and the main woodwind / brass patches as loud as a real player at its written dynamic (the Meyer rule, 2026-10-14: TU Berlin's single-note pp / ff are ppp / fff, written pp / ff at Meyer's in-play levels, p .. f equal steps between, from mp; rule D, 7 equal steps, where Meyer has no figures), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `contextlevel.cpp` (`realRangeDb`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` / `realPlay` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |
+| Real range: each note of the five string sections and the main woodwind / brass patches as loud as a real player at its written dynamic (the Meyer rule, 2026-10-14: TU Berlin's single-note pp / ff are ppp / fff, written pp / ff at Meyer's in-play levels, p .. f equal steps between, from mp; rule D, 7 equal steps, where Meyer has no figures), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 2, Clark & Luce spans (Recommended, the default since 2026-10-14; 1 the Meyer rule; 0 in Library default; the owner, 2026-10-13 / 14) | `contextlevel.cpp` (`realRangeDb`, `clarkLuceSpans`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` / `realPlay` / `realSteps` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |
 | Pedal changes after their chord (legato pedalling) | up one tick after, down the tick after (since 2026-10-06; the pianist's timing, `[pedal]`, removed 2026-10-07) | `renderSpanners` (pedal) | fixed |
 | A key struck again ends its sounding note just before | on | `finishLibraryEvents` | `[notes] sameKeyEndsFirst` |
 | An attack at a velocity whose recording at that key is faulty plays at the nearest clean velocity measured (map `avoid`, `tools/soundlibraries/sso_bad_samples.json`: SSO's Celli - Performance B2-C3 at 100-116, the spiccato attack's top layer and the re-attack 106, plays its 5th round robin of 6 with a narrow tone near 1184 Hz, +9 .. +11 dB over the other attacks there; 99 and below clean; kthost on the Windows VM, 2026-10-10). Not legato transitions, not a note's own velocity (the Velocity lane). The owner, 2026-10-10: "the weird square wave-y noise problem" in Whence's Celli under the level rule (its CC1 64 makes the recording stand out: at CC1 89 it is there too, +3 dB) | on | `rendermidi.cpp` (`libAvoidBad`), `Articulation::avoidVelocity` | `[notes] avoidBadSamples`; score: `playbackSettings` |

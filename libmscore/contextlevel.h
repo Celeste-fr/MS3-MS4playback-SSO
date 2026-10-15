@@ -59,7 +59,13 @@
 //   J. Meyer, Acoustics and the Performance of Music, 2009, ch. 3: P rapid scales, X single-note extremes); p, mp, mf,
 //   f in equal dB steps between pp and ff (Meyer's own method), ppp -> pp and ff -> fff one step each, linear in steps
 //   between, so continuous in CC1. Without realPlay rule D (the owner, 2026-10-12): a = 1/7, b = 6/7, 7 equal steps of
-//   span / 7 (instruments Meyer gives no extremes for). long(x, p) SSO's All techniques Long at CC1 x less at CC1 64
+//   span / 7 (instruments Meyer gives no extremes for). Clark & Luce spans ([levels] realRange 2, the owner,
+//   2026-10-14: the section data where it's reliable, one source for every instrument; in Recommended and by default):
+//   the player's change from mp is steps(x) x S / 5 instead, S the instrument's written pp -> ff as orchestral players
+//   play it (<Instrument realSteps="S">: M. Clark, D. Luce, J. Audio Eng. Soc. 13(2), 1965, Table I: two players per
+//   instrument, scales at pp, mf, ff; the Spheres dataset's whole sections agree within ~2 dB where they recorded 3+
+//   dynamics, a cross-check only), ppp / fff one step more, whatever the single-note span; a patch without realSteps
+//   plays the Meyer rule. long(x, p) SSO's All techniques Long at CC1 x less at CC1 64
 //   (the sustain's power, sso_cc1_curves.json; linear in CC1 and in pitch between the measured points, the nearest end's
 //   beyond). At mp (CC1 64, where the section balance M was set) realDb is 0: M stays as it is, on top.
 //   Every technique of the section takes it: a note on velocity (a short) is calibrated to the Long at its dynamic
@@ -104,8 +110,10 @@ bool has(const SoundLib::LibInstrument* patch);
 // (utick = tick + tickOffset)
 double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset);
 
-// whether [levels] realRange is on for the score
+// whether [levels] realRange is on for the score (1 or 2)
 bool realRange(const Score* score);
+// whether it plays Clark & Luce spans (2) for the score
+bool clarkLuceSpans(const Score* score);
 // whether a patch has the real range's data (realSpan and longLevel)
 bool hasRealRange(const SoundLib::LibInstrument* patch);
 // a written dynamics CC value's distance from mp in markings (ppp -3 … fff +4)
@@ -113,8 +121,9 @@ double markingSteps(int cc);
 // the player's level at a marking step (markingSteps) as a fraction of realSpan above the single-note pp: ppp 0, pp the
 // patch's realPlayPp, p .. f in 5 equal steps to ff's realPlayFf, fff 1; linear between (rule D: 1/7, 6/7: (steps + 3) / 7)
 double realFraction(double steps, double pp, double ff);
-// realDb (above) of a note at the pitch on the patch with the dynamics CC x in force as written
-double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch);
+// realDb (above) of a note at the pitch on the patch with the dynamics CC x in force as written; spans: Clark & Luce
+// spans (realRange 2) where the patch has realSteps, the player's level steps(x) x S / 5 instead of the Meyer rule's
+double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch, bool spans = false);
 
 struct Volumes {
       std::map<QString, double> patchDb;    // patch -> its volume in dB (P or -S; section balance: O (+ the part's G) - S'; real range: + R)

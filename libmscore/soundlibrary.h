@@ -261,6 +261,10 @@ struct LibInstrument {
       // extremes); missing: rule D, 1/7 and 6/7
       double realPlayPp { 1.0 / 7.0 };
       double realPlayFf { 6.0 / 7.0 };
+      // Clark & Luce spans ([levels] realRange 2; the owner, 2026-10-14; <Instrument realSteps="S">, the extras take it):
+      // the instrument's written pp -> ff in dB as orchestral players play it (Clark & Luce 1965, Table I), the markings
+      // in equal steps of S / 5 around mp. 0: none (realRange 2 plays the Meyer rule for the patch)
+      double realStepsDb { 0.0 };
       QString scan;                      // a <Patch> with several articulations (read from its files): "values"
                                           // (its switch values to scan) or "keys" (sounds by key); empty: one sound
       std::vector<DrumKey> drums;

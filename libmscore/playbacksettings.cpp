@@ -133,14 +133,17 @@ static const std::vector<Definition> DEFINITIONS = {
       // (the owner, 2026-10-12, stage A of the dynamics plan: each note as loud as a real player at its written dynamic,
       // the player's full range; rule D: TU Berlin's pp / ff are ppp / fff, 7 equal dB steps, relative to mp; 2026-10-13,
       // heard on the ladder: "this sounds great": on in Recommended and by default, off in Library default; contextlevel.h ›
-      // Real range)
-      { "levels/realRange", 1, 0, 1, "on/off",
-        "1: each note of a patch with a map realSpan (SSO's string sections, woodwinds, brass) as loud as a real player at "
-        "its written dynamic: ppp / fff the player's softest / loudest single note (Weinzierl et al. 2018), pp / ff the "
-        "levels of normal playing (Meyer 2009; else ppp .. fff in 7 equal steps), p .. f equal steps between, from mp, less "
-        "what the library's held note already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' "
-        "volumes (everything lower together past Live's Volume top, +6 dB); a short at velocity 127 still under its "
-        "calibrated level gets the rest by CC11; 0: the library's own range", true },
+      // Real range; 2026-10-14, the owner: "let's use the section data wherever it's reliable", one source for every
+      // instrument: 2, Clark & Luce spans, in Recommended and by default)
+      { "levels/realRange", 2, 0, 2, "",
+        "each note of a patch with a map realSpan (SSO's string sections, woodwinds, brass) as loud as a real player at its "
+        "written dynamic, from mp, less what the library's held note already changes with CC1, by CC11 (following CC1 "
+        "through hairpins) and the patches' volumes (everything lower together past Live's Volume top, +6 dB); a short at "
+        "velocity 127 still under its calibrated level gets the rest by CC11. 2: Clark & Luce spans: the markings in equal "
+        "steps of the instrument's pp -> ff as orchestral players play them (map realSteps: Clark & Luce 1965, Table I), "
+        "ppp / fff one step more (a patch without realSteps as 1); 1: the Meyer rule: ppp / fff the player's "
+        "softest / loudest single note (Weinzierl et al. 2018), pp / ff the levels of normal playing (Meyer 2009; else "
+        "ppp .. fff in 7 equal steps), p .. f equal steps between; 0: the library's own range", true },
       // (the owner, 2026-10-12: SSO's Performance legato plays some slurred notes louder than others, by context; evened
       // out by a glide of CC11 measured in place, the blind listening test's choice; 2026-10-13, MuseScore's playback
       // verified on the VM (3.6 -> 0.60 dB), the owner: "why is this not in recommended": on in Recommended and by default,
@@ -387,7 +390,7 @@ const std::vector<Preset>& presets()
             // player's range, levels/realRange; 2026-10-14: slurs/transitionsEarly 0 in both until the owner approves it)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 0 },
-                                              { "levels/context", 1 }, { "levels/sectionBalance", 1 }, { "levels/realRange", 1 },
+                                              { "levels/context", 1 }, { "levels/sectionBalance", 1 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "levels/context", 0 },

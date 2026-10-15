@@ -721,6 +721,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         li.realPlayPp = pp;
                         li.realPlayFf = ff;
                         }
+                  if (a.hasAttribute("realSteps")) {
+                        bool ok = false;
+                        li.realStepsDb = a.value("realSteps").toDouble(&ok);
+                        if (!ok || !(li.realStepsDb > 0.0))
+                              return fail(QString("%1:%2: bad realSteps \"%3\"").arg(path).arg(r.lineNumber()).arg(a.value("realSteps").toString()));
+                        }
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;
@@ -787,6 +793,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.longLevel = main->longLevel;
                   li.realPlayPp = main->realPlayPp;
                   li.realPlayFf = main->realPlayFf;
+                  li.realStepsDb = main->realStepsDb;
                   }
             main->extras.push_back(&li);
             }

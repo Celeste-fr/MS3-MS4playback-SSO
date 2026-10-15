@@ -1862,10 +1862,10 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nevenLevels=%6\nrealRange=%6\nsectionBalance=%6\ncontext=%6\ncalibrated=%3\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
-      QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1));
+                                + "\n[levels]\nevenLevels=%6\nrealRange=%7\nsectionBalance=%6\ncontext=%6\ncalibrated=%3\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+      QCOMPARE(out, withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1).arg(2));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
-      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
+      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
@@ -1873,11 +1873,11 @@ void TestSoundLibrary::playbackPresets()
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=1\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=2\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=1\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenLevels=1\nrealRange=2\nsectionBalance=1\ncontext=1\ncalibrated=1\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1898,7 +1898,7 @@ void TestSoundLibrary::playbackPresets()
       f.close();
       QVERIFY(Playback::applyPreset("recommended", path));
       QVERIFY(f.open(QIODevice::ReadOnly));
-      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1));
+      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(1).arg(2).arg(1).arg(1).arg(2));
       f.close();
       // detection, from the file read and from values
       Playback::setIniPath(path);
@@ -1934,7 +1934,10 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 },
                                          { "levels/context", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 0 } }), QString());
-      // realRange left out: its default 1, Recommended's; Library default needs 0 (the owner, 2026-10-13)
+      // realRange left out: its default 2, Recommended's; Library default needs 0 (the owner, 2026-10-13; 2 since
+      // 2026-10-14); 1 (the Meyer rule) is neither
+      QCOMPARE(Playback::detectPreset({ { "levels/realRange", 1 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "levels/realRange", 2 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 },
                                          { "levels/context", 0 }, { "levels/sectionBalance", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/realRange", 0 } }), QString());
@@ -2864,6 +2867,38 @@ void TestSoundLibrary::levelRealRange()
             }
       for (const char* bad : { "0.9 0.4", "0.4", "-0.1 0.5", "0.4 1.2", "a b" })
             QVERIFY2(!meyerMap(bad), bad);
+      // Clark & Luce spans (realRange 2): realSteps 15, 3 dB a step from mp whatever the span: the player ppp -9, pp -6,
+      // p -3, mf +3, f +6, ff +9, fff +12, less the Long (above): ppp -3, pp -2, p -1, mf +2, f +4, ff +6, fff +8; CC1
+      // 120 (steps 3 + 8/15) 10.6 - 3.5333; the Meyer rule where spans is off, or the patch has no realSteps
+      auto spansMap = [this](const char* steps) {
+            return loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+               "<Instrument name='Violin' ids='violin' realSpan='60:30 84:30' realPlay='0.4 0.9' realSteps='%1'"
+               " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/84:-6 64/84:0 112/84:3 127/84:4'>"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "<Articulation name='Staccato' value='40' techniques='short'/>"
+               "</Instrument>"
+               "<Instrument name='Violin Legato' with='Violin'><Switch type='none'/>"
+               "<Articulation name='Legato' value='20' techniques='legato' modifiers='performance'/></Instrument>"
+               "</SoundLibrary>").arg(steps));
+            };
+      auto spans = spansMap("15");
+      QVERIFY(spans);
+      for (const SoundLib::LibInstrument& li : spans->instruments) {       // (the extra takes the main's)
+            QCOMPARE(li.realStepsDb, 15.0);
+            const std::map<int, double> want { { 16, -3 }, { 32, -2 }, { 48, -1 }, { 64, 0 }, { 80, 2 }, { 96, 4 },
+                                               { 112, 6 }, { 120, 3 * (3 + 8 / 15.0) - (3 + 8 / 15.0) }, { 127, 8 } };
+            for (const auto& e : want) {
+                  QVERIFY2(std::fabs(ContextLevel::realRangeDb(li, e.first, 70, true) - e.second) < 1e-9,
+                           qPrintable(QString("%1 cc %2: %3, expected %4").arg(li.name).arg(e.first)
+                                      .arg(ContextLevel::realRangeDb(li, e.first, 70, true)).arg(e.second)));
+                  QCOMPARE(ContextLevel::realRangeDb(li, e.first, 70), ContextLevel::realRangeDb(meyer->instruments.front(), e.first, 70));
+                  }
+            }
+      for (const SoundLib::LibInstrument& li : meyer->instruments)
+            QCOMPARE(ContextLevel::realRangeDb(li, 16, 70, true), ContextLevel::realRangeDb(li, 16, 70));
+      for (const char* bad : { "0", "-1", "a" })
+            QVERIFY2(!spansMap(bad), bad);
       SoundLib::setCurrent(lib);
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); Playback::setIniValuesForTest({}); } } reset;
       MasterScore* score = readScore(DIR + "real-range.musicxml");
@@ -3005,16 +3040,42 @@ void TestSoundLibrary::levelRealRange()
             last = h.second;
             lastCc1 = h.first;
             }
+      // realRange 2 on the Meyer map (no realSteps): the Meyer rule, as 1
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "2" } });
+      QVERIFY(ContextLevel::clarkLuceSpans(score));
+      n = render();
+      QCOMPARE(n[72].cc11, cc11(-12 - 8));
+      QCOMPARE(n[79].cc11, cc11(4 - 8));
+      // Clark & Luce spans' map (above), realRange 2: R = 8 (fff), the patches +6, everything 2 lower; ppp -3, mp 0, p -1,
+      // f +4 less R; the hairpin by the spans' realDb
+      SoundLib::setCurrent(spans);
+      v = ContextLevel::volumes(score);
+      QVERIFY2(std::fabs(v[part].range - 8) < 1e-9, qPrintable(QString::number(v[part].range)));
+      QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
+      n = render();
+      QCOMPARE(n[72].cc11, cc11(-3 - 8));           // ppp
+      QCOMPARE(n[74].cc11, cc11(0 - 8));            // mp
+      QCOMPARE(n[76].cc11, 127);                    // fff
+      QCOMPARE(n[77].cc11, cc11(-1 - 8));           // p
+      QCOMPARE(n[79].cc11, cc11(4 - 8));            // f
+      QVERIFY2(hairpin.size() >= 10, qPrintable(QString::number(hairpin.size())));
+      for (const auto& h : hairpin)
+            QCOMPARE(h.second, cc11(ContextLevel::realRangeDb(spans->instruments.front(), h.first, 77, true) - 8));
+      // the same map at 1: the Meyer rule (ppp -12)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" } });
+      QVERIFY(!ContextLevel::clarkLuceSpans(score));
+      QCOMPARE(render()[72].cc11, cc11(-12 - 8));
       SoundLib::setCurrent(lib);
       delete score;
-      // on by default and in Recommended, off in Library default (the owner, 2026-10-13: "this sounds great")
+      // 2 (Clark & Luce spans) by default and in Recommended, 0 in Library default (the owner, 2026-10-13: "this sounds
+      // great"; 2026-10-14: the section data where it's reliable, one source)
       const Playback::Definition* def = Playback::definition("levels/realRange");
-      QVERIFY(def && def->value == 1.0 && def->perScore);
+      QVERIFY(def && def->value == 2.0 && def->max == 2.0 && def->perScore);
       int presets = 0;
       for (const Playback::Preset& p : Playback::presets())
             for (const auto& kv : p.values)
                   if (QString(kv.first) == "levels/realRange") {
-                        QCOMPARE(double(kv.second), QString(p.id) == "recommended" ? 1.0 : 0.0);
+                        QCOMPARE(double(kv.second), QString(p.id) == "recommended" ? 2.0 : 0.0);
                         ++presets;
                         }
       QCOMPARE(presets, 2);
@@ -3038,6 +3099,12 @@ void TestSoundLibrary::levelRealRange()
             { "Violins 1", { 16 / 41.0, 36 / 41.0 } }, { "Clarinet Solo", { 20 / 49.0, 40 / 49.0 } },
             { "Bass Clarinet", { 20 / 49.0, 40 / 49.0 } }, { "Tenor Trombone Solo", { 0.4, 0.8 } },
             { "Bass Trombone Solo", { 0.4, 0.8 } }, { "Bass Trombones a2", { 0.4, 0.8 } } };
+      // Clark & Luce 1965, Table I (the bass clarinet, contrabassoon and bass trombones their family's: an assumption)
+      const std::map<QString, double> stepsDb { { "Violins 1", 13.8 }, { "Violins 2", 13.8 }, { "Violas", 15.9 },
+            { "Celli", 14.1 }, { "Basses", 14.1 }, { "Flute Solo", 7.5 }, { "Oboe Solo", 7.4 }, { "Cor Anglais", 5.2 },
+            { "Clarinet Solo", 8.3 }, { "Bass Clarinet", 8.3 }, { "Bassoon Solo", 10.2 }, { "Contrabassoon", 10.2 },
+            { "Horns a6", 17.7 }, { "Trumpets a6", 8.8 }, { "Trombones a6", 17.0 }, { "Bass Trombones a2", 17.0 },
+            { "Tuba Solo", 12.5 } };
       int with = 0;
       QStringList mains;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
@@ -3060,6 +3127,9 @@ void TestSoundLibrary::levelRealRange()
                   QVERIFY(std::fabs(li.realPlayPp - fractions.at(section).first) < 1e-4);
                   QVERIFY(std::fabs(li.realPlayFf - fractions.at(section).second) < 1e-4);
                   }
+            QVERIFY2(li.realStepsDb > 0.0, qPrintable(li.name));          // (every one has a Clark & Luce span)
+            if (stepsDb.count(section))
+                  QVERIFY2(li.realStepsDb == stepsDb.at(section), qPrintable(li.name));
             }
       QCOMPARE(mains.size(), sections.size());
       QVERIFY(with >= 40);

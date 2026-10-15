@@ -34,6 +34,12 @@ which take their sibling's fractions (SIBLING: the clarinet's, the tenor trombon
 "plays like its family", not a measurement); Cor Anglais and Contrabassoon keep rule D. Only section numbers and figures are used here
 (the book is copyrighted).
 
+Clark & Luce spans ([levels] realRange 2, the owner, 2026-10-14: the section data where reliable, one source for every
+instrument): each entry with one (SPANS below: Clark & Luce 1965, Table I) gets "sectionSpan" {db S, source}: written markings in equal steps of S / 5 around mp
+(pp -2 S / 5 .. ff +3 S / 5, ppp / fff one step more), whatever the single-note span; gen_spitfire_sso.py writes it as
+realSteps="S" and MuseScore plays it with realRange 2 (realRange 1, the Meyer rule, unchanged). marksMid / realDbMid
+"spans" give it at the middle pitch.
+
 Rule D (the owner, 2026-10-12; kept where Meyer has no extremes, and by --rule-d): the database's pp and ff ("as softly / loudly as possible") are the player's ppp and
 fff; the markings between them in 7 equal dB steps of (ff - pp) / 7 at each pitch, relative to mp (where the section
 balance M was set). So only the span ff - pp per pitch matters. The span is smoothed over pitch (single takes: a
@@ -106,6 +112,49 @@ SIBLING = {
     'Bass clarinet modern': 'Clarinet modern',
     'Bass trombone modern': 'Tenor trombone modern',
 }
+# Clark & Luce spans ([levels] realRange 2; the owner, 2026-10-14: "let's use the section data wherever it's reliable",
+# then one source for every instrument, not mixed): an instrument's written pp -> ff in dB, S; the markings in equal steps
+# of S / 5 around mp, ppp / fff one step more (the map's realSteps, contextlevel.cpp realRangeDb). Source: M. Clark,
+# D. Luce, "Intensities of Orchestral Instrument Scales Played at Prescribed Dynamic Markings", J. Audio Eng. Soc. 13(2),
+# 1965, 151-157, Table I "Dynamic Range" (printed): two players per instrument, chromatic scales at pp, mf and ff as they
+# would play those markings in orchestral music; the average ff scale less the average pp scale. Cross-check, not used:
+# the Spheres dataset (Colibri Ensemble; arXiv 2511.21247, Zenodo 17347681), whole sections' scales, where a section
+# recorded 3+ dynamics: Violin 2 13.7, Cello 15.8, Trumpet 10.6, Trombone 14.3 dB, within ~2 dB of these. Family (an
+# ASSUMPTION, not a measurement: plays like its family): bass clarinet the clarinet's, contrabassoon the bassoon's, bass
+# trombone the tenor trombone's.
+CL = 'Clark & Luce 1965, Table I'
+SPANS = {
+    'Violin modern': (13.8, CL),
+    'Viola modern': (15.9, CL),
+    'Cello modern': (14.1, CL),
+    'Double bass modern': (14.1, CL),
+    'Transverse flute modern': (7.5, CL),
+    'Oboe modern': (7.4, CL),
+    'English horn modern': (5.2, CL),
+    'Clarinet modern': (8.3, CL),
+    'Bassoon modern': (10.2, CL),
+    'French horn modern': (17.7, CL),
+    'Trumpet modern': (8.8, CL),
+    'Tenor trombone modern': (17.0, CL),
+    'Tuba modern': (12.5, CL),
+}
+SPAN_FAMILY = {
+    'Bass clarinet modern': 'Clarinet modern',
+    'Contrabassoon modern': 'Bassoon modern',
+    'Bass trombone modern': 'Tenor trombone modern',
+}
+
+
+def sectionSpan(lab):
+    """(S dB, source) of the instrument's written pp -> ff, None: none (rule 1 then)"""
+    if lab in SPANS:
+        return SPANS[lab]
+    if lab in SPAN_FAMILY:
+        s, src = SPANS[SPAN_FAMILY[lab]]
+        return s, src + "; " + SPAN_FAMILY[lab] + "'s, an assumption (plays like its family)"
+    return None
+
+
 MARKS = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff']
 MARK_CC = [16, 32, 48, 64, 80, 96, 112, 127]      # Ms4::expressionLevel; marking steps from mp -3 .. +4
 RULE_D = (1 / 7, 6 / 7)
@@ -144,14 +193,18 @@ def between(m, x):
     return m[lo] + (x - lo) / (hi - lo) * (m[hi] - m[lo])
 
 
-def marks(e, ab):
-    """({marking: the player's dB from mp}, {marking: realDb}) at the entry's middle pitch"""
+def marks(e, ab, sectionDb=None):
+    """({marking: the player's dB from mp}, {marking: realDb}) at the entry's middle pitch; sectionDb: the section
+    spans' rule (steps x S / 5) instead of fractions ab of the span"""
     p = e['midPitch']
     span = e['span'][str(p)]
     longs = {int(q): {int(c): v for c, v in per.items()} for q, per in e['long'].items()}
     player, real = {}, {}
     for i, (mk, cc) in enumerate(zip(MARKS, MARK_CC)):
-        player[mk] = round((level(i - 3, ab) - level(0, ab)) * span, 2)
+        if sectionDb is not None:
+            player[mk] = round((i - 3) * sectionDb / 5, 2)
+        else:
+            player[mk] = round((level(i - 3, ab) - level(0, ab)) * span, 2)
         real[mk] = round(player[mk] - between({q: between(per, cc) for q, per in longs.items()}, p), 2)
     return player, real
 
@@ -175,6 +228,10 @@ def addRule(e, ruleD):
     e['marksMid'], e['realDbMid'] = {'D': md}, {'D': rd}
     if fractions(lab):
         e['marksMid']['meyer'], e['realDbMid']['meyer'] = marks(e, fractions(lab))
+    ss = sectionSpan(lab)
+    if ss:
+        e['sectionSpan'] = {'db': ss[0], 'source': ss[1]}
+        e['marksMid']['spans'], e['realDbMid']['spans'] = marks(e, None, ss[0])
     return e
 
 

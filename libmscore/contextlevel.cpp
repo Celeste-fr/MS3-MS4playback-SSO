@@ -49,6 +49,11 @@ bool realRange(const Score* score)
       return Playback::on("levels/realRange", score);
       }
 
+bool clarkLuceSpans(const Score* score)
+      {
+      return Playback::value("levels/realRange", score) >= 1.5;
+      }
+
 bool hasRealRange(const SoundLib::LibInstrument* patch)
       {
       return patch && !patch->realSpan.empty() && !patch->longLevel.empty();
@@ -92,15 +97,18 @@ double realFraction(double steps, double pp, double ff)
       return std::min(1.0, ff + (steps - 3.0) * (1.0 - ff));
       }
 
-double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch)
+double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch, bool spans)
       {
       if (!hasRealRange(&patch))
             return 0.0;
-      const double span = between(patch.realSpan, pitch, [](double v) { return v; });
       const double cc = std::max(0, std::min(127, x));
       const double sso = between(patch.longLevel, pitch, [cc](const std::map<int, double>& byCc) {
             return between(byCc, cc, [](double v) { return v; });
             });
+      // Clark & Luce spans: equal steps of S / 5 from mp, ppp / fff one step more (markingSteps -3 .. +4)
+      if (spans && patch.realStepsDb > 0.0)
+            return markingSteps(x) * patch.realStepsDb / 5.0 - sso;
+      const double span = between(patch.realSpan, pitch, [](double v) { return v; });
       const double player = realFraction(markingSteps(x), patch.realPlayPp, patch.realPlayFf)
                             - realFraction(0.0, patch.realPlayPp, patch.realPlayFf);
       return player * span - sso;

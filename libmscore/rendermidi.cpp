@@ -1440,6 +1440,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // over it) gets the rest by CC11 (realExtra; not with the note's own velocity, the Velocity lane)
                   const bool rangeOn = li && ContextLevel::realRange(score) && library->dynamicsCC >= 0
                                        && library->dynamicsCC != CTRL_EXPRESSION;
+                  const bool rangeSpans = rangeOn && ContextLevel::clarkLuceSpans(score);
                   auto realRangeLevel = [&](const Note* note, const SoundLib::Choice& c, int velocity, const Ms4::NoteResult& r, int dynLevel) {
                         if (!rangeOn || !c)
                               return;
@@ -1451,7 +1452,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (t == libRangeTables.end()) {
                               auto table = std::make_shared<std::vector<double>>(128, 0.0);
                               for (int x = 0; x < 128; ++x)
-                                    (*table)[size_t(x)] = ContextLevel::realRangeDb(*patch, x, note->ppitch());
+                                    (*table)[size_t(x)] = ContextLevel::realRangeDb(*patch, x, note->ppitch(), rangeSpans);
                               t = libRangeTables.insert({ key, table }).first;
                               }
                         LibLevel& l = libLevels[note];
