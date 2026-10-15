@@ -48,6 +48,13 @@ class TestMarcatoLevel : public QObject, public MTest
                   qWarning("%s", qPrintable(error));
             return lib;
             }
+      // the level settings that came after these tests (section balance, real range, mic compensation, context level, even
+      // levels, calibrated levels) off: with them a part has its own CC11 at every note, which the marcato's CC11 would
+      // replace instead of add to
+      static QString noLevelSettings()
+            {
+            return "levels/sectionBalance=0;levels/realRange=0;levels/micCompensation=0;levels/context=0;levels/evenLevels=0;levels/calibrated=0";
+            }
       MasterScore* score()
             {
             MasterScore* s = readScore(DIR + "marcatolevel.musicxml");
@@ -199,7 +206,9 @@ class TestMarcatoLevel : public QObject, public MTest
 //    the built-in events unchanged; regenerated 2026-10-06 without the Performance patches: the trumpet's and tuba's slurs play
 //    their main patch's Long (switch, onset early, the tuba on channel 2), the strings' notes before a slurred one end as written;
 //    again the same day without the automatic adjustments: the SSO notes start on their beat, no early onsets; regenerated
-//    2026-10-08: every measured technique starts early by its onset, the SSO shorts and marcatos too, the same events earlier),
+//    2026-10-08: every measured technique starts early by its onset, the SSO shorts and marcatos too, the same events earlier;
+//    2026-10-15: the later level settings pinned off (noLevelSettings) and the start lead's shift regenerated: the trumpet and tuba
+//    start 32 / 1 ms in, everything after the first notes 42 ms later),
 //    kept in marcatolevel-events.txt. MS_MARCATO_DUMP_OUT=<file> writes this build's
 //    events there instead (to make the reference again after an intended playback change)
 //---------------------------------------------------------
@@ -211,7 +220,9 @@ void TestMarcatoLevel::defaultUnchanged()
       MasterScore* s = score();
       QVERIFY(s);
       // the reference's held notes start early by their pitch's onset (heldNotes/byPitch 1, the default until 2026-10-08)
-      s->setMetaTag(Playback::metaTag, "heldNotes/byPitch=1");
+      // and the level settings that came later (section balance, real range, mic compensation, context, even levels) off: this is
+      // the score without levels, as it was rendered then
+      s->setMetaTag(Playback::metaTag, "heldNotes/byPitch=1;" + noLevelSettings());
       QStringList all;
       all << "# built-in" << events(s, nullptr) << "# SSO" << events(s, lib);
       const QString text = all.join('\n') + '\n';
@@ -487,6 +498,7 @@ void TestMarcatoLevel::controllerPath()
       MasterScore* s = score();
       QVERIFY(s);
       QCOMPARE(s->parts().at(0)->instrument()->getId(), QString("strings"));        // (SSO: Strings Ensemble)
+      s->setMetaTag(Playback::metaTag, noLevelSettings());
       const std::vector<Ev> before = render(s, lib, 0, 0);
 
       setLevel(marcato(s, 0, 0), -6);                   // G4, beat 1
