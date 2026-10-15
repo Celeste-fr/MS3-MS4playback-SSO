@@ -255,9 +255,42 @@ Where M comes from (`gen_spitfire_sso.py` `SECTION_FADERS` has the same): the ba
 - Listening (the owner, 2026-10-11, ABX, blind): the basses' 1.6-3.6 dB differences between candidate balances heard
   soloed (14/14), not in the full mix (5/8). The owner chose M for its model, not for a heard difference.
 
+**Woodwinds and brass** (the owner, 2026-10-14: from the solo data "until we can find better non-solo data"): the 23
+wind and brass patches with real-range data get an M by the same method on the strings' scale (not re-centred), so each
+plays that many dB louder beside the strings (`tools/soundlibraries/section_balance_winds.py` ->
+`sso_winds_section_balance.json` -> `gen_spitfire_sso.py` -> the map's `sectionLevel`):
+
+- A patch = one player + 10 log10 N (solo 1, a2 2, a6 6); SSO's Long at CC1 64 from `sso_winds_cc1_curves.json` (loudDb,
+  as the strings').
+- mp where `[levels] realRange` plays it: pp + f (ff - pp), f = a + 2 (b - a) / 5 by the Meyer rule (Real range, below;
+  the bass clarinet's and bass trombones' their sibling's fractions, an assumption), 3 / 7 by rule D (Cor Anglais,
+  Contrabassoon).
+- The strings stay at the approved values: recomputed with the Meyer rule's mp (f 0.54-0.59 against 0.4) they would be
+  -2.60 / -1.45 / -3.08 / +1.89 / +5.24, up to 1.21 dB away (Violins); the brief allowed 0.5. So the winds sit on the
+  approved strings' scale (their centre: the strings' mean at f = 0.4 on today's curves, which give -3.83 / -2.68 /
+  -2.15 / +2.71 / +5.95 since the Celli / Basses re-measure, within 0.14 dB of the approved). On the strings' Meyer scale
+  every wind's M would be 4.39 dB lower (`meyerScaleShift`): the strings' mp is placed at 0.4, the winds' at Meyer's
+  0.50-0.63, a mismatch left for the owner to decide.
+
+| Patch | M (dB) | Patch | M (dB) | Patch | M (dB) |
+|---|---|---|---|---|---|
+| Flute Solo | +11.75 | Bassoon Solo | +1.63 | Trumpets a2 | +18.43 |
+| Flutes a2 | +9.92 | Bassoons a2 | +14.11 | Trumpets a6 | +24.05 |
+| Oboe Solo | +4.02 | Contrabassoon (rule D) | +1.26 | Tenor Trombone Solo | +9.06 |
+| Oboes a2 | +1.66 | Horn Solo | +8.36 | Tenor Trombones a2 | +15.72 |
+| Cor Anglais (rule D) | +8.78 | Horns a2 | +14.96 | Trombones a6 | +24.46 |
+| Clarinet Solo | +7.82 | Horns a6 | +18.74 | Bass Trombone Solo | +11.06 |
+| Clarinets a2 | +5.88 | Trumpet Solo | +13.21 | Bass Trombones a2 | +14.61 |
+| Bass Clarinet | +5.60 | | | Tuba Solo | +12.95 |
+
+Large values (Bassoons a2 12.5 dB over Bassoon Solo, Trumpets a6 +24) are SSO's own levels: at CC1 64 Bassoons a2
+measures ~9 dB under Bassoon Solo and Trumpets a6 no louder than Trumpet Solo, against a real a2 / a6 3.0 / 7.8 dB over
+one player. Solo data: a real section's blend and its players' spread
+are not in it (HANDOFF.md › Section balance › Winds).
+
 How it plays (`ContextLevel::volumes`):
 
-- Each string section has its level O (the map's `<Instrument sectionLevel>` on the main patch; extras take it). Every
+- Each section (strings; since 2026-10-14 woodwinds and brass) has its level O (the map's `<Instrument sectionLevel>` on the main patch; extras take it). Every
   patch of the section plays O louder by its volume (`TrackDelays::patchGain`: the Kontakt slot hosted, the route set's
   and the plain set's Kontakt track Volume in Live). Staccatos and Performance alike.
 - With `[levels] context` a phrase plays gain + O, a staccato O; everything lower together by S' = max(0, max over
@@ -270,10 +303,13 @@ How it plays (`ContextLevel::volumes`):
 
 Whence (quarter tones), Recommended (dumpEvents on the Linux dev machine, no Kontakt): S' 12.063 (the Celli -
 Performance at +6); every note, hosted and in the plain set, plays O - 2.77 dB against the setting off, so the sections
-are M apart and the mix 2.77 dB quieter (HANDOFF.md › Section balance).
+are M apart and the mix 2.77 dB quieter (HANDOFF.md › Section balance). The winds' M (2026-10-14) changes nothing in
+Whence (strings only). A full orchestra with a6 brass (a2 woodwinds, a6 horns / trumpets / trombones, tuba, five string
+sections, fff then mp; dumpEvents): Trombones a6 (O 24.46 + R 5.39) set the top, every string patch 15.86 dB lower than
+without the winds' M (HANDOFF.md › Section balance › Winds).
 
 Test: `tst_soundlibrary::levelSectionBalance` (the levels, the volumes, each note's level, the layers, a map without
-levels, the shipped map's M), `tst_liveequivalence::liveSectionBalance` (Live's clips, the route set's and the plain set's Kontakt volumes).
+levels, the shipped map's M for all 28 patches, a flute and Trumpets a6 on it), `tst_liveequivalence::liveSectionBalance` (Live's clips, the route set's and the plain set's Kontakt volumes).
 
 ### Real range
 
@@ -302,17 +338,22 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   | double bass (Basses) | 3.3.4.2 | 66-100 | 79-96 | 0.382 | 0.882 |
   | flute (Flute Solo, Flutes a2) | 3.2.1.2 | 67-100 | 82-94 | 0.455 | 0.818 |
   | oboe (Oboe Solo, Oboes a2) | 3.2.2.2 | 70-103 | 83-95 | 0.394 | 0.758 |
-  | clarinet (Clarinet Solo, Clarinets a2) | 3.2.3.2 | 57-106 (57 fifth octave, 65 typical) | 77-97 | 0.408 | 0.816 |
+  | clarinet (Clarinet Solo, Clarinets a2; Bass Clarinet: assumed) | 3.2.3.2 | 57-106 (57 fifth octave, 65 typical) | 77-97 | 0.408 | 0.816 |
   | bassoon (Bassoon Solo, Bassoons a2) | 3.2.4.2 | 72-102 | 81-96 | 0.300 | 0.800 |
   | horn (Horn Solo, Horns a2, a6) | 3.1.1.2 | 65-117 | 86-107 | 0.404 | 0.808 |
   | trumpet (Trumpet Solo, Trumpets a2, a6) | 3.1.2.2 | 78-111 | 89-104 ("sound pressure", read as power) | 0.333 | 0.788 |
-  | tenor trombone (Tenor Trombone Solo, a2, Trombones a6) | 3.1.3.2 | 73-113 | 89-105 | 0.400 | 0.800 |
+  | tenor trombone (Tenor Trombone Solo, a2, Trombones a6; Bass Trombone Solo, a2: assumed) | 3.1.3.2 | 73-113 | 89-105 | 0.400 | 0.800 |
   | tuba (Tuba Solo) | 3.1.4.2 | 77-112 | 93-108 | 0.457 | 0.886 |
 
-- **Rule D** (the owner, 2026-10-12; now only where Meyer gives no single-note extremes against in-play levels: Cor
-  Anglais (§3.2.2.4 limits only), Bass Clarinet (§3.2.3.4 single notes only), Contrabassoon (§3.2.4.6 in-play only),
-  Bass Trombone Solo / a2 (§3.1.3.4 no levels); no sibling's fractions, Meyer doesn't call them alike): the markings in 7
-  equal dB steps of span / 7, i.e. a = 1/7, b = 6/7. `real_range.py --rule-d` writes every instrument by it (comparison).
+- **Siblings' fractions, an assumption** (the owner, 2026-10-14, "sure": "plays like its family"; not a measurement):
+  Meyer gives the bass clarinet (§3.2.3.4: single notes only) and the bass trombone (§3.1.3.4: no levels) nothing to
+  place pp / ff by, so Bass Clarinet takes the clarinet's a / b and Bass Trombone Solo / a2 the tenor trombone's
+  (`real_range.py` `SIBLING`; their entries in `sso_real_range.json` carry `meyerSibling`). Effect at the middle pitch
+  (realDb pp / mp / ff, rule D -> sibling's): Bass Clarinet (55) -6.2 / 0 / +2.2 -> -3.4 / 0 / -2.0, Bass Trombone Solo
+  (47) +1.3 / 0 / +10.0 -> +5.5 / 0 / +3.7, Bass Trombones a2 (47) -4.1 / 0 / +1.9 -> +0.1 / 0 / -4.4.
+- **Rule D** (the owner, 2026-10-12; now only Cor Anglais (§3.2.2.4 limits only) and Contrabassoon (§3.2.4.6 in-play
+  only), which the owner was not asked about): the markings in 7 equal dB steps of span / 7, i.e. a = 1/7, b = 6/7.
+  `real_range.py --rule-d` writes every instrument by it (comparison).
 - **Each note** plays by CC11 `realDb(x, p) = (F(steps(x)) - F(0)) × span(p) - long(x, p)`: x the dynamics CC in force as
   written (so CC1 and CC11 move together: a hairpin ramps both), steps(x) its distance from mp in markings (ppp -3, pp -2 …
   ff +3, fff +4; between them linear in CC1, the inverse of `Ms4::expressionLevel`), F the level as a fraction of the span

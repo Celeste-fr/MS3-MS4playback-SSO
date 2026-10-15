@@ -1,16 +1,40 @@
 {
- "method": "    python3 -I section_balance_winds.py <3_Audio_Features.csv> <sso_sound_range.json> <sso_cc1_curves.json>\n                                        <sso_winds_cc1_curves.json> <out sso_winds_section_balance.json>\n\nThe strings' M (gen_spitfire_sso.py SECTION_FADERS, the owner's choice 2026-10-11) by its own method, then the same\nfor every measured wind and brass patch WITHOUT re-centring: each patch's D = SSO - real (mean over the semitones of\nthe Long's range the database also measured), M = -(D - the strings' mean D), so the strings keep -3.81 -2.66 -2.12\n+2.77 +5.81 and a wind's M is the dB it would play louder by beside them.\n  - SSO side: the Long at CC1 = velocity 64, loudDb (the loudest 50 ms of the note and 0.5 s of its release), median of\n    4, every 3 semitones, linear in dB between (sso_cc1_curves.json / sso_winds_cc1_curves.json);\n  - real side: Weinzierl et al. 2018, TU Berlin database v3, SoundPower in dB of single tones (_et_), per MIDI pitch,\n    linear in dB between measured pitches; mp = pp + 0.4 (ff - pp) (CC1 64 = level 4750 on MuseScore's pp 3750 .. ff\n    6250, as for the strings); a patch = one player + 10 log10 N, N its players (solo 1, a2 2, a6 6; strings 16 / 14 /\n    12 / 10 / 8, SSO's product page).\nThe CSV is CC BY-NC-SA 4.0: derived numbers only.",
- "stringsReproduced": {
+ "method": "    python3 -I section_balance_winds.py <3_Audio_Features.csv> <sso_sound_range.json> <sso_cc1_curves.json>\n                                        <sso_winds_cc1_curves.json> <out sso_winds_section_balance.json>\n\nThe owner, 2026-10-14: the woodwinds and brass get a section balance M from the solo data (TU Berlin sound power, with\nMeyer's levels) \"until we can find better non-solo data\". The strings' M (gen_spitfire_sso.py SECTION_FADERS, the\nowner's choice 2026-10-11) by its own method, then the same for every measured wind and brass patch WITHOUT re-centring:\neach patch's D = SSO - real (mean over the semitones of the Long's range the database also measured), M = -(D - the\nstrings' mean D), so a wind's M is the dB it plays louder by beside the strings.\n  - SSO side: the Long at CC1 = velocity 64, loudDb (the loudest 50 ms of the note and 0.5 s of its release), median of\n    4, linear in dB between measured pitches (sso_cc1_curves.json / sso_winds_cc1_curves.json);\n  - real side: Weinzierl et al. 2018, TU Berlin database v3, SoundPower in dB of single tones (_et_), per MIDI pitch,\n    linear in dB between measured pitches (pp, ff as measured, not smoothed); a patch = one player + 10 log10 N, N its\n    players (solo 1, a2 2, a6 6; strings 16 / 14 / 12 / 10 / 8, SSO's product page);\n  - mp: a wind at mp as [levels] realRange plays it (2026-10-14): pp + f (ff - pp), f = a + 2 (b - a) / 5 by the Meyer\n    rule (real_range.fractions: the bass clarinet's and bass trombones' their sibling's, an assumption), 3 / 7 by rule D\n    (Cor Anglais, Contrabassoon). The strings' approved M placed mp at f = 0.4 (CC1 64 = level 4750 on MuseScore's pp\n    3750 .. ff 6250); recomputed with the Meyer rule's f they would move by up to 1.21 dB (stringsMove), more than\n    MOVE_MAX, so the approved strings stay and the winds go on their scale: the centre is the strings' mean D at f = 0.4\n    on today's curves (stringsMp04: within 0.14 dB of the approved values: Celli and Basses re-measured 2026-10-14).\n    meyerScaleShift: what every wind's M would change by with the strings' Meyer M instead (a choice for the owner).\nThe CSV is CC BY-NC-SA 4.0: derived numbers only.",
+ "approved": {
   "Violins 1": -3.81,
   "Violins 2": -2.66,
   "Violas": -2.12,
   "Celli": 2.77,
   "Basses": 5.81
  },
+ "stringsMp04": {
+  "Violins 1": -3.83,
+  "Violins 2": -2.68,
+  "Violas": -2.15,
+  "Celli": 2.71,
+  "Basses": 5.95
+ },
+ "meyerScaleShift": -4.39,
+ "stringsMeyer": {
+  "Violins 1": -2.6,
+  "Violins 2": -1.45,
+  "Violas": -3.08,
+  "Celli": 1.89,
+  "Basses": 5.24
+ },
+ "stringsMove": {
+  "Violins 1": 1.21,
+  "Violins 2": 1.21,
+  "Violas": -0.96,
+  "Celli": -0.88,
+  "Basses": -0.57
+ },
+ "stringsTake": "approved",
  "strings": {
   "Violins 1": {
    "M": -3.81,
-   "D": -113.83,
+   "D": -119.46,
+   "mpFrac": 0.5854,
    "players": 16,
    "common": [
     55,
@@ -19,7 +43,8 @@
   },
   "Violins 2": {
    "M": -2.66,
-   "D": -114.99,
+   "D": -120.61,
+   "mpFrac": 0.5854,
    "players": 14,
    "common": [
     55,
@@ -28,7 +53,8 @@
   },
   "Violas": {
    "M": -2.12,
-   "D": -115.52,
+   "D": -118.98,
+   "mpFrac": 0.5375,
    "players": 12,
    "common": [
     48,
@@ -37,7 +63,8 @@
   },
   "Celli": {
    "M": 2.77,
-   "D": -120.41,
+   "D": -123.95,
+   "mpFrac": 0.5657,
    "players": 10,
    "common": [
     36,
@@ -46,7 +73,8 @@
   },
   "Basses": {
    "M": 5.81,
-   "D": -123.46,
+   "D": -127.29,
+   "mpFrac": 0.5824,
    "players": 8,
    "common": [
     28,
@@ -56,230 +84,276 @@
  },
  "instruments": {
   "Flute Solo": {
-   "M": 10.35,
-   "D": -128.0,
+   "M": 11.75,
+   "D": -129.41,
    "instrument": "Transverse flute modern",
    "players": 1,
+   "mpFrac": 0.6,
+   "rule": "meyer",
    "common": [
     60,
     94
    ]
   },
   "Flutes a2": {
-   "M": 8.52,
-   "D": -126.17,
+   "M": 9.92,
+   "D": -127.58,
    "instrument": "Transverse flute modern",
    "players": 2,
+   "mpFrac": 0.6,
+   "rule": "meyer",
    "common": [
     60,
     94
    ]
   },
   "Oboe Solo": {
-   "M": 2.31,
-   "D": -119.95,
+   "M": 4.02,
+   "D": -121.68,
    "instrument": "Oboe modern",
    "players": 1,
+   "mpFrac": 0.5394,
+   "rule": "meyer",
    "common": [
     58,
     90
    ]
   },
   "Oboes a2": {
-   "M": -0.05,
-   "D": -117.59,
+   "M": 1.66,
+   "D": -119.32,
    "instrument": "Oboe modern",
    "players": 2,
+   "mpFrac": 0.5394,
+   "rule": "meyer",
    "common": [
     58,
     90
    ]
   },
   "Cor Anglais": {
-   "M": 8.49,
-   "D": -126.14,
+   "M": 8.78,
+   "D": -126.45,
    "instrument": "English horn modern",
    "players": 1,
+   "mpFrac": 0.4286,
+   "rule": "D",
    "common": [
     52,
     82
    ]
   },
   "Clarinet Solo": {
-   "M": 2.73,
-   "D": -120.37,
+   "M": 7.82,
+   "D": -125.49,
    "instrument": "Clarinet modern",
    "players": 1,
+   "mpFrac": 0.5714,
+   "rule": "meyer",
    "common": [
     50,
     89
    ]
   },
   "Clarinets a2": {
-   "M": 0.78,
-   "D": -118.42,
+   "M": 5.88,
+   "D": -123.54,
    "instrument": "Clarinet modern",
    "players": 2,
+   "mpFrac": 0.5714,
+   "rule": "meyer",
    "common": [
     50,
     89
    ]
   },
   "Bass Clarinet": {
-   "M": 1.83,
-   "D": -119.47,
+   "M": 5.6,
+   "D": -123.26,
    "instrument": "Bass clarinet modern",
    "players": 1,
+   "mpFrac": 0.5714,
+   "rule": "meyer",
    "common": [
     34,
     75
    ]
   },
   "Bassoon Solo": {
-   "M": 0.37,
-   "D": -118.01,
+   "M": 1.63,
+   "D": -119.3,
    "instrument": "Bassoon modern",
    "players": 1,
+   "mpFrac": 0.5,
+   "rule": "meyer",
    "common": [
     34,
     74
    ]
   },
   "Bassoons a2": {
-   "M": 12.85,
-   "D": -130.49,
+   "M": 14.11,
+   "D": -131.77,
    "instrument": "Bassoon modern",
    "players": 2,
+   "mpFrac": 0.5,
+   "rule": "meyer",
    "common": [
     34,
     74
    ]
   },
   "Contrabassoon": {
-   "M": 0.97,
-   "D": -118.61,
+   "M": 1.26,
+   "D": -118.92,
    "instrument": "Contrabassoon modern",
    "players": 1,
+   "mpFrac": 0.4286,
+   "rule": "D",
    "common": [
     22,
     51
    ]
   },
   "Horn Solo": {
-   "M": 4.82,
-   "D": -122.46,
+   "M": 8.36,
+   "D": -126.03,
    "instrument": "French horn modern",
    "players": 1,
+   "mpFrac": 0.5654,
+   "rule": "meyer",
    "common": [
     38,
     77
    ]
   },
   "Horns a2": {
-   "M": 11.42,
-   "D": -129.07,
+   "M": 14.96,
+   "D": -132.63,
    "instrument": "French horn modern",
    "players": 2,
+   "mpFrac": 0.5654,
+   "rule": "meyer",
    "common": [
     38,
     77
    ]
   },
   "Horns a6": {
-   "M": 15.2,
-   "D": -132.84,
+   "M": 18.74,
+   "D": -136.41,
    "instrument": "French horn modern",
    "players": 6,
+   "mpFrac": 0.5654,
+   "rule": "meyer",
    "common": [
     38,
     77
    ]
   },
   "Trumpet Solo": {
-   "M": 10.88,
-   "D": -128.52,
+   "M": 13.21,
+   "D": -130.88,
    "instrument": "Trumpet modern",
    "players": 1,
+   "mpFrac": 0.5152,
+   "rule": "meyer",
    "common": [
     54,
     86
    ]
   },
   "Trumpets a2": {
-   "M": 16.09,
-   "D": -133.74,
+   "M": 18.43,
+   "D": -136.1,
    "instrument": "Trumpet modern",
    "players": 2,
+   "mpFrac": 0.5152,
+   "rule": "meyer",
    "common": [
     54,
     86
    ]
   },
   "Trumpets a6": {
-   "M": 21.66,
-   "D": -139.31,
+   "M": 24.05,
+   "D": -141.72,
    "instrument": "Trumpet modern",
    "players": 6,
+   "mpFrac": 0.5152,
+   "rule": "meyer",
    "common": [
     54,
     84
    ]
   },
   "Tenor Trombone Solo": {
-   "M": 4.18,
-   "D": -121.82,
+   "M": 9.06,
+   "D": -126.72,
    "instrument": "Tenor trombone modern",
    "players": 1,
+   "mpFrac": 0.56,
+   "rule": "meyer",
    "common": [
     31,
     72
    ]
   },
   "Tenor Trombones a2": {
-   "M": 10.85,
-   "D": -128.49,
+   "M": 15.72,
+   "D": -133.39,
    "instrument": "Tenor trombone modern",
    "players": 2,
+   "mpFrac": 0.56,
+   "rule": "meyer",
    "common": [
     31,
     72
    ]
   },
   "Trombones a6": {
-   "M": 19.39,
-   "D": -137.03,
+   "M": 24.46,
+   "D": -142.13,
    "instrument": "Tenor trombone modern",
    "players": 6,
+   "mpFrac": 0.56,
+   "rule": "meyer",
    "common": [
     31,
     66
    ]
   },
   "Bass Trombone Solo": {
-   "M": 6.22,
-   "D": -123.86,
+   "M": 11.06,
+   "D": -128.73,
    "instrument": "Bass trombone modern",
    "players": 1,
+   "mpFrac": 0.56,
+   "rule": "meyer",
    "common": [
     28,
     65
    ]
   },
   "Bass Trombones a2": {
-   "M": 9.77,
-   "D": -127.41,
+   "M": 14.61,
+   "D": -132.28,
    "instrument": "Bass trombone modern",
    "players": 2,
+   "mpFrac": 0.56,
+   "rule": "meyer",
    "common": [
     28,
     65
    ]
   },
   "Tuba Solo": {
-   "M": 7.48,
-   "D": -125.13,
+   "M": 12.95,
+   "D": -130.62,
    "instrument": "Tuba modern",
    "players": 1,
+   "mpFrac": 0.6286,
+   "rule": "meyer",
    "common": [
     24,
     64

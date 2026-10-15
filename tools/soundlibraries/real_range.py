@@ -29,7 +29,9 @@ pp and ff inside each pitch's span: pp(p) = tuPp(p) + a span(p), ff(p) = tuPp(p)
 shape kept); p, mp, mf, f in equal dB steps between pp and ff (Meyer's own method for his forte: equal steps from pp to
 ff), 5 steps of (b - a) span / 5; ppp -> pp and ff -> fff one step each. Relative to mp as before (the section balance M
 unchanged); piecewise linear in marking steps, so continuous in CC1 through hairpins. Rule D is the case a = 1/7,
-b = 6/7. Instruments without Meyer extremes keep rule D (MEYER_NONE). Only section numbers and figures are used here
+b = 6/7. Instruments without Meyer extremes keep rule D (MEYER_NONE), except the bass clarinet and the bass trombone,
+which take their sibling's fractions (SIBLING: the clarinet's, the tenor trombone's; the owner, 2026-10-14: an assumption,
+"plays like its family", not a measurement); Cor Anglais and Contrabassoon keep rule D. Only section numbers and figures are used here
 (the book is copyrighted).
 
 Rule D (the owner, 2026-10-12; kept where Meyer has no extremes, and by --rule-d): the database's pp and ff ("as softly / loudly as possible") are the player's ppp and
@@ -89,13 +91,20 @@ MEYER = {
     'Tenor trombone modern': ('3.1.3.2', (73, 113), (89, 105)),
     'Tuba modern': ('3.1.4.2', (77, 112), (93, 108)),
 }
-# Meyer gives no single-note extremes against in-play levels: rule D (no sibling's fractions: Meyer doesn't say they
-# are alike in dynamics). Piccolo (3.2.1.4: limits only, about 15 dB) has no database data anyway
+# Meyer gives no single-note extremes against in-play levels: rule D. Piccolo (3.2.1.4: limits only, about 15 dB) has no
+# database data anyway
 MEYER_NONE = {
     'English horn modern': '3.2.2.4: only the limits pp 79 / ff 94 (narrower than the oboe), no scales against single notes',
     'Bass clarinet modern': '3.2.3.4: only single notes (pp 59 low register, ff about 97), no in-play levels',
     'Contrabassoon modern': '3.2.4.6: in-play pp 86 / ff 96, single notes only as a range ("up to 15 dB"), no levels',
     'Bass trombone modern': '3.1.3.4: tone colour only, no levels',
+}
+# An ASSUMPTION, not a measurement (the owner, 2026-10-14, "sure": "plays like its family"): these take their sibling's
+# Meyer fractions, Meyer giving them no levels to place pp / ff by (MEYER_NONE above). Cor Anglais and Contrabassoon were
+# not asked about: rule D
+SIBLING = {
+    'Bass clarinet modern': 'Clarinet modern',
+    'Bass trombone modern': 'Tenor trombone modern',
 }
 MARKS = ['ppp', 'pp', 'p', 'mp', 'mf', 'f', 'ff', 'fff']
 MARK_CC = [16, 32, 48, 64, 80, 96, 112, 127]      # Ms4::expressionLevel; marking steps from mp -3 .. +4
@@ -104,7 +113,7 @@ RULE_D = (1 / 7, 6 / 7)
 
 def fractions(lab):
     """(a, b): written pp and ff as fractions of the span above the single-note pp; None: rule D"""
-    m = MEYER.get(lab)
+    m = MEYER.get(lab) or MEYER.get(SIBLING.get(lab))
     if not m:
         return None
     (xlo, xhi), (ppp, fff) = m[1], m[2]
@@ -158,9 +167,13 @@ def addRule(e, ruleD):
         e['meyer'] = {'section': sec, 'extremes': list(x), 'inPlay': list(pl)}
     else:
         e['meyerNone'] = MEYER_NONE.get(lab, 'not in Meyer chapter 3')
+    if lab in SIBLING:
+        sec, x, pl = MEYER[SIBLING[lab]]
+        e['meyerSibling'] = {'instrument': SIBLING[lab], 'section': sec, 'extremes': list(x), 'inPlay': list(pl),
+                             'why': 'an assumption, not a measurement: plays like its family (the owner, 2026-10-14)'}
     md, rd = marks(e, RULE_D)
     e['marksMid'], e['realDbMid'] = {'D': md}, {'D': rd}
-    if lab in MEYER:
+    if fractions(lab):
         e['marksMid']['meyer'], e['realDbMid']['meyer'] = marks(e, fractions(lab))
     return e
 
@@ -305,6 +318,8 @@ def main():
                     'Long, rmsDb less CC1 64\'s. marksMid: the player\'s dB from mp at midPitch, both rules; realDbMid: '
                     'less long at the marking\'s CC1 (16 .. 127): MuseScore\'s CC11 before the headroom',
             'meyerNone': MEYER_NONE,
+            'meyerSibling': {k: v + "'s fractions: an assumption, not a measurement (the owner, 2026-10-14: plays like "
+                                 "its family)" for k, v in SIBLING.items()},
             'real': 'Weinzierl et al. 2018, JASA 144(3), TU Berlin database v3, 3_Audio_Features.csv, SoundPower in dB, '
                     '_et_ files, mean over files per pitch',
             'smoothing': 'local linear least squares over +-k semitones, k by leave-one-out cross-validation pooled '

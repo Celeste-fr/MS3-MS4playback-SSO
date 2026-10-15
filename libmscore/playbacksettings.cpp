@@ -117,7 +117,7 @@ static const std::vector<Definition> DEFINITIONS = {
       // section sizes) against SSO's measured one (sso_cc1_curves.json); on in Recommended, off in Library default;
       // contextlevel.h, gen_spitfire_sso.py SECTION_FADERS)
       { "levels/sectionBalance", 1, 0, 1, "on/off",
-        "1: every patch of a section with a map sectionLevel (SSO's five string sections: a real orchestra's balance at mp, "
+        "1: every patch of a section with a map sectionLevel (SSO's string sections, woodwinds and brass: a real orchestra's balance at mp, "
         "from measured sound power and section sizes, against SSO's measured levels) plays that many dB louder, staccatos and Performance alike, by the patches' volumes (with [levels] "
         "context the Performance patches' volume carries the section's largest slur gain too; everything lower together so the "
         "loudest stays at Live's Volume top, +6 dB); 0: every section at the same level", true },

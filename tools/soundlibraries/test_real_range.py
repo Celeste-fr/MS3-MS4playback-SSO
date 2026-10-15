@@ -15,8 +15,12 @@ class RealRange(unittest.TestCase):
         # Meyer 2009 ch. 3: cello X 63-98, P 74-96 (3.3.3.2); clarinet X 57-106, P 77-97 (3.2.3.2)
         self.assertEqual(rr.fractions('Cello modern'), (11 / 35, 33 / 35))
         self.assertEqual(rr.fractions('Clarinet modern'), (20 / 49, 40 / 49))
-        for lab in rr.MEYER_NONE:
-            self.assertIsNone(rr.fractions(lab))
+        # Cor Anglais and Contrabassoon: rule D; the bass clarinet and bass trombone take their sibling's (the owner,
+        # 2026-10-14: an assumption, "plays like its family")
+        self.assertIsNone(rr.fractions('English horn modern'))
+        self.assertIsNone(rr.fractions('Contrabassoon modern'))
+        self.assertEqual(rr.fractions('Bass clarinet modern'), (20 / 49, 40 / 49))
+        self.assertEqual(rr.fractions('Bass trombone modern'), (16 / 40, 32 / 40))   # tenor trombone X 73-113, P 89-105
 
     def test_meyer_levels(self):
         # pp 0.4, ff 0.9: 0.1 a step between, ppp 0, fff 1, continuous

@@ -2569,16 +2569,27 @@ void TestSoundLibrary::levelSectionBalance()
       QVERIFY(std::fabs(v[score->parts()[1]].top - 15) < 1e-9 && std::fabs(v[score->parts()[1]].patchDb["Viola"] + 9) < 1e-9);
       delete score;
       // the shipped SSO map: the owner's M (2026-10-11, gen_spitfire_sso.py SECTION_FADERS), centred (the five add up
-      // to 0), every patch of a section with its main patch's level, nothing else with one
+      // to 0), and the woodwinds' and brass' on the strings' scale (the owner, 2026-10-14: from the solo data;
+      // section_balance_winds.py -> sso_winds_section_balance.json), every patch of a section with its main patch's
+      // level, nothing else with one
       QString error;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
       QVERIFY2(sso, qPrintable(error));
-      const std::map<QString, double> M { { "Violins 1", -3.81 }, { "Violins 2", -2.66 }, { "Violas", -2.12 },
-                                          { "Celli", 2.77 }, { "Basses", 5.81 } };
+      const std::map<QString, double> strings { { "Violins 1", -3.81 }, { "Violins 2", -2.66 }, { "Violas", -2.12 },
+                                                { "Celli", 2.77 }, { "Basses", 5.81 } };
       double sum = 0;
-      for (const auto& m : M)
+      for (const auto& m : strings)
             sum += m.second;
       QVERIFY(std::fabs(sum) < 0.011);
+      std::map<QString, double> M = strings;
+      M.insert({ { "Flute Solo", 11.75 }, { "Flutes a2", 9.92 }, { "Oboe Solo", 4.02 }, { "Oboes a2", 1.66 },
+                 { "Cor Anglais", 8.78 }, { "Clarinet Solo", 7.82 }, { "Clarinets a2", 5.88 }, { "Bass Clarinet", 5.6 },
+                 { "Bassoon Solo", 1.63 }, { "Bassoons a2", 14.11 }, { "Contrabassoon", 1.26 }, { "Horn Solo", 8.36 },
+                 { "Horns a2", 14.96 }, { "Horns a6", 18.74 }, { "Trumpet Solo", 13.21 }, { "Trumpets a2", 18.43 },
+                 { "Trumpets a6", 24.05 }, { "Tenor Trombone Solo", 9.06 }, { "Tenor Trombones a2", 15.72 },
+                 { "Trombones a6", 24.46 }, { "Bass Trombone Solo", 11.06 }, { "Bass Trombones a2", 14.61 },
+                 { "Tuba Solo", 12.95 } });
+      QCOMPARE(int(M.size()), 28);
       int withLevel = 0;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
@@ -2588,6 +2599,24 @@ void TestSoundLibrary::levelSectionBalance()
             withLevel += li.sectionLevelDb != 0.0;
             }
       QVERIFY(withLevel > 5);
+      // a woodwind and a brass section play theirs (nothing in the code is the strings' only): a flute and Trumpets a6
+      // on the shipped map, the rule and the real range off: S' = 24.05 - 6 = 18.05, the trumpets at +6, the flute at
+      // 11.75 - 18.05 = -6.30
+      SoundLib::setCurrent(sso);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" } });
+      score = readScore(DIR + "section-balance-winds.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(score->parts().size(), 2);
+      v = ContextLevel::volumes(score);
+      QCOMPARE(int(v.size()), 2);
+      QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 6.30) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
+      QVERIFY2(std::fabs(v[score->parts()[1]].patchDb["Trumpets a6"] - 6) < 1e-9, qPrintable(QString::number(v[score->parts()[1]].patchDb["Trumpets a6"])));
+      // off: no volumes
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },
+                                      { "levels/sectionBalance", "0" } });
+      QVERIFY(ContextLevel::volumes(score).empty());
+      delete score;
       }
 
 //---------------------------------------------------------
@@ -2597,8 +2626,8 @@ void TestSoundLibrary::levelSectionBalance()
 //    owner 2026-10-14): written pp / ff at a / b of the span, p .. f in 5 equal steps, ppp 0, fff 1, by hand; each
 //    note's CC11 at ppp / mp / fff under both, a hairpin's CC11 following its CC1, the part's R as its patches' volume
 //    (+6 at most, the rest lower together), a capped short's rest by CC11; layers (default 0, the ini's 1, the score's 1
-//    over the ini's 0); the presets leave it alone; the shipped map: the strings, woodwinds and brass by Meyer, the
-//    instruments without Meyer figures by rule D
+//    over the ini's 0); the presets leave it alone; the shipped map: the strings, woodwinds and brass by Meyer (the bass
+//    clarinet and bass trombones by their sibling's fractions, an assumption), Cor Anglais and Contrabassoon by rule D
 //---------------------------------------------------------
 
 void TestSoundLibrary::levelRealRange()
@@ -2835,11 +2864,15 @@ void TestSoundLibrary::levelRealRange()
                                    "Horn Solo", "Horns a2", "Horns a6", "Trumpet Solo", "Trumpets a2", "Trumpets a6",
                                    "Tenor Trombone Solo", "Tenor Trombones a2", "Trombones a6", "Bass Trombone Solo",
                                    "Bass Trombones a2", "Tuba Solo" };
-      const QStringList ruleD { "Cor Anglais", "Bass Clarinet", "Contrabassoon", "Bass Trombone Solo", "Bass Trombones a2" };
+      // (the bass clarinet and the bass trombones take their sibling's fractions: the owner, 2026-10-14, an assumption)
+      const QStringList ruleD { "Cor Anglais", "Contrabassoon" };
       // Meyer 2009 ch. 3, (P - X_lo) / (X_hi - X_lo): Celli (74 - 63) / 35, (96 - 63) / 35 (3.3.3.2); Violins (74 - 58) / 41,
-      // (94 - 58) / 41 (3.3.1.2); Clarinet (77 - 57) / 49, (97 - 57) / 49 (3.2.3.2)
+      // (94 - 58) / 41 (3.3.1.2); Clarinet (77 - 57) / 49, (97 - 57) / 49 (3.2.3.2), the Bass Clarinet too; tenor
+      // trombone (89 - 73) / 40, (105 - 73) / 40 (3.1.3.2), the Bass Trombones too
       const std::map<QString, std::pair<double, double>> fractions { { "Celli", { 11 / 35.0, 33 / 35.0 } },
-            { "Violins 1", { 16 / 41.0, 36 / 41.0 } }, { "Clarinet Solo", { 20 / 49.0, 40 / 49.0 } } };
+            { "Violins 1", { 16 / 41.0, 36 / 41.0 } }, { "Clarinet Solo", { 20 / 49.0, 40 / 49.0 } },
+            { "Bass Clarinet", { 20 / 49.0, 40 / 49.0 } }, { "Tenor Trombone Solo", { 0.4, 0.8 } },
+            { "Bass Trombone Solo", { 0.4, 0.8 } }, { "Bass Trombones a2", { 0.4, 0.8 } } };
       int with = 0;
       QStringList mains;
       for (const SoundLib::LibInstrument& li : sso->instruments) {

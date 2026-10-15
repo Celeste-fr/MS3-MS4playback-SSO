@@ -247,7 +247,8 @@ struct LibInstrument {
       int maxVelocity { 127 };
       // [levels] sectionBalance (contextlevel.h): every patch of the section plays this many dB louder, by its volume
       // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's M,
-      // 2026-10-11, gen_spitfire_sso.py SECTION_FADERS). 0: none
+      // 2026-10-11, gen_spitfire_sso.py SECTION_FADERS; since 2026-10-14 SSO's woodwinds and brass too, on the strings'
+      // scale, section_balance_winds.py). 0: none
       double sectionLevelDb { 0 };
       // [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A), on the main patch, its
       // extras take them: one real player's ff - pp in dB per pitch (<Instrument realSpan="pitch:dB ...">: Weinzierl et al.
