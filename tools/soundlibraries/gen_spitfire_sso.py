@@ -1510,6 +1510,9 @@ def sectionLevel(name):
 #   TU Berlin's directivity in that direction, mp between pp and mf, one player + 10 log10 N; corroborated per family by the
 #   Spheres dataset's sections and Skaalevik 2019's orchestra dosimetry fit. Bass Clarinet, Contrabassoon, Bass Trombone
 #   Solo / a2: their family member's change (an assumption). section_balance_cl.py -> sso_cl_section_balance.json
+#   Strings Ensemble (2026-10-15, docs/BALANCE_LOG.md › Iteration 9): from the sections it mixes at each key
+#   (strings_ensemble.py -> sso_strings_ensemble.json, section_balance_cl.py's last argument); no real range (its sections'
+#   spans differ)
 SECTION_LEVEL2 = {n: v['M2'] for n, v in loadFit('sso_cl_section_balance.json').get('patches', {}).items()}
 def sectionLevelAttributes(name):
     out = f' sectionLevel="{sectionLevel(name):g}"'

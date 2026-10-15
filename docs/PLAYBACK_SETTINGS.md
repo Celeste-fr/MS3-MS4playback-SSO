@@ -371,13 +371,21 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Cimbassi a2 (trombone) | +14.69 | - | 92.8 |
 | Contrabass Tuba (tuba) | -3.24 | - | 95.1 |
 | Harp | -9.81 | - | - |
+| Strings Ensemble (the sections it mixes) | +11.93 | - | - |
 
 The 15 rows from Solo Violin 1 to Contrabass Tuba (since 2026-10-15, docs/BALANCE_LOG.md › Iterations 2 and 4) had no
 section level and played SSO's own level; since Iteration 4 their SSO side is their own sweep, as every other patch's
 (until then the dynamics check at one test pitch + 1.50 dB, ±2.3 dB). In brackets: the family member whose real level
 and span the patch takes (an assumption); "TU ratio": the sibling's Clark & Luce level plus TU Berlin's difference
-(Iteration 5). The harp: Iteration 6 (above). Strings Ensemble has none (which sections sound at a given note isn't
-known), nor do the timpani (Iteration 6: no marking for TU's levels), keyboards and the other percussion (Iteration 7:
+(Iteration 5). The harp: Iteration 6 (above). Strings Ensemble (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 9):
+its Long is the five sections' own samples mixed, every section that has the note (Basses 24 .. 50, Celli 36 .. 80,
+Violas 48 .. 90, Violins 1 / 2 56 .. 96, faded in and out over 4 .. 10 semitones at their ends; each at -13.3 dB against
+its own patch, the basses at -5.7), found by cross-correlation with the sections' recordings and a harmonic-by-harmonic
+fit (`strings_ensemble.py` -> `sso_strings_ensemble.json`); per key the target is the balanced sections it plays (their
+Long + `sectionLevel2` + how far faded), +11.93 the mean over keys 24 .. 96 (SD 2.0 across keys: the basses-only
+bottom +7.3 .. +10.4, so with one offset it plays 2 .. 4 dB over the balanced sections there, the middle +13 .. +15; the
+sections' own uncertainty carries over). Before: SSO's own level, about 12 dB under the balanced sections. Neither the
+timpani (Iteration 6: no marking for TU's levels), keyboards and the other percussion (Iteration 7:
 SSO's group already inside Skålevik's range).
 
 Biggest moves from `sectionLevel`: Bassoon Solo -12.5 dB (TU's single notes put it far louder than orchestral players
@@ -513,7 +521,8 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   a2, Contrabass Tuba) with realSteps only (realRange 2; realRange 1 leaves them as SSO plays them). Checked in Kontakt
   (all 43 patches with a real range, each marking at its test pitch as MuseScore sends it): the steps from mp within
   0.05 dB RMS (median) of steps x S / 5, every patch in order except Cor Anglais, whose round robins (4.5 dB apart at pp)
-  exceed its 1.04 dB step. Strings Ensemble, the harp, keyboards and percussion have none.
+  exceed its 1.04 dB step. Strings Ensemble (its sections don't share a span: violas 15.9 against 13.8 .. 14.1 dB), the
+  harp, keyboards and percussion have none.
 
   At a middle pitch, realDb (dB from mp, the CC11 before the headroom; ppp / pp / p / mp / mf / f / ff / fff;
   `sso_real_range.json` `realDbMid`), Clark & Luce spans against the Meyer rule (rule D for Cor Anglais):
@@ -796,7 +805,8 @@ default**) makes the change up, so the section stays at its balance whatever mic
   2026-10-15 (balance-refine, `mic_levels.py extra`, same method) also the 15 patches swept for the balance (solo
   strings, Motif brass, piccolo, alto / bass flute, contrabass clarinet / trombone / tuba, cimbassi), the harp and the
   timpani (decaying notes by their energy 0 .. 6 s after the note-on; the timpani's Close mic rendered empty offline,
-  about -92 dB rms in every take: no level, so not compensated); every patch with a section level is covered. The
+  about -92 dB rms in every take: no level, so not compensated), and Strings Ensemble (Iteration 9: Close -4.07, Tree 0,
+  Ambient -5.28, Outrigger -5.81 dB; at MIDI 42 / 60 / 78); every patch with a section level is covered. The
   percussion kits have no mic Controllers, so their mics never change. Any other `with` patch takes its main patch's
   values (`soundlibrary.cpp`: an assumption, the same recording's mics); other patches none (no compensation).
 - **Not covered / untested**: a mic change by staff text (mic Controllers have none). With Mic Mix Distance set, a mic

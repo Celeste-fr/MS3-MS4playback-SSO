@@ -224,6 +224,52 @@ power as before. The harp's TU-to-Clark & Luce offset recomputed with it (-128.3
 -0.05, Cor Anglais -0.97, strings -0.13 .. +0.10, Harp -10.41 -> -9.81. One brass player against one string player at pp
 / mf: +11.4 / +13.5 -> +14.8 / +14.5 dB; the Spheres dataset's whole sections (independent) +14.3: now closer.
 
+## Iteration 9 (2026-10-15): Strings Ensemble from the sections it mixes
+
+**Weakest link.** Strings Ensemble had no section level: it played SSO's own level beside five string sections that are
+all corrected (iteration 2 left it out: which sections sound at a given key wasn't known).
+
+**Evidence.** Windows VM (Kontakt Player 8.13.1 + SSO, kthost, offline; the setups MuseScore made, unedited): Strings
+Ensemble's Long and the five sections' Long at CC1 = velocity 64, every even key of each range (the ensemble's sample
+zones are every 2 semitones, 24 .. 96), 4 takes (`strings_ensemble.py` -> `sso_strings_ensemble.json`). The sections'
+renders reproduce `sso_cc1_curves.json` to 0.01 dB. Spitfire says only "a set of blended six-octave Ensemble patches"
+(Sound On Sound's review, D. Stewart, August 2024; the SSO manual v3 / v5 lists the patch, not its make-up). Two
+measures, per key:
+- *The sections' own recordings in it.* Cross-correlation of the ensemble's sustain with each section's (the best of the
+  two round robins' pairings, lags +-250 ms): from key 48 up the sections in it correlate 0.34 .. 0.88 against 0.12 ..
+  0.36 for two different recordings (the ensemble's own round robins), and their r^2 (energy shares) add up to 0.69 ..
+  1.17 (median 0.98; under 0.85 only at 48 and 58, where a faded section's r stays under the threshold): the ensemble is
+  the sections' own samples mixed, nothing else. At keys 24 .. 46 two different
+  recordings of the non-vibrato basses correlate up to 0.6, so r can't decide there (key 28: 0.73).
+- *A harmonic-by-harmonic fit* (each harmonic's power, both channels, NNLS over the sections at the same key): error 0.14
+  .. 0.64 dB from key 36 up, 0.54 .. 1.04 dB at 24 .. 34 (the ensemble's own two round robins differ by 0.5 .. 2.3), and
+  every section fully in sits at the same level against its own patch: Violins 1 -13.78, Violins 2 -13.22, Violas
+  -13.41, Celli -13.06 (spread 0.5 .. 2.9 dB; Violins 1 and 2 sound alike, so the fit trades them), Basses -5.71. No
+  octave doubling: the power at f0/2 x 1, 3, 5 is 27 .. 51 dB under f0 x 1, 2, 3 (nothing an octave down) and the
+  sections an octave up correlate <= 0.31 above key 34.
+
+Which sections play (dB: faded against their full level; certain from key 36 up by both measures, 24 .. 34 by the fit
+alone, the only section with notes there): Basses 24 .. 42, fading to 50 (-1.8 at 44, -4.5 .. -4.7 at 46 .. 50), gone
+from 52; Celli 36 .. 68, fading 70 .. 80 (-3 .. -7.6); Violas from 48 (-8.4, -6.4, -4.3, -2.0 at 48 .. 54), 56 .. 82,
+fading 84 .. 90 (-2.3 .. -6.9); Violins 1 and 2 from 56 (-6.8 / -5.9, then -4, -2 at 58 / 60), 62 .. 96. Every section
+that has the note, in unison.
+
+**Decision.** Per key, target = the power sum of the sections it plays, each at its Long (loudDb) + its sectionLevel2 +
+how far the ensemble fades it there: the balanced sections playing what the ensemble plays. sectionLevel2 = the mean
+over the 37 keys of (target - the ensemble's loudDb), on the sections' scale (`section_balance_cl.py` `ensemble`).
+Real range: none (realSteps only when its sections share a span; the violas' 15.9 dB isn't the others' 13.8 .. 14.1).
+Mic levels measured as `mic_levels.py` does (MIDI 42 / 60 / 78, 4 takes, each mic alone at full; the default mix the
+Tree alone at 127): Close -4.07, Tree 0, Ambient -5.28, Outrigger -5.81 dB (`sso_mic_levels.json`).
+
+**Uncertainty.** The keys' SD 2.03 dB (+7.29 .. +15.14; the mean's standard error 0.33): the basses-only bottom
+(24 .. 34) needs +7.3 .. +10.4, the rest +9.5 .. +15.1, because SSO mixes its basses 7.6 dB hotter than its other
+sections; with one offset the bottom plays 2 .. 4 dB over the balanced sections and keys 48 .. 54 / 88 .. 96 1 .. 3 dB
+under. Variants: every section counted at full level where it is in at all +12.48; by the sustain's power (rmsDb)
+instead of loudDb +11.95. The sections' own balance uncertainty (their sectionLevel2) carries over.
+
+**Before -> after** (`sectionLevel2`, dB): Strings Ensemble none (SSO's level, about 12 dB under the balanced sections it
+mixes) -> +11.93. Every other patch unchanged; Trumpets a6 (+20.45) stay the loudest (S' unchanged).
+
 ## Mic levels for the added patches (2026-10-15)
 
 The mic-compensation work (`[levels] micCompensation`) measured each mic alone for the 28 patches that had a section

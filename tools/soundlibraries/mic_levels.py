@@ -18,7 +18,8 @@ Bass Flute, Contrabass Clarinet, Contrabass Trombone, Cimbasso Solo, Cimbassi a2
 quartiles of sso_gap_cc1_curves.json's; and Harp and Timpani (3 mics), which decay: their notes 6.0 s apart and their level
 the energy of the note and its tail (both channels' mean square from the note-on to 6.0 s after it, "levelMeasure"), the
 same window for every mic; Harp at MIDI 42 / 60 / 78, Timpani at keys 50 / 54 / 58 (key 50 sounds D2). The percussion
-patches have no mic Controllers in the map (MuseScore never changes their mics): not measured.
+patches have no mic Controllers in the map (MuseScore never changes their mics): not measured. Strings Ensemble
+(2026-10-15, docs/BALANCE_LOG.md › Iteration 9: it got a section level) the same way, 4 mics, at MIDI 42 / 60 / 78.
 
 Method (Windows test VM, kthost: Kontakt 8.13.1 + SSO, one process per render, offline, 44.1 kHz; copies of MuseScore's
 resaved setups, the strings' from MuseScore's setups folder, the winds' and brass' from the dynamics check's): SSO's All

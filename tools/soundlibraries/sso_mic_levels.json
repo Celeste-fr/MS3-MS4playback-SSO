@@ -3415,6 +3415,67 @@
    "default": {
     "Tree": 127
    }
+  },
+  "Strings Ensemble": {
+   "pitches": [
+    42,
+    60,
+    78
+   ],
+   "defaultRmsDb": {
+    "42": -38.465,
+    "60": -41.400000000000006,
+    "78": -43.95
+   },
+   "defaultSpread": 3.09,
+   "mics": {
+    "Close": {
+     "rmsDb": -4.07,
+     "lufs": -3.54,
+     "loudDb": -3.69
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -5.28,
+     "lufs": -5.45,
+     "loudDb": -5.78
+    },
+    "Outrigger": {
+     "rmsDb": -5.81,
+     "lufs": -6.17,
+     "loudDb": -6.27
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -4.07,
+     -2.84,
+     -5.73
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -6.02,
+     -3.4,
+     -5.28
+    ],
+    "Outrigger": [
+     -8.0,
+     -4.92,
+     -5.81
+    ]
+   },
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
   }
  }
 }

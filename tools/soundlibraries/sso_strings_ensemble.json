@@ -1,0 +1,3230 @@
+{
+ "method": "    strings_ensemble.py events <folder>\n        kthost event files (<tag>.txt) and notes files (<tag>.notes.json) for the Windows VM: s_ens, s_vn1, s_vn2,\n        s_vla, s_vc, s_cb (Strings Ensemble and the five sections)\n    strings_ensemble.py analyze <wav folder> <notes folder> -o tools/soundlibraries/sso_strings_ensemble.json\n\nRenders (Windows test VM, kthost: Kontakt Player 8.13.1 + SSO, one process per patch, offline, 44.1 kHz stereo float;\nthe setups MuseScore made, unedited: the five sections' from MuseScore's setups folder, as sso_cc1_curves.json,\nStrings Ensemble's from the rest check's): each patch's All techniques Long (UACC 1 by CC32), CC11 127, CC1 = velocity 64,\na warm-up note, then every even key of its range (Strings Ensemble 24 .. 96, its sample zones every 2 semitones;\nViolins 1 / 2 56 .. 96, Violas 48 .. 90, Celli 36 .. 80, Basses 24 .. 54), 4 notes each (SSO alternates two round robins),\n3.0 s long, 1.5 s apart (sso_cc1_sweep.make_events with --cc 64 --step 2). The sections' renders reproduce\nsso_cc1_curves.json's loudDb at the keys both have to 0.01 dB (the same setups, a deterministic render).\n\nIdentification: a section's own recording in the ensemble. Strings Ensemble's samples turned out to be the sections'\nown samples mixed (Spitfire's description: \"a set of blended six-octave Ensemble patches\", Sound On Sound's review,\nD. Stewart, August 2024; the manual lists the patch, not its make-up). Per key, the normalised cross-correlation r (max\n|r| over lags +-250 ms, mean of the two channels) of the ensemble's sustain (0.2 .. 2.8 s after the note-on) with each\nsection's at the same key, the best of the 2 x 2 pairings of the two round robins; the same against each section an\noctave up and down (octave doublings). Two different recordings of a sustained note correlate too (the ensemble's own\ntwo round robins, \"ensRr\": 0.12 .. 0.36 from key 48, up to 0.6 at the lowest keys, where a low sustained note is close\nto periodic), so a section counts as present when r > max(PRESENT_R, ensRr + PRESENT_OVER) and its r^2 (its share of\nthe ensemble's energy, the parts being uncorrelated recordings) is at least PRESENT_SHARE; sumR2 (the present parts'\nshares added) near 1 says nothing else is in the mix. mixDb: a present part's level in the ensemble against its own\npatch, 10 log10(r^2 E_ens / E_section) over the same sustain window of the paired takes. At the lowest keys (Basses,\nnon-vibrato, close to periodic) two different recordings correlate as well as the same one, so r can't tell there.\nSpectral fit (every key): the power at each harmonic k f0 < 12 kHz (+-max(2.5 bins, 1.5 %), Welch 8192-point Hann, the\nsustain 1.5 .. 3.0 s, the 4 takes' mean), each channel, of the ensemble = a non-negative sum of the sections' at the same\nkey (NNLS, each harmonic weighted by 1 / the ensemble's power: a relative error): gainDb per section, fitErrDb (dB rms\nover harmonics of fit / ensemble; the ensemble's own two round robins differ by 0.5 .. 2.3 dB); octaves: no section an\noctave down (the power at f0 / 2 x 1, 3, 5 is 27 .. 51 dB under f0 x 1, 2, 3: subharmDb) and none an octave up (r of the\nsections an octave up <= 0.31 above key 34). weightDb: a section's gainDb less its plateau (the median gainDb over the\nkeys where it is fully in, PLATEAU: its level in the mix there), capped at 0: how far it is faded at a key; a section\nunder WEIGHT_MIN dB is left out.\nLevels per key: sso_cc1_sweep.measure (loudDb, the section balance's measure; rmsDb), the median of the 4 takes.",
+ "plateau": {
+  "Violins 1": {
+   "keys": [
+    62,
+    96
+   ],
+   "gainDb": -13.78,
+   "spreadDb": 2.58
+  },
+  "Violins 2": {
+   "keys": [
+    62,
+    96
+   ],
+   "gainDb": -13.22,
+   "spreadDb": 2.91
+  },
+  "Violas": {
+   "keys": [
+    56,
+    82
+   ],
+   "gainDb": -13.41,
+   "spreadDb": 0.6
+  },
+  "Celli": {
+   "keys": [
+    36,
+    68
+   ],
+   "gainDb": -13.06,
+   "spreadDb": 0.48
+  },
+  "Basses": {
+   "keys": [
+    24,
+    42
+   ],
+   "gainDb": -5.71,
+   "spreadDb": 1.96
+  }
+ },
+ "rule": {
+  "weightMinDb": -25.0,
+  "presentR": 0.3,
+  "presentOver": 0.1,
+  "presentShare": 0.05,
+  "windowS": [
+   0.2,
+   2.8
+  ],
+  "lagS": 0.25
+ },
+ "ranges": {
+  "Strings Ensemble": [
+   24,
+   96
+  ],
+  "Violins 1": [
+   56,
+   96
+  ],
+  "Violins 2": [
+   56,
+   96
+  ],
+  "Violas": [
+   48,
+   90
+  ],
+  "Celli": [
+   36,
+   80
+  ],
+  "Basses": [
+   24,
+   54
+  ]
+ },
+ "keys": {
+  "24": {
+   "loudDb": -34.55,
+   "rmsDb": -37.27,
+   "ensRr": 0.563,
+   "parts": {
+    "Basses": {
+     "r": 0.398,
+     "rLR": [
+      0.394,
+      0.401
+     ],
+     "lagMs": [
+      -229.2,
+      -113.9
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.158,
+     "present": false,
+     "loudDb": -30.2,
+     "rmsDb": -32.33,
+     "mixDb": -13.03,
+     "gainDb": -4.86
+    }
+   },
+   "octaves": {
+    "Celli +12": 0.048,
+    "Basses +12": 0.657
+   },
+   "fitErrDb": 0.86,
+   "subharmDb": -32.4,
+   "present": [],
+   "sumR2": 0,
+   "maxOctaveR": 0.657,
+   "weights": {
+    "Basses": 0.0
+   }
+  },
+  "26": {
+   "loudDb": -41.11,
+   "rmsDb": -44.0,
+   "ensRr": 0.322,
+   "parts": {
+    "Basses": {
+     "r": 0.429,
+     "rLR": [
+      0.527,
+      0.331
+     ],
+     "lagMs": [
+      -224.6,
+      -225.3
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.184,
+     "present": true,
+     "loudDb": -34.14,
+     "rmsDb": -37.59,
+     "mixDb": -14.12,
+     "gainDb": -5.84
+    }
+   },
+   "octaves": {
+    "Celli +12": 0.104,
+    "Basses +12": 0.53
+   },
+   "fitErrDb": 0.91,
+   "subharmDb": null,
+   "present": [
+    "Basses"
+   ],
+   "sumR2": 0.184,
+   "maxOctaveR": 0.53,
+   "weights": {
+    "Basses": -0.13
+   }
+  },
+  "28": {
+   "loudDb": -34.9,
+   "rmsDb": -37.81,
+   "ensRr": 0.534,
+   "parts": {
+    "Basses": {
+     "r": 0.733,
+     "rLR": [
+      0.707,
+      0.759
+     ],
+     "lagMs": [
+      -10.1,
+      -46.0
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.537,
+     "present": true,
+     "loudDb": -29.55,
+     "rmsDb": -31.49,
+     "mixDb": -12.86,
+     "gainDb": -5.92
+    }
+   },
+   "octaves": {
+    "Celli +12": 0.329,
+    "Basses +12": 0.775
+   },
+   "fitErrDb": 0.89,
+   "subharmDb": -27.3,
+   "present": [
+    "Basses"
+   ],
+   "sumR2": 0.537,
+   "maxOctaveR": 0.775,
+   "weights": {
+    "Basses": -0.21
+   }
+  },
+  "30": {
+   "loudDb": -35.58,
+   "rmsDb": -39.05,
+   "ensRr": 0.499,
+   "parts": {
+    "Basses": {
+     "r": 0.384,
+     "rLR": [
+      0.301,
+      0.467
+     ],
+     "lagMs": [
+      -241.0,
+      176.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.148,
+     "present": false,
+     "loudDb": -30.71,
+     "rmsDb": -34.66,
+     "mixDb": -13.24,
+     "gainDb": -5.67
+    }
+   },
+   "octaves": {
+    "Celli +12": 0.252,
+    "Basses +12": 0.432
+   },
+   "fitErrDb": 0.54,
+   "subharmDb": -39.4,
+   "present": [],
+   "sumR2": 0,
+   "maxOctaveR": 0.432,
+   "weights": {
+    "Basses": 0.0
+   }
+  },
+  "32": {
+   "loudDb": -35.05,
+   "rmsDb": -38.36,
+   "ensRr": 0.387,
+   "parts": {
+    "Basses": {
+     "r": 0.333,
+     "rLR": [
+      0.355,
+      0.311
+     ],
+     "lagMs": [
+      -248.8,
+      149.2
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.111,
+     "present": false,
+     "loudDb": -31.19,
+     "rmsDb": -34.12,
+     "mixDb": -12.3,
+     "gainDb": -5.43
+    }
+   },
+   "octaves": {
+    "Celli +12": 0.317,
+    "Basses +12": 0.357
+   },
+   "fitErrDb": 0.69,
+   "subharmDb": -48.5,
+   "present": [],
+   "sumR2": 0,
+   "maxOctaveR": 0.357,
+   "weights": {
+    "Basses": 0.0
+   }
+  },
+  "34": {
+   "loudDb": -36.78,
+   "rmsDb": -38.95,
+   "ensRr": 0.535,
+   "parts": {
+    "Basses": {
+     "r": 0.278,
+     "rLR": [
+      0.293,
+      0.263
+     ],
+     "lagMs": [
+      242.1,
+      233.9
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.077,
+     "present": false,
+     "loudDb": -29.8,
+     "rmsDb": -32.91,
+     "mixDb": -15.67,
+     "gainDb": -4.98
+    }
+   },
+   "octaves": {
+    "Celli +12": 0.171,
+    "Basses +12": 0.13
+   },
+   "fitErrDb": 1.04,
+   "subharmDb": -27.7,
+   "present": [],
+   "sumR2": 0,
+   "maxOctaveR": 0.171,
+   "weights": {
+    "Basses": 0.0
+   }
+  },
+  "36": {
+   "loudDb": -36.68,
+   "rmsDb": -38.95,
+   "ensRr": 0.548,
+   "parts": {
+    "Celli": {
+     "r": 0.489,
+     "rLR": [
+      0.447,
+      0.53
+     ],
+     "lagMs": [
+      -0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.239,
+     "present": false,
+     "loudDb": -29.64,
+     "rmsDb": -31.75,
+     "mixDb": -12.9,
+     "gainDb": -12.99
+    },
+    "Basses": {
+     "r": 0.363,
+     "rLR": [
+      0.445,
+      0.281
+     ],
+     "lagMs": [
+      248.7,
+      -116.7
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.132,
+     "present": false,
+     "loudDb": -30.19,
+     "rmsDb": -33.75,
+     "mixDb": -12.12,
+     "gainDb": -5.8
+    }
+   },
+   "octaves": {
+    "Violas +12": 0.044,
+    "Celli +12": 0.167,
+    "Basses +12": 0.137,
+    "Basses -12": 0.097
+   },
+   "fitErrDb": 0.41,
+   "subharmDb": -37.1,
+   "present": [],
+   "sumR2": 0,
+   "maxOctaveR": 0.167,
+   "weights": {
+    "Celli": 0.0,
+    "Basses": -0.09
+   }
+  },
+  "38": {
+   "loudDb": -37.41,
+   "rmsDb": -41.09,
+   "ensRr": 0.358,
+   "parts": {
+    "Celli": {
+     "r": 0.447,
+     "rLR": [
+      0.416,
+      0.477
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.2,
+     "present": false,
+     "loudDb": -34.16,
+     "rmsDb": -36.48,
+     "mixDb": -12.65,
+     "gainDb": -12.84
+    },
+    "Basses": {
+     "r": 0.52,
+     "rLR": [
+      0.543,
+      0.496
+     ],
+     "lagMs": [
+      -245.2,
+      -237.5
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.27,
+     "present": true,
+     "loudDb": -33.3,
+     "rmsDb": -36.66,
+     "mixDb": -4.86,
+     "gainDb": -6.26
+    }
+   },
+   "octaves": {
+    "Violas +12": 0.034,
+    "Celli +12": 0.119,
+    "Basses +12": 0.062,
+    "Basses -12": 0.183
+   },
+   "fitErrDb": 0.51,
+   "subharmDb": -35.6,
+   "present": [
+    "Basses"
+   ],
+   "sumR2": 0.27,
+   "maxOctaveR": 0.183,
+   "weights": {
+    "Celli": 0.0,
+    "Basses": -0.55
+   }
+  },
+  "40": {
+   "loudDb": -36.15,
+   "rmsDb": -39.55,
+   "ensRr": 0.596,
+   "parts": {
+    "Celli": {
+     "r": 0.618,
+     "rLR": [
+      0.653,
+      0.584
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.382,
+     "present": false,
+     "loudDb": -30.61,
+     "rmsDb": -33.1,
+     "mixDb": -11.01,
+     "gainDb": -13.12
+    },
+    "Basses": {
+     "r": 0.358,
+     "rLR": [
+      0.442,
+      0.274
+     ],
+     "lagMs": [
+      43.3,
+      7.8
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.128,
+     "present": false,
+     "loudDb": -33.16,
+     "rmsDb": -37.27,
+     "mixDb": -11.78,
+     "gainDb": -4.3
+    }
+   },
+   "octaves": {
+    "Violas +12": 0.056,
+    "Celli +12": 0.113,
+    "Basses +12": 0.117,
+    "Basses -12": 0.166
+   },
+   "fitErrDb": 0.54,
+   "subharmDb": -35.7,
+   "present": [],
+   "sumR2": 0,
+   "maxOctaveR": 0.166,
+   "weights": {
+    "Celli": -0.06,
+    "Basses": 0.0
+   }
+  },
+  "42": {
+   "loudDb": -34.11,
+   "rmsDb": -38.47,
+   "ensRr": 0.311,
+   "parts": {
+    "Celli": {
+     "r": 0.724,
+     "rLR": [
+      0.655,
+      0.793
+     ],
+     "lagMs": [
+      0.1,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.524,
+     "present": true,
+     "loudDb": -24.47,
+     "rmsDb": -27.38,
+     "mixDb": -12.85,
+     "gainDb": -12.78
+    },
+    "Basses": {
+     "r": 0.503,
+     "rLR": [
+      0.501,
+      0.505
+     ],
+     "lagMs": [
+      20.5,
+      -249.4
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.253,
+     "present": true,
+     "loudDb": -31.44,
+     "rmsDb": -35.82,
+     "mixDb": -7.93,
+     "gainDb": -5.76
+    }
+   },
+   "octaves": {
+    "Violas +12": 0.071,
+    "Celli +12": 0.282,
+    "Basses +12": 0.314,
+    "Basses -12": 0.303
+   },
+   "fitErrDb": 0.64,
+   "subharmDb": -51.4,
+   "present": [
+    "Celli",
+    "Basses"
+   ],
+   "sumR2": 0.777,
+   "maxOctaveR": 0.314,
+   "weights": {
+    "Celli": 0.0,
+    "Basses": -0.05
+   }
+  },
+  "44": {
+   "loudDb": -40.33,
+   "rmsDb": -42.59,
+   "ensRr": 0.285,
+   "parts": {
+    "Celli": {
+     "r": 0.744,
+     "rLR": [
+      0.695,
+      0.793
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.554,
+     "present": true,
+     "loudDb": -30.54,
+     "rmsDb": -33.42,
+     "mixDb": -12.46,
+     "gainDb": -12.96
+    },
+    "Basses": {
+     "r": 0.309,
+     "rLR": [
+      0.324,
+      0.294
+     ],
+     "lagMs": [
+      53.3,
+      -234.3
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.096,
+     "present": false,
+     "loudDb": -34.62,
+     "rmsDb": -37.83,
+     "mixDb": -16.3,
+     "gainDb": -7.46
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.06,
+    "Violins 2 +12": 0.049,
+    "Violas +12": 0.085,
+    "Celli +12": 0.17,
+    "Basses -12": 0.38
+   },
+   "fitErrDb": 0.44,
+   "subharmDb": -46.7,
+   "present": [
+    "Celli"
+   ],
+   "sumR2": 0.554,
+   "maxOctaveR": 0.38,
+   "weights": {
+    "Celli": 0.0,
+    "Basses": -1.75
+   }
+  },
+  "46": {
+   "loudDb": -43.19,
+   "rmsDb": -45.06,
+   "ensRr": 0.305,
+   "parts": {
+    "Celli": {
+     "r": 0.738,
+     "rLR": [
+      0.852,
+      0.624
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.545,
+     "present": true,
+     "loudDb": -32.45,
+     "rmsDb": -34.62,
+     "mixDb": -14.36,
+     "gainDb": -12.91
+    },
+    "Basses": {
+     "r": 0.297,
+     "rLR": [
+      0.307,
+      0.286
+     ],
+     "lagMs": [
+      -244.3,
+      223.4
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.088,
+     "present": false,
+     "loudDb": -36.15,
+     "rmsDb": -38.53,
+     "mixDb": -14.41,
+     "gainDb": -10.21
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.076,
+    "Violins 2 +12": 0.087,
+    "Violas +12": 0.137,
+    "Celli +12": 0.157,
+    "Basses -12": 0.14
+   },
+   "fitErrDb": 0.46,
+   "subharmDb": -39.1,
+   "present": [
+    "Celli"
+   ],
+   "sumR2": 0.545,
+   "maxOctaveR": 0.157,
+   "weights": {
+    "Celli": 0.0,
+    "Basses": -4.5
+   }
+  },
+  "48": {
+   "loudDb": -44.27,
+   "rmsDb": -46.17,
+   "ensRr": 0.362,
+   "parts": {
+    "Violas": {
+     "r": 0.4,
+     "rLR": [
+      0.402,
+      0.397
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.16,
+     "present": false,
+     "loudDb": -30.62,
+     "rmsDb": -33.97,
+     "mixDb": -21.45,
+     "gainDb": -21.8
+    },
+    "Celli": {
+     "r": 0.829,
+     "rLR": [
+      0.847,
+      0.811
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.687,
+     "present": true,
+     "loudDb": -32.29,
+     "rmsDb": -34.16,
+     "mixDb": -12.27,
+     "gainDb": -13.02
+    },
+    "Basses": {
+     "r": 0.247,
+     "rLR": [
+      0.248,
+      0.247
+     ],
+     "lagMs": [
+      1.7,
+      -248.7
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.061,
+     "present": false,
+     "loudDb": -40.67,
+     "rmsDb": -43.78,
+     "mixDb": -13.7,
+     "gainDb": -9.38
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.161,
+    "Violins 2 +12": 0.152,
+    "Violas +12": 0.143,
+    "Celli +12": 0.212,
+    "Celli -12": 0.09,
+    "Basses -12": 0.093
+   },
+   "fitErrDb": 0.33,
+   "subharmDb": -36.6,
+   "present": [
+    "Celli"
+   ],
+   "sumR2": 0.687,
+   "maxOctaveR": 0.212,
+   "weights": {
+    "Violas": -8.39,
+    "Celli": 0.0,
+    "Basses": -3.67
+   }
+  },
+  "50": {
+   "loudDb": -43.98,
+   "rmsDb": -46.73,
+   "ensRr": 0.186,
+   "parts": {
+    "Violas": {
+     "r": 0.53,
+     "rLR": [
+      0.56,
+      0.501
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.281,
+     "present": true,
+     "loudDb": -29.38,
+     "rmsDb": -33.25,
+     "mixDb": -19.72,
+     "gainDb": -19.84
+    },
+    "Celli": {
+     "r": 0.746,
+     "rLR": [
+      0.757,
+      0.736
+     ],
+     "lagMs": [
+      0.0,
+      -0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.557,
+     "present": true,
+     "loudDb": -33.28,
+     "rmsDb": -36.44,
+     "mixDb": -13.4,
+     "gainDb": -13.06
+    },
+    "Basses": {
+     "r": 0.135,
+     "rLR": [
+      0.106,
+      0.164
+     ],
+     "lagMs": [
+      71.5,
+      -145.3
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.018,
+     "present": false,
+     "loudDb": -40.13,
+     "rmsDb": -42.33,
+     "mixDb": -20.55,
+     "gainDb": -10.44
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.135,
+    "Violins 2 +12": 0.146,
+    "Violas +12": 0.138,
+    "Celli +12": 0.196,
+    "Celli -12": 0.178,
+    "Basses -12": 0.104
+   },
+   "fitErrDb": 0.28,
+   "subharmDb": -41.2,
+   "present": [
+    "Violas",
+    "Celli"
+   ],
+   "sumR2": 0.838,
+   "maxOctaveR": 0.196,
+   "weights": {
+    "Violas": -6.43,
+    "Celli": 0.0,
+    "Basses": -4.73
+   }
+  },
+  "52": {
+   "loudDb": -42.94,
+   "rmsDb": -45.72,
+   "ensRr": 0.275,
+   "parts": {
+    "Violas": {
+     "r": 0.576,
+     "rLR": [
+      0.677,
+      0.476
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.332,
+     "present": true,
+     "loudDb": -30.19,
+     "rmsDb": -33.43,
+     "mixDb": -17.8,
+     "gainDb": -17.7
+    },
+    "Celli": {
+     "r": 0.793,
+     "rLR": [
+      0.702,
+      0.883
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.628,
+     "present": true,
+     "loudDb": -30.55,
+     "rmsDb": -34.18,
+     "mixDb": -13.48,
+     "gainDb": -12.88
+    },
+    "Basses": {
+     "r": 0.214,
+     "rLR": [
+      0.258,
+      0.17
+     ],
+     "lagMs": [
+      247.3,
+      112.8
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.046,
+     "present": false,
+     "loudDb": -42.36,
+     "rmsDb": -45.34,
+     "mixDb": -12.92,
+     "gainDb": null
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.146,
+    "Violins 2 +12": 0.173,
+    "Violas +12": 0.208,
+    "Celli +12": 0.21,
+    "Celli -12": 0.184,
+    "Basses -12": 0.056
+   },
+   "fitErrDb": 0.31,
+   "subharmDb": -39.1,
+   "present": [
+    "Violas",
+    "Celli"
+   ],
+   "sumR2": 0.96,
+   "maxOctaveR": 0.21,
+   "weights": {
+    "Violas": -4.29,
+    "Celli": 0.0
+   }
+  },
+  "54": {
+   "loudDb": -37.8,
+   "rmsDb": -41.62,
+   "ensRr": 0.229,
+   "parts": {
+    "Violas": {
+     "r": 0.597,
+     "rLR": [
+      0.626,
+      0.568
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.357,
+     "present": true,
+     "loudDb": -25.58,
+     "rmsDb": -31.14,
+     "mixDb": -15.49,
+     "gainDb": -15.36
+    },
+    "Celli": {
+     "r": 0.82,
+     "rLR": [
+      0.79,
+      0.85
+     ],
+     "lagMs": [
+      -0.0,
+      -0.1
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.672,
+     "present": true,
+     "loudDb": -26.77,
+     "rmsDb": -30.24,
+     "mixDb": -13.28,
+     "gainDb": -13.22
+    },
+    "Basses": {
+     "r": 0.365,
+     "rLR": [
+      0.494,
+      0.237
+     ],
+     "lagMs": [
+      180.2,
+      -245.7
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.134,
+     "present": true,
+     "loudDb": -41.73,
+     "rmsDb": -44.8,
+     "mixDb": -4.86,
+     "gainDb": null
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.161,
+    "Violins 2 +12": 0.163,
+    "Violas +12": 0.242,
+    "Celli +12": 0.202,
+    "Celli -12": 0.335,
+    "Basses -12": 0.067
+   },
+   "fitErrDb": 0.35,
+   "subharmDb": -44.6,
+   "present": [
+    "Violas",
+    "Celli",
+    "Basses"
+   ],
+   "sumR2": 1.163,
+   "maxOctaveR": 0.335,
+   "weights": {
+    "Violas": -1.95,
+    "Celli": -0.16
+   }
+  },
+  "56": {
+   "loudDb": -35.6,
+   "rmsDb": -41.22,
+   "ensRr": 0.266,
+   "parts": {
+    "Violins 1": {
+     "r": 0.267,
+     "rLR": [
+      0.222,
+      0.312
+     ],
+     "lagMs": [
+      -0.0,
+      -226.7
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.071,
+     "present": false,
+     "loudDb": -32.04,
+     "rmsDb": -35.83,
+     "mixDb": -15.51,
+     "gainDb": -20.6
+    },
+    "Violins 2": {
+     "r": 0.265,
+     "rLR": [
+      0.254,
+      0.277
+     ],
+     "lagMs": [
+      -26.1,
+      217.9
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.07,
+     "present": false,
+     "loudDb": -33.16,
+     "rmsDb": -36.71,
+     "mixDb": -15.66,
+     "gainDb": -19.12
+    },
+    "Violas": {
+     "r": 0.846,
+     "rLR": [
+      0.861,
+      0.831
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.716,
+     "present": true,
+     "loudDb": -23.45,
+     "rmsDb": -29.19,
+     "mixDb": -13.0,
+     "gainDb": -13.62
+    },
+    "Celli": {
+     "r": 0.557,
+     "rLR": [
+      0.477,
+      0.637
+     ],
+     "lagMs": [
+      -4.9,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.31,
+     "present": true,
+     "loudDb": -29.87,
+     "rmsDb": -34.43,
+     "mixDb": -12.66,
+     "gainDb": -12.96
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.22,
+    "Violins 2 +12": 0.205,
+    "Violas +12": 0.285,
+    "Celli +12": 0.223,
+    "Celli -12": 0.133,
+    "Basses -12": 0.059
+   },
+   "fitErrDb": 0.29,
+   "subharmDb": -46.2,
+   "present": [
+    "Violas",
+    "Celli"
+   ],
+   "sumR2": 1.026,
+   "maxOctaveR": 0.285,
+   "weights": {
+    "Violins 1": -6.82,
+    "Violins 2": -5.9,
+    "Violas": -0.21,
+    "Celli": 0.0
+   }
+  },
+  "58": {
+   "loudDb": -36.78,
+   "rmsDb": -41.18,
+   "ensRr": 0.257,
+   "parts": {
+    "Violins 1": {
+     "r": 0.289,
+     "rLR": [
+      0.313,
+      0.266
+     ],
+     "lagMs": [
+      4.3,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.084,
+     "present": false,
+     "loudDb": -31.3,
+     "rmsDb": -35.03,
+     "mixDb": -17.57,
+     "gainDb": -17.89
+    },
+    "Violins 2": {
+     "r": 0.283,
+     "rLR": [
+      0.37,
+      0.196
+     ],
+     "lagMs": [
+      -4.4,
+      247.4
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.08,
+     "present": false,
+     "loudDb": -30.55,
+     "rmsDb": -34.87,
+     "mixDb": -16.85,
+     "gainDb": -18.27
+    },
+    "Violas": {
+     "r": 0.876,
+     "rLR": [
+      0.848,
+      0.904
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.768,
+     "present": true,
+     "loudDb": -24.66,
+     "rmsDb": -29.36,
+     "mixDb": -13.56,
+     "gainDb": -13.25
+    },
+    "Celli": {
+     "r": 0.337,
+     "rLR": [
+      0.259,
+      0.416
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.114,
+     "present": false,
+     "loudDb": -34.46,
+     "rmsDb": -38.24,
+     "mixDb": -12.29,
+     "gainDb": -13.26
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.134,
+    "Violins 2 +12": 0.161,
+    "Violas +12": 0.165,
+    "Celli +12": 0.134,
+    "Celli -12": 0.171,
+    "Basses -12": 0.082
+   },
+   "fitErrDb": 0.29,
+   "subharmDb": -47.4,
+   "present": [
+    "Violas"
+   ],
+   "sumR2": 0.768,
+   "maxOctaveR": 0.171,
+   "weights": {
+    "Violins 1": -4.11,
+    "Violins 2": -5.05,
+    "Violas": 0.0,
+    "Celli": -0.2
+   }
+  },
+  "60": {
+   "loudDb": -38.3,
+   "rmsDb": -41.4,
+   "ensRr": 0.174,
+   "parts": {
+    "Violins 1": {
+     "r": 0.573,
+     "rLR": [
+      0.572,
+      0.573
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.328,
+     "present": true,
+     "loudDb": -26.98,
+     "rmsDb": -30.26,
+     "mixDb": -16.2,
+     "gainDb": -15.71
+    },
+    "Violins 2": {
+     "r": 0.469,
+     "rLR": [
+      0.473,
+      0.465
+     ],
+     "lagMs": [
+      0.0,
+      -0.0
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.22,
+     "present": true,
+     "loudDb": -29.34,
+     "rmsDb": -32.7,
+     "mixDb": -14.99,
+     "gainDb": -15.37
+    },
+    "Violas": {
+     "r": 0.57,
+     "rLR": [
+      0.59,
+      0.551
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.325,
+     "present": true,
+     "loudDb": -29.93,
+     "rmsDb": -32.97,
+     "mixDb": -12.95,
+     "gainDb": -13.58
+    },
+    "Celli": {
+     "r": 0.465,
+     "rLR": [
+      0.304,
+      0.626
+     ],
+     "lagMs": [
+      206.1,
+      3.8
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.216,
+     "present": true,
+     "loudDb": -31.3,
+     "rmsDb": -37.01,
+     "mixDb": -12.28,
+     "gainDb": -13.23
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.153,
+    "Violins 2 +12": 0.122,
+    "Violas +12": 0.094,
+    "Violas -12": 0.14,
+    "Celli +12": 0.093,
+    "Celli -12": 0.192,
+    "Basses -12": 0.097
+   },
+   "fitErrDb": 0.29,
+   "subharmDb": -45.7,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas",
+    "Celli"
+   ],
+   "sumR2": 1.089,
+   "maxOctaveR": 0.192,
+   "weights": {
+    "Violins 1": -1.93,
+    "Violins 2": -2.15,
+    "Violas": -0.17,
+    "Celli": -0.17
+   }
+  },
+  "62": {
+   "loudDb": -38.9,
+   "rmsDb": -42.55,
+   "ensRr": 0.185,
+   "parts": {
+    "Violins 1": {
+     "r": 0.529,
+     "rLR": [
+      0.557,
+      0.502
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.28,
+     "present": true,
+     "loudDb": -31.94,
+     "rmsDb": -35.68,
+     "mixDb": -12.65,
+     "gainDb": -13.85
+    },
+    "Violins 2": {
+     "r": 0.517,
+     "rLR": [
+      0.579,
+      0.455
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.267,
+     "present": true,
+     "loudDb": -33.17,
+     "rmsDb": -35.73,
+     "mixDb": -12.0,
+     "gainDb": -13.63
+    },
+    "Violas": {
+     "r": 0.581,
+     "rLR": [
+      0.563,
+      0.599
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.338,
+     "present": true,
+     "loudDb": -30.5,
+     "rmsDb": -34.52,
+     "mixDb": -13.55,
+     "gainDb": -13.17
+    },
+    "Celli": {
+     "r": 0.536,
+     "rLR": [
+      0.505,
+      0.568
+     ],
+     "lagMs": [
+      3.4,
+      -0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.287,
+     "present": true,
+     "loudDb": -30.74,
+     "rmsDb": -35.91,
+     "mixDb": -12.14,
+     "gainDb": -13.21
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.093,
+    "Violins 2 +12": 0.1,
+    "Violas +12": 0.082,
+    "Violas -12": 0.153,
+    "Celli +12": 0.107,
+    "Celli -12": 0.185,
+    "Basses -12": 0.051
+   },
+   "fitErrDb": 0.23,
+   "subharmDb": -41.7,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas",
+    "Celli"
+   ],
+   "sumR2": 1.172,
+   "maxOctaveR": 0.185,
+   "weights": {
+    "Violins 1": -0.07,
+    "Violins 2": -0.41,
+    "Violas": 0.0,
+    "Celli": -0.15
+   }
+  },
+  "64": {
+   "loudDb": -38.95,
+   "rmsDb": -42.65,
+   "ensRr": 0.202,
+   "parts": {
+    "Violins 1": {
+     "r": 0.437,
+     "rLR": [
+      0.476,
+      0.398
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.191,
+     "present": true,
+     "loudDb": -32.6,
+     "rmsDb": -36.81,
+     "mixDb": -13.39,
+     "gainDb": -13.81
+    },
+    "Violins 2": {
+     "r": 0.389,
+     "rLR": [
+      0.366,
+      0.413
+     ],
+     "lagMs": [
+      0.0,
+      -3.1
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.152,
+     "present": true,
+     "loudDb": -35.72,
+     "rmsDb": -37.98,
+     "mixDb": -12.3,
+     "gainDb": -13.29
+    },
+    "Violas": {
+     "r": 0.6,
+     "rLR": [
+      0.671,
+      0.529
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.36,
+     "present": true,
+     "loudDb": -29.3,
+     "rmsDb": -33.25,
+     "mixDb": -13.81,
+     "gainDb": -13.31
+    },
+    "Celli": {
+     "r": 0.506,
+     "rLR": [
+      0.413,
+      0.599
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.256,
+     "present": true,
+     "loudDb": -29.8,
+     "rmsDb": -34.45,
+     "mixDb": -15.07,
+     "gainDb": -13.21
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.07,
+    "Violins 2 +12": 0.059,
+    "Violas +12": 0.079,
+    "Violas -12": 0.173,
+    "Celli +12": 0.07,
+    "Celli -12": 0.16,
+    "Basses -12": 0.165
+   },
+   "fitErrDb": 0.26,
+   "subharmDb": -40.2,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas",
+    "Celli"
+   ],
+   "sumR2": 0.959,
+   "maxOctaveR": 0.173,
+   "weights": {
+    "Violins 1": -0.03,
+    "Violins 2": -0.07,
+    "Violas": 0.0,
+    "Celli": -0.15
+   }
+  },
+  "66": {
+   "loudDb": -35.89,
+   "rmsDb": -41.13,
+   "ensRr": 0.268,
+   "parts": {
+    "Violins 1": {
+     "r": 0.417,
+     "rLR": [
+      0.431,
+      0.403
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.174,
+     "present": true,
+     "loudDb": -31.62,
+     "rmsDb": -35.55,
+     "mixDb": -13.24,
+     "gainDb": -13.08
+    },
+    "Violins 2": {
+     "r": 0.313,
+     "rLR": [
+      0.35,
+      0.276
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.098,
+     "present": false,
+     "loudDb": -35.3,
+     "rmsDb": -38.25,
+     "mixDb": -11.79,
+     "gainDb": -13.79
+    },
+    "Violas": {
+     "r": 0.785,
+     "rLR": [
+      0.793,
+      0.778
+     ],
+     "lagMs": [
+      0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.617,
+     "present": true,
+     "loudDb": -24.21,
+     "rmsDb": -30.38,
+     "mixDb": -13.39,
+     "gainDb": -13.42
+    },
+    "Celli": {
+     "r": 0.46,
+     "rLR": [
+      0.418,
+      0.502
+     ],
+     "lagMs": [
+      0.0,
+      0.1
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.212,
+     "present": true,
+     "loudDb": -31.15,
+     "rmsDb": -35.1,
+     "mixDb": -12.94,
+     "gainDb": -13.23
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.052,
+    "Violins 2 +12": 0.067,
+    "Violas +12": 0.075,
+    "Violas -12": 0.302,
+    "Celli +12": 0.067,
+    "Celli -12": 0.101,
+    "Basses -12": 0.108
+   },
+   "fitErrDb": 0.28,
+   "subharmDb": -38.2,
+   "present": [
+    "Violins 1",
+    "Violas",
+    "Celli"
+   ],
+   "sumR2": 1.003,
+   "maxOctaveR": 0.302,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": -0.57,
+    "Violas": -0.01,
+    "Celli": -0.17
+   }
+  },
+  "68": {
+   "loudDb": -34.67,
+   "rmsDb": -40.24,
+   "ensRr": 0.272,
+   "parts": {
+    "Violins 1": {
+     "r": 0.304,
+     "rLR": [
+      0.371,
+      0.236
+     ],
+     "lagMs": [
+      2.4,
+      -2.4
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.092,
+     "present": false,
+     "loudDb": -30.63,
+     "rmsDb": -35.19,
+     "mixDb": -15.4,
+     "gainDb": -14.83
+    },
+    "Violins 2": {
+     "r": 0.27,
+     "rLR": [
+      0.254,
+      0.287
+     ],
+     "lagMs": [
+      -147.7,
+      -4.8
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.073,
+     "present": false,
+     "loudDb": -31.12,
+     "rmsDb": -36.66,
+     "mixDb": -13.65,
+     "gainDb": -12.38
+    },
+    "Violas": {
+     "r": 0.815,
+     "rLR": [
+      0.791,
+      0.839
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.664,
+     "present": true,
+     "loudDb": -23.64,
+     "rmsDb": -28.93,
+     "mixDb": -13.67,
+     "gainDb": -13.28
+    },
+    "Celli": {
+     "r": 0.491,
+     "rLR": [
+      0.458,
+      0.523
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.241,
+     "present": true,
+     "loudDb": -29.67,
+     "rmsDb": -34.55,
+     "mixDb": -12.8,
+     "gainDb": -13.2
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.054,
+    "Violins 1 -12": 0.245,
+    "Violins 2 +12": 0.076,
+    "Violins 2 -12": 0.251,
+    "Violas +12": 0.052,
+    "Violas -12": 0.292,
+    "Celli +12": 0.053,
+    "Celli -12": 0.185
+   },
+   "fitErrDb": 0.24,
+   "subharmDb": -49.4,
+   "present": [
+    "Violas",
+    "Celli"
+   ],
+   "sumR2": 0.905,
+   "maxOctaveR": 0.292,
+   "weights": {
+    "Violins 1": -1.05,
+    "Violins 2": 0.0,
+    "Violas": 0.0,
+    "Celli": -0.14
+   }
+  },
+  "70": {
+   "loudDb": -37.12,
+   "rmsDb": -41.97,
+   "ensRr": 0.191,
+   "parts": {
+    "Violins 1": {
+     "r": 0.479,
+     "rLR": [
+      0.42,
+      0.539
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.23,
+     "present": true,
+     "loudDb": -30.6,
+     "rmsDb": -35.06,
+     "mixDb": -13.29,
+     "gainDb": -14.1
+    },
+    "Violins 2": {
+     "r": 0.476,
+     "rLR": [
+      0.478,
+      0.475
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.227,
+     "present": true,
+     "loudDb": -30.76,
+     "rmsDb": -34.97,
+     "mixDb": -13.17,
+     "gainDb": -12.89
+    },
+    "Violas": {
+     "r": 0.727,
+     "rLR": [
+      0.715,
+      0.74
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.529,
+     "present": true,
+     "loudDb": -26.45,
+     "rmsDb": -31.55,
+     "mixDb": -13.39,
+     "gainDb": -13.49
+    },
+    "Celli": {
+     "r": 0.242,
+     "rLR": [
+      0.19,
+      0.294
+     ],
+     "lagMs": [
+      0.0,
+      -137.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.058,
+     "present": false,
+     "loudDb": -35.49,
+     "rmsDb": -39.1,
+     "mixDb": -16.49,
+     "gainDb": -16.08
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.061,
+    "Violins 1 -12": 0.199,
+    "Violins 2 +12": 0.059,
+    "Violins 2 -12": 0.184,
+    "Violas +12": 0.058,
+    "Violas -12": 0.158,
+    "Celli -12": 0.089
+   },
+   "fitErrDb": 0.34,
+   "subharmDb": -45.0,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 0.986,
+   "maxOctaveR": 0.199,
+   "weights": {
+    "Violins 1": -0.32,
+    "Violins 2": 0.0,
+    "Violas": -0.08,
+    "Celli": -3.02
+   }
+  },
+  "72": {
+   "loudDb": -39.31,
+   "rmsDb": -43.14,
+   "ensRr": 0.143,
+   "parts": {
+    "Violins 1": {
+     "r": 0.632,
+     "rLR": [
+      0.671,
+      0.594
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.4,
+     "present": true,
+     "loudDb": -28.91,
+     "rmsDb": -33.89,
+     "mixDb": -13.78,
+     "gainDb": -13.87
+    },
+    "Violins 2": {
+     "r": 0.465,
+     "rLR": [
+      0.424,
+      0.506
+     ],
+     "lagMs": [
+      -0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.216,
+     "present": true,
+     "loudDb": -32.32,
+     "rmsDb": -35.66,
+     "mixDb": -13.72,
+     "gainDb": -12.54
+    },
+    "Violas": {
+     "r": 0.569,
+     "rLR": [
+      0.558,
+      0.58
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.324,
+     "present": true,
+     "loudDb": -31.04,
+     "rmsDb": -34.89,
+     "mixDb": -13.36,
+     "gainDb": -13.41
+    },
+    "Celli": {
+     "r": 0.215,
+     "rLR": [
+      0.212,
+      0.219
+     ],
+     "lagMs": [
+      0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.046,
+     "present": false,
+     "loudDb": -35.41,
+     "rmsDb": -38.59,
+     "mixDb": -17.86,
+     "gainDb": -18.77
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.065,
+    "Violins 1 -12": 0.145,
+    "Violins 2 +12": 0.073,
+    "Violins 2 -12": 0.159,
+    "Violas +12": 0.064,
+    "Violas -12": 0.109,
+    "Celli -12": 0.074
+   },
+   "fitErrDb": 0.23,
+   "subharmDb": -43.0,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 0.94,
+   "maxOctaveR": 0.159,
+   "weights": {
+    "Violins 1": -0.09,
+    "Violins 2": 0.0,
+    "Violas": 0.0,
+    "Celli": -5.71
+   }
+  },
+  "74": {
+   "loudDb": -42.02,
+   "rmsDb": -45.34,
+   "ensRr": 0.133,
+   "parts": {
+    "Violins 1": {
+     "r": 0.445,
+     "rLR": [
+      0.484,
+      0.405
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.198,
+     "present": true,
+     "loudDb": -35.0,
+     "rmsDb": -38.28,
+     "mixDb": -13.9,
+     "gainDb": -12.25
+    },
+    "Violins 2": {
+     "r": 0.406,
+     "rLR": [
+      0.403,
+      0.409
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.165,
+     "present": true,
+     "loudDb": -36.75,
+     "rmsDb": -39.1,
+     "mixDb": -13.7,
+     "gainDb": -15.07
+    },
+    "Violas": {
+     "r": 0.728,
+     "rLR": [
+      0.701,
+      0.755
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.53,
+     "present": true,
+     "loudDb": -30.2,
+     "rmsDb": -35.2,
+     "mixDb": -13.82,
+     "gainDb": -13.09
+    },
+    "Celli": {
+     "r": 0.255,
+     "rLR": [
+      0.218,
+      0.292
+     ],
+     "lagMs": [
+      0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.065,
+     "present": false,
+     "loudDb": -32.42,
+     "rmsDb": -36.95,
+     "mixDb": -19.88,
+     "gainDb": -20.08
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.063,
+    "Violins 1 -12": 0.09,
+    "Violins 2 +12": 0.064,
+    "Violins 2 -12": 0.069,
+    "Violas +12": 0.068,
+    "Violas -12": 0.09,
+    "Celli -12": 0.084
+   },
+   "fitErrDb": 0.27,
+   "subharmDb": -43.2,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 0.893,
+   "maxOctaveR": 0.09,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": -1.85,
+    "Violas": 0.0,
+    "Celli": -7.02
+   }
+  },
+  "76": {
+   "loudDb": -42.14,
+   "rmsDb": -45.23,
+   "ensRr": 0.155,
+   "parts": {
+    "Violins 1": {
+     "r": 0.396,
+     "rLR": [
+      0.447,
+      0.344
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      0,
+      1
+     ],
+     "share": 0.157,
+     "present": true,
+     "loudDb": -35.81,
+     "rmsDb": -39.65,
+     "mixDb": -13.91,
+     "gainDb": -12.96
+    },
+    "Violins 2": {
+     "r": 0.348,
+     "rLR": [
+      0.344,
+      0.353
+     ],
+     "lagMs": [
+      -0.0,
+      -0.0
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.121,
+     "present": true,
+     "loudDb": -37.82,
+     "rmsDb": -40.11,
+     "mixDb": -14.03,
+     "gainDb": -12.16
+    },
+    "Violas": {
+     "r": 0.809,
+     "rLR": [
+      0.802,
+      0.816
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.655,
+     "present": true,
+     "loudDb": -29.12,
+     "rmsDb": -33.58,
+     "mixDb": -13.88,
+     "gainDb": -13.69
+    },
+    "Celli": {
+     "r": 0.169,
+     "rLR": [
+      0.118,
+      0.219
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.028,
+     "present": false,
+     "loudDb": -37.16,
+     "rmsDb": -40.46,
+     "mixDb": -20.36,
+     "gainDb": -18.8
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.076,
+    "Violins 1 -12": 0.063,
+    "Violins 2 +12": 0.072,
+    "Violins 2 -12": 0.065,
+    "Violas +12": 0.067,
+    "Violas -12": 0.094,
+    "Celli -12": 0.043
+   },
+   "fitErrDb": 0.28,
+   "subharmDb": -43.0,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 0.933,
+   "maxOctaveR": 0.094,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": 0.0,
+    "Violas": -0.28,
+    "Celli": -5.74
+   }
+  },
+  "78": {
+   "loudDb": -40.05,
+   "rmsDb": -43.95,
+   "ensRr": 0.133,
+   "parts": {
+    "Violins 1": {
+     "r": 0.483,
+     "rLR": [
+      0.492,
+      0.473
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.233,
+     "present": true,
+     "loudDb": -33.58,
+     "rmsDb": -37.45,
+     "mixDb": -12.66,
+     "gainDb": -13.37
+    },
+    "Violins 2": {
+     "r": 0.39,
+     "rLR": [
+      0.453,
+      0.328
+     ],
+     "lagMs": [
+      0.0,
+      -1.4
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.152,
+     "present": true,
+     "loudDb": -34.17,
+     "rmsDb": -37.65,
+     "mixDb": -14.23,
+     "gainDb": -13.44
+    },
+    "Violas": {
+     "r": 0.789,
+     "rLR": [
+      0.775,
+      0.803
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.622,
+     "present": true,
+     "loudDb": -28.46,
+     "rmsDb": -32.8,
+     "mixDb": -13.19,
+     "gainDb": -13.53
+    },
+    "Celli": {
+     "r": 0.149,
+     "rLR": [
+      0.167,
+      0.131
+     ],
+     "lagMs": [
+      -25.2,
+      -162.3
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.022,
+     "present": false,
+     "loudDb": -37.39,
+     "rmsDb": -40.05,
+     "mixDb": -19.69,
+     "gainDb": -17.21
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.073,
+    "Violins 1 -12": 0.076,
+    "Violins 2 +12": 0.059,
+    "Violins 2 -12": 0.147,
+    "Violas +12": 0.064,
+    "Violas -12": 0.072,
+    "Celli -12": 0.063
+   },
+   "fitErrDb": 0.23,
+   "subharmDb": -40.0,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 1.007,
+   "maxOctaveR": 0.147,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": -0.22,
+    "Violas": -0.12,
+    "Celli": -4.15
+   }
+  },
+  "80": {
+   "loudDb": -39.71,
+   "rmsDb": -43.65,
+   "ensRr": 0.122,
+   "parts": {
+    "Violins 1": {
+     "r": 0.504,
+     "rLR": [
+      0.571,
+      0.437
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.254,
+     "present": true,
+     "loudDb": -31.49,
+     "rmsDb": -35.52,
+     "mixDb": -14.01,
+     "gainDb": -13.58
+    },
+    "Violins 2": {
+     "r": 0.424,
+     "rLR": [
+      0.411,
+      0.437
+     ],
+     "lagMs": [
+      0.0,
+      1.2
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.18,
+     "present": true,
+     "loudDb": -33.3,
+     "rmsDb": -37.03,
+     "mixDb": -14.0,
+     "gainDb": -13.51
+    },
+    "Violas": {
+     "r": 0.768,
+     "rLR": [
+      0.775,
+      0.762
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.59,
+     "present": true,
+     "loudDb": -29.16,
+     "rmsDb": -33.23,
+     "mixDb": -13.36,
+     "gainDb": -13.25
+    },
+    "Celli": {
+     "r": 0.171,
+     "rLR": [
+      0.169,
+      0.173
+     ],
+     "lagMs": [
+      -249.3,
+      -65.0
+     ],
+     "pair": [
+      1,
+      0
+     ],
+     "share": 0.029,
+     "present": false,
+     "loudDb": -34.65,
+     "rmsDb": -39.36,
+     "mixDb": -19.86,
+     "gainDb": -20.64
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.081,
+    "Violins 1 -12": 0.093,
+    "Violins 2 +12": 0.078,
+    "Violins 2 -12": 0.093,
+    "Violas -12": 0.048,
+    "Celli -12": 0.059
+   },
+   "fitErrDb": 0.29,
+   "subharmDb": -43.4,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 1.024,
+   "maxOctaveR": 0.093,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": -0.29,
+    "Violas": 0.0,
+    "Celli": -7.58
+   }
+  },
+  "82": {
+   "loudDb": -41.5,
+   "rmsDb": -44.61,
+   "ensRr": 0.116,
+   "parts": {
+    "Violins 1": {
+     "r": 0.528,
+     "rLR": [
+      0.578,
+      0.477
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.278,
+     "present": true,
+     "loudDb": -32.33,
+     "rmsDb": -35.64,
+     "mixDb": -13.92,
+     "gainDb": -13.9
+    },
+    "Violins 2": {
+     "r": 0.463,
+     "rLR": [
+      0.483,
+      0.442
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.214,
+     "present": true,
+     "loudDb": -34.36,
+     "rmsDb": -37.86,
+     "mixDb": -13.44,
+     "gainDb": -12.21
+    },
+    "Violas": {
+     "r": 0.692,
+     "rLR": [
+      0.648,
+      0.737
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.479,
+     "present": true,
+     "loudDb": -31.52,
+     "rmsDb": -34.92,
+     "mixDb": -13.29,
+     "gainDb": -13.6
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.084,
+    "Violins 1 -12": 0.061,
+    "Violins 2 +12": 0.09,
+    "Violins 2 -12": 0.045,
+    "Violas -12": 0.061,
+    "Celli -12": 0.089
+   },
+   "fitErrDb": 0.14,
+   "subharmDb": -44.0,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 0.971,
+   "maxOctaveR": 0.09,
+   "weights": {
+    "Violins 1": -0.12,
+    "Violins 2": 0.0,
+    "Violas": -0.19
+   }
+  },
+  "84": {
+   "loudDb": -42.15,
+   "rmsDb": -46.12,
+   "ensRr": 0.121,
+   "parts": {
+    "Violins 1": {
+     "r": 0.61,
+     "rLR": [
+      0.655,
+      0.566
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.373,
+     "present": true,
+     "loudDb": -33.06,
+     "rmsDb": -36.08,
+     "mixDb": -13.97,
+     "gainDb": -13.68
+    },
+    "Violins 2": {
+     "r": 0.513,
+     "rLR": [
+      0.479,
+      0.547
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.263,
+     "present": true,
+     "loudDb": -35.78,
+     "rmsDb": -38.03,
+     "mixDb": -13.61,
+     "gainDb": -13.27
+    },
+    "Violas": {
+     "r": 0.597,
+     "rLR": [
+      0.605,
+      0.588
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.356,
+     "present": true,
+     "loudDb": -32.42,
+     "rmsDb": -36.0,
+     "mixDb": -15.32,
+     "gainDb": -15.69
+    }
+   },
+   "octaves": {
+    "Violins 1 +12": 0.069,
+    "Violins 1 -12": 0.066,
+    "Violins 2 +12": 0.09,
+    "Violins 2 -12": 0.058,
+    "Violas -12": 0.066,
+    "Celli -12": 0.091
+   },
+   "fitErrDb": 0.25,
+   "subharmDb": -43.5,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 0.992,
+   "maxOctaveR": 0.091,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": -0.05,
+    "Violas": -2.28
+   }
+  },
+  "86": {
+   "loudDb": -45.0,
+   "rmsDb": -47.89,
+   "ensRr": 0.128,
+   "parts": {
+    "Violins 1": {
+     "r": 0.64,
+     "rLR": [
+      0.67,
+      0.609
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.409,
+     "present": true,
+     "loudDb": -35.3,
+     "rmsDb": -37.8,
+     "mixDb": -13.74,
+     "gainDb": -13.84
+    },
+    "Violins 2": {
+     "r": 0.57,
+     "rLR": [
+      0.555,
+      0.584
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.324,
+     "present": true,
+     "loudDb": -36.97,
+     "rmsDb": -39.21,
+     "mixDb": -13.33,
+     "gainDb": -12.61
+    },
+    "Violas": {
+     "r": 0.523,
+     "rLR": [
+      0.461,
+      0.584
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.273,
+     "present": true,
+     "loudDb": -33.67,
+     "rmsDb": -36.99,
+     "mixDb": -17.07,
+     "gainDb": -18.07
+    }
+   },
+   "octaves": {
+    "Violins 1 -12": 0.092,
+    "Violins 2 -12": 0.072,
+    "Violas -12": 0.065,
+    "Celli -12": 0.053
+   },
+   "fitErrDb": 0.24,
+   "subharmDb": -42.8,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 1.006,
+   "maxOctaveR": 0.092,
+   "weights": {
+    "Violins 1": -0.06,
+    "Violins 2": 0.0,
+    "Violas": -4.66
+   }
+  },
+  "88": {
+   "loudDb": -46.19,
+   "rmsDb": -49.23,
+   "ensRr": 0.105,
+   "parts": {
+    "Violins 1": {
+     "r": 0.644,
+     "rLR": [
+      0.678,
+      0.61
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.415,
+     "present": true,
+     "loudDb": -36.33,
+     "rmsDb": -39.23,
+     "mixDb": -13.75,
+     "gainDb": -13.18
+    },
+    "Violins 2": {
+     "r": 0.584,
+     "rLR": [
+      0.598,
+      0.571
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.341,
+     "present": true,
+     "loudDb": -36.86,
+     "rmsDb": -40.48,
+     "mixDb": -13.23,
+     "gainDb": -13.25
+    },
+    "Violas": {
+     "r": 0.471,
+     "rLR": [
+      0.443,
+      0.499
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.222,
+     "present": true,
+     "loudDb": -32.3,
+     "rmsDb": -37.16,
+     "mixDb": -19.09,
+     "gainDb": -20.01
+    }
+   },
+   "octaves": {
+    "Violins 1 -12": 0.075,
+    "Violins 2 -12": 0.076,
+    "Violas -12": 0.061,
+    "Celli -12": 0.06
+   },
+   "fitErrDb": 0.18,
+   "subharmDb": -41.0,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 0.978,
+   "maxOctaveR": 0.076,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": -0.03,
+    "Violas": -6.6
+   }
+  },
+  "90": {
+   "loudDb": -45.69,
+   "rmsDb": -48.96,
+   "ensRr": 0.126,
+   "parts": {
+    "Violins 1": {
+     "r": 0.727,
+     "rLR": [
+      0.742,
+      0.713
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.529,
+     "present": true,
+     "loudDb": -34.21,
+     "rmsDb": -38.55,
+     "mixDb": -13.87,
+     "gainDb": -13.93
+    },
+    "Violins 2": {
+     "r": 0.592,
+     "rLR": [
+      0.619,
+      0.566
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.351,
+     "present": true,
+     "loudDb": -36.48,
+     "rmsDb": -39.58,
+     "mixDb": -14.0,
+     "gainDb": -13.13
+    },
+    "Violas": {
+     "r": 0.339,
+     "rLR": [
+      0.343,
+      0.336
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.115,
+     "present": true,
+     "loudDb": -33.86,
+     "rmsDb": -37.05,
+     "mixDb": -21.19,
+     "gainDb": -20.34
+    }
+   },
+   "octaves": {
+    "Violins 1 -12": 0.07,
+    "Violins 2 -12": 0.063,
+    "Violas -12": 0.048,
+    "Celli -12": 0.078
+   },
+   "fitErrDb": 0.19,
+   "subharmDb": -41.1,
+   "present": [
+    "Violins 1",
+    "Violins 2",
+    "Violas"
+   ],
+   "sumR2": 0.995,
+   "maxOctaveR": 0.078,
+   "weights": {
+    "Violins 1": -0.15,
+    "Violins 2": 0.0,
+    "Violas": -6.93
+   }
+  },
+  "92": {
+   "loudDb": -46.84,
+   "rmsDb": -50.42,
+   "ensRr": 0.119,
+   "parts": {
+    "Violins 1": {
+     "r": 0.714,
+     "rLR": [
+      0.731,
+      0.697
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.51,
+     "present": true,
+     "loudDb": -35.44,
+     "rmsDb": -39.84,
+     "mixDb": -13.92,
+     "gainDb": -13.04
+    },
+    "Violins 2": {
+     "r": 0.684,
+     "rLR": [
+      0.637,
+      0.73
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.467,
+     "present": true,
+     "loudDb": -37.08,
+     "rmsDb": -40.48,
+     "mixDb": -13.43,
+     "gainDb": -13.27
+    }
+   },
+   "octaves": {
+    "Violins 1 -12": 0.068,
+    "Violins 2 -12": 0.078,
+    "Violas -12": 0.073,
+    "Celli -12": 0.065
+   },
+   "fitErrDb": 0.18,
+   "subharmDb": -36.1,
+   "present": [
+    "Violins 1",
+    "Violins 2"
+   ],
+   "sumR2": 0.977,
+   "maxOctaveR": 0.078,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": -0.05
+   }
+  },
+  "94": {
+   "loudDb": -46.66,
+   "rmsDb": -49.54,
+   "ensRr": 0.12,
+   "parts": {
+    "Violins 1": {
+     "r": 0.789,
+     "rLR": [
+      0.814,
+      0.764
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      0,
+      0
+     ],
+     "share": 0.623,
+     "present": true,
+     "loudDb": -35.14,
+     "rmsDb": -38.34,
+     "mixDb": -13.92,
+     "gainDb": -13.94
+    },
+    "Violins 2": {
+     "r": 0.628,
+     "rLR": [
+      0.612,
+      0.645
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.395,
+     "present": true,
+     "loudDb": -37.8,
+     "rmsDb": -40.41,
+     "mixDb": -13.35,
+     "gainDb": -12.44
+    }
+   },
+   "octaves": {
+    "Violins 1 -12": 0.079,
+    "Violins 2 -12": 0.075,
+    "Violas -12": 0.096
+   },
+   "fitErrDb": 0.15,
+   "subharmDb": -41.5,
+   "present": [
+    "Violins 1",
+    "Violins 2"
+   ],
+   "sumR2": 1.018,
+   "maxOctaveR": 0.096,
+   "weights": {
+    "Violins 1": -0.16,
+    "Violins 2": 0.0
+   }
+  },
+  "96": {
+   "loudDb": -45.98,
+   "rmsDb": -49.77,
+   "ensRr": 0.116,
+   "parts": {
+    "Violins 1": {
+     "r": 0.794,
+     "rLR": [
+      0.843,
+      0.745
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.631,
+     "present": true,
+     "loudDb": -34.38,
+     "rmsDb": -38.05,
+     "mixDb": -13.85,
+     "gainDb": -13.75
+    },
+    "Violins 2": {
+     "r": 0.591,
+     "rLR": [
+      0.512,
+      0.669
+     ],
+     "lagMs": [
+      0.0,
+      0.0
+     ],
+     "pair": [
+      1,
+      1
+     ],
+     "share": 0.349,
+     "present": true,
+     "loudDb": -37.85,
+     "rmsDb": -40.72,
+     "mixDb": -12.95,
+     "gainDb": -13.19
+    }
+   },
+   "octaves": {
+    "Violins 1 -12": 0.066,
+    "Violins 2 -12": 0.069,
+    "Violas -12": 0.091
+   },
+   "fitErrDb": 0.15,
+   "subharmDb": -38.9,
+   "present": [
+    "Violins 1",
+    "Violins 2"
+   ],
+   "sumR2": 0.98,
+   "maxOctaveR": 0.091,
+   "weights": {
+    "Violins 1": 0.0,
+    "Violins 2": 0.0
+   }
+  }
+ }
+}
