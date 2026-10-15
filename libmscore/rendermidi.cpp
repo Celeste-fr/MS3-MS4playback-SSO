@@ -1234,7 +1234,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (!c)
                               return -1;
                         const int level = Ms4::expressionLevel(dynLevel);
-                        const double accent = level > 0 ? double(r.levelVelocity) / level : 1.0;
+                        // a marcato (also with staccato / tenuto) gets no accent share: it plays as a plain note
+                        // of the dynamic (MS4's accent boost is MS4's; the library's marcato level is the
+                        // library's own, plus the Marcato level offset, marcatoLevel)
+                        const bool marcato = std::find(r.arts.begin(), r.arts.end(), Ms4::Art::Marcato) != r.arts.end();
+                        const double accent = level > 0 && !marcato ? double(r.levelVelocity) / level : 1.0;
                         if (cal) {
                               const SoundLib::Choice held = SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} });
                               if (held) {
@@ -1249,7 +1253,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           return qBound(1, int(std::lround(v * accent)), 127);
                                     }
                               }
-                        return lp->velocityDynamics.contains(c.base) ? r.levelVelocity : -1;
+                        return lp->velocityDynamics.contains(c.base) ? (marcato ? level : r.levelVelocity) : -1;
                         };
                   // a marcato's level (articulation.h MarcatoLevel; 0: nothing changes). A note on velocity (velocity:
                   // libVelocity's): the velocity at which its articulation's measured curve is db louder or softer
