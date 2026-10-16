@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "evenautomeasurer.h"
+#include "libmscore/lagprobe.h"
 
 #include <chrono>
 #include <condition_variable>
@@ -142,6 +143,8 @@ void EvenAutoMeasurer::edited(Score* cs)
       MasterScore* ms = cs->masterScore();
       if (_session && _session->score() == ms && ms->undoStack()->state() == _undoState)
             return;                       // (a command that changed nothing: a selection)
+      if (_probePaused)
+            return;
       if (!ready(cs))
             return;
       _undoState = ms->undoStack()->state();
@@ -160,6 +163,9 @@ void EvenAutoMeasurer::playing(bool on)
 
 void EvenAutoMeasurer::prepare(Score* cs)
       {
+      if (_probePaused)
+            return;
+      LagProbe::Scope probe("EvenAutoMeasurer::prepare");
       if (!ready(cs))
             return;
       if (_session->needsDetect() || cs->masterScore()->playlistDirty()) {
@@ -175,8 +181,9 @@ void EvenAutoMeasurer::prepare(Score* cs)
 
 void EvenAutoMeasurer::detect()
       {
-      if (!_session || !_score)
+      if (!_session || !_score || _probePaused)
             return;
+      LagProbe::Scope probe("EvenAutoMeasurer::detect");
       if (_paused) {
             _detectAfterPlay = true;      // (measured once playback stops)
             return;
@@ -271,6 +278,8 @@ void EvenAutoMeasurer::loadStep()
                         route = &r;
             QString error;
             clock.restart();
+            LagProbe::Scope probe("EvenAutoMeasurer: load instance");
+            probe.setDetail(job.patch);
             std::shared_ptr<Vst3Synth> vst = route ? SoundLibraryExport::loadInstance(_score, *route, float(RATE), &error) : nullptr;
             // (the load profile: these instances load on the main thread, between and after the playback's own)
             logLine(QString("even levels: %1 loaded in %2 ms on the main thread (the routes worked out %3 ms)")
@@ -304,6 +313,7 @@ void EvenAutoMeasurer::loadStep()
 void EvenAutoMeasurer::worker(Instance* in)
       {
 #ifdef USE_VST3
+      LagProbe::nameThread(QString("even levels: %1").arg(in->patch).toUtf8().constData());
       SoundLibraryHost::workerThread(true);
       // until it sounds: a test note in real time, as PlaybackVerifier::waitUntilSounding plays it (Kontakt goes on
       // loading samples after its state is set), here given up when the instance is released
@@ -361,7 +371,7 @@ void EvenAutoMeasurer::worker(Instance* in)
                   continue;
             in->vst->idle();              // (the plug-in's parameter changes and MIDI mapping, between renders)
             const EvenAuto::Result r = EvenMeasure::run(in->vst.get(), job, RATE, [this, in, &wanted]() {
-                  while (_paused && !in->stop)
+                  while ((_paused || _probePaused) && !in->stop)
                         std::this_thread::sleep_for(std::chrono::milliseconds(20));
                   return !in->stop && wanted();
                   });
@@ -384,6 +394,7 @@ void EvenAutoMeasurer::onResult(const EvenAuto::Result& r)
       {
       if (!_session || !_score)
             return;
+      LagProbe::Scope probe("EvenAutoMeasurer::onResult");
       const bool wasWritten = _score->evenLevelsWritten();
       EvenAuto::Job next;
       if (_session->result(r, &next))
@@ -407,9 +418,32 @@ void EvenAutoMeasurer::onResult(const EvenAuto::Result& r)
 //   holdPlay / checkHold / countdown / cancelHold
 //---------------------------------------------------------
 
+bool EvenAutoMeasurer::probeBusy() const
+      {
+      return _session && (_session->busy() || !_toLoad.empty());
+      }
+
+void EvenAutoMeasurer::setProbePaused(bool on)
+      {
+      _probePaused = on;
+      if (!on && _session) {
+            _session->edited();
+            _debounce.start(DEBOUNCE_MS);
+            }
+      }
+
+void EvenAutoMeasurer::probeRefresh(Score* cs)
+      {
+      if (ready(cs)) {
+            _undoState = cs->masterScore()->undoStack()->state();
+            _session->edited();
+            _debounce.start(DEBOUNCE_MS);
+            }
+      }
+
 bool EvenAutoMeasurer::holdPlay(Score* cs, double from, double to, std::function<void()> resume)
       {
-      if (!_session || !cs || cs->masterScore() != _session->score())
+      if (!_session || !cs || cs->masterScore() != _session->score() || _probePaused)
             return false;
       if (!_session->mustWait(from, to))
             return false;

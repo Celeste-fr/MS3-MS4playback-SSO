@@ -319,6 +319,7 @@ add_library(mscoreapp STATIC
       playbackverify.cpp playbackverify.h evenlevelsjob.cpp evenlevelsjob.h evenautomeasurer.cpp evenautomeasurer.h
       tuningdialog.cpp tuningdialog.h
       playbackmode.cpp playbackmode.h
+      lagprobesession.cpp lagprobesession.h
 
       ${CLOUD_SRC}
       ${IMPORTMIDIUI_SRC}

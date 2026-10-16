@@ -18,6 +18,7 @@
 #include "repeatlist.h"
 #include "score.h"
 #include "synthesizerstate.h"
+#include "lagprobe.h"
 
 #include <algorithm>
 #include <cmath>
@@ -40,6 +41,7 @@ std::map<const Part*, std::vector<Mark>> marks(MasterScore* score)
       std::map<const Part*, std::vector<Mark>> out;
       if (!score)
             return out;
+      LagProbe::Scope probe("NoteLane::marks render");
       // (as Seq renders: its chunks; the score's repeats as they are)
       std::vector<MidiRenderer::LibTrace> trace;
       MidiRenderer midi(score);
@@ -97,6 +99,7 @@ std::set<const Note*> onPerformancePatch(const std::vector<const Note*>& notes)
             m = m->firstTiedNote();
             played[m].push_back(n);
             }
+      LagProbe::Scope probe("NoteLane::onPerformancePatch render");
       // (as Seq renders: its chunks)
       MidiRenderer midi(master);
       midi.setMinChunkSize(10);

@@ -85,6 +85,7 @@ class EvenAutoMeasurer : public QObject {
       int _undoState { -1 };
       bool _detectAfterPlay { false };
       std::atomic<bool> _paused { false };
+      std::atomic<bool> _probePaused { false };       // (the lag probe's)
       std::mutex _liveMutex;
       std::set<int> _live;                            // the Works' ids still wanted (the workers skip the rest)
       std::atomic<double> _focus { 0 };               // seconds: the jobs from here on first (EvenAuto::priority)
@@ -121,6 +122,12 @@ class EvenAutoMeasurer : public QObject {
       bool holdPlay(Score* cs, double from, double to, std::function<void()> resume);
       void cancelHold();                  // Stop
       bool holding() const { return _holding; }
+      // the lag probe only (MS_LAG_PROBE, lagprobesession.h): work queued, rendering or an instance to load; paused:
+      // edits not looked at, Play doesn't wait, the workers idle (the probe's "measurement paused" phases); refresh: the
+      // session made or dropped for the setting as it is now
+      bool probeBusy() const;
+      void setProbePaused(bool on);
+      void probeRefresh(Score* cs);
       void shutdown();                    // MuseScore quits: workers stopped, instances released, cache saved
       };
 

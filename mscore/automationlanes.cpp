@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "automationlanes.h"
+#include "libmscore/lagprobe.h"
 #include "notelanes.h"
 #include "liveclipedit.h"
 #include "liveclips.h"
@@ -1004,6 +1005,7 @@ int AutomationLanes::segmentAt(const Lane& l, int tick) const
 
 void AutomationLanes::paint(QPainter& p, const QRect& viewport)
       {
+      LagProbe::Scope probe("AutomationLanes::paint");
       const std::vector<Row> rs = rows();
       if (rs.empty())
             return;

@@ -66,6 +66,7 @@
 #include "global/log.h"
 
 #include "audio/midi/event.h"
+#include "lagprobe.h"
 
 namespace Ms {
 
@@ -5462,6 +5463,7 @@ void MidiRenderer::renderScore(EventMap* events, const Context& ctx)
 
 void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Context& ctx)
       {
+      LagProbe::Scope probe("MidiRenderer::renderChunk");
       // the start lead (libraryDelayLead) comes from the score's first notes: a later chunk rendered before the first
       // (playback from a later bar) renders the first once for it, writing nowhere
       if (library && !libStartKnown && !libProbing && !writtenTiming && chunk.utick1() > 0) {
