@@ -180,6 +180,7 @@ class TestSoundLibrary : public QObject, public MTest
       void renderKitRoll();
       void controllers();
       void controllerSettings();
+      void controllerPatchDefaults();
       void partMix();
 #ifdef TESTSYNTH
       void evenAutoTestSynth();
@@ -4381,6 +4382,96 @@ void TestSoundLibrary::controllers()
                   break;
             }
       delete score;
+      }
+
+//---------------------------------------------------------
+//   controllerPatchDefaults
+//    the controllers' own values shipped with the map (<Controller patchDefault>, 0-1; the owner, 2026-10-15: Kontakt's
+//    default and the map's "should be the same"): read per patch (an instrument's own controller over the library's),
+//    refused out of 0-1 or on a MIDI controller; a patch never loaded on this computer: its unautomated lane (the dashed
+//    line) shows the map's value; loaded once (the hook: the setup's own value): Kontakt's live value takes over; the map's
+//    default (MuseScore sets it) wins over both; the mics' measured faders only where nothing else is known. The shipped
+//    SSO map: every patchDefault in 0-1, on a plug-in parameter
+//---------------------------------------------------------
+
+void TestSoundLibrary::controllerPatchDefaults()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Controller id='release' name='Release' param='Release' patchDefault='0.25'/>"
+         "<Controller id='mic2' name='Mic 2' param='Mic 2 level'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long'/>"
+         "<Controller id='release' name='Release' param='Release' patchDefault='0.496'/>"
+         "<Controller id='tone' name='Tone' param='Tone' default='100' patchDefault='0.5'/>"
+         "<Controller id='mic2' name='Mic 2' param='Mic 2 level' patchDefault='0.75'/>"
+         "</Instrument>"
+         "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      auto controllerOf = [](const SoundLib::LibInstrument& li, const char* id) -> const SoundLib::Controller* {
+            for (const SoundLib::Controller& c : li.allControllers)
+                  if (c.id == id)
+                        return &c;
+            return nullptr;
+            };
+      const SoundLib::LibInstrument& violin = lib->instruments[0];
+      const SoundLib::LibInstrument& viola = lib->instruments[1];
+      QVERIFY(controllerOf(violin, "release") && controllerOf(viola, "release") && controllerOf(violin, "mic2"));
+      QCOMPARE(controllerOf(violin, "release")->patchDefault, 0.496);       // (the instrument's own)
+      QCOMPARE(controllerOf(viola, "release")->patchDefault, 0.25);         // (the library's)
+      QCOMPARE(controllerOf(viola, "mic2")->patchDefault, -1.0);            // (not measured)
+      // refused: out of 0-1, on a MIDI controller
+      auto withController = [](const QString& c) {
+            return "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>" + c
+                   + "<Instrument name='V' ids='violin'><Articulation name='Long' value='1' techniques='long'/></Instrument>"
+                     "</SoundLibrary>";
+            };
+      QVERIFY(loadMap(withController("<Controller id='r' name='R' param='R' patchDefault='1'/>")));
+      QVERIFY(!loadMap(withController("<Controller id='r' name='R' param='R' patchDefault='1.5'/>")));
+      QVERIFY(!loadMap(withController("<Controller id='r' name='R' param='R' patchDefault='x'/>")));
+      QVERIFY(loadMap(withController("<Controller id='r' name='R' cc='21'/>")));
+      QVERIFY(!loadMap(withController("<Controller id='r' name='R' cc='21' patchDefault='0.5'/>")));
+
+      // never loaded here (the hook knows nothing): the map's value
+      PartControllers::setSetupValues([](const QString&, const QString&) { return -1.0; });
+      QCOMPARE(PartControllers::unautomatedValue(violin, *controllerOf(violin, "release")), 0.496);
+      QCOMPARE(PartControllers::unautomatedValue(viola, *controllerOf(viola, "release")), 0.25);
+      QCOMPARE(PartControllers::unautomatedValue(viola, *controllerOf(viola, "mic2")), -1.0);
+      // the map's default: what MuseScore sets, over the patch's own
+      QCOMPARE(PartControllers::unautomatedValue(violin, *controllerOf(violin, "tone")), 100 / 127.0);
+      // loaded once: Kontakt's live value takes over
+      PartControllers::setSetupValues([](const QString& patch, const QString& param) {
+            return patch == "Violin" && param == "Release" ? 0.6 : -1.0;
+            });
+      QCOMPARE(PartControllers::unautomatedValue(violin, *controllerOf(violin, "release")), 0.6);
+      QCOMPARE(PartControllers::unautomatedValue(viola, *controllerOf(viola, "release")), 0.25);
+      // the mics: the map's patchDefault over the measured faders (micDefault), those where nothing else is known
+      SoundLib::LibInstrument miked = violin;
+      miked.hasMicLevels = true;
+      miked.micDefault = { { 0, 127, 0, 0, 0 } };
+      QCOMPARE(PartControllers::unautomatedValue(miked, *controllerOf(violin, "mic2")), 0.75);
+      SoundLib::LibInstrument mikedViola = viola;
+      mikedViola.hasMicLevels = true;
+      mikedViola.micDefault = { { 0, 127, 0, 0, 0 } };
+      QCOMPARE(PartControllers::unautomatedValue(mikedViola, *controllerOf(viola, "mic2")), 1.0);
+      PartControllers::setSetupValues(nullptr);
+
+      // the shipped SSO map (tools/soundlibraries/sso_controller_defaults.json by gen_spitfire_sso.py)
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      int measured = 0, controllers = 0;
+      for (const SoundLib::LibInstrument& li : sso->instruments)
+            for (const SoundLib::Controller& c : li.allControllers) {
+                  ++controllers;
+                  if (c.patchDefault < 0)
+                        continue;
+                  ++measured;
+                  QVERIFY2(c.patchDefault <= 1 && !c.param.isEmpty() && c.cc < 0, qPrintable(li.name + " " + c.id));
+                  }
+      qDebug("SSO map: %d of %d controllers with their patchDefault", measured, controllers);
+      QVERIFY(measured > 0);
       }
 
 //---------------------------------------------------------

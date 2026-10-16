@@ -76,10 +76,13 @@ int valueAt(int partValue, const std::map<int, int>& texts, int tick, bool* from
 
 //---------------------------------------------------------
 //   unautomatedValue
-//    what an unautomated controller plays at, 0-1 (Live's dashed line): the map's default; else, for the patch's mics
-//    (Mic 1-5 level), the map's measured default faders (micDefault); else the patch's own value as its setup holds it,
-//    from the hook (SoundLibraryHost records each parameter's value as a setup loads); -1: not known (the patch never
-//    loaded on this computer)
+//    what an unautomated controller plays at, 0-1 (Live's dashed line): the map's default (MuseScore sets it); else the
+//    patch's own value: as its setup held it when it last loaded on this computer, from the hook (SoundLibraryHost
+//    records each parameter's value as a setup loads and settles: Kontakt's live value takes over); before it ever
+//    loaded here, the value shipped with the map (<Controller patchDefault>, measured once in Kontakt 8 + SSO with
+//    MuseScore's setups: tools/soundlibraries/sso_controller_defaults.json; the owner, 2026-10-15: the two "should be
+//    the same", a difference is logged when the patch loads); else, for the patch's mics (Mic 1-5 level), the map's
+//    measured default faders (micDefault); -1: not known
 //---------------------------------------------------------
 
 double unautomatedValue(const SoundLib::LibInstrument& patch, const SoundLib::Controller& controller);

@@ -368,7 +368,11 @@ in a section collapsible at the same time".
   Another CC: one clip the whole song, an envelope stepping from a rest value (the lowest the patch's articulations
   don't use) to the value and back after the run. A keyswitch patch: one clip, a key note one unit long per run. The
   Kontakt track's "Controllers" clip holds the dynamics (CC1), CC11 and the pedal as envelopes; plug-in parameters
-  MuseScore automates are automation on the Kontakt track.
+  MuseScore automates are automation on the Kontakt track. **A lane that never changes** (one value from the score's
+  start, `Lane::flatValue`: the controller's setting) **is the parameter's plain value, not automation** (the owner,
+  2026-10-15, "Option B"): its Manual value in Live's panel of Kontakt (*Configure*) and in Kontakt's state, no
+  envelope; a lane that changes is automation (Create Live Set and Update Live Set alike). A constant MIDI-CC lane has no
+  Live parameter: it stays a one-value envelope of the Controllers clip.
 - **Written clips** (the owner, 2026-10-11: "Live clips hold the WRITTEN notes -- on the grid, exact written lengths,
   rests -- never the played timing"; the timing "is applied at PLAYBACK", per technique by Track Delay, the rest by the
   device: "a device is fine"; `libmscore/livetiming.h`). The technique tracks' clips hold each note where the notation
@@ -518,6 +522,16 @@ in a section collapsible at the same time".
     becomes lanes; Create Live Set gives the score's parameter lanes the written envelope's liveHash, so an unchanged
     one keeps MuseScore's lane (Automation::merge). An extra patch's Kontakt: its changed envelopes are reported, not
     imported.
+  - **Knobs turned in Live** (the owner, 2026-10-15: "yea sure"; `livetracks.h` › Knobs): a Kontakt parameter Live's
+    panel lists without automation has one value, its Manual value. On the part's main Kontakt track, one that differs
+    from what MuseScore wrote there (`liveTracks` › written › `params`; a set without that record: from what the score
+    plays now, the lane's value or the unautomated one) becomes the part's lane with that one value from the start
+    (one undoable step with the rest of the import), merged as any lane (`Automation::merge`: Live's newer value taken,
+    a lane edited in MuseScore since kept, both changed asked, a dialog per lane). The value then lives in MuseScore and
+    changes only through MuseScore. A lane that came from a knob stays when the parameter leaves Live's panel. An extra
+    patch's Kontakt: a turned knob is reported, not imported. **Not read**: Kontakt's own window (its state is opaque
+    here, LIVE.md › Kontakt's state from the set): a value changed there and not in Live's panel stays unknown to
+    MuseScore (and Update Live Set may write MuseScore's value over it in the state, below).
   - **Technique tracks**: their switch (the Sub, the switch envelope, keyswitch notes) is never a lane; another
     clip envelope there is reported as not imported.
   - **Mixer**: a Kontakt track's Volume / Pan / Track Activator is the part's Mixer when the part has only that
@@ -533,7 +547,8 @@ in a section collapsible at the same time".
     samples (Live's toggle) is reported, not imported.
   - Without the record (the score not saved after Create Live Set), the tracks match as any set's (MIDI input or
     name) and the Controllers clip's envelopes come back as lanes.
-  - Test: `tst_liveequivalence` `plainSetReadBack`, `liveTracksJson`.
+  - Test: `tst_liveequivalence` `plainSetReadBack`, `liveTracksJson`, `updateLiveSetKnobs`; `tst_liveintegration`
+    `liveSetKnobs`.
 
 The sections below describe the route set.
 
@@ -586,9 +601,10 @@ The sections below describe the route set.
     is in Live's panel too (at the patch's own value), so the MuseScore Link device finds it and plays the lane. The report lists per part
     and patch what was set. Controllers on a MIDI CC are in the clips (carriers), as before.
     **Changed later in MuseScore, they don't follow into the set** (the set is a file Live opened): create the set
-    again, or change and automate them in Live (Live's panel has them). Update Live Set keeps Kontakt's state (the
-    owner's), so a flat lane's new value doesn't reach an updated set either (open: write it as constant automation?);
-    a Kontakt parameter turned in Live without automation is not read back (Kontakt's state is opaque here).
+    again, or change and automate them in Live (Live's panel has them). The plain set's *Update Live Set* (below) writes
+    a flat lane's new value as the parameter's plain value (the owner's option B, 2026-10-15: not constant automation),
+    and reads a Kontakt parameter turned in Live's panel back as a lane (The plain set › Knobs turned in Live); Kontakt's
+    own window stays unread (its state is opaque here).
   - **Live's mixer** = MuseScore's Mixer (2026-09-30): each track's Volume is the part's volume as MuseScore's host
     plays it, (v/100)² as a linear gain (100 = 0 dB, 127 = +4.2 dB, 0 = -70 dB, Live's lowest; MuseScore's 0 is
     silence), its Pan the same position (-1 … 1; Live's law is MuseScore's: constant power, sine / cosine, 0 dB in
@@ -728,9 +744,17 @@ its own copy and would save it over the update), is brought up to date with the 
 3. **What MuseScore owns is replaced, only where it differs**: a MuseScore track's arrangement clips (the technique
    clips with their switch, the Controllers clips; the clip envelopes pointing at the track's own MidiControllers ids), its
    Track Delay, a technique track's MuseScore Link `"Timing"` store (the device's other stores as Max saved them), the
-   Kontakt's parameter automation MuseScore writes (a parameter Live's panel doesn't list is reported), and a Kontakt's
-   state only when its slots' tunings changed (`liveTracks` › written › `slots`; its Kontakt-window settings are then
-   reset, the report says). **Live's own clip edits** (velocities, notes added or deleted) stay while the score's notes on
+   Kontakt's parameter automation MuseScore writes, the parameters MuseScore holds at one value (2026-10-15, the owner's
+   option B: a flat lane, or the map's `default`, as the parameter's **Manual value** in Live's panel, never an envelope;
+   a lane that was automation and is constant now loses MuseScore's envelope; a parameter the panel doesn't list gets
+   one of its free slots, named and with the plug-in's id, as Live's *Configure* lists one; an unautomated parameter
+   MuseScore had written a value for goes back to the patch's own value, only while the set still has MuseScore's value
+   there), with **the set's own Kontakt state** carrying the same values (`SoundLibraryHost::stateWithParameters`: the
+   set's state loaded into an instance, the values set, read back; its other settings kept), and a Kontakt's state from
+   the setup only when its slots' tunings changed (`liveTracks` › written › `slots`; its Kontakt-window settings are
+   then reset, the report says). **A knob turned in Live is never overwritten silently**: the read-back (step 1) takes it
+   into the lane first; changed in MuseScore too, the dialog asks; without a dialog (the command line) Live's value
+   stays in the set, the report says so, and the next update asks again. **Live's own clip edits** (velocities, notes added or deleted) stay while the score's notes on
    that track are unchanged since the last write (`liveTracks` › written › `clips`); changed in the score too, the score's
    clip replaces them (reported). A main patch's Controllers clip is always the score's (its edits came back as lanes).
 4. **Everything else stays byte for byte**: devices added on any track (after Kontakt too), return tracks and sends,
@@ -757,11 +781,19 @@ extra patch, a staccatissimo removed, the piano part removed): the owner's addit
 byte for byte, the backup the saved file, the Spiccato track cleared, the new Kontakt and technique inside the part
 group with a send at −inf, every MuseScore track's clips as a new Create Live Set's, the moved note's override where
 Live played it (`playedBy`), the Long track's timing record the new one; a second update writes nothing; a set
-without the piano part gets its section, part group and tracks. **Only real Live 12.4 can show** (to check first, with
+without the piano part gets its section, part group and tracks. `updateLiveSetKnobs` (the test synth's Tone and Macro
+parameters as Kontakt's): a constant lane written as Live's panel value with no envelope, a changing one as automation; a
+knob turned in the saved set read into the lane and kept; MuseScore's next value written into the panel and the set's
+own state; both changed without a dialog: Live's kept and asked again; a lane made constant losing its envelope; an
+unlisted parameter given a free slot (its id from the instance); an unautomated parameter back at the patch's own value,
+then turned in Live and read back. **Only real Live 12.4 can show** (to check first, with
 a Windows build): that Live opens an updated set it saved itself (12.4's format, the inserted tracks written in 12.2's
 as Create Live Set writes them) without a message; that it keeps the inserted tracks' sends and the devices' saved data;
 that the clip envelopes' ControllerTargets ids taken from the file are still the ones Live 12.4 saved; how Live names
-its backups exactly (assumed `<name> [yyyy-MM-dd hhmmss].als`).
+its backups exactly (assumed `<name> [yyyy-MM-dd hhmmss].als`); that Live saves a knob turned in its panel as the
+parameter's Manual value (as the owner's 12.2 sets showed for configured parameters), that it opens a set whose free
+panel slot MuseScore filled, and whether it sets the panel's values on Kontakt after loading its state (MuseScore writes
+both alike, so either way they agree).
 
 ## Automation lanes in MuseScore and in Live
 
@@ -1081,9 +1113,13 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   them; nor any track's mixer automation (a Kontakt's static mixer is the part's Mixer).
 - **Track delays in the route set** (Add Missing Tracks, the Live-against-MuseScore check): its tracks carry none, and
   *Live plays the score*'s clips are rendered without them; only the plain set has them (as TrackDelay).
-- **Controllers and the Mixer changed after the set was written** don't follow: create the set again, or use Live's
-  panel and faders. *Update Live Set* (below) doesn't carry them either: it reads Live's mixer back into the score (Live
-  wins) and keeps each Kontakt's state as Live saved it.
+- **The Mixer changed after the set was written** doesn't follow: create the set again, or use Live's faders. *Update
+  Live Set* (below) reads Live's mixer back into the score (Live wins). **Controllers** (flat lanes) changed in MuseScore
+  reach an updated plain set since 2026-10-15 (the parameter's plain value in Live's panel and the set's Kontakt state),
+  and a knob turned in Live's panel comes back as a lane; still differing: a value changed in **Kontakt's own window**
+  (not in Live's panel; Kontakt's state is opaque here) is not read back, so MuseScore plays the lane's value there;
+  a knob turned on an extra patch's Kontakt is reported, not imported (no lane plays an extra patch's Kontakt); the
+  route set (Add Missing Tracks) and *Live plays the score* get no Update.
 - **Live's own clip edits kept by Update Live Set** (velocities, notes added or deleted in a technique clip whose notes
   the score hasn't changed since; LIVE.md › Update Live Set): Live plays them, MuseScore doesn't (they are not in the
   score). A note moved or trimmed is not one of them: it became its timing override, which both play.

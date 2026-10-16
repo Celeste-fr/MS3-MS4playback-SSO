@@ -188,19 +188,34 @@ f'  <Onset early="{ONSET_EARLY}"/>',
 CONTROLLERS = []            # for every patch
 PATCH_CONTROLLERS = {}      # patch name -> [...], over CONTROLLERS (same id: replaces it)
 
-def controller(c, indent):
+def num4(v):
+    s = ('%.4f' % v).rstrip('0').rstrip('.')
+    return s if s not in ('', '-0') else '0'
+
+def controller(c, indent, patchDefault=None):
     cid, name, cc, param, default, texts = c
     assert (cc is None) != (param is None), c
     assert cc is None or 0 <= cc <= 119, c
     assert default is None or 0 <= default <= 127, c
     assert not texts or cc is not None, c           # (staff text: MIDI controllers only)
+    assert patchDefault is None or (param is not None and 0 <= patchDefault <= 1), c
     a = f'{indent}<Controller id={q(cid)} name={q(name)}'
     a += f' cc="{cc}"' if cc is not None else f' param={q(param)}'
     if default is not None:
         a += f' default="{default}"'
+    if patchDefault is not None:
+        a += f' patchDefault="{num4(patchDefault)}"'
     if not texts:
         return [a + '/>']
     return [a + '>'] + [f'{indent}  <Text match={q(m)} value="{v}"/>' for m, v in texts] + [f'{indent}</Controller>']
+
+# Each patch's controllers' own values as the library ships them (<Controller patchDefault>, 0-1: the plug-in's
+# normalized value with MuseScore's setup loaded and settled, nothing set), measured once in Kontakt 8 + SSO on the
+# Windows VM (tools/soundlibraries/sso_controller_defaults.json, controller_defaults_from_extract.py; the owner,
+# 2026-10-15: the dashed lane of a patch never loaded shows them; once it loads, Kontakt's live value takes over and
+# a difference is logged). MuseScore sends nothing for them (unlike default)
+_CD = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_controller_defaults.json')
+CONTROLLER_DEFAULTS = json.load(open(_CD, encoding='utf-8'))['patches'] if os.path.exists(_CD) else {}
 
 out += [x for c in CONTROLLERS for x in controller(c, '  ')]
 patchControllersUsed = set()
@@ -214,7 +229,8 @@ def patchControllers(name):
         else:
             measuredMissing.append(name)
             cs = []
-    return [x for c in cs for x in controller(c, '    ')]
+    own = CONTROLLER_DEFAULTS.get(name, {})
+    return [x for c in cs for x in controller(c, '    ', own.get(c[0]) if c[3] is not None else None)]
 
 # Corrections from Spitfire's own Cubase expression maps for SSS / SSB / SSW (legacy downloads,
 # CC32 = UACC; see check_spitfire_expressionmaps.py), where they differ from the community bank

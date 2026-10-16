@@ -205,7 +205,8 @@ static QString setPartMix(MasterScore* score, const Part* part, const LiveTracks
 //   importSet
 //---------------------------------------------------------
 
-bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report, QWidget* askParent)
+bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report, QWidget* askParent,
+               std::set<std::pair<const Part*, QString>>* unchosen)
       {
       if (!score)
             return false;
@@ -235,6 +236,9 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
                   return false;
                   }
             }
+      else if (unchosen)
+            for (const Automation::Conflict& c : conflicts)
+                  unchosen->insert({ c.part, c.target });
       QStringList both;
       const std::map<const Part*, Automation::PartLanes> all = Automation::merge(before, live, choices, &both);
       QJsonObject o;

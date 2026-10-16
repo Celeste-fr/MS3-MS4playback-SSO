@@ -779,6 +779,25 @@ std::map<QString, Record> records(const QByteArray& xml)
       return out;
       }
 
+std::map<QString, QByteArray> kontaktStates(const QByteArray& xml)
+      {
+      std::map<QString, QByteArray> out;
+      const Xml x(xml);
+      if (!x.ok())
+            return out;
+      for (int t : trackList(x)) {
+            if (!x.is(t, "MidiTrack"))
+                  continue;
+            const QString key = annotationOf(x, t);
+            if (PlainLiveSet::keyPath(key).isEmpty() || out.count(key))
+                  continue;
+            const int ps = x.path(pluginDeviceOf(x, t), { "PluginDesc", "Vst3PluginInfo", "Preset", "Vst3Preset", "ProcessorState" });
+            if (ps >= 0)
+                  out[key] = hexContent(x, ps);
+            }
+      return out;
+      }
+
 QString slotsText(const std::vector<double>& slotCents)
       {
       QStringList l;
@@ -1229,15 +1248,18 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                         }
                   }
 
-            // a Kontakt: its slots' state when the tunings changed, its parameters' automation
+            // a Kontakt: its slots' state when the tunings changed, its parameters' automation, the parameters MuseScore
+            // holds at one value as their plain value (the owner's option B, 2026-10-15: no automation envelope)
             if (t.midiTo < 0) {
                   const int plugin = pluginDeviceOf(ox, o);
+                  const int ps = ox.path(plugin, { "PluginDesc", "Vst3PluginInfo", "Preset", "Vst3Preset", "ProcessorState" });
                   const QString tunings = slotsText(t.slotCents);
+                  bool stateReplaced = false;
                   if (w && w->slotTunings != tunings) {
-                        const int ps = ox.path(plugin, { "PluginDesc", "Vst3PluginInfo", "Preset", "Vst3Preset", "ProcessorState" });
                         if (ps >= 0 && t.hasPlugin && !t.plugin.component.isEmpty()) {
                               edits.push_back({ ox.at(ps).start, ox.at(ps).end, hexElement("ProcessorState", t.plugin.component,
                                                                                            ox.indent(ps), nl) });
+                              stateReplaced = true;
                               what << QObject::tr("Kontakt's state (its slots' tunings changed: %1; settings changed in Kontakt's "
                                                   "window there are reset)").arg(tunings.isEmpty() ? QObject::tr("one slot") : tunings);
                               }
@@ -1245,26 +1267,78 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                               rep.skipped << QObject::tr("%1: its slots' tunings changed (%2), but no Kontakt state was made: create "
                                                          "the set again for it").arg(name, tunings);
                         }
+                  // Live's panel of the plug-in (Configure): its parameters by title, and its free slots (the writer's 128,
+                  // Live's own: no name, ParameterId -1)
+                  std::vector<int> listed, freeSlots;
+                  for (int p : ox.children(ox.child(plugin, "ParameterList"))) {
+                        if (!ox.is(p, "PluginFloatParameter") && !ox.is(p, "PluginEnumParameter") && !ox.is(p, "PluginIntParameter"))
+                              continue;
+                        if (ox.childValue(p, "ParameterName").isEmpty() && ox.childValue(p, "ParameterId").toInt() < 0) {
+                              if (ox.is(p, "PluginFloatParameter"))
+                                    freeSlots.push_back(p);
+                              }
+                        else
+                              listed.push_back(p);
+                        }
+                  auto findParam = [&](const QString& title) {
+                        for (int p : listed)
+                              if (ox.childValue(p, "ParameterName") == title)
+                                    return p;
+                        return -1;
+                        };
+                  // a free slot of the panel given to a parameter (as Live's Configure lists one): its name, id and value
+                  size_t nextFree = 0;
+                  auto configure = [&](const QString& title, long id, double value) {
+                        if (nextFree >= freeSlots.size())
+                              return false;
+                        const int p = freeSlots[nextFree++];
+                        int a = 0, b = 0;
+                        auto setAttr = [&](int e, const QByteArray& v) {
+                              if (e >= 0 && ox.attrRange(e, "Value", &a, &b))
+                                    edits.push_back({ a, b, v });
+                              };
+                        setAttr(ox.child(p, "ParameterName"), LiveSetWriter::Writer::esc(title));
+                        setAttr(ox.child(p, "ParameterId"), QByteArray::number(qlonglong(id)));
+                        setAttr(ox.child(p, "VisualIndex"), ox.rawAttr(p, "Id"));
+                        setAttr(ox.path(p, { "ParameterValue", "Manual" }), LiveSetWriter::Writer::num(float(value)).toUtf8());
+                        setAttr(ox.path(p, { "LastUserRange", "First" }), "0");
+                        setAttr(ox.path(p, { "LastUserRange", "Last" }), "1");
+                        return true;
+                        };
+                  auto same = [](double a, double b) { return std::fabs(a - b) < 0.5e-4; };
                   const int envs = ox.path(o, { "AutomationEnvelopes", "Envelopes" });
                   int envCount = int(ox.children(envs, "AutomationEnvelope").size());
+                  auto envelopeOf = [&](int target) {
+                        const QByteArray id = ox.rawAttr(target, "Id");
+                        for (int e : ox.children(envs, "AutomationEnvelope"))
+                              if (ox.rawAttr(ox.path(e, { "EnvelopeTarget", "PointeeId" }), "Value") == id)
+                                    return e;
+                        return -1;
+                        };
                   QByteArray inserted;
+                  QStringList configured;
                   for (const LiveSetWriter::ParameterAutomation& a : t.automation) {
                         if (a.points.empty())
                               continue;
-                        int target = -1;
-                        for (int p : ox.children(ox.child(plugin, "ParameterList"), "PluginFloatParameter"))
-                              if (ox.childValue(p, "ParameterName") == a.name)
-                                    target = ox.path(p, { "ParameterValue", "AutomationTarget" });
+                        if (a.keepLive) {
+                              rep.skipped << QObject::tr("%1: %2 changed in Live and in MuseScore (not chosen): Live's left as it is")
+                                             .arg(name, a.name);
+                              continue;
+                              }
+                        int p = findParam(a.name);
+                        if (p < 0 && a.id >= 0 && configure(a.name, a.id, a.points.front().second)) {
+                              // (the slot's AutomationTarget is the target: found in the slot just configured)
+                              p = freeSlots[nextFree - 1];
+                              configured << a.name;
+                              }
+                        const int target = p >= 0 ? ox.path(p, { "ParameterValue", "AutomationTarget" }) : -1;
                         if (target < 0) {
                               rep.skipped << QObject::tr("%1: Kontakt doesn't list %2 in Live's panel (Configure): its automation "
                                                          "not written").arg(name, a.name);
                               continue;
                               }
                         const QByteArray id = ox.rawAttr(target, "Id");
-                        int env = -1;
-                        for (int e : ox.children(envs, "AutomationEnvelope"))
-                              if (ox.rawAttr(ox.path(e, { "EnvelopeTarget", "PointeeId" }), "Value") == id)
-                                    env = e;
+                        const int env = envelopeOf(target);
                         LiveSetWriter::Writer ew;
                         LiveSetWriter::automationEvents(ew, a.points);
                         const Xml want(ew.data());
@@ -1287,6 +1361,66 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                               inserted += ind + withNl(placed(nw.data(), ind, nl), nl) + nl;
                               }
                         what << QObject::tr("%1 automation").arg(a.name);
+                        }
+                  // the parameters held at one value: their Manual value, no envelope (a lane that changed before and is
+                  // constant now loses MuseScore's envelope); one Live's panel doesn't list gets a free slot when its id is
+                  // known
+                  QStringList values;
+                  for (const LiveSetWriter::Constant& c : t.constants) {
+                        int p = findParam(c.name);
+                        if (c.keepLive) {
+                              if (p >= 0)
+                                    rep.skipped << QObject::tr("%1: %2 changed in Live and in MuseScore (not chosen): Live's left "
+                                                               "as it is").arg(name, c.name);
+                              continue;
+                              }
+                        if (p < 0) {
+                              if (c.unautomated)
+                                    continue;
+                              if (c.id >= 0 && configure(c.name, c.id, c.value)) {
+                                    configured << c.name;
+                                    values << QString("%1 %2").arg(c.name).arg(c.value, 0, 'f', 4);
+                                    }
+                              else
+                                    rep.skipped << QObject::tr("%1: Kontakt doesn't list %2 in Live's panel (Configure)%3: its value "
+                                                               "%4 is in Kontakt's state only").arg(name, c.name)
+                                                   .arg(c.id < 0 ? QObject::tr(" and its id isn't known") : QObject::tr(", no free slot"))
+                                                   .arg(c.value, 0, 'f', 4);
+                              continue;
+                              }
+                        const int target = ox.path(p, { "ParameterValue", "AutomationTarget" });
+                        const int env = target >= 0 ? envelopeOf(target) : -1;
+                        const int manual = ox.path(p, { "ParameterValue", "Manual" });
+                        const double now = manual >= 0 ? ox.value(manual).toDouble() : -1;
+                        if (c.unautomated) {
+                              // (only over a value MuseScore itself wrote there: never over Live's)
+                              auto rec = w ? w->params.find(c.name) : std::map<QString, double>::const_iterator();
+                              if (env >= 0 || !w || rec == w->params.end() || !same(rec->second, now))
+                                    continue;
+                              }
+                        if (env >= 0) {
+                              int from = ox.lineStart(env);
+                              int to = ox.at(env).end;
+                              if (ox.data().mid(to, nl.size()) == nl)
+                                    to += nl.size();
+                              edits.push_back({ from, to, QByteArray() });
+                              what << QObject::tr("%1 automation removed (one value now)").arg(c.name);
+                              }
+                        int a = 0, b = 0;
+                        if (manual >= 0 && !same(now, c.value) && ox.attrRange(manual, "Value", &a, &b)) {
+                              edits.push_back({ a, b, LiveSetWriter::Writer::num(float(c.value)).toUtf8() });
+                              values << QString("%1 %2").arg(c.name).arg(c.value, 0, 'f', 4);
+                              }
+                        }
+                  if (!configured.isEmpty())
+                        what << QObject::tr("Live's panel lists %1 now").arg(configured.join(", "));
+                  if (!values.isEmpty())
+                        what << QObject::tr("values %1").arg(values.join(", "));
+                  // the set's own Kontakt state with those values (SoundLibraryHost::stateWithParameters: Live's panel and
+                  // the state agree, whether Live sets the panel's values again when it opens the set or not)
+                  if (t.parameterState && !stateReplaced && ps >= 0 && !t.plugin.component.isEmpty()) {
+                        edits.push_back({ ox.at(ps).start, ox.at(ps).end, hexElement("ProcessorState", t.plugin.component, ox.indent(ps), nl) });
+                        what << QObject::tr("Kontakt's state with them (the set's own, its other settings kept)");
                         }
                   if (!inserted.isEmpty() && envs >= 0) {
                         if (ox.at(envs).closeStart == ox.at(envs).openEnd)           // <Envelopes />

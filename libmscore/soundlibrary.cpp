@@ -511,7 +511,8 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
 // <Controller id="vibrato" name="Vibrato" cc="21" default="64">
 //   <Text match="senza vib\.?" value="0"/>
 // </Controller>
-// or param="<the plug-in parameter's title>" instead of cc; the reader is on the element
+// or param="<the plug-in parameter's title>" instead of cc (patchDefault="0-1": its measured own value, Controller::
+// patchDefault); the reader is on the element
 static bool readController(QXmlStreamReader& r, Controller& c)
       {
       const QXmlStreamAttributes a = r.attributes();
@@ -527,6 +528,11 @@ static bool readController(QXmlStreamReader& r, Controller& c)
             bool okd = false;
             c.defaultValue = a.value("default").toInt(&okd);
             ok = ok && okd && c.defaultValue >= 0 && c.defaultValue <= 127;
+            }
+      if (a.hasAttribute("patchDefault")) {
+            bool okp = false;
+            c.patchDefault = a.value("patchDefault").toDouble(&okp);
+            ok = ok && okp && c.patchDefault >= 0 && c.patchDefault <= 1 && !c.param.isEmpty();
             }
       if (!ok || c.id.isEmpty() || (c.cc < 0) == c.param.isEmpty() || c.cc > 119)
             return false;

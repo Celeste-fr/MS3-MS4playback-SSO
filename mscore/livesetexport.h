@@ -20,6 +20,8 @@
 //---------------------------------------------------------
 
 #include <functional>
+#include <set>
+#include <utility>
 
 #include <QString>
 #include <QStringList>
@@ -32,6 +34,7 @@ class QWidget;
 namespace Ms {
 
 class MasterScore;
+class Part;
 namespace LiveSet {
 struct Set;
 }
@@ -82,9 +85,11 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing);
 
 // after Create Live Set or Update Live Set wrote a plain set: in the score (liveTracks, one undoable step with the lanes)
 // what it wrote (written: the XML MuseScore made for spec; file: the set as written, read back), the lanes Live had
-// MuseScore's again; keepOthers: the record of tracks not in spec kept (Update). How many lanes came back from Live
+// MuseScore's again; keepOthers: the record of tracks not in spec kept (Update). undecided: lanes (part, target) changed in
+// Live and in MuseScore and not chosen (Update left Live's value in the set): not marked as agreeing with the set, so the
+// next read-back asks again. How many lanes came back from Live
 int recordWritten(MasterScore* score, const LiveSetWriter::Spec& spec, const QByteArray& written, const LiveSet::Set& file,
-                  bool keepOthers);
+                  bool keepOthers, const std::set<std::pair<const Part*, QString>>* undecided = nullptr);
 
 //---------------------------------------------------------
 //   Update Live Set (libmscore/livesetupdate.h; LIVE.md › Update Live Set): a plain set Create Live Set wrote, saved

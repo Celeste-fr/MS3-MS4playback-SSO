@@ -1,0 +1,1047 @@
+{
+ "source": "background extract --extract-patches mapped, MuseScore 2496da4 (CI run 433), Kontakt 8 + SSO on the Windows VM, MuseScore's setups at library defaults, 2026-10-15",
+ "patches": {
+  "Alto Flute": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Alto Flute - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bass Clarinet": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bass Clarinet - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bass Flute": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bass Flute - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bass Trombone Solo": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bass Trombones a2": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bass Trombones a2 - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Basses": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Basses - Performance": {
+   "mute": 0.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Bassoon Solo": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bassoon Solo - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bassoons a2": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Bassoons a2 - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Cimbassi a2 - Long Alt": {
+   "release": 0.4961,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Horn Solo - Short Staccatissimo": {
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Horns a2 - Bells up Staccatissimo": {
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Horns a2 - Short Staccatissimo": {
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Horns a6 - Fanfare": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Trombones a6 - Fanfare": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Trumpet Solo - Fall Muted": {
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Trumpet Solo - Rip Muted": {
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Trumpets a2 - Fanfare": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Brass - Trumpets a6 - Fanfare": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Celeste": {
+   "mic1": 0.9998,
+   "mic2": 0.9998,
+   "mic3": 0.9998
+  },
+  "Celli": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Celli - Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Celli - Sul C - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Cimbassi a2": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Cimbasso Solo": {
+   "release": 0.4882,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Clarinet Solo": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Clarinet Solo - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Clarinets a2": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Clarinets a2 - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "ContraBass Clarinet - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "ContraBassoon - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Contrabass Clarinet": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Contrabass Trombone": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Contrabass Tuba": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Contrabassoon": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Cor Anglais": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Cor Anglais - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Crotales": {
+   "mic1": 0.9998,
+   "mic2": 0.9998,
+   "mic3": 0.9998
+  },
+  "Desk Bells": {
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Drums - High": {
+   "releases": 1.0,
+   "variation": 1.0,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Drums - Low": {
+   "releases": 1.0,
+   "variation": 1.0,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Flute Solo": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Flute Solo - Total Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.498,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Flutes a2": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Flutes a2 - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Glockenspiel": {
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Grand Piano": {
+   "pedalvol": 1.0,
+   "pedaldyn": 0.5276,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Harp": {
+   "releases": 1.0,
+   "harppedal1": 0.5,
+   "harppedal2": 0.5,
+   "harppedal3": 0.5,
+   "harppedal4": 0.5,
+   "harppedal5": 0.5,
+   "harppedal6": 0.5,
+   "harppedal7": 0.5,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Horn Solo": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Horn Solo - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Horns a2": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Horns a2 - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Horns a4 - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Horns a6": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Horns a6 - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Marimba": {
+   "mic1": 0.9998,
+   "mic2": 0.9998,
+   "mic3": 0.9998
+  },
+  "Motif Horns a4": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Motif Trombones a5": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Motif Trumpets a3": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Oboe Solo": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Oboe Solo - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Oboes a2": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Oboes a2 - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Other - Toys": {
+   "releases": 1.0,
+   "variation": 1.0,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Percussion - Drums - High - Bongos": {},
+  "Percussion - Drums - High - Conga 1": {},
+  "Percussion - Drums - High - Conga 2": {},
+  "Percussion - Drums - High - Rototoms": {},
+  "Percussion - Drums - High - Snare 1": {},
+  "Percussion - Drums - High - Snare 2": {},
+  "Percussion - Drums - High - Snare 3": {},
+  "Percussion - Drums - High - Timbales": {},
+  "Percussion - Drums - Low - Bass Drum": {},
+  "Percussion - Drums - Low - Field Drum": {},
+  "Percussion - Drums - Low - Gong Drum": {},
+  "Percussion - Drums - Low - Tom Ensemble": {},
+  "Percussion - Drums - Low - Toms": {},
+  "Percussion - Other - Toys - Agogo": {},
+  "Percussion - Other - Toys - Cabasa": {},
+  "Percussion - Other - Toys - Castanets": {},
+  "Percussion - Other - Toys - Cowbells": {},
+  "Percussion - Other - Toys - Gankogui": {},
+  "Percussion - Other - Toys - Guiro": {},
+  "Percussion - Other - Toys - Jawbone": {},
+  "Percussion - Other - Toys - Ratchet": {},
+  "Percussion - Other - Toys - Shakers": {},
+  "Percussion - Other - Toys - Ships Bell": {},
+  "Percussion - Other - Toys - Sleighbells": {},
+  "Percussion - Other - Toys - Tambourines": {},
+  "Percussion - Unpitched - Metal - Anvil": {},
+  "Percussion - Unpitched - Metal - Cymbal Hi": {},
+  "Percussion - Unpitched - Metal - Cymbal Lo": {},
+  "Percussion - Unpitched - Metal - Cymbal Med": {},
+  "Percussion - Unpitched - Metal - Mark Tree": {},
+  "Percussion - Unpitched - Metal - Mini Anvil": {},
+  "Percussion - Unpitched - Metal - Piatti": {},
+  "Percussion - Unpitched - Metal - Rain Sheet": {},
+  "Percussion - Unpitched - Metal - Rivet Cymbal": {},
+  "Percussion - Unpitched - Metal - Tam Tam": {},
+  "Percussion - Unpitched - Metal - Trash Metals": {},
+  "Percussion - Unpitched - Metal - Triangle 1": {},
+  "Percussion - Unpitched - Metal - Triangle 2": {},
+  "Percussion - Unpitched - Metal - Wind Gong": {},
+  "Percussion - Unpitched - Wood - Claves": {},
+  "Percussion - Unpitched - Wood - Temple Blocks": {},
+  "Percussion - Unpitched - Wood - Woodblocks": {},
+  "Piccolo": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Piccolo Flute - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Solo Cello": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Solo Cello - Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "bowemphasis": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Solo Viola": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Solo Viola - Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "bowemphasis": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Solo Violin - Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "bowemphasis": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Solo Violin 1": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Solo Violin 2": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Solo Violin 2 - Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "bowemphasis": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Strings - Celli - Long Sul C": {
+   "release": 0.4961,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Strings - Violins 1 - Long Sul G": {
+   "release": 0.4961,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Strings - Violins 1 - Long Sul Pont Distorted": {
+   "release": 0.4961,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Strings - Violins 2 - Long Sul G": {
+   "release": 0.4961,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Strings Ensemble": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Tenor Trombone Solo": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Tenor Trombone Solo - Total Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "micmix": 0.498,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Tenor Trombones a2": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Tenor Trombones a2 - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Timpani": {
+   "variation": 1.0,
+   "releases": 1.0,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Trombones a5 - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Trombones a6": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Trombones a6 - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Trumpet Solo": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Trumpet Solo - Total Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "micmix": 0.498,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Trumpets a2": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Trumpets a2 - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Trumpets a3 - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Trumpets a6": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Trumpets a6 - Performance": {
+   "vibrato": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Tuba Solo": {
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "variation": 1.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Tuba Solo - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0
+  },
+  "Tubular Bells": {
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Unpitched - Metal": {
+   "releases": 1.0,
+   "variation": 1.0,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Unpitched - Wood": {
+   "releases": 1.0,
+   "variation": 1.0,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Vibraphone": {
+   "releases": 1.0,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  },
+  "Violas": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Violas - Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Violas - Sul C - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Violins 1": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Violins 1 - Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Violins 1 - Sul G - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Violins 2": {
+   "vibrato": 1.0,
+   "release": 0.4961,
+   "tightness": 0.5039,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Violins 2 - Performance": {
+   "vibrato": 1.0,
+   "mute": 0.0,
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Violins 2 - Sul G - Performance": {
+   "micmix": 0.5,
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0,
+   "mic4": 1.0,
+   "mic5": 1.0
+  },
+  "Xylophone": {
+   "mic1": 1.0,
+   "mic2": 1.0,
+   "mic3": 1.0
+  }
+ },
+ "missing": {}
+}

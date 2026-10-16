@@ -24,6 +24,7 @@
 #include "libmscore/liveclips.h"
 #include "libmscore/liveset.h"
 #include "libmscore/livesetwriter.h"
+#include "libmscore/livetracks.h"
 #include "libmscore/midisync.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
@@ -88,6 +89,7 @@ class TestLiveIntegration : public QObject, public MTest
       void liveProjectPath();
       void liveSetRead();
       void liveSetCurve();
+      void liveSetKnobs();
       void liveSetLanes();
       void liveLanesPlayback();
       void clipsTimeline();
@@ -408,6 +410,15 @@ void TestLiveIntegration::liveSetRead()
       for (const LiveSet::Point& p : clip.points)
             pts << QString("%1:%2").arg(p.beat).arg(p.value);
       QCOMPARE(pts, QStringList({ "8:0", "12:127", "12:0", "16:127" }));
+      // Live's panel of Kontakt: the named parameters (not the empty slot), their Manual values, both automated
+      QCOMPARE(int(t.parameters.size()), 2);
+      QCOMPARE(t.parameters[0].name, QString("Vibrato"));
+      QCOMPARE(t.parameters[0].id, 1);
+      QCOMPARE(t.parameters[0].manual, 0.25);
+      QVERIFY(t.parameters[0].automated);
+      QCOMPARE(t.parameters[1].name, QString("Unknown Knob"));
+      QVERIFY(t.parameters[1].automated);
+      QVERIFY(LiveTracks::knobs(t).empty());
 
       const LiveSet::Track& f = set.tracks[1];
       QCOMPARE(f.name, QString("Flute"));
@@ -423,6 +434,98 @@ void TestLiveIntegration::liveSetRead()
 //    a curved segment as straight pieces: from a to b, inside their box, each within one MIDI step of the curve
 //    (Automation::flattenCurve: as few as that allows); the diagonal is one line
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   liveSetKnobs
+//    a set's plug-in parameters in Live's panel (LiveSet::Parameter, the owner 2026-10-15: knobs turned in Live come back):
+//    their Manual values, whether an arrangement envelope automates them (a clip envelope doesn't), the empty slots left
+//    out; the knobs (unautomated ones) as LiveTracks::knobs gives them; their hash; the record's JSON; a lane from a knob
+//    kept by Automation::merge when the parameter left Live's panel (an envelope's lane, unedited, goes with its envelope)
+//---------------------------------------------------------
+
+void TestLiveIntegration::liveSetKnobs()
+      {
+      auto param = [](int slot, const char* name, int id, const char* manual, int target) {
+            return QString("<PluginFloatParameter Id=\"%1\"><ParameterName Value=\"%2\" /><ParameterId Value=\"%3\" />"
+                           "<ParameterValue><LomId Value=\"0\" /><Manual Value=\"%4\" /><AutomationTarget Id=\"%5\">"
+                           "<LockEnvelope Value=\"0\" /></AutomationTarget></ParameterValue></PluginFloatParameter>")
+                   .arg(slot).arg(name).arg(id).arg(manual).arg(target);
+            };
+      const QString xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Ableton Creator=\"Ableton Live 12.4.6\"><LiveSet><Tracks>"
+                          "<MidiTrack Id=\"1\"><Name><EffectiveName Value=\"Violins 1\" /><UserName Value=\"\" />"
+                          "<Annotation Value=\"MuseScore: Strings / Violins 1 / Violins 1\" /></Name>"
+                          "<AutomationEnvelopes><Envelopes><AutomationEnvelope Id=\"0\"><EnvelopeTarget><PointeeId Value=\"501\" />"
+                          "</EnvelopeTarget><Automation><Events><FloatEvent Id=\"1\" Time=\"-63072000\" Value=\"0.3\" />"
+                          "<FloatEvent Id=\"2\" Time=\"4\" Value=\"0.9\" /></Events></Automation></AutomationEnvelope></Envelopes>"
+                          "</AutomationEnvelopes><DeviceChain><DeviceChain><Devices><PluginDevice Id=\"0\"><PluginDesc>"
+                          "<Vst3PluginInfo Id=\"0\"><Name Value=\"Kontakt 8\" /></Vst3PluginInfo></PluginDesc><ParameterList>"
+                          + param(0, "Vibrato", 12, "0.3", 501) + param(1, "Release", 13, "0.7000000477", 502)
+                          + param(2, "Mic 2 level", 21, "1", 503) + param(3, "", -1, "0.1234567687", 504)
+                          + "</ParameterList></PluginDevice></Devices></DeviceChain></DeviceChain></MidiTrack>"
+                            "</Tracks></LiveSet></Ableton>";
+      const LiveSet::Set set = LiveSet::parse(xml.toUtf8());
+      QVERIFY2(set.error.isEmpty(), qPrintable(set.error));
+      QCOMPARE(int(set.tracks.size()), 1);
+      const LiveSet::Track& t = set.tracks[0];
+      QCOMPARE(int(t.parameters.size()), 3);
+      QCOMPARE(t.parameters[0].name, QString("Vibrato"));
+      QVERIFY(t.parameters[0].automated);
+      QCOMPARE(t.parameters[1].name, QString("Release"));
+      QCOMPARE(t.parameters[1].id, 13);
+      QVERIFY(!t.parameters[1].automated);
+      QVERIFY(std::fabs(t.parameters[1].manual - 0.7) < 1e-6);
+      QCOMPARE(t.parameters[2].device, QString("Kontakt 8"));
+      const std::map<QString, double> k = LiveTracks::knobs(t);
+      QCOMPARE(int(k.size()), 2);
+      QVERIFY(k.count("Release") && k.count("Mic 2 level") && !k.count("Vibrato"));
+      // the hash: to Live's float precision (1e-4), clamped
+      QCOMPARE(LiveTracks::knobHash(0.7000000477), LiveTracks::knobHash(0.7));
+      QVERIFY(LiveTracks::knobHash(0.7) != LiveTracks::knobHash(0.7002));
+      QCOMPARE(LiveTracks::knobHash(1.2), LiveTracks::knobHash(1.0));
+      QVERIFY(LiveTracks::isKnobHash(LiveTracks::knobHash(0.5)));
+      QVERIFY(!LiveTracks::isKnobHash("abc"));
+      // the record: Written::params through the JSON
+      LiveTracks::Data d;
+      d.written["MuseScore: Strings / Violins 1 / Violins 1"].kind = "kontakt";
+      d.written["MuseScore: Strings / Violins 1 / Violins 1"].params = k;
+      const LiveTracks::Data back = LiveTracks::fromJson(LiveTracks::toJson(d));
+      QVERIFY(std::fabs(back.written.at("MuseScore: Strings / Violins 1 / Violins 1").params.at("Release") - 0.7) < 1e-6);
+      QCOMPARE(back.written.at("MuseScore: Strings / Violins 1 / Violins 1").params.at("Mic 2 level"), 1.0);
+
+      // merge: a lane from a knob (unedited) whose parameter left Live's panel stays, as MuseScore's own; an envelope's
+      // lane (unedited) whose envelope Live deleted goes
+      Automation::Lane knob;
+      knob.target = "release";
+      knob.points.push_back(Automation::Point(0, 0.7, Automation::Curve::STEP));
+      knob.extra["liveHash"] = LiveTracks::knobHash(0.7);
+      knob.extra["pointsHash"] = Automation::pointsHash(knob.points);
+      Automation::Lane env;
+      env.target = "vibrato";
+      env.points = { Automation::Point(0, 0.3, Automation::Curve::STEP), Automation::Point(1920, 0.9, Automation::Curve::STEP) };
+      env.extra["liveHash"] = "e123";
+      env.extra["pointsHash"] = Automation::pointsHash(env.points);
+      QVERIFY(knob.playedByLive() && env.playedByLive());
+      const Part* part = reinterpret_cast<const Part*>(&set);       // (a key only)
+      const std::map<const Part*, Automation::PartLanes> mine { { part, { knob, env } } };
+      const std::map<const Part*, Automation::PartLanes> merged = Automation::merge(mine, {});
+      QCOMPARE(int(merged.at(part).size()), 1);
+      QCOMPARE(merged.at(part)[0].target, QString("release"));
+      QVERIFY(!merged.at(part)[0].extra.contains("liveHash"));
+      QCOMPARE(merged.at(part)[0].flatValue(), 0.7);
+      // a knob turned in Live (another hash), the lane unedited here: Live's taken; edited here too: a conflict
+      Automation::Lane turned = knob;
+      turned.points[0].value = 0.2;
+      turned.extra["liveHash"] = LiveTracks::knobHash(0.2);
+      turned.extra["pointsHash"] = Automation::pointsHash(turned.points);
+      const std::map<const Part*, Automation::PartLanes> live { { part, { turned } } };
+      QVERIFY(Automation::conflicts(mine, live).empty());
+      QCOMPARE(Automation::merge(mine, live).at(part)[0].flatValue(), 0.2);
+      Automation::Lane edited = knob;
+      edited.points[0].value = 0.5;
+      const std::map<const Part*, Automation::PartLanes> mineEdited { { part, { edited } } };
+      QCOMPARE(int(Automation::conflicts(mineEdited, live).size()), 1);
+      QCOMPARE(Automation::merge(mineEdited, live).at(part)[0].flatValue(), 0.5);      // (not chosen: MuseScore's kept)
+      }
 
 void TestLiveIntegration::liveSetCurve()
       {

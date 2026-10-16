@@ -123,6 +123,22 @@ constexpr int PITCH_BEND_ENVELOPE = -1;
 struct ParameterAutomation {
       QString name;
       std::vector<std::pair<double, double>> points;
+      long id { -1 };                     // (Update Live Set) the plug-in's id of it, when known: a parameter Live's panel
+                                          // doesn't list yet gets a free slot of the panel
+      bool keepLive { false };            // (Update Live Set) changed in Live and in MuseScore, not chosen: Live's left
+      };
+
+// (Update Live Set, livesetupdate.h; not written by Create Live Set, whose Kontakt state and Plugin::parameters carry the
+// same) a plug-in parameter MuseScore holds at one value on a Kontakt track: the owner's option B (2026-10-15), a lane
+// that never changes is the Live parameter's plain value (its Manual value in Live's panel), not an automation envelope
+struct Constant {
+      QString name;                       // the parameter's title
+      long id { -1 };                     // the plug-in's id of it, when known
+      double value { 0 };                 // 0-1
+      // not a lane: the value the patch plays unautomated (the map's patchDefault, the setup's own); written only over a
+      // value MuseScore itself wrote there (the record: livetracks.h Written::params), never over Live's
+      bool unautomated { false };
+      bool keepLive { false };            // changed in Live and in MuseScore, not chosen (no dialog): Live's left as it is
       };
 
 // an envelope of the track's own mixer as Live keeps it (the owner's, read back from a saved set: livetracks.h): its
@@ -173,6 +189,9 @@ struct Track {
                                           // by the export); empty: one slot, as made
       std::vector<Clip> clips;            // arrangement clips, by start, not overlapping
       std::vector<ParameterAutomation> automation;
+      std::vector<Constant> constants;    // (not written: Update Live Set) the Kontakt's parameters held at one value
+      bool parameterState { false };      // (not written: Update Live Set) plugin.component is the set's own Kontakt state
+                                          // with the constants set (SoundLibraryHost::stateWithParameters): it replaces it
       std::vector<MixerAutomation> mixerAutomation;   // (a group's too)
       QString annotation;                 // the track's Info text (Name/Annotation): the plain set's track key
       double delayMs { 0 };               // Track Delay, ms (trackdelays.h; the plain set's tracks)

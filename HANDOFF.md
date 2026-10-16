@@ -5,6 +5,29 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Flat lanes in Live, knobs read back, shipped controller defaults (2026-10-15, branch `lanes-b-readback`, not merged)
+
+The owner's three decisions on https://claude.ai/artifact/4hxBZ3x3yzQUxC94EkGJYD (2026-10-15):
+- **Option B**: Create Live Set and Update Live Set write a flat plug-in-parameter lane as the Kontakt panel parameter's
+  plain value (a Configure slot with its Manual value, no envelope); a changing lane stays automation; Update removes an
+  envelope whose lane became flat and also writes the constants into the set's own Kontakt state (its other settings
+  kept), since it is unknown whether Live applies a Manual value over the state at load. A flat MIDI-CC lane has no Live
+  parameter: still a one-value envelope in the Controllers clip.
+- **Knobs read back** ("yea sure"): a panel parameter without automation whose saved value differs from what MuseScore
+  wrote (or, never written, from the unautomated value) becomes a flat lane (one undo step, report line); both changed: the
+  merge dialog per lane; a conflict not chosen (no GUI, `--update-live-set`) leaves Live's value and asks again next time;
+  Update never writes over a turned knob. Kontakt's own window (opaque state) is not read. Main Kontakt only: an extra
+  patch's turned knob is reported.
+- **Controller defaults shipped**: `patchDefault` on every SSO `<Controller param>` (767), measured on the Windows VM
+  (background extract `--extract-patches mapped`, build 2496da4 = run 433, Kontakt 8 + SSO, MuseScore's setups) ->
+  `tools/soundlibraries/sso_controller_defaults.json` (`controller_defaults_from_extract.py`) -> `gen_spitfire_sso.py`.
+  Never-loaded patches' dashed lines show it; a loaded setup differing is logged in `load times.log`. Note: SSO reports
+  every Mic N level at 1.0 (Celeste / Crotales / Marimba 0.9998) while `micDefault` says the Tree alone plays: the mics'
+  on / off lie elsewhere in SSO's script; mic compensation still reads `micDefault`.
+- Tested on Linux with the test synth (`tst_liveequivalence` updateLiveSetKnobs / controllerPatchDefault,
+  `tst_liveintegration` liveSetKnobs, `tst_soundlibrary` controllerPatchDefaults). **Untried in real Live**: whether
+  Live applies the Manual value, fills a free Configure slot as written, and keeps it on save.
+
 ## Controllers only by automation (2026-10-15, branch `automation-only-controllers`, not merged)
 
 The owner, 2026-10-15, showing the Sound Library window and a Live lane's red dashed line: "remove this entirely, we'll
@@ -28,7 +51,7 @@ window, titled with the library's name alone.
   migrates to a flat lane with identical dumps and audit. **Untried with Kontakt / SSO and in Live**: the dashed value
   of a parameter before its patch ever loaded on that computer is unknown (no line, header "–"); Update Live Set keeps
   Kontakt's state, so a flat lane's new value doesn't reach an updated set (as Controllers values didn't); a Kontakt
-  parameter turned in Live without automation isn't read back.
+  parameter turned in Live without automation isn't read back. (All three addressed by `lanes-b-readback` above.)
 
 ## Mic compensation (2026-10-15, branch `mic-compensation`, merged into integrate-1012)
 

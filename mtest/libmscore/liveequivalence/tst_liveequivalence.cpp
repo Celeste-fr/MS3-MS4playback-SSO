@@ -16,6 +16,7 @@
 //   tst_palette does: tst_soundlibrary's link doesn't take mscoreapp's objects (both have stringutils' moc)
 //---------------------------------------------------------
 
+#include <algorithm>
 #include <cmath>
 #include <set>
 #include <tuple>
@@ -63,6 +64,7 @@
 #include "libmscore/trackdelays.h"
 #include "libmscore/contextlevel.h"
 #include "mscore/liveequivalence.h"
+#include "mscore/liveintegration.h"
 #include "mscore/livesetexport.h"
 #include "mscore/preferences.h"
 #include "mscore/soundlibraryhost.h"
@@ -152,6 +154,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveMicCompensation();
       void liveTracksJson();
       void updateLiveSet();
+      void updateLiveSetKnobs();
+      void controllerPatchDefault();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -4137,6 +4141,358 @@ void TestLiveEquivalence::liveTracksJson()
       QVERIFY(!rs.envelopes[0].events[0].curved);
       QCOMPARE(r.written.at("MuseScore: Strings / Violin / Violin").patch, 1);
       QCOMPARE(r.written.at("MuseScore: Strings / Violin / Violin").hashes.at("cc1"), QString("abc,def"));
+      }
+
+//---------------------------------------------------------
+//   updateLiveSetKnobs
+//    the owner's three decisions of 2026-10-15 for plug-in parameters, the test synth as Kontakt (its "Tone", "Macro 1",
+//    "Macro 2"), the set edited as Live saves a turned knob (the parameter's Manual value):
+//      option B: a lane that never changes is the parameter's plain value in Live's panel, no envelope (Create Live Set
+//        and Update); a lane that changes is automation; one that changed and is constant now loses its envelope;
+//      knobs read back: a value turned in Live without automation becomes the part's lane (one value from the start),
+//        Update keeps it (no edit); changed in MuseScore since, MuseScore's is written (panel and Kontakt's state);
+//        changed in both and not chosen (no dialog): Live's stays, asked again next time; a parameter Live's panel
+//        doesn't list gets a free slot; an unautomated parameter MuseScore had written goes back to the patch's own value,
+//        and turned in Live then, it becomes a lane
+//---------------------------------------------------------
+
+static const char* const KNOB_MAP =
+   "<SoundLibrary name='LiveK'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+   "<Instrument name='Violin' ids='violin'>"
+   "<Articulation name='Long' value='1' techniques='long legato' onset='60'/>"
+   "<Articulation name='Staccato' value='40' techniques='short' onset='20'/>"
+   "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo' onset='10'/>"
+   "<Controller id='tone' name='Tone' param='Tone'/>"
+   "<Controller id='macro1' name='Macro 1' param='Macro 1'/>"
+   "<Controller id='macro2' name='Macro 2' param='Macro 2'/>"
+   "</Instrument>"
+   "<Instrument name='Piano' ids='piano'><Switch type='none'/><Articulation name='Long' value='1' techniques='long'/></Instrument>"
+   "</SoundLibrary>";
+
+// the Kontakt track's parameter in Live's panel (-1: not listed), its Manual value, whether an envelope automates it
+static int panelParam(const LiveSetUpdate::Xml& x, int track, const QString& title)
+      {
+      const int list = x.path(track, { "DeviceChain", "DeviceChain", "Devices", "PluginDevice", "ParameterList" });
+      for (int p : x.children(list))
+            if (x.childValue(p, "ParameterName") == title)
+                  return p;
+      return -1;
+      }
+static double panelValue(const LiveSetUpdate::Xml& x, int param)
+      {
+      return x.value(x.path(param, { "ParameterValue", "Manual" })).toDouble();
+      }
+static bool panelAutomated(const LiveSetUpdate::Xml& x, int track, int param)
+      {
+      const QByteArray id = x.rawAttr(x.path(param, { "ParameterValue", "AutomationTarget" }), "Id");
+      for (int e : x.children(x.path(track, { "AutomationEnvelopes", "Envelopes" }), "AutomationEnvelope"))
+            if (x.rawAttr(x.path(e, { "EnvelopeTarget", "PointeeId" }), "Value") == id)
+                  return true;
+      return false;
+      }
+
+void TestLiveEquivalence::updateLiveSetKnobs()
+      {
+      qputenv("MSTESTSYNTH_INIT_MS", "40");
+      LiveHost host(this, "", { "Violin", "Piano" }, KNOB_MAP);
+      QVERIFY(host.ok);
+      SoundLibraryHost::instance();         // (its hook: the setups' own values, the unautomated lanes')
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* violin = score->parts()[0];
+      auto lane = [](const QString& target, std::vector<std::pair<int, double>> points) {
+            Automation::Lane l;
+            l.target = target;
+            for (const auto& p : points)
+                  l.points.push_back(Automation::Point(p.first, p.second, Automation::Curve::STEP));
+            return l;
+            };
+      auto laneOf = [&](const QString& target) -> Automation::Lane {
+            for (const Automation::Lane& l : Automation::lanes(violin, Automation::read(score)))
+                  if (l.target == target)
+                        return l;
+            return Automation::Lane();
+            };
+      // an edit in MuseScore: the lane's points (its other keys kept, as the editor keeps them)
+      auto edit = [&](const QString& target, std::vector<std::pair<int, double>> points) {
+            std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+            Automation::PartLanes& pl = all[violin];
+            Automation::Lane n = lane(target, points);
+            bool found = false;
+            for (Automation::Lane& l : pl)
+                  if (l.target == target) {
+                        if (points.empty()) {
+                              l.points.clear();
+                              }
+                        else
+                              l.points = n.points;
+                        found = true;
+                        }
+            pl.erase(std::remove_if(pl.begin(), pl.end(), [](const Automation::Lane& l) { return l.points.empty(); }), pl.end());
+            if (!found && !points.empty())
+                  pl.push_back(n);
+            score->setMetaTag(Automation::metaTag, Automation::write(score, all));
+            };
+      // a knob turned in Live: the parameter's Manual value, as Live saves it
+      const QString path = host.dir.path() + "/Knobs Project/Knobs.als";
+      auto turn = [&](const QString& title, double v) {
+            const QByteArray xml = readSet(path);
+            const LiveSetUpdate::Xml x(xml);
+            const int p = panelParam(x, setTrack(x, "Violin", "MidiTrack"), title);
+            QVERIFY(p >= 0);
+            int a = 0, b = 0;
+            QVERIFY(x.attrRange(x.path(p, { "ParameterValue", "Manual" }), "Value", &a, &b));
+            QByteArray out;
+            QVERIFY(LiveSetUpdate::apply(xml, { { a, b, QByteArray::number(v, 'g', 10) } }, &out));
+            writeSet(path, out);
+            };
+      struct Seen { int param { -1 }; double value { -1 }; bool automated { false }; };
+      auto seen = [&](const QString& title) {
+            const QByteArray xml = readSet(path);
+            const LiveSetUpdate::Xml x(xml);
+            const int k = setTrack(x, "Violin", "MidiTrack");
+            Seen s;
+            s.param = panelParam(x, k, title);
+            if (s.param >= 0) {
+                  s.value = panelValue(x, s.param);
+                  s.automated = panelAutomated(x, k, s.param);
+                  }
+            return s;
+            };
+      // the set's Kontakt state's Tone, heard by the test synth
+      auto stateTone = [&]() {
+            const std::map<QString, QByteArray> states = LiveSetUpdate::kontaktStates(readSet(path));
+            auto s = states.find("MuseScore: Strings / Violin / Violin");
+            if (s == states.end())
+                  return -1.0;
+            QString error;
+            std::unique_ptr<Vst3Plugin> q = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+            if (!q || !q->setState(Vst3Plugin::joinState(q->name(), s->second, QByteArray())))
+                  return -1.0;
+            q->settle();
+            return q->parameter(unsigned(q->parameterId("Tone")));
+            };
+      auto update = [&](LiveIntegration::UpdateResult* res) {
+            QString error;
+            QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, res, &error), qPrintable(error));
+            QCOMPARE(LiveSetWriter::validate(readSet(path)), QString());
+            };
+
+      // the score: Tone at 26 throughout (constant), Macro 1 stepping 0 -> 1 at bar 2 (changing)
+      edit("tone", { { 0, 26 / 127.0 } });
+      edit("macro1", { { 0, 0.0 }, { 1920, 1.0 } });
+
+      //---------------------------------------------------------
+      //   Create Live Set: Tone a plain value, Macro 1 automation
+      //---------------------------------------------------------
+      {
+            LiveIntegration::LiveSetPlan plan;
+            QString error;
+            QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::PLAIN_LINKED, &plan, &error),
+                     qPrintable(error));
+            QDir().mkpath(QFileInfo(path).absolutePath());
+            QVERIFY2(LiveSetWriter::write(path, plan.spec, &error), qPrintable(error));
+            LiveIntegration::recordWritten(score, plan.spec, LiveSetWriter::xml(plan.spec), LiveSet::read(path), false);
+      }
+      {
+            const Seen tone = seen("Tone");
+            QVERIFY(tone.param >= 0 && !tone.automated);
+            QVERIFY2(std::fabs(tone.value - 26 / 127.0) < 1e-6, qPrintable(QString::number(tone.value)));
+            const Seen m1 = seen("Macro 1");
+            QVERIFY(m1.param >= 0 && m1.automated);
+            QVERIFY(std::fabs(stateTone() - 26 / 127.0) < 1e-6);
+            // the score's Tone lane: as the set has it (its knob), Macro 1 as its envelope
+            QVERIFY(LiveTracks::isKnobHash(laneOf("tone").extra.value("liveHash").toString()));
+            QVERIFY(laneOf("tone").playedByLive());
+            QVERIFY(!laneOf("macro1").extra.value("liveHash").toString().isEmpty());
+            QVERIFY(!LiveTracks::isKnobHash(laneOf("macro1").extra.value("liveHash").toString()));
+            const LiveTracks::Data d = LiveTracks::read(score);
+            QVERIFY(std::fabs(d.written.at("MuseScore: Strings / Violin / Violin").params.at("Tone") - 26 / 127.0) < 1e-6);
+      }
+      // an update right away: nothing to do
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(!res.written, qPrintable(res.text()));
+            QVERIFY(std::fabs(laneOf("tone").flatValue() - 26 / 127.0) < 1e-4);
+      }
+
+      //---------------------------------------------------------
+      //   a knob turned in Live: Tone 0.75, no automation -> the lane; Update leaves it
+      //---------------------------------------------------------
+      turn("Tone", 0.75);
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(std::fabs(laneOf("tone").flatValue() - 0.75) < 1e-4, qPrintable(res.text()));
+            QVERIFY2(res.importReport.contains("Tone at 0.7500"), qPrintable(res.importReport));
+            QVERIFY2(!res.written, qPrintable(res.text()));          // (the set has what the score has now)
+            QVERIFY(std::fabs(seen("Tone").value - 0.75) < 1e-6);
+            QVERIFY2(!res.report.skipped.join("\n").contains("Tone"), qPrintable(res.report.skipped.join("\n")));
+      }
+
+      //---------------------------------------------------------
+      //   changed in MuseScore: 0.3 written into Live's panel and Kontakt's state
+      //---------------------------------------------------------
+      edit("tone", { { 0, 0.3 } });
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(res.written, qPrintable(res.text()));
+            QVERIFY2(res.report.text().contains("Tone 0.3000"), qPrintable(res.text()));
+            QVERIFY2(res.report.text().contains("Kontakt's state with them"), qPrintable(res.text()));
+            QVERIFY(std::fabs(seen("Tone").value - 0.3) < 1e-6);
+            QVERIFY(!seen("Tone").automated);
+            QVERIFY2(std::fabs(stateTone() - 0.3) < 1e-6, qPrintable(QString::number(stateTone())));
+            QVERIFY(std::fabs(laneOf("tone").flatValue() - 0.3) < 1e-4);
+      }
+
+      //---------------------------------------------------------
+      //   changed in both, no dialog: Live's stays (reported), MuseScore's lane too; asked again next time
+      //---------------------------------------------------------
+      turn("Tone", 0.6);
+      edit("tone", { { 0, 0.2 } });
+      for (int round = 0; round < 2; ++round) {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(std::fabs(seen("Tone").value - 0.6) < 1e-6, qPrintable(res.text()));
+            QVERIFY2(std::fabs(laneOf("tone").flatValue() - 0.2) < 1e-4, qPrintable(res.text()));
+            QVERIFY2(res.report.skipped.join("\n").contains("Tone changed in Live and in MuseScore"), qPrintable(res.text()));
+            QVERIFY2(res.importReport.contains("changed in MuseScore and in Live"), qPrintable(res.importReport));
+            QVERIFY(std::fabs(stateTone() - 0.3) < 1e-6);                    // (the state as it was)
+            }
+      // they agree again: nothing asked, nothing skipped
+      edit("tone", { { 0, 0.6 } });
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(!res.report.skipped.join("\n").contains("Tone"), qPrintable(res.text()));
+            QVERIFY2(!res.importReport.contains("changed in MuseScore and in Live"), qPrintable(res.importReport));
+            QVERIFY(std::fabs(seen("Tone").value - 0.6) < 1e-6);
+      }
+
+      //---------------------------------------------------------
+      //   Macro 1 constant now (0.5): its envelope removed, its plain value; Macro 2 a lane Live's panel didn't list: a
+      //   free slot (the plug-in's id, as Live's Configure lists it)
+      //---------------------------------------------------------
+      QCOMPARE(seen("Macro 2").param, -1);
+      edit("macro1", { { 0, 0.5 } });
+      edit("macro2", { { 0, 0.4 } });
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(res.written, qPrintable(res.text()));
+            const Seen m1 = seen("Macro 1");
+            QVERIFY2(!m1.automated && std::fabs(m1.value - 0.5) < 1e-6, qPrintable(res.text()));
+            QVERIFY2(res.report.text().contains("Macro 1 automation removed"), qPrintable(res.text()));
+            const Seen m2 = seen("Macro 2");
+            QVERIFY2(m2.param >= 0 && !m2.automated && std::fabs(m2.value - 0.4) < 1e-6, qPrintable(res.text()));
+            const LiveSetUpdate::Xml x(readSet(path));
+            QCOMPARE(x.childValue(m2.param, "ParameterId"), QString("101"));          // (the test synth's Macro 2)
+            QVERIFY2(res.report.text().contains("Live's panel lists Macro 2"), qPrintable(res.text()));
+            const LiveSet::Set set = LiveSet::read(path);
+            QVERIFY(set.error.isEmpty());
+            bool listed = false;
+            for (const LiveSet::Track& t : set.tracks)
+                  for (const LiveSet::Parameter& p : t.parameters)
+                        listed = listed || (p.name == "Macro 2" && p.id == 101 && !p.automated && std::fabs(p.manual - 0.4) < 1e-6);
+            QVERIFY(listed);
+            // a second update: nothing
+            LiveIntegration::UpdateResult again;
+            update(&again);
+            QVERIFY2(!again.written, qPrintable(again.text()));
+      }
+
+      //---------------------------------------------------------
+      //   Macro 2's lane deleted in MuseScore: the patch's own value (the setup's, 0) over MuseScore's 0.4; then turned in
+      //   Live (0.9, no lane): read back as a lane
+      //---------------------------------------------------------
+      edit("macro2", {});
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(std::fabs(seen("Macro 2").value - 0.0) < 1e-6, qPrintable(res.text()));
+            QVERIFY(laneOf("macro2").points.empty());
+      }
+      turn("Macro 2", 0.9);
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(std::fabs(laneOf("macro2").flatValue() - 0.9) < 1e-4, qPrintable(res.text()));
+            QVERIFY(std::fabs(seen("Macro 2").value - 0.9) < 1e-6);
+      }
+      // a knob's parameter taken out of Live's panel: its lane stays MuseScore's (not removed with it)
+      {
+            const QByteArray xml = readSet(path);
+            const LiveSetUpdate::Xml x(xml);
+            const int p = panelParam(x, setTrack(x, "Violin", "MidiTrack"), "Macro 2");
+            QVERIFY(p >= 0);
+            int a = 0, b = 0;
+            QVERIFY(x.attrRange(x.child(p, "ParameterName"), "Value", &a, &b));
+            QByteArray out;
+            int c = 0, d = 0;
+            QVERIFY(x.attrRange(x.child(p, "ParameterId"), "Value", &c, &d));
+            QVERIFY(LiveSetUpdate::apply(xml, { { a, b, "" }, { c, d, "-1" } }, &out));
+            writeSet(path, out);
+            QString report;
+            QVERIFY(LiveIntegration::importSet(score, path, false, &report));
+            QVERIFY2(std::fabs(laneOf("macro2").flatValue() - 0.9) < 1e-4, qPrintable(report));
+      }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   controllerPatchDefault
+//    the controllers' own values shipped with the map (<Controller patchDefault>; the owner, 2026-10-15): a patch never
+//    loaded on this computer shows the map's value as its unautomated lane; once its setup loads, the plug-in's live value
+//    takes over, and a value that differs from the map's is logged in the setups folder's "load times.log" (once)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::controllerPatchDefault()
+      {
+      qputenv("MSTESTSYNTH_INIT_MS", "40");
+      LiveHost host(this, "", { "Violin" },
+                    "<SoundLibrary name='LiveD'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/>"
+                    "<Controller id='tone' name='Tone' param='Tone' patchDefault='0.5'/>"
+                    "<Controller id='macro1' name='Macro 1' param='Macro 1' patchDefault='0'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      SoundLibraryHost::instance();
+      const SoundLib::LibInstrument& violin = host.lib->instruments[0];
+      const SoundLib::Controller* tone = nullptr;
+      const SoundLib::Controller* macro = nullptr;
+      for (const SoundLib::Controller& c : violin.allControllers) {
+            if (c.id == "tone")
+                  tone = &c;
+            else if (c.id == "macro1")
+                  macro = &c;
+            }
+      QVERIFY(tone && macro);
+      // never loaded: the map's
+      QCOMPARE(PartControllers::unautomatedValue(violin, *tone), 0.5);
+      QCOMPARE(PartControllers::unautomatedValue(violin, *macro), 0.0);
+      // loaded as MuseScore loads it (its script settled): the test synth's own Tone (100 %) takes over
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY2(p, qPrintable(error));
+      QVERIFY2(SoundLibraryHost::loadSetup(p.get(), *host.lib, "Violin", TESTSYNTH, &error), qPrintable(error));
+      QCOMPARE(PartControllers::unautomatedValue(violin, *tone), 1.0);
+      QCOMPARE(PartControllers::unautomatedValue(violin, *macro), 0.0);
+      auto logged = [&]() {
+            QFile f(SoundLibraryHost::setupsFolder(*host.lib) + "/load times.log");
+            return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+            };
+      const QString log = logged();
+      QVERIFY2(log.contains("Violin: the setup's own values differ from the map's"), qPrintable(log));
+      QVERIFY2(log.contains("Tone 1.0000 (the map's patchDefault 0.5000)"), qPrintable(log));
+      QVERIFY2(!log.contains("Macro 1 0"), qPrintable(log));           // (the same as the map's)
+      // loaded again, the same values: logged once
+      std::unique_ptr<Vst3Plugin> p2 = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
+      QVERIFY(SoundLibraryHost::loadSetup(p2.get(), *host.lib, "Violin", TESTSYNTH, &error));
+      QCOMPARE(logged().count("differ from the map's"), 1);
       }
 
 //---------------------------------------------------------

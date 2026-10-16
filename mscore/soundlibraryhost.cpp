@@ -941,6 +941,37 @@ bool SoundLibraryHost::parametersOf(const SoundLib::Library& library, const Soun
       return true;
       }
 
+QByteArray SoundLibraryHost::stateWithParameters(const QByteArray& component, const QString& pluginPath,
+                                                 const std::vector<std::pair<QString, double>>& values,
+                                                 std::map<QString, long>* ids, QString* error)
+      {
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
+      if (!p)
+            return QByteArray();
+      if (!p->setState(Vst3Plugin::joinState(p->name(), component, QByteArray()))) {
+            if (error)
+                  *error = tr("The plug-in didn't take the set's state.");
+            return QByteArray();
+            }
+      p->settle();                  // (its script initialised first: it would reset values set before)
+      for (const auto& v : values) {
+            const long id = p->parameterId(v.first);
+            if (ids)
+                  (*ids)[v.first] = id;
+            if (id >= 0)
+                  p->setParameter(unsigned(id), std::min(1.0, std::max(0.0, v.second)));
+            }
+      p->settle(p->secondsSinceState() + 0.25);
+      QString name;
+      QByteArray out, controller;
+      if (!Vst3Plugin::splitState(p->state(), &name, &out, &controller) || out.isEmpty()) {
+            if (error)
+                  *error = tr("The plug-in gave no state.");
+            return QByteArray();
+            }
+      return out;
+      }
+
 static QString ms(double v)
       {
       return QString::number(v, 'f', v < 10 ? 1 : 0);
@@ -992,6 +1023,14 @@ bool SoundLibraryHost::parametersOf(const SoundLib::Library&, const SoundLib::Ro
 QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library&, const SoundLib::Route&,
                                                   const std::map<const Part*, Automation::PartLanes>&, const QString&,
                                                   std::vector<AppliedParameter>*, QString* error)
+      {
+      if (error)
+            *error = tr("This MuseScore was built without plug-in hosting.");
+      return QByteArray();
+      }
+
+QByteArray SoundLibraryHost::stateWithParameters(const QByteArray&, const QString&, const std::vector<std::pair<QString, double>>&,
+                                                 std::map<QString, long>*, QString* error)
       {
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
@@ -1082,6 +1121,7 @@ void SoundLibraryHost::recordSetupValues(Vst3Plugin* p, const SoundLib::Library&
       QJsonObject& all = parameterValueCache(library, &path);
       QJsonObject o = all.value(patch).toObject();
       bool changed = false;
+      QStringList differ;
       for (const SoundLib::Controller& c : li->allControllers) {
             if (c.param.isEmpty())
                   continue;
@@ -1093,8 +1133,15 @@ void SoundLibraryHost::recordSetupValues(Vst3Plugin* p, const SoundLib::Library&
             if (!o.contains(k) || std::fabs(o.value(k).toDouble() - v) > 1e-9) {
                   o[k] = v;
                   changed = true;
+                  // the value shipped with the map (Controller::patchDefault, measured once): Kontakt's live value takes
+                  // over; a difference means the map needs measuring again (logged once per new value)
+                  if (c.patchDefault >= 0 && std::fabs(c.patchDefault - v) > PATCH_DEFAULT_TOLERANCE)
+                        differ << QString("%1 %2 (the map's patchDefault %3)").arg(c.param).arg(v, 0, 'f', 4).arg(c.patchDefault, 0, 'f', 4);
                   }
             }
+      if (!differ.isEmpty())
+            logTime(library, QString("%1: the setup's own values differ from the map's (measure them again: "
+                                     "tools/soundlibraries/controller_defaults_from_extract.py): %2").arg(patch, differ.join(", ")));
       if (!changed)
             return;
       all[patch] = o;
