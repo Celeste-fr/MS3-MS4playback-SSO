@@ -14,6 +14,7 @@
 //---------------------------------------------------------
 
 #include <QtTest/QtTest>
+#include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <cmath>
 #include <set>
@@ -529,6 +530,27 @@ void TestPlaybackAudit::transitionArrival()
                   QVERIFY2(f.text.contains("transition arrives 120.0 after its note-on"), qPrintable(f.text));
                   }
       QVERIFY(r.transitionShiftsMs.empty());
+      // the heard check's rows (Report::rows, writeHeardInputs, 2026-10-16): one per note-on, the transitions with their
+      // modelled arrival (sent + 120 ms), each joined and slurred to the chord before; the files written
+      QCOMPARE(int(r.rows.size()), r.notes);
+      int rowTransitions = 0;
+      for (const PlaybackAudit::NoteRow& row : r.rows) {
+            QCOMPARE(row.patch.isEmpty(), false);
+            if (row.transition) {
+                  ++rowTransitions;
+                  QVERIFY(row.hasArrival && row.fromPitch > 0 && row.joinedBefore && row.slurredBefore && row.slur >= 0);
+                  QVERIFY2(std::fabs(row.arrivalMs - (row.sentMs + 120)) < 0.01, qPrintable(QString::number(row.arrivalMs)));
+                  }
+            }
+      QCOMPARE(rowTransitions, 5);
+      QTemporaryDir dir;
+      QVERIFY(PlaybackAudit::writeHeardInputs(score, events, r, dir.path()));
+      for (const char* f : { "predicted.tsv", "routemap.txt", "lead.txt", "bars.txt" })
+            QVERIFY2(QFile::exists(dir.path() + "/" + f), f);
+      QFile pf(dir.path() + "/predicted.tsv");
+      QVERIFY(pf.open(QIODevice::ReadOnly | QIODevice::Text));
+      QCOMPARE(QString(pf.readAll()).trimmed().split('\n').size(), r.notes + 1);
+      QVERIFY(!QDir(dir.path()).entryList({ "* museScore.txt" }).isEmpty());
       // [slurs] transitionsEarly (2026-10-14): each transition sent its arrival (120 ms) early arrives on its beat: no
       // ARRIVAL, none capped (500 ms apart), none DROPPED, none CAPPED by the onset
       score->setMetaTag(Playback::metaTag, "slurs/transitionsEarly=1");
@@ -565,7 +587,8 @@ void TestPlaybackAudit::transitionArrival()
 //   auditScore
 //    any score: MS_AUDIT_SCORE (.mscz/.mscx), MS_AUDIT_MAP (default: the shipped SSO map, with its shipped
 //    dynamics calibration), MS_AUDIT_SETTINGS (a preset id, default "recommended", or a playbackSettings metaTag
-//    "id=value;..."), MS_AUDIT_OUT (the report; else printed). Fails on any OVERLAP
+//    "id=value;..."), MS_AUDIT_OUT (the report; else printed), MS_AUDIT_DUMP (a folder: the heard check's inputs,
+//    PlaybackAudit::writeHeardInputs). Fails on any OVERLAP
 //---------------------------------------------------------
 
 void TestPlaybackAudit::auditScore()
@@ -608,6 +631,9 @@ void TestPlaybackAudit::auditScore()
       PlaybackAudit::render(score, &events, &trace);
       const PlaybackAudit::Measured measured = PlaybackAudit::measuredFrom(root + "/../tools/soundlibraries");
       const PlaybackAudit::Report r = PlaybackAudit::audit(score, events, trace, measured);
+      // MS_AUDIT_DUMP=<folder>: the heard check's inputs (VERIFY.md › Heard check)
+      if (qEnvironmentVariableIsSet("MS_AUDIT_DUMP"))
+            QVERIFY(PlaybackAudit::writeHeardInputs(score, events, r, qEnvironmentVariable("MS_AUDIT_DUMP")));
       const QString text = r.text(QString("Playback audit of %1 (settings: %2; map: %3; calibration: %4; fits: %5)")
                                   .arg(QFileInfo(qEnvironmentVariable("MS_AUDIT_SCORE")).fileName(), settings,
                                        QFileInfo(mapFile).fileName(), SoundLib::dynamicsCalibration() ? "shipped" : "none",

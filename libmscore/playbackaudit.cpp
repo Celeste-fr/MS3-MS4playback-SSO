@@ -10,6 +10,7 @@
 
 #include "playbackaudit.h"
 
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -653,7 +654,150 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                           "attacks afresh (velocity %4); its Performance technique, legato delay and level calibration don't apply")
                           .arg(from->ppitch()).arg(cents / 100.0, 0, 'f', 2).arg(cents, 0, 'f', 0).arg(p->velocity), cents);
             }
+
+      // (g) the rows for the heard check: every note-on with a choice, its prediction and its place in its line and slur
+      std::vector<const Slur*> slurs;
+      for (const auto& sp : score->spanner())
+            if (sp.second->isSlur() && !toSlur(sp.second)->phraseMark())
+                  slurs.push_back(toSlur(sp.second));
+      std::sort(slurs.begin(), slurs.end(), [](const Slur* a, const Slur* b) {
+            return a->tick() != b->tick() ? a->tick() < b->tick() : a->track() < b->track();
+            });
+      std::map<const Played*, const Played*> before;            // the top note of the chord before in its line, joined
+      std::map<const Played*, bool> slurredBefore, dynamicBefore;
+      for (auto& line : lines) {
+            std::vector<Group*> gs;
+            for (auto& g : line.second)
+                  gs.push_back(&g.second);
+            for (size_t i = 1; i < gs.size(); ++i) {
+                  if (gs[i - 1]->writtenEnd != gs[i]->written)
+                        continue;
+                  const Played* a = *std::max_element(gs[i - 1]->notes.begin(), gs[i - 1]->notes.end(),
+                                                      [](const Played* x, const Played* y) { return x->pitch < y->pitch; });
+                  for (const Played* b : gs[i]->notes) {
+                        before[b] = a;
+                        slurredBefore[b] = slurBoth(a->note->lastTiedNote(), b->note);
+                        dynamicBefore[b] = dynamicChanges(a->note->lastTiedNote(), b->note);
+                        }
+                  }
+            }
+      for (const auto& up : played) {
+            const Played* p = up.get();
+            if (!p->trace || !p->note || !p->trace->choice || p->written < 0)
+                  continue;
+            const Note* n = p->note;
+            NoteRow r;
+            r.part = n->part()->partName();
+            r.track = n->track();
+            const Measure* m = n->chord()->measure();
+            r.bar = m->no() + 1;
+            const int beatTicks = DIVISION * 4 / std::max(1, m->timesig().denominator());
+            r.beat = 1 + double(n->chord()->tick().ticks() - m->tick().ticks()) / beatTicks;
+            r.written = ms(p->written) / 1000;
+            const Note* last = n->lastTiedNote();
+            r.writtenEnd = ms(p->written + (last->chord()->tick() + last->chord()->actualTicks() - n->chord()->tick()).ticks()) / 1000;
+            r.pitch = p->pitch;
+            r.cents = tuning.cents(n);
+            r.route = p->route;
+            r.patch = p->trace->patch->name;
+            r.articulation = p->trace->choice.articulation->name;
+            r.techniques = p->trace->choice.articulation->techniques.join(",");
+            r.velocity = p->velocity;
+            r.performance = int(p->trace->performance);
+            if (p->trace->from) {
+                  r.transition = true;
+                  r.fromPitch = p->trace->from->ppitch();
+                  r.fromWritten = score->utick2utime(p->trace->from->chord()->tick().ticks());
+                  }
+            r.sentMs = sent(p) - ms(p->written);
+            r.onsetMs = p->hasOnset ? p->onset : -1.0;
+            r.glideArriveMs = p->trace->glideArriveMs;
+            r.hasArrival = p->hasArrival;
+            r.arrivalMs = p->arrival;
+            r.sub = p->sub;
+            r.grace = n->chord()->isGrace();
+            const int tick = n->chord()->tick().ticks();
+            for (size_t i = 0; i < slurs.size(); ++i)
+                  if (slurs[i]->track() == n->track() && slurs[i]->tick().ticks() <= tick && tick <= slurs[i]->tick2().ticks())
+                        r.slur = int(i);          // (sorted by start: the latest one that covers it)
+            r.joinedBefore = before.count(p);
+            r.slurredBefore = r.joinedBefore && slurredBefore[p];
+            r.dynamicBefore = r.joinedBefore && dynamicBefore[p];
+            report.rows.push_back(r);
+            }
       return report;
+      }
+
+//---------------------------------------------------------
+//   Report::rowsText
+//---------------------------------------------------------
+
+QString Report::rowsText() const
+      {
+      QStringList out;
+      out << "part\ttrack\tbar\tbeat\twritten\twrittenEnd\tpitch\tcents\troute\tpatch\tarticulation\ttechniques\tvelocity\t"
+             "performance\ttransition\tfromWritten\tfromPitch\tsentMs\tonsetMs\tglideArriveMs\thasArrival\tarrivalMs\tsub\tgrace\t"
+             "slur\tjoinedBefore\tslurredBefore\tdynamicBefore";
+      for (const NoteRow& r : rows)
+            out << QStringList({ r.part, QString::number(r.track), QString::number(r.bar), QString::number(r.beat, 'f', 4),
+                                 QString::number(r.written, 'f', 6), QString::number(r.writtenEnd, 'f', 6), QString::number(r.pitch),
+                                 QString::number(r.cents, 'f', 2), QString("%1-%2").arg(r.route / 16).arg(r.route % 16 + 1), r.patch,
+                                 r.articulation, r.techniques, QString::number(r.velocity), QString::number(r.performance),
+                                 QString::number(int(r.transition)), QString::number(r.fromWritten, 'f', 6), QString::number(r.fromPitch),
+                                 QString::number(r.sentMs, 'f', 2), QString::number(r.onsetMs, 'f', 2), QString::number(r.glideArriveMs, 'f', 2),
+                                 QString::number(int(r.hasArrival)), QString::number(r.arrivalMs, 'f', 2), QString::number(int(r.sub)),
+                                 QString::number(int(r.grace)), QString::number(r.slur), QString::number(int(r.joinedBefore)),
+                                 QString::number(int(r.slurredBefore)), QString::number(int(r.dynamicBefore)) }).join("\t");
+      return out.join("\n") + "\n";
+      }
+
+//---------------------------------------------------------
+//   writeHeardInputs
+//---------------------------------------------------------
+
+bool writeHeardInputs(const Score* score, const EventMap& events, const Report& report, const QString& folder)
+      {
+      QDir().mkpath(folder);
+      auto write = [&folder](const QString& name, const QString& text) {
+            QFile f(folder + "/" + name);
+            if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+                  return false;
+            f.write(text.toUtf8());
+            return true;
+            };
+      bool ok = true;
+      std::map<QString, QStringList> ev;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal())
+                  continue;
+            const QString key = QString("%1-%2").arg(e.extPort()).arg(e.extChannel() + 1);
+            const double t = score->utick2utime(te.first);
+            if (e.type() == ME_NOTEON)
+                  ev[key] << QString("%1 %2 %3 %4").arg(t, 0, 'f', 6).arg(e.velo() > 0 ? "on" : "off").arg(e.pitch()).arg(e.velo());
+            else if (e.type() == ME_NOTEOFF)
+                  ev[key] << QString("%1 off %2 0").arg(t, 0, 'f', 6).arg(e.pitch());
+            else if (e.type() == ME_CONTROLLER)
+                  ev[key] << QString("%1 cc %2 %3").arg(t, 0, 'f', 6).arg(e.controller()).arg(e.value());
+            else if (e.type() == ME_PITCHBEND)
+                  ev[key] << QString("%1 pb %2 0").arg(t, 0, 'f', 6).arg(e.dataA() | (e.dataB() << 7));
+            }
+      for (const auto& m : ev)
+            ok = write(m.first + " museScore.txt", m.second.join("\n") + "\n") && ok;
+      QStringList rm;
+      if (std::shared_ptr<const SoundLib::Library> lib = SoundLib::current())
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib))
+                  rm << QString("%1-%2|%3|%4|%5|%6|%7").arg(r.port).arg(r.channel + 1).arg(r.part ? r.part->partName() : QString(),
+                           r.instrument ? r.instrument->name : QString()).arg(r.lane).arg(r.cents, 0, 'f', 2)
+                           .arg(r.instrument ? r.instrument->bendCents : 0.0, 0, 'f', 1);
+      ok = write("routemap.txt", rm.join("\n") + "\n") && ok;
+      ok = write("predicted.tsv", report.rowsText()) && ok;
+      ok = write("lead.txt", QString::number(events.startLeadMs, 'f', 3) + "\n") && ok;
+      QStringList bars;
+      for (const Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
+            bars << QString::number(score->utick2utime(m->tick().ticks()), 'f', 6);
+      ok = write("bars.txt", bars.join("\n") + "\n") && ok;
+      return ok;
       }
 
 }     // namespace PlaybackAudit

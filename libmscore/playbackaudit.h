@@ -116,8 +116,43 @@ Measured measuredFrom(const QString& folder);           // tools/soundlibraries
 // note's choice in trace
 void render(MasterScore* score, EventMap* events, std::vector<MidiRenderer::LibTrace>* trace);
 
+// every library note-on with a choice as the audit saw it, with its predicted heard time (the heard check,
+// tools/playbackverify/heard_check.py, measures the real sound against these: VERIFY.md › Heard check)
+struct NoteRow {
+      QString part;
+      int track { -1 };
+      int bar { 0 };                // 1-based
+      double beat { 1 };
+      double written { 0 };         // s, score time
+      double writtenEnd { 0 };      // s, the end of its tie chain
+      int pitch { -1 };
+      double cents { 0 };           // its playback tuning (ScoreTuning)
+      int route { -1 };             // port * 16 + channel
+      QString patch;
+      QString articulation;
+      QString techniques;           // the articulation's bases, comma-separated
+      int velocity { 0 };
+      int performance { 0 };        // LibPerformance: 0 none, 1 attack, 2 transition
+      bool transition { false };    // played as a legato transition (LibTrace::from)
+      double fromWritten { -1 };    // the note it transitions from: its written start, s (-1: none)
+      int fromPitch { -1 };
+      double sentMs { 0 };          // note-on - written, ms (the start lead taken off)
+      double onsetMs { -1 };        // the onset the renderer took (-1: none)
+      double glideArriveMs { -1 };  // LibTrace::glideArriveMs
+      bool hasArrival { false };
+      double arrivalMs { 0 };       // predicted heard - written, ms (ARRIVAL's)
+      bool sub { false };           // an ornament's later sub-note
+      bool grace { false };
+      int slur { -1 };              // the (non-phrase-mark) slur it lies under: an index per score, -1 none
+      bool joinedBefore { false };  // its line's chord before ends where it starts (no rest)
+      bool slurredBefore { false }; // ... and both lie under one slur (LEVEL_STEP's slurBoth)
+      bool dynamicBefore { false }; // a dynamic or hairpin between them (LEVEL_STEP's dynamicChanges)
+      };
+
 struct Report {
       std::vector<Finding> findings;
+      std::vector<NoteRow> rows;    // (every note-on with a trace, in the order played)
+      QString rowsText() const;     // a header line, then one tab-separated line per row
       double keepMs { 0 };
       int notes { 0 };              // library note-ons looked at
       // [slurs] transitionsEarly: each legato transition's early start as sent (ms), and how many were capped
@@ -133,6 +168,12 @@ struct Report {
 // the checks over rendered events (render()'s, or any EventMap with its trace)
 Report audit(const Score* score, const EventMap& events, const std::vector<MidiRenderer::LibTrace>& trace,
              const Measured& measured);
+
+// the heard check's inputs (tools/playbackverify/heard_check.py): per route its events ("<port>-<channel> museScore.txt",
+// "seconds on|off|cc|pb a b" as tst_liveequivalence's dumpEvents writes them: the start lead included), routemap.txt
+// ("port-channel|part|patch|lane|cents|bendCents"), predicted.tsv (Report::rowsText), lead.txt (the start lead, ms),
+// bars.txt (each bar's start, s). False: a file couldn't be written
+bool writeHeardInputs(const Score* score, const EventMap& events, const Report& report, const QString& folder);
 
 }     // namespace PlaybackAudit
 }     // namespace Ms
