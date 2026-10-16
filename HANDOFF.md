@@ -76,7 +76,7 @@ the other parts on MS4's sounds, each render twice, `compare_renders.py`; floors
 
 The owner, 2026-10-15: "is there any way at all we can make SSO load even faster" … "Whence takes absolutely forever to
 load all the patches because the microtonal stuff". Hosted playback now tunes as the plain Live set does
-(`[tuning] hostedTuning` 1, slots, the default; 0 varispeed as before, to compare by ear; CLAUDE.md › Microtones,
+(`[tuning] hostedTuning` 1, slots, the default; 0 varispeed as before; slots kept by the owner 2026-10-16; CLAUDE.md › Microtones,
 docs/PLAYBACK_SETTINGS.md inventory, LIVE.md › What still differs): Live's routes (a fixed copy per tuning) and a
 patch's copies of one part in one Kontakt, a slot per tuning by Tune on its own MIDI channel.
 
@@ -104,7 +104,7 @@ patch's copies of one part in one Kontakt, a slot per tuning by Tune on its own 
 - Tuning (VM, `--verify-playback --verify-wav` on two quarter-tone test scores of mine, pYIN): All techniques Violins by
   slots and Tune -2 … -4.5 cents from the written tuning (mean -3.4, the 0-cent notes the same -3), by varispeed (436)
   -1 … -5 (mean -3.2), note by note within 3 cents of each other; Violas Performance (bends) identical in both builds
-  (max 8 cents); 0 verify findings in both. Not heard yet: the owner compares `[tuning] hostedTuning` slots / varispeed.
+  (max 8 cents); 0 verify findings in both. Slots kept by the owner 2026-10-16 ("yeah seems good"): they match the plain Live set.
 - **With the gain stage** (merged with utility-gain in `integrate-ts`): a multi plays at its instance slot's Mixer, which
   carries the patch's gain stage (`TrackDelays::patchGain`, per part and patch, so every copy's slot gets the same value;
   the linked slots have no instance of their own and their values go unused): the gain applies once per instance, never

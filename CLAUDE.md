@@ -299,7 +299,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   channel i; each other copy a MIDI track with its Controllers clip, MIDI To `DeviceIn.0.<i−1>`; measured identical
   to a Kontakt per copy, ~85-90 MB less each, Whence 20 Kontakts → 8), a bending patch's copies their bends as the
   clip's pitch-bend envelope (−8192 … 8191, measured). LIVE.md › The plain set › Microtones.
-  **Hosted, the same since 2026-10-15** (`[tuning] hostedTuning` 1 slots, the default; 0 varispeed, as before, to
+  **Hosted, the same since 2026-10-15** (`[tuning] hostedTuning` 1 slots, the default; 0 varispeed, as before; slots kept by the owner 2026-10-16, "yeah seems good", as Live plays them;
   compare by ear; the owner: "Whence takes absolutely forever to load all the patches because the microtonal stuff"):
   `SoundLib::hostedSlots` (a hosted Kontakt library with `<Tuning method="varispeed">`) makes routes() give Live's fixed
   copies, and `SoundLib::instances` puts a patch's copies of one part in ONE instance, a slot per copy tuned by Tune on
