@@ -7,19 +7,26 @@ a section there when you need the background of that topic. Commit messages desc
 
 ## Technique balance, `[levels] calibrated` 2 (2026-10-15, branch `technique-balance`, from integrate-1012)
 
-The owner chose option B (2026-10-15, "yes this makes sense"): a velocity technique is matched to the part's Long at its
-marking (as 1), then plays D louder along its own curve, D = its perceived level at velocity 127 less the Long's at 127
-(both recordings of players playing loud), then MS4's offset and the Inspector's (docs/PLAYBACK_SETTINGS.md › Calibrated
-levels: the D table, why A failed). 2 is the default and Recommended's; 1 by hand; 0 unchanged. Past 127 the rest by the
-capped-short top-up (realRange on only); under a curve's lowest point by CC11. The level rule follows: every slur gain +
-D of the section's Spiccato, so slurs stay 1.3 dB over the staccatos (Whence: +2.84 / +5.88 / +1.57 dB for Violins 1 /
-Violas / Celli against D 2.9 / 6.0 / 1.6). realRange: the Long's realDb applies to technique notes too.
-The first 2 (A, the written dynamic's velocity on the technique's own curve) made Whence's staccatos 13-21 dB too soft
-and was replaced the same day. The shipped calibration's D differs from `sso_sound_dynamics.json`'s by one offset per
-section (0 for Violins 2, up to 1.1 dB Celli: the string Longs re-measured 2026-10-12).
-**Untried in Kontakt / SSO and not heard**: tests on the renderer and the test synth (Linux). To do: listen to Whence on
-the VM (its 108 changed staccatos and the shifted slurs); cross-check against the research on technique levels (con
-sordino, harmonics, cello pizzicato corroborated; col legno, tremolo, ponticello, spiccato: no source yet).
+Option B' (the owner, 2026-10-15: "if the data clearly point to b', then b' it is"), replacing B the same day: a velocity
+technique is matched to the part's Long at its marking (as 1), then plays D more along its own curve, then MS4's offset and
+the Inspector's. D from real players where measured, the map's `heldOffset` (`tools/soundlibraries/technique_offsets.py`
+-> `technique_offsets.json` -> `gen_spitfire_sso.py`): the string sections' Spiccato and Short 0.5 -4.2 dB (Spheres K. 550,
+staccato against held at f, perceived, pooled over Violins 1 / 2, Celli, Basses; 90 % [-5.8, -2.5]; Violas assumed;
+**a placeholder**: the K. 550 readings are being corrected, bar 28's double stop is Violin II's; the value lives once in
+`technique_offsets.json` › `staccato` › `use`, `technique_offsets.py` `STACCATO_PLACEHOLDER`),
+Short 1.0 +0.4 (K. 550's quarters against wholes at p, [-2.1, +2.4]; an assumption that it plays as those), pizzicato
+Meyer 2009's pp / ff by the written CC (sound power: several dB uncertain), the Basses' Bartók and col legno 0 (SSO's two
+metrics disagree by ~10 dB). Everything else (Bartók, col legno of the upper four, Short CS, harmonics) keeps B's SSO
+loud-end D: an assumption, no real data. The same D at every marking: untested at p. The level rule re-anchors by the
+Spiccato's D (now -4.2: every slur gain 4.2 dB lower), so slurs stay 1.3 dB over the staccatos. Why B went: its D had the
+wrong sign for bowed shorts (+1.6 .. +9.2 against the players' -3 .. -6) and was too high for pizzicato
+(docs/PLAYBACK_SETTINGS.md › Calibrated levels).
+Tests (Linux, renderer and test synth, after merging integrate-1012's transitionsEarly 1): tst_soundlibrary 97 + 3
+skipped, tst_liveequivalence 39 + 1, tst_marcatolevel 14, tst_performancetechnique 22, tst_playbackaudit 9 + 1. Whence
+(placeholder -4.2): the 109 Spiccato notes 6-17 velocities under calibrated 1, G 11.09 dB (1: 15.29, B: 16.94); audit
+OVERLAP 0, CAPPED 1, ARRIVAL 0 / 2 warn. **To do**: the corrected K. 550 staccato values (per section and pooled) into
+`technique_offsets.py` (`STACCATO_PLACEHOLDER` to None, or the chosen value), regenerate the JSON and the map, re-run the
+Whence dump. **Untried in Kontakt / SSO and not heard.**
 
 ## Mic compensation (2026-10-15, branch `mic-compensation`, merged into integrate-1012)
 

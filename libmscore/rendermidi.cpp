@@ -1251,8 +1251,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // listed in <Dynamics velocity>. With [levels] calibrated 1 and both measured (dynamics.json): the
                   // velocity at which it is as loud as the part's held note at this dynamic, plus MS4's offset for its
                   // articulations (marcato's too: SoundFont 2's law, 40 log10 of MS4's velocity over a plain note's).
-                  // With 2 (option B, the owner 2026-10-15: matched + the recorded loud-end difference): 1's match plus D,
-                  // its level at velocity 127 less the held note's at 127 (SoundLib::loudEndDb), then MS4's offset; not
+                  // With 2 (option B', the owner 2026-10-15): 1's match plus D, real players' difference against the held
+                  // note (<Articulation heldOffset>), else its level at velocity 127 less the held note's at 127
+                  // (SoundLib::techniqueOffsetDb, loudEndDb: an assumption), then MS4's offset; not
                   // extrapolated under its lowest measured point: the rest by CC11 (*under; calibratedVelocityFloored).
                   // Else (0, or a curve missing) its level on the CC's scale, an accent's share included (levelVelocity).
                   // -1: MS4's velocity
@@ -1263,13 +1264,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const SoundLib::Choice libHeld = calibratedMode >= 1 ? SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} })
                                                                        : SoundLib::Choice();
                   // (a technique measured at several pitches: the note's pitch's curve, DynamicsCurve::atPitch)
-                  // [levels] calibrated 2's D for the note's technique (0: not 2, or not measured)
-                  auto loudEnd = [&](const Note* note, const SoundLib::Choice& c) {
+                  // [levels] calibrated 2's D for the note's technique at the written dynamic's CC (option B': real
+                  // players' where the map lists heldOffset, else the library's loud-end difference; 0: not 2, or neither)
+                  auto loudEnd = [&](const Note* note, const SoundLib::Choice& c, int cc) {
                         if (calibratedMode != 2 || !libHeld || !c)
                               return 0.0;
-                        const double d = SoundLib::loudEndDb(*cal, libPatches[c.patch]->name, c.articulation->value,
-                                                             libPatches[libHeld.patch]->name, libHeld.articulation->value,
-                                                             note->ppitch());
+                        const double d = SoundLib::techniqueOffsetDb(*cal, libPatches[c.patch]->name, *c.articulation,
+                                                                     libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                     note->ppitch(), cc);
                         return std::isnan(d) ? 0.0 : d;
                         };
                   auto libVelocity = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel,
@@ -1282,7 +1284,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (libHeld && level > 0) {
                               const int v = SoundLib::calibratedVelocityFloored(*cal, libPatches[c.patch]->name, c.articulation->value,
                                                                                 libPatches[libHeld.patch]->name, libHeld.articulation->value,
-                                                                                level, loudEnd(note, c) + 40.0 * std::log10(r.share),
+                                                                                level, loudEnd(note, c, level) + 40.0 * std::log10(r.share),
                                                                                 note->ppitch(), calibratedMode == 2 ? under : nullptr);
                               if (v > 0)
                                     return qBound(1, v, 127);
@@ -1506,7 +1508,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const bool byEar = own.byEar() && ref.byEar();
                         const int cc = Ms4::expressionLevel(dynLevel);
                         // (what libVelocity and marcatoLevel aimed at: the held note at the dynamic, 2's D, MS4's offset, the levels)
-                        const double target = (byEar ? ref.perceivedAt(cc) : ref.at(cc)) + loudEnd(note, c) + 40.0 * std::log10(r.share)
+                        const double target = (byEar ? ref.perceivedAt(cc) : ref.at(cc)) + loudEnd(note, c, cc) + 40.0 * std::log10(r.share)
                                               + levelOf(note) + quickDb(note, c);
                         const double reached = byEar ? own.perceivedAt(velocity) : own.at(velocity);
                         const double miss = target - reached;

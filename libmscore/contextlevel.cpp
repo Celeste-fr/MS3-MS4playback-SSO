@@ -346,8 +346,10 @@ double staccatoShiftDb(const std::vector<const SoundLib::LibInstrument*>& patche
       const SoundLib::Choice held = SoundLib::choose(patches, SoundLib::Want { { "long" }, {} });
       if (!st || !held || st.base != "spiccato")
             return 0.0;
-      const double d = SoundLib::loudEndDb(*cal, patches[size_t(st.patch)]->name, st.articulation->value,
-                                           patches[size_t(held.patch)]->name, held.articulation->value);
+      // (option B': the map's heldOffset, real players' staccato against held, negative; at mp's CC, one value for
+      // SSO's Spiccato; else SSO's loud-end difference)
+      const double d = SoundLib::techniqueOffsetDb(*cal, patches[size_t(st.patch)]->name, *st.articulation,
+                                                   patches[size_t(held.patch)]->name, held.articulation->value, -1, 64);
       return std::isnan(d) ? 0.0 : d;
       }
 

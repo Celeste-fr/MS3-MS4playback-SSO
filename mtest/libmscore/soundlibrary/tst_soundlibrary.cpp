@@ -2613,7 +2613,7 @@ void TestSoundLibrary::levelContext()
       QCOMPARE(at(render(), 72).cc11, cc11(g1 - top));
       score->setMetaTag(Playback::metaTag, "");
 
-      // [levels] calibrated 2 (option B): the section's staccatos (Spiccato) play D louder than at 1's matched level, so
+      // [levels] calibrated 2 (option B, B'): the section's staccatos (Spiccato) play D more than at 1's matched level, so
       // every slur gain takes D too (ContextLevel::staccatoShiftDb): the slurs stay 1.3 dB over the staccatos (the model:
       // gain = st - pfd + 1.3), G and S follow. Long -45 + 0.2 x, Spiccato -50 + 0.15 x: D = -30.95 - (-19.6) = -11.35
       auto calLib = loadMap(QString(
@@ -2679,6 +2679,15 @@ void TestSoundLibrary::levelContext()
       const double slurShift = slurOver(v2, n2) - slurOver(v1, n1);
       QVERIFY2(std::fabs(stShift - dSp) <= 0.15 * 0.5 + 1e-9, qPrintable(QString::number(stShift)));
       QVERIFY2(std::fabs(slurShift - dSp) < 0.05, qPrintable(QString::number(slurShift)));
+      // option B': the Spiccato's heldOffset (real players' staccato against held, negative) is the shift instead
+      auto calLibB = loadMap("<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='spiccato'/>"
+                             "<Instrument name='Violin' ids='violin'>"
+                             "<Articulation name='Long' value='1' techniques='long legato'/>"
+                             "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo' heldOffset='-4.2'/>"
+                             "</Instrument></SoundLibrary>");
+      QVERIFY(calLibB);
+      std::vector<const SoundLib::LibInstrument*> patchesB { &calLibB->instruments[0] };
+      QVERIFY(std::fabs(ContextLevel::staccatoShiftDb(patchesB, score) + 4.2) < 1e-9);
       Playback::setIniValuesForTest({});
       delete score;
       SoundLib::setCurrent(nullptr);
@@ -2933,8 +2942,9 @@ void TestSoundLibrary::levelSectionBalance()
 //    -45 + 0.2 x (-19.6 at 127), Pizzicato -60 + 0.1 x (D -27.7), Staccato -50 + 0.1 x (D -17.7), Marcato -40 + 0.15 x
 //    (D -1.35). A pizzicato at f: L(96) - 27.7 = -53.5 dB at velocity 65 (1: capped at 127; 0: 96); under the curve's
 //    lowest point (16): velocity 16, the rest by CC11; without its own curve as 0; layers (default 2, the ini's 1, the
-//    score's 2 over it, the score's 0). realRange 2: the Long's realDb at each marking on top. Then the shipped
-//    calibration's D against sso_sound_dynamics.json's reference values (printed for the strings)
+//    score's 2 over it, the score's 0). realRange 2: the Long's realDb at each marking on top. Option B': a map
+//    heldOffset replaces D (one value; or by the written dynamic's CC, linear). Then the shipped calibration's loud-end D
+//    against sso_sound_dynamics.json's reference values, the shipped map's heldOffsets (both printed for the strings)
 //---------------------------------------------------------
 
 void TestSoundLibrary::levelTechniqueBalance()
@@ -3108,6 +3118,53 @@ void TestSoundLibrary::levelTechniqueBalance()
       QCOMPARE(n[84].cc11, cc11(6 - r));
       QCOMPARE(n[72].cc11, cc11(4 - r));
       QCOMPARE(n[79].cc11, cc11(4 - r));                // (the staccato at f: the Long's too)
+
+      // option B' (the owner 2026-10-15): the map's heldOffset replaces the loud-end D: the staccato -20 at every marking,
+      // the pizzicato -27 at pp (CC 32) .. -29 at ff (112), linear in the written dynamic's CC between, the ends' beyond
+      auto libB = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short marcato pizzicato'/>"
+         "<Instrument name='Violin' ids='violin' realSteps='15'"
+         " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/96:-6 64/96:0 112/96:3 127/96:4'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short' heldOffset='-20'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "<Articulation name='Pizzicato' value='56' techniques='pizzicato' heldOffset='112:-29 32:-27'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(libB);
+      const SoundLib::Articulation* pizzB = nullptr;
+      const SoundLib::Articulation* marcB = nullptr;
+      for (const SoundLib::Articulation& a : libB->instruments[0].articulations) {
+            if (a.name == "Pizzicato")
+                  pizzB = &a;
+            if (a.name == "Marcato")
+                  marcB = &a;
+            }
+      QVERIFY(pizzB && marcB);
+      QCOMPARE(int(pizzB->heldOffsets.size()), 2);
+      QVERIFY(std::fabs(pizzB->heldOffsetAt(16) + 27) < 1e-9);
+      QVERIFY(std::fabs(pizzB->heldOffsetAt(72) + 28) < 1e-9);
+      QVERIFY(std::fabs(pizzB->heldOffsetAt(127) + 29) < 1e-9);
+      QVERIFY(std::fabs(SoundLib::techniqueOffsetDb(*cal, "Violin", *pizzB, "Violin", 1, -1, 96) + 28.6) < 1e-9);
+      QVERIFY(std::fabs(SoundLib::techniqueOffsetDb(*cal, "Violin", *marcB, "Violin", 1, -1, 96) - dM) < 1e-9);  // (none: SSO's)
+      QVERIFY(!loadMap("<SoundLibrary name='x'><Instrument name='V' ids='violin'>"
+                       "<Articulation name='P' value='1' techniques='pizzicato' heldOffset='-3 -4'/>"
+                       "</Instrument></SoundLibrary>"));                    // (malformed: two plain values)
+      SoundLib::setCurrent(libB);
+      with({});
+      n = render();
+      const double dPf = -27 - 2.0 * (f - 32) / 80;       // (f, CC 96: -28.6)
+      QCOMPARE(n[74].velocity, int(std::lround((L(f) + dPf + 60) / 0.1)));          // 56
+      QCOMPARE(n[76].velocity, n[74].velocity);
+      QCOMPARE(n[74].cc11, 127);
+      QCOMPARE(n[84].velocity, int(std::lround((L(112) - 29 + 60) / 0.1)));         // ff: 84
+      QCOMPARE(n[81].velocity, 16);                                                // pp: under the curve, by CC11
+      QCOMPARE(n[81].cc11, cc11(L(32) - 27 - (-60 + 1.6)));
+      QCOMPARE(n[83].velocity, 16);
+      QCOMPARE(n[83].cc11, cc11(L(64) - 27.8 - (-60 + 1.6)));
+      QVERIFY2(std::abs(n[79].velocity - ((L(f) - 20 + sDb + 50) / 0.1)) <= 1.5 + 40 * std::log10(1 + 0.5 / stacc0) / 0.1,
+               qPrintable(QString("staccato %1").arg(n[79].velocity)));
+      QCOMPARE(n[77].velocity, marc2);                    // (the marcato: no heldOffset, SSO's D as before)
+      SoundLib::setCurrent(lib);
       delete score;
 
       // the shipped calibration's D against sso_sound_dynamics.json's (the coordinator's reference list, perceived, the
@@ -3143,6 +3200,47 @@ void TestSoundLibrary::levelTechniqueBalance()
                   QVERIFY2(std::fabs(d - x.second[i] - offset) <= 0.15, qPrintable(QString("%1 %2: %3, the reference %4, offset %5")
                                                                       .arg(x.first, names[i]).arg(d).arg(x.second[i]).arg(offset)));
                   }
+            }
+      // option B': the shipped map's heldOffset (tools/soundlibraries/technique_offsets.json): the bowed shorts the
+      // Spheres K. 550 pooled staccato, Short 1.0 the quarters, the pizzicato Meyer's pp / ff, the Basses' Bartok and col
+      // legno 0; the rest (Short CS, Short Harmonics, the other Bartok / col legno) none: SSO's loud-end D
+      auto artOf = [&](const QString& patch, const QString& name) -> const SoundLib::Articulation* {
+            for (const SoundLib::LibInstrument& li : sso->instruments)
+                  if (li.name == patch)
+                        for (const SoundLib::Articulation& a : li.articulations)
+                              if (a.name == name)
+                                    return &a;
+            return nullptr;
+            };
+      // (the bowed shorts' one value, technique_offsets.json "staccato" > "use": a placeholder while the K. 550 readings
+      // are corrected, 2026-10-15)
+      QFile offsetsFile(root + "/../tools/soundlibraries/technique_offsets.json");
+      QVERIFY(offsetsFile.open(QIODevice::ReadOnly));
+      const double staccatoD = QJsonDocument::fromJson(offsetsFile.readAll()).object().value("staccato").toObject().value("use").toDouble(NAN);
+      QVERIFY(!std::isnan(staccatoD));
+      const std::map<QString, std::pair<double, double>> meyer { { "Violins 1", { -7, -9 } }, { "Violins 2", { -7, -9 } },
+            { "Violas", { -9, -5 } }, { "Celli", { -12, -8 } }, { "Basses", { -6, -7 } } };
+      for (const auto& m : meyer) {
+            for (const char* name : { "Spiccato", "Short 0.5" })
+                  QVERIFY2(artOf(m.first, name) && std::fabs(artOf(m.first, name)->heldOffsetAt(64) - staccatoD) < 1e-9, qPrintable(m.first));
+            QVERIFY(std::fabs(artOf(m.first, "Short 1.0")->heldOffsetAt(64) - 0.4) < 1e-9);
+            const SoundLib::Articulation* p = artOf(m.first, "Pizzicato");
+            QVERIFY(std::fabs(p->heldOffsetAt(32) - m.second.first) < 1e-9 && std::fabs(p->heldOffsetAt(112) - m.second.second) < 1e-9);
+            QVERIFY(artOf(m.first, "Short CS") == nullptr || artOf(m.first, "Short CS")->heldOffsets.empty());
+            QVERIFY(artOf(m.first, "Short Harmonics")->heldOffsets.empty());
+            const bool zero = m.first == "Basses";
+            for (const char* name : { "Pizzicato Bartok", "Col Legno" }) {
+                  const SoundLib::Articulation* a = artOf(m.first, name);
+                  QVERIFY(a && a->heldOffsets.empty() == !zero);
+                  if (zero)
+                        QVERIFY(std::fabs(a->heldOffsetAt(64)) < 1e-9);
+                  }
+            QString row = QString("D B' | %1 |").arg(m.first);
+            for (const char* name : { "Spiccato", "Short 0.5", "Short 1.0", "Pizzicato", "Pizzicato Bartok", "Col Legno" }) {
+                  const SoundLib::Articulation* a = artOf(m.first, name);
+                  row += QString(" %1 %2 |").arg(name).arg(SoundLib::techniqueOffsetDb(shipped, m.first, *a, m.first, 1, -1, 96), 0, 'f', 1);
+                  }
+            qInfo("%s", qPrintable(row));
             }
       for (const char* patch : { "Violins 1", "Violins 2", "Violas", "Celli", "Basses" }) {
             QString row = QString("D | %1 |").arg(patch);

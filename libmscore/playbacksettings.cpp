@@ -113,11 +113,13 @@ static const std::vector<Definition> DEFINITIONS = {
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
       // balance: measured sensible, docs/PLAYBACK_SETTINGS.md › Calibrated levels; 2026-10-15, the owner, option B: "yes
-      // this makes sense": matched + the recorded loud-end difference, 2, in Recommended and by default)
+      // this makes sense": matched + the recorded loud-end difference, 2, in Recommended and by default; option B', the
+      // owner: "if the data clearly point to b', then b' it is": D from real players where measured)
       { "levels/calibrated", 2, 0, 2, "",
         "2: a technique on velocity (the map's <Dynamics velocity>: shorts, pizzicato ...), where measured, as loud as the "
-        "part's held note at the same dynamic plus D, its level at velocity 127 less the held note's at 127 (both recorded "
-        "loud), plus MuseScore 4's offset for its articulations (40 log10 of its velocity over a plain note's, marcato's too); "
+        "part's held note at the same dynamic plus D, real players' difference where the map lists one (heldOffset: SSO's "
+        "string staccatos -4.2 dB, pizzicato -5 .. -12 dB), else its level at velocity 127 less the held note's at 127 (both "
+        "recorded loud), plus MuseScore 4's offset for its articulations (40 log10 of its velocity over a plain note's, marcato's too); "
         "with [levels] context the slurs keep 1.3 dB over the staccatos (+ D of the Spiccato); "
         "1: as 2 without D; 1 and 2: a Performance legato note (on the dynamics CC) at the CC at which its patch sounds as "
         "loud as the part's held note; 0: at the dynamic's level, MuseScore 4's accent share on top, a marcato at the plain "

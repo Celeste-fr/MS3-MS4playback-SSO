@@ -77,8 +77,9 @@
 //   context, by its phrase's gain, measured in the music at the written dynamic against the staccatos (which are the
 //   Long's level there): each is the Long's level at the written CC1, which already holds SSO's own change with CC1
 //   once; realDb takes that change away (- long) and puts the player's in ((F(steps) - F(0)) x span), so SSO's change is
-//   counted once, not twice. With [levels] calibrated 2 (option B, 2026-10-15) a note on velocity is matched to the
-//   Long as with 1 and plays a constant D more (its loud-end difference), so it follows the Long's change too and takes
+//   counted once, not twice. With [levels] calibrated 2 (option B', 2026-10-15) a note on velocity is matched to the
+//   Long as with 1 and plays D more (real players' difference, heldOffset; else its loud-end difference), so it follows
+//   the Long's change too and takes
 //   the same realDb. A short whose calibrated velocity is capped (127 and still under its level, or 1 and still
 //   over it) gets the rest by CC11 (realExtra), no longer silently.
 //   Headroom: CC11 only lowers, so a part's notes play realDb less the part's largest R (Volumes::range, every note's
@@ -141,8 +142,9 @@ bool has(const SoundLib::LibInstrument* patch);
 double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset);
 // the gains were fitted against the section's staccatos (Spiccato) at [levels] calibrated 1's level (level_rule.py:
 // gain = st - pfd + 1.3, the owner's 1.3 dB of slurs over the staccatos around them). With calibrated 2 the staccatos
-// play D louder (SoundLib::loudEndDb of the section's Spiccato against its Long, the patch's one curve), so every slur
-// gain of the section takes D too: the relation stays 1.3 dB, G and S follow. 0: not 2, no calibration, not measured
+// play D more (SoundLib::techniqueOffsetDb of the section's Spiccato against its Long: option B', the map's heldOffset,
+// real players' -4.2 dB; else SSO's loud-end difference), so every slur gain of the section takes D too (negative: the
+// slurs lower with them): the relation stays 1.3 dB, G and S follow. 0: not 2, no calibration, not measured
 double staccatoShiftDb(const std::vector<const SoundLib::LibInstrument*>& patches, const Score* score);
 
 // whether [levels] realRange is on for the score (1 or 2)

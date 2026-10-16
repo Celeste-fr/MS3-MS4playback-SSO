@@ -170,6 +170,12 @@ struct Articulation {
       struct QuickLevel { int pitch; double ms; double db; };
       std::vector<QuickLevel> quickLevels;          // sorted by pitch, then ms
       double quickLevelAt(int pitch, double ms) const; // log-linear in ms, linear in pitch, the nearest end's beyond; 0: none
+      // [levels] calibrated 2 (option B', the owner 2026-10-15): the dB a velocity technique plays over the part's held
+      // note matched at the same marking, from real players (<Articulation heldOffset="-4.2"> or "32:-7 112:-9": by the
+      // written dynamic's CC, linear between, the nearest end's beyond; tools/soundlibraries/technique_offsets.json).
+      // Empty: none listed (SoundLib::techniqueOffsetDb takes the library's own loud-end difference)
+      std::vector<std::pair<int, double>> heldOffsets;   // cc -> dB, sorted; one entry with cc -1: every marking
+      double heldOffsetAt(int cc) const;  // (heldOffsets not empty)
       // [levels] context (contextlevel.h): the gain in dB a slur on this articulation needs over the patch at the
       // dynamics CC = cc (the written dynamic's value), for the slur's median note spacing (ms) and median pitch
       // (<Articulation contextLevel="cc/ms/pitch:dB …">: a full grid, measured in context, performance_context/level_rule.py)
@@ -514,7 +520,8 @@ int calibratedController(const DynamicsCalibration& cal, const QString& patch, i
 // (pitch: the note's, for a technique measured at several pitches; -1: its one curve)
 int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int value,
                        const QString& refPatch, int refValue, int cc, double db, int pitch = -1);
-// [levels] calibrated 2 (option B, the owner 2026-10-15): D, the technique's level at velocity 127 less the held note's
+// [levels] calibrated 2's D where the map lists no heldOffset (option B's, the owner 2026-10-15; option B' keeps it for
+// the techniques without real-player data, an assumption): the technique's level at velocity 127 less the held note's
 // at its CC 127: at the loudest layers both recordings are the players playing loud, so their relation is recorded data
 // (the curves in between are the library's mapping). By ear where both curves are (as calibratedVelocity), the
 // loudest 50 ms else; at the pitch's curves where measured. NAN: a curve missing or the technique not on velocity
@@ -522,6 +529,11 @@ double loudEndDb(const DynamicsCalibration& cal, const QString& patch, int value
                  int pitch = -1);
 // calibratedVelocity, but not extrapolated under the technique's lowest measured point: there that point's velocity,
 // and *under the dB still to go (< 0; else 0), which the renderer plays by CC11
+// [levels] calibrated 2's D for a technique against the held note (option B', the owner 2026-10-15: real players'
+// difference where the map lists one, Articulation::heldOffsets at the written dynamic's cc; else the library's own,
+// loudEndDb: an assumption, no real-player data). NAN: neither
+double techniqueOffsetDb(const DynamicsCalibration& cal, const QString& patch, const Articulation& a, const QString& refPatch,
+                         int refValue, int pitch, int cc);
 int calibratedVelocityFloored(const DynamicsCalibration& cal, const QString& patch, int value,
                               const QString& refPatch, int refValue, int cc, double db, int pitch, double* under);
 

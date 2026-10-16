@@ -88,7 +88,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
 //               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
-//               [bendGlide="136:-8:100 300:70:230 …"]/>;
+//               [bendGlide="136:-8:100 300:70:230 …"] [heldOffset="-4.2" | heldOffset="32:-7 112:-9"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -307,6 +307,20 @@ double Articulation::contextLevelAt(double cc, double ms, double pitch) const
       return db;
       }
 
+double Articulation::heldOffsetAt(int cc) const
+      {
+      if (heldOffsets.empty())
+            return 0.0;
+      if (heldOffsets.size() == 1 || cc <= heldOffsets.front().first)
+            return heldOffsets.front().second;
+      if (cc >= heldOffsets.back().first)
+            return heldOffsets.back().second;
+      auto hi = std::lower_bound(heldOffsets.begin(), heldOffsets.end(), cc,
+                                 [](const std::pair<int, double>& x, int c) { return x.first < c; });
+      auto lo = hi - 1;
+      return lo->second + (hi->second - lo->second) * double(cc - lo->first) / double(hi->first - lo->first);
+      }
+
 double Articulation::quickLevelAt(int pitch, double ms) const
       {
       // each measured pitch's level at ms, then between the two pitches around the note
@@ -393,6 +407,19 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       std::sort(art.quickLevels.begin(), art.quickLevels.end(), [](const Articulation::QuickLevel& x, const Articulation::QuickLevel& y) {
             return x.pitch != y.pitch ? x.pitch < y.pitch : x.ms < y.ms;
             });
+      // heldOffset="dB" or "cc:dB …" ([levels] calibrated 2, option B')
+      for (const QString& t : a.value("heldOffset").toString().split(' ', QString::SkipEmptyParts)) {
+            const int colon = t.indexOf(':');
+            bool ok1 = true, ok2 = false;
+            const int cc = colon < 0 ? -1 : t.left(colon).toInt(&ok1);
+            const double db = t.mid(colon + 1).toDouble(&ok2);
+            if (!ok1 || !ok2 || (colon < 0 && !art.heldOffsets.empty()) || (colon >= 0 && cc < 0))
+                  return false;
+            art.heldOffsets.push_back({ cc, db });
+            }
+      std::sort(art.heldOffsets.begin(), art.heldOffsets.end());
+      if (art.heldOffsets.size() > 1 && art.heldOffsets.front().first < 0)
+            return false;
       for (const QString& t : a.value("contextLevel").toString().split(' ', QString::SkipEmptyParts)) {
             const QStringList f = t.left(t.indexOf(':')).split('/');
             bool ok[4] = { false, false, false, false };
@@ -1495,6 +1522,14 @@ double loudEndDb(const DynamicsCalibration& cal, const QString& patch, int value
       if (c.byEar() && ref.byEar())
             return c.perceivedAt(127) - ref.perceivedAt(127);
       return c.at(127) - ref.at(127);
+      }
+
+double techniqueOffsetDb(const DynamicsCalibration& cal, const QString& patch, const Articulation& a, const QString& refPatch,
+                         int refValue, int pitch, int cc)
+      {
+      if (!a.heldOffsets.empty())
+            return a.heldOffsetAt(cc);
+      return loudEndDb(cal, patch, a.value, refPatch, refValue, pitch);
       }
 
 int calibratedVelocityFloored(const DynamicsCalibration& cal, const QString& patch, int value,

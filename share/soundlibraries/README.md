@@ -229,6 +229,11 @@ switch value of each articulation. For example:
   - `peak` on an `Articulation` (ms): when a held note is loudest after its note-on (SSO: the median over the
     measured semitones of the onset check's mf perceived peak). With `[slurs] quick` a slurred note shorter than
     it plays the patch's tenuto short (1) or espressivo long (2) instead.
+  - `heldOffset` on an `Articulation` of a velocity technique (dB, or `cc:dB` pairs by the written dynamic's CC,
+    linear between, the ends' beyond): with `[levels] calibrated` 2 (option B') the note plays this much over the part's
+    held Long matched at the same marking, real players' difference; without it the library's own loud-end difference.
+    SSO (`gen_spitfire_sso.py` from `tools/soundlibraries/technique_offsets.json`): the five string sections' Spiccato
+    and Short 0.5 `-4.2`, Short 1.0 `0.4`, Pizzicato e.g. Violins 1 `32:-7 112:-9`, the Basses' Bartók and Col Legno `0`.
   - `onset` on an `Articulation` (ms): a sustained note is heard this long after its note-on (its
     level 15 dB under the note's peak), one number or `pitch:ms` pairs by played MIDI pitch
     (`onset="55:65 68:55 78:65 89:40 97:80"`, linear between, the nearest end's beyond). A note that is
