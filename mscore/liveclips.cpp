@@ -737,6 +737,7 @@ void LiveClipsLink::startRender()
             }
       _renderer.reset(new MidiRenderer(_score));
       _renderer->setForLiveClips(true);   // (the automation lanes of plug-in parameters: for the device)
+      _renderer->setFlatParamEvents(true);  // (a setting too: the set may not have it in Kontakt's state)
       _events.clear();
       _nextUtick = 0;
       _renderStarted = QDateTime::currentMSecsSinceEpoch();

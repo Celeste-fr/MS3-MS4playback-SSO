@@ -22,7 +22,7 @@ namespace LibraryControllers {
 //   applyParameters
 //---------------------------------------------------------
 
-void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, PartControllers::Values>& values,
+void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<const Part*, Automation::PartLanes>& lanes,
                      std::map<unsigned, double>* patchValues, const std::vector<QString>& skip)
       {
       if (!p || !r.instrument)
@@ -30,7 +30,7 @@ void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<con
       for (const SoundLib::Controller& c : r.instrument->allControllers) {
             if (c.param.isEmpty() || std::find(skip.begin(), skip.end(), c.id) != skip.end())
                   continue;
-            const int value = PartControllers::value(r.part, c, values);
+            const double value = PartControllers::value(r.part, c, lanes);
             if (value < 0 && (!patchValues || patchValues->empty()))
                   continue;
             const long id = p->parameterId(c.param);
@@ -57,7 +57,7 @@ void applyParameters(Vst3Plugin* p, const SoundLib::Route& r, const std::map<con
 //---------------------------------------------------------
 
 std::vector<int> applyPart(Vst3Synth* vst, const std::vector<SoundLib::Route>& routes, const Part* part,
-                           const std::map<const Part*, PartControllers::Values>& values,
+                           const std::map<const Part*, Automation::PartLanes>& lanes,
                            const std::function<std::map<unsigned, double>*(int)>& patchValues,
                            const std::vector<QString>& skip)
       {
@@ -72,7 +72,7 @@ std::vector<int> applyPart(Vst3Synth* vst, const std::vector<SoundLib::Route>& r
             Vst3Plugin* p = vst->plugin(slot);
             if (!p)
                   continue;
-            applyParameters(p, r, values, patchValues ? patchValues(slot) : nullptr, skip);
+            applyParameters(p, r, lanes, patchValues ? patchValues(slot) : nullptr, skip);
             set.push_back(slot);
             }
       return set;

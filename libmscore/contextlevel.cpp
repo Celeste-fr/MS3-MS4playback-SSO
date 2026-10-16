@@ -95,7 +95,6 @@ std::array<double, 6> MicValues::at(int tick) const
       }
 
 MicValues micValues(const Part* part, const SoundLib::LibInstrument& patch,
-                    const std::map<const Part*, PartControllers::Values>& values,
                     const std::map<const Part*, Automation::PartLanes>& lanes)
       {
       MicValues v;
@@ -104,7 +103,9 @@ MicValues micValues(const Part* part, const SoundLib::LibInstrument& patch,
             const int i = micIndex(c);
             if (i < 0)
                   continue;
-            v.part[size_t(i)] = PartControllers::value(part, c, values);
+            v.part[size_t(i)] = PartControllers::value(part, c, lanes);
+            if (PartControllers::flatLane(own, c))
+                  continue;         // (a setting: the patch volume)
             for (const Automation::Lane& l : own)
                   if (l.target == c.id && !l.points.empty()) {
                         v.lanes[size_t(i)] = l;
@@ -385,7 +386,7 @@ std::map<const Part*, Volumes> volumes(const MasterScore* score)
                           .arg(score->metaTag(Playback::metaTag)).arg(score->metaTag(PartPlaybackModes::metaTag))
                           + QString("|%1|%2|%3%4").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves())
                           .arg(int(context)).arg(sectionMode) + QString("|%1|%2").arg(int(real)).arg(int(mics))
-                          + (mics ? "|" + score->metaTag(PartControllers::metaTag) + "|" + score->metaTag(Automation::metaTag) : QString());
+                          + (mics ? "|" + score->metaTag(Automation::metaTag) : QString());
       static QMutex mutex;
       static std::map<const MasterScore*, std::pair<QString, std::map<const Part*, Volumes>>> cache;
       {
@@ -413,14 +414,13 @@ static std::map<const Part*, std::map<const SoundLib::LibInstrument*, double>> m
       const std::map<const Part*, std::vector<const SoundLib::LibInstrument*>>& patches)
       {
       std::map<const Part*, std::map<const SoundLib::LibInstrument*, double>> out;
-      const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score);
       const std::map<const Part*, Automation::PartLanes> lanes = Automation::read(score);
       for (const auto& pp : patches) {
             std::set<int> ticks;          // (the part's note starts, when automated)
             for (const SoundLib::LibInstrument* p : pp.second) {
                   if (!p->hasMicLevels)
                         continue;
-                  const MicValues v = micValues(pp.first, *p, values, lanes);
+                  const MicValues v = micValues(pp.first, *p, lanes);
                   double top = micOffsetDb(*p, library, v.at(0));
                   if (v.automated()) {
                         if (ticks.empty()) {

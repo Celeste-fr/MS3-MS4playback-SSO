@@ -130,6 +130,16 @@ double Lane::valueAt(int tick) const
       return p.value + (next->value - p.value) * y;
       }
 
+double Lane::flatValue() const
+      {
+      if (points.empty() || points.front().tick > 0)
+            return -1;
+      for (const Point& p : points)
+            if (std::fabs(p.value - points.front().value) > 1e-9)
+                  return -1;
+      return points.front().value;
+      }
+
 const char* const VELOCITY_TARGET = "velocity";
 
 bool velocityAbsolute(const Lane& lane)
@@ -519,6 +529,39 @@ double barLineX(const Measure* m)
           && middle(next->findSegment(SegmentType::StartRepeatBarLine, next->tick()), &x))
             return x;
       return m->canvasPos().x() + m->width();
+      }
+
+int tickAtX(const std::vector<std::pair<int, double>>& anchors, double x)
+      {
+      if (anchors.empty())
+            return 0;
+      if (x <= anchors.front().second)
+            return anchors.front().first;
+      if (x >= anchors.back().second)
+            return anchors.back().first;
+      for (size_t i = 1; i < anchors.size(); ++i) {
+            const auto& a = anchors[i - 1];
+            const auto& b = anchors[i];
+            if (x >= a.second && x <= b.second) {
+                  if (b.second - a.second < 1e-9 || b.first == a.first)
+                        return b.first;
+                  return a.first + int(std::lround(double(b.first - a.first) * (x - a.second) / (b.second - a.second)));
+                  }
+            }
+      return anchors.back().first;
+      }
+
+double pointX(Score* score, const std::vector<std::pair<int, double>>& anchors, int tick)
+      {
+      if (score && tick > 0) {
+            Measure* m = score->tick2measureMM(Fraction::fromTicks(tick));
+            if (m && m->tick().ticks() == tick) {
+                  const Measure* prev = m->prevMeasureMM();
+                  if (prev && prev->system() && prev->system() == m->system())
+                        return barLineX(prev);
+                  }
+            }
+      return xAtTick(anchors, tick);
       }
 
 double xAtTick(const std::vector<std::pair<int, double>>& anchors, int tick)

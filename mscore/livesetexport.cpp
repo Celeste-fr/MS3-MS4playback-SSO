@@ -238,11 +238,12 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                                                                                                           "was not found") : pluginError);
       std::map<QString, LiveSetWriter::Plugin> made;     // by patch (copies for other tunings share it)
       std::map<QString, QString> failed;
-      // a part's plug-in parameters (Controllers…): its routes' states with them set, as MuseScore plays them
-      const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score);
+      // a part's plug-in parameter settings (its flat lanes: partcontrollers.h): its routes' states with them set, as
+      // MuseScore plays them
       std::map<std::pair<const Part*, QString>, LiveSetWriter::Plugin> withControllers;      // by part and patch
       std::map<std::pair<const Part*, QString>, QString> controllerNotes;
       const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score);
+      const std::map<const Part*, Automation::PartLanes>& values = allLanes;
       std::map<std::pair<const Part*, QString>, std::vector<SoundLibraryHost::AppliedParameter>> laneParameters;
       int slow = 0;
       QStringList tunedTracks;
@@ -313,7 +314,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                                     continue;
                                     }
                               const bool held = std::fabs(a.readBack - a.value / 127.0) < 0.5 / 127.0;
-                              set << QString("%1 %2%3").arg(a.title).arg(a.value)
+                              set << QString("%1 %2%3").arg(a.title).arg(a.value, 0, 'g', 6)
                                      .arg(held ? QString() : QObject::tr(" (the plug-in holds %1)").arg(std::lround(a.readBack * 127.0)));
                               LiveSetWriter::Plugin::Parameter lp;
                               lp.id = a.id;
@@ -322,11 +323,11 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                               p.parameters.push_back(lp);
                               }
                         if (!err.isEmpty())
-                              controllerNotes[key] = QObject::tr("%1 – %2: its Controllers could not be set (%3): the patch's own values")
+                              controllerNotes[key] = QObject::tr("%1 – %2: its settings (flat automation lanes) could not be set (%3): the patch's own values")
                                                      .arg(t.part, patch, err);
                         else {
                               withControllers[key] = p;
-                              controllerNotes[key] = QObject::tr("%1 – %2: Controllers set in the plug-in's state: %3").arg(t.part, patch, set.join(", "));
+                              controllerNotes[key] = QObject::tr("%1 – %2: settings (flat automation lanes) in the plug-in's state: %3").arg(t.part, patch, set.join(", "));
                               }
                         }
                   if (withControllers.count(key))
@@ -374,7 +375,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
             QStringList titles;
             for (const Automation::Lane& lane : Automation::lanes(t.partRef, allLanes))
                   for (const SoundLib::Controller& c : t.instrument->allControllers)
-                        if (c.id == lane.target && c.cc < 0 && !c.param.isEmpty())
+                        if (c.id == lane.target && c.cc < 0 && !c.param.isEmpty() && lane.flatValue() < 0)   // (flat: in the state)
                               titles << c.param;
             if (!titles.isEmpty()) {
                   if (!laneParameters.count(key)) {

@@ -172,17 +172,18 @@ class SoundLibraryHost : public QObject {
                                         QString* error);
       static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
                             const QString& pluginPath, QString* error = nullptr);
-      // a part's plug-in parameters (Controllers…) as MuseScore's playback sets them on a route's instance
+      // a part's plug-in parameter settings (its flat automation lanes: partcontrollers.h) as MuseScore's playback sets
+      // them on a route's instance
       struct AppliedParameter {
             QString controller;           // the map's controller id ("mic1")
             QString title;                // the plug-in's parameter ("Mic 1 level", as the plug-in names it)
             long id { -1 };
-            int value { 0 };              // 0-127, the part's (or the map's default)
+            double value { 0 };           // 0-127, the part's setting (or the map's default)
             double readBack { -1 };       // normalized, what the plug-in holds after it took it
             };
       // the parameters the part sets on this route's patch (none: the setup plays as it is)
       static std::vector<QString> routeParameterControllers(const SoundLib::Route& r,
-                                                            const std::map<const Part*, PartControllers::Values>& values);
+                                                            const std::map<const Part*, Automation::PartLanes>& lanes);
       // the route's setup (setupState) as MuseScore plays it: loaded into a new instance of the plug-in, its script
       // settled (loadSetup), the part's parameters set exactly as playback sets them
       // (LibraryControllers::applyParameters), a moment of audio for the plug-in to take them, then its state (the
@@ -193,12 +194,14 @@ class SoundLibraryHost : public QObject {
       // score": Live names Kontakt's automation slots "#001" … and the MuseScore Link device finds them by id)
       static void rememberParameterIds(const SoundLib::Library& library, const QString& patch, const std::map<QString, long>& ids);
       static long knownParameterId(const SoundLib::Library& library, const QString& patch, const QString& title);
+      // (after a setup loaded and settled: its parameters' values for setupParameterValue)
+      static void recordSetupValues(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch);
       // the parameters with these titles on the patch as MuseScore loads it (setup, script settled): id (-1: not in it)
       // and the patch's own value (readBack); controller empty
       static bool parametersOf(const SoundLib::Library& library, const SoundLib::Route& r, const QStringList& titles,
                                const QString& pluginPath, std::vector<AppliedParameter>* found, QString* error = nullptr);
       static QByteArray stateWithControllers(const SoundLib::Library& library, const SoundLib::Route& r,
-                                             const std::map<const Part*, PartControllers::Values>& values,
+                                             const std::map<const Part*, Automation::PartLanes>& lanes,
                                              const QString& pluginPath, std::vector<AppliedParameter>* applied,
                                              QString* error = nullptr);
       // after a setup was set on p (loadSetup does both): load times.log, and a setup made from the
@@ -228,9 +231,13 @@ class SoundLibraryHost : public QObject {
       // 50 ms (so mute and solo from anywhere reach them: the Mixer, the old part editor, OSC)
       void applyMixer(const Score* score = nullptr);
       std::vector<int> slotsOf(const Part* part) const;   // the part's slots (last sync)
-      // live (the Controllers window): the part's plug-in parameter controllers at values (its own
-      // now) on all its loaded slots at once; the slots set
-      std::vector<int> applyPartControllers(MasterScore* ms, const Part* part, const PartControllers::Values& values);
+      // live (an automation lane edited, also during playback: mscore/automationlanes.h): the part's plug-in parameter
+      // settings (its flat lanes; without one the patch's own value again) on all its loaded slots at once, leaving the
+      // parameters its other lanes play to them; the slots set
+      std::vector<int> applyPartSettings(MasterScore* ms, const Part* part);
+      // the setup's own value (0-1) of a plug-in parameter of a patch, as recorded when the setup last loaded on this
+      // computer ("parameter values.json" in the setups folder; -1: not known): the lanes' dashed line
+      static double setupParameterValue(const SoundLib::Library& library, const QString& patch, const QString& title);
 
    protected:
       bool eventFilter(QObject* o, QEvent* e) override;
@@ -284,21 +291,24 @@ class SoundLibraryDialog : public QDialog {
 
       std::shared_ptr<const SoundLib::Library> _library;
       SoundLib::Output _output;
+      QPointer<Score> _score;             // (null: the current score)
       QLabel* _info;
+      QLabel* _folder { nullptr };        // the library's folder (the box above the parts: every score)
       QTreeWidget* _tree;                 // a part, its patches (extras, copies for other tunings) under it
 
       void rebuild();
 
    public:
-      SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> library, SoundLib::Output output, QWidget* parent = nullptr);
+      // score: the one shown (null: the current one, followed)
+      SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> library, SoundLib::Output output, QWidget* parent = nullptr,
+                         Score* score = nullptr);
       };
 
 //---------------------------------------------------------
 //   SoundLibraryOptions
 //    Mixer › Advanced Options…: the score's sound library settings (the copies for other tunings,
-//    held notes early by their onset) and the library's own (its folder, the background
-//    measurements); the owner, 2026-09-28: "put the useful configs in there … make all these
-//    configs per score"
+//    held notes early by their onset); the owner, 2026-09-28: "put the useful configs in there … make
+//    all these configs per score". (The library's folder: View › Sound Library…, since 2026-10-15)
 //---------------------------------------------------------
 
 class SoundLibraryOptions : public QDialog {
@@ -306,7 +316,6 @@ class SoundLibraryOptions : public QDialog {
 
       std::shared_ptr<const SoundLib::Library> _library;
       QPointer<MasterScore> _score;
-      QLabel* _folder { nullptr };
       QLabel* _liveSet { nullptr };
       QCheckBox* _liveAuto { nullptr };
       QPushButton* _liveUnlink { nullptr };
