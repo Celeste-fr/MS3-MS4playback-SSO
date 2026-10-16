@@ -367,6 +367,7 @@ void InspectorNote::techniqueChosen(int index)
                   note->undoChangeProperty(Pid::LIBRARY_TECHNIQUE, value);
       inspector->setInspectorEdit(true);
       score->endCmd();
+      inspector->setInspectorEdit(false);       // as InspectorBase::valueChanged: left set, the Inspector never updated again
       setTechniques();
       setPerformanceShown();
       }

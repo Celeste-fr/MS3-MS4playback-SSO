@@ -3098,7 +3098,7 @@ void TestSoundLibrary::levelTechniqueBalance()
       QVERIFY2(std::abs(marc2 - qMin(127.0, (L(f) + dM + marcDb + 40) / 0.15)) <= 1,
                qPrintable(QString("marcato %1, share %2").arg(marc2).arg(marcShare)));
       // the Inspector's +3 dB on the marcato: 20 velocities more along its curve (capped at 127)
-      Chord* marcChord = nullptr;
+      Ms::Chord* marcChord = nullptr;       // Ms::: MSVC sees another Chord here (run 437)
       for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
             if (seg->element(0) && seg->element(0)->isChord() && toChord(seg->element(0))->upNote()->pitch() == 77)
                   marcChord = toChord(seg->element(0));
