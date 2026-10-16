@@ -1584,6 +1584,18 @@ if MIC.get('faderLaw'):
         '       Kontakt 8 (tools/soundlibraries/sso_mic_levels.json, mic_levels.py); micLevels= on an Instrument: each mic alone',
         '       at its full fader against the patch\'s default mix (micDefault=: its default faders, the others 0) -->',
         f'  <Mics fader="{fader}" mix="{mix}"/>']
+# - <Dynamics crest=> (the master trim, contextlevel.h › Gain stage and master trim; the owner, 2026-10-15): the largest
+#   measured sample peak of a note over its loudest 50 ms (the dynamics calibration's level), sso_crest.json (crest_sweep.py:
+#   the five string sections' All techniques and Performance patches in real Kontakt 8 + SSO on the Windows VM, 392 notes,
+#   2026-10-12); MuseScore adds it to each sounding note's calibrated level to find the score's loudest peak
+CREST = loadFit('sso_crest.json')
+if CREST.get('crest'):
+    at = next(i for i, ln in enumerate(out) if ln.startswith('  <Dynamics cc='))
+    out[at] = out[at].replace('/>', f' crest="{CREST["crest"]["max"]:g}"/>')
+    out[at:at] = [
+        '  <!-- crest=: a note\'s sample peak over its loudest 50 ms, dB, the largest of 392 string notes measured in Kontakt 8',
+        f'       (tools/soundlibraries/sso_crest.json, median {CREST["crest"]["median"]:g}): the master trim adds it to each note\'s',
+        '       calibrated level (libmscore/contextlevel.h › Gain stage and master trim) -->']
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0

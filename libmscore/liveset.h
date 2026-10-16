@@ -136,6 +136,9 @@ struct Track {
       // its Track Delay (TrackDelay/Value; IsValueSampleBased: in samples, else ms)
       double delay { 0 };
       bool delayInSamples { false };
+      // MuseScore's gain stage (LiveSetWriter::UTILITY_NAME: a Utility of that name in its devices) and its Gain (linear)
+      bool hasMuseScoreGain { false };
+      double museScoreGain { 1 };
       };
 
 struct Set {

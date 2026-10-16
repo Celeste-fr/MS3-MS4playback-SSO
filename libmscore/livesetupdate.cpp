@@ -472,6 +472,15 @@ int pluginDeviceOf(const Xml& x, int t)
       return x.child(devicesOf(x, t), "PluginDevice");
       }
 
+// MuseScore's gain stage on a Kontakt track: a Utility (StereoGain) named LiveSetWriter::UTILITY_NAME; -1 none
+int utilityOf(const Xml& x, int t)
+      {
+      for (int d : x.children(devicesOf(x, t), "StereoGain"))
+            if (x.childValue(d, "UserName") == QLatin1String(LiveSetWriter::UTILITY_NAME))
+                  return d;
+      return -1;
+      }
+
 // lines of a block written by LiveSetWriter's Writer at depth 0 (CRLF after each), placed where an element of indent
 // `indent` starts: the first line at the element's place, the others indented
 QByteArray placed(const QByteArray& block, const QByteArray& indent, const QByteArray& nl)
@@ -1129,6 +1138,8 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
             const bool kontakt = w != recorded.written.end() ? w->second.kind == "kontakt" : !routed;
             if (kontakt && pluginDeviceOf(ox, t) >= 0)
                   ++ours;
+            if (kontakt && utilityOf(ox, t) >= 0)
+                  ++ours;
             rep.userDevices += std::max(0, int(ox.children(devicesOf(ox, t)).size()) - ours);
             }
 
@@ -1229,9 +1240,64 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                         }
                   }
 
-            // a Kontakt: its slots' state when the tunings changed, its parameters' automation
+            // a Kontakt: its gain stage (MuseScore's Utility: its Gain and Info text), its slots' state when the tunings
+            // changed, its parameters' automation
             if (t.midiTo < 0) {
                   const int plugin = pluginDeviceOf(ox, o);
+                  const int utility = utilityOf(ox, o);
+                  if (utility >= 0) {
+                        const double want = t.utility ? t.utilityGain : 1.0;
+                        const int manual = ox.path(utility, { "Gain", "Manual" });
+                        int a = 0, b = 0;
+                        if (manual >= 0 && std::fabs(LiveSetWriter::utilityDb(ox.value(manual).toDouble()) - LiveSetWriter::utilityDb(want)) > 0.005
+                            && ox.attrRange(manual, "Value", &a, &b)) {
+                              edits.push_back({ a, b, LiveSetWriter::Writer::num(want).toUtf8() });
+                              what << QObject::tr("%1 %2 dB").arg(LiveSetWriter::UTILITY_NAME)
+                                      .arg(LiveSetWriter::utilityDb(want), 0, 'f', 2);
+                              }
+                        const int info = ox.child(utility, "Annotation");
+                        if (t.utility && info >= 0 && ox.value(info) != t.utilityInfo && ox.attrRange(info, "Value", &a, &b))
+                              edits.push_back({ a, b, LiveSetWriter::Writer::esc(t.utilityInfo) });
+                        }
+                  else if (t.utility && plugin >= 0) {
+                        // a set written before the gain stage (or a patch that had no gain): the Utility inserted right
+                        // after the Kontakt (the owner's devices after it keep their place), its list Id after the others'
+                        const int devices = devicesOf(ox, o);
+                        int listId = 0;
+                        for (int d : ox.children(devices))
+                              listId = std::max(listId, ox.attr(d, "Id").toInt() + 1);
+                        LiveSetWriter::Writer uw;
+                        LiveSetWriter::utilityDevice(uw, listId, t.utilityGain, t.utilityInfo);
+                        const Xml ux(uw.data());
+                        std::vector<Edit> ue;
+                        std::map<QByteArray, QByteArray> uids;
+                        renumber(ux, ux.root(), &nextPointee, &uids, &ue);
+                        const QByteArray block = piece(ux, 0, ux.data().size(), ue);
+                        edits.push_back({ ox.at(plugin).end, ox.at(plugin).end,
+                                          nl + ox.indent(plugin) + withNl(placed(block, ox.indent(plugin), nl), nl) });
+                        what << QObject::tr("%1 %2 dB (inserted)").arg(LiveSetWriter::UTILITY_NAME)
+                                .arg(LiveSetWriter::utilityDb(t.utilityGain), 0, 'f', 2);
+                        // its fader: the volume a set written before the gain stage had there moves to the Utility (the
+                        // owner's change of it was read back first, into the part's Mixer); a fader that is neither that
+                        // nor MuseScore's now stays the owner's
+                        const int vm = ox.path(o, { "DeviceChain", "Mixer", "Volume", "Manual" });
+                        int a = 0, b = 0;
+                        if (vm >= 0 && t.legacyVolume > 0) {
+                              const double now = ox.value(vm).toDouble();
+                              if (std::fabs(now - t.legacyVolume) <= std::max(1e-6, t.legacyVolume * 1e-4)) {
+                                    if (std::fabs(now - t.volume) > std::max(1e-6, t.volume * 1e-4) && ox.attrRange(vm, "Value", &a, &b)) {
+                                          edits.push_back({ a, b, LiveSetWriter::Writer::num(t.volume).toUtf8() });
+                                          what << QObject::tr("fader %1 dB (its old volume moved to the Utility)")
+                                                  .arg(LiveSetWriter::utilityDb(t.volume), 0, 'f', 2);
+                                          }
+                                    }
+                              else if (std::fabs(now - t.volume) > std::max(1e-6, t.volume * 1e-4))
+                                    rep.skipped << QObject::tr("%1: its fader (%2 dB) is yours, kept; it may still hold the level "
+                                                               "MuseScore's Utility now plays (%3 dB before)")
+                                                   .arg(name).arg(LiveSetWriter::utilityDb(now), 0, 'f', 2)
+                                                   .arg(LiveSetWriter::utilityDb(t.legacyVolume), 0, 'f', 2);
+                              }
+                        }
                   const QString tunings = slotsText(t.slotCents);
                   if (w && w->slotTunings != tunings) {
                         const int ps = ox.path(plugin, { "PluginDesc", "Vst3PluginInfo", "Preset", "Vst3Preset", "ProcessorState" });

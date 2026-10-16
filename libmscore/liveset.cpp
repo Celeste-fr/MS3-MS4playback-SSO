@@ -20,6 +20,7 @@
 #include <zlib.h>
 
 #include "liveclips.h"
+#include "livesetwriter.h"
 #include "part.h"
 #include "repeatlist.h"
 #include "score.h"
@@ -330,6 +331,9 @@ Set parse(const QByteArray& xml)
       std::unique_ptr<TrackState> ts;
       int trackDepth = -1;
       int deviceDepth = -1;
+      int utilityDepth = -1;              // a Utility (StereoGain): MuseScore's when named so
+      bool utilityOurs = false;
+      double utilityGain = 1;
       int paramDepth = -1;
       int clipDepth = -1;
       int envelopeDepth = -1;
@@ -446,6 +450,16 @@ Set parse(const QByteArray& xml)
                         else if (n == "LowerDisplayString")
                               lower = value.toString();
                         }
+                  // MuseScore's gain stage: a Utility named LiveSetWriter::UTILITY_NAME
+                  else if (n == "StereoGain" && parent() == "Devices") {
+                        utilityDepth = depth;
+                        utilityOurs = false;
+                        utilityGain = 1;
+                        }
+                  else if (utilityDepth >= 0 && n == "UserName" && depth == utilityDepth + 1)
+                        utilityOurs = value == QLatin1String(LiveSetWriter::UTILITY_NAME);
+                  else if (utilityDepth >= 0 && n == "Manual" && parent() == "Gain" && depth == utilityDepth + 2)
+                        utilityGain = num(value);
                   // plug-ins
                   else if (n == "PluginDevice" || n == "AuPluginDevice") {
                         deviceDepth = depth;
@@ -556,6 +570,13 @@ Set parse(const QByteArray& xml)
                               }
                         else if (depth == deviceDepth)
                               deviceDepth = -1;
+                        else if (depth == utilityDepth) {
+                              if (utilityOurs && !ts->track.hasMuseScoreGain) {
+                                    ts->track.hasMuseScoreGain = true;
+                                    ts->track.museScoreGain = utilityGain;
+                                    }
+                              utilityDepth = -1;
+                              }
                         else if (depth == envelopeDepth) {
                               if (!env.pointee.isEmpty() && !env.events.empty())
                                     ts->envelopes.push_back(env);

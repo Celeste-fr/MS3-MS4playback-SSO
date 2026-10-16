@@ -353,6 +353,9 @@ constexpr int CONTROLLER_TARGETS = 131;
 void clipTimeable(Writer& w, const Track& t, int numerator, int denominator, const std::vector<int>& controllerTargets);
 // the MidiControllers index of a controller (a CC, PITCH_BEND_ENVELOPE); -1: none
 int controllerTarget(int controller);
+// MuseScore's gain stage on a Kontakt track (livesetwriter.h › UTILITY_NAME): Live's stock Utility, Gain a linear factor
+// (0 … UTILITY_MAX), its Info text info; listId: its place in the track's Devices (livesetupdate.cpp inserts one too)
+void utilityDevice(Writer& w, int listId, double gain, const QString& info);
 // MIDI To: the track (its Id) whose plug-in gets the MIDI
 void midiToRouting(Writer& w, int trackId, const QString& trackName, int channel = 0, const QString& deviceName = QString());
 

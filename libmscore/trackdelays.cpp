@@ -114,9 +114,10 @@ std::map<const Part*, Delays> read(const MasterScore* score)
             d.ruleTop = v.second.top;
             d.rangeTop = v.second.range;
             d.micTop = v.second.micTop;
+            d.shift = v.second.shift;
             }
-      // [levels] evenLevels: each patch's largest correction on its volume, its notes that much lower; the rest that
-      // doesn't fit under MAX_DB lowers every library patch of the score alike (evenAll)
+      // [levels] evenLevels: each patch's largest correction on its gain stage, its notes that much lower. (evenAll: the
+      // old volumes' rest that didn't fit under MAX_DB, legacyPatchGain only)
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (library && library->dynamicsCC != CTRL_EXPRESSION && Playback::on("levels/evenLevels", score)) {
             double rest = 0.0;
@@ -126,7 +127,7 @@ std::map<const Part*, Delays> read(const MasterScore* score)
                               continue;
                         Delays& d = delays[pt.first];
                         auto r = d.rule.find(t.first);
-                        const double now = std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, t.first) + (r == d.rule.end() ? 0.0 : r->second)));
+                        const double now = std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, t.first) + (r == d.rule.end() ? 0.0 : r->second) - d.shift));
                         d.even[t.first] = t.second;
                         rest = std::max(rest, t.second - (MAX_DB - now));
                         }
@@ -136,6 +137,11 @@ std::map<const Part*, Delays> read(const MasterScore* score)
                         delays[part].evenAll = -rest;
                   }
             }
+      // the master trim (0 while it is being computed: ContextLevel::masterTrim renders the score with these gains)
+      const double trim = ContextLevel::masterTrim(score).db;
+      if (trim != 0.0)
+            for (const Part* part : score->parts())
+                  delays[part].trim = trim;
       return delays;
       }
 
@@ -230,13 +236,37 @@ double noteDb(const Delays& d, const QString& patch, const QString& technique)
       return std::max(MIN_DB, std::min(MAX_DB, db(d, patch, technique))) - headroomDb(d, patch);
       }
 
-double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
+static double ruleDb(const Delays& d, const QString& patch)
+      {
+      auto r = d.rule.find(patch);
+      return r == d.rule.end() ? 0.0 : r->second;
+      }
+
+double faderGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
       {
       if (library.dynamicsCC == CTRL_EXPRESSION)
             return 1.0;
-      auto r = d.rule.find(patch);
-      const double rule = r == d.rule.end() ? 0.0 : r->second;
-      return std::pow(10.0, std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, patch) + rule)) / 20.0 + evenVolumeDb(d, patch) / 20.0);
+      return std::pow(10.0, headroomDb(d, patch) / 20.0);
+      }
+
+double gainStageDb(const SoundLib::Library& library, const Delays& d, const QString& patch)
+      {
+      if (library.dynamicsCC == CTRL_EXPRESSION)
+            return 0.0;
+      return ruleDb(d, patch) + evenDb(d, patch) - d.trim;
+      }
+
+double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
+      {
+      return faderGain(library, d, patch) * std::pow(10.0, gainStageDb(library, d, patch) / 20.0);
+      }
+
+double legacyPatchGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
+      {
+      if (library.dynamicsCC == CTRL_EXPRESSION)
+            return 1.0;
+      const double volume = std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, patch) + ruleDb(d, patch) - d.shift));
+      return std::pow(10.0, (volume + evenDb(d, patch) + d.evenAll) / 20.0);
       }
 
 double evenDb(const Delays& d, const QString& patch)
@@ -245,9 +275,33 @@ double evenDb(const Delays& d, const QString& patch)
       return e == d.even.end() ? 0.0 : e->second;
       }
 
-double evenVolumeDb(const Delays& d, const QString& patch)
+std::map<int, int> midiVolumes(const MasterScore* score, const SoundLib::Library& library, bool withSolo)
       {
-      return evenDb(d, patch) + d.evenAll;
+      std::map<int, int> out;
+      if (!score || library.dynamicsCC == CTRL_EXPRESSION)
+            return out;
+      const std::map<const Part*, Delays> delays = read(score);
+      std::map<int, std::pair<double, bool>> want;      // route -> its gain, the Mixer's included (dB); its patch's gain isn't 1
+      double over = 0.0;
+      bool any = false;
+      const double top = 40.0 * std::log10(1.27);                         // CC7 127: (127 / 100)², +4.15 dB
+      for (const SoundLib::Route& r : SoundLib::routes(score, library, true)) {
+            const double gain = patchGain(library, of(r.part, delays), r.instrument->name);
+            const int v = qBound(0, SoundLib::partMix(r.part, withSolo).volume, 127);
+            if (v == 0 || !(gain > 0.0))
+                  continue;
+            const bool own = std::fabs(gain - 1.0) > 1e-9;
+            const double db = 40.0 * std::log10(v / 100.0) + 20.0 * std::log10(gain);
+            want[r.port * 16 + r.channel] = { db, own };
+            over = std::max(over, db - top);
+            any = any || own;
+            }
+      if (!any)
+            return out;
+      for (const auto& w : want)
+            if (w.second.second || over > 0.0)
+                  out[w.first] = qBound(0, int(std::lround(100.0 * std::pow(10.0, (w.second.first - over) / 40.0))), 127);
+      return out;
       }
 
 }     // namespace TrackDelays

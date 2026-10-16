@@ -293,6 +293,8 @@ void midiTrack(Writer& w, const Spec& spec, int index)
                   linkDevice(w, link, n++, t);
             if (t.hasPlugin)
                   pluginDevice(w, t.plugin, n++, parameterTargets);
+            if (t.hasPlugin && t.utility)
+                  utilityDevice(w, n++, t.utilityGain, t.utilityInfo);
             w.close("Devices");
             }
       w.empty("SignalModulations");
@@ -693,6 +695,50 @@ void noteAlgorithms(Writer& w)
 
 }     // namespace
 
+// Live's stock Utility (StereoGain) as Live 12.4.6 saves one (a factory set's, element for element; its presets' paths
+// left empty, as this writer's other devices'), at its defaults but its Gain, named UTILITY_NAME
+void utilityDevice(Writer& w, int listId, double gain, const QString& info)
+      {
+      w.open("StereoGain", "Id=\"" + QByteArray::number(listId) + "\"");
+      w.value("LomId", 0);
+      w.value("LomIdView", 0);
+      w.value("IsExpanded", true);
+      w.value("BreakoutIsExpanded", false);
+      w.onOff("On");
+      w.value("ModulationSourceCount", 0);
+      w.lom("ParametersListWrapper");
+      w.empty("Pointee", "Id=\"" + QByteArray::number(w.id()) + "\"");
+      w.value("LastSelectedTimeableIndex", 0);
+      w.value("LastSelectedClipEnvelopeIndex", 0);
+      w.emptyValue("LastPresetRef");
+      w.empty("LockedScripts");
+      w.value("IsFolded", false);
+      w.value("ShouldShowPresetName", true);
+      w.value("UserName", UTILITY_NAME);
+      w.value("Annotation", info);
+      w.emptyValue("SourceContext");
+      w.value("MpePitchBendUsesTuning", true);
+      w.value("ViewData", "{}");
+      w.value("OverwriteProtectionNumber", OVERWRITE_PROTECTION);
+      w.onOff("PhaseInvertL", false);
+      w.onOff("PhaseInvertR", false);
+      w.paramRangeAfter("ChannelMode", "1", "0", "3");
+      w.param("StereoWidth", "1", "0", "4");
+      w.param("MidSideBalance", "1", "0", "2");
+      w.value("MidSideBalanceOn", false);
+      w.onOff("Mono", false);
+      w.onOff("BassMono", false);
+      w.value("BassMonoAudition", false);
+      w.param("BassMonoFrequency", "120", "50", "500");
+      w.param("Balance", "0", "-1", "1");
+      w.param("Gain", Writer::num(std::max(0.0, std::min(UTILITY_MAX, gain))), "0", Writer::num(UTILITY_MAX));
+      w.param("LegacyGain", "0", "-35", "35");
+      w.onOff("Mute", false);
+      w.onOff("DcFilter", false);
+      w.value("LegacyMode", false);
+      w.close("StereoGain");
+      }
+
 //---------------------------------------------------------
 //   xml
 //---------------------------------------------------------
@@ -1009,7 +1055,13 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             t.cents = r.cents;
             // the Mixer as MuseScore's host plays the part (mute, not solo: as MuseScore's export)
             const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
-            t.volume = kontaktVolume(m.volume, TrackDelays::patchGain(library, TrackDelays::of(r.part, delays), t.patch));
+            const TrackDelays::Delays d = TrackDelays::of(r.part, delays);
+            const double stage = TrackDelays::gainStageDb(library, d, t.patch);
+            const KontaktGains g = kontaktGains(m.volume, TrackDelays::faderGain(library, d, t.patch), stage);
+            t.volume = g.volume;
+            t.utility = g.hasUtility;
+            t.utilityGain = g.utility;
+            t.utilityInfo = utilityInfo(stage, d.trim);
             t.pan = mixPan(m.pan);
             t.active = !m.muted;
             out.push_back(t);
@@ -1049,6 +1101,32 @@ double mixGain(int volume)
 double kontaktVolume(int volume, double patchGain)
       {
       return std::min(MAX_VOLUME, mixGain(volume) * patchGain);
+      }
+
+const char* const UTILITY_NAME = "MuseScore gain";
+
+KontaktGains kontaktGains(int volume, double faderGain, double gainStageDb)
+      {
+      KontaktGains g;
+      if (!std::isfinite(gainStageDb))
+            gainStageDb = 0.0;
+      const double rest = std::max(0.0, gainStageDb - UTILITY_MAX_DB);
+      g.volume = std::min(MAX_VOLUME, mixGain(volume) * faderGain * std::pow(10.0, rest / 20.0));
+      g.utility = std::min(UTILITY_MAX, std::pow(10.0, std::min(gainStageDb, UTILITY_MAX_DB) / 20.0));
+      g.hasUtility = std::fabs(gainStageDb) > 1e-6;
+      return g;
+      }
+
+QString utilityInfo(double gainStageDb, double trimDb)
+      {
+      return QString("MuseScore's gain for this patch: %1 dB (its levels %2 dB, the score's master trim %3 dB). Create Live Set "
+                     "and Update Live Set write it; use the track's fader for your own changes.")
+             .arg(gainStageDb, 0, 'f', 2).arg(gainStageDb + trimDb, 0, 'f', 2).arg(trimDb >= 0.005 ? -trimDb : 0.0, 0, 'f', 2);
+      }
+
+double utilityDb(double gain)
+      {
+      return gain > 0.0 ? 20.0 * std::log10(gain) : -200.0;
       }
 
 double mixPan(int pan)

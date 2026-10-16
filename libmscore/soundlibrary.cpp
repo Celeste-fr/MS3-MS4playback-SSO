@@ -661,6 +661,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         lib->expressionValue = a.value("expression").toInt();
                   if (a.hasAttribute("velocity"))
                         lib->velocityDynamics = a.value("velocity").toString().split(' ', QString::SkipEmptyParts);
+                  if (a.hasAttribute("crest"))
+                        lib->crestDb = a.value("crest").toDouble();
                   // (heard=: the short notes' balance's references, removed 2026-10-07; ignored)
                   r.skipCurrentElement();
                   }

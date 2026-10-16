@@ -504,6 +504,26 @@ in a section collapsible at the same time".
   note on the patch plays its level less the headroom by CC11 (`noteDb`). Read back: the Kontakt track's Volume less
   the headroom is the Mixer's. Above the Mixer's default (100) the two add past Live's +6 dB: Live is kept at +6 (What
   still differs). Test: `tst_soundlibrary` `trackLevels`, `tst_liveequivalence` `plainSetTrackDelays`.
+- **MuseScore gain: each patch's gain stage in a Utility** (the owner, 2026-10-15: "yeah sure let's go with utility";
+  contextlevel.h › Gain stage and master trim, docs/PLAYBACK_SETTINGS.md › Gain stage and master trim). The level rule's
+  gain, the section balance, the real range, the mic compensation and the even levels are no longer squeezed under the
+  fader's +6 dB by lowering every other patch: each Kontakt track that needs a gain (plain set and route set) has Live's
+  stock **Utility** right after the Kontakt, named **MuseScore gain** (`LiveSetWriter::UTILITY_NAME`; its Info text says
+  what it holds), its Gain the patch's gain stage (`TrackDelays::gainStageDb`, including the score's **master trim**:
+  one per score, only as low as the loudest moment needs not to clip). Utility's Gain runs -inf … +35 dB (a linear
+  factor up to 56.2341309, as Live 12.4 saves it); a gain over +35 dB puts the rest on the fader (`kontaktGains`). The
+  Kontakt track's fader stays where it was before the levels (the part's Mixer times the track levels' headroom), the
+  owner's to use. A tuning copy's slot is in the same Kontakt, behind the same Utility. The Utility's XML is the one Live
+  12.4d1 saves (a factory set's StereoGain, element for element, preset paths left empty as for the other devices); the
+  set stays 12.2's format. **Read back** (`LiveSet::Track::hasMuseScoreGain`, `museScoreGain`): MuseScore's Utility is
+  known by its name and not counted as the owner's device; its Gain changed in Live is reported, not imported (Update
+  Live Set writes MuseScore's again: change the fader instead). A Kontakt track without one, in a set written before the
+  Utility, is read with its old fader (`TrackDelays::legacyPatchGain`, `Track::legacyVolume`), so only the owner's change
+  of it counts. **Update Live Set** writes the Utility's Gain and Info text where they differ; inserts one right after the
+  Kontakt where a track needs it and has none (the owner's devices after it keep their place), and moves a fader still at
+  its old volume to the Mixer's (a fader the owner moved is kept, reported). Tests: `tst_liveequivalence` `liveGainStage`,
+  `liveSectionBalance`, `liveRealRange`, `liveMicCompensation` (fader × Utility = MuseScore's slot gain), `tst_soundlibrary`
+  `gainStage`.
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
@@ -1066,6 +1086,17 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 - **A raised track level with a loud Mixer** (trackdelays.h, 2026-10-08): a patch's headroom (up to +6 dB) and the
   Mixer's volume above 100 (up to +4.15 dB) multiply on the Kontakt track's Volume, which stops at +6 dB in Live
   (`LiveSetWriter::MAX_VOLUME`); MuseScore's slot has no such top. At the Mixer's default 100 they match.
+- **A gain stage over +35 dB plus +6 dB** (2026-10-15): MuseScore's Utility stops at +35 dB and the fader takes the rest
+  only up to its +6 dB; MuseScore's slot has no top. No score reaches it today (Whence's largest gain stage: HANDOFF.md ›
+  Gain stage).
+- **MIDI out's levels** (2026-10-15): with no host and no Utility, a patch's gain goes on CC7 with the Mixer's on the
+  host's law (gain = (CC7 / 100)², `TrackDelays::midiVolumes`), every route lower together by what goes over CC7's
+  +4.15 dB (the old way). What a receiver makes of CC7 is its own (Kontakt's CC7 law is unmeasured), so MIDI out's
+  balance is only as right as that law matches. Before 2026-10-15 MIDI out sent the Mixer's CC7 alone: none of the level
+  rule's, the section balance's or the real range's volumes reached it.
+- **Live plays the score** (the clips into the owner's own set, `liveclips.*`): it writes no devices, so the gain stage
+  isn't there (as the volumes before it weren't): only Create Live Set's plain set and route set carry MuseScore's
+  Utility.
 - **A carrier value of 1 plays as 0** (the UACC switch: 127 can't be carried, and it is no articulation): 128
   controller values in a note's 127 velocities.
 - **MuseScore's automation lanes of plug-in parameters** play in Live through the device (since 2026-09-30), from a
