@@ -28,7 +28,7 @@ swept against CC1 (`sso_gap_cc1_curves.json`; 7 with their own real range, 8 the
 checked as MuseScore sends it (43 patches, median error 0.05 dB, 42 in order; Cor Anglais' round robins spread 4.5 dB
 against its 1.04 dB step); bass clarinet / contrabassoon / bass trombones by TU Berlin's ratio to their sibling (bass
 clarinet ±5 dB); the harp by TU's sound power for decaying tones (fast-weighted energy, `tu_transient.py`; -9.81 dB,
-±4 dB); timpani not applied from TU (its D2 has unlabelled dynamics), since iteration 9 (branch perc-keys-levels) from the Spheres dataset's Romeo and Juliet at written p / f (-5.09 dB, ±3, realSteps 39.2; markings review page https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj, owner to check), the Grand Piano from Meyer 2009 (-1.11, ±3; iteration 10), celeste and mallets no source (iteration 11); the percussion group inside Skålevik 2019's range (no
+±4 dB); timpani not applied from TU (its D2 has unlabelled dynamics), since iteration 9 (branch perc-keys-levels) from the Spheres dataset's Romeo and Juliet at written p / f (-6.92 dB, ±3, realSteps 43.8; markings review page https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj, checked by the owner, four readings corrected: iteration 12, branch timpani-readings), the Grand Piano from Meyer 2009 (-1.11, ±3; iteration 10), celeste and mallets no source (iteration 11); the percussion group inside Skålevik 2019's range (no
 change); each marking's own directivity from TU's pp recordings (`tu_directivity.json`; horns +3.5 dB); mic levels of
 the 15 patches and the harp (`sso_mic_levels.json`). **Timpani octave, fixed** (341ac3dd84): SSO's timpani keys sound an
 octave under their MIDI number (key 50 = D2), so a written D2 (MIDI 38) hit a silent key and every timpani note played

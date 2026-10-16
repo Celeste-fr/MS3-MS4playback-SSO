@@ -3,7 +3,10 @@
 (section_balance_cl.py reads the output for the Timpani's sectionLevel2; docs/BALANCE_LOG.md › Iteration 9).
 
     python3 -I spheres_timpani.py <Spheres Tchaikovsky folder> <sso_cl_section_balance.json> <out spheres_timpani.json>
-                                  [<mics, default MainL,MainC,MainR>]
+                                  [<mics, default MainL,MainC,MainR>] [--scale-from <earlier spheres_timpani.json>]
+
+--scale-from takes the calibration parts' rows (and so K) from an earlier output at the same microphones instead of reading
+their stems again: for a change to the timpani's readings alone (2026-10-15: the owner's corrected hit counts).
 
 Source: The Spheres dataset (Colibri Ensemble, Pescara; arXiv 2511.21247, Zenodo 17347681, CC BY-SA 4.0), the
 multichannel set's Tchaikovsky folder: Romeo and Juliet, overture-fantasia (1880 version), every part recorded alone
@@ -61,13 +64,17 @@ def coda(k):
     return CODA0 + (k - 1) * BAR
 
 
-# the timpani's passages: (t0, t1, written hits, marking, where)
+# the timpani's passages: (t0, t1, written hits, marking, where); the readings as the owner corrected them (2026-10-15,
+# review page): p. 17 bar 1's E figure is two sixteenths and an eighth, p. 18 bar 1 a B and an E; the coda's figure is
+# [3(777)7] on every beat of p. 106 bars 1-4 and p. 107 bars 1-5 (a sixteenth triplet and an eighth: 4 hits a beat, 16 a
+# bar; written out in bar 1's first two beats, abbreviated after, as the recording's 4 hits per beat confirm)
 TIMPANI = [
-    (394.5, 407.9, 8, 'f', 'Allegro giusto, its first 4 bars (p. 17-18): B, E E E (sixteenths), B, B, B B (eighths); f at '
-                           'the first note'),
+    (394.5, 407.9, 8, 'f', 'Allegro giusto, its first 4 bars (p. 17-18): B, E E E (two sixteenths and an eighth), B, B, '
+                           'B E (eighths); f at the first note'),
     (407.9, 420.0, 3, 'f', 'p. 19 last bar, p. 20 bars 1-2: one B eighth each, f at the first'),
-    (coda(1) - 0.27, coda(10) + 5.85, 77, 'p', 'coda (U, Moderato assai, p. 106-107): 12 triplet eighths, 8 bars of 4 '
-                                              'dotted-eighth + sixteenth pairs, a quarter; p at the first note'),
+    (coda(1) - 0.27, coda(10) + 5.85, 145, 'p', 'coda (U, Moderato assai, p. 106-107): 9 bars of [3(777)7] on every beat '
+                                               '(a sixteenth triplet and an eighth, 16 hits a bar), a quarter; p at the '
+                                               'first note'),
 ]
 # calibration parts: (stem, seat, players, Clark & Luce patch, marking, t0, t1, where)
 CAL = [(s, seat, n, patch, 'mf', coda(2) + 1.5, coda(9) - 1.0, 'coda bars 2-8 (p. 106-107): two phrases, mf at each entry')
@@ -101,14 +108,25 @@ def playingLevel(p):
 
 
 def main():
-    folder, clPath, outPath = sys.argv[1:4]
-    if len(sys.argv) > 4:
-        MICS[:] = sys.argv[4].split(',')
+    args = sys.argv[1:]
+    scaleFrom = None
+    if '--scale-from' in args:
+        i = args.index('--scale-from')
+        scaleFrom = args[i + 1]
+        del args[i:i + 2]
+    folder, clPath, outPath = args[:3]
+    if len(args) > 3:
+        MICS[:] = args[3].split(',')
     cl = json.load(open(clPath, encoding='utf-8'))['patches']
     ref = statistics.mean([sweep(s) for s in STRING_SEATS] + [statistics.mean(sweep(s) for s in BASS_SEATS)])
     pos = lambda seat: sweep(seat) - ref
     cal = []
-    for stem, seat, n, patch, mark, t0, t1, where in CAL:
+    if scaleFrom:
+        earlier = json.load(open(scaleFrom, encoding='utf-8'))
+        if earlier['mics'] != MICS:
+            sys.exit('--scale-from: measured at %s, not %s' % (','.join(earlier['mics']), ','.join(MICS)))
+        cal = [{k: v for k, v in c.items() if k != 'role'} for c in earlier['calibration']]
+    for stem, seat, n, patch, mark, t0, t1, where in ([] if scaleFrom else CAL):
         try:
             level, playing = playingLevel(power(folder, stem, t0, t1))
         except (OSError, RuntimeError) as e:

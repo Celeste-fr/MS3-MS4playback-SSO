@@ -1537,7 +1537,7 @@ def sectionLevelAttributes(name):
 #   clarinet, contrabassoon and bass trombones their family's (an assumption). real_range.py SPANS
 REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
 REAL_RANGE_WINDS = loadFit('sso_real_range.json').get('instruments', {})
-# - the timpani (2026-10-15, docs/BALANCE_LOG.md › Iteration 9): realSteps from the Spheres dataset's written p and f
+# - the timpani (2026-10-15, docs/BALANCE_LOG.md › Iterations 9 and 12): realSteps from the Spheres dataset's written p and f
 #   ((f - p) x 5 / 3) and longLevel from SSO's hit energy by velocity (sso_percussion_levels.json), both computed by
 #   section_balance_cl.py ("realRange" in sso_cl_section_balance.json): a velocity patch, its x the written dynamic
 REAL_RANGE_DECAYING = {n: v['realRange'] for n, v in loadFit('sso_cl_section_balance.json').get('patches', {}).items()

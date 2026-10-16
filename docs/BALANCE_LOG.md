@@ -232,7 +232,8 @@ iteration 6 had measured them against TU Berlin but could not apply it (TU's D2 
 **Evidence.** *Real side*: the Spheres dataset's Romeo and Juliet (Colibri Ensemble; arXiv 2511.21247, Zenodo 17347681,
 CC BY-SA 4.0; every part recorded alone, all 23 microphones on every take). The markings read from the first edition of the
 1880 version's score (Bote & G. Bock, Berlin 1881, plate 9325; Sibley Music Library, public domain): review page
-https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj (the owner to check). Written f: the Allegro giusto's first bars (B, three
+https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj (checked by the owner the same day: four readings corrected, the coda's
+hit count with them; the numbers below are this iteration's, Iteration 12 has the current ones). Written f: the Allegro giusto's first bars (B, three
 E sixteenths, B, B, two B eighths; 8 hits) and three B eighths on pp. 19-20; written p: the coda's heartbeat (U, Moderato
 assai, 77 hits: triplets, then dotted-eighth + sixteenth pairs, a quarter). The timpani's energy per hit at the main
 microphone L (the passage's whole energy, rings included, over the written hits: the measure iteration 6 matched for TU
@@ -301,6 +302,35 @@ stroke, not a written pp. Pitch SD 4 .. 10 dB, strong slopes with pitch.
 **Decision.** No realSteps for the mallets, celeste or piano (not consistent across pitches; not markings). Their balance
 stays SSO's: no real source measured them as orchestral players play (marked as no data). The marimba (yarn) is the only
 consistent one (SD 4.6, no slope), a candidate at most.
+
+## Iteration 12 (2026-10-15): the timpani's readings corrected by the owner
+
+**Weakest link.** Iteration 9's hit counts came from my reading of the score, unchecked. The level is an energy per hit
+(the passage's whole energy over its written hits), so a wrong count moves it by 10 log10 of the ratio.
+
+**Evidence.** The owner checked the review page (https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj; "everything else is
+fine"; rhythms in jianpu, `[...]` one underline, `3(...)` a triplet). Four readings corrected: p. 17 bar 1's E figure is two
+sixteenths and an eighth (was three sixteenths: still 3 hits); p. 18 bar 1 is a B and an E (was two B: still 2 hits); the
+coda, p. 106 bars 1-4 and p. 107 bars 1-5, is `[3(777)7]` on every beat: a sixteenth triplet and an eighth, 4 hits a beat,
+16 a bar (was 12 triplet eighths in bar 1 and dotted-eighth + sixteenth pairs after: 8 a bar). The scan at 400 dpi agrees:
+bar 1's first two beats are written out (three sixteenths under a 3, beamed to an eighth), from beat 3 on the triplet is
+abbreviated to one stroked note under the 3, which I had read as a dotted eighth. The recording agrees: where the onsets
+are clear, four strokes about 0.2 s apart, then a gap to the next beat (1.5 s), never more than four. So the written f
+passages keep 8 + 3 hits; the coda has 9 x 16 + 1 = 145 (was 77). Re-run (`spheres_timpani.py --scale-from`: the timpani
+stem re-fetched from Zenodo, main microphone L; the string lines' scale K 125.29, RMS 2.31, taken from Iteration 9's output,
+as no string reading changed; the f windows reproduce Iteration 9's -28.63 / -33.06 dB exactly): p 72.36 dB re 1 pW s (was
+75.11), f 98.62 (unchanged), f - p 26.26 dB (was 23.51). Still inside Meyer's single-stroke extremes (pp 67 .. 70, ff 115;
+TU 58 .. 60 / 108); TU Berlin's D2 steps 2 -> 5 (20.9 .. 24.7 dB, iteration 6) now corroborate less well (the Spheres' p -> f
+lies 1.6 dB over their largest rise).
+
+**Decision.** The same rules as iteration 9 on the corrected counts: real mp 81.11 dB re 1 pW s, sectionLevel2 -6.92 dB (at
+p alone -11.55, at f alone +7.11); realSteps 26.26 x 5 / 3 = 43.8 dB (the markings 8.75 dB apart). Uncertainty as before:
+about +-3 dB on the level, about +-4 dB on the span (one passage per marking, one player; within each beat the triplet's
+strokes may be softer than the eighth).
+
+**Before -> after**: Timpani sectionLevel2 -5.09 -> -6.92, realSteps 39.2 -> 43.8 (the map's Timpani line only). At mf
+about 0.9 dB softer than iteration 9 (-6.92 + 8.75 - 2.6 against -5.09 + 7.84 - 2.6), still inside Skaalevik's range for the
+percussion group; p about 11.5 dB softer than SSO's own (was 9), f about 7 dB louder (unchanged), ff about 14 (was 13).
 
 ## Mic levels for the added patches (2026-10-15)
 

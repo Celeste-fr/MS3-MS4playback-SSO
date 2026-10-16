@@ -2810,8 +2810,9 @@ void TestSoundLibrary::levelSectionBalance()
                  { "Contrabass Trombone", -1.88 }, { "Cimbasso Solo", 4.74 }, { "Cimbassi a2", 14.69 },
                  { "Contrabass Tuba", -3.24 }, { "Harp", -9.81 },
                  // (2026-10-15, docs/BALANCE_LOG.md › Iterations 9 and 10: the timpani from the Spheres dataset's Romeo and
-                 // Juliet at its written p and f, the grand piano from Meyer 2009's in-play levels)
-                 { "Timpani", -5.09 }, { "Grand Piano", -1.11 } };
+                 // Juliet at its written p and f, the hit counts as the owner corrected them (Iteration 12); the grand
+                 // piano from Meyer 2009's in-play levels)
+                 { "Timpani", -6.92 }, { "Grand Piano", -1.11 } };
       QCOMPARE(int(M2.size()), 46);
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
@@ -3366,7 +3367,7 @@ void TestSoundLibrary::levelRealRange()
             { "Tuba Solo", 12.5 }, { "Solo Violin 1", 13.8 }, { "Solo Viola", 15.9 }, { "Solo Cello", 14.1 },
             { "Motif Horns a4", 17.7 }, { "Motif Trumpets a3", 8.8 }, { "Motif Trombones a5", 17.0 }, { "Piccolo", 7.5 },
             { "Bass Flute", 7.5 }, { "Contrabass Clarinet", 8.3 }, { "Cimbassi a2", 17.0 }, { "Contrabass Tuba", 12.5 },
-            { "Timpani", 39.2 } };
+            { "Timpani", 43.8 } };
       int with = 0;
       QStringList mains;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
