@@ -183,10 +183,15 @@ class SoundLibraryHost : public QObject {
       // Kontakt's Tune, one slot (cents of one: KontaktSetup::withTune) or a multi of the patch, a slot per copy on its
       // own MIDI channel (KontaktSetup::withSlots, as the plain Live set's); empty with *error when the state isn't
       // Kontakt's (no program in its first slot): that patch then plays plain, a copy per instance, by varispeed
-      static QByteArray tunedState(const QByteArray& state, const std::vector<double>& cents, QString* error = nullptr);
+      // library: made once and kept (the very bytes: soundlibraryhost.cpp › prepared), else made now
+      static QByteArray tunedState(const QByteArray& state, const std::vector<double>& cents, QString* error = nullptr,
+                                   const SoundLib::Library* library = nullptr);
       static QString tuningKey(const std::vector<double>& cents);     // what Slot::tuning compares ("" plain)
       // a made setup is Kontakt's own state already (resaved; true for a library whose setups aren't made)
       static bool setupResaved(const SoundLib::Library& library, const QString& patch);
+      // the prepared states (setupState's voice limit, tunedState's tunings: made once, the very bytes, kept in memory
+      // and in "<setups folder>/prepared") forgotten in memory (the files stay); made: how many were made so far
+      static void forgetPrepared(int* made = nullptr);
       // an instance's setup into p as MuseScore plays it: plain (cents empty) as loadSetup, else tuned (tunedState); a
       // made setup not yet resaved goes in plain first (resaved: Kontakt's own state; a multi of a made one would
       // load each slot as slowly), then tuned. *tuned: its tuning is in its state (false: plain, varispeed tunes it)
@@ -250,6 +255,9 @@ class SoundLibraryHost : public QObject {
       Vst3Synth* synth() const;
       bool sync(Score* score, QString* error = nullptr);    // the score's routes' instances
       void preloadSoon(Score* score);     // load them all when the score is opened or shown
+      // that loading still going on (more instances to load, or setups being set on worker threads): the even levels'
+      // own instances wait for it (mscore/evenautomeasurer.h), so the playback's load first
+      bool preloading() const;
       void release();                     // no instances
       bool loaded(int slot) const;
       qint64 memory(int slot) const       { return slot >= 0 && slot < int(_slots.size()) ? _slots[size_t(slot)].memory : -1; }

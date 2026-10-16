@@ -218,7 +218,7 @@ deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores o
   **UNHEARD** (warn: a skipped note, a microtone not reached, or pYIN lost it; listen).
 - **ARRIVAL** (fail > 50 ms, warn > 30): heard - written against the note before in its line (Rasch 1979, as the
   audit's ARRIVAL).
-- **RHYTHM** (fail > 0.10, warn > 0.05; **proposed, owner to approve**): per slur (its notes and the next onset) and per
+- **RHYTHM** (fail > 0.10, warn > 0.05; approved by the owner 2026-10-16 ("sure, go with your rec")): per slur (its notes and the next onset) and per
   run (a line's notes joined without a rest), windows of 3 inter-onset intervals: the largest difference between a
   heard IOI's share of the window and the written one's. 0.10 is derived, not published: Desain & Honing 2003
   (Perception 32, 341-365) category means for 2:1 scatter with SD ~47 ms in a 1 s bar (as tabled in Sadakata, Desain &

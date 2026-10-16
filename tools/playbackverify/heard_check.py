@@ -45,7 +45,7 @@ Flags (d):
   ARRIVAL   FAIL: heard - written differs from the line's note before (joined, as the audit's ARRIVAL) by more than
             50 ms; WARN 30-50 ms (Rasch 1979, "Synchronization in performed ensemble music", Acustica 43: 30-50 ms
             asynchrony is normal ensemble playing)
-  RHYTHM    FAIL (PROPOSED, owner to approve): in a window of 3 IOIs (4 onsets; a slur of 3 notes: its 2) the heard
+  RHYTHM    FAIL (approved by the owner 2026-10-16, "sure, go with your rec"): in a window of 3 IOIs (4 onsets; a slur of 3 notes: its 2) the heard
             proportions p_i = IOI_i / sum differ from the written ones by more than RHYTHM_FAIL = 0.10 in any interval.
             Derived (not a published figure): Desain & Honing 2003 ("The formation of rhythmic categories and metric
             priming", Perception 32, 341-365; 3-interval rhythms in a 1 s bar): listeners' category means for 2:1 scatter
@@ -88,7 +88,7 @@ ARRIVE_FRAMES = 3           # ... for 3 pYIN frames in a row
 PYIN_HOP = 128
 TRANSITION_SEARCH_S = 0.7   # its arrival looked for until 0.7 s after its note-on
 ARRIVAL_WARN_MS, ARRIVAL_FAIL_MS = 30.0, 50.0       # Rasch 1979
-RHYTHM_WARN, RHYTHM_FAIL = 0.05, 0.10               # PROPOSED (owner to approve), see above
+RHYTHM_WARN, RHYTHM_FAIL = 0.05, 0.10               # approved by the owner 2026-10-16, see above
 LEVEL_DL_DB = 0.69                                  # the audit's proposed (Jesteadt, Wier & Green 1977)
 DRIFT_MS = 20.0
 SHORT_BASES = {"spiccato", "staccatissimo", "staccato", "short", "tenuto", "pizzicato", "bartok", "collegno"}
@@ -544,7 +544,7 @@ def analyse(dump, wavs, parts=None, load=None):
                 slursAlt6=dict(measured=len(alt), fail=sum(1 for d in alt if d > RHYTHM_FAIL),
                                warn=sum(1 for d in alt if RHYTHM_WARN < d <= RHYTHM_FAIL)), notes=notes_out, groups=groups_out, findings=findings, drift=drift_out,
                 thresholds=dict(arrivalWarnMs=ARRIVAL_WARN_MS, arrivalFailMs=ARRIVAL_FAIL_MS, rhythmWarn=RHYTHM_WARN,
-                                rhythmFail=RHYTHM_FAIL, rhythmProposed=True, levelDlDb=LEVEL_DL_DB, driftMs=DRIFT_MS))
+                                rhythmFail=RHYTHM_FAIL, rhythmProposed=False, levelDlDb=LEVEL_DL_DB, driftMs=DRIFT_MS))
 
 
 def report_text(res, title=""):
@@ -564,7 +564,7 @@ def report_text(res, title=""):
         out.append("kthost's probe note stayed silent (samples maybe not all loaded; check those routes): " + ", ".join(res["probeSilent"]))
     t = res["thresholds"]
     out.append("thresholds: ARRIVAL warn > %.0f, fail > %.0f ms (Rasch 1979); RHYTHM warn > %.2f, fail > %.2f max |dp| "
-               "(PROPOSED, owner to approve: Desain & Honing 2003 / Sadakata et al. 2006); LEVEL warn > %.2f dB (proposed, "
+               "(approved 2026-10-16: Desain & Honing 2003 / Sadakata et al. 2006); LEVEL warn > %.2f dB (proposed, "
                "Jesteadt et al. 1977); DRIFT |median| > %.0f ms" % (t["arrivalWarnMs"], t["arrivalFailMs"], t["rhythmWarn"],
                                                                     t["rhythmFail"], t["levelDlDb"], t["driftMs"]))
     for k, sub in (("ARRIVAL", None), ("RHYTHM", "slur"), ("RHYTHM", "run"), ("LEVEL", None), ("UNHEARD", None)):

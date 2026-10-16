@@ -21,7 +21,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <future>
+#include <mutex>
 #include <set>
 
 #include <QApplication>
@@ -654,6 +656,121 @@ static QByteArray importResaved(const SoundLib::Library& library, const SoundLib
 //    voices to 512"). MS_KONTAKT_MAX_VOICES: another value, 0 the library's own (for comparing)
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   prepared
+//    the states MuseScore puts into the plug-in, kept once made (the load profile, 2026-10-16: Whence's 8 instances
+//    spent 0.2-0.6 s each in the voice limit and 0.3-1.2 s each in the copies' tunings, every load, on the GUI thread
+//    before setState: KontaktSetup unpacks and packs again the whole preset, FastLZ, each time). What is kept is the
+//    very bytes made from the very bytes given (the key: the input's SHA-1, what was done to it, the maker's
+//    version), so the plug-in gets the same state as before, byte for byte. In memory for the session (up to
+//    PREPARED_MEMORY bytes) and in "<setups folder>/prepared", each file named by its key and its own SHA-1 (checked
+//    when read: a damaged file is made again); the oldest go when there are more than PREPARED_FILES
+//---------------------------------------------------------
+
+static const int PREPARED_VERSION = 1;          // raise when KontaktSetup's voice limit or tunings write other bytes
+static const qint64 PREPARED_MEMORY = 512LL << 20;
+static const int PREPARED_FILES = 96;
+
+namespace {
+struct Prepared {
+      struct Kept {
+            QByteArray state;
+            qint64 used { 0 };
+            };
+      std::mutex mutex;
+      std::map<QByteArray, Kept> kept;
+      qint64 keptBytes = 0;
+      qint64 clock = 0;
+      int made = 0;                       // made here (not from memory or a file): for the tests
+      static Prepared& get() { static Prepared p; return p; }
+      };
+}
+
+void SoundLibraryHost::forgetPrepared(int* made)
+      {
+      Prepared& p = Prepared::get();
+      std::lock_guard<std::mutex> lock(p.mutex);
+      if (made)
+            *made = p.made;
+      p.kept.clear();
+      p.keptBytes = 0;
+      }
+
+static QByteArray prepared(const SoundLib::Library& library, const QByteArray& in, const QString& what,
+                           const std::function<QByteArray()>& make)
+      {
+      Prepared& pr = Prepared::get();
+      std::mutex& mutex = pr.mutex;
+      std::map<QByteArray, Prepared::Kept>& kept = pr.kept;
+      qint64& keptBytes = pr.keptBytes;
+      qint64& clock = pr.clock;
+      static const bool off = qEnvironmentVariableIsSet("MS_PREPARED_OFF");    // (to compare: made at every load, as before)
+      if (off)
+            return make();
+      const QByteArray key = QCryptographicHash::hash(QCryptographicHash::hash(in, QCryptographicHash::Sha1).toHex() + "|" + what.toUtf8()
+                                                      + "|" + QByteArray::number(PREPARED_VERSION), QCryptographicHash::Sha1).toHex();
+      {
+            std::lock_guard<std::mutex> lock(mutex);
+            auto i = kept.find(key);
+            if (i != kept.end()) {
+                  i->second.used = ++clock;
+                  return i->second.state;
+                  }
+      }
+      const QString folder = SoundLibraryHost::setupsFolder(library) + "/prepared";
+      QByteArray out;
+      for (const QFileInfo& fi : QDir(folder).entryInfoList({ QString::fromLatin1(key) + "-*.vst3state" }, QDir::Files)) {
+            QFile f(fi.absoluteFilePath());
+            if (!f.open(QIODevice::ReadOnly))
+                  continue;
+            const QByteArray data = f.readAll();
+            const QString sum = fi.completeBaseName().mid(key.size() + 1);
+            if (!data.isEmpty() && QCryptographicHash::hash(data, QCryptographicHash::Sha1).toHex() == sum.toLatin1()) {
+                  out = data;
+                  f.close();
+                  QFile t(fi.absoluteFilePath());           // (touched: used now, the last to go)
+                  if (t.open(QIODevice::ReadWrite))
+                        t.setFileTime(QDateTime::currentDateTimeUtc(), QFileDevice::FileModificationTime);
+                  break;
+                  }
+            }
+      if (out.isEmpty()) {
+            out = make();
+            if (out.isEmpty())
+                  return out;
+            {
+                  std::lock_guard<std::mutex> lock(mutex);
+                  ++pr.made;
+            }
+            QDir().mkpath(folder);
+            const QString file = QString("%1/%2-%3.vst3state").arg(folder, QString::fromLatin1(key),
+                                                                   QString::fromLatin1(QCryptographicHash::hash(out, QCryptographicHash::Sha1).toHex()));
+            QSaveFile f(file);
+            if (f.open(QIODevice::WriteOnly) && f.write(out) == out.size())
+                  f.commit();
+            // the oldest files go (only this folder's prepared states, by their names' form)
+            QFileInfoList files = QDir(folder).entryInfoList({ "*-*.vst3state" }, QDir::Files, QDir::Time);
+            for (int k = PREPARED_FILES; k < files.size(); ++k)
+                  if (files[k].absolutePath() == QFileInfo(file).absolutePath() && files[k].fileName().size() > 80)
+                        QFile::remove(files[k].absoluteFilePath());
+            }
+      std::lock_guard<std::mutex> lock(mutex);
+      Prepared::Kept& k = kept[key];
+      if (k.state.isEmpty())
+            keptBytes += out.size();
+      k.state = out;
+      k.used = ++clock;
+      while (keptBytes > PREPARED_MEMORY && kept.size() > 1) {
+            auto oldest = std::min_element(kept.begin(), kept.end(), [](const std::pair<const QByteArray, Prepared::Kept>& a,
+                                                                         const std::pair<const QByteArray, Prepared::Kept>& b) {
+                  return a.second.used < b.second.used;
+                  });
+            keptBytes -= oldest->second.state.size();
+            kept.erase(oldest);
+            }
+      return out;
+      }
+
 int SoundLibraryHost::kontaktMaxVoices()
       {
       if (qEnvironmentVariableIsSet("MS_KONTAKT_MAX_VOICES"))
@@ -669,21 +786,25 @@ QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const 
       if (state.isEmpty() || !makesSetups(library) || maxVoices <= 0)
             return state;
       // Kontakt's (the setups MuseScore makes from the .nki, and Kontakt's own state they are resaved as):
-      // its instrument's voice limit, as it loads (a setup file on disk stays as it was made or resaved)
-      QString name, err;
-      QByteArray component, controller;
-      if (!readState(state, &name, &component, &controller))
-            return state;
-      int before = -1;
-      const QByteArray limited = KontaktSetup::withMaxVoices(component, maxVoices, &err, &before);
-      if (limited.isEmpty() || before < 0) {
-            qWarning("Sound library: %s: its voice limit was not set (%s)", qPrintable(patch), qPrintable(err));
-            return state;
-            }
-      if (limited == component)
-            return state;
-      logTime(library, QString("%1: Max voices %2 (the patch has %3)").arg(patch).arg(maxVoices).arg(before));
-      return writeState(name, limited, controller);
+      // its instrument's voice limit, as it loads (a setup file on disk stays as it was made or resaved); made once
+      // (prepared: the same bytes)
+      const QByteArray out = prepared(library, state, QString("max voices %1").arg(maxVoices), [&]() {
+            QString name, err;
+            QByteArray component, controller;
+            if (!readState(state, &name, &component, &controller))
+                  return state;
+            int before = -1;
+            const QByteArray limited = KontaktSetup::withMaxVoices(component, maxVoices, &err, &before);
+            if (limited.isEmpty() || before < 0) {
+                  qWarning("Sound library: %s: its voice limit was not set (%s)", qPrintable(patch), qPrintable(err));
+                  return state;
+                  }
+            if (limited == component)
+                  return state;
+            logTime(library, QString("%1: Max voices %2 (the patch has %3)").arg(patch).arg(maxVoices).arg(before));
+            return writeState(name, limited, controller);
+            });
+      return out.isEmpty() ? state : out;
       }
 
 QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
@@ -881,8 +1002,18 @@ QString SoundLibraryHost::tuningKey(const std::vector<double>& cents)
       return c.join(' ');
       }
 
-QByteArray SoundLibraryHost::tunedState(const QByteArray& state, const std::vector<double>& cents, QString* error)
+QByteArray SoundLibraryHost::tunedState(const QByteArray& state, const std::vector<double>& cents, QString* error,
+                                        const SoundLib::Library* library)
       {
+      if (library) {            // (made once: prepared, the same bytes)
+            QString err;
+            const QByteArray out = prepared(*library, state, "tunings " + tuningKey(cents), [&]() {
+                  return tunedState(state, cents, &err, nullptr);
+                  });
+            if (out.isEmpty() && error)
+                  *error = err;
+            return out;
+            }
       QString name, err;
       QByteArray component, controller;
       if (!readState(state, &name, &component, &controller)) {
@@ -922,7 +1053,7 @@ bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin* p, const SoundLib::Library&
       if (plain.isEmpty())
             return false;
       QString err;
-      const QByteArray state = tunedState(plain, cents, &err);
+      const QByteArray state = tunedState(plain, cents, &err, &library);
       if (state.isEmpty()) {
             untunable().insert(patch);
             logTime(library, QString("%1: its copies can't be tuned in the setup (%2): plain, an instance each, by varispeed")
@@ -1085,7 +1216,13 @@ QString SoundLibraryHost::tuningKey(const std::vector<double>&)
       return QString();
       }
 
-QByteArray SoundLibraryHost::tunedState(const QByteArray&, const std::vector<double>&, QString* error)
+void SoundLibraryHost::forgetPrepared(int* made)
+      {
+      if (made)
+            *made = 0;
+      }
+
+QByteArray SoundLibraryHost::tunedState(const QByteArray&, const std::vector<double>&, QString* error, const SoundLib::Library*)
       {
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
@@ -1359,6 +1496,15 @@ void SoundLibraryHost::preloadSoon(Score* score)
 //    the time of the user's last key, click or wheel (preloadStep)
 //---------------------------------------------------------
 
+bool SoundLibraryHost::preloading() const
+      {
+#ifdef USE_VST3
+      return _preloadTimer.isActive() || !_pending.empty();
+#else
+      return false;
+#endif
+      }
+
 bool SoundLibraryHost::eventFilter(QObject* o, QEvent* e)
       {
       switch (e->type()) {
@@ -1441,6 +1587,7 @@ struct SoundLibraryHost::Pending {
       qint64 memoryBefore { -1 };
       double createMs { -1 };             // a new instance (-1: a spare reused)
       double setupMs { 0 };               // reading or making the setup
+      double tuneMs { 0 };                //   of which: the copies' tunings put in its state (tunedState)
       std::vector<int> routes;            // the slots it plays (SoundLib::Instance::routes)
       std::vector<double> cents;          // their tunings, in its state (empty: plain)
       std::vector<double> tuneAfter;      // a made setup goes in plain first (resaved), then these tunings
@@ -1528,7 +1675,10 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
                         pl->tuneAfter = cents;
                   else {
                         QString err;
-                        const QByteArray tuned = tunedState(pl->state, cents, &err);
+                        QElapsedTimer tt;
+                        tt.start();
+                        const QByteArray tuned = tunedState(pl->state, cents, &err, &library);
+                        pl->tuneMs = tt.nsecsElapsed() / 1e6;
                         if (tuned.isEmpty()) {
                               untunable().insert(name);
                               _resync = true;
@@ -1584,22 +1734,30 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
       const Vst3Plugin::Times tm = pl->plugin->times();
       QElapsedTimer t;
       t.start();
+      double loggedMs = 0, settleMs = 0, valuesMs = 0;
       if (loaded) {
+            QElapsedTimer st;
+            st.start();
             setupLoaded(pl->plugin.get(), library, pl->name, pl->state, pl->setupMs);
+            loggedMs = st.nsecsElapsed() / 1e6;
+            st.restart();
             // its own script initialised before it goes into its slot and the part's controllers are set
             // (Vst3Plugin::settle: Kontakt's engine runs only once the plug-in processes, and a live
             // instance processes only from its first note on; until then SSO's patches were "NOT
             // INITIALISED", and the controllers set at score open were lost when they initialised: a
             // score's mic positions were heard only from the second play or export on)
             pl->plugin->settle();
+            settleMs = st.nsecsElapsed() / 1e6;
+            st.restart();
             recordSetupValues(pl->plugin.get(), library, pl->name);
+            valuesMs = st.nsecsElapsed() / 1e6;
             if (threaded)
                   logTime(library, QString("%1: set on a worker thread, %2 ms from its start to done").arg(pl->name, ms(wall)));
             // (a made setup, resaved now: the copies' tunings on Kontakt's own state, here)
             if (!pl->tuneAfter.empty()) {
                   QString err;
                   const QByteArray plain = setupState(library, pl->name, pl->plugin->path(), &err);
-                  const QByteArray tuned = plain.isEmpty() ? QByteArray() : tunedState(plain, pl->tuneAfter, &err);
+                  const QByteArray tuned = plain.isEmpty() ? QByteArray() : tunedState(plain, pl->tuneAfter, &err, &library);
                   QElapsedTimer tt;
                   tt.start();
                   if (!tuned.isEmpty() && pl->plugin->setState(tuned)) {
@@ -1654,6 +1812,15 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
                   emit changed();
                   });
             }
+      // each instance's steps, for the load profile (the owner, 2026-10-16: "make SSO load even faster"): where an
+      // instance's time goes on MuseScore's side, and when (ms since the batch's first load)
+      logTime(library, QString("%1: steps%2 | new instance %3 ms | setup read %4 ms (tunings %5 ms, %6 slot(s)) | setState %7 ms "
+                               "| logged and resaved %8 ms | settle %9 ms | setup values %10 ms | into its slot %11 ms%12")
+              .arg(pl->name, threaded ? QString(" (setState on a worker thread)") : QString())
+              .arg(ms(std::max(0.0, pl->createMs)), ms(pl->setupMs), ms(pl->tuneMs)).arg(std::max<size_t>(1, pl->cents.size()))
+              .arg(ms(wall), ms(loggedMs), ms(settleMs), ms(valuesMs))
+              .arg(ms(t.nsecsElapsed() / 1e6 - loggedMs - settleMs - valuesMs))
+              .arg(_batch ? QString(" | at %1 s").arg(_batch->clock.nsecsElapsed() / 1e9, 0, 'f', 2) : QString()));
       if (_batch) {
             Batch& b = *_batch;
             ++b.loads;

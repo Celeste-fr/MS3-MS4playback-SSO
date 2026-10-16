@@ -1178,6 +1178,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | A lane edited while playing: heard at once (flat lanes' parameters on the instances, the rest rendered again) | always | `SoundLibraryHost::applyPartSettings`, `Seq::renderAgainPlaying` | not a number: no setting |
 | Chunks don't end before a slurred or library note (live playback) | always | `libSlurAcross`, `libNoteAfter` | fixed (correctness: an early start can't cross a chunk) |
 | Background loading pauses | 0 ms | `SoundLibraryHost` `INPUT_PAUSE_MS`, `PRELOAD_GAP_MS` | fixed (the owner chose 0) |
+| Prepared states kept (a patch's voice limit and its copies' tunings made once, the very bytes, in memory and in `<setups folder>/prepared`) | always | `SoundLibraryHost` `prepared` (`MS_PREPARED_OFF`: made at each load, to compare) | not a number: load time only, the plug-in gets the same state (2026-10-16, load profile) |
 
 **Fast slurs (2026-10-02; history: legato transitions play on their beat since 2026-10-06, the early start removed
 2026-10-07, the owner: "I want fast slurs to not sound late"; replaces the fast-note ramp of
