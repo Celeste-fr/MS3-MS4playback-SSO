@@ -198,7 +198,7 @@ and in Recommended, 0 in Library default; per score through `playbackSettings`; 
   log ms of spacing, the nearest end's beyond the grid) of the slur's first dynamic, its median note spacing (IOI) and
   median pitch (`libmscore/contextlevel.h`). One gain per slur: no level step inside it. A note outside a slur (staff
   text "performance") is a phrase of one.
-- The gain reaches 21 dB (Celli pp, high), more than CC11 can add. The score's largest gain G over every slur of those
+- The gain reaches 29.6 dB (Celli pp, 136 ms, mid register; 21 before the 2026-10-15 re-measure), more than CC11 can add. The score's largest gain G over every slur of those
   parts is shared out (`ContextLevel::volumes`): the Performance patches play at volume G - S, every other patch of the
   library's parts S = max(0, G - 6) dB lower together (6: Live's Volume top; the owner, 2026-10-10: Performance levels
   move together, by lowering the rest: one shared gain, not equal levels; section balance's per-section offsets go on
@@ -209,27 +209,50 @@ and in Recommended, 0 in Library default; per score through `playbackSettings`; 
 - An Inspector level on top: louder along the patch's own curve from the written value (CC1), softer by CC11.
 
 The gains (`tools/soundlibraries/performance_context/level_rule.py`, from the measured cells of
-`tools/soundlibraries/sso_performance_context.json`, the real Kontakt + SSO on the Windows VM, 2026-10-10; metric L:
-loudest 50 ms RMS per note, median per figure, two takes):
+`tools/soundlibraries/sso_performance_context.json`). **Re-measured 2026-10-15** with today's Recommended slurs
+(`[slurs] transitions`, `smoothStart`, `transitionsEarly` 1), which the 2026-10-10 grid predated: the VM check of build
+435 had the held notes balanced as the model says but the slurs not (violas' slurs 2.7 dB under, celli's 3-5 over).
 
-1. The staccatos' (Spiccato at the calibrated velocity) level in the music, least squares over all five sections:
-   st = T(d) + a_s + b_s (p - p_mid) / 12 + c_s log2(IOI / 136 ms). T(32 / 64 / 96 / 112) = -40.2 / -34.9 / -32.3 /
-   -29.9 dB; RMS residual 2.37 dB. The fitted level, not each cell: the cells' take-to-take noise is 0.9-1.3 dB, and
-   two cells break the rule themselves (Celli pp staccatos 4.9 dB over the fit, Basses pp 4.8 under: calibration
-   points to check, not followed).
-2. gain = st - pfd + 1.3 dB: pfd the Performance figure's measured level at CC1 = d; 1.3 dB the Violas' relation the
-   owner approved (slurs 1.3 dB louder than the staccatos around them, HANDOFF.md).
+- Renders: the real Kontakt 8 + SSO on the Windows VM, MuseScore3Evo.exe (build 435) `--verify-playback --verify-wav`
+  of `performance_context/grid_score.py`'s scores (the repository's String Orchestra template; each part rendered alone
+  through the hosted plug-ins, so the events are MuseScore's own): per section, dynamic d (pp mp f ff = CC1 32 64 96
+  112) and grid pitch p, four held half notes (All techniques Long) and, at each IOI 100 / 136 / 200 / 300 / 500 /
+  1000 ms (1000 new: slow slurs fell on the 500 ms column before), two touching slurs of four sixteenths (Performance
+  Legato: smooth first note, fingered within, bowed into the second, transitions sent by their modelled arrival).
+  Takes A and B (B in reverse order); take to take sd 0.36 dB per figure.
+- The map's `contextLevel` zeroed for these renders (the VM's copy only): CC1 = the written dynamic, no gain. What both
+  techniques of a section play alike cancels in held - slurred and was off (`sectionBalance`, `realRange`,
+  `micCompensation`); it stacks on top in MuseScore.
+- **Even levels off**: the gain sets a slur's overall level (its median); even levels then glides the notes inside the
+  slur to that median (CC11), so the two stack without counting anything twice. With even levels on the grid would
+  depend on even values measured at the old gains.
+- Metric P, `ArticulationCheck::perceivedLoudnessDb` (`perceived.py`: the calibration curves' measure, the one the
+  check used), per note from its note-on as sent to the next note-on (or its end + 0.3 s), median per figure; L (the
+  2026-10-10 grid's loudest 50 ms RMS) is kept beside it, 1-3 dB smaller gains.
+- **gain = held - slurred** (the held Long at the written CC1 is what every other technique of the section is
+  calibrated to). Before: gain = staccatos' fitted level - slurs + 1.3 dB (the Violas' relation against the staccatos
+  around them); the fit's common T(d) and section offsets misplaced each section's slurs against its own held notes.
 
-`gen_spitfire_sso.py` writes them into the map (`contextLevel`, the grid: d 32 / 64 / 96 / 112, IOI 100 / 136 / 200 /
-300 / 500 ms, three pitches per section). Gains at IOI 136 ms, low / mid / high register, d 32 / 64 / 96 / 112:
+Gains at IOI 136 ms, low / mid / high register, d 32 / 64 / 96 / 112 (before, 2026-10-10, in brackets at d 64):
 
 | Section | 32 | 64 | 96 | 112 |
 |---|---|---|---|---|
-| Violins 1 | 10.1 / 13.6 / 16.3 | 6.7 / 10.0 / 12.9 | 1.4 / 6.8 / 9.0 | 1.9 / 6.2 / 7.5 |
-| Violins 2 | 8.8 / 14.1 / 17.0 | 7.3 / 11.5 / 14.5 | 3.8 / 7.1 / 9.7 | 3.9 / 7.2 / 9.5 |
-| Violas | 10.2 / 8.0 / 16.0 | 9.1 / 8.3 / 15.5 | 2.8 / 4.4 / 10.7 | 3.2 / 3.8 / 10.1 |
-| Celli | 16.3 / 20.9 / 20.4 | 11.6 / 15.4 / 14.2 | 6.1 / 9.8 / 9.0 | 7.0 / 10.0 / 8.7 |
-| Basses | 4.6 / 0.7 / 3.7 | 2.6 / -1.9 / 1.0 | 0.4 / -1.1 / 1.2 | 1.5 / -0.8 / 1.2 |
+| Violins 1 | 19.3 / 18.9 / 17.7 | 12.8 / 11.1 / 11.1 (6.7 / 10.0 / 12.9) | 9.4 / 7.1 / 7.9 | 7.1 / 4.8 / 5.6 |
+| Violins 2 | 15.8 / 14.6 / 17.3 | 10.9 / 8.9 / 10.5 (7.3 / 11.5 / 14.5) | 5.9 / 4.5 / 5.9 | 4.2 / 3.4 / 3.9 |
+| Violas | 19.2 / 20.0 / 22.3 | 14.5 / 16.1 / 17.9 (9.1 / 8.3 / 15.5) | 9.2 / 9.4 / 11.7 | 7.3 / 7.3 / 9.6 |
+| Celli | 24.9 / 29.6 / 28.9 | 14.0 / 16.4 / 15.5 (11.6 / 15.4 / 14.2) | 8.4 / 9.1 / 8.5 | 6.5 / 6.0 / 5.5 |
+| Basses | 11.7 / 6.1 / 7.8 | 5.4 / -0.2 / 0.8 (2.6 / -1.9 / 1.0) | -0.4 / -1.8 / -1.0 | 0.9 / 0.1 / 1.7 |
+
+The gain falls with the IOI (at 1000 ms 4-7 dB under 136 ms: SSO's Performance notes swell when held longer), and
+with the dynamic (the Performance patch's CC1 curve is steeper than the Long's). `gen_spitfire_sso.py` writes the grid
+into the map (`contextLevel`, d 32 / 64 / 96 / 112, IOI 100 / 136 / 200 / 300 / 500 / 1000 ms, three pitches).
+
+Validation (same VM, build 435 with the new map, full Recommended; `grid_ana.py groups` / `parts`): the calibration
+score (`grid_score.py`'s calib.mscx: 8 held halves, 16 slurred quarters at q = 60, mp then f) slurred - held per
+section at mp Violins 1 / 2, Violas, Celli, Basses -0.6 / -0.1 / +0.5 / +1.3 / -1.4 dB (before -1.4 / +5.0 / -2.0 /
++2.7 / +2.3), at f 0.0 / -0.8 / 0.0 / -0.7 / +1.0 (before -1.8 / +3.4 / -3.1 / +2.0 / +1.7); the slurs' section
+differences now follow the held notes' (mp: slurs Va - V1 -4.3, Vc - Va +8.0 against held -5.5 / +7.3; before -6.1 /
++12.1). *Whence* (quarter tones), the Performance notes: Va - V1 -1.7, Vc - Va +7.4 dB (before -8.1 / +13.3).
 
 Test: `tst_soundlibrary::levelContext` (the grid, the layers, CC1 at the written value, one CC11 per slur, the volumes),
 `tst_liveequivalence::liveContextLevel` (Live's clips, the plain set's lanes and Kontakt volumes).
