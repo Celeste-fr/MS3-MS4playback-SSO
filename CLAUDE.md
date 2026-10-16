@@ -424,7 +424,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   their modelled arrival, `LibTrace::glideArriveMs`): OVERLAP 0, UNMEASURED 10, CAPPED 288, ARRIVAL 33 fail / 6 warn
   (15 a slur's first transition 100-208 ms after its on-time attack, 3 + 6 neighbouring transitions' delays differing,
   15 the on-time attack after a slur's late last transition: HANDOFF.md › The audit's transitions), LEVEL STEP 0.
-  Whence, Recommended with `[slurs] transitionsEarly` 1 (its default since 2026-10-15, integrate-1012): OVERLAP 0,
+  Whence, Recommended with `[slurs] transitionsEarly` 1 (its default since 2026-10-15, integrate-1012; the same on integrate-stage, 2026-10-15: timpani, context re-measure, automation-only controllers, clicked notes): OVERLAP 0,
   UNMEASURED 10, CAPPED 1 (the Celli's 2nd note, bar 1: its transition 94.9 ms early, meant 128.2, the first note keeps
   keepMs), ARRIVAL 0 fail / 2 warn (that note +33.3 ms), LEVEL STEP 0, DROPPED 0, LEAP 0; 288 transitions early, median
   127.9 ms (94.9 - 207.4).
