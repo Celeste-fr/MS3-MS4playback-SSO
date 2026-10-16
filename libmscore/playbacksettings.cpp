@@ -98,10 +98,13 @@ static const std::vector<Definition> DEFINITIONS = {
         "patch with the smooth attack (no bite) instead of spiccato; an accent or marcato still accented, a re-attack right "
         "after a note of the patch still spiccato; 0: spiccato", true },
       // (the owner, 2026-10-14: "sure let's hear them started early", to A/B by ear against the transitions on the beat, his
-      // rule since 2026-10-07; off in every preset until he approves it. Not the removed legato/early, whose key stays
-      // ignored: an old playback.ini can't turn this on. Modes 2 / 3 (the coordinator, 2026-10-14, from the research note: a
-      // bowed legato note is heard ~23.5 ms after its pitch change starts, Polfreman 2013, ISMIR, SD 22.8 ms))
-      { "slurs/transitionsEarly", 0, 0, 3, "",
+      // rule since 2026-10-07. Not the removed legato/early, whose key stays ignored: an old playback.ini can't turn this
+      // on. Modes 2 / 3 (the coordinator, 2026-10-14, from the research note: a bowed legato note is heard ~23.5 ms after
+      // its pitch change starts, Polfreman 2013, ISMIR, SD 22.8 ms). 1 by default and in Recommended since 2026-10-15: the
+      // owner, after hearing Whence's fast quarter-tone slurs rendered through SSO, "I think 1 and 3 are both fine (I can
+      // hear very little difference btwn them)"; 1 measured closest to the written pitches there (Violas bar 7 93 cents mean
+      // error against 123 for 3 and 127 on the beat, Violins 1 bars 5-7 62 / 73 / 97: kthost on the test VM, pYIN))
+      { "slurs/transitionsEarly", 1, 0, 3, "",
         "a Performance legato transition (SSO's string sections) is sent early: 0 on the beat; 1 by its modelled arrival (the "
         "patch's measured bendGlide, else legatoDelay by interval, quicker after a short note), the new pitch arrives on the beat; "
         "2 by the measured leave + 23.5 ms, the change is heard on the beat (Polfreman 2013); 3 the middle of the measured glide "
@@ -386,7 +389,7 @@ QString iniTemplate()
 //    Only the held notes' early start (heldNotes/early, heldNotes/byPitch), the calibrated levels (levels/calibrated,
 //    levels/context, levels/sectionBalance, levels/realRange) and
 //    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance, slurs/transitions, slurs/smoothStart) differ between them;
-//    slurs/transitionsEarly is 0 in both (the owner to decide by ear, 2026-10-14), so that a preset turns it off. The other settings are not in the table because: legato/keepMs acts
+//    slurs/transitionsEarly (1 in Recommended since 2026-10-15, 0 in Library default). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -403,9 +406,10 @@ const std::vector<Preset>& presets()
             // bowed between slurs, slurs/transitions; a phrase's first note smooth, slurs/smoothStart; 2026-10-13: the real
             // player's range, levels/realRange; 2026-10-14: slurs/transitionsEarly 0 in both until the owner approves it;
             // levels/realRange 2 and levels/sectionBalance 2: the balance and the markings' levels from real data; 2026-10-15:
-            // levels/micCompensation, the mics never change the balance)
+            // levels/micCompensation, the mics never change the balance; slurs/transitionsEarly 1, the transitions sent by
+            // their modelled arrival: the owner by ear on Whence's fast quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
-                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 0 },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
