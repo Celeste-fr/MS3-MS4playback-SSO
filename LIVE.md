@@ -1046,11 +1046,11 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   2026-10-15 MuseScore's own hosting tunes them as Live does (`[tuning] hostedTuning` 1, slots, the default;
   soundlibrary.h › hosted tuning): the same routes, a copy per tuning, fixed by Kontakt's Tune, a patch's copies one
   Kontakt with a slot per tuning on its own MIDI channel (the plain set's multis; `KontaktSetup::withSlots`), and a
-  slurred note of another tuning starts on its own copy. What still differs: (1) a part that sets one of the patch's
-  plug-in parameters (Controllers…: SSO's Vibrato, mics) keeps a Kontakt per copy in MuseScore, each by its Tune, until
-  it is measured that a parameter set on a multi reaches every slot (the load-times run's phase 6); the plain set bakes
-  such settings into the state before it copies the slots, so it shares them (only automated parameters keep a Kontakt
-  of their own there); the sound is the same, the memory not. (2) The even-levels background measurer renders each part
+  slurred note of another tuning starts on its own copy. What still differs: (1) a part's plug-in parameters (SSO's
+  Vibrato, mics): MuseScore sets them on the multi, which reaches every slot (measured, the load-times run's phase 6,
+  2026-10-15), so a part's copies share one Kontakt with them too; the plain set bakes a setting into the state before
+  it copies the slots and keeps a Kontakt of their own only for automated parameters: the sound is the same, the memory
+  may not be. (2) The even-levels background measurer renders each part
   and patch on one plain instance of its own, its copies' tunings by varispeed (the cheapest load; the levels it
   measures are of the notes' envelopes, not their pitch). (3) A bending copy with a note beyond its bend range plays it
   by varispeed in MuseScore (an instance per copy then); Live can't. (4) A score with very many tunings can run out of

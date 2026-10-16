@@ -583,9 +583,9 @@ bool fixedLanes(const Score* score, const Library& library, bool forLive);
 //    times measurement). Without hosted slots: one per route, plain (cents empty: tuned by varispeed, as ever). With
 //    them: a patch's copies of one part in one instance (16 at most), route i of it on MIDI channel i + 1, each
 //    slot tuned by cents[i] (NaN: untuned, a bending copy); a copy alone in its instance, at a fixed tuning, by its
-//    Tune (one slot, cents { c }). Copies keep an instance each when the part sets one of the patch's plug-in
-//    parameters (a controller with param=: its setting or automation): a parameter of a multi is set on the
-//    instance, and that each slot's script takes it is not measured; or when a bending copy's note lies beyond its
+//    Tune (one slot, cents { c }). A plug-in parameter the part sets (a controller with param=: its setting or
+//    automation) is set on the instance and reaches every slot's script (measured: --measure-load-times phase 6, a
+//    3-slot SSO multi, 2026-10-15). Copies keep an instance each only when a bending copy's note lies beyond its
 //    bend range (the renderer then plays it by varispeed: one instance per copy, as before)
 //---------------------------------------------------------
 

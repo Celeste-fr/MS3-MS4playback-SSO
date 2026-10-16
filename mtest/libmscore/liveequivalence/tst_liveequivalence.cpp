@@ -4118,7 +4118,7 @@ void TestLiveEquivalence::updateLiveSet()
 //    multis; as SoundLibraryHost::sync loads them at play and SoundLibraryExport::loadInstances for an export. The
 //    setup is made from the .nki (the fixture) on Kontakt's empty state, as MuseScore makes SSO's; the test synth
 //    keeps a Kontakt state as it came. varispeed (0): two copies retuned, an instance each, plain. A part that sets a
-//    plug-in parameter: an instance per copy, each by its Tune. A copy's events reach the instance on its channel
+//    plug-in parameter: still one instance. A copy's events reach the instance on its channel
 //---------------------------------------------------------
 
 void TestLiveEquivalence::hostedSlots()
@@ -4254,7 +4254,8 @@ void TestLiveEquivalence::hostedSlots()
             Playback::setIniValuesForTest({ { "tuning/hostedTuning", "slots" } });
             QCOMPARE(Playback::value("tuning/hostedTuning"), 1.0);
             Playback::setIniValuesForTest({});
-            // a part that sets a plug-in parameter: an instance per copy, each by its Tune (0 cents: as made)
+            // a part that sets a plug-in parameter: still one instance (the parameter reaches every slot: measured on
+            // SSO, --measure-load-times phase 6)
             Automation::Lane tone;
             tone.target = "tone";
             tone.points.push_back(Automation::Point(0, 0.5, Automation::Curve::STEP));
@@ -4262,14 +4263,10 @@ void TestLiveEquivalence::hostedSlots()
             lanes[score->parts()[0]] = { tone };
             score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
             const std::vector<SoundLib::Instance> each = SoundLib::instances(score, lib, SoundLib::routes(score, lib));
-            QCOMPARE(int(each.size()), 3);
-            QVERIFY(each[0].cents.empty());
-            QCOMPARE(each[1].cents, std::vector<double>({ -50.0 }));
+            QCOMPARE(int(each.size()), 1);
+            QCOMPARE(each[0].cents, std::vector<double>({ 0.0, -50.0, 50.0 }));
             QVERIFY2(h->sync(score, &error), qPrintable(error));
-            QVERIFY(s->plugin(0) && s->plugin(1) && s->plugin(2));
-            QCOMPARE(int(slotsOf(s->plugin(2)).size()), 1);
-            QVERIFY(std::fabs(slotsOf(s->plugin(2))[0].cents - 50.0) < 1e-3);
-            QVERIFY(std::fabs(slotsOf(s->plugin(1))[0].cents + 50.0) < 1e-3);
+            checkMulti(s);
             score->setMetaTag(Automation::metaTag, "");
             h->release();
             QVERIFY(!s->instance(1));

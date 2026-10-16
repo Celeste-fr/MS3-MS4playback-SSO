@@ -288,9 +288,8 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   its own MIDI channel (`SoundLibraryHost::tunedState` = `withSlots` / `withTune` on the setup; a made setup goes in
   plain first so that it is resaved, then tuned); `Vst3Synth::setLink` plays a route's slot on its instance's channel
   (`tuned`: no varispeed, no note tuning sent), the Mixer is the instance's (one output: one part, one patch volume).
-  A part that sets a plug-in parameter of the patch keeps a Kontakt per copy (each by its Tune) until the load-times
-  run's phase 6 shows that a parameter set on a multi reaches every slot (`MS_SLOTS_PARAMETERS=1` shares them anyway);
-  a setup that isn't Kontakt's falls back to an instance per copy by varispeed (`SoundLibraryHost::untunable`). The
+  A plug-in parameter the part sets (Vibrato, mics) is set on the instance and reaches every slot (measured: the
+  load-times run's phase 6, SSO, 2026-10-15); a setup that isn't Kontakt's falls back to an instance per copy by varispeed (`SoundLibraryHost::untunable`). The
   even-levels background measurer keeps one plain instance per part and patch (varispeed). HANDOFF.md › Kontakt slots.
 - Mixer on library parts: `Vst3Synth::setMix` per slot (hosted), CC7/10/91/93 on the routes (MIDI out).
   Mixer and playback edits never leave playback stopped (the owner, 2026-10-07): track delays / levels render again

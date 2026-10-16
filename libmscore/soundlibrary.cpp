@@ -1716,21 +1716,6 @@ bool fixedLanes(const Score* score, const Library& library, bool forLive)
       return forLive || output() == Output::MIDI || hostedSlots(score, library);
       }
 
-// the part sets one of the patch's plug-in parameters (a setting or automation of a controller with param=)
-static bool setsParameters(const Part* part, const LibInstrument& patch, const std::map<const Part*, Automation::PartLanes>& lanes)
-      {
-      for (const Controller& c : patch.allControllers) {
-            if (c.param.isEmpty())
-                  continue;
-            if (PartControllers::value(part, c, lanes) >= 0)
-                  return true;
-            auto i = lanes.find(part);
-            if (i != lanes.end() && PartControllers::laneOf(i->second, c))
-                  return true;
-            }
-      return false;
-      }
-
 // a note of the part tuned beyond the patch's bend range (the renderer plays it by varispeed: libraryPitchBends)
 static bool beyondBend(const Score* score, const Part* part, double bendCents)
       {
@@ -1759,11 +1744,6 @@ std::vector<Instance> instances(const Score* score, const Library& library, cons
       std::vector<Instance> out;
       const bool bySlots = hostedSlots(score, library);
       const bool bend = Playback::on("tuning/pitchBend", score);
-      // (Ms: MS_SLOTS_PARAMETERS=1 shares a part's copies with plug-in parameters too, to measure whether each slot takes them)
-      static const bool withParameters = qEnvironmentVariableIntValue("MS_SLOTS_PARAMETERS") == 1;
-      std::map<const Part*, Automation::PartLanes> lanes;
-      if (bySlots && score && score->masterScore())
-            lanes = Automation::read(const_cast<MasterScore*>(score->masterScore()));
       std::map<std::pair<const Part*, int>, bool> shares;        // (part, patch) -> its copies share an instance
       for (const Route& r : routes) {
             if (!r.instrument || r.instrument->kit)
@@ -1790,8 +1770,7 @@ std::vector<Instance> instances(const Score* score, const Library& library, cons
             if (bySlots) {
                   const bool bends = bend && r.instrument->bendCents > 0;
                   if (r.lane == 0 && !shares.count({ r.part, r.patch }))
-                        shares[{ r.part, r.patch }] = (withParameters || !setsParameters(r.part, *r.instrument, lanes))
-                                                      && !(bends && beyondBend(score, r.part, r.instrument->bendCents));
+                        shares[{ r.part, r.patch }] = !(bends && beyondBend(score, r.part, r.instrument->bendCents));
                   // (a copy alone: by its Tune when it has a fixed tuning; a bending copy alone plays as before)
                   if (std::isfinite(r.cents) || shares[{ r.part, r.patch }])
                         in.cents.push_back(r.cents);
