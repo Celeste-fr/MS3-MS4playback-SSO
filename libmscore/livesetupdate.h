@@ -26,9 +26,14 @@
 //     - the "Timing" store of each technique track's MuseScore Link copy (in its MxDBlob; the device's other stores,
 //       its port and lanes, stay as Max saved them);
 //     - the automation of the Kontakt's plug-in parameters MuseScore automates (their events; a parameter the file's
-//       Kontakt doesn't list in Live's panel is reported);
-//     - a Kontakt's state only when the tunings its slots play changed (a new quarter tone: KontaktSetup::withSlots);
-//       otherwise Kontakt's state is the owner's (a patch's settings changed in Live stay).
+//       Kontakt doesn't list in Live's panel is put in a free Configure slot when its id is known, else reported);
+//     - the plain value (ParameterValue/Manual) of each plug-in parameter whose lane is flat (the owner, 2026-10-15,
+//       "Option B": Track::constants; an envelope left from a changing lane removed), never over a value turned in Live
+//       that the read-back didn't take (Constant::keepLive), and a never-written unautomated value only over
+//       MuseScore's own recorded one;
+//     - a Kontakt's state when the tunings its slots play changed (a new quarter tone: KontaktSetup::withSlots), or when
+//       a constant changed (Track::parameterState: the set's own state with those parameters, its other settings kept);
+//       otherwise Kontakt's state is the owner's (a patch's settings changed in Kontakt's window stay).
 //   Everything else stays byte for byte: devices the owner added (on any track, after Kontakt too), return tracks and
 //   sends, other tracks, groups' and tracks' names, colours and mixers, automation MuseScore doesn't write, locators,
 //   tempo, scenes, Live's version attributes. An update of an unchanged score changes nothing (no file is written).
@@ -148,6 +153,8 @@ struct Record {
 std::map<QString, Record> records(const QByteArray& xml);
 // a Kontakt's slots as recorded (Written::slots): "" one slot, else each slot's cents ("bent" for a bending copy)
 QString slotsText(const std::vector<double>& slotCents);
+// every MuseScore track's plug-in state in a set (by key: ProcessorState decoded; Kontakt's component state)
+std::map<QString, QByteArray> kontaktStates(const QByteArray& xml);
 
 //---------------------------------------------------------
 //   Live's timing edits of the technique clips, as the notes' overrides

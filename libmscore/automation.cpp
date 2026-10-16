@@ -454,7 +454,9 @@ std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& a
                   if (taken.count(m.target))
                         continue;
                   const bool fromLive = m.source() == SOURCE_LIVE || m.extra.contains("liveHash");
-                  if (fromLive && m.playedByLive())
+                  // (a knob's value, livetracks.h › Knobs: the parameter left Live's panel, its value stays MuseScore's)
+                  const bool knob = m.extra.value("liveHash").toString().startsWith("knob:");
+                  if (fromLive && m.playedByLive() && !knob)
                         continue;                     // gone from Live, unedited here
                   Lane k = m;
                   if (fromLive) {

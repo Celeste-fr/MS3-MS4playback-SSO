@@ -45,7 +45,8 @@
 //                                      "events": [[time, value], [time, value, c1x, c1y, c2x, c2y], …]}]}},
 //      "written": {key: {"kind": "section" | "part" | "kontakt" | "copy" | "technique", "part": index, "patch": n,
 //                        "hashes": {"cc1": hash, …}, "delayKey": trackdelays.h key, "lookahead": ms,
-//                        "clips": hash, "notes": base64, "slots": "0.00 -50.00"}}}   (livesetupdate.h: Update Live Set)
+//                        "clips": hash, "notes": base64, "slots": "0.00 -50.00",
+//                        "params": {"Vibrato": 0.5, …}}}}   (livesetupdate.h: Update Live Set; Knobs below)
 //   Track delays: each part's tracks' TrackDelay comes back as the part's delays (trackdelays.h; "part": its group's,
 //   "delayKey": a Kontakt's or technique's; a technique track's with its written notes' lookahead added back, livetiming.h:
 //   Create Live Set wrote it that much earlier); one in samples (Live's toggle) is reported, not imported.
@@ -105,6 +106,9 @@ struct Written {
       QString clips;
       QString notes;
       QString slotTunings;
+      // a Kontakt track's plug-in parameters in Live's panel as written, without automation: their values (Manual, 0-1)
+      // by title. A knob the owner turns in Live (another value, still no automation) comes back as a lane (import)
+      std::map<QString, double> params;
       };
 
 struct Data {
@@ -127,9 +131,27 @@ QString key(const LiveSet::Set& set, size_t i, const Data& data);
 std::map<QString, Written> written(const Score* score, const std::vector<LiveSetWriter::Track>& tracks, const LiveSet::Set& readBack);
 
 // after Create Live Set: the score's parameter lanes the set has as Kontakt-track automation get the written envelope's
-// liveHash and their own pointsHash (Live plays them; Automation::merge keeps them while Live's are unchanged); the count
+// liveHash and their own pointsHash (Live plays them; Automation::merge keeps them while Live's are unchanged); a flat
+// lane (one value from the start: the set has it as the parameter's plain value, no automation) gets knobHash of the
+// value written instead; the count
 int markWrittenLanes(const std::vector<LiveSetWriter::Track>& tracks, const LiveSet::Set& readBack,
                      std::map<const Part*, Automation::PartLanes>* lanes);
+
+//---------------------------------------------------------
+//   Knobs (the owner, 2026-10-15, "yea sure" to reading them back): a Kontakt parameter Live's panel lists without
+//   automation has one value, its Manual value, which the owner may turn in Live. Read back (import), on the part's main
+//   Kontakt track, it becomes the part's flat lane (one step point at the score's start; "knob": true, liveHash knobHash)
+//   when it differs from what was written there (Written::params; a set without that record: from what the score plays
+//   now, the lane's value or the unautomated value), and Automation::merge decides as for any lane: Live's newer value
+//   taken, a lane edited here since kept, both changed asked. A score lane that came from a knob is never removed because
+//   the parameter left Live's panel (Automation::merge). Kontakt's own window (its state) is not read: a value set there
+//   and not in Live's panel stays unknown to MuseScore (Kontakt's state is opaque here: LIVE.md).
+//---------------------------------------------------------
+
+QString knobHash(double value);           // "knob:<value to 1e-4>"
+bool isKnobHash(const QString& liveHash);
+// a track's knobs: its listed, unautomated parameters' values by title
+std::map<QString, double> knobs(const LiveSet::Track& track);
 
 // Create Live Set: each track's kept state (static values, mixer automation)
 void apply(const Data& data, std::vector<LiveSetWriter::Track>* tracks);

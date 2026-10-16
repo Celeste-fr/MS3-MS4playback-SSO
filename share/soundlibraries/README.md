@@ -372,7 +372,12 @@ switch value of each articulation. For example:
   controller (`cc`, 0–119) or a parameter of the hosted plug-in, found by its title (`param`,
   plug-in hosting only). Values are 0–127 (a parameter gets value / 127). `default` is what a
   part plays it at unless it has a value of its own; without it the patch keeps its own
-  setting. `<Text>` children are staff texts (the whole text, as a regular expression,
+  setting. `patchDefault` (a `param` controller only; 0–1, the plug-in's normalized value) is
+  that own setting as the library ships it, measured once in the real plug-in with MuseScore's
+  setup loaded and settled and nothing set: MuseScore sends nothing for it, it is what an
+  unautomated lane shows (its dashed line) for a patch that never loaded on this computer; once
+  the patch loads, the plug-in's live value takes over, and a value that differs is logged in
+  the setups folder's `load times.log` (the map then needs measuring again). `<Text>` children are staff texts (the whole text, as a regular expression,
   case-insensitive) that change a MIDI controller from their note on. A `<Controller>` at the
   top is for every instrument; one inside an `Instrument` replaces the top one of the same `id`
   (or adds to them).
@@ -382,13 +387,15 @@ switch value of each articulation. For example:
     <Text match="senza vib\.?" value="0"/>
     <Text match="molto vib\.?" value="127"/>
   </Controller>
-  <Controller id="release" name="Release" param="Release"/>
+  <Controller id="release" name="Release" param="Release" patchDefault="0.496"/>
   ```
 
   A part's controllers are set by automation lanes only (Continuous View, under the part's header:
   one lane per controller of its patches, by `id`, so a lane stays with the part when the library
   changes). A lane without points plays the `default` (else the patch's own value) and is drawn as
-  a dashed line; a lane with one value from the score's start is the controller's setting. Scores
+  a dashed line; a lane with one value from the score's start is the controller's setting (in a
+  Live set Create / Update Live Set write, the parameter's plain value in Live's panel, not
+  automation; a value turned there comes back as such a lane). Scores
   saved before 2026-10-15 kept *Controllers…* values in the metaTag `partControllers`: they are
   read as such lanes.
 

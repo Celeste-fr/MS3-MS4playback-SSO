@@ -152,12 +152,19 @@ double unautomatedValue(const SoundLib::LibInstrument& patch, const SoundLib::Co
             return controller.defaultValue / 127.0;
       if (controller.param.isEmpty())
             return -1;
+      // the patch as it loaded on this computer (Kontakt's live value, as Live's panel shows it once loaded)
+      if (setupValues()) {
+            const double v = setupValues()(patch.name, controller.param);
+            if (v >= 0)
+                  return v;
+            }
+      // never loaded here: the value shipped with the map (measured in the real plug-in)
+      if (controller.patchDefault >= 0)
+            return controller.patchDefault;
       static const QRegularExpression mic("^Mic ([1-5]) level$");
       const QRegularExpressionMatch m = mic.match(controller.param);
       if (m.hasMatch() && patch.hasMicLevels)
             return patch.micDefault[size_t(m.captured(1).toInt() - 1)] / 127.0;
-      if (setupValues())
-            return setupValues()(patch.name, controller.param);
       return -1;
       }
 

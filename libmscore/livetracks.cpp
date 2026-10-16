@@ -11,12 +11,14 @@
 #include "livetracks.h"
 
 #include <cmath>
+#include <set>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
 
 #include "part.h"
+#include "partcontrollers.h"
 #include "plainliveset.h"
 #include "score.h"
 #include "soundlibrary.h"
@@ -90,6 +92,9 @@ Data fromJson(const QString& json)
             const QJsonObject h = t.value("hashes").toObject();
             for (auto hi = h.begin(); hi != h.end(); ++hi)
                   w.hashes[hi.key()] = hi.value().toString();
+            const QJsonObject pv = t.value("params").toObject();
+            for (auto pi = pv.begin(); pi != pv.end(); ++pi)
+                  w.params[pi.key()] = pi.value().toDouble();
             d.written[it.key()] = w;
             }
       return d;
@@ -154,6 +159,12 @@ QString toJson(const Data& data)
                   for (const auto& hs : ws.second.hashes)
                         h[hs.first] = hs.second;
                   w["hashes"] = h;
+                  }
+            if (!ws.second.params.empty()) {
+                  QJsonObject pv;
+                  for (const auto& p : ws.second.params)
+                        pv[p.first] = rounded(p.second);
+                  w["params"] = pv;
                   }
             written[ws.first] = w;
             }
@@ -291,9 +302,104 @@ std::map<QString, Written> written(const Score* score, const std::vector<LiveSet
             auto r = read.find(t.annotation);
             if (r != read.end() && !t.group)
                   w.hashes = ccHashes(*r->second);
+            if (r != read.end() && w.kind == "kontakt")
+                  w.params = knobs(*r->second);
             out[t.annotation] = w;
             }
       return out;
+      }
+
+//---------------------------------------------------------
+//   knobs
+//---------------------------------------------------------
+
+QString knobHash(double value)
+      {
+      return QString("knob:%1").arg(std::lround(std::min(1.0, std::max(0.0, value)) * 1e4));
+      }
+
+bool isKnobHash(const QString& liveHash)
+      {
+      return liveHash.startsWith("knob:");
+      }
+
+std::map<QString, double> knobs(const LiveSet::Track& track)
+      {
+      std::map<QString, double> out;
+      for (const LiveSet::Parameter& p : track.parameters)
+            if (!p.automated && p.manual >= 0 && !p.name.isEmpty() && !out.count(p.name))
+                  out[p.name] = p.manual;
+      return out;
+      }
+
+// a map controller of the patch by Live's parameter title (Vst3Plugin::parameterId's loose rule)
+static const SoundLib::Controller* paramController(const SoundLib::LibInstrument* li, const QString& title)
+      {
+      if (!li)
+            return nullptr;
+      for (const SoundLib::Controller& c : li->allControllers)
+            if (c.cc < 0 && !c.param.isEmpty() && LiveSet::looseTitle(c.param) == LiveSet::looseTitle(title))
+                  return &c;
+      return nullptr;
+      }
+
+static bool sameKnob(double a, double b)
+      {
+      return knobHash(a) == knobHash(b);
+      }
+
+// the main Kontakt track's knobs as lanes (Knobs, livetracks.h): mine, the score's lanes of the part
+static void knobLanes(const LiveSet::Track& t, const Written& w, const LiveSet::PartInfo* pi, const Automation::PartLanes& mine,
+                      const QString& path, const QDateTime& modified, Automation::PartLanes* out, QStringList* taken)
+      {
+      if (!pi || !pi->instrument)
+            return;
+      std::set<QString> seen;
+      for (const LiveSet::Parameter& p : t.parameters) {
+            if (p.automated || p.manual < 0)
+                  continue;
+            const SoundLib::Controller* c = paramController(pi->instrument, p.name);
+            if (!c || !seen.insert(c->id).second)
+                  continue;
+            const Automation::Lane* lane = nullptr;
+            for (const Automation::Lane& l : mine)
+                  if (l.target == c->id && !l.points.empty())
+                        lane = &l;
+            bool take = false;
+            if (lane) {
+                  if (!lane->extra.value("liveHash").toString().isEmpty())
+                        take = true;            // written to the set (as this value, or as automation since removed in Live)
+                  else if (lane->flatValue() >= 0)
+                        take = !sameKnob(lane->flatValue(), p.manual);      // (never agreed: Automation::merge asks)
+                  }
+            else {
+                  auto rec = w.params.find(p.name);
+                  if (rec != w.params.end())
+                        take = !sameKnob(rec->second, p.manual);            // turned in Live since it was written
+                  else {
+                        const double u = PartControllers::unautomatedValue(*pi->instrument, *c);
+                        take = u >= 0 && !sameKnob(u, p.manual);
+                        }
+                  }
+            if (!take)
+                  continue;
+            Automation::Lane k;
+            k.target = c->id;
+            k.points.push_back(Automation::Point(0, std::min(1.0, std::max(0.0, p.manual)), Automation::Curve::STEP));
+            k.extra["source"] = Automation::SOURCE_LIVE;
+            k.extra["set"] = path;
+            k.extra["setTime"] = modified.toUTC().toString(Qt::ISODate);
+            k.extra["track"] = t.name;
+            k.extra["param"] = p.name;
+            k.extra["paramId"] = p.id;
+            k.extra["knob"] = true;
+            k.extra["liveHash"] = knobHash(p.manual);
+            k.extra["pointsHash"] = Automation::pointsHash(k.points);
+            out->push_back(k);
+            if (taken && !(lane && lane->extra.value("liveHash").toString() == knobHash(p.manual)))
+                  *taken << QObject::tr("Track \"%1\": %2 at %3 in Live's panel (no automation)").arg(t.name, p.name)
+                            .arg(p.manual, 0, 'f', 4);
+            }
       }
 
 int markWrittenLanes(const std::vector<LiveSetWriter::Track>& tracks, const LiveSet::Set& readBack,
@@ -320,6 +426,20 @@ int markWrittenLanes(const std::vector<LiveSetWriter::Track>& tracks, const Live
                                     l.extra["pointsHash"] = Automation::pointsHash(l.points);
                                     ++n;
                                     }
+                  }
+            // a flat lane: the parameter's plain value in Live's panel (no automation; option B, the owner 2026-10-15)
+            for (const LiveSet::Parameter& p : read.at(t.annotation)->parameters) {
+                  if (p.automated || p.manual < 0)
+                        continue;
+                  const SoundLib::Controller* c = paramController(t.instrument, p.name);
+                  if (!c)
+                        continue;
+                  for (Automation::Lane& l : pl->second)
+                        if (l.target == c->id && l.flatValue() >= 0) {
+                              l.extra["liveHash"] = knobHash(p.manual);
+                              l.extra["pointsHash"] = Automation::pointsHash(l.points);
+                              ++n;
+                              }
                   }
             }
       return n;
@@ -379,6 +499,11 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
       const QList<Part*> scoreParts = score ? score->parts() : QList<Part*>();
       const std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       const std::map<const Part*, TrackDelays::Delays> delays = score ? TrackDelays::read(score) : std::map<const Part*, TrackDelays::Delays>();
+      // the knobs turned in Live (Knobs above): against the score's lanes
+      const std::map<const Part*, Automation::PartLanes> scoreLanes = score ? Automation::read(score)
+                                                                            : std::map<const Part*, Automation::PartLanes>();
+      std::map<const Part*, Automation::PartLanes> knobOut;
+      QStringList knobsTaken;
       // the parts with one Kontakt track: its mixer is the part's Mixer
       std::map<int, int> kontakts;
       for (const auto& w : data.written)
@@ -473,6 +598,23 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                         continue;               // its switch
                   notImported << QObject::tr("Track \"%1\", %2: MuseScore doesn't play it").arg(t.name, what);
                   }
+            // its knobs: Live's panel values without automation
+            if (mainKontakt && part) {
+                  const LiveSet::PartInfo* pi = nullptr;
+                  for (const LiveSet::PartInfo& p : parts)
+                        if (p.part == part)
+                              pi = &p;
+                  knobLanes(t, w, pi, Automation::lanes(part, scoreLanes), path, modified, &knobOut[part], &knobsTaken);
+                  }
+            else if (kontakt) {
+                  // (an extra patch's Kontakt: its knobs are not lanes, as its envelopes aren't)
+                  for (const auto& kv : knobs(t)) {
+                        auto rec = w.params.find(kv.first);
+                        if (rec != w.params.end() && !sameKnob(rec->second, kv.second))
+                              notImported << QObject::tr("Track \"%1\", \"%2\" turned to %3 in Live: an extra patch's Kontakt (no lane "
+                                                         "plays it)").arg(t.name, kv.first).arg(kv.second, 0, 'f', 4);
+                        }
+                  }
             // the track delay
             // (from the score's: a track the set hasn't, a technique no note plays, keeps its value)
             if (part && (w.kind == "part" || !w.delayKey.isEmpty())) {
@@ -495,6 +637,14 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   im.data.tracks[k] = s;
             }
       im.lanes = LiveSet::lanes(score, set, parts, path, modified, &im.report, &bound);
+      for (const auto& pk : knobOut)
+            for (const Automation::Lane& l : pk.second) {
+                  im.lanes[pk.first].push_back(l);
+                  ++im.report.lanes;
+                  }
+      if (!knobsTaken.isEmpty())
+            im.report.matched << QObject::tr("Plug-in parameters set in Live's panel, without automation (each a lane with "
+                                             "one value):") << knobsTaken;
       im.report.unmatched << notImported;
       return im;
       }

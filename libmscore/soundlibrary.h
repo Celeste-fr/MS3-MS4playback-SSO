@@ -230,6 +230,11 @@ struct Controller {
       int cc { -1 };                      // a MIDI controller (0-119)
       QString param;                      // else a plug-in parameter's title (hosted plug-in only)
       int defaultValue { -1 };            // 0-127; -1: MuseScore leaves the patch's own value
+      // the patch's own value as the library ships it (<Controller patchDefault>: the plug-in's normalized value, 0-1,
+      // measured once in the real plug-in with MuseScore's setup loaded and settled, nothing set; the owner, 2026-10-15:
+      // "shouldn't these 2 values be the same?"): what an unautomated lane shows before the patch ever loaded on this
+      // computer (partcontrollers.h unautomatedValue). MuseScore sends nothing for it. -1: not measured
+      double patchDefault { -1 };
       std::vector<ControllerText> texts;
       };
 

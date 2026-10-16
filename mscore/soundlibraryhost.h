@@ -194,8 +194,17 @@ class SoundLibraryHost : public QObject {
       // score": Live names Kontakt's automation slots "#001" … and the MuseScore Link device finds them by id)
       static void rememberParameterIds(const SoundLib::Library& library, const QString& patch, const std::map<QString, long>& ids);
       static long knownParameterId(const SoundLib::Library& library, const QString& patch, const QString& title);
-      // (after a setup loaded and settled: its parameters' values for setupParameterValue)
+      // (after a setup loaded and settled: its parameters' values for setupParameterValue; one that differs from the
+      // map's patchDefault by more than PATCH_DEFAULT_TOLERANCE, the map's rounding, is logged in "load times.log")
       static void recordSetupValues(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch);
+      static constexpr double PATCH_DEFAULT_TOLERANCE = 1e-4;
+      // a Kontakt's state from a Live set (its component: ProcessorState) with plug-in parameters set (by title, 0-1):
+      // loaded into a new instance, its script settled, the values set, a moment for the plug-in to take them, then its
+      // component state (Update Live Set: a lane that never changes is the parameter's plain value, in Live's panel and
+      // in the state, livesetupdate.h). *ids: each title's parameter id on it (-1: not in it). Empty and *error: failed
+      static QByteArray stateWithParameters(const QByteArray& component, const QString& pluginPath,
+                                            const std::vector<std::pair<QString, double>>& values,
+                                            std::map<QString, long>* ids, QString* error = nullptr);
       // the parameters with these titles on the patch as MuseScore loads it (setup, script settled): id (-1: not in it)
       // and the patch's own value (readBack); controller empty
       static bool parametersOf(const SoundLib::Library& library, const SoundLib::Route& r, const QStringList& titles,

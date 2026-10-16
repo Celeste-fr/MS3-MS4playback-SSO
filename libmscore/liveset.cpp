@@ -171,6 +171,8 @@ struct TrackState {
       QString device;
       ParamTarget param;
       QString paramTargetId;
+      double paramManual { -1 };
+      std::vector<std::pair<Parameter, QString>> parameters;      // Live's panel, each with its AutomationTarget Id
       // the MIDI clip being read
       bool inClip { false };
       int clip { -1 };
@@ -463,7 +465,10 @@ Set parse(const QByteArray& xml)
                         ts->param.kind = Envelope::Kind::PARAMETER;
                         ts->param.device = ts->device;
                         ts->paramTargetId.clear();
+                        ts->paramManual = -1;
                         }
+                  else if (paramDepth >= 0 && n == "Manual" && parent() == "ParameterValue" && depth == paramDepth + 2)
+                        ts->paramManual = num(value);
                   else if (paramDepth >= 0 && n == "ParameterName" && depth == paramDepth + 1)
                         ts->param.name = value.toString();
                   else if (paramDepth >= 0 && n == "ParameterId" && depth == paramDepth + 1)
@@ -552,6 +557,14 @@ Set parse(const QByteArray& xml)
                         if (depth == paramDepth) {
                               if (!ts->paramTargetId.isEmpty())
                                     ts->targets[ts->paramTargetId] = ts->param;
+                              if (ts->param.kind == Envelope::Kind::PARAMETER && !ts->param.name.isEmpty()) {
+                                    Parameter pp;
+                                    pp.device = ts->param.device;
+                                    pp.name = ts->param.name;
+                                    pp.id = ts->param.id;
+                                    pp.manual = ts->paramManual;
+                                    ts->parameters.push_back({ pp, ts->paramTargetId });
+                                    }
                               paramDepth = -1;
                               }
                         else if (depth == deviceDepth)
@@ -585,6 +598,12 @@ Set parse(const QByteArray& xml)
                               midiInput(t, upper, lower);
                               for (const RawEnvelope& e : ts->envelopes)
                                     t.envelopes.push_back(resolve(e, *ts));
+                              for (auto& pp : ts->parameters) {
+                                    for (const RawEnvelope& e : ts->envelopes)
+                                          if (!e.inClip && !pp.second.isEmpty() && e.pointee == pp.second)
+                                                pp.first.automated = true;
+                                    t.parameters.push_back(pp.first);
+                                    }
                               set.tracks.push_back(t);
                               ts.reset();
                               trackDepth = -1;
@@ -682,6 +701,7 @@ std::vector<PartInfo> partInfos(const MasterScore* score, const QStringList& por
             pi.part = r.part;
             pi.portName = r.port < portNames.size() ? portNames[r.port] : QString();
             pi.channel = r.channel + 1;
+            pi.instrument = r.instrument;
             for (const SoundLib::Controller& c : r.instrument->allControllers)
                   pi.targets.push_back({ c.id, c.param, c.name, c.cc });
             out.push_back(pi);
