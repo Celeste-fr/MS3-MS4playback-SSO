@@ -16,6 +16,8 @@
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
 #include "libmscore/part.h"
+#include "libmscore/partplayback.h"
+#include "libmscore/performancetechnique.h"
 #include "libmscore/score.h"
 
 #include <algorithm>
@@ -397,6 +399,15 @@ void NoteLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible) cons
       p.setPen(QPen(QColor(200, 200, 200), px));
       p.setBrush(Qt::NoBrush);
       p.drawRect(r.rect);
+      if (_drag == Drag::RUBBER && !_rubber.isEmpty() && _row.master == r.master && _row.target == r.target)
+            paintRubber(p, _rubber, px);
+      }
+
+void NoteLanes::paintRubber(QPainter& p, const QRectF& band, double px)
+      {
+      p.setPen(QPen(QColor(47, 109, 181), 1.0 * px, Qt::DashLine));
+      p.setBrush(QColor(47, 109, 181, 30));
+      p.drawRect(band);
       }
 
 //---------------------------------------------------------
@@ -468,6 +479,7 @@ void NoteLanes::move(const QPointF& p, Qt::KeyboardModifiers mods)
                   // fall through
             case Drag::RUBBER: {
                   const QRectF band = QRectF(_pressPos, p).normalized();
+                  _rubber = band.intersected(r.rect);
                   if (!(mods & Qt::ControlModifier))
                         _sel.clear();
                   for (const Stem& s : stems(r))
@@ -499,6 +511,7 @@ void NoteLanes::release()
       {
       const Drag d = _drag;
       _drag = Drag::NONE;
+      _rubber = QRectF();
       if (d == Drag::MOVE || d == Drag::DRAW) {
             std::map<const Note*, int> values;
             values.swap(_work);
@@ -531,6 +544,56 @@ void NoteLanes::resetSelected()
       for (const Note* n : _sel)
             values[n] = join ? PerformanceTechnique::JOIN_AUTO : 0;
       commit(values, join, tr("Notes: Auto"));
+      }
+
+bool NoteLanes::duplicateSelected()
+      {
+      if (_sel.empty())
+            return false;
+      Score* view = _lanes->score();
+      if (!view || !fresh())
+            return true;
+      MasterScore* s = view->masterScore();
+      int first = INT_MAX;
+      int last = -1;
+      for (const Note* n : _sel) {
+            const Chord* c = n->chord();
+            first = std::min(first, c->tick().ticks());
+            last = std::max(last, (c->tick() + c->actualTicks()).ticks());
+            }
+      if (last <= first)
+            return true;
+      int start = first;
+      int end = last;
+      if (_lanes->_snapOn) {
+            const std::pair<int, int> a = _lanes->gridCell(first, false);
+            const std::pair<int, int> b = _lanes->gridCell(last - 1, false);
+            if (a.first >= 0 && b.second > a.first) {
+                  start = a.first;
+                  end = b.second;
+                  }
+            }
+      const Part* part = PartPlaybackModes::masterPart(_row.master ? _row.master : (*_sel.begin())->part());
+      if (seq)
+            seq->waitForRendering();      // (the background renderer reads the notes)
+      std::vector<Note*> to;
+      s->startCmd();
+      PerformanceTechnique::duplicateNoteValues(s, part, start, end, s->endTick().ticks(), &_sel, &to);
+      s->endCmd();
+      if (to.empty()) {
+            if (mscore)
+                  mscore->showMessage(end >= s->endTick().ticks() ? tr("Duplicate: the score ends here")
+                                                                  : tr("Duplicate: no notes at the same places after them"), 1500);
+            return true;
+            }
+      _sel.clear();
+      for (Note* n : to)
+            _sel.insert(n);
+      if (mscore)
+            mscore->showMessage(tr("Notes: %n duplicated", "", int(to.size())), 1500);
+      render();
+      _view->update();
+      return true;
       }
 
 void NoteLanes::clearSelection()

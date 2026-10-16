@@ -58,6 +58,14 @@
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
 #include "mscore/lanefolds.h"
+#include "mscore/automationlanes.h"
+#include "mscore/notelanes.h"
+#include "mscore/soundlibraryhost.h"
+#include <QGroupBox>
+#include <QLabel>
+#include <QPushButton>
+#include <QTreeWidget>
+#include <QVBoxLayout>
 #include "audio/midi/event.h"
 #include "mscore/livesetexport.h"
 #include "mtest/testutils.h"
@@ -119,6 +127,10 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEnvelopeMapping();
       void laneTimeAxis();
       void laneFolds();
+      void laneDashedLine();
+      void lanePointsOnBarLines();
+      void noteLaneRubber();
+      void soundLibraryWindow();
       void laneEvenBeats();
       void liveParamLanes();
       void clipTabMidi();
@@ -3180,6 +3192,376 @@ void TestLiveIntegration::clipEnvelopeMapping()
       }
 
 //---------------------------------------------------------
+//   laneDashedLine
+//    Live's dashed line (the owner, 2026-10-15: "if something has no automated value yet, I want it to show a dashed
+//    line like Ableton does"): a lane without points draws a dashed line at the value its controller plays unautomated
+//    (mscore/automationlanes.h paintEnvelope); not known: nothing; with points the envelope solid from its first point,
+//    the dashed line before it at the unautomated value. MS_LANE_PNG=<folder>: the two lanes as pictures
+//    (lane-unautomated.png, lane-automated.png) and both together (lanes-dashed.png)
+//---------------------------------------------------------
+
+namespace {
+struct LanePicture {
+      QImage img;
+      QRectF rect;
+      QRectF value;
+      };
+}
+
+static LanePicture drawLane(const Automation::Lane& lane, double unautomated, const QString& title, bool antialias = true)
+      {
+      // a lane as the editor draws it: its band (a plug-in parameter's), four bars of 4/4 (bar lines, beats), the line
+      const int w = 760, h = 72, head = 150;
+      LanePicture lp;
+      lp.img = QImage(w, h, QImage::Format_ARGB32);
+      lp.img.fill(QColor(255, 255, 255));
+      lp.rect = QRectF(head, 6, w - head - 10, h - 12);
+      lp.value = lp.rect.adjusted(0, 6, 0, -6);
+      QPainter p(&lp.img);
+      p.setRenderHint(QPainter::Antialiasing, antialias);
+      p.fillRect(QRectF(0, lp.rect.top(), head, lp.rect.height()), QColor(246, 236, 226));
+      p.setPen(QColor(29, 31, 34));
+      QFont f = p.font();
+      f.setPixelSize(12);
+      p.setFont(f);
+      p.drawText(QRectF(8, lp.rect.top(), head - 12, lp.rect.height() / 2), Qt::AlignBottom | Qt::AlignLeft, title);
+      p.setPen(QColor(85, 88, 92));
+      const double shown = lane.points.empty() ? unautomated : lane.valueAt(0) >= 0 ? lane.valueAt(0) : unautomated;
+      p.drawText(QRectF(8, lp.rect.center().y(), head - 12, lp.rect.height() / 2), Qt::AlignTop | Qt::AlignLeft,
+                 shown >= 0 ? QString::number(std::lround(shown * 127)) : QString::fromUtf8("–"));
+      p.setPen(Qt::NoPen);
+      p.setBrush(QColor(251, 245, 239));
+      p.drawRect(lp.rect);
+      const QRectF rect = lp.rect;
+      auto tickToX = [rect](int tick) { return rect.left() + rect.width() * tick / (4.0 * 1920); };
+      for (int t = 0; t < 4 * 1920; t += 480) {
+            p.setPen(QPen(t % 1920 == 0 ? QColor(170, 170, 170) : QColor(220, 220, 220), 1));
+            p.drawLine(QPointF(tickToX(t), rect.top()), QPointF(tickToX(t), rect.bottom()));
+            }
+      p.setPen(QPen(QColor(200, 200, 200), 1));
+      p.setBrush(Qt::NoBrush);
+      p.drawRect(rect);
+      AutomationLanes::paintEnvelope(p, rect, lp.value, lane, unautomated, tickToX, 1.0, QColor(200, 100, 30), {}, rect);
+      return lp;
+      }
+
+// the share of the pixels in [x1, x2) on the row of value v (or the one under it) that the line drew
+static double inked(const LanePicture& lp, double v, int x1, int x2)
+      {
+      const double y = lp.value.bottom() - v * lp.value.height();
+      const QColor bg(251, 245, 239);
+      int ink = 0;
+      for (int x = x1; x < x2; ++x) {
+            bool on = false;
+            for (int row : { int(std::floor(y - 0.5)), int(std::floor(y)), int(std::floor(y + 0.5)) }) {
+                  const QColor c = lp.img.pixelColor(x, row);
+                  on = on || std::abs(c.red() - bg.red()) + std::abs(c.green() - bg.green()) + std::abs(c.blue() - bg.blue()) > 60;
+                  }
+            ink += on;
+            }
+      return double(ink) / (x2 - x1);
+      }
+
+void TestLiveIntegration::laneDashedLine()
+      {
+      // (bars and beats aside: sampled between the grid's lines)
+      auto between = [](const LanePicture& lp, double v, double fromBeat, double toBeat) {
+            const double beat = lp.rect.width() / 16;
+            return inked(lp, v, int(lp.rect.left() + fromBeat * beat) + 3, int(lp.rect.left() + toBeat * beat) - 3);
+            };
+      // no points: dashed at the unautomated value (64 of 127), dashes and gaps along the whole lane
+      Automation::Lane empty;
+      empty.target = "vibrato";
+      const LanePicture none = drawLane(empty, 64 / 127.0, "Vibrato", false);
+      for (int b = 0; b < 16; ++b) {
+            const double share = between(none, 64 / 127.0, b, b + 1);
+            QVERIFY2(share > 0.35 && share < 0.85, qPrintable(QString("beat %1: %2 of the row drawn").arg(b).arg(share)));
+            }
+      for (int b = 0; b < 16; ++b)
+            QCOMPARE(between(none, 1.0, b, b + 1), 0.0);              // (nothing else)
+      // not known: nothing at all
+      const LanePicture unknown = drawLane(empty, -1, "Vibrato", false);
+      for (double v : { 0.0, 0.25, 0.5, 0.75, 1.0 })
+            for (int b = 0; b < 16; ++b)
+                  QCOMPARE(between(unknown, v, b, b + 1), 0.0);
+      // points from bar 2: dashed before them at the unautomated value, the envelope solid from the first point
+      Automation::Lane lane;
+      lane.target = "vibrato";
+      lane.points = { Automation::Point(1920, 100 / 127.0, Automation::Curve::STEP),
+                      Automation::Point(3840, 100 / 127.0, Automation::Curve::LINEAR),
+                      Automation::Point(5760, 30 / 127.0, Automation::Curve::STEP) };
+      const LanePicture with = drawLane(lane, 64 / 127.0, "Vibrato", false);
+      const double dashedBefore = between(with, 64 / 127.0, 0, 4);
+      QVERIFY2(dashedBefore > 0.35 && dashedBefore < 0.85, qPrintable(QString::number(dashedBefore)));
+      QVERIFY(between(with, 100 / 127.0, 4.1, 4.9) > 0.97);           // (bar 2: solid)
+      QVERIFY(between(with, 30 / 127.0, 12.1, 12.9) > 0.97);            // (after the last point: solid on)
+      QCOMPARE(between(with, 64 / 127.0, 4.1, 4.9), 0.0);             // (no dashed line under the envelope)
+      // the last point deleted: the dashed line again (the same picture as without points)
+      Automation::Lane emptied = lane;
+      Automation::Edit::removePoints(emptied, { 0, 1, 2 });
+      QVERIFY(emptied.points.empty());
+      QVERIFY(drawLane(emptied, 64 / 127.0, "Vibrato", false).img == none.img);
+
+      if (qEnvironmentVariableIsSet("MS_LANE_PNG")) {
+            const QString dir = qEnvironmentVariable("MS_LANE_PNG");
+            QDir().mkpath(dir);
+            const LanePicture a = drawLane(empty, 64 / 127.0, "Vibrato (no automation)");
+            const LanePicture b = drawLane(lane, 64 / 127.0, "Vibrato (automated)");
+            QVERIFY(a.img.save(dir + "/lane-unautomated.png"));
+            QVERIFY(b.img.save(dir + "/lane-automated.png"));
+            QImage both(a.img.width(), a.img.height() * 2, QImage::Format_ARGB32);
+            QPainter p(&both);
+            p.drawImage(0, 0, a.img);
+            p.drawImage(0, a.img.height(), b.img);
+            p.end();
+            QVERIFY(both.save(dir + "/lanes-dashed.png"));
+            }
+      }
+
+//---------------------------------------------------------
+//   soundLibraryWindow
+//    View › Sound Library… (mscore/soundlibraryhost.h, the owner 2026-10-15): no Controllers column (automation lanes
+//    set the controllers); the library's folder box, titled with the library's name alone, above the parts (moved from
+//    Mixer › Advanced Options…, which has it no more). MS_SOUND_LIBRARY_PNG=<file>: a picture of the window
+//---------------------------------------------------------
+
+void TestLiveIntegration::soundLibraryWindow()
+      {
+      QString error;
+      std::shared_ptr<const SoundLib::Library> sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      SoundLib::setCurrent(sso);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); } } reset;
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      {
+            SoundLibraryDialog d(sso, SoundLib::Output::PLUGIN, nullptr, score);
+            d.resize(820, 420);
+            QTreeWidget* tree = d.findChild<QTreeWidget*>();
+            QVERIFY(tree);
+            QStringList headers;
+            for (int c = 0; c < tree->columnCount(); ++c)
+                  headers << tree->headerItem()->text(c);
+            QCOMPARE(headers, QStringList({ "Part", "Patch", "Setup", "", "Memory" }));
+            QVERIFY(tree->topLevelItemCount() >= 2);
+            for (QPushButton* b : d.findChildren<QPushButton*>())
+                  QVERIFY2(!b->text().contains("Controllers"), qPrintable(b->text()));
+#ifdef USE_VST3
+            QGroupBox* box = d.findChild<QGroupBox*>("libraryBox");
+            QVERIFY(box);
+            QCOMPARE(box->title(), QString("Spitfire Symphony Orchestra"));
+            QPushButton* folder = d.findChild<QPushButton*>("libraryFolder");
+            QVERIFY(folder && folder->text().startsWith("Library folder"));
+            QLabel* text = nullptr;
+            for (QLabel* l : box->findChildren<QLabel*>())
+                  text = l;
+            QVERIFY(text && (text->text().startsWith("Installed in") || text->text().contains("was not found")));
+            // above the parts
+            QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(d.layout());
+            QVERIFY(layout && layout->indexOf(box) >= 0 && layout->indexOf(box) < layout->indexOf(tree));
+#endif
+            if (qEnvironmentVariableIsSet("MS_SOUND_LIBRARY_PNG"))
+                  QVERIFY(d.grab().toImage().save(qEnvironmentVariable("MS_SOUND_LIBRARY_PNG")));
+      }
+      // Advanced Options: the box no more
+      {
+            SoundLibraryOptions o(score);
+            for (QGroupBox* g : o.findChildren<QGroupBox*>())
+                  QVERIFY2(!g->title().contains("every score") && g->title() != "Spitfire Symphony Orchestra", qPrintable(g->title()));
+            for (QPushButton* b : o.findChildren<QPushButton*>())
+                  QVERIFY2(!b->text().startsWith("Library folder"), qPrintable(b->text()));
+      }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   lanePointsOnBarLines
+//    a lane point on a bar's tick stands on the bar line, as the lanes' grid draws it (the owner, 2026-10-15: "points on
+//    automation lane don't always snap to grid correctly"; Automation::pointX): every bar but a system's first, where
+//    there is none (xAtTick); elsewhere the note's place, as before; the bar line's x maps back to the bar's tick (a point
+//    dragged onto it snaps there). The note lanes' stems stay under their notes (xAtTick, unchanged).
+//    MS_LANE_PNG=<folder>: a Dynamics lane under the score with a point at bar 2's start, before the fix (where xAtTick
+//    put it) and after (lane-barline-before.png, lane-barline-after.png)
+//---------------------------------------------------------
+
+void TestLiveIntegration::lanePointsOnBarLines()
+      {
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      score->setLayoutMode(LayoutMode::LINE);
+      score->doLayout();
+      const double sp = score->spatium();
+      const std::vector<std::pair<int, double>> anchors = Automation::timeAxis(score);
+      QVERIFY(!anchors.empty());
+      int bars = 0;
+      for (Measure* m = score->firstMeasureMM(); m; m = m->nextMeasureMM()) {
+            const int t = m->tick().ticks();
+            const Measure* prev = m->prevMeasureMM();
+            if (!prev || prev->system() != m->system()) {
+                  QCOMPARE(Automation::pointX(score, anchors, t), Automation::xAtTick(anchors, t));    // (a system's first bar)
+                  continue;
+                  }
+            const double bar = Automation::barLineX(prev);
+            QVERIFY2(std::fabs(Automation::pointX(score, anchors, t) - bar) < 1e-9, qPrintable(QString("bar at %1").arg(t)));
+            QVERIFY(Automation::xAtTick(anchors, t) > bar + 0.5 * sp);         // (where it was drawn before: the first note)
+            QCOMPARE(Automation::tickAtX(anchors, bar), t);                     // (dragged onto the bar line: the bar's tick)
+            const int mid = t + (m->endTick().ticks() - t) / 2;                 // (inside a bar: as before)
+            QCOMPARE(Automation::pointX(score, anchors, mid), Automation::xAtTick(anchors, mid));
+            ++bars;
+            }
+      QVERIFY(bars >= 2);
+
+      if (qEnvironmentVariableIsSet("MS_LANE_PNG")) {
+            const QString dir = qEnvironmentVariable("MS_LANE_PNG");
+            QDir().mkpath(dir);
+            Measure* m1 = score->firstMeasureMM();
+            Measure* m3 = m1->nextMeasureMM()->nextMeasureMM();
+            QVERIFY(m3);
+            System* sys = m1->system();
+            QRectF area = sys->canvasBoundingRect();
+            area.setLeft(m1->canvasPos().x() - 4 * sp);
+            area.setRight(Automation::barLineX(m3) + 2 * sp);
+            const QRectF staff = area;
+            const double laneTop = staff.bottom() + 1 * sp;
+            const QRectF lane(area.left() + 4 * sp, laneTop, area.right() - area.left() - 4 * sp, 5 * sp);
+            Automation::Lane dyn;
+            dyn.target = "cc1";
+            const int bar2 = m1->endTick().ticks();
+            dyn.points = { Automation::Point(0, 0.4, Automation::Curve::STEP), Automation::Point(bar2, 0.8, Automation::Curve::LINEAR),
+                           Automation::Point(m3->endTick().ticks(), 0.5, Automation::Curve::STEP) };
+            for (bool after : { false, true }) {
+                  const double scale = 2.0;
+                  const QRectF all = staff.united(lane).adjusted(-sp, -sp, sp, sp);
+                  QImage img(int(all.width() * scale), int(all.height() * scale), QImage::Format_ARGB32);
+                  img.fill(Qt::white);
+                  QPainter p(&img);
+                  p.setRenderHint(QPainter::Antialiasing);
+                  p.scale(scale, scale);
+                  p.translate(-all.topLeft());
+                  score->print(&p, 0);          // (the score as MuseScore draws it: its one page, at the canvas' origin)
+                  // the lane: its band, the grid's bar lines (where the staff's are) and beats, the envelope
+                  p.fillRect(lane, QColor(242, 246, 251));
+                  for (Measure* m = m1; m && m != m3->nextMeasureMM(); m = m->nextMeasureMM()) {
+                        const Measure* prev = m->prevMeasureMM();
+                        for (int t = m->tick().ticks(); t < m->endTick().ticks(); t += 480) {
+                              const bool barStart = t == m->tick().ticks();
+                              const double x = barStart && prev && prev->system() == m->system() ? Automation::barLineX(prev)
+                                                                                                 : Automation::xAtTick(anchors, t);
+                              p.setPen(QPen(barStart ? QColor(170, 170, 170) : QColor(220, 220, 220), 1.0 / scale));
+                              p.drawLine(QPointF(x, lane.top()), QPointF(x, lane.bottom()));
+                              }
+                        }
+                  auto x = [&](int t) { return after ? Automation::pointX(score, anchors, t) : Automation::xAtTick(anchors, t); };
+                  AutomationLanes::paintEnvelope(p, lane, lane.adjusted(0, 0.45 * sp, 0, -0.45 * sp), dyn, -1, x, 1.0 / scale,
+                                                 QColor(47, 109, 181), {}, lane);
+                  p.setPen(QPen(QColor(200, 200, 200), 1.0 / scale));
+                  p.setBrush(Qt::NoBrush);
+                  p.drawRect(lane);
+                  p.setPen(QColor(29, 31, 34));
+                  QFont f = p.font();
+                  f.setPixelSize(int(1.2 * sp));
+                  p.setFont(f);
+                  p.drawText(QRectF(all.left() + 0.5 * sp, lane.top(), 4 * sp, lane.height()), Qt::AlignVCenter | Qt::AlignLeft, "CC1");
+                  p.end();
+                  QVERIFY(img.save(dir + (after ? "/lane-barline-after.png" : "/lane-barline-before.png")));
+                  }
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   noteLaneRubber
+//    the Velocity and Join lanes' rubber band (the owner, 2026-10-15: "the selection box doesn't show up"): drawn as the
+//    automation lanes draw theirs (NoteLanes::paintRubber, which both use). MS_LANE_PNG=<folder>: a Velocity lane's stems
+//    under the score's notes, three selected inside a rubber band (lane-rubber.png; the stems as notelanes.cpp draws them,
+//    composed here: the lanes need a ScoreView, which a test can't make)
+//---------------------------------------------------------
+
+void TestLiveIntegration::noteLaneRubber()
+      {
+      QImage img(200, 80, QImage::Format_ARGB32);
+      img.fill(Qt::white);
+      {
+            QPainter p(&img);
+            NoteLanes::paintRubber(p, QRectF(20.5, 10.5, 100, 50), 1.0);
+      }
+      // its dashed edge and light fill
+      QVERIFY(img.pixelColor(20, 30) != QColor(Qt::white) || img.pixelColor(21, 30) != QColor(Qt::white));
+      const QColor fill = img.pixelColor(70, 35);
+      QVERIFY(fill != QColor(Qt::white) && fill.blue() > fill.red());
+      QCOMPARE(img.pixelColor(150, 35), QColor(Qt::white));
+
+      if (!qEnvironmentVariableIsSet("MS_LANE_PNG"))
+            return;
+      const QString dir = qEnvironmentVariable("MS_LANE_PNG");
+      QDir().mkpath(dir);
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      score->setLayoutMode(LayoutMode::LINE);
+      score->doLayout();
+      const double sp = score->spatium();
+      const std::vector<std::pair<int, double>> anchors = Automation::timeAxis(score);
+      Measure* m1 = score->firstMeasureMM();
+      Measure* m2 = m1->nextMeasureMM()->nextMeasureMM();
+      QVERIFY(m2);
+      System* sys = m1->system();
+      QRectF staff = sys->canvasBoundingRect();
+      staff.setLeft(m1->canvasPos().x() - 4 * sp);
+      staff.setRight(Automation::barLineX(m2) + 2 * sp);
+      const QRectF lane(staff.left() + 4 * sp, staff.bottom() + 1 * sp, staff.width() - 4 * sp, 6 * sp);
+      const double scale = 2.0;
+      const QRectF all = staff.united(lane).adjusted(-sp, -sp, sp, sp);
+      QImage pic(int(all.width() * scale), int(all.height() * scale), QImage::Format_ARGB32);
+      pic.fill(Qt::white);
+      QPainter p(&pic);
+      p.setRenderHint(QPainter::Antialiasing);
+      p.scale(scale, scale);
+      p.translate(-all.topLeft());
+      score->print(&p, 0);
+      const double px = 1.0 / scale;
+      p.fillRect(lane, QColor(246, 246, 246));
+      // the violin's notes of bars 1-2: a stem each at its velocity (made-up example values for the picture, 40 … 100)
+      std::vector<QPointF> heads;
+      int k = 0;
+      for (Segment* s = m1->first(SegmentType::ChordRest); s && s->tick() < m2->endTick(); s = s->next1(SegmentType::ChordRest)) {
+            bool chord = false;
+            for (int track = 0; track < score->parts()[0]->endTrack(); ++track)
+                  chord = chord || (s->element(track) && s->element(track)->isChord());
+            if (!chord)
+                  continue;
+            const int v = 40 + (k++ * 23) % 61;
+            const double x = Automation::xAtTick(anchors, s->tick().ticks());
+            heads.push_back(QPointF(x, lane.bottom() - 0.45 * sp - v / 127.0 * (lane.height() - 0.9 * sp)));
+            }
+      QVERIFY2(heads.size() >= 3, qPrintable(QString::number(heads.size())));
+      const size_t a = heads.size() >= 5 ? 1 : 0;
+      QRectF band(QPointF(heads[a].x() - 1.2 * sp, lane.top() + 0.5 * sp), QPointF(heads[a + 2].x() + 1.2 * sp, lane.bottom() - 0.3 * sp));
+      const double stemPx = 3.0;
+      for (size_t i = 0; i < heads.size(); ++i) {
+            const QColor ink(110, 110, 110);
+            p.setPen(QPen(ink, 1.6 * px));
+            p.drawLine(QPointF(heads[i].x(), lane.bottom()), heads[i]);
+            if (band.contains(heads[i])) {
+                  p.setPen(QPen(QColor(29, 79, 140), 1.4 * px));
+                  p.setBrush(Qt::NoBrush);
+                  p.drawEllipse(heads[i], (stemPx + 2.2) * px, (stemPx + 2.2) * px);
+                  }
+            p.setPen(QPen(ink, 1.6 * px));
+            p.setBrush(QColor(Qt::white));
+            p.drawEllipse(heads[i], stemPx * px, stemPx * px);
+            }
+      NoteLanes::paintRubber(p, band, px);
+      p.setPen(QPen(QColor(200, 200, 200), px));
+      p.setBrush(Qt::NoBrush);
+      p.drawRect(lane);
+      p.end();
+      QVERIFY(pic.save(dir + "/lane-rubber.png"));
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   laneFolds
 //    the automation editor's folding (mscore/lanefolds.h; the owner, 2026-10-12: every part's header shown, each folded
 //    or open at will): all folded at first; several open at once; Alt-click sets every part to the clicked one's new
@@ -3379,6 +3761,7 @@ void TestLiveIntegration::liveParamLanes()
       EventMap events;
       MidiRenderer r(score);
       r.setForLiveClips(true);
+      r.setFlatParamEvents(true);       // (as LiveClipsLink renders for the device: Vibrato's flat lane, a setting, too)
       SynthesizerState ss;
       MidiRenderer::Context ctx(ss);
       ctx.metronome = false;
@@ -3415,8 +3798,19 @@ void TestLiveIntegration::liveParamLanes()
             if (t.part == "Flute")
                   QVERIFY(t.params.empty());
 
-      // MuseScore's own playback (the hosted plug-in): Vibrato only
+      // MuseScore's own playback (the hosted plug-in): Vibrato only, and its flat lane (a setting: on the instance,
+      // partcontrollers.h) not as events; with a second value it plays as automation
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      score->setPlaylistDirty();
+      {
+            EventMap flat;
+            score->renderMidi(&flat, false, true, ss);
+            for (const auto& te : flat)
+                  QVERIFY(te.second.type() != ME_PARAMETER);
+      }
+      vib.points.push_back(Automation::Point(960, 0.7, Automation::Curve::STEP));
+      all[score->parts()[0]] = { vib, tone, vol, empty };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, all));
       score->setPlaylistDirty();
       EventMap hosted;
       score->renderMidi(&hosted, false, true, ss);
