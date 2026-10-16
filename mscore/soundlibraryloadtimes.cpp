@@ -272,7 +272,6 @@ class Run {
             QByteArray state;
             if (SoundLibraryHost::hasSetup(lib, name))
                   state = SoundLibraryHost::setupState(lib, name, path, &l.error);
-            l.setupMs = msSince(t);
             const bool after = resaved(name);
             l.kind = !SoundLibraryHost::makesSetups(lib) ? QString("a setup file")
                      : after ? (before ? QString("Kontakt's own state") : QString("Kontakt's own state, taken from another setups folder"))
@@ -281,13 +280,16 @@ class Run {
             // Kontakt's own state yet stays plain here: phase 1 resaves it)
             if (!state.isEmpty() && !cents.empty()) {
                   QString err;
-                  const QByteArray tuned = SoundLibraryHost::setupResaved(lib, name) ? SoundLibraryHost::tunedState(state, cents, &err)
+                  const QByteArray tuned = SoundLibraryHost::setupResaved(lib, name) ? SoundLibraryHost::tunedState(state, cents, &err, &lib)
                                                                                      : QByteArray();
                   if (!tuned.isEmpty())
                         state = tuned;
                   else
                         l.kind += QString(", NOT tuned (%1)").arg(err.isEmpty() ? QString("not resaved yet") : err);
                   }
+            // (the setup read, its voice limit and its tunings, as SoundLibraryHost::beginLoad times them; the made-setups
+            // record read twice above for the report's kind is in it too, a few ms)
+            l.setupMs = msSince(t);
             l.ok = !state.isEmpty();
             _states[l.key] = state;
             return l;
