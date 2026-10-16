@@ -22,7 +22,7 @@
 //   spacing and median pitch; a phrase is the slur, not a phrase mark, the note is in on its staff, else its chord
 //   alone), so no level step inside a slur.
 //
-//   The gain is up to about 21 dB (Celli pp), more than CC11 can add (CC11 rests at 127). So a score's largest gain
+//   The gain is up to about 30 dB (Celli pp, 2026-10-15 grid; 21 before), more than CC11 can add (CC11 rests at 127). So a score's largest gain
 //   G (every slur of every part with such an articulation, with [slurs] performance on: a superset of the slurs that
 //   play on it; a note on it outside a slur, by staff text "performance", louder than G plays at G) is shared out
 //   (volumes()):
@@ -74,8 +74,8 @@
 //   beyond). At mp (CC1 64, where the section balance M was set) realDb is 0: M stays as it is, on top.
 //   Every technique of the section takes it: a note on velocity (a short) is calibrated to the Long at its dynamic with
 //   [levels] calibrated 1, a Performance legato note to the Long by CC1 ([levels] calibrated 1 and 2) or, with [levels]
-//   context, by its phrase's gain, measured in the music at the written dynamic against the staccatos (which are the
-//   Long's level there): each is the Long's level at the written CC1, which already holds SSO's own change with CC1
+//   context, by its phrase's gain, measured at the written dynamic against the section's held Long (since 2026-10-15; before,
+//   against the staccatos, which were the Long's level there): each is the Long's level at the written CC1, which already holds SSO's own change with CC1
 //   once; realDb takes that change away (- long) and puts the player's in ((F(steps) - F(0)) x span), so SSO's change is
 //   counted once, not twice. With [levels] calibrated 2 (option B', 2026-10-15) a note on velocity is matched to the
 //   Long as with 1 and plays D more (real players' difference, heldOffset; else its loud-end difference), so it follows
@@ -138,14 +138,10 @@ bool has(const SoundLib::Articulation* a);
 bool has(const SoundLib::LibInstrument* patch);
 
 // the gain in dB of the phrase the chord is in (above), its dynamic from dynamics at the phrase's first chord
-// (utick = tick + tickOffset)
+// (utick = tick + tickOffset). Measured against the section's own held Long (2026-10-15 grid: gain = held - slurred,
+// level_rule.py), so [levels] calibrated 2's D for the staccatos does not move it (until 2026-10-15 every slur gain took
+// the section's Spiccato D, the gains having been fitted against the staccatos: that would now count it twice)
 double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset);
-// the gains were fitted against the section's staccatos (Spiccato) at [levels] calibrated 1's level (level_rule.py:
-// gain = st - pfd + 1.3, the owner's 1.3 dB of slurs over the staccatos around them). With calibrated 2 the staccatos
-// play D more (SoundLib::techniqueOffsetDb of the section's Spiccato against its Long: option B', the map's heldOffset,
-// real players' -4.2 dB; else SSO's loud-end difference), so every slur gain of the section takes D too (negative: the
-// slurs lower with them): the relation stays 1.3 dB, G and S follow. 0: not 2, no calibration, not measured
-double staccatoShiftDb(const std::vector<const SoundLib::LibInstrument*>& patches, const Score* score);
 
 // whether [levels] realRange is on for the score (1 or 2)
 bool realRange(const Score* score);

@@ -1338,15 +1338,13 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // patches' volumes play the rest: TrackDelays::patchGain); NAN: not such a note
                   const bool contextOn = li && ContextLevel::on(score) && library->dynamicsCC >= 0
                                          && library->dynamicsCC != CTRL_EXPRESSION;
-                  // ([levels] calibrated 2: every slur gain + the section's staccatos' D, ContextLevel::staccatoShiftDb)
-                  const double ruleShift = contextOn ? ContextLevel::staccatoShiftDb(libPatches, score) : 0.0;
                   auto contextDb = [&](const Note* note, const SoundLib::Choice& c) {
                         if (!contextOn || !c || !ContextLevel::has(c.articulation) || c.articulation->attacks.empty())
                               return double(NAN);
                         const std::pair<const Chord*, int> key { note->chord(), tickOffset };
                         auto g = libContextGain.find(key);
                         if (g == libContextGain.end())
-                              g = libContextGain.insert({ key, ContextLevel::gain(*c.articulation, note->chord(), ctx.dynamics, tickOffset) + ruleShift }).first;
+                              g = libContextGain.insert({ key, ContextLevel::gain(*c.articulation, note->chord(), ctx.dynamics, tickOffset) }).first;
                         auto d = libTrackDelays.find(st1->part());
                         const double top = d == libTrackDelays.end() ? 0.0 : d->second.ruleTop;
                         return std::max(TrackDelays::MIN_DB, std::min(0.0, g->second - top));

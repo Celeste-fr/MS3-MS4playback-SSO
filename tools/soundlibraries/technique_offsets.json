@@ -5,66 +5,57 @@
   "source": "Spheres dataset, Mozart K. 550 (spheres_k550_staccato.json)",
   "sections": {
    "Violins 1": {
-    "d": -3.19,
+    "d": -0.41,
     "interval90": [
-     -7.86,
-     0.49
-    ],
-    "nShort": 25,
-    "nHeld": 4
-   },
-   "Violins 2": {
-    "d": -4.52,
-    "interval90": [
-     -6.32,
-     -0.89
+     -1.39,
+     0.56
     ],
     "nShort": 26,
-    "nHeld": 4
+    "nHeld": 2
    },
    "Celli": {
-    "d": -5.98,
+    "d": -6.69,
     "interval90": [
-     -6.26,
-     -5.61
+     -7.06,
+     -5.9
     ],
-    "nShort": 47,
+    "nShort": 55,
     "nHeld": 1
    },
    "Basses": {
-    "d": -3.01,
+    "d": -3.14,
     "interval90": [
-     -3.64,
-     -2.29
+     -3.63,
+     -2.16
     ],
-    "nShort": 46,
+    "nShort": 51,
     "nHeld": 1
    }
   },
   "pooled": {
-   "d": -4.2,
+   "d": -3.4,
    "interval90": [
-    -5.8,
-    -2.5
+    -5.7,
+    -0.9
    ],
-   "sections": 4
+   "sections": 3
   },
-  "use": -4.2,
-  "placeholder": "ON HOLD: the K. 550 readings are being corrected (bar 28: the double stop is in Violin II); the measurement here is from the readings under review, not final",
-  "choice": "pooled for all five sections: 1-4 held notes per section (Celli, Basses: one); one held note varies by 2.6-4.2 dB (SD, Violins 2 / 1) while the sections differ by 1.4 dB (SD); Violas not measured (an assumption)",
+  "use": -3.4,
+  "placeholder": null,
+  "choice": "pooled for all five sections: one held note per measured section (Violins 1, Celli, Basses); the sections differ by 3.1 dB (SD), about one held note's own variation (2.6-4.2 dB SD, the first readings), so one held note each can't separate them; Violins 2 (no single held note at f in bars 28-33: double stops) and Violas not measured",
   "assumptions": [
    "the same D at every marking (measured at f only; untested at p)",
-   "Violas take the pooled value (not measured)"
+   "Violins 2 and Violas take the pooled value (not measured)"
   ]
  },
  "quarters": {
-  "method": "as staccato: quarter notes (bars 2-9) against whole notes (bars 10-15) at p, Celli and Basses",
+  "method": "as staccato: quarter notes (bars 1-9) against whole notes (bars 10-15) at p, Celli and Basses",
   "source": "Spheres dataset, Mozart K. 550 (spheres_k550_staccato.json)",
   "pooled": {
-   "d": 0.4,
+   "d": 0.3,
    "interval90": [
-    -2.1,
-    2.4
+    -2.2,
+    2.3
    ],
    "sections": 2
   },
@@ -134,31 +125,31 @@
   "Violins 1": {
    "Spiccato": "@staccato",
    "Short 0.5": "@staccato",
-   "Short 1.0": "0.4",
+   "Short 1.0": "0.3",
    "Pizzicato": "32:-7 112:-9"
   },
   "Violins 2": {
    "Spiccato": "@staccato",
    "Short 0.5": "@staccato",
-   "Short 1.0": "0.4",
+   "Short 1.0": "0.3",
    "Pizzicato": "32:-7 112:-9"
   },
   "Violas": {
    "Spiccato": "@staccato",
    "Short 0.5": "@staccato",
-   "Short 1.0": "0.4",
+   "Short 1.0": "0.3",
    "Pizzicato": "32:-9 112:-5"
   },
   "Celli": {
    "Spiccato": "@staccato",
    "Short 0.5": "@staccato",
-   "Short 1.0": "0.4",
+   "Short 1.0": "0.3",
    "Pizzicato": "32:-12 112:-8"
   },
   "Basses": {
    "Spiccato": "@staccato",
    "Short 0.5": "@staccato",
-   "Short 1.0": "0.4",
+   "Short 1.0": "0.3",
    "Pizzicato": "32:-6 112:-7",
    "Pizzicato Bartok": "0",
    "Col Legno": "0"

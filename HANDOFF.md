@@ -5,28 +5,28 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
-## Technique balance, `[levels] calibrated` 2 (2026-10-15, branch `technique-balance`, from integrate-1012)
+## Technique balance, `[levels] calibrated` 2 (2026-10-15, branch `bprime-final`: technique-balance + context-remeasure)
 
 Option B' (the owner, 2026-10-15: "if the data clearly point to b', then b' it is"), replacing B the same day: a velocity
 technique is matched to the part's Long at its marking (as 1), then plays D more along its own curve, then MS4's offset and
 the Inspector's. D from real players where measured, the map's `heldOffset` (`tools/soundlibraries/technique_offsets.py`
--> `technique_offsets.json` -> `gen_spitfire_sso.py`): the string sections' Spiccato and Short 0.5 -4.2 dB (Spheres K. 550,
-staccato against held at f, perceived, pooled over Violins 1 / 2, Celli, Basses; 90 % [-5.8, -2.5]; Violas assumed;
-**a placeholder**: the K. 550 readings are being corrected, bar 28's double stop is Violin II's; the value lives once in
-`technique_offsets.json` › `staccato` › `use`, `technique_offsets.py` `STACCATO_PLACEHOLDER`),
-Short 1.0 +0.4 (K. 550's quarters against wholes at p, [-2.1, +2.4]; an assumption that it plays as those), pizzicato
-Meyer 2009's pp / ff by the written CC (sound power: several dB uncertain), the Basses' Bartók and col legno 0 (SSO's two
-metrics disagree by ~10 dB). Everything else (Bartók, col legno of the upper four, Short CS, harmonics) keeps B's SSO
-loud-end D: an assumption, no real data. The same D at every marking: untested at p. The level rule re-anchors by the
-Spiccato's D (now -4.2: every slur gain 4.2 dB lower), so slurs stay 1.3 dB over the staccatos. Why B went: its D had the
-wrong sign for bowed shorts (+1.6 .. +9.2 against the players' -3 .. -6) and was too high for pizzicato
-(docs/PLAYBACK_SETTINGS.md › Calibrated levels).
-Tests (Linux, renderer and test synth, after merging integrate-1012's transitionsEarly 1): tst_soundlibrary 97 + 3
-skipped, tst_liveequivalence 39 + 1, tst_marcatolevel 14, tst_performancetechnique 22, tst_playbackaudit 9 + 1. Whence
-(placeholder -4.2): the 109 Spiccato notes 6-17 velocities under calibrated 1, G 11.09 dB (1: 15.29, B: 16.94); audit
-OVERLAP 0, CAPPED 1, ARRIVAL 0 / 2 warn. **To do**: the corrected K. 550 staccato values (per section and pooled) into
-`technique_offsets.py` (`STACCATO_PLACEHOLDER` to None, or the chosen value), regenerate the JSON and the map, re-run the
-Whence dump. **Untried in Kontakt / SSO and not heard.**
+-> `technique_offsets.json` -> `gen_spitfire_sso.py`): the string sections' Spiccato and Short 0.5 **-3.4 dB** (Spheres
+K. 550, staccato against held at f, perceived, with the owner's corrected readings, review page
+https://claude.ai/artifact/8FoTWaNAb3Ekf2zFEDqWg8; pooled over Violins 1 -0.4, Celli -6.7, Basses -3.1; 90 % [-5.7,
+-0.9]; Violins 2 has no single held note at f, double stops, and Violas take the pooled value: assumptions), Short 1.0
++0.3 (K. 550's quarters against wholes at p, [-2.2, +2.3]; an assumption that it plays as those), pizzicato Meyer 2009's
+pp / ff by the written CC (sound power: several dB uncertain), the Basses' Bartók and col legno 0 (SSO's two metrics
+disagree by ~10 dB). Everything else (Bartók, col legno of the upper four, Short CS, harmonics) keeps B's SSO loud-end D:
+an assumption, no real data. The same D at every marking: untested at p. **The level rule is not shifted**: its grid was
+re-measured the same day against each section's held Long (gain = held - slurred, context-remeasure), the reference D
+is measured against too, so the earlier shift of every slur gain by the Spiccato's D (`ContextLevel::staccatoShiftDb`)
+was removed (it would count D twice). Why B went: its D had the wrong sign for bowed shorts and was too high for
+pizzicato (docs/PLAYBACK_SETTINGS.md › Calibrated levels).
+Tests (Linux, renderer and test synth): tst_soundlibrary 97 + 3 skipped, tst_liveequivalence 39 + 1, tst_marcatolevel 14,
+tst_performancetechnique 22, tst_playbackaudit 9 + 1. Whence against integrate-1012: the 109 Spiccato notes 5-15
+velocities softer (medians Violins 1 107 -> 95, Violins 2 105 -> 93, Violas 111 -> 106), G 15.29 -> 16.32 dB, S 9.29 ->
+10.32; audit OVERLAP 0, CAPPED 1, ARRIVAL 0 / 2 warn. Not merged (waits for the coordinating session). **Untried in
+Kontakt / SSO and not heard.**
 
 ## Mic compensation (2026-10-15, branch `mic-compensation`, merged into integrate-1012)
 
@@ -360,6 +360,7 @@ now also plays a flute and Trumpets a6 on the shipped map.
 The owner (2026-10-10): the same written dynamic sounds equally loud in every string part and technique, judged in the
 music. Branch `performance-level-rule`: SSO's five string sections' Performance Legato slurs play CC1 at the written
 dynamic and one gain per slur, by volume only (CC11 and patch volumes; never CC1): gain = st_fit - pfd + 1.3 dB
+(since 2026-10-15, branch `context-remeasure`: held Long - slurred figure, re-measured with today's slurs; below › Open)
 (`level_rule.py`, map `contextLevel`; docs/PLAYBACK_SETTINGS.md › Level rule). Headroom: the score's largest gain G puts
 the Performance patches at G - S and every other patch of the library's parts at -S, S = max(0, G - 6) (Whence: G 15.3,
 Performance +6.0, the rest -9.3 dB). On in Recommended and by default, 0 in Library default.
@@ -596,13 +597,19 @@ move the transitions 50 ms early, which MuseScore doesn't. R's own clips sit on 
 only early start.
 
 Open:
-- **Level rule's grid out of date** (2026-10-15, VM, build 435, kthost + SSO on the owner's Whence and a calibration
-  score): held notes balance as the model says (Va - V1 -3.5 dB, model -3.9), slurred notes don't (Va - V1 -6.6, Vc - Va
-  +11.7, model +6.6); with `[levels] context` off -4.2 / +5.3. `sso_performance_context.json` was measured 2026-10-10,
-  before transitions / smoothStart / even levels / transitionsEarly: re-measure it with today's Recommended.
-- **Technique levels** (branch `technique-balance`, option B, not merged): the validation (Spheres Mozart K. 550 at f;
-  Meyer 2009) puts real staccato ~4 dB (+-3) UNDER the held note and pizz 5-12 under arco; B (SSO's top-layer D) plays
-  them 2-10 dB over. Proposed B' (D from real players) awaits the owner.
+- **Level rule's grid re-measured** (2026-10-15, branch `context-remeasure`, in `bprime-final`; docs/PLAYBACK_SETTINGS.md ›
+  Level rule): the VM check of build 435 had held notes balanced as the model says but slurs not (Va - V1 -6.6, Vc - Va
+  +11.7). New grid from MuseScore's own renders (build 435 `--verify-playback --verify-wav`, Kontakt 8 + SSO, today's
+  Recommended slurs incl. transitionsEarly 1, even levels off, contextLevel zeroed): gain = held Long - slurred figure,
+  IOI 100 … 1000 ms. Calibration score after: slurred - held within ±1.5 dB in every section at mp and f (before up to
+  +5.0); Whence's Performance notes Va - V1 -1.7, Vc - Va +7.4 (before -8.1 / +13.3). Open:
+  - the held notes' own balance in the calibration score is Va - V1 -5.5 / Vc - Va +7.3 at mp (model -3.9 / +6.6): the
+    section balance's job, not the rule's (the check's -3.5 used the owner's Whence's mixer and a wider window);
+  - the largest gain is now 29.6 dB (Celli pp, 136 ms; was 21): a score with fast Celli pp slurs plays every other
+    patch S = G - 6 = ~24 dB lower (headroom by volume, as designed); the owner may want to hear it;
+  - Whence's Violas slurs against its staccatos: with B' final (`bprime-final`) the staccatos play 3.4 dB under the held
+    Long and the slurs as loud as it, so the slurs sit ~3.4 dB over the staccatos, by the data (no 1.3 dB rule any more).
+- **Technique levels**: B' final on branch `bprime-final` (above), not merged.
 - **Transitions early: decided 2026-10-15**, 1 by default and in Recommended (the owner by ear on Whence's fast quarter
   tones, "1 and 3 are both fine"; 1 measured best, https://claude.ai/artifact/HwdLDf8SuzNbGzLK1PSEKv). Fast quarter-tone
   slurs (136 ms notes) still sit 60-90 cents off: SSO's legato is slower than the notes and the bend retunes the note
@@ -672,7 +679,7 @@ Open:
   velocity = CC1, one pitch; R's slurs are 136 ms sixteenths (tempo 110), and the All techniques faders also balance the
   spiccatos. The owner decides by ear; nothing was tuned.
 - **Performance level in context, measured, not applied** (branch `performance-context-level`, 2026-10-10;
-  `tools/soundlibraries/sso_performance_context.json`, scripts in `performance_context/`): real Kontakt + SSO renders of
+  `tools/soundlibraries/sso_performance_context.json`, scripts in `performance_context/` of commit c10734850d; the JSON re-measured 2026-10-15): real Kontakt + SSO renders of
   Whence-like figures (staccatos around slurs) for the five sections × dynamic 32-112 × IOI 100-500 ms × three
   registers. The gain the slurs need over their calibrated CC1 for staccatos - slurs = -1.3 dB is mostly +2 … +9 dB
   (Violins 2 up to +13, Basses about 0), rising with register and falling with IOI; CC1 127 can't give it in most cells.

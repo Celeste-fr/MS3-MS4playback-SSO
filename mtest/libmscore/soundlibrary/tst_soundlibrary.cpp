@@ -2613,9 +2613,10 @@ void TestSoundLibrary::levelContext()
       QCOMPARE(at(render(), 72).cc11, cc11(g1 - top));
       score->setMetaTag(Playback::metaTag, "");
 
-      // [levels] calibrated 2 (option B, B'): the section's staccatos (Spiccato) play D more than at 1's matched level, so
-      // every slur gain takes D too (ContextLevel::staccatoShiftDb): the slurs stay 1.3 dB over the staccatos (the model:
-      // gain = st - pfd + 1.3), G and S follow. Long -45 + 0.2 x, Spiccato -50 + 0.15 x: D = -30.95 - (-19.6) = -11.35
+      // [levels] calibrated 2 (option B'): the section's staccatos (Spiccato) play D more than at 1's matched level; the
+      // slur gains don't move (since 2026-10-15 they are measured against the held Long, not the staccatos: a shift by
+      // D would count it twice), so G, S and every slur's level stay as under 1. Long -45 + 0.2 x, Spiccato -50 + 0.15 x:
+      // D = -30.95 - (-19.6) = -11.35
       auto calLib = loadMap(QString(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='spiccato'/>"
          "<Instrument name='Violin' ids='violin'>"
@@ -2646,26 +2647,21 @@ void TestSoundLibrary::levelContext()
       struct ResetCal { ~ResetCal() { SoundLib::setDynamicsCalibration(nullptr); } } resetCal;
       const double dSp = (-50 + 0.15 * 127) - (-45 + 0.2 * 127);
       QVERIFY(std::fabs(dSp + 11.35) < 1e-9);
-      std::vector<const SoundLib::LibInstrument*> patches;
-      for (const SoundLib::LibInstrument& li : calLib->instruments)
-            patches.push_back(&li);
       Playback::setIniValuesForTest({ { "levels/calibrated", "1" } });
-      QCOMPARE(ContextLevel::staccatoShiftDb(patches, score), 0.0);
       const ContextLevel::Volumes v1 = ContextLevel::volumes(score).begin()->second;
       const std::vector<N> n1 = render();
       Playback::setIniValuesForTest({ { "levels/calibrated", "2" } });
-      QVERIFY(std::fabs(ContextLevel::staccatoShiftDb(patches, score) - dSp) < 1e-9);
       const ContextLevel::Volumes v2 = ContextLevel::volumes(score).begin()->second;
       const std::vector<N> n2 = render();
-      // G follows (here D < 0: G - 6 < 0 after it, S = 0, the Performance patch at G + D, the rest at 0)
-      QVERIFY2(std::fabs(v2.top - (v1.top + dSp)) < 1e-9, qPrintable(QString("%1 %2").arg(v1.top).arg(v2.top)));
-      QVERIFY(std::fabs(v2.patchDb.at("Violin - Performance") - std::min(6.0, v1.top + dSp)) < 1e-9);
-      QVERIFY(std::fabs(v2.patchDb.at("Violin") + std::max(0.0, v1.top + dSp - 6.0)) < 1e-9);
-      // each slur's CC11 (its gain less G) as under 1: the shift is shared
+      // G, S and the volumes as under 1
+      QVERIFY2(std::fabs(v2.top - v1.top) < 1e-9, qPrintable(QString("%1 %2").arg(v1.top).arg(v2.top)));
+      QVERIFY(std::fabs(v2.patchDb.at("Violin - Performance") - v1.patchDb.at("Violin - Performance")) < 1e-9);
+      QVERIFY(std::fabs(v2.patchDb.at("Violin") - v1.patchDb.at("Violin")) < 1e-9);
+      // each slur's CC11 (its gain less G) as under 1
       for (int p : { 72, 74, 76, 77, 69, 71 })
             QCOMPARE(at(n2, p).cc11, at(n1, p).cc11);
       // the staccato at the slur's dynamic: D louder under 2 than under 1 (its velocity, within half a velocity step),
-      // the slur D louder too: still 1.3 dB over it in the model
+      // the slur unchanged against the Long's patch
       const int cc = Ms4::expressionLevel(dynamics.levelAt(chordOf(72)->track(), chordOf(72)->tick().ticks()));
       const int st1 = SoundLib::calibratedVelocity(*cal, "Violin", 42, "Violin", 1, cc, 0.0);
       const int st2 = SoundLib::calibratedVelocity(*cal, "Violin", 42, "Violin", 1, cc, dSp);
@@ -2678,16 +2674,7 @@ void TestSoundLibrary::levelContext()
       QVERIFY(std::fabs(slurOver(v1, n1) - g1) < 0.05);              // (CC11's rounding)
       const double slurShift = slurOver(v2, n2) - slurOver(v1, n1);
       QVERIFY2(std::fabs(stShift - dSp) <= 0.15 * 0.5 + 1e-9, qPrintable(QString::number(stShift)));
-      QVERIFY2(std::fabs(slurShift - dSp) < 0.05, qPrintable(QString::number(slurShift)));
-      // option B': the Spiccato's heldOffset (real players' staccato against held, negative) is the shift instead
-      auto calLibB = loadMap("<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='spiccato'/>"
-                             "<Instrument name='Violin' ids='violin'>"
-                             "<Articulation name='Long' value='1' techniques='long legato'/>"
-                             "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo' heldOffset='-4.2'/>"
-                             "</Instrument></SoundLibrary>");
-      QVERIFY(calLibB);
-      std::vector<const SoundLib::LibInstrument*> patchesB { &calLibB->instruments[0] };
-      QVERIFY(std::fabs(ContextLevel::staccatoShiftDb(patchesB, score) + 4.2) < 1e-9);
+      QVERIFY2(std::fabs(slurShift) < 0.05, qPrintable(QString::number(slurShift)));
       Playback::setIniValuesForTest({});
       delete score;
       SoundLib::setCurrent(nullptr);
@@ -3212,8 +3199,8 @@ void TestSoundLibrary::levelTechniqueBalance()
                                     return &a;
             return nullptr;
             };
-      // (the bowed shorts' one value, technique_offsets.json "staccato" > "use": a placeholder while the K. 550 readings
-      // are corrected, 2026-10-15)
+      // (the bowed shorts' one value, technique_offsets.json "staccato" > "use": the pooled -3.4 dB of the owner-corrected
+      // K. 550 readings, 2026-10-15)
       QFile offsetsFile(root + "/../tools/soundlibraries/technique_offsets.json");
       QVERIFY(offsetsFile.open(QIODevice::ReadOnly));
       const double staccatoD = QJsonDocument::fromJson(offsetsFile.readAll()).object().value("staccato").toObject().value("use").toDouble(NAN);
@@ -3223,7 +3210,8 @@ void TestSoundLibrary::levelTechniqueBalance()
       for (const auto& m : meyer) {
             for (const char* name : { "Spiccato", "Short 0.5" })
                   QVERIFY2(artOf(m.first, name) && std::fabs(artOf(m.first, name)->heldOffsetAt(64) - staccatoD) < 1e-9, qPrintable(m.first));
-            QVERIFY(std::fabs(artOf(m.first, "Short 1.0")->heldOffsetAt(64) - 0.4) < 1e-9);
+            QVERIFY(std::fabs(staccatoD + 3.4) < 1e-9);
+            QVERIFY(std::fabs(artOf(m.first, "Short 1.0")->heldOffsetAt(64) - 0.3) < 1e-9);
             const SoundLib::Articulation* p = artOf(m.first, "Pizzicato");
             QVERIFY(std::fabs(p->heldOffsetAt(32) - m.second.first) < 1e-9 && std::fabs(p->heldOffsetAt(112) - m.second.second) < 1e-9);
             QVERIFY(artOf(m.first, "Short CS") == nullptr || artOf(m.first, "Short CS")->heldOffsets.empty());

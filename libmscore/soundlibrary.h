@@ -171,7 +171,7 @@ struct Articulation {
       std::vector<QuickLevel> quickLevels;          // sorted by pitch, then ms
       double quickLevelAt(int pitch, double ms) const; // log-linear in ms, linear in pitch, the nearest end's beyond; 0: none
       // [levels] calibrated 2 (option B', the owner 2026-10-15): the dB a velocity technique plays over the part's held
-      // note matched at the same marking, from real players (<Articulation heldOffset="-4.2"> or "32:-7 112:-9": by the
+      // note matched at the same marking, from real players (<Articulation heldOffset="-3.4"> or "32:-7 112:-9": by the
       // written dynamic's CC, linear between, the nearest end's beyond; tools/soundlibraries/technique_offsets.json).
       // Empty: none listed (SoundLib::techniqueOffsetDb takes the library's own loud-end difference)
       std::vector<std::pair<int, double>> heldOffsets;   // cc -> dB, sorted; one entry with cc -1: every marking

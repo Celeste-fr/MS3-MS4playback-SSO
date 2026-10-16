@@ -5,60 +5,47 @@
 # written by gen_spitfire_sso.py from technique_offsets.json, which this script writes).
 #
 #   python3 technique_offsets.py [spheres_k550_staccato.json] [technique_offsets.json]
-#   python3 technique_offsets.py --extract <res_moz_own.json> [spheres_k550_staccato.json]
 #
 # Inputs
 # - spheres_k550_staccato.json: the Spheres dataset (Colibri Ensemble; arXiv 2511.21247, Zenodo 17347681), Mozart
 #   K. 550, each section's own close stem: every note's perceived level (short-term loudness, ITU-R BS.1771-style
-#   STL maximum, dB) in a staccato passage and the held notes next to it at the same marking (f): Violins 1 / 2
-#   bars 30-33 against bars 28-29, Celli / Basses bars 191-197 against bar 198; and quarter notes against whole notes
-#   at p (bars 2-9 / 10-15, Celli and Basses). Measured 2026-10-15 (the B validation; segmenting by onsets, a segment
-#   15 dB under its passage's median dropped as a tail or split note). --extract makes it from that run's per-note file.
+#   STL maximum, dB) in a staccato passage and the held notes next to it at the same marking (f): Violins 1 bars
+#   30-33's dotted quarters against bar 29's single dotted half, Celli / Basses bars 191-197 against bar 198; and
+#   quarter notes against whole notes at p (bars 1-9 / 10-15, Celli and Basses). Re-measured 2026-10-15 with the
+#   readings the owner confirmed or corrected that day (review page https://claude.ai/artifact/8FoTWaNAb3Ekf2zFEDqWg8):
+#   bar 28 is a double stop in both violin sections and bar 29 one in Violins 2, all left out, so Violins 2 has no
+#   single held note at f and is not measured; a segment 15 dB under its passage's median is dropped as a tail or split
+#   note. (The first readings, with bar 28 as Violins 1's held note, gave -4.2 [-5.8, -2.5] over four sections.)
 # - Meyer 2009 (Acoustics and the Performance of Music, 5th ed., ch. 3): pizzicato minus arco sound power at pp / ff
 #   per instrument (the numbers only).
 #
 # Method (bowed shorts): per section d = median(staccato) - median(held); pooled = the mean of the sections' d (a
 # section is the unit: its own players, stem and room position); its interval by a two-level bootstrap (sections
-# resampled, then each section's notes), 90 %, 20000 draws, seed 1. Per section vs pooled, by data quality: the
-# sections have 1-4 held notes each (Celli and Basses one: their own intervals hold only the staccatos' spread, not
-# the held note's), and one held note varies by 2.6-4.2 dB (SD of Violins 2's / 1's four) while the sections' d
-# differ by 1.4 dB (SD): the differences between sections are within one held note's error, so one pooled value for
-# all five is the better estimate; Violas (not measured) take it: an assumption.
+# resampled, then each section's notes), 90 %, 20000 draws, seed 1. Per section vs pooled, by data quality: each
+# measured section has one held note (Violins 1 its bar 29, played twice; Celli and Basses one: their own intervals
+# hold only the staccatos' spread, not the held note's), and one held note varied by 2.6-4.2 dB (SD, the first
+# readings' Violins 2 / 1). The corrected readings' sections differ by 3.1 dB (SD: Violins 1 -0.4, Celli -6.7, Basses
+# -3.1), about one held note's own error, so with one held note each the difference between sections can't be told
+# from it: one pooled value for all five, its interval carrying that spread; Violins 2 and Violas (not measured) take
+# it: an assumption.
 import json, sys, random, statistics
 
 HERE = __import__('os').path.dirname(__file__) or '.'
 SECTIONS = {   # the dataset's stem folder -> (map section, staccato passage, held passage)
-    'Violin_1': ('Violins 1', 'A stacc f b30-33', 'A long f b28-29'),
-    'Violin_2': ('Violins 2', 'A stacc f b30-33', 'A long f b28-29'),
+    'Violin_1': ('Violins 1', 'A stacc f b30-33 (dotted quarters)', 'A long f b29 (single dotted half)'),
     'Cello': ('Celli', 'C stacc8 f b191-197', 'C whole f b198'),
     'Bass_1': ('Basses', 'C stacc8 f b191-197', 'C whole f b198'),
 }
-QUARTERS = {'Cello': 'Celli', 'Bass_1': 'Basses'}   # B quarter p b2-9 against B whole p b10-15
+QUARTERS = {'Cello': 'Celli', 'Bass_1': 'Basses'}   # B quarter p b1-9 against B whole p b10-15
+QUARTER, WHOLE = 'B quarter p b1-9', 'B whole p b10-15'
 MAP_SECTIONS = ['Violins 1', 'Violins 2', 'Violas', 'Celli', 'Basses']
 # Meyer 2009 ch. 3: pizzicato minus arco, dB of sound power, at pp / ff (as cited in the B validation, 2026-10-15)
 MEYER_PIZZ = {'Violins 1': (-7, -9), 'Violins 2': (-7, -9), 'Violas': (-9, -5), 'Celli': (-12, -8), 'Basses': (-6, -7)}
 PP_CC, FF_CC = 32, 112   # Ms4::expressionLevel of pp (3750) and ff (6250)
-# PLACEHOLDER (2026-10-15): the bowed-staccato D is on hold. The owner found an error in the K. 550 readings (bar 28:
-# the double stop is Violin II's, not Violin I's; a double stop as the "held" reference biases that section's staccato
-# - held), and the bars are being re-read and re-measured. Until the corrected values arrive the map plays this value,
-# written once into technique_offsets.json's "staccato" > "use" and referred to from every bowed short ("@staccato");
-# the per-section and pooled numbers below come from the readings under review. Set to None to use the pooled value.
-STACCATO_PLACEHOLDER = -4.2
-
-
-def extract(src, dst):
-    res = json.load(open(src))
-    out = {}
-    for r in res:
-        stem = r['file'].split('/')[-2]
-        if stem not in SECTIONS and stem not in QUARTERS:
-            continue
-        out.setdefault(stem, {}).setdefault(r['label'], []).append({'t0': round(r['t0'], 3), 'dur': round(r['dur'], 3),
-                                                                    'stl': round(r['stl'], 2)})
-    json.dump({'source': 'The Spheres dataset (Colibri Ensemble; arXiv 2511.21247, Zenodo 17347681), Mozart K. 550, '
-                         'each section\'s own stem; per note: start (s), length (s), perceived level (STL max, dB). '
-                         'Measured 2026-10-15 (the option B validation)',
-               'sections': out}, open(dst, 'w'), indent=1)
+# A fixed value the map would play instead of the pooled one (written once into technique_offsets.json's "staccato" >
+# "use", referred to from every bowed short, "@staccato"); None: the pooled value. -4.2 until the owner's corrected
+# K. 550 readings arrived (2026-10-15).
+STACCATO_PLACEHOLDER = None
 
 
 def kept(notes):
@@ -99,7 +86,7 @@ def main(src, dst):
         d, lo, hi = own(a, b)
         per[sec] = {'d': round(d, 2), 'interval90': [round(lo, 2), round(hi, 2)], 'nShort': len(a), 'nHeld': len(b)}
     for stem, sec in QUARTERS.items():
-        quart[sec] = (kept(data[stem]['B quarter p b2-9']), kept(data[stem]['B whole p b10-15']))
+        quart[sec] = (kept(data[stem][QUARTER]), kept(data[stem][WHOLE]))
     st, st_lo, st_hi = pooled(stacc)
     qu, qu_lo, qu_hi = pooled(quart)
     r1 = lambda x: round(x, 1)
@@ -117,16 +104,16 @@ def main(src, dst):
             # the one value every bowed short plays ("@staccato" below)
             'use': r1(st) if STACCATO_PLACEHOLDER is None else STACCATO_PLACEHOLDER,
             'placeholder': None if STACCATO_PLACEHOLDER is None else
-                           'ON HOLD: the K. 550 readings are being corrected (bar 28: the double stop is in Violin II); '
-                           'the measurement here is from the readings under review, not final',
-            'choice': 'pooled for all five sections: 1-4 held notes per section (Celli, Basses: one); one held note '
-                      'varies by 2.6-4.2 dB (SD, Violins 2 / 1) while the sections differ by 1.4 dB (SD); Violas '
-                      'not measured (an assumption)',
+                           'a fixed value, not the pooled measurement',
+            'choice': 'pooled for all five sections: one held note per measured section (Violins 1, Celli, Basses); '
+                      'the sections differ by 3.1 dB (SD), about one held note\'s own variation (2.6-4.2 dB SD, the '
+                      'first readings), so one held note each can\'t separate them; '
+                      'Violins 2 (no single held note at f in bars 28-33: double stops) and Violas not measured',
             'assumptions': ['the same D at every marking (measured at f only; untested at p)',
-                            'Violas take the pooled value (not measured)'],
+                            'Violins 2 and Violas take the pooled value (not measured)'],
         },
         'quarters': {
-            'method': 'as staccato: quarter notes (bars 2-9) against whole notes (bars 10-15) at p, Celli and Basses',
+            'method': 'as staccato: quarter notes (bars 1-9) against whole notes (bars 10-15) at p, Celli and Basses',
             'source': 'Spheres dataset, Mozart K. 550 (spheres_k550_staccato.json)',
             'pooled': {'d': r1(qu), 'interval90': [r1(qu_lo), r1(qu_hi)], 'sections': len(quart)},
             'assumptions': ['Short 1.0 (a full-length bowed short) plays as these unaccented quarters',
@@ -175,8 +162,5 @@ def main(src, dst):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1 and sys.argv[1] == '--extract':
-        extract(sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else f'{HERE}/spheres_k550_staccato.json')
-    else:
-        main(sys.argv[1] if len(sys.argv) > 1 else f'{HERE}/spheres_k550_staccato.json',
-             sys.argv[2] if len(sys.argv) > 2 else f'{HERE}/technique_offsets.json')
+    main(sys.argv[1] if len(sys.argv) > 1 else f'{HERE}/spheres_k550_staccato.json',
+         sys.argv[2] if len(sys.argv) > 2 else f'{HERE}/technique_offsets.json')
