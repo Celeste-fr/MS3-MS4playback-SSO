@@ -596,6 +596,94 @@ bool NoteLanes::duplicateSelected()
       return true;
       }
 
+NoteLane::Clip NoteLanes::_clip;
+const Part* NoteLanes::_clipPart { nullptr };
+int NoteLanes::_clipEnd { 0 };
+
+bool NoteLanes::copySelected()
+      {
+      if (_sel.empty())
+            return false;
+      if (!fresh())
+            return true;
+      const Part* master = PartPlaybackModes::masterPart(_row.master ? _row.master : (*_sel.begin())->part());
+      const bool join = _selTarget == JOIN;
+      const NoteLane::Clip c = NoteLane::copyClip(partMarks(master), _sel, join);
+      if (c.items.empty())
+            return true;
+      _clip = c;
+      _clipPart = master;
+      _clipEnd = 0;
+      for (const Mark& m : partMarks(master))
+            if (_sel.count(m.note))
+                  _clipEnd = std::max(_clipEnd, m.tick + 1);
+      if (mscore)
+            mscore->showMessage(join ? tr("Join: %n value(s) copied", "", int(c.items.size()))
+                                     : tr("Velocity: %n value(s) copied", "", int(c.items.size())), 1500);
+      return true;
+      }
+
+bool NoteLanes::pasteCopied(const QPointF& hover)
+      {
+      if (_clip.items.empty())
+            return false;
+      Score* view = _lanes->score();
+      if (!view || !fresh())
+            return true;
+      const QString lane = _clip.join ? JOIN : VELOCITY;
+      const QString wrong = _clip.join ? tr("Paste: these are Join values, not for the Velocity lane")
+                                       : tr("Paste: these are Velocity values, not for the Join lane");
+      const Part* master = _clipPart;
+      int at = _clipEnd;
+      const Row* hr = hover.x() >= 0 ? _lanes->rowAt(hover) : nullptr;
+      if (hr && NoteLane::isTarget(hr->target)) {
+            if (hr->target != lane) {
+                  if (mscore)
+                        mscore->showMessage(wrong, 2500);
+                  return true;
+                  }
+            master = hr->master;
+            at = _lanes->xToTick(hover.x());
+            }
+      else if (!_sel.empty() && _selTarget == lane) {
+            master = PartPlaybackModes::masterPart(_row.master ? _row.master : (*_sel.begin())->part());
+            at = INT_MAX;
+            for (const Mark& m : partMarks(master))
+                  if (_sel.count(m.note))
+                        at = std::min(at, m.tick);
+            }
+      else if (_selTarget != lane && NoteLane::isTarget(_selTarget)) {
+            if (mscore)
+                  mscore->showMessage(wrong, 2500);
+            return true;
+            }
+      if (!master)
+            return true;
+      MasterScore* s = view->masterScore();
+      if (seq)
+            seq->waitForRendering();
+      std::vector<Note*> to;
+      s->startCmd();
+      to = NoteLane::pasteClip(partMarks(master), _clip, at);
+      s->endCmd();
+      if (to.empty()) {
+            if (mscore)
+                  mscore->showMessage(tr("Paste: no notes there"), 1500);
+            return true;
+            }
+      _selTarget = lane;
+      _sel.clear();
+      for (Note* n : to)
+            _sel.insert(n);
+      if (mscore)
+            mscore->showMessage(to.size() < _clip.items.size()
+                                ? tr("Notes: %1 of %2 pasted (no more notes)").arg(to.size()).arg(_clip.items.size())
+                                : tr("Notes: %n pasted", "", int(to.size())), 1500);
+      render();
+      _view->update();
+      return true;
+      }
+
 void NoteLanes::clearSelection()
       {
       if (_sel.empty())

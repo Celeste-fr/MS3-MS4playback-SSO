@@ -174,6 +174,7 @@ class TestPerformanceTechnique : public QObject, public MTest
       void onPerformancePatch();
       void ownTechnique();
       void duplicateNoteValues();
+      void noteLaneCopyPaste();
       void duplicateAutomation();
       void slurTransitions();
       void evenLevels();
@@ -995,6 +996,132 @@ void TestPerformanceTechnique::duplicateNoteValues()
       QCOMPARE(at(s, 2400, 1)->libraryVelocity(), 3);
       s->undoRedo(true, 0);                                                      // (one undo step)
       QCOMPARE(at(s, 1920)->libraryVelocity(), 1);
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   noteLaneCopyPaste
+//    Ctrl+C / Ctrl+V in the Velocity and Join lanes (NoteLane::copyClip / pasteClip; the lanes' keys: mscore/notelanes.h):
+//    the selected stems' own values in note order (Auto as Auto, relative ticks), pasted in order onto the lane's
+//    stems from the target on, the rest dropped when the notes run out, Velocity and Join each into their own lane
+//    only, one undo step, and the score's own copy / paste untouched
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::noteLaneCopyPaste()
+      {
+      auto lib = sso();
+      MasterScore* s = score();
+      QVERIFY(lib && s);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      std::vector<Note*> n = notes(s);
+      QCOMPARE(int(n.size()), 7);
+      auto marks = [s]() { return NoteLane::marks(s).begin()->second; };
+      std::vector<NoteLane::Mark> m = marks();
+      QVERIFY(!m[0].joinable());
+      for (size_t i = 1; i < m.size(); ++i)
+            QVERIFY(m[i].joinable());
+
+      // velocities: notes 0, 1, 3 own values, note 2 Auto
+      set({ n[0] }, Pid::LIBRARY_VELOCITY, 90);
+      set({ n[1] }, Pid::LIBRARY_VELOCITY, 70);
+      set({ n[3] }, Pid::LIBRARY_VELOCITY, 55);
+      const std::set<const Note*> sel { n[0], n[1], n[2], n[3] };
+      NoteLane::Clip c = NoteLane::copyClip(marks(), sel, false);
+      QVERIFY(!c.join);
+      QCOMPARE(int(c.items.size()), 4);
+      QCOMPARE(c.items[0].value, 90);
+      QCOMPARE(c.items[1].value, 70);
+      QCOMPARE(c.items[2].value, 0);                       // Auto stays Auto
+      QCOMPARE(c.items[3].value, 55);
+      QCOMPARE(c.items[0].dTick, 0);
+      QCOMPARE(c.items[3].dTick, m[3].tick - m[0].tick);
+
+      // pasted onto the notes from note 3 on (3 left: 3, 4, 5 .. there are 4 left, 4 values): all four
+      s->startCmd();
+      std::vector<Note*> to = NoteLane::pasteClip(marks(), c, m[3].tick);
+      s->endCmd();
+      QCOMPARE(int(to.size()), 4);
+      QCOMPARE(to[0], n[3]);
+      QCOMPARE(n[3]->libraryVelocity(), 90);
+      QCOMPARE(n[4]->libraryVelocity(), 70);
+      QCOMPARE(n[5]->libraryVelocity(), 0);
+      QCOMPARE(n[6]->libraryVelocity(), 55);
+      QCOMPARE(n[2]->libraryVelocity(), 0);                // (before the target: as it was)
+      QCOMPARE(n[0]->libraryVelocity(), 90);
+      s->undoRedo(true, 0);                                 // one step
+      QCOMPARE(n[3]->libraryVelocity(), 55);
+      QCOMPARE(n[4]->libraryVelocity(), 0);
+      QCOMPARE(n[6]->libraryVelocity(), 0);
+
+      // fewer notes left than values: the rest dropped
+      s->startCmd();
+      to = NoteLane::pasteClip(marks(), c, m[5].tick);
+      s->endCmd();
+      QCOMPARE(int(to.size()), 2);
+      QCOMPARE(n[5]->libraryVelocity(), 90);
+      QCOMPARE(n[6]->libraryVelocity(), 70);
+      s->undoRedo(true, 0);
+      // a target past the last note: nothing, no undo step made
+      s->startCmd();
+      to = NoteLane::pasteClip(marks(), c, m[6].tick + 1);
+      s->endCmd();
+      QVERIFY(to.empty());
+      QCOMPARE(n[6]->libraryVelocity(), 0);
+
+      // Join: only joinable notes (the first has no note before it); Auto as Auto; the clip's lane is its own
+      set({ n[1] }, Pid::LIBRARY_JOIN, -20);
+      set({ n[3] }, Pid::LIBRARY_JOIN, 30);
+      const std::set<const Note*> js { n[0], n[1], n[2], n[3] };
+      NoteLane::Clip j = NoteLane::copyClip(marks(), js, true);
+      QVERIFY(j.join);
+      QCOMPARE(int(j.items.size()), 3);                    // (n[0] has no stem in the Join lane)
+      QCOMPARE(j.items[0].value, -20);
+      QCOMPARE(j.items[1].value, PerformanceTechnique::JOIN_AUTO);
+      QCOMPARE(j.items[2].value, 30);
+      s->startCmd();
+      to = NoteLane::pasteClip(marks(), j, marks()[4].tick);
+      s->endCmd();
+      QCOMPARE(int(to.size()), 3);
+      QCOMPARE(n[4]->libraryJoin(), -20);
+      QCOMPARE(n[5]->libraryJoin(), PerformanceTechnique::JOIN_AUTO);
+      QCOMPARE(n[6]->libraryJoin(), 30);
+      QCOMPARE(n[4]->libraryVelocity(), 0);                // (the velocities untouched)
+      s->undoRedo(true, 0);
+      QCOMPARE(n[4]->libraryJoin(), PerformanceTechnique::JOIN_AUTO);
+      QCOMPARE(n[6]->libraryJoin(), PerformanceTechnique::JOIN_AUTO);
+
+      // a Join clip never writes velocities and a Velocity clip never joins (the Pid follows the clip)
+      s->startCmd();
+      NoteLane::pasteClip(marks(), j, 0);
+      s->endCmd();
+      QCOMPARE(n[1]->libraryVelocity(), 70);
+      s->undoRedo(true, 0);
+
+      // the metaTag carries the pasted values
+      s->startCmd();
+      NoteLane::pasteClip(marks(), c, m[3].tick);
+      s->endCmd();
+      QVERIFY(saveScore(s, "performancetechnique-lanepaste.mscx"));
+      QVERIFY(fileText("performancetechnique-lanepaste.mscx").contains("<metaTag name=\"performanceTechniques\">"));
+      MasterScore* again = readCreatedScore("performancetechnique-lanepaste.mscx");
+      QVERIFY(again);
+      QCOMPARE(notes(again)[3]->libraryVelocity(), 90);
+      QCOMPARE(notes(again)[6]->libraryVelocity(), 55);
+      delete again;
+
+      // the score's own copy / paste: the first note onto the last, untouched by the lanes' clip
+      s->select(n[0]);
+      QMimeData mime;
+      mime.setData(s->selection().mimeType(), s->selection().mimeData());
+      s->select(n[6]);
+      const int before = n[6]->pitch();
+      QVERIFY(before != n[0]->pitch());
+      s->startCmd();
+      s->cmdPaste(&mime, nullptr);
+      s->endCmd();
+      QCOMPARE(notes(s).back()->pitch(), n[0]->pitch());
+      QCOMPARE(int(c.items.size()), 4);
       delete s;
       }
 

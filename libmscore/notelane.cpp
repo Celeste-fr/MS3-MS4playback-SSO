@@ -173,6 +173,44 @@ const Band* bandAt(const std::vector<Band>& bands, int velocity)
       return nullptr;
       }
 
+//---------------------------------------------------------
+//   copyClip / pasteClip
+//---------------------------------------------------------
+
+Clip copyClip(const std::vector<Mark>& marks, const std::set<const Note*>& selected, bool join)
+      {
+      Clip c;
+      c.join = join;
+      int first = -1;
+      for (const Mark& m : marks) {
+            if (!selected.count(m.note) || (join && !m.joinable()))
+                  continue;
+            if (first < 0)
+                  first = m.tick;
+            c.items.push_back({ m.tick - first, join ? m.note->libraryJoin() : m.note->libraryVelocity() });
+            }
+      return c;
+      }
+
+std::vector<Note*> pasteClip(const std::vector<Mark>& marks, const Clip& clip, int at)
+      {
+      std::vector<Note*> out;
+      const Pid pid = clip.join ? Pid::LIBRARY_JOIN : Pid::LIBRARY_VELOCITY;
+      size_t i = 0;
+      for (const Mark& m : marks) {
+            if (i >= clip.items.size())
+                  break;
+            if (m.tick < at || (clip.join && !m.joinable()))
+                  continue;
+            Note* n = m.note;
+            const int v = clip.items[i++].value;
+            if (n->getProperty(pid).toInt() != v)
+                  n->undoChangeProperty(pid, v);
+            out.push_back(n);
+            }
+      return out;
+      }
+
 }     // namespace NoteLane
 
 }     // namespace Ms

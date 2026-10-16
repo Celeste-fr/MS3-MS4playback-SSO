@@ -5,6 +5,23 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Ctrl+C / Ctrl+V in the Velocity and Join lanes (2026-10-15, branch `notelane-copypaste`)
+
+The owner: "Ctrl C+V still doesn't work in the velocity and join automation lanes". Cause: `AutomationLanes::wantsKey`
+refused C / X / V (and D, until the stems' Ctrl+D) when the focused lane was a note lane, so the ShortcutOverride was
+not accepted and the score's own Ctrl+C / Ctrl+V took the key (copying the score's selection, if any).
+The automation lanes' rules: Ctrl+C / X copy the selected points (with their times), Ctrl+V pastes at the mouse's time in
+the lane under it (any parameter), else after the copied ones; the lane has the focus after a click, Esc drops it.
+Note lanes (values per note): Ctrl+C keeps the selected stems' own values (Auto as Auto: velocity 0, join JOIN_AUTO) in note
+order with their ticks relative to the first (`NoteLane::Clip`); Ctrl+V writes them in order onto the lane's stems
+(Join: the joinable ones) from the first note at or after the mouse's time when the mouse is over that lane (any part),
+else the first selected stem, else the stem after the copied ones; the paste is by order, the relative ticks are kept for
+later. Fewer stems left: the rest dropped (status bar says "n of m pasted"). A Velocity clip over the Join lane (or the
+other way): refused with a message. One undo step, the pasted notes selected, values in the metaTag `performanceTechniques`
+as any edit. Ctrl+X stays the automation lanes' (the score's in a note lane). The score's own Ctrl+C / V act whenever no
+lane has the focus. Tested: `tst_performancetechnique::noteLaneCopyPaste` (the model). The key routing and the lane
+widget need a ScoreView: tried by hand only (see the commit message).
+
 ## Controllers only by automation (2026-10-15, branch `automation-only-controllers`, merged into integrate-1012)
 
 The owner, 2026-10-15, showing the Sound Library window and a Live lane's red dashed line: "remove this entirely, we'll

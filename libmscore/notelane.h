@@ -60,6 +60,20 @@ std::map<const Part*, std::vector<Mark>> marks(MasterScore* score);
 // Inspector greys Note › Performance attack / transition when none does (the owner, 2026-10-12)
 std::set<const Note*> onPerformancePatch(const std::vector<const Note*>& notes);
 
+// Ctrl+C / Ctrl+V in the Velocity and Join lanes (the owner, 2026-10-15: "Ctrl C+V still doesn't work in the velocity and
+// join automation lanes"). A Clip is the selected stems' own values of one lane in note order (tick, then the marks'
+// order), Auto kept as Auto (velocity 0, join JOIN_AUTO), each with its tick after the first one's (the relative timing).
+// It pastes into its own lane only. pasteClip puts the values, in order, onto the lane's stems from the first mark at or
+// after `at` (the Join lane's: the joinable marks only, as it shows stems for those only); more values than stems left:
+// the rest are dropped. Changes are undoable in the caller's command; returns the notes written (changed or not)
+struct Clip {
+      bool join { false };
+      struct Item { int dTick; int value; };
+      std::vector<Item> items;
+      };
+Clip copyClip(const std::vector<Mark>& marks, const std::set<const Note*>& selected, bool join);
+std::vector<Note*> pasteClip(const std::vector<Mark>& marks, const Clip& clip, int at);
+
 struct Band {
       enum class Kind : char { ATTACK, TRANSITION, DYNAMIC };
       Kind kind;

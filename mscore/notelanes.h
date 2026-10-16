@@ -97,6 +97,12 @@ class NoteLanes : public QObject {
       // after them, the span from the first one's chord to the last one's end, rounded out to the lanes' grid (snap off:
       // as it is); one undo step; then those notes selected. False: none selected
       bool duplicateSelected();
+      // Ctrl+C: the selected stems' own values (Auto as Auto) in note order, kept for Ctrl+V (NoteLane::Clip); false: none selected
+      bool copySelected();
+      // Ctrl+V: the copied values in order onto the notes of the lane they came from (a Velocity clip never into Join). Where:
+      // the first stem at or after the mouse's time when the mouse is over that lane (any part), else the first selected
+      // stem, else the stem after the copied ones. One undo step; the notes written are selected. False: nothing copied
+      bool pasteCopied(const QPointF& hover);
       // (tests) the selection, its lane
       const std::set<const Note*>& selected() const { return _sel; }
       void select(const QString& target, const std::set<const Note*>& notes) { _selTarget = target; _sel = notes; }
@@ -118,6 +124,9 @@ class NoteLanes : public QObject {
             bool own;
             };
 
+      static NoteLane::Clip _clip;            // Ctrl+C's
+      static const Part* _clipPart;           // its part (master) and the tick after its last note
+      static int _clipEnd;
       AutomationLanes* _lanes;
       ScoreView* _view;
       QTimer* _timer;

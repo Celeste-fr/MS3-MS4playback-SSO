@@ -157,7 +157,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   (`Pid::LIBRARY_VELOCITY` / `LIBRARY_JOIN`, in the same metaTag; a join down to the map's `legatoGap` still a transition),
   edited in the **Velocity and Join lanes** (`libmscore/notelane.h` the model, `mscore/notelanes.h` the lanes: a stem
   per note under the part's automation header, coloured by technique band or, on velocity techniques, by dynamic
-  band ppp … fff); metaTag `performanceTechniques`, which also holds each note's **own technique** (Inspector › Note › Technique, the
+  band ppp … fff; Ctrl+C / Ctrl+V copy and paste stems' values by note order into the same lane only, `NoteLane::copyClip` / `pasteClip`); metaTag `performanceTechniques`, which also holds each note's **own technique** (Inspector › Note › Technique, the
   map's sounding articulations of its part's patches, `"<patch>|<articulation>"`, `Note::libraryTechnique`: replaces
   the notation's choice in `SoundLib::chooseNote`, so routes, lanes, Live's clips and plain set follow); map `attacks` `transitions` `reattack` `reattackGap` `overlap` `avoid` (a faulty
   round robin's velocities, steered to a clean one: `sso_bad_samples.json`, `[notes] avoidBadSamples`) `avoid` (a faulty round robin's velocities: `sso_bad_samples.json`, `[notes] avoidBadSamples`)
