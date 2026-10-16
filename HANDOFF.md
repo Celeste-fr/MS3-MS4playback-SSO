@@ -5,6 +5,26 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Slur rhythm (2026-10-16, branch `slur-rhythm`, from integrate-1012; docs/PLAYBACK_SETTINGS.md › Slur rhythm)
+
+The owner, of Whence's Violas bars 8-13 with each slur's first note later (clips A / B / C): "B and C both sound ok with C
+maybe a bit better? … the slurs now sound like a triplet instead of an 8th note + 2 16th notes".
+- **`[slurs] slurOnset`** (1 by default and in Recommended, 0 in Library default): a slur's first note by its onset in a
+  slur, by pitch + length + dynamic (sweep + grid, `tools/soundlibraries/slur_rhythm/`, `sso_slur_rhythm.json`). The
+  heard check puts Whence's Violas first notes at +1 / +2 ms (were -112 / -109), Violins 1's +3 / +8 (-27).
+- **`[slurs] transitionModel`** (0 everywhere, offered): the transition by `bendGlideAttack` / `bendGlideSlur`, by the
+  note before's played length. Right on each section's median (the grid re-rendered), not per note.
+- **Open: the 2nd note of the Violas' slurs** is heard 62-71 ms early with slurOnset alone (RHYTHM 0.14-0.16, fail;
+  integrate-1012 0.04-0.08, the first note then ~110 ms early, so the slur sounded in proportion), 47-50 ms with the
+  model (0.12-0.13): these keys' transitions out of the attack arrive ~110 ms after the note-on, the sections' medians
+  150-155. SSO's transition times vary by key and interval (±100 ms p10 .. p90; a one-interval sweep's per-key values
+  don't carry over to other intervals). What would fix it: measure each slur's transitions in the score itself, as even
+  levels do (`evenauto.h`: render the slur, read the heard times, store per note); or a per-interval-and-key sweep.
+  The owner to hear the listening page (`nmb-slurrhythm/`, untracked): A / B / C / all strings with C, plus two
+  borderline clips for the RHYTHM limits.
+- The heard check's caveats: kthost plays quarter tones at 12-TET (Whence's Celli transitions read unreliably), no gain
+  stage (soft routes read late: in Heard passages the first notes read +17 .. +30 ms with slurOnset).
+
 ## Kontakt slots for tuning copies (2026-10-15, branch `tuning-slots`, from integrate-1012 41e1c46d46; merged with integrate-1012 in `integrate-ts`)
 
 The owner, 2026-10-15: "is there any way at all we can make SSO load even faster" … "Whence takes absolutely forever to

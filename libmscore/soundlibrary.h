@@ -108,12 +108,25 @@ struct Articulation {
       // sso_smooth_onset.json): with [slurs] smoothStart a held note on that attack starts early by it, not by the
       // articulation's onset= (measured at velocity 80, it arrived late: Violas smooth 236 ms, onset= 111;
       // startOnset()). -1: none (the articulation's onset)
+      // An attack's onset as a slur's first note (<Articulation slurOnset="smooth:median[;pitch:ms,…]"
+      // slurOnsetLength="smooth:lenMs:dms,…" slurOnsetDynamic="smooth:cc:dms,…">: the first note heard -- 15 dB under the
+      // slur's own top, not a held note's peak -- this long after its note-on: by played pitch, measured with one shape
+      // (an eighth + two sixteenths at 110 bpm, mp), plus the change by the first note's written length (ms) and by the
+      // written dynamic (MS4's CC1 value), each 0 at that shape, linear between the listed keys, the nearest beyond;
+      // measured in MuseScore's renders of slurs, tools/soundlibraries/sso_slur_rhythm.json): with [slurs] smoothStart and
+      // [slurs] slurOnset a slur's first note on that attack starts early by it instead of attackOnset. -1: none
       struct Technique {
             QString name; int low; int high; int velocity;
             double onsetMs { -1 };
             std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
+            double slurOnsetMs { -1 };
+            std::vector<std::pair<int, double>> slurOnsets;     // pitch -> ms, sorted; empty: slurOnsetMs for every pitch
+            std::vector<std::pair<int, double>> slurLengthDms;  // written length (ms) -> ms more (or less), sorted
+            std::vector<std::pair<int, double>> slurDynamicDms; // CC1 value -> ms more (or less), sorted
             bool hasOnset() const { return onsetMs >= 0; }
+            bool hasSlurOnset() const { return slurOnsetMs >= 0; }
             double onsetAt(int pitch) const;
+            double slurOnsetAt(int pitch, double lenMs, int dynamic) const;   // (never under 0)
             };
       std::vector<Technique> attacks;
       std::vector<Technique> transitions;
@@ -146,6 +159,15 @@ struct Articulation {
       // the leave and arrival (ms after the note-on) after a note lenBeforeMs long: linear between the measured
       // lengths, the nearest one's outside them; false: none measured
       bool bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const;
+      // the same in context, as MuseScore plays slurs (<Articulation bendGlideAttack="lenMs:leave:arrive …"
+      // bendGlideSlur="…">, measured in MuseScore's own renders of slurs, tools/soundlibraries/sso_slur_rhythm.json): a
+      // transition out of a slur's first note (a fresh smooth attack: bendGlideAttack) and one after a transition
+      // (bendGlideSlur), each by the note before's PLAYED length (its note-on to the transition's); arrive as heard (the
+      // first of 3 pYIN frames within 30 cents of the new pitch: the heard check's rule, VERIFY.md › Heard check), leave as
+      // bendGlide's (a tenth of the way). Read with [slurs] transitionModel 1; empty: bendGlide
+      std::vector<BendGlide> bendGlidesAttack;  // sorted by lenBeforeMs
+      std::vector<BendGlide> bendGlidesSlur;
+      bool bendGlideContextAt(bool afterAttack, double playedLenMs, double* leaveMs, double* arriveMs) const;  // false: none
       // how the patch smooths a pitch bend (<Articulation bendSmoothing="73.1">: a one-pole low-pass's time constant,
       // ms, fitted to the f0 of a held note under bend steps, Kontakt 8 + SSO, tools/soundlibraries/
       // sso_bend_smoothing.json): with a bendGlide, the renderer sends the bend so that the bend as heard reaches the

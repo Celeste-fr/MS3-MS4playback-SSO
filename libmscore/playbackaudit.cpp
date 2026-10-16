@@ -386,6 +386,10 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
       auto onsetOf = [&](const Played* p, int pitch) {
             const SoundLib::Choice& c = p->trace->choice;
             const SoundLib::Articulation* a = c.articulation;
+            // ([slurs] slurOnset: a slur's first note timed by its attack's onset in a slur, as rendered; the adjustment
+            // is in it already)
+            if (p->trace->slurOnsetMs >= 0)
+                  return p->trace->slurOnsetMs;
             return Playback::adjust("heldNotes.onset", p->trace->patch->name, a->name, pitch,
                                     a->startOnset(p->trace->attack, pitch, byPitchAll));   // (a smooth attack: its own)
             };

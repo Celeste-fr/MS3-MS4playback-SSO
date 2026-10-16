@@ -146,6 +146,16 @@ class MidiRenderer {
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
       bool libAvoidBad = true;                                    // [notes] avoidBadSamples (the map's avoid)
       int libTransitionsEarly = 0;                                // [slurs] transitionsEarly 0-3 (this chunk; not written timing)
+      bool libSlurOnset = false;                                  // [slurs] slurOnset (this chunk): a slur's first note's onset in context
+      bool libTransitionModel = false;                            // [slurs] transitionModel (this chunk): the map's in-context glides
+      // the played render's [slurs] transitionsEarly and SoundLib::onsetEarly, in written timing too (Live's clips): a
+      // transition out of a fresh attack times its glide by the attack's played length alike in both renders
+      int libTransitionsMode = 0;
+      int libOnsetEarlyPlayed = 0;
+      // [slurs] transitionModel, this chunk: a Performance note's early start as the played render means it (note, tickOffset ->
+      // whether it is a smooth attack, ms before its written start): a transition right after it times its glide by the
+      // note's played length (the map's bendGlideAttack / bendGlideSlur)
+      std::map<std::pair<const Note*, int>, std::pair<bool, double>> libEarlyMeant;
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]
@@ -217,6 +227,13 @@ class MidiRenderer {
             // a Performance attack with its own onset that timed the note's early start ([slurs] smoothStart: smooth;
             // Articulation::startOnset); nullptr: the articulation's onset
             const SoundLib::Articulation::Technique* attack { nullptr };
+            // [slurs] slurOnset: the onset that timed a slur's first note (the attack's slurOnset by its length, ms); -1: none
+            double slurOnsetMs { -1 };
+            // [slurs] transitionModel: the glide is the map's in-context one (glideContext 1: bendGlideAttack, out of a fresh
+            // attack; 2: bendGlideSlur, after a transition) at the note before's played length glidePlayedMs (its note-on to
+            // this note-on); 0: bendGlide by the written length
+            int glideContext { 0 };
+            double glidePlayedMs { -1 };
             double glideLeaveMs { -1 };                       // a bent transition's glide (libraryPitchBends), ms
             double glideArriveMs { -1 };                      // after its note-on; -1: none
             // a technique on velocity: the velocity a plain note of it plays at each MS4 dynamic (DYNAMIC_LEVELS, ppp

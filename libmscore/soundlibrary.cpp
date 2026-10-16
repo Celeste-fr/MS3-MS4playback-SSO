@@ -89,8 +89,8 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
-//               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
-//               [bendGlide="136:-8:100 300:70:230 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]/>;
+//               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"] [slurOnset="smooth:131.3;48:164.3,49:157.4 …" slurOnsetLength="smooth:94:6,136:-7.6 …" slurOnsetDynamic="smooth:32:3.5,64:0,96:-19.2"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
+//               [bendGlide="136:-8:100 300:70:230 …"] [bendGlideAttack="200:40:163 277:71:150 …"] [bendGlideSlur="110:48:159 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -188,12 +188,12 @@ double Articulation::legatoDelayAt(int interval, int fromPitch) const
       return keyedMsAt(legatoDelays, legatoDelayMs, interval);
       }
 
-bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const
+static bool glideAt(const std::vector<Articulation::BendGlide>& bendGlides, double lenBeforeMs, double* leaveMs, double* arriveMs)
       {
       if (bendGlides.empty())
             return false;
-      const BendGlide* lo = &bendGlides.front();
-      const BendGlide* hi = &bendGlides.back();
+      const Articulation::BendGlide* lo = &bendGlides.front();
+      const Articulation::BendGlide* hi = &bendGlides.back();
       for (size_t i = 0; i + 1 < bendGlides.size(); ++i)
             if (bendGlides[i].lenBeforeMs <= lenBeforeMs && lenBeforeMs <= bendGlides[i + 1].lenBeforeMs) {
                   lo = &bendGlides[i];
@@ -214,6 +214,16 @@ bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arri
       return true;
       }
 
+bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const
+      {
+      return glideAt(bendGlides, lenBeforeMs, leaveMs, arriveMs);
+      }
+
+bool Articulation::bendGlideContextAt(bool afterAttack, double playedLenMs, double* leaveMs, double* arriveMs) const
+      {
+      return glideAt(afterAttack ? bendGlidesAttack : bendGlidesSlur, playedLenMs, leaveMs, arriveMs);
+      }
+
 double Articulation::onsetAt(int pitch) const
       {
       return keyedMsAt(onsets, onsetMs, pitch);
@@ -222,6 +232,12 @@ double Articulation::onsetAt(int pitch) const
 double Articulation::Technique::onsetAt(int pitch) const
       {
       return keyedMsAt(onsets, onsetMs, pitch);
+      }
+
+double Articulation::Technique::slurOnsetAt(int pitch, double lenMs, int dynamic) const
+      {
+      return std::max(0.0, keyedMsAt(slurOnsets, slurOnsetMs, pitch) + keyedMsAt(slurLengthDms, 0.0, int(std::lround(lenMs)))
+                      + keyedMsAt(slurDynamicDms, 0.0, dynamic));
       }
 
 double Articulation::startOnset(const Technique* attack, int pitch, bool byPitch) const
@@ -457,9 +473,13 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             };
       if (!readTechniques("attacks", art.attacks) || !readTechniques("transitions", art.transitions))
             return false;
-      // attackOnset="name:median[;pitch:ms,…] …": an attack's own onset (ms >= 0), the attack listed in attacks=
-      if (a.hasAttribute("attackOnset")) {
-            for (const QString& t : a.value("attackOnset").toString().split(' ', QString::SkipEmptyParts)) {
+      // attackOnset="name:median[;pitch:ms,…] …": an attack's own onset (ms >= 0), the attack listed in attacks=;
+      // slurOnset= the same as a slur's first note
+      for (const char* attr : { "attackOnset", "slurOnset" }) {
+            if (!a.hasAttribute(attr))
+                  continue;
+            const bool slur = QString(attr) == "slurOnset";
+            for (const QString& t : a.value(attr).toString().split(' ', QString::SkipEmptyParts)) {
                   const int colon = t.indexOf(':');
                   const QStringList parts = t.mid(colon + 1).split(';');
                   Articulation::Technique* tq = nullptr;
@@ -472,9 +492,37 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
                         return false;
                   double tableMedian = 0;
                   if (parts.size() == 2 && (!parts[1].contains(':')
-                                            || !readKeyedMs(QString(parts[1]).replace(',', ' '), tableMedian, tq->onsets)))
+                                            || !readKeyedMs(QString(parts[1]).replace(',', ' '), tableMedian, slur ? tq->slurOnsets : tq->onsets)))
                         return false;
-                  tq->onsetMs = median;
+                  (slur ? tq->slurOnsetMs : tq->onsetMs) = median;
+                  }
+            }
+      // slurOnsetLength="name:lenMs:dms,…" / slurOnsetDynamic="name:cc:dms,…": a slur onset's change (ms, signed)
+      for (const char* attr : { "slurOnsetLength", "slurOnsetDynamic" }) {
+            if (!a.hasAttribute(attr))
+                  continue;
+            for (const QString& t : a.value(attr).toString().split(' ', QString::SkipEmptyParts)) {
+                  const int colon = t.indexOf(':');
+                  Articulation::Technique* tq = nullptr;
+                  for (Articulation::Technique& x : art.attacks)
+                        if (x.name == t.left(colon))
+                              tq = &x;
+                  if (colon <= 0 || !tq)
+                        return false;
+                  std::vector<std::pair<int, double>>& table = QString(attr) == "slurOnsetLength" ? tq->slurLengthDms : tq->slurDynamicDms;
+                  table.clear();
+                  for (const QString& kv : t.mid(colon + 1).split(',', QString::SkipEmptyParts)) {
+                        const QStringList f = kv.split(':');
+                        bool ok1 = false, ok2 = false;
+                        const int key = f.value(0).toInt(&ok1);
+                        const double ms = f.value(1).toDouble(&ok2);     // ("+4" reads as 4)
+                        if (f.size() != 2 || !ok1 || !ok2)
+                              return false;
+                        table.push_back({ key, ms });
+                        }
+                  if (table.empty())
+                        return false;
+                  std::sort(table.begin(), table.end());
                   }
             }
       // key[-key]:low-high:velocity …, the velocity outside its band
@@ -505,18 +553,23 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             return false;
       if (a.hasAttribute("octaveUp") && !readKeyedMs(a.value("octaveUp").toString(), art.octaveUpMs, art.octaveUp))
             return false;
-      // bendGlide="lenBefore:leave:arrive …" (ms; leave may be negative: the f0 already on its way)
-      for (const QString& g : a.value("bendGlide").toString().split(' ', QString::SkipEmptyParts)) {
-            const QStringList f = g.split(':');
-            bool ok[3] = { false, false, false };
-            Articulation::BendGlide bg { f.value(0).toDouble(&ok[0]), f.value(1).toDouble(&ok[1]), f.value(2).toDouble(&ok[2]) };
-            if (f.size() != 3 || !ok[0] || !ok[1] || !ok[2] || bg.lenBeforeMs < 0 || bg.arriveMs < bg.leaveMs)
-                  return false;
-            art.bendGlides.push_back(bg);
+      // bendGlide="lenBefore:leave:arrive …" (ms; leave may be negative: the f0 already on its way); bendGlideAttack= /
+      // bendGlideSlur= the same in context (out of a fresh attack / after a transition), by the played length
+      for (const char* attr : { "bendGlide", "bendGlideAttack", "bendGlideSlur" }) {
+            std::vector<Articulation::BendGlide>& glides = QString(attr) == "bendGlide" ? art.bendGlides
+                                                          : QString(attr) == "bendGlideAttack" ? art.bendGlidesAttack : art.bendGlidesSlur;
+            for (const QString& g : a.value(attr).toString().split(' ', QString::SkipEmptyParts)) {
+                  const QStringList f = g.split(':');
+                  bool ok[3] = { false, false, false };
+                  Articulation::BendGlide bg { f.value(0).toDouble(&ok[0]), f.value(1).toDouble(&ok[1]), f.value(2).toDouble(&ok[2]) };
+                  if (f.size() != 3 || !ok[0] || !ok[1] || !ok[2] || bg.lenBeforeMs < 0 || bg.arriveMs < bg.leaveMs)
+                        return false;
+                  glides.push_back(bg);
+                  }
+            std::sort(glides.begin(), glides.end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
+                  return x.lenBeforeMs < y.lenBeforeMs;
+                  });
             }
-      std::sort(art.bendGlides.begin(), art.bendGlides.end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
-            return x.lenBeforeMs < y.lenBeforeMs;
-            });
       // bendSmoothing="tau" (ms, the patch's one-pole smoothing of a bend; negative: malformed)
       if (a.hasAttribute("bendSmoothing")) {
             bool ok = false;

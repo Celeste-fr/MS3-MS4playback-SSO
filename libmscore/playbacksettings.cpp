@@ -109,6 +109,21 @@ static const std::vector<Definition> DEFINITIONS = {
         "patch's measured bendGlide, else legatoDelay by interval, quicker after a short note), the new pitch arrives on the beat; "
         "2 by the measured leave + 23.5 ms, the change is heard on the beat (Polfreman 2013); 3 the middle of the measured glide "
         "on the beat (2 / 3 without a measured glide: as 1); the note before keeps at least [legato] keepMs (and 15 ms) as played", true },
+      // (2026-10-16: the owner, Whence's Violas bars 8-13 with each slur's first note sent 60 / 120 ms later: "B and C both
+      // sound ok with C maybe a bit better", the direction approved: 1 in Recommended and by default. The smooth attack's
+      // attackOnset was measured to 15 dB under a 1.4 s held note's peak, which a slur's first note never reaches)
+      { "slurs/slurOnset", 1, 0, 1, "on/off",
+        "1: a slur's first note on the smooth attack ([slurs] smoothStart) starts early by the attack's onset as measured in "
+        "slurs (the map's slurOnset: heard 15 dB under the slur's own top, by the first note's length) instead of a lone held "
+        "note's (attackOnset); 0: attackOnset", true },
+      // (2026-10-16: the owner, same clips, "the slurs now sound like a triplet instead of an 8th note + 2 16th notes": the 2nd
+      // note heard too early. A new key, not a value of transitionsEarly: it changes the model every mode of that key uses (and
+      // the bend's glide), so it A/Bs against any of them; 0 in both presets until approved by ear)
+      { "slurs/transitionModel", 0, 0, 1, "on/off",
+        "1: a Performance legato transition (SSO's string sections) is modelled as measured in MuseScore's own slurs: out of a "
+        "slur's first note by the map's bendGlideAttack, after a transition by bendGlideSlur, each by the note before's played "
+        "length; [slurs] transitionsEarly sends it early by that model and the bend glides by it; 0: bendGlide by the written "
+        "length (runs from a spiccato attack)", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -428,10 +443,12 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
+                                              { "slurs/slurOnset", 1 }, { "slurs/transitionModel", 0 },
                                               { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 },
+                                              { "slurs/slurOnset", 0 }, { "slurs/transitionModel", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 } } },
             };

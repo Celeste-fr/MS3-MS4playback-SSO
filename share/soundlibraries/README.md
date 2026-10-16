@@ -209,6 +209,15 @@ switch value of each articulation. For example:
     on, a note on that attack starts early by it (`[heldNotes] byPitch`: by pitch, else the median) instead of the
     articulation's `onset`. SSO (`gen_spitfire_sso.py` from `sso_smooth_onset.json`): the smooth attack of the five
     string sections' Performance Legato, e.g. Violas `attackOnset="smooth:236.2;50:198.3,59:259.5,…"`.
+  - `slurOnset="name:median[;pitch:ms,…] …"` on such an `Articulation`: the attack's onset as a slur's first note (heard
+    15 dB under the slur's own top, less 30 ms, ms after the note-on; optionally by pitch, linear between, the nearest
+    beyond), measured with one shape; `slurOnsetLength="name:lenMs:dms,…"` and `slurOnsetDynamic="name:cc:dms,…"` its
+    change (ms, signed) by the first note's written length (ms) and by the written dynamic (MS4's CC1 value), linear
+    between, the nearest beyond; the sum is never under 0. With `[slurs] smoothStart` and `[slurs] slurOnset` on, a
+    slur's first note (a slur goes on past it) on that attack starts early by it instead of `attackOnset`. SSO
+    (`gen_spitfire_sso.py` from `sso_slur_rhythm.json`, `tools/soundlibraries/slur_rhythm/`: a sweep of every semitone
+    and a grid of lengths and dynamics): the five string sections' smooth attack, e.g. Violas
+    `slurOnset="smooth:131.3;48:164.3,49:157.4,…" slurOnsetLength="smooth:94:6,136:-7.6,…" slurOnsetDynamic="smooth:32:3.5,64:0,96:-19.2"`.
   - `avoid="keys:low-high:velocity …"` on such an `Articulation`: an attack (not a legato transition) at those keys
     (one key or `low-high`) with a velocity in the band plays at `velocity` instead, the nearest velocity measured
     clean: a faulty recording (a round robin with its own narrow tone). Not a note's own velocity; `[notes]
@@ -275,6 +284,12 @@ switch value of each articulation. For example:
     one's beyond (SSO's five string sections: `sso_legato_glide.json`, `legato_glide/glide.py`, slurred runs of
     steps pitch-tracked). A transition bent to another tuning glides its bend then, with the transition; left
     out, from the arrival (`legatoDelay`) one cent a tick.
+  - `bendGlideAttack` / `bendGlideSlur` on an `Articulation`: `len:leave:arrive` triples (ms) as `bendGlide`, measured in
+    MuseScore's own slurs: a transition out of a slur's first note (a fresh smooth attack) / after a transition, by the
+    note before's **played** length (its note-on to the transition's), arrive as heard (the first of 3 pYIN frames within
+    30 cents of the new pitch), leave a tenth of the way. Read with `[slurs] transitionModel` 1 instead of `bendGlide`
+    (the renderer: the played length a fixed point with `[slurs] transitionsEarly`'s shift). SSO: Violins 1 / 2, Violas,
+    Celli (`sso_slur_rhythm.json`; the Basses' left out: pitch tracking too noisy).
   - `bendSmoothing` on an `Articulation` with a `bendGlide` (ms): the patch smooths a pitch bend as a one-pole
     low-pass with this time constant (SSO's five string sections' Performance Legato: `sso_bend_smoothing.json`,
     `legato_glide/fit.py`, bend steps on a held note pitch-tracked). The glide is then sent so that the bend as

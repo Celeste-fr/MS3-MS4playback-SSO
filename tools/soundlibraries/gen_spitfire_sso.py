@@ -359,6 +359,34 @@ def attackOnset(patch):
         return None
     by = sorted((int(k), v) for k, v in m['byPitch']['smooth'].items())
     return f"smooth:{m['median']['smooth']:g};" + ','.join(f'{k}:{v:g}' for k, v in by)
+# in MuseScore's own slurs (sso_slur_rhythm.json, 2026-10-16, tools/soundlibraries/slur_rhythm/: a grid of 243 slurs per
+# section x 2 takes and a sweep of every semitone, MuseScore's events rendered with kthost + SSO on the test VM at CC11
+# 127, the heard check's rules): slurOnset="smooth:median;pitch:ms,…" the smooth attack heard -- 15 dB under the slur's
+# own top -- after its note-on, by pitch, slurOnsetLength= / slurOnsetDynamic= its change by the first note's written
+# length / the dynamic ([slurs] slurOnset: a slur's first note); bendGlideAttack= / bendGlideSlur= the
+# transition out of that attack / after a transition by the note before's played length, leave (phi 0.1, as bendGlide)
+# and the heard arrival (3 pYIN frames within 30 cents) ([slurs] transitionModel)
+SLUR_RHYTHM = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_slur_rhythm.json'),
+                             encoding='utf-8'))['sections']
+def slurOnset(patch):
+    """the slurOnset=, slurOnsetLength= and slurOnsetDynamic= texts of a Performance patch (Nones: not measured): the
+    onset by pitch (the sweep), the change by the first note's written length and by the dynamic (the grid)"""
+    m = SLUR_RHYTHM.get(patch)
+    if not m:
+        return None, None, None
+    o = m['slurOnset']
+    by = lambda d: ','.join(f'{k}:{v:g}' for k, v in sorted((int(k), v) for k, v in d.items()))
+    return (f"smooth:{o['median']:g};" + by(o['byPitch']), 'smooth:' + by(o['lengthDms']), 'smooth:' + by(o['dynamicDms']))
+# Basses - Performance's glides are left out: pYIN at 30-60 Hz found 78 % of their transitions, their bins' IQR up to
+# 230 ms and not monotone by length (sso_slur_rhythm.json): too noisy for a model; their slurOnset (the envelope) is kept
+CONTEXT_GLIDES_LEFT_OUT = {'Basses - Performance'}
+def contextGlides(patch):
+    """the bendGlideAttack= and bendGlideSlur= texts of a Performance patch (None: not measured)"""
+    m = SLUR_RHYTHM.get(patch)
+    if not m or patch in CONTEXT_GLIDES_LEFT_OUT:
+        return None, None
+    txt = lambda g: ' '.join(f"{x['len']}:{x['leave']}:{x['arrive']}" for x in g) or None
+    return txt(m['glideAttack']), txt(m['glideSlur'])
 # velocities whose attack plays a faulty recording (avoid="keys:low-high:velocity …"): a round robin with its own narrow
 # tone, measured with kthost on the test VM (sso_bad_samples.json: the bands, the clean velocity next to them and the
 # renders; the owner, 2026-10-10, heard it in Whence's Celli)
@@ -1689,6 +1717,9 @@ for i, line in enumerate(out):
             ao = attackOnset(current)
             if ao:
                 extra += f' attackOnset="{ao}"'
+            so, sl, sd = slurOnset(current)
+            if so:
+                extra += f' slurOnset="{so}" slurOnsetLength="{sl}" slurOnsetDynamic="{sd}"'
             if current in BAD_SAMPLES:
                 extra += ' avoid="' + ' '.join(
                     (f"{b['keys'][0]}" if b['keys'][0] == b['keys'][1] else f"{b['keys'][0]}-{b['keys'][1]}")
@@ -1707,6 +1738,11 @@ for i, line in enumerate(out):
             octaveCount += 1
         if current in LEGATO_GLIDE:
             extra += ' bendGlide="%s"' % ' '.join(f'{g[0]}:{g[1]}:{g[2]}' for g in LEGATO_GLIDE[current]['glide'])
+            ga, gs = contextGlides(current)
+            if ga:
+                extra += f' bendGlideAttack="{ga}"'
+            if gs:
+                extra += f' bendGlideSlur="{gs}"'
             if current in BEND_SMOOTHING:
                 extra += f' bendSmoothing="{BEND_SMOOTHING[current]["tau_ms"]}"'
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()

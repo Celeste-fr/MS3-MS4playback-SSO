@@ -54,6 +54,7 @@ class TestPlaybackAudit : public QObject, public MTest
       void droppedFindings();
       void leapFindings();
       void transitionArrival();
+      void slurRhythmArrival();
       void auditScore();
       };
 
@@ -581,6 +582,81 @@ void TestPlaybackAudit::transitionArrival()
       QVERIFY2(r2.text().contains("fell back to the arrival): Violin - Performance"), qPrintable(r2.text()));
       score->setMetaTag(Playback::metaTag, "");
       delete score;
+      }
+
+//---------------------------------------------------------
+//   slurRhythmArrival
+//    (2026-10-16) the audit's arrival model follows [slurs] slurOnset and [slurs] transitionModel: leap.musicxml (120 bpm,
+//    quarters of 500 ms, one slur C4 D4 E5 E4 F5 G5): the first note's onset is its attack's onset in a slur (slurOnset
+//    150; LibTrace::slurOnsetMs), arriving on its beat; D4's glide out of the fresh attack (bendGlideAttack,
+//    arrive = 25 + 0.25 x played: played = 500 + 150 - arrive -> 500, 150 ms; context 1), E5's after a transition
+//    (bendGlideSlur, arrive = 50 + 0.1 x played: 500 + 150 - arrive -> 545.5, 104.5 ms; context 2), each sent that early
+//    ([slurs] transitionsEarly 1), so each arrives on its beat in the audit's rows; without the settings attackOnset (300)
+//    and the legato delay (120)
+//---------------------------------------------------------
+
+void TestPlaybackAudit::slurRhythmArrival()
+      {
+      MasterScore* score = readScore(DIR + "leap.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      SoundLib::setCurrent(loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='60'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " legatoDelay='-12:120 +14:120'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300' slurOnset='smooth:150'"
+         " bendGlideAttack='300:50:100 700:150:200' bendGlideSlur='300:20:80 700:40:120'/>"
+         "</Instrument></SoundLibrary>"));
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      auto rowsOf = [score](std::vector<MidiRenderer::LibTrace>* trace) {
+            EventMap events;
+            trace->clear();
+            PlaybackAudit::render(score, &events, trace);
+            return PlaybackAudit::audit(score, events, *trace, PlaybackAudit::Measured());
+            };
+      auto row = [](const PlaybackAudit::Report& r, int pitch) -> const PlaybackAudit::NoteRow* {
+            for (const PlaybackAudit::NoteRow& x : r.rows)
+                  if (x.pitch == pitch)
+                        return &x;
+            return nullptr;
+            };
+      auto traced = [](const std::vector<MidiRenderer::LibTrace>& trace, int pitch) -> const MidiRenderer::LibTrace* {
+            for (const MidiRenderer::LibTrace& t : trace)
+                  if (t.note && t.note->pitch() == pitch)
+                        return &t;
+            return nullptr;
+            };
+      std::vector<MidiRenderer::LibTrace> trace;
+      recommended({ { "levels/calibrated", "0" }, { "slurs/transitionsEarly", "1" }, { "slurs/slurOnset", "1" }, { "slurs/transitionModel", "1" } });
+      PlaybackAudit::Report r = rowsOf(&trace);
+      const PlaybackAudit::NoteRow* c4 = row(r, 60);
+      const PlaybackAudit::NoteRow* d4 = row(r, 62);
+      const PlaybackAudit::NoteRow* e5 = row(r, 76);
+      QVERIFY(c4 && d4 && e5);
+      QVERIFY2(std::fabs(c4->onsetMs - 150) < 0.5 && std::fabs(c4->arrivalMs) < 1.5, qPrintable(QString("%1 %2").arg(c4->onsetMs).arg(c4->arrivalMs)));
+      const MidiRenderer::LibTrace* td4 = traced(trace, 62);
+      const MidiRenderer::LibTrace* te5 = traced(trace, 76);
+      QVERIFY(td4 && td4->glideContext == 1 && std::fabs(td4->glidePlayedMs - 500) < 0.1 && std::fabs(td4->glideArriveMs - 150) < 0.1);
+      QVERIFY(te5 && te5->glideContext == 2 && std::fabs(te5->glidePlayedMs - 545.45) < 0.1 && std::fabs(te5->glideArriveMs - 104.55) < 0.1);
+      QVERIFY2(d4->transition && std::fabs(d4->arrivalMs) < 1.5, qPrintable(QString::number(d4->arrivalMs)));
+      QVERIFY2(e5->transition && std::fabs(e5->arrivalMs) < 1.5, qPrintable(QString::number(e5->arrivalMs)));
+      // without: attackOnset's 300, the legato delay's 120
+      recommended({ { "levels/calibrated", "0" }, { "slurs/transitionsEarly", "1" }, { "slurs/slurOnset", "0" }, { "slurs/transitionModel", "0" } });
+      r = rowsOf(&trace);
+      c4 = row(r, 60);
+      d4 = row(r, 62);
+      QVERIFY(c4 && d4);
+      QVERIFY2(std::fabs(c4->onsetMs - 300) < 0.5, qPrintable(QString::number(c4->onsetMs)));
+      td4 = traced(trace, 62);
+      QVERIFY(td4 && td4->glideContext == 0 && std::fabs(td4->glideArriveMs - 120) < 0.1);
+      delete score;
+      SoundLib::setCurrent(nullptr);
       }
 
 //---------------------------------------------------------

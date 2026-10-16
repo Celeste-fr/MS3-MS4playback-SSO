@@ -1769,6 +1769,37 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return p;
                         };
 
+                  // the onset that times a held note's early start (the chord's latest, playback.ini's [heldNotes.onset]
+                  // applied): a Performance attack with its own onset (timedAttack, [slurs] smoothStart) by that one, else
+                  // the articulation's (Articulation::startOnset; [heldNotes] byPitch: by pitch). [slurs] slurOnset
+                  // (2026-10-16, the owner approved the direction: "now that we've fixed the first note of the slurs"): a
+                  // slur's first note on such an attack (a slur goes on past it: a transition follows) by the attack's
+                  // onset in a slur instead (<Articulation slurOnset>: heard -- 15 dB under the slur's own top, which a
+                  // first note never reaches the held note's peak of; by its pitch, plus its written length's and its
+                  // dynamic's change; sso_slur_rhythm.json).
+                  // slurOnsetMs: that onset, -1 when not used
+                  auto heldOnsetMs = [&](const Note* note, const SoundLib::Choice& c, const SoundLib::Articulation::Technique* timedAttack,
+                                         double* slurOnsetMs) {
+                        const SoundLib::Articulation* oa = c.articulation;
+                        const bool inSlur = libSlurOnset && timedAttack && timedAttack->hasSlurOnset() && slurGoesOn(note);
+                        double lenMs = 0;
+                        if (inSlur) {
+                              const Chord* ch = note->chord();
+                              const int t0 = ch->tick().ticks() + tickOffset;
+                              lenMs = (score->utick2utime(t0 + ch->actualTicks().ticks()) - score->utick2utime(t0)) * 1000.0;
+                              }
+                        double onsetMs = 0;
+                        for (const Note* n : note->chord()->notes())
+                              if (n->play())
+                                    onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
+                                                       libPatches[c.patch]->name, oa->name, n->ppitch(),
+                                                       inSlur ? timedAttack->slurOnsetAt(n->ppitch(), lenMs, Ms4::expressionLevel(level))
+                                                              : oa->startOnset(timedAttack, n->ppitch(), libOnsetByPitch)));
+                        if (slurOnsetMs)
+                              *slurOnsetMs = inSlur ? onsetMs : -1;
+                        return onsetMs;
+                        };
+
                   // a held note that is not a legato transition (a lone held note, a slur's first note) and plays an
                   // articulation with a measured onset: how early it may start (utick). The note just before on its
                   // track, when it plays on the same patch, keeps keepMs of its length as played; not before the
@@ -1995,7 +2026,43 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // octaveDown; playback.ini [legato.delay] by patch: an offset or its own table); after
                                     // a short note SSO's transition is quicker ([legato] fastShare, fastFullMs)
                                     LibGlide g;
-                                    const bool glideMeasured = libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs);
+                                    // [slurs] transitionModel (2026-10-16, to A/B by ear; 0 by default): the transition as
+                                    // measured in MuseScore's own slurs (sso_slur_rhythm.json): out of a slur's first note, a
+                                    // fresh smooth attack, the map's bendGlideAttack; after a transition its bendGlideSlur;
+                                    // each by the note before's PLAYED length: from its early note-on (libEarlyMeant: its
+                                    // onset, or its own transition's shift) to this note-on, itself sent early by [slurs]
+                                    // transitionsEarly's shift of the glide at that length (a fixed point: the shift depends
+                                    // on the length; it converges, the glide's slope by length being under 1). bendGlide was
+                                    // measured in runs from a spiccato attack, every transition pooled, arrival at 9/10 of the
+                                    // way: in MuseScore's slurs SSO's transitions arrive (heard: 30 cents) off it by -40 (Violas
+                                    // out of an attack) to +160 ms (Celli). The new pitch then ARRIVES on its beat
+                                    double playedMs = -1;
+                                    int context = 0;
+                                    bool glideMeasured = false;
+                                    if (libTransitionModel && perf.on) {
+                                          auto ae = libEarlyMeant.find({ from, tickOffset });
+                                          if (ae != libEarlyMeant.end()
+                                              && !(ae->second.first ? libChoice.articulation->bendGlidesAttack : libChoice.articulation->bendGlidesSlur).empty()) {
+                                                const bool afterAttack = ae->second.first;
+                                                auto shiftOf = [&](const LibGlide& x) {
+                                                      return libTransitionsMode == 1 ? x.arriveMs
+                                                             : libTransitionsMode == 2 ? x.leaveMs + HEARD_AFTER_LEAVE_MS
+                                                             : libTransitionsMode == 3 ? (x.leaveMs + x.arriveMs) / 2.0 : 0.0;
+                                                      };
+                                                const double reach = lenBefore * 1000.0 + ae->second.second;
+                                                double len = reach;
+                                                for (int i = 0; i < 12; ++i) {
+                                                      libChoice.articulation->bendGlideContextAt(afterAttack, len, &g.leaveMs, &g.arriveMs);
+                                                      len = std::max(0.0, reach - std::max(0.0, shiftOf(g)));
+                                                      }
+                                                libChoice.articulation->bendGlideContextAt(afterAttack, len, &g.leaveMs, &g.arriveMs);
+                                                glideMeasured = true;
+                                                playedMs = len;
+                                                context = afterAttack ? 1 : 2;
+                                                }
+                                          }
+                                    if (!glideMeasured)
+                                          glideMeasured = libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs);
                                     if (glideMeasured)
                                           g.smoothingMs = libChoice.articulation->bendSmoothingMs;
                                     else {
@@ -2011,6 +2078,16 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           libTrace->back().interval = interval;
                                           libTrace->back().glideLeaveMs = g.leaveMs;
                                           libTrace->back().glideArriveMs = g.arriveMs;
+                                          libTrace->back().glideContext = context;
+                                          libTrace->back().glidePlayedMs = playedMs;
+                                          }
+                                    // ([slurs] transitionModel: this transition's early start as the played render means it,
+                                    // [slurs] transitionsEarly's shift, for a transition right after it)
+                                    if (libTransitionModel && perf.on && offset == 0) {
+                                          const double meant = libTransitionsMode == 2 && glideMeasured ? g.leaveMs + HEARD_AFTER_LEAVE_MS
+                                                               : libTransitionsMode == 3 && glideMeasured ? (g.leaveMs + g.arriveMs) / 2.0
+                                                               : libTransitionsMode >= 1 ? g.arriveMs : 0.0;
+                                          libEarlyMeant[{ note, tickOffset }] = { false, std::max(0.0, meant) };
                                           }
                                     // [slurs] transitionsEarly (the owner, 2026-10-14: "sure let's hear them started early"; 0, off, in
                                     // every preset until approved by ear): a Performance legato transition is sent early by
@@ -2067,14 +2144,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // quick swap (Choice::swapped) too (the owner, 2026-10-09: per-pitch Rachm. made
                                     // Whence's first bars uneven); 1: each by its pitch's. A Performance attack with its
                                     // own onset (perf.timedAttack: smooth, [slurs] smoothStart) by that one
-                                    const SoundLib::Articulation* oa = libChoice.articulation;
-                                    const bool byPitch = libOnsetByPitch;
-                                    double onsetMs = 0;
-                                    for (const Note* n : note->chord()->notes())
-                                          if (n->play())
-                                                onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
-                                                                   libPatches[libChoice.patch]->name, oa->name,
-                                                                   n->ppitch(), oa->startOnset(perf.timedAttack, n->ppitch(), byPitch)));
+                                    // (a slur's first note: its attack's onset in a slur, [slurs] slurOnset; heldOnsetMs)
+                                    double slurOnsetMs = -1;
+                                    const double onsetMs = heldOnsetMs(note, libChoice, perf.timedAttack, &slurOnsetMs);
+                                    if (libTrace && !libTrace->empty() && libTrace->back().note == note)
+                                          libTrace->back().slurOnsetMs = slurOnsetMs;
                                     // (a Performance re-attack: the note before ends its gap before this note-on,
                                     // so it keeps keepMs after that gap)
                                     const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
@@ -2089,6 +2163,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           libShiftOn = libShiftWritten = -1;
                                           }
                                     }
+                              // ([slurs] transitionModel: a smooth attack's early start as the played render means it, for a
+                              // transition out of it; in written timing too, so that both renders time its glide alike. A
+                              // transition's: where it comes in (perf.from), below)
+                              if (libTransitionModel && !from && perf.on && perf.timedAttack && offset == 0 && !note->tieBack())
+                                    libEarlyMeant[{ note, tickOffset }] = { true, heldOnsetMs(note, libChoice, perf.timedAttack, nullptr)
+                                                                                  * libOnsetEarlyPlayed / 100.0 };
                               }
                         config.libKey = libNote.key;
                         if (libNote.velocity > 0)
@@ -5557,6 +5637,11 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libAvoidBad = Playback::on("notes/avoidBadSamples", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libTransitionsEarly = library && !writtenTiming ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;
+      libTransitionsMode = library ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;
+      libOnsetEarlyPlayed = library ? SoundLib::onsetEarly(score, *library) : 0;
+      libSlurOnset = library && Playback::on("slurs/slurOnset", score);
+      libTransitionModel = library && Playback::on("slurs/transitionModel", score);
+      libEarlyMeant.clear();
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();

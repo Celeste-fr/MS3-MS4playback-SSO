@@ -56,6 +56,8 @@
 //                 when the note before keeps keepMs; Report::transitionShiftsMs, transitionsCapped) and is not
 //                 UNMEASURED for that early start (the transition's delay is the measured legato grid / bendGlide).
 //                 ARRIVAL still compares the modelled arrival: ~0 in mode 1, arrive - shift late in modes 2 / 3 (by design)
+//                 The model follows [slurs] slurOnset (a slur's first note by its onset in a slur, LibTrace::slurOnsetMs)
+//                 and [slurs] transitionModel (the in-context glide, LibTrace::glideContext / glideArriveMs) as rendered
 //     DROPPED     a legato transition (LibTrace::from) on an articulation that plays transitions, sent less than 15 ms
 //                 after the previous note-on on its route (also a legato note) at velocity 64 or lower: SSO's legato
 //                 engine doesn't play it at all (from reading its script; behaviour only). A fault. (Notes of one chord

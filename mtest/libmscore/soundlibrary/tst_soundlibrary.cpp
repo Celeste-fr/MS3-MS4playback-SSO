@@ -162,6 +162,7 @@ class TestSoundLibrary : public QObject, public MTest
       void playbackSettingsLayers();
       void slurPerformance();
       void smoothOnset();
+      void slurRhythm();
       void transitionsEarly();
       void levelContext();
       void levelSectionBalance();
@@ -1901,22 +1902,22 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\ntransitionModel=0\nslurOnset=%5\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n"));
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\ntransitionModel=0\nslurOnset=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n"));
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\ntransitionModel=0\nslurOnset=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\ntransitionModel=0\nslurOnset=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1946,7 +1947,7 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/slurOnset", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // quick left out: its default 2, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
@@ -1968,7 +1969,7 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                         { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
+                                         { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/slurOnset", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
                                          { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
@@ -2190,6 +2191,152 @@ void TestSoundLibrary::smoothOnset()
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/early", "0" } });
       on = render();
       QCOMPARE(on[69].first, 2400);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   slurRhythm
+//    (2026-10-16, the owner: Whence's Violas slurs heard as a triplet) [slurs] slurOnset: a slur's first note on the smooth
+//    attack starts early by the attack's onset in a slur (<Articulation slurOnset>, by the first note's written length),
+//    not attackOnset; [slurs] transitionModel: a transition's glide from the map's in-context tables by the note before's
+//    PLAYED length (bendGlideAttack out of a fresh attack, bendGlideSlur after a transition), which [slurs]
+//    transitionsEarly sends it early by (a fixed point). legato-early.musicxml at 60 bpm (0.48 ticks a ms): bar 1 C5 D5
+//    E5 F5 under a slur (C5 a smooth attack after silence, at the score's start: the start lead), bar 2's A4 (2400) a
+//    slur's first note after the unslurred G5 on the main patch. The map: slurOnset 250 at A4 and C5, a 500 ms first note
+//    100 less, 1000 ms 0 (slurOnsetLength), a dynamic's change (slurOnsetDynamic) by the function alone;
+//    bendGlideAttack 500:50:100 1500:150:300 (arrive = 0.2 x played length); bendGlideSlur 500:20:80 1500:40:120 (arrive =
+//    60 + 0.04 x played); bendGlide flat 150. Every quarter is 1000 ms written:
+//      slurOnset 1: C5 and A4 early by 250 ms (120 ticks); 0: attackOnset's 300 (144)
+//      transitionModel 1, transitionsEarly 1: D5 after C5 (early 250): played = 1250 - 0.2 played -> 1041.7 ms, arrive 208.3 ms
+//        (100 ticks: 380); E5 after D5 (early 208.3): played = 1208.3 - 60 - 0.04 played -> 1104.2, arrive 104.2 ms (50 ticks: 910)
+//      transitionModel 0: bendGlide's 150 (72 ticks: 408, 888); transitionsEarly 0 with the model: on the beat, D5's glide
+//        arrives 0.2 x 1250 = 250 ms after its note-on (the trace's context 1, played 1250)
+//    Layers: slurOnset 1 by default, the ini's 0, the score's 1 over it; transitionModel 0 by default. The map's malformed
+//    values refused
+//---------------------------------------------------------
+
+void TestSoundLibrary::slurRhythm()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      const QString map = "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300' bendGlide='500:10:150 1500:10:150' %1/>"
+         "</Instrument></SoundLibrary>";
+      const QString good = "slurOnset='smooth:200;69:250,72:250' slurOnsetLength='smooth:500:-100,1000:0' bendGlideAttack='500:50:100 1500:150:300' bendGlideSlur='500:20:80 1500:40:120'";
+      QVERIFY(!loadMap(map.arg("slurOnset='bowed:300'")));                 // (not an attack)
+      QVERIFY(!loadMap(map.arg("slurOnset='smooth:x'")));
+      QVERIFY(!loadMap(map.arg("slurOnset='smooth:300;69'")));
+      QVERIFY(!loadMap(map.arg("bendGlideAttack='500:100:50'")));          // (arrives before it leaves)
+      QVERIFY(!loadMap(map.arg("bendGlideSlur='500:10'")));
+      auto lib = loadMap(map.arg(good));
+      QVERIFY(lib);
+      const SoundLib::Articulation& legato = lib->instruments[1].articulations[0];
+      const SoundLib::Articulation::Technique* smooth = legato.attack("smooth");
+      QVERIFY(smooth->hasSlurOnset() && smooth->hasOnset() && !legato.attack("spiccato")->hasSlurOnset());
+      QCOMPARE(smooth->slurOnsetMs, 200.0);
+      QCOMPARE(smooth->slurOnsetAt(69, 1000, 64), 250.0);
+      QCOMPARE(smooth->slurOnsetAt(69, 750, 64), 200.0);                   // (linear between the lengths)
+      QCOMPARE(smooth->slurOnsetAt(60, 2000, 64), 250.0);                  // (the nearest ends beyond)
+      QCOMPARE(smooth->slurOnsetAt(69, 250, 64), 150.0);
+      QVERIFY(!loadMap(map.arg("slurOnsetDynamic='smooth:64'")));
+      QVERIFY(!loadMap(map.arg("slurOnsetDynamic='bowed:64:0'")));
+      {
+      auto withDyn = loadMap(map.arg("slurOnset='smooth:200' slurOnsetDynamic='smooth:64:0,96:-20,127:-300'"));
+      QVERIFY(withDyn);
+      const SoundLib::Articulation::Technique* sd = withDyn->instruments[1].articulations[0].attack("smooth");
+      QCOMPARE(sd->slurOnsetAt(69, 1000, 96), 180.0);
+      QCOMPARE(sd->slurOnsetAt(69, 1000, 80), 190.0);
+      QCOMPARE(sd->slurOnsetAt(69, 1000, 127), 0.0);                      // (never under 0)
+      }
+      double leave = 0, arrive = 0;
+      QVERIFY(legato.bendGlideContextAt(true, 1000, &leave, &arrive));
+      QCOMPARE(leave, 100.0);
+      QCOMPARE(arrive, 200.0);
+      QVERIFY(legato.bendGlideContextAt(false, 1000, &leave, &arrive));
+      QCOMPARE(arrive, 100.0);
+      QVERIFY(legato.bendGlideAt(1000, &leave, &arrive) && arrive == 150.0);
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      std::vector<MidiRenderer::LibTrace> trace;
+      // each key's first note-on (tick, the start lead taken off) and the trace
+      auto render = [score, &trace]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            trace.clear();
+            MidiRenderer r(score);
+            r.setLibraryTrace(&trace);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            std::map<int, int> on;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && !e.librarySwitch() && e.type() == ME_NOTEON && e.velo() > 0 && !on.count(e.pitch()))
+                        on[e.pitch()] = unlead(score, events, te.first);
+                  }
+            return on;
+            };
+      auto traced = [&trace](int pitch, int utick) -> const MidiRenderer::LibTrace* {
+            for (const MidiRenderer::LibTrace& t : trace)
+                  if (t.note && t.note->pitch() == pitch && t.utick == utick)
+                        return &t;
+            return nullptr;
+            };
+      auto within = [](int tick, int want) { return std::abs(tick - want) <= 1; };
+      // the defaults: slurOnset 1, transitionModel 0
+      QCOMPARE(Playback::value("slurs/slurOnset", score), 1.0);
+      QCOMPARE(Playback::value("slurs/transitionModel", score), 0.0);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" } });
+      std::map<int, int> on = render();
+      QVERIFY2(within(on[69], 2400 - 120), qPrintable(QString::number(on[69])));     // (A4: 250 ms, its slur onset)
+      QVERIFY2(within(on[72], -120), qPrintable(QString::number(on[72])));            // (C5: at the start, the lead)
+      QVERIFY2(within(on[74], 480 - 72), qPrintable(QString::number(on[74])));        // (bendGlide's 150)
+      QVERIFY2(within(on[76], 960 - 72), qPrintable(QString::number(on[76])));
+      const MidiRenderer::LibTrace* a4 = traced(69, 2400);
+      QVERIFY(a4 && a4->slurOnsetMs == 250.0);
+      const MidiRenderer::LibTrace* d5 = traced(74, 480);
+      QVERIFY(d5 && d5->glideContext == 0 && d5->glideArriveMs == 150.0);
+      // slurOnset 0 (the ini): attackOnset's 300; the score's 1 over it
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" }, { "slurs/slurOnset", "0" } });
+      QCOMPARE(Playback::source("slurs/slurOnset", score), Playback::Source::INI);
+      on = render();
+      QVERIFY2(within(on[69], 2400 - 144), qPrintable(QString::number(on[69])));
+      QVERIFY(traced(69, 2400) && traced(69, 2400)->slurOnsetMs == -1);
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/slurOnset", 1 } }));
+      QCOMPARE(Playback::source("slurs/slurOnset", score), Playback::Source::SCORE);
+      on = render();
+      QVERIFY2(within(on[69], 2400 - 120), qPrintable(QString::number(on[69])));
+      score->setMetaTag(Playback::metaTag, QString());
+      // transitionModel 1: by the played lengths
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" }, { "slurs/transitionModel", "1" } });
+      on = render();
+      QVERIFY2(within(on[74], 480 - 100), qPrintable(QString::number(on[74])));
+      QVERIFY2(within(on[76], 960 - 50), qPrintable(QString::number(on[76])));
+      d5 = traced(74, 480);
+      QVERIFY(d5 && d5->glideContext == 1 && std::abs(d5->glidePlayedMs - 1041.67) < 0.1 && std::abs(d5->glideArriveMs - 208.33) < 0.1);
+      const MidiRenderer::LibTrace* e5 = traced(76, 960);
+      QVERIFY(e5 && e5->glideContext == 2 && std::abs(e5->glidePlayedMs - 1104.17) < 0.1 && std::abs(e5->glideArriveMs - 104.17) < 0.1);
+      // with slurOnset 0 the attack is 300 ms early: D5's played length follows (1300 - 0.2 x played: 1083.3, 216.7 ms)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" }, { "slurs/transitionModel", "1" },
+                                      { "slurs/slurOnset", "0" } });
+      on = render();
+      QVERIFY2(within(on[74], 480 - 104), qPrintable(QString::number(on[74])));
+      // transitionsEarly 0: on the beat, the glide by the played length all the same
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" }, { "slurs/transitionModel", "1" },
+                                      { "slurs/transitionsEarly", "0" } });
+      on = render();
+      QCOMPARE(on[74], 480);
+      d5 = traced(74, 480);
+      QVERIFY(d5 && d5->glideContext == 1 && std::abs(d5->glidePlayedMs - 1250.0) < 0.1 && std::abs(d5->glideArriveMs - 250.0) < 0.1);
       delete score;
       }
 
