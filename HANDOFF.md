@@ -5,6 +5,61 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; not merged)
+
+The owner, 2026-10-16: "is there any way at all we can make SSO load even faster"; rule the same day: "no optimizations
+should ever change the sound" (an optimization is sound-identical, proven by a render null test against the floor of two
+identical passes, or dropped). Measured on the Windows VM (Kontakt 8 + SSO) with build 439 (2ba8f9f7ac, run
+https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38850314270, `MS_SLOTS_PARAMETERS=1`) and ktload
+(`tools/soundlibraries/ktload`: the very states MuseScore loads, one after the other, timed). **Every VM run today was
+contended** (another session's Live 12.4.6 with 8 GB, one or two kthost renders): numbers 3-7x the 2026-10-15 warm run.
+
+| Part of Whence's warm load (8 instances, 20 slots) | Measured | Notes |
+|---|---|---|
+| new instance (Kontakt's component) | 0.2-0.6 s each | Kontakt's |
+| MuseScore's state: voice limit 512 + the copies' Tune slots | 0.5-1.7 s each, 8.9 s in all (Linux CPU); "setups read" 5.3 / 10.9 s for the voice limit alone (VM) | **now prepared once** (below) |
+| setState (Kontakt's instrument load + script) | 1.9-19.5 s each (VM, contended); ktload CPU time 2.4-7.4 s each, the 3-slot multis ~2x a single patch | Kontakt's, single-threaded |
+| settle (47 ms of audio) | 3-80 ms each | needed (parameters) |
+| every parameter's info (4145) | 2-10 ms | negligible |
+| samples after setState | ~0.5-1.1 GB allocated during each setState, then filled by Kontakt's own thread, processed or not | VM: over SMB from the owner's PC (C:\NI\…\Samples are symlinks to \\VOLENS\VMShare): ~190 reads/s of ~40 KB, 3-17 MB/s, still growing after 5 min; not the owner's local disk |
+
+- **Implemented, on (load time only)**: `prepared` (soundlibraryhost.cpp): the states setupState (voice limit) and
+  tunedState (the copies' slots) make are kept, keyed by the input's SHA-1 + what was done + PREPARED_VERSION, in memory
+  and in `<setups folder>/prepared` (checked by SHA-1 when read). The plug-in gets the same bytes by construction
+  (`tst_liveequivalence::preparedStates`); `MS_PREPARED_OFF=1` makes them at each load, to compare. The even levels'
+  measurer loads its instances only after the playback's preload (it took turns with it on the main thread). Timing
+  lines in `load times.log` ("<patch>: steps | …" per instance).
+- **Still to prove (needs a Windows build of `load-profile`; ask before a CI run)**: on the VM, Whence rendered with
+  and without `MS_PREPARED_OFF` (`--verify-playback --verify-wav`, per part with `tools/playbackverify/part_variants.py`:
+  the whole score with 20 instances crashed the render while Live held 8 GB, `MapViewOfFile` error 1450), each twice,
+  compared with `tools/playbackverify/compare_renders.py`; and `--measure-load-times` with / without it. Expect the
+  same as two identical passes (below: bit for bit on the All techniques parts).
+- **Dropped** (could change the sound, or no gain): purging articulations the score doesn't play (no guarantee that a
+  later edit, a play from anywhere, an export and the measurer find their samples loaded: Kontakt loads in the
+  background with no "done" signal); a smaller preload (realtime dropouts possible; the owner's Kontakt overrides
+  every instrument's preload with 30 kB anyway, the VM doesn't: `overrideInstDFD` 0); a Kontakt-resaved multi (loads
+  no faster: ktload 7.6-23.7 s against 7.8-25.2 s, 4 + 4 alternating); worker threads (no gain, 2026-10-15); playing
+  before late parts load (their notes would be lost; MuseScore can't see when Kontakt's samples are in). Note: Play
+  doesn't wait for Kontakt's background sample loading today either (found, not changed).
+
+**Tuning slots against varispeed** (`[tuning] hostedTuning` 1 / 0, the coordinator's check; build 439, Whence per part:
+the other parts on MS4's sounds, each render twice, `compare_renders.py`; floors = two identical passes):
+- Floors: the All techniques parts (Violins 2, Basses) render **bit for bit** (whole part -145 / -158 dB); a part with
+  a Performance patch doesn't (Violins 1 -6.9, Violas -8.4, Celli -7.1 dB; per note up to ±2-6 dB level): SSO's
+  Performance patches vary between runs after the transport restart.
+- Slots vs varispeed: Violins 2 -11.5 dB, Basses -25.2 dB (whole part, both pairs alike); per note on the deterministic
+  notes: pitch within 1.2 cents (Violins 2) / 1.7 (Basses) / 2.9 (Violas), level within 0.08 / 0.03 / 0.82 dB, 1/3-octave
+  spectrum within 0.17 / 0.25 / 1.45 dB, onset within 2.7 / 0 / 10 ms (Violas' tuned notes). Basses' untuned notes
+  identical (-148 dB), its tuned notes -23 dB (Kontakt's Tune and MuseScore's resampler differ in the waveform). Violins
+  2's and Celli's untuned notes differ too (null +2 / -7 dB, level / spectrum the same): the copies' notes fall on other
+  instances, so other round robins play. Parts with Performance patches: slots - varispeed at the floor (Violins 1 -4.6
+  against -7.2; Violas -6.7 against -8.3; Celli -5.8 against -7.1).
+- Pitch against the written tuning (YIN, median over the note): slots and varispeed alike, quarter-tone notes
+  median -2.2 / -2.0 cents (Violins 2), -2.1 / -2.1 (Violins 1), -0.9 / -0.5 (Violas).
+- The plain Live set plays Kontakt's Tune (KontaktSetup::withSlots / withTune: the same states as hosted slots;
+  2026-10-10, kthost: a multi = a Kontakt per copy, null -111 dB), so slots are what Live plays by construction; no Live
+  render was made today (Live held by another session; the VM's memory).
+
 ## Kontakt slots for tuning copies (2026-10-15, branch `tuning-slots`, from integrate-1012 41e1c46d46; merged with integrate-1012 in `integrate-ts`)
 
 The owner, 2026-10-15: "is there any way at all we can make SSO load even faster" … "Whence takes absolutely forever to
