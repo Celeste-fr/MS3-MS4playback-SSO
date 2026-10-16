@@ -82,6 +82,9 @@ class SoundLibraryHost : public QObject {
             // stay in the score; the setup is the library's default). Cleared when a setup loads
             std::map<unsigned, double> patchValues;
             qint64 memory { -1 };         // bytes the process grew by as it loaded (-1: not measured)
+            QString tuning;               // its slots' tunings (tuningKey: a patch's copies in one instance, or a copy
+                                          // by its Tune); empty: plain, tuned by varispeed
+            std::vector<int> routes;      // the slots it plays (SoundLib::Instance::routes; empty: its own)
             };
       std::array<Slot, 64> _slots;
       // the part each slot plays (its patch, an extra, a copy for another tuning) and the score, from
@@ -101,8 +104,12 @@ class SoundLibraryHost : public QObject {
       // put in their slot) on the GUI thread
       struct Pending;
       std::vector<std::unique_ptr<Pending>> _pending;
-      std::unique_ptr<Pending> beginLoad(int slot, const QString& name, bool setup, const SoundLib::Library& library,
+      std::unique_ptr<Pending> beginLoad(int slot, const QString& name, bool setup, const std::vector<double>& cents,
+                                         const std::vector<int>& routes, const SoundLib::Library& library,
                                          const QString& path, QString* error);
+      // the instances' slots linked to their instance (Vst3Synth::setLink), from the slots loaded
+      void applyLinks();
+      bool _resync { false };             // a patch's tuned instance fell back to plain: its copies need instances of their own
       void finishLoad(std::unique_ptr<Pending> pl, const SoundLib::Library& library);
       bool harvest(const SoundLib::Library& library, int keep);   // finished pending loads (keep >= 0: waits till no more are left)
       bool pendingOn(int slot) const;
@@ -172,6 +179,21 @@ class SoundLibraryHost : public QObject {
                                         QString* error);
       static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
                             const QString& pluginPath, QString* error = nullptr);
+      // hosted tuning by slots (SoundLib::Instance, [tuning] hostedTuning): a setup state (setupState's form) tuned by
+      // Kontakt's Tune, one slot (cents of one: KontaktSetup::withTune) or a multi of the patch, a slot per copy on its
+      // own MIDI channel (KontaktSetup::withSlots, as the plain Live set's); empty with *error when the state isn't
+      // Kontakt's (no program in its first slot): that patch then plays plain, a copy per instance, by varispeed
+      static QByteArray tunedState(const QByteArray& state, const std::vector<double>& cents, QString* error = nullptr);
+      static QString tuningKey(const std::vector<double>& cents);     // what Slot::tuning compares ("" plain)
+      // a made setup is Kontakt's own state already (resaved; true for a library whose setups aren't made)
+      static bool setupResaved(const SoundLib::Library& library, const QString& patch);
+      // an instance's setup into p as MuseScore plays it: plain (cents empty) as loadSetup, else tuned (tunedState); a
+      // made setup not yet resaved goes in plain first (resaved: Kontakt's own state; a multi of a made one would
+      // load each slot as slowly), then tuned. *tuned: its tuning is in its state (false: plain, varispeed tunes it)
+      static bool loadInstanceSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
+                                    const std::vector<double>& cents, const QString& pluginPath, QString* error, bool* tuned);
+      // patches whose setup can't be tuned (not Kontakt's): their copies play plain, an instance each
+      static std::set<QString>& untunable();
       // a part's plug-in parameter settings (its flat automation lanes: partcontrollers.h) as MuseScore's playback sets
       // them on a route's instance
       struct AppliedParameter {

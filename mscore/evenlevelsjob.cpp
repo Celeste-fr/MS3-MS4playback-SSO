@@ -503,7 +503,11 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
             log("the library's plug-in: " + error);
             return QString();
             }
-      log(QString("%1: %2 instances loaded in %3 s").arg(name).arg(patches.size()).arg(t.elapsed() / 1000.0, 0, 'f', 1));
+      std::set<int> hosts;                    // (hosted slots: a patch's copies share one: Vst3Synth::hostOf)
+      for (const auto& sp : patches)
+            hosts.insert(vst->hostOf(sp.first));
+      log(QString("%1: %2 instances for %3 routes loaded in %4 s").arg(name).arg(hosts.size()).arg(patches.size())
+          .arg(t.elapsed() / 1000.0, 0, 'f', 1));
       QJsonObject waited;
       PlaybackVerifier::waitUntilSounding(vst, patches, rate, name, log, &waited);
 

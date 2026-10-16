@@ -201,11 +201,13 @@ struct Route {
       QString part;
       int lane { 0 };
       const SoundLib::LibInstrument* instrument { nullptr };
+      std::vector<double> cents;          // hosted slots (SoundLib::Instance): its slots' tunings, by Kontakt's Tune; empty: plain
       };
 
 struct Load {                             // one instance loaded
       std::unique_ptr<Vst3Plugin> plugin;
       QString name;
+      QString key;                        // the patch, and its tunings (_states)
       QString kind;                       // what its setup was
       double createMs { -1 };
       double setupMs { 0 };
@@ -250,10 +252,11 @@ class Run {
             }
 
       // a new instance (else p), its setup read or made; setState here or (threaded) by the caller
-      Load begin(const QString& name, std::unique_ptr<Vst3Plugin> reuse = nullptr)
+      Load begin(const QString& name, std::unique_ptr<Vst3Plugin> reuse = nullptr, const std::vector<double>& cents = {})
             {
             Load l;
             l.name = name;
+            l.key = cents.empty() ? name : QString("%1 [%2]").arg(name, SoundLibraryHost::tuningKey(cents));
             QElapsedTimer t;
             t.start();
             if (reuse)
@@ -274,8 +277,19 @@ class Run {
             l.kind = !SoundLibraryHost::makesSetups(lib) ? QString("a setup file")
                      : after ? (before ? QString("Kontakt's own state") : QString("Kontakt's own state, taken from another setups folder"))
                      : QString("made from the .nki");
+            // (hosted slots: the copies' tunings in the state, as SoundLibraryHost loads them; a made setup that isn't
+            // Kontakt's own state yet stays plain here: phase 1 resaves it)
+            if (!state.isEmpty() && !cents.empty()) {
+                  QString err;
+                  const QByteArray tuned = SoundLibraryHost::setupResaved(lib, name) ? SoundLibraryHost::tunedState(state, cents, &err)
+                                                                                     : QByteArray();
+                  if (!tuned.isEmpty())
+                        state = tuned;
+                  else
+                        l.kind += QString(", NOT tuned (%1)").arg(err.isEmpty() ? QString("not resaved yet") : err);
+                  }
             l.ok = !state.isEmpty();
-            _states[name] = state;
+            _states[l.key] = state;
             return l;
             }
       void set(Load& l)
@@ -284,7 +298,7 @@ class Run {
                   return;
             QElapsedTimer t;
             t.start();
-            l.ok = l.plugin->setState(_states[l.name]);
+            l.ok = l.plugin->setState(_states[l.key]);
             l.setStateMs = msSince(t);
             finish(l);
             }
@@ -298,7 +312,7 @@ class Run {
                   }
             QElapsedTimer t;
             t.start();
-            SoundLibraryHost::setupLoaded(l.plugin.get(), lib, l.name, _states[l.name], l.setupMs);      // (resaves a made one)
+            SoundLibraryHost::setupLoaded(l.plugin.get(), lib, l.name, _states[l.key], l.setupMs);      // (resaves a made one)
             l.resaveMs = msSince(t);
             }
       QString describe(const Load& l) const
@@ -309,7 +323,7 @@ class Run {
             if (!l.ok)
                   return s + " | FAILED: " + l.error;
             s += QString(" | setup: %1, %2 KB, read %3 | setState %4 (component %5, controller %6 + %7, MIDI mapping %8)")
-                 .arg(l.kind).arg(_states.at(l.name).size() / 1024).arg(sec(l.setupMs)).arg(sec(l.setStateMs))
+                 .arg(l.kind).arg(_states.at(l.key).size() / 1024).arg(sec(l.setupMs)).arg(sec(l.setStateMs))
                  .arg(sec(tm.component), sec(tm.controllerComponent), sec(tm.controller), sec(tm.mapping));
             if (l.resaveMs > 5)
                   s += QString(" | log and resave %1").arg(sec(l.resaveMs));
@@ -403,6 +417,7 @@ class Run {
       void phaseAlone(const std::vector<Route>& unique);
       void phaseScore(const QString& title, const std::vector<Route>& routes, int threads);
       void phaseReuse(const std::vector<Route>& unique);
+      void phaseMultiParameters(const std::vector<Route>& routes);
       void phaseProbe(const Route& r);
 
       std::map<QString, QByteArray> _states;         // the setups as read
@@ -472,11 +487,14 @@ void Run::phaseScore(const QString& title, const std::vector<Route>& routes, int
             for (const Route& r : routes) {
                   QElapsedTimer t;
                   t.start();
-                  Load l = begin(r.name);
+                  Load l = begin(r.name, nullptr, r.cents);
                   if (l.plugin)
                         set(l);
                   longest = std::max(longest, msSince(t));
-                  rep.line(QString("%1%2 | %3").arg(r.name, r.lane ? QString(" (other tuning %1)").arg(r.lane) : QString(),
+                  rep.line(QString("%1%2 | %3").arg(r.name, r.cents.size() > 1 ? QString(" (%1 tunings in one instance: %2 cents)")
+                                                                                   .arg(r.cents.size()).arg(SoundLibraryHost::tuningKey(r.cents))
+                                                          : r.cents.size() == 1 ? QString(" (tuned %1 cents)").arg(SoundLibraryHost::tuningKey(r.cents))
+                                                          : r.lane ? QString(" (other tuning %1)").arg(r.lane) : QString(),
                                                    l.plugin ? describe(l) : "no instance: " + l.error));
                   QApplication::processEvents();
                   loads.push_back(std::move(l));
@@ -514,12 +532,12 @@ void Run::phaseScore(const QString& title, const std::vector<Route>& routes, int
                   while (next < routes.size() && int(running.size()) < threads) {
                         QElapsedTimer t;
                         t.start();
-                        loads.push_back(begin(routes[next].name));
+                        loads.push_back(begin(routes[next].name, nullptr, routes[next].cents));
                         Load& l = loads.back();
                         longest = std::max(longest, msSince(t));
                         if (l.plugin && l.ok) {
                               Vst3Plugin* p = l.plugin.get();
-                              const QByteArray state = _states[l.name];
+                              const QByteArray state = _states[l.key];
                               Running run;
                               run.index = loads.size() - 1;
                               run.clock.start();
@@ -567,6 +585,111 @@ void Run::phaseScore(const QString& title, const std::vector<Route>& routes, int
       pump.set({});
       const Settled f = freed(pump, full);
       rep.line(QString("freed %1 in %2").arg(mb(-f.growth), sec(f.ms)));
+      }
+
+//---------------------------------------------------------
+//   phase 6: a plug-in parameter on a multi (hosted slots: SoundLib::Instance)
+//    does a parameter set on an instance whose slots are one patch's copies reach every slot? A part that sets one of
+//    its patch's parameters (Controllers…: SSO's Vibrato, mics) keeps an instance per copy until this says so: the
+//    parameter turned over on a multi of the patch, then each slot's script values as Kontakt gives them back
+//---------------------------------------------------------
+
+void Run::phaseMultiParameters(const std::vector<Route>& routes)
+      {
+      rep.line();
+      rep.line("# 6 A plug-in parameter on a multi (a patch's copies in one instance): each slot's script values before and "
+               "after it is set on the instance");
+      const Route* multi = nullptr;
+      const SoundLib::Controller* control = nullptr;
+      auto paramOf = [](const SoundLib::LibInstrument* li) -> const SoundLib::Controller* {
+            if (!li)
+                  return nullptr;
+            const SoundLib::Controller* first = nullptr;
+            for (const SoundLib::Controller& c : li->allControllers) {
+                  if (c.param.isEmpty())
+                        continue;
+                  if (c.id == "vibrato")
+                        return &c;
+                  if (!first)
+                        first = &c;
+                  }
+            return first;
+            };
+      for (const Route& r : routes)
+            if (!multi && r.cents.size() > 1 && paramOf(r.instrument)) {
+                  multi = &r;
+                  control = paramOf(r.instrument);
+                  }
+      Route made;
+      if (!multi) {               // (none in the scores: the first patch with a parameter, at 0 / -50 / +50 cents)
+            for (const Route& r : routes)
+                  if (!multi && paramOf(r.instrument)) {
+                        made = r;
+                        made.cents = { 0.0, -50.0, 50.0 };
+                        multi = &made;
+                        control = paramOf(r.instrument);
+                        }
+            }
+      if (!multi) {
+            rep.line("no patch with a plug-in parameter measured");
+            return;
+            }
+      pump.set({});
+      Load l = begin(multi->name, nullptr, multi->cents);
+      if (!l.plugin) {
+            rep.line(QString("%1 | no instance: %2").arg(multi->name, l.error));
+            return;
+            }
+      set(l);
+      if (!l.ok) {
+            rep.line(QString("%1 | %2").arg(multi->name, describe(l)));
+            return;
+            }
+      QElapsedTimer start;
+      start.start();
+      pump.set({ l.plugin.get() });
+      untilSounds(l.plugin.get(), multi->instrument, start);
+      auto slotValues = [&]() {
+            QString n;
+            QByteArray component, controller;
+            return readState(l.plugin->state(), &n, &component, &controller) ? KontaktSetup::slotsOf(component)
+                                                                                : std::vector<KontaktSetup::Slot>();
+            };
+      const std::vector<KontaktSetup::Slot> before = slotValues();
+      const long id = l.plugin->parameterId(control->param);
+      if (id < 0 || before.size() < 2) {
+            rep.line(QString("%1 | parameter \"%2\" %3, %4 slots in its state").arg(multi->name, control->param)
+                     .arg(id < 0 ? "not found" : "found").arg(before.size()));
+            return;
+            }
+      const double was = l.plugin->parameter(unsigned(id));
+      const double to = was > 0.5 ? 0.0 : 1.0;
+      l.plugin->setParameter(unsigned(id), to);
+      pump.run(1500);
+      const std::vector<KontaktSetup::Slot> after = slotValues();
+      int reached = 0;
+      QStringList lines;
+      for (size_t i = 0; i < before.size() && i < after.size(); ++i) {
+            QStringList changed;
+            for (const auto& v : after[i].values) {
+                  auto b = before[i].values.find(v.first);
+                  if (b == before[i].values.end() || b->second != v.second)
+                        changed << v.first;
+                  }
+            reached += !changed.isEmpty();
+            lines << QString("slot %1 (MIDI channel %2, Tune %3 cents): %4 script value(s) changed%5").arg(i + 1)
+                     .arg(after[i].channel).arg(after[i].cents, 0, 'f', 1).arg(changed.size())
+                     .arg(changed.isEmpty() ? QString() : ": " + changed.mid(0, 6).join(", "));
+            }
+      rep.line(QString("%1 | %2 slots | parameter \"%3\" (id %4) %5 to %6 on the instance | %7")
+               .arg(multi->name).arg(before.size()).arg(control->param).arg(id).arg(was, 0, 'f', 3).arg(to, 0, 'f', 1)
+               .arg(lines.join("; ")));
+      rep.line(QString("VERDICT multi parameters: %1 of %2 slots took it (%3)").arg(reached).arg(before.size())
+               .arg(reached == int(before.size()) ? "a parameter reaches every slot: a part's parameters can share a multi"
+                    : reached == 1 ? "only one slot: a part that sets parameters keeps an instance per copy"
+                    : "mixed"));
+      l.plugin.reset();
+      pump.set({});
       }
 
 //---------------------------------------------------------
@@ -863,13 +986,21 @@ bool Run::run(QString* reportPath)
             t.start();
             const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), lib);
             const double routesMs = msSince(t);
-            for (const SoundLib::Route& r : routes) {
-                  if (r.instrument->kit)
-                        continue;
-                  rs.push_back({ r.instrument->name, r.part->partName(), r.lane, r.instrument });
-                  parts << QString("%1: %2%3").arg(r.part->partName(), r.instrument->name, r.lane ? QString(" ~%1").arg(r.lane) : QString());
+            // the instances MuseScore loads for them (SoundLib::instances: hosted slots, a patch's copies in one)
+            int lane = 0;
+            for (const SoundLib::Instance& in : SoundLib::instances(score->masterScore(), lib, routes)) {
+                  for (const SoundLib::Route& r : routes)
+                        if (r.port * 16 + r.channel == in.slot)
+                              lane = r.lane;
+                  rs.push_back({ in.instrument->name, in.part->partName(), lane, in.instrument, in.cents });
+                  parts << QString("%1: %2%3").arg(in.part->partName(), in.instrument->name,
+                                                   in.multi() ? QString(" x%1").arg(in.routes.size())
+                                                   : lane ? QString(" ~%1").arg(lane) : QString());
                   }
-            rep.line(QString("score %1 | %2 instances | its routes worked out in %3 | %4").arg(QFileInfo(file).fileName()).arg(rs.size())
+            rep.line(QString("score %1 | %2 routes, %3 instances (%4) | its routes worked out in %5 | %6").arg(QFileInfo(file).fileName())
+                     .arg(routes.size()).arg(rs.size())
+                     .arg(SoundLib::hostedSlots(score->masterScore(), lib) ? "[tuning] hostedTuning 1: slots, Kontakt's Tune"
+                                                                          : "one per route; tuning by varispeed")
                      .arg(sec(routesMs), parts.join("; ")));
             sets.push_back({ "Score " + QFileInfo(file).fileName(), rs });
             delete score;
@@ -916,6 +1047,12 @@ bool Run::run(QString* reportPath)
                   if (t > 0)
                         phaseScore(s.first, s.second, t);
       phaseReuse(unique);
+      {
+            std::vector<Route> all;
+            for (const auto& set : sets)
+                  all.insert(all.end(), set.second.begin(), set.second.end());
+            phaseMultiParameters(all);
+      }
       if (opt.probe) {
             const Route* probe = nullptr;
             for (const Route& r : unique)

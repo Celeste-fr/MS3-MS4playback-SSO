@@ -5797,8 +5797,9 @@ void MidiRenderer::updateState()
                         bool tuned = false;           // (a part with no microtones: no bends either)
                         if (library->varispeed && !r.instrument->kit) {
                               const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *library);
+                              // (fixed copies as routes() gives them: Live's, MIDI out, hosted slots)
                               const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes,
-                                                                          forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
+                                                                          SoundLib::fixedLanes(score, *library, forLiveClips));
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;

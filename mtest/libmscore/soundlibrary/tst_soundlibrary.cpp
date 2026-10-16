@@ -214,6 +214,7 @@ class TestSoundLibrary : public QObject, public MTest
       void pitchShift();
       void tuningLanes();
       void tuningLanesLive();
+      void vst3SynthLinks();
       void computedLaneSettings();
       void tuningBend();
       void tuningBendAtArrival();
@@ -10909,6 +10910,93 @@ void TestSoundLibrary::playbackVerifyLegato()
       for (const PV::Finding& f : r.findings)
             QVERIFY2(std::fabs(f.time - 8.0) < 0.7, qPrintable(found));
       }
+
+#ifdef TESTSYNTH
+//---------------------------------------------------------
+//   vst3SynthLinks
+//    a slot played by another slot's instance (Vst3Synth::setLink: hosted slots, a patch's tuning copies in one
+//    Kontakt): its notes reach that instance; tuned (the instance's state tunes it: Kontakt's Tune) its note's tuning is
+//    neither sent nor played by varispeed; untuned it is, as before. Heard on the test synth (it honours a note's
+//    tuning: PluginExtract::centsShift against an untuned A4); the Mixer is the instance's; [tuning] hostedTuning's
+//    definition (1 slots, a per-score setting of its own, not the older lanes metaTag)
+//---------------------------------------------------------
+
+void TestSoundLibrary::vst3SynthLinks()
+      {
+      const Playback::Definition* d = Playback::definition("tuning/hostedTuning");
+      QVERIFY(d);
+      QCOMPARE(d->value, 1.0);
+      QVERIFY(d->perScore);
+      QVERIFY(!Playback::hasOwnMetaTag("tuning/hostedTuning"));
+
+      const int rate = 48000;
+      QString error;
+      Vst3Synth vst;
+      vst.init(rate);
+      vst.setPlugin(0, Vst3Plugin::load(TESTSYNTH, rate, 512, &error));
+      QVERIFY2(vst.plugin(0), qPrintable(error));
+      auto play = [&](int slot, float cents) {
+            PlayEvent cc(ME_CONTROLLER, slot, 1, 100);
+            vst.play(cc);
+            PlayEvent on(ME_NOTEON, slot, 69, 100);
+            on.setTuning(cents);
+            vst.play(on);
+            std::vector<float> skip(2 * 512 * 10, 0.f);
+            for (int i = 0; i < 10; ++i)
+                  vst.process(512, skip.data() + 2 * 512 * i, nullptr, nullptr);
+            std::vector<float> c(2 * 512 * 110, 0.f);
+            for (int i = 0; i < 110; ++i)
+                  vst.process(512, c.data() + 2 * 512 * i, nullptr, nullptr);
+            vst.play(PlayEvent(ME_NOTEON, slot, 69, 0));
+            std::vector<float> rest(2 * 4096, 0.f);
+            vst.process(4096, rest.data(), nullptr, nullptr);
+            return c;
+            };
+      auto level = [](const std::vector<float>& b) {
+            double s = 0;
+            for (float x : b)
+                  s += double(x) * x;
+            return std::sqrt(s / double(b.size()));
+            };
+      const std::vector<float> reference = play(0, 0.f);
+      QVERIFY(level(reference) > 1e-3);
+      // slot 1 without an instance: silent
+      QVERIFY(level(play(1, 0.f)) < 1e-6);
+      QCOMPARE(vst.instance(1), nullptr);
+      // linked, untuned: the note's tuning as ever (the test synth honours it)
+      vst.setLink(1, 0, 1, false);
+      QCOMPARE(vst.instance(1), vst.plugin(0));
+      QCOMPARE(vst.hostOf(1), 0);
+      QCOMPARE(vst.plugin(1), nullptr);
+      double confidence = 0;
+      double measured = PluginExtract::centsShift(reference, play(1, 50.f), rate, 2600, &confidence);
+      QVERIFY2(std::fabs(measured - 50) < 6, qPrintable(QString::number(measured)));
+      // tuned: the state tunes it (Kontakt's Tune; the test synth has none): no tuning sent
+      vst.setLink(1, 0, 1, true);
+      measured = PluginExtract::centsShift(reference, play(1, 50.f), rate, 2600, &confidence);
+      QVERIFY2(std::fabs(measured) < 6, qPrintable(QString::number(measured)));
+      // varispeed on: a tuned slot leaves the instance's speed alone, an untuned one sets it
+      vst.setVarispeed(true);
+      measured = PluginExtract::centsShift(reference, play(1, 50.f), rate, 2600, &confidence);
+      QVERIFY2(std::fabs(measured) < 6, qPrintable(QString::number(measured)));
+      vst.setLink(1, 0, 1, false);
+      measured = PluginExtract::centsShift(reference, play(1, -50.f), rate, 2600, &confidence);
+      QVERIFY2(std::fabs(measured + 50) < 6, qPrintable(QString::number(measured)));
+      measured = PluginExtract::centsShift(reference, play(0, 0.f), rate, 2600, &confidence);
+      QVERIFY2(std::fabs(measured) < 6, qPrintable(QString::number(measured)));
+      vst.setVarispeed(false);
+      // the Mixer: the instance's (slot 0's) mix, a linked slot's own mix not applied (one output)
+      vst.setMix(1, 0, 64, true);
+      QVERIFY(level(play(1, 0.f)) > 1e-3);
+      vst.setMix(0, 100, 64, true);
+      QVERIFY(level(play(1, 0.f)) < 1e-6);
+      vst.setMix(0, 100, 64, false);
+      // unlinked again: its own (none)
+      vst.clearLinks();
+      QCOMPARE(vst.instance(1), nullptr);
+      QVERIFY(level(play(1, 0.f)) < 1e-6);
+      }
+#endif
 
 QTEST_MAIN(TestSoundLibrary)
 #include "tst_soundlibrary.moc"

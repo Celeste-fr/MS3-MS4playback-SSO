@@ -5,6 +5,53 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Kontakt slots for tuning copies (2026-10-15, branch `tuning-slots`, from integrate-1012 41e1c46d46; merged with integrate-1012 in `integrate-ts`)
+
+The owner, 2026-10-15: "is there any way at all we can make SSO load even faster" … "Whence takes absolutely forever to
+load all the patches because the microtonal stuff". Hosted playback now tunes as the plain Live set does
+(`[tuning] hostedTuning` 1, slots, the default; 0 varispeed as before, to compare by ear; CLAUDE.md › Microtones,
+docs/PLAYBACK_SETTINGS.md inventory, LIVE.md › What still differs): Live's routes (a fixed copy per tuning) and a
+patch's copies of one part in one Kontakt, a slot per tuning by Tune on its own MIDI channel.
+
+- Whence: 20 routes (Live's) against 19 varispeed copies; 8 instances against 19 (one per part and patch, as the plain
+  set's multis). Phase 6 (new in `--measure-load-times`): Vibrato set on a 3-slot Violins 2 multi changed the same
+  script values in all 3 slots, so a part's plug-in parameters share the multi (Violins 1 sets Vibrato; build 439,
+  before that was known, kept its 5 copies apart: 11 instances).
+- Before (VM, build 436 = 10c6641, varispeed; `--measure-load-times … Whence.mscz --measure-threads 2,4
+  --measure-no-probe`, an extract job of another session running alongside): phase 2, one after the other, 19
+  instances loaded in 42.9 s (setState 32.1 s), memory settled 178 s after the start, +7.7 GB freed at the end (the
+  run's +12.2 GB counts the VM's paging); each patch alone 425-1017 MB, not the 245 of `LANE_COPY_BYTES`. Worker
+  threads: Kontakt takes them (no failure) but slower: 2 threads 63.0 s, 4 threads 100.2 s, memory still growing at
+  5 minutes. Keep `io/soundLibraryLoadThreads` 0.
+- After (VM, build 439 = 2ba8f9f7ac, run https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38850314270;
+  same command). The first runs of each build differ by the disk cache (436 ran cold), so both were run again
+  back to back, warm (436, then 439 sharing parameters, `MS_SLOTS_PARAMETERS=1` then, the default now):
+  | | instances | phase 2 loaded | memory settled after start | freed at the end | 2 threads | 4 threads |
+  |---|---|---|---|---|---|---|
+  | 436 varispeed, cold | 19 | 42.9 s | 178 s | 7.70 GB | 63.0 s / >300 s | 100.2 s / >300 s |
+  | 439 slots, 11 instances, warmer | 11 | 33.6 s | 121 s | 7.41 GB | 37.7 / 133 s | 35.4 / 130 s |
+  | 436 varispeed, warm | 19 | 26.5 s | 90 s | 7.72 GB | 30.8 / 89 s | 25.0 / 73 s |
+  | 439 slots, shared, warm | 8 | 21.5 s | 71 s | 7.27 GB | 22.9 / 69 s | 22.8 / 69 s |
+  Warm: everything sounds ~20 s sooner (90 → 71 s), 0.45 GB less; the samples (one set per patch either way) dominate
+  the memory. Worker threads gain nothing with slots (8 instances); keep `io/soundLibraryLoadThreads` 0.
+- Tuning (VM, `--verify-playback --verify-wav` on two quarter-tone test scores of mine, pYIN): All techniques Violins by
+  slots and Tune -2 … -4.5 cents from the written tuning (mean -3.4, the 0-cent notes the same -3), by varispeed (436)
+  -1 … -5 (mean -3.2), note by note within 3 cents of each other; Violas Performance (bends) identical in both builds
+  (max 8 cents); 0 verify findings in both. Not heard yet: the owner compares `[tuning] hostedTuning` slots / varispeed.
+- **With the gain stage** (merged with utility-gain in `integrate-ts`): a multi plays at its instance slot's Mixer, which
+  carries the patch's gain stage (`TrackDelays::patchGain`, per part and patch, so every copy's slot gets the same value;
+  the linked slots have no instance of their own and their values go unused): the gain applies once per instance, never
+  per MIDI channel. The plain set's multi: one Kontakt track, one Utility; the copies' MIDI tracks none.
+  `tst_liveequivalence::hostedSlotsGain` (test synth): three copies at +12 dB, each and all together +12.00 dB against
+  unity, export and play, with the linked slots' Mixer muted / changed. Untried with Kontakt / SSO.
+  Whence (quarter tones), Recommended, `integrate-ts` (`dumpEvents` chunked with the shipped calibration, instances.txt /
+  gains.txt): 20 routes, 8 instances; trim 0.00 dB, loudest -2.71 dBFS at 15.45 s; slot gains per instance as on
+  integrate-1012: Violins 1 (3 slots) -0.03, Violins 1 - Performance (2, bending) +16.29, Violins 2 (3) +1.12, Violas
+  (3) -7.08, Violas - Performance (3, bending) +9.24, Celli (3) +2.56, Celli - Performance (1) +18.88, Basses (2) +3.43.
+- Open: the even-levels background measurer keeps one plain instance per part and patch, by varispeed (the cheapest
+  load; it measures envelopes);
+  `LANE_COPY_BYTES` (245 MB, memoryMaxLanes) is from the owner's 2026-10-04 measurement and only bounds varispeed copies.
+
 ## Gain stage and master trim (2026-10-15, branch `utility-gain`, merged with integrate-1012 in `integrate-ug`)
 
 The owner, 2026-10-15 ("sure", then "yeah sure let's go with utility"): no more lowering every patch by S = max(0, G - 6)

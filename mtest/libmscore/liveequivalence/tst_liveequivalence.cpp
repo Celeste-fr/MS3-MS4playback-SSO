@@ -153,6 +153,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveRealRange();
       void liveMicCompensation();
       void liveTracksJson();
+      void hostedSlots();
+      void hostedSlotsGain();
       void updateLiveSet();
       void updateLiveSetKnobs();
       void controllerPatchDefault();
@@ -193,6 +195,8 @@ static void setPartMix(Part* part, int volume, int pan, bool mute = false)
 //   MuseScore's audio output for SSO must match"): the test synth as the library's plug-in, its setups in a
 //   scratch folder
 //---------------------------------------------------------
+
+namespace Ms { extern MasterSynthesizer* synti; }
 
 namespace {
 struct LiveHost {
@@ -4127,6 +4131,379 @@ void TestLiveEquivalence::updateLiveSet()
       }
 
 //---------------------------------------------------------
+//   hostedSlots
+//    hosted tuning by slots ([tuning] hostedTuning 1, the default; soundlibrary.h › hosted tuning): a Kontakt library's
+//    part in quarter tones (quartertones.musicxml: 0, +50, -50) gets Live's routes, a fixed copy per tuning, and plays
+//    them from ONE instance, a slot per copy (KontaktSetup::withSlots: Tune 0 / -50 / +50, MIDI channels 1-3), its
+//    routes 1 and 2 linked to it (Vst3Synth::setLink, tuned: no note tuning, no varispeed), as the plain Live set's
+//    multis; as SoundLibraryHost::sync loads them at play and SoundLibraryExport::loadInstances for an export. The
+//    setup is made from the .nki (the fixture) on Kontakt's empty state, as MuseScore makes SSO's; the test synth
+//    keeps a Kontakt state as it came. varispeed (0): two copies retuned, an instance each, plain. A part that sets a
+//    plug-in parameter: still one instance. A copy's events reach the instance on its channel
+//---------------------------------------------------------
+
+void TestLiveEquivalence::hostedSlots()
+      {
+      LiveHost host(this, " nki='Violins 2 - All techniques.nki'", { "Violin" },
+                    "<SoundLibrary name='SlotsT'><Files registry='SlotsT'/><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+                    "<Controller id='tone' name='Tone' param='Tone'/>"
+                    "<Instrument name='Violin' ids='violin' nki='Violins 2 - All techniques.nki'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      QVERIFY(SoundLibraryHost::makesSetups(lib));
+      // the library's folder: the fixture's .nki; Kontakt's empty state (the fixture) as the template of the setup made
+      SoundLibraryHost::setLibraryFolder(lib, root + "/" + DIR + "kontakt");
+      QVERIFY(SoundLibraryHost::hasSetup(lib, "Violin"));
+      QFile::remove(SoundLibraryHost::setupFile(lib, "Violin"));        // (LiveHost's: the test synth's own state)
+      {
+            QFile e(root + "/" + DIR + "kontakt/empty.bin");
+            QVERIFY(e.open(QIODevice::ReadOnly));
+            QString error;
+            const QString path = SoundLibraryHost::pluginPath(lib, &error);
+            QVERIFY2(!path.isEmpty(), qPrintable(error));
+            QFile f(SoundLibraryHost::setupsFolder(lib) + "/Kontakt empty.vst3state");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(Vst3Plugin::joinState("MS Test Synth", e.readAll(), QByteArray()));
+            QJsonObject from;
+            from["plugin"] = path;
+            from["modified"] = QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate);
+            QFile m(SoundLibraryHost::setupsFolder(lib) + "/made setups.json");
+            QVERIFY(m.open(QIODevice::WriteOnly));
+            m.write(QJsonDocument(QJsonObject { { "(empty)", from } }).toJson());
+      }
+      Playback::setIniValuesForTest({});
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QVERIFY(SoundLib::hostedSlots(score, lib));
+
+      // the routes: Live's, a copy per tuning; one instance plays all three
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, lib);
+      QCOMPARE(int(routes.size()), 3);
+      QCOMPARE(routes[1].cents, -50.0);
+      QCOMPARE(routes[2].cents, 50.0);
+      const std::vector<SoundLib::Instance> ins = SoundLib::instances(score, lib, routes);
+      QCOMPARE(int(ins.size()), 1);
+      QCOMPARE(ins[0].slot, 0);
+      QCOMPARE(ins[0].routes, std::vector<int>({ 0, 1, 2 }));
+      QCOMPARE(ins[0].cents, std::vector<double>({ 0.0, -50.0, 50.0 }));
+      // rendered as hosted: each note-on on its tuning's copy, at its tuning (as Live's clips: tuningLanesLive)
+      {
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<int> channels;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch()) {
+                        channels.push_back(ev.extChannel());
+                        QVERIFY(std::fabs(ev.tuning() - routes[size_t(ev.extChannel())].cents) < 0.01);
+                        }
+                  }
+            QCOMPARE(channels, std::vector<int>({ 0, 2, 2, 0, 1, 0, 2, 0 }));
+      }
+      auto slotsOf = [](Vst3Plugin* p) {
+            QString name;
+            QByteArray component, controller;
+            return p && Vst3Plugin::splitState(p->state(), &name, &component, &controller) ? KontaktSetup::slotsOf(component)
+                                                                                         : std::vector<KontaktSetup::Slot>();
+            };
+      auto checkMulti = [&](Vst3Synth* vst) {
+            QVERIFY(vst->plugin(0));
+            QVERIFY(!vst->plugin(1) && !vst->plugin(2));
+            QCOMPARE(vst->instance(1), vst->plugin(0));
+            QCOMPARE(vst->instance(2), vst->plugin(0));
+            QCOMPARE(vst->hostOf(2), 0);
+            const std::vector<KontaktSetup::Slot> s = slotsOf(vst->plugin(0));
+            QCOMPARE(int(s.size()), 3);
+            const double cents[] = { 0.0, -50.0, 50.0 };
+            for (int i = 0; i < 3; ++i) {
+                  QCOMPARE(s[size_t(i)].channel, i + 1);
+                  QVERIFY2(std::fabs(s[size_t(i)].cents - cents[i]) < 1e-3, qPrintable(QString::number(s[size_t(i)].cents)));
+                  }
+            };
+      // an export's instances of its own (the verification, the even levels job)
+      QString error;
+      std::map<int, QString> patches;
+      std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000, &error, &patches);
+      QVERIFY2(vst, qPrintable(error));
+      checkMulti(vst.get());
+      QCOMPARE(int(patches.size()), 3);
+      // a copy's note reaches the instance (on its channel) and sounds
+      {
+            vst->beginExport(48000);
+            vst->play(PlayEvent(ME_CONTROLLER, 2, 1, 100));
+            vst->play(PlayEvent(ME_NOTEON, 2, 69, 100));
+            std::vector<float> b(2 * 4800, 0.f);
+            vst->process(4800, b.data(), nullptr, nullptr);
+            vst->endExport();
+            QVERIFY(rms(b, 0) > 1e-4);
+      }
+      vst.reset();
+      // as MuseScore loads them at play (SoundLibraryHost::sync, into the sequencer's Vst3Synth)
+      {
+            MasterSynthesizer master;
+            master.registerSynthesizer(new Vst3Synth);
+            MasterSynthesizer* was = synti;
+            synti = &master;
+            SoundLibraryHost* h = SoundLibraryHost::instance();
+            QVERIFY2(h->sync(score, &error), qPrintable(error));
+            Vst3Synth* s = h->synth();
+            QVERIFY(s);
+            checkMulti(s);
+            QVERIFY(h->loaded(1) && h->loaded(2));
+            QCOMPARE(h->slotsOf(score->parts()[0]), std::vector<int>({ 0, 1, 2 }));
+            // varispeed (the ini's word): two copies, an instance each, plain (no Tune, one slot)
+            Playback::setIniValuesForTest({ { "tuning/hostedTuning", "varispeed" } });
+            QCOMPARE(Playback::value("tuning/hostedTuning"), 0.0);
+            QVERIFY(!SoundLib::hostedSlots(score, lib));
+            QCOMPARE(int(SoundLib::routes(score, lib).size()), 2);
+            QVERIFY2(h->sync(score, &error), qPrintable(error));
+            QVERIFY(s->plugin(0) && s->plugin(1) && !s->plugin(2));
+            QCOMPARE(s->hostOf(1), 1);
+            QCOMPARE(int(slotsOf(s->plugin(1)).size()), 1);
+            QCOMPARE(slotsOf(s->plugin(1))[0].cents, 0.0);
+            // the score's slots over the ini's varispeed (its playback settings)
+            score->setMetaTag(Playback::metaTag, "tuning/hostedTuning=1");
+            QVERIFY(SoundLib::hostedSlots(score, lib));
+            QVERIFY2(h->sync(score, &error), qPrintable(error));
+            checkMulti(s);
+            score->setMetaTag(Playback::metaTag, "");
+            Playback::setIniValuesForTest({ { "tuning/hostedTuning", "slots" } });
+            QCOMPARE(Playback::value("tuning/hostedTuning"), 1.0);
+            Playback::setIniValuesForTest({});
+            // a part that sets a plug-in parameter: still one instance (the parameter reaches every slot: measured on
+            // SSO, --measure-load-times phase 6)
+            Automation::Lane tone;
+            tone.target = "tone";
+            tone.points.push_back(Automation::Point(0, 0.5, Automation::Curve::STEP));
+            std::map<const Part*, Automation::PartLanes> lanes;
+            lanes[score->parts()[0]] = { tone };
+            score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
+            const std::vector<SoundLib::Instance> each = SoundLib::instances(score, lib, SoundLib::routes(score, lib));
+            QCOMPARE(int(each.size()), 1);
+            QCOMPARE(each[0].cents, std::vector<double>({ 0.0, -50.0, 50.0 }));
+            QVERIFY2(h->sync(score, &error), qPrintable(error));
+            checkMulti(s);
+            score->setMetaTag(Automation::metaTag, "");
+            h->release();
+            QVERIFY(!s->instance(1));
+            synti = was;
+      }
+      SoundLibraryHost::setLibraryFolder(lib, QString());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   hostedSlotsGain
+//    the gain stage with hosted tuning slots (integrate-ts: tuning-slots + utility-gain): a patch's three tuning copies
+//    (quartertones.musicxml: 0, -50, +50 cents) in ONE Kontakt instance, a slot each on MIDI channels 1-3, the patch at a
+//    gain stage of +12 dB (sectionLevel2 12, master trim 0: a quiet calibration). The gain is the Mixer's of the slot the
+//    instance sits in (Vst3Synth::process mixes per instance, a linked slot has none): every copy plays exactly +12 dB
+//    against the same instance at unity, in an export (SoundLibraryExport::setExportMix) and at play
+//    (SoundLibraryHost::sync + applyMixer); all three at once also +12 dB (applied once, not per MIDI channel); the
+//    linked slots' own Mixer values change nothing. Every copy's slot gets the same gain (one per part and patch). The
+//    plain Live set: one Kontakt track (the multi) with one Utility "MuseScore gain" at +12 dB, its copies' MIDI tracks none
+//---------------------------------------------------------
+
+void TestLiveEquivalence::hostedSlotsGain()
+      {
+      qputenv("MSTESTSYNTH_INIT_MS", "40");
+      LiveHost host(this, "", { "Violin" },
+                    "<SoundLibrary name='SlotsG'><Files registry='SlotsG'/><Switch type='cc' number='32'/><Dynamics cc='1' crest='14.515'/>"
+                    "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+                    "<Instrument name='Violin' ids='violin' nki='Violins 2 - All techniques.nki' sectionLevel2='12'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      QVERIFY(SoundLibraryHost::makesSetups(lib));
+      // the setup made from the fixture's .nki on Kontakt's empty state (as hostedSlots)
+      SoundLibraryHost::setLibraryFolder(lib, root + "/" + DIR + "kontakt");
+      QFile::remove(SoundLibraryHost::setupFile(lib, "Violin"));
+      {
+            QFile e(root + "/" + DIR + "kontakt/empty.bin");
+            QVERIFY(e.open(QIODevice::ReadOnly));
+            QString error;
+            const QString path = SoundLibraryHost::pluginPath(lib, &error);
+            QVERIFY2(!path.isEmpty(), qPrintable(error));
+            QFile f(SoundLibraryHost::setupsFolder(lib) + "/Kontakt empty.vst3state");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(Vst3Plugin::joinState("MS Test Synth", e.readAll(), QByteArray()));
+            QJsonObject from;
+            from["plugin"] = path;
+            from["modified"] = QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate);
+            QFile m(SoundLibraryHost::setupsFolder(lib) + "/made setups.json");
+            QVERIFY(m.open(QIODevice::WriteOnly));
+            m.write(QJsonDocument(QJsonObject { { "(empty)", from } }).toJson());
+      }
+      struct Reset { ~Reset() { SoundLib::setDynamicsCalibration(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      {
+            auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = "controller";
+            for (int x : { 16, 64, 127 })
+                  c.points.push_back({ x, -50.0 });
+            cal->setCurve("Violin", 1, c);
+            SoundLib::setDynamicsCalibration(cal);
+      }
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "2" },
+                                      { "levels/realRange", "0" } });
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QVERIFY(SoundLib::hostedSlots(score, lib));
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, lib);
+      QCOMPARE(int(routes.size()), 3);
+      const std::vector<SoundLib::Instance> ins = SoundLib::instances(score, lib, routes);
+      QCOMPARE(int(ins.size()), 1);
+      QCOMPARE(ins[0].routes, std::vector<int>({ 0, 1, 2 }));
+      // the gain stage: +12 dB, no trim; one value for the part and patch, whichever copy
+      QCOMPARE(ContextLevel::masterTrim(score).db, 0.0);
+      const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+      const TrackDelays::Delays d = TrackDelays::of(score->parts()[0], delays);
+      QVERIFY2(std::fabs(TrackDelays::gainStageDb(lib, d, "Violin") - 12.0) < 1e-9,
+               qPrintable(QString::number(TrackDelays::gainStageDb(lib, d, "Violin"))));
+      const double want = std::pow(10.0, 12.0 / 20);
+      QVERIFY(std::fabs(TrackDelays::patchGain(lib, d, "Violin") - want) < 1e-9);
+      for (const SoundLib::Route& r : routes)
+            QCOMPARE(r.instrument->name, QString("Violin"));
+
+      // a copy's (or all copies') level from the instance: CC1 and a note on each copy's slot, the 0.2 s after the onset
+      auto level = [](Vst3Synth* vst, std::vector<int> which, bool exporting) {
+            if (exporting)
+                  vst->beginExport(48000);
+            for (int c : which) {
+                  vst->play(PlayEvent(ME_CONTROLLER, c, 1, 100));
+                  vst->play(PlayEvent(ME_NOTEON, c, 69, 100));
+                  }
+            std::vector<float> b(2 * 9600, 0.f);
+            vst->process(9600, b.data(), nullptr, nullptr);
+            for (int c : which)
+                  vst->play(PlayEvent(ME_NOTEOFF, c, 69, 0));
+            // (the test synth's round robins: each note of an instance a little louder or softer, a cycle of 12 notes;
+            // every run plays 12, so each measured note has the same place in the cycle)
+            std::vector<float> pad(2 * 64, 0.f);
+            for (size_t i = which.size(); i < 12; ++i) {
+                  vst->play(PlayEvent(ME_NOTEON, which[0], 60, 100));
+                  vst->process(64, pad.data(), nullptr, nullptr);
+                  vst->play(PlayEvent(ME_NOTEOFF, which[0], 60, 0));
+                  vst->process(64, pad.data(), nullptr, nullptr);
+                  }
+            std::vector<float> tail(2 * 48000, 0.f);
+            vst->process(48000, tail.data(), nullptr, nullptr);       // (released before the next run)
+            if (exporting)
+                  vst->endExport();
+            return std::sqrt((rms(b, 0) * rms(b, 0) + rms(b, 1) * rms(b, 1)) / 2);
+            };
+      const std::vector<std::vector<int>> cases = { { 0 }, { 1 }, { 2 }, { 0, 1, 2 } };
+      auto checkGain = [&](const char* where, const std::vector<double>& unity, const std::vector<double>& gained) {
+            for (size_t i = 0; i < cases.size(); ++i) {
+                  QVERIFY2(unity[i] > 1e-4, where);
+                  const double g = dB(gained[i], unity[i]);
+                  qDebug("%s: copy %s: %+.3f dB", where, i < 3 ? qPrintable(QString::number(i)) : "all", g);
+                  QVERIFY2(std::fabs(g - 12.0) < 0.05, qPrintable(QString("%1, case %2: %3 dB").arg(where).arg(i).arg(g)));
+                  }
+            };
+
+      // an export (the verification, --live-equivalence): loadInstances + setExportMix
+      QString error;
+      std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000, &error);
+      QVERIFY2(vst, qPrintable(error));
+      QVERIFY(vst->plugin(0) && !vst->plugin(1) && !vst->plugin(2));
+      QCOMPARE(vst->hostOf(1), 0);
+      QCOMPARE(vst->hostOf(2), 0);
+      // (unity: the part's own Mixer, volume and pan, without the gain stage)
+      const SoundLib::PartMix pm = SoundLib::partMix(score->parts()[0], false);
+      float panL, panR;
+      Vst3Synth::panGains(pm.pan, &panL, &panR);
+      std::vector<double> unity, gained;
+      for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+            vst->setExportMix(k, pm.volume, pm.pan, false);
+      for (const auto& c : cases)
+            unity.push_back(level(vst.get(), c, true));
+      SoundLibraryExport::setExportMix(vst.get(), score, false);
+      for (int k = 0; k < 3; ++k) {             // every copy's slot the same gain
+            float l, r;
+            vst->exportMix(k, &l, &r);
+            const double mg = Vst3Synth::volumeGain(pm.volume) * want;
+            QVERIFY2(std::fabs(l - mg * panL) < 1e-5 && std::fabs(r - mg * panR) < 1e-5, qPrintable(QString("slot %1: %2").arg(k).arg(l)));
+            }
+      for (const auto& c : cases)
+            gained.push_back(level(vst.get(), c, true));
+      checkGain("export", unity, gained);
+      // the linked slots' own Mixer values play no part (muted, or at another gain): the host's, once
+      vst->setExportMix(1, pm.volume, pm.pan, true);
+      vst->setExportMix(2, 127, 64, false, 10.f);
+      gained.clear();
+      for (const auto& c : cases)
+            gained.push_back(level(vst.get(), c, true));
+      checkGain("export, linked slots' Mixer changed", unity, gained);
+      // and the host's muted silences every copy
+      vst->setExportMix(0, pm.volume, pm.pan, true);
+      const double muted1 = level(vst.get(), std::vector<int>({ 1 }), true);
+      const double muted2 = level(vst.get(), std::vector<int>({ 2 }), true);
+      QVERIFY(muted1 < 1e-7);
+      QVERIFY(muted2 < 1e-7);
+      vst.reset();
+
+      // at play: SoundLibraryHost::sync into the sequencer's Vst3Synth, the Mixer by applyMixer
+      {
+            MasterSynthesizer master;
+            master.registerSynthesizer(new Vst3Synth);
+            MasterSynthesizer* was = synti;
+            synti = &master;
+            SoundLibraryHost* h = SoundLibraryHost::instance();
+            QVERIFY2(h->sync(score, &error), qPrintable(error));
+            Vst3Synth* s = h->synth();
+            QVERIFY(s && s->plugin(0) && !s->plugin(1) && !s->plugin(2));
+            QCOMPARE(s->instance(2), s->plugin(0));
+            std::vector<double> u, g;
+            for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+                  s->setMix(k, pm.volume, pm.pan, false);
+            for (const auto& c : cases)
+                  u.push_back(level(s, c, false));
+            h->applyMixer(score);
+            for (const auto& c : cases)
+                  g.push_back(level(s, c, false));
+            checkGain("play", u, g);
+            h->release();
+            synti = was;
+      }
+
+      // the plain Live set: the multi is one Kontakt track with one Utility (+12 dB), the copies' MIDI tracks none
+      {
+            LiveIntegration::LiveSetPlan plan;
+            QVERIFY2(LiveIntegration::planLiveSet(score, lib, LiveIntegration::LiveSetKind::PLAIN, &plan, &error), qPrintable(error));
+            int kontakts = 0, copies = 0;
+            for (const LiveSetWriter::Track& t : plan.spec.tracks) {
+                  if (t.hasPlugin) {
+                        ++kontakts;
+                        QCOMPARE(int(t.slotCents.size()), 3);
+                        QVERIFY(t.utility);
+                        QVERIFY2(std::fabs(LiveSetWriter::utilityDb(t.utilityGain) - 12.0) < 1e-6,
+                                 qPrintable(QString::number(LiveSetWriter::utilityDb(t.utilityGain))));
+                        QVERIFY(std::fabs(t.volume - 1.0) < 1e-12);
+                        }
+                  else if (t.tuningCopy) {
+                        ++copies;
+                        QVERIFY(!t.utility);
+                        }
+                  }
+            QCOMPARE(kontakts, 1);
+            QCOMPARE(copies, 2);
+            const QByteArray xml = LiveSetWriter::xml(plan.spec);
+            QCOMPARE(xml.count("<StereoGain Id="), 1);
+            QCOMPARE(xml.count("<UserName Value=\"MuseScore gain\" />"), 1);
+      }
+      SoundLibraryHost::setLibraryFolder(lib, QString());
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   liveTracksJson
 //    the metaTag "liveTracks": left out when empty, the same after a round trip
 //---------------------------------------------------------
@@ -4943,6 +5320,24 @@ void TestLiveEquivalence::dumpEvents()
             QFile gf(out + "/gains.txt");
             QVERIFY(gf.open(QIODevice::WriteOnly | QIODevice::Text));
             gf.write((gl.join("\n") + "\n").toUtf8());
+            // instances.txt: the hosted instances (SoundLib::instances; hosted tuning slots: a patch's copies in one),
+            // "part|patch|slot|routes' slots|Tune cents|slot gain dB" (the gain the instance's slot plays at, once)
+            QStringList il;
+            const std::vector<SoundLib::Route> hosted = SoundLib::routes(score, *lib);
+            il << QString("hostedSlots %1, %2 routes").arg(SoundLib::hostedSlots(score, *lib) ? 1 : 0).arg(hosted.size());
+            for (const SoundLib::Instance& in : SoundLib::instances(score, *lib, hosted)) {
+                  QStringList rs, cs;
+                  for (int r : in.routes)
+                        rs << QString::number(r);
+                  for (double c : in.cents)
+                        cs << QString::number(c, 'f', 1);
+                  il << QStringList({ in.part ? in.part->partName() : QString(), in.instrument ? in.instrument->name : QString(),
+                                      QString::number(in.slot), rs.join(" "), cs.join(" "),
+                                      dB(in.instrument ? TrackDelays::patchGain(*lib, TrackDelays::of(in.part, delays), in.instrument->name) : 0.0) }).join("|");
+                  }
+            QFile inf(out + "/instances.txt");
+            QVERIFY(inf.open(QIODevice::WriteOnly | QIODevice::Text));
+            inf.write((il.join("\n") + "\n").toUtf8());
       }
       // trace.txt: "part|seconds|pitch|patch|performance|glide leave ms|glide arrive ms" per library note (seconds: its
       // written start; performance 0 none, 1 attack, 2 transition; glide: a bent transition's, libraryPitchBends; -1 none)

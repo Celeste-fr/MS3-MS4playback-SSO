@@ -1660,8 +1660,10 @@ std::vector<Slot> slotsOf(const QByteArray& component)
                         std::vector<PChunk> ckids;
                         if (container.read(sc.body) && chunks(container.kids, ckids))
                               for (const PChunk& p : ckids)
-                                    if (p.id == PROGRAM_LIST && p.body.size() > 4)
+                                    if (p.id == PROGRAM_LIST && p.body.size() > 4) {
                                           s.cents = tune(p.body.mid(4));
+                                          s.values = scriptValues(p.body.mid(4));
+                                          }
                         out.push_back(s);
                         }
                   }
