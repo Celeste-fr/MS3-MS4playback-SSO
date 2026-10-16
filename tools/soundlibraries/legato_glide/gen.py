@@ -6,7 +6,7 @@
 #   map's legatoVelocity; 93 is the bowed transition, performancetechnique.h), the note before off 24 ms after the
 #   next note-on (the map's overlap), CC1 64, CC11 127, no pitch bend. A run: p, p+i, p, p+i, p, p+i at IOI 136 ms
 #   (Whence's sixteenths at 110 bpm), 300 and 600 ms, i in -2 -1 +1 +2, p three registers per section (the
-#   performance-context study's, ../performance_context/gen.py), 1.5 s between runs.
+#   performance-context study's, performance_context/gen.py of commit c10734850d), 1.5 s between runs.
 # - probe_<sec>: one held note; the bend stepped 0 -> +50 -> 0 -> -50 -> 0 cents 1.5 s apart, then six full-range
 #   moves (full range until a one pole of 71.35 ms, the 2026-10-10 measurement, would reach the target, then the
 #   target), for the patch's bend smoothing (fit.py).
