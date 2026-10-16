@@ -939,20 +939,25 @@ void TestLiveEquivalence::liveEquivalenceAutomation()
 //    at CC1 32 / 80 / 127, Marcato 10 dB louder at the same velocities): the short marcatos at the velocity where
 //    Marcato is as loud as Long at mf, plus MS4's marcato offset for the part's family, -6 dB: the trumpet's
 //    40 log10(103 / 80) (winds) gives 24 (tst_marcatolevel's calibrated works it out), the violins' strings marcato
-//    (MS4's pattern peaks higher: 7000 against 6000) more; Live's clips the same
+//    (MS4's pattern peaks higher: 7000 against 6000) more; Live's clips the same. "calibrated" plays [levels] calibrated 1;
+//    "technique balance" 2 (the default since 2026-10-15, option B): matched to the Long, D (+10: the Marcato's level at 127
+//    less the Long's) and MS4's offset on top, then -6 dB along its curve: the trumpet's 101 - 6 dB = 73, the violins' by
+//    their share; Live's clips the same
 //---------------------------------------------------------
 
 void TestLiveEquivalence::liveMarcatoLevel_data()
       {
-      QTest::addColumn<bool>("calibrated");
-      QTest::newRow("plain") << false;
-      QTest::newRow("calibrated") << true;
+      QTest::addColumn<int>("calibrated");
+      QTest::newRow("plain") << 0;
+      QTest::newRow("calibrated") << 1;
+      QTest::newRow("technique balance") << 2;
       }
 
 void TestLiveEquivalence::liveMarcatoLevel()
       {
-      QFETCH(bool, calibrated);
-      struct Reset { ~Reset() { SoundLib::setDynamicsCalibration(nullptr); } } reset;
+      QFETCH(int, calibrated);
+      struct Reset { ~Reset() { SoundLib::setDynamicsCalibration(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", QString::number(calibrated) } });
       if (calibrated) {
             auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
             SoundLib::DynamicsCurve held;
@@ -1054,7 +1059,7 @@ void TestLiveEquivalence::liveMarcatoLevel()
             all += r.first + ": " + r.second.join(", ") + "\n";
       QVERIFY2(all.contains("cc11: 127 90 127"), qPrintable(all));
       QVERIFY2(all.contains("cc1: 80 113 96"), qPrintable(all));         // (f at the next note)
-      if (calibrated) {
+      if (calibrated == 1) {
             const int mf = 5250;                                       // MS4's mf (ms4playback.cpp's dynamics table)
             QCOMPARE(Ms4::note(Ms4::Family::Winds, { { Ms4::Art::Marcato, false } }, mf, true).levelVelocity, 103);
             QCOMPARE(Ms4::note(Ms4::Family::Winds, { { Ms4::Art::Standard, false } }, mf, true).levelVelocity, 80);
@@ -1064,6 +1069,18 @@ void TestLiveEquivalence::liveMarcatoLevel()
                                                             40 * std::log10(strings) - 6);
             QVERIFY2(all.contains(QString("67 %1").arg(violin)), qPrintable(all + QString::number(violin)));   // the violins' G4
             QVERIFY2(all.contains("72 24"), qPrintable(all));            // the trumpet's C5
+            }
+      if (calibrated == 2) {
+            const int mf = 5250;
+            const double strings = Ms4::note(Ms4::Family::Strings, { { Ms4::Art::Marcato, false } }, mf, true).share;
+            const SoundLib::DynamicsCurve& marc = *SoundLib::dynamicsCalibration()->curve("Violin", 52);
+            const double d = SoundLib::loudEndDb(*SoundLib::dynamicsCalibration(), "Violin", 52, "Violin", 1);
+            QVERIFY(std::fabs(d - 10) < 1e-9);                         // (the Marcato 10 dB over the Long at 127)
+            const int v1 = qBound(1, SoundLib::calibratedVelocity(*SoundLib::dynamicsCalibration(), "Violin", 52, "Violin", 1, 80,
+                                                                  d + 40 * std::log10(strings)), 127);
+            const int violin = qMin(v1, marc.louder(v1, -6));
+            QVERIFY2(all.contains(QString("67 %1").arg(violin)), qPrintable(all + QString::number(violin)));   // the violins' G4
+            QVERIFY2(all.contains("72 73"), qPrintable(all));            // the trumpet's C5: 101, then -6 dB
             }
 
       // the whole chain, audio
@@ -4271,7 +4288,10 @@ void TestLiveEquivalence::dumpEvents()
                   tl << QString("%1|%2|%3|%4|%5|%6|%7").arg(t.note ? t.note->part()->partName() : QString())
                         .arg(score->utick2utime(t.utick), 0, 'f', 6).arg(t.note ? t.note->ppitch() : -1)
                         .arg(t.patch ? t.patch->name : QString()).arg(int(t.performance))
-                        .arg(t.glideLeaveMs, 0, 'f', 1).arg(t.glideArriveMs, 0, 'f', 1);
+                        .arg(t.glideLeaveMs, 0, 'f', 1).arg(t.glideArriveMs, 0, 'f', 1)
+                        // then "|articulation|velocity|on velocity" (1: a technique whose velocity is its dynamic, libVelocity)
+                        + QString("|%1|%2|%3").arg(t.choice.articulation ? t.choice.articulation->name : QString())
+                          .arg(t.velocity).arg(t.dynamicVelocities.empty() ? 0 : 1);
             QFile tf(out + "/trace.txt");
             QVERIFY(tf.open(QIODevice::WriteOnly | QIODevice::Text));
             tf.write((tl.join("\n") + "\n").toUtf8());

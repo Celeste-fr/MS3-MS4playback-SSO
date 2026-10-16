@@ -1584,6 +1584,19 @@ if MIC.get('faderLaw'):
         '       Kontakt 8 (tools/soundlibraries/sso_mic_levels.json, mic_levels.py); micLevels= on an Instrument: each mic alone',
         '       at its full fader against the patch\'s default mix (micDefault=: its default faders, the others 0) -->',
         f'  <Mics fader="{fader}" mix="{mix}"/>']
+# - heldOffset= (dB, or "cc:dB cc:dB" linear in the written dynamic's CC, constant outside; [levels] calibrated 2,
+#   option B', the owner 2026-10-15): on the five string sections' velocity techniques, the dB the technique plays over
+#   the part's held Long matched at the same marking, from real players: the bowed shorts from the Spheres dataset's
+#   Mozart K. 550 (staccato against held at f, perceived, pooled over the sections), the pizzicato from Meyer 2009
+#   (pizzicato against arco at pp / ff, sound power), the Basses' Bartok and col legno 0. A velocity technique without it
+#   keeps SSO's own loud-end difference (SoundLib::loudEndDb; an assumption). technique_offsets.py -> technique_offsets.json
+TECHNIQUE_OFFSETS = loadFit('technique_offsets.json')
+# ("@staccato": the bowed shorts' one value, technique_offsets.json "staccato" > "use"; a placeholder while marked so)
+HELD_OFFSETS = {s: {n: (f"{TECHNIQUE_OFFSETS['staccato']['use']:g}" if v == '@staccato' else v) for n, v in a.items()}
+                for s, a in TECHNIQUE_OFFSETS.get('articulations', {}).items()}
+if TECHNIQUE_OFFSETS.get('staccato', {}).get('placeholder'):
+    print('note: the bowed-staccato heldOffset is a placeholder:', TECHNIQUE_OFFSETS['staccato']['placeholder'], file=sys.stderr)
+heldOffsetCount = 0
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0
@@ -1620,6 +1633,11 @@ for i, line in enumerate(out):
             end = '/>' if out[i].endswith('/>') else '>'
             out[i] = out[i][:-len(end)] + micAttributes(current) + end
         continue
+    m = re.match(r'    <Articulation name="([^"]*)" value="(\d+)"', line)
+    if m and current in HELD_OFFSETS and m.group(1) in HELD_OFFSETS[current]:
+        assert line.endswith('/>'), line
+        line = out[i] = line[:-2] + f' heldOffset="{HELD_OFFSETS[current][m.group(1)]}"/>'
+        heldOffsetCount += 1
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:
         continue
@@ -1698,4 +1716,5 @@ assert missing <= timedValues, missing - timedValues
 # and Oboe Principal, play no articulation a notation chooses as legato)
 assert set(LEGATO_GRID) & mapInstruments - {'Oboe Principal - Total Performance'} <= legatoGridUsed, \
     set(LEGATO_GRID) & mapInstruments - legatoGridUsed
+assert heldOffsetCount == sum(len(v) for v in HELD_OFFSETS.values()), heldOffsetCount
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

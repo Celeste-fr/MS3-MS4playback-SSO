@@ -1248,23 +1248,44 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const std::vector<const SoundLib::LibInstrument*> libPatches = li ? lp->patchesFor(li)
                                                                                      : std::vector<const SoundLib::LibInstrument*>();
                   // a technique on velocity (Spitfire's shorts, pizzicato ...: velocity, not CC1, sets its dynamics),
-                  // listed in <Dynamics velocity>. With [levels] calibrated and both measured (dynamics.json): the
+                  // listed in <Dynamics velocity>. With [levels] calibrated 1 and both measured (dynamics.json): the
                   // velocity at which it is as loud as the part's held note at this dynamic, plus MS4's offset for its
                   // articulations (marcato's too: SoundFont 2's law, 40 log10 of MS4's velocity over a plain note's).
-                  // Else its level on the CC's scale, an accent's share included (levelVelocity). -1: MS4's velocity
+                  // With 2 (option B', the owner 2026-10-15): 1's match plus D, real players' difference against the held
+                  // note (<Articulation heldOffset>), else its level at velocity 127 less the held note's at 127
+                  // (SoundLib::techniqueOffsetDb, loudEndDb: an assumption), then MS4's offset; not
+                  // extrapolated under its lowest measured point: the rest by CC11 (*under; calibratedVelocityFloored).
+                  // Else (0, or a curve missing) its level on the CC's scale, an accent's share included (levelVelocity).
+                  // -1: MS4's velocity
                   const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::dynamicsCalibration() : nullptr;
-                  const bool calibrated = cal && Playback::on("levels/calibrated", score);
-                  const SoundLib::Choice libHeld = calibrated ? SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} })
-                                                              : SoundLib::Choice();
+                  const int calibratedMode = cal ? int(std::lround(Playback::value("levels/calibrated", score))) : 0;
+                  // the held note: what 1 and 2 match a velocity technique and a Performance legato note to
+                  // (performanceLevel), and what a capped short's rest by CC11 is measured against (realRangeLevel)
+                  const SoundLib::Choice libHeld = calibratedMode >= 1 ? SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} })
+                                                                       : SoundLib::Choice();
                   // (a technique measured at several pitches: the note's pitch's curve, DynamicsCurve::atPitch)
-                  auto libVelocity = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
+                  // [levels] calibrated 2's D for the note's technique at the written dynamic's CC (option B': real
+                  // players' where the map lists heldOffset, else the library's loud-end difference; 0: not 2, or neither)
+                  auto loudEnd = [&](const Note* note, const SoundLib::Choice& c, int cc) {
+                        if (calibratedMode != 2 || !libHeld || !c)
+                              return 0.0;
+                        const double d = SoundLib::techniqueOffsetDb(*cal, libPatches[c.patch]->name, *c.articulation,
+                                                                     libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                     note->ppitch(), cc);
+                        return std::isnan(d) ? 0.0 : d;
+                        };
+                  auto libVelocity = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel,
+                                         double* under = nullptr) {
+                        if (under)
+                              *under = 0.0;
                         if (!c || !lp->velocityDynamics.contains(c.base))
                               return -1;
                         const int level = Ms4::expressionLevel(dynLevel);
                         if (libHeld && level > 0) {
-                              const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
-                                                                         libPatches[libHeld.patch]->name, libHeld.articulation->value,
-                                                                         level, 40.0 * std::log10(r.share), note->ppitch());
+                              const int v = SoundLib::calibratedVelocityFloored(*cal, libPatches[c.patch]->name, c.articulation->value,
+                                                                                libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                                level, loudEnd(note, c, level) + 40.0 * std::log10(r.share),
+                                                                                note->ppitch(), calibratedMode == 2 ? under : nullptr);
                               if (v > 0)
                                     return qBound(1, v, 127);
                               }
@@ -1469,7 +1490,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         auto d = libTrackDelays.find(st1->part());
                         l.rangeTop = d == libTrackDelays.end() ? 0.0 : d->second.rangeTop;
                         l.realExtra = 0.0;
-                        if (velocity <= 0 || !libHeld || note->libraryVelocity() > 0 || !lp->velocityDynamics.contains(c.base))
+                        if (velocity <= 0 || note->libraryVelocity() > 0 || !lp->velocityDynamics.contains(c.base))
+                              return;
+                        // (the note takes the Long's realDb, the table's: with 1 and 2 it is tied to the Long at every marking)
+                        if (!libHeld)
                               return;
                         const SoundLib::DynamicsCurve* cp = cal->curve(patch->name, c.articulation->value);
                         const SoundLib::DynamicsCurve* rp = cal->curve(libPatches[libHeld.patch]->name, libHeld.articulation->value);
@@ -1481,8 +1505,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               return;
                         const bool byEar = own.byEar() && ref.byEar();
                         const int cc = Ms4::expressionLevel(dynLevel);
-                        // (what libVelocity and marcatoLevel aimed at: the held note at the dynamic, MS4's offset, the levels)
-                        const double target = (byEar ? ref.perceivedAt(cc) : ref.at(cc)) + 40.0 * std::log10(r.share)
+                        // (what libVelocity and marcatoLevel aimed at: the held note at the dynamic, 2's D, MS4's offset, the levels)
+                        const double target = (byEar ? ref.perceivedAt(cc) : ref.at(cc)) + loudEnd(note, c, cc) + 40.0 * std::log10(r.share)
                                               + levelOf(note) + quickDb(note, c);
                         const double reached = byEar ? own.perceivedAt(velocity) : own.at(velocity);
                         const double miss = target - reached;
@@ -1874,9 +1898,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (!li->kit && !note->tieBack()) {
                                     const Chord* ch = note->chord();
                                     libChoice = librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
-                                    libNote.velocity = libVelocity(note, libChoice, r, level);
+                                    double under = 0.0;
+                                    libNote.velocity = libVelocity(note, libChoice, r, level, &under);
                                     marcatoLevel(note, libChoice, libNote.velocity, level);
                                     trackLevel(note, libChoice);
+                                    if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
+                                          libLevels[note].volumeDb += under;
                                     realRangeLevel(note, libChoice, libNote.velocity, r, level);
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
@@ -2108,9 +2135,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               noteChannel = libChannel;
                               if (!li->kit) {
                                     libChoice = librarySwitch(note, noteArts, start, length);
-                                    libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
+                                    double under = 0.0;
+                                    libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset), &under);
                                     marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     trackLevel(note, libChoice);
+                                    if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
+                                          libLevels[note].volumeDb += under;
                                     realRangeLevel(note, libChoice, libNote.velocity, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();

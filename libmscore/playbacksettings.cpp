@@ -112,18 +112,24 @@ static const std::vector<Definition> DEFINITIONS = {
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
-      // balance: measured sensible, docs/PLAYBACK_SETTINGS.md › Calibrated levels)
-      { "levels/calibrated", 1, 0, 1, "on/off",
-        "1: a technique on velocity (the map's <Dynamics velocity>: shorts, pizzicato ...), where measured, plays as loud as the "
-        "part's held note at the same dynamic, plus MuseScore 4's offset for its articulations (40 log10 of its velocity over a "
-        "plain note's); a Performance legato note (on the dynamics CC) at the CC at which its patch sounds as loud as the part's "
-        "held note; 0: at the dynamic's level, MuseScore 4's accent share on top (the library's own balance)", true },
+      // balance: measured sensible, docs/PLAYBACK_SETTINGS.md › Calibrated levels; 2026-10-15, the owner, option B: "yes
+      // this makes sense": matched + the recorded loud-end difference, 2, in Recommended and by default; option B', the
+      // owner: "if the data clearly point to b', then b' it is": D from real players where measured)
+      { "levels/calibrated", 2, 0, 2, "",
+        "2: a technique on velocity (the map's <Dynamics velocity>: shorts, pizzicato ...), where measured, as loud as the "
+        "part's held note at the same dynamic plus D, real players' difference where the map lists one (heldOffset: SSO's "
+        "string staccatos -3.4 dB, pizzicato -5 .. -12 dB), else its level at velocity 127 less the held note's at 127 (both "
+        "recorded loud), plus MuseScore 4's offset for its articulations (40 log10 of its velocity over a plain note's, marcato's too); "
+        "the level rule's slur gains, measured against the held note, don't take D; "
+        "1: as 2 without D; 1 and 2: a Performance legato note (on the dynamics CC) at the CC at which its patch sounds as "
+        "loud as the part's held note; 0: at the dynamic's level, MuseScore 4's accent share on top, a marcato at the plain "
+        "level, the Performance legato at the written CC", true },
       // (the owner, 2026-10-10: the same written dynamic sounds equally loud in every string part and technique, judged in
       // the music; by volume only, never by raising CC1 (a timbre crossfade); one level per slur; contextlevel.h)
       { "levels/context", 1, 0, 1, "on/off",
         "1: a slur on a Performance legato with a measured context level (map contextLevel: SSO's five string sections) plays "
         "CC1 at the written dynamic and one gain per slur (by its dynamic, median note spacing and median pitch) that makes it "
-        "1.3 dB louder than its section's staccatos in the music; past CC11's top the Performance patches' volume plays it, "
+        "as loud as its section's held Long at the same dynamic (measured in MuseScore's own renders); past CC11's top the Performance patches' volume plays it, "
         "every other patch of the library's parts lower together (Live's Volume top, +6 dB); 0: [levels] calibrated's CC1", true },
       // (the owner, 2026-10-11: M, the real orchestra's balance at CC1 64 (Weinzierl et al. 2018's sound power, SSO's
       // section sizes) against SSO's measured one (sso_cc1_curves.json); on in Recommended, off in Library default;
@@ -406,9 +412,10 @@ const std::vector<Preset>& presets()
             // bowed between slurs, slurs/transitions; a phrase's first note smooth, slurs/smoothStart; 2026-10-13: the real
             // player's range, levels/realRange; 2026-10-14: slurs/transitionsEarly 0 in both until the owner approves it;
             // levels/realRange 2 and levels/sectionBalance 2: the balance and the markings' levels from real data; 2026-10-15:
-            // levels/micCompensation, the mics never change the balance; slurs/transitionsEarly 1, the transitions sent by
-            // their modelled arrival: the owner by ear on Whence's fast quarter tones)
-            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 1 },
+            // levels/micCompensation, the mics never change the balance; levels/calibrated 2, the technique balance (option
+            // B'); slurs/transitionsEarly 1, the transitions sent by their modelled arrival: the owner by ear on Whence's fast
+            // quarter tones)
+            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },

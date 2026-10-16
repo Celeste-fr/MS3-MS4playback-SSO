@@ -22,7 +22,7 @@
 //   spacing and median pitch; a phrase is the slur, not a phrase mark, the note is in on its staff, else its chord
 //   alone), so no level step inside a slur.
 //
-//   The gain is up to about 21 dB (Celli pp), more than CC11 can add (CC11 rests at 127). So a score's largest gain
+//   The gain is up to about 30 dB (Celli pp, 2026-10-15 grid; 21 before), more than CC11 can add (CC11 rests at 127). So a score's largest gain
 //   G (every slur of every part with such an articulation, with [slurs] performance on: a superset of the slurs that
 //   play on it; a note on it outside a slur, by staff text "performance", louder than G plays at G) is shared out
 //   (volumes()):
@@ -72,12 +72,15 @@
 //   plays the Meyer rule. long(x, p) SSO's All techniques Long at CC1 x less at CC1 64
 //   (the sustain's power, sso_cc1_curves.json; linear in CC1 and in pitch between the measured points, the nearest end's
 //   beyond). At mp (CC1 64, where the section balance M was set) realDb is 0: M stays as it is, on top.
-//   Every technique of the section takes it: a note on velocity (a short) is calibrated to the Long at its dynamic
-//   ([levels] calibrated), a Performance legato note to the Long by CC1 ([levels] calibrated) or, with [levels]
-//   context, by its phrase's gain, measured in the music at the written dynamic against the staccatos (which are the
-//   Long's level there): each is the Long's level at the written CC1, which already holds SSO's own change with CC1
+//   Every technique of the section takes it: a note on velocity (a short) is calibrated to the Long at its dynamic with
+//   [levels] calibrated 1, a Performance legato note to the Long by CC1 ([levels] calibrated 1 and 2) or, with [levels]
+//   context, by its phrase's gain, measured at the written dynamic against the section's held Long (since 2026-10-15; before,
+//   against the staccatos, which were the Long's level there): each is the Long's level at the written CC1, which already holds SSO's own change with CC1
 //   once; realDb takes that change away (- long) and puts the player's in ((F(steps) - F(0)) x span), so SSO's change is
-//   counted once, not twice. A short whose calibrated velocity is capped (127 and still under its level, or 1 and still
+//   counted once, not twice. With [levels] calibrated 2 (option B', 2026-10-15) a note on velocity is matched to the
+//   Long as with 1 and plays D more (real players' difference, heldOffset; else its loud-end difference), so it follows
+//   the Long's change too and takes
+//   the same realDb. A short whose calibrated velocity is capped (127 and still under its level, or 1 and still
 //   over it) gets the rest by CC11 (realExtra), no longer silently.
 //   Headroom: CC11 only lowers, so a part's notes play realDb less the part's largest R (Volumes::range, every note's
 //   realDb + realExtra over every CC1 value it meets, found by rendering the score once with the setting's CC11
@@ -135,7 +138,9 @@ bool has(const SoundLib::Articulation* a);
 bool has(const SoundLib::LibInstrument* patch);
 
 // the gain in dB of the phrase the chord is in (above), its dynamic from dynamics at the phrase's first chord
-// (utick = tick + tickOffset)
+// (utick = tick + tickOffset). Measured against the section's own held Long (2026-10-15 grid: gain = held - slurred,
+// level_rule.py), so [levels] calibrated 2's D for the staccatos does not move it (until 2026-10-15 every slur gain took
+// the section's Spiccato D, the gains having been fitted against the staccatos: that would now count it twice)
 double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset);
 
 // whether [levels] realRange is on for the score (1 or 2)
@@ -153,6 +158,8 @@ double realFraction(double steps, double pp, double ff);
 // realDb (above) of a note at the pitch on the patch with the dynamics CC x in force as written; spans: Clark & Luce
 // spans (realRange 2) where the patch has realSteps, the player's level steps(x) x S / 5 instead of the Meyer rule's
 double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch, bool spans = false);
+// long(x, pitch) of realDb: SSO's All techniques Long at the dynamics CC x less at 64, dB (the map's longLevel; 0 without it)
+double longLevelDb(const SoundLib::LibInstrument& patch, int x, int pitch);
 
 // whether [levels] micCompensation is on for the score
 bool micCompensation(const Score* score);

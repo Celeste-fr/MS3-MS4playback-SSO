@@ -1,0 +1,158 @@
+{
+ "about": "D for [levels] calibrated 2 (option B'): dB a velocity technique plays over the part's held Long at the same marking (map <Articulation heldOffset>, gen_spitfire_sso.py). Written by technique_offsets.py; a technique of the five string sections not listed here keeps SSO's own loud-end difference (SoundLib::loudEndDb): an assumption, no real-player data.",
+ "staccato": {
+  "method": "per section median(staccato) - median(held) at f, perceived (STL); pooled = mean of the sections; 90 % interval by a two-level bootstrap (sections, then notes), 20000 draws",
+  "source": "Spheres dataset, Mozart K. 550 (spheres_k550_staccato.json)",
+  "sections": {
+   "Violins 1": {
+    "d": -0.41,
+    "interval90": [
+     -1.39,
+     0.56
+    ],
+    "nShort": 26,
+    "nHeld": 2
+   },
+   "Celli": {
+    "d": -6.69,
+    "interval90": [
+     -7.06,
+     -5.9
+    ],
+    "nShort": 55,
+    "nHeld": 1
+   },
+   "Basses": {
+    "d": -3.14,
+    "interval90": [
+     -3.63,
+     -2.16
+    ],
+    "nShort": 51,
+    "nHeld": 1
+   }
+  },
+  "pooled": {
+   "d": -3.4,
+   "interval90": [
+    -5.7,
+    -0.9
+   ],
+   "sections": 3
+  },
+  "use": -3.4,
+  "placeholder": null,
+  "choice": "pooled for all five sections: one held note per measured section (Violins 1, Celli, Basses); the sections differ by 3.1 dB (SD), about one held note's own variation (2.6-4.2 dB SD, the first readings), so one held note each can't separate them; Violins 2 (no single held note at f in bars 28-33: double stops) and Violas not measured",
+  "assumptions": [
+   "the same D at every marking (measured at f only; untested at p)",
+   "Violins 2 and Violas take the pooled value (not measured)"
+  ]
+ },
+ "quarters": {
+  "method": "as staccato: quarter notes (bars 1-9) against whole notes (bars 10-15) at p, Celli and Basses",
+  "source": "Spheres dataset, Mozart K. 550 (spheres_k550_staccato.json)",
+  "pooled": {
+   "d": 0.3,
+   "interval90": [
+    -2.2,
+    2.3
+   ],
+   "sections": 2
+  },
+  "assumptions": [
+   "Short 1.0 (a full-length bowed short) plays as these unaccented quarters",
+   "measured at p only; Violins and Violas take the Celli / Basses value"
+  ]
+ },
+ "pizzicato": {
+  "method": "pizzicato minus arco at pp and ff, linear in the written dynamic's CC between (pp CC 32, ff CC 112), constant outside",
+  "source": "Meyer 2009, Acoustics and the Performance of Music, ch. 3 (sound power, not perceived: an uncertainty of several dB)",
+  "sections": {
+   "Violins 1": {
+    "pp": -7,
+    "ff": -9
+   },
+   "Violins 2": {
+    "pp": -7,
+    "ff": -9
+   },
+   "Violas": {
+    "pp": -9,
+    "ff": -5
+   },
+   "Celli": {
+    "pp": -12,
+    "ff": -8
+   },
+   "Basses": {
+    "pp": -6,
+    "ff": -7
+   }
+  },
+  "assumptions": [
+   "Violins 2 take the violin's values"
+  ],
+  "corroboration": {
+   "source": "University of Iowa Musical Instrument Samples (5 sessions, 5 players: violin, viola, double bass): each pizzicato note's peak loudness (ISO 532-1) against a held arco note at the same marking; measured 2026-10-15",
+   "pizzMinusArco": {
+    "pp": [
+     -7.3,
+     -8.7,
+     -6.3
+    ],
+    "mf": [
+     -6.3,
+     -12.1,
+     -2.3
+    ],
+    "ff": [
+     -4.0,
+     -8.4,
+     -2.6
+    ]
+   },
+   "note": "median and range over the sessions; only pp agrees within 3 dB across sessions; independent corroboration of Meyer, uncertainty about +-3-4 dB; not used for the values"
+  }
+ },
+ "zero": {
+  "Basses": [
+   "Pizzicato Bartok",
+   "Col Legno"
+  ],
+  "why": "SSO's own loud-end difference disagrees by ~10 dB between the perceived and the 50 ms metric (2026-10-15 validation): D = 0, SSO's balance at the matched level (an assumption)"
+ },
+ "articulations": {
+  "Violins 1": {
+   "Spiccato": "@staccato",
+   "Short 0.5": "@staccato",
+   "Short 1.0": "0.3",
+   "Pizzicato": "32:-7 112:-9"
+  },
+  "Violins 2": {
+   "Spiccato": "@staccato",
+   "Short 0.5": "@staccato",
+   "Short 1.0": "0.3",
+   "Pizzicato": "32:-7 112:-9"
+  },
+  "Violas": {
+   "Spiccato": "@staccato",
+   "Short 0.5": "@staccato",
+   "Short 1.0": "0.3",
+   "Pizzicato": "32:-9 112:-5"
+  },
+  "Celli": {
+   "Spiccato": "@staccato",
+   "Short 0.5": "@staccato",
+   "Short 1.0": "0.3",
+   "Pizzicato": "32:-12 112:-8"
+  },
+  "Basses": {
+   "Spiccato": "@staccato",
+   "Short 0.5": "@staccato",
+   "Short 1.0": "0.3",
+   "Pizzicato": "32:-6 112:-7",
+   "Pizzicato Bartok": "0",
+   "Col Legno": "0"
+  }
+ }
+}
