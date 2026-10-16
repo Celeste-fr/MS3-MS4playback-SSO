@@ -6408,8 +6408,13 @@ void MuseScore::play(Element* e) const
             play(e, note->ppitch());
             }
       else if (e->isChord()) {
-            seq->stopNotes();
             Chord* c   = toChord(e);
+            // as playback plays it: the sound library's parts on their routes, MS4's on the built-in synthesizer
+            // (Seq::playNotes, libmscore/notepreview.h); else MuseScore 3.6's click
+            std::vector<const Note*> notes(c->notes().begin(), c->notes().end());
+            if (seq->playNotes(notes, MScore::defaultPlayDuration))
+                  return;
+            seq->stopNotes();
             Part* part = c->staff()->part();
             Fraction tick   = c->segment() ? c->segment()->tick() : Fraction(0,1);
             Instrument* instr = part->instrument(tick);
@@ -6451,6 +6456,9 @@ void MuseScore::play(Element* e, int pitch) const
             return;
       if (preferences.getBool(PREF_SCORE_NOTE_PLAYONCLICK) && e->isNote()) {
             Note* note = static_cast<Note*>(e);
+            // as playback plays it (Seq::playNotes, libmscore/notepreview.h); else MuseScore 3.6's click
+            if (pitch == note->ppitch() && seq->playNotes({ note }, MScore::defaultPlayDuration))
+                  return;
 
             Note* masterNote = note;
             if (note->linkList().size() > 1) {

@@ -39,6 +39,8 @@
 #include "libmscore/liveset.h"
 #include "libmscore/playbacksettings.h"
 #include "libmscore/playstart.h"
+#include "libmscore/notepreview.h"
+#include "libmscore/partplayback.h"
 #include "libmscore/tuning.h"
 #include "libmscore/trackdelays.h"
 #include "libmscore/evenlevels.h"
@@ -144,6 +146,7 @@ class TestSoundLibrary : public QObject, public MTest
       void renderKit();
       void renderKitMaxVelocity();
       void keyShift();
+      void clickedNote();
       void renderKitRoll();
       void controllers();
       void liveControllers();
@@ -4630,6 +4633,296 @@ void TestSoundLibrary::keyShift()
       QVERIFY2(sso, qPrintable(error));
       for (const SoundLib::LibInstrument& li : sso->instruments)
             QCOMPARE(li.keyShift, li.name == "Timpani" ? 12 : 0);
+      }
+
+//---------------------------------------------------------
+//   clickedNote
+//    a clicked note sounds as playback plays it (libmscore/notepreview.h): for every note of the score, the click's
+//    events (its own renderer, the note's chunk only) against the playback render (the whole score in Seq's chunks):
+//    the same note-on (channel, route: patch and tuning lane, key, velocity, tuning) with the same switch, CC1, CC11,
+//    bend, program … in force on its route; a library part external, a built-in part (MS4) on its channel; the part's
+//    mode and the global one decide (MS3: MuseScore 3.6's click, no events), the next click following a switch
+//---------------------------------------------------------
+
+typedef std::map<std::pair<int, int>, int> ClickState;          // (type, controller) -> value
+
+static void addClickState(ClickState* s, const NPlayEvent& e)
+      {
+      if (e.type() == ME_CONTROLLER && e.controller() != CTRL_SUSTAIN && e.controller() != CTRL_ALL_NOTES_OFF)
+            (*s)[{ ME_CONTROLLER, e.controller() }] = e.value();
+      else if (e.type() == ME_PITCHBEND)
+            (*s)[{ ME_PITCHBEND, 0 }] = e.dataA() | (e.dataB() << 7);
+      else if (e.type() == ME_PROGRAM)
+            (*s)[{ ME_PROGRAM, 0 }] = e.dataA();
+      else if (e.type() == ME_NOTEON && e.librarySwitch() && e.velo() > 0)
+            (*s)[{ ME_NOTEON, -1 }] = e.pitch();                    // (a key switch: the last one pressed)
+      }
+
+static bool sameRoute(const NPlayEvent& a, const NPlayEvent& b)
+      {
+      return a.channel() == b.channel() && a.extPort() == b.extPort() && a.extChannel() == b.extChannel();
+      }
+
+// every note of part (all: -1) clicked against the playback render; returns a failure or empty; *count: notes checked
+static QString checkClicks(MasterScore* score, const SynthesizerState& ss, int partIdx, NotePreview::Sound want, int* count,
+                           int chunkSize = 10)
+      {
+      score->setPlaylistDirty();
+      EventMap full;
+      MidiRenderer playback(score);
+      playback.setMinChunkSize(chunkSize);
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = true;
+      ctx.renderHarmony = true;
+      for (int utick = 0;;) {
+            const MidiRenderer::Chunk chunk = playback.getChunkAt(utick);
+            if (!chunk)
+                  break;
+            playback.renderChunk(chunk, &full, ctx);
+            utick = chunk.utick2();
+            }
+      NotePreview::Previewer previewer;
+      MidiRenderer own(score);                // (another chunk size than Seq's: render() with a renderer of that size)
+      own.setMinChunkSize(chunkSize);
+      EventMap cache;
+      int cacheKey = -1;
+      for (int pi = 0; pi < score->parts().size(); ++pi) {
+            if (partIdx >= 0 && pi != partIdx)
+                  continue;
+            const Part* part = score->parts()[pi];
+            for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+                  for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                        Element* el = seg->element(track);
+                        if (!el || !el->isChord())
+                              continue;
+                        for (const Note* n : toChord(el)->notes()) {
+                              const QString at = QString("part %1 tick %2 pitch %3: ").arg(pi).arg(seg->tick().ticks()).arg(n->pitch());
+                              const NotePreview::Preview p = chunkSize == 10 ? previewer.preview({ n }, ss)
+                                                                            : NotePreview::render(own, ss, { n }, &cache, &cacheKey);
+                              if (p.sound != want)
+                                    return at + QString("sound %1, not %2").arg(int(p.sound)).arg(int(want));
+                              // the note's note-on in playback
+                              const Note* played = NotePreview::playedNote(n);
+                              int onAt = -1;
+                              const NPlayEvent* on = nullptr;
+                              for (const auto& ke : full) {
+                                    const NPlayEvent& e = ke.second;
+                                    if (e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch() && e.note() == played) {
+                                          onAt = ke.first;
+                                          on = &e;
+                                          break;
+                                          }
+                                    }
+                              if (want == NotePreview::Sound::MS3 || !on) {
+                                    if (!p.empty())
+                                          return at + "events for a click MuseScore 3.6's way, or for a note playback doesn't sound";
+                                    continue;
+                                    }
+                              if (p.on.empty() || p.off.size() != 1)
+                                    return at + QString("%1 events, %2 note-offs").arg(p.on.size()).arg(p.off.size());
+                              const NPlayEvent& c = p.on.back();
+                              if (c.type() != ME_NOTEON || c.note() != played || !sameRoute(c, *on) || c.pitch() != on->pitch()
+                                  || c.velo() != on->velo() || std::fabs(c.tuning() - on->tuning()) > 1e-9
+                                  || c.isExternal() != (want == NotePreview::Sound::LIBRARY))
+                                    return at + QString("note-on ch %1 route %2/%3 key %4 velo %5 tuning %6, playback's ch %7 route %8/%9 key %10 velo %11 tuning %12")
+                                           .arg(c.channel()).arg(c.extPort()).arg(c.extChannel()).arg(c.pitch()).arg(c.velo()).arg(c.tuning())
+                                           .arg(on->channel()).arg(on->extPort()).arg(on->extChannel()).arg(on->pitch()).arg(on->velo()).arg(on->tuning());
+                              const NPlayEvent& off = p.off.front();
+                              if (off.velo() != 0 || off.pitch() != c.pitch() || !sameRoute(off, c))
+                                    return at + "its note-off";
+                              ClickState sent;
+                              for (size_t i = 0; i + 1 < p.on.size(); ++i) {
+                                    if (!sameRoute(p.on[i], c))
+                                          return at + "an event on another route";
+                                    addClickState(&sent, p.on[i]);
+                                    }
+                              // what playback has in force on the note-on's channel and route at it
+                              ClickState expected;
+                              for (auto i = full.cbegin(); i != full.cend() && i->first <= onAt; ++i)
+                                    if (sameRoute(i->second, *on))
+                                          addClickState(&expected, i->second);
+                              if (expected.empty())
+                                    return at + "nothing in force on its route (a click's state can't be checked)";
+                              if (want == NotePreview::Sound::LIBRARY && !expected.count({ ME_CONTROLLER, SoundLib::current()->dynamicsCC }))
+                                    return at + "no dynamics controller in force";
+                              if (sent != expected) {
+                                    QString d;
+                                    for (const auto& e : expected)
+                                          d += QString(" %1/%2=%3").arg(e.first.first).arg(e.first.second).arg(e.second);
+                                    d += " | sent";
+                                    for (const auto& e : sent)
+                                          d += QString(" %1/%2=%3").arg(e.first.first).arg(e.first.second).arg(e.second);
+                                    return at + "state in force, playback's:" + d;
+                                    }
+                              ++*count;
+                              }
+                        }
+                  }
+            }
+      qDebug("clickedNote: %d notes clicked as played", *count);
+      return QString();
+      }
+
+static QString partModeTag(const Part* part, int index, const char* mode)
+      {
+      return QString("[{\"part\": %1, \"name\": \"%2\", \"mode\": \"%3\"}]").arg(index).arg(part->partName()).arg(mode);
+      }
+
+void TestSoundLibrary::clickedNote()
+      {
+      struct Reset { ~Reset() {
+            SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({});
+            } } reset;
+      SynthesizerState ms4;                 // (no method: MS4's, as the renderer's default)
+      const SynthesizerState ms3 { SynthesizerGroup("master", { IdValue(4, "1"), IdValue(5, "1") }) };
+      QCOMPARE(ms3.method(), 1);
+      int count = 0;
+      QString failure;
+
+      // a library part (switches, CC1 dynamics) and a piano on the built-in synthesizer, MIDI out and hosted
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Long CS' value='7' techniques='long legato' modifiers='muted'/>"
+         "<Articulation name='Long Harmonics' value='10' techniques='long legato' modifiers='harmonics'/>"
+         "<Articulation name='Tremolo' value='11' techniques='tremolo'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "<Articulation name='Pizzicato' value='56' techniques='pizzicato'/>"
+         "<Articulation name='Trill m2' value='70' techniques='trill-m2'/>"
+         "<Articulation name='Trill M2' value='71' techniques='trill-M2'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      QVERIFY(PartPlaybackModes::libraryDefault());
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      for (SoundLib::Output out : { SoundLib::Output::MIDI, SoundLib::Output::PLUGIN }) {
+            SoundLib::setOutput(out);
+            SoundLib::routesChanged();
+            for (int chunkSize : { 10, 2 }) {
+                  count = 0;
+                  failure = checkClicks(score, ms4, 0, NotePreview::Sound::LIBRARY, &count, chunkSize);
+                  QVERIFY2(failure.isEmpty(), qPrintable(failure));
+                  QVERIFY(count >= 10);
+                  count = 0;
+                  failure = checkClicks(score, ms4, 1, NotePreview::Sound::MS4, &count, chunkSize);
+                  QVERIFY2(failure.isEmpty(), qPrintable(failure));
+                  QVERIFY(count > 0);
+                  }
+            }
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      SoundLib::routesChanged();
+
+      // the modes: the global one (the library's default, the synthesizer's method) and a part's own; one previewer
+      // across the switches, as Seq keeps it: each click follows the mode at once
+      NotePreview::Previewer previewer;
+      const Note* violinNote = nullptr;
+      for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg && !violinNote; seg = seg->next1(SegmentType::ChordRest))
+            if (Element* el = seg->element(0))
+                  if (el->isChord())
+                        violinNote = toChord(el)->notes().front();
+      QVERIFY(violinNote);
+      auto click = [&](const SynthesizerState& ss) { return previewer.preview({ violinNote }, ss); };
+      NotePreview::Preview p = click(ms4);
+      QCOMPARE(int(p.sound), int(NotePreview::Sound::LIBRARY));
+      QVERIFY(p.on.back().isExternal());
+      PartPlaybackModes::setLibraryDefault(false);                // global MS4
+      p = click(ms4);
+      QCOMPARE(int(p.sound), int(NotePreview::Sound::MS4));
+      QVERIFY(!p.empty() && !p.on.back().isExternal());
+      count = 0;
+      failure = checkClicks(score, ms4, 0, NotePreview::Sound::MS4, &count);
+      QVERIFY2(failure.isEmpty(), qPrintable(failure));
+      p = click(ms3);                                             // global MS3: MuseScore 3.6's click
+      QCOMPARE(int(p.sound), int(NotePreview::Sound::MS3));
+      QVERIFY(p.empty());
+      count = 0;
+      failure = checkClicks(score, ms3, -1, NotePreview::Sound::MS3, &count);
+      QVERIFY2(failure.isEmpty(), qPrintable(failure));
+      PartPlaybackModes::setLibraryDefault(true);                 // global library again: the same previewer's next click
+      p = click(ms4);
+      QCOMPARE(int(p.sound), int(NotePreview::Sound::LIBRARY));
+      QVERIFY(p.on.back().isExternal());
+      // a part's own mode over the global one
+      score->setMetaTag(PartPlaybackModes::metaTag, partModeTag(score->parts()[0], 0, "ms3"));
+      QCOMPARE(int(PartPlaybackModes::of(score->parts()[0])), int(PartPlayback::MS3));
+      p = click(ms4);
+      QCOMPARE(int(p.sound), int(NotePreview::Sound::MS3));
+      QVERIFY(p.empty());
+      score->setMetaTag(PartPlaybackModes::metaTag, partModeTag(score->parts()[0], 0, "ms4"));
+      p = click(ms4);
+      QCOMPARE(int(p.sound), int(NotePreview::Sound::MS4));
+      QVERIFY(!p.on.back().isExternal());
+      count = 0;
+      failure = checkClicks(score, ms4, 0, NotePreview::Sound::MS4, &count);
+      QVERIFY2(failure.isEmpty(), qPrintable(failure));
+      // global MS3 (the library off), the piano set to the library, which lacks it: MS4
+      score->setMetaTag(PartPlaybackModes::metaTag, partModeTag(score->parts()[1], 1, "library"));
+      PartPlaybackModes::setLibraryDefault(false);
+      count = 0;
+      failure = checkClicks(score, ms3, 1, NotePreview::Sound::MS4, &count);
+      QVERIFY2(failure.isEmpty(), qPrintable(failure));
+      QVERIFY(count > 0);
+      PartPlaybackModes::setLibraryDefault(true);
+      score->setMetaTag(PartPlaybackModes::metaTag, QString());
+      delete score;
+
+      // a keyswitched patch (the timpani: its keys an octave up)
+      lib = loadMap("<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Timpani' ids='timpani' keyShift='12'><Switch type='keyswitch'/>"
+                    "<Articulation name='Timpani' value='0' techniques='long short'/></Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      score = readScore(DIR + "timpani.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      count = 0;
+      failure = checkClicks(score, ms4, -1, NotePreview::Sound::LIBRARY, &count);
+      QVERIFY2(failure.isEmpty(), qPrintable(failure));
+      QCOMPARE(count, 2);
+      delete score;
+
+      // quarter tones, hosted: each note on its varispeed lane, or on a bending patch with its bend
+      for (const QString& bend : { QString(" bend='200'"), QString() }) {
+            lib = loadMap("<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                          "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+                          "<Instrument name='Violin' ids='violin'" + bend + ">"
+                          "<Articulation name='Long' value='1' techniques='legato long'/>"
+                          "</Instrument></SoundLibrary>");
+            QVERIFY(lib);
+            SoundLib::setCurrent(lib);
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            score = readScore(DIR + "quartertones.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            count = 0;
+            failure = checkClicks(score, ms4, -1, NotePreview::Sound::LIBRARY, &count);
+            QVERIFY2(failure.isEmpty(), qPrintable(bend + failure));
+            QVERIFY(count >= 8);
+            delete score;
+            }
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+
+      // the shipped SSO map with the playback adjustments' defaults (Recommended): calibrated levels, section
+      // balance, real range, mic compensation on CC11, the Performance patches on slurs
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      SoundLib::setCurrent(sso);
+      for (const char* file : { "section-balance.musicxml", "real-range.musicxml", "legato-early.musicxml" }) {
+            score = readScore(DIR + file);
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            count = 0;
+            failure = checkClicks(score, ms4, -1, NotePreview::Sound::LIBRARY, &count);
+            QVERIFY2(failure.isEmpty(), qPrintable(QString(file) + ": " + failure));
+            QVERIFY(count > 0);
+            delete score;
+            }
       }
 
 //---------------------------------------------------------

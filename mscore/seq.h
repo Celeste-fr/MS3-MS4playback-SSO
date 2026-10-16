@@ -27,6 +27,7 @@
 #include "libmscore/fifo.h"
 #include "libmscore/midisync.h"
 #include "libmscore/playstart.h"
+#include "libmscore/notepreview.h"
 
 #include "audio/midi/event.h"
 #include "audiodrivers/driver.h"
@@ -160,6 +161,10 @@ class Seq : public QObject, public Sequencer {
       RangeMap renderEventsStatus;
       MidiRenderer midi;
       QFuture<void> midiRenderFuture;
+      // a clicked or entered note as playback plays it (playNotes, libmscore/notepreview.h: a renderer of its own,
+      // not midi, the background render's) and the note-offs of the notes a click started (stopNotes sends them)
+      NotePreview::Previewer _preview;
+      std::vector<NPlayEvent> _previewOffs;
       // the Mixer for sound library parts (soundlibrary.h: PartMix): their routes (MIDI out; the
       // hosted plug-ins' slots are the host's), found again at each start or when stale, and the
       // CC7 / CC10 / CC91 / CC93 values last sent on each route over MIDI out (only changes are sent)
@@ -453,6 +458,11 @@ class Seq : public QObject, public Sequencer {
 
       void putEvent(const NPlayEvent&, unsigned framePos = 0);
       void startNoteTimer(int duration);
+      // (GUI thread) a clicked or entered note (a chord: all its notes) as playback plays it, for duration ms
+      // (libmscore/notepreview.h): a part the sound library plays on its routes (hosted or MIDI out), an MS4 part
+      // on the built-in synthesizer as MS4 renders it. False: the caller plays MuseScore 3.6's click (an MS3
+      // part, playing, Live plays the score, a Live clip edited here, a note playback doesn't sound)
+      bool playNotes(const std::vector<const Note*>& notes, int duration);
       virtual void startNote(int channel, int, int, double nt) override;
       virtual void startNote(int channel, int, int, int, double nt) override;
       virtual void playMetronomeBeat(BeatType type) override;
