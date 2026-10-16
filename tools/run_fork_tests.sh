@@ -37,6 +37,9 @@ for p in tools/live/test/test_envelopes.py tools/soundlibraries/test_make_setups
   if python3 -I "$ROOT/$p" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
   printf '%-28s %s\n' "python $(basename "$p")" "$r" >> "$OUT"
 done
+# (not -I: it needs librosa, a user install here)
+if python3 "$ROOT/tools/playbackverify/test_heard_check.py" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
+printf '%-28s %s\n' "python test_heard_check.py" "$r" >> "$OUT"
 echo; cat "$OUT"; rm -f "$OUT"
 [ $FAIL -eq 0 ] && echo "all passed" || echo "SOME FAILED"
 exit $FAIL

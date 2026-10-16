@@ -396,7 +396,11 @@ onset - written; Rasch 1979: > 50 ms fails) and level steps under a slur (values
 Wier & Green 1977, owner to approve), DROPPED (fail: a legato transition sent < 15 ms after the legato note-on before
 on its route at velocity <= 64: SSO doesn't play it) and LEAP (warn: a transition beyond an octave / 1200 cents: SSO attacks afresh). The renderer
 reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (quarter tones,
-`Whence.mscz`; Recommended) before any build goes to the owner.**
+`Whence.mscz`; Recommended) before any build goes to the owner, and the heard check too** (VERIFY.md › Heard check:
+`tools/playbackverify/heard_check.sh <score> [preset]`: the real sound, Kontakt + SSO on the VM per route, each note's
+heard time against its written one and the audit's prediction; ARRIVAL / RHYTHM (proposed) / LEVEL, model drift per
+patch x situation; on Whence and `share/verifyplayback/Heard passages.musicxml`; the audit alone can't catch a wrong
+model).
 
 ## Building and testing
 

@@ -184,6 +184,71 @@ worktree's wrappers:
 `.dynamics.json`). The test fails on any OVERLAP; read the report's ARRIVAL fails and CAPPED notes before handing a
 build over, and say in the hand-over which remain and why. Keep reports out of the repository (the owner's score).
 
+## Heard check (agents; Linux + the Windows VM; before any build goes to the owner)
+
+The audit above checks the renderer against its own model, so a wrong model passes it: on 2026-10-16 it reported
+ARRIVAL 0 fail while Whence's Violas slurs (an eighth + two sixteenths, written 273 / 136 / 136 ms) sounded about
+200 / 210 / 105 ms, heard as a triplet by the owner. The heard check measures the **real sound**: every library route
+rendered with Kontakt + SSO on the VM, each note's heard time measured, judged against the written times and against
+the audit's predictions. Code: `tools/playbackverify/heard_check.py` (its header holds every rule and source),
+`heard_check.sh` (end to end), `heard_check_vm.cmd` (the VM side), the inputs from `PlaybackAudit::writeHeardInputs`
+(`tst_playbackaudit auditScore` with `MS_AUDIT_DUMP=<folder>`), tests `test_heard_check.py` (synthetic audio).
+
+```sh
+HC_RUN=~/MuseScore/ms3fork/run-<name>.sh tools/playbackverify/heard_check.sh ~/MuseScore/ms3fork/test-scores/Whence.mscz [preset] [parts]
+```
+
+The preset is `recommended` (the default), `library`, or a `playbackSettings` metaTag (`slurs/transitionsEarly=0`);
+parts a comma list (default all). `HC_RUN`: a wrapper running a command in the build dir (else `HC_BUILD`, the build
+dir). It writes the dump, the renders and `report.txt` / `report.json` to `~/.cache/heardcheck/<run>/` (`HC_WORK`; the
+renders deleted after the analysis unless `HC_KEEP=1`), uses `C:\claude\heardcheck\<run>` on the VM (one share login,
+deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores out of the repository.
+
+- **Render**: each route alone (kthost, one Kontakt instance with MuseScore's setup of the route's patch from the VM's
+  setups folder), MuseScore's events as playback renders them (10-measure chunks), the start lead included.
+- **Heard time**: an attack (staccato, held note, a slur's first note) by its perceived envelope (`loudness.py`): the
+  -15 dB time under its peak less 30 ms, the rule the map's onsets were measured by (so a step onset reads ~24 ms
+  early, a swell near its -15 dB time); the peak over the note's own span, a slur's first note over its slur. A note
+  before on the route still within 15 dB: "masked", its tail (extrapolated in dB) taken off in loudness first. Beside
+  it a -6 dB reading (`heardAltMs`, and the slurs' RHYTHM counts with it in one line, not judged): on Whence's Violas
+  slurs the owner's ear (~200 / 210 / 105 ms) matches -6 dB on the smooth first notes, not -15; which rule is right for
+  slow attacks is open (owner). A legato transition by pYIN over its whole route: the note before's pitch heard, then
+  left, then the first of 3 frames within 30 cents of its pitch (quarter-tone cents included) before the next note-on
+  on the route (the bendGlide's model arrival is 9/10 of the way: for a semitone 30 cents is 7/10). Not reached:
+  **UNHEARD** (warn: a skipped note, a microtone not reached, or pYIN lost it; listen).
+- **ARRIVAL** (fail > 50 ms, warn > 30): heard - written against the note before in its line (Rasch 1979, as the
+  audit's ARRIVAL).
+- **RHYTHM** (fail > 0.10, warn > 0.05; **proposed, owner to approve**): per slur (its notes and the next onset) and per
+  run (a line's notes joined without a rest), windows of 3 inter-onset intervals: the largest difference between a
+  heard IOI's share of the window and the written one's. 0.10 is derived, not published: Desain & Honing 2003
+  (Perception 32, 341-365) category means for 2:1 scatter with SD ~47 ms in a 1 s bar (as tabled in Sadakata, Desain &
+  Honing 2006, Music Perception 23(3)): 2 SD ~0.094; players' largest SD there ~37 ms (2 SD 0.074) stays under it.
+  0.05: audible, not categorical (Friberg & Sundberg's JND, ~10 ms below ~240 ms, ~5 % above, their 1993 ASA abstract).
+  The Violas' 200 / 210 / 105 for 273 / 136 / 136 is 0.158.
+- **LEVEL** (warn): under one slur at an unchanged written dynamic, the change of the notes' loudest perceived level
+  above the audit's proposed 0.69 dB. The renders play at the setups' own volumes (no gain stage): steps within a route
+  only.
+- **Model drift**: measured - the audit's predicted heard time (`arrivalMs`: sent + onset, or sent + glideArriveMs) per
+  patch x situation (first after silence, attack joined, staccato, transition after attack, transition after
+  transition), median and 10th-90th percentile; |median| > 20 ms marked DRIFT. Where it drifts, the map's numbers (or
+  the renderer's model) are wrong for that situation, and the audit can't see it.
+
+Time (2026-10-16, VM): ~10-25 s of kthost per route (+60 s per Basses route: kthost's probe note never passes
+-60 dBFS at their setups' levels, so it waits its 60 s; their renders sound), analysis ~1.5 min (Whence) to ~4 min
+(the passages; pYIN on every Performance route). Whence 7.6 min end to end, the passages ~20 min. Performance renders
+differ take to take (HANDOFF.md): one run is one take; for a finding that matters, run twice.
+
+First results (integrate-1012 41cdbbb311, Recommended; numbers: commit message of the heard-check branch): Whence's
+Violas bars 9-11 reproduced (each slur's 2nd note heard 27-60 ms early, its smooth first note 90-160 ms before its
+beat by the -15 dB rule, +6 and +77 by -6 dB, one unreadable); Whence's fast quarter-tone sixteenths (Violas bar 8,
+...) mostly UNHEARD: f0 a slow wave that never settles on the quarter tones; model drift on every Performance patch's
+transitions and first notes, none on the staccatos (within 20 ms). Masked readings of a held Long re-attacked on its
+route are unreliable (Celli bar 11, +539 ms): check those by ear before acting on them.
+
+Not covered: tuning by Kontakt slots or varispeed (kthost plays a non-bending patch's quarter tones in 12-TET; only the
+attacks' envelopes are measured on those routes), Controllers set as plug-in parameters (flat lanes), the gain stage and
+mic levels, chords on one Performance route (not pitch-tracked).
+
 ## Testing here (Linux, no Kontakt)
 
 - `tools/playbackverify/try_with_testsynth.sh <build dir> <install dir> [work dir]`: the whole
