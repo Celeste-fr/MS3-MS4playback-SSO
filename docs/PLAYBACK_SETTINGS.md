@@ -954,6 +954,7 @@ gain is applied moved (`libmscore/contextlevel.h` › Gain stage and master trim
 
   ```
   peak(t) = 10 log10 Σ_n 10^((g_n + e_n(t) + L_n(t) + crest) / 10)          trim = max(0, max_t peak(t))
+  No margin under 0 dBFS beyond the crest (the owner, 2026-10-16: "keep it as it is, we have other ways to make extra room anyways").
   ```
 
   over the library notes n sounding at t (note-on to note-off as rendered; release tails left out): g_n its patch's

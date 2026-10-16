@@ -129,6 +129,8 @@ the fader stays at 0 dB (the Mixer's), the owner's. One **master trim** per scor
 loudest moment needs (power sum of the sounding notes' calibrated level + the map's `crest`, 14.5 dB, measured in SSO:
 `sso_crest.json`); without calibration or crest it falls back to the old S'. Design and numbers:
 docs/PLAYBACK_SETTINGS.md › Gain stage and master trim; Live: LIVE.md › The plain set › MuseScore gain.
+No extra safety margin under 0 dBFS (the owner, 2026-10-16: "keep it as it is, we have other ways to make extra room
+anyways"): Whence's loudest moment stays at about −2.71 dBFS.
 
 - **Whence (quarter tones), Recommended, `integrate-ug`** (with integrate-1012's B′; `dumpEvents` chunked, gains.txt):
   trim 0.00 dB (loudest moment -2.71 dBFS at 15.45 s, 7 notes; the old S' was 12.88 dB), so every patch plays 12.88 dB
