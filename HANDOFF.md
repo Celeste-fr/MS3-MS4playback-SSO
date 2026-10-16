@@ -5,6 +5,35 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Gain stage and master trim (2026-10-15, branch `utility-gain`, merged with integrate-1012 in `integrate-ug`)
+
+The owner, 2026-10-15 ("sure", then "yeah sure let's go with utility"): no more lowering every patch by S = max(0, G - 6)
+when one quiet patch needs more than Live's fader +6 dB. Each patch's levels (level rule, section balance, realRange
+tops, mic compensation, even levels) now play on its own gain stage: MuseScore's slot gain (float, no cap) and, in the
+plain set, a stock **Utility named "MuseScore gain"** after the Kontakt (±35 dB; a rest above +35 goes on the fader);
+the fader stays at 0 dB (the Mixer's), the owner's. One **master trim** per score lowers everything only as much as the
+loudest moment needs (power sum of the sounding notes' calibrated level + the map's `crest`, 14.5 dB, measured in SSO:
+`sso_crest.json`); without calibration or crest it falls back to the old S'. Design and numbers:
+docs/PLAYBACK_SETTINGS.md › Gain stage and master trim; Live: LIVE.md › The plain set › MuseScore gain.
+
+- **Whence (quarter tones), Recommended, `integrate-ug`** (with integrate-1012's B′; `dumpEvents` chunked, gains.txt):
+  trim 0.00 dB (loudest moment -2.71 dBFS at 15.45 s, 7 notes; the old S' was 12.88 dB), so every patch plays 12.88 dB
+  louder than before: Violins 1 Utility -0.03 dB (fader was -12.91), Violins 1 - Performance +16.29 (+3.41), Violins 2
+  +1.12 (-11.76), Violas -7.08 (-19.96), Violas - Performance +9.24 (-3.64), Celli +2.56 (-10.32), Celli - Performance
+  +18.88 (+6.00), Basses +3.43 (-9.45); every fader 0.00. utility-gain alone (before B′): trim 0, loudest -2.65 dBFS, S'
+  12.98, the Celli +2.66 / +18.98, the rest the same. Audit (OVERLAP 0, UNMEASURED 10, CAPPED 1, ARRIVAL 0 / 2 warn,
+  LEVEL STEP 0, DROPPED 0, LEAP 0) unchanged.
+- **Checked in real Live 12.4.6 on the VM** (build 433's Create Live Set + a Utility added by this branch's code on
+  Linux, `tst_liveequivalence utilitySet`): the set opens with the Utility after Kontakt; its +6 dB plays +6.000 dB
+  (export against the same set without it, median sample ratio); Live re-saves the Utility with the same XML (ids aside);
+  the in-place Gain edit (Update Live Set's code) of Live's saved set to -10 dB opens and plays -10.000 dB.
+  **Untried**: Update Live Set end to end and the hosted slot gain with Kontakt / SSO (need a Windows build).
+- **For the owner**: playback is louder by the old S' wherever the trim is smaller (by design: the trim lowers only what
+  the peak needs); the crest is the strings' (woodwinds, brass, percussion assumed alike); single soft odd takes peak up
+  to 20.2 dB over their calibration level (median 9.1), above the 14.5 crest; the trim costs one more render of the score
+  after an edit; MIDI out plays the gain by CC7 within 127 (receiver's CC7 law unmeasured, LIVE.md › What still
+  differs); *Live plays the score*'s clips into the owner's own set carry no Utility (LIVE.md › What still differs).
+
 ## Ctrl+C / Ctrl+V in the Velocity and Join lanes (2026-10-15, branch `notelane-copypaste`, merged into integrate-1012)
 
 The owner: "Ctrl C+V still doesn't work in the velocity and join automation lanes". Cause: `AutomationLanes::wantsKey`

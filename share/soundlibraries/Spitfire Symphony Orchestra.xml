@@ -27,7 +27,10 @@
   <!-- shorts: Spitfire sets their dynamics by velocity (CC1 only moves the longs), so their velocity
        follows the dynamics on CC1's scale (the owner, 2026-09-28: staccatos stood out at pp); heard: the short notes' balance
        that sounded right (the owner, 2026-09-28, "Whence": strings -4 dB), what Recommended fits to -->
-  <Dynamics cc="1" expression="127" velocity="short staccatissimo spiccato marcato tenuto pizzicato bartok collegno" heard="strings=-4"/>
+  <!-- crest=: a note's sample peak over its loudest 50 ms, dB, the largest of 392 string notes measured in Kontakt 8
+       (tools/soundlibraries/sso_crest.json, median 8.971): the master trim adds it to each note's
+       calibrated level (libmscore/contextlevel.h › Gain stage and master trim) -->
+  <Dynamics cc="1" expression="127" velocity="short staccatissimo spiccato marcato tenuto pizzicato bartok collegno" heard="strings=-4" crest="14.515"/>
   <!-- mics ([levels] micCompensation): a mic's level at a fader value against 127 (fader=, 0 silent) and what Mic Mix
        Distance sets Close / Tree / Ambient to (mix=, each against its full fader, - silent); measured on SSO with
        Kontakt 8 (tools/soundlibraries/sso_mic_levels.json, mic_levels.py); micLevels= on an Instrument: each mic alone

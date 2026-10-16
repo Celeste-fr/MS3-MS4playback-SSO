@@ -167,6 +167,7 @@ class TestSoundLibrary : public QObject, public MTest
       void levelSectionBalance();
       void levelTechniqueBalance();
       void levelMicCompensation();
+      void gainStage();
       void levelRealRange();
       void noLevelSpikes();
       void startLead();
@@ -2527,7 +2528,8 @@ void TestSoundLibrary::slurPerformance()
 //    [levels] context (contextlevel.h) at each layer (default on, the ini's 0, the score's 1 over it): the map's
 //    contextLevel grid (linear in CC and pitch, log in ms, the nearest end's beyond); a slur on the Performance legato
 //    plays CC1 at the written dynamic and one CC11 for the whole slur, its gain less the score's largest; the volumes:
-//    the Performance patch +6 (Live's top), every other patch the rest lower (TrackDelays::read, patchGain)
+//    the Performance patch G, every other patch 0 (the gain stage), S = G - 6 kept; without a crest in the map the trim's
+//    fallback lowers them all by S, so the Performance patch plays +6, the rest S lower (TrackDelays::read, patchGain)
 //---------------------------------------------------------
 
 void TestSoundLibrary::levelContext()
@@ -2620,8 +2622,12 @@ void TestSoundLibrary::levelContext()
       const double top = std::max(g1, g2);
       const ContextLevel::Volumes& pv = v.begin()->second;
       QVERIFY(std::fabs(pv.top - top) < 1e-9);
-      QVERIFY(std::fabs(pv.patchDb.at("Violin - Performance") - 6.0) < 1e-9);
-      QVERIFY(std::fabs(pv.patchDb.at("Violin") + (top - 6.0)) < 1e-9);
+      QVERIFY(std::fabs((pv.patchDb.at("Violin - Performance") - pv.shift) - 6.0) < 1e-9);
+      QVERIFY(std::fabs((pv.patchDb.at("Violin") - pv.shift) + (top - 6.0)) < 1e-9);
+      // (the gain stage: nothing lowered to fit Live's fader; the patches as the rule has them, the trim lowers them all)
+      QVERIFY(std::fabs(pv.patchDb.at("Violin - Performance") - top) < 1e-9);
+      QCOMPARE(pv.patchDb.at("Violin"), 0.0);
+      QVERIFY(std::fabs(pv.shift - (top - 6.0)) < 1e-9);
       const TrackDelays::Delays d = TrackDelays::of(score->parts()[0], TrackDelays::read(score));
       QVERIFY(d.empty() && d.levels.empty());                // (never in the metaTag)
       QVERIFY(std::fabs(TrackDelays::patchGain(*lib, d, "Violin - Performance") - std::pow(10.0, 6.0 / 20)) < 1e-9);
@@ -2789,18 +2795,18 @@ void TestSoundLibrary::levelSectionBalance()
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/sectionBalance", "0" } });
       std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
       QCOMPARE(int(v.size()), 2);
-      QVERIFY(std::fabs(v[viola].top - 15) < 1e-9 && std::fabs(v[viola].patchDb["Viola - Performance"] - 6) < 1e-9);
-      QVERIFY(std::fabs(v[viola].patchDb["Viola"] + 9) < 1e-9);
+      QVERIFY(std::fabs(v[viola].top - 15) < 1e-9 && std::fabs((v[viola].patchDb["Viola - Performance"] - v[viola].shift) - 6) < 1e-9);
+      QVERIFY(std::fabs((v[viola].patchDb["Viola"] - v[viola].shift) + 9) < 1e-9);
       const std::map<int, double> rule = levels();
       // on (the default): S' = max(15 - 1.5, 9 + 2) - 6 = 7.5; each Performance patch at T = min(G, S' + 6 - O) plus O
       // less S': the Violin's T 15 (G), the Viola's 11.5 (G would put it over +6), its slur's CC11 9 - 11.5
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
       v = ContextLevel::volumes(score);
       QVERIFY(std::fabs(v[violin].top - 15) < 1e-9 && std::fabs(v[viola].top - 11.5) < 1e-9);
-      QVERIFY(std::fabs(v[violin].patchDb["Violin - Performance"] - 6) < 1e-9);
-      QVERIFY(std::fabs(v[violin].patchDb["Violin"] + 9) < 1e-9);
-      QVERIFY(std::fabs(v[viola].patchDb["Viola - Performance"] - 6) < 1e-9);
-      QVERIFY(std::fabs(v[viola].patchDb["Viola"] + 5.5) < 1e-9);
+      QVERIFY(std::fabs((v[violin].patchDb["Violin - Performance"] - v[violin].shift) - 6) < 1e-9);
+      QVERIFY(std::fabs((v[violin].patchDb["Violin"] - v[violin].shift) + 9) < 1e-9);
+      QVERIFY(std::fabs((v[viola].patchDb["Viola - Performance"] - v[viola].shift) - 6) < 1e-9);
+      QVERIFY(std::fabs((v[viola].patchDb["Viola"] - v[viola].shift) + 5.5) < 1e-9);
       const std::map<int, double> balanced = levels();
       QCOMPARE(balanced.size(), rule.size());
       auto check = [&](const std::map<int, double>& got, const std::vector<int>& pitches, double expected) {
@@ -2823,8 +2829,8 @@ void TestSoundLibrary::levelSectionBalance()
       // the rule off, the balance on: the levels alone (nothing over +6: S' 0)
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" } });
       v = ContextLevel::volumes(score);
-      QVERIFY(std::fabs(v[violin].patchDb["Violin - Performance"] + 1.5) < 1e-9 && std::fabs(v[violin].patchDb["Violin"] + 1.5) < 1e-9);
-      QVERIFY(std::fabs(v[viola].patchDb["Viola - Performance"] - 2) < 1e-9 && std::fabs(v[viola].patchDb["Viola"] - 2) < 1e-9);
+      QVERIFY(std::fabs((v[violin].patchDb["Violin - Performance"] - v[violin].shift) + 1.5) < 1e-9 && std::fabs((v[violin].patchDb["Violin"] - v[violin].shift) + 1.5) < 1e-9);
+      QVERIFY(std::fabs((v[viola].patchDb["Viola - Performance"] - v[viola].shift) - 2) < 1e-9 && std::fabs((v[viola].patchDb["Viola"] - v[viola].shift) - 2) < 1e-9);
       const std::map<int, double> alone = levels();
       check(alone, plainV, -1.5);
       check(alone, plainA, 2);
@@ -2850,12 +2856,12 @@ void TestSoundLibrary::levelSectionBalance()
       score->rebuildMidiMapping();
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "2" } });
       v = ContextLevel::volumes(score);
-      QVERIFY(std::fabs(v[score->parts()[0]].patchDb["Violin - Performance"] - 3) < 1e-9 && std::fabs(v[score->parts()[0]].patchDb["Violin"] - 3) < 1e-9);
-      QVERIFY(std::fabs(v[score->parts()[1]].patchDb["Viola"] - 2) < 1e-9);
+      QVERIFY(std::fabs((v[score->parts()[0]].patchDb["Violin - Performance"] - v[score->parts()[0]].shift) - 3) < 1e-9 && std::fabs((v[score->parts()[0]].patchDb["Violin"] - v[score->parts()[0]].shift) - 3) < 1e-9);
+      QVERIFY(std::fabs((v[score->parts()[1]].patchDb["Viola"] - v[score->parts()[1]].shift) - 2) < 1e-9);
       check(levels(), plainV, 3);
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "1" } });
       v = ContextLevel::volumes(score);
-      QVERIFY(std::fabs(v[score->parts()[0]].patchDb["Violin"] + 1.5) < 1e-9);
+      QVERIFY(std::fabs((v[score->parts()[0]].patchDb["Violin"] - v[score->parts()[0]].shift) + 1.5) < 1e-9);
       delete score;
       // a map without levels: on plays the rule's
       auto plain = map("", "");
@@ -2866,7 +2872,7 @@ void TestSoundLibrary::levelSectionBalance()
       QVERIFY(score);
       score->rebuildMidiMapping();
       v = ContextLevel::volumes(score);
-      QVERIFY(std::fabs(v[score->parts()[1]].top - 15) < 1e-9 && std::fabs(v[score->parts()[1]].patchDb["Viola"] + 9) < 1e-9);
+      QVERIFY(std::fabs(v[score->parts()[1]].top - 15) < 1e-9 && std::fabs((v[score->parts()[1]].patchDb["Viola"] - v[score->parts()[1]].shift) + 9) < 1e-9);
       delete score;
       // the shipped SSO map: the strings' M, centred (the five add up to 0), and the woodwinds' and brass' on the strings'
       // scale, all with mp where [levels] realRange plays it (the owner, 2026-10-14: the Meyer rule for everything; the
@@ -2944,13 +2950,13 @@ void TestSoundLibrary::levelSectionBalance()
       QCOMPARE(score->parts().size(), 2);
       v = ContextLevel::volumes(score);
       QCOMPARE(int(v.size()), 2);
-      QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 6.31) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
-      QVERIFY2(std::fabs(v[score->parts()[1]].patchDb["Trumpets a6"] - 6) < 1e-9, qPrintable(QString::number(v[score->parts()[1]].patchDb["Trumpets a6"])));
+      QVERIFY2(std::fabs((v[score->parts()[0]].patchDb["Flute Solo"] - v[score->parts()[0]].shift) + 6.31) < 1e-9, qPrintable(QString::number((v[score->parts()[0]].patchDb["Flute Solo"] - v[score->parts()[0]].shift))));
+      QVERIFY2(std::fabs((v[score->parts()[1]].patchDb["Trumpets a6"] - v[score->parts()[1]].shift) - 6) < 1e-9, qPrintable(QString::number((v[score->parts()[1]].patchDb["Trumpets a6"] - v[score->parts()[1]].shift))));
       // 2 (the default, Clark & Luce): S' = 20.45 - 6 = 14.45, the trumpets at +6, the flute at -2.04 - 14.45 = -16.49
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" } });
       v = ContextLevel::volumes(score);
-      QVERIFY2(std::fabs(v[score->parts()[0]].patchDb["Flute Solo"] + 16.49) < 1e-9, qPrintable(QString::number(v[score->parts()[0]].patchDb["Flute Solo"])));
-      QVERIFY2(std::fabs(v[score->parts()[1]].patchDb["Trumpets a6"] - 6) < 1e-9, qPrintable(QString::number(v[score->parts()[1]].patchDb["Trumpets a6"])));
+      QVERIFY2(std::fabs((v[score->parts()[0]].patchDb["Flute Solo"] - v[score->parts()[0]].shift) + 16.49) < 1e-9, qPrintable(QString::number((v[score->parts()[0]].patchDb["Flute Solo"] - v[score->parts()[0]].shift))));
+      QVERIFY2(std::fabs((v[score->parts()[1]].patchDb["Trumpets a6"] - v[score->parts()[1]].shift) - 6) < 1e-9, qPrintable(QString::number((v[score->parts()[1]].patchDb["Trumpets a6"] - v[score->parts()[1]].shift))));
       // off: no volumes
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },
                                       { "levels/sectionBalance", "0" } });
@@ -3276,6 +3282,117 @@ void TestSoundLibrary::levelTechniqueBalance()
       }
 
 //---------------------------------------------------------
+//   gainStage
+//    the gain stage and the master trim (contextlevel.h › Gain stage and master trim; the owner, 2026-10-15): one patch
+//    at +29.6 dB (its section level) leaves every other patch at 0 dB, only the trim moves them; the trim from the
+//    calibration's levels plus the map's crest (a flat curve: a note's peak = gain + level + crest, the notes' powers
+//    added), never a boost; without a crest the old fallback (the loudest at +6 dB, as before); Library default: none;
+//    MIDI out's CC7 (TrackDelays::midiVolumes) within its top, the rest lower together
+//---------------------------------------------------------
+
+void TestSoundLibrary::gainStage()
+      {
+      auto map = [this](const QString& dynamics) {
+            return loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'%1/>"
+               "<Instrument name='Violin' ids='violin' sectionLevel2='29.6'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+               "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+               "</SoundLibrary>").arg(dynamics).toUtf8().constData());
+            };
+      auto lib = map(" crest='14.515'");
+      QVERIFY(lib);
+      QCOMPARE(lib->crestDb, 14.515);
+      QVERIFY(!std::isfinite(map("")->crestDb));
+      SoundLib::setCurrent(lib);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* violin = score->parts()[0];
+      const Part* viola = score->parts()[1];
+      auto flat = [](double db) {
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = "controller";
+            for (int x : { 16, 64, 127 })
+                  c.points.push_back({ x, db });
+            return c;
+            };
+      auto calibrate = [&](double db) {
+            auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+            cal->setCurve("Violin", 1, flat(db));
+            cal->setCurve("Viola", 1, flat(db));
+            SoundLib::setDynamicsCalibration(cal);
+            };
+      const std::map<QString, QString> on { { "levels/calibrated", "0" }, { "levels/context", "0" },
+                                                    { "levels/sectionBalance", "2" }, { "levels/realRange", "0" } };
+      Playback::setIniValuesForTest(on);
+      auto stage = [&](const Part* part, const QString& patch) {
+            return TrackDelays::gainStageDb(*lib, TrackDelays::of(part, TrackDelays::read(score)), patch);
+            };
+      // the volumes: the Violin +29.6, the Viola 0, nothing lowered (S' 23.6 kept for the old volumes)
+      std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
+      QVERIFY(std::fabs(v[violin].patchDb["Violin"] - 29.6) < 1e-9);
+      QCOMPARE(v[viola].patchDb["Viola"], 0.0);
+      QVERIFY(std::fabs(v[viola].shift - 23.6) < 1e-9);
+
+      // a quiet library (every note at -50 dB, its peak 29.6 - 50 + 14.515 = -5.885 dBFS): no trim, the Viola at 0 dB
+      calibrate(-50);
+      ContextLevel::MasterTrim t = ContextLevel::masterTrim(score);
+      QVERIFY(t.measured);
+      QVERIFY2(t.peakDb >= -5.886 && t.peakDb < -5.87, qPrintable(QString::number(t.peakDb)));      // (the Viola's note adds 0.004)
+      QVERIFY(t.peakAmplitudeDb >= t.peakDb);
+      QCOMPARE(t.db, 0.0);
+      QVERIFY(t.notes > 0 && t.uncalibrated == 0);
+      QVERIFY(std::fabs(t.fallbackDb - 23.6) < 1e-9);
+      QCOMPARE(stage(viola, "Viola"), 0.0);
+      QVERIFY(std::fabs(stage(violin, "Violin") - 29.6) < 1e-9);
+      QCOMPARE(TrackDelays::patchGain(*lib, TrackDelays::of(viola, TrackDelays::read(score)), "Viola"), 1.0);
+      // MIDI out: the Violin's CC7 would be 100 × 10^(29.6 / 40), over 127: both lower by its excess
+      std::map<int, int> cc7 = TrackDelays::midiVolumes(score, *lib, false);
+      QCOMPARE(int(cc7.size()), 2);
+      std::map<QString, int> byPatch;
+      for (const SoundLib::Route& r : SoundLib::routes(score, *lib, true))
+            if (cc7.count(r.port * 16 + r.channel))
+                  byPatch[r.instrument->name] = cc7[r.port * 16 + r.channel];
+      QCOMPARE(byPatch["Violin"], 127);
+      QCOMPARE(byPatch["Viola"], int(std::lround(127 * std::pow(10.0, -29.6 / 40))));
+
+      // a louder one (-30 dB: the Violin's peak +14.115 dBFS): the trim takes it to 0 dBFS, the Viola only by the trim
+      calibrate(-30);
+      t = ContextLevel::masterTrim(score);
+      QVERIFY2(t.db >= 14.115 && t.db < 14.13, qPrintable(QString::number(t.db)));
+      QVERIFY(std::fabs(t.db - t.peakDb) < 1e-9);
+      QVERIFY(std::fabs(stage(viola, "Viola") + t.db) < 1e-9);
+      QVERIFY(std::fabs(stage(violin, "Violin") - (29.6 - t.db)) < 1e-9);
+      const TrackDelays::Delays dv = TrackDelays::of(viola, TrackDelays::read(score));
+      QVERIFY(std::fabs(dv.trim - t.db) < 1e-9);
+      QVERIFY(std::fabs(20 * std::log10(TrackDelays::patchGain(*lib, dv, "Viola")) + t.db) < 1e-9);
+      // the old volumes (a set written before the gain stage): the Violin at +6, the Viola at -23.6
+      QVERIFY(std::fabs(20 * std::log10(TrackDelays::legacyPatchGain(*lib, TrackDelays::of(violin, TrackDelays::read(score)), "Violin")) - 6) < 1e-9);
+      QVERIFY(std::fabs(20 * std::log10(TrackDelays::legacyPatchGain(*lib, dv, "Viola")) + 23.6) < 1e-9);
+      QCOMPARE(ContextLevel::computeMasterTrim(score).db, t.db);
+
+      // without a crest: the fallback, the loudest patch at +6 dB (as before the gain stage)
+      auto noCrest = map("");
+      SoundLib::setCurrent(noCrest);
+      t = ContextLevel::masterTrim(score);
+      QVERIFY(!t.measured);
+      QVERIFY(std::fabs(t.db - 23.6) < 1e-9);
+      QVERIFY(std::fabs(TrackDelays::gainStageDb(*noCrest, TrackDelays::of(viola, TrackDelays::read(score)), "Viola") + 23.6) < 1e-9);
+      QVERIFY(std::fabs(TrackDelays::gainStageDb(*noCrest, TrackDelays::of(violin, TrackDelays::read(score)), "Violin") - 6) < 1e-9);
+      SoundLib::setCurrent(lib);
+
+      // Library default (the level settings off): no gain, no trim
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "0" },
+                                      { "levels/realRange", "0" }, { "levels/micCompensation", "0" }, { "levels/evenLevels", "0" } });
+      t = ContextLevel::masterTrim(score);
+      QCOMPARE(t.db, 0.0);
+      QCOMPARE(stage(violin, "Violin"), 0.0);
+      QVERIFY(TrackDelays::midiVolumes(score, *lib, false).empty());
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   levelMicCompensation
 //    [levels] micCompensation (contextlevel.h › Mics): the map's <Mics fader mix> and <Instrument micLevels micDefault>
 //    (an extra takes its main's); the level of a mix by the fader law (linear in dB between points, in amplitude below
@@ -3388,8 +3505,8 @@ void TestSoundLibrary::levelMicCompensation()
       QVERIFY(score->metaTag(PartControllers::metaTag).isEmpty());
       std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
       QCOMPARE(int(v.size()), 2);
-      QVERIFY(same(v[violin].patchDb["Violin"], 6));                     // (the Performance patch: not routed here)
-      QVERIFY(same(v[violin].micTop["Violin"], 13) && same(v[viola].patchDb["Viola"], -7) && v[viola].micTop.empty());
+      QVERIFY(same((v[violin].patchDb["Violin"] - v[violin].shift), 6));                     // (the Performance patch: not routed here)
+      QVERIFY(same(v[violin].micTop["Violin"], 13) && same((v[viola].patchDb["Viola"] - v[viola].shift), -7) && v[viola].micTop.empty());
       std::map<int, double> got = levels();
       check(got, bar1V, 6);
       check(got, bar2V, 6);
@@ -3425,7 +3542,7 @@ void TestSoundLibrary::levelMicCompensation()
       score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
       v = ContextLevel::volumes(score);
       // (a lane keeps its values to 1e-4: 64 / 127 plays 63.995, 0.0015 dB off)
-      QVERIFY(std::fabs(v[violin].micTop["Violin"] - 13) < 0.01 && std::fabs(v[violin].patchDb["Violin"] - 6) < 0.01);
+      QVERIFY(std::fabs(v[violin].micTop["Violin"] - 13) < 0.01 && std::fabs((v[violin].patchDb["Violin"] - v[violin].shift) - 6) < 0.01);
       got = levels();
       check(got, bar1V, -7);
       check(got, bar2V, 6);
@@ -3632,8 +3749,8 @@ void TestSoundLibrary::levelRealRange()
       std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
       QCOMPARE(int(v.size()), 1);
       QVERIFY(std::fabs(v[part].range - 12) < 1e-9);
-      QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
-      QVERIFY(!v[part].patchDb.count("Violin Legato") || std::fabs(v[part].patchDb["Violin Legato"] - 6) < 1e-9);
+      QVERIFY(std::fabs((v[part].patchDb["Violin"] - v[part].shift) - 6) < 1e-9);
+      QVERIFY(!v[part].patchDb.count("Violin Legato") || std::fabs((v[part].patchDb["Violin Legato"] - v[part].shift) - 6) < 1e-9);
       const TrackDelays::Delays d = TrackDelays::of(part, TrackDelays::read(score));
       QVERIFY(std::fabs(d.rangeTop - 12) < 1e-9);
       QVERIFY(std::fabs(TrackDelays::patchGain(*lib, d, "Violin") - std::pow(10.0, 6.0 / 20)) < 1e-9);
@@ -3692,14 +3809,14 @@ void TestSoundLibrary::levelRealRange()
       QCOMPARE(n[69].cc11, 127);
       QCOMPARE(n[76].cc11, cc11(12 - r));
       QCOMPARE(n[74].cc11, cc11(0 - r));
-      QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
+      QVERIFY(std::fabs((v[part].patchDb["Violin"] - v[part].shift) - 6) < 1e-9);
       // the Meyer rule's map (above): R = 8 (fff), the patches +6, everything 2 lower; ppp -12, mp 0, p -1, f +4 less R
       SoundLib::setDynamicsCalibration(nullptr);
       SoundLib::setCurrent(meyer);
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" } });
       v = ContextLevel::volumes(score);
       QVERIFY2(std::fabs(v[part].range - 8) < 1e-9, qPrintable(QString::number(v[part].range)));
-      QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
+      QVERIFY(std::fabs((v[part].patchDb["Violin"] - v[part].shift) - 6) < 1e-9);
       n = render();
       QCOMPARE(n[72].cc11, cc11(-12 - 8));          // ppp
       QCOMPARE(n[74].cc11, cc11(0 - 8));            // mp
@@ -3727,7 +3844,7 @@ void TestSoundLibrary::levelRealRange()
       SoundLib::setCurrent(spans);
       v = ContextLevel::volumes(score);
       QVERIFY2(std::fabs(v[part].range - 8) < 1e-9, qPrintable(QString::number(v[part].range)));
-      QVERIFY(std::fabs(v[part].patchDb["Violin"] - 6) < 1e-9);
+      QVERIFY(std::fabs((v[part].patchDb["Violin"] - v[part].shift) - 6) < 1e-9);
       n = render();
       QCOMPARE(n[72].cc11, cc11(-3 - 8));           // ppp
       QCOMPARE(n[74].cc11, cc11(0 - 8));            // mp

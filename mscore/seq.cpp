@@ -2706,6 +2706,9 @@ void Seq::libraryMixerChanged(const Part* part)
             }
       if (!_driver || !_driver->canOutputMidi())
             return;
+      // CC7: the Mixer's volume times the patch's gain (its gain stage and master trim: TrackDelays::midiVolumes)
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      const std::map<int, int> volumes = library ? TrackDelays::midiVolumes(cs->masterScore(), *library, true) : std::map<int, int>();
       for (const Part* p : cs->parts()) {
             if (part && p != part)
                   continue;
@@ -2717,7 +2720,9 @@ void Seq::libraryMixerChanged(const Part* part)
                   continue;
             const SoundLib::PartMix m = SoundLib::partMix(p, true);
             for (const std::pair<int, int>& out : outs) {
-                  for (const std::pair<int, int>& cv : { std::make_pair(int(CTRL_VOLUME), m.volume), std::make_pair(int(CTRL_PANPOT), m.pan),
+                  auto vol = volumes.find(out.first * 16 + out.second);
+                  const int volume = vol != volumes.end() ? vol->second : m.volume;
+                  for (const std::pair<int, int>& cv : { std::make_pair(int(CTRL_VOLUME), volume), std::make_pair(int(CTRL_PANPOT), m.pan),
                                                           std::make_pair(int(CTRL_REVERB_SEND), m.reverb),
                                                           std::make_pair(int(CTRL_CHORUS_SEND), m.chorus) }) {
                         const int key = (out.first * 16 + out.second) * 128 + cv.first;

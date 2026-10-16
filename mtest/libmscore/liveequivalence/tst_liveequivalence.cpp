@@ -156,6 +156,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void updateLiveSet();
       void updateLiveSetKnobs();
       void controllerPatchDefault();
+      void liveGainStage();
+      void utilitySet();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -277,6 +279,12 @@ std::vector<QByteArray> setStates(const QByteArray& xml)
       return states;
       }
 }
+
+// a Kontakt track's gain in Live: its fader times MuseScore's Utility (its gain stage, livesetwriter.h › UTILITY_NAME)
+static double liveGain(const LiveSetWriter::Track& t)
+      {
+      return t.volume * (t.utility ? t.utilityGain : 1.0);
+      }
 
 //---------------------------------------------------------
 //   liveSetControllersAndMix
@@ -3312,9 +3320,11 @@ void TestLiveEquivalence::liveSectionBalance()
       for (const LiveSetWriter::Track& t : LiveSetWriter::tracks(score, *lib, { "MuseScore A" })) {
             if (!expected.count(t.patch) || t.lane != 0)
                   continue;
-            const double want = LiveSetWriter::kontaktVolume(SoundLib::partMix(t.partRef, false).volume,
-                                                             std::pow(10.0, expected.at(t.patch) / 20));
-            QVERIFY2(std::fabs(t.volume - want) < 1e-9, qPrintable(QString("%1: %2, expected %3").arg(t.patch).arg(t.volume).arg(want)));
+            // (the gain stage: the fader the Mixer's, MuseScore's Utility the patch's gain)
+            const double mix = LiveSetWriter::mixGain(SoundLib::partMix(t.partRef, false).volume);
+            const double want = mix * std::pow(10.0, expected.at(t.patch) / 20);
+            QVERIFY2(std::fabs(t.volume - mix) < 1e-9, qPrintable(QString("%1: fader %2, expected %3").arg(t.patch).arg(t.volume).arg(mix)));
+            QVERIFY2(std::fabs(liveGain(t) - want) < 1e-9, qPrintable(QString("%1: %2, expected %3").arg(t.patch).arg(liveGain(t)).arg(want)));
             ++checked;
             }
       QCOMPARE(checked, 4);
@@ -3456,8 +3466,11 @@ void TestLiveEquivalence::liveRealRange()
       for (const LiveSetWriter::Track& t : LiveSetWriter::tracks(score, *lib, { "MuseScore A" })) {
             if (t.patch != "Violin" || t.lane != 0)
                   continue;
-            const double want = LiveSetWriter::kontaktVolume(SoundLib::partMix(t.partRef, false).volume, std::pow(10.0, 6.0 / 20));
-            QVERIFY2(std::fabs(t.volume - want) < 1e-9, qPrintable(QString("%1: %2, expected %3").arg(t.patch).arg(t.volume).arg(want)));
+            // (the gain stage: the fader the Mixer's, MuseScore's Utility the patch's gain)
+            const double mix = LiveSetWriter::mixGain(SoundLib::partMix(t.partRef, false).volume);
+            const double want = mix * std::pow(10.0, 6.0 / 20);
+            QVERIFY2(std::fabs(t.volume - mix) < 1e-9, qPrintable(QString("%1: fader %2, expected %3").arg(t.patch).arg(t.volume).arg(mix)));
+            QVERIFY2(std::fabs(liveGain(t) - want) < 1e-9, qPrintable(QString("%1: %2, expected %3").arg(t.patch).arg(liveGain(t)).arg(want)));
             ++checked;
             }
       QCOMPARE(checked, 1);
@@ -3603,8 +3616,11 @@ void TestLiveEquivalence::liveMicCompensation()
       for (const LiveSetWriter::Track& t : LiveSetWriter::tracks(score, *lib, { "MuseScore A" })) {
             if (t.patch != "Violin" || t.lane != 0)
                   continue;
-            const double want = LiveSetWriter::kontaktVolume(SoundLib::partMix(t.partRef, false).volume, got);
-            QVERIFY2(std::fabs(t.volume - want) < 1e-9, qPrintable(QString("%1: %2, expected %3").arg(t.patch).arg(t.volume).arg(want)));
+            // (the gain stage: the fader the Mixer's, MuseScore's Utility the patch's gain)
+            const double mix = LiveSetWriter::mixGain(SoundLib::partMix(t.partRef, false).volume);
+            const double want = mix * got;
+            QVERIFY2(std::fabs(t.volume - mix) < 1e-9, qPrintable(QString("%1: fader %2, expected %3").arg(t.patch).arg(t.volume).arg(mix)));
+            QVERIFY2(std::fabs(liveGain(t) - want) < 1e-9, qPrintable(QString("%1: %2, expected %3").arg(t.patch).arg(liveGain(t)).arg(want)));
             ++checked;
             }
       QCOMPARE(checked, 1);
@@ -4460,6 +4476,189 @@ void TestLiveEquivalence::updateLiveSetKnobs()
       }
 
 //---------------------------------------------------------
+//   liveGainStage
+//    the gain stage in Live (contextlevel.h › Gain stage and master trim; LIVE.md › The plain set › MuseScore gain): the
+//    plain set's Kontakt tracks carry each patch's gain in Live's Utility after the Kontakt ("MuseScore gain"), the fader
+//    at the Mixer's: fader × Utility is MuseScore's slot gain (the Mixer's times TrackDelays::patchGain), the master trim
+//    in every Utility; read back (LiveSet: the Utility's Gain; no Mixer change found); Update Live Set writes nothing for
+//    an unchanged score, writes a changed gain in place, and moves a set written before the gain stage over (the Utility
+//    inserted after the Kontakt, its fader from the old volume to the Mixer's); the Utility's top (+35 dB) and the rest
+//    on the fader
+//---------------------------------------------------------
+
+static const char* const GAIN_MAP =
+   "<SoundLibrary name='LiveG'><Switch type='cc' number='32'/><Dynamics cc='1' crest='14.515'/>"
+   "<Instrument name='Violin' ids='violin' sectionLevel2='29.6'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+   "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+   "</SoundLibrary>";
+
+void TestLiveEquivalence::liveGainStage()
+      {
+      // the Utility's range, the rest on the fader
+      LiveSetWriter::KontaktGains g = LiveSetWriter::kontaktGains(100, 1.0, 29.6);
+      QVERIFY(g.hasUtility && std::fabs(g.volume - 1.0) < 1e-12 && std::fabs(LiveSetWriter::utilityDb(g.utility) - 29.6) < 1e-9);
+      g = LiveSetWriter::kontaktGains(100, 1.0, 40.0);
+      QVERIFY(std::fabs(g.utility - LiveSetWriter::UTILITY_MAX) < 1e-12 && std::fabs(LiveSetWriter::utilityDb(g.volume) - 5.0) < 1e-9);
+      g = LiveSetWriter::kontaktGains(100, std::pow(10.0, 3.0 / 20), 0.0);
+      QVERIFY(!g.hasUtility && std::fabs(LiveSetWriter::utilityDb(g.volume) - 3.0) < 1e-9);
+
+      qputenv("MSTESTSYNTH_INIT_MS", "40");
+      LiveHost host(this, "", { "Violin", "Viola" }, GAIN_MAP);
+      QVERIFY(host.ok);
+      struct Reset { ~Reset() { SoundLib::setDynamicsCalibration(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto flat = [](double db) {
+            SoundLib::DynamicsCurve c;
+            c.drivenBy = "controller";
+            for (int x : { 16, 64, 127 })
+                  c.points.push_back({ x, db });
+            return c;
+            };
+      auto calibrate = [&](double db) {
+            auto cal = std::make_shared<SoundLib::DynamicsCalibration>();
+            cal->setCurve("Violin", 1, flat(db));
+            cal->setCurve("Viola", 1, flat(db));
+            SoundLib::setDynamicsCalibration(cal);
+            };
+      calibrate(-30);                         // (the Violin's notes peak at +14.1 dBFS: a trim)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "2" },
+                                      { "levels/realRange", "0" } });
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const double trim = ContextLevel::masterTrim(score).db;
+      QVERIFY2(trim > 14.1 && trim < 14.2, qPrintable(QString::number(trim)));
+      const QString path = host.dir.path() + "/Gain Project/Gain.als";
+      auto create = [&](LiveIntegration::LiveSetPlan* plan) {
+            QString error;
+            QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::PLAIN, plan, &error), qPrintable(error));
+            QDir().mkpath(QFileInfo(path).absolutePath());
+            QVERIFY2(LiveSetWriter::write(path, plan->spec, &error), qPrintable(error));
+            LiveIntegration::recordWritten(score, plan->spec, LiveSetWriter::xml(plan->spec), LiveSet::read(path), false);
+            };
+      LiveIntegration::LiveSetPlan plan;
+      create(&plan);
+      // each Kontakt track: fader × Utility = MuseScore's slot gain; the fader the Mixer's
+      const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+      std::map<QString, double> utilityDb;
+      for (const LiveSetWriter::Track& t : plan.spec.tracks) {
+            if (!t.hasPlugin)
+                  continue;
+            const double mix = LiveSetWriter::mixGain(SoundLib::partMix(t.partRef, false).volume);
+            const double ms = mix * TrackDelays::patchGain(*host.lib, TrackDelays::of(t.partRef, delays), t.patch);
+            QVERIFY2(std::fabs(liveGain(t) / ms - 1.0) < 1e-9, qPrintable(QString("%1: Live %2, MuseScore %3").arg(t.patch).arg(liveGain(t)).arg(ms)));
+            QVERIFY(std::fabs(t.volume - mix) < 1e-12);
+            QVERIFY(t.utility);
+            utilityDb[t.patch] = LiveSetWriter::utilityDb(t.utilityGain);
+            }
+      QCOMPARE(int(utilityDb.size()), 2);
+      QVERIFY(std::fabs(utilityDb["Violin"] - (29.6 - trim)) < 1e-6);
+      QVERIFY(std::fabs(utilityDb["Viola"] + trim) < 1e-6);
+      // the file: a Utility named so after each Kontakt, its Gain as planned, Live's bookkeeping fine
+      const QByteArray xml = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      QCOMPARE(xml.count("<StereoGain Id="), 2);
+      QCOMPARE(xml.count("<UserName Value=\"MuseScore gain\" />"), 2);
+      auto readGains = [](const LiveSet::Set& set) {
+            std::map<QString, std::pair<double, double>> out;           // track -> fader, Utility (-1: none)
+            for (const LiveSet::Track& t : set.tracks)
+                  if (!t.devices.isEmpty())
+                        out[t.name] = { t.volume, t.hasMuseScoreGain ? t.museScoreGain : -1.0 };
+            return out;
+            };
+      std::map<QString, std::pair<double, double>> got = readGains(LiveSet::read(path));
+      QCOMPARE(int(got.size()), 2);
+      for (const LiveSetWriter::Track& t : plan.spec.tracks)
+            if (t.hasPlugin) {
+                  QVERIFY2(got.count(t.name), qPrintable(t.name));
+                  QVERIFY(std::fabs(got[t.name].second / t.utilityGain - 1.0) < 1e-6);
+                  QVERIFY(std::fabs(got[t.name].first - t.volume) < 1e-9);
+                  }
+      // Update Live Set, the score unchanged: nothing written
+      LiveIntegration::UpdateResult res;
+      QString error;
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(!res.written, qPrintable(res.text()));
+      QVERIFY2(res.report.userDevices == 0, qPrintable(res.text()));
+      // the gains changed (a quieter calibration: no trim): each Utility's Gain in place
+      calibrate(-50);
+      QCOMPARE(ContextLevel::masterTrim(score).db, 0.0);
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written, qPrintable(res.text()));
+      got = readGains(LiveSet::read(path));
+      for (const auto& x : got) {
+            const bool violin = x.first.startsWith("Violin");
+            QVERIFY2(std::fabs(LiveSetWriter::utilityDb(x.second.second) - (violin ? 29.6 : 0.0)) < 1e-6,
+                     qPrintable(QString("%1: %2 dB").arg(x.first).arg(LiveSetWriter::utilityDb(x.second.second))));
+            QVERIFY(std::fabs(x.second.first - 1.0) < 1e-9);          // (the faders untouched: the owner's)
+            }
+      QCOMPARE(LiveSetWriter::validate(readSet(path)), QString());
+
+      // a set written before the gain stage: no Utility, the old volume on the fader (the Violin +6, the Viola -23.6);
+      // Update Live Set inserts the Utility after the Kontakt and moves the fader to the Mixer's
+      calibrate(-30);
+      create(&plan);
+      {
+            const QByteArray now = readSet(path);
+            LiveSetUpdate::Xml x(now);
+            QVERIFY(x.ok());
+            std::vector<LiveSetUpdate::Edit> e;
+            for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" }))) {
+                  const int devices = x.path(t, { "DeviceChain", "DeviceChain", "Devices" });
+                  const int u = x.child(devices, "StereoGain");
+                  if (u < 0)
+                        continue;
+                  e.push_back({ x.lineStart(u), x.at(u).end + 2, QByteArray() });         // (the line and its CRLF)
+                  const QString name = x.childValue(x.child(t, "Name"), "EffectiveName");
+                  const LiveSetWriter::Track* pt = nullptr;
+                  for (const LiveSetWriter::Track& k : plan.spec.tracks)
+                        if (k.name == name && k.hasPlugin)
+                              pt = &k;
+                  QVERIFY(pt && pt->legacyVolume > 0);
+                  QVERIFY(std::fabs(LiveSetWriter::utilityDb(pt->legacyVolume) - (name.startsWith("Violin") ? 6.0 : -23.6)) < 1e-6);
+                  const int volume = x.path(t, { "DeviceChain", "Mixer", "Volume", "Manual" });
+                  int a = 0, b = 0;
+                  QVERIFY(x.attrRange(volume, "Value", &a, &b));
+                  e.push_back({ a, b, LiveSetWriter::Writer::num(pt->legacyVolume).toUtf8() });
+                  }
+            QCOMPARE(int(e.size()), 4);
+            QByteArray old;
+            QVERIFY(LiveSetUpdate::apply(now, e, &old));
+            QVERIFY(!old.contains("StereoGain"));
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(LiveSetWriter::gzip(old));
+      }
+      got = readGains(LiveSet::read(path));
+      for (const auto& x : got)
+            QCOMPARE(x.second.second, -1.0);
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written, qPrintable(res.text()));
+      const QByteArray up = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(up), QString());
+      got = readGains(LiveSet::read(path));
+      for (const LiveSetWriter::Track& t : plan.spec.tracks)
+            if (t.hasPlugin) {
+                  QVERIFY2(std::fabs(got[t.name].second / t.utilityGain - 1.0) < 1e-6,
+                           qPrintable(QString("%1: Utility %2, expected %3\n%4").arg(t.name).arg(got[t.name].second).arg(t.utilityGain).arg(res.text())));
+                  QVERIFY2(std::fabs(got[t.name].first - t.volume) < 1e-9,
+                           qPrintable(QString("%1: fader %2, expected %3\n%4").arg(t.name).arg(got[t.name].first).arg(t.volume).arg(res.text())));
+                  }
+      // (the Utility right after the Kontakt)
+      {
+            LiveSetUpdate::Xml x(up);
+            for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" }))) {
+                  const std::vector<int> d = x.children(x.path(t, { "DeviceChain", "DeviceChain", "Devices" }));
+                  if (d.empty() || !x.is(d[0], "PluginDevice"))
+                        continue;
+                  QVERIFY(d.size() == 2 && x.is(d[1], "StereoGain"));
+                  }
+      }
+      // the Mixer as it was: the old fader read back as the Mixer's, not as a change
+      QCOMPARE(SoundLib::partMix(score->parts()[0], false).volume, 100);
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   controllerPatchDefault
 //    the controllers' own values shipped with the map (<Controller patchDefault>; the owner, 2026-10-15): a patch never
 //    loaded on this computer shows the map's value as its unautomated lane; once its setup loads, the plug-in's live value
@@ -4510,6 +4709,86 @@ void TestLiveEquivalence::controllerPatchDefault()
       std::unique_ptr<Vst3Plugin> p2 = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
       QVERIFY(SoundLibraryHost::loadSetup(p2.get(), *host.lib, "Violin", TESTSYNTH, &error));
       QCOMPARE(logged().count("differ from the map's"), 1);
+      }
+
+//---------------------------------------------------------
+//   utilitySet
+//    a tool, not a test (skipped without MS_UTILITY_IN): a Live set's Kontakt tracks (a PluginDevice) get MuseScore's
+//    Utility (LiveSetWriter::utilityDevice, as Create Live Set writes it) right after the Kontakt, at MS_UTILITY_DB
+//    ("<track name>=<dB>,…"; a track not listed: left alone); one that has it already gets its Gain written in place (as
+//    Update Live Set does); written to MS_UTILITY_OUT (gzip). Each Kontakt track's fader and Utility as read back
+//    (LiveSet::read) go to stdout. For checking in real Live what a Linux build writes (the VM, LIVE.md)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::utilitySet()
+      {
+      if (!qEnvironmentVariableIsSet("MS_UTILITY_IN"))
+            QSKIP("a tool: MS_UTILITY_IN=<set.als> MS_UTILITY_OUT=<set.als> MS_UTILITY_DB=\"<track>=<dB>,…\"");
+      const QByteArray in = readSet(qEnvironmentVariable("MS_UTILITY_IN"));
+      QVERIFY(!in.isEmpty());
+      std::map<QString, double> want;
+      for (const QString& kv : qEnvironmentVariable("MS_UTILITY_DB").split(",", QString::SkipEmptyParts)) {
+            const int eq = kv.lastIndexOf('=');
+            if (eq > 0)
+                  want[kv.left(eq).trimmed()] = kv.mid(eq + 1).toDouble();
+            }
+      LiveSetUpdate::Xml x(in);
+      QVERIFY2(x.ok(), qPrintable(x.error()));
+      const int nextElem = x.path(x.root(), { "LiveSet", "NextPointeeId" });
+      int next = x.value(nextElem).toInt();
+      std::vector<LiveSetUpdate::Edit> edits;
+      for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" }))) {
+            const QString name = x.childValue(x.child(t, "Name"), "UserName").isEmpty()
+                                 ? x.childValue(x.child(t, "Name"), "EffectiveName") : x.childValue(x.child(t, "Name"), "UserName");
+            auto w = want.find(name);
+            const int devices = x.path(t, { "DeviceChain", "DeviceChain", "Devices" });
+            const int plugin = x.child(devices, "PluginDevice");
+            if (w == want.end() || plugin < 0)
+                  continue;
+            const double gain = std::pow(10.0, std::min(w->second, LiveSetWriter::UTILITY_MAX_DB) / 20.0);
+            int util = -1;
+            for (int d : x.children(devices, "StereoGain"))
+                  if (x.childValue(d, "UserName") == QLatin1String(LiveSetWriter::UTILITY_NAME))
+                        util = d;
+            if (util >= 0) {
+                  const int manual = x.path(util, { "Gain", "Manual" });
+                  int a = 0, b = 0;
+                  QVERIFY(manual >= 0 && x.attrRange(manual, "Value", &a, &b));
+                  edits.push_back({ a, b, LiveSetWriter::Writer::num(gain).toUtf8() });
+                  continue;
+                  }
+            int listId = 0;
+            for (int d : x.children(devices))
+                  listId = std::max(listId, x.attr(d, "Id").toInt() + 1);
+            LiveSetWriter::Writer uw;
+            while (uw.nextId() < next)
+                  uw.id();
+            LiveSetWriter::utilityDevice(uw, listId, gain, LiveSetWriter::utilityInfo(w->second, 0.0));
+            next = uw.nextId();
+            QByteArray block;
+            const QByteArray indent = x.indent(plugin);
+            for (QByteArray l : uw.data().split('\n')) {
+                  if (l.endsWith('\r'))
+                        l.chop(1);
+                  if (!l.isEmpty())
+                        block += "\r\n" + indent + l;
+                  }
+            edits.push_back({ x.at(plugin).end, x.at(plugin).end, block });
+            }
+      int a = 0, b = 0;
+      QVERIFY(x.attrRange(nextElem, "Value", &a, &b));
+      edits.push_back({ a, b, QByteArray::number(next) });
+      QByteArray out;
+      QVERIFY(LiveSetUpdate::apply(in, edits, &out));
+      QCOMPARE(LiveSetWriter::validate(out), QString());
+      QFile f(qEnvironmentVariable("MS_UTILITY_OUT"));
+      QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+      f.write(LiveSetWriter::gzip(out));
+      f.close();
+      for (const LiveSet::Track& t : LiveSet::read(qEnvironmentVariable("MS_UTILITY_OUT")).tracks)
+            if (!t.devices.isEmpty())
+                  qInfo("%s: fader %.3f dB, MuseScore gain %s", qPrintable(t.name), LiveSetWriter::utilityDb(t.volume),
+                        t.hasMuseScoreGain ? qPrintable(QString("%1 dB").arg(LiveSetWriter::utilityDb(t.museScoreGain), 0, 'f', 3)) : "none");
       }
 
 //---------------------------------------------------------
@@ -4635,6 +4914,35 @@ void TestLiveEquivalence::dumpEvents()
             QFile vf(out + "/headroom.txt");
             QVERIFY(vf.open(QIODevice::WriteOnly | QIODevice::Text));
             vf.write((vl.join("\n") + "\n").toUtf8());
+      }
+      // gains.txt (the gain stage, contextlevel.h › Gain stage and master trim): the master trim, then per route
+      // "part|patch|lane|old dB|new dB|fader dB|Utility dB": its gain as it was until 2026-10-15 (TrackDelays::legacyPatchGain:
+      // S' lower to fit Live's +6 dB), as it is now (patchGain: MuseScore's slot), and in the plain set (the Kontakt track's
+      // fader at the Mixer's default, MuseScore's Utility)
+      {
+            const ContextLevel::MasterTrim mt = ContextLevel::masterTrim(score);
+            const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+            QStringList gl;
+            double shift = 0.0;
+            for (const auto& v : ContextLevel::volumes(score))
+                  shift = std::max(shift, v.second.shift);
+            gl << QString("trim %1 dB, measured %2, peak %3 dBFS (amplitudes added %4) at %5 s with %6 notes sounding, fallback %7 dB, "
+                          "S' %8 dB, %9 notes, %10 without their own curve")
+                  .arg(mt.db, 0, 'f', 2).arg(mt.measured ? "yes" : "no").arg(mt.peakDb, 0, 'f', 2).arg(mt.peakAmplitudeDb, 0, 'f', 2)
+                  .arg(mt.atSeconds, 0, 'f', 2).arg(mt.sounding).arg(mt.fallbackDb, 0, 'f', 2).arg(shift, 0, 'f', 2)
+                  .arg(mt.notes).arg(mt.uncalibrated);
+            auto dB = [](double g) { return QString::number(g > 0 ? 20 * std::log10(g) : -200.0, 'f', 2); };
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib)) {
+                  const TrackDelays::Delays d = TrackDelays::of(r.part, delays);
+                  const QString patch = r.instrument->name;
+                  const LiveSetWriter::KontaktGains k = LiveSetWriter::kontaktGains(100, TrackDelays::faderGain(*lib, d, patch),
+                                                                                    TrackDelays::gainStageDb(*lib, d, patch));
+                  gl << QStringList({ r.part->partName(), patch, QString::number(r.lane), dB(TrackDelays::legacyPatchGain(*lib, d, patch)),
+                                      dB(TrackDelays::patchGain(*lib, d, patch)), dB(k.volume), k.hasUtility ? dB(k.utility) : QString("-") }).join("|");
+                  }
+            QFile gf(out + "/gains.txt");
+            QVERIFY(gf.open(QIODevice::WriteOnly | QIODevice::Text));
+            gf.write((gl.join("\n") + "\n").toUtf8());
       }
       // trace.txt: "part|seconds|pitch|patch|performance|glide leave ms|glide arrive ms" per library note (seconds: its
       // written start; performance 0 none, 1 attack, 2 transition; glide: a bent transition's, libraryPitchBends; -1 none)

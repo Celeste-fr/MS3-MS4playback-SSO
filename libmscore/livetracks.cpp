@@ -529,8 +529,26 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   bool active = true;
                   if (kontakt && part) {
                         const SoundLib::PartMix pm = SoundLib::partMix(part, false);
-                        // (its Volume carries the patch's track-level headroom too: not the Mixer's)
-                        gain = library ? TrackDelays::patchGain(*library, TrackDelays::of(part, delays), w.delayKey) : 1.0;
+                        // (its Volume carries the patch's track-level headroom too, and what of the gain stage is over the
+                        // Utility's top: not the Mixer's. A set written before the gain stage, no MuseScore Utility on the
+                        // track: its fader has the volume as it was then, TrackDelays::legacyPatchGain)
+                        const TrackDelays::Delays d = TrackDelays::of(part, delays);
+                        if (!library)
+                              gain = 1.0;
+                        else if (t.hasMuseScoreGain) {
+                              const LiveSetWriter::KontaktGains g = LiveSetWriter::kontaktGains(
+                                    100, TrackDelays::faderGain(*library, d, w.delayKey), TrackDelays::gainStageDb(*library, d, w.delayKey));
+                              gain = g.volume;
+                              const double want = LiveSetWriter::utilityDb(g.utility);
+                              const double got = LiveSetWriter::utilityDb(t.museScoreGain);
+                              if (std::fabs(want - got) > 0.01)
+                                    notImported << QObject::tr("Track \"%1\": its \"%2\" Utility at %3 dB (MuseScore's: %4 dB) is "
+                                                               "MuseScore's gain stage; Update Live Set writes MuseScore's again (use "
+                                                               "the track's fader)").arg(t.name, LiveSetWriter::UTILITY_NAME)
+                                                   .arg(got, 0, 'f', 2).arg(want, 0, 'f', 2);
+                              }
+                        else
+                              gain = TrackDelays::legacyPatchGain(*library, d, w.delayKey);
                         volume = LiveSetWriter::kontaktVolume(pm.volume, gain);
                         pan = LiveSetWriter::mixPan(pm.pan);
                         active = !pm.muted;

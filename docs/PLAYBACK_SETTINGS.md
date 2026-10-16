@@ -210,7 +210,7 @@ What B' changes in *Whence* (the final values, branch `bprime-final`, 2026-10-15
 shipped calibration; against integrate-1012, calibrated 1 and the 2026-10-10 grid): the 109 velocity notes are all
 Spiccato (no pizzicato in Whence), each D softer: Violins 1 -7 .. -12 velocities (21 notes, median 107 -> 95), Violins 2
 -5 .. -12 (45, 105 -> 93), Violas -5 .. -7 (41, 111 -> 106), Celli -15 (1, 127 -> 112: no longer capped), Basses -8
-(1, 100 -> 92). The slurs take the re-measured gains as measured, no shift: G 15.29 -> 16.32 dB, S 9.29 -> 10.32 (the
+(1, 100 -> 92). The slurs take the re-measured gains as measured, no shift: G 15.29 -> 16.32 dB, S 9.29 -> 10.32 before the gain stage (the
 first B', with the shift and the placeholder -4.2: G 11.09, S 5.09). Audit: OVERLAP 0, UNMEASURED 10 info, CAPPED 1
 info, ARRIVAL 0 fail / 2 warn, LEVEL STEP 0, DROPPED 0, LEAP 0. Untried in Kontakt / SSO and not heard.
 
@@ -219,7 +219,7 @@ What option B changed in *Whence* (Recommended, `dumpEvents` chunked, the shippe
 section's D: Violins 1 +7 .. +8 velocities (21 notes, D +2.9 dB), Violins 2 +9 .. +14 (45, +6.0), Violas +6 .. +11 (41,
 +6.0), Basses +17 (1, +9.2); the Celli's one is at 127 under both (capped: its rest by CC11, the Celli's real-range top
 0.10 -> 1.75 dB; Violas' 0 -> 2.47, Violins 2's 0 -> 0.11). The slurs follow (the level rule): the score's G 15.29 ->
-16.94 dB, every patch's volume 1.65-3.3 dB lower together (S'), and each slur against its section's All techniques patch
+16.94 dB, every patch's volume 1.65-3.3 dB lower together (S', before the gain stage and master trim replaced it the same day), and each slur against its section's All techniques patch
 +2.84 (Violins 1), +5.88 (Violas), +1.57 dB (Celli), the D of its Spiccato within CC11's rounding: the slurs stay 1.3 dB
 over the staccatos. The audit unchanged (OVERLAP 0, UNMEASURED 10, CAPPED 288, ARRIVAL 33 / 6, the rest 0).
 
@@ -302,13 +302,15 @@ and in Recommended, 0 in Library default; per score through `playbackSettings`; 
   median pitch (`libmscore/contextlevel.h`). One gain per slur: no level step inside it. A note outside a slur (staff
   text "performance") is a phrase of one.
 - The gain reaches 29.6 dB (Celli pp, 136 ms, mid register; 21 before the 2026-10-15 re-measure), more than CC11 can add. The score's largest gain G over every slur of those
-  parts is shared out (`ContextLevel::volumes`): the Performance patches play at volume G - S, every other patch of the
-  library's parts S = max(0, G - 6) dB lower together (6: Live's Volume top; the owner, 2026-10-10: Performance levels
-  move together, by lowering the rest: one shared gain, not equal levels; section balance's per-section offsets go on
-  top, 2026-10-12), and each slur plays gain - G by CC11. The volumes go through
-  `TrackDelays::patchGain` (the Kontakt slot's volume in MuseScore; `LiveSetWriter::kontaktVolume` / the plain set's
-  Kontakt track Volume in Live), the CC11 through the per-note levels (`libraryNoteLevels`): Live's clips and the plain
-  set's CC11 lanes carry it. They are not kept in the `trackDelays` metaTag; the Mixer's own track levels add.
+  parts is shared out (`ContextLevel::volumes`): the Performance patches play G louder by their **gain stage**, every
+  other patch of the library's parts at 0 dB (the owner, 2026-10-10: Performance levels move together, one shared gain,
+  not equal levels; section balance's per-section offsets go on top, 2026-10-12), and each slur plays gain - G by CC11.
+  Until 2026-10-15 every patch was S = max(0, G - 6) dB lower so the loudest fit Live's +6 dB fader; the gain stage and
+  the master trim took its place (below, Gain stage and master trim: the same levels, one trim per score against
+  clipping). The gains go through `TrackDelays::patchGain` (the Kontakt slot's gain in MuseScore; MuseScore's Utility
+  after the Kontakt in Live, `LiveSetWriter::kontaktGains`), the CC11 through the per-note levels (`libraryNoteLevels`):
+  Live's clips and the plain set's CC11 lanes carry it. They are not kept in the `trackDelays` metaTag; the Mixer's own
+  track levels add.
 - An Inspector level on top: louder along the patch's own curve from the written value (CC1), softer by CC11.
 - `[levels] calibrated` 2's D doesn't move the gains: they are measured against the held Long, as D is (until
   2026-10-15 every slur gain took its section's Spiccato D, `ContextLevel::staccatoShiftDb`, removed: it would count D
@@ -556,15 +558,16 @@ Winds).
 How it plays (`ContextLevel::volumes`):
 
 - Each section (strings; since 2026-10-14 woodwinds and brass) has its level O (the map's `<Instrument sectionLevel>` on
-  the main patch; extras take it). Every patch of the section plays O louder by its volume (`TrackDelays::patchGain`:
-  the Kontakt slot hosted, the route set's and the plain set's Kontakt track Volume in Live). Staccatos and Performance
-  alike.
-- With `[levels] context` a phrase plays gain + O, a staccato O; everything lower together by S' = max(0, max over
-  phrases of gain + O - 6): the loudest track at Live's Volume top (+6 dB), none capped, all the Performance tracks
-  moving together (the owner, 2026-10-10). A part's Performance patch plays at T + O - S', T = min(G, S' + 6 - O), its
-  phrases' CC11 gain - T (the rule's own CC11 values where G fits under +6; T is at least the part's own loudest gain,
-  so no CC11 goes over 127).
-- So each note plays the rule's level plus its section's O, less one common constant (S' - S).
+  the main patch; extras take it). Every patch of the section plays O louder by its gain stage (`TrackDelays::patchGain`:
+  the Kontakt slot hosted, MuseScore's Utility on the route set's and the plain set's Kontakt tracks in Live). Staccatos
+  and Performance alike.
+- With `[levels] context` a phrase plays gain + O, a staccato O, none capped, all the Performance tracks moving together
+  (the owner, 2026-10-10). A part's Performance patch plays at T + O, T = min(G, S' + 6 - O), S' = max(0, max over
+  phrases of gain + O - 6), its phrases' CC11 gain - T (the rule's own CC11 values where G fits under +6; T is at least
+  the part's own loudest gain, so no CC11 goes over 127). Until 2026-10-15 everything was S' lower too, the loudest track
+  at Live's Volume top (+6 dB); now the master trim (below) lowers everything only as far as the score's loudest moment
+  needs. S' is kept (`Volumes::shift`) so T and the CC11 values stay what they were.
+- So each note plays the rule's level plus its section's O, less one common constant (the master trim).
 - Off, or no patch of the score's library parts with a level: the rule alone, as above.
 
 Whence (quarter tones), Recommended (dumpEvents on the Linux dev machine, no Kontakt): the Celli - Performance stays
@@ -711,10 +714,11 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   velocity (the Velocity lane).
 - **Headroom**: CC11 only lowers. A part's notes play realDb (+ realExtra) less the part's largest R, found by rendering
   the score once (`ContextLevel::realRangeTops`, every CC1 value each note meets), and every patch of the part plays R
-  louder by its volume (`TrackDelays::patchGain`), within the same S' as the level rule and the section balance: the
-  loudest patch at Live's Volume top (+6 dB), everything else lower together.
+  louder by its gain stage (`TrackDelays::patchGain`), with the level rule's and the section balance's, less the master
+  trim (below).
 - **Live**: the CC11 values are the renderer's (`libraryNoteLevels`), so Live's clips and the plain set's CC11 lanes carry
-  them; the volumes reach the route set's and the plain set's Kontakt track Volume (`tst_liveequivalence::liveRealRange`).
+  them; the gains reach MuseScore's Utility on the route set's and the plain set's Kontakt tracks
+  (`tst_liveequivalence::liveRealRange`).
 
 The data (`tools/soundlibraries/real_range.py` → `sso_real_range.json` → `gen_spitfire_sso.py` → the map's
 `<Instrument realSpan longLevel realPlay>` on the main patches, their extras take them; `realPlay="a b"` only where the
@@ -806,12 +810,12 @@ the design.
   a run of joined notes with current values glides on top of the route's CC11 schedule (the level rule, section balance,
   realRange, track levels: dB add up), a message per 5 ms where the value changes, the CC11 in force again at the next
   note-on. **Headroom**: every note on a patch plays its largest value lower by CC11 (`TrackDelays::evenDb`), so no
-  correction is cut at CC11 127; the patch's volume adds it back as far as it fits under Live's +6 dB (`patchGain`), and
-  the rest lowers every library patch of the score alike by its volume (`Delays::evenAll`): the balance stays, the
-  library plays that much quieter, as the listening test's shift did (2026-10-13: Celli - Performance already at +6 dB by
-  the level rule, the first VM run cut every boost at 127).
-- **Live**: the same CC11 events reach Live's clips and the plain set's CC11 lane; the headroom the Kontakt tracks' Volume
-  (`tst_liveequivalence::liveEvenLevels`).
+  correction is cut at CC11 127; the patch's gain stage adds it back (`patchGain`, uncapped since 2026-10-15), the master
+  trim (below) keeping the score from clipping. Until 2026-10-15 the volume added it only as far as it fit under Live's
+  +6 dB and the rest lowered every library patch alike (`Delays::evenAll`, now only the old volumes', `legacyPatchGain`;
+  2026-10-13: Celli - Performance already at +6 dB by the level rule, the first VM run cut every boost at 127).
+- **Live**: the same CC11 events reach Live's clips and the plain set's CC11 lane; the headroom MuseScore's Utility on the
+  Kontakt tracks (`tst_liveequivalence::liveEvenLevels`).
 - **Measured in the background near edits** (branch `even-auto`, 2026-10-13; libmscore/evenauto.h, mscore/evenautomeasurer.h;
   no setting of its own: on whenever `[levels] evenLevels` plays for the score and the library plays through its
   plug-in). The owner (2026-10-13): a note plays its **measured** correction or playback waits for it, never a predicted
@@ -883,9 +887,9 @@ default**) makes the change up, so the section stays at its balance whatever mic
   Outrigger and Leader at their default. fader(v) the measured law (map
   `<Mics fader>`: linear in dB between the measured values, in amplitude below the first). The compensation C is minus
   that level; a mix in which no mic sounds stays silent (C 0).
-- **Played** where the section level is: the patches' volumes (`ContextLevel::volumes`, `TrackDelays::patchGain`: the
-  hosted slot, the route set's and the plain set's Kontakt track Volume), within the same S' (past Live's Volume top,
-  +6 dB, everything lower together). Fixed values (flat lanes, as the Controllers values were: a migrated score plays the same volumes) change nothing
+- **Played** where the section level is: the patches' gain stage (`ContextLevel::volumes`, `TrackDelays::patchGain`: the
+  hosted slot, MuseScore's Utility on the route set's and the plain set's Kontakt tracks), less the master trim. Fixed
+  values (flat lanes, as the Controllers values were: a migrated score plays the same volumes) change nothing
   else, in Live too. **Automated mics** (any other lane): the volume
   carries the part's largest C over its note starts (`Volumes::micTop`), each note its own C at its start less that, by
   CC11 (`trackLevel` in rendermidi.cpp: the per-note levels, so Live's clips and the plain set's CC11 lane carry it). A
@@ -918,9 +922,69 @@ default**) makes the change up, so the section stays at its balance whatever mic
   were measured).
 
 Tests: `tst_soundlibrary::levelMicCompensation` (the map's attributes, the laws, the power sum, Mic Mix Distance and a
-set mic, silence, a migrated Controllers value (a flat lane) as the volumes within S', a lane by CC11, layers, presets),
+set mic, silence, a migrated Controllers value (a flat lane) on the gain stage, a lane by CC11, layers, presets),
 `tst_liveequivalence::liveMicCompensation` (a fixed Close and a Tree lane: MuseScore's gain = the route set's and the
 plain set's Kontakt gain, Live's clips' CC11 = MuseScore's, the plain set's CC11 lane).
+
+## Gain stage and master trim
+
+The owner, 2026-10-15 ("sure", then "yeah sure let's go with utility"): stop solving "one quiet patch needs more than
++6 dB" by lowering every other patch by S' = max(0, loudest - 6). The level rule's gain, the section balance, the real
+range's tops, the mic compensation and the even levels are each patch's own **gain stage** after its Kontakt; one
+**master trim** per score keeps the loudest moment from clipping. Every level number is the one before; only where the
+gain is applied moved (`libmscore/contextlevel.h` › Gain stage and master trim).
+
+- **The gain stage** (`TrackDelays::gainStageDb`): the patch's volume from the levels (`ContextLevel::Volumes::patchDb`:
+  G or T, O, R, C; no longer less S') plus the even levels' headroom (`evenDb`), less the score's trim; uncapped. What
+  stays on the fader with the Mixer's: the track levels' headroom (`faderGain`, 0 … +6 dB, as before). `patchGain` =
+  both.
+  - **MuseScore hosted**: the plug-in slot's output gain (`Vst3Synth::setMix`, a float factor, no top).
+  - **Live** (plain set and route set): Live's stock **Utility** right after the Kontakt on each Kontakt track that needs
+    a gain, named **MuseScore gain** (`LiveSetWriter::UTILITY_NAME`, `utilityDevice`; its Info text says what it holds).
+    Its Gain is a linear factor 0 (-inf) … 56.2341309 (+35 dB): the range Live 12.4 saves (a factory set saved by Live
+    12.4d1: `<Gain>` Manual 1 = 0 dB, MidiControllerRange 0 … 56.2341309; `<LegacyGain>` -35 … 35 dB, LegacyMode false).
+    Above +35 dB the rest goes on the fader (`kontaktGains`), within its +6 dB. The fader stays at its old place (the
+    part's Mixer and the track levels' headroom), the owner's to use. The set stays Live 12.2's format.
+  - **MIDI out** (no host, no Utility): the gain goes on CC7 with the Mixer's (`TrackDelays::midiVolumes`, on the host's
+    law: gain = (CC7 / 100)², so CC7 127 = +4.15 dB); where a route would go over, every route lower together by the
+    largest excess (the old way, CC7 in the gain stage's place). Until 2026-10-15 MIDI out sent the Mixer's CC7 alone
+    and none of the level volumes. How a receiver turns CC7 into gain is its own (LIVE.md › What still differs).
+- **The master trim** (`ContextLevel::masterTrim`; cached per score until an edit, undo, settings, routes, library or
+  calibration change; one render of the score with the untrimmed gains):
+
+  ```
+  peak(t) = 10 log10 Σ_n 10^((g_n + e_n(t) + L_n(t) + crest) / 10)          trim = max(0, max_t peak(t))
+  ```
+
+  over the library notes n sounding at t (note-on to note-off as rendered; release tails left out): g_n its patch's
+  untrimmed gain (`patchGain`, dB; the Mixer and Live's faders are the owner's, not counted), e_n its route's CC11 in
+  force (20 log10 (CC11 / 127)), L_n its articulation's loudest 50 ms (the dynamics calibration's curve, dB as
+  `dynamics.json` has it: at the note's velocity, its route's dynamics CC in force, or the larger of both, as the curve is
+  driven; at its pitch where measured; a note without its own curve: its patch's loudest curve level, else the
+  calibration's loudest), crest the map's `<Dynamics crest>`. Powers add (independent sources); the amplitudes added
+  (`peakAmplitudeDb`, the in-phase bound) are reported beside it. The trim never boosts. Without a calibration or a crest
+  the trim is the old S' (`fallbackDb`: the loudest gain at +6 dB), so nothing plays louder than before. None of the
+  level settings on (Library default): no gain stage, no trim.
+- **The crest** (`tools/soundlibraries/crest_sweep.py` → `sso_crest.json` → `gen_spitfire_sso.py` → `<Dynamics
+  crest="14.515">`): a note's sample peak over its loudest 50 ms, measured 2026-10-12 on the Windows test VM (real
+  Kontakt 8 + SSO, kthost, offline, 44.1 kHz; branch utility-headroom's measurement): the five string sections' All
+  techniques Long and played velocity techniques and their Performance Legato, velocity = CC1 = 32 / 64 / 96 / 127, two
+  repeats, 392 notes: median 8.97 dB, largest 14.515 dB (Basses Pizzicato Bartok), the one used. Against the
+  calibration's level instead of the note's own (round robins differ), the same notes' peaks lie up to 20.2 dB over it
+  (median 9.1; the largest a pp Violins 1 pizzicato): the trim can be ~6 dB short on a single soft note's odd take, never
+  near the loud moments that set it. Woodwinds, brass and percussion not measured (an assumption: the strings' crest).
+- **Read back** (livetracks.h): MuseScore's Utility is known by its name; its Gain changed in Live is reported, not
+  imported (Update Live Set writes MuseScore's again). A Kontakt track without it (a set written before 2026-10-15) is
+  read with its old fader (`TrackDelays::legacyPatchGain`, the volume as it was then), so only the owner's change of it
+  counts. **Update Live Set** (livesetupdate.h): the Utility's Gain and Info text replaced where they differ; a Kontakt
+  track that needs one and has none gets it inserted right after the Kontakt (new pointee ids, its list Id after the
+  others'), and a fader still at its old volume moves to the Mixer's (else it is the owner's: kept, reported).
+
+Tests: `tst_soundlibrary::gainStage` (one patch at +29.6 dB, every other at 0 dB, only the trim moves them; the trim from
+the calibration and the crest, never a boost; the fallback; Library default; MIDI out's CC7), the level tests' volumes
+(`levelContext`, `levelSectionBalance`, `levelRealRange`, `levelMicCompensation`, `evenLevels`: their old values less
+`Volumes::shift`), `tst_liveequivalence::liveGainStage` (fader × Utility = MuseScore's slot gain; read back; Update Live
+Set unchanged, changed and from a set written before the Utility) and the live tests' route-set checks.
 
 ## Transitions early
 
@@ -1008,8 +1072,9 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Auto's transitions on a Performance legato with listed techniques (SSO's five string sections; Spitfire's slow transitions by velocity: 20-84 slurred / fingered, 85-127 bowed, support.spitfireaudio.com/en/articles/11815986): a slurred note fingered (map velocity 69); the first note of a slur that starts where the slur before ends (same patch, touching, no accent or marcato) a bowed transition from it (93; Violas' map `legatoVelocity` 100), the note before overlapping it by the map's `overlap`, instead of a re-attack (the note before cut `reattackGap` ms early). A glissando line still portamento; the Inspector's attack / transition and the Join lane override. 0: slurred notes bowed, each slur re-attacked. The owner, 2026-10-12, after setting it by hand in Whence's Velocity lane: "notes within a slur use fingered and two slurs adjacent to each other will use bowed". Not measured: the Violas' transitions at 69 (their 100 tightened a run's arrival SD 54 → 39 ms, 2026-10-07) | 1 (on; Recommended 1, Library default 0) | `rendermidi.cpp` `performanceNote` (`slurAt`) | `[slurs] transitions`; score: `playbackSettings` |
 | Auto's attack after silence on a Performance legato with listed techniques (SSO's five string sections): smooth (map velocity 5; measured on Violins 1 - Performance 2026-10-10: velocity 1-9, no bite, -6 dB at ~165 ms) instead of spiccato (112: a bite at 50-80 ms, then a swell). An accent or marcato stays accented (122), a re-attack right after a note of the patch spiccato (106); the Inspector's attack and the Velocity lane override. The owner, 2026-10-12: "smooth" for a phrase's first note (after setting it by hand in Whence). A smooth note starts early by the smooth attack's own measured onset (map `attackOnset`, `sso_smooth_onset.json`, 2026-10-12, kthost on the test VM, CC1 64: median Violins 1 100.2, Violins 2 91.1, Violas 236.2, Celli 172.2, Basses 103.1 ms; by pitch with `[heldNotes] byPitch` 1), not the articulation's onset (measured at velocity 80), within the same cap (the note before on its patch keeps keepMs; chunks); Live's written clips get it through their timing. 0: spiccato | 1 (on; Recommended 1, Library default 0) | `rendermidi.cpp` `performanceNote` | `[slurs] smoothStart`; score: `playbackSettings` |
 | Transitions early, `[slurs] transitionsEarly` (the owner, 2026-10-14: "sure let's hear them started early"; 2026-10-15: 1, by ear and measured): a Performance legato transition (SSO's five string sections) is sent early: 1 by its modelled arrival (the measured `bendGlide` by the note before's length, else `legatoDelay` by interval with `libFastDelay`: the audit's model), the new pitch arrives on the beat; 2 by the measured leave + 23.5 ms, the change heard on the beat (Polfreman 2013, ISMIR: a legato note on a modelled bowed string is perceived 23.5 ms after its pitch change starts, SD 22.8); 3 the middle of the measured glide on the beat; 2 / 3 without a measured glide as 1 (the audit lists those patches). Capped in every mode: the note before on its patch keeps `[legato] keepMs` as played and never less than 15 ms (SSO doesn't play a legato note-on closer to the one before: the audit's DROPPED); the note before still ends `overlap` after the moved note-on (a transition, not a re-attack); the bend's glide moves with the note-on; Live: the written clips + Track Delay + MuseScore Link's delays play the moved note-ons (LiveTiming), *Live plays the score*'s clips carry them (below, Transitions early) | **1 (Recommended 1, Library default 0; since 2026-10-15)** | `rendermidi.cpp` `collect` (`libTransitionsEarly`, `onsetEarliest`, `libShifts`, `libJoins`), `MidiRenderer::TRANSITION_MIN_GAP_MS`, `HEARD_AFTER_LEAVE_MS`; audit: `Report::transitionShiftsMs` | `[slurs] transitionsEarly` 0-3; score: `playbackSettings` |
-| Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' volumes, the rest of the part's patches lower together (above, Level rule; the owner, 2026-10-10) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
-| Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, all lower together so the loudest stays at +6 dB (above, Section balance; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
+| Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' gain stage, the rest of the part's patches at 0 dB (above, Level rule; the owner, 2026-10-10; the gain stage 2026-10-15) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
+| Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, by the patches' gain stage less the score's master trim (above, Section balance, Gain stage and master trim; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
+| Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |
 | Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' nodes (halfway from each note-on to the next, since 2026-10-14), every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
 | Mic compensation: a part whose mic controllers (Mic 1-5, Mic Mix Distance; values or lanes) give another mix than the default plays as loud as the default mix, by its patches' volumes (lanes: the largest by the volume, each note's own at its start by CC11); measured mic levels and laws, mics as powers (above, Mic compensation; the owner, 2026-10-15) | 1 (Recommended, the default; 0 in Library default) | `contextlevel.cpp` (`micLevelDb`, `micValues`, `micTops`, `volumes`), `rendermidi.cpp` `trackLevel`, `TrackDelays::patchGain`; data: map `<Mics>`, `micLevels` / `micDefault` from `mic_levels.py` | `[levels] micCompensation`; score: `playbackSettings` |
 | Real range: each note of the five string sections and the main woodwind / brass patches as loud as a real player at its written dynamic (the Meyer rule, 2026-10-14: TU Berlin's single-note pp / ff are ppp / fff, written pp / ff at Meyer's in-play levels, p .. f equal steps between, from mp; rule D, 7 equal steps, where Meyer has no figures), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 2, Clark & Luce spans (Recommended, the default since 2026-10-14; 1 the Meyer rule; 0 in Library default; the owner, 2026-10-13 / 14) | `contextlevel.cpp` (`realRangeDb`, `clarkLuceSpans`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` / `realPlay` / `realSteps` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |

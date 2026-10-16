@@ -146,6 +146,10 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             k.instrument = r.instrument;
             k.patch = r.instrument ? r.instrument->name : QString();
             k.gain = TrackDelays::patchGain(library, p->delays, k.patch);
+            k.faderGain = TrackDelays::faderGain(library, p->delays, k.patch);
+            k.gainStageDb = TrackDelays::gainStageDb(library, p->delays, k.patch);
+            k.trimDb = p->delays.trim;
+            k.legacyGain = TrackDelays::legacyPatchGain(library, p->delays, k.patch);
             k.port = r.port;
             k.channel = r.channel;
             k.patchIndex = r.patch;
@@ -709,7 +713,12 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                         kt.lane = k.lane;
                         kt.cents = k.cents;
                         kt.annotation = trackKey({ s.name, p.name, kt.name });
-                        kt.volume = LiveSetWriter::kontaktVolume(mix.volume, k.gain);
+                        const LiveSetWriter::KontaktGains kg = LiveSetWriter::kontaktGains(mix.volume, k.faderGain, k.gainStageDb);
+                        kt.volume = kg.volume;
+                        kt.utility = kg.hasUtility;
+                        kt.utilityGain = kg.utility;
+                        kt.utilityInfo = LiveSetWriter::utilityInfo(k.gainStageDb, k.trimDb);
+                        kt.legacyVolume = LiveSetWriter::kontaktVolume(mix.volume, k.legacyGain);
                         kt.pan = LiveSetWriter::mixPan(mix.pan);
                         kt.active = !mix.muted;
                         kt.delayKey = TrackDelays::trackKey(k.patch);

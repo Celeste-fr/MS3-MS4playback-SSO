@@ -122,7 +122,11 @@ struct Kontakt {
       int lane { 0 };                     // the route's tuning lane (SoundLib::Route::lane, Live's: one per tuning)
       double cents { 0 };                 // its tuning: the Kontakt's Tune (KontaktSetup::withTune, by the export);
                                           // NaN: a bending patch's lane, tuned by its bends
-      double gain { 1.0 };                // its track-level headroom (TrackDelays::patchGain): on its track's Volume
+      double gain { 1.0 };                // its whole gain (TrackDelays::patchGain: what MuseScore's slot plays)
+      double faderGain { 1.0 };           // of it on its track's Volume (TrackDelays::faderGain: the track levels' headroom)
+      double gainStageDb { 0.0 };         // of it in MuseScore's Utility after the Kontakt (TrackDelays::gainStageDb)
+      double trimDb { 0.0 };              // (in gainStageDb) the score's master trim
+      double legacyGain { 1.0 };          // its gain as written until 2026-10-15 (TrackDelays::legacyPatchGain): on the fader
       };
 
 struct PartTracks {

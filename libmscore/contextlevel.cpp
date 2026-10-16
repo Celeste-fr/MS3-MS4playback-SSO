@@ -30,7 +30,9 @@
 #include <QRegularExpression>
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <set>
+#include <tuple>
 
 namespace Ms {
 namespace ContextLevel {
@@ -513,12 +515,14 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
             // the rule alone: the score's largest gain G on every Performance patch, every other patch -S
             if (partTop.empty())
                   return out;
+            // (the gain stage, contextlevel.h › Gain stage: no -S; S kept for the old volumes, TrackDelays::legacyPatchGain)
             const double s = std::max(0.0, top - TrackDelays::MAX_DB);
             for (const auto& pp : patches) {
                   Volumes v;
                   v.top = top;
+                  v.shift = s;
                   for (const SoundLib::LibInstrument* p : pp.second)
-                        v.patchDb[p->name] = has(p) ? top - s : -s;
+                        v.patchDb[p->name] = has(p) ? top : 0.0;
                   out[pp.first] = v;
                   }
             return out;
@@ -554,18 +558,270 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
       for (const auto& pp : patches) {
             Volumes v;
             v.range = rangeOf(pp.first);
+            v.shift = s;
             const bool rule = ruled.count(pp.first);
             for (const SoundLib::LibInstrument* p : pp.second)
                   if (rule && has(p))
                         v.top = std::min(partTop.empty() ? 1e9 : top, s + TrackDelays::MAX_DB - levelOf(p) - micOf(pp.first, p) - v.range);
             for (const SoundLib::LibInstrument* p : pp.second) {
-                  v.patchDb[p->name] = levelOf(p) + micOf(pp.first, p) + v.range + (rule && has(p) ? v.top : 0.0) - s;
+                  v.patchDb[p->name] = levelOf(p) + micOf(pp.first, p) + v.range + (rule && has(p) ? v.top : 0.0);
                   if (micOf(pp.first, p) != 0.0)
                         v.micTop[p->name] = micOf(pp.first, p);
                   }
             out[pp.first] = v;
             }
       return out;
+      }
+
+//---------------------------------------------------------
+//   masterTrim (contextlevel.h › Gain stage and master trim)
+//---------------------------------------------------------
+
+// (computeMasterTrim renders the score and reads the gains: inside it, no trim)
+static thread_local int trimPass = 0;
+
+namespace {
+struct TrimGuard {
+      TrimGuard() { ++trimPass; }
+      ~TrimGuard() { --trimPass; }
+      };
+}
+
+static double dbOf(double gain)
+      {
+      return gain > 0.0 ? 20.0 * std::log10(gain) : -200.0;
+      }
+
+static MasterTrim computeTrim(const MasterScore* score, const SoundLib::Library& library,
+                              const std::map<const Part*, TrackDelays::Delays>& delays)
+      {
+      MasterTrim t;
+      bool any = false;             // (a level setting gives a patch a gain: else nothing to trim, Library default)
+      for (const auto& d : delays)
+            any = any || !d.second.rule.empty() || !d.second.even.empty();
+      if (!any || library.dynamicsCC == CTRL_EXPRESSION)
+            return t;
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library, SoundLib::output() == SoundLib::Output::MIDI);
+      std::map<int, const SoundLib::Route*> byRoute;
+      std::map<int, double> gainDb;                   // route -> its patch's gain (untrimmed), dB
+      double loudest = -200.0;
+      for (const SoundLib::Route& r : routes) {
+            const int key = r.port * 16 + r.channel;
+            byRoute[key] = &r;
+            gainDb[key] = dbOf(TrackDelays::patchGain(library, TrackDelays::of(r.part, delays), r.instrument->name));
+            loudest = std::max(loudest, gainDb[key]);
+            }
+      t.fallbackDb = std::max(0.0, loudest - TrackDelays::MAX_DB);
+      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+      if (!cal || cal->patches().empty() || !std::isfinite(library.crestDb)) {
+            t.db = t.fallbackDb;
+            return t;
+            }
+      // the loudest level of a patch's curves, and of the calibration (a note whose own curve isn't measured)
+      std::map<QString, double> patchTop;
+      double calTop = -200.0;
+      for (const auto& p : cal->patches()) {
+            double top = -200.0;
+            for (const auto& c : p.second) {
+                  for (const auto& x : c.second.points)
+                        top = std::max(top, x.second);
+                  for (const auto& pc : c.second.pitches)
+                        for (const auto& x : pc.second.points)
+                              top = std::max(top, x.second);
+                  }
+            patchTop[p.first] = top;
+            calTop = std::max(calTop, top);
+            }
+
+      // the score rendered once, each library note's choice traced (its articulation: the calibration's curve)
+      EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;
+      {
+            MidiRenderer midi(const_cast<MasterScore*>(score));
+            midi.setMinChunkSize(10);
+            midi.setLibraryTrace(&trace);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx { ss };
+            ctx.metronome = false;
+            for (MidiRenderer::Chunk chunk = midi.getChunkAt(0); chunk; chunk = midi.getChunkAt(chunk.utick2())) {
+                  EventMap part;
+                  midi.renderChunk(chunk, &part, ctx);
+                  events.insert(part.begin(), part.end());
+                  }
+      }
+      std::map<const Note*, const MidiRenderer::LibTrace*> traceOf;
+      for (const MidiRenderer::LibTrace& x : trace)
+            traceOf.emplace(x.note, &x);
+
+      struct Curve {
+            SoundLib::DynamicsCurve curve;
+            bool has { false };
+            double flat { -200.0 };       // without a curve: this level
+            };
+      std::map<std::tuple<QString, int, int>, std::shared_ptr<const Curve>> curves;     // (patch, value, pitch)
+      auto curveOf = [&](const QString& patch, int value, int pitch) {
+            auto& c = curves[std::make_tuple(patch, value, pitch)];
+            if (!c) {
+                  auto n = std::make_shared<Curve>();
+                  const SoundLib::DynamicsCurve* dc = value >= 0 ? cal->curve(patch, value) : nullptr;
+                  if (dc && !dc->points.empty()) {
+                        n->curve = dc->atPitch(pitch);
+                        n->has = !n->curve.points.empty();
+                        }
+                  if (!n->has) {
+                        auto pt = patchTop.find(patch);
+                        n->flat = pt != patchTop.end() ? pt->second : calTop;
+                        }
+                  c = n;
+                  }
+            return c;
+            };
+      struct Sounding {
+            std::shared_ptr<const Curve> curve;
+            int velocity { 0 };
+            };
+      struct RouteState {
+            int cc11 { 127 };
+            int dyn { 64 };
+            std::map<int, Sounding> notes;          // pitch ->
+            };
+      std::map<int, RouteState> state;
+      for (const auto& r : byRoute)
+            state[r.first].cc11 = qBound(0, library.expressionValue, 127);
+      const int dynamicsCC = library.dynamicsCC;
+      double maxPower = 0.0;
+      for (auto it = events.begin(); it != events.end();) {
+            const int tick = it->first;
+            bool changed = false;
+            for (; it != events.end() && it->first == tick; ++it) {
+                  const NPlayEvent& e = it->second;
+                  if (!e.isExternal())
+                        continue;
+                  const int route = e.extPort() * 16 + e.extChannel();
+                  auto br = byRoute.find(route);
+                  if (br == byRoute.end())
+                        continue;
+                  RouteState& rs = state[route];
+                  if (e.type() == ME_CONTROLLER) {
+                        if (e.controller() == CTRL_EXPRESSION)
+                              rs.cc11 = e.value();
+                        else if (e.controller() == dynamicsCC)
+                              rs.dyn = e.value();
+                        changed = true;
+                        }
+                  else if (e.type() == ME_NOTEOFF || (e.type() == ME_NOTEON && e.velo() == 0))
+                        rs.notes.erase(e.pitch());
+                  else if (e.type() == ME_NOTEON && !e.librarySwitch()) {
+                        auto tr = e.note() ? traceOf.find(e.note()) : traceOf.end();
+                        const SoundLib::LibInstrument* patch = br->second->instrument;
+                        int value = -1;
+                        if (tr != traceOf.end() && tr->second->choice.articulation) {
+                              value = tr->second->choice.articulation->value;
+                              if (tr->second->patch)
+                                    patch = tr->second->patch;
+                              }
+                        Sounding s;
+                        s.curve = curveOf(patch ? patch->name : QString(), value, e.pitch());
+                        s.velocity = e.velo();
+                        rs.notes[e.pitch()] = s;
+                        ++t.notes;
+                        if (!s.curve->has)
+                              ++t.uncalibrated;
+                        changed = true;
+                        }
+                  }
+            if (!changed)
+                  continue;
+            double power = 0.0, amplitude = 0.0;
+            int sounding = 0;
+            for (const auto& rs : state) {
+                  if (rs.second.notes.empty() || rs.second.cc11 <= 0)
+                        continue;
+                  const double g = gainDb[rs.first] + dbOf(rs.second.cc11 / 127.0) + library.crestDb;
+                  for (const auto& n : rs.second.notes) {
+                        const Curve& c = *n.second.curve;
+                        double level = c.flat;
+                        if (c.has) {
+                              const QString& by = c.curve.drivenBy;
+                              const int x = by == "velocity" ? n.second.velocity
+                                            : (by == "controller" ? rs.second.dyn
+                                               : (by == "both" ? std::max(n.second.velocity, rs.second.dyn) : 127));
+                              level = c.curve.at(qBound(1, x, 127));
+                              }
+                        power += std::pow(10.0, (level + g) / 10.0);
+                        amplitude += std::pow(10.0, (level + g) / 20.0);
+                        ++sounding;
+                        }
+                  }
+            if (power > maxPower) {
+                  maxPower = power;
+                  t.peakDb = 10.0 * std::log10(power);
+                  t.peakAmplitudeDb = 20.0 * std::log10(amplitude);
+                  t.atSeconds = score->utick2utime(tick);
+                  t.sounding = sounding;
+                  }
+            }
+      t.measured = true;
+      t.db = std::max(0.0, t.peakDb);
+      return t;
+      }
+
+MasterTrim computeMasterTrim(const MasterScore* score)
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!score || !library)
+            return MasterTrim();
+      TrimGuard guard;
+      return computeTrim(score, *library, TrackDelays::read(score));
+      }
+
+MasterTrim masterTrim(const MasterScore* score)
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      // (none inside the real range's render either: it needs no gains, and its volumes lack R)
+      if (!score || !library || trimPass || rangePass)
+            return MasterTrim();
+      std::map<const Part*, TrackDelays::Delays> delays;
+      {
+            TrimGuard guard;
+            delays = TrackDelays::read(score);
+      }
+      // (the key: what the render and the gains depend on; the gains themselves, as even levels change without an undo step)
+      const UndoStack* undo = score->undoStack();
+      QString key = QString("%1|%2|%3|%4|%5|%6|%7").arg(quintptr(library.get())).arg(SoundLib::routesGeneration())
+                    .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
+                    .arg(quintptr(SoundLib::dynamicsCalibration().get())).arg(int(SoundLib::output()))
+                    + "|" + score->metaTag(Playback::metaTag) + "|" + score->metaTag(PartPlaybackModes::metaTag)
+                    + QString("|%1|%2").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves());
+      bool gains = false;
+      for (const auto& pd : delays) {
+            const TrackDelays::Delays& d = pd.second;
+            gains = gains || !d.rule.empty() || !d.even.empty();
+            key += QString("|%1").arg(quintptr(pd.first));
+            for (const std::map<QString, double>* m : { &d.rule, &d.even, &d.levels })
+                  for (const auto& v : *m)
+                        key += QString(",%1=%2").arg(v.first).arg(v.second, 0, 'g', 12);
+            }
+      if (!gains)
+            return MasterTrim();
+      static QMutex mutex;
+      static std::map<const MasterScore*, std::pair<QString, MasterTrim>> cache;
+      {
+            QMutexLocker lock(&mutex);
+            auto c = cache.find(score);
+            if (c != cache.end() && c->second.first == key && undo && !undo->active())
+                  return c->second.second;
+      }
+      MasterTrim t;
+      {
+            TrimGuard guard;
+            t = computeTrim(score, *library, delays);
+      }
+      QMutexLocker lock(&mutex);
+      if (cache.size() > 16)
+            cache.clear();
+      cache[score] = { key, t };
+      return t;
       }
 
 }     // namespace ContextLevel

@@ -353,6 +353,11 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
             out.assign(r.museScore.size(), 0.f);
             float gl, gr;
             liveMixer(t.volume, t.pan, t.active, &gl, &gr);
+            // MuseScore's Utility after the Kontakt (its gain stage: livesetwriter.h › UTILITY_NAME)
+            if (t.utility) {
+                  gl *= float(t.utilityGain);
+                  gr *= float(t.utilityGain);
+                  }
             if (fault.contains("no-mixer"))
                   gl = gr = 1.f;
             std::vector<float> buf(size_t(2 * 512));

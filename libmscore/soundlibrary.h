@@ -348,6 +348,10 @@ class Library {
       // (<Dynamics velocity="short spiccato …">; Spitfire's shorts): those notes' velocity is their
       // level on the dynamics CC's scale (pp 32, mf 80) instead of MS4's soundfont velocity
       QStringList velocityDynamics;
+      // a note's sample peak over its loudest 50 ms (the dynamics calibration's level), dB (<Dynamics crest>: the largest
+      // measured, tools/soundlibraries/sso_crest.json, crest_sweep.py); the master trim adds it to every sounding note's
+      // calibrated level (contextlevel.h › Gain stage and master trim). NAN: not measured (the trim's fallback)
+      double crestDb { NAN };
       // microtones (<Tuning method="varispeed" tolerance tail>): the plug-in ignores a note's tuning
       // (Kontakt), so a part's notes are spread over copies of its patch ("lanes", Lanes below),
       // each played faster or slower by its tuning (Vst3Plugin::setPitch). A lane changes its

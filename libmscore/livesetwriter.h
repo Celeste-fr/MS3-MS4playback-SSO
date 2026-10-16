@@ -166,6 +166,14 @@ struct Track {
       Plugin plugin;
       // Live's mixer (the part's Mixer values as MuseScore's host plays them: SoundLib::partMix, mixGain / mixPan)
       double volume { 1 };                // a linear gain (1 = 0 dB), Live's range 0.000316 (-70 dB) … 1.995 (+6 dB)
+      // MuseScore's gain stage on a Kontakt track (kontaktGains): Live's Utility right after the Kontakt, named UTILITY_NAME,
+      // its Gain a linear factor (0 … UTILITY_MAX), its Info text utilityInfo; utility false: none written (0 dB)
+      bool utility { false };
+      double utilityGain { 1 };
+      QString utilityInfo;
+      // (not written) the fader a set written before the gain stage (2026-10-15) has here: the Mixer's times the old
+      // volume (TrackDelays::legacyPatchGain); Update Live Set moves such a set over (livesetupdate.h); -1: none
+      double legacyVolume { -1 };
       double pan { 0 };                   // -1 (left) … 1 (right)
       bool active { true };               // the Track Activator: off for a muted part
       // the route's plug-in parameter lanes as the MuseScore Link device keeps them in the set (its "Lanes" stores), so
@@ -265,6 +273,25 @@ double mixGain(int volume);
 // within Live's top (MAX_VOLUME, +6 dB: livesetxml.h's Volume range; above it Live plays the patch softer than MuseScore)
 constexpr double MAX_VOLUME = 1.99526238;
 double kontaktVolume(int volume, double patchGain);
+// MuseScore's gain stage in Live (contextlevel.h › Gain stage and master trim; the owner, 2026-10-15): Live's stock Utility
+// right after the Kontakt, named UTILITY_NAME; its Gain a linear factor, 0 (-inf dB) … UTILITY_MAX (+35 dB: the Gain's
+// MidiControllerRange as Live 12.4 saves it, 10^(35/20))
+extern const char* const UTILITY_NAME;
+constexpr double UTILITY_MAX = 56.2341309;
+constexpr double UTILITY_MAX_DB = 35.0;
+struct KontaktGains {
+      double volume { 1 };                // the Kontakt track's fader
+      double utility { 1 };               // its Utility's Gain
+      bool hasUtility { false };          // the gain stage isn't 0 dB: a Utility written
+      };
+// a Kontakt track's fader and Utility: the fader the Mixer's (mixGain) times faderGain (the track levels' headroom,
+// TrackDelays::faderGain, as before the gain stage) times what of the gain stage is over UTILITY_MAX_DB, within MAX_VOLUME;
+// the Utility the gain stage (TrackDelays::gainStageDb) within UTILITY_MAX_DB
+KontaktGains kontaktGains(int volume, double faderGain, double gainStageDb);
+// the Utility's Info text: what it holds (gainStageDb, of which the master trim trimDb)
+QString utilityInfo(double gainStageDb, double trimDb);
+// a Utility's Gain as Live's XML holds it (its Manual), to dB
+double utilityDb(double gain);
 // the Mixer's pan (0-127, 64 centre) as Live's Pan (-1 … 1): Vst3Synth::panGains' position. Both are constant-power
 // sine/cosine laws, 0 dB at the centre and +3 dB fully panned (Live 12 manual, Audio Fact Sheet › Panning), so the
 // same position gives the same gains

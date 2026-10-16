@@ -56,10 +56,11 @@
 //   schedule (libraryNoteLevels: the level rule, the section balance, [levels] realRange, track levels: dB add up),
 //   a message per STEP_MS where the value changes, the value held before the first and after the last middle, the
 //   CC11 in force again at the next note-on on the route (or the chunk's end). Headroom: each
-//   patch's largest value (tops) plays louder by its volume (TrackDelays::patchGain), every note on the patch that
-//   much lower by CC11, so no correction is cut at CC11 127; what the volume can't add under Live's +6 dB lowers every
-//   library patch of the score alike, by its volume (TrackDelays::Delays::evenAll: the balance stays, the whole
-//   library plays that much quieter, as the 2026-10-12 listening test's shift did). The same events reach Live's clips and the plain set's CC11 lane.
+//   patch's largest value (tops) plays louder by its gain stage (TrackDelays::patchGain, uncapped since 2026-10-15:
+//   contextlevel.h › Gain stage and master trim), every note on the patch that much lower by CC11, so no correction is
+//   cut at CC11 127; the score's master trim keeps the whole from clipping (before, what the volume couldn't add under
+//   Live's +6 dB lowered every library patch alike: TrackDelays::Delays::evenAll, now only the old volumes'). The same
+//   events reach Live's clips and the plain set's CC11 lane.
 //---------------------------------------------------------
 
 #include <map>
