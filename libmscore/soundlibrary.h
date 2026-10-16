@@ -151,6 +151,13 @@ struct Articulation {
       // sso_bend_smoothing.json): with a bendGlide, the renderer sends the bend so that the bend as heard reaches the
       // note's tuning at the measured arrival (libraryPitchBends). 0: unknown (the glide is sent as the path itself)
       double bendSmoothingMs { 0 };
+      // a Performance slur's whole-slur shift (<Articulation slurShift="37">: ms, >= 0): with [slurs] slurShift every note
+      // of a slur on this articulation (its first note's attack and each transition, their switches, controllers, joins
+      // and bends with them, the slur's last note-off too) plays this much later than its early start, so that SSO's
+      // relative timing inside the slur stays as it is and the slur as a whole is centred on its written beats (the
+      // value minimising each slur's worst |heard - written|, the median over the slur-rhythm grid's slurs:
+      // tools/soundlibraries/sso_slur_shift.json, slur_rhythm/shift.py). 0: none
+      double slurShiftMs { 0 };
       // a sustained note's attack: it is heard (its level 15 dB under its peak) this long after its note-on
       // (<Articulation onset>: one number or "pitch:ms" pairs by played pitch): a note that is not a legato
       // transition starts early by it (the renderer, onsetEarly()); -1: unknown / not shifted

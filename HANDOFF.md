@@ -5,6 +5,25 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Slur shift (2026-10-16, branch `slur-shift`, from integrate-1012; docs/PLAYBACK_SETTINGS.md › Slur shift)
+
+The owner rejected measuring each score's slurs in the background ("MuseScore already feels kinda laggy … is per-score
+measurement genuinely inevitable? I hate it"). Instead **`[slurs] slurShift`** (0 by default and in both presets until he
+hears it): every note of a Performance slur sent the map's `slurShift` later, SSO's timing inside the slur as in
+Recommended (A). Fitted on the slur-rhythm grid's A renders (`slur_rhythm/shift.py` -> `sso_slur_shift.json`): Violas 37
+ms (the median of each slur's minimax centre; 90 % 34-40); the other sections' fits are -11 .. +1 ms, their slurs centred
+already: 0. **This branch supersedes `slur-rhythm`'s `[slurs] slurOnset` and `transitionModel`: neither is here** (only
+its grid data and tools: `tools/soundlibraries/slur_rhythm/`, `sso_slur_rhythm.json`).
+- Verified on the VM (grid, two takes): a whole-slur shift keeps the timing inside the slur within 5-6 ms median (violins,
+  violas; Celli / Basses 11-13) against round-robin noise of 2-7 ms; the Violas land as predicted (worst note 93 -> 73 ms).
+- Heard check (kthost + SSO, Recommended with slurShift 0 / 1, `HC_VMDIR`): Whence ARRIVAL fail/warn 29/29, 26/30 -> 29/27,
+  29/26; RHYTHM 12/11, 9/11 -> 9/7, 11/7 (two takes; Violas ARRIVAL fails 13, 11 -> 12, 13, RHYTHM fails 9, 7 -> 6, 8);
+  Heard passages 162/46 -> 159/54, RHYTHM 55/21 -> 55/29 (Violas ARRIVAL fails 48 -> 41). On the whole a wash: the Violas'
+  first notes come 25-45 ms nearer the beat, but **the slur's last note runs into the unmoved staccato after it** (Whence
+  bar 13's last sixteenth heard 72-83 ms instead of 124; RHYTHM 0.058 -> 0.115 / 0.134). Open: whether to shorten the
+  shift's effect on the last note (e.g. shift only up to the next note's keep), or a smaller D. The owner to hear clip E
+  (listening page `nmb-slurrhythm/`, untracked).
+
 ## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; not merged)
 
 The owner, 2026-10-16: "is there any way at all we can make SSO load even faster"; rule the same day: "no optimizations

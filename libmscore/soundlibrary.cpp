@@ -90,7 +90,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
 //               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
-//               [bendGlide="136:-8:100 300:70:230 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]/>;
+//               [bendGlide="136:-8:100 300:70:230 …"] [slurShift="37"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -522,6 +522,13 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             bool ok = false;
             art.bendSmoothingMs = a.value("bendSmoothing").toDouble(&ok);
             if (!ok || art.bendSmoothingMs < 0)
+                  return false;
+            }
+      // slurShift="ms" (a Performance slur's whole-slur shift, [slurs] slurShift; negative: malformed)
+      if (a.hasAttribute("slurShift")) {
+            bool ok = false;
+            art.slurShiftMs = a.value("slurShift").toDouble(&ok);
+            if (!ok || art.slurShiftMs < 0)
                   return false;
             }
       if (a.hasAttribute("octaveDown") && !readKeyedMs(a.value("octaveDown").toString(), art.octaveDownMs, art.octaveDown))

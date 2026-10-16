@@ -54,6 +54,7 @@ class TestPlaybackAudit : public QObject, public MTest
       void droppedFindings();
       void leapFindings();
       void transitionArrival();
+      void slurShiftAudit();
       void auditScore();
       };
 
@@ -581,6 +582,71 @@ void TestPlaybackAudit::transitionArrival()
       QVERIFY2(r2.text().contains("fell back to the arrival): Violin - Performance"), qPrintable(r2.text()));
       score->setMetaTag(Playback::metaTag, "");
       delete score;
+      }
+
+//---------------------------------------------------------
+//   slurShiftAudit
+//    (2026-10-16) the audit follows [slurs] slurShift: leap.musicxml's slur (C4 D4 E5 E4 F5 G5, 500 ms each) on a
+//    Performance patch with slurShift='45', the smooth attack's own onset (150 ms) and the transitions sent their arrival
+//    (120 ms) early ([slurs] transitionsEarly 1). With the shift every note of the slur is sent 45 ms later (sentMs) and
+//    traced (LibTrace::slurShiftMs); the model takes it off, so the arrivals, the findings and the transitions' early
+//    starts (none CAPPED) are as without it
+//---------------------------------------------------------
+
+void TestPlaybackAudit::slurShiftAudit()
+      {
+      MasterScore* score = readScore(DIR + "leap.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      SoundLib::setCurrent(loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='60'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " legatoDelay='-12:120 +14:120'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:150' slurShift='45'/>"
+         "</Instrument></SoundLibrary>"));
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Run { PlaybackAudit::Report r; std::vector<MidiRenderer::LibTrace> trace; };
+      auto run = [score](const char* shift) {
+            recommended({ { "levels/calibrated", "0" }, { "slurs/transitionsEarly", "1" }, { "slurs/slurShift", shift } });
+            Run x;
+            EventMap events;
+            PlaybackAudit::render(score, &events, &x.trace);
+            x.r = PlaybackAudit::audit(score, events, x.trace, PlaybackAudit::Measured());
+            return x;
+            };
+      const Run off = run("0");
+      const Run on = run("1");
+      QCOMPARE(int(on.r.rows.size()), int(off.r.rows.size()));
+      QCOMPARE(int(off.r.rows.size()), 6);
+      for (size_t i = 0; i < on.r.rows.size(); ++i) {
+            const PlaybackAudit::NoteRow& a = off.r.rows[i];
+            const PlaybackAudit::NoteRow& b = on.r.rows[i];
+            QCOMPARE(b.pitch, a.pitch);
+            QVERIFY2(std::fabs(b.sentMs - a.sentMs - 45) < 1.5, qPrintable(QString("%1: %2 %3").arg(a.pitch).arg(a.sentMs).arg(b.sentMs)));
+            QVERIFY2(std::fabs(b.arrivalMs - a.arrivalMs) < 1.5, qPrintable(QString("%1: %2 %3").arg(a.pitch).arg(a.arrivalMs).arg(b.arrivalMs)));
+            }
+      int shifted = 0;
+      for (const MidiRenderer::LibTrace& t : on.trace)
+            if (t.note) {
+                  QCOMPARE(t.slurShiftMs, 45.0);
+                  ++shifted;
+                  }
+      QCOMPARE(shifted, 6);
+      for (const MidiRenderer::LibTrace& t : off.trace)
+            QCOMPARE(t.slurShiftMs, 0.0);
+      for (PlaybackAudit::Kind k : { PlaybackAudit::Kind::ARRIVAL, PlaybackAudit::Kind::CAPPED, PlaybackAudit::Kind::OVERLAP,
+                                     PlaybackAudit::Kind::DROPPED, PlaybackAudit::Kind::UNMEASURED })
+            QVERIFY2(on.r.count(k) == off.r.count(k), qPrintable(on.r.text() + "\n----\n" + off.r.text()));
+      QCOMPARE(on.r.transitionsCapped, off.r.transitionsCapped);
+      QCOMPARE(int(on.r.transitionShiftsMs.size()), int(off.r.transitionShiftsMs.size()));
+      delete score;
+      SoundLib::setCurrent(nullptr);
       }
 
 //---------------------------------------------------------

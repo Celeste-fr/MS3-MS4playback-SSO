@@ -109,6 +109,13 @@ static const std::vector<Definition> DEFINITIONS = {
         "patch's measured bendGlide, else legatoDelay by interval, quicker after a short note), the new pitch arrives on the beat; "
         "2 by the measured leave + 23.5 ms, the change is heard on the beat (Polfreman 2013); 3 the middle of the measured glide "
         "on the beat (2 / 3 without a measured glide: as 1); the note before keeps at least [legato] keepMs (and 15 ms) as played", true },
+      // (2026-10-16: the owner rejected measuring each score's slurs in the background, "MuseScore already feels kinda laggy
+      // … is per-score measurement genuinely inevitable? I hate it"; instead the whole slur moves by one measured amount per
+      // section, SSO's own timing inside it untouched. 0 in both presets until the owner hears it)
+      { "slurs/slurShift", 0, 0, 1, "on/off",
+        "1: every note of a Performance slur (SSO's string sections: its first note and each transition, with their switches, "
+        "controllers, joins and bends, and its last note-off) plays later by the map's slurShift (ms per section, measured in "
+        "MuseScore's own slurs: the shift that centres each slur's heard notes on their written beats); 0: as rendered", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -427,11 +434,11 @@ const std::vector<Preset>& presets()
             // B'); slurs/transitionsEarly 1, the transitions sent by their modelled arrival: the owner by ear on Whence's fast
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
-                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
+                                              { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 }, { "slurs/slurShift", 0 },
                                               { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/slurShift", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 } } },
             };

@@ -146,6 +146,7 @@ class MidiRenderer {
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
       bool libAvoidBad = true;                                    // [notes] avoidBadSamples (the map's avoid)
       int libTransitionsEarly = 0;                                // [slurs] transitionsEarly 0-3 (this chunk; not written timing)
+      bool libSlurShift = false;                                  // [slurs] slurShift (this chunk; not written timing)
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]
@@ -230,6 +231,9 @@ class MidiRenderer {
             // has no measured glide so that modes 2 / 3 fell back to the arrival (mode 1's model)
             double earlyMeantMs { -1 };
             bool earlyFallback { false };
+            // [slurs] slurShift: ms this note of a Performance slur plays later than its early start (the map's slurShift; the
+            // audit takes it off its model: the shift corrects the model's error in a slur, it is not a fault); 0: none
+            double slurShiftMs { 0 };
             };
       // SSO's Performance legato doesn't play a legato note-on less than this after the legato note-on before on its
       // route (at velocity 64 or lower; from reading its script, behaviour only): the audit's DROPPED, and the least a

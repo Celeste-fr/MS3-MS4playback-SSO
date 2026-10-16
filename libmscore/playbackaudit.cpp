@@ -418,6 +418,9 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   }
             else if (p->trace->from)
                   p->hasArrival = false;
+            // ([slurs] slurShift: the slur's notes sent later on purpose, the shift measured against the model's error in a
+            // slur; the model takes it off)
+            p->arrival -= p->trace->slurShiftMs;
             }
 
       // (b) swapped or early without an in-context measurement, or no onset at all, per instrument; (c) capped
@@ -427,7 +430,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const Played* p = up.get();
             if (!p->trace || !p->note || p->written < 0)
                   continue;
-            const double early = ms(p->written) - sent(p);
+            const double early = ms(p->written) - sent(p) + p->trace->slurShiftMs;   // ([slurs] slurShift: as meant before it)
             const SoundLib::Choice& c = p->trace->choice;
             const QString inst = p->trace->patch->name;
             const QString art = c.articulation->name;

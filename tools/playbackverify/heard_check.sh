@@ -11,7 +11,9 @@
 #   HC_BUILD  the build dir itself (default: build.dir next to this repo's tools)
 #   HC_VM     ssh target (default user@192.168.1.45), HC_KEY its key (default ~/.ssh/id_ed25519_winvm)
 #   HC_WORK   local work folder (default ~/.cache/heardcheck/<run>); HC_KEEP=1 keeps the renders
-# The VM side writes only C:\claude\heardcheck\<run>. Never commit a report of the owner's score.
+#   HC_VMDIR  the VM's base folder (default heardcheck: C:\claude\heardcheck; a name of letters, digits, _ and -, or
+#             two such names with a backslash: a session's own folder, e.g. slurshift\\hc)
+# The VM side writes only C:\claude\<HC_VMDIR>\<run>. Never commit a report of the owner's score.
 set -u
 [ $# -ge 1 ] || { sed -n '2,15p' "$0"; exit 2; }
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -26,6 +28,10 @@ NAME=hc-$(date +%Y%m%d-%H%M%S)-$$
 case "$NAME" in hc-[0-9]*-[0-9]*-[0-9]*) ;; *) echo "bad run name '$NAME'"; exit 2;; esac
 WORK=${HC_WORK:-$HOME/.cache/heardcheck/$NAME}
 mkdir -p "$WORK/dump" "$WORK/ev" "$WORK/wav"
+VMDIR=${HC_VMDIR:-heardcheck}
+case "$VMDIR" in ''|*[!A-Za-z0-9_\\-]*|\\*|*\\) echo "bad HC_VMDIR '$VMDIR'"; exit 2;; esac
+VMB="C:\\claude\\$VMDIR"
+VMS="C:/claude/$(printf %s "$VMDIR" | tr '\\' /)"
 SSH="ssh -o BatchMode=yes -i $KEY $VM"
 SCP="scp -q -o BatchMode=yes -i $KEY"
 T0=$(date +%s)
@@ -47,19 +53,19 @@ N=$(grep -c . "$WORK/ev/list.txt")
 echo "$N routes"
 sed 's/$/\r/' "$HERE/heard_check_vm.cmd" > "$WORK/ev/heard_check_vm.cmd"
 
-printf "== 3. render on the VM (%s)\n" "C:/claude/heardcheck/$NAME"
-$SSH "if not exist C:\\claude\\heardcheck mkdir C:\\claude\\heardcheck" || exit 2
-$SCP -r "$WORK/ev" "$VM:C:/claude/heardcheck/$NAME" || exit 2
+printf "== 3. render on the VM (%s)\n" "$VMS/$NAME"
+$SSH "if not exist $VMB mkdir $VMB" || exit 2
+$SCP -r "$WORK/ev" "$VM:$VMS/$NAME" || exit 2
 T1=$(date +%s)
-$SSH "C:\\claude\\heardcheck\\$NAME\\heard_check_vm.cmd $NAME" | tail -1
+$SSH "$VMB\\$NAME\\heard_check_vm.cmd $NAME $VMB" | tail -1
 T2=$(date +%s)
-$SCP "$VM:C:/claude/heardcheck/$NAME/wav/*.wav" "$WORK/wav/" || echo "(some renders missing)"
-$SCP "$VM:C:/claude/heardcheck/$NAME/wav/*.log" "$WORK/wav/" 2>/dev/null
-$SCP "$VM:C:/claude/heardcheck/$NAME/run.out" "$WORK/run.out" 2>/dev/null
+$SCP "$VM:$VMS/$NAME/wav/*.wav" "$WORK/wav/" || echo "(some renders missing)"
+$SCP "$VM:$VMS/$NAME/wav/*.log" "$WORK/wav/" 2>/dev/null
+$SCP "$VM:$VMS/$NAME/run.out" "$WORK/run.out" 2>/dev/null
 
 echo "== 4. delete the VM's renders"
 # (a literal path: the run name checked above, never empty)
-$SSH "dir /b C:\\claude\\heardcheck\\$NAME\\wav | find /c \".wav\" & if exist C:\\claude\\heardcheck\\$NAME\\list.txt rmdir /s /q C:\\claude\\heardcheck\\$NAME"
+$SSH "dir /b $VMB\\$NAME\\wav | find /c \".wav\" & if exist $VMB\\$NAME\\list.txt rmdir /s /q $VMB\\$NAME"
 
 echo "== 5. analyse"
 python3 "$HERE/heard_check.py" analyse "$WORK/dump" "$WORK/wav" --report "$WORK/report.txt" --json "$WORK/report.json" \

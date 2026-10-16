@@ -201,7 +201,7 @@ HC_RUN=~/MuseScore/ms3fork/run-<name>.sh tools/playbackverify/heard_check.sh ~/M
 The preset is `recommended` (the default), `library`, or a `playbackSettings` metaTag (`slurs/transitionsEarly=0`);
 parts a comma list (default all). `HC_RUN`: a wrapper running a command in the build dir (else `HC_BUILD`, the build
 dir). It writes the dump, the renders and `report.txt` / `report.json` to `~/.cache/heardcheck/<run>/` (`HC_WORK`; the
-renders deleted after the analysis unless `HC_KEEP=1`), uses `C:\claude\heardcheck\<run>` on the VM (one share login,
+renders deleted after the analysis unless `HC_KEEP=1`), uses `C:\claude\heardcheck\<run>` on the VM (`HC_VMDIR=<folder>`: `C:\claude\<folder>\<run>`, a session's own) (one share login,
 deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores out of the repository.
 
 - **Render**: each route alone (kthost, one Kontakt instance with MuseScore's setup of the route's patch from the VM's

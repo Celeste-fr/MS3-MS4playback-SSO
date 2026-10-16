@@ -359,6 +359,18 @@ def attackOnset(patch):
         return None
     by = sorted((int(k), v) for k, v in m['byPitch']['smooth'].items())
     return f"smooth:{m['median']['smooth']:g};" + ','.join(f'{k}:{v:g}' for k, v in by)
+# a Performance slur's whole-slur shift (slurShift="ms", [slurs] slurShift): every note of a slur sent this much later, so
+# that SSO's own timing inside the slur stays and the slur is centred on its written beats. Measured 2026-10-16 (branch
+# slur-shift, tools/soundlibraries/slur_rhythm/shift.py -> sso_slur_shift.json): from the slur-rhythm grid's renders as
+# integrate-1012's Recommended plays it (kthost + SSO on the test VM, 243 slurs x 2 takes per section), the median over
+# slurs of each slur's minimax centre (its worst |heard - written| smallest); written only where that is above 0 at 90 %
+# (Violas; the other sections' slurs are centred already)
+SLUR_SHIFT = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_slur_shift.json'),
+                            encoding='utf-8'))['sections']
+def slurShift(patch):
+    """the slurShift= value of a Performance patch (None: none)"""
+    m = SLUR_SHIFT.get(patch)
+    return m['usedMs'] if m and m['usedMs'] > 0 else None
 # velocities whose attack plays a faulty recording (avoid="keys:low-high:velocity …"): a round robin with its own narrow
 # tone, measured with kthost on the test VM (sso_bad_samples.json: the bands, the clean velocity next to them and the
 # renders; the owner, 2026-10-10, heard it in Whence's Celli)
@@ -1689,6 +1701,9 @@ for i, line in enumerate(out):
             ao = attackOnset(current)
             if ao:
                 extra += f' attackOnset="{ao}"'
+            ss = slurShift(current)
+            if ss:
+                extra += f' slurShift="{ss:g}"'
             if current in BAD_SAMPLES:
                 extra += ' avoid="' + ' '.join(
                     (f"{b['keys'][0]}" if b['keys'][0] == b['keys'][1] else f"{b['keys'][0]}-{b['keys'][1]}")

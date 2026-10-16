@@ -106,7 +106,8 @@ struct SndConfig {
       int ms4SwingGate = 100;     // swing: the chord's length, percent
       bool ms4Once = false;       // the note once, as written, whatever MuseScore 3's play events are
       int libPatch = 0;           // a sound library part: the patch that plays the note
-      double libEarly = 0;        // seconds a held note starts early (its onset)
+      double libEarly = 0;        // seconds a held note starts early (its onset); negative: late ([slurs] slurShift)
+      double libLateOff = 0;      // seconds its note-off plays later ([slurs] slurShift: a Performance slur's notes)
       int libEarliest = 0;        // … but not before this utick
       std::map<const Note*, double>* libLost = nullptr;   // where the score's start cuts that: the ms cut (the start lead)
       int* libOn = nullptr;       // where the note starts, as written and as played (libEarly)
@@ -558,6 +559,15 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
                   // rest of its early start the start lead's: MidiRenderer::libraryDelayLead)
                   if (config.libLost && config.libEarliest == 0 && lost > 0)
                         (*config.libLost)[note] = lost * 1000.0;
+                  }
+            else if (config.libEarly < 0) {
+                  // ([slurs] slurShift: a Performance slur's note whose early start is less than the slur's shift: late)
+                  Score* sc = note->score();
+                  on = sc->utime2utick(sc->utick2utime(on) - config.libEarly);
+                  }
+            if (config.libLateOff > 0) {
+                  Score* sc = note->score();
+                  off = sc->utime2utick(sc->utick2utime(off) + config.libLateOff);
                   }
             if (config.libOn)
                   *config.libOn = on;
@@ -2088,6 +2098,35 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           config.libWrittenOn = &libShiftWritten;
                                           libShiftOn = libShiftWritten = -1;
                                           }
+                                    }
+                              // [slurs] slurShift (2026-10-16; 0 in every preset until the owner hears it): every note of a
+                              // Performance slur -- its first note (an attack a slur goes on past) and each transition,
+                              // a bowed one between touching slurs too -- plays the map's slurShift later than its early
+                              // start above, its note-off as much later. SSO's timing inside the slur (each transition's
+                              // place after the note-on before it, the attack's played length) stays what it was, so the
+                              // slur sounds in the same proportions, only centred on its written beats (measured:
+                              // tools/soundlibraries/sso_slur_shift.json): a slur's first note is heard earlier than the
+                              // map's attackOnset says (it never grows to a held note's peak). Its switch and controllers
+                              // stay with the note-on (libShifts) while it is still early; later than written (an early
+                              // start smaller than the shift: transitionsEarly 0) they stay at the written start, before
+                              // it. The note before on the patch keeps its keepMs cap (the shifted note-on is later, never
+                              // earlier); joins (libJoins) and bends follow the note-on as played. One amount per patch,
+                              // so touching slurs (a bowed transition) stay as they were against each other. Written
+                              // timing (Live's clips): as written, LiveTiming puts it back from the played render
+                              if (libSlurShift && perf.on && offset == 0 && !note->tieBack() && libChoice.articulation
+                                  && libChoice.articulation->slurShiftMs > 0 && (perf.from || slurGoesOn(note))) {
+                                    const double d = libChoice.articulation->slurShiftMs / 1000.0;
+                                    if (!config.libOn) {
+                                          config.libEarly = 0;
+                                          config.libEarliest = 0;
+                                          config.libOn = &libShiftOn;
+                                          config.libWrittenOn = &libShiftWritten;
+                                          libShiftOn = libShiftWritten = -1;
+                                          }
+                                    config.libEarly -= d;
+                                    config.libLateOff = d;
+                                    if (libTrace && !libTrace->empty() && libTrace->back().note == note)
+                                          libTrace->back().slurShiftMs = d * 1000.0;
                                     }
                               }
                         config.libKey = libNote.key;
@@ -5557,6 +5596,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libAvoidBad = Playback::on("notes/avoidBadSamples", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libTransitionsEarly = library && !writtenTiming ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;
+      libSlurShift = library && !writtenTiming && Playback::on("slurs/slurShift", score);
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();

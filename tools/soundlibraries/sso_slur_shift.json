@@ -1,0 +1,908 @@
+{
+ "_about": "The map's slurShift (2026-10-16, branch slur-shift; tools/soundlibraries/slur_rhythm/shift.py, its header holds the rules): per string section's Performance patch, ms every note of a Performance slur is sent later with [slurs] slurShift. From sso_slur_rhythm.json's grid rows (integrate-1012 Recommended, the A renders: kthost + Kontakt 8 + SSO on the Windows test VM, CC11 127, 243 slurs x 2 takes per section): e = heard - written per note; fitMs the median over slurs of each slur's minimax centre -(max e + min e) / 2, |e| > 250 ms left out; ci90 a bootstrap of that median; minimaxMeanMs / rmsMs the other criteria; usedMs = round(fitMs) where ci90 lies above 0, else 0 (later only); atZero / atUsed the slurs' worst notes and the shares within 50 ms (ARRIVAL) without and with it; byPosition the median error of each slur position (k0 the first note); byGroup each group's own fit and the mean worst note with one D against a D per group. verify: the VM check that a whole-slur shift keeps the heard timing inside the slur.",
+ "sections": {
+  "Violins 1 - Performance": {
+   "slurs": 480,
+   "notes": 1199,
+   "fitMs": -10.0,
+   "ci90": [
+    -14.9,
+    -7.1
+   ],
+   "minimaxMeanMs": -10.0,
+   "rmsMs": -9.9,
+   "feasible50": 0.619,
+   "usedMs": 0.0,
+   "atZero": {
+    "medianWorstMs": 66.1,
+    "meanWorstMs": 74.2,
+    "notesWithin50": 0.738,
+    "slursWithin50": 0.381
+   },
+   "atUsed": {
+    "medianWorstMs": 66.1,
+    "meanWorstMs": 74.2,
+    "notesWithin50": 0.738,
+    "slursWithin50": 0.381
+   },
+   "byPosition": {
+    "k0": {
+     "n": 486,
+     "medianMs": -24.9,
+     "withShiftMs": -24.9
+    },
+    "k1": {
+     "n": 312,
+     "medianMs": 23.3,
+     "withShiftMs": 23.3
+    },
+    "k2": {
+     "n": 251,
+     "medianMs": 15.3,
+     "withShiftMs": 15.3
+    },
+    "k3": {
+     "n": 156,
+     "medianMs": 41.6,
+     "withShiftMs": 41.6
+    }
+   },
+   "byTake": [
+    -9.9,
+    -10.3
+   ],
+   "byGroup": {
+    "bpm": {
+     "fitMs": {
+      "110": -11.5,
+      "160": -17.1,
+      "80": -1.1
+     },
+     "meanWorstSplitMs": 72.6,
+     "meanWorstOneMs": 73.0
+    },
+    "dyn": {
+     "fitMs": {
+      "32": -16.7,
+      "64": -9.9,
+      "96": -6.8
+     },
+     "meanWorstSplitMs": 72.8,
+     "meanWorstOneMs": 73.0
+    },
+    "l1": {
+     "fitMs": {
+      "16th": -34.5,
+      "eighth": -4.6,
+      "quarter": 4.6
+     },
+     "meanWorstSplitMs": 68.3,
+     "meanWorstOneMs": 73.0
+    },
+    "n": {
+     "fitMs": {
+      "2": -29.3,
+      "3": -1.9,
+      "4": -8.6
+     },
+     "meanWorstSplitMs": 71.9,
+     "meanWorstOneMs": 73.0
+    }
+   }
+  },
+  "Violins 2 - Performance": {
+   "slurs": 483,
+   "notes": 1205,
+   "fitMs": -1.5,
+   "ci90": [
+    -4.1,
+    1.7
+   ],
+   "minimaxMeanMs": -1.5,
+   "rmsMs": 4.0,
+   "feasible50": 0.464,
+   "usedMs": 0.0,
+   "atZero": {
+    "medianWorstMs": 80.5,
+    "meanWorstMs": 89.0,
+    "notesWithin50": 0.552,
+    "slursWithin50": 0.193
+   },
+   "atUsed": {
+    "medianWorstMs": 80.5,
+    "meanWorstMs": 89.0,
+    "notesWithin50": 0.552,
+    "slursWithin50": 0.193
+   },
+   "byPosition": {
+    "k0": {
+     "n": 486,
+     "medianMs": -25.5,
+     "withShiftMs": -25.5
+    },
+    "k1": {
+     "n": 321,
+     "medianMs": -31.1,
+     "withShiftMs": -31.1
+    },
+    "k2": {
+     "n": 240,
+     "medianMs": 40.0,
+     "withShiftMs": 40.0
+    },
+    "k3": {
+     "n": 161,
+     "medianMs": 42.9,
+     "withShiftMs": 42.9
+    }
+   },
+   "byTake": [
+    -1.4,
+    -1.5
+   ],
+   "byGroup": {
+    "bpm": {
+     "fitMs": {
+      "110": -7.7,
+      "160": -8.3,
+      "80": 5.4
+     },
+     "meanWorstSplitMs": 88.3,
+     "meanWorstOneMs": 88.9
+    },
+    "dyn": {
+     "fitMs": {
+      "32": -5.4,
+      "64": 0.4,
+      "96": -1.5
+     },
+     "meanWorstSplitMs": 88.9,
+     "meanWorstOneMs": 88.9
+    },
+    "l1": {
+     "fitMs": {
+      "16th": -18.4,
+      "eighth": -1.9,
+      "quarter": 27.8
+     },
+     "meanWorstSplitMs": 84.6,
+     "meanWorstOneMs": 88.9
+    },
+    "n": {
+     "fitMs": {
+      "2": -3.7,
+      "3": -3.1,
+      "4": 5.7
+     },
+     "meanWorstSplitMs": 88.7,
+     "meanWorstOneMs": 88.9
+    }
+   }
+  },
+  "Violas - Performance": {
+   "slurs": 481,
+   "notes": 1230,
+   "fitMs": 36.8,
+   "ci90": [
+    34.1,
+    40.2
+   ],
+   "minimaxMeanMs": 37.0,
+   "rmsMs": 33.4,
+   "feasible50": 0.514,
+   "usedMs": 37.0,
+   "atZero": {
+    "medianWorstMs": 93.1,
+    "meanWorstMs": 101.6,
+    "notesWithin50": 0.366,
+    "slursWithin50": 0.037
+   },
+   "atUsed": {
+    "medianWorstMs": 71.5,
+    "meanWorstMs": 88.9,
+    "notesWithin50": 0.586,
+    "slursWithin50": 0.254
+   },
+   "byPosition": {
+    "k0": {
+     "n": 486,
+     "medianMs": -81.4,
+     "withShiftMs": -44.4
+    },
+    "k1": {
+     "n": 351,
+     "medianMs": -29.0,
+     "withShiftMs": 8.0
+    },
+    "k2": {
+     "n": 244,
+     "medianMs": -4.5,
+     "withShiftMs": 32.5
+    },
+    "k3": {
+     "n": 154,
+     "medianMs": 8.8,
+     "withShiftMs": 45.8
+    }
+   },
+   "byTake": [
+    38.4,
+    36.2
+   ],
+   "byGroup": {
+    "bpm": {
+     "fitMs": {
+      "110": 39.8,
+      "160": 23.4,
+      "80": 38.7
+     },
+     "meanWorstSplitMs": 88.7,
+     "meanWorstOneMs": 88.9
+    },
+    "dyn": {
+     "fitMs": {
+      "32": 45.4,
+      "64": 20.5,
+      "96": 40.2
+     },
+     "meanWorstSplitMs": 87.4,
+     "meanWorstOneMs": 88.9
+    },
+    "l1": {
+     "fitMs": {
+      "16th": 25.5,
+      "eighth": 49.3,
+      "quarter": 36.6
+     },
+     "meanWorstSplitMs": 87.9,
+     "meanWorstOneMs": 88.9
+    },
+    "n": {
+     "fitMs": {
+      "2": 45.2,
+      "3": 33.4,
+      "4": 30.4
+     },
+     "meanWorstSplitMs": 88.3,
+     "meanWorstOneMs": 88.9
+    }
+   }
+  },
+  "Celli - Performance": {
+   "slurs": 444,
+   "notes": 1053,
+   "fitMs": -11.3,
+   "ci90": [
+    -15.6,
+    -6.9
+   ],
+   "minimaxMeanMs": -11.5,
+   "rmsMs": -3.4,
+   "feasible50": 0.349,
+   "usedMs": 0.0,
+   "atZero": {
+    "medianWorstMs": 94.6,
+    "meanWorstMs": 102.1,
+    "notesWithin50": 0.453,
+    "slursWithin50": 0.126
+   },
+   "atUsed": {
+    "medianWorstMs": 94.6,
+    "meanWorstMs": 102.1,
+    "notesWithin50": 0.453,
+    "slursWithin50": 0.126
+   },
+   "byPosition": {
+    "k0": {
+     "n": 486,
+     "medianMs": -49.0,
+     "withShiftMs": -49.0
+    },
+    "k1": {
+     "n": 229,
+     "medianMs": 32.3,
+     "withShiftMs": 32.3
+    },
+    "k2": {
+     "n": 221,
+     "medianMs": 10.7,
+     "withShiftMs": 10.7
+    },
+    "k3": {
+     "n": 159,
+     "medianMs": 57.1,
+     "withShiftMs": 57.1
+    }
+   },
+   "byTake": [
+    -11.6,
+    -10.8
+   ],
+   "byGroup": {
+    "bpm": {
+     "fitMs": {
+      "110": -12.5,
+      "160": -15.8,
+      "80": -4.9
+     },
+     "meanWorstSplitMs": 100.8,
+     "meanWorstOneMs": 101.1
+    },
+    "dyn": {
+     "fitMs": {
+      "32": -16.8,
+      "64": -5.8,
+      "96": -10.5
+     },
+     "meanWorstSplitMs": 100.8,
+     "meanWorstOneMs": 101.1
+    },
+    "l1": {
+     "fitMs": {
+      "16th": -30.0,
+      "eighth": 5.3,
+      "quarter": 4.2
+     },
+     "meanWorstSplitMs": 97.4,
+     "meanWorstOneMs": 101.1
+    },
+    "n": {
+     "fitMs": {
+      "2": -28.7,
+      "3": 6.4,
+      "4": -5.7
+     },
+     "meanWorstSplitMs": 99.4,
+     "meanWorstOneMs": 101.1
+    }
+   }
+  },
+  "Basses - Performance": {
+   "slurs": 419,
+   "notes": 962,
+   "fitMs": 1.1,
+   "ci90": [
+    -5.9,
+    6.0
+   ],
+   "minimaxMeanMs": 1.0,
+   "rmsMs": -8.9,
+   "feasible50": 0.561,
+   "usedMs": 0.0,
+   "atZero": {
+    "medianWorstMs": 89.7,
+    "meanWorstMs": 95.4,
+    "notesWithin50": 0.59,
+    "slursWithin50": 0.282
+   },
+   "atUsed": {
+    "medianWorstMs": 89.7,
+    "meanWorstMs": 95.4,
+    "notesWithin50": 0.59,
+    "slursWithin50": 0.282
+   },
+   "byPosition": {
+    "k0": {
+     "n": 486,
+     "medianMs": 12.4,
+     "withShiftMs": 12.4
+    },
+    "k1": {
+     "n": 260,
+     "medianMs": -32.6,
+     "withShiftMs": -32.6
+    },
+    "k2": {
+     "n": 144,
+     "medianMs": -8.9,
+     "withShiftMs": -8.9
+    },
+    "k3": {
+     "n": 139,
+     "medianMs": 38.0,
+     "withShiftMs": 38.0
+    }
+   },
+   "byTake": [
+    2.2,
+    -2.0
+   ],
+   "byGroup": {
+    "bpm": {
+     "fitMs": {
+      "110": -6.0,
+      "160": 0.9,
+      "80": 7.5
+     },
+     "meanWorstSplitMs": 94.9,
+     "meanWorstOneMs": 95.4
+    },
+    "dyn": {
+     "fitMs": {
+      "32": -20.0,
+      "64": 2.9,
+      "96": 14.5
+     },
+     "meanWorstSplitMs": 93.8,
+     "meanWorstOneMs": 95.4
+    },
+    "l1": {
+     "fitMs": {
+      "16th": 6.7,
+      "eighth": -4.9,
+      "quarter": -2.4
+     },
+     "meanWorstSplitMs": 95.2,
+     "meanWorstOneMs": 95.4
+    },
+    "n": {
+     "fitMs": {
+      "2": 6.0,
+      "3": 7.0,
+      "4": -32.9
+     },
+     "meanWorstSplitMs": 93.7,
+     "meanWorstOneMs": 95.4
+    }
+   }
+  }
+ },
+ "verify": {
+  "shift": {
+   "Basses": {
+    "s16": {
+     "shiftMs": 60.0,
+     "against": "a16",
+     "note": {
+      "n": 538,
+      "medianAbsMs": 3.3,
+      "p90AbsMs": 28.9,
+      "within5": 0.589
+     },
+     "inside": {
+      "n": 293,
+      "medianAbsMs": 7.7,
+      "p90AbsMs": 55.1,
+      "within5": 0.42
+     }
+    },
+    "s17": {
+     "shiftMs": 60.0,
+     "against": "A rows",
+     "note": {
+      "n": 495,
+      "medianAbsMs": 3.4,
+      "p90AbsMs": 41.1,
+      "within5": 0.562
+     },
+     "inside": {
+      "n": 252,
+      "medianAbsMs": 10.9,
+      "p90AbsMs": 51.6,
+      "within5": 0.321
+     }
+    }
+   },
+   "Celli": {
+    "s16": {
+     "shiftMs": 60.0,
+     "against": "a16",
+     "note": {
+      "n": 575,
+      "medianAbsMs": 4.4,
+      "p90AbsMs": 51.6,
+      "within5": 0.501
+     },
+     "inside": {
+      "n": 332,
+      "medianAbsMs": 10.7,
+      "p90AbsMs": 84.4,
+      "within5": 0.31
+     }
+    },
+    "s17": {
+     "shiftMs": 60.0,
+     "against": "A rows",
+     "note": {
+      "n": 524,
+      "medianAbsMs": 5.6,
+      "p90AbsMs": 63.3,
+      "within5": 0.496
+     },
+     "inside": {
+      "n": 281,
+      "medianAbsMs": 12.9,
+      "p90AbsMs": 103.5,
+      "within5": 0.285
+     }
+    }
+   },
+   "Violas": {
+    "s16": {
+     "shiftMs": 37.0,
+     "against": "a16",
+     "note": {
+      "n": 645,
+      "medianAbsMs": 3.1,
+      "p90AbsMs": 26.2,
+      "within5": 0.611
+     },
+     "inside": {
+      "n": 402,
+      "medianAbsMs": 5.8,
+      "p90AbsMs": 41.2,
+      "within5": 0.47
+     }
+    },
+    "s17": {
+     "shiftMs": 37.0,
+     "against": "A rows",
+     "note": {
+      "n": 612,
+      "medianAbsMs": 2.7,
+      "p90AbsMs": 31.6,
+      "within5": 0.616
+     },
+     "inside": {
+      "n": 369,
+      "medianAbsMs": 5.1,
+      "p90AbsMs": 55.1,
+      "within5": 0.48
+     }
+    }
+   },
+   "Violins 1": {
+    "s16": {
+     "shiftMs": 60.0,
+     "against": "a16",
+     "note": {
+      "n": 659,
+      "medianAbsMs": 3.3,
+      "p90AbsMs": 20.6,
+      "within5": 0.625
+     },
+     "inside": {
+      "n": 416,
+      "medianAbsMs": 6.1,
+      "p90AbsMs": 36.2,
+      "within5": 0.43
+     }
+    },
+    "s17": {
+     "shiftMs": 60.0,
+     "against": "A rows",
+     "note": {
+      "n": 598,
+      "medianAbsMs": 3.3,
+      "p90AbsMs": 26.6,
+      "within5": 0.632
+     },
+     "inside": {
+      "n": 355,
+      "medianAbsMs": 7.2,
+      "p90AbsMs": 40.3,
+      "within5": 0.392
+     }
+    }
+   },
+   "Violins 2": {
+    "s16": {
+     "shiftMs": 60.0,
+     "against": "a16",
+     "note": {
+      "n": 658,
+      "medianAbsMs": 3.3,
+      "p90AbsMs": 27.9,
+      "within5": 0.637
+     },
+     "inside": {
+      "n": 415,
+      "medianAbsMs": 5.7,
+      "p90AbsMs": 43.5,
+      "within5": 0.463
+     }
+    },
+    "s17": {
+     "shiftMs": 60.0,
+     "against": "A rows",
+     "note": {
+      "n": 596,
+      "medianAbsMs": 3.3,
+      "p90AbsMs": 34.8,
+      "within5": 0.659
+     },
+     "inside": {
+      "n": 353,
+      "medianAbsMs": 5.2,
+      "p90AbsMs": 60.1,
+      "within5": 0.479
+     }
+    }
+   }
+  },
+  "noise": {
+   "Basses": {
+    "renders (a16 against the A rows)": {
+     "note": {
+      "n": 515,
+      "medianAbsMs": 0.0,
+      "p90AbsMs": 5.0,
+      "within5": 0.895
+     },
+     "inside": {
+      "n": 272,
+      "medianAbsMs": 0.1,
+      "p90AbsMs": 12.8,
+      "within5": 0.801
+     }
+    },
+    "takes (A rows, take A against B)": {
+     "note": {
+      "n": 509,
+      "medianAbsMs": 1.1,
+      "p90AbsMs": 16.5,
+      "within5": 0.825
+     },
+     "inside": {
+      "n": 266,
+      "medianAbsMs": 2.4,
+      "p90AbsMs": 25.1,
+      "within5": 0.741
+     }
+    }
+   },
+   "Celli": {
+    "renders (a16 against the A rows)": {
+     "note": {
+      "n": 548,
+      "medianAbsMs": 2.9,
+      "p90AbsMs": 20.3,
+      "within5": 0.677
+     },
+     "inside": {
+      "n": 305,
+      "medianAbsMs": 5.1,
+      "p90AbsMs": 50.2,
+      "within5": 0.469
+     }
+    },
+    "takes (A rows, take A against B)": {
+     "note": {
+      "n": 537,
+      "medianAbsMs": 3.0,
+      "p90AbsMs": 43.0,
+      "within5": 0.605
+     },
+     "inside": {
+      "n": 294,
+      "medianAbsMs": 6.9,
+      "p90AbsMs": 69.8,
+      "within5": 0.408
+     }
+    }
+   },
+   "Violas": {
+    "renders (a16 against the A rows)": {
+     "note": {
+      "n": 614,
+      "medianAbsMs": 0.1,
+      "p90AbsMs": 14.5,
+      "within5": 0.738
+     },
+     "inside": {
+      "n": 371,
+      "medianAbsMs": 3.0,
+      "p90AbsMs": 26.0,
+      "within5": 0.563
+     }
+    },
+    "takes (A rows, take A against B)": {
+     "note": {
+      "n": 611,
+      "medianAbsMs": 2.9,
+      "p90AbsMs": 23.2,
+      "within5": 0.709
+     },
+     "inside": {
+      "n": 368,
+      "medianAbsMs": 4.2,
+      "p90AbsMs": 36.3,
+      "within5": 0.527
+     }
+    }
+   },
+   "Violins 1": {
+    "renders (a16 against the A rows)": {
+     "note": {
+      "n": 602,
+      "medianAbsMs": 0.1,
+      "p90AbsMs": 14.5,
+      "within5": 0.711
+     },
+     "inside": {
+      "n": 359,
+      "medianAbsMs": 3.0,
+      "p90AbsMs": 20.3,
+      "within5": 0.554
+     }
+    },
+    "takes (A rows, take A against B)": {
+     "note": {
+      "n": 597,
+      "medianAbsMs": 2.9,
+      "p90AbsMs": 17.5,
+      "within5": 0.677
+     },
+     "inside": {
+      "n": 354,
+      "medianAbsMs": 4.7,
+      "p90AbsMs": 29.0,
+      "within5": 0.514
+     }
+    }
+   },
+   "Violins 2": {
+    "renders (a16 against the A rows)": {
+     "note": {
+      "n": 603,
+      "medianAbsMs": 0.1,
+      "p90AbsMs": 11.7,
+      "within5": 0.745
+     },
+     "inside": {
+      "n": 360,
+      "medianAbsMs": 2.9,
+      "p90AbsMs": 20.3,
+      "within5": 0.594
+     }
+    },
+    "takes (A rows, take A against B)": {
+     "note": {
+      "n": 601,
+      "medianAbsMs": 2.9,
+      "p90AbsMs": 31.9,
+      "within5": 0.687
+     },
+     "inside": {
+      "n": 358,
+      "medianAbsMs": 3.9,
+      "p90AbsMs": 63.6,
+      "within5": 0.545
+     }
+    }
+   }
+  },
+  "withShift": {
+   "Basses": {
+    "s16": {
+     "shiftMs": 60.0,
+     "byPosition": {
+      "k0": 68.3,
+      "k1": 36.0,
+      "k2": 68.2,
+      "k3": 95.8
+     },
+     "medianWorstMs": 106.1,
+     "notesWithin50": 0.355,
+     "slursWithin50": 0.121
+    },
+    "s17": {
+     "shiftMs": 60.0,
+     "byPosition": {
+      "k0": 66.6,
+      "k1": 35.9,
+      "k2": 81.6,
+      "k3": 98.5
+     },
+     "medianWorstMs": 109.7,
+     "notesWithin50": 0.347,
+     "slursWithin50": 0.112
+    }
+   },
+   "Celli": {
+    "s16": {
+     "shiftMs": 60.0,
+     "byPosition": {
+      "k0": 4.3,
+      "k1": 97.4,
+      "k2": 96.8,
+      "k3": 117.8
+     },
+     "medianWorstMs": 133.0,
+     "notesWithin50": 0.429,
+     "slursWithin50": 0.061
+    },
+    "s17": {
+     "shiftMs": 60.0,
+     "byPosition": {
+      "k0": 4.6,
+      "k1": 103.7,
+      "k2": 74.8,
+      "k3": 119.1
+     },
+     "medianWorstMs": 133.6,
+     "notesWithin50": 0.427,
+     "slursWithin50": 0.066
+    }
+   },
+   "Violas": {
+    "s16": {
+     "shiftMs": 37.0,
+     "byPosition": {
+      "k0": -46.9,
+      "k1": 17.1,
+      "k2": 32.7,
+      "k3": 47.8
+     },
+     "medianWorstMs": 72.8,
+     "notesWithin50": 0.545,
+     "slursWithin50": 0.197
+    },
+    "s17": {
+     "shiftMs": 37.0,
+     "byPosition": {
+      "k0": -46.6,
+      "k1": 21.5,
+      "k2": 33.2,
+      "k3": 40.9
+     },
+     "medianWorstMs": 73.2,
+     "notesWithin50": 0.538,
+     "slursWithin50": 0.197
+    }
+   },
+   "Violins 1": {
+    "s16": {
+     "shiftMs": 60.0,
+     "byPosition": {
+      "k0": 34.0,
+      "k1": 96.2,
+      "k2": 87.5,
+      "k3": 103.1
+     },
+     "medianWorstMs": 136.5,
+     "notesWithin50": 0.425,
+     "slursWithin50": 0.017
+    },
+    "s17": {
+     "shiftMs": 60.0,
+     "byPosition": {
+      "k0": 33.9,
+      "k1": 96.9,
+      "k2": 87.5,
+      "k3": 98.8
+     },
+     "medianWorstMs": 133.4,
+     "notesWithin50": 0.43,
+     "slursWithin50": 0.025
+    }
+   },
+   "Violins 2": {
+    "s16": {
+     "shiftMs": 60.0,
+     "byPosition": {
+      "k0": 29.1,
+      "k1": 57.1,
+      "k2": 108.9,
+      "k3": 97.2
+     },
+     "medianWorstMs": 117.6,
+     "notesWithin50": 0.477,
+     "slursWithin50": 0.12
+    },
+    "s17": {
+     "shiftMs": 60.0,
+     "byPosition": {
+      "k0": 29.8,
+      "k1": 68.4,
+      "k2": 108.9,
+      "k3": 97.3
+     },
+     "medianWorstMs": 120.2,
+     "notesWithin50": 0.474,
+     "slursWithin50": 0.121
+    }
+   }
+  }
+ }
+}

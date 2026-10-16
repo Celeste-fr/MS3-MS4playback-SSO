@@ -209,6 +209,11 @@ switch value of each articulation. For example:
     on, a note on that attack starts early by it (`[heldNotes] byPitch`: by pitch, else the median) instead of the
     articulation's `onset`. SSO (`gen_spitfire_sso.py` from `sso_smooth_onset.json`): the smooth attack of the five
     string sections' Performance Legato, e.g. Violas `attackOnset="smooth:236.2;50:198.3,59:259.5,…"`.
+  - `slurShift="ms"` on such an `Articulation` (>= 0): with `[slurs] slurShift` every note of a slur on it (the first
+    note's attack, each transition, their switches, controllers, joins and bends, the last note-off) plays this much
+    later than its early start: SSO's timing inside the slur stays, the slur is centred on its written beats. SSO
+    (`gen_spitfire_sso.py` from `sso_slur_shift.json`, `tools/soundlibraries/slur_rhythm/shift.py`): Violas - Performance
+    `slurShift="37"`; the other sections' slurs are centred already (none written).
   - `avoid="keys:low-high:velocity …"` on such an `Articulation`: an attack (not a legato transition) at those keys
     (one key or `low-high`) with a velocity in the band plays at `velocity` instead, the nearest velocity measured
     clean: a faulty recording (a round robin with its own narrow tone). Not a note's own velocity; `[notes]
