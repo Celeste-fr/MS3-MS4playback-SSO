@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <tuple>
 
 #include "click.h"
@@ -285,6 +286,7 @@ void Seq::setScoreView(ScoreView* v)
       cs = cv ? cv->score()->masterScore() : 0;
       midi = MidiRenderer(cs);
       midi.setMinChunkSize(10);
+      _preview = NotePreview::Previewer();      // (a click's renderer: never one of a score closed since)
 
       if (!heartBeatTimer->isActive())
             heartBeatTimer->start(20);    // msec
@@ -1912,6 +1914,67 @@ void Seq::startNote(int channel, int pitch, int velo, int duration, double nt)
       }
 
 //---------------------------------------------------------
+//   playNotes
+//    a clicked or entered note as playback plays it (libmscore/notepreview.h). Stopped only: while playing a click
+//    plays as before (the renderer's chunk can't be rendered next to the background render, and the library's
+//    routes are playing). Each click renders the note's playback chunk on a renderer of its own (cached until the
+//    score, its metaTags, the library or the mode change: a click on another note of the chunk renders nothing),
+//    then sends each route's switch, controllers and bend in force and the note-on at once. Hosted, a route whose
+//    slot isn't loaded for the part (a patch the score needs since the last load) gets nothing and the host loads
+//    the score's patches in the background (SoundLibraryHost::preloadSoon): the next click plays it. The patch
+//    volumes are the slots' already (SoundLibraryHost::applyMixer, every 50 ms from the score's first load)
+//---------------------------------------------------------
+
+bool Seq::playNotes(const std::vector<const Note*>& notes, int duration)
+      {
+      if (!cs || notes.empty() || state != Transport::STOP || cs->playMode() != PlayMode::SYNTHESIZER)
+            return false;
+      const Note* first = NotePreview::playedNote(notes.front());
+      if (!first || first->masterScore() != cs)
+            return false;
+      const SynthesizerState synState = mscore->synthesizerState();
+      if (NotePreview::modelOf(first->part(), synState) == NotePreview::Sound::MS3)
+            return false;                       // (MuseScore 3.6's click)
+      if (_liveTrack.load() && _liveTrackScore.load() == cs)
+            return false;                       // (a Live clip edited here: its Live track plays the click, playOnLiveTrack)
+      waitForRendering();                       // (a chunk still rendering in the background since a stop)
+      const NotePreview::Preview p = _preview.preview(notes, synState);
+      if (p.empty())
+            return false;                       // (no note-on: as before)
+      if (p.sound == NotePreview::Sound::LIBRARY && _liveClips)
+            return false;                       // (Live plays the library's parts: MuseScore sends them nothing)
+      // hosted: only to slots loaded for the note's part
+      std::set<int> skip;
+      if (p.sound == NotePreview::Sound::LIBRARY && SoundLib::output() == SoundLib::Output::PLUGIN) {
+            SoundLibraryHost* host = SoundLibraryHost::instance();
+            const std::vector<int> partSlots = host->slotsOf(first->part());
+            bool missing = false;
+            for (const NPlayEvent& e : p.on) {
+                  if (!e.isExternal())
+                        continue;
+                  const int slot = e.extPort() * 16 + e.extChannel();
+                  if (!host->loaded(slot) || std::find(partSlots.begin(), partSlots.end(), slot) == partSlots.end()) {
+                        skip.insert(slot);
+                        missing = true;
+                        }
+                  }
+            if (missing) {
+                  qDebug("playNotes: a route of %s is not loaded yet: loading the score's patches", qPrintable(first->part()->partName()));
+                  host->preloadSoon(cs);
+                  }
+            }
+      stopNotes();
+      for (const NPlayEvent& e : p.on)
+            if (!e.isExternal() || !skip.count(e.extPort() * 16 + e.extChannel()))
+                  sendEvent(e);
+      for (const NPlayEvent& e : p.off)
+            if (!e.isExternal() || !skip.count(e.extPort() * 16 + e.extChannel()))
+                  _previewOffs.push_back(e);
+      startNoteTimer(duration);
+      return true;
+      }
+
+//---------------------------------------------------------
 //   playMetronomeBeat
 //---------------------------------------------------------
 
@@ -2513,6 +2576,18 @@ void Seq::stopNotes(int channel, bool realTime)
             };
       // For VSTs/devices that do not support All Notes Off
       // CTRL_ALL_NOTES_OFF should still be evoked after calling this function, even if it seems redundant
+      // the notes a click started (playNotes): their note-offs on their routes and channels (GUI thread)
+      if (!realTime && !_previewOffs.empty()) {
+            for (const NPlayEvent& off : _previewOffs)
+                  if (channel == -1 || off.channel() == channel)
+                        send(off);
+            if (channel == -1)
+                  _previewOffs.clear();
+            else
+                  _previewOffs.erase(std::remove_if(_previewOffs.begin(), _previewOffs.end(),
+                                                    [channel](const NPlayEvent& off) { return off.channel() == channel; }),
+                                     _previewOffs.end());
+            }
       auto turnAllNotesOff = [send](int channel) {
             for (unsigned note = 0; note < 128; note++)
                   send(NPlayEvent(ME_NOTEOFF, channel, note, 0));

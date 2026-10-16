@@ -1031,6 +1031,11 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   a note at the score's start whose onset MuseScore plays early by the start lead (`libraryDelayLead`, 2026-10-14;
   Whence's first Celli note, 172 ms) starts at 0 there, late by its onset; the plain set plays it early (Track Delay).
 
+- **A clicked or entered note** (2026-10-15, `libmscore/notepreview.h`): in MuseScore's own playback (hosted or MIDI
+  out) it plays its playback events on its route (patch, switch, CC1 / CC11, bend: docs/PLAYBACK_SETTINGS.md › Clicked
+  and entered notes). While *Live plays the score* MuseScore sends the library's routes nothing, so a click there plays
+  MuseScore 3.6's click on the built-in synthesizer as before; a clip tab playing through its Live track sends the
+  click to that track as before (Live's keyboard option unchanged).
 - **Host-only playback settings** (docs/PLAYBACK_SETTINGS.md; playback.ini `[hosting]`): `settleSeconds` (how long a
   freshly loaded patch runs before MuseScore sets its controllers) acts
   in MuseScore's own hosting only; Live loads and mixes the plug-ins itself. Varispeed's glides too (each frame

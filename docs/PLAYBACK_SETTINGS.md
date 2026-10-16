@@ -812,6 +812,30 @@ puts the moved note-on back (Track Delay + MuseScore Link's per-note delays; `ts
 judges each transition against its mode's shift for CAPPED and prints the shifts (median, range, capped); ARRIVAL still
 compares the modelled arrival, so in modes 2 / 3 a transition shows `arrive - shift` late by design.
 
+## Clicked and entered notes
+
+The owner (2026-10-15): "send a clicked note on a library part to its SSO patch, with its technique and the same patch
+volume and levels playback uses, so a click sounds like that note does in playback, in tone and level"; "the clicked
+note should match the global playback library". A note clicked, selected with the keyboard, entered or typed (and a
+chord added with *play chord*) goes through `MuseScore::play` → `Seq::playNotes` (`libmscore/notepreview.h`). The part's
+effective mode (its own, `partplayback.h`, else the global one) decides, read at every click:
+
+| Effective mode | The click |
+|---|---|
+| MS3 | MuseScore 3.6's click, unchanged: velocity 80, the single-note-dynamics controller at 80 |
+| MS4 (and a part set to the library that the library lacks) | the note's MS4 note-on (velocity by its dynamic, MS4's channel slot) with CC11 and the preset in force on that channel |
+| Library | the note's library note-on on its route (patch, varispeed lane or bend) with the switch, CC1, CC11 and every controller and bend in force there |
+
+So every adjustment in this file that playback applies to the note applies to its click: the technique, calibrated
+velocity, the level rule, section balance, real range, mic compensation, even levels, track levels, the Inspector's
+levels; the patch volumes are the slots' (hosted: `SoundLibraryHost::applyMixer` keeps them every 50 ms, also while
+stopped). No early start: the note-on goes at once, ending after the click duration as before. The events come from
+rendering the note's 10-measure playback chunk on a renderer of the click's own (kept until an edit, a metaTag, the
+library or the mode changes). Not changed: while playing (a click plays as before), while *Live plays the score*, a clip
+tab playing through its Live track, the piano roll's and drum roll's keyboards and the drum palette (`seq->startNote`).
+Hosted, a route whose patch isn't loaded yet (a technique added since the score's last load) stays silent and the
+host loads the score's patches in the background; the next click plays it.
+
 ## Inventory
 
 Not in the table, because they are corrections and not adjustments (no setting, the same in every preset): a percussion
