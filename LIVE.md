@@ -177,8 +177,9 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   last; at a tick without a note (a glide's step) the last of them is at the tick itself.
   Plug-in parameter events (MuseScore's own automation lanes of Kontakt's parameters: Vibrato, mics …) are
   not notes: the device sets those parameters itself while Live plays ([Automation lanes in MuseScore and in
-  Live](#automation-lanes-in-musescore-and-in-live)); lanes Live's set already holds are left to Live. The part's *Controllers…* that are plug-in parameters are in each patch's state in the Live Set
-  (Create Live Set, below).
+  Live](#automation-lanes-in-musescore-and-in-live)); lanes Live's set already holds are left to Live. A part's plug-in parameter settings (flat lanes: one value from the
+  score's start, `libmscore/partcontrollers.h`; until 2026-10-15 its *Controllers…* values) are in each patch's state in
+  the Live Set (Create Live Set, below), not sent as events.
 - **Time:** the Live Object Model can't write the song's tempo automation, so Live plays at one tempo,
   the score's first, and the clips hold the notes at their real times (seconds as MuseScore plays them:
   tempo changes, rit./accel. lines, fermatas, repeats). With one tempo throughout, Live's bars are the
@@ -572,18 +573,22 @@ The sections below describe the route set.
   - Kontakt's state is the patch's setup exactly as MuseScore loads it (`SoundLibraryHost::setupState`): Kontakt's
     own state when a load has resaved it, else made from the `.nki`; "UACC & UI only" (`$iooxo` 3) and **512
     voices** as MuseScore sets them. Kontakt's controller state: what the setup holds (empty for Kontakt).
-  - **with the part's Controllers** (2026-09-30): when the part sets plug-in parameters of that patch in
-    *Controllers…* (the piano's mic levels, a violin's vibrato …), the state is the one MuseScore plays: the setup
+  - **with the part's settings** (2026-09-30; since 2026-10-15 a flat automation lane, one value from the score's start,
+    is a controller's setting: the *Controllers…* window is gone and old scores' values become such lanes at load, so
+    a migrated score writes the same set): when the part sets plug-in parameters of that patch (the piano's mic levels,
+    a violin's vibrato …), the state is the one MuseScore plays: the setup
     loaded into a Kontakt instance as MuseScore loads it (its script settled, 1 s), the part's values set exactly as
     playback sets them, a quarter second for Kontakt to take them, then Kontakt's state
     (`SoundLibraryHost::stateWithControllers`). A patch without such values keeps its setup byte for byte. The same
     parameters are listed in Live's panel of Kontakt (as after *Configure*: name, id, value), so whether Live sets
     them again over the state or not, both agree, and they are ready for automation.
-  - **with the part's automation lanes** (2026-09-30): each lane's parameter is in Live's panel too (at the patch's own
-    value), so the MuseScore Link device finds it and plays the lane. The report lists per part
+  - **with the part's automation lanes** (2026-09-30): each lane's parameter (other than a flat lane's, in the state)
+    is in Live's panel too (at the patch's own value), so the MuseScore Link device finds it and plays the lane. The report lists per part
     and patch what was set. Controllers on a MIDI CC are in the clips (carriers), as before.
     **Changed later in MuseScore, they don't follow into the set** (the set is a file Live opened): create the set
-    again, or change and automate them in Live (Live's panel has them).
+    again, or change and automate them in Live (Live's panel has them). Update Live Set keeps Kontakt's state (the
+    owner's), so a flat lane's new value doesn't reach an updated set either (open: write it as constant automation?);
+    a Kontakt parameter turned in Live without automation is not read back (Kontakt's state is opaque here).
   - **Live's mixer** = MuseScore's Mixer (2026-09-30): each track's Volume is the part's volume as MuseScore's host
     plays it, (v/100)² as a linear gain (100 = 0 dB, 127 = +4.2 dB, 0 = -70 dB, Live's lowest; MuseScore's 0 is
     silence), its Pan the same position (-1 … 1; Live's law is MuseScore's: constant power, sine / cosine, 0 dB in

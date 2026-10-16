@@ -5613,21 +5613,19 @@ double MidiRenderer::levelOf(const Note* note) const
 void MidiRenderer::updateState()
       {
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
-      const QString controllers = score->masterScore()->metaTag(PartControllers::metaTag);
       const QString automation = score->masterScore()->metaTag(Automation::metaTag);
       const QString settings = score->masterScore()->metaTag(Playback::metaTag);
       const QString delays = score->masterScore()->metaTag(TrackDelays::metaTag);
       if (delays != trackDelaysTag)
             needUpdate = true;
       if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
-          || controllers != partControllers || automation != partAutomation || settings != playbackSettingsTag
+          || automation != partAutomation || settings != playbackSettingsTag
           || Playback::generation() != playbackGeneration)
             needUpdate = true;
       if (needUpdate) {
             playbackSettingsTag = settings;
             playbackGeneration = Playback::generation();
             partModes = modes;
-            partControllers = controllers;
             partAutomation = automation;
             trackDelaysTag = delays;
             // Update the related structures inside score
@@ -5664,7 +5662,6 @@ void MidiRenderer::updateState()
             library = SoundLib::current();
             libGeneration = SoundLib::routesGeneration();
             if (library) {
-                  const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
                   const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score->masterScore());
                   const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
                   const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
@@ -5681,7 +5678,7 @@ void MidiRenderer::updateState()
                         for (const SoundLib::Route& r : routes) {
                               if (r.lane != 0 || !r.instrument->hasMicLevels || libMics.count({ r.part, r.instrument }))
                                     continue;
-                              auto v = std::make_shared<ContextLevel::MicValues>(ContextLevel::micValues(r.part, *r.instrument, values, allLanes));
+                              auto v = std::make_shared<ContextLevel::MicValues>(ContextLevel::micValues(r.part, *r.instrument, allLanes));
                               if (v->automated())
                                     libMics[{ r.part, r.instrument }] = v;
                               }
@@ -5732,6 +5729,14 @@ void MidiRenderer::updateState()
                                     }
                               if (a.cc < 0 && a.param < 0)
                                     continue;         // (a controller this library doesn't have)
+                              // a flat lane of a map controller is its setting (partcontrollers.h): a MIDI controller's
+                              // with the part's controllers below (its staff texts over it), a plug-in parameter's set on
+                              // the instance (SoundLibraryHost) and in Live's Kontakt state (livesetexport)
+                              bool setting = false;
+                              for (const SoundLib::Controller& c : r.instrument->allControllers)
+                                    setting = setting || (PartControllers::flatLane({ lane }, c) != nullptr);
+                              if (setting && !(flatParamEvents && a.param >= 0))
+                                    continue;
                               automated.insert(lane.target);
                               lp.automation.push_back(a);
                               }
@@ -5740,7 +5745,8 @@ void MidiRenderer::updateState()
                                     continue;
                               if (automated.contains(c.id) || automated.contains(QString("cc%1").arg(c.cc)))
                                     continue;
-                              lp.controllers.push_back({ c.cc, PartControllers::value(part, c, values),
+                              const double v = PartControllers::value(part, c, allLanes);
+                              lp.controllers.push_back({ c.cc, v < 0 ? -1 : int(std::lround(v)),
                                                          SoundLib::controllerTexts(score, part, c) });
                               }
                         // the main patch's instrument plays all the part's routed patches, an

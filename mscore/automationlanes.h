@@ -31,7 +31,10 @@
 //
 //   Lanes (Automation::Lane::target): Dynamics (the library's dynamics CC: it takes the notation's place
 //   from its first point) and Expression (CC11), then every controller of the part's patches (the map's:
-//   SSO's named controls, Vibrato, Release, Tightness, Mic 1-5 … as Kontakt parameters or CCs).
+//   SSO's named controls, Vibrato, Release, Tightness, Mic 1-5 … as Kontakt parameters or CCs). The lanes are the only
+//   way to set a controller (since 2026-10-15: the Sound Library window's Controllers… went; a flat lane is the
+//   controller's setting, partcontrollers.h); an edit is heard at once, also while playing (the parameters' settings on
+//   the instances, SoundLibraryHost::applyPartSettings; the rest by Seq::renderAgainPlaying).
 //   Not only the sound library's parts (the owner, 2026-10-02: "the automation display wouldn't only work for sso, it
 //   works for any midi clip"): an Edit-in-MuseScore clip tab's part gets its Live track's parameters (the mixer's
 //   volume and pan, every device's: a synth rack's macros, Sampler's, Operator's …; "live:<d>/<p>", read from Live by
@@ -55,6 +58,13 @@
 //       Ctrl+1 narrower (halves it, down to 1/64), Ctrl+2 wider (up to the beat, then the bar), Ctrl+4 snap on / off
 //       (Live's keys for its editing grid; while a lane has the focus); the header's Grid button shows the value
 //       ("Off": no snap), its menu sets it; the lanes draw a line at each step;
+//     a lane without points (the owner, 2026-10-15: "if something has no automated value yet, I want it to show a
+//       dashed line like Ableton does … just make it like ableton"): a dashed line at the value the controller plays
+//       unautomated (libmscore/partcontrollers.h unautomatedValue: the map's default, the patch's measured mic
+//       faders, else its setup's own value as last loaded here; not known: no line), in the lane's colour, its value
+//       on hover and in the header; before a lane's first point the same dashed line. Click on it: a point at that
+//       value; drag it up or down: the value from the score's start (one point at tick 0: a flat lane, the
+//       controller's setting); the last point deleted: the dashed line again (the lane stays shown);
 //     click: a breakpoint (on the envelope's line: on it; elsewhere: at the mouse's value), snapped to the
 //       grid; Alt: no snap;
 //     drag a breakpoint: moves it (and the other selected ones); points passed over are removed; Shift: fine
@@ -91,11 +101,17 @@
 //   take it (ShortcutOverride) only while there is a time selection or a lane has the focus. Points selected in a lane
 //   since the score's selection last changed take over: Ctrl+D then duplicates those (as before).
 //   Not here: a lane's rubber band as a time selection (it selects points).
-//   Under a library part's header row, first: the Velocity and Join lanes, a stem per note (notelanes.h).
+//   Under a library part's header row, first: the Velocity and Join lanes, a stem per note (notelanes.h); there a
+//   background drag draws its rubber band as the lanes do, and Ctrl+D with stems selected copies their values onto the
+//   notes at the same places right after them (the span rounded out to the grid; NoteLanes::duplicateSelected; a time
+//   selection on the part wins); Ctrl+C / X / V stay the automation lanes' only.
+//   A point on a bar's tick is drawn and hit on the bar line, where the grid draws the bar (Automation::pointX; the owner,
+//   2026-10-15: "points on automation lane don't always snap to grid correctly"); the stems stay under their notes.
 //   A lane Live's set has as it is (Automation::Lane::playedByLive) is marked "Live"; editing it here makes
 //   MuseScore's the newer one (automation.h).
 //---------------------------------------------------------
 
+#include <functional>
 #include <map>
 #include <set>
 #include <vector>
@@ -108,6 +124,7 @@
 #include "libmscore/soundlibrary.h"
 #include "lanefolds.h"
 
+class QColor;
 class QContextMenuEvent;
 class QKeyEvent;
 class QMouseEvent;
@@ -170,11 +187,20 @@ class AutomationLanes : public QObject {
       std::vector<Target> targets(const Part* part) const;
       double tickToX(int tick) const;
       int xToTick(double x) const;
+      double pointX(int tick) const;          // a lane point's x: on a bar's tick the bar line (Automation::pointX)
       void unfold(const Part* part, bool on = true);          // open / fold a part's lanes (lanefolds.h)
       bool isOpen(const Part* part) const;
       std::vector<const Part*> headerParts() const;           // the parts with a header row, in score order
       void showLane(const Part* part, const QString& target, bool on = true);
       void setDrawMode(bool on) { _drawMode = on; }
+      // a lane's line as paintLane draws it (also for the tests' pictures): rect the lane, valueRect its values (0 at
+      // the bottom, 1 at the top), unautomated the controller's value without a point (partcontrollers.h; -1: not
+      // known), px a screen pixel, selected the selected points' indices
+      static void paintEnvelope(QPainter& p, const QRectF& rect, const QRectF& valueRect, const Automation::Lane& l,
+                                double unautomated, const std::function<double(int)>& tickToX, double px, const QColor& ink,
+                                const std::vector<int>& selected, const QRectF& visible);
+      // what a lane's controller plays without a point, 0-1 (Live's dashed line; -1: not known, or not a map controller)
+      double unautomatedValue(const Row& r) const;
 
       // the time selection (above): whole bars [start, end) of a view part, from the score's range selection
       struct TimeSelection {
@@ -230,6 +256,8 @@ class AutomationLanes : public QObject {
       QRectF _rubber;
       int _drawCell { -1 };
       bool _nearLine { false };
+      double _dashedValue { -1 };             // pressed on an empty lane's dashed line: its value (else -1)
+      bool _valueOnly { false };              // the drag moves the value only (the dashed line dragged)
       int _lineSegment { -1 };                // the segment under the press (on its line: dragged)
       std::vector<int> _segMoved;             // what a segment drag moves: its two points, or the selection
       std::map<int, double> _freePath;        // Draw Mode with Alt: the mouse's path, tick -> value

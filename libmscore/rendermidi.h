@@ -80,17 +80,17 @@ class MidiRenderer {
       bool ms4Mode { false };                               // the chunk being rendered uses it
       std::set<const Part*> ms4Active;                      // its parts that use it (partplayback.h)
       QString partModes;                                    // the parts' playback modes as last read
-      QString partControllers;                              // the parts' library controllers as last read
       QString partAutomation;                               // the parts' automation lanes as last read
       bool forLiveClips { false };
+      bool flatParamEvents { false };                       // setFlatParamEvents
       bool writtenTiming { false };                         // setWrittenTiming
 
       // parts played by an external sound library (soundlibrary.h, MS4 note model only)
       struct LibPart {
             SoundLib::Route route;                          // the main patch's
             SoundLib::TextTechniques text;
-            // the main patch's MIDI controllers (vibrato …): the part's value (-1: the patch's
-            // own), and the staff text that changes it (tick -> value)
+            // the main patch's MIDI controllers (vibrato …): the part's setting, its flat lane's or the map's default
+            // (partcontrollers.h; -1: the patch's own), and the staff text that changes it (tick -> value)
             struct Ctrl {
                   int cc;
                   int value;
@@ -331,6 +331,10 @@ class MidiRenderer {
       // rendering the clips Live plays (liveclips.h): plug-in parameter lanes as ME_PARAMETER events whatever the
       // output (the MuseScore Link device sets them in Live), lanes Live plays itself (Lane::playedByLive) left out
       void setForLiveClips(bool v) { forLiveClips = v; needUpdate = true; }
+      // a flat lane of a plug-in parameter (a controller's setting, partcontrollers.h) as parameter events too, not only on
+      // the instance: for the MuseScore Link device while Live plays the score (liveclips.h), which sets Kontakt's
+      // parameter in a set MuseScore didn't write. Off: the sets Create Live Set writes have the setting in Kontakt's state
+      void setFlatParamEvents(bool v) { flatParamEvents = v; needUpdate = true; }
       // the library notes at their written times (the note model's, in ticks): none of the timing in seconds the
       // renderer gives them otherwise (a held note early by its onset with keepMs' cap, the note before cut at that early
       // start, a Performance note's join). Live's clips hold these (the owner, 2026-10-11); livetiming.h pairs them with

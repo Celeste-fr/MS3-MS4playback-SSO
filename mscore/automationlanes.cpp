@@ -15,9 +15,11 @@
 #include "scoreview.h"
 #include "musescore.h"
 #include "seq.h"
+#include "soundlibraryhost.h"
 
 #include "libmscore/measure.h"
 #include "libmscore/page.h"
+#include "libmscore/partcontrollers.h"
 #include "libmscore/part.h"
 #include "libmscore/partplayback.h"
 #include "libmscore/score.h"
@@ -63,6 +65,7 @@ AutomationLanes::AutomationLanes(ScoreView* view)
    : QObject(view), _view(view)
       {
       _notes = new NoteLanes(this, view);
+      SoundLibraryHost::instance();       // (it records the setups' own values: unautomatedValue's)
       }
 
 bool AutomationLanes::enabled()
@@ -369,6 +372,9 @@ void AutomationLanes::commit(const QString& what)
       for (auto& pl : all) {
             PartLanes keep;
             for (Lane l : pl.second) {
+                  // (its last point deleted: the lane stays shown, its dashed line again, as in Live)
+                  if (l.points.empty() && !NoteLane::isTarget(l.target))
+                        _added[pl.first].insert(l.target);
                   // (an empty lane goes; the Velocity lane keeps its settings: scale or absolute, shaped or written)
                   if (l.points.empty() && !(l.target == LiveClipEdit::VELOCITY_TARGET
                                             && (l.extra.contains("velocityMode") || l.extra.contains("velocityOutput"))))
@@ -391,8 +397,16 @@ void AutomationLanes::commit(const QString& what)
             }
       if (seq)
             seq->waitForRendering();      // (the background renderer reads the metaTag)
-      if (Automation::undoWrite(s->masterScore(), all) && mscore)
-            mscore->showMessage(what, 1500);
+      if (Automation::undoWrite(s->masterScore(), all)) {
+            if (mscore)
+                  mscore->showMessage(what, 1500);
+            // heard at once, also while playing (the owner, 2026-10-07: playback edits never stop playback): the parts'
+            // plug-in parameter settings (flat lanes) on their instances, the rest rendered again from the play position
+            for (const auto& pl : all)
+                  SoundLibraryHost::instance()->applyPartSettings(s->masterScore(), pl.first);
+            if (seq)
+                  seq->renderAgainPlaying();
+            }
       _cachedTag = QString("\x01");
       updateSpace();
       _view->update();
@@ -548,22 +562,13 @@ double AutomationLanes::tickToX(int tick) const
 int AutomationLanes::xToTick(double x) const
       {
       buildAnchors();
-      if (_anchors.empty())
-            return 0;
-      if (x <= _anchors.front().second)
-            return _anchors.front().first;
-      if (x >= _anchors.back().second)
-            return _anchors.back().first;
-      for (size_t i = 1; i < _anchors.size(); ++i) {
-            const auto& a = _anchors[i - 1];
-            const auto& b = _anchors[i];
-            if (x >= a.second && x <= b.second) {
-                  if (b.second - a.second < 1e-9 || b.first == a.first)
-                        return b.first;
-                  return a.first + int(std::lround(double(b.first - a.first) * (x - a.second) / (b.second - a.second)));
-                  }
-            }
-      return _anchors.back().first;
+      return Automation::tickAtX(_anchors, x);
+      }
+
+double AutomationLanes::pointX(int tick) const
+      {
+      buildAnchors();
+      return Automation::pointX(score(), _anchors, tick);
       }
 
 double AutomationLanes::pixel() const
@@ -973,7 +978,7 @@ int AutomationLanes::pointAt(const Row& r, const Lane& l, const QPointF& p) cons
       int best = -1;
       double bestD = rad;
       for (int i = 0; i < int(l.points.size()); ++i) {
-            const QPointF q(tickToX(l.points[size_t(i)].tick), yOfValue(r, l.points[size_t(i)].value));
+            const QPointF q(pointX(l.points[size_t(i)].tick), yOfValue(r, l.points[size_t(i)].value));
             const double d = std::hypot(q.x() - p.x(), q.y() - p.y());
             if (d <= bestD) {
                   bestD = d;
@@ -1020,11 +1025,8 @@ void AutomationLanes::paint(QPainter& p, const QRect& viewport)
                         p.fillRect(QRectF(QPointF(xa, r.rect.top()), QPointF(xb, r.rect.bottom())), QColor(47, 109, 181, 40));
             }
       // the rubber band
-      if (_drag == Drag::RUBBER && !_rubber.isEmpty()) {
-            p.setPen(QPen(QColor(47, 109, 181), 1.0 * pixel(), Qt::DashLine));
-            p.setBrush(QColor(47, 109, 181, 30));
-            p.drawRect(_rubber);
-            }
+      if (_drag == Drag::RUBBER && !_rubber.isEmpty())
+            NoteLanes::paintRubber(p, _rubber, pixel());
       // the value at the mouse
       if (!_hoverText.isEmpty() && _hover.x() >= 0) {
             QFont f = p.font();
@@ -1093,16 +1095,41 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
       p.setPen(QPen(QColor(200, 200, 200), px));
       p.setBrush(Qt::NoBrush);
       p.drawRect(r.rect);
-      if (l.points.empty())
+      const bool selLane = _focus && r.master == _selPart && r.target == _selTarget;
+      const QRectF v = valueRect(r);
+      paintEnvelope(p, r.rect, v, l, unautomatedValue(r), [this](int t) { return pointX(t); }, px, ink,
+                    selLane ? _sel : std::vector<int>(), visible);
+      }
+
+//---------------------------------------------------------
+//   paintEnvelope
+//    a lane's line in rect (its values 0-1 in valueRect, bottom to top): with points, the envelope (solid, filled
+//    under) and its breakpoints, before the first point the controller's unautomated value dashed; without points,
+//    Live's dashed line at the unautomated value (unautomated < 0: not known, nothing drawn)
+//---------------------------------------------------------
+
+void AutomationLanes::paintEnvelope(QPainter& p, const QRectF& rect, const QRectF& valueRect, const Lane& l, double unautomated,
+                                    const std::function<double(int)>& tickToX, double px, const QColor& ink,
+                                    const std::vector<int>& selected, const QRectF& visible)
+      {
+      auto yOf = [&valueRect](double v) { return valueRect.bottom() - std::min(1.0, std::max(0.0, v)) * valueRect.height(); };
+      QPen dashed(ink, 1.4 * px, Qt::CustomDashLine);
+      dashed.setDashPattern({ 4.0, 3.0 });
+      if (l.points.empty()) {
+            if (unautomated < 0)
+                  return;
+            p.setPen(dashed);
+            p.drawLine(QPointF(rect.left(), yOf(unautomated)), QPointF(rect.right(), yOf(unautomated)));
             return;
+            }
       // the envelope
       QPainterPath path;
       const double xFirst = tickToX(l.points.front().tick);
-      path.moveTo(xFirst, yOfValue(r, l.points.front().value));
+      path.moveTo(xFirst, yOf(l.points.front().value));
       for (size_t i = 0; i < l.points.size(); ++i) {
             const Point& a = l.points[i];
             const double xa1 = tickToX(a.tick);
-            const double ya = yOfValue(r, a.value);
+            const double ya = yOf(a.value);
             path.lineTo(xa1, ya);
             if (i + 1 == l.points.size())
                   break;
@@ -1115,38 +1142,59 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
                   const int n = std::max(8, std::min(64, int((xb1 - xa1) / (3 * px))));
                   for (int k = 1; k < n; ++k) {
                         const int t = a.tick + int(std::lround(double(b.tick - a.tick) * k / n));
-                        path.lineTo(tickToX(t), yOfValue(r, l.valueAt(t)));
+                        path.lineTo(tickToX(t), yOf(l.valueAt(t)));
                         }
                   }
             }
-      path.lineTo(r.rect.right(), yOfValue(r, l.points.back().value));
+      path.lineTo(rect.right(), yOf(l.points.back().value));
       QPainterPath fill = path;
-      fill.lineTo(r.rect.right(), r.rect.bottom());
-      fill.lineTo(xFirst, r.rect.bottom());
+      fill.lineTo(rect.right(), rect.bottom());
+      fill.lineTo(xFirst, rect.bottom());
       fill.closeSubpath();
       QColor f = ink;
       f.setAlpha(34);
       p.setPen(Qt::NoPen);
       p.setBrush(f);
       p.drawPath(fill);
-      // before the first point: says nothing (the controller's own value): dashed
-      p.setPen(QPen(ink, 1.0 * px, Qt::DashLine));
-      p.drawLine(QPointF(r.rect.left(), yOfValue(r, l.points.front().value)), QPointF(xFirst, yOfValue(r, l.points.front().value)));
+      // before the first point the lane says nothing: the controller plays its unautomated value there (dashed; not
+      // known: at the first point's value, as before)
+      if (xFirst > rect.left()) {
+            const double y = yOf(unautomated >= 0 ? unautomated : l.points.front().value);
+            p.setPen(dashed);
+            p.drawLine(QPointF(rect.left(), y), QPointF(xFirst, y));
+            }
       p.setPen(QPen(ink, 1.8 * px));
       p.setBrush(Qt::NoBrush);
       p.drawPath(path);
       // the breakpoints
-      const bool selLane = _focus && r.master == _selPart && r.target == _selTarget;
       for (int i = 0; i < int(l.points.size()); ++i) {
             const Point& a = l.points[size_t(i)];
-            const QPointF c(tickToX(a.tick), yOfValue(r, a.value));
+            const QPointF c(tickToX(a.tick), yOf(a.value));
             if (c.x() < visible.left() - 10 * px || c.x() > visible.right() + 10 * px)
                   continue;
-            const bool sel = selLane && std::find(_sel.begin(), _sel.end(), i) != _sel.end();
+            const bool sel = std::find(selected.begin(), selected.end(), i) != selected.end();
             p.setPen(QPen(ink, 1.6 * px));
             p.setBrush(sel ? ink : QColor(Qt::white));
             p.drawEllipse(c, POINT_PX * px, POINT_PX * px);
             }
+      }
+
+//---------------------------------------------------------
+//   unautomatedValue
+//    what the row's controller plays without a point (0-1; -1: not known, or no map controller: Dynamics,
+//    Expression, a Live track's parameter)
+//---------------------------------------------------------
+
+double AutomationLanes::unautomatedValue(const Row& r) const
+      {
+      for (const SoundLib::Route& rt : libraryRoutes()) {
+            if (PartPlaybackModes::masterPart(rt.part) != r.master || rt.patch != 0 || rt.lane != 0 || !rt.instrument)
+                  continue;
+            for (const SoundLib::Controller& c : rt.instrument->allControllers)
+                  if (c.id == r.target || (c.cc >= 0 && r.target == QString("cc%1").arg(c.cc)))
+                        return PartControllers::unautomatedValue(*rt.instrument, c);
+            }
+      return -1;
       }
 
 void AutomationLanes::paintGrid(QPainter& p, const Row& r, const QRectF& visible) const
@@ -1204,7 +1252,9 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
       int at = s ? s->playPos().ticks() : 0;
       if (_hover.x() >= 0 && r.rect.contains(_hover))
             at = xToTick(_hover.x());
-      const double v = l.valueAt(at);
+      double v = l.valueAt(at);
+      if (v < 0 && !NoteLane::isTarget(r.target))
+            v = unautomatedValue(r);          // (no point there: the controller's own value, Live's dashed line)
       QString line2 = v >= 0 ? valueText(r.target, v) : QString::fromUtf8("–");
       if (live)
             line2 += "  " + tr("Live");
@@ -1409,6 +1459,14 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
       const double lineV = _before.valueAt(tick);
       _nearLine = lineV >= 0 && std::fabs(yOfValue(r, lineV) - p.y()) <= 6 * pixel();
       _lineSegment = _nearLine ? segmentAt(_before, tick) : -1;
+      // an empty lane's dashed line (Live's unautomated value): a click puts a point on it, a drag sets the value
+      _dashedValue = -1;
+      if (_before.points.empty()) {
+            const double u = unautomatedValue(r);
+            if (u >= 0 && std::fabs(yOfValue(r, u) - p.y()) <= 6 * pixel())
+                  _dashedValue = u;
+            }
+      _valueOnly = false;
       if ((mods & Qt::AltModifier) && segmentAt(_before, tick) >= 0) {
             _segment = segmentAt(_before, tick);
             _k0 = curvature(_before.points[size_t(_segment)]);
@@ -1442,6 +1500,17 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
             case Drag::PENDING:
                   if ((ev->pos() - _pressPixel).manhattanLength() <= 4)
                         return true;
+                  if (_dashedValue >= 0) {
+                        // the dashed line dragged (Live: the parameter's value set): one point at the score's start,
+                        // moved up or down (a flat lane: the controller's setting, partcontrollers.h)
+                        _before.points = { Point(0, _dashedValue, Curve::STEP) };
+                        _grab = 0;
+                        select(r, { 0 });
+                        _valueOnly = true;
+                        _drag = Drag::MOVE;
+                        _working = false;
+                        return mouseMove(ev);
+                        }
                   if (_lineSegment >= 0) {
                         // pressed on the line: the segment moves (its two points; both selected: the selection)
                         const int s = _lineSegment;
@@ -1457,7 +1526,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   _rubber = QRectF(_pressPos, p).normalized().intersected(r.rect);
                   std::vector<int> sel = (mods & Qt::ControlModifier) ? _beforeSel : std::vector<int>();
                   for (int i = 0; i < int(_before.points.size()); ++i) {
-                        const QPointF c(tickToX(_before.points[size_t(i)].tick), yOfValue(r, _before.points[size_t(i)].value));
+                        const QPointF c(pointX(_before.points[size_t(i)].tick), yOfValue(r, _before.points[size_t(i)].value));
                         if (_rubber.contains(c) && std::find(sel.begin(), sel.end(), i) == sel.end())
                               sel.push_back(i);
                         }
@@ -1466,13 +1535,13 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   return true;
                   }
             case Drag::MOVE: {
-                  if ((ev->pos() - _pressPixel).manhattanLength() <= 2 && !_working)
+                  if ((ev->pos() - _pressPixel).manhattanLength() <= 2 && !_working && !_valueOnly)
                         return true;
                   const Point& g = _before.points[size_t(_grab)];
                   const bool fineValue = mods & Qt::ShiftModifier;
                   int dtick = 0;
-                  if (!fineValue) {
-                        const double gx = tickToX(g.tick) + (p.x() - _pressPos.x());
+                  if (!fineValue && !_valueOnly) {
+                        const double gx = pointX(g.tick) + (p.x() - _pressPos.x());
                         dtick = snap(xToTick(gx), fineTime) - g.tick;
                         }
                   double dv = valueAtY(r, yOfValue(r, g.value) + (p.y() - _pressPos.y())) - g.value;
@@ -1484,7 +1553,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   // the grabbed point: where it went
                   std::vector<int> sel = moved;
                   select(r, sel);
-                  _hover = QPointF(tickToX(g.tick + dtick), yOfValue(r, std::min(1.0, std::max(0.0, g.value + dv))));
+                  _hover = QPointF(pointX(g.tick + dtick), yOfValue(r, std::min(1.0, std::max(0.0, g.value + dv))));
                   _hoverText = valueText(r.target, std::min(1.0, std::max(0.0, g.value + dv)));
                   _view->update();
                   return true;
@@ -1559,7 +1628,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                         else
                               dx = 0;
                         }
-                  const int dtick = dx == 0 ? 0 : snap(xToTick(tickToX(a.tick) + dx), fineTime) - a.tick;
+                  const int dtick = dx == 0 ? 0 : snap(xToTick(pointX(a.tick) + dx), fineTime) - a.tick;
                   const double dv = valueAtY(r, yOfValue(r, a.value) + dy) - a.value;
                   Lane l = _before;
                   const std::vector<int> moved = Edit::movePoints(l, _segMoved, dtick, dv);
@@ -1593,7 +1662,8 @@ bool AutomationLanes::mouseRelease(QMouseEvent* ev)
                   // a click: a breakpoint (on the line: on it; elsewhere at the mouse's value)
                   Lane l = _before;
                   const int tick = snap(xToTick(_pressPos.x()), ev->modifiers() & Qt::AltModifier);
-                  const int i = _nearLine ? Edit::addPointOnLine(l, tick) : Edit::addPoint(l, tick, valueAtY(r, _pressPos.y()));
+                  const int i = _nearLine ? Edit::addPointOnLine(l, tick)
+                              : Edit::addPoint(l, tick, _dashedValue >= 0 ? _dashedValue : valueAtY(r, _pressPos.y()));
                   setLane(r.master, l);
                   select(r, { i });
                   _lastAddedTick = tick;
@@ -1684,6 +1754,12 @@ void AutomationLanes::hover(const QPoint& pos)
                   const int pt = pointAt(*r, l, p);
                   if (pt >= 0)
                         _hoverText = valueText(r->target, l.points[size_t(pt)].value);
+                  else if (l.points.empty() || xToTick(p.x()) < l.points.front().tick) {
+                        // on the dashed line (no point there): the value the controller plays, as Live shows it
+                        const double u = unautomatedValue(*r);
+                        if (u >= 0 && std::fabs(p.y() - yOfValue(*r, u)) <= 6 * pixel())
+                              _hoverText = valueText(r->target, u);
+                        }
                   }
             }
       if (old != _hover || oldText != _hoverText)
@@ -1895,6 +1971,9 @@ bool AutomationLanes::wantsKey(const QKeyEvent* ev) const
       // Ctrl+D over a time selection, the focus in the score or in a lane (MuseScore 3 has no Ctrl+D of its own)
       if (ev->key() == Qt::Key_D && m == Qt::ControlModifier && timeSelection().valid())
             return true;
+      // (Ctrl+D on selected stems of the Velocity and Join lanes: NoteLanes::duplicateSelected)
+      if (ev->key() == Qt::Key_D && m == Qt::ControlModifier && _focus && NoteLane::isTarget(_selTarget) && !_notes->selected().empty())
+            return true;
       if (!_focus)
             return false;
       switch (ev->key()) {
@@ -1922,6 +2001,10 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
             return false;
       if (ev->key() == Qt::Key_D && duplicateTimeSelection())
             return true;
+      if (ev->key() == Qt::Key_D && NoteLane::isTarget(_selTarget)) {
+            _notes->duplicateSelected();
+            return true;
+            }
       if (NoteLane::isTarget(_selTarget) && (ev->key() == Qt::Key_Delete || ev->key() == Qt::Key_Backspace)) {
             _notes->resetSelected();      // (back to Auto)
             return true;

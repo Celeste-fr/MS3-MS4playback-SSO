@@ -740,8 +740,6 @@ void Seq::recomputeMaxMidiOutPort()
 
 void Seq::processMessages()
       {
-      if (_libLiveClear.exchange(false))
-            _libLive.clear();
       if (_swapState.load() == 1)
             swapEventsRT();
       for (;;) {
@@ -769,9 +767,6 @@ void Seq::processMessages()
                         break;
                   case SeqMsgId::PLAY:
                         putEvent(msg.event);
-                        break;
-                  case SeqMsgId::LIBRARY_CC_LIVE:
-                        _libLive.set(msg.event.extPort() * 16 + msg.event.extChannel(), msg.event.controller(), msg.intVal, msg.intVal2);
                         break;
                   case SeqMsgId::SEEK:
                         setPos(msg.intVal);
@@ -1582,7 +1577,6 @@ void Seq::collectEvents(int utick)
 
       if (playlistChanged) {
             midi.setScoreChanged();
-            _libLiveClear = true;         // (rendered from the score's values again: nothing to correct)
             events.clear();
             renderEvents.clear();
             renderEventsStatus.clear();
@@ -1634,7 +1628,6 @@ void Seq::renderAgainPlaying()
             renderChunk(chunk, &_swapEvents);
             unrenderedUtick = renderEventsStatus.occupiedRangeEnd(utick);
             }
-      _libLiveClear = true;               // (rendered from the score's values again: nothing to correct)
       _swapState = 1;
       // the realtime thread takes it within a period (half a second at most here)
       for (int i = 0; i < 250 && _swapState.load() == 1; ++i)
@@ -2666,39 +2659,6 @@ void Seq::libraryMixerChanged(const Part* part)
       }
 
 //---------------------------------------------------------
-//   libraryControllersChanged
-//---------------------------------------------------------
-
-void Seq::libraryControllersChanged(MasterScore* score, const Part* part, const PartControllers::Values& before,
-                                    const PartControllers::Values& after)
-      {
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
-      if (!cs || score != cs || !part || !library || !SoundLib::active())
-            return;
-      const bool hosted = SoundLib::output() == SoundLib::Output::PLUGIN;
-      if (!hosted && (!_driver || !_driver->canOutputMidi()))
-            return;
-      // (an event's channel must be one of the score's: the part's first, as libraryMixerChanged)
-      const Part* master = PartPlaybackModes::masterPart(part);
-      if (!master || master->instruments()->empty() || master->instruments()->begin()->second->channel().empty())
-            return;
-      const int channel = master->instruments()->begin()->second->channel(0)->channel();
-      if (channel < 0 || channel >= int(cs->midiMapping().size()))
-            return;
-      const int tick = state == Transport::PLAY ? cs->repeatList().utick2tick(getCurTick()) : cs->playPos().ticks();
-      for (const PartControllers::LiveCc& c : PartControllers::liveChanges(cs, SoundLib::routes(cs, *library, !hosted), master,
-                                                                          before, after, tick)) {
-            NPlayEvent ev(ME_CONTROLLER, channel, c.cc, c.to < 0 ? 0 : c.to);
-            ev.setExternal(c.port, c.channel);
-            SeqMsg msg(SeqMsgId::LIBRARY_CC_LIVE, c.from, c.to);
-            msg.event = ev;
-            guiToSeq(msg);
-            if (c.send)
-                  sendEvent(ev);
-            }
-      }
-
-//---------------------------------------------------------
 //   waitForRendering
 //---------------------------------------------------------
 
@@ -2945,18 +2905,6 @@ void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
       // a sound library part (soundlibrary.h): to its hosted plug-in (Vst3Synth, the route as
       // the channel), or to MIDI out only, or without its articulation switches to the
       // synthesizer while there is neither
-      // (a controller the Controllers window changed live: the value rendered before plays the new one)
-      if (event.isExternal() && event.type() == ME_CONTROLLER && !_libLive.empty()) {
-            const int value = _libLive.apply(event.extPort() * 16 + event.extChannel(), event.controller(), event.value());
-            if (value < 0)
-                  return;
-            if (value != event.value()) {
-                  NPlayEvent e(event);
-                  e.setValue(value);
-                  putEvent(e, framePos);
-                  return;
-                  }
-            }
       if (event.isExternal() && _liveClips)
             return;                 // (Live plays the score: the library's parts are Live's clips)
       if (event.isExternal() && SoundLib::output() == SoundLib::Output::PLUGIN) {

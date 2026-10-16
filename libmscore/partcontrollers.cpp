@@ -15,10 +15,11 @@
 #include "score.h"
 #include "soundlibrary.h"
 
+#include <cmath>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSet>
+#include <QRegularExpression>
 
 namespace Ms {
 namespace PartControllers {
@@ -26,72 +27,95 @@ namespace PartControllers {
 const char* const metaTag = "partControllers";
 
 //---------------------------------------------------------
-//   read
+//   migrate
 //---------------------------------------------------------
 
-std::map<const Part*, Values> read(const MasterScore* score)
+bool migrate(MasterScore* score)
       {
-      std::map<const Part*, Values> values;
       if (!score)
-            return values;
+            return false;
       const QString tag = score->metaTag(metaTag);
       if (tag.isEmpty())
-            return values;
+            return false;
+      std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+      std::map<const Part*, bool> taken;
       for (const QJsonValue& v : QJsonDocument::fromJson(tag.toUtf8()).array()) {
             const QJsonObject o = v.toObject();
-            Values vals;
+            const Part* part = PartPlaybackModes::findPart(score, o.value("part").toInt(-1), o.value("name").toString(),
+                                                           [&taken](const Part* p) { return taken.count(p) > 0; });
+            if (!part)
+                  continue;         // (a part no longer in the score: its values went with it, as they were never played)
+            taken[part] = true;
+            Automation::PartLanes& lanes = all[part];
             const QJsonObject vo = o.value("values").toObject();
             for (auto it = vo.begin(); it != vo.end(); ++it) {
                   const int x = it.value().toInt(-1);
-                  if (x >= 0 && x <= 127)
-                        vals[it.key()] = x;
+                  if (x < 0 || x > 127)
+                        continue;
+                  bool has = false;
+                  for (const Automation::Lane& l : lanes)
+                        has = has || (l.target == it.key() && !l.points.empty());
+                  if (has)
+                        continue;         // (its lane played over the value)
+                  lanes.erase(std::remove_if(lanes.begin(), lanes.end(), [&it](const Automation::Lane& l) {
+                        return l.target == it.key();
+                        }), lanes.end());
+                  Automation::Lane lane;
+                  lane.target = it.key();
+                  lane.points.push_back(Automation::Point(0, x / 127.0, Automation::Curve::STEP));
+                  lanes.push_back(lane);
                   }
-            if (vals.empty())
-                  continue;
-            const Part* part = PartPlaybackModes::findPart(score, o.value("part").toInt(-1), o.value("name").toString(),
-                                                           [&values](const Part* p) { return values.count(p) > 0; });
-            if (part)
-                  values[part] = vals;
             }
-      return values;
+      QMap<QString, QString> tags = score->metaTags();
+      tags.remove(metaTag);
+      const QString lanes = Automation::write(score, all);
+      if (lanes.isEmpty())
+            tags.remove(Automation::metaTag);
+      else
+            tags.insert(Automation::metaTag, lanes);
+      score->setMetaTags(tags);
+      return true;
       }
 
 //---------------------------------------------------------
-//   write
+//   laneOf / flatLane
 //---------------------------------------------------------
 
-QString write(const MasterScore* score, const std::map<const Part*, Values>& values)
+const Automation::Lane* laneOf(const Automation::PartLanes& lanes, const SoundLib::Controller& controller)
       {
-      QJsonArray list;
-      const QList<Part*>& parts = score->parts();
-      for (int i = 0; i < parts.size(); ++i) {
-            auto it = values.find(parts[i]);
-            if (it == values.end() || it->second.empty())
-                  continue;
-            QJsonObject vals;
-            for (const auto& v : it->second)
-                  vals[v.first] = v.second;
-            QJsonObject o;
-            o["part"] = i;
-            o["name"] = parts[i]->partName();
-            o["values"] = vals;
-            list.append(o);
-            }
-      return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
+      const QString cc = controller.cc >= 0 ? QString("cc%1").arg(controller.cc) : QString();
+      for (const Automation::Lane& l : lanes)
+            if (!l.points.empty() && (l.target == controller.id || (!cc.isEmpty() && l.target == cc)))
+                  return &l;
+      return nullptr;
+      }
+
+const Automation::Lane* flatLane(const Automation::PartLanes& lanes, const SoundLib::Controller& controller)
+      {
+      const Automation::Lane* l = laneOf(lanes, controller);
+      return l && l->flatValue() >= 0 ? l : nullptr;
+      }
+
+//---------------------------------------------------------
+//   toScale
+//---------------------------------------------------------
+
+double toScale(double laneValue)
+      {
+      const double v = 127.0 * std::min(1.0, std::max(0.0, laneValue));
+      const double r = std::round(v);
+      return std::fabs(v - r) <= 127.0 * 0.5e-4 + 1e-9 ? r : v;
       }
 
 //---------------------------------------------------------
 //   value
 //---------------------------------------------------------
 
-int value(const Part* part, const SoundLib::Controller& controller, const std::map<const Part*, Values>& values)
+double value(const Part* part, const SoundLib::Controller& controller, const std::map<const Part*, Automation::PartLanes>& lanes)
       {
-      auto it = values.find(PartPlaybackModes::masterPart(part));
-      if (it != values.end()) {
-            auto v = it->second.find(controller.id);
-            if (v != it->second.end())
-                  return v->second;
-            }
+      const Automation::PartLanes own = Automation::lanes(part, lanes);
+      if (const Automation::Lane* l = flatLane(own, controller))
+            return toScale(l->flatValue());
       return controller.defaultValue;
       }
 
@@ -108,80 +132,33 @@ int valueAt(int partValue, const std::map<int, int>& texts, int tick, bool* from
       }
 
 //---------------------------------------------------------
-//   liveChanges
+//   unautomatedValue
 //---------------------------------------------------------
 
-std::vector<LiveCc> liveChanges(Score* score, const std::vector<SoundLib::Route>& routes, const Part* part,
-                                const Values& before, const Values& after, int tick)
+static std::function<double(const QString&, const QString&)>& setupValues()
       {
-      std::vector<LiveCc> changes;
-      const Part* master = PartPlaybackModes::masterPart(part);
-      if (!score || !master)
-            return changes;
-      // the part's main patch: its controllers are the part's (rendermidi: LibPart::controllers)
-      const SoundLib::LibInstrument* main = nullptr;
-      for (const SoundLib::Route& r : routes)
-            if (PartPlaybackModes::masterPart(r.part) == master && r.patch == 0 && r.lane == 0)
-                  main = r.instrument;
-      if (!main)
-            return changes;
-      QSet<QString> automated;
-      for (const Automation::Lane& lane : Automation::lanes(master, Automation::read(score->masterScore())))
-            automated.insert(lane.target);
-      const std::map<const Part*, Values> was { { master, before } };
-      const std::map<const Part*, Values> now { { master, after } };
-      for (const SoundLib::Controller& c : main->allControllers) {
-            if (c.cc < 0 || c.cc > 127 || automated.contains(c.id) || automated.contains(QString("cc%1").arg(c.cc)))
-                  continue;
-            const int from = value(master, c, was);
-            const int to = value(master, c, now);
-            if (from == to)
-                  continue;
-            bool text = false;
-            valueAt(to, SoundLib::controllerTexts(score, master, c), tick, &text);
-            for (const SoundLib::Route& r : routes) {
-                  if (PartPlaybackModes::masterPart(r.part) != master || r.instrument->kit)
-                        continue;
-                  LiveCc l;
-                  l.port = r.port;
-                  l.channel = r.channel;
-                  l.cc = c.cc;
-                  l.from = from;
-                  l.to = to;
-                  l.send = to >= 0 && !text;
-                  changes.push_back(l);
-                  }
-            }
-      return changes;
+      static std::function<double(const QString&, const QString&)> f;
+      return f;
       }
 
-//---------------------------------------------------------
-//   LiveOverrides
-//---------------------------------------------------------
-
-void LiveOverrides::set(int route, int cc, int from, int to)
+void setSetupValues(std::function<double(const QString& patch, const QString& param)> lookup)
       {
-      if (cc < 0 || cc > 127)
-            return;
-      const int key = route * 128 + cc;
-      Override& o = _overrides[key];
-      if (from >= 0 && from <= 127)
-            o.from.set(size_t(from));
-      o.to = to;
-      if (to >= 0 && to <= 127)
-            o.from.reset(size_t(to));           // (events carrying it are right as they are)
-      if (o.from.none())
-            _overrides.erase(key);
+      setupValues() = lookup;
       }
 
-int LiveOverrides::apply(int route, int cc, int value) const
+double unautomatedValue(const SoundLib::LibInstrument& patch, const SoundLib::Controller& controller)
       {
-      if (_overrides.empty() || value < 0 || value > 127)
-            return value;
-      auto i = _overrides.find(route * 128 + cc);
-      if (i == _overrides.end() || !i->second.from.test(size_t(value)))
-            return value;
-      return i->second.to;
+      if (controller.defaultValue >= 0)
+            return controller.defaultValue / 127.0;
+      if (controller.param.isEmpty())
+            return -1;
+      static const QRegularExpression mic("^Mic ([1-5]) level$");
+      const QRegularExpressionMatch m = mic.match(controller.param);
+      if (m.hasMatch() && patch.hasMicLevels)
+            return patch.micDefault[size_t(m.captured(1).toInt() - 1)] / 127.0;
+      if (setupValues())
+            return setupValues()(patch.name, controller.param);
+      return -1;
       }
 
 }     // namespace PartControllers

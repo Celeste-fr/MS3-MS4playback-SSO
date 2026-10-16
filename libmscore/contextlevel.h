@@ -156,10 +156,11 @@ double realRangeDb(const SoundLib::LibInstrument& patch, int x, int pitch, bool 
 
 // whether [levels] micCompensation is on for the score
 bool micCompensation(const Score* score);
-// a part's mic faders for a patch (Mics above): Mic 1-5 and Mic Mix Distance, the part's Controllers values (-1: the
-// patch's own) and their automation lanes (a lane's value in force wins)
+// a part's mic faders for a patch (Mics above): Mic 1-5 and Mic Mix Distance, the part's settings (a flat lane's value,
+// partcontrollers.h; -1: the patch's own), compensated by the patch volume, and their other automation lanes (a lane's
+// value in force wins), by CC11 at each note
 struct MicValues {
-      std::array<int, 6> part { { -1, -1, -1, -1, -1, -1 } };
+      std::array<double, 6> part { { -1, -1, -1, -1, -1, -1 } };
       std::array<Automation::Lane, 6> lanes;
       std::array<bool, 6> hasLane { { false, false, false, false, false, false } };
       bool automated() const;
@@ -167,7 +168,6 @@ struct MicValues {
       std::array<double, 6> at(int tick) const;
       };
 MicValues micValues(const Part* part, const SoundLib::LibInstrument& patch,
-                    const std::map<const Part*, PartControllers::Values>& values,
                     const std::map<const Part*, Automation::PartLanes>& lanes);
 // a fader value's level against its full fader (<Mics fader>; -inf at 0)
 double micFaderDb(const SoundLib::Library& library, double fader);

@@ -77,6 +77,36 @@
 using namespace Ms;
 
 //---------------------------------------------------------
+//   a score's Controllers values as files until 2026-10-15 kept them (the metaTag partControllers), read as MuseScore
+//   reads such a file now: as flat automation lanes (PartControllers::migrate). values: by part, controller id -> 0-127
+//---------------------------------------------------------
+
+static void legacyControllers(MasterScore* score, const std::map<const Part*, std::map<QString, int>>& values)
+      {
+      QJsonArray list;
+      for (int i = 0; i < score->parts().size(); ++i) {
+            auto it = values.find(score->parts()[i]);
+            if (it == values.end())
+                  continue;
+            QJsonObject vals;
+            for (const auto& v : it->second)
+                  vals[v.first] = v.second;
+            list.append(QJsonObject { { "part", i }, { "name", score->parts()[i]->partName() }, { "values", vals } });
+            }
+      score->setMetaTag(PartControllers::metaTag, QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact)));
+      PartControllers::migrate(score);
+      }
+
+// a controller's setting: a flat lane at value (0-127)
+static Automation::Lane settingLane(const QString& target, int value)
+      {
+      Automation::Lane l;
+      l.target = target;
+      l.points.push_back(Automation::Point(0, value / 127.0, Automation::Curve::STEP));
+      return l;
+      }
+
+//---------------------------------------------------------
 //   TestSoundLibrary
 //---------------------------------------------------------
 
@@ -146,7 +176,7 @@ class TestSoundLibrary : public QObject, public MTest
       void keyShift();
       void renderKitRoll();
       void controllers();
-      void liveControllers();
+      void controllerSettings();
       void partMix();
 #ifdef TESTSYNTH
       void evenAutoTestSynth();
@@ -155,7 +185,6 @@ class TestSoundLibrary : public QObject, public MTest
       void mixerScore();
       void liveSetTestSynth();
       void liveParameters();
-      void liveMidiControllers();
       void kontaktSetup();
       void kontaktScriptValues();
       void kontaktMaxVoices();
@@ -2962,9 +2991,9 @@ void TestSoundLibrary::levelMicCompensation()
       const std::map<int, double> plain = levels();
       check(plain, bar1V, 0);
       // the Violin's Tree at 64: C +13 on both its patches, S' 7: the Violin +6, the Viola -7
-      std::map<const Part*, PartControllers::Values> values;
-      values[violin] = { { "mic2", 64 } };
-      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      // (a score of before 2026-10-15: its Controllers value as a flat lane, still by the patch volume)
+      legacyControllers(score, { { violin, { { "mic2", 64 } } } });
+      QVERIFY(score->metaTag(PartControllers::metaTag).isEmpty());
       std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
       QCOMPARE(int(v.size()), 2);
       QVERIFY(same(v[violin].patchDb["Violin"], 6));                     // (the Performance patch: not routed here)
@@ -2994,7 +3023,7 @@ void TestSoundLibrary::levelMicCompensation()
       QCOMPARE(Playback::definition("levels/micCompensation")->value, 1.0);
       // a lane on the Violin's Tree: 127 in bar 1, 64 from bar 2: C 0 then +13; the volume +13 - S' (7), bar 1 by CC11 -13
       Playback::setIniValuesForTest(others);
-      score->setMetaTag(PartControllers::metaTag, "");
+      score->setMetaTag(Automation::metaTag, "");
       Automation::Lane lane;
       lane.target = "mic2";
       lane.points.push_back({ 0, 1.0, Automation::Curve::STEP });
@@ -4286,19 +4315,22 @@ void TestSoundLibrary::controllers()
       score->rebuildMidiMapping();
       const Part* part = score->parts().front();
 
-      // the part's values in the score: vibrato 100, tightness at the map's default
-      std::map<const Part*, PartControllers::Values> values;
-      values[part] = { { "vibrato", 100 }, { "other-library", 3 } };
-      const QString tag = PartControllers::write(score, values);
-      QVERIFY(!tag.isEmpty());
-      score->setMetaTag(PartControllers::metaTag, tag);
-      const std::map<const Part*, PartControllers::Values> read = PartControllers::read(score);
+      // the part's settings, from a file of before 2026-10-15 (its Controllers values: vibrato 100, a controller of
+      // another library 3), as flat lanes; tightness at the map's default
+      legacyControllers(score, { { part, { { "vibrato", 100 }, { "other-library", 3 } } } });
+      QVERIFY(score->metaTag(PartControllers::metaTag).isEmpty());
+      const std::map<const Part*, Automation::PartLanes> read = Automation::read(score);
       QCOMPARE(int(read.size()), 1);
-      QCOMPARE(read.at(part).at("vibrato"), 100);
-      QCOMPARE(read.at(part).at("other-library"), 3);
-      QCOMPARE(PartControllers::value(part, violin.allControllers[0], read), 100);
-      QCOMPARE(PartControllers::value(part, violin.allControllers[2], read), 10);
-      QCOMPARE(PartControllers::value(part, violin.allControllers[1], read), -1);
+      QCOMPARE(int(read.at(part).size()), 2);
+      for (const Automation::Lane& l : read.at(part)) {
+            QCOMPARE(int(l.points.size()), 1);
+            QCOMPARE(l.points.front().tick, 0);
+            QVERIFY(l.points.front().curve == Automation::Curve::STEP);
+            QVERIFY(l.flatValue() >= 0);
+            }
+      QCOMPARE(PartControllers::value(part, violin.allControllers[0], read), 100.0);
+      QCOMPARE(PartControllers::value(part, violin.allControllers[2], read), 10.0);
+      QCOMPARE(PartControllers::value(part, violin.allControllers[1], read), -1.0);
 
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
       QCOMPARE(int(routes.size()), 4);
@@ -4348,42 +4380,17 @@ void TestSoundLibrary::controllers()
       }
 
 //---------------------------------------------------------
-//   liveControllers
-//    the Controllers window during playback (PartControllers::liveChanges, LiveOverrides): a MIDI
-//    controller changed live goes to every route of the part (its patch and extras), not sent where a
-//    staff text is in force; the events rendered before the change play the new value (dragged on,
-//    back again as Cancel does, unticked without a default: dropped); an automation lane keeps its
-//    controller; a plug-in parameter is not a MIDI controller (LibraryControllers, liveParameters)
+//   controllerSettings
+//    automation is the only way to set a controller (the owner, 2026-10-15): a flat lane (one value from the score's
+//    start) is its setting, played as a part's Controllers value was (a MIDI controller ahead of the notes on every
+//    route, a staff text over it), any other lane as automation (no staff text); the value in force at a tick;
+//    the migration of the old metaTag (a lane with points wins, a part no longer there dropped, nothing left over);
+//    a migrated score renders the same events as the same flat lane drawn; the dashed line's value
+//    (unautomatedValue: the map's default, the mics' measured defaults, the setup's own through the hook)
 //---------------------------------------------------------
 
-void TestSoundLibrary::liveControllers()
+void TestSoundLibrary::controllerSettings()
       {
-      // the sequencer's correction of events rendered before
-      PartControllers::LiveOverrides o;
-      QVERIFY(o.empty());
-      o.set(5, 21, 100, 80);
-      QCOMPARE(o.apply(5, 21, 100), 80);
-      QCOMPARE(o.apply(5, 21, 5), 5);             // (a staff text's)
-      QCOMPARE(o.apply(6, 21, 100), 100);         // another route
-      QCOMPARE(o.apply(5, 18, 100), 100);         // another controller
-      o.set(5, 21, 80, 60);                       // dragged on: both older values play the newest
-      QCOMPARE(o.apply(5, 21, 100), 60);
-      QCOMPARE(o.apply(5, 21, 80), 60);
-      QCOMPARE(o.apply(5, 21, 60), 60);
-      o.set(5, 21, 60, 100);                      // Cancel: back where it was
-      QCOMPARE(o.apply(5, 21, 100), 100);
-      QCOMPARE(o.apply(5, 21, 80), 100);
-      QCOMPARE(o.apply(5, 21, 60), 100);
-      o.set(5, 21, 100, -1);                      // unticked, no default: the old values dropped
-      QCOMPARE(o.apply(5, 21, 100), -1);
-      QCOMPARE(o.apply(5, 21, 80), -1);
-      QCOMPARE(o.apply(5, 21, 7), 7);
-      o.clear();                                  // (the score rendered again)
-      QVERIFY(o.empty());
-      QCOMPARE(o.apply(5, 21, 100), 100);
-      o.set(1, 21, 90, 90);                       // no change: nothing to correct
-      QVERIFY(o.empty());
-
       // the value in force at a tick: the last staff text's, else the part's
       const std::map<int, int> texts { { 480, 5 }, { 960, 127 } };
       bool text = true;
@@ -4395,11 +4402,27 @@ void TestSoundLibrary::liveControllers()
       QCOMPARE(PartControllers::valueAt(64, texts, 959), 5);
       QCOMPARE(PartControllers::valueAt(64, texts, 5000), 127);
 
+      // flat lanes
+      Automation::Lane l = settingLane("vibrato", 100);
+      QVERIFY(std::fabs(l.flatValue() - 100 / 127.0) < 1e-12);
+      l.points.push_back(Automation::Point(1920, 100 / 127.0, Automation::Curve::LINEAR));
+      QVERIFY(l.flatValue() >= 0);                            // (more points, one value)
+      l.points.push_back(Automation::Point(3840, 0.2, Automation::Curve::STEP));
+      QCOMPARE(l.flatValue(), -1.0);
+      Automation::Lane later;
+      later.points.push_back(Automation::Point(480, 0.5, Automation::Curve::STEP));
+      QCOMPARE(later.flatValue(), -1.0);                      // (not from the start)
+      QCOMPARE(Automation::Lane().flatValue(), -1.0);
+      // a lane's value on the 0-127 scale: within the lanes' 1e-4 of a step, that step
+      for (int v = 0; v <= 127; ++v)
+            QCOMPARE(PartControllers::toScale(std::round(v / 127.0 * 10000) / 10000), double(v));
+      QVERIFY(std::fabs(PartControllers::toScale(0.5) - 63.5) < 1e-9);
+
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Controller id='vibrato' name='Vibrato' cc='21' default='64'/>"
          "<Controller id='release' name='Release' param='Release'/>"
-         "<Controller id='tightness' name='Tightness' cc='18' default='10'/>"
+         "<Controller id='mic2' name='Mic 2' param='Mic 2 level'/>"
          "<Instrument name='Violin' ids='violin'>"
          "<Articulation name='Long' value='1' techniques='long'/>"
          "<Articulation name='Staccato' value='40' techniques='short staccatissimo'/>"
@@ -4419,78 +4442,107 @@ void TestSoundLibrary::liveControllers()
          "</Instrument></SoundLibrary>");
       QVERIFY(lib);
       SoundLib::setCurrent(lib);
+      const SoundLib::LibInstrument& violin = lib->instruments[0];
+      const SoundLib::Controller* vibratoC = nullptr;
+      const SoundLib::Controller* releaseC = nullptr;
+      const SoundLib::Controller* micC = nullptr;
+      for (const SoundLib::Controller& c : violin.allControllers) {
+            if (c.id == "vibrato")
+                  vibratoC = &c;
+            else if (c.id == "release")
+                  releaseC = &c;
+            else if (c.id == "mic2")
+                  micC = &c;
+            }
+      QVERIFY(vibratoC && releaseC && micC);
+
+      // the dashed line: the map's default; a parameter without one: the hook (the setup's own), else not known
+      QVERIFY(std::fabs(PartControllers::unautomatedValue(violin, *vibratoC) - 64 / 127.0) < 1e-12);
+      QCOMPARE(PartControllers::unautomatedValue(violin, *releaseC), -1.0);
+      PartControllers::setSetupValues([](const QString& patch, const QString& param) {
+            return patch == "Violin" && param == "Release" ? 0.25 : -1.0;
+            });
+      QCOMPARE(PartControllers::unautomatedValue(violin, *releaseC), 0.25);
+      // the mics: the map's measured default faders (micDefault) where the patch has its mic levels
+      QCOMPARE(PartControllers::unautomatedValue(violin, *micC), -1.0);
+      SoundLib::LibInstrument miked = violin;
+      miked.hasMicLevels = true;
+      miked.micDefault = { { 0, 127, 0, 0, 0 } };
+      QCOMPARE(PartControllers::unautomatedValue(miked, *micC), 1.0);
+      PartControllers::setSetupValues(nullptr);
+
       MasterScore* score = readScore(DIR + "patches.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
-      const Part* part = score->parts().front();
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
-      QCOMPARE(int(routes.size()), 4);
-      std::map<const Part*, PartControllers::Values> values;
-      values[part] = { { "vibrato", 100 } };
-      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
-
-      // vibrato 100 -> 80 at the start: on all four routes, sent now
-      std::vector<PartControllers::LiveCc> changes = PartControllers::liveChanges(score, routes, part, { { "vibrato", 100 } },
-                                                                                  { { "vibrato", 80 } }, 0);
-      QCOMPARE(int(changes.size()), 4);
-      std::set<std::pair<int, int>> reached;
-      for (const PartControllers::LiveCc& c : changes) {
-            QCOMPARE(c.cc, 21);
-            QCOMPARE(c.from, 100);
-            QCOMPARE(c.to, 80);
-            QVERIFY(c.send);
-            reached.insert({ c.port, c.channel });
-            }
-      for (const SoundLib::Route& r : routes)
-            QVERIFY(reached.count({ r.port, r.channel }));
-      // unticked: the map's default
-      changes = PartControllers::liveChanges(score, routes, part, { { "vibrato", 100 } }, {}, 0);
-      QCOMPARE(int(changes.size()), 4);
-      QCOMPARE(changes.front().to, 64);
-      // a plug-in parameter is no MIDI controller; an unchanged one is not sent
-      QVERIFY(PartControllers::liveChanges(score, routes, part, { { "vibrato", 100 } }, { { "vibrato", 100 }, { "release", 30 } }, 0).empty());
-      // where the staff text "sul G" is in force: not sent (its value stands), still corrected
-      const std::map<int, int> sulG = SoundLib::controllerTexts(score, const_cast<Part*>(part), lib->instruments[0].allControllers[0]);
+      Part* part = score->parts().front();
+      auto vibratoEvents = [&]() {
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<std::tuple<int, int, int, int>> out;      // tick, port, channel, value
+            for (const auto& te : events)
+                  if (te.second.isExternal() && te.second.type() == ME_CONTROLLER && te.second.controller() == 21)
+                        out.push_back(std::make_tuple(te.first, te.second.extPort(), te.second.extChannel(), te.second.value()));
+            return out;
+            };
+      const std::map<int, int> sulG = SoundLib::controllerTexts(score, part, *vibratoC);
       QCOMPARE(int(sulG.size()), 1);
-      changes = PartControllers::liveChanges(score, routes, part, { { "vibrato", 100 } }, { { "vibrato", 80 } }, sulG.begin()->first);
-      QCOMPARE(int(changes.size()), 4);
-      QVERIFY(!changes.front().send);
-      QCOMPARE(changes.front().to, 80);
 
-      // the events rendered with vibrato 100, as the sequencer plays them after the change: 80, and
-      // the staff text's 5 stays
-      EventMap events;
-      SynthesizerState ss;
-      score->renderMidi(&events, false, true, ss);
-      PartControllers::LiveOverrides live;
-      for (const PartControllers::LiveCc& c : changes)
-            live.set(c.port * 16 + c.channel, c.cc, c.from, c.to);
-      int corrected = 0;
-      int texts5 = 0;
-      for (const auto& te : events) {
-            const NPlayEvent& ev = te.second;
-            if (!ev.isExternal() || ev.type() != ME_CONTROLLER || ev.controller() != 21)
-                  continue;
-            const int v = live.apply(ev.extPort() * 16 + ev.extChannel(), 21, ev.value());
-            if (ev.value() == 100) {
-                  QCOMPARE(v, 80);
-                  ++corrected;
-                  }
-            else if (ev.value() == 5) {
-                  QCOMPARE(v, 5);
-                  ++texts5;
+      // the migration: the old values as flat lanes, the metaTag gone; a lane with points kept as it was
+      Automation::Lane own;
+      own.target = "release";
+      own.points = { Automation::Point(960, 0.3, Automation::Curve::STEP), Automation::Point(1920, 0.6, Automation::Curve::STEP) };
+      std::map<const Part*, Automation::PartLanes> lanes;
+      lanes[part] = { own };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
+      QJsonArray old;
+      old.append(QJsonObject { { "part", 0 }, { "name", part->partName() },
+                               { "values", QJsonObject { { "vibrato", 100 }, { "release", 10 } } } });
+      old.append(QJsonObject { { "part", 7 }, { "name", "Gone" }, { "values", QJsonObject { { "vibrato", 1 } } } });
+      score->setMetaTag(PartControllers::metaTag, QString::fromUtf8(QJsonDocument(old).toJson(QJsonDocument::Compact)));
+      QVERIFY(PartControllers::migrate(score));
+      QVERIFY(score->metaTag(PartControllers::metaTag).isEmpty());
+      QVERIFY(!PartControllers::migrate(score));                // (nothing left to do)
+      lanes = Automation::read(score);
+      QCOMPARE(int(lanes.size()), 1);
+      QCOMPARE(int(lanes[part].size()), 2);
+      for (const Automation::Lane& x : lanes[part]) {
+            if (x.target == "release")
+                  QCOMPARE(int(x.points.size()), 2);            // (its own)
+            else {
+                  QCOMPARE(x.target, QString("vibrato"));
+                  QCOMPARE(PartControllers::toScale(x.flatValue()), 100.0);
                   }
             }
-      QVERIFY(corrected >= 4 && texts5 >= 4);
-
-      // an automation lane on vibrato: the lane plays it, nothing live
-      Automation::Lane lane;
-      lane.target = "vibrato";
-      lane.points.push_back({ 0, 0.5, Automation::Curve::STEP });
-      std::map<const Part*, Automation::PartLanes> lanes;
-      lanes[part] = { lane };
+      // a migrated MIDI controller: 100 on all four routes from the start, the staff text's 5 over it
+      const auto migrated = vibratoEvents();
+      std::set<std::pair<int, int>> atStart;
+      bool five = false;
+      for (const auto& e : migrated) {
+            if (std::get<0>(e) == 0 && std::get<3>(e) == 100)
+                  atStart.insert({ std::get<1>(e), std::get<2>(e) });
+            five = five || std::get<3>(e) == 5;
+            }
+      QCOMPARE(int(atStart.size()), 4);
+      QVERIFY(five);
+      // the same as the flat lane drawn here: the same events
+      lanes[part] = { own, settingLane("vibrato", 100) };
       score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
-      QVERIFY(PartControllers::liveChanges(score, routes, part, { { "vibrato", 100 } }, { { "vibrato", 80 } }, 0).empty());
+      QVERIFY(vibratoEvents() == migrated);
+      // a second point at another value: automation, which takes the staff text's place (no 5)
+      Automation::Lane vib = settingLane("vibrato", 100);
+      vib.points.push_back(Automation::Point(sulG.begin()->first + 1920, 0.0, Automation::Curve::STEP));
+      lanes[part] = { own, vib };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
+      bool anyFive = false;
+      for (const auto& e : vibratoEvents())
+            anyFive = anyFive || std::get<3>(e) == 5;
+      QVERIFY(!anyFive);
+      // no lane: the map's default, 64, with the staff text
+      lanes[part] = { own };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
+      const auto unset = vibratoEvents();
+      QVERIFY(!unset.empty() && std::get<3>(unset.front()) == 64);
       delete score;
       }
 
@@ -9550,11 +9602,11 @@ void TestSoundLibrary::mixerScore()
 
 //---------------------------------------------------------
 //   liveParameters
-//    the Controllers window's plug-in parameters, live (LibraryControllers::applyPart): on every
-//    slot of the part at once (its patch and extras; its copies for other tunings), heard at once on
-//    the notes sounding (the test synth's "Tone": 0 is 20 % of the level), the patch's own value back
-//    when unticked, Cancel's way back, a lane's controller left alone; set from the GUI thread while the
-//    audio thread plays (Vst3Plugin::setParameter hands the processor's change over)
+//    a part's plug-in parameter settings (flat lanes), live as a lane is edited (LibraryControllers::applyPart,
+//    SoundLibraryHost::applyPartSettings): on every slot of the part at once (its patch and extras; its copies for
+//    other tunings), heard at once on the notes sounding (the test synth's "Tone": 0 is 20 % of the level), the
+//    patch's own value back when the lane is emptied, a lane's controller left alone; set from the GUI thread while
+//    the audio thread plays (Vst3Plugin::setParameter hands the processor's change over)
 //---------------------------------------------------------
 
 void TestSoundLibrary::liveParameters()
@@ -9615,9 +9667,9 @@ void TestSoundLibrary::liveParameters()
             auto patchValues = [&own](int slot) { return &own[slot]; };
             const unsigned tone = unsigned(vst.plugin(used.front())->parameterId("Tone"));
 
-            // tone 0: every slot, heard at once (-14 dB)
-            std::map<const Part*, PartControllers::Values> values;
-            values[part] = { { "tone", 0 } };
+            // tone 0 (a flat lane: the setting): every slot, heard at once (-14 dB)
+            std::map<const Part*, Automation::PartLanes> values;
+            values[part] = { settingLane("tone", 0) };
             std::vector<int> set = LibraryControllers::applyPart(&vst, routes, part, values, patchValues);
             std::sort(set.begin(), set.end());
             std::vector<int> expected = used;
@@ -9631,19 +9683,19 @@ void TestSoundLibrary::liveParameters()
             const double low = rms(run(vst, 4800), 0);
             QVERIFY2(std::fabs(dB(low, full) - 20 * std::log10(0.2)) < 0.3, qPrintable(QString::number(dB(low, full))));
 
-            // Cancel (the window opened at 100): 100 again, the patch's own still kept
-            values[part] = { { "tone", 100 } };
+            // the lane dragged to 100: 100, the patch's own still kept
+            values[part] = { settingLane("tone", 100) };
             LibraryControllers::applyPart(&vst, routes, part, values, patchValues);
             for (int slot : used) {
                   QVERIFY(std::fabs(vst.plugin(slot)->parameter(tone) - 100 / 127.0) < 1e-9);
                   QCOMPARE(own[slot].at(tone), 1.0);
                   }
             // an automation lane's controller: left to the lane
-            values[part] = { { "tone", 10 } };
+            values[part] = { settingLane("tone", 10) };
             LibraryControllers::applyPart(&vst, routes, part, values, patchValues, { "tone" });
             for (int slot : used)
                   QVERIFY(std::fabs(vst.plugin(slot)->parameter(tone) - 100 / 127.0) < 1e-9);
-            // unticked: the patch's own value on every slot, heard at once
+            // the lane's points deleted: the patch's own value on every slot, heard at once
             values.erase(part);
             LibraryControllers::applyPart(&vst, routes, part, values, patchValues);
             for (int slot : used) {
@@ -9666,10 +9718,10 @@ void TestSoundLibrary::liveParameters()
                         }
                   });
             for (int i = 0; i < 1000; ++i) {
-                  values[part] = { { "tone", i % 128 } };
+                  values[part] = { settingLane("tone", i % 128) };
                   LibraryControllers::applyPart(&vst, routes, part, values, patchValues);
                   }
-            values[part] = { { "tone", 0 } };
+            values[part] = { settingLane("tone", 0) };
             LibraryControllers::applyPart(&vst, routes, part, values, patchValues);
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             stop = true;
@@ -9681,94 +9733,6 @@ void TestSoundLibrary::liveParameters()
       SoundLib::setOutput(SoundLib::Output::MIDI);
       }
 
-//---------------------------------------------------------
-//   liveMidiControllers
-//    a MIDI controller changed live (the Controllers window): the CC on each of the part's routes, as
-//    Seq::putEvent delivers it to the used, changes the notes already sounding (the test synth's CC1
-//    is its level), and a CC rendered before the change (the old value, at the next chunk's start)
-//    plays the new value through LiveOverrides instead of putting the old one back
-//---------------------------------------------------------
-
-void TestSoundLibrary::liveMidiControllers()
-      {
-      SoundLib::setOutput(SoundLib::Output::PLUGIN);
-      const int rate = 48000;
-      QString error;
-      auto lib = loadMap(
-         "<SoundLibrary name='t'><Switch type='cc' number='32'/>"
-         "<Controller id='level' name='Level' cc='1' default='127'/>"
-         "<Instrument name='Violin' ids='violin'>"
-         "<Articulation name='Long' value='1' techniques='long'/>"
-         "<Articulation name='Staccato' value='40' techniques='short staccatissimo'/>"
-         "</Instrument>"
-         "<Instrument name='Violin Legato' with='Violin'>"
-         "<Articulation name='Legato' value='20' techniques='legato'/>"
-         "</Instrument>"
-         "<Instrument name='Violin Sul G' with='Violin'>"
-         "<Articulation name='Long Sul G' value='1' techniques='long legato' modifiers='sulg'/>"
-         "</Instrument>"
-         "<Instrument name='Violin Staccatissimo' with='Violin'>"
-         "<Articulation name='Staccatissimo' value='1' techniques='staccatissimo'/>"
-         "</Instrument></SoundLibrary>");
-      QVERIFY(lib);
-      SoundLib::setCurrent(lib);
-      MasterScore* score = readScore(DIR + "patches.musicxml");
-      QVERIFY(score);
-      score->rebuildMidiMapping();
-      const Part* part = score->parts().front();
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
-      QCOMPARE(int(routes.size()), 4);
-      Vst3Synth vst;
-      vst.init(rate);
-      for (const SoundLib::Route& r : routes) {
-            const int slot = r.port * 16 + r.channel;
-            vst.setPlugin(slot, Vst3Plugin::load(TESTSYNTH, rate, 256, &error));
-            QVERIFY2(vst.plugin(slot), qPrintable(error));
-            vst.play(PlayEvent(ME_CONTROLLER, slot, 1, 127));
-            vst.play(PlayEvent(ME_NOTEON, slot, 69, 100));
-            }
-      run(vst, 4800);
-      const double full = rms(run(vst, 4800), 0);
-      QVERIFY(full > 0.01);
-
-      // the window: level 127 (the map's default) -> 32, sent to every route now
-      PartControllers::LiveOverrides live;
-      auto deliver = [&](const PlayEvent& e, int slot) {       // (Seq::putEvent: corrected, then to the slot)
-            PlayEvent x(e);
-            if (x.type() == ME_CONTROLLER) {
-                  const int v = live.apply(slot, x.dataA(), x.dataB());
-                  if (v < 0)
-                        return;
-                  x.setData(x.dataA(), v);
-                  }
-            x.setChannel(slot);
-            vst.play(x);
-            };
-      const std::vector<PartControllers::LiveCc> changes = PartControllers::liveChanges(score, routes, part, {}, { { "level", 32 } }, 0);
-      QCOMPARE(int(changes.size()), 4);
-      for (const PartControllers::LiveCc& c : changes) {
-            live.set(c.port * 16 + c.channel, c.cc, c.from, c.to);
-            QVERIFY(c.send);
-            deliver(PlayEvent(ME_CONTROLLER, 0, c.cc, c.to), c.port * 16 + c.channel);
-            }
-      run(vst, 256);
-      const double low = rms(run(vst, 4800), 0);
-      QVERIFY2(std::fabs(dB(low, full) - 20 * std::log10(32 / 127.0)) < 0.3, qPrintable(QString::number(dB(low, full))));
-      // the next chunk's start, rendered before the change: the old 127 would put it back; it plays 32
-      for (const SoundLib::Route& r : routes)
-            deliver(PlayEvent(ME_CONTROLLER, 0, 1, 127), r.port * 16 + r.channel);
-      run(vst, 256);
-      QVERIFY(std::fabs(dB(rms(run(vst, 4800), 0), low)) < 0.1);
-      // Cancel: back to 127, live
-      for (const PartControllers::LiveCc& c : PartControllers::liveChanges(score, routes, part, { { "level", 32 } }, {}, 0)) {
-            live.set(c.port * 16 + c.channel, c.cc, c.from, c.to);
-            deliver(PlayEvent(ME_CONTROLLER, 0, c.cc, c.to), c.port * 16 + c.channel);
-            }
-      run(vst, 256);
-      QVERIFY(std::fabs(dB(rms(run(vst, 4800), 0), full)) < 0.1);
-      delete score;
-      SoundLib::setOutput(SoundLib::Output::MIDI);
-      }
 #endif
 //---------------------------------------------------------
 //   playbackVerify

@@ -47,10 +47,13 @@
 //    bars after (duplicateNoteValues).
 //---------------------------------------------------------
 
+#include <set>
+#include <vector>
 #include <QString>
 
 namespace Ms {
 
+class Note;
 class Part;
 class Score;
 
@@ -79,8 +82,10 @@ QString write(const Score* score);
 // grace chord, same index in its chord from the bottom. A note found gets the source's values, Auto included (an attack
 // or transition first: Note::undoChangeProperty resets the own values, then they are set); none found, or either note
 // tied from the one before (a tie chain plays its first note's), left as it is. Undoable changes in the caller's
-// command (each note's linked ones too). Returns the notes changed
-int duplicateNoteValues(Score* score, const Part* part, int start, int end, int limit);
+// command (each note's linked ones too). Returns the notes changed. only: just these source notes (the Velocity and
+// Join lanes' Ctrl+D on selected stems, mscore/notelanes.h); copiedTo: the notes found for them, changed or not
+int duplicateNoteValues(Score* score, const Part* part, int start, int end, int limit,
+                        const std::set<const Note*>* only = nullptr, std::vector<Note*>* copiedTo = nullptr);
 
 }     // namespace PerformanceTechnique
 }     // namespace Ms
