@@ -1981,9 +1981,10 @@ bool AutomationLanes::wantsKey(const QKeyEvent* ev) const
             case Qt::Key_Backspace:
             case Qt::Key_Escape:
                   return m == 0;
-            case Qt::Key_C:             // (not in the notes' lanes)
-            case Qt::Key_X:
+            case Qt::Key_C:             // (the notes' lanes: Ctrl+C / V, NoteLanes::copySelected / pasteCopied; no X)
             case Qt::Key_V:
+                  return m == Qt::ControlModifier;
+            case Qt::Key_X:
             case Qt::Key_D:
                   return m == Qt::ControlModifier && !NoteLane::isTarget(_selTarget);
             case Qt::Key_1:             // the grid: narrower, wider, snap on / off (Live's keys)
@@ -2003,6 +2004,15 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
             return true;
       if (ev->key() == Qt::Key_D && NoteLane::isTarget(_selTarget)) {
             _notes->duplicateSelected();
+            return true;
+            }
+      if (NoteLane::isTarget(_selTarget) && ev->key() == Qt::Key_C) {
+            _notes->copySelected();
+            return true;
+            }
+      if (NoteLane::isTarget(_selTarget) && ev->key() == Qt::Key_V) {
+            if (!_notes->pasteCopied(_hover) && mscore)
+                  mscore->showMessage(tr("Paste: copy stems of the Velocity or Join lane first (Ctrl+C)"), 2500);
             return true;
             }
       if (NoteLane::isTarget(_selTarget) && (ev->key() == Qt::Key_Delete || ev->key() == Qt::Key_Backspace)) {

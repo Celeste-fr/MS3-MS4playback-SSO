@@ -104,7 +104,7 @@
 //   Under a library part's header row, first: the Velocity and Join lanes, a stem per note (notelanes.h); there a
 //   background drag draws its rubber band as the lanes do, and Ctrl+D with stems selected copies their values onto the
 //   notes at the same places right after them (the span rounded out to the grid; NoteLanes::duplicateSelected; a time
-//   selection on the part wins); Ctrl+C / X / V stay the automation lanes' only.
+//   selection on the part wins); Ctrl+C / V copy and paste their values (NoteLanes::copySelected / pasteCopied; target: the mouse's time over the lane, else the first selected stem, else after the copied ones; a Velocity clip never into Join); X stays the automation lanes' only.
 //   A point on a bar's tick is drawn and hit on the bar line, where the grid draws the bar (Automation::pointX; the owner,
 //   2026-10-15: "points on automation lane don't always snap to grid correctly"); the stems stay under their notes.
 //   A lane Live's set has as it is (Automation::Lane::playedByLive) is marked "Live"; editing it here makes
