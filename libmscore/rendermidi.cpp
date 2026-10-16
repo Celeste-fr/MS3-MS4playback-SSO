@@ -3538,6 +3538,16 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                   in.utick = o.tick;
                   in.on = o.on;
                   in.off = o.off;
+                  {
+                        // (the written start: the note's tick in the pass it plays in)
+                        const int t = o.note->chord()->tick().ticks();
+                        const RepeatList& repeats = score->repeatList();
+                        auto it = repeats.findRepeatSegmentFromUTick(o.tick);
+                        if (it != repeats.end() && (*it)->tick <= t && t < (*it)->tick + (*it)->len())
+                              in.written = score->utick2utime(t + (*it)->utick - (*it)->tick);
+                        else if (repeats.size() == 1)
+                              in.written = score->utick2utime(t);
+                        }
                   in.pitch = o.pitch;
                   in.velocity = o.velocity;
                   in.joined = o.joined;
@@ -3602,6 +3612,10 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                   int out = -1;
                   std::vector<std::pair<int, int>> inserts;          // (tick, value)
                   const double tEnd = score->utick2utime(endTick);
+                  // (a step closer than this to a CC11 of the span's own is left out: theirs need not lie on the steps'
+                  // grid, e.g. at a transition sent early, [slurs] transitionsEarly; the messages stay ~STEP_MS apart)
+                  const double minGap = 0.7 * EvenLevels::STEP_MS / 1000.0;
+                  double lastT = -1;
                   size_t x = 0;
                   for (int step = 0;; ++step) {
                         const double t = ns[s].on + step * EvenLevels::STEP_MS / 1000.0;
@@ -3610,7 +3624,8 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                         while (x < existing.size() && existing[x]->first <= tick && existing[x]->first < endTick) {
                               NPlayEvent& ev = existing[x]->second;
                               base = ev.value();
-                              out = scaled(base, EvenLevels::glideAt(centres, dbs, score->utick2utime(existing[x]->first)));
+                              lastT = score->utick2utime(existing[x]->first);
+                              out = scaled(base, EvenLevels::glideAt(centres, dbs, lastT));
                               ev.setValue(out);
                               ev.setLibraryLevel(true);
                               ++x;
@@ -3619,10 +3634,15 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                               break;
                         if (x > 0 && existing[x - 1]->first == tick)
                               continue;               // (a CC11 of the span's own at this tick: it plays)
+                        const double at = score->utick2utime(tick);
+                        if ((lastT >= 0 && at - lastT < minGap)
+                            || (x < existing.size() && existing[x]->first < endTick && score->utick2utime(existing[x]->first) - at < minGap))
+                              continue;
                         const int v = scaled(base, EvenLevels::glideAt(centres, dbs, t));
                         if (v != out) {
                               inserts.push_back({ tick, v });
                               out = v;
+                              lastT = at;
                               }
                         }
                   if (out != base)

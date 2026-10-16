@@ -605,8 +605,11 @@ bool slowPassage(const std::vector<NoteInfo>& notes, size_t first, size_t last)
       {
       if (last > notes.size() || last < first + 2)
             return false;
+      // (by the written starts: the owner's rule is the music's speed; transitions sent early ([slurs] transitionsEarly,
+      // since 2026-10-15 the default) shorten a slur's first interval as played, the attack staying on its beat)
+      auto at = [&](size_t k) { return notes[k].written >= 0 ? notes[k].written : notes[k].on; };
       for (size_t k = first + 1; k < last; ++k)
-            if (notes[k].on - notes[k - 1].on < SLOW_IOI_S - 1e-6)
+            if (at(k) - at(k - 1) < SLOW_IOI_S - 1e-6)
                   return false;
       return true;
       }

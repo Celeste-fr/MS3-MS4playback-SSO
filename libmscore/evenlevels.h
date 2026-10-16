@@ -119,6 +119,7 @@ struct NoteInfo {
       int utick { 0 };                  // its note-on as played
       double on { 0 };                  // seconds, as played
       double off { 0 };
+      double written { -1 };            // seconds, its written start (slowPassage; -1: unknown, the note-on as played)
       int pitch { 0 };
       int velocity { 0 };
       bool joined { false };            // a transition from the note before on its route

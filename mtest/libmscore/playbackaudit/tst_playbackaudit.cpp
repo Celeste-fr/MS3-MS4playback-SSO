@@ -490,7 +490,8 @@ void TestPlaybackAudit::leapFindings()
 
 void TestPlaybackAudit::transitionArrival()
       {
-      recommended({ { "levels/calibrated", "0" } });
+      // (the transitions on the beat first: [slurs] transitionsEarly 0, Recommended's 1 since 2026-10-15)
+      recommended({ { "levels/calibrated", "0" }, { "slurs/transitionsEarly", "0" } });
       MasterScore* score = readScore(DIR + "leap.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();

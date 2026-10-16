@@ -589,8 +589,19 @@ move the transitions 50 ms early, which MuseScore doesn't. R's own clips sit on 
 only early start.
 
 Open:
+- **Level rule's grid out of date** (2026-10-15, VM, build 435, kthost + SSO on the owner's Whence and a calibration
+  score): held notes balance as the model says (Va - V1 -3.5 dB, model -3.9), slurred notes don't (Va - V1 -6.6, Vc - Va
+  +11.7, model +6.6); with `[levels] context` off -4.2 / +5.3. `sso_performance_context.json` was measured 2026-10-10,
+  before transitions / smoothStart / even levels / transitionsEarly: re-measure it with today's Recommended.
+- **Technique levels** (branch `technique-balance`, option B, not merged): the validation (Spheres Mozart K. 550 at f;
+  Meyer 2009) puts real staccato ~4 dB (+-3) UNDER the held note and pizz 5-12 under arco; B (SSO's top-layer D) plays
+  them 2-10 dB over. Proposed B' (D from real players) awaits the owner.
+- **Transitions early: decided 2026-10-15**, 1 by default and in Recommended (the owner by ear on Whence's fast quarter
+  tones, "1 and 3 are both fine"; 1 measured best, https://claude.ai/artifact/HwdLDf8SuzNbGzLK1PSEKv). Fast quarter-tone
+  slurs (136 ms notes) still sit 60-90 cents off: SSO's legato is slower than the notes and the bend retunes the note
+  still sounding. Below, the A/B as it was:
 - **Transitions early, to A/B** (branch `transitions-early`, 2026-10-14; the owner: "sure let's hear them started
-  early"; **0, off, by default and in both presets until he approves one by ear**): `[slurs] transitionsEarly` sends a
+  early"; 0 until 2026-10-15): `[slurs] transitionsEarly` sends a
   Performance legato transition early: 1 by its modelled arrival (new pitch arrives on the beat), 2 by the measured
   bendGlide leave + 23.5 ms (the change heard on the beat: Polfreman 2013, ISMIR, a bowed legato note perceived 23.5 ms,
   SD 22.8, after its pitch change starts), 3 the glide's middle on the beat (docs/PLAYBACK_SETTINGS.md › Transitions
