@@ -5,7 +5,9 @@
 //  Vst3Synth: the hosted plug-ins (vst3plugin.h) as one of the MasterSynthesizer's
 //  synthesizers. A sound library part's events come with its route (SoundLib::Route): the
 //  slot port * 16 + channel is the event's channel here, each slot a plug-in instance of its
-//  own (one library instrument, played on MIDI channel 1). It is "dry": mixed in after the
+//  own (one library instrument, played on MIDI channel 1), or linked to another slot's instance
+//  (setLink: a patch's tuning copies as the slots of one Kontakt, each on its own MIDI channel and
+//  tuned by its Tune: SoundLib::Instance, [tuning] hostedTuning slots). It is "dry": mixed in after the
 //  master effects, as the library brings its own room.
 //
 //  The Mixer (volume, pan, mute, solo of the part a slot plays) is applied here, in the host, to
@@ -43,6 +45,15 @@ class Vst3Synth : public Synthesizer {
       std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
                                                     // controller index (ME_PARAMETER events), -1: none
       std::atomic<bool> _varispeed { false };
+      // a slot played by another slot's instance (host >= 0), on MIDI channel channel (0-15) of it; tuned: the
+      // instance's state tunes it (Kontakt's Tune), so a note's tuning is neither varispeed nor sent
+      struct Link {
+            int host { -1 };
+            int channel { 0 };
+            bool tuned { false };
+            };
+      std::array<Link, 64> _links;
+      bool target(int slot, Vst3Plugin** plugin, int* channel) const;    // (with _mutex held)
       // the Mixer, per slot: the gains of the left and right output (volume × pan, 0 muted), live and
       // for an export (its own: an export plays mute but not solo, as MuseScore's); a change applies
       // from the next block on, with no glide (the owner, 2026-10-03: no mixer smoothing)
@@ -112,6 +123,13 @@ class Vst3Synth : public Synthesizer {
       // ignores a note's tuning: set at each note-on, at once when nothing sounds on the slot (the
       // lanes see to that, SoundLib::Lanes), else gliding (legato)
       void setVarispeed(bool on) { _varispeed = on; }
+      // (GUI thread) slot played by host's instance on its MIDI channel (0-15; host -1: by its own, channel 0); tuned: its
+      // tuning is in the instance's state (no varispeed, no note tuning sent). The Mixer of a linked slot is its host's
+      // (one instance, one output: a patch's copies are one part's, at one patch volume)
+      void setLink(int slot, int host, int channel, bool tuned);
+      void clearLinks();
+      int hostOf(int slot) const;               // the slot whose instance plays it (itself when not linked)
+      Vst3Plugin* instance(int slot) const;     // the instance that plays the slot (its own or its host's)
       // (GUI thread, SoundLibraryHost::sync) a slot's parameter ids by controller index (automation)
       void setParameterIds(int slot, const std::vector<long>& ids);
       // (a slurred note of another tuning on its previous note's lane glides by varispeed, each output frame within a

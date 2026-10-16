@@ -561,6 +561,46 @@ struct Route {
 std::vector<Route> routes(const Score* score, const Library& library, bool forLive = false);
 
 //---------------------------------------------------------
+//   hosted tuning ([tuning] hostedTuning; the owner, 2026-10-15: "Whence takes absolutely forever to load all the
+//   patches because the microtonal stuff")
+//    slots (1, the default): when MuseScore hosts a Kontakt library (<Files registry>) whose plug-in ignores a note's
+//    tuning (<Tuning method="varispeed">), the routes are Live's: a copy per tuning, each at a fixed tuning (as
+//    forLive), and a patch's copies play from ONE instance, a Kontakt slot per copy, each tuned by its program's Tune
+//    and listening to its own MIDI channel (KontaktSetup::withSlots, as the plain Live set's multis: measured
+//    identical to a Kontakt per copy, ~85-90 MB less each). A copy that bends (<Instrument bend>) shares the
+//    instance untuned, its bends on its own channel. varispeed (0): a Kontakt per copy, retuned by varispeed
+//    (Vst3Plugin::setPitch) once silent, as before 2026-10-15
+//---------------------------------------------------------
+
+// slots: hosted, a Kontakt library with varispeed lanes, [tuning] hostedTuning 1
+bool hostedSlots(const Score* score, const Library& library);
+// the routes' copies keep their tuning: Live's routes (forLive), MIDI out (no varispeed there), hosted slots
+bool fixedLanes(const Score* score, const Library& library, bool forLive);
+
+//---------------------------------------------------------
+//   Instance
+//    one hosted plug-in instance and the routes it plays (SoundLibraryHost, SoundLibraryExport::loadInstances, the load
+//    times measurement). Without hosted slots: one per route, plain (cents empty: tuned by varispeed, as ever). With
+//    them: a patch's copies of one part in one instance (16 at most), route i of it on MIDI channel i + 1, each
+//    slot tuned by cents[i] (NaN: untuned, a bending copy); a copy alone in its instance, at a fixed tuning, by its
+//    Tune (one slot, cents { c }). Copies keep an instance each when the part sets one of the patch's plug-in
+//    parameters (a controller with param=: its setting or automation): a parameter of a multi is set on the
+//    instance, and that each slot's script takes it is not measured; or when a bending copy's note lies beyond its
+//    bend range (the renderer then plays it by varispeed: one instance per copy, as before)
+//---------------------------------------------------------
+
+struct Instance {
+      int slot { -1 };                    // its first route's (port * 16 + channel): where it is in Vst3Synth
+      const Part* part { nullptr };
+      const LibInstrument* instrument { nullptr };
+      std::vector<int> routes;            // the slots of the routes it plays, in order: route i on MIDI channel i + 1
+      std::vector<double> cents;          // per route: its slot's Tune (NaN: untuned); empty: plain (varispeed)
+      bool multi() const { return routes.size() > 1; }
+      bool tuned() const { return !cents.empty(); }   // its tuning is in its state: the notes' tuning not played
+      };
+std::vector<Instance> instances(const Score* score, const Library& library, const std::vector<Route>& routes);
+
+//---------------------------------------------------------
 //   PartMix
 //    the Mixer's values for a library part, for all its routes (its patch, extras, copies for
 //    other tunings): the volume, pan, reverb and chorus of the channel its notes play on (the

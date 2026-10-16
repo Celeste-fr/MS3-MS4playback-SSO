@@ -1042,15 +1042,23 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   within a cent; varispeed can't reach Live); the pitch-bend glides are rendered and reach the clips. Every other
   playback setting acts in the renderer (the clips' events) or, `[hosting] maxVoices`, in the Kontakt states the Live
   Set carries, so Live gets it identically.
-- **Microtones on patches without `bend=`** (the All techniques patches: SSO's pitch bend doesn't bend them): MuseScore
-  plays them by varispeed on copies of the patch, a copy retuned once silent and slurred notes gliding on one copy
-  (at most `[tuning] maxLanes` copies); Live has no varispeed, so its routes (MIDI out's too) give a copy per tuning,
-  fixed by Kontakt's Tune (the plain set above; the route set the same), and a slurred note of another tuning starts
-  on its own copy: no varispeed glide (the All techniques longs give each note its own attack anyway). More Kontakt
-  slots than MuseScore hosts: one per tuning a patch plays (the plain set: one Kontakt per patch, a slot per tuning;
-  the route set: a Kontakt per copy). Pitches agree within 2 cents (measured). (The Performance
-  patches, Solo Cello and the tuned percussion bend: those match.) A route set made before 2026-10-10 has no tuned
-  copies: make it again.
+- **Microtones on patches without `bend=`** (the All techniques patches: SSO's pitch bend doesn't bend them): since
+  2026-10-15 MuseScore's own hosting tunes them as Live does (`[tuning] hostedTuning` 1, slots, the default;
+  soundlibrary.h › hosted tuning): the same routes, a copy per tuning, fixed by Kontakt's Tune, a patch's copies one
+  Kontakt with a slot per tuning on its own MIDI channel (the plain set's multis; `KontaktSetup::withSlots`), and a
+  slurred note of another tuning starts on its own copy. What still differs: (1) a part that sets one of the patch's
+  plug-in parameters (Controllers…: SSO's Vibrato, mics) keeps a Kontakt per copy in MuseScore, each by its Tune, until
+  it is measured that a parameter set on a multi reaches every slot (the load-times run's phase 6); the plain set bakes
+  such settings into the state before it copies the slots, so it shares them (only automated parameters keep a Kontakt
+  of their own there); the sound is the same, the memory not. (2) The even-levels background measurer renders each part
+  and patch on one plain instance of its own, its copies' tunings by varispeed (the cheapest load; the levels it
+  measures are of the notes' envelopes, not their pitch). (3) A bending copy with a note beyond its bend range plays it
+  by varispeed in MuseScore (an instance per copy then); Live can't. (4) A score with very many tunings can run out of
+  the 64 routes (4 ports × 16) with a copy per tuning, as MIDI out and Live already could. With `hostedTuning` 0
+  (varispeed, to compare by ear) MuseScore plays them as before 2026-10-15: varispeed on copies of the patch, a copy
+  retuned once silent and slurred notes gliding on one copy (at most `[tuning] maxLanes` copies), a Kontakt per copy.
+  Pitches agree within 2 cents (Tune, measured). (The Performance patches, Solo Cello and the tuned percussion bend:
+  those match.) A route set made before 2026-10-10 has no tuned copies: make it again.
 - **A note at the very start** (time 0) waits in Live for its carriers, which can't go before the clip's start: the
   switch, controllers and bend at 0, 0.26 ms each at 120 bpm (1-4 ms). The wait itself is inaudible, but SSO's
   Performance legato script is sensitive to where a line starts: on the VM the first note of a Solo Violin -

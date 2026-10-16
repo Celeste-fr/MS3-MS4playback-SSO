@@ -111,6 +111,7 @@ QByteArray withSlots(const QByteArray& component, const std::vector<double>& cen
 struct Slot {
       double cents { 0 };                 // its program's Tune (NaN: not found)
       int channel { -1 };                 // its MULTI_CONFIGURATION channel byte (0 Omni, n channel n)
+      std::map<QString, QByteArray> values;     // its program's script values (scriptValues)
       };
 std::vector<Slot> slotsOf(const QByteArray& component);   // a state's slots, in order
 

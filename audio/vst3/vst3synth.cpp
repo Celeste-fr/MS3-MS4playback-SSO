@@ -223,11 +223,26 @@ void Vst3Synth::releaseDelayed(unsigned frames)
       _releasing = false;
       }
 
+// (with _mutex held) the instance that plays slot and the MIDI channel it listens to for it
+bool Vst3Synth::target(int slot, Vst3Plugin** plugin, int* channel) const
+      {
+      if (slot < 0 || slot >= int(_slots.size()))
+            return false;
+      const Link& l = _links[size_t(slot)];
+      const int k = l.host >= 0 ? l.host : slot;
+      *plugin = _slots[size_t(k)].get();
+      *channel = l.host >= 0 ? l.channel : 0;
+      return *plugin != nullptr;
+      }
+
 void Vst3Synth::deliver(const PlayEvent& event)
       {
       const int slot = event.channel();
-      if (slot < 0 || slot >= int(_slots.size()) || !_slots[slot])
+      Vst3Plugin* plugin = nullptr;
+      int midiChannel = 0;
+      if (!target(slot, &plugin, &midiChannel))
             return;
+      const bool tuned = _links[size_t(slot)].tuned;
       if (fault().pedalDropMs >= 0 && !_releasing) {
             if (event.type() == ME_CONTROLLER && event.dataA() == 64 && event.dataB() < 64) {
                   if (_pedalUps.size() <= size_t(slot))
@@ -242,17 +257,17 @@ void Vst3Synth::deliver(const PlayEvent& event)
       const bool noteOn = event.type() == ME_NOTEON && event.dataB() > 0;
       const bool noteOff = event.type() == ME_NOTEOFF || (event.type() == ME_NOTEON && event.dataB() == 0);
       std::array<unsigned char, 128>& sounding = _sounding[size_t(slot)];
-      if (_varispeed && noteOn) {
+      if (_varispeed && !tuned && noteOn) {
             bool any = false;
             for (unsigned char n : sounding)
                   any = any || n > 0;
-            _slots[slot]->setPitch(event.tuning(), any ? -1.0 : 0.0);   // (-1: each frame within a cent, GLIDE_CENT_STEP)
+            plugin->setPitch(event.tuning(), any ? -1.0 : 0.0);   // (-1: each frame within a cent, GLIDE_CENT_STEP)
             }
       // automation of a plug-in parameter (not MIDI): the controller's parameter on this slot's instance
       if (event.type() == ME_PARAMETER) {
             const size_t index = size_t(event.dataA());
             if (size_t(slot) < _parameters.size() && index < _parameters[size_t(slot)].size() && _parameters[size_t(slot)][index] >= 0)
-                  _slots[slot]->queueParameter(unsigned(_parameters[size_t(slot)][index]), double(event.tuning()));
+                  plugin->queueParameter(unsigned(_parameters[size_t(slot)][index]), double(event.tuning()));
             return;
             }
       // all notes off (the Mixer's mute or solo, stop): each key still on gets its note-off too, for a
@@ -260,7 +275,7 @@ void Vst3Synth::deliver(const PlayEvent& event)
       if (event.type() == ME_CONTROLLER && event.dataA() == CTRL_ALL_NOTES_OFF) {
             for (int k = 0; k < 128; ++k) {
                   if (sounding[size_t(k)] > 0)
-                        _slots[slot]->midi(ME_NOTEOFF, 0, k, 0);
+                        plugin->midi(ME_NOTEOFF, midiChannel, k, 0);
                   }
             sounding.fill(0);
             }
@@ -269,7 +284,7 @@ void Vst3Synth::deliver(const PlayEvent& event)
             ++sounding[size_t(key)];
       else if (noteOff && sounding[size_t(key)] > 0)
             --sounding[size_t(key)];
-      _slots[slot]->midi(event.type(), 0, event.dataA(), event.dataB(), _varispeed ? 0.f : event.tuning());
+      plugin->midi(event.type(), midiChannel, event.dataA(), event.dataB(), (_varispeed || tuned) ? 0.f : event.tuning());
       }
 
 void Vst3Synth::play(const PlayEvent& event)
@@ -299,8 +314,10 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       if (!_cutoffs.empty()) {
             for (auto i = _cutoffs.begin(); i != _cutoffs.end();) {
                   if (i->at < _clock + (long long)frames) {
-                        if (i->slot >= 0 && i->slot < int(_slots.size()) && _slots[size_t(i->slot)])
-                              _slots[size_t(i->slot)]->midi(ME_NOTEOFF, 0, i->key, 0, 0.f);
+                        Vst3Plugin* p = nullptr;
+                        int ch = 0;
+                        if (target(i->slot, &p, &ch))
+                              p->midi(ME_NOTEOFF, ch, i->key, 0, 0.f);
                         i = _cutoffs.erase(i);
                         }
                   else
@@ -437,6 +454,43 @@ void Vst3Synth::allNotesOff(int slot)
 //---------------------------------------------------------
 //   slots (GUI thread)
 //---------------------------------------------------------
+
+void Vst3Synth::setLink(int slot, int host, int channel, bool tuned)
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return;
+      std::lock_guard<std::mutex> lock(_mutex);
+      Link& l = _links[size_t(slot)];
+      const bool changed = l.host != (host == slot ? -1 : host) || l.channel != channel;
+      l.host = host == slot ? -1 : host;
+      l.channel = l.host >= 0 ? qBound(0, channel, 15) : 0;
+      l.tuned = tuned;
+      if (changed)
+            _sounding[size_t(slot)].fill(0);
+      }
+
+void Vst3Synth::clearLinks()
+      {
+      std::lock_guard<std::mutex> lock(_mutex);
+      for (Link& l : _links)
+            l = Link();
+      }
+
+int Vst3Synth::hostOf(int slot) const
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return slot;
+      std::lock_guard<std::mutex> lock(_mutex);
+      return _links[size_t(slot)].host >= 0 ? _links[size_t(slot)].host : slot;
+      }
+
+Vst3Plugin* Vst3Synth::instance(int slot) const
+      {
+      std::lock_guard<std::mutex> lock(_mutex);
+      Vst3Plugin* p = nullptr;
+      int ch = 0;
+      return target(slot, &p, &ch) ? p : nullptr;
+      }
 
 Vst3Plugin* Vst3Synth::plugin(int slot) const
       {

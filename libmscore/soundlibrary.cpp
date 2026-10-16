@@ -44,6 +44,8 @@
 #include "tempo.h"
 #include "trill.h"
 #include "tuning.h"
+#include "automation.h"
+#include "partcontrollers.h"
 
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
@@ -1676,7 +1678,7 @@ std::vector<Route> routes(const Score* score, const Library& library, bool forLi
             const bool laned = library.varispeed && !li->kit;
             if (laned) {
                   const LaneSettings ls = laneSettings(score, library);
-                  const Lanes l = lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes, forLive);
+                  const Lanes l = lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes, fixedLanes(score, library, forLive));
                   laneCount = l.count;
                   fixed = l.fixed;
                   fixed.resize(patches.size());
@@ -1697,6 +1699,110 @@ std::vector<Route> routes(const Score* score, const Library& library, bool forLi
                   }
             }
       return result;
+      }
+
+//---------------------------------------------------------
+//   hostedSlots / fixedLanes / instances
+//---------------------------------------------------------
+
+bool hostedSlots(const Score* score, const Library& library)
+      {
+      return output() == Output::PLUGIN && library.varispeed && !library.registryName.isEmpty()
+             && Playback::value("tuning/hostedTuning", score) >= 0.5;
+      }
+
+bool fixedLanes(const Score* score, const Library& library, bool forLive)
+      {
+      return forLive || output() == Output::MIDI || hostedSlots(score, library);
+      }
+
+// the part sets one of the patch's plug-in parameters (a setting or automation of a controller with param=)
+static bool setsParameters(const Part* part, const LibInstrument& patch, const std::map<const Part*, Automation::PartLanes>& lanes)
+      {
+      for (const Controller& c : patch.allControllers) {
+            if (c.param.isEmpty())
+                  continue;
+            if (PartControllers::value(part, c, lanes) >= 0)
+                  return true;
+            auto i = lanes.find(part);
+            if (i != lanes.end() && PartControllers::laneOf(i->second, c))
+                  return true;
+            }
+      return false;
+      }
+
+// a note of the part tuned beyond the patch's bend range (the renderer plays it by varispeed: libraryPitchBends)
+static bool beyondBend(const Score* score, const Part* part, double bendCents)
+      {
+      Score* sc = const_cast<Score*>(score);
+      const ScoreTuningScope tuningScope(sc);
+      for (Segment* seg = sc->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* e = seg->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  const Chord* chord = toChord(e);
+                  for (const Chord* g : chord->graceNotes())
+                        for (const Note* n : g->notes())
+                              if (bendValue(playbackTuning(n), bendCents) < 0)
+                                    return true;
+                  for (const Note* n : chord->notes())
+                        if (bendValue(playbackTuning(n), bendCents) < 0)
+                              return true;
+                  }
+            }
+      return false;
+      }
+
+std::vector<Instance> instances(const Score* score, const Library& library, const std::vector<Route>& routes)
+      {
+      std::vector<Instance> out;
+      const bool bySlots = hostedSlots(score, library);
+      const bool bend = Playback::on("tuning/pitchBend", score);
+      // (Ms: MS_SLOTS_PARAMETERS=1 shares a part's copies with plug-in parameters too, to measure whether each slot takes them)
+      static const bool withParameters = qEnvironmentVariableIntValue("MS_SLOTS_PARAMETERS") == 1;
+      std::map<const Part*, Automation::PartLanes> lanes;
+      if (bySlots && score && score->masterScore())
+            lanes = Automation::read(const_cast<MasterScore*>(score->masterScore()));
+      std::map<std::pair<const Part*, int>, bool> shares;        // (part, patch) -> its copies share an instance
+      for (const Route& r : routes) {
+            if (!r.instrument || r.instrument->kit)
+                  continue;
+            const int slot = r.port * 16 + r.channel;
+            Instance* host = nullptr;
+            if (bySlots && r.lane > 0 && !out.empty()) {
+                  Instance& last = out.back();
+                  auto s = shares.find({ r.part, r.patch });
+                  if (last.part == r.part && last.instrument == r.instrument && s != shares.end() && s->second
+                      && last.routes.size() < 16)
+                        host = &last;
+                  }
+            if (host) {
+                  host->routes.push_back(slot);
+                  host->cents.push_back(r.cents);
+                  continue;
+                  }
+            Instance in;
+            in.slot = slot;
+            in.part = r.part;
+            in.instrument = r.instrument;
+            in.routes.push_back(slot);
+            if (bySlots) {
+                  const bool bends = bend && r.instrument->bendCents > 0;
+                  if (r.lane == 0 && !shares.count({ r.part, r.patch }))
+                        shares[{ r.part, r.patch }] = (withParameters || !setsParameters(r.part, *r.instrument, lanes))
+                                                      && !(bends && beyondBend(score, r.part, r.instrument->bendCents));
+                  // (a copy alone: by its Tune when it has a fixed tuning; a bending copy alone plays as before)
+                  if (std::isfinite(r.cents) || shares[{ r.part, r.patch }])
+                        in.cents.push_back(r.cents);
+                  }
+            out.push_back(in);
+            }
+      // (a lone copy that bends, or a patch with one copy at 0 cents: nothing to tune, plain as before)
+      for (Instance& in : out)
+            if (in.routes.size() == 1 && !in.cents.empty() && (!std::isfinite(in.cents[0]) || std::fabs(in.cents[0]) < 0.005))
+                  in.cents.clear();
+      return out;
       }
 
 //---------------------------------------------------------

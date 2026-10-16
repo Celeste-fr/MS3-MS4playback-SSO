@@ -5,6 +5,27 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Kontakt slots for tuning copies (2026-10-15, branch `tuning-slots`, from integrate-1012 41e1c46d46; not merged)
+
+The owner, 2026-10-15: "is there any way at all we can make SSO load even faster" … "Whence takes absolutely forever to
+load all the patches because the microtonal stuff". Hosted playback now tunes as the plain Live set does
+(`[tuning] hostedTuning` 1, slots, the default; 0 varispeed as before, to compare by ear; CLAUDE.md › Microtones,
+docs/PLAYBACK_SETTINGS.md inventory, LIVE.md › What still differs): Live's routes (a fixed copy per tuning) and a
+patch's copies of one part in one Kontakt, a slot per tuning by Tune on its own MIDI channel.
+
+- Whence: 20 routes (Live's) against 19 varispeed copies; 11 instances against 19 (Violins 1 sets Vibrato: its 5 copies
+  keep an instance each until phase 6 says parameters reach every slot; with that, 8, as the plain set).
+- Before (VM, build 436 = 10c6641, varispeed; `--measure-load-times … Whence.mscz --measure-threads 2,4
+  --measure-no-probe`, an extract job of another session running alongside): phase 2, one after the other, 19
+  instances loaded in 42.9 s (setState 32.1 s), memory settled 178 s after the start, +7.7 GB freed at the end (the
+  run's +12.2 GB counts the VM's paging); each patch alone 425-1017 MB, not the 245 of `LANE_COPY_BYTES`. Worker
+  threads: Kontakt takes them (no failure) but slower: 2 threads 63.0 s, 4 threads 100.2 s, memory still growing at
+  5 minutes. Keep `io/soundLibraryLoadThreads` 0.
+- After: see the commit after the Windows build (numbers, phase 6's verdict, the pitch check).
+- Open: the even-levels background measurer keeps one plain instance per part and patch, by varispeed (the cheapest
+  load; it measures envelopes); a part with plug-in parameters keeps an instance per copy (phase 6 decides);
+  `LANE_COPY_BYTES` (245 MB, memoryMaxLanes) is from the owner's 2026-10-04 measurement and only bounds varispeed copies.
+
 ## Controllers only by automation (2026-10-15, branch `automation-only-controllers`, merged into integrate-1012)
 
 The owner, 2026-10-15, showing the Sound Library window and a Live lane's red dashed line: "remove this entirely, we'll

@@ -199,6 +199,13 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: a legato transition's pitch bend glides with the transition's own pitch (the map's measured bendGlide; else "
         "from its arrival, note-on plus the measured legato delay), so the note before keeps its tuning while it sounds; "
         "0: at the note-on", true },
+      // (the owner, 2026-10-15: "is there any way at all we can make SSO load even faster" … "Whence takes absolutely forever
+      // to load all the patches because the microtonal stuff"; a patch's copies in one Kontakt, as the plain Live set's
+      // multis: soundlibrary.h › hosted tuning; varispeed kept to compare by ear)
+      { "tuning/hostedTuning", 1, 0, 1, "1 slots / 0 varispeed",
+        "hosted Kontakt: 1 (slots): a patch's copies for other tunings play from one instance, a slot per tuning, each tuned "
+        "by Kontakt's own Tune on its own MIDI channel, as in the Live set (one load per patch, ~85-90 MB less a copy); "
+        "0 (varispeed): a Kontakt per copy, retuned by varispeed once silent (before 2026-10-15). Also \"slots\" / \"varispeed\"", true },
       // [live]
       // (measured in Live 12.4.6: 1 and 0 units keep every carrier before its note; 1 is the smallest the range allows:
       // LiveClips::EPSILON, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
@@ -328,6 +335,10 @@ static void take(Ini& i, const QString& group, const QString& key, const QString
             if (t.compare("on", Qt::CaseInsensitive) == 0 || t.compare("true", Qt::CaseInsensitive) == 0)
                   v = 1, ok = true;
             else if (t.compare("off", Qt::CaseInsensitive) == 0 || t.compare("false", Qt::CaseInsensitive) == 0)
+                  v = 0, ok = true;
+            else if (id == "tuning/hostedTuning" && t.compare("slots", Qt::CaseInsensitive) == 0)
+                  v = 1, ok = true;
+            else if (id == "tuning/hostedTuning" && t.compare("varispeed", Qt::CaseInsensitive) == 0)
                   v = 0, ok = true;
             }
       if (!ok) {
@@ -651,7 +662,7 @@ bool hasOwnMetaTag(const char* id)
       {
       const QString s = id;
       return s == "heldNotes/early" || s.startsWith("tuning/") && s != "tuning/waitForRelease"
-             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival";
+             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival" && s != "tuning/hostedTuning";
       }
 
 static bool ownMetaTagValue(const char* id, const Score* score, double* v)
