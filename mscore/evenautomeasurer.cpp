@@ -245,6 +245,15 @@ void EvenAutoMeasurer::loadStep()
 #ifdef USE_VST3
       if (_toLoad.empty() || !_score)
             return;
+      // the playback's own instances first (the load profile, 2026-10-16: at score open both loaded on the main thread,
+      // one each in turn, so the last of the score's instances came in a measurer's load later each time). What is
+      // measured doesn't change: the same states, rendered offline once each sounds. (Play loads the rest at once,
+      // SoundLibraryHost::sync, and then these go on)
+      if (SoundLibraryHost::instance()->preloading()) {
+            _loadTimer.start(200);
+            return;
+            }
+      _loadTimer.setInterval(0);
       const int k = EvenAuto::next(_toLoad, _focus);      // (the instance the focus needs first)
       const EvenAuto::Job job = _toLoad[size_t(k)];
       _toLoad.erase(_toLoad.begin() + k);
@@ -252,13 +261,20 @@ void EvenAutoMeasurer::loadStep()
             std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
             const SoundLib::Route* route = nullptr;
             std::vector<SoundLib::Route> routes;
+            QElapsedTimer clock;
+            clock.start();
             if (library)
                   routes = SoundLib::routes(_score, *library);
+            const double routesMs = clock.nsecsElapsed() / 1e6;
             for (const SoundLib::Route& r : routes)
                   if (r.port * 16 + r.channel == job.route)
                         route = &r;
             QString error;
+            clock.restart();
             std::shared_ptr<Vst3Synth> vst = route ? SoundLibraryExport::loadInstance(_score, *route, float(RATE), &error) : nullptr;
+            // (the load profile: these instances load on the main thread, between and after the playback's own)
+            logLine(QString("even levels: %1 loaded in %2 ms on the main thread (the routes worked out %3 ms)")
+                    .arg(job.patch).arg(clock.nsecsElapsed() / 1e6, 0, 'f', 0).arg(routesMs, 0, 'f', 0));
             if (!vst) {
                   _failed.insert(job.instance);
                   logLine(QString("even levels: could not load %1: %2").arg(job.patch, error));

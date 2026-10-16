@@ -155,6 +155,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveTracksJson();
       void hostedSlots();
       void hostedSlotsGain();
+      void preparedStates();
       void updateLiveSet();
       void updateLiveSetKnobs();
       void controllerPatchDefault();
@@ -4295,6 +4296,98 @@ void TestLiveEquivalence::hostedSlots()
       }
       SoundLibraryHost::setLibraryFolder(lib, QString());
       delete score;
+      }
+
+//---------------------------------------------------------
+//   preparedStates
+//    the load profile (2026-10-16): the states MuseScore puts into Kontakt (setupState's voice limit, tunedState's
+//    copies in one instance) made once and kept, in memory and in "<setups folder>/prepared": the very bytes they are
+//    made as (what the plug-in gets doesn't change), read back from the file once forgotten in memory, made again when
+//    the file is damaged
+//---------------------------------------------------------
+
+void TestLiveEquivalence::preparedStates()
+      {
+      LiveHost host(this, " nki='Violins 2 - All techniques.nki'", { "Violin" },
+                    "<SoundLibrary name='PrepT'><Files registry='PrepT'/><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin' nki='Violins 2 - All techniques.nki'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      SoundLibraryHost::setLibraryFolder(lib, root + "/" + DIR + "kontakt");
+      QFile::remove(SoundLibraryHost::setupFile(lib, "Violin"));
+      QString error;
+      const QString path = SoundLibraryHost::pluginPath(lib, &error);
+      QVERIFY2(!path.isEmpty(), qPrintable(error));
+      {
+            QFile e(root + "/" + DIR + "kontakt/empty.bin");
+            QVERIFY(e.open(QIODevice::ReadOnly));
+            QFile f(SoundLibraryHost::setupsFolder(lib) + "/Kontakt empty.vst3state");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(Vst3Plugin::joinState("MS Test Synth", e.readAll(), QByteArray()));
+            QJsonObject from;
+            from["plugin"] = path;
+            from["modified"] = QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate);
+            QFile m(SoundLibraryHost::setupsFolder(lib) + "/made setups.json");
+            QVERIFY(m.open(QIODevice::WriteOnly));
+            m.write(QJsonDocument(QJsonObject { { "(empty)", from } }).toJson());
+      }
+      // what it was before: the voice limit and the tunings made at each load
+      const QByteArray saved = SoundLibraryHost::savedSetupState(lib, "Violin", path, &error);
+      QVERIFY2(!saved.isEmpty(), qPrintable(error));
+      QString name;
+      QByteArray component, controller;
+      QVERIFY(Vst3Plugin::splitState(saved, &name, &component, &controller));
+      const QByteArray limited = KontaktSetup::withMaxVoices(component, SoundLibraryHost::kontaktMaxVoices(), &error);
+      QVERIFY(!limited.isEmpty() && limited != component);
+      const QByteArray expected = Vst3Plugin::joinState(name, limited, controller);
+      const std::vector<double> cents { 0.0, -50.0, 50.0 };
+      const QByteArray expectedTuned = SoundLibraryHost::tunedState(expected, cents, &error);    // (no library: made now)
+      QVERIFY2(!expectedTuned.isEmpty(), qPrintable(error));
+
+      int made0 = 0;
+      SoundLibraryHost::forgetPrepared(&made0);
+      const QString folder = SoundLibraryHost::setupsFolder(lib) + "/prepared";
+      // made: the same bytes, kept as a file each
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error), expected);
+      QCOMPARE(SoundLibraryHost::tunedState(expected, cents, &error, &lib), expectedTuned);
+      int made = 0;
+      SoundLibraryHost::forgetPrepared(&made);
+      QCOMPARE(made - made0, 2);
+      const QStringList files = QDir(folder).entryList({ "*.vst3state" }, QDir::Files);
+      QCOMPARE(files.size(), 2);
+      // from the files (forgotten in memory): the same bytes, nothing made
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error), expected);
+      QCOMPARE(SoundLibraryHost::tunedState(expected, cents, &error, &lib), expectedTuned);
+      // from memory (the files gone): the same bytes, nothing made
+      for (const QString& f : files)
+            QVERIFY(QFile::remove(folder + "/" + f));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error), expected);
+      QCOMPARE(SoundLibraryHost::tunedState(expected, cents, &error, &lib), expectedTuned);
+      int made2 = 0;
+      SoundLibraryHost::forgetPrepared(&made2);
+      QCOMPARE(made2, made);
+      // a damaged file: made again, the same bytes
+      QCOMPARE(SoundLibraryHost::tunedState(expected, cents, &error, &lib), expectedTuned);
+      const QStringList again = QDir(folder).entryList({ "*.vst3state" }, QDir::Files);
+      QCOMPARE(again.size(), 1);
+      {
+            QFile f(folder + "/" + again[0]);
+            QVERIFY(f.open(QIODevice::ReadWrite));
+            f.seek(f.size() / 2);
+            f.write("damaged");
+      }
+      SoundLibraryHost::forgetPrepared();
+      QCOMPARE(SoundLibraryHost::tunedState(expected, cents, &error, &lib), expectedTuned);
+      int made3 = 0;
+      SoundLibraryHost::forgetPrepared(&made3);
+      QCOMPARE(made3, made2 + 2);
+      // another tuning: its own state
+      const std::vector<double> two { 0.0, -50.0 };
+      QCOMPARE(SoundLibraryHost::tunedState(expected, two, &error, &lib), SoundLibraryHost::tunedState(expected, two, &error));
+      QVERIFY(SoundLibraryHost::tunedState(expected, two, &error, &lib) != expectedTuned);
+      SoundLibraryHost::forgetPrepared();
       }
 
 //---------------------------------------------------------
