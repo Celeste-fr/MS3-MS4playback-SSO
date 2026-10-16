@@ -3416,6 +3416,68 @@
     "Tree": 127
    }
   },
+  "Grand Piano": {
+   "pitches": [
+    45,
+    62,
+    79
+   ],
+   "defaultRmsDb": {
+    "45": -31.689500000000002,
+    "62": -36.43,
+    "79": -36.667
+   },
+   "defaultSpread": 2.93,
+   "mics": {
+    "Close": {
+     "rmsDb": -1.52,
+     "lufs": -4.53,
+     "loudDb": 1.05
+    },
+    "Tree": {
+     "rmsDb": 0.0,
+     "lufs": 0.0,
+     "loudDb": 0.0
+    },
+    "Ambient": {
+     "rmsDb": -2.91,
+     "lufs": -4.26,
+     "loudDb": -3.2
+    },
+    "Outrigger": {
+     "rmsDb": -9.53,
+     "lufs": -10.25,
+     "loudDb": -9.54
+    }
+   },
+   "perPitch": {
+    "Close": [
+     -3.71,
+     3.91,
+     -1.52
+    ],
+    "Tree": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "Ambient": [
+     -3.57,
+     -2.67,
+     -2.91
+    ],
+    "Outrigger": [
+     -9.53,
+     -8.74,
+     -10.76
+    ]
+   },
+   "levelMeasure": "energyDb (stored as rmsDb): the note and its tail, 0 .. 6.0 s after the note-on",
+   "treeOff": null,
+   "default": {
+    "Tree": 127
+   }
+  },
   "Strings Ensemble": {
    "pitches": [
     42,

@@ -6,7 +6,7 @@
                                      <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <sso_sound_dynamics.json>
                                      <sso_gap_cc1_curves.json> <3_Audio_Features.csv> <tu_directivity.json | ->
                                      <tu_decaying.json> <sso_percussion_levels.json> <out sso_cl_section_balance.json>
-                                     [<sso_strings_ensemble.json>]
+                                     [<sso_strings_ensemble.json | -> [<spheres_timpani.json | ->]]
 
 The owner, 2026-10-14: "I prefer all the balance levels and the dynamic levels loudness to be based on real data".
 Real side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in
@@ -43,9 +43,22 @@ energy over the same span after the note-on as TU's recording after its onset; T
 TU to Clark & Luce: M2 = median over OFFSET_SET of (M2 + sectionLevel's D, sso_winds_section_balance.json) - D: the nine
 solo winds with a Clark & Luce instrument of their own (single players like the harp; TU against Clark & Luce agrees
 better there, RMS 3.6 dB, than over every patch with both, 4.3; the patches whose real side comes from TU, SIBLING_TU,
-are left out). Uncertainty about +-4 dB. The timpani are computed the same way ("decayingNotApplied") but not applied:
-TU's D2 series are "6 dynamics" without markings, so mp's place (step 3 of 6, if pp .. ff) is unknown by a whole step
-(about 7 dB), more than the correction.
+are left out). Uncertainty about +-4 dB. The timpani were computed the same way but not applied: TU's D2 series are
+"6 dynamics" without markings, so mp's place (step 3 of 6, if pp .. ff) is unknown by a whole step (about 7 dB), more than
+the correction; kept as the Timpani entry's "tuBerlin" (without the Spheres file: "decayingNotApplied").
+The timpani (since 2026-10-15, iteration 10, docs/BALANCE_LOG.md): written markings measured in a real orchestra, the
+Spheres dataset's Romeo and Juliet (spheres_timpani.py -> spheres_timpani.json, the 14th argument): the energy per hit at
+the written p and f on the Clark & Luce scale (the strings' lines at mf set the scale); mp one of the three marking steps
+from p to f (SPHERES_MP_STEPS); SSO's side the hit's energy at velocity 64 over its whole ring (sso_percussion_levels.json
+cumE), power-averaged over every measured key; M2 = -(SSO - real - centre) as every patch. Its realRange 2 data
+("realRange": realSteps = (f - p) x 5 / 3, longLevel = SSO's hit energy by velocity less velocity 64's per written
+pitch) go to the map with it (gen_spitfire_sso.py REAL_RANGE_DECAYING).
+The grand piano (since 2026-10-15, iteration 11): Meyer 2009, 3.4.2 (two-voice scales, open lid, no pedal: pp about 88,
+ff about 104 dB re 1 pW), mp two of the five steps from pp, one voice 10 log10 2 under two (two equal voices' powers add),
+to the Clark & Luce scale by the median of (Clark & Luce's one-player mp - Meyer's in-play mp, placed the same way) over
+the twelve instruments Meyer and Clark & Luce share (MEYER: RMS 2.5 dB after the offset, 3.9 without); SSO's side the
+Grand Piano's Direct at velocity 64, its loudest 50 ms (loudDb, as the winds' Long), mean over the swept keys 21 .. 105
+(sso_percussion_levels.json "Grand Piano").
 Percussion group check (iteration 7, "percussionGroup", not applied): SSO's six-player section (Timpani at key 50 = D2,
 Bass Drum, Piatti, Snare 1, Tam Tam, Triangle 1, each one hit at mf's velocity 80) energetically summed against the string
 family (the five sections' Long at CC1 64, loudDb as above, + their M2) by the 50 ms peak and by the energy over 1 s and
@@ -84,6 +97,18 @@ CL = [('flute', 'Flute'), ('oboe', 'Oboe'), ('cor anglais', 'English horn'), ('c
 # patch: (its TU database instrument, its sibling's) for the tuRatio; the Clark & Luce instrument is the sibling's
 OFFSET_SET = ['Flute Solo', 'Oboe Solo', 'Cor Anglais', 'Clarinet Solo', 'Bassoon Solo', 'Horn Solo', 'Trumpet Solo',
               'Tenor Trombone Solo', 'Tuba Solo']
+# Meyer 2009, ch. 3: rapid two-octave scales, every note sounded, pp / ff, sound power dB re 1 pW (the Meyer rule's P column,
+# docs/PLAYBACK_SETTINGS.md › Real range), for the patches whose instrument Clark & Luce also measured (iteration 11)
+MEYER = {'Violins 1': ('3.3.1.2', 74, 94), 'Violas': ('3.3.2.2', 73, 91), 'Celli': ('3.3.3.2', 74, 96),
+         'Basses': ('3.3.4.2', 79, 96), 'Flute Solo': ('3.2.1.2', 82, 94), 'Oboe Solo': ('3.2.2.2', 83, 95),
+         'Clarinet Solo': ('3.2.3.2', 77, 97), 'Bassoon Solo': ('3.2.4.2', 81, 96), 'Horn Solo': ('3.1.1.2', 86, 107),
+         'Trumpet Solo': ('3.1.2.2', 89, 104), 'Tenor Trombone Solo': ('3.1.3.2', 89, 105), 'Tuba Solo': ('3.1.4.2', 93, 108)}
+MEYER_MP = 2 / 5            # mp two of the five equal marking steps from pp to ff (realRange's steps)
+# Meyer 2009, 3.4.2: a grand piano's scales in two voices, open lid, no pedal: pp "of the order of 88 dB", ff "around 104"
+MEYER_PIANO = ('3.4.2', 88, 104, 2)
+# the timpani's mp from its written p and f in the Spheres recording: one of the three marking steps p -> mp -> mf -> f
+SPHERES_MP_STEPS = 1 / 3
+TIMPANI_KEY_SHIFT = 12      # gen_spitfire_sso.py KEY_SHIFT: SSO's timpani keys sound an octave under their number
 GROUP = [('Timpani', 50), ('Bass Drum', 48), ('Piatti', 48), ('Snare 1', 48), ('Tam Tam', 48), ('Triangle 1', 48)]
 SKAALEVIK = {'re strings': [-8, -4, -2, -3], 'columns': ['quiet', 'average', 'loud sessions', 'forte passages'],
              'source': 'Skaalevik 2019, slide 19 (review page https://claude.ai/artifact/JKYSTkAFHEv4hjZviRhCEn): '
@@ -213,6 +238,70 @@ def decaying(tuD, perc, out, balance):
     return h, t
 
 
+def piano(perc, out, centre):
+    """the Grand Piano on the Clark & Luce scale from Meyer 2009's in-play levels (iteration 11)"""
+    rows = {}
+    for name, (sec, pp, ff) in MEYER.items():
+        v = out['patches'][name]
+        lw = {k: x - 10 * math.log10(v['players']) for k, x in v['lw'].items()}
+        mp = pp + MEYER_MP * (ff - pp)
+        rows[name] = {'meyerSection': sec, 'meyer': {'pp': pp, 'mp': round(mp, 2), 'ff': ff},
+                      'clMp': round(lw['mp'], 2), 'diffMp': round(lw['mp'] - mp, 2)}
+    diffs = [r['diffMp'] for r in rows.values()]
+    off = statistics.median(diffs)
+    rms = lambda xs: (sum(x * x for x in xs) / len(xs)) ** 0.5
+    sec, pp, ff, voices = MEYER_PIANO
+    real = pp + MEYER_MP * (ff - pp) - 10 * math.log10(voices) + off
+    notes = perc['patches']['Grand Piano']['notes']
+    pitches = sorted({n['pitch'] for n in notes})
+    at = {p: statistics.mean(n['loudDb'] for n in notes if n['pitch'] == p and n['velocity'] == 64) for p in pitches}
+    sso = statistics.mean(at.values())
+    mid = statistics.mean(v for p, v in at.items() if 45 <= p <= 81)
+    return {'M2': round(-(sso - real - centre), 2), 'M1': None, 'instrument': 'Grand piano (Meyer 2009, %s)' % sec,
+            'players': 1, 'realMp': round(real, 2), 'sso': round(sso, 2), 'ssoPitches': {str(p): round(v, 2) for p, v in at.items()},
+            'ssoMid45to81': round(mid, 2), 'M2ifMid': round(-(mid - real - centre), 2),
+            'offset': {'value': round(off, 2), 'rms': round(rms([d - off for d in diffs]), 2),
+                       'max': round(max(abs(d - off) for d in diffs), 2), 'rmsNoCorrection': round(rms(diffs), 2),
+                       'rows': rows},
+            'uncertaintyDb': 'about +-3 (the offset\'s RMS 2.5; SSO\'s mean over the whole keyboard against the middle '
+                             '45 .. 81: M2ifMid; Meyer\'s levels are a scale\'s, SSO\'s one note\'s loudest 50 ms)'}
+
+
+def timpani(sp, perc, centre, tuEntry):
+    """the timpani on the Clark & Luce scale from the Spheres dataset's Romeo and Juliet (iteration 10)"""
+    e = sp['soundEnergyDb']
+    steps = SPHERES_MP_STEPS
+    real = e['p'] + (e['f'] - e['p']) * steps
+    tim, cumT = perc['patches']['Timpani']['notes'], perc['patches']['Timpani']['cumT']
+    keys = sorted({n['pitch'] for n in tim})
+    at = {k: statistics.mean(n['cumE'][-1] for n in tim if n['pitch'] == k and n['velocity'] == 64) for k in keys}
+    sso = 10 * math.log10(statistics.mean(10 ** (v / 10) for v in at.values()))
+    vel = lambda v: 10 * math.log10(statistics.mean(10 ** (n['cumE'][-1] / 10) for n in tim if n['velocity'] == v))
+    ssoAt = {v: vel(v) for v in (32, 64, 80, 112)}
+    ssoP = ssoAt[32] + (ssoAt[64] - ssoAt[32]) * (48 - 32) / 32
+    ssoF = ssoAt[80] + (ssoAt[112] - ssoAt[80]) * (96 - 80) / 32
+    # [levels] realRange 2 (iteration 10): the written p -> f is three of the five equal steps pp -> ff, so S = (f - p) x 5 / 3;
+    # longLevel: SSO's hit energy at each velocity less velocity 64's, per written pitch (the key less keyShift's 12)
+    long = {}
+    for k in keys:
+        base = statistics.mean(n['cumE'][-1] for n in tim if n['pitch'] == k and n['velocity'] == 64)
+        long[str(k - TIMPANI_KEY_SHIFT)] = {str(v): round(statistics.mean(n['cumE'][-1] for n in tim if n['pitch'] == k
+                                                                           and n['velocity'] == v) - base, 2)
+                                            for v in (32, 64, 80, 112)}
+    realRange = {'sectionSpan': {'db': round((e['f'] - e['p']) * 5 / 3, 1),
+                                 'source': 'the Spheres dataset\'s Romeo and Juliet, written p and f (spheres_timpani.json)'},
+                 'long': long}
+    return {'M2': round(-(sso - real - centre), 2), 'M1': None, 'instrument': 'Timpani (the Spheres dataset)',
+            'realRange': realRange,
+            'players': 1, 'realMp': round(real, 2), 'realP': e['p'], 'realF': e['f'], 'k': sp['k'], 'kRms': sp['kRms'],
+            'sso': round(sso, 2), 'ssoKeys': {str(k): round(v, 2) for k, v in at.items()},
+            'M2atP': round(-(ssoP - e['p'] - centre), 2), 'M2atF': round(-(ssoF - e['f'] - centre), 2),
+            'spanPtoF': {'real': round(e['f'] - e['p'], 2), 'sso': round(ssoF - ssoP, 2)},
+            'tuBerlin': tuEntry,
+            'uncertaintyDb': 'about +-3 (the scale K\'s RMS over the calibration parts, one passage per marking, the '
+                             'seats\' sweep correction)'}
+
+
 def group(perc, strings):
     """the percussion group against the string family, by three measures (not applied)"""
     out = {'velocity': 80, 'stringsFamilyLoudDb': round(psum(strings.values()), 2), 'skaalevik': SKAALEVIK, 'hits': {}}
@@ -252,7 +341,8 @@ def ensemble(ens, m2):
 def main():
     (levelsPath, table2Path, curvesPath, windsPath, balancePath, dynamicsPath, gapPath, csvPath, diPath, tuDecayPath,
      percPath, outPath) = sys.argv[1:13]
-    ensPath = sys.argv[13] if len(sys.argv) > 13 else None
+    ensPath = sys.argv[13] if len(sys.argv) > 13 and sys.argv[13] != '-' else None
+    spheresPath = sys.argv[14] if len(sys.argv) > 14 else '-'
     power = sbw.power(csvPath)
     di = None
     if diPath != '-':
@@ -306,8 +396,13 @@ def main():
                                 'lw': {k: round(x, 2) for k, x in r.items()}}
     tuD = json.load(open(tuDecayPath, encoding='utf-8'))
     perc = json.load(open(percPath, encoding='utf-8'))
-    out['patches']['Harp'], out['decayingNotApplied'] = decaying(tuD, perc, out, balance)
-    out['decayingNotApplied'] = {'Timpani': out['decayingNotApplied']}
+    out['patches']['Harp'], tuTimpani = decaying(tuD, perc, out, balance)
+    if spheresPath != '-':
+        out['patches']['Timpani'] = timpani(json.load(open(spheresPath, encoding='utf-8')), perc, centre, tuTimpani)
+    else:
+        out['decayingNotApplied'] = {'Timpani': tuTimpani}
+    if 'Grand Piano' in perc['patches']:
+        out['patches']['Grand Piano'] = piano(perc, out, centre)
     out['percussionGroup'] = group(perc, {s: sso64[s] + out['patches'][s]['M2'] for s in STRINGS})
     if ensPath:
         out['patches']['Strings Ensemble'] = ensemble(json.load(open(ensPath, encoding='utf-8')),
@@ -321,9 +416,20 @@ def main():
                                                     v['tuRatio']['sibling'], v['tuRatio']['mp'], v['tuRatio']['pp'],
                                                     v['tuRatio']['ff']) if v.get('tuRatio') else
                                                 '  (family assumption: %s)' % v['instrument'] if v.get('familyAssumption') else ''))
-    h, t, g = out['patches']['Harp'], out['decayingNotApplied']['Timpani'], out['percussionGroup']
-    print('harp D %+.2f (pitch SD %.2f), offset %.2f (rms %.2f) -> M2 %+.2f; timpani (not applied) M2 %+.2f' % (
-        h['D'], h['dPitchSd'], h['offset']['value'], h['offset']['rms'], h['M2'], t['M2']))
+    h, g = out['patches']['Harp'], out['percussionGroup']
+    print('harp D %+.2f (pitch SD %.2f), offset %.2f (rms %.2f) -> M2 %+.2f' % (
+        h['D'], h['dPitchSd'], h['offset']['value'], h['offset']['rms'], h['M2']))
+    t = out['patches'].get('Timpani')
+    if t:
+        print('timpani (Spheres): real mp %.2f (p %.2f, f %.2f), SSO %.2f -> M2 %+.2f (at p %+.2f, at f %+.2f; span p->f real '
+              '%.2f, SSO %.2f; TU Berlin step 3 of 6 gave %+.2f)' % (t['realMp'], t['realP'], t['realF'], t['sso'], t['M2'],
+                                                                  t['M2atP'], t['M2atF'], t['spanPtoF']['real'],
+                                                                  t['spanPtoF']['sso'], t['tuBerlin']['M2']))
+    pn = out['patches'].get('Grand Piano')
+    if pn:
+        print('piano (Meyer): offset %+.2f (RMS %.2f, none %.2f), real mp %.2f, SSO %.2f -> M2 %+.2f (middle keys %+.2f)' % (
+            pn['offset']['value'], pn['offset']['rms'], pn['offset']['rmsNoCorrection'], pn['realMp'], pn['sso'], pn['M2'],
+            pn['M2ifMid']))
     print('percussion group re strings: peak %+.2f, energy 1 s %+.2f, ring %+.2f: %s' % (
         g['peakReStrings'], g['energy1sReStrings'], g['energyRingReStrings'], g['decision']))
     if 'Strings Ensemble' in out['patches']:

@@ -17,7 +17,8 @@ iteration 2 (Solo Violin 1 / 2, Solo Viola, Solo Cello: 3 mics; Motif Horns a4 /
 Bass Flute, Contrabass Clarinet, Contrabass Trombone, Cimbasso Solo, Cimbassi a2, Contrabass Tuba: 4), their pitches the
 quartiles of sso_gap_cc1_curves.json's; and Harp and Timpani (3 mics), which decay: their notes 6.0 s apart and their level
 the energy of the note and its tail (both channels' mean square from the note-on to 6.0 s after it, "levelMeasure"), the
-same window for every mic; Harp at MIDI 42 / 60 / 78, Timpani at keys 50 / 54 / 58 (key 50 sounds D2). The percussion
+same window for every mic; Harp at MIDI 42 / 60 / 78, Timpani at keys 50 / 54 / 58 (key 50 sounds D2); the Grand Piano (4 mics,
+perc-keys-levels, the same way when it got its section level: MIDI 45 / 62 / 79 at velocity 80, CC32 1, pedal off). The percussion
 patches have no mic Controllers in the map (MuseScore never changes their mics): not measured. Strings Ensemble
 (2026-10-15, docs/BALANCE_LOG.md › Iteration 9: it got a section level) the same way, 4 mics, at MIDI 42 / 60 / 78.
 
@@ -393,7 +394,7 @@ def extra(measPath, jobsPath, out):
             by.setdefault(patch, {})[tag.rsplit('_', 1)[1]] = tag
     res = json.load(open(out))
     for patch, t in by.items():
-        decaying = patch in ('Harp', 'Timpani')
+        decaying = patch in ('Harp', 'Timpani', 'Grand Piano')
         lv = 'energyDb' if decaying else 'rmsDb'
         med = lambda tag, k: {p: statistics.median(v[k]) for p, v in meas[tag].items()}
 

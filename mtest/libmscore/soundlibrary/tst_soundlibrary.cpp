@@ -2813,8 +2813,11 @@ void TestSoundLibrary::levelSectionBalance()
                  { "Motif Horns a4", 12.82 }, { "Motif Trumpets a3", 13.57 }, { "Motif Trombones a5", 8.28 },
                  { "Piccolo", -4.26 }, { "Alto Flute", 1.93 }, { "Bass Flute", -2.90 }, { "Contrabass Clarinet", -0.77 },
                  { "Contrabass Trombone", -1.88 }, { "Cimbasso Solo", 4.74 }, { "Cimbassi a2", 14.69 },
-                 { "Contrabass Tuba", -3.24 }, { "Harp", -9.81 }, { "Strings Ensemble", 11.93 } };
-      QCOMPARE(int(M2.size()), 45);
+                 { "Contrabass Tuba", -3.24 }, { "Harp", -9.81 }, { "Strings Ensemble", 11.93 },
+                 // (2026-10-15, docs/BALANCE_LOG.md › Iterations 10 and 11: the timpani from the Spheres dataset's Romeo and
+                 // Juliet at its written p and f, the grand piano from Meyer 2009's in-play levels)
+                 { "Timpani", -5.09 }, { "Grand Piano", -1.11 } };
+      QCOMPARE(int(M2.size()), 47);
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
             QCOMPARE(li.hasSectionLevel2, M2.count(section) == 1);
@@ -3346,10 +3349,11 @@ void TestSoundLibrary::levelRealRange()
                                    "Solo Violin 1", "Solo Violin 2", "Solo Viola", "Solo Cello", "Motif Horns a4",
                                    "Motif Trumpets a3", "Motif Trombones a5", "Piccolo", "Alto Flute", "Bass Flute",
                                    "Contrabass Clarinet", "Contrabass Trombone", "Cimbasso Solo", "Cimbassi a2",
-                                   "Contrabass Tuba" };
+                                   "Contrabass Tuba", "Timpani" };
       // (no database instrument: their family's realSteps only, an assumption; realRange 1 plays them as before)
+      // (the timpani: realSteps from the Spheres dataset, no database span either; a velocity patch, longLevel its hit's energy)
       const QStringList family { "Piccolo", "Alto Flute", "Bass Flute", "Contrabass Clarinet", "Contrabass Trombone",
-                                 "Cimbasso Solo", "Cimbassi a2", "Contrabass Tuba" };
+                                 "Cimbasso Solo", "Cimbassi a2", "Contrabass Tuba", "Timpani" };
       // (the bass clarinet and the bass trombones take their sibling's fractions: the owner, 2026-10-14, an assumption)
       const QStringList ruleD { "Cor Anglais", "Contrabassoon" };
       // Meyer 2009 ch. 3, (P - X_lo) / (X_hi - X_lo): Celli (74 - 63) / 35, (96 - 63) / 35 (3.3.3.2); Violins (74 - 58) / 41,
@@ -3366,7 +3370,8 @@ void TestSoundLibrary::levelRealRange()
             { "Horns a6", 17.7 }, { "Trumpets a6", 8.8 }, { "Trombones a6", 17.0 }, { "Bass Trombones a2", 17.0 },
             { "Tuba Solo", 12.5 }, { "Solo Violin 1", 13.8 }, { "Solo Viola", 15.9 }, { "Solo Cello", 14.1 },
             { "Motif Horns a4", 17.7 }, { "Motif Trumpets a3", 8.8 }, { "Motif Trombones a5", 17.0 }, { "Piccolo", 7.5 },
-            { "Bass Flute", 7.5 }, { "Contrabass Clarinet", 8.3 }, { "Cimbassi a2", 17.0 }, { "Contrabass Tuba", 12.5 } };
+            { "Bass Flute", 7.5 }, { "Contrabass Clarinet", 8.3 }, { "Cimbassi a2", 17.0 }, { "Contrabass Tuba", 12.5 },
+            { "Timpani", 39.2 } };
       int with = 0;
       QStringList mains;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
@@ -3407,6 +3412,15 @@ void TestSoundLibrary::levelRealRange()
             if (li.name == "Celli") {
                   const double lo = ContextLevel::realRangeDb(li, 16, 64), hi = ContextLevel::realRangeDb(li, 127, 64);
                   QVERIFY2(std::fabs(lo + 6.75) < 0.006 && std::fabs(hi - 4.91) < 0.006, qPrintable(QString("%1 %2").arg(lo).arg(hi)));
+                  }
+      // the timpani at a written B2 (47, key 59: keyShift): S 39.2, 7.84 dB a step; its hit's energy at velocity 48 / 96
+      // against 64, -3.53 / +3.23 (linear between the measured 32 / 64 and 80 / 112): p (one step under mp) -7.84 + 3.53,
+      // f (two over) 15.68 - 3.23
+      for (const SoundLib::LibInstrument& li : sso->instruments)
+            if (li.name == "Timpani") {
+                  const double p = ContextLevel::realRangeDb(li, 48, 47, true), f = ContextLevel::realRangeDb(li, 96, 47, true);
+                  QVERIFY2(std::fabs(p + 4.31) < 0.006 && std::fabs(f - 12.45) < 0.006, qPrintable(QString("%1 %2").arg(p).arg(f)));
+                  QCOMPARE(ContextLevel::realRangeDb(li, 96, 47), 0.0);            // (realRange 1: no database span)
                   }
       }
 

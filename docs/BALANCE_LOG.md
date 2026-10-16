@@ -270,6 +270,84 @@ instead of loudDb +11.95. The sections' own balance uncertainty (their sectionLe
 **Before -> after** (`sectionLevel2`, dB): Strings Ensemble none (SSO's level, about 12 dB under the balanced sections it
 mixes) -> +11.93. Every other patch unchanged; Trumpets a6 (+20.45) stay the loudest (S' unchanged).
 
+## Iteration 10 (2026-10-15): the timpani from a real orchestra's written markings
+
+**Weakest link.** The timpani played SSO's own level and SSO's own dynamics beside an orchestra corrected from real data:
+iteration 6 had measured them against TU Berlin but could not apply it (TU's D2 series name no markings).
+
+**Evidence.** *Real side*: the Spheres dataset's Romeo and Juliet (Colibri Ensemble; arXiv 2511.21247, Zenodo 17347681,
+CC BY-SA 4.0; every part recorded alone, all 23 microphones on every take). The markings read from the first edition of the
+1880 version's score (Bote & G. Bock, Berlin 1881, plate 9325; Sibley Music Library, public domain): review page
+https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj (the owner to check). Written f: the Allegro giusto's first bars (B, three
+E sixteenths, B, B, two B eighths; 8 hits) and three B eighths on pp. 19-20; written p: the coda's heartbeat (U, Moderato
+assai, 77 hits: triplets, then dotted-eighth + sixteenth pairs, a quarter). The timpani's energy per hit at the main
+microphone L (the passage's whole energy, rings included, over the written hits: the measure iteration 6 matched for TU
+and SSO), less its seat's sweep level against the strings' (-3.64 dB). *Scale*: the strings' eight lines at their written mf
+in coda bars 2-8, each line's level per player (the findings' section sizes) against Clark & Luce's one-player Lw at mf:
+K = 125.29, RMS 2.31 dB (Violins II's inner parts lowest, Violins I's melody highest). The timpani per hit: p 75.11, f 98.62
+dB re 1 pW s; f - p 23.51 dB. Main L + C, where both were fetched (no cello lines): p 75.56, f 98.44. One wind part at its
+written pp could be fetched before Zenodo stopped answering (Flute 1, the chorale on pp. 107-108): its K is 118.0, 7.3 dB
+off the strings', so players' pp and Clark & Luce's differ by about that much for the flute: a check, not used.
+*SSO side*: the hit's energy over its ring (sso_percussion_levels.json, velocity 64, power mean over keys 46 .. 62: -34.25
+dB FS^2 s; key 59, B2, alone -30.72). *Corroboration*: TU Berlin's five D2 series (iteration 6) from step 2 to step 5 rise
+20.9 .. 24.7 dB (mean 22.5), against the Spheres' 23.5 from p to f, if TU's six steps are pp .. ff; TU's level at its step 3
+(if mp) sits about 5 dB over the Spheres' mp on the same SSO keys. Meyer 2009, 3.7.1 (Burghauser & Spelda): single-stroke
+extremes 67 .. 70 / 115 dB; TU: 58 .. 60 / 108 dB: the Spheres' written p .. f lies inside both.
+
+**Decision.** `sectionLevel2` at mp (one of the three steps from p to f): real 82.95 dB re 1 pW s, M2 -5.09 dB (at p alone
+-8.80, at f alone +7.11: SSO's own p .. f spans 7.6 dB against the player's 23.5). Its real range (realRange 2): realSteps
+= 23.51 x 5 / 3 = 39.2 dB (the markings 7.84 dB apart), longLevel SSO's hit energy by velocity (32 / 64 / 80 / 112) less
+velocity 64's at each written pitch (the key less keyShift's 12). A velocity patch: the timpani's velocity is MS4's level of
+the written dynamic (`Ms4::expressionLevel`), the x realRange reads; CC11 is a plain volume on SSO's timpani (measured on the
+VM today, key 59 at velocity 64: CC11 90 / 64 / 32 -2.9 / -6.4 / -12.2 dB by energy, two takes, against 20 log10's -3.0 / -6.0 / -12.0). So
+the code needed no change: the map's longLevel and realSteps on the Timpani (`gen_spitfire_sso.py` REAL_RANGE_DECAYING,
+from `section_balance_cl.py`'s "realRange"). Uncertainty: about +-3 dB on the level (the scale's RMS 2.3, the seat
+correction, the flute check's 7 dB says how far a section's marking can sit from Clark & Luce's), about +-4 dB on the span
+(one passage per marking, one player; the coda's sixteenths are pickups and may be softer than its beats).
+
+**Before -> after**: Timpani none (SSO's level and dynamics) -> sectionLevel2 -5.09, realSteps 39.2. At mf the two together
+play about as before (-5.09 + 7.84 - SSO's 2.6 from velocity 64 to 80), so iteration 7's percussion group stays inside
+Skaalevik's range; p plays about 9 dB softer, f about 7 dB louder, ff about 13 dB louder than SSO's own.
+
+## Iteration 11 (2026-10-15): the grand piano from Meyer 2009
+
+**Weakest link.** The Grand Piano played SSO's own level: no Clark & Luce or TU Berlin figure.
+
+**Evidence.** Meyer 2009, 3.4.2 (read from the text): two-voice scales, open lid, no pedal, ff "around 104 dB", pp "of the
+order of 88 dB" sound power, single notes at pp below 65. The same kind of figure (rapid scales, every note sounded, pp /
+ff) exists for the twelve instruments Meyer and Clark & Luce share (the Meyer rule's P column). mp two of the five marking
+steps from pp on both sides' terms (Meyer: pp + 0.4 (ff - pp); Clark & Luce: as section_balance_cl.py). Clark & Luce's
+one-player mp less Meyer's: median -3.92 dB, RMS 2.50 after it (max 5.5), 3.87 without, so the offset does better than none
+(at pp it would not: RMS 3.15 against 3.01). The piano at mp: 88 + 6.4 - 3.01 (one voice of two equal ones) - 3.92 = 87.47
+dB re 1 pW. SSO (Windows VM, Kontakt 8.13.1 + SSO, kthost, today): Grand Piano Direct every 6 semitones 21 .. 105 at
+velocity 32 .. 112, two takes; the loudest 50 ms (loudDb, the winds' Long's measure); the mean at velocity 64 over the keys
+-33.70 dB FS^2 (the dynamics check's one note at 62 said -31.7). Meyer's levels are scales' and SSO's one note's loudest 50
+ms; a scale's level is its notes' onsets, so the measures agree in kind, not exactly.
+
+**Decision.** Grand Piano `sectionLevel2` -1.11 dB, about +-3 (the offset's RMS 2.5; SSO's middle keys 45 .. 81 alone would
+give -3.55). No realSteps: Meyer's 16 dB pp -> ff are in-play limits (the owner chose Clark & Luce's written spans over them,
+2026-10-14), and Iowa's single notes (iteration 12) are extremes, not markings.
+
+**Before -> after**: Grand Piano none -> -1.11. Every other patch unchanged.
+
+## Iteration 12 (2026-10-15): mallets, celeste and piano spans from Iowa, not applied
+
+**Question.** Can the University of Iowa Musical Instrument Samples (theremin.music.uiowa.edu; gain fixed within a session)
+give the mallets' and the piano's written pp -> ff?
+
+**Evidence.** The original MIS files at pp / mf / ff, pitch by pitch, each hit's energy over 1 s through the fast weighting
+(the 50 ms peak agrees within about 1 dB); ff - pp per pitch, median (IQR, n, SD): glockenspiel 28.8 (25.2 .. 33.1, 41, 8.3),
+crotales 38.7 (36.8 .. 44.2, 23, 6.3; +6.4 dB an octave), marimba yarn 18.3 (15.7 .. 21.2, 61, 4.6), cord 23.0 (SD 9.0),
+rubber 21.5 (SD 6.5), vibraphone 36.4 (28.9 .. 47.2, 40, 10.1; +8.9 an octave), xylophone 26.0 / 25.3 (hard rubber /
+rosewood; SD 4.1 / 5.4), piano 24.7 (21.1 .. 30.4, 28, 6.4). Iowa has no celeste, tubular bells or desk bells. The method on
+strings came out 2 .. 3 dB under Clark & Luce (violin 10.7 / 13.9, cello 12.1 / 12.0 against 13.8 / 14.1), but here every
+span is beyond any Clark & Luce span (5.2 .. 17.7) and Meyer's piano in-play 16 dB: Iowa's percussion pp is a softest
+stroke, not a written pp. Pitch SD 4 .. 10 dB, strong slopes with pitch.
+
+**Decision.** No realSteps for the mallets, celeste or piano (not consistent across pitches; not markings). Their balance
+stays SSO's: no real source measured them as orchestral players play (marked as no data). The marimba (yarn) is the only
+consistent one (SD 4.6, no slope), a candidate at most.
+
 ## Mic levels for the added patches (2026-10-15)
 
 The mic-compensation work (`[levels] micCompensation`) measured each mic alone for the 28 patches that had a section
@@ -283,6 +361,10 @@ empty signal (about -92 dB rms, every take the same: its samples weren't loaded 
 compensated (`extra` now leaves out a mic under -80 dB rms at every pitch). The percussion kits have no mic Controllers
 in the map, so MuseScore never changes their mics: not measured. No sectionLevel2 changed; the map gains `micLevels`
 on the 17. tst_soundlibrary checks that every patch with a sectionLevel2, the harp and the timpani have mic levels.
+The Grand Piano (iteration 11 gave it a sectionLevel2) measured the same way, 4 mics, MIDI 45 / 62 / 79 at velocity 80
+(Direct, pedal off; 24 renders' notes, kthost, VM, 2026-10-15): Close -1.52 (per pitch -3.71 / +3.91 / -1.52: the
+close mic's balance moves with the register), Tree 0, Ambient -2.91, Outrigger -9.53 dB; the default mix the Tree alone
+at 127 (silent with the Tree at 0).
 
 ## Investigated, no change (2026-10-15)
 

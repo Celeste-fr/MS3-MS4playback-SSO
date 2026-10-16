@@ -1,0 +1,228 @@
+{
+ "method": "    python3 -I spheres_timpani.py <Spheres Tchaikovsky folder> <sso_cl_section_balance.json> <out spheres_timpani.json>\n                                  [<mics, default MainL,MainC,MainR>]\n\nSource: The Spheres dataset (Colibri Ensemble, Pescara; arXiv 2511.21247, Zenodo 17347681, CC BY-SA 4.0), the\nmultichannel set's Tchaikovsky folder: Romeo and Juliet, overture-fantasia (1880 version), every part recorded alone\n(one player per wind part, the strings by section), 23 microphones recording every take; the audio is read from a local\ncopy and never stored in the repository (derived numbers only). The markings are read from the first edition of the 1880\nversion's full score (Berlin: Bote & G. Bock, plate 9325, 1881; Sibley Music Library, http://hdl.handle.net/1802/24924,\npublic domain): review page https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj (crops beside each reading).\n\nMeasure: the main microphones, power summed (the earlier Spheres findings' method; the ones given). A sustained part: the\nmean power over its playing 50 ms frames (within 20 dB of the window's 95th percentile), dB re FS^2; the timpani: the\nenergy of a passage's hits (the passage's whole energy, rings included, over the number of written hits), dB re FS^2 s,\nthe measure iteration 6 matched for TU Berlin's decaying tones and SSO's (sso_percussion_levels.json cumE).\nPosition: each part less its seat's session-1 sweep level at the same microphones (loudspeaker at the seat; SWEEP),\nre the strings' mean seat, as the findings' \"pos\" correction (by it the timpani sit 4.0 dB under the strings, the horns\n4.3). Both recording sessions as measured (hand claps: no gain change between them).\nScale: per calibration part, K = Clark & Luce's one-player sound power at the written marking (sso_cl_section_balance.json\n`lw` of the patch named, one player) less the part's position-corrected level per player (the strings' lines: the\nsection's players as the findings assumed, Violin 3, Viola 4, Cello 3, each line recorded by the whole section); K = the\nmedian over the eight string lines at mf (sectionLevel2 centres the strings; dB re 1 pW / FS^2), its RMS the scale's\nuncertainty. The wind chorale's parts at pp (one player each) are checks only, where their stems could be fetched (2026-10-15:\nZenodo stopped answering after Flute 1; the main microphone L alone was complete for every part used). The timpani's\nsound energy per hit at a marking (dB re 1 pW s) = its position-corrected energy per hit + K.",
+ "mics": [
+  "MainL"
+ ],
+ "k": 125.29,
+ "kRms": 2.31,
+ "kByMarking": {
+  "mf": 125.29,
+  "pp": 118.02
+ },
+ "calibration": [
+  {
+   "stem": "Violin_1_1",
+   "seat": "Vln 1",
+   "players": 3,
+   "clarkLuce": "Solo Violin 1",
+   "marking": "mf",
+   "window": [
+    1169.58,
+    1209.14
+   ],
+   "where": "coda bars 2-8 (p. 106-107): two phrases, mf at each entry",
+   "levelDb": -36.34,
+   "playing": 0.7,
+   "positionDb": 0.6,
+   "perPlayerDb": -41.71,
+   "clLw": 79.46,
+   "k": 121.17,
+   "role": "scale"
+  },
+  {
+   "stem": "Violin_1_2",
+   "seat": "Vln 1",
+   "players": 3,
+   "clarkLuce": "Solo Violin 1",
+   "marking": "mf",
+   "window": [
+    1169.58,
+    1209.14
+   ],
+   "where": "coda bars 2-8 (p. 106-107): two phrases, mf at each entry",
+   "levelDb": -38.16,
+   "playing": 0.69,
+   "positionDb": 0.6,
+   "perPlayerDb": -43.53,
+   "clLw": 79.46,
+   "k": 122.99,
+   "role": "scale"
+  },
+  {
+   "stem": "Violin_2_1",
+   "seat": "Vln 2",
+   "players": 3,
+   "clarkLuce": "Solo Violin 1",
+   "marking": "mf",
+   "window": [
+    1169.58,
+    1209.14
+   ],
+   "where": "coda bars 2-8 (p. 106-107): two phrases, mf at each entry",
+   "levelDb": -44.81,
+   "playing": 0.74,
+   "positionDb": -0.41,
+   "perPlayerDb": -49.17,
+   "clLw": 79.46,
+   "k": 128.63,
+   "role": "scale"
+  },
+  {
+   "stem": "Violin_2_2",
+   "seat": "Vln 2",
+   "players": 3,
+   "clarkLuce": "Solo Violin 1",
+   "marking": "mf",
+   "window": [
+    1169.58,
+    1209.14
+   ],
+   "where": "coda bars 2-8 (p. 106-107): two phrases, mf at each entry",
+   "levelDb": -44.38,
+   "playing": 0.68,
+   "positionDb": -0.41,
+   "perPlayerDb": -48.74,
+   "clLw": 79.46,
+   "k": 128.2,
+   "role": "scale"
+  },
+  {
+   "stem": "Viola_1",
+   "seat": "Vla",
+   "players": 4,
+   "clarkLuce": "Solo Viola",
+   "marking": "mf",
+   "window": [
+    1169.58,
+    1209.14
+   ],
+   "where": "coda bars 2-8 (p. 106-107): two phrases, mf at each entry",
+   "levelDb": -41.68,
+   "playing": 0.69,
+   "positionDb": -0.48,
+   "perPlayerDb": -47.22,
+   "clLw": 77.45,
+   "k": 124.67,
+   "role": "scale"
+  },
+  {
+   "stem": "Viola_2",
+   "seat": "Vla",
+   "players": 4,
+   "clarkLuce": "Solo Viola",
+   "marking": "mf",
+   "window": [
+    1169.58,
+    1209.14
+   ],
+   "where": "coda bars 2-8 (p. 106-107): two phrases, mf at each entry",
+   "levelDb": -42.78,
+   "playing": 0.7,
+   "positionDb": -0.48,
+   "perPlayerDb": -48.33,
+   "clLw": 77.45,
+   "k": 125.78,
+   "role": "scale"
+  },
+  {
+   "stem": "Cello_1",
+   "seat": "Vcl",
+   "players": 3,
+   "clarkLuce": "Solo Cello",
+   "marking": "mf",
+   "window": [
+    1169.58,
+    1209.14
+   ],
+   "where": "coda bars 2-8 (p. 106-107): two phrases, mf at each entry",
+   "levelDb": -35.0,
+   "playing": 0.72,
+   "positionDb": -0.13,
+   "perPlayerDb": -39.65,
+   "clLw": 85.37,
+   "k": 125.02,
+   "role": "scale"
+  },
+  {
+   "stem": "Cello_2",
+   "seat": "Vcl",
+   "players": 3,
+   "clarkLuce": "Solo Cello",
+   "marking": "mf",
+   "window": [
+    1169.58,
+    1209.14
+   ],
+   "where": "coda bars 2-8 (p. 106-107): two phrases, mf at each entry",
+   "levelDb": -35.55,
+   "playing": 0.73,
+   "positionDb": -0.13,
+   "perPlayerDb": -40.19,
+   "clLw": 85.37,
+   "k": 125.56,
+   "role": "scale"
+  },
+  {
+   "stem": "Flute_1",
+   "seat": "Flute",
+   "players": 1,
+   "clarkLuce": "Flute Solo",
+   "marking": "pp",
+   "window": [
+    1217.65,
+    1246.19
+   ],
+   "where": "coda bars 10-14 (p. 107 last bar, p. 108 bars 1-4): the wind chorale, pp, before its hairpins",
+   "levelDb": -38.72,
+   "playing": 0.9,
+   "positionDb": -0.27,
+   "perPlayerDb": -38.45,
+   "clLw": 79.57,
+   "k": 118.02,
+   "role": "check"
+  }
+ ],
+ "timpani": [
+  {
+   "window": [
+    394.5,
+    407.9
+   ],
+   "hits": 8,
+   "marking": "f",
+   "where": "Allegro giusto, its first 4 bars (p. 17-18): B, E E E (sixteenths), B, B, B B (eighths); f at the first note",
+   "energyPerHitDb": -28.63,
+   "positionDb": -3.64,
+   "soundEnergyDb": 100.3
+  },
+  {
+   "window": [
+    407.9,
+    420.0
+   ],
+   "hits": 3,
+   "marking": "f",
+   "where": "p. 19 last bar, p. 20 bars 1-2: one B eighth each, f at the first",
+   "energyPerHitDb": -33.06,
+   "positionDb": -3.64,
+   "soundEnergyDb": 95.86
+  },
+  {
+   "window": [
+    1161.8,
+    1222.0
+   ],
+   "hits": 77,
+   "marking": "p",
+   "where": "coda (U, Moderato assai, p. 106-107): 12 triplet eighths, 8 bars of 4 dotted-eighth + sixteenth pairs, a quarter; p at the first note",
+   "energyPerHitDb": -53.82,
+   "positionDb": -3.64,
+   "soundEnergyDb": 75.11
+  }
+ ],
+ "soundEnergyDb": {
+  "p": 75.11,
+  "f": 98.62
+ },
+ "fMinusP": 23.51
+}
