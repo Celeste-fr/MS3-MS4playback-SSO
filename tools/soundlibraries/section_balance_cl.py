@@ -32,7 +32,8 @@ Patches with no Clark & Luce instrument (Bass Clarinet, Contrabassoon, Bass Trom
 iteration 6, docs/BALANCE_LOG.md): their sibling's Clark & Luce levels plus the TU Berlin database's difference between
 the two instruments' sound power at mp (each placed between its own pp and ff as sectionLevel places it,
 section_balance_winds.py mpFrac), averaged over the semitones both played (SIBLING_TU, "tuRatio": one source's ratio,
-measured the same way for both, not an assumption). Before: the family member's change from sectionLevel to
+measured the same way for both, not an assumption; the Bass Clarinet since iteration 13 the median of four independent
+sources, SOURCED_RATIO, 'ratioUsed'; 'tuRatio' keeps TU's). Before: the family member's change from sectionLevel to
 sectionLevel2 added to their sectionLevel (an assumption, "plays like its family").
 Decaying instruments (since 2026-10-15, iteration 6, docs/BALANCE_LOG.md): the harp from TU Berlin's sound power on the
 Clark & Luce scale. TU's measure for a decaying tone is the fast-weighted (125 ms) pressure squared averaged over the
@@ -118,6 +119,22 @@ SIBLING_TU = {'Bass Clarinet': ('Bass clarinet modern', 'Clarinet modern'),
               'Contrabassoon': ('Contrabassoon modern', 'Bassoon modern'),
               'Bass Trombone Solo': ('Bass trombone modern', 'Tenor trombone modern'),
               'Bass Trombones a2': ('Bass trombone modern', 'Tenor trombone modern')}
+# Sourced ratios (since 2026-10-15, iteration 13, docs/BALANCE_LOG.md): where independent sources give a patch's level over its
+# sibling's, the ratio at mp is their median instead of TU Berlin's alone (the owner checked the sources, 2026-10-15, review
+# page https://claude.ai/artifact/6LwMCt4X82fVsiJgZjHCz8). Bass Clarinet over Clarinet, dB (sound power unless noted):
+#   ISO 23591 Annex A forte, Burghauser & Spelda via NS 8178, printed in Skaalevik 2023 (Forum Acusticum), Table 4: -1
+#   O'Brien 2013, practice-session sound power, Skaalevik 2023, Table 2: 0
+#   TU Berlin ff (Weinzierl et al. 2018's database, tuRatio['ff']): +0.5
+#   University of Iowa MIS, one player (C. Bellomy), SPL at one point, mf, octaves 3 and 4: -1.9 .. +0.5, midpoint -0.7
+#       (octave 5 -3.6 outside the range the owner confirmed; research3/lowwinds/results.json)
+# Not used: Detzner 2015's -2 (TU's recordings again, not independent); TU's mp (+4.88) rests on one player's loud pp.
+# The Contrabassoon and the Bass Trombones keep SIBLING_TU (nothing better for the contrabassoon; the bass trombone's +1.71 is
+# corroborated by Iowa MIS bass - tenor trombone, +1.1 pp / +1.0 mf / +2.0 ff, and ISO 23591 Annex A +1).
+SOURCED_RATIO = {'Bass Clarinet': [('ISO 23591 Annex A forte (Burghauser & Spelda via NS 8178; Skaalevik 2023, Table 4)', -1.0),
+                                   ("O'Brien 2013 practice sessions (Skaalevik 2023, Table 2)", 0.0),
+                                   ('TU Berlin ff (Weinzierl et al. 2018)', 0.5),
+                                   ('University of Iowa MIS mf, octaves 3-4, midpoint of -1.9 .. +0.5', -0.7)]}
+SOURCED_NOT_INDEPENDENT = {'Bass Clarinet': 'Detzner 2015: -2 (the same TU Berlin recordings)'}
 # patch: (Clark & Luce instrument, players, family assumption)
 GAP = {'Solo Violin 1': ('Violin', 1, False), 'Solo Violin 2': ('Violin', 1, False), 'Solo Viola': ('Viola', 1, False),
        'Solo Cello': ('Cello', 1, False), 'Motif Horns a4': ('French horn', 4, False), 'Motif Trumpets a3': ('Trumpet', 3, False),
@@ -348,6 +365,14 @@ def main():
     if diPath != '-':
         di = {k: {'pp': v['diPp'], 'ff': v['diFf']} for k, v in json.load(open(diPath, encoding='utf-8'))['instruments'].items()}
     ratio = {name: tuRatio(power, *labs) for name, labs in SIBLING_TU.items()}
+    sourced = {}
+    for name, rows in SOURCED_RATIO.items():
+        vals = [v for _, v in rows]
+        sourced[name] = {'mp': round(statistics.median(vals), 2), 'range': [min(vals), max(vals)],
+                         'sources': [{'source': src, 'db': v} for src, v in rows],
+                         'notIndependent': SOURCED_NOT_INDEPENDENT[name], 'uncertaintyDb': 'about +-2 (the sources spread)',
+                         'tuMp': ratio[name]['mp']}
+        ratio[name] = dict(ratio[name], mp=sourced[name]['mp'])
     gap = json.load(open(gapPath, encoding='utf-8'))['sections']
     dynamics = json.load(open(dynamicsPath, encoding='utf-8'))
     levels = json.load(open(levelsPath, encoding='utf-8'))['levels']
@@ -382,7 +407,9 @@ def main():
             out['patches'][name] = {'M2': round(m, 2), 'M1': b['M'], 'instrument': inst, 'players': n,
                                     'lw': {k: round(x, 2) for k, x in real[name].items()}}
             if name in ratio:
-                out['patches'][name]['tuRatio'] = ratio[name]
+                out['patches'][name]['tuRatio'] = dict(ratio[name], mp=sourced[name]['tuMp']) if name in sourced else ratio[name]
+                if name in sourced:
+                    out['patches'][name]['ratioUsed'] = sourced[name]
     out['standIn'] = {'db': round(standIn, 2), 'patches': len(both), 'sd': round(statistics.pstdev(err), 2),
                       'max': round(max(map(abs, err)), 2)}
     for name, (inst, n, family) in GAP.items():

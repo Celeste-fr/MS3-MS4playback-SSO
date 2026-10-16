@@ -262,8 +262,11 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   M = -(D - the strings' mean D) (strings centred, winds on their scale).
 - No Clark & Luce instrument (since 2026-10-15, docs/BALANCE_LOG.md › Iteration 5): Bass Clarinet, Contrabassoon, Bass
   Trombone Solo / a2 take their sibling's (clarinet's, bassoon's, tenor trombone's) Clark & Luce level plus the TU Berlin
-  database's difference between the two at mp over the semitones both played (+4.88, -4.46, +1.71 dB): one source's
-  ratio, not an assumption; the bass clarinet's is uncertain by about ±5 dB (TU's difference +10.7 at pp, +0.5 at ff).
+  database's difference between the two at mp over the semitones both played (-4.46, +1.71 dB for the contrabassoon and
+  the bass trombones): one source's ratio, not an assumption; the bass trombones' is corroborated by Iowa MIS (+1.1 pp /
+  +1.0 mf / +2.0 ff) and ISO 23591 (+1). The Bass Clarinet's (Iteration 13, 2026-10-15) is the median of four independent
+  sources, -0.35 dB (ISO 23591 Annex A -1, O'Brien 2013 0, TU Berlin's ff +0.5, Iowa MIS mf -0.7; spread -1.0 .. +0.5,
+  uncertainty about ±2 dB), in place of TU's mp +4.88 (one player's loud pp, ±5 dB).
   Before: their family member's change from `sectionLevel` to `sectionLevel2` (an assumption).
 - The harp (since 2026-10-15, Iteration 6): TU Berlin's sound power (no Clark & Luce figure) on Clark & Luce's scale:
   TU's measure for a decaying tone (the fast-weighted pressure squared averaged over the recording: `tu_transient.py`
@@ -311,7 +314,7 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Cor Anglais | -3.86 | +4.39 | 81.4 |
 | Clarinet Solo | -2.79 | +3.43 | 82.0 |
 | Clarinets a2 | -4.73 | +1.49 | 85.1 |
-| Bass Clarinet (TU ratio) | +0.38 | +1.20 | 86.9 |
+| Bass Clarinet (median of 4 sources) | -4.85 | +1.20 | 86.9 |
 | Bassoon Solo | -15.00 | -2.76 | 81.2 |
 | Bassoons a2 | -2.52 | +9.72 | 84.2 |
 | Contrabassoon (TU ratio) | -14.56 | -3.14 | 76.7 |

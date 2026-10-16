@@ -348,6 +348,43 @@ stroke, not a written pp. Pitch SD 4 .. 10 dB, strong slopes with pitch.
 stays SSO's: no real source measured them as orchestral players play (marked as no data). The marimba (yarn) is the only
 consistent one (SD 4.6, no slope), a candidate at most.
 
+## Iteration 13 (2026-10-15): the bass clarinet from four independent sources, not TU's mp
+
+(Numbered after iteration 12 on this branch; the branch `timpani-readings` also adds an iteration, so the numbers may
+need resolving at merge.)
+
+**Weakest link.** The Bass Clarinet's real side was the clarinet's Clark & Luce level plus TU Berlin's bass clarinet -
+clarinet difference at mp, +4.88 dB (Iteration 5): one source, and one bass clarinettist's loud pp (TU: +10.73 at pp, +0.50
+at ff), so uncertain by about +-5 dB.
+
+**Evidence** (bass clarinet - clarinet, dB; the owner checked the sources, 2026-10-15, review page
+https://claude.ai/artifact/6LwMCt4X82fVsiJgZjHCz8; Iowa's and TU's numbers as in `research3/lowwinds/results.json`; ISO's
+and O'Brien's are from the review page, not in that file):
+- ISO 23591 Annex A forte sound power (Burghauser & Spelda via NS 8178, printed in Skaalevik 2023, Forum Acusticum,
+  Table 4): -1.
+- O'Brien 2013 practice-session sound power (Skaalevik 2023, Table 2): 0.
+- TU Berlin's own ff: +0.5.
+- University of Iowa MIS, one player, SPL at one point, same chain: mf octave 3 -1.9, octave 4 +0.5 (midpoint -0.7); pp
+  +6.2 / +6.2, ff +0.5 / +2.7 (gain unverifiable: gated silence; octave 5 is lower at every dynamic, -0.8 / -3.6 / -1.3,
+  and is outside the range used).
+- Not counted: Detzner 2015's -2 (mean f) and scales / single-note statistics: the same TU recordings, not independent.
+- Rejected: the Philharmonia samples (levels normalised per file, 5.4 dB bass clarinet pp -> ff).
+Four independent sources agree within -1 .. +0.5 (Iowa's own range -1.9 .. +0.5) at forte / mf; only TU's pp, and so its mp
+interpolation, sits +5 dB higher.
+
+**Decision.** `SOURCED_RATIO` in `section_balance_cl.py`: the Bass Clarinet's ratio at mp is the median of the four,
+-0.35 dB (spread -1.0 .. +0.5, uncertainty about +-2 dB with Iowa's range and its unverified gain), recorded with each
+source in "ratioUsed" of `sso_cl_section_balance.json` ("tuRatio" keeps TU's). The forte / mf values stand for mp: an
+assumption that the bass clarinet's mp difference lies near its mf / f difference, which TU's pp (+10.7) puts in doubt but
+no independent source supports. The Contrabassoon (nothing better than TU's -4.46) and the Bass Trombones keep
+`SIBLING_TU`: the bass trombone's +1.71 is corroborated by the University of Iowa's bass - tenor trombone (same day, same
+chain, one player each; SPL: +1.1 pp, +1.0 mf, +2.0 ff; gain +-3 dB) and ISO 23591 Annex A (+1), within about 1 dB;
+Wenmaekers & Hak 2015 (-1, A-weighted at the player's own ears) not usable.
+
+**Before -> after** (`sectionLevel2`, dB): Bass Clarinet +0.38 -> -4.85 (the ratio +4.88 -> -0.35, so the patch's real side
+5.23 dB lower and its offset 5.23 dB lower). Every other patch unchanged (map diff: one attribute of one line).
+Uncertainty: about +-2 dB (was +-5). Python tests only (no build): `tst_soundlibrary`'s expected value updated, not run.
+
 ## Mic levels for the added patches (2026-10-15)
 
 The mic-compensation work (`[levels] micCompensation`) measured each mic alone for the 28 patches that had a section

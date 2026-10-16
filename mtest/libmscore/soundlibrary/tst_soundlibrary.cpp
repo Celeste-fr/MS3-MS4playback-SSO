@@ -2804,7 +2804,7 @@ void TestSoundLibrary::levelSectionBalance()
       const std::map<QString, double> M2 { { "Violins 1", -0.03 }, { "Violins 2", 1.12 }, { "Violas", -7.08 },
                  { "Celli", 2.56 }, { "Basses", 3.43 }, { "Flute Solo", -2.04 }, { "Flutes a2", -3.87 },
                  { "Oboe Solo", -6.67 }, { "Oboes a2", -9.03 }, { "Cor Anglais", -3.86 }, { "Clarinet Solo", -2.79 },
-                 { "Clarinets a2", -4.73 }, { "Bass Clarinet", 0.38 }, { "Bassoon Solo", -15.00 }, { "Bassoons a2", -2.52 },
+                 { "Clarinets a2", -4.73 }, { "Bass Clarinet", -4.85 }, { "Bassoon Solo", -15.00 }, { "Bassoons a2", -2.52 },
                  { "Contrabassoon", -14.56 }, { "Horn Solo", 0.57 }, { "Horns a2", 7.17 }, { "Horns a6", 10.95 },
                  { "Trumpet Solo", 9.04 }, { "Trumpets a2", 14.26 }, { "Trumpets a6", 20.45 },
                  { "Tenor Trombone Solo", -0.35 }, { "Tenor Trombones a2", 6.31 }, { "Trombones a6", 16.00 },
