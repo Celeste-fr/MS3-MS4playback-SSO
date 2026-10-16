@@ -2,7 +2,10 @@
 """Compare two hosted renders of the same part (MuseScore --verify-playback --verify-wav: "<part> library.wav" and the
 score's events.tsv), note by note and as a null test.
 
-cmp.py <dirA> <dirB> <part name> <notes.txt of the part's dump> [--json out]
+compare_renders.py <dirA> <dirB> <part name> <notes.txt of the part's dump, or - > [--json out]
+
+With - (two renders of the same build, no dump at hand) the notes are A's events, each at its MIDI pitch (cents 0:
+f0 is then against the 12-TET pitch, f0Diff between A and B unaffected; every note counts as untuned).
 
 dirA / dirB: a "Playback verify <date>" folder. Per note (the events' note-ons of the part, matched in order with the
 dump's notes: written pitch + cents): f0 (pYIN, median over the note's steady part) in cents from the written tuning,
@@ -63,7 +66,7 @@ def main():
     a, sr, onsA = load(da, part)
     b, srb, onsB = load(db, part)
     assert sr == srb
-    written = notes(ntxt, part)
+    written = notes(ntxt, part) if ntxt != "-" else [(o[0], o[3] - o[0], o[1], 0.0) for o in onsA]
     n = min(len(a), len(b))
     a, b = a[:n], b[:n]
     # null test: best lag within +-5 ms

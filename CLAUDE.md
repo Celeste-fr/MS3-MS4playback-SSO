@@ -340,7 +340,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
 - **Setups are made by MuseScore** from each patch's `.nki` (`audio/vst3/kontaktsetup.*`), then replaced by
   Kontakt's own state after the first load (`resave`). The states loaded (voice limit 512, the copies' Tune slots) are **prepared once**
   and kept, byte for byte, in memory and `<setups folder>/prepared` (`prepared` in soundlibraryhost.cpp; 2026-10-16, the
-  load profile: 0.5-1.8 s an instance before). Setups folder `<dataPath>/soundlibraries/<library>/`:
+  load profile: 0.5-1.8 s an instance before; Whence 5-11 s -> 0.2 s on the VM, renders null at the floor of two passes, HANDOFF.md › Load profile). Setups folder `<dataPath>/soundlibraries/<library>/`:
   `<patch>.vst3state`, `Kontakt empty.vst3state`, `made setups.json` (`MAKER_VERSION`), `checks.json` (raise
   `CHECK_VERSION` in soundlibrarycheck.cpp when old results go stale), `dynamics.json`, `load times.log` (qDebug
   doesn't show on Windows).

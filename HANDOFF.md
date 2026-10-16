@@ -29,11 +29,23 @@ contended** (another session's Live 12.4.6 with 8 GB, one or two kthost renders)
   (`tst_liveequivalence::preparedStates`); `MS_PREPARED_OFF=1` makes them at each load, to compare. The even levels'
   measurer loads its instances only after the playback's preload (it took turns with it on the main thread). Timing
   lines in `load times.log` ("<patch>: steps | …" per instance).
-- **Still to prove (needs a Windows build of `load-profile`; ask before a CI run)**: on the VM, Whence rendered with
-  and without `MS_PREPARED_OFF` (`--verify-playback --verify-wav`, per part with `tools/playbackverify/part_variants.py`:
-  the whole score with 20 instances crashed the render while Live held 8 GB, `MapViewOfFile` error 1450), each twice,
-  compared with `tools/playbackverify/compare_renders.py`; and `--measure-load-times` with / without it. Expect the
-  same as two identical passes (below: bit for bit on the All techniques parts).
+- **Proven sound-identical** (build 441 of `load-profile`, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38942606898,
+  Windows VM, Kontakt 8 + SSO, 2026-10-16): Whence per part (`part_variants.py`, hostedTuning 1), `--verify-playback
+  --verify-wav` with prepared states on / off (`MS_PREPARED_OFF=1`), each twice (on a, off a, on b, off b; on a wrote the
+  cache, on b read it: the job copy's `prepared` folder), compared with `compare_renders.py` (`-`: no dump needed).
+  Whole-part null, floors (on a - on b, off a - off b) | on - off (a, b):
+  Violins 2 -144.6 / -144.6 | -144.6 / -144.6 dB; Basses -158.0 / -97.8 | -97.8 / -158.2 dB (the -97.8 is off a's own
+  pass, its floor too); Violins 1 -7.5 / -7.3 | -7.0 / -6.9; Violas -8.3 / -8.0 | -8.5 / -8.7; Celli -7.2 / -6.9 | -6.5 /
+  -7.7 dB (Performance patches: not deterministic). Per note, every part: level 0.00 dB / f0 0.00 cents / onset 0 ms /
+  spectrum 0.00 dB on Violins 2 and Basses; on the Performance parts on - off within the floors' own maxima (level
+  <= 3.9 dB against floors to 5.0, spectrum <= 6.0 against 6.2, f0 <= 10.8 cents against 14.1), and their notes bit-exact
+  in both floors (14 / 28 / 18) null on - off at the floors' level (worst -62.7 / -100.0 / -140.0 dB against -62.6 /
+  -101.7 / -140.0). Kept, on.
+- **Load times** (same build, `--measure-load-times`, phase 2: all 8 instances one after the other; another session's
+  kthost rendered during most runs, total CPU median 16-31 %, no Live): off 56.6 s (the build's first run) / 33.3 /
+  22.8 s, setups read 11.6 / 7.4 / 5.3 s; on 21.4 s (the run that wrote the cache, setups read 3.6 s) / 17.9 / 17.7 /
+  19.0 s, setups read 0.17 / 0.14 / 0.21 s. setState 17.0-18.2 s both ways once warm (off 3 / on 2-4): the gain is the
+  setups read, 5-11 s -> 0.2 s. The owner's PC needs its own numbers.
 - **Dropped** (could change the sound, or no gain): purging articulations the score doesn't play (no guarantee that a
   later edit, a play from anywhere, an export and the measurer find their samples loaded: Kontakt loads in the
   background with no "done" signal); a smaller preload (realtime dropouts possible; the owner's Kontakt overrides
