@@ -1537,8 +1537,13 @@ def sectionLevelAttributes(name):
 #   clarinet, contrabassoon and bass trombones their family's (an assumption). real_range.py SPANS
 REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
 REAL_RANGE_WINDS = loadFit('sso_real_range.json').get('instruments', {})
+# - the timpani (2026-10-15, docs/BALANCE_LOG.md › Iteration 9): realSteps from the Spheres dataset's written p and f
+#   ((f - p) x 5 / 3) and longLevel from SSO's hit energy by velocity (sso_percussion_levels.json), both computed by
+#   section_balance_cl.py ("realRange" in sso_cl_section_balance.json): a velocity patch, its x the written dynamic
+REAL_RANGE_DECAYING = {n: v['realRange'] for n, v in loadFit('sso_cl_section_balance.json').get('patches', {}).items()
+                       if v.get('realRange')}
 def realRangeAttributes(name):
-    r = REAL_RANGE.get(name) or REAL_RANGE_WINDS.get(name)
+    r = REAL_RANGE.get(name) or REAL_RANGE_WINDS.get(name) or REAL_RANGE_DECAYING.get(name)
     if not r:
         return ''
     # (real_range.py GAP_FAMILY: no database instrument, so no realSpan; realSteps their family's, an assumption)
@@ -1606,7 +1611,8 @@ for i, line in enumerate(out):
             elif current in SECTION_LEVEL2:
                 # a patch with Clark & Luce's balance only (section_balance_cl.py GAP: no sectionLevel)
                 end = '/>' if out[i].endswith('/>') else '>'
-                out[i] = out[i][:-len(end)] + f' sectionLevel2="{round(SECTION_LEVEL2[current], 3):g}"' + end
+                out[i] = out[i][:-len(end)] + f' sectionLevel2="{round(SECTION_LEVEL2[current], 3):g}"' \
+                         + realRangeAttributes(current) + end
         if current and micAttributes(current):
             end = '/>' if out[i].endswith('/>') else '>'
             out[i] = out[i][:-len(end)] + micAttributes(current) + end

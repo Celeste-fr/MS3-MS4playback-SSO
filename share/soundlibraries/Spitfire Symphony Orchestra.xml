@@ -979,7 +979,7 @@
     <Controller id="mic2" name="Mic 2 (Tree)" param="Mic 2 level"/>
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
   </Instrument>
-  <Instrument name="Grand Piano" ids="piano grand-piano upright-piano" nki="Instruments/Symphonic Percussion/Other - Grand Piano.nki" setup="$iooxo=3" pitch="62">
+  <Instrument name="Grand Piano" ids="piano grand-piano upright-piano" nki="Instruments/Symphonic Percussion/Other - Grand Piano.nki" setup="$iooxo=3" pitch="62" sectionLevel2="-1.11" micLevels="Close:-1.52 Tree:0 Ambient:-2.91 Outrigger:-9.53" micDefault="Tree:127">
     <Articulation name="Direct" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
     <Articulation name="Tape" value="2" techniques=""/>
     <Controller id="pedalvol" name="Pedal Vol" param="Pedal Vol"/>
@@ -990,7 +990,7 @@
     <Controller id="mic3" name="Mic 3 (Ambient)" param="Mic 3 level"/>
     <Controller id="mic4" name="Mic 4 (Outrigger)" param="Mic 4 level"/>
   </Instrument>
-  <Instrument name="Timpani" ids="timpani" keyScan="1" keyShift="12" nki="Instruments/Symphonic Percussion/Tuned - Timpani.nki" pitch="60" bend="195.2" micLevels="Tree:0 Ambient:-0.58" micDefault="Tree:127">
+  <Instrument name="Timpani" ids="timpani" keyScan="1" keyShift="12" nki="Instruments/Symphonic Percussion/Tuned - Timpani.nki" pitch="60" bend="195.2" sectionLevel2="-5.09" longLevel="32/34:-9.38 64/34:0 80/34:3.51 112/34:5.73 32/35:-7.57 64/35:0 80/35:3.79 112/35:5.86 32/36:-7.57 64/36:0 80/36:3.79 112/36:5.86 32/37:-7.57 64/37:0 80/37:3.79 112/37:5.85 32/38:-10.23 64/38:0 80/38:2.14 112/38:4.54 32/39:-10.23 64/39:0 80/39:2.14 112/39:4.53 32/40:-8.1 64/40:0 80/40:0.63 112/40:2.13 32/41:-8.1 64/41:0 80/41:0.63 112/41:2.13 32/42:-12.9 64/42:0 80/42:2.27 112/42:5.74 32/43:-12.17 64/43:0 80/43:3.24 112/43:6 32/44:-12.17 64/44:0 80/44:3.24 112/44:5.99 32/45:-9.45 64/45:0 80/45:1.76 112/45:4.92 32/46:-9.45 64/46:0 80/46:1.76 112/46:4.92 32/47:-7.06 64/47:0 80/47:2.33 112/47:4.13 32/48:-6.04 64/48:0 80/48:2.83 112/48:4.59 32/49:-6.98 64/49:0 80/49:2.11 112/49:3.93 32/50:-9.78 64/50:0 80/50:2.88 112/50:6.79" realSteps="39.2" micLevels="Tree:0 Ambient:-0.58" micDefault="Tree:127">
     <Switch type="keyswitch"/>
     <Articulation name="Timpani" value="0" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
     <Articulation name="Muted" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno" modifiers="muted"/>

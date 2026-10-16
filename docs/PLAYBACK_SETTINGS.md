@@ -270,8 +270,23 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   reproduces the CSV's harp values within 0.005 dB) as an energy, SSO's harp (`sso_percussion_levels.json`, velocity 64)
   over the same span after the note-on; TU's mp by rule D; to Clark & Luce's scale by the median (M2 + sectionLevel's D)
   over the nine solo winds with their own Clark & Luce instrument (RMS 3.3 dB; -9.81 since iteration 8's directivity): -10.41 dB, about ±4 dB. The timpani
-  were measured the same way (+1.65) but are not applied: TU's D2 series name no markings, so mp's step is unknown by
-  about 7 dB. The percussion section (Iteration 7): SSO's six-player group at mf against the string family lies within
+  measured that way (+1.65) were not applied (TU's D2 series name no markings: mp's step unknown by about 7 dB).
+- The timpani (since 2026-10-15, Iteration 9): the Spheres dataset's Romeo and Juliet (1880 version), every part recorded
+  alone, markings read from the 1881 Bote & G. Bock full score (review page https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj):
+  the timpani's energy per hit at f (11 hits, Allegro giusto) and p (77 hits, the coda), position-corrected by the seats'
+  sweeps, put on Clark & Luce's scale by the eight string lines at mf in the same coda (their Clark & Luce power less their
+  level; RMS 2.3 dB): 98.6 / 75.1 dB re 1 pW s, mp by a third of p -> f; SSO's timpani energy at velocity 64 over keys
+  46 .. 62 (`sso_percussion_levels.json`): **-5.09**, about ±3 dB (scale RMS 2.3, main microphone L only: Zenodo
+  stopped answering; L + C without the celli moved the levels by under 0.5). One recording, one player; TU Berlin's D2
+  series (no markings) rises 20.9 .. 24.7 dB over the same three steps, corroborating the span (`spheres_timpani.py`,
+  `spheres_timpani.json`; a velocity patch: realRange below by CC11).
+- The Grand Piano (since 2026-10-15, Iteration 10): Meyer 2009 § 3.4.2 (two-voice scales, lid open, no pedal: pp 88, ff
+  104 dB), mp at 2 of Meyer's 5 steps, moved to Clark & Luce's scale by the median offset over the instruments both
+  measured (-3.92 dB, RMS 2.50 against 3.87 with no offset); SSO's Grand Piano (Direct) swept on the VM every 6 semitones
+  21 .. 105: **-1.11**, about ±3 dB. Celeste, glockenspiel, xylophone, marimba, vibraphone, crotales, tubular and desk
+  bells (Iteration 11): no source of their level in an orchestra; the University of Iowa's recordings give only their
+  pp / ff extremes (18 .. 39 dB, spread 4 .. 10 dB by pitch), not markings: they play SSO's own level and span.
+- The percussion section (Iteration 7): SSO's six-player group at mf against the string family lies within
   Skålevik 2019's -8 .. -2 dB by energy (-3.6 / -2.0, peak +1.8): no offset.
 - Corroboration (one player against a string player, woodwind / brass, dB): Clark & Luce + directivity +2.6 .. +4.0 /
   +11.3 .. +11.9 (pp .. mf; at ff -1.9 / +8.3); the Spheres dataset's whole sections +1.4 / +14.3 (its claps showed no
@@ -328,14 +343,16 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Cimbassi a2 (trombone) | +14.69 | - | 92.8 |
 | Contrabass Tuba (tuba) | -3.24 | - | 95.1 |
 | Harp | -9.81 | - | - |
+| Timpani (Spheres) | -5.09 | - | 83.0 (energy per hit, dB re 1 pW s) |
+| Grand Piano (Meyer) | -1.11 | - | 87.5 |
 
 The 15 rows from Solo Violin 1 to Contrabass Tuba (since 2026-10-15, docs/BALANCE_LOG.md › Iterations 2 and 4) had no
 section level and played SSO's own level; since Iteration 4 their SSO side is their own sweep, as every other patch's
 (until then the dynamics check at one test pitch + 1.50 dB, ±2.3 dB). In brackets: the family member whose real level
 and span the patch takes (an assumption); "TU ratio": the sibling's Clark & Luce level plus TU Berlin's difference
 (Iteration 5). The harp: Iteration 6 (above). Strings Ensemble has none (which sections sound at a given note isn't
-known), nor do the timpani (Iteration 6: no marking for TU's levels), keyboards and the other percussion (Iteration 7:
-SSO's group already inside Skålevik's range).
+known), nor do the celeste and mallets (Iteration 11: no source) and the other percussion (Iteration 7: SSO's group
+already inside Skålevik's range). Timpani: Iteration 9; Grand Piano: Iteration 10 (above).
 
 Biggest moves from `sectionLevel`: Bassoon Solo -12.5 dB (TU's single notes put it far louder than orchestral players
 play it), Horn Solo -7.1, Violas -3.7; the trumpets barely move.
@@ -457,6 +474,7 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   | trumpet (Trumpet Solo, Trumpets a2, a6, Motif Trumpets a3) | 8.8 | Trumpet 10.6 |
   | trombone (Tenor Trombone Solo, a2, Trombones a6, Motif Trombones a5; Bass Trombone Solo, a2, Contrabass Trombone, Cimbasso Solo, Cimbassi a2: family) | 17.0 | Trombone 14.3 |
   | tuba (Tuba Solo; Contrabass Tuba: family) | 12.5 | |
+  | timpani (Timpani; the Spheres dataset's Romeo and Juliet, f - p 23.5 dB over 3 steps; velocity patch: by CC11, SSO's own velocity curve the longLevel per written pitch) | 39.2 | (is the source) |
 
   *Family* is an assumption, not a measurement ("plays like its family"). The cross-check: the Spheres dataset (Colibrì
   Ensemble, Pescara; arXiv 2511.21247, Zenodo 17347681, CC BY-SA 4.0), each section of a chamber orchestra recorded alone
@@ -470,7 +488,7 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   a2, Contrabass Tuba) with realSteps only (realRange 2; realRange 1 leaves them as SSO plays them). Checked in Kontakt
   (all 43 patches with a real range, each marking at its test pitch as MuseScore sends it): the steps from mp within
   0.05 dB RMS (median) of steps x S / 5, every patch in order except Cor Anglais, whose round robins (4.5 dB apart at pp)
-  exceed its 1.04 dB step. Strings Ensemble, the harp, keyboards and percussion have none.
+  exceed its 1.04 dB step. Strings Ensemble, the harp, keyboards and percussion other than the timpani have none.
 
   At a middle pitch, realDb (dB from mp, the CC11 before the headroom; ppp / pp / p / mp / mf / f / ff / fff;
   `sso_real_range.json` `realDbMid`), Clark & Luce spans against the Meyer rule (rule D for Cor Anglais):
