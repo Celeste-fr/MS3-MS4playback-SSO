@@ -727,14 +727,16 @@ on the test synth), `tst_liveequivalence::liveEvenLevels`.
 ### Mic compensation
 
 Every level above (section balance, real range, calibrated levels, the level rule) was measured at each patch's
-**default mix**: in SSO the Tree mic alone at its full fader. A part's mics can be changed in the Controllers window
-(Mic 1-5: Close, Tree, Ambient, Outrigger, Leader; Mic Mix Distance, which sets Close / Tree / Ambient together) or by
-automation lanes, and that changes how loud the patch is. `[levels] micCompensation` (the owner, 2026-10-15: "mic
+**default mix**: in SSO the Tree mic alone at its full fader. A part's mics can be changed by their automation lanes
+(Mic 1-5: Close, Tree, Ambient, Outrigger, Leader; Mic Mix Distance, which sets Close / Tree / Ambient together; until
+2026-10-15 also the Controllers window, whose values old scores now read as flat lanes), and that changes how loud the
+patch is. `[levels] micCompensation` (the owner, 2026-10-15: "mic
 changes then only affect tone and sense of space, never the balance"; **1 in Recommended and by default, 0 in Library
 default**) makes the change up, so the section stays at its balance whatever mics it plays:
 
 - **The level of a mix** = 10 log10 of the sum over the mics of 10^((micLevel + fader(v)) / 10): micLevel each mic
-  alone at its full fader against the default mix (map `<Instrument micLevels>`), v its fader 0-127: the part's value,
+  alone at its full fader against the default mix (map `<Instrument micLevels>`), v its fader 0-127: the part's setting (a flat lane: one value
+  from the score's start),
   else the patch's default (map `micDefault`, SSO: Tree 127, the others 0). **With Mic Mix Distance set** the plug-in
   plays its mix whatever mic values go with it (measured: sent in one block, as MuseScore sends a part's values, SSO's
   script overrides every mic, Outrigger and Leader included): Close / Tree / Ambient by its law (map `<Mics mix>`),
@@ -743,7 +745,8 @@ default**) makes the change up, so the section stays at its balance whatever mic
   that level; a mix in which no mic sounds stays silent (C 0).
 - **Played** where the section level is: the patches' volumes (`ContextLevel::volumes`, `TrackDelays::patchGain`: the
   hosted slot, the route set's and the plain set's Kontakt track Volume), within the same S' (past Live's Volume top,
-  +6 dB, everything lower together). Fixed values change nothing else, in Live too. **Automated mics**: the volume
+  +6 dB, everything lower together). Fixed values (flat lanes, as the Controllers values were: a migrated score plays the same volumes) change nothing
+  else, in Live too. **Automated mics** (any other lane): the volume
   carries the part's largest C over its note starts (`Volumes::micTop`), each note its own C at its start less that, by
   CC11 (`trackLevel` in rendermidi.cpp: the per-note levels, so Live's clips and the plain set's CC11 lane carry it). A
   note held through a mic change keeps its start's C (Kontakt changes the mic at once, the note's level stays).
@@ -770,12 +773,12 @@ default**) makes the change up, so the section stays at its balance whatever mic
   percussion kits have no mic Controllers, so their mics never change. Any other `with` patch takes its main patch's
   values (`soundlibrary.cpp`: an assumption, the same recording's mics); other patches none (no compensation).
 - **Not covered / untested**: a mic change by staff text (mic Controllers have none). With Mic Mix Distance set, a mic
-  value changed alone later (the Controllers window while playing, a mic lane's point) reaches Kontakt in a block of its
+  value changed alone later (a mic lane's point) reaches Kontakt in a block of its
   own and may play, where the model keeps Mic Mix Distance's mix until playback starts again (only values sent together
   were measured).
 
 Tests: `tst_soundlibrary::levelMicCompensation` (the map's attributes, the laws, the power sum, Mic Mix Distance and a
-set mic, silence, a Controllers value as the volumes within S', a lane by CC11, layers, presets),
+set mic, silence, a migrated Controllers value (a flat lane) as the volumes within S', a lane by CC11, layers, presets),
 `tst_liveequivalence::liveMicCompensation` (a fixed Close and a Tree lane: MuseScore's gain = the route set's and the
 plain set's Kontakt gain, Live's clips' CC11 = MuseScore's, the plain set's CC11 lane).
 
@@ -860,7 +863,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Mixer volume, pan and mute on library slots apply from the next audio block, no glide (the owner, 2026-10-03: no mixer smoothing; the 5 ms glide had no source, `[hosting] mixSmoothingMs` is retired) | at once | `Vst3Synth::process` | — |
 | MS3 hairpin with its own velocity change plays as in 3.6 | on | `ms3HairpinVelocity()` | Preferences (Advanced) `application/playback/ms3HairpinVelocityChange`; `MS4_STRICT` |
 | Library dynamics CC ahead of the notes at its tick; shorts' velocity on the CC1 scale (calibrated levels off, or not measured) | always | `renderMs4Dynamics`, `libVelocity` | map `<Dynamics cc velocity>` |
-| Live controls (Controllers window live, LiveOverrides) | always | `PartControllers::liveChanges` | not a number: no setting |
+| A lane edited while playing: heard at once (flat lanes' parameters on the instances, the rest rendered again) | always | `SoundLibraryHost::applyPartSettings`, `Seq::renderAgainPlaying` | not a number: no setting |
 | Chunks don't end before a slurred or library note (live playback) | always | `libSlurAcross`, `libNoteAfter` | fixed (correctness: an early start can't cross a chunk) |
 | Background loading pauses | 0 ms | `SoundLibraryHost` `INPUT_PAUSE_MS`, `PRELOAD_GAP_MS` | fixed (the owner chose 0) |
 

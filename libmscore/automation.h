@@ -121,6 +121,13 @@ constexpr double PARAM_RESOLUTION = 1e-4;
 std::vector<std::pair<int, double>> timeAxis(Score* score);
 double xAtTick(const std::vector<std::pair<int, double>>& anchors, int tick);
 double barLineX(const Measure* m);
+// the tick at x (the anchors' inverse; between two anchors of one tick, as between a bar line and its bar's first note:
+// that tick)
+int tickAtX(const std::vector<std::pair<int, double>>& anchors, double x);
+// where a lane's point at tick is drawn and hit (the owner, 2026-10-15: "points on automation lane don't always snap to
+// grid correctly"): on a bar's tick the bar line, as the lanes' grid draws it (the measure before in the same system;
+// a system's first bar has none: xAtTick), else xAtTick. The note lanes' stems stay under their notes (xAtTick)
+double pointX(Score* score, const std::vector<std::pair<int, double>>& anchors, int tick);
 
 extern const char* const SOURCE_LIVE;     // "live"
 
@@ -134,6 +141,9 @@ struct Lane {
       int cc() const;                     // "cc<n>": n (0-127); else -1
       // the value at tick: -1 before the first point
       double valueAt(int tick) const;
+      // a flat lane: its first point at the score's start and every point at one value; that value (else -1). A flat lane
+      // on a map controller is the controller's setting (partcontrollers.h): played as the part's value once was
+      double flatValue() const;
       // what to send in [tick1, tick2): the value in force at tick1 (when there is one), then each
       // point, and along a ramp each tick at which the value, counted in steps of resolution (rounded), changes:
       // a MIDI controller gets every one of its 128 values a ramp passes, at the tick it reaches it (the

@@ -45,6 +45,7 @@
 #include <vector>
 #include <QObject>
 #include <QPointF>
+#include <QRectF>
 #include <QString>
 
 #include "automationlanes.h"
@@ -92,6 +93,15 @@ class NoteLanes : public QObject {
       void doubleClick(const Row& r, const QPointF& p);
       void contextMenu(const Row& r, const QPointF& p, const QPoint& globalPos);
       void resetSelected();
+      // Ctrl+D on selected stems (Live's duplicate of a selection): their values onto the notes at the same places right
+      // after them, the span from the first one's chord to the last one's end, rounded out to the lanes' grid (snap off:
+      // as it is); one undo step; then those notes selected. False: none selected
+      bool duplicateSelected();
+      // (tests) the selection, its lane
+      const std::set<const Note*>& selected() const { return _sel; }
+      void select(const QString& target, const std::set<const Note*>& notes) { _selTarget = target; _sel = notes; }
+      // a rubber band as the lanes draw it (the automation lanes' too)
+      static void paintRubber(QPainter& p, const QRectF& band, double px);
       void clearSelection();
       bool fresh() const;                     // rendered now if it may be (not while playing)
 
@@ -123,6 +133,7 @@ class NoteLanes : public QObject {
       Row _row;
       QPointF _pressPos;
       QPointF _last;
+      QRectF _rubber;                         // the rubber band while dragging (canvas, within the row)
       int _range { 100 };                     // the Join lane's ms either way while dragging
       std::map<const Note*, int> _base;       // the dragged stems' values at the press
       std::map<const Note*, int> _work;       // the gesture's values

@@ -156,21 +156,24 @@ QString write(const Score* score)
 //   duplicateNoteValues
 //---------------------------------------------------------
 
-int duplicateNoteValues(Score* score, const Part* part, int start, int end, int limit)
+int duplicateNoteValues(Score* score, const Part* part, int start, int end, int limit,
+                        const std::set<const Note*>* only, std::vector<Note*>* copiedTo)
       {
       const int len = end - start;
       Measure* m = score && part && len > 0 ? score->tick2measure(Fraction::fromTicks(start)) : nullptr;
       if (!m)
             return 0;
       int changed = 0;
-      auto copy = [&changed](const Chord* from, const Chord* to) {
+      auto copy = [&changed, only, copiedTo](const Chord* from, const Chord* to) {
             const std::vector<Note*>& a = from->notes();        // (by pitch, the lowest first)
             const std::vector<Note*>& b = to->notes();
             for (size_t i = 0; i < a.size() && i < b.size(); ++i) {
                   const Note* src = a[i];
                   Note* n = b[i];
-                  if (src->tieBack() || n->tieBack())
+                  if (src->tieBack() || n->tieBack() || (only && !only->count(src)))
                         continue;
+                  if (copiedTo)
+                        copiedTo->push_back(n);
                   bool c = false;
                   auto set = [n, &c](Pid pid, const QVariant& v) {
                         if (n->getProperty(pid) != v) {

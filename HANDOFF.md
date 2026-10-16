@@ -5,6 +5,31 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Controllers only by automation (2026-10-15, branch `automation-only-controllers`, not merged)
+
+The owner, 2026-10-15, showing the Sound Library window and a Live lane's red dashed line: "remove this entirely, we'll
+use automation instead. if something has no automated value yet, I want it to show a dashed line like Ableton does …
+just make it like ableton"; and: move the library's folder box from Mixer › Advanced Options… into the Sound Library
+window, titled with the library's name alone.
+
+- Gone: the Sound Library window's Controllers column and *Controllers…* window (`ControllersWindow`), its live MIDI
+  corrections (`PartControllers::LiveOverrides`, `Seq::libraryControllersChanged`), the metaTag `partControllers` as a
+  source (`libmscore/partcontrollers.h` header: what is left).
+- A **flat lane** (one value from tick 0) is a controller's setting and plays exactly as a Controllers value did (CC with
+  its staff texts, plug-in parameter on the instance and in Create Live Set's Kontakt state, mics by the patch volume);
+  other lanes as automation. Old files: `PartControllers::migrate` at load (read302.cpp), the metaTag dropped on save.
+- Lanes without points: Live's dashed line at the unautomated value (map default, the map's mic defaults, else the
+  setup's own value recorded at its last load here, `parameter values.json`); value on hover and in the header; a click
+  on it adds a point at that value, a drag sets the value from the start; the last point deleted: dashed again.
+- A lane edit is heard at once while playing (parameter settings on the instances, the rest by `renderAgainPlaying`,
+  which ends sounding notes as a seek does).
+- Tested on Linux only (renderer, test synth, `tst_liveequivalence` with migrated scores, pictures from
+  `tst_liveintegration` `MS_LANE_PNG` / `MS_SOUND_LIBRARY_PNG`); Whence's own partControllers (Violin I vibrato 0)
+  migrates to a flat lane with identical dumps and audit. **Untried with Kontakt / SSO and in Live**: the dashed value
+  of a parameter before its patch ever loaded on that computer is unknown (no line, header "–"); Update Live Set keeps
+  Kontakt's state, so a flat lane's new value doesn't reach an updated set (as Controllers values didn't); a Kontakt
+  parameter turned in Live without automation isn't read back.
+
 ## Mic compensation (2026-10-15, branch `mic-compensation`, merged into integrate-1012)
 
 The owner, 2026-10-15 ("sure"): measure each patch through each mic on the VM and compensate, so that changing a part's

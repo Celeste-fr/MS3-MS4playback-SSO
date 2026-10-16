@@ -316,7 +316,7 @@ switch value of each articulation. For example:
     Must be above 0.
   - `micLevels` and `micDefault` on an `Instrument`, `<Mics fader mix>` (top level): with playback setting
     `[levels] micCompensation`, a part whose mic controllers (the plug-in parameters `Mic 1-5 level`, `Mic Mix
-    Distance`: Controllers values or automation lanes) give another mix than the patch's default plays as loud as the
+    Distance`: their automation lanes) give another mix than the patch's default plays as loud as the
     default mix, by its patches' volumes (`libmscore/contextlevel.h` › Mics). `micLevels="Close:dB Tree:dB Ambient:dB
     Outrigger:dB Leader:dB"`: each mic (Mic 1-5) alone at its full fader against the default mix; `micDefault="Tree:127"`:
     the default faders 0-127 (a mic not listed 0); a `with` patch without its own takes its main's. `<Mics
@@ -380,9 +380,12 @@ switch value of each articulation. For example:
   <Controller id="release" name="Release" param="Release"/>
   ```
 
-  *View › Sound Library…* › *Controllers…* sets a part's values. They are kept in the score
-  (as the metaTag `partControllers`, which MuseScore 3.6 keeps) by controller `id`, so a value
-  stays with the part when the library changes.
+  A part's controllers are set by automation lanes only (Continuous View, under the part's header:
+  one lane per controller of its patches, by `id`, so a lane stays with the part when the library
+  changes). A lane without points plays the `default` (else the patch's own value) and is drawn as
+  a dashed line; a lane with one value from the score's start is the controller's setting. Scores
+  saved before 2026-10-15 kept *Controllers…* values in the metaTag `partControllers`: they are
+  read as such lanes.
 
 **The Spitfire UACC values have not been checked against the library.** They come from a
 community articulation bank for Spitfire Symphony Orchestra

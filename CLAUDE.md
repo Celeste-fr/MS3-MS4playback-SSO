@@ -226,14 +226,25 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Long against CC1 16-127, every 3 semitones, Celli and Basses every semitone (VM, 2026-10-11 / 10-14, with each round
   robin's takes): `sso_cc1_curves.json` by `sso_cc1_sweep.py` (the section balance's SSO side and, by `real_range.py`,
   the map's longLevel; not read by MuseScore).
-- Controllers: map `<Controller>`, metaTag `partControllers` (`partcontrollers.*`), live while playing
-  (`ControllersWindow`, `audio/vst3/librarycontrollers.*`). Automation: `libmscore/automation.*`, metaTag
+- Controllers: map `<Controller>`, set **only by automation lanes** (the owner, 2026-10-15: "remove this entirely, we'll
+  use automation instead … just make it like ableton"; the Sound Library window's *Controllers…* and its window are gone).
+  A **flat lane** (`Lane::flatValue`: one value from tick 0) is the controller's setting (`libmscore/partcontrollers.*`):
+  played as the old per-part value was (a CC ahead of the notes with its staff texts, a plug-in parameter set on the
+  instance at each sync and live as the lane is edited, `audio/vst3/librarycontrollers.*`,
+  `SoundLibraryHost::applyPartSettings`; in Create Live Set's Kontakt state; mics by the patch volume); any other lane as
+  automation. Unautomated: the map's default, else the patch's own (`PartControllers::unautomatedValue`: mic defaults
+  from the map, else the setup's value recorded at its last load, `parameter values.json` in the setups folder), drawn
+  as Live's **dashed line**. The old metaTag `partControllers` becomes flat lanes at load (`PartControllers::migrate`,
+  read302.cpp) and is never written. Automation: `libmscore/automation.*`, metaTag
   `automation` (points step / linear, a ramp may carry Live's Bézier control points). Every lane is editable;
   `Lane::playedByLive` (liveHash / pointsHash in its extra) says whether Live's set plays it; an import merges
   (`Automation::merge`, newer edit wins, both changed: a dialog per lane). **Editor**: `mscore/automationlanes.*`
   (Continuous View, a header row under every library part, each folded / open at will, Alt-click all: `mscore/lanefolds.h`,
   per score, the session's, never saved; Live's gestures; header lists them), model
-  `Automation::Edit`, one undo step per gesture (`undoWrite`); a Dynamics lane replaces the notation's CC1 from its
+  `Automation::Edit`, one undo step per gesture (`undoWrite`; heard at once while playing: `Seq::renderAgainPlaying`);
+  an empty lane draws the dashed line (`AutomationLanes::paintEnvelope`), a drag on it sets the value from the start; points
+  on a bar's tick sit on the bar line (`Automation::pointX`; stems stay at `xAtTick`); the Velocity / Join lanes draw their
+  rubber band and Ctrl+D copies the selected stems' values to the notes right after (`NoteLanes::duplicateSelected`); a Dynamics lane replaces the notation's CC1 from its
   first point. **Time selection** (Live's): the score's range selection on a part with a header (whole bars,
   a light band over its rows); Ctrl+D (score or lane focus; MS3 has no Ctrl+D) copies every lane of the part and each
   note's attack / transition / velocity / join to the bars after, one undo step, then selects them
@@ -401,7 +412,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
 
 ## Tests and known state
 
-- `tst_soundlibrary`: 96 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-15: keyShift, levelMicCompensation, playbackPresets with micCompensation; 2026-10-14: levelRealRange and playbackPresets with realRange 2, transitionsEarly, noLevelSpikes, startLead; 2026-10-13: evenAutoSlow (slow slurs skipped; evenAutoSession / evenAutoTestSynth now read even-auto.musicxml, legato-early at 240 bpm), evenAutoWindows (with the measured gaps, early stop, the order), evenAutoSession (the wait at opening: queued windows), evenAutoTestSynth (early stop), transportRestart, renderKitMaxVelocity, evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
+- `tst_soundlibrary`: 95 passed, 3 skipped (counting initTestCase and cleanup; 2026-10-15: controllerSettings replaced liveControllers, liveMidiControllers removed (automation-only-controllers); keyShift, levelMicCompensation, playbackPresets with micCompensation; 2026-10-14: levelRealRange and playbackPresets with realRange 2, transitionsEarly, noLevelSpikes, startLead; 2026-10-13: evenAutoSlow (slow slurs skipped; evenAutoSession / evenAutoTestSynth now read even-auto.musicxml, legato-early at 240 bpm), evenAutoWindows (with the measured gaps, early stop, the order), evenAutoSession (the wait at opening: queued windows), evenAutoTestSynth (early stop), transportRestart, renderKitMaxVelocity, evenLevelsGlide; 2026-10-12: levelRealRange, smoothOnset; 2026-10-11: renderPreflightCalibration, renderPreflightJobCopy, dynamicsCalibrationUserFile, bendGlideSmoothed, bendGlideMeasured, levelSectionBalance, with the shipped map's M; 2026-10-10: levelContext, kontaktTune, tuningLanesLive, kontaktSlots, playStartEarly, slurPerformance; 2026-10-07: the removed settings' tests went, playbackPresets added; 2026-10-08: presets with `[levels] calibrated`; 2026-10-09: onsetLongerThanNote, dynamicsCalibrationPitches);
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 9 passed, 1 skipped (2026-10-14, transitionArrival, with transitionsEarly 1 / 2; 2026-10-13, droppedFindings, leapFindings; 2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
@@ -427,7 +438,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   tool: `MS_DUMP_SCORE`, `MS_DUMP_MAP`, `MS_DUMP_OUT`, `MS_DUMP_SETTINGS`, `MS_DUMP_CHUNKED` renders as
   playback does: 10-measure chunks, `MS_DUMP_LIVE` as Live's clips (plus kontakts.txt, routes.txt and multis.txt: the
   plain set's Kontakt instances and each slot's Tune); every dump writes routemap.txt (route, lane, cents, bend range)
-  and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 63 with init and cleanup (2026-10-12, laneFolds; 2026-10-11, clipsTimingFromLive; 2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
+  and tunings.txt (each note-on's varispeed), with notes.txt's cents to check that no microtone plays in 12-TET). `tst_liveintegration` 67 with init and cleanup (2026-10-15, laneDashedLine, lanePointsOnBarLines, noteLaneRubber, soundLibraryWindow, pictures with `MS_LANE_PNG=<folder>` / `MS_SOUND_LIBRARY_PNG=<file>`; 2026-10-12, laneFolds; 2026-10-11, clipsTimingFromLive; 2026-10-06, laneEvenBeats; 2026-10-05, clipEditDuplicateChunk, clipBandsEditing, MS_CLIP_TURNS_PNG=<file>; links mscoreapp; clipEditBands writes pictures with `MS_CLIPBANDS_PNG=<folder>`, clipTempoArrangement with `MS_CLIP_TEMPO_PNG=<file>`), `tst_keysig` 8, `tst_tuning` 18,
   `tst_phrasemark` 8, `tst_marcatolevel` 14 (`defaultUnchanged`, `controllerPath`: the level settings pinned off since 2026-10-15; `defaultUnchanged`: events regenerated 2026-10-15 for the start lead, 2026-10-06 no Performance patches; 2026-10-08:
   allArticulations, textLevel, calibrated), `tst_performancetechnique` 22 (2026-10-13: evenLevels; 2026-10-12: slurTransitions, onPerformancePatch, ownTechnique, duplicateNoteValues, duplicateAutomation (Ctrl+D over a time selection); 2026-10-11: avoidBadSamples; 2026-10-10: Auto techniques, overrides, joins on
   rendered events, file round trip, undo; own velocity / join, the trace, the lanes' model `lanes`), `tst_tempochange` 4, `tst_playability` 20 passed (2026-10-04, microThreshold; `speed` skipped without

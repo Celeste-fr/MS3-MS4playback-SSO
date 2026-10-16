@@ -116,7 +116,7 @@ exports, known bugs); strings, winds and brass through Kontakt are untried.
 Agents can reach a Windows VM of the owner's with Kontakt 8 and SSO (access in the agents' own notes, not
 here). What was learned there about checking playback:
 - The render must be what the owner hears. Two of MuseScore's renders of the same score differed: the first
-  after loading (the patch's KSP script not yet initialised, the score's Controllers… lost when it did) and
+  after loading (the patch's KSP script not yet initialised, the score's controller settings lost when it did) and
   every later one (the mics on, several voices per note, 31-40 notes dropped at the patch's 256-voice limit).
   An export right after opening a score, and this tool's render, were the first kind and missed the bug; the
   owner exports after playing. Both are one kind now (`Vst3Plugin::settle`, docs/HISTORY.md › A patch's own script, and its voice limit).

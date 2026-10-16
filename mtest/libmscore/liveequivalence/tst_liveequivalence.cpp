@@ -20,6 +20,9 @@
 #include <set>
 #include <tuple>
 #include <QtTest/QtTest>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
 #include <QXmlStreamReader>
@@ -73,6 +76,28 @@
 #define DIR QString("libmscore/soundlibrary/")
 
 using namespace Ms;
+
+//---------------------------------------------------------
+//   a score's Controllers values as files until 2026-10-15 kept them (the metaTag partControllers), read as MuseScore
+//   reads such a file now: as flat automation lanes (PartControllers::migrate). values: by part, controller id -> 0-127.
+//   The tests below kept their expectations: a migrated score plays and exports as the Controllers values did
+//---------------------------------------------------------
+
+static void legacyControllers(MasterScore* score, const std::map<const Part*, std::map<QString, int>>& values)
+      {
+      QJsonArray list;
+      for (int i = 0; i < score->parts().size(); ++i) {
+            auto it = values.find(score->parts()[i]);
+            if (it == values.end())
+                  continue;
+            QJsonObject vals;
+            for (const auto& v : it->second)
+                  vals[v.first] = v.second;
+            list.append(QJsonObject { { "part", i }, { "name", score->parts()[i]->partName() }, { "values", vals } });
+            }
+      score->setMetaTag(PartControllers::metaTag, QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact)));
+      PartControllers::migrate(score);
+      }
 
 class TestLiveEquivalence : public QObject, public MTest
       {
@@ -285,9 +310,8 @@ void TestLiveEquivalence::liveSetControllersAndMix()
       score->rebuildMidiMapping();
       QVERIFY(!score->parts().empty());
       Part* violin = score->parts().front();
-      std::map<const Part*, PartControllers::Values> values;
-      values[violin] = { { "tone", 26 }, { "vibrato", 90 } };
-      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      legacyControllers(score, { { violin, { { "tone", 26 }, { "vibrato", 90 } } } });
+      QVERIFY(score->metaTag(PartControllers::metaTag).isEmpty());
       setPartMix(violin, 80, 32);
 
       LiveIntegration::LiveSetPlan plan;
@@ -392,8 +416,7 @@ void TestLiveEquivalence::liveSetControllersAndMix()
       }
 
       // without Controllers: the setup byte for byte, no parameters in Live's panel; muted: the Track Activator off
-      values.clear();
-      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      score->setMetaTag(Automation::metaTag, "");
       setPartMix(violin, 100, 64, true);
       LiveIntegration::LiveSetPlan plain2;
       QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::ROUTES, &plain2, &error), qPrintable(error));
@@ -410,8 +433,7 @@ void TestLiveEquivalence::liveSetControllersAndMix()
       QCOMPARE(m2[0].pan, 0.0);
 
       // the plain set (Create Live Set): the plug-in on the Kontakt track only, with the part's Controllers; no device
-      values[violin] = { { "tone", 26 } };
-      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      legacyControllers(score, { { violin, { { "tone", 26 } } } });
       LiveIntegration::LiveSetPlan p3;
       QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::PLAIN, &p3, &error), qPrintable(error));
       QVERIFY(!p3.spec.link.valid());
@@ -723,9 +745,7 @@ void TestLiveEquivalence::liveEquivalence()
       QVERIFY(score);
       score->rebuildMidiMapping();
       Part* violin = score->parts().front();
-      std::map<const Part*, PartControllers::Values> values;
-      values[violin] = { { "tone", 26 }, { "vibrato", 90 } };
-      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      legacyControllers(score, { { violin, { { "tone", 26 }, { "vibrato", 90 } } } });
       setPartMix(violin, 80, 32);
       LiveEquivalence::Options o;
       o.thresholds.roundRobins = false;
@@ -772,9 +792,7 @@ void TestLiveEquivalence::liveEquivalenceLegato()
       MasterScore* score = readScore(DIR + "legato-early.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
-      std::map<const Part*, PartControllers::Values> values;
-      values[score->parts().front()] = { { "tone", 90 } };
-      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      legacyControllers(score, { { score->parts().front(), { { "tone", 90 } } } });
       LiveEquivalence::Options o;
       o.thresholds.roundRobins = false;
       const LiveEquivalence::Result r = LiveEquivalence::compare(score, *host.lib, o);
@@ -3484,15 +3502,14 @@ void TestLiveEquivalence::liveMicCompensation()
       QVERIFY(score);
       score->rebuildMidiMapping();
       const Part* part = score->parts()[0];
-      std::map<const Part*, PartControllers::Values> values;
-      values[part] = { { "mic1", 127 } };
-      score->setMetaTag(PartControllers::metaTag, PartControllers::write(score, values));
+      legacyControllers(score, { { part, { { "mic1", 127 } } } });     // (a setting: by the patch volume)
       Automation::Lane lane;
       lane.target = "mic2";
       lane.points.push_back({ 0, 1.0, Automation::Curve::STEP });
       lane.points.push_back({ 3840, 64 / 127.0, Automation::Curve::STEP });
-      std::map<const Part*, Automation::PartLanes> lanes;
-      lanes[part] = { lane };
+      std::map<const Part*, Automation::PartLanes> lanes = Automation::read(score);
+      QCOMPARE(int(lanes[part].size()), 1);
+      lanes[part].push_back(lane);
       score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
       const double before = -10 * std::log10(1 + std::pow(10.0, -0.3));
       const double after = -10 * std::log10(std::pow(10.0, -0.3) + std::pow(10.0, -1.3));

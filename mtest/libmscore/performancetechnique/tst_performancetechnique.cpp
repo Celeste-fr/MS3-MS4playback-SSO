@@ -8,6 +8,7 @@
 //  the file LICENCE.GPL
 //=============================================================================
 
+#include <set>
 #include <QtTest/QtTest>
 #include "audio/midi/event.h"
 #include "mtest/testutils.h"
@@ -968,6 +969,32 @@ void TestPerformanceTechnique::duplicateNoteValues()
       QVERIFY(Automation::duplicateTimeSelection(s, part, 3840, 7680) == std::make_pair(7680, 9600));
       QVERIFY(Automation::duplicateTimeSelection(s, part, 7680, 9600) == std::make_pair(-1, -1));
       QCOMPARE(s->nmeasures(), measures);
+
+      // selected notes only (the Velocity and Join lanes' Ctrl+D on stems, NoteLanes::duplicateSelected): bar 1's
+      // first note and the lower note at 480 onto bar 2's, the others there as they were; the notes found returned
+      s->startCmd();
+      at(s, 0)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 101);
+      at(s, 960)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 102);
+      at(s, 480, 1)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 103);
+      at(s, 480, 0)->undoChangeProperty(Pid::LIBRARY_JOIN, 31);
+      at(s, 1920)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 1);
+      at(s, 2880)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 2);
+      at(s, 2400, 1)->undoChangeProperty(Pid::LIBRARY_VELOCITY, 3);
+      s->endCmd();
+      const std::set<const Note*> only { at(s, 0), at(s, 480, 0) };
+      std::vector<Note*> to;
+      s->startCmd();
+      PerformanceTechnique::duplicateNoteValues(s, part, 0, 1920, s->endTick().ticks(), &only, &to);
+      s->endCmd();
+      QCOMPARE(int(to.size()), 2);
+      QVERIFY(std::find(to.begin(), to.end(), at(s, 1920)) != to.end());
+      QVERIFY(std::find(to.begin(), to.end(), at(s, 2400, 0)) != to.end());
+      QCOMPARE(at(s, 1920)->libraryVelocity(), 101);
+      QCOMPARE(at(s, 2400, 0)->libraryJoin(), 31);
+      QCOMPARE(at(s, 2880)->libraryVelocity(), 2);                              // (not selected)
+      QCOMPARE(at(s, 2400, 1)->libraryVelocity(), 3);
+      s->undoRedo(true, 0);                                                      // (one undo step)
+      QCOMPARE(at(s, 1920)->libraryVelocity(), 1);
       delete s;
       }
 

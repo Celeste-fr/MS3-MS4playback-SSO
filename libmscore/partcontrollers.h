@@ -12,91 +12,79 @@
 #define __PARTCONTROLLERS_H__
 
 //---------------------------------------------------------
-//   A part's values for the sound library's controllers (SoundLib::Controller: vibrato,
-//   release … a MIDI controller or a plug-in parameter, 0-127), over the map's defaults.
+//   A part's settings of the sound library's controllers (SoundLib::Controller: vibrato, release, Mic 1-5 … a MIDI
+//   controller or a plug-in parameter, 0-127), from its automation lanes only (the owner, 2026-10-15: "remove this
+//   entirely, we'll use automation instead … in summary just make it like ableton").
 //
-//   Kept in the score as the metaTag "partControllers" (MuseScore 3.6 keeps metaTags through a
-//   round trip, as for partPlayback), JSON:
-//     [{"part": index, "name": part name, "values": {"<controller id>": 0-127, …}}]
-//   A part is found as partplayback.h finds it. Keyed by controller id, not by library: a
-//   value stays with the part when the library changes, and applies to any library whose
-//   map has a controller of that id. Parts of an excerpt follow their master score's part.
+//   A controller without a lane (or with an empty one) plays the patch as the library ships it: the map's <Controller
+//   default>, else the patch's own (its setup's value: Kontakt setups keep the library's defaults). The lane editor draws
+//   that value as Live draws an unautomated parameter, a dashed line (unautomatedValue). A flat lane (Lane::flatValue:
+//   one value from the score's start) is the controller's setting: played as a part's Controllers value was until
+//   2026-10-15, so a migrated score sounds and exports as before: a MIDI controller's value ahead of the notes at each
+//   chunk with its staff texts over it (rendermidi, LibPart::controllers), a plug-in parameter set on the instance at
+//   each sync (LibraryControllers) and in the Kontakt state Create Live Set writes, mics compensated by the patch
+//   volume (contextlevel.h › Mics). Any other lane plays as automation (automation.h).
+//
+//   Until 2026-10-15 the values were set in View › Sound Library… › Controllers… and kept in the metaTag
+//   "partControllers" ([{"part": index, "name": part name, "values": {"<controller id>": 0-127, …}}]). migrate()
+//   turns them into flat lanes at load (a step point at tick 0 at value / 127) and drops the metaTag; a controller
+//   whose lane already has points keeps its lane as it is (the lane played over the value: a MIDI controller's lane took
+//   its place from the start; only a plug-in parameter's lane starting after the score's start left the value set on
+//   the instance before its first point, and from the second play on the lane's last value: not kept). Every value
+//   makes its lane (one at the map's default plays as no lane does; SSO's controllers have no default). MuseScore 3.6
+//   keeps both metaTags as they are, so a file round-trips.
 //---------------------------------------------------------
 
-#include <bitset>
+#include <functional>
 #include <map>
 #include <vector>
 #include <QString>
+
+#include "automation.h"
 
 namespace Ms {
 
 class MasterScore;
 class Part;
-class Score;
 
-namespace SoundLib { struct Controller; struct Route; }
+namespace SoundLib { struct Controller; struct LibInstrument; }
 
 namespace PartControllers {
 
-extern const char* const metaTag;
+extern const char* const metaTag;       // "partControllers": read by migrate() only, never written
 
-using Values = std::map<QString, int>;          // controller id -> 0-127
+// the old metaTag's values as flat lanes of the score's "automation" (no undo step: at load); true: the score changed
+bool migrate(MasterScore* score);
 
-// the parts of the master score with values of their own
-std::map<const Part*, Values> read(const MasterScore* score);
-// the metaTag's value (empty: none)
-QString write(const MasterScore* score, const std::map<const Part*, Values>& values);
+// the part's lane of a map controller (by its id, or "cc<n>" for its MIDI controller; null: none with points)
+const Automation::Lane* laneOf(const Automation::PartLanes& lanes, const SoundLib::Controller& controller);
+// the part's flat lane of the controller (null: none, or its lane is not flat)
+const Automation::Lane* flatLane(const Automation::PartLanes& lanes, const SoundLib::Controller& controller);
 
-// the value the part plays the controller at: its own, else the map's default (-1: none, the
-// patch's own value stays)
-int value(const Part* part, const SoundLib::Controller& controller, const std::map<const Part*, Values>& values);
+// a lane value (0-1) on the controller's 0-127 scale; within the lanes' storage precision (1e-4) of a whole step (a
+// migrated value: v / 127 kept to 1e-4) that step exactly
+double toScale(double laneValue);
+
+// the setting the part plays the controller at, 0-127: its flat lane's, else the map's default (-1: none, the patch's
+// own value stays). A MIDI controller sends it rounded
+double value(const Part* part, const SoundLib::Controller& controller,
+             const std::map<const Part*, Automation::PartLanes>& lanes);
 
 // the value a MIDI controller plays at tick, as the renderer sends it: the last staff text's at or
 // before tick (SoundLib::controllerTexts), else the part's (-1: none). fromText: a staff text's
 int valueAt(int partValue, const std::map<int, int>& texts, int tick, bool* fromText = nullptr);
 
 //---------------------------------------------------------
-//   Live changes (the Controllers window, during playback)
-//    A part's MIDI controllers changed from before to after, on each of its routes (its patch,
-//    extras, copies for other tunings: the renderer sends the main patch's controllers to all of
-//    them). A controller an automation lane plays is left out (the lane has it)
+//   unautomatedValue
+//    what an unautomated controller plays at, 0-1 (Live's dashed line): the map's default; else, for the patch's mics
+//    (Mic 1-5 level), the map's measured default faders (micDefault); else the patch's own value as its setup holds it,
+//    from the hook (SoundLibraryHost records each parameter's value as a setup loads); -1: not known (the patch never
+//    loaded on this computer)
 //---------------------------------------------------------
 
-struct LiveCc {
-      int port { 0 };
-      int channel { 0 };            // the route
-      int cc { -1 };
-      int from { -1 };              // the part's value before: what events rendered earlier carry (-1: none)
-      int to { -1 };                // now (-1: none, the patch's own)
-      bool send { false };          // to send now: to >= 0 and no staff text in force at the tick
-      };
-
-std::vector<LiveCc> liveChanges(Score* score, const std::vector<SoundLib::Route>& routes, const Part* part,
-                                const Values& before, const Values& after, int tick);
-
-//---------------------------------------------------------
-//   LiveOverrides
-//    the sequencer's (audio thread's) correction of events rendered before a live change: the
-//    events already rendered ahead (about 10 measures) still carry the old part value at each
-//    chunk's start, and would put the old value back. An event of a route's MIDI controller whose
-//    value is one the part had before (from) plays the live value (to; -1: dropped). Cleared when
-//    the score is rendered again from its values (the next start after a change). A staff text's
-//    value equal to an old part value is corrected too (rare, and only until playback restarts)
-//---------------------------------------------------------
-
-class LiveOverrides {
-      struct Override {
-            std::bitset<128> from;
-            int to { -1 };
-            };
-      std::map<int, Override> _overrides;       // (port * 16 + channel) * 128 + cc
-
-   public:
-      void set(int route, int cc, int from, int to);    // route: port * 16 + channel
-      void clear()                  { _overrides.clear(); }
-      bool empty() const            { return _overrides.empty(); }
-      int apply(int route, int cc, int value) const;     // the value to play; -1: drop the event
-      };
+double unautomatedValue(const SoundLib::LibInstrument& patch, const SoundLib::Controller& controller);
+// the hook: (patch, plug-in parameter title) -> 0-1, -1 unknown
+void setSetupValues(std::function<double(const QString& patch, const QString& param)> lookup);
 
 }     // namespace PartControllers
 }     // namespace Ms
