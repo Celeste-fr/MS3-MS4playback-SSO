@@ -274,15 +274,16 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   over the same span after the note-on; TU's mp by rule D; to Clark & Luce's scale by the median (M2 + sectionLevel's D)
   over the nine solo winds with their own Clark & Luce instrument (RMS 3.3 dB; -9.81 since iteration 8's directivity): -10.41 dB, about ±4 dB. The timpani
   measured that way (+1.65) were not applied (TU's D2 series name no markings: mp's step unknown by about 7 dB).
-- The timpani (since 2026-10-15, Iteration 10): the Spheres dataset's Romeo and Juliet (1880 version), every part recorded
-  alone, markings read from the 1881 Bote & G. Bock full score (review page https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj):
-  the timpani's energy per hit at f (11 hits, Allegro giusto) and p (77 hits, the coda), position-corrected by the seats'
-  sweeps, put on Clark & Luce's scale by the eight string lines at mf in the same coda (their Clark & Luce power less their
-  level; RMS 2.3 dB): 98.6 / 75.1 dB re 1 pW s, mp by a third of p -> f; SSO's timpani energy at velocity 64 over keys
-  46 .. 62 (`sso_percussion_levels.json`): **-5.09**, about ±3 dB (scale RMS 2.3, main microphone L only: Zenodo
-  stopped answering; L + C without the celli moved the levels by under 0.5). One recording, one player; TU Berlin's D2
-  series (no markings) rises 20.9 .. 24.7 dB over the same three steps, corroborating the span (`spheres_timpani.py`,
-  `spheres_timpani.json`; a velocity patch: realRange below by CC11).
+- The timpani (since 2026-10-15, Iterations 10 and 14): the Spheres dataset's Romeo and Juliet (1880 version), every part
+  recorded alone, markings read from the 1881 Bote & G. Bock full score (review page
+  https://claude.ai/artifact/R2bYpawLeH8MU2585HRoXj, checked by the owner: four readings corrected, Iteration 14):
+  the timpani's energy per hit at f (11 hits, Allegro giusto) and p (145 hits, the coda: a sixteenth triplet and an eighth
+  on every beat), position-corrected by the seats' sweeps, put on Clark & Luce's scale by the eight string lines at mf in
+  the same coda (their Clark & Luce power less their level; RMS 2.3 dB): 98.6 / 72.4 dB re 1 pW s, mp by a third of
+  p -> f; SSO's timpani energy at velocity 64 over keys 46 .. 62 (`sso_percussion_levels.json`): **-6.92**, about ±3 dB
+  (scale RMS 2.3, main microphone L only: Zenodo stopped answering; L + C without the celli moved the levels by under
+  0.5). One recording, one player; TU Berlin's D2 series (no markings) rises 20.9 .. 24.7 dB over the same three steps
+  against the Spheres' 26.3 (`spheres_timpani.py`, `spheres_timpani.json`; a velocity patch: realRange below by CC11).
 - The Grand Piano (since 2026-10-15, Iteration 11): Meyer 2009 § 3.4.2 (two-voice scales, lid open, no pedal: pp 88, ff
   104 dB), mp at 2 of Meyer's 5 steps, moved to Clark & Luce's scale by the median offset over the instruments both
   measured (-3.92 dB, RMS 2.50 against 3.87 with no offset); SSO's Grand Piano (Direct) swept on the VM every 6 semitones
@@ -347,7 +348,7 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Contrabass Tuba (tuba) | -3.24 | - | 95.1 |
 | Harp | -9.81 | - | - |
 | Strings Ensemble (the sections it mixes) | +11.93 | - | - |
-| Timpani (Spheres) | -5.09 | - | 83.0 (energy per hit, dB re 1 pW s) |
+| Timpani (Spheres) | -6.92 | - | 81.1 (energy per hit, dB re 1 pW s) |
 | Grand Piano (Meyer) | -1.11 | - | 87.5 |
 
 The 15 rows from Solo Violin 1 to Contrabass Tuba (since 2026-10-15, docs/BALANCE_LOG.md › Iterations 2 and 4) had no
@@ -363,7 +364,7 @@ Long + `sectionLevel2` + how far faded), +11.93 the mean over keys 24 .. 96 (SD 
 bottom +7.3 .. +10.4, so with one offset it plays 2 .. 4 dB over the balanced sections there, the middle +13 .. +15; the
 sections' own uncertainty carries over). Before: SSO's own level, about 12 dB under the balanced sections. The celeste and
 mallets have none (Iteration 12: no source), nor the other percussion (Iteration 7: SSO's group already inside
-Skålevik's range). Timpani: Iteration 10; Grand Piano: Iteration 11 (above).
+Skålevik's range). Timpani: Iterations 10 and 14; Grand Piano: Iteration 11 (above).
 
 Biggest moves from `sectionLevel`: Bassoon Solo -12.5 dB (TU's single notes put it far louder than orchestral players
 play it), Horn Solo -7.1, Violas -3.7; the trumpets barely move.
@@ -485,7 +486,7 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   | trumpet (Trumpet Solo, Trumpets a2, a6, Motif Trumpets a3) | 8.8 | Trumpet 10.6 |
   | trombone (Tenor Trombone Solo, a2, Trombones a6, Motif Trombones a5; Bass Trombone Solo, a2, Contrabass Trombone, Cimbasso Solo, Cimbassi a2: family) | 17.0 | Trombone 14.3 |
   | tuba (Tuba Solo; Contrabass Tuba: family) | 12.5 | |
-  | timpani (Timpani; the Spheres dataset's Romeo and Juliet, f - p 23.5 dB over 3 steps; velocity patch: by CC11, SSO's own velocity curve the longLevel per written pitch) | 39.2 | (is the source) |
+  | timpani (Timpani; the Spheres dataset's Romeo and Juliet, f - p 26.3 dB over 3 steps; velocity patch: by CC11, SSO's own velocity curve the longLevel per written pitch) | 43.8 | (is the source) |
 
   *Family* is an assumption, not a measurement ("plays like its family"). The cross-check: the Spheres dataset (Colibrì
   Ensemble, Pescara; arXiv 2511.21247, Zenodo 17347681, CC BY-SA 4.0), each section of a chamber orchestra recorded alone

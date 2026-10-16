@@ -2844,8 +2844,9 @@ void TestSoundLibrary::levelSectionBalance()
                  { "Contrabass Trombone", -1.88 }, { "Cimbasso Solo", 4.74 }, { "Cimbassi a2", 14.69 },
                  { "Contrabass Tuba", -3.24 }, { "Harp", -9.81 }, { "Strings Ensemble", 11.93 },
                  // (2026-10-15, docs/BALANCE_LOG.md › Iterations 10 and 11: the timpani from the Spheres dataset's Romeo and
-                 // Juliet at its written p and f, the grand piano from Meyer 2009's in-play levels)
-                 { "Timpani", -5.09 }, { "Grand Piano", -1.11 } };
+                 // Juliet at its written p and f, the hit counts as the owner corrected them (Iteration 14); the grand
+                 // piano from Meyer 2009's in-play levels)
+                 { "Timpani", -6.92 }, { "Grand Piano", -1.11 } };
       QCOMPARE(int(M2.size()), 47);
       for (const SoundLib::LibInstrument& li : sso->instruments) {
             const QString section = li.with.isEmpty() ? li.name : li.with;
@@ -3400,7 +3401,7 @@ void TestSoundLibrary::levelRealRange()
             { "Tuba Solo", 12.5 }, { "Solo Violin 1", 13.8 }, { "Solo Viola", 15.9 }, { "Solo Cello", 14.1 },
             { "Motif Horns a4", 17.7 }, { "Motif Trumpets a3", 8.8 }, { "Motif Trombones a5", 17.0 }, { "Piccolo", 7.5 },
             { "Bass Flute", 7.5 }, { "Contrabass Clarinet", 8.3 }, { "Cimbassi a2", 17.0 }, { "Contrabass Tuba", 12.5 },
-            { "Timpani", 39.2 } };
+            { "Timpani", 43.8 } };
       int with = 0;
       QStringList mains;
       for (const SoundLib::LibInstrument& li : sso->instruments) {
@@ -3442,13 +3443,13 @@ void TestSoundLibrary::levelRealRange()
                   const double lo = ContextLevel::realRangeDb(li, 16, 64), hi = ContextLevel::realRangeDb(li, 127, 64);
                   QVERIFY2(std::fabs(lo + 6.75) < 0.006 && std::fabs(hi - 4.91) < 0.006, qPrintable(QString("%1 %2").arg(lo).arg(hi)));
                   }
-      // the timpani at a written B2 (47, key 59: keyShift): S 39.2, 7.84 dB a step; its hit's energy at velocity 48 / 96
-      // against 64, -3.53 / +3.23 (linear between the measured 32 / 64 and 80 / 112): p (one step under mp) -7.84 + 3.53,
-      // f (two over) 15.68 - 3.23
+      // the timpani at a written B2 (47, key 59: keyShift): S 43.8, 8.76 dB a step (BALANCE_LOG Iteration 14); its hit's
+      // energy at velocity 48 / 96 against 64, -3.53 / +3.23 (linear between the measured 32 / 64 and 80 / 112): p (one
+      // step under mp) -8.76 + 3.53, f (two over) 17.52 - 3.23
       for (const SoundLib::LibInstrument& li : sso->instruments)
             if (li.name == "Timpani") {
                   const double p = ContextLevel::realRangeDb(li, 48, 47, true), f = ContextLevel::realRangeDb(li, 96, 47, true);
-                  QVERIFY2(std::fabs(p + 4.31) < 0.006 && std::fabs(f - 12.45) < 0.006, qPrintable(QString("%1 %2").arg(p).arg(f)));
+                  QVERIFY2(std::fabs(p + 5.23) < 0.006 && std::fabs(f - 14.29) < 0.006, qPrintable(QString("%1 %2").arg(p).arg(f)));
                   QCOMPARE(ContextLevel::realRangeDb(li, 96, 47), 0.0);            // (realRange 1: no database span)
                   }
       }
