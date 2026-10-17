@@ -17,7 +17,8 @@
 //  route (a note joined to the one before: a transition), three notes or more, of the chosen parts and bars (a passage
 //  reaching into them taken whole; a passage with a note played twice, a repeat or an ornament, left out); each chosen
 //  part alone rendered through the hosted plug-ins (PlaybackVerifier::renderPasses: the span of its passages, PASSES
-//  times in a row, the export's mix), each note's level measured (the perceived envelope's mean over its window, the
+//  times in a row, the export's mix; only that part's instances loaded, the part before's released first: all of them
+//  at once ran the Windows VM out of memory, 2026-10-16), each note's level measured (the perceived envelope's mean over its window, the
 //  median of the passes), the glide fitted to the envelope (EvenLevels::fitGlide; nodes halfway from each note-on to the
 //  next, nodeTime) and divided by CC11_FACTOR; rendered and measured again with the values ([levels] evenLevels on);
 //  every passage fitted once more from that measurement (the change scaled by the measured / predicted change of the

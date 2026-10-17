@@ -26,6 +26,7 @@ add_library(vst3host STATIC
       vst3synth.cpp
       evenmeasure.cpp
       evenmeasure.h
+      wavwriter.h
       vst3synth.h
       )
 target_include_directories(vst3host PRIVATE

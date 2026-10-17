@@ -58,6 +58,7 @@
 #include "soundlibraryhost.h"
 #include "soundlibrarycheck.h"
 #include "thirdparty/qzip/qzipwriter_p.h"
+#include "audio/vst3/wavwriter.h"
 
 #ifdef USE_VST3
 #include "audio/vst3/playbackverify.h"
@@ -201,69 +202,6 @@ struct Render {
       double seconds { 0 };         // how long it took
       };
 
-class WavWriter {
-      QFile _file;
-      int _channels;
-      int _rate;
-      bool _float;
-      qint64 _frames { 0 };
-
-      void header()
-            {
-            const quint32 bytes = quint32(_frames * _channels * (_float ? 4 : 2));
-            auto u32 = [this](quint32 v) { char b[4] = { char(v), char(v >> 8), char(v >> 16), char(v >> 24) }; _file.write(b, 4); };
-            auto u16 = [this](quint16 v) { char b[2] = { char(v), char(v >> 8) }; _file.write(b, 2); };
-            _file.seek(0);
-            _file.write("RIFF", 4);
-            u32(36 + bytes);
-            _file.write("WAVEfmt ", 8);
-            u32(16);
-            u16(_float ? 3 : 1);
-            u16(quint16(_channels));
-            u32(quint32(_rate));
-            u32(quint32(_rate * _channels * (_float ? 4 : 2)));
-            u16(quint16(_channels * (_float ? 4 : 2)));
-            u16(_float ? 32 : 16);
-            _file.write("data", 4);
-            u32(bytes);
-            }
-
-   public:
-      WavWriter(const QString& path, int channels, int rate, bool isFloat)
-         : _file(path), _channels(channels), _rate(rate), _float(isFloat)
-            {
-            if (_file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-                  header();
-            }
-      ~WavWriter() { close(); }
-      bool ok() const { return _file.isOpen(); }
-      void write(const float* x, qint64 frames, float gain = 1.f)
-            {
-            if (!_file.isOpen())
-                  return;
-            if (_float) {
-                  std::vector<float> b(x, x + frames * _channels);
-                  for (float& v : b)
-                        v *= gain;
-                  _file.write(reinterpret_cast<const char*>(b.data()), qint64(b.size() * 4));
-                  }
-            else {
-                  std::vector<qint16> b(size_t(frames * _channels));
-                  for (size_t i = 0; i < b.size(); ++i)
-                        b[i] = qint16(std::lround(qBound(-1.f, x[i] * gain, 1.f) * 32767));
-                  _file.write(reinterpret_cast<const char*>(b.data()), qint64(b.size() * 2));
-                  }
-            _frames += frames;
-            }
-      void close()
-            {
-            if (!_file.isOpen())
-                  return;
-            header();
-            _file.close();
-            }
-      };
-
 static MasterSynthesizer* makeSynth(MasterScore* score, int rate, const SynthesizerState& state)
       {
       MasterSynthesizer* synth = synthesizerFactory();
@@ -275,8 +213,26 @@ static MasterSynthesizer* makeSynth(MasterScore* score, int rate, const Synthesi
       return synth;
       }
 
+// a second of stereo audio from chunkStart (frames): what went over full scale, joined to out's findings
+static void addClips(Render* out, const std::vector<float>& chunk, qint64 chunkStart, int rate)
+      {
+      double p = -200;
+      std::vector<PV::Finding> c = PV::clipping(chunk.data(), chunk.size() / 2, 2, rate, &p);
+      for (PV::Finding& f : c) {
+            f.time = f.audioTime = f.time + double(chunkStart) / rate;
+            if (!out->clips.empty() && f.time - (out->clips.back().time + out->clips.back().length) < 0.01) {
+                  out->clips.back().length = f.time + f.length - out->clips.back().time;
+                  out->clips.back().value = std::max(out->clips.back().value, f.value);
+                  }
+            else
+                  out->clips.push_back(f);
+            }
+      }
+
+// stereo: also the render itself (interleaved), for the mix of renders made one part at a time (mixOf)
 static Render render(MasterScore* score, const EventMap& events, int rate, const SynthesizerState& state,
-                     std::shared_ptr<Vst3Synth> vst, std::function<bool(const NPlayEvent&)> keep, const QString& wav = QString())
+                     std::shared_ptr<Vst3Synth> vst, std::function<bool(const NPlayEvent&)> keep, const QString& wav = QString(),
+                     std::vector<float>* stereo = nullptr)
       {
       Render out;
       QElapsedTimer clock;
@@ -322,17 +278,7 @@ static Render render(MasterScore* score, const EventMap& events, int rate, const
       double peak = 0;
       qint64 playTime = 0;
       auto flushChunk = [&]() {
-            double p = -200;
-            std::vector<PV::Finding> c = PV::clipping(chunk.data(), chunk.size() / 2, 2, rate, &p);
-            for (PV::Finding& f : c) {
-                  f.time = f.audioTime = f.time + double(chunkStart) / rate;
-                  if (!out.clips.empty() && f.time - (out.clips.back().time + out.clips.back().length) < 0.01) {
-                        out.clips.back().length = f.time + f.length - out.clips.back().time;
-                        out.clips.back().value = std::max(out.clips.back().value, f.value);
-                        }
-                  else
-                        out.clips.push_back(f);
-                  }
+            addClips(&out, chunk, chunkStart, rate);
             chunkStart += qint64(chunk.size() / 2);
             chunk.clear();
             };
@@ -379,6 +325,8 @@ static Render render(MasterScore* score, const EventMap& events, int rate, const
             for (unsigned i = 0; i < FRAMES; ++i)
                   out.mono.push_back(0.5f * (buffer[2 * i] + buffer[2 * i + 1]));
             chunk.insert(chunk.end(), buffer, buffer + FRAMES * 2);
+            if (stereo)
+                  stereo->insert(stereo->end(), buffer, buffer + FRAMES * 2);
             if (chunk.size() >= size_t(2 * rate))
                   flushChunk();
             if (writer)
@@ -397,6 +345,43 @@ static Render render(MasterScore* score, const EventMap& events, int rate, const
       if (library)
             library->finish();
       out.seconds = clock.elapsed() / 1000.0;
+      return out;
+      }
+
+//---------------------------------------------------------
+//   mixOf
+//    renders made one at a time (each library part alone with only its instances loaded, the built-in parts) added up:
+//    the score's mix as one render of everything plays it (the instances are separate plug-ins, the built-in synth plays
+//    apart from them), its clipping, peak and WAV as render's. Every part's instances at once needed more memory than
+//    the Windows VM's 16 GB on the passages' score (2026-10-16: 18 GB committed, the run crashed late)
+//---------------------------------------------------------
+
+static Render mixOf(const std::vector<std::vector<float>>& stereos, int rate, const QString& wav)
+      {
+      Render out;
+      size_t n = 0;
+      for (const std::vector<float>& s : stereos)
+            n = std::max(n, s.size());
+      std::vector<float> mix(n, 0.f);
+      for (const std::vector<float>& s : stereos)
+            for (size_t i = 0; i < s.size(); ++i)
+                  mix[i] += s[i];
+      double peak = 0;
+      for (float x : mix)
+            peak = std::max(peak, double(std::fabs(x)));
+      out.peakDb = peak > 0 ? 20 * std::log10(peak) : -200;
+      const size_t second = size_t(2 * rate);
+      for (size_t at = 0; at < n; at += second) {
+            const std::vector<float> chunk(mix.begin() + long(at), mix.begin() + long(std::min(n, at + second)));
+            addClips(&out, chunk, qint64(at / 2), rate);
+            }
+      out.mono.resize(n / 2);
+      for (size_t i = 0; i < n / 2; ++i)
+            out.mono[i] = 0.5f * (mix[2 * i] + mix[2 * i + 1]);
+      if (!wav.isEmpty()) {
+            WavWriter writer(wav, 2, rate, true);
+            writer.write(mix.data(), qint64(n / 2));
+            }
       return out;
       }
 
@@ -1078,22 +1063,49 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
             if (notes[i].key >= 1000)
                   slotsOf[notes[i].part].insert(notes[i].key - 1000);
             }
+      // the instances: one library part's at a time (only it plays in its render), the part before's released first; every
+      // part's at once ran the Windows VM out of memory on the passages' score (2026-10-16: SSO's five string sections, 10
+      // Kontakt instances for 34 routes, 18 GB committed, growing as they played; the run crashed late). The mix is the
+      // parts' renders added up (mixOf)
       std::map<int, QString> patches;
       std::shared_ptr<Vst3Synth> vst;
-      if (fileAudio.empty() && !slotsOf.empty()) {
-            QString error;
+      double loadSeconds = 0.0;
+      QJsonObject waits;
+      // parts: the parts whose instances to load (null: every library part's); false: the plug-in failed (error said)
+      auto loadInstances = [&](const std::set<const Part*>* parts, const QString& what, QString* error) {
+            vst.reset();
+            std::map<int, QString> loaded;
             QElapsedTimer t;
             t.start();
-            vst = SoundLibraryExport::loadInstances(score.get(), float(rate), &error, &patches);
+            vst = SoundLibraryExport::loadInstances(score.get(), float(rate), error, &loaded, parts);
             if (!vst)
-                  return fail("the library's plug-in: " + error);
+                  return false;
             std::set<int> hosts;                    // (hosted slots: a patch's copies share one: Vst3Synth::hostOf)
-            for (const auto& sp : patches)
+            for (const auto& sp : loaded) {
                   hosts.insert(vst->hostOf(sp.first));
-            log(QString("%1: %2 instances for %3 routes loaded in %4 s").arg(name).arg(hosts.size()).arg(patches.size())
+                  patches[sp.first] = sp.second;
+                  }
+            log(QString("%1: %2 instances for %3 routes loaded in %4 s").arg(what).arg(hosts.size()).arg(loaded.size())
                 .arg(t.elapsed() / 1000.0, 0, 'f', 1));
-            js["loadSeconds"] = t.elapsed() / 1000.0;
-            PlaybackVerifier::waitUntilSounding(vst, patches, rate, name, log, &js);
+            QJsonObject w;
+            PlaybackVerifier::waitUntilSounding(vst, loaded, rate, what, log, &w);
+            waits[what] = w;
+            // (the score's totals, as when every part's instances loaded at once)
+            js["soundWaitSeconds"] = js.value("soundWaitSeconds").toDouble() + w.value("soundWaitSeconds").toDouble();
+            if (w.contains("neverSounded")) {
+                  QJsonArray never = js.value("neverSounded").toArray();
+                  for (const QJsonValue& v : w.value("neverSounded").toArray())
+                        never.append(v);
+                  js["neverSounded"] = never;
+                  }
+            loadSeconds += t.elapsed() / 1000.0;
+            return true;
+            };
+      const bool onePart = byPart.size() == 1;
+      if (fileAudio.empty() && !slotsOf.empty() && onePart) {
+            QString error;
+            if (!loadInstances(nullptr, name, &error))
+                  return fail("the library's plug-in: " + error);
             }
       auto patchesOf = [&](const Part* p) {
             QStringList l;
@@ -1116,7 +1128,43 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
       // the mix: clipping, and the analysis when one part plays (or a file is checked)
       QString wavMix = options.wav && !shareable ? report->folder + "/" + prefix + " library.wav" : QString();
       Render mix;
-      if (fileAudio.empty()) {
+      // more than one part: each library part rendered alone with its own instances (kept for its analysis below), the
+      // built-in parts once, the mix their sum
+      std::map<const Part*, Render> alone;
+      if (fileAudio.empty() && !onePart) {
+            std::vector<std::vector<float>> stereos;
+            QElapsedTimer mt;
+            mt.start();
+            for (const auto& bp : byPart) {
+                  const Part* p = bp.first;
+                  if (slotsOf[p].empty())
+                        continue;
+                  QString error;
+                  const std::set<const Part*> only { p };
+                  if (!loadInstances(&only, name + ": " + p->partName(), &error)) {
+                        vst.reset();
+                        return fail("the library's plug-in: " + error);
+                        }
+                  const std::set<int> partSlots = slotsOf[p];
+                  const QString partPrefix = prefix + " " + safeName(p->partName());
+                  stereos.emplace_back();
+                  Render& lib = alone[p];
+                  lib = render(score.get(), libEvents, rate, state, vst,
+                               [&partSlots](const NPlayEvent& e) { return e.isExternal() && partSlots.count(e.extPort() * 16 + e.extChannel()); },
+                               options.wav ? report->folder + "/" + partPrefix + " library.wav" : QString(), &stereos.back());
+                  log(QString("%1: %2 rendered alone in %3 s").arg(name, p->partName()).arg(lib.seconds, 0, 'f', 1));
+                  }
+            vst.reset();
+            // the built-in synth's parts (no instance needed)
+            stereos.emplace_back();
+            render(score.get(), libEvents, rate, state, nullptr, [](const NPlayEvent& e) { return !e.isExternal(); }, QString(),
+                   &stereos.back());
+            mix = mixOf(stereos, rate, wavMix);
+            mix.seconds = mt.elapsed() / 1000.0;
+            log(QString("%1: rendered in %2 s (%3 s of audio: the parts' renders added up)").arg(name).arg(mix.seconds, 0, 'f', 1)
+                .arg(double(mix.mono.size()) / rate, 0, 'f', 1));
+            }
+      else if (fileAudio.empty()) {
             mix = render(score.get(), libEvents, rate, state, vst, [](const NPlayEvent&) { return true; }, wavMix);
             log(QString("%1: rendered in %2 s (%3 s of audio)").arg(name).arg(mix.seconds, 0, 'f', 1)
                 .arg(double(mix.mono.size()) / rate, 0, 'f', 1));
@@ -1159,7 +1207,6 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
                   const Part* p = bp.first;
                   if (slotsOf[p].empty())
                         continue;               // (a built-in part: it is the expectation itself)
-                  const std::set<int> partSlots = slotsOf[p];
                   std::set<int> channels;
                   for (int c = 0; c < int(score->midiMapping().size()); ++c)
                         if (score->midiMapping(c)->part() == p)
@@ -1169,18 +1216,22 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
                   a.patches = patchesOf(p);
                   a.noteIndex = bp.second;
                   const QString partPrefix = prefix + " " + safeName(a.name);
-                  const Render lib = render(score.get(), libEvents, rate, state, vst,
-                                            [&partSlots](const NPlayEvent& e) { return e.isExternal() && partSlots.count(e.extPort() * 16 + e.extChannel()); },
-                                            options.wav ? report->folder + "/" + partPrefix + " library.wav" : QString());
+                  // (rendered above, with its own instances)
+                  const Render& lib = alone[p];
                   const Render ref = render(score.get(), refEvents, rate, state, nullptr,
                                             [&channels](const NPlayEvent& e) { return !e.isChannelEvent() || channels.count(e.channel()); },
                                             options.wav ? report->folder + "/" + partPrefix + " built-in.wav" : QString());
-                  log(QString("%1: %2 rendered alone in %3 s").arg(name, a.name).arg(lib.seconds, 0, 'f', 1));
                   QJsonObject part;
                   analysePart(score.get(), libEvents, notes, a, lib.mono, ref.mono, rate, settings, clipDir, partPrefix, &clipsLeft,
                               &part, &partLines, &report->totals);
                   parts.append(part);
+                  alone.erase(p);
                   }
+            }
+      vst.reset();
+      if (loadSeconds > 0) {
+            js["loadSeconds"] = loadSeconds;
+            js["soundWait"] = waits;
             }
       js["parts"] = parts;
       js["seconds"] = clock_.elapsed() / 1000.0;

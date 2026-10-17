@@ -155,6 +155,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveTracksJson();
       void hostedSlots();
       void hostedSlotsGain();
+      void exportInstancesOfParts();
       void preparedStates();
       void updateLiveSet();
       void updateLiveSetKnobs();
@@ -4295,6 +4296,60 @@ void TestLiveEquivalence::hostedSlots()
             synti = was;
       }
       SoundLibraryHost::setLibraryFolder(lib, QString());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   exportInstancesOfParts
+//    an export's instances of some parts only (the even-levels job loads one part's at a time: every part's at once ran
+//    the Windows VM out of memory on the passages' score, 2026-10-16): only their routes get an instance, on the score's
+//    own slots, and play there; null: every part's
+//---------------------------------------------------------
+
+void TestLiveEquivalence::exportInstancesOfParts()
+      {
+      LiveHost host(this, QString(), { "Violin", "Viola" },
+                    "<SoundLibrary name='PartsT'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "</SoundLibrary>");
+      QVERIFY(host.ok);
+      Playback::setIniValuesForTest({});
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *host.lib);
+      std::map<const Part*, std::set<int>> slotsOf;
+      for (const SoundLib::Route& r : routes)
+            slotsOf[r.part].insert(r.port * 16 + r.channel);
+      QCOMPARE(int(slotsOf.size()), 2);
+      QString error;
+      std::map<int, QString> all;
+      QVERIFY2(SoundLibraryExport::loadInstances(score, 48000, &error, &all), qPrintable(error));
+      QCOMPARE(int(all.size()), int(routes.size()));
+      const Part* viola = score->parts()[1];
+      QVERIFY(slotsOf.count(viola));
+      const std::set<const Part*> only { viola };
+      std::map<int, QString> patches;
+      std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000, &error, &patches, &only);
+      QVERIFY2(vst, qPrintable(error));
+      QCOMPARE(int(patches.size()), int(slotsOf[viola].size()));
+      for (const auto& sp : patches) {
+            QVERIFY(slotsOf[viola].count(sp.first));
+            QCOMPARE(sp.second, QString("Viola"));
+            QVERIFY(vst->instance(sp.first));
+            }
+      for (int s : slotsOf[score->parts()[0]])
+            QVERIFY(!vst->instance(s));                 // (the violin's: not loaded)
+      // the viola's slot plays
+      const int slot = *slotsOf[viola].begin();
+      vst->beginExport(48000);
+      vst->play(PlayEvent(ME_CONTROLLER, slot, 1, 100));
+      vst->play(PlayEvent(ME_NOTEON, slot, 60, 100));
+      std::vector<float> b(2 * 4800, 0.f);
+      vst->process(4800, b.data(), nullptr, nullptr);
+      vst->endExport();
+      QVERIFY(rms(b, 0) > 1e-4);
       delete score;
       }
 

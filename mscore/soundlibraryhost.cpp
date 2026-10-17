@@ -2443,7 +2443,7 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
 
 #ifdef USE_VST3
 std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float sampleRate, QString* error,
-                                                             std::map<int, QString>* patches)
+                                                             std::map<int, QString>* patches, const std::set<const Part*>* parts)
       {
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!library) {
@@ -2471,7 +2471,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
       for (size_t n = 0; n < all.size(); ++n) {
             const SoundLib::Instance in = all[n];
             const SoundLib::Route* r = routeAt(in.slot);
-            if (!r)
+            if (!r || (parts && !parts->count(r->part)))
                   continue;
             std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
             if (!p)
@@ -2539,7 +2539,8 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score*, const SoundL
             *error = QObject::tr("This MuseScore was built without plug-in hosting.");
       return nullptr;
       }
-std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score*, float, QString* error, std::map<int, QString>*)
+std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score*, float, QString* error, std::map<int, QString>*,
+                                                             const std::set<const Part*>*)
       {
       if (error)
             *error = QObject::tr("This MuseScore was built without plug-in hosting.");

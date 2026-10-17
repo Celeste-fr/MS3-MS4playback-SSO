@@ -25,9 +25,14 @@ background.bat.in`, `tools/playbackverify/`.
 3. Keep working: it has no window, runs at below-normal priority, uses a copy of your setups
    (`Documents\MuseScore Sound Library Check\background verify setups`) and changes nothing of your
    MuseScore. Progress: `Documents\MuseScore Sound Library Check\background playback verify.log`.
-   Each score is rendered through Kontakt once mixed and once per library part alone (plus the
-   built-in synth, which is quick), after loading its patches; how long that takes with Kontakt
-   isn't measured yet (here, with a test plug-in, a 13-minute piano score took about a minute).
+   Each score is rendered through Kontakt once per library part alone (plus the built-in synth,
+   which is quick), each part with only its own patches loaded (the part before's released first),
+   and the mix is those renders added up: every part's patches at once needed more memory than the
+   Windows VM's 16 GB on the passages' score (2026-10-16: 18 GB committed, the run crashed late). A
+   one-part score is rendered once. How long that takes with Kontakt isn't measured yet (here, with a
+   test plug-in, a 13-minute piano score took about a minute). The WAVs (`--verify-wav`) have a valid
+   header from the start, brought up to date every second of audio: a run that stops early leaves
+   playable files.
 4. When it's done that folder opens: hand back the newest **`Playback verify <date>.zip`**.
 
 What the zip holds: `summary.txt` (read it yourself: PASS or FAIL and each finding), `report.json`,

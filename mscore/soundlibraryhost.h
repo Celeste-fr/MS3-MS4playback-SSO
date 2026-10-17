@@ -309,9 +309,12 @@ class SoundLibraryExport {
       static void setExportMix(Vst3Synth* vst, Score* score, bool mute);
       ~SoundLibraryExport() { finish(); }
       // instances of its own for the score's library parts (no sequencer: a conversion from the
-      // command line); patches: slot -> the patch loaded there
+      // command line); patches: slot -> the patch loaded there; parts: only these parts' routes (null: every part's; the
+      // even-levels job loads one part's at a time: every part's SSO strings at once needed more memory than the
+      // Windows VM's 16 GB, 2026-10-16)
       static std::shared_ptr<Vst3Synth> loadInstances(Score* score, float sampleRate, QString* error,
-                                                      std::map<int, QString>* patches = nullptr);
+                                                      std::map<int, QString>* patches = nullptr,
+                                                      const std::set<const Part*>* parts = nullptr);
       // one route's patch, as loadInstances loads it, on slot 0 of an instance of its own (the even levels measured in
       // the background: mscore/evenautomeasurer.h)
       static std::shared_ptr<Vst3Synth> loadInstance(Score* score, const SoundLib::Route& route, float sampleRate, QString* error);
