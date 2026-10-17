@@ -42,6 +42,9 @@
 //       "levels": {"<patch>": dB, "<patch> / <technique>": dB}}]
 //   A part is found as partplayback.h finds it; parts of an excerpt follow their master score's part.
 //
+//   [slurs] plainPerformance (the owner, 2026-10-17) adds its measured shift to a plain Performance patch's delay
+//   (Delays::plain, plainMs: in ms() and earliest(), never in the metaTag nor in own()).
+//
 //   MuseScore plays it (MidiRenderer::libraryTrackDelays): each library event moves by its track's delay in time
 //   (tempo changes followed), a note and its switch by its technique's, controllers, pitch bends and parameters by
 //   the patch's; with a negative delay everything else plays later by the earliest one (libraryDelayLead), so the
@@ -74,6 +77,11 @@ struct Delays {
       bool empty() const;                     // all 0 (the metaTag's values; not the rule's below)
       // the level rule ([levels] context, contextlevel.h; never in the metaTag): each patch's volume in dB, and the
       // score's largest phrase gain G (a phrase plays its gain less G by CC11)
+      // [slurs] plainPerformance (never in the metaTag): the patch played plain and its measured shift, ms (<= 0, the map's
+      // plainShift early: SoundLib::plainPerformancePatches; added to the patch's ms() as a Kontakt track's delay; the plain
+      // Live set writes it in that track's Track Delay and takes it off again when reading it back, as a technique track's
+      // lookahead); a patch without a measured shift isn't listed
+      std::map<QString, double> plain;        // patch -> ms
       std::map<QString, double> rule;         // patch -> dB
       double ruleTop { 0.0 };
       double rangeTop { 0.0 };                // [levels] realRange: the part's R (its notes' CC11 play realDb less it)
@@ -111,6 +119,8 @@ Delays of(const Part* part, const std::map<const Part*, Delays>& delays);
 double ms(const Delays& d, const QString& patch, const QString& technique = QString());
 // one track's own value (0: none)
 double own(const Delays& d, const QString& key);
+// [slurs] plainPerformance's shift of the patch (Delays::plain; 0: none)
+double plainMs(const Delays& d, const QString& patch);
 // the earliest any of the part's tracks plays at: the least of the part's, each patch's and each technique's ms()
 double earliest(const Delays& d);
 // the level a note of the technique on the patch plays at: the patch's and the technique's dB added up

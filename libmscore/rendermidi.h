@@ -162,7 +162,8 @@ class MidiRenderer {
       std::vector<LibShift> libShifts;
       // a Performance note's join (rendermidi.cpp performanceNote; finishLibraryEvents): the note before on its patch
       // (key) ends ms after (overlap) or before (re-attack gap) the note's note-on as played
-      struct LibJoin { int channel; int patch; int key; const Note* note; int written; double ms; };
+      // (shortenOnly: the note before ends there only if it would end later: [slurs] plainPerformance's staccato gap)
+      struct LibJoin { int channel; int patch; int key; const Note* note; int written; double ms; bool shortenOnly = false; };
       std::vector<LibJoin> libJoins;
       // a note's own level on its route by a controller (this chunk; libraryNoteLevels): a marcato's level
       // (articulation.h MarcatoLevel) on a patch whose level is the dynamics controller, and its track level
@@ -239,6 +240,12 @@ class MidiRenderer {
       // (Polfreman 2013, "Comparing onset detection and perceptual attack time", ISMIR 2013: a modelled bowed string,
       // 23.5 ms, SD 22.8)
       static constexpr double HEARD_AFTER_LEAVE_MS = 23.5;
+      // [slurs] plainPerformance (abl.py's PLAIN on branch qt-bends, the variant the owner chose by ear, 2026-10-17): every
+      // plain note's velocity (the owner's "velocity 64"), and how long before a staccato's neighbour on the patch it ends
+      // (and the note before it ends before it): SSO's Performance legato joins a note-on less than 40 ms after the note-off
+      // before as a transition (the map's legatoGap, 39 ms, measured), so a spiccato attack needs 45 ms (abl.py's margin)
+      static constexpr int PLAIN_VELOCITY = 64;
+      static constexpr double PLAIN_STACCATO_GAP_MS = 45.0;
       static const int DYNAMIC_LEVELS[8];         // MS4's levels of ppp … fff (ms4playback.cpp's dynamic table)
       static const char* const DYNAMIC_NAMES[8];
    private:

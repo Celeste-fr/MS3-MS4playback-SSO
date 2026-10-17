@@ -60,6 +60,9 @@
 //                 after the previous note-on on its route (also a legato note) at velocity 64 or lower: SSO's legato
 //                 engine doesn't play it at all (from reading its script; behaviour only). A fault. (Notes of one chord
 //                 are not compared.) Part, bar, beat, pitch, velocity, gap
+//     ([slurs] plainPerformance: a plain note has no early start of its own; its patch's events go the map's plainShift
+//     early, its predicted arrival is sent + plainShift - written (the shift is the measured median latency of plain
+//     notes); a patch without plainShift is UNMEASURED and its notes have no ARRIVAL; Report::plainShifts)
 //     LEAP        a legato transition whose interval from the note before exceeds an octave (12 semitones; with
 //                 microtones 1200 cents, ScoreTuning): SSO gives it no transition, it releases the note before and
 //                 attacks afresh, so its Performance technique, legatoDelay timing and level calibration don't apply.
@@ -160,6 +163,8 @@ struct Report {
       int transitionsCapped { 0 };
       int transitionsEarlyMode { 0 };
       std::set<QString> transitionsFallback;      // patches without a measured glide (modes 2 / 3: the arrival instead)
+      // [slurs] plainPerformance: each patch whose notes played plain and its shift, ms (the map's plainShift; NaN: none)
+      std::map<QString, double> plainShifts;
       int count(Kind k, Severity s) const;
       int count(Kind k) const;
       QString text(const QString& title = QString()) const;

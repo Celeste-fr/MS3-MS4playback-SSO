@@ -287,6 +287,11 @@ switch value of each articulation. For example:
     generator's `KEY_SHIFT`): a written D2 (38) goes on key 50. Only the key sent shifts (note-on and note-off, so
     Live's clips and the plain set too); the keyswitches, pitch tables, tunings and bends stay by the written pitch.
     A correctness fix of the map, not a playback adjustment.
+  - `plainShift` on an `Instrument` (ms, 0 .. 1000, left out: not measured): with `[slurs] plainPerformance` a part
+    played plain on this Performance patch has every event of the patch sent this much early (the median heard -
+    written latency of plain notes, measured in context: `tools/soundlibraries/sso_plain_performance_shift.json`;
+    SSO's Violas - Performance 95.2). Left out: the notes play as written and the playback audit lists the patch
+    (docs/PLAYBACK_SETTINGS.md › Plain Performance).
   - `maxVelocity` on an `Instrument` (1-127, left out: 127): the loudest velocity MuseScore sends to the patch;
     a louder note-on is sent at this. For a patch whose own script turns the top velocity into a different
     sound: SSO's percussion script (Kickstart) plays velocity 127 as a roll where its option "Roll on high

@@ -1684,7 +1684,18 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
 
                   struct PerformanceNote { bool on = false; const Note* from = nullptr; int interval = 0; double lenBefore = 0;
                                            int velocity = -1; const Note* before = nullptr; double endMs = 0;
-                                           const SoundLib::Articulation::Technique* timedAttack = nullptr; };
+                                           const SoundLib::Articulation::Technique* timedAttack = nullptr;
+                                           bool shortenOnly = false; };
+                  // a staccato as written (staccato, staccatissimo; the first of its tie chain's): [slurs] plainPerformance
+                  // plays it as a spiccato attack
+                  auto staccatoNote = [&](const Note* n) {
+                        const Note* first = n->firstTiedNote();
+                        const Chord* fc = first->chord();
+                        for (const Ms4::ArtRef& a : Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset)))
+                              if (a.art == Ms4::Art::Staccato || a.art == Ms4::Art::Staccatissimo)
+                                    return true;
+                        return false;
+                        };
                   auto performanceNote = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r) {
                         PerformanceNote p;
                         const SoundLib::Articulation* a = c ? c.articulation : nullptr;
@@ -1738,6 +1749,28 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               transition = t;
                               }
                         const int own = note->libraryVelocity();
+                        // [slurs] plainPerformance (Choice::plain; abl.py's PLAIN, the owner's "C", 2026-10-17): velocity 64
+                        // (a note's own velocity, or a technique chosen for it in the Inspector, still its own); a staccato,
+                        // or a note after a staccato, a spiccato attack: the note before on the patch ends at least
+                        // PLAIN_STACCATO_GAP_MS before it (SSO joins a smaller gap as a transition); a slurred note's
+                        // transition as below (the note before overlapping it); any other note right after a note of the
+                        // patch, both at their written length, touches it: SSO plays a transition (its bend glides), no
+                        // re-attack gap; no smooth attack's own onset (no early start: the patch's shift, TrackDelays)
+                        const bool plain = c.plain && !ownJoin;
+                        const bool explicitTechnique = tr != PerformanceTechnique::Transition::AUTO || at != PerformanceTechnique::Attack::AUTO;
+                        const int plainVelocity = own > 0 ? own : PLAIN_VELOCITY;
+                        if (plain && (staccatoNote(note) || (joinable && staccatoNote(joinable)))) {
+                              if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at))))
+                                    p.velocity = own > 0 ? own : t->velocity;
+                              else
+                                    p.velocity = plainVelocity;
+                              if (joinable) {
+                                    p.before = joinable;
+                                    p.endMs = -PLAIN_STACCATO_GAP_MS;
+                                    p.shortenOnly = true;
+                                    }
+                              return p;
+                              }
                         if (transition) {
                               if (!slurred) {
                                     p.interval = interval;
@@ -1747,6 +1780,20 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               p.velocity = own > 0 ? own : (t->name == "bowed" && a->legatoVelocity > 0) ? a->legatoVelocity : t->velocity;
                               p.before = joinable;
                               p.endMs = ownJoin ? join : a->overlapMs > 0 ? a->overlapMs : 0;
+                              if (c.plain && !explicitTechnique)
+                                    p.velocity = plainVelocity;
+                              return p;
+                              }
+                        if (plain) {
+                              if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at))))
+                                    p.velocity = own > 0 ? own : t->velocity;
+                              else
+                                    p.velocity = plainVelocity;
+                              if (joinable) {         // (touching: SSO's transition from it)
+                                    p.from = joinable;
+                                    p.interval = interval;
+                                    p.lenBefore = lenBefore;
+                                    }
                               return p;
                               }
                         if (at != PerformanceTechnique::Attack::AUTO)
@@ -1766,6 +1813,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               p.before = joinable;
                               p.endMs = ownJoin ? join : -a->reattackGapMs;
                               }
+                        if (c.plain && !explicitTechnique)      // ([slurs] plainPerformance with a join of its own)
+                              p.velocity = plainVelocity;
                         return p;
                         };
 
@@ -1954,7 +2003,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           libNote.velocity = perf.velocity;
                                     if (perf.before && !writtenTiming)      // (written timing: the note before as written)
                                           libJoins.push_back({ noteChannel, libChoice.patch, perf.before->ppitch(), note,
-                                                               note->chord()->tick().ticks() + tickOffset, perf.endMs });
+                                                               note->chord()->tick().ticks() + tickOffset, perf.endMs, perf.shortenOnly });
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
                                           LibTrace& t = libTrace->back();
                                           t.velocity = libNote.velocity;
@@ -2032,7 +2081,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // played, the audit's DROPPED); not before the chunk or the pass. The bend's glide (ms after
                                     // the note-on as played) moves with it. Written timing (Live's clips): as written, LiveTiming
                                     // puts it back at playback
-                                    if (libTransitionsEarly > 0 && perf.on && perf.from && offset == 0 && g.arriveMs > 0) {
+                                    // ([slurs] plainPerformance: none, its patch's events go early together, TrackDelays)
+                                    if (libTransitionsEarly > 0 && perf.on && perf.from && offset == 0 && g.arriveMs > 0 && !libChoice.plain) {
                                           double shiftMs = g.arriveMs;
                                           const bool fallback = libTransitionsEarly >= 2 && !glideMeasured;
                                           if (libTransitionsEarly == 2 && glideMeasured)
@@ -2055,7 +2105,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                 }
                                           }
                                     }
-                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
+                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack() && !libChoice.plain
                                        && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty()
                                            || perf.timedAttack)) {
                                     // a note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
@@ -2088,6 +2138,26 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           config.libWrittenOn = &libShiftWritten;
                                           libShiftOn = libShiftWritten = -1;
                                           }
+                                    }
+                              }
+                        // ([slurs] plainPerformance: a note at its written length; a staccato as long as it plays today: MS4's
+                        // note model's length plus the early start its technique (plainFrom) had, the note-off staying)
+                        if (li && !libNote.builtIn && libChoice.plain && offset == 0) {
+                              if (!staccatoNote(note))
+                                    config.ms4Dur = Ms4::HUNDRED;
+                              else if (libChoice.plainFrom && libOnsetEarly > 0 && !note->tieBack()
+                                       && (libChoice.plainFrom->onsetMs > 0 || !libChoice.plainFrom->onsets.empty())) {
+                                    const SoundLib::Articulation* oa = libChoice.plainFrom;
+                                    double onsetMs = 0;
+                                    for (const Note* n : note->chord()->notes())
+                                          if (n->play())
+                                                onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset", libPatches[libChoice.plainFromPatch]->name,
+                                                                                             oa->name, n->ppitch(), oa->startOnset(nullptr, n->ppitch(), libOnsetByPitch)));
+                                    const int ticks = note->chord()->actualTicks().ticks();
+                                    const int t0 = note->chord()->tick().ticks() + tickOffset;
+                                    const int extra = score->utime2utick(score->utick2utime(t0) + onsetMs * libOnsetEarly / 100.0 / 1000.0) - t0;
+                                    if (ticks > 0 && extra > 0)
+                                          config.ms4Dur = r.dur + int(qint64(extra) * Ms4::HUNDRED / ticks);
                                     }
                               }
                         config.libKey = libNote.key;
@@ -2142,6 +2212,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
                                           libLevels[note].volumeDb += under;
                                     realRangeLevel(note, libChoice, libNote.velocity, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
+                                    if (libChoice.plain)                // ([slurs] plainPerformance)
+                                          libNote.velocity = PLAIN_VELOCITY;
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
                                     // a patch whose keys sound an octave off (SSO's timpani): the key sent is shifted
@@ -2771,7 +2843,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
             if (off == events->end())
                   continue;
             const int to = std::max(lastOn + 1, score->utime2utick(score->utick2utime(on) + j.ms / 1000.0));
-            if (to == off->first)
+            if (to == off->first || (j.shortenOnly && to > off->first))
                   continue;
             const NPlayEvent ev = off->second;
             events->erase(off);
@@ -5581,6 +5653,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             events->startEarlyMs = libStartLost;
             }
       events->startLeadMs = forLiveClips ? 0.0 : libStartLead;
+      events->delayLeadMs = forLiveClips ? 0.0 : libDelayLead;
       ms4Mode = !ms4Active.empty();
       if (ms4Mode)
             renderMs4Dynamics(chunk, events);
@@ -5698,7 +5771,7 @@ void MidiRenderer::updateState()
                   for (const SoundLib::Route& r : routes) {
                         libRoutePatches[r.port * 16 + r.channel] = { r.part, r.instrument };
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
-                        if (d.empty() && d.rule.empty() && d.even.empty() && d.evenAll == 0.0)
+                        if (d.empty() && d.rule.empty() && d.even.empty() && d.evenAll == 0.0 && d.plain.empty())
                               continue;
                         libTrackDelays[r.part] = d;
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };

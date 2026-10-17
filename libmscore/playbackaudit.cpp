@@ -130,6 +130,7 @@ void render(MasterScore* score, EventMap* events, std::vector<MidiRenderer::LibT
             midi.renderChunk(chunk, &part, ctx);
             events->insert(part.begin(), part.end());
             events->startLeadMs = part.startLeadMs;               // (the start lead: the same in every chunk)
+            events->delayLeadMs = part.delayLeadMs;               // (the track delays' lead: likewise)
             events->startEarlyMs.insert(part.startEarlyMs.begin(), part.startEarlyMs.end());
             }
       }
@@ -160,6 +161,13 @@ QString Report::text(const QString& title) const
       for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP, Kind::DROPPED, Kind::LEAP })
             out << QString("  %1: %2 fail, %3 warn, %4 info").arg(kindName(k), -12).arg(count(k, Severity::FAIL))
                    .arg(count(k, Severity::WARN)).arg(count(k, Severity::INFO));
+      if (!plainShifts.empty()) {
+            QStringList ps;
+            for (const auto& p : plainShifts)
+                  ps << (std::isfinite(p.second) ? QString("%1 %2 ms early").arg(p.first).arg(p.second, 0, 'f', 1)
+                                                 : QString("%1 not measured (0)").arg(p.first));
+            out << QString("  [slurs] plainPerformance, each patch's shift (the map's plainShift): %1").arg(ps.join(", "));
+            }
       if (!transitionShiftsMs.empty()) {
             std::vector<double> v = transitionShiftsMs;
             std::sort(v.begin(), v.end());
@@ -248,7 +256,8 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
       auto ms = [score](int utick) { return score->utick2utime(utick) * 1000.0; };
       // a note's note-on, ms on the score's time: without the start lead everything plays later by
       // (MidiRenderer::libraryDelayLead; a first note started its whole onset early comes out before its written time)
-      auto sent = [&](const auto* p) { return ms(p->on) - events.startLeadMs; };
+      // (and without the track delays' lead, libraryDelayLead: a plain Performance patch's shift shows as its early start)
+      auto sent = [&](const auto* p) { return ms(p->on) - events.startLeadMs - events.delayLeadMs; };
 
       std::map<const Note*, std::vector<const MidiRenderer::LibTrace*>> traces;
       for (const MidiRenderer::LibTrace& t : trace)
@@ -418,6 +427,15 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   }
             else if (p->trace->from)
                   p->hasArrival = false;
+            // [slurs] plainPerformance: every note of the patch heard its measured latency (the map's plainShift: the median
+            // heard - written of plain notes, attacks and transitions alike) after its note-on; unmeasured: no arrival
+            if (p->trace->choice.plain) {
+                  const double shift = p->trace->patch->plainShiftMs;
+                  p->hasOnset = std::isfinite(shift);
+                  p->onset = p->hasOnset ? shift : 0.0;
+                  p->hasArrival = p->hasOnset;
+                  p->arrival = sent(p) + p->onset - ms(p->written);
+                  }
             }
 
       // (b) swapped or early without an in-context measurement, or no onset at all, per instrument; (c) capped
@@ -431,6 +449,19 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const SoundLib::Choice& c = p->trace->choice;
             const QString inst = p->trace->patch->name;
             const QString art = c.articulation->name;
+            // ([slurs] plainPerformance: no early start of its own, its patch's shift; listed when the map has none)
+            if (c.plain) {
+                  report.plainShifts[inst] = p->trace->patch->plainShiftMs;
+                  if (!std::isfinite(p->trace->patch->plainShiftMs)) {
+                        Missing& mm = missing[{ inst, art }];
+                        ++mm.notes;
+                        mm.maxEarly = std::max(mm.maxEarly, early);
+                        mm.bars.insert(p->note->chord()->measure()->no() + 1);
+                        mm.what = "plain ([slurs] plainPerformance): no measured shift in the map (plainShift, "
+                                  "sso_plain_performance_shift.json), sent as written";
+                        }
+                  continue;
+                  }
             // ([slurs] transitionsEarly: a transition is meant its modelled arrival early, not its onset: capped when the
             // note before keeps keepMs (or SSO's 15 ms) as played, TRANSITION_MIN_GAP_MS; its shift is listed in the report)
             if (transitionsEarly && p->transition && !p->sub && p->trace->earlyMeantMs >= 0) {
@@ -792,7 +823,7 @@ bool writeHeardInputs(const Score* score, const EventMap& events, const Report& 
                            .arg(r.instrument ? r.instrument->bendCents : 0.0, 0, 'f', 1);
       ok = write("routemap.txt", rm.join("\n") + "\n") && ok;
       ok = write("predicted.tsv", report.rowsText()) && ok;
-      ok = write("lead.txt", QString::number(events.startLeadMs, 'f', 3) + "\n") && ok;
+      ok = write("lead.txt", QString::number(events.startLeadMs + events.delayLeadMs, 'f', 3) + "\n") && ok;
       QStringList bars;
       for (const Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
             bars << QString::number(score->utick2utime(m->tick().ticks()), 'f', 6);

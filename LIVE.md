@@ -1083,6 +1083,13 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   a note at the score's start whose onset MuseScore plays early by the start lead (`libraryDelayLead`, 2026-10-14;
   Whence's first Celli note, 172 ms) starts at 0 there, late by its onset; the plain set plays it early (Track Delay).
 
+- **`[slurs] plainPerformance`'s shift** (2026-10-17, docs/PLAYBACK_SETTINGS.md › Plain Performance): the plain set plays
+  it as the Performance patch's Kontakt track's Track Delay (-plainShift; `tst_liveequivalence::plainPerformanceLive`:
+  every note-on, note-off and the patch's CC1 where MuseScore plays them). *Live plays the score*'s clips and the route
+  set (as every track delay there: no Track Delay through Live's API) play the patch's events at their written place,
+  late by the shift (Violas - Performance 95.2 ms) against MuseScore's own playback, until the owner sets that track's
+  Track Delay by hand. Untried in real Live.
+
 - **A clicked or entered note** (2026-10-15, `libmscore/notepreview.h`): in MuseScore's own playback (hosted or MIDI
   out) it plays its playback events on its route (patch, switch, CC1 / CC11, bend: docs/PLAYBACK_SETTINGS.md › Clicked
   and entered notes). While *Live plays the score* MuseScore sends the library's routes nothing, so a click there plays

@@ -5,6 +5,16 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Plain Performance (branch `plain-performance`, 2026-10-17)
+
+The owner chose "C" by ear (Whence Violas bars 8-13): plain SSO Performance, the whole part early by one constant.
+`[slurs] plainPerformance` (0 by default and in both presets: the owner flips Recommended after hearing all five string
+sections; docs/PLAYBACK_SETTINGS.md › Plain Performance). Measured shift: Violas - Performance only (95.2 ms,
+`sso_plain_performance_shift.json`); Violins 1 / 2, Celli, Basses play plain on the beat until measured the same way
+(abl.py's PLAINb per section, median heard - written; the audit lists them). Next: measure the other four sections,
+render all five for the owner (listening page), then he decides Recommended. Tested on Linux only (test synth,
+dumps); not in Kontakt or real Live.
+
 ## Paused 2026-10-17: where to pick up
 
 The owner paused the project to start a new session. `integrate-1012` (pushed) holds everything finished: crash fixes

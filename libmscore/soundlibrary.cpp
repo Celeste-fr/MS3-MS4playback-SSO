@@ -757,6 +757,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         li.keyShift = qBound(-48, a.value("keyShift").toInt(), 48);
                   if (a.hasAttribute("maxVelocity"))
                         li.maxVelocity = qBound(1, a.value("maxVelocity").toInt(), 127);
+                  if (a.hasAttribute("plainShift")) {
+                        bool ok = false;
+                        const double v = a.value("plainShift").toDouble(&ok);
+                        if (ok && std::isfinite(v))
+                              li.plainShiftMs = std::max(0.0, std::min(1000.0, v));   // (TrackDelays' range)
+                        }
                   li.sectionLevelDb = a.value("sectionLevel").toDouble();
                   li.hasSectionLevel2 = a.hasAttribute("sectionLevel2");
                   li.sectionLevel2Db = a.value("sectionLevel2").toDouble();
@@ -1115,9 +1121,73 @@ static Choice choosePerformance(const std::vector<const LibInstrument*>& patches
       return c;
       }
 
+const Articulation* plainPerformanceArticulation(const LibInstrument& patch)
+      {
+      for (const Articulation& a : patch.articulations)
+            if (a.playsTransitions() && a.modifiers == QStringList { "performance" } && !a.attacks.empty())
+                  return &a;
+      return nullptr;
+      }
+
+std::map<const Part*, std::map<QString, double>> plainPerformancePatches(const Score* score, const Library& library)
+      {
+      std::map<const Part*, std::map<QString, double>> out;
+      if (!score || !Playback::on("slurs/plainPerformance", score))
+            return out;
+      for (const Part* part : score->masterScore()->parts()) {
+            for (const auto& ip : *part->instruments()) {
+                  const LibInstrument* li = library.match(ip.second, part);
+                  if (!li)
+                        continue;
+                  for (const LibInstrument* p : li->patches())
+                        if (plainPerformanceArticulation(*p))
+                              out[part][p->name] = p->plainShiftMs;
+                  }
+            }
+      return out;
+      }
+
+// [slurs] plainPerformance (the owner's "C", 2026-10-17, by ear on Whence's Violas bars 8-13, against Recommended): every
+// note of the part on its Performance legato, as SSO's patch plays a plain MIDI part (abl.py's PLAIN on branch qt-bends,
+// tools/soundlibraries/qt_bends/abl.py). A technique the Performance legato doesn't play (pizzicato, col legno, tremolo,
+// trills, falls, harmonics, mutes, sul pont. / tasto, espressivo, ... : a base outside BOWED or any modifier) keeps the
+// choice made otherwise. Under staff text "performance" the note is already there (held): plain too
+static Choice choosePlain(const std::vector<const LibInstrument*>& patches, const Want& want, const Choice& held)
+      {
+      static const QStringList BOWED = { "long", "legato", "longmarcato", "marcato", "tenuto", "short", "spiccato", "staccatissimo" };
+      if (!want.plainPerformance || !held)
+            return Choice();
+      for (const QString& m : want.modifiers)
+            if (m != "performance")
+                  return Choice();
+      for (int p = 0; p < int(patches.size()); ++p) {
+            const Articulation* a = plainPerformanceArticulation(*patches[size_t(p)]);
+            if (!a)
+                  continue;
+            if (held.articulation == a) {
+                  Choice c = held;
+                  c.plain = true;
+                  return c;
+                  }
+            if (!BOWED.contains(held.base) || !held.articulation->modifiers.isEmpty())
+                  return Choice();
+            // (its base among the articulation's: "legato" for a slurred note, a slur's transitions; else "long", so that
+            // no short's velocity dynamics apply: the Performance legato's level is CC1's)
+            Choice c { a, held.base == "legato" ? QString("legato") : QString("long"), p };
+            c.plain = true;
+            c.plainFrom = held.articulation;
+            c.plainFromPatch = held.patch;
+            return c;
+            }
+      return Choice();
+      }
+
 Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want)
       {
       const Choice held = chooseBases(patches, want);
+      const Choice plain = choosePlain(patches, want, held);
+      if (plain)
+            return plain;
       const Choice performance = choosePerformance(patches, want, held);
       return performance ? performance : chooseSlurred(patches, want, held);
       }
@@ -1146,7 +1216,10 @@ Choice chooseOwn(const std::vector<const LibInstrument*>& patches, const QString
 
 Choice chooseNote(const std::vector<const LibInstrument*>& patches, const Want& want, const Note* note)
       {
-      const Choice own = note ? chooseOwn(patches, note->firstTiedNote()->libraryTechnique()) : Choice();
+      Choice own = note ? chooseOwn(patches, note->firstTiedNote()->libraryTechnique()) : Choice();
+      // (its own technique the plain Performance legato: plain as the others, its patch's events going early together)
+      if (own && want.plainPerformance && own.articulation == plainPerformanceArticulation(*patches[size_t(own.patch)]))
+            own.plain = true;
       return own ? own : choose(patches, want);
       }
 
@@ -2374,6 +2447,8 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             w.soundSeconds = seconds * factor;
             }
       w.modifiers = text.modifiers;
+      w.plainPerformance = !text.performanceOff && Playback::on("slurs/plainPerformance", score);
+      w.staccato = has(Art::Staccato) || has(Art::Staccatissimo);
       if (has(Art::Mute) || has(Art::PalmMute)) {
             if (!w.modifiers.contains("muted"))
                   w.modifiers.append("muted");

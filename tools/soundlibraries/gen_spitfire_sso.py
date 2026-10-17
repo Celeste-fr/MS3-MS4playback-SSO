@@ -1230,6 +1230,13 @@ def bendRange(name):
 # bendSmoothing= (ms) beside it: the patch's one-pole smoothing of a bend step on a held note (fit.py,
 # sso_bend_smoothing.json, tau_ms); the renderer sends the glide so that the bend as heard reaches the tuning at the
 # arrival (2026-10-11, branch legato-bend-settle)
+# [slurs] plainPerformance (the owner's "C", 2026-10-17, by ear on Whence's Violas bars 8-13): a part played plain on its
+# Performance patch has every event of the patch sent early by one constant, plainShift= on the patch's <Instrument>
+# (ms): the median heard - written latency of the plain notes, measured in context (sso_plain_performance_shift.json,
+# each entry with its source). A Performance patch without one: shift 0 (the playback audit lists it)
+PLAIN_SHIFT = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                            'sso_plain_performance_shift.json'), encoding='utf-8')).items()
+               if not k.startswith('_')}
 LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
                               encoding='utf-8'))
 BEND_SMOOTHING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_bend_smoothing.json'),
@@ -1643,6 +1650,9 @@ for i, line in enumerate(out):
             if b:
                 end = '/>' if line.endswith('/>') else '>'
                 out[i] = line[:-len(end)] + f' bend="{b:g}"' + end
+            if current in PLAIN_SHIFT:
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + f' plainShift="{PLAIN_SHIFT[current]["shiftMs"]:g}"' + end
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) + end

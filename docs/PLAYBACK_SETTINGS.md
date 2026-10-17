@@ -89,6 +89,9 @@ match plus D, real players' difference: option B'): set by hand it shows "(Custo
 `levels/realRange` 1 (the Meyer rule) is in neither preset since 2026-10-14 (Recommended plays 2, Clark & Luce
 spans): set by hand it shows "(Custom)".
 
+`slurs/plainPerformance` is 0 in both presets (2026-10-17: the owner chose it by ear on Whence's Violas and flips
+Recommended after hearing the five string sections; below, Plain Performance): set by hand to 1 it shows "(Custom)".
+
 `slurs/transitionsEarly` is 1 in Recommended and 0 in Library default since 2026-10-15 (the owner, 2026-10-15, after hearing Whence's fast quarter-tone slurs through SSO: "I think 1 and 3 are both fine (I can hear very little difference btwn them)"; 1 measured closest to the written pitches there: Violas bar 7 93 cents mean error against 123 for 3 and 127 on the beat, Violins 1 bars 5-7 62 / 73 / 97, kthost + SSO on the test VM, pYIN; below, Transitions
 early); 2 or 3 by hand shows "(Custom)".
 
@@ -1013,6 +1016,47 @@ puts the moved note-on back (Track Delay + MuseScore Link's per-note delays; `ts
 judges each transition against its mode's shift for CAPPED and prints the shifts (median, range, capped); ARRIVAL still
 compares the modelled arrival, so in modes 2 / 3 a transition shows `arrive - shift` late by design.
 
+## Plain Performance
+
+The owner, 2026-10-17, by ear on Whence's Violas bars 8-13 ("C"): plain SSO Performance (abl.py's PLAINb, branch `qt-bends`,
+`tools/soundlibraries/qt_bends/abl.py`) sounded better than Recommended, which plays the staccatos on All techniques and
+starts each note early by its own onset or modelled arrival (they drift apart). `[slurs] plainPerformance` (0 by default
+and in both presets; the owner flips Recommended after hearing the five string sections):
+
+- **Which notes**: every note of a part whose instrument has a Performance legato with measured `attacks` (SSO's five
+  string sections; `SoundLib::plainPerformanceArticulation`: a legato articulation under modifier "performance" alone,
+  so not the Sul G / Sul C patches, the solo strings' or the winds') plays on it (`Want::plainPerformance`,
+  `choosePlain`, `Choice::plain`), staccatos and unslurred notes too. A note whose technique the Performance legato
+  doesn't play keeps its choice: pizzicato, col legno, tremolo, trills, falls, rips (a base outside long / legato /
+  marcato / tenuto / the shorts) and any modifier (harmonics, mutes, sul pont. / tasto, flautando, espressivo …). Staff
+  text "non performance" opts the part out until "performance", as for `[slurs] performance`.
+- **Each note** (`performanceNote` in rendermidi.cpp): velocity 64 (`MidiRenderer::PLAIN_VELOCITY`; a note's own velocity
+  or an attack / transition chosen in the Inspector still its own); at its written start; a staccato (or staccatissimo)
+  as MuseScore 4's note model plays it (today's note-off) and a spiccato attack: the note before it on the patch, and the
+  staccato itself before the next note, end at least 45 ms before the next note-on (`PLAIN_STACCATO_GAP_MS`: SSO joins a
+  note-on less than 40 ms after the note-off before as a transition, the map's `legatoGap` 39 ms measured on Violins 1 -
+  Performance; 45 is abl.py's margin); a slur's transitions as before (the note before overlapping by the map's
+  `overlap`); every other note its written length (100 %), so a note right after another of the patch touches it and SSO
+  plays a transition (its bend glides as a transition's: `LibTrace::from`). The score's CC1 (dynamics) unchanged.
+- **Timing**: no early start of its own (no onset, `heldNotes/early`, `transitionsEarly`, smooth attack's onset); instead
+  every event of the patch (note-ons, note-offs, CCs, bends) goes one constant early: the map's `<Instrument plainShift>`
+  (ms), the median heard - written latency of the plain notes measured in context
+  (`tools/soundlibraries/sso_plain_performance_shift.json` → `gen_spitfire_sso.py`). Measured so far: Violas -
+  Performance 95.2 ms (Whence bars 9-12, PLAINb, 2 passes, 28 notes, Kontakt 8 + SSO in kthost on the test VM,
+  2026-10-17). Another Performance patch: 0 (as written), and the playback audit lists it (UNMEASURED, and the report's
+  "plainPerformance" line). Played as a track delay of the patch (`TrackDelays::Delays::plain`, `plainMs`; never in the
+  `trackDelays` metaTag): everything else plays that much later (`libraryDelayLead`), so the patch is early from its
+  first note; Play from a tick pre-rolls (`PlayStart`). The start lead (`libStartLead`) still serves the other parts'
+  early notes.
+- **Levels**: unchanged; the level settings (calibrated, context, realRange, sectionBalance, evenLevels, the gain stage)
+  act on these notes as on any note of the Performance legato.
+- **Live**: the plain set's clips hold the written notes; the Performance patch's Kontakt track carries the shift as its
+  Track Delay (-plainShift, with the patch's own delay), recorded as that track's lookahead so that reading the set back
+  takes it off (`PlainLiveSet`, `LiveTracks`); the MuseScore Link device delays what the joins move (`tst_liveequivalence::
+  plainPerformanceLive`: every note-on / note-off and the patch's CC1 as MuseScore plays them). *Live plays the score*'s
+  clips and the route set have no Track Delay (LIVE.md › What still differs).
+- **Audit**: a plain note's predicted arrival is sent + plainShift - written (`Report::plainShifts`).
+
 ## Clicked and entered notes
 
 The owner (2026-10-15): "send a clicked note on a library part to its SSO patch, with its technique and the same patch
@@ -1073,6 +1117,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Auto's transitions on a Performance legato with listed techniques (SSO's five string sections; Spitfire's slow transitions by velocity: 20-84 slurred / fingered, 85-127 bowed, support.spitfireaudio.com/en/articles/11815986): a slurred note fingered (map velocity 69); the first note of a slur that starts where the slur before ends (same patch, touching, no accent or marcato) a bowed transition from it (93; Violas' map `legatoVelocity` 100), the note before overlapping it by the map's `overlap`, instead of a re-attack (the note before cut `reattackGap` ms early). A glissando line still portamento; the Inspector's attack / transition and the Join lane override. 0: slurred notes bowed, each slur re-attacked. The owner, 2026-10-12, after setting it by hand in Whence's Velocity lane: "notes within a slur use fingered and two slurs adjacent to each other will use bowed". Not measured: the Violas' transitions at 69 (their 100 tightened a run's arrival SD 54 → 39 ms, 2026-10-07) | 1 (on; Recommended 1, Library default 0) | `rendermidi.cpp` `performanceNote` (`slurAt`) | `[slurs] transitions`; score: `playbackSettings` |
 | Auto's attack after silence on a Performance legato with listed techniques (SSO's five string sections): smooth (map velocity 5; measured on Violins 1 - Performance 2026-10-10: velocity 1-9, no bite, -6 dB at ~165 ms) instead of spiccato (112: a bite at 50-80 ms, then a swell). An accent or marcato stays accented (122), a re-attack right after a note of the patch spiccato (106); the Inspector's attack and the Velocity lane override. The owner, 2026-10-12: "smooth" for a phrase's first note (after setting it by hand in Whence). A smooth note starts early by the smooth attack's own measured onset (map `attackOnset`, `sso_smooth_onset.json`, 2026-10-12, kthost on the test VM, CC1 64: median Violins 1 100.2, Violins 2 91.1, Violas 236.2, Celli 172.2, Basses 103.1 ms; by pitch with `[heldNotes] byPitch` 1), not the articulation's onset (measured at velocity 80), within the same cap (the note before on its patch keeps keepMs; chunks); Live's written clips get it through their timing. 0: spiccato | 1 (on; Recommended 1, Library default 0) | `rendermidi.cpp` `performanceNote` | `[slurs] smoothStart`; score: `playbackSettings` |
 | Transitions early, `[slurs] transitionsEarly` (the owner, 2026-10-14: "sure let's hear them started early"; 2026-10-15: 1, by ear and measured): a Performance legato transition (SSO's five string sections) is sent early: 1 by its modelled arrival (the measured `bendGlide` by the note before's length, else `legatoDelay` by interval with `libFastDelay`: the audit's model), the new pitch arrives on the beat; 2 by the measured leave + 23.5 ms, the change heard on the beat (Polfreman 2013, ISMIR: a legato note on a modelled bowed string is perceived 23.5 ms after its pitch change starts, SD 22.8); 3 the middle of the measured glide on the beat; 2 / 3 without a measured glide as 1 (the audit lists those patches). Capped in every mode: the note before on its patch keeps `[legato] keepMs` as played and never less than 15 ms (SSO doesn't play a legato note-on closer to the one before: the audit's DROPPED); the note before still ends `overlap` after the moved note-on (a transition, not a re-attack); the bend's glide moves with the note-on; Live: the written clips + Track Delay + MuseScore Link's delays play the moved note-ons (LiveTiming), *Live plays the score*'s clips carry them (below, Transitions early) | **1 (Recommended 1, Library default 0; since 2026-10-15)** | `rendermidi.cpp` `collect` (`libTransitionsEarly`, `onsetEarliest`, `libShifts`, `libJoins`), `MidiRenderer::TRANSITION_MIN_GAP_MS`, `HEARD_AFTER_LEAVE_MS`; audit: `Report::transitionShiftsMs` | `[slurs] transitionsEarly` 0-3; score: `playbackSettings` |
+| Plain Performance, `[slurs] plainPerformance` (the owner, 2026-10-17, "C" by ear on Whence's Violas bars 8-13): every bowed note of a string section with a Performance legato (attacks listed) on it, staccatos too, velocity 64, at its written start (no early start of its own), a staccato a spiccato attack (its neighbours on the patch ending 45 ms before the next note-on), slurred transitions overlapping as before, other notes their written length; pizzicato, tremolo, trills, harmonics, mutes … keep their technique; "non performance" opts out; every event of the patch the map's `plainShift` early (Violas - Performance 95.2 ms, measured; others 0, the audit lists them), everything else later by it; Live: the Kontakt track's Track Delay (above, Plain Performance) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`choosePlain`, `plainPerformanceArticulation`, `plainPerformancePatches`), `rendermidi.cpp` (`performanceNote`, `collect`, `PLAIN_VELOCITY`, `PLAIN_STACCATO_GAP_MS`, `libraryTrackDelays`), `TrackDelays::Delays::plain` / `plainMs`, `plainliveset.cpp`; data: map `plainShift` from `sso_plain_performance_shift.json` | `[slurs] plainPerformance`; score: `playbackSettings` |
 | Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' gain stage, the rest of the part's patches at 0 dB (above, Level rule; the owner, 2026-10-10; the gain stage 2026-10-15) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, by the patches' gain stage less the score's master trim (above, Section balance, Gain stage and master trim; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |

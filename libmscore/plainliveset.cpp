@@ -723,6 +723,10 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                         kt.active = !mix.muted;
                         kt.delayKey = TrackDelays::trackKey(k.patch);
                         kt.delayMs = TrackDelays::own(p.delays, kt.delayKey);
+                        // ([slurs] plainPerformance: the patch's shift on its Kontakt track, every event of the patch early by
+                        // it as MuseScore plays them; recorded as the track's lookahead, so reading the set back takes it off)
+                        kt.lookaheadMs = -TrackDelays::plainMs(p.delays, k.patch);
+                        kt.delayMs -= kt.lookaheadMs;
                         controllersClip(k, &kt.clips);
                         for (const ParamLane& pl : k.params) {
                               LiveSetWriter::ParameterAutomation a;

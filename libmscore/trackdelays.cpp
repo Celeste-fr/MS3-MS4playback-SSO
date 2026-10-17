@@ -137,6 +137,13 @@ std::map<const Part*, Delays> read(const MasterScore* score)
                         delays[part].evenAll = -rest;
                   }
             }
+      // [slurs] plainPerformance: each plain Performance patch's measured shift (the map's plainShift), early
+      if (library) {
+            for (const auto& pp : SoundLib::plainPerformancePatches(score, *library))
+                  for (const auto& p : pp.second)
+                        if (std::isfinite(p.second) && p.second > 0.0)
+                              delays[pp.first].plain[p.first] = -clampMs(p.second);
+            }
       // the master trim (0 while it is being computed: ContextLevel::masterTrim renders the score with these gains)
       const double trim = ContextLevel::masterTrim(score).db;
       if (trim != 0.0)
@@ -191,9 +198,15 @@ double own(const Delays& d, const QString& key)
       return it == d.tracks.end() ? 0.0 : it->second;
       }
 
+double plainMs(const Delays& d, const QString& patch)
+      {
+      auto it = d.plain.find(patch);
+      return it == d.plain.end() ? 0.0 : it->second;
+      }
+
 double ms(const Delays& d, const QString& patch, const QString& technique)
       {
-      double x = d.ms + own(d, trackKey(patch));
+      double x = d.ms + own(d, trackKey(patch)) + plainMs(d, patch);
       if (!technique.isEmpty())
             x += own(d, trackKey(patch, technique));
       return x;
@@ -206,6 +219,8 @@ double earliest(const Delays& d)
             const int sep = t.first.indexOf(" / ");
             x = std::min(x, sep < 0 ? ms(d, t.first) : ms(d, t.first.left(sep), t.first.mid(sep + 3)));
             }
+      for (const auto& p : d.plain)
+            x = std::min(x, ms(d, p.first));
       return x;
       }
 

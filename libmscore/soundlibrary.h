@@ -262,6 +262,12 @@ struct LibInstrument {
       // sound an octave under their key (key 50 = 72.8 Hz = D2, measured 2026-10-15), so a written D2 (38) is sent on
       // key 50 (keyShift 12). Only the key sent: pitch tables, tuning and bends stay by the written pitch. 0: none
       int keyShift { 0 };
+      // [slurs] plainPerformance (the owner's "C", 2026-10-17, by ear on Whence's Violas bars 8-13): a part played plain on
+      // this Performance patch sends every event of the patch this many ms early, one constant for the whole patch
+      // (<Instrument plainShift>, ms: the median heard - written latency of the plain notes, measured in context;
+      // tools/soundlibraries/sso_plain_performance_shift.json -> gen_spitfire_sso.py). NaN: not measured (sent as written,
+      // the playback audit lists it)
+      double plainShiftMs { NAN };
       // [levels] sectionBalance (contextlevel.h): every patch of the section plays this many dB louder, by its volume
       // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's M,
       // 2026-10-11, mp by the Meyer rule since 2026-10-14; SSO's woodwinds and brass too since then, on the strings'
@@ -331,6 +337,13 @@ struct Want {
       // "performance" where that gives a Performance legato with measured attacks (the string sections'), and then
       // without [slurs] quick's swap; choose()
       bool slurPerformance { false };
+      // every note (playback setting slurs/plainPerformance, not under "non performance"): on the patches' plain Performance
+      // legato (plainPerformanceArticulation) when the technique chosen otherwise is a bowed one it plays (long, legato,
+      // the shorts, tenuto, marcato) without modifiers; choose()
+      bool plainPerformance { false };
+      // the note is a staccato, staccatissimo or spiccato as written (with plainPerformance: a spiccato attack on the
+      // Performance patch, the renderer's plain lengths)
+      bool staccato { false };
       };
 
 //---------------------------------------------------------
@@ -399,12 +412,27 @@ struct Choice {
       // [heldNotes] byPitch 1 at each pitch: its per-pitch fit, sso_rachm_onset_fit.json), at the held one's level with
       // [slurs] quickLevel (Articulation::quickLevelAt)
       bool swapped { false };
+      // [slurs] plainPerformance moved the note onto the plain Performance legato (Want::plainPerformance): no early start
+      // of its own, its patch's events sent plainShift early (TrackDelays::Delays::plain), velocity 64 (the renderer)
+      bool plain { false };
+      // (plain: the articulation and patch the note would have played otherwise; a staccato keeps that one's played
+      // length, its early start included: the renderer)
+      const Articulation* plainFrom { nullptr };
+      int plainFromPatch { -1 };
       bool sampledOrnament() const;       // a trill or tremolo sample: play the note once
       explicit operator bool() const { return articulation; }
       };
 
 // a note's written length in seconds, its whole tie chain (TempoMap::writtenTime)
 double noteSeconds(const Note* note);
+
+// [slurs] plainPerformance: the patch's Performance legato that plays a part plain (a legato articulation under modifier
+// "performance" alone, with measured attacks: SSO's five string sections'), nullptr: none (the solo strings', the winds'
+// and the Sul C patches' keep their notes)
+const Articulation* plainPerformanceArticulation(const LibInstrument& patch);
+// with the setting on, the patch of each part that plays it plain and the ms its events go early (its plainShift; NaN:
+// not measured), by part; empty with the setting off
+std::map<const Part*, std::map<QString, double>> plainPerformancePatches(const Score* score, const Library& library);
 
 Choice choose(const LibInstrument& instrument, const Want& want);
 // of several patches: the best fit of all; of equal ones, the earlier patch

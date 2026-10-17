@@ -374,6 +374,9 @@ class EventMap : public std::multimap<int, NPlayEvent> {
       // its note-on at tick 0 (MidiRenderer: the start lead; Live's clips, the plain set: livetiming.h)
       std::map<const Note*, double> startEarlyMs;
       double startLeadMs { 0 };     // what everything plays later by for them (the start lead; 0 in Live's clips)
+      // what every event without a track delay plays later by (MidiRenderer::libraryDelayLead: the earliest negative track
+      // delay, [slurs] plainPerformance's shift among them; 0 in Live's clips): the playback audit takes it off with the start lead
+      double delayLeadMs { 0 };
       void fixupMIDI();
       void registerChannel(int c) { if (c > _highestChannel) _highestChannel = c; }
       };
