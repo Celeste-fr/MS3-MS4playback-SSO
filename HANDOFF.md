@@ -5,6 +5,38 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Paused 2026-10-17: where to pick up
+
+The owner paused the project to start a new session. `integrate-1012` (pushed) holds everything finished: crash fixes
+(Kontakt unloaded at exit, jobs load one part's instances at a time, `--live-equivalence` too, WAV header always
+valid; the GUI exit verified on the VM with build 444: 5 of 5 closes exit 0), the heard check, prepared states,
+tuning slots, the Inspector rows fix. Not yet a Windows build for the owner; before one: the Whence audit and the
+heard check (Before a build goes to the owner).
+
+1. **First: Violas, Whence bars 9-12.** The owner, 2026-10-16: plain SSO Performance (every note on the Performance
+   patch, no parameters tweaked) sounds better than the latest build; "plain SSO performance had the timing perfect
+   relatively between the staccatos and the slurs. though it's consistent late". The likely cause: our staccatos go to
+   All techniques and each technique is sent early by its own onset, so staccatos and slurs drift apart. Candidate:
+   keep staccatos on the Performance patch (spiccato attack) and send the whole patch early by one constant (its
+   median heard latency; two constants only if attacks and transitions differ by > 20 ms). The ablation (PLAIN,
+   PLAIN-SHIFT, CURRENT, CURRENT-ON-PERF, one adjustment off at a time) was started on branch `qt-bends`; state in
+   `~/MuseScore/ms3fork/private/violas-ablation-state.md`, renders in `~/.cache/qtbends/abl/`. Then a listening page
+   for the owner (the owner decides what is heard).
+2. **Quarter tones in fast slurs** (`qt-bends`): Violas' bends work in isolation, something in Whence's context
+   loses them (14 one-change variants ready, `whence_variants.py`); Celli: SSO's own Performance transitions don't
+   finish below ~300 ms per note, in 12-TET too (no fix on our side; another way of playing fast celli slurs would
+   be the owner's decision).
+3. **Lag with SSO loaded**: the lag probe's full run was stopped; state in `~/MuseScore/ms3fork/private/lag-probe-state.md`.
+   Re-run it on a quiet VM. Even levels: whether to skip short slurs waits on those numbers.
+4. **Own legato: paused** (the owner's ear: plain SSO already beats our build in bars 9-12, so what we add comes
+   first). 12-TET only when it resumes. Diagnosis: six bugs fixable in sfizz (CC1 reviving faded layers, same-key
+   note-off cutting the new note, leaps > ±7 unrecorded, ~0.9 s loops, releases after long holds only, sfizz 1.2.3
+   hangs a `delay=` region on a 256-frame boundary; fast/runs sets unused; attacks start late); the splice (old note
+   switched 80 ms before the shift, SSO 150-300 ms) needs SSO-like latency or a custom sampler (~40 % to reach SSO's
+   joins; a 1-hour null test of two identical SSO passes would decide, ~65 % if it nulls). SSO's splice rules,
+   read from the patch's script: `~/MuseScore/ms3fork/private/sso-splice-notes.md` (local only). Plan:
+   `private/own-legato-plan.md`; branch `own-legato`.
+
 ## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; not merged)
 
 The owner, 2026-10-16: "is there any way at all we can make SSO load even faster"; rule the same day: "no optimizations
