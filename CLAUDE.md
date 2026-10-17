@@ -399,7 +399,7 @@ Wier & Green 1977, owner to approve), DROPPED (fail: a legato transition sent < 
 on its route at velocity <= 64: SSO doesn't play it) and LEAP (warn: a transition beyond an octave / 1200 cents: SSO attacks afresh). The renderer
 reports each library note's choice through `MidiRenderer::setLibraryTrace`. **Run it on Whence (quarter tones,
 `Whence.mscz`; Recommended) before any build goes to the owner, and the heard check too** (VERIFY.md › Heard check:
-`tools/playbackverify/heard_check.sh <score> [preset]`: the real sound, Kontakt + SSO on the VM per route, each note's
+`tools/playbackverify/heard_check.sh <score> [preset]`: the real sound, Kontakt + SSO on the VM per route, by default as MuseScore's own export renders it (`HC_RENDER=export`: `--verify-playback --verify-wav` with `MS_VERIFY_ROUTES=1`, one run per part; `kthost` the bare patches), each note's
 heard time against its written one and the audit's prediction; ARRIVAL / RHYTHM (fail 0.10 / warn 0.05, approved 2026-10-16) / LEVEL, model drift per
 patch x situation; on Whence and `share/verifyplayback/Heard passages.musicxml`; the audit alone can't catch a wrong
 model).

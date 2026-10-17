@@ -10,9 +10,16 @@ wrong model passes it: it reported ARRIVAL 0 fail while Whence's Violas slurs (a
   heard_check.py events <dump> <out> [--parts a,b]   kthost event files, one per route (<dump>: tst_playbackaudit
                                                      auditScore's MS_AUDIT_DUMP folder; times + OFFSET_S), list.txt
                                                      "route|patch|probe pitch"
-  heard_check.py analyse <dump> <wavs> [--report f] [--json f] [--parts a,b] [--title t]
+  heard_check.py analyse <dump> <wavs> [--report f] [--json f] [--parts a,b] [--title t] [--export]
                                                      the renders (<wavs>/<code>.wav, code = route "0-11") measured;
-                                                     the report printed (and written); exit 1 on any FAIL
+                                                     the report printed (and written); exit 1 on any FAIL. --export:
+                                                     <wavs> is MuseScore's --verify-playback folder (MS_VERIFY_ROUTES=1:
+                                                     "<score> route <code>.wav", its events.tsv)
+  heard_check.py score <in.mscz|.mscx> <out> <preset or metaTag> [--part name]
+                                                     the export renderer's copy of the score: its playbackSettings
+                                                     metaTag set as the dump plays it (settings_tag); --part: only that
+                                                     part on the library (partPlayback metaTag)
+  heard_check.py parts <score> <dump>                the library parts, one per line (HC_SPLIT=parts)
 
 Inputs (PlaybackAudit::writeHeardInputs): per route "<route> museScore.txt" (seconds = score time + the start lead),
 routemap.txt, predicted.tsv (every library note-on: written time, route, patch, articulation, sent ms, the audit's
@@ -67,9 +74,12 @@ Model drift (e): measured - predicted heard time (the audit's arrivalMs: sent + 
 """
 import argparse
 import json
+import glob
 import math
 import os
+import re
 import sys
+import zipfile
 
 import numpy as np
 
@@ -77,6 +87,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
 OFFSET_S = 1.0              # kthost: the events from 1.0 s (a note-on before the score's 0 fits)
+EXPORT_OFFSET_S = 0.0       # the export (--verify-playback --verify-wav): sample 0 is score time 0 (the start lead is
+                            # in the events); measured against kthost on bit-exact routes (VERIFY.md › Heard check)
 LATENCY_MS = 30.0           # the perceived envelope's analysis latency (docs/HISTORY.md, the map's onsets)
 ONSET_DB = 15.0             # the -15 dB perceptual onset (Vos & Rasch 1981; the map's onset rule)
 ALT_DB = 6.0                # a second reading of each attack, -6 dB: the Violas' slurs as the owner heard them (2026-10-16:
@@ -162,6 +174,130 @@ def make_events(dump, out, parts=None):
         lst.append("%s|%s|%d" % (route, info["patch"], probe))
     _write(os.path.join(out, "list.txt"), "\n".join(lst) + "\n")
     return lst
+
+
+# ------------------------------------------------------------------------------------------------- the export renderer
+
+def preset_values(preset, root=os.path.join(HERE, "..", "..")):
+    """a preset's values (Playback::presets() in libmscore/playbacksettings.cpp), as "id=value" items"""
+    src = _read(os.path.join(root, "libmscore", "playbacksettings.cpp"))
+    m = re.search(r'\{\s*"%s",\s*"[^"]*",\s*\{(.*?)\}\s*\}\s*\}' % re.escape(preset), src, re.S)
+    if not m:
+        raise SystemExit("no preset %s in playbacksettings.cpp" % preset)
+    return ["%s=%s" % kv for kv in re.findall(r'\{\s*"([^"]+)",\s*(-?[0-9.]+)', m.group(1))]
+
+
+def settings_tag(settings, own):
+    """the playbackSettings metaTag the export copy carries, so that it plays as the dump renders (tst_playbackaudit
+    auditScore): a metaTag string replaces the score's own; a preset id is the preset's values (the dump's ini) with the
+    score's own metaTag over them"""
+    if "=" in settings:
+        return settings
+    items = dict(i.split("=", 1) for i in preset_values(settings))
+    for i in (own or "").split(";"):
+        if "=" in i:
+            k, v = i.split("=", 1)
+            items[k.strip()] = v.strip()
+    return ";".join("%s=%s" % kv for kv in items.items())
+
+
+def set_settings(text, settings):
+    tag = re.search(r'<metaTag name="playbackSettings">([^<]*)</metaTag>', text)
+    value = settings_tag(settings, tag.group(1) if tag else "")
+    esc = value.replace("&", "&amp;").replace("<", "&lt;")
+    if tag:
+        return text[:tag.start(1)] + esc + text[tag.end(1):], value
+    m = re.search(r'\n(\s*)<metaTag ', text)
+    assert m, "no metaTag in the score"
+    at = m.start() + 1
+    return text[:at] + m.group(1) + '<metaTag name="playbackSettings">' + esc + "</metaTag>\n" + text[at:], value
+
+
+def only_part(text, name):
+    """the partPlayback metaTag (libmscore/partplayback.h): part name on the library, every other part on MS4's sounds
+    (HC_SPLIT=parts: one export run per part loads only its instances)"""
+    names = [re.search(r"<trackName>([^<]*)</trackName>", p).group(1) for p in re.findall(r"<Part[ >].*?</Part>", text, re.S)]
+    if name not in names:
+        raise SystemExit("no part %s in the score (%s)" % (name, ", ".join(names)))
+    modes = [{"part": i, "name": n, "mode": "library" if n == name else "ms4"} for i, n in enumerate(names)]
+    value = json.dumps(modes).replace("&", "&amp;").replace("<", "&lt;").replace('"', "&quot;")
+    text = re.sub(r'\s*<metaTag name="partPlayback">[^<]*</metaTag>', "", text)
+    m = re.search(r'\n(\s*)<metaTag ', text)
+    at = m.start() + 1
+    return text[:at] + m.group(1) + '<metaTag name="partPlayback">' + value + "</metaTag>\n" + text[at:]
+
+
+def score_parts(src):
+    """the library parts' names of a .mscz / .mscx, in score order"""
+    text = _read(src) if src.endswith(".mscx") else next(
+        zipfile.ZipFile(src).read(n).decode("utf-8") for n in zipfile.ZipFile(src).namelist() if n.endswith(".mscx"))
+    return [re.search(r"<trackName>([^<]*)</trackName>", p).group(1) for p in re.findall(r"<Part[ >].*?</Part>", text, re.S)]
+
+
+def make_score(src, out, settings, part=None):
+    """a copy of a .mscz / .mscx (out: the same kind) with the playbackSettings metaTag of settings_tag (and with part:
+    only that part on the library, only_part)"""
+    if src.endswith(".mscx"):
+        text, value = set_settings(_read(src), settings)
+        if part:
+            text = only_part(text, part)
+        _write(out, text)
+        return value
+    value = None
+    with zipfile.ZipFile(src) as z, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as o:
+        for info in z.infolist():
+            data = z.read(info.filename)
+            if info.filename.endswith(".mscx"):
+                text, value = set_settings(data.decode("utf-8"), settings)
+                if part:
+                    text = only_part(text, part)
+                data = text.encode("utf-8")
+            o.writestr(info, data)
+    assert value is not None, "no .mscx in " + src
+    return value
+
+
+def export_folders(root):
+    """the --verify-playback folders under root (each holding "<score> events.tsv"): one per run (HC_SPLIT=parts: one per
+    part), sorted"""
+    return sorted({os.path.dirname(f) for f in glob.glob(os.path.join(root, "**", "* events.tsv"), recursive=True)})
+
+
+def route_key(folders, i, code):
+    return code if len(folders) == 1 else "%d/%s" % (i, code)
+
+
+def read_export_ons(root):
+    """the export's note-ons per route key (the route code "<port>-<channel + 1>", "<run>/<code>" with several runs) from
+    each folder's "<score> events.tsv": {key: [(seconds, key number)]}, {key: folder}"""
+    folders = export_folders(root)
+    if not folders:
+        raise SystemExit("no events.tsv under %s" % root)
+    out, where = {}, {}
+    for i, folder in enumerate(folders):
+        ev = glob.glob(os.path.join(folder, "* events.tsv"))
+        for ln in _read(ev[0]).splitlines()[1:]:
+            c = ln.split("\t")
+            if len(c) >= 6 and c[3] == "on" and int(c[5]) > 0:
+                slot = int(c[2])
+                k = route_key(folders, i, "%d-%d" % (slot // 16, slot % 16 + 1))
+                out.setdefault(k, []).append((float(c[0]), int(c[4])))
+                where[k] = folder
+    for v in out.values():
+        v.sort()
+    return out, where
+
+
+def read_dump_ons(dump, route):
+    f = os.path.join(dump, route + " museScore.txt")
+    if not os.path.exists(f):
+        return []
+    out = []
+    for e in _read(f).splitlines():
+        c = e.split()
+        if len(c) >= 4 and c[1] == "on" and int(c[3]) > 0:
+            out.append((float(c[0]), int(c[2])))
+    return sorted(out)
 
 
 # ------------------------------------------------------------------------------------------------------------- measures
@@ -283,8 +419,10 @@ def pct(v, q):
 
 # ------------------------------------------------------------------------------------------------------------- analysis
 
-def analyse(dump, wavs, parts=None, load=None):
-    """the measurements and findings (a dict, the JSON's content). load(route) -> (x, sr) or None (default: the wav)"""
+def analyse(dump, wavs, parts=None, load=None, export=False):
+    """the measurements and findings (a dict, the JSON's content). load(route) -> (x, sr) or None (default: the wav).
+    export: wavs is MuseScore's --verify-playback folder (MS_VERIFY_ROUTES: "<score> route <code>.wav", sample 0 = score
+    time 0 + EXPORT_OFFSET_S) and each note's note-on is the export's own (its events.tsv, paired with the dump's)"""
     import soundfile as sf
     from loudness import perceived_envelope
     lead = read_lead_ms(dump)
@@ -295,17 +433,107 @@ def analyse(dump, wavs, parts=None, load=None):
         rows = [r for r in rows if r["part"] in parts]
     rows_by_note = {(r["part"], round(r["written"], 4), r["pitch"]): r for r in rows}
 
+    offset = EXPORT_OFFSET_S if export else OFFSET_S
+
     def load_wav(route):
-        f = os.path.join(wavs, route + ".wav")
+        if export:
+            folder = export_where.get(route, wavs)
+            f = glob.glob(os.path.join(folder, "* route %s.wav" % route.split("/")[-1]))
+            f = f[0] if f else ""
+        else:
+            f = os.path.join(wavs, route + ".wav")
         if not os.path.exists(f):
             return None
         x, sr = sf.read(f, always_2d=False)
         return x, sr
+    export_where = {}
     load = load or load_wav
     by_route = {}
     for r in rows:
-        r["onMs"] = (r["written"] + OFFSET_S) * 1000 + lead + r["sentMs"]      # render time of its note-on
+        r["onMs"] = (r["written"] + offset) * 1000 + lead + r["sentMs"]      # render time of its note-on
         by_route.setdefault(r["route"], []).append(r)
+    # the export's own note-ons (what played): each row's note-on moved to its pair in events.tsv (its key, nearest in
+    # time within 100 ms, any route: the export's routes are what played, so a row the dump put on another lane of its
+    # patch is re-routed; seen once in 13 dumps of Whence, 2026-10-16: Violas - Performance on 2 lanes instead of 3)
+    # (each export run's own start lead: with HC_SPLIT=parts a run plays one part, whose lead may differ from the whole
+    # score's; its shift against the dump, the mode of the same-key differences within 0.5 s, is taken out first)
+    pairing = {}
+    if export:
+        import bisect
+        eons, export_where = read_export_ons(wavs)
+        alle = sorted((t, k, route) for route, v in eons.items() for (t, k) in v)
+        times = [e[0] for e in alle]
+        dons = {route: read_dump_ons(dump, route) for route in by_route}
+        alld = sorted((t, k) for v in dons.values() for (t, k) in v)
+        dtimes = [d[0] for d in alld]
+        shift = {}
+        for folder in set(export_where.values()):
+            hist = {}
+            for (t, k, route) in alle:
+                if export_where[route] != folder:
+                    continue
+                for j in range(bisect.bisect_left(dtimes, t - 0.5), bisect.bisect_right(dtimes, t + 0.5)):
+                    if alld[j][1] == k:
+                        b_ = int(round(1000 * (t - alld[j][0])))
+                        hist[b_] = hist.get(b_, 0) + 1
+            # (a run's shift only when most of its notes agree on it, at least 5: a whole run moved by its lead, not
+            # single notes another build or setting plays at other times)
+            n_run = sum(1 for e in alle if export_where[e[2]] == folder)
+            # (1 ms bins: a shift on a bin's edge splits; the support within 2 ms of the mode, its mean)
+            best = max(hist, key=lambda b_: (sum(hist.get(b_ + d, 0) for d in range(-2, 3)), -abs(b_))) if hist else 0
+            near = {b_: hist.get(b_, 0) for b_ in range(best - 2, best + 3)}
+            support = sum(near.values())
+            mean = sum(b_ * c for b_, c in near.items()) / support if support else 0.0
+            shift[folder] = mean / 1000 if hist and support >= max(5, 0.8 * n_run) else 0.0
+        used, diffs, unpaired, rerouted = set(), [], 0, 0
+        for r in sorted(rows, key=lambda r: r["onMs"]):
+            t = r["onMs"] / 1000 - offset
+            d = dons.get(r["route"], [])
+            # (its event in the dump: at its time, the key nearest its pitch: a chord's notes share the time)
+            i = min(range(len(d)), key=lambda i: (round(abs(d[i][0] - t), 3), abs(d[i][1] - r["pitch"] - r["cents"] / 100)),
+                    default=None)
+            if i is None or abs(d[i][0] - t) > 0.002:
+                unpaired += 1
+                continue
+            key = d[i][1]
+            lo, hi = bisect.bisect_left(times, t - 0.6), bisect.bisect_right(times, t + 0.6)
+            cand = [j for j in range(lo, hi) if j not in used and alle[j][1] == key
+                    and abs(alle[j][0] - shift[export_where[alle[j][2]]] - t) < 0.1]
+            if not cand:
+                unpaired += 1
+                continue
+            j = min(cand, key=lambda j: (round(abs(alle[j][0] - shift[export_where[alle[j][2]]] - t), 4),
+                                         alle[j][2] != r["route"]))
+            used.add(j)
+            sh = shift[export_where[alle[j][2]]]
+            diffs.append(1000 * (alle[j][0] - sh - t))
+            if alle[j][2] != r["route"]:
+                # (counted when the code differs: a split run numbers its own part's routes from 0-1, which isn't one)
+                rerouted += alle[j][2].split("/")[-1] != r["route"] and len(set(export_where.values())) == 1
+                r["dumpRoute"] = r["route"]
+                r["route"] = alle[j][2]
+            r["dumpOnMs"] = r["onMs"]
+            r["exportRun"] = export_where[alle[j][2]]
+            r["leadMs"] = lead + 1000 * sh
+            r["onMs"] = (alle[j][0] + offset) * 1000
+            r["sentMs"] = r["onMs"] - (r["written"] + offset) * 1000 - r["leadMs"]
+        # (a shifted run's lead refined to the median of its notes' exact differences: the histogram's 1 ms bins)
+        for folder in set(export_where.values()):
+            rr = [r for r in rows if r.get("exportRun") == folder]
+            if rr and shift[folder] != 0.0:
+                dm = float(np.median([r["onMs"] - offset * 1000 - r["dumpOnMs"] + offset * 1000 for r in rr]))
+                for r in rr:
+                    r["leadMs"] = lead + dm
+                    r["sentMs"] = r["onMs"] - (r["written"] + offset) * 1000 - r["leadMs"]
+                shift[folder] = dm / 1000
+        diffs = [r["onMs"] - r["dumpOnMs"] - (r["leadMs"] - lead) for r in rows if "dumpOnMs" in r]
+        pairing = dict(rows=len(rows), paired=len(diffs), unpaired=unpaired, rerouted=rerouted, exportOns=len(alle),
+                       runs=len(set(export_where.values())), shiftsMs=sorted({round(1000 * v, 1) for v in shift.values()}),
+                       medianMs=round(float(np.median(diffs)), 3) if diffs else None,
+                       maxAbsMs=round(float(max(abs(x) for x in diffs)), 3) if diffs else None)
+        by_route = {}
+        for r in rows:
+            by_route.setdefault(r["route"], []).append(r)
     missing = []
     for route, rr in by_route.items():
         rr.sort(key=lambda r: r["onMs"])
@@ -335,7 +563,7 @@ def analyse(dump, wavs, parts=None, load=None):
                 # map's onsets were measured on single notes against their own peak, the slur's level here)
                 later = [q for q in rr if q["slur"] == r["slur"] and q["part"] == r["part"] and q["onMs"] > on + 0.5]
                 if later and all(q["transition"] for q in later):
-                    slur_end = (max(q["writtenEnd"] for q in later) + OFFSET_S) * 1000 + lead
+                    slur_end = (max(q["writtenEnd"] for q in later) + offset) * 1000 + r.get("leadMs", lead)
                     end = min(max(end, slur_end), on + SPAN_MAX_S * 1000)
             chord = sum(1 for q in rr if abs(q["onMs"] - on) < 0.5) > 1
             r["chordOnRoute"] = chord
@@ -352,13 +580,19 @@ def analyse(dump, wavs, parts=None, load=None):
                 t, why = transition_time(f0, fh, on / 1000, fp, tp, after, nxt[0] / 1000 if nxt else None)
                 if t is None:
                     r["heard"], r["how"] = None, why
+                    # (how near the sound came: the f0 closest to the target between its note-on and the next one)
+                    i0, i1 = int(round(on / 1000 / fh)), int(round((nxt[0] if nxt else on + 700) / 1000 / fh))
+                    w = f0[max(0, i0):max(i0 + 1, i1)]
+                    w = w[~np.isnan(w)]
+                    if len(w):
+                        r["closestCents"] = float(100 * (w[np.argmin(np.abs(w - tp))] - tp))
                 else:
                     r["heardRender"] = t * 1000
                     r["how"] = "pitch"
             else:
                 t, masked, _ = attack_time(env, first, hop, on, prev_on, end)
                 t6, _, _ = attack_time(env, first, hop, on, prev_on, end, ALT_DB)
-                r["heardAlt"] = t6 - (r["written"] + OFFSET_S) * 1000 - lead if t6 is not None else None
+                r["heardAlt"] = t6 - (r["written"] + offset) * 1000 - r.get("leadMs", lead) if t6 is not None else None
                 r["masked"] = masked
                 if t is None:
                     r["heard"], r["how"] = None, "no rise"
@@ -366,7 +600,7 @@ def analyse(dump, wavs, parts=None, load=None):
                     r["heardRender"] = t
                     r["how"] = "envelope (masked)" if masked else "envelope"
             if "heardRender" in r:
-                r["heard"] = r["heardRender"] - (r["written"] + OFFSET_S) * 1000 - lead
+                r["heard"] = r["heardRender"] - (r["written"] + offset) * 1000 - r.get("leadMs", lead)
         # each note's loudest level over its heard span (to the next heard note on the route)
         heard_on = sorted((r["heardRender"], r["id"]) for r in rr if r.get("heardRender") is not None)
         for i, (t, rid) in enumerate(heard_on):
@@ -387,7 +621,8 @@ def analyse(dump, wavs, parts=None, load=None):
         if r["transition"] and r.get("how") == "pitch not reached" and not r["grace"] and not r["sub"]:
             findings.append(dict(kind="UNHEARD", severity="WARN", value=0.0, seconds=r["written"],
                                  text="its pitch (%+.0f cents) not reached within 30 cents before the next note-on on its route "
-                                      "(%s)" % (r["cents"], r["route"]), **where(r)))
+                                      "(%s; closest %s)" % (r["cents"], r["route"], "%+.0f cents" % r["closestCents"]
+                                                            if r.get("closestCents") is not None else "unvoiced"), **where(r)))
 
     # (d1) heard against the note before in its line (the audit's ARRIVAL pairs: a chord's earliest)
     groups = {}
@@ -533,14 +768,16 @@ def analyse(dump, wavs, parts=None, load=None):
                               predictedMs=round(r["arrivalMs"], 1) if r["hasArrival"] else None,
                               heardMs=round(r["heard"], 1) if r.get("heard") is not None else None, how=r.get("how"),
                               heardAltMs=round(r["heardAlt"], 1) if r.get("heardAlt") is not None else None,
+                              closestCents=round(r["closestCents"], 1) if r.get("closestCents") is not None else None,
                               transition=bool(r["transition"]), situation=r.get("situation"),
                               levelDb=round(r["levelDb"], 2) if r.get("levelDb") is not None else None))
     order = {"ARRIVAL": 0, "RHYTHM": 1, "LEVEL": 2, "UNHEARD": 3}
     findings.sort(key=lambda f: (order[f["kind"]], {"FAIL": 0, "WARN": 1}[f["severity"]], f["part"], f["seconds"]))
-    silent = sorted(r for r in by_route if os.path.exists(os.path.join(wavs, r + ".log"))
+    silent = sorted(r for r in by_route if not export and os.path.exists(os.path.join(wavs, r + ".log"))
                     and "probe SILENT" in _read(os.path.join(wavs, r + ".log")))
     alt = [d for d in alt if d is not None]
-    return dict(lead=lead, missingRenders=missing, probeSilent=silent,
+    return dict(lead=lead, renderer="export" if export else "kthost", pairing=pairing, missingRenders=missing,
+                probeSilent=silent,
                 slursAlt6=dict(measured=len(alt), fail=sum(1 for d in alt if d > RHYTHM_FAIL),
                                warn=sum(1 for d in alt if RHYTHM_WARN < d <= RHYTHM_FAIL)), notes=notes_out, groups=groups_out, findings=findings, drift=drift_out,
                 thresholds=dict(arrivalWarnMs=ARRIVAL_WARN_MS, arrivalFailMs=ARRIVAL_FAIL_MS, rhythmWarn=RHYTHM_WARN,
@@ -558,6 +795,12 @@ def report_text(res, title=""):
         len(n), len(meas), masked, len(n) - len(meas),
         ", ".join("%s %d" % (k, sum(1 for x in n if x["heardMs"] is None and x["how"] == k))
                   for k in sorted({x["how"] for x in n if x["heardMs"] is None}))))
+    pr = res.get("pairing") or {}
+    if pr:
+        out.append("export renderer: %d of %d notes paired with the export's note-ons (%d in all, %d run%s, lead shifts %s ms; "
+                   "%d unpaired, %d re-routed; export - dump median %s ms, max |d| %s ms); times as the export played them" % (
+                       pr["paired"], pr["rows"], pr["exportOns"], pr.get("runs", 1), "" if pr.get("runs", 1) == 1 else "s",
+                       pr.get("shiftsMs", [0.0]), pr["unpaired"], pr["rerouted"], pr["medianMs"], pr["maxAbsMs"]))
     if res["missingRenders"]:
         out.append("no render for routes: " + ", ".join(res["missingRenders"]))
     if res.get("probeSilent"):
@@ -609,13 +852,32 @@ def main(argv=None):
     a.add_argument("--json")
     a.add_argument("--parts")
     a.add_argument("--title", default="")
+    a.add_argument("--export", action="store_true", help="wavs: MuseScore's --verify-playback folder (MS_VERIFY_ROUTES)")
+    m = sub.add_parser("score")
+    m.add_argument("src")
+    m.add_argument("out")
+    m.add_argument("settings")
+    m.add_argument("--part", help="only this part on the library (the others on MS4's sounds)")
+    pl = sub.add_parser("parts")
+    pl.add_argument("score")
+    pl.add_argument("dump")
     args = ap.parse_args(argv)
+    if args.cmd == "score":
+        print(make_score(args.src, args.out, args.settings, args.part))
+        return 0
+    if args.cmd == "parts":
+        # (the parts with library routes in the dump, in score order: one export run each with HC_SPLIT=parts)
+        lib = {v["part"] for v in read_routemap(args.dump).values()}
+        for n in score_parts(args.score):
+            if n in lib:
+                print(n)
+        return 0
     parts = set(args.parts.split(",")) if args.parts else None
     if args.cmd == "events":
         for ln in make_events(args.dump, args.out, parts):
             print(ln)
         return 0
-    res = analyse(args.dump, args.wavs, parts)
+    res = analyse(args.dump, args.wavs, parts, export=args.export)
     text = report_text(res, args.title)
     sys.stdout.write(text)
     if args.report:

@@ -191,7 +191,7 @@ ARRIVAL 0 fail while Whence's Violas slurs (an eighth + two sixteenths, written 
 200 / 210 / 105 ms, heard as a triplet by the owner. The heard check measures the **real sound**: every library route
 rendered with Kontakt + SSO on the VM, each note's heard time measured, judged against the written times and against
 the audit's predictions. Code: `tools/playbackverify/heard_check.py` (its header holds every rule and source),
-`heard_check.sh` (end to end), `heard_check_vm.cmd` (the VM side), the inputs from `PlaybackAudit::writeHeardInputs`
+`heard_check.sh` (end to end), `heard_export_vm.cmd` / `heard_check_vm.cmd` (the VM side of each renderer), the inputs from `PlaybackAudit::writeHeardInputs`
 (`tst_playbackaudit auditScore` with `MS_AUDIT_DUMP=<folder>`), tests `test_heard_check.py` (synthetic audio).
 
 ```sh
@@ -201,11 +201,35 @@ HC_RUN=~/MuseScore/ms3fork/run-<name>.sh tools/playbackverify/heard_check.sh ~/M
 The preset is `recommended` (the default), `library`, or a `playbackSettings` metaTag (`slurs/transitionsEarly=0`);
 parts a comma list (default all). `HC_RUN`: a wrapper running a command in the build dir (else `HC_BUILD`, the build
 dir). It writes the dump, the renders and `report.txt` / `report.json` to `~/.cache/heardcheck/<run>/` (`HC_WORK`; the
-renders deleted after the analysis unless `HC_KEEP=1`), uses `C:\claude\heardcheck\<run>` on the VM (one share login,
+renders deleted after the analysis unless `HC_KEEP=1`), uses `C:\claude\<HC_VMDIR, default heardcheck>\<run>` on the VM (one share login,
 deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores out of the repository.
 
-- **Render**: each route alone (kthost, one Kontakt instance with MuseScore's setup of the route's patch from the VM's
-  setups folder), MuseScore's events as playback renders them (10-measure chunks), the start lead included.
+- **Render**, two renderers, each route alone (the analysis needs one route's sound):
+  - `HC_RENDER=export` (**the default**, 2026-10-16): MuseScore's own export, `--verify-playback --verify-wav` with
+    `MS_VERIFY_ROUTES=1` (build 443 on, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38997724166;
+    `HC_EXE` the VM's MuseScore3Evo.exe): every library route rendered alone as File › Export audio renders it, so with
+    what the owner hears: the tuning slots (Kontakt's Tune: quarter tones on the non-bending patches too), the gain stage
+    and master trim, the export mix, the flat lanes' plug-in parameters (Whence's Violins 1 vibrato 0), the transport
+    restart. Its copy of the score carries the dump's settings as its playbackSettings metaTag (`heard_check.py score`: the
+    preset's values with the score's own over them); a MusicXML score is imported by the VM's MuseScore first and the
+    dump made from that same copy. `HC_SPLIT=parts` (the default): one MuseScore run per library part, the others on
+    MS4's sounds (partPlayback metaTag): each run loads only its part's instances, and a crash loses one part (one run of
+    the whole passages crashed with 0xC0000409 after 24 of 34 routes, the `--verify-wav` crash `C:\claude\crashfix` is
+    on; per part, none); `whole` one run. Alignment: the WAV's sample 0 is score time 0 and the events are placed
+    sample-exactly (the renderer splits its blocks at each event), so the offset is **0**: export against kthost on 5
+    untuned All techniques routes of Whence (identical events) null at -46 … -61 dB at lag **0 samples** after a gain
+    (the gain stage: Violins 2 +1.12, Violas -7.08, Celli +2.56, Basses +3.44 dB), the first sound 0.03-1.9 ms after the
+    first note-on in both. (The -16 … +34 ms "offsets" fitted before were the onset readings, not the timeline.) The
+    analysis takes each note's note-on from the export's own `events.tsv`, paired with the dump's by key and time
+    (`analyse --export`; reported: Whence 454 / 454 within 0.05 ms, the passages 600 / 600): a part run has its own
+    start lead (the passages' parts 133-216 ms less than the score's), taken out per run; a note the dump put on another
+    lane is re-routed (once in 13 dumps of Whence the dump gave Violas - Performance 2 lanes, the export 3: the renderer
+    isn't always deterministic there; not investigated).
+  - `HC_RENDER=kthost`: each route through kthost (one Kontakt instance with MuseScore's setup of the route's patch from
+    the VM's setups folder), the dump's events + 1.0 s. It lacks the tuning slots (a non-bending patch's quarter tones
+    play in 12-TET), the gain stage, master trim and mix (the passages' Performance routes ~30-50 dB quieter in
+    perceived level than exported) and the flat lanes' parameters; its probe note waits 60 s on every Basses route.
+  Both: MuseScore's events as playback renders them (10-measure chunks), the start lead included.
 - **Heard time**: an attack (staccato, held note, a slur's first note) by its perceived envelope (`loudness.py`): the
   -15 dB time under its peak less 30 ms, the rule the map's onsets were measured by (so a step onset reads ~24 ms
   early, a swell near its -15 dB time); the peak over the note's own span, a slur's first note over its slur. A note
@@ -215,7 +239,8 @@ deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores o
   slow attacks is open (owner). A legato transition by pYIN over its whole route: the note before's pitch heard, then
   left, then the first of 3 frames within 30 cents of its pitch (quarter-tone cents included) before the next note-on
   on the route (the bendGlide's model arrival is 9/10 of the way: for a semitone 30 cents is 7/10). Not reached:
-  **UNHEARD** (warn: a skipped note, a microtone not reached, or pYIN lost it; listen).
+  **UNHEARD** (warn: a skipped note, a microtone not reached, or pYIN lost it; listen), with the f0 closest to the
+  target between its note-on and the next (`closestCents`).
 - **ARRIVAL** (fail > 50 ms, warn > 30): heard - written against the note before in its line (Rasch 1979, as the
   audit's ARRIVAL).
 - **RHYTHM** (fail > 0.10, warn > 0.05; approved by the owner 2026-10-16 ("sure, go with your rec")): per slur (its notes and the next onset) and per
@@ -233,7 +258,8 @@ deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores o
   transition), median and 10th-90th percentile; |median| > 20 ms marked DRIFT. Where it drifts, the map's numbers (or
   the renderer's model) are wrong for that situation, and the audit can't see it.
 
-Time (2026-10-16, VM): ~10-25 s of kthost per route (+60 s per Basses route: kthost's probe note never passes
+Time (2026-10-16, VM, uncontended), end to end: **export** Whence 5.1 min (VM 258 s, 5 part runs), the passages 7.1 min
+(VM 334 s); **kthost** Whence 5.8 min (VM 295 s), the passages 17.5 min (VM 850 s). Before that: ~10-25 s of kthost per route (+60 s per Basses route: kthost's probe note never passes
 -60 dBFS at their setups' levels, so it waits its 60 s; their renders sound), analysis ~1.5 min (Whence) to ~4 min
 (the passages; pYIN on every Performance route). Whence 7.6 min end to end, the passages ~20 min. Performance renders
 differ take to take (HANDOFF.md): one run is one take; for a finding that matters, run twice.
@@ -245,9 +271,37 @@ beat by the -15 dB rule, +6 and +77 by -6 dB, one unreadable); Whence's fast qua
 transitions and first notes, none on the staccatos (within 20 ms). Masked readings of a held Long re-attacked on its
 route are unreliable (Celli bar 11, +539 ms): check those by ear before acting on them.
 
-Not covered: tuning by Kontakt slots or varispeed (kthost plays a non-bending patch's quarter tones in 12-TET; only the
-attacks' envelopes are measured on those routes), Controllers set as plug-in parameters (flat lanes), the gain stage and
-mic levels, chords on one Performance route (not pitch-tracked).
+**The two renderers side by side** (2026-10-16, integrate-1012 8cfc8f56b1 + this branch, Recommended, build 443, one
+take each; kthost | export, fail / warn):
+
+| | Whence kthost | Whence export | passages kthost | passages export |
+|---|---|---|---|---|
+| measured notes | 233 / 454 | 225 / 454 | 439 / 600 | 443 / 600 |
+| ARRIVAL | 29 / 32 | 33 / 30 | 162 / 48 | 164 / 50 |
+| RHYTHM slurs | 4 / 2 | 1 / 1 | 29 / 9 | 27 / 13 |
+| RHYTHM runs | 10 / 9 | 9 / 11 | 29 / 12 | 26 / 19 |
+| LEVEL (warn) | 25 | 16 | 62 | 65 |
+| UNHEARD (warn) | 126 | 132 | 90 | 89 |
+
+(Whence's whole-score export run, a second take: ARRIVAL 41 / 27, RHYTHM slurs 4 / 1, runs 11 / 12: the Performance
+patches' take-to-take spread is as large as the renderers' difference.) Model drift agrees on the All techniques
+staccatos (within 3 ms) and the transitions; it differs where the export plays what kthost doesn't:
+- **Performance attacks read 30-60 ms earlier** in the export (passages, first after silence / attack joined: Celli
+  -8 / +33 -> -58 / -52, Violins 2 -5 / +31 -> -55 / -31, Basses +51 / +155 -> +4 / +15 ms): the level. The kthost renders
+  scaled to the export's levels read the same as the export (Celli -66 / -61, Violins 2 -59 / -42, Basses -11 / +5): the
+  perceived envelope is level-dependent, so the export's readings (the real levels) are the ones to trust.
+- **Whence's Violins 1 Longs on the tuned copies** (route +50 cents, bars 12 and 16): kthost -10 / -2 ms, the export +67 /
+  +225 ms, a slow swell ~10 dB under kthost's attack with identical events; the likely cause is the score's vibrato 0
+  (a flat lane, set on the instance; kthost plays the patch's default), not proven.
+- **Quarter-tone transitions are tracked** in both (the Violas' and Celli's are on bending Performance patches, so
+  kthost played them by pitch bend too): Violas bar 8's sixteenths are a slow wave between 62.0 and 64.1 that never
+  reaches 61.5 / 64.5 (closest 40-60 cents off), Celli bar 1's alternating 48 / 47.5 closest 70-180 cents off: the sound
+  doesn't reach the quarter tones at that speed (UNHEARD is the finding, not a tracking loss). Whence's quarter-tone
+  transitions heard: 32 / 141 kthost, 26 / 141 export; median closest approach of the unreached ones 60 cents (Violas,
+  Violins 1), 90 (Celli).
+
+Not covered: chords on one Performance route (not pitch-tracked); the export renderer's split runs play each part with
+its own start lead and master trim (levels are compared within a route only, timing against each run's own lead).
 
 ## Testing here (Linux, no Kontakt)
 

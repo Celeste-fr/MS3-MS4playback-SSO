@@ -188,6 +188,66 @@ class EndToEnd(unittest.TestCase):
         self.assertFalse(d[("Violas - Performance", "transition after transition")]["drifting"])
         self.assertIn("RHYTHM", H.report_text(res))
 
+    def test_export_pairing(self):
+        """the export renderer: sample 0 = score time 0, and the note-on as the export sent it (its events.tsv, 10 ms
+        after the dump's): a staccato whose hard start sounds at the export's note-on reads (sent + 10) - 24 ms"""
+        lead_ms = 100.0
+        w = 0.5
+        tmp = tempfile.mkdtemp()
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + row(w, w + 0.2, 62, "0-8", "Violas", "Spiccato",
+                                                                         "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0,
+                                                                         -1, 0.0, -1, 0, 0, 1) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        on = w + lead_ms / 1000 - 0.020
+        H._write(os.path.join(tmp, "0-8 museScore.txt"), "%.6f on 62 64\n%.6f off 62 0\n" % (on, on + 0.2))
+        H._write(os.path.join(tmp, "score events.tsv"), "time\ttick\tslot\ttype\ta\tb\tswitch\n"
+                 "%.4f\t0\t7\ton\t62\t64\t0\n%.4f\t0\t7\toff\t62\t0\t0\n" % (on + 0.010, on + 0.21))
+        n = int(2.0 * SR)
+        t = np.arange(n) / SR
+        s = on + 0.010
+        x = saw(hz(62), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40)])
+        res = H.analyse(tmp, tmp, load=lambda r: (x, SR) if r == "0-8" else None, export=True)
+        heard = res["notes"][0]["heardMs"]
+        self.assertLess(abs(heard - (-20 + 10 - HARD_BIAS_MS)), 6, heard)
+        self.assertEqual(res["pairing"]["paired"], 1)
+        self.assertAlmostEqual(res["pairing"]["medianMs"], 10.0, places=1)
+        self.assertIn("export renderer: 1 of 1 notes paired", H.report_text(res))
+
+    def test_export_split_runs(self):
+        """HC_SPLIT=parts: a run that plays one part has its own start lead (here 150 ms less): its notes paired by the
+        run's shift, each note's heard time against its run's lead"""
+        lead_ms = 200.0
+        tmp = tempfile.mkdtemp()
+        ws = [0.5 + 0.3 * i for i in range(6)]
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(
+            row(w, w + 0.2, 62 + i, "0-8", "Violas", "Spiccato", "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0, -1, 0.0, -1,
+                0, 0, 1 + i) for i, w in enumerate(ws)) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        ons = [w + lead_ms / 1000 - 0.020 for w in ws]
+        H._write(os.path.join(tmp, "0-8 museScore.txt"), "".join("%.6f on %d 64\n" % (t, 62 + i) for i, t in enumerate(ons)))
+        root = os.path.join(tmp, "out")
+        for k, sh in ((1, 0.0), (2, -0.150)):
+            d = os.path.join(root, "score-%d" % k, "Playback verify")
+            os.makedirs(d)
+            ev = "" if k == 1 else "".join("%.4f\t0\t0\ton\t%d\t64\t0\n" % (t + sh, 62 + i) for i, t in enumerate(ons))
+            H._write(os.path.join(d, "score-%d events.tsv" % k), "time\ttick\tslot\ttype\ta\tb\tswitch\n" + ev)
+        n = int(3.0 * SR)
+        t = np.arange(n) / SR
+        x = np.zeros(n)
+        for i, o in enumerate(ons):
+            s = o - 0.150
+            x += saw(hz(62 + i), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40),
+                                                   (s + 0.25, -120)])
+        res = H.analyse(tmp, root, load=lambda r: (x, SR) if r == "1/0-1" else None, export=True)
+        self.assertEqual(res["pairing"]["paired"], 6, res["pairing"])
+        self.assertEqual(res["pairing"]["shiftsMs"], [-150.0])
+        for note in res["notes"]:
+            self.assertLess(abs(note["heardMs"] - (-20 - HARD_BIAS_MS)), 10, note)
+
 
 if __name__ == "__main__":
     unittest.main()

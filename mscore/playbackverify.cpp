@@ -1105,6 +1105,43 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
       const QString clipDir = report->folder + "/clips";
       int clipsLeft = shareable ? 0 : options.maxClips;
       const QString prefix = safeName(QFileInfo(path).completeBaseName());
+
+      // MS_VERIFY_ROUTES=1 with --verify-wav (the heard check's export renderer, VERIFY.md › Heard check): each library
+      // route (slot) rendered alone as the export renders it (its instance, tuning slots, the export mix with the gain
+      // stage, the plug-in parameters), "<score> route <port>-<channel + 1>.wav" (the playback audit's route codes), and
+      // nothing else: no mix, no per-part analysis, no built-in renders. A route's events, plus the plug-in parameters
+      // sent to any slot of its instance (a multi's parameters are the instance's). Sample 0 is score time 0, as in
+      // events.tsv
+      if (vst && options.wav && !shareable && qEnvironmentVariableIntValue("MS_VERIFY_ROUTES") == 1) {
+            QJsonArray routesJs;
+            for (const auto& sp : patches) {
+                  const int slot = sp.first;
+                  const int host = vst->hostOf(slot);
+                  const QString code = QString("%1-%2").arg(slot / 16).arg(slot % 16 + 1);
+                  Vst3Synth* v = vst.get();
+                  const Render r = render(score.get(), libEvents, rate, state, vst,
+                                          [slot, host, v](const NPlayEvent& e) {
+                                                if (!e.isExternal())
+                                                      return false;
+                                                const int s = e.extPort() * 16 + e.extChannel();
+                                                return s == slot || (e.type() == ME_PARAMETER && v->hostOf(s) == host);
+                                                },
+                                          report->folder + "/" + prefix + " route " + code + ".wav");
+                  log(QString("%1: route %2 (%3) rendered alone in %4 s").arg(name, code, sp.second).arg(r.seconds, 0, 'f', 1));
+                  routesJs.append(QJsonObject { { "route", code }, { "patch", sp.second }, { "renderSeconds", r.seconds },
+                                                { "peakDb", std::round(r.peakDb * 10) / 10 },
+                                                { "seconds", double(r.mono.size()) / rate } });
+                  }
+            js["routes"] = routesJs;
+            js["seconds"] = clock_.elapsed() / 1000.0;
+            js["findingCount"] = 0;
+            lines << QString(" %1 routes rendered alone (MS_VERIFY_ROUTES); %2 s").arg(routesJs.size())
+                     .arg(clock_.elapsed() / 1000.0, 0, 'f', 0);
+            report->scores.append(js);
+            report->summary << lines;
+            return;
+            }
+
       PV::Settings settings;
       if (!fileAudio.empty()) {
             settings.offsetFrom = -0.3;         // an export made elsewhere may start late
@@ -1301,7 +1338,9 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
             s.write((head + report.summary).join("\n").toUtf8() + "\n");
             s.close();
             }
-      const QString z = zipFolder(folder);
+      // (MS_VERIFY_ROUTES: no zip; the folder holds little but the routes' renders, which a zip would only copy)
+      const bool routesOnly = options.wav && qEnvironmentVariableIntValue("MS_VERIFY_ROUTES") == 1;
+      const QString z = routesOnly ? folder : zipFolder(folder);
       if (zip)
             *zip = z;
       log(QString("done: %1 finding(s) in %2 s; %3").arg(report.findings).arg(t.elapsed() / 1000.0, 0, 'f', 0)
