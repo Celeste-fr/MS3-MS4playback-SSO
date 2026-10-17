@@ -5,6 +5,39 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Edit lag (branch `edit-lag`, 2026-10-17, from plain-performance 44114ac529 + lag-probe; not merged)
+
+Goal: edits respond fast with SSO, sound unchanged (the owner's rule: speedups sound-identical or dropped).
+- **Redundant**: the Inspector asked `NoteLane::onPerformancePatch` twice per command (selectionChanged, then endCmd:
+  same undo state, same notes); an undo / redo back to a state seen seconds earlier rendered realRangeTops and the master
+  trim again (one cached result per score). **Needed but not now**: the first Inspector question after an edit paid
+  both whole-score renders (~200 ms of each VM edit), only needed for the next sound. **Main-thread stalls**: the
+  measurer's instance loads (setState 1.8-3.2 s on the VM).
+- **Changed** (CLAUDE.md › Edit lag): RecentResults (8 per score), onPerformancePatch kept by inputs, EditWarmup
+  (the edit's renders one chunk per event-loop pass while stopped; the mixer timer and the Inspector's Performance
+  rows wait; preview / Play / export finish the same job at once), measurer setState on a worker
+  (`SoundLibraryExport::beginInstance`). `MS_EDIT_LAG_OFF=1` = the code before; probe phases `b-` / `a-` = off.
+- **Proof** (Linux): `editLagIdentical` (21 steps, off vs on, Whence 44314 lines per step) identical; before/after
+  `dumpEvents` (6 scores x Recommended / plainPerformance 1 x default / chunked / live) + audit dumps: 1213 files
+  byte-identical; run_fork_tests all passed. Not proven with Kontakt: the measurer's threaded setState (the same bytes;
+  Kontakt took threaded setState in the 2026-10-03 load-times run) and the mixer gains set after the warm-up (stopped).
+- **Linux probe** (test synth, Whence, 5 rounds, interleaved off/on blocks b-,b,b-,b,a-,a,a-,a; host load 10-12 of 12
+  cores from other builds): all-edit response p50 384 -> 34, 495 -> 40 (b), 418 -> 99, 668 -> 76 ms (a); worst
+  event-loop lateness in an edit's window p50 409 -> 138, 538 -> 162, 448 -> 294, 702 -> 253 ms (a warm-up step is one
+  10-measure chunk, ~80-200 ms here). Pitch edits and select still render at once (the click's preview needs the
+  edit's renders): pitch-up 562 -> 366, 781 -> 413 ms.
+- **Open**: the VM run (needs a Windows build: `go.cmd <tag> o+b-+b+b-+b+a-+a 5 stopped`); the 0xC0000005 crash
+  (rerun1 phase e): not ours on the evidence (below); the note preview's chunk cache ignores even levels written without
+  an undo step (`NotePreview::stateKey`): a click after such a write can replay the chunk rendered before it (a
+  correctness fix changes what the click plays: owner's call).
+- Crash (rerun1, phase e playing, logs only): the "VirtualUnlock failed" lines (19108, errno 158 ERROR_NOT_LOCKED) came
+  while the 8 playback instances were released at the switch to MS4 (01:22:32-57), 3 min 15 s before the exit; the
+  process was then shrinking (ws 5006 -> 1739 MB, physical free >= 5432 MB throughout; commit not logged); no stdout in
+  the last 3 min; no code path found that touches a released instance (setPlugin under the mutex, the audio thread's
+  try_lock, the measurer joins its workers first). Most consistent with Kontakt's own fault after its purge; next time:
+  WER LocalDumps on the VM, commit headroom in monitor.ps1, phase e alone. (The measurer's instances stay loaded in MS4
+  mode: EvenAuto::active follows the current library; releasing them there would save memory, not proven related.)
+
 ## Plain Performance (branch `plain-performance`, 2026-10-17)
 
 The owner chose "C" by ear (Whence Violas bars 8-13): plain SSO Performance, the whole part early by one constant.
