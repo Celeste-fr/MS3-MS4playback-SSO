@@ -320,6 +320,7 @@ add_library(mscoreapp STATIC
       tuningdialog.cpp tuningdialog.h
       playbackmode.cpp playbackmode.h
       lagprobesession.cpp lagprobesession.h
+      editwarmup.cpp editwarmup.h
 
       ${CLOUD_SRC}
       ${IMPORTMIDIUI_SRC}

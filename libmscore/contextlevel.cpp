@@ -27,15 +27,55 @@
 #include "synthesizerstate.h"
 #include "undo.h"
 #include "lagprobe.h"
+#include "evenlevels.h"
+#include "recentresults.h"
 #include <QMutex>
 #include <QRegularExpression>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <memory>
 #include <set>
 #include <tuple>
 
 namespace Ms {
+//---------------------------------------------------------
+//   EditLag (recentresults.h)
+//---------------------------------------------------------
+
+static std::atomic<int> editLagOn { -1 };
+
+bool EditLag::on()
+      {
+      int v = editLagOn.load();
+      if (v < 0) {
+            v = qEnvironmentVariableIntValue("MS_EDIT_LAG_OFF") ? 0 : 1;
+            editLagOn = v;
+            }
+      return v == 1;
+      }
+
+void EditLag::setOn(bool on)
+      {
+      editLagOn = on ? 1 : 0;
+      }
+
+//---------------------------------------------------------
+//   untrackedInputs (recentresults.h)
+//---------------------------------------------------------
+
+QString untrackedInputs(const MasterScore* score)
+      {
+      uint tags = 0;
+      if (score)
+            for (auto i = score->metaTags().cbegin(); i != score->metaTags().cend(); ++i)
+                  tags = tags * 31u + (qHash(i.key()) ^ (qHash(i.value()) * 7u));
+      return QString("%1|%2|%3|%4|%5|%6|%7|%8|%9").arg(EvenLevels::generation()).arg(tags)
+             .arg(quintptr(SoundLib::current().get())).arg(SoundLib::routesGeneration()).arg(Playback::generation())
+             .arg(int(SoundLib::output())).arg(int(SoundLib::active())).arg(int(PartPlaybackModes::libraryDefault()))
+             .arg(quintptr(SoundLib::dynamicsCalibration().get()));
+      }
+
 namespace ContextLevel {
 
 bool on(const Score* score)
@@ -345,16 +385,82 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
 // (realRangeTops renders the score, and the renderer reads the volumes: inside it, the volumes without the real range)
 static thread_local int rangePass = 0;
 
-std::map<const Part*, double> realRangeTops(const MasterScore* score)
+static bool rangeNeedsRender(const MasterScore* score)
       {
-      std::map<const Part*, double> tops;
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!score || !library || !realRange(score) || library->dynamicsCC < 0 || library->dynamicsCC == CTRL_EXPRESSION)
-            return tops;
+            return false;
       bool any = false;
       for (const SoundLib::Route& r : SoundLib::routes(score, *library))
             any = any || hasRealRange(r.instrument);
-      if (!any)
+      return any;
+      }
+
+//---------------------------------------------------------
+//   RenderJob
+//    a whole-score render of realRangeTops or the master trim one chunk at a time (warmStep: the edit lag), the very
+//    loop each runs at once: one renderer, the chunks in order, the same context. A sync caller of the same inputs (key
+//    and untrackedInputs) finishes it instead of starting over; other inputs drop it. The main thread's only
+//---------------------------------------------------------
+
+namespace {
+struct RenderJob {
+      const MasterScore* score { nullptr };
+      QString key;
+      QString untracked;
+      bool trim { false };                    // the master trim's render (else realRangeTops')
+      std::unique_ptr<MidiRenderer> midi;
+      MidiRenderer::Chunk next;
+      bool started { false };
+      bool done { false };
+      std::map<const Part*, double> tops;     // realRangeTops'
+      std::map<const Part*, TrackDelays::Delays> delays;  // the trim's
+      EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;
+      };
+std::unique_ptr<RenderJob> rangeJob;
+std::unique_ptr<RenderJob> trimJob;
+}
+
+static void step(RenderJob& j)
+      {
+      if (!j.started) {
+            j.midi.reset(new MidiRenderer(const_cast<MasterScore*>(j.score)));
+            j.midi->setMinChunkSize(10);
+            if (j.trim)
+                  j.midi->setLibraryTrace(&j.trace);
+            else
+                  j.midi->setRealRangeTops(&j.tops);
+            j.next = j.midi->getChunkAt(0);
+            j.started = true;
+            }
+      if (j.next) {
+            SynthesizerState ss;
+            MidiRenderer::Context ctx { ss };
+            ctx.metronome = false;
+            EventMap part;
+            j.midi->renderChunk(j.next, &part, ctx);
+            if (j.trim)
+                  j.events.insert(part.begin(), part.end());
+            j.next = j.midi->getChunkAt(j.next.utick2());
+            }
+      j.done = !j.next;
+      }
+
+static void rangeStep(RenderJob& j)
+      {
+      ++rangePass;
+      {
+            LagProbe::Scope probe("realRangeTops render (step)");
+            step(j);
+      }
+      --rangePass;
+      }
+
+std::map<const Part*, double> realRangeTops(const MasterScore* score)
+      {
+      std::map<const Part*, double> tops;
+      if (!rangeNeedsRender(score))
             return tops;
       ++rangePass;
       {
@@ -375,6 +481,57 @@ std::map<const Part*, double> realRangeTops(const MasterScore* score)
       return tops;
       }
 
+// realRangeTops for volumes(key): the warm-up's job when it is for the same inputs (finished here), else at once
+static std::map<const Part*, double> rangeTopsFor(const MasterScore* score, const QString& key, const QString& untracked)
+      {
+      if (EditLag::on() && rangeJob && rangeJob->score == score && rangeJob->key == key && rangeJob->untracked == untracked) {
+            std::unique_ptr<RenderJob> j = std::move(rangeJob);
+            while (!j->done)
+                  rangeStep(*j);
+            return j->tops;
+            }
+      return realRangeTops(score);
+      }
+
+// what volumes() computes for the score now (and its cache key); any false: nothing (empty)
+namespace {
+struct VolumesCall {
+      bool context { false };
+      int sectionMode { 0 };
+      bool section { false };
+      bool real { false };
+      bool mics { false };
+      bool any { false };
+      QString key;
+      };
+}
+
+static VolumesCall volumesCall(const MasterScore* score, const SoundLib::Library& library)
+      {
+      VolumesCall v;
+      v.context = on(score) && Playback::on("slurs/performance", score);
+      v.sectionMode = sectionBalanceMode(score);
+      v.section = v.sectionMode > 0;
+      v.real = realRange(score) && !rangePass;
+      v.mics = micCompensation(score) && !library.micFader.empty();
+      v.any = v.context || v.section || v.real || v.mics;
+      if (!v.any)
+            return v;
+      const UndoStack* undo = score->undoStack();
+      v.key = QString("%1|%2|%3|%4|%5|%6|%7").arg(quintptr(&library)).arg(SoundLib::routesGeneration())
+              .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
+              .arg(score->metaTag(Playback::metaTag)).arg(score->metaTag(PartPlaybackModes::metaTag))
+              + QString("|%1|%2|%3%4").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves())
+              .arg(int(v.context)).arg(v.sectionMode) + QString("|%1|%2").arg(int(v.real)).arg(int(v.mics))
+              + (v.mics ? "|" + score->metaTag(Automation::metaTag) : QString());
+      return v;
+      }
+
+static QMutex volumesMutex;
+// (the last few states per score: an undo or redo back to one is a hit; the key holds the undo state, so an entry is
+// only ever the same inputs' result)
+static std::map<const MasterScore*, RecentResults<std::map<const Part*, Volumes>>> volumesCache;
+
 // (read often: TrackDelays::read, the host's mixer every 50 ms; kept per score until an edit, an undo, another library,
 // other routes or settings)
 std::map<const Part*, Volumes> volumes(const MasterScore* score)
@@ -382,38 +539,29 @@ std::map<const Part*, Volumes> volumes(const MasterScore* score)
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!score || !library)
             return std::map<const Part*, Volumes>();
-      const bool context = on(score) && Playback::on("slurs/performance", score);
-      const int sectionMode = sectionBalanceMode(score);
-      const bool section = sectionMode > 0;
-      const bool real = realRange(score) && !rangePass;
-      const bool mics = micCompensation(score) && !library->micFader.empty();
-      if (!context && !section && !real && !mics)
+      const VolumesCall vc = volumesCall(score, *library);
+      if (!vc.any)
             return std::map<const Part*, Volumes>();
       const UndoStack* undo = score->undoStack();
-      const QString key = QString("%1|%2|%3|%4|%5|%6|%7").arg(quintptr(library.get())).arg(SoundLib::routesGeneration())
-                          .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
-                          .arg(score->metaTag(Playback::metaTag)).arg(score->metaTag(PartPlaybackModes::metaTag))
-                          + QString("|%1|%2|%3%4").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves())
-                          .arg(int(context)).arg(sectionMode) + QString("|%1|%2").arg(int(real)).arg(int(mics))
-                          + (mics ? "|" + score->metaTag(Automation::metaTag) : QString());
-      static QMutex mutex;
-      static std::map<const MasterScore*, std::pair<QString, std::map<const Part*, Volumes>>> cache;
+      const QString& key = vc.key;
       {
-            QMutexLocker lock(&mutex);
-            auto c = cache.find(score);
-            if (c != cache.end() && c->second.first == key && undo && !undo->active())
-                  return c->second.second;
+            QMutexLocker lock(&volumesMutex);
+            auto c = volumesCache.find(score);
+            const std::map<const Part*, Volumes>* hit = c != volumesCache.end() && undo && !undo->active() ? c->second.find(key, untrackedInputs(score)) : nullptr;
+            if (hit)
+                  return *hit;
       }
+      const QString untracked = untrackedInputs(score);         // (as they were when computed)
       // (the real range's headroom renders the score, which reads the volumes again: not under the lock)
-      const std::map<const Part*, double> ranges = real ? realRangeTops(score) : std::map<const Part*, double>();
-      if (!context && !section && ranges.empty() && !mics)
+      const std::map<const Part*, double> ranges = vc.real ? rangeTopsFor(score, key, untracked) : std::map<const Part*, double>();
+      if (!vc.context && !vc.section && ranges.empty() && !vc.mics)
             return std::map<const Part*, Volumes>();
-      QMutexLocker lock(&mutex);
-      if (cache.size() > 16)
-            cache.clear();
+      QMutexLocker lock(&volumesMutex);
+      if (volumesCache.size() > 16)
+            volumesCache.clear();
       LagProbe::Scope probe("ContextLevel::volumes compute");
-      std::map<const Part*, Volumes> out = compute(score, *library, context, sectionMode, ranges, mics);
-      cache[score] = { key, out };
+      std::map<const Part*, Volumes> out = compute(score, *library, vc.context, vc.sectionMode, ranges, vc.mics);
+      volumesCache[score].put(key, untracked, out);
       return out;
       }
 
@@ -595,8 +743,22 @@ static double dbOf(double gain)
       return gain > 0.0 ? 20.0 * std::log10(gain) : -200.0;
       }
 
+// (computeTrim renders the score: false when it returns before, nothing to render)
+static bool trimNeedsRender(const SoundLib::Library& library, const std::map<const Part*, TrackDelays::Delays>& delays)
+      {
+      bool any = false;
+      for (const auto& d : delays)
+            any = any || !d.second.rule.empty() || !d.second.even.empty();
+      if (!any || library.dynamicsCC == CTRL_EXPRESSION)
+            return false;
+      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+      return cal && !cal->patches().empty() && std::isfinite(library.crestDb);
+      }
+
+// rendered, renderedTrace: the score's render as below, made before (RenderJob, the warm-up)
 static MasterTrim computeTrim(const MasterScore* score, const SoundLib::Library& library,
-                              const std::map<const Part*, TrackDelays::Delays>& delays)
+                              const std::map<const Part*, TrackDelays::Delays>& delays, const EventMap* rendered = nullptr,
+                              const std::vector<MidiRenderer::LibTrace>* renderedTrace = nullptr)
       {
       MasterTrim t;
       bool any = false;             // (a level setting gives a patch a gain: else nothing to trim, Library default)
@@ -637,9 +799,13 @@ static MasterTrim computeTrim(const MasterScore* score, const SoundLib::Library&
             }
 
       // the score rendered once, each library note's choice traced (its articulation: the calibration's curve)
-      EventMap events;
-      std::vector<MidiRenderer::LibTrace> trace;
-      {
+      EventMap ownEvents;
+      std::vector<MidiRenderer::LibTrace> ownTrace;
+      const EventMap& events = rendered ? *rendered : ownEvents;
+      const std::vector<MidiRenderer::LibTrace>& trace = renderedTrace ? *renderedTrace : ownTrace;
+      if (!rendered) {
+            EventMap& events = ownEvents;
+            std::vector<MidiRenderer::LibTrace>& trace = ownTrace;
             MidiRenderer midi(const_cast<MasterScore*>(score));
             midi.setMinChunkSize(10);
             midi.setLibraryTrace(&trace);
@@ -778,6 +944,43 @@ MasterTrim computeMasterTrim(const MasterScore* score)
       return computeTrim(score, *library, TrackDelays::read(score));
       }
 
+// masterTrim's inputs now: the gains (TrackDelays, untrimmed) and the cache key; false: no gains, no trim
+static bool trimCall(const MasterScore* score, const SoundLib::Library& library, std::map<const Part*, TrackDelays::Delays>* delays,
+                     QString* key)
+      {
+      {
+            TrimGuard guard;
+            *delays = TrackDelays::read(score);
+      }
+      // (the key: what the render and the gains depend on; the gains themselves, as even levels change without an undo step)
+      const UndoStack* undo = score->undoStack();
+      *key = QString("%1|%2|%3|%4|%5|%6|%7").arg(quintptr(&library)).arg(SoundLib::routesGeneration())
+             .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
+             .arg(quintptr(SoundLib::dynamicsCalibration().get())).arg(int(SoundLib::output()))
+             + "|" + score->metaTag(Playback::metaTag) + "|" + score->metaTag(PartPlaybackModes::metaTag)
+             + QString("|%1|%2").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves());
+      bool gains = false;
+      for (const auto& pd : *delays) {
+            const TrackDelays::Delays& d = pd.second;
+            gains = gains || !d.rule.empty() || !d.even.empty();
+            *key += QString("|%1").arg(quintptr(pd.first));
+            for (const std::map<QString, double>* m : { &d.rule, &d.even, &d.levels })
+                  for (const auto& v : *m)
+                        *key += QString(",%1=%2").arg(v.first).arg(v.second, 0, 'g', 12);
+            }
+      return gains;
+      }
+
+static QMutex trimMutex;
+static std::map<const MasterScore*, RecentResults<MasterTrim>> trimCache;       // (as volumes': the last few states)
+
+static void trimStep(RenderJob& j)
+      {
+      LagProbe::Scope probe("masterTrim render (step)");
+      TrimGuard guard;
+      step(j);
+      }
+
 MasterTrim masterTrim(const MasterScore* score)
       {
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
@@ -785,47 +988,112 @@ MasterTrim masterTrim(const MasterScore* score)
       if (!score || !library || trimPass || rangePass)
             return MasterTrim();
       std::map<const Part*, TrackDelays::Delays> delays;
-      {
-            TrimGuard guard;
-            delays = TrackDelays::read(score);
-      }
-      // (the key: what the render and the gains depend on; the gains themselves, as even levels change without an undo step)
-      const UndoStack* undo = score->undoStack();
-      QString key = QString("%1|%2|%3|%4|%5|%6|%7").arg(quintptr(library.get())).arg(SoundLib::routesGeneration())
-                    .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
-                    .arg(quintptr(SoundLib::dynamicsCalibration().get())).arg(int(SoundLib::output()))
-                    + "|" + score->metaTag(Playback::metaTag) + "|" + score->metaTag(PartPlaybackModes::metaTag)
-                    + QString("|%1|%2").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves());
-      bool gains = false;
-      for (const auto& pd : delays) {
-            const TrackDelays::Delays& d = pd.second;
-            gains = gains || !d.rule.empty() || !d.even.empty();
-            key += QString("|%1").arg(quintptr(pd.first));
-            for (const std::map<QString, double>* m : { &d.rule, &d.even, &d.levels })
-                  for (const auto& v : *m)
-                        key += QString(",%1=%2").arg(v.first).arg(v.second, 0, 'g', 12);
-            }
-      if (!gains)
+      QString key;
+      if (!trimCall(score, *library, &delays, &key))
             return MasterTrim();
-      static QMutex mutex;
-      static std::map<const MasterScore*, std::pair<QString, MasterTrim>> cache;
+      const UndoStack* undo = score->undoStack();
       {
-            QMutexLocker lock(&mutex);
-            auto c = cache.find(score);
-            if (c != cache.end() && c->second.first == key && undo && !undo->active())
-                  return c->second.second;
+            QMutexLocker lock(&trimMutex);
+            auto c = trimCache.find(score);
+            const MasterTrim* hit = c != trimCache.end() && undo && !undo->active() ? c->second.find(key, untrackedInputs(score)) : nullptr;
+            if (hit)
+                  return *hit;
       }
+      const QString untracked = untrackedInputs(score);         // (as they were when computed)
       MasterTrim t;
-      {
+      if (EditLag::on() && trimJob && trimJob->score == score && trimJob->key == key && trimJob->untracked == untracked) {
+            // (the warm-up's render of these very inputs: finished here)
+            std::unique_ptr<RenderJob> j = std::move(trimJob);
+            while (!j->done)
+                  trimStep(*j);
+            TrimGuard guard;
+            t = computeTrim(score, *library, delays, &j->events, &j->trace);
+            }
+      else {
             LagProbe::Scope probe("masterTrim render");
             TrimGuard guard;
             t = computeTrim(score, *library, delays);
-      }
-      QMutexLocker lock(&mutex);
-      if (cache.size() > 16)
-            cache.clear();
-      cache[score] = { key, t };
+            }
+      QMutexLocker lock(&trimMutex);
+      if (trimCache.size() > 16)
+            trimCache.clear();
+      trimCache[score].put(key, untracked, t);
       return t;
+      }
+
+//---------------------------------------------------------
+//   warmStep / dropWarmup (contextlevel.h)
+//---------------------------------------------------------
+
+bool warmStep(const MasterScore* score)
+      {
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!EditLag::on() || !score || !library || trimPass || rangePass)
+            return true;
+      const UndoStack* undo = score->undoStack();
+      if (!undo || undo->active())
+            return true;                  // (inside a command: nothing kept now)
+      const QString untracked = untrackedInputs(score);
+      // the volumes (their real range's render)
+      const VolumesCall vc = volumesCall(score, *library);
+      static QString volumesTried;      // (volumes() asked for these inputs: a result it doesn't keep, none to keep, is warm too)
+      if (vc.any && volumesTried != vc.key + "#" + untracked) {
+            bool warm = false;
+            {
+                  QMutexLocker lock(&volumesMutex);
+                  auto c = volumesCache.find(score);
+                  warm = c != volumesCache.end() && c->second.find(vc.key, untracked);
+            }
+            if (!warm) {
+                  if (vc.real && rangeNeedsRender(score)) {
+                        if (!rangeJob || rangeJob->score != score || rangeJob->key != vc.key || rangeJob->untracked != untracked) {
+                              rangeJob.reset(new RenderJob);
+                              rangeJob->score = score;
+                              rangeJob->key = vc.key;
+                              rangeJob->untracked = untracked;
+                              }
+                        if (!rangeJob->done) {
+                              rangeStep(*rangeJob);
+                              return false;
+                              }
+                        }
+                  volumes(score);         // (with the job's tops: their compute only)
+                  volumesTried = vc.key + "#" + untracked;
+                  return false;
+                  }
+            }
+      // the master trim (its render)
+      std::map<const Part*, TrackDelays::Delays> delays;
+      QString key;
+      if (!trimCall(score, *library, &delays, &key))
+            return true;
+      {
+            QMutexLocker lock(&trimMutex);
+            auto c = trimCache.find(score);
+            if (c != trimCache.end() && c->second.find(key, untracked))
+                  return true;
+      }
+      if (trimNeedsRender(*library, delays)) {
+            if (!trimJob || trimJob->score != score || trimJob->key != key || trimJob->untracked != untracked) {
+                  trimJob.reset(new RenderJob);
+                  trimJob->score = score;
+                  trimJob->key = key;
+                  trimJob->untracked = untracked;
+                  trimJob->trim = true;
+                  }
+            if (!trimJob->done) {
+                  trimStep(*trimJob);
+                  return false;
+                  }
+            }
+      masterTrim(score);            // (with the job's render: the estimate only)
+      return false;
+      }
+
+void dropWarmup()
+      {
+      rangeJob.reset();
+      trimJob.reset();
       }
 
 }     // namespace ContextLevel

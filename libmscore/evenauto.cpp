@@ -117,6 +117,7 @@ void Session::write(const Note* note, double db, const QString& context)
       if (changed) {
             _score->setEvenLevelsWritten(true);
             _score->setPlaylistDirty();
+            EvenLevels::changed();
             }
       }
 

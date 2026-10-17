@@ -138,6 +138,7 @@
 #include "libmscore/playbacksettings.h"
 #include "soundlibraryhost.h"
 #include "evenautomeasurer.h"
+#include "editwarmup.h"
 #include "lagprobesession.h"
 #include "libmscore/lagprobe.h"
 #include "libmscore/renderpreflight.h"
@@ -7777,6 +7778,7 @@ void MuseScore::endCmd(bool undoRedo)
             {
                   LagProbe::Scope evenProbe("EvenAutoMeasurer::edited");
                   EvenAutoMeasurer::instance()->edited(cs);    // (an edit: even levels near it measured in the background)
+                  EditWarmup::instance()->edited(cs);          // (its renders for the next sound, between events: editwarmup.h)
             }
             setPos(cs->inputState().tick());
             updateInputState(cs);

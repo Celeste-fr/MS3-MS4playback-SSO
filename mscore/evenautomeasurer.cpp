@@ -21,6 +21,7 @@
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/undo.h"
+#include "libmscore/recentresults.h"
 #include "musescore.h"
 #include "soundlibrarycheck.h"
 #include "soundlibraryhost.h"
@@ -261,6 +262,31 @@ void EvenAutoMeasurer::loadStep()
             return;
             }
       _loadTimer.setInterval(0);
+      // a load in steps (EditLag: its setState on a worker, the window free): when done, finished here
+      if (_pendingLoad) {
+            if (!SoundLibraryExport::instanceReady(_pendingLoad.get())) {
+                  _loadTimer.start(LOAD_POLL_MS);
+                  return;
+                  }
+            const EvenAuto::Job job = _pendingJob;
+            QString error;
+            std::shared_ptr<Vst3Synth> vst;
+            if (!_score)
+                  error = tr("the score was closed");
+            else {
+                  LagProbe::Scope probe("EvenAutoMeasurer: finish instance");
+                  probe.setDetail(job.patch);
+                  vst = SoundLibraryExport::finishInstance(_pendingLoad.get(), _score, &error);
+            }
+            _pendingLoad.reset();
+            logLine(QString("even levels: %1 loaded in %2 ms, its setState on a worker thread").arg(job.patch)
+                    .arg(_pendingClock.nsecsElapsed() / 1e6, 0, 'f', 0));
+            loaded(job, vst, error);
+            dispatch(job);
+            if (!_toLoad.empty())
+                  _loadTimer.start(0);
+            return;
+            }
       const int k = EvenAuto::next(_toLoad, _focus);      // (the instance the focus needs first)
       const EvenAuto::Job job = _toLoad[size_t(k)];
       _toLoad.erase(_toLoad.begin() + k);
@@ -278,31 +304,56 @@ void EvenAutoMeasurer::loadStep()
                         route = &r;
             QString error;
             clock.restart();
+            if (route && EditLag::on()) {
+                  LagProbe::Scope probe("EvenAutoMeasurer: begin instance");
+                  probe.setDetail(job.patch);
+                  _pendingClock.start();
+                  _pendingLoad = SoundLibraryExport::beginInstance(_score, *route, float(RATE), &error);
+                  _pendingJob = job;
+                  _loadTimer.start(LOAD_POLL_MS);
+                  return;
+                  }
             LagProbe::Scope probe("EvenAutoMeasurer: load instance");
             probe.setDetail(job.patch);
             std::shared_ptr<Vst3Synth> vst = route ? SoundLibraryExport::loadInstance(_score, *route, float(RATE), &error) : nullptr;
             // (the load profile: these instances load on the main thread, between and after the playback's own)
             logLine(QString("even levels: %1 loaded in %2 ms on the main thread (the routes worked out %3 ms)")
                     .arg(job.patch).arg(clock.nsecsElapsed() / 1e6, 0, 'f', 0).arg(routesMs, 0, 'f', 0));
-            if (!vst) {
-                  _failed.insert(job.instance);
-                  logLine(QString("even levels: could not load %1: %2").arg(job.patch, error));
-                  if (mscore)
-                        mscore->showMessage(tr("Even levels: could not load %1 for measuring: %2").arg(job.patch, error), 10000);
-                  }
-            else {
-                  std::unique_ptr<Instance> in(new Instance);
-                  in->key = job.instance;
-                  in->patch = job.patch;
-                  in->vst = vst;
-                  Instance* p = in.get();
-                  _instances[job.instance] = std::move(in);
-                  p->thread = std::thread([this, p]() { worker(p); });
-                  }
+            loaded(job, vst, error);
             }
       dispatch(job);
       if (!_toLoad.empty())
             _loadTimer.start();
+#endif
+      }
+
+//---------------------------------------------------------
+//   loaded
+//    an instance loaded (vst) or not: its worker started, or the instance marked failed
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::loaded(const EvenAuto::Job& job, std::shared_ptr<Vst3Synth> vst, const QString& error)
+      {
+#ifdef USE_VST3
+      if (!vst) {
+            _failed.insert(job.instance);
+            logLine(QString("even levels: could not load %1: %2").arg(job.patch, error));
+            if (mscore)
+                  mscore->showMessage(tr("Even levels: could not load %1 for measuring: %2").arg(job.patch, error), 10000);
+            }
+      else {
+            std::unique_ptr<Instance> in(new Instance);
+            in->key = job.instance;
+            in->patch = job.patch;
+            in->vst = vst;
+            Instance* p = in.get();
+            _instances[job.instance] = std::move(in);
+            p->thread = std::thread([this, p]() { worker(p); });
+            }
+#else
+      Q_UNUSED(job);
+      Q_UNUSED(vst);
+      Q_UNUSED(error);
 #endif
       }
 
@@ -420,7 +471,7 @@ void EvenAutoMeasurer::onResult(const EvenAuto::Result& r)
 
 bool EvenAutoMeasurer::probeBusy() const
       {
-      return _session && (_session->busy() || !_toLoad.empty());
+      return _session && (_session->busy() || !_toLoad.empty() || _pendingLoad);
       }
 
 void EvenAutoMeasurer::setProbePaused(bool on)
@@ -536,6 +587,7 @@ bool EvenAutoMeasurer::loading(const std::vector<QString>& instances) const
 void EvenAutoMeasurer::releaseInstances()
       {
       _toLoad.clear();
+      _pendingLoad.reset();               // (after its setState: InstanceLoad waits)
       for (auto& i : _instances) {
             Instance* in = i.second.get();
             {

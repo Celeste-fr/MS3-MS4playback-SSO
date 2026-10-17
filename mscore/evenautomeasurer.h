@@ -12,7 +12,8 @@
 //                once, the rest measured
 //    where       plug-in instances of its own, one per part and patch with something to measure, loaded on the main
 //                thread when first needed (SoundLibraryExport::loadInstance: the same setup, controllers and parameter
-//                ids as playback's), each with a worker thread: played a test note in real time until it sounds
+//                ids as playback's; its setState on a worker thread meanwhile, beginInstance / finishInstance, the
+//                window free: the edit lag, 2026-10-17), each with a worker thread: played a test note in real time until it sounds
 //                (PlaybackVerifier::waitUntilSounding: Kontakt goes on loading samples), then offline (beginExport)
 //                rendering the jobs given to it (EvenMeasure::run). Parts measure in parallel (an instance each). The
 //                main playback's instances are never touched (note previews while editing play as before). Released
@@ -57,6 +58,7 @@
 
 #include "libmscore/evenauto.h"
 #include "libmscore/evenlevels.h"
+#include "soundlibraryhost.h"
 
 namespace Ms {
 
@@ -69,6 +71,7 @@ class EvenAutoMeasurer : public QObject {
       static constexpr int RATE = 44100;              // the job's
       static constexpr int DEBOUNCE_MS = 600;         // (UI timing: after the last edit)
       static constexpr int OPEN_DELAY_MS = 1500;      // (UI timing: after a score is shown)
+      static constexpr int LOAD_POLL_MS = 20;         // (UI timing: a load's setState on its worker looked at)
 
       struct Instance;
       QPointer<MasterScore> _score;
@@ -78,6 +81,10 @@ class EvenAutoMeasurer : public QObject {
       std::map<QString, std::unique_ptr<Instance>> _instances;
       std::set<QString> _failed;                      // instances that could not load (this score)
       std::vector<EvenAuto::Job> _toLoad;             // waiting for their instance
+      // the instance loading in steps (its setState on a worker: SoundLibraryExport::beginInstance) and the job it is for
+      std::unique_ptr<SoundLibraryExport::InstanceLoad, void(*)(SoundLibraryExport::InstanceLoad*)> _pendingLoad { nullptr, nullptr };
+      EvenAuto::Job _pendingJob;
+      QElapsedTimer _pendingClock;
       QTimer _debounce;
       QTimer _loadTimer;
       QTimer _countdown;
@@ -101,6 +108,7 @@ class EvenAutoMeasurer : public QObject {
       void detect();
       void dispatch(const EvenAuto::Job& job);
       void loadStep();
+      void loaded(const EvenAuto::Job& job, std::shared_ptr<Vst3Synth> vst, const QString& error);
       void onResult(const EvenAuto::Result& r);
       void updateLive();
       void checkHold();

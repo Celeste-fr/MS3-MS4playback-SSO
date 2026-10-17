@@ -63,6 +63,11 @@
 #include "libmscore/synthesizerstate.h"
 #include "libmscore/trackdelays.h"
 #include "libmscore/contextlevel.h"
+#include "libmscore/evenlevels.h"
+#include "libmscore/notelane.h"
+#include "libmscore/notepreview.h"
+#include "libmscore/recentresults.h"
+#include "libmscore/undo.h"
 #include "mscore/liveequivalence.h"
 #include "mscore/liveintegration.h"
 #include "mscore/livesetexport.h"
@@ -143,6 +148,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainWritten_data();
       void plainWritten();
       void plainPerformanceLive();
+      void editLagIdentical();
       void delayedTrackLevel();
       void verifyExportMix();
       void liveTimingOverride();
@@ -5928,6 +5934,221 @@ void TestLiveEquivalence::playbackSettingsWidget()
       QCOMPARE(writes.back().second, QString("50"));
       QCOMPARE(SoundLib::onsetEarly(score, *lib), 50);
       delete score;
+      }
+
+
+//---------------------------------------------------------
+//   editLagIdentical
+//    the edit-lag speedups (recentresults.h: results kept by their inputs) give what the code before them gave after
+//    every step of an edit sequence: pitch up, undo / redo back to states seen before, a staccato, even levels written
+//    without an undo step, a setting changed and undone. Each step's TrackDelays (the gains, the master trim), the master
+//    trim, NoteLane::onPerformancePatch for every chosen note, the note preview's events and the score's chunked render
+//    (as Seq plays it) recorded with EditLag off and on, compared. MS_EDITLAG_SCORE=<score> (e.g. Whence) instead of
+//    the test's; MS_EDITLAG_SETTINGS=<metaTag>; MS_EDITLAG_TIMES=1 prints each step's Inspector + preview time in both
+//---------------------------------------------------------
+
+static QString eventsText(const EventMap& events)
+      {
+      QStringList out;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            out << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9").arg(te.first).arg(e.type()).arg(e.channel()).arg(e.dataA()).arg(e.dataB())
+                   .arg(e.extPort()).arg(e.extChannel()).arg(double(e.tuning()), 0, 'g', 9).arg(int(e.librarySwitch()));
+            }
+      return out.join("\n");
+      }
+
+static QString delaysText(const MasterScore* score)
+      {
+      QStringList out;
+      auto mapText = [](const std::map<QString, double>& m) {
+            QStringList t;
+            for (const auto& v : m)
+                  t << QString("%1=%2").arg(v.first).arg(v.second, 0, 'g', 15);
+            return t.join(",");
+            };
+      const std::map<const Part*, TrackDelays::Delays> all = TrackDelays::read(score);
+      for (int i = 0; i < score->parts().size(); ++i) {
+            const TrackDelays::Delays d = TrackDelays::of(score->parts()[i], all);
+            out << QString("%1|%2|%3|%4|%5|%6|%7|%8|%9").arg(i).arg(d.ms, 0, 'g', 15).arg(mapText(d.tracks), mapText(d.levels), mapText(d.plain), mapText(d.rule))
+                   .arg(d.ruleTop, 0, 'g', 15).arg(d.rangeTop, 0, 'g', 15).arg(mapText(d.micTop))
+                   + QString("|%1|%2|%3|%4").arg(mapText(d.even)).arg(d.evenAll, 0, 'g', 15).arg(d.trim, 0, 'g', 15).arg(d.shift, 0, 'g', 15);
+            }
+      const ContextLevel::MasterTrim t = ContextLevel::masterTrim(score);
+      out << QString("trim %1 %2 %3 %4 %5 %6 %7 %8").arg(t.db, 0, 'g', 15).arg(int(t.measured)).arg(t.peakDb, 0, 'g', 15).arg(t.atSeconds, 0, 'g', 15)
+             .arg(t.sounding).arg(t.fallbackDb, 0, 'g', 15).arg(t.notes).arg(t.uncalibrated);
+      const std::map<const Part*, ContextLevel::Volumes> volumes = ContextLevel::volumes(score);
+      for (int i = 0; i < score->parts().size(); ++i) {           // (in the score's order, not the map's pointers')
+            auto v = volumes.find(score->parts()[i]);
+            if (v != volumes.end())
+                  for (const auto& p : v->second.patchDb)
+                        out << QString("volume %1 %2 %3 %4").arg(i).arg(p.first).arg(p.second, 0, 'g', 15).arg(v->second.range, 0, 'g', 15);
+            }
+      return out.join("\n");
+      }
+
+void TestLiveEquivalence::editLagIdentical()
+      {
+      struct Reset { ~Reset() { ContextLevel::dropWarmup(); SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); EditLag::setOn(true); } } reset;
+      QString error;
+      const QString share = root + "/../share/soundlibraries/";       // (the shipped map and calibration)
+      std::shared_ptr<SoundLib::Library> lib = SoundLib::Library::load(share + "Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(lib, qPrintable(error));
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      auto cal = SoundLib::readCalibration(QString(), share + "Spitfire Symphony Orchestra.dynamics.json");
+      QVERIFY(cal);
+      SoundLib::setDynamicsCalibration(cal);
+      const bool times = qEnvironmentVariableIsSet("MS_EDITLAG_TIMES");
+
+      std::vector<std::unique_ptr<MasterScore>> keep;         // (alive to the end: no score at a freed one's address)
+      std::vector<QStringList> records(2);
+      std::vector<QStringList> timings(2);
+      for (int pass = 0; pass < 2; ++pass) {
+            EditLag::setOn(pass == 1);
+            MasterScore* score = qEnvironmentVariableIsSet("MS_EDITLAG_SCORE") ? readCreatedScore(qEnvironmentVariable("MS_EDITLAG_SCORE"))
+                                                                              : readScore(DIR + "real-range.musicxml");
+            QVERIFY(score);
+            keep.emplace_back(score);
+            score->rebuildMidiMapping();
+            score->doLayout();
+            if (qEnvironmentVariableIsSet("MS_EDITLAG_SETTINGS"))
+                  score->setMetaTag(Playback::metaTag, qEnvironmentVariable("MS_EDITLAG_SETTINGS"));
+            // the notes asked about: about 12 chords' top notes spread over the score (pitch edits on the first two)
+            std::vector<Note*> all, notes;
+            for (Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
+                  for (int track = 0; track < score->ntracks(); ++track) {
+                        Element* e = seg->element(track);
+                        if (e && e->isChord() && !toChord(e)->notes().empty())
+                              all.push_back(toChord(e)->notes().back());
+                        }
+            for (size_t i = all.size() / 3; i < all.size(); i += std::max<size_t>(1, all.size() / 12))
+                  notes.push_back(all[i]);
+            QVERIFY(notes.size() >= 2);
+            NotePreview::Previewer previewer;
+            SynthesizerState synth;
+            QElapsedTimer clock;
+            int stepNo = 0;
+            auto record = [&](const QString& step) {
+                  // the warm-up (editwarmup.h: on only) a few steps in, as far as events let it before the next question
+                  // (0, 1, 2 steps, or to the end), then as the app asks after a command: the Inspector twice, the
+                  // click's preview, the mixer
+                  const int warm = stepNo++ % 4;
+                  clock.start();
+                  for (int w = 0; w < (warm == 3 ? 1000 : warm); ++w)
+                        if (ContextLevel::warmStep(score))
+                              break;
+                  const double warmMs = clock.nsecsElapsed() / 1e6;
+                  clock.restart();
+                  std::set<const Note*> perf1 = NoteLane::onPerformancePatch({ notes[0] });
+                  std::set<const Note*> perf2 = NoteLane::onPerformancePatch({ notes[0] });
+                  const double inspectorMs = clock.nsecsElapsed() / 1e6;
+                  clock.restart();
+                  const NotePreview::Preview pv = previewer.preview({ notes[0] }, synth);
+                  const double previewMs = clock.nsecsElapsed() / 1e6;
+                  timings[size_t(pass)] << QString("%1: warm-up %2 ms (%3), inspector %4 ms, preview %5 ms").arg(step).arg(warmMs, 0, 'f', 1)
+                                           .arg(warm == 3 ? QString("all") : QString::number(warm)).arg(inspectorMs, 0, 'f', 1).arg(previewMs, 0, 'f', 1);
+                  QStringList r;
+                  r << "step " + step << QString("inspector %1 %2").arg(perf1.size()).arg(perf2.size());
+                  auto pvText = [](const NotePreview::Preview& p) {
+                        QStringList t;
+                        for (const NPlayEvent& e : p.on)
+                              t << QString("on %1 %2 %3 %4 %5").arg(e.type()).arg(e.dataA()).arg(e.dataB()).arg(e.extChannel()).arg(double(e.tuning()), 0, 'g', 9);
+                        for (const NPlayEvent& e : p.off)
+                              t << QString("off %1 %2 %3 %4").arg(e.type()).arg(e.dataA()).arg(e.dataB()).arg(e.extChannel());
+                        return t.join(";");
+                        };
+                  r << "preview " + pvText(pv);
+                  r << delaysText(score);
+                  for (size_t i = 0; i < notes.size(); ++i)
+                        r << QString("perf %1 %2").arg(i).arg(NoteLane::onPerformancePatch({ notes[i] }).size());
+                  for (size_t i = 1; i < notes.size(); i += 5)
+                        r << QString("preview %1 ").arg(i) + pvText(previewer.preview({ notes[i] }, synth));
+                  // the chunked render, as Seq plays it
+                  EventMap events;
+                  MidiRenderer midi(score);
+                  midi.setMinChunkSize(10);
+                  MidiRenderer::Context ctx { SynthesizerState() };
+                  ctx.renderHarmony = true;
+                  for (MidiRenderer::Chunk chunk = midi.getChunkAt(0); chunk; chunk = midi.getChunkAt(chunk.utick2())) {
+                        EventMap part;
+                        midi.renderChunk(chunk, &part, ctx);
+                        events.insert(part.begin(), part.end());
+                        }
+                  r << eventsText(events);
+                  records[size_t(pass)] << r.join("\n");
+                  };
+            auto pitch = [&](Note* n, bool up) {
+                  score->select(n, SelectType::SINGLE, 0);
+                  score->startCmd();
+                  score->upDown(up, UpDownMode::CHROMATIC);
+                  score->endCmd();
+                  };
+            auto staccato = [&](Note* n) {
+                  score->select(n, SelectType::SINGLE, 0);
+                  score->startCmd();
+                  score->addArticulation(SymId::articStaccatoAbove);
+                  score->endCmd();
+                  };
+            auto undo = [&](bool u) { score->undoRedo(u, nullptr); };
+            auto even = [&](Note* n, double db) {       // (as EvenAuto::Session::write: no undo step)
+                  for (ScoreElement* l : n->linkList())
+                        if (l->isNote()) {
+                              toNote(l)->setEvenLevel(db);
+                              toNote(l)->setEvenContext(QString("%1|test").arg(lib->instruments.empty() ? QString() : lib->instruments.front().name));
+                              }
+                  score->setPlaylistDirty();
+                  EvenLevels::changed();
+                  };
+            auto setting = [&](const QString& v) {
+                  QMap<QString, QString> tags = score->metaTags();
+                  tags.insert(Playback::metaTag, v);
+                  score->startCmd();
+                  score->undo(new ChangeMetaTags(score, tags));
+                  score->endCmd();
+                  };
+            const QString settingsWas = score->metaTag(Playback::metaTag);
+            record("open");
+            pitch(notes[0], true);            record("pitch up");
+            undo(true);                       record("undo");
+            undo(false);                      record("redo");
+            undo(true);                       record("undo again");
+            pitch(notes[1], false);           record("pitch down (redo stack dropped)");
+            undo(true);                       record("undo");
+            staccato(notes[0]);               record("staccato");
+            undo(true);                       record("undo");
+            undo(false);                      record("redo");
+            even(notes[0], 1.5);              record("even level written");
+            undo(true);                       record("undo after even level");
+            undo(false);                      record("redo after even level");
+            setting(settingsWas + (settingsWas.isEmpty() ? "" : ";") + "levels/realRange=0");  record("setting");
+            undo(true);                       record("setting undone");
+            undo(false);                      record("setting redone");
+            undo(true);                       record("setting undone again");
+            pitch(notes[0], true);            record("pitch up");
+            pitch(notes[0], false);           record("pitch down");
+            undo(true); undo(true);           record("two undos");
+            undo(false); undo(false);         record("two redos");
+            }
+      QCOMPARE(records[0].size(), records[1].size());
+      for (int i = 0; i < records[0].size(); ++i) {
+            if (records[0][i] != records[1][i]) {
+                  const QStringList a = records[0][i].split("\n"), b = records[1][i].split("\n");
+                  for (int j = 0; j < std::min(a.size(), b.size()); ++j)
+                        if (a[j] != b[j]) {
+                              qWarning("%s: line %d differs:\n off: %s\n on:  %s", qPrintable(a.front()), j, qPrintable(a[j]), qPrintable(b[j]));
+                              break;
+                              }
+                  }
+            QCOMPARE(records[1][i], records[0][i]);
+            }
+      if (times)
+            for (int i = 0; i < timings[0].size(); ++i)
+                  qDebug("off %s | on %s", qPrintable(timings[0][i]), qPrintable(timings[1][i].section(": ", 1)));
+      int lines = 0;
+      for (const QString& r : records[1])
+            lines += r.count('\n') + 1;
+      qDebug("editLagIdentical: %d steps, %d lines each, identical", int(records[1].size()), lines);
       }
 
 #include "tst_liveequivalence.moc"

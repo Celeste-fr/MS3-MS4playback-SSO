@@ -6,6 +6,8 @@ load within minutes: the 2026-10-17 runs).
 
 usage: compare_blocks.py <log.jsonl>
 
+A phase named "<phase>-" (e.g. b-) ran with the edit-lag speedups off (EditLag: the code as before them).
+
 Per block: each scripted action's response median (ms), all edits' median (scroll and the Inspector's close left out),
 the main thread's render scopes' median (n), and the block's wall time, audio callback mean, process CPU, memory.
 """
@@ -17,7 +19,9 @@ from collections import defaultdict
 ACTIONS = ["select note", "pitch-up", "pitch-down", "staccato add", "staccato remove", "undo", "redo",
            "inspector open", "lane point add", "lane point remove", "scroll"]
 SCOPES = ["masterTrim render", "realRangeTops render", "NoteLane::onPerformancePatch render",
-          "MidiRenderer::renderChunk", "NotePreview::render", "EvenAutoMeasurer::detect", "EvenAutoMeasurer: load instance"]
+          "MidiRenderer::renderChunk", "NotePreview::render", "EvenAutoMeasurer::detect", "EvenAutoMeasurer: load instance",
+          "EditWarmup::step", "masterTrim render (step)", "realRangeTops render (step)",
+          "EvenAutoMeasurer: begin instance", "EvenAutoMeasurer: finish instance"]
 
 
 def med(v):
@@ -29,6 +33,8 @@ def main():
         sys.exit(__doc__)
     blk, label = -1, {}
     act = defaultdict(lambda: defaultdict(list))
+    sync = defaultdict(lambda: defaultdict(list))
+    late = defaultdict(lambda: defaultdict(list))
     scope = defaultdict(lambda: defaultdict(list))
     phases = []
     with open(sys.argv[1], encoding="utf-8") as f:
@@ -42,6 +48,8 @@ def main():
                 phases.append(d)
             elif blk >= 0 and k == "action":
                 act[blk][d["name"]].append(d["response_ms"])
+                sync[blk][d["name"]].append(d["sync_ms"])
+                late[blk][d["name"]].append(d["window_worst_late_ms"])
             elif blk >= 0 and k == "slow" and d.get("main"):
                 scope[blk][d["name"]].append(d["dur_ms"])
     blks = [b for b in sorted(label) if label[b] != "o"]
@@ -52,6 +60,13 @@ def main():
     edits = {b: [x for n in ACTIONS if n != "scroll" for x in act[b][n]] for b in blks}
     print("| all edits | " + " | ".join(f"{med(edits[b]):.0f} (n {len(edits[b])})" if edits[b] else "-"
                                        for b in blks) + " |")
+    # (sync: the action's own call; worst lateness: the event loop's longest wait in the action's window, what a
+    # keypress then would wait)
+    for what, table in (("sync", sync), ("worst lateness", late)):
+        all_ = {b: [x for n in ACTIONS if n != "scroll" for x in table[b][n]] for b in blks}
+        print(f"| all edits, {what} p50 ms | " + " | ".join(f"{med(all_[b]):.0f}" if all_[b] else "-" for b in blks) + " |")
+        print(f"| all edits, {what} p95 ms | " + " | ".join(
+            f"{sorted(all_[b])[int(0.95 * (len(all_[b]) - 1))]:.0f}" if all_[b] else "-" for b in blks) + " |")
     for s in SCOPES:
         print(f"| {s} p50 ms (n) | " + " | ".join(f"{med(scope[b][s]):.1f} ({len(scope[b][s])})" if scope[b][s] else "-"
                                                   for b in blks) + " |")

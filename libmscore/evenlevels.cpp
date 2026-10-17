@@ -10,6 +10,8 @@
 
 #include "evenlevels.h"
 
+#include <atomic>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -92,6 +94,7 @@ void read(Score* score)
                   toNote(l)->setEvenContext(context);
                   }
             }
+      changed();
       }
 
 Note* find(Score* score, int tick, int track, int grace, int pitch)
@@ -153,6 +156,18 @@ QString contextPatch(const QString& context)
       {
       const int bar = context.lastIndexOf('|');
       return bar < 0 ? QString() : context.left(bar);
+      }
+
+static std::atomic<int> valuesGeneration { 0 };
+
+int generation()
+      {
+      return valuesGeneration.load();
+      }
+
+void changed()
+      {
+      ++valuesGeneration;
       }
 
 std::map<const Part*, std::map<QString, double>> tops(const MasterScore* score)

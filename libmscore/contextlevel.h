@@ -246,6 +246,12 @@ struct MasterTrim {
 // the score's master trim: 0 when none of the level settings above gives a patch a gain (Library default: nothing lowered);
 // cached per score until an edit, an undo, another library, calibration, other routes or settings (renders the score once)
 MasterTrim masterTrim(const MasterScore* score);
+// the edit lag (recentresults.h): the volumes' real-range render and the master trim's render one chunk per call, for the
+// score as it is now, ahead of anyone asking (an edit's next sound: the click, Play, the mixer). The same renders as
+// volumes() / masterTrim() make at once, finished by them when asked before (the same inputs), dropped when the inputs
+// change. true: both kept for these inputs (nothing left). The main thread's; dropWarmup: before its score goes
+bool warmStep(const MasterScore* score);
+void dropWarmup();
 // the estimate itself on the score's untrimmed gains (masterTrim's work; for tests and the audit)
 MasterTrim computeMasterTrim(const MasterScore* score);
 

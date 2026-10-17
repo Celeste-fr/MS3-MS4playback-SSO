@@ -47,6 +47,7 @@
 #include "libmscore/automation.h"
 #include "libmscore/chord.h"
 #include "libmscore/lagprobe.h"
+#include "libmscore/recentresults.h"
 #include "libmscore/note.h"
 #include "libmscore/part.h"
 #include "libmscore/playbacksettings.h"
@@ -652,7 +653,15 @@ class Probe : public QObject {
                                       ? qEnvironmentVariable("MS_LAG_PROBE_MODES").split(QChar(0x2c))
                                       : QStringList({ "stopped", "playing" });
             const int openTimeout = 1000 * (qEnvironmentVariableIsSet("MS_LAG_PROBE_OPEN_S") ? qEnvironmentVariableIntValue("MS_LAG_PROBE_OPEN_S") : 2400);
-            for (const QString& p : phases) {
+            for (QString p : phases) {
+                  // "<phase>-": the same phase with the edit-lag speedups off (EditLag, recentresults.h: the code as before
+                  // them), to compare blocks under the same machine load
+                  const QString name = p;
+                  const bool lagOff = p.endsWith(QChar(0x2d));
+                  if (lagOff)
+                        p.chop(1);
+                  if (p != "o")
+                        add("edit lag " + name, [lagOff]() { EditLag::setOn(!lagOff); });
                   if (p == "o") {
                         add("begin o", [this]() { beginPhase("o", "opening"); });
                         add("wait opening", nullptr, 0, [this]() { return quiet(); }, openTimeout);
@@ -661,29 +670,29 @@ class Probe : public QObject {
                   else if (p == "b") {
                         add("setup b", [this]() { EvenAutoMeasurer::instance()->setProbePaused(false); setEvenLevels(true); }, 2000,
                             [this]() { return quiet(); }, openTimeout);
-                        addPhase("b", modes);
+                        addPhase(name, modes);
                         }
                   else if (p == "c") {
                         add("setup c", [this]() { EvenAutoMeasurer::instance()->setProbePaused(false); setEvenLevels(true); }, 2000,
                             [this]() { return quiet(); }, openTimeout);
                         add("pause c", [this]() { EvenAutoMeasurer::instance()->setProbePaused(true); }, 1000);
-                        addPhase("c", modes);
+                        addPhase(name, modes);
                         }
                   else if (p == "d") {
                         add("setup d", [this]() { setEvenLevels(true); }, 2000, [this]() { return quiet(); }, openTimeout);
                         add("pause d", [this]() { EvenAutoMeasurer::instance()->setProbePaused(true); setLanesOpen(true); }, 2000);
-                        addPhase("d", modes);
+                        addPhase(name, modes);
                         add("fold d", [this]() { setLanesOpen(false); }, 1000);
                         }
                   else if (p == "a") {
                         add("setup a", [this]() { EvenAutoMeasurer::instance()->setProbePaused(false); setEvenLevels(false); }, 3000);
-                        addPhase("a", modes);
+                        addPhase(name, modes);
                         }
                   else if (p == "e") {
                         add("setup e", [this]() { EvenAutoMeasurer::instance()->setProbePaused(false); setEvenLevels(true);
                                                   setPlaybackMode(PlaybackMode::MS4); }, 3000,
                             []() { return !SoundLibraryHost::instance()->preloading(); }, 600000);
-                        addPhase("e", modes);
+                        addPhase(name, modes);
                         }
                   }
             add("finish", [this]() { finish(); });

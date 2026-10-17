@@ -24,6 +24,7 @@
 #include "libmscore/staff.h"
 #include "inspector.h"
 #include "inspectorNote.h"
+#include "../editwarmup.h"
 #include <array>
 #include "resetButton.h"
 
@@ -398,6 +399,16 @@ void InspectorNote::techniqueChosen(int index)
 void InspectorNote::setPerformanceShown()
       {
       const std::vector<Note*> notes = selectedNotes();
+      // (just edited: the answer renders with the edit's volumes and trim, made between events; asked once they are)
+      if (!notes.empty() && EditWarmup::instance()->pending(notes.front()->score())) {
+            if (!_whenWarmed)
+                  _whenWarmed = connect(EditWarmup::instance(), &EditWarmup::warmed, this, [this]() {
+                        disconnect(_whenWarmed);
+                        _whenWarmed = QMetaObject::Connection();
+                        setPerformanceShown();
+                        });
+            return;
+            }
       const bool on = !NoteLane::onPerformancePatch(std::vector<const Note*>(notes.begin(), notes.end())).empty();
       for (QWidget* w : { static_cast<QWidget*>(n.label_performanceAttack), static_cast<QWidget*>(n.performanceAttack),
                           static_cast<QWidget*>(n.resetPerformanceAttack),

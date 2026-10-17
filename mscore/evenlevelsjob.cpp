@@ -682,6 +682,7 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                   note->setEvenContext(has ? p.notes[j].info.context : QString());
                   }
             }
+      EvenLevels::changed();
 
       // the result
       QJsonArray pj;
