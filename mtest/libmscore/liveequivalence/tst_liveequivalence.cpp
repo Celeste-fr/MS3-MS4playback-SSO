@@ -161,6 +161,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void controllerPatchDefault();
       void liveGainStage();
       void utilitySet();
+      void tuneState();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -5179,6 +5180,34 @@ void TestLiveEquivalence::controllerPatchDefault()
       std::unique_ptr<Vst3Plugin> p2 = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
       QVERIFY(SoundLibraryHost::loadSetup(p2.get(), *host.lib, "Violin", TESTSYNTH, &error));
       QCOMPARE(logged().count("differ from the map's"), 1);
+      }
+
+//---------------------------------------------------------
+//   tuneState
+//    a tool, not a test (skipped without MS_TUNE_IN): a Kontakt setup (.vst3state, a Windows MuseScore's) tuned by its
+//    instrument's Tune as the export tunes a fixed copy (KontaktSetup::withTune, 512 voices as every patch MuseScore
+//    sets up), MS_TUNE_CENTS cents, written to MS_TUNE_OUT: for rendering a tuning lane's events with kthost on the VM
+//---------------------------------------------------------
+
+void TestLiveEquivalence::tuneState()
+      {
+      if (!qEnvironmentVariableIsSet("MS_TUNE_IN"))
+            QSKIP("a tool: MS_TUNE_IN=<patch.vst3state> MS_TUNE_OUT=<out.vst3state> MS_TUNE_CENTS=<cents>");
+      QFile f(qEnvironmentVariable("MS_TUNE_IN"));
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QString name;
+      QByteArray component, controller;
+      QVERIFY(Vst3Plugin::splitState(f.readAll(), &name, &component, &controller));
+      QString err;
+      component = KontaktSetup::withMaxVoices(component, 512, &err);
+      QVERIFY2(err.isEmpty(), qPrintable(err));
+      double before = 0;
+      component = KontaktSetup::withTune(component, qEnvironmentVariable("MS_TUNE_CENTS").toDouble(), &err, &before);
+      QVERIFY2(err.isEmpty() && !component.isEmpty(), qPrintable(err));
+      QFile o(qEnvironmentVariable("MS_TUNE_OUT"));
+      QVERIFY(o.open(QIODevice::WriteOnly));
+      o.write(Vst3Plugin::joinState(name, component, controller));
+      qInfo("tuned %s: Tune %.2f -> %s cents", qPrintable(name), before, qPrintable(qEnvironmentVariable("MS_TUNE_CENTS")));
       }
 
 //---------------------------------------------------------
