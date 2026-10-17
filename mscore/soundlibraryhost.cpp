@@ -778,8 +778,60 @@ int SoundLibraryHost::kontaktMaxVoices()
       return int(Playback::value("hosting/maxVoices"));      // (playback.ini [hosting]; default KONTAKT_MAX_VOICES, 512)
       }
 
+std::map<QString, QByteArray> SoundLibraryHost::scriptValuesFor(const SoundLib::Library& library, const QString& patch,
+                                                                const Score* score)
+      {
+      const SoundLib::LibInstrument* li = findPatch(library, patch);
+      return li ? SoundLib::playbackScriptValues(*li, score) : std::map<QString, QByteArray>();
+      }
+
+static QString valuesKey(const std::map<QString, QByteArray>& values)
+      {
+      QStringList v;
+      for (const auto& p : values)
+            v << p.first + "=" + QString::fromUtf8(p.second);
+      return v.join(";");
+      }
+
 QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                        QString* error)
+                                        QString* error, const Score* score)
+      {
+      return setupStateWith(library, patch, pluginPath, scriptValuesFor(library, patch, score), error);
+      }
+
+//---------------------------------------------------------
+//   setupStateWith
+//    the setup with the voice limit, then the script values the playback settings set ([slurs] speedFromWritten: SSO's
+//    Performance "Leg. Speed CC" 0, the renderer sends CC119): in the state loaded, never in the setup file (resave
+//    puts the setup's own value back), so the setting can change without making setups again; made once (prepared)
+//---------------------------------------------------------
+
+QByteArray SoundLibraryHost::setupStateWith(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
+                                            const std::map<QString, QByteArray>& values, QString* error)
+      {
+      const QByteArray limitedState = maxVoicesState(library, patch, pluginPath, error);
+      if (limitedState.isEmpty() || values.empty() || !makesSetups(library))
+            return limitedState;
+      const QByteArray out = prepared(library, limitedState, "script values " + valuesKey(values), [&]() {
+            QString name, err;
+            QByteArray component, controller;
+            if (!readState(limitedState, &name, &component, &controller))
+                  return limitedState;
+            int set = 0;
+            const QByteArray withValues = KontaktSetup::withScriptValues(component, values, &err, &set);
+            if (withValues.isEmpty() || set < 1) {
+                  qWarning("Sound library: %s: script values %s not set (%s)", qPrintable(patch), qPrintable(valuesKey(values)),
+                           qPrintable(err));
+                  return limitedState;
+                  }
+            logTime(library, QString("%1: script values %2 (playback settings)").arg(patch, valuesKey(values)));
+            return writeState(name, withValues, controller);
+            });
+      return out.isEmpty() ? limitedState : out;
+      }
+
+QByteArray SoundLibraryHost::maxVoicesState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
+                                            QString* error)
       {
       const QByteArray state = savedSetupState(library, patch, pluginPath, error);
       const int maxVoices = kontaktMaxVoices();
@@ -909,8 +961,8 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
       t.start();
       const QByteArray state = p->state();
       QString name, madeName;
-      QByteArray component, controller, madeComponent;
-      if (!readState(state, &name, &component, &controller) || !readState(made, &madeName, &madeComponent, &controller)) {
+      QByteArray component, controller, madeComponent, madeController;
+      if (!readState(state, &name, &component, &controller) || !readState(made, &madeName, &madeComponent, &madeController)) {
             logTime(library, QString("%1: not resaved (the plug-in's state could not be read)").arg(li.name));
             return;
             }
@@ -945,7 +997,30 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
             logTime(library, QString("%1: not resaved (the plug-in's state has not the same program: \"%2\")").arg(li.name, programName));
             return;
             }
-      if (!writeFile(SoundLibraryHost::setupFile(library, li.name), state))
+      // (a script value the playback settings set at load, SoundLib::playbackScriptValues: the setup keeps its own, the
+      // value of the setup made, so the file stays the library's default whatever the setting)
+      QByteArray saved = state;
+      if (li.speedCC > 0 && !li.speedScript.isEmpty()) {
+            // (made: the state loaded, the playback settings' values in it; the setup file still holds the one made)
+            QFile f(SoundLibraryHost::setupFile(library, li.name));
+            QString fileName;
+            QByteArray fileComponent, fileController;
+            const bool read = f.open(QIODevice::ReadOnly) && readState(f.readAll(), &fileName, &fileComponent, &fileController);
+            const std::map<QString, QByteArray> madeValues = read ? KontaktSetup::scriptValues(KontaktSetup::slotProgram(fileComponent, nullptr))
+                                                                  : std::map<QString, QByteArray>();
+            auto own = madeValues.find(li.speedScript);
+            auto now = values.find(li.speedScript);
+            if (own != madeValues.end() && now != values.end() && own->second != now->second) {
+                  QString err;
+                  const QByteArray back = KontaktSetup::withScriptValues(component, { { li.speedScript, own->second } }, &err);
+                  if (back.isEmpty()) {
+                        logTime(library, QString("%1: not resaved (%2 could not be put back: %3)").arg(li.name, li.speedScript, err));
+                        return;
+                        }
+                  saved = writeState(name, back, controller);
+                  }
+            }
+      if (!writeFile(SoundLibraryHost::setupFile(library, li.name), saved))
             return;
       QJsonObject all = readMade(library);
       QJsonObject rec = all.value(li.name).toObject();
@@ -962,11 +1037,11 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
 //---------------------------------------------------------
 
 bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                 QString* error)
+                                 QString* error, const Score* score)
       {
       QElapsedTimer t;
       t.start();
-      const QByteArray state = setupState(library, patch, pluginPath, error);
+      const QByteArray state = setupState(library, patch, pluginPath, error, score);
       const double setupMs = t.nsecsElapsed() / 1e6;
       if (state.isEmpty())
             return false;
@@ -1038,18 +1113,19 @@ bool SoundLibraryHost::setupResaved(const SoundLib::Library& library, const QStr
       }
 
 bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
-                                         const std::vector<double>& cents, const QString& pluginPath, QString* error, bool* tuned)
+                                         const std::vector<double>& cents, const QString& pluginPath, QString* error, bool* tuned,
+                                         const Score* score)
       {
       if (tuned)
             *tuned = false;
       if (cents.empty() || untunable().count(patch))
-            return loadSetup(p, library, patch, pluginPath, error);
+            return loadSetup(p, library, patch, pluginPath, error, score);
       const bool first = !setupResaved(library, patch);
-      if (first && !loadSetup(p, library, patch, pluginPath, error))     // (resaved by it)
+      if (first && !loadSetup(p, library, patch, pluginPath, error, score))     // (resaved by it)
             return false;
       QElapsedTimer t;
       t.start();
-      const QByteArray plain = setupState(library, patch, pluginPath, error);
+      const QByteArray plain = setupState(library, patch, pluginPath, error, score);
       if (plain.isEmpty())
             return false;
       QString err;
@@ -1058,7 +1134,7 @@ bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin* p, const SoundLib::Library&
             untunable().insert(patch);
             logTime(library, QString("%1: its copies can't be tuned in the setup (%2): plain, an instance each, by varispeed")
                     .arg(patch, err));
-            return first || loadSetup(p, library, patch, pluginPath, error);
+            return first || loadSetup(p, library, patch, pluginPath, error, score);
             }
       const double setupMs = t.nsecsElapsed() / 1e6;
       if (!p->setState(state)) {
@@ -1100,7 +1176,7 @@ QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library& libra
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
       if (!p)
             return QByteArray();
-      if (!loadSetup(p.get(), library, r.instrument->name, pluginPath, error))       // (its script settled)
+      if (!loadSetup(p.get(), library, r.instrument->name, pluginPath, error, r.part ? r.part->score() : nullptr))   // (its script settled)
             return QByteArray();
       LibraryControllers::applyParameters(p.get(), r, lanes, nullptr);
       // (the processor takes a change at its next process(), a script then sets its control: as in playback,
@@ -1135,7 +1211,7 @@ bool SoundLibraryHost::parametersOf(const SoundLib::Library& library, const Soun
       if (!r.instrument)
             return false;
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
-      if (!p || !loadSetup(p.get(), library, r.instrument->name, pluginPath, error))
+      if (!p || !loadSetup(p.get(), library, r.instrument->name, pluginPath, error, r.part ? r.part->score() : nullptr))
             return false;
       std::map<long, QString> names;
       for (const Vst3Plugin::Parameter& pp : p->parameters())
@@ -1234,22 +1310,42 @@ bool SoundLibraryHost::setupResaved(const SoundLib::Library&, const QString&)
       return true;
       }
 
-bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin*, const SoundLib::Library&, const QString&, const std::vector<double>&,
-                                         const QString&, QString* error, bool*)
+std::map<QString, QByteArray> SoundLibraryHost::scriptValuesFor(const SoundLib::Library&, const QString&, const Score*)
       {
-      if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
-      return false;
+      return std::map<QString, QByteArray>();
       }
 
-QByteArray SoundLibraryHost::setupState(const SoundLib::Library&, const QString&, const QString&, QString* error)
+QByteArray SoundLibraryHost::setupStateWith(const SoundLib::Library&, const QString&, const QString&,
+                                            const std::map<QString, QByteArray>&, QString* error)
       {
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
       return QByteArray();
       }
 
-bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QString&, const QString&, QString* error)
+QByteArray SoundLibraryHost::maxVoicesState(const SoundLib::Library&, const QString&, const QString&, QString* error)
+      {
+      if (error)
+            *error = tr("This MuseScore was built without plug-in hosting.");
+      return QByteArray();
+      }
+
+bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin*, const SoundLib::Library&, const QString&, const std::vector<double>&,
+                                         const QString&, QString* error, bool*, const Score*)
+      {
+      if (error)
+            *error = tr("This MuseScore was built without plug-in hosting.");
+      return false;
+      }
+
+QByteArray SoundLibraryHost::setupState(const SoundLib::Library&, const QString&, const QString&, QString* error, const Score*)
+      {
+      if (error)
+            *error = tr("This MuseScore was built without plug-in hosting.");
+      return QByteArray();
+      }
+
+bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QString&, const QString&, QString* error, const Score*)
       {
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
@@ -1591,6 +1687,7 @@ struct SoundLibraryHost::Pending {
       std::vector<int> routes;            // the slots it plays (SoundLib::Instance::routes)
       std::vector<double> cents;          // their tunings, in its state (empty: plain)
       std::vector<double> tuneAfter;      // a made setup goes in plain first (resaved), then these tunings
+      std::map<QString, QByteArray> values;     // the script values its score's playback settings set (scriptValuesFor)
       };
 
 struct SoundLibraryHost::Batch {
@@ -1629,10 +1726,11 @@ bool SoundLibraryHost::pendingOn(int slot) const
 std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot, const QString& name, bool setup,
                                                                        const std::vector<double>& cents, const std::vector<int>& routes,
                                                                        const SoundLib::Library& library, const QString& path,
-                                                                       QString* error)
+                                                                       QString* error, const std::map<QString, QByteArray>& values)
       {
       std::unique_ptr<Pending> pl(new Pending);
       pl->slot = slot;
+      pl->values = values;
       pl->name = name;
       pl->setup = setup;
       pl->routes = routes;
@@ -1667,7 +1765,7 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
             }
       if (setup) {
             t.restart();
-            pl->state = setupState(library, name, path, &pl->error);
+            pl->state = setupStateWith(library, name, path, values, &pl->error);
             // hosted slots: the patch's copies in this one instance, each tuned by Kontakt's Tune (soundlibrary.h › hosted
             // tuning); a made setup goes in plain first, to be resaved as Kontakt's own state (finishLoad tunes it then)
             if (!pl->state.isEmpty() && !cents.empty() && !untunable().count(name)) {
@@ -1756,7 +1854,7 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
             // (a made setup, resaved now: the copies' tunings on Kontakt's own state, here)
             if (!pl->tuneAfter.empty()) {
                   QString err;
-                  const QByteArray plain = setupState(library, pl->name, pl->plugin->path(), &err);
+                  const QByteArray plain = setupStateWith(library, pl->name, pl->plugin->path(), pl->values, &err);
                   const QByteArray tuned = plain.isEmpty() ? QByteArray() : tunedState(plain, pl->tuneAfter, &err, &library);
                   QElapsedTimer tt;
                   tt.start();
@@ -1786,6 +1884,7 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
       info.setupFailed = failed;
       info.tuning = tuningKey(pl->cents);
       info.routes = pl->routes;
+      info.values = valuesKey(pl->values);
       Vst3Synth* vst = synth();
       const int k = pl->slot;
       if (!vst || vst->plugin(k)) {
@@ -2041,6 +2140,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             std::vector<double> cents;          // hosted slots: its slots' tunings (empty: plain)
             std::vector<int> routes;            // the slots it plays
             QString tuning;                     // tuningKey(cents)
+            std::map<QString, QByteArray> values;     // the script values the score's playback settings set (scriptValuesFor)
+            QString valuesText;                 // (valuesKey)
             };
       std::array<bool, 64> used {};
       std::vector<Need> needs;
@@ -2067,13 +2168,17 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             if (in.tuned() && untunable().count(in.instrument->name)) {
                   for (int k : in.routes)
                         needs.push_back({ k, in.instrument->name, setup, {}, { k }, QString() });
-                  continue;
                   }
-            needs.push_back({ in.slot, in.instrument->name, setup, in.cents, in.routes, tuningKey(in.cents) });
+            else
+                  needs.push_back({ in.slot, in.instrument->name, setup, in.cents, in.routes, tuningKey(in.cents) });
+            }
+      for (Need& n : needs) {
+            n.values = scriptValuesFor(*library, n.name, score);
+            n.valuesText = valuesKey(n.values);
             }
       auto fits = [&path](const Vst3Plugin* p, const Slot& s, const Need& n) {
             return p && p->path() == path && s.instrument == n.name && (s.hasSetup || s.setupFailed || !n.setup)
-                   && s.tuning == n.tuning;
+                   && s.tuning == n.tuning && s.values == n.valuesText;
             };
 
       // an instance the score can't use in its slot is set aside (a spare), not released: the
@@ -2151,7 +2256,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             if (mscore)
                   mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(library->name, n->name)
                                                    : tr("Loading %1 in the background: %2…").arg(library->name, n->name), 8000);
-            std::unique_ptr<Pending> pl = beginLoad(n->slot, n->name, n->setup, n->cents, n->routes, *library, path, error);
+            std::unique_ptr<Pending> pl = beginLoad(n->slot, n->name, n->setup, n->cents, n->routes, *library, path, error, n->values);
             if (!pl) {
                   ok = false;
                   break;
@@ -2479,7 +2584,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             QString e;
             bool tuned = false;
             if (SoundLibraryHost::hasSetup(*library, in.instrument->name)
-                && !SoundLibraryHost::loadInstanceSetup(p.get(), *library, in.instrument->name, in.cents, path, &e, &tuned))
+                && !SoundLibraryHost::loadInstanceSetup(p.get(), *library, in.instrument->name, in.cents, path, &e, &tuned, score))
                   qWarning("Sound library: %s", qPrintable(e));
             if (in.tuned() && !tuned && in.multi()) {
                   // (its setup isn't Kontakt's: the other copies an instance each, plain)
@@ -2524,7 +2629,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const 
             return nullptr;
       QString e;
       if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
-          && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e))
+          && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e, score))
             qWarning("Sound library: %s", qPrintable(e));
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       LibraryControllers::applyParameters(p.get(), r, Automation::read(score->masterScore()), nullptr);

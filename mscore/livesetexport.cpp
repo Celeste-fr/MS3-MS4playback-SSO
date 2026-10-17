@@ -300,7 +300,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   if (!SoundLibraryHost::hasSetup(library, patch))
                         err = QObject::tr("no setup (its .nki was not found: View › Sound Library… › Library folder…)");
                   else
-                        state = SoundLibraryHost::setupState(library, patch, pluginPath, &err);
+                        state = SoundLibraryHost::setupState(library, patch, pluginPath, &err, score);
                   LiveSetWriter::Plugin p;
                   QString stateName;
                   if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))

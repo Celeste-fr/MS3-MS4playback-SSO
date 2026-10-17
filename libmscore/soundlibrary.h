@@ -268,6 +268,14 @@ struct LibInstrument {
       // tools/soundlibraries/sso_plain_performance_shift.json -> gen_spitfire_sso.py). NaN: not measured (sent as written,
       // the playback audit lists it)
       double plainShiftMs { NAN };
+      // [slurs] speedFromWritten (the owner approved, 2026-10-17): the controller this patch's script writes at each legato
+      // note-on from the note-on spacing it measures (SSO's Performance: "Leg. Speed CC", CC119 = 126 - floor(ms since the
+      // voice's previous note-on x 127 / 1000); the groups pick RUNS / RUNS RT / FAST LEGATO ... by it) and the script value
+      // that sets it (<Instrument speedCC speedScript>; tools/soundlibraries/sso_performance_layers.json). With the setting
+      // on, the patch's state gets speedScript = 0 (the script writes nothing) and the renderer sends speedCC itself, from
+      // the WRITTEN spacing (speedValue). 0 / empty: none
+      int speedCC { 0 };
+      QString speedScript;
       // [levels] sectionBalance (contextlevel.h): every patch of the section plays this many dB louder, by its volume
       // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's M,
       // 2026-10-11, mp by the Meyer rule since 2026-10-14; SSO's woodwinds and brass too since then, on the strings'
@@ -433,6 +441,15 @@ const Articulation* plainPerformanceArticulation(const LibInstrument& patch);
 // with the setting on, the patch of each part that plays it plain and the ms its events go early (its plainShift; NaN:
 // not measured), by part; empty with the setting off
 std::map<const Part*, std::map<QString, double>> plainPerformancePatches(const Score* score, const Library& library);
+
+// [slurs] speedFromWritten (the score's value, else playback.ini's): the patch's speed controller is MuseScore's (its state
+// gets speedScript = 0, the renderer sends speedCC); false: the setting off or the patch has none
+bool speedFromWritten(const LibInstrument* patch, const Score* score);
+// the value of the speed controller for a legato note-on ms after the note-on it follows (SSO's script's own formula:
+// 126 - min(126, floor(ms x 127 / 1000)), ms in whole ms as the script's clock counts them, rounded)
+int speedValue(double ms);
+// the script values the patch's state gets on top of its setup's (setupValues): with speedFromWritten, speedScript = 0
+std::map<QString, QByteArray> playbackScriptValues(const LibInstrument& patch, const Score* score);
 
 Choice choose(const LibInstrument& instrument, const Want& want);
 // of several patches: the best fit of all; of equal ones, the earlier patch

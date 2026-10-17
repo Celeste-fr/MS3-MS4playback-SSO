@@ -164,13 +164,15 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   value is the velocity, 0 as 1, so 127 is exact and 1 plays as 0; the UACC switch is value + 1:
   `carrierVelocity`), and the **pitch bend** (the microtones of a patch with
   `bend=`, legato glides included) on keys 115 (its upper 7 bits) and 114 (its lower 7), each written
-  when it changes (2026-09-30). The Live Object Model can write a clip's notes but not
+  when it changes (2026-09-30), and below them CC119 on key 113 (`LiveClips::EXTRA_CARRIERS`, the device's protocol 11,
+  2026-10-17: SSO's Performance speed controller with `[slurs] speedFromWritten`; a device of protocol 10 or less would
+  play key 113 as a note, so its clips get none, counted as dropped). The Live Object Model can write a clip's notes but not
   its MIDI controller envelopes, so the controllers travel as notes, and the **MuseScore Link**
   device, placed before Kontakt on the track, turns each carrier into its controller or the pitch bend
-  (and drops its note-off). Keys 114-127 are never played as notes. The device does so only on a track holding a
+  (and drops its note-off). Keys 113-127 are never played as notes. The device does so only on a track holding a
   clip named "MuseScore: …" (protocol 8, 2026-10-07; `MuseScoreLink.js` › Carriers: a `[gate 2 2]` before the carrier
   keys' `[route]`, set by the copy from its own track's arrangement and session clips once a second and at once
-  when the hub makes or deletes one); on any other track every note passes unchanged, keys 114-127 too. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
+  when the hub makes or deletes one); on any other track every note passes unchanged, keys 113-127 too. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
   also in an export or a freeze, and chased when playback starts in the middle (Live's *Chase MIDI
   Notes*: each carrier lasts until that controller's next value). A controller at a note's tick is
   placed just before it (0.26 ms at 120 bpm apart): switches first, then the controllers, the pitch bend
@@ -1083,6 +1085,16 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   a note at the score's start whose onset MuseScore plays early by the start lead (`libraryDelayLead`, 2026-10-14;
   Whence's first Celli note, 172 ms) starts at 0 there, late by its onset; the plain set plays it early (Track Delay).
 
+- **`[slurs] speedFromWritten`** (2026-10-17, docs/PLAYBACK_SETTINGS.md › Speed from written): the Performance patch's
+  CC119 before each legato note-on reaches Live as a carrier on key 113 (*Live plays the score*, protocol 11) and, in the
+  plain set, as a CC119 envelope of the technique track's clip (not the Kontakt's Controllers clip: it gets the note's own
+  Track Delay), a step one unit before the note as Live plays it (with the MuseScore Link device the controllers pass at
+  once and the notes are delayed: the step is at the note's played start plus the track's lookahead; without the device at
+  the written note); before the first, 0 (a patch just loaded). The Kontakt state Create Live Set embeds has the script's
+  own writing off ($vfm12 0, `SoundLibraryHost::setupState` with the score). `tst_liveequivalence::speedFromWrittenLive`
+  (Linux, test synth): the route clip's carriers and the device's MIDI (CC119 63 before each transition), the plain set's
+  envelope. A carrier's value 1 plays as 0 (as for every carrier). Untried in real Live.
+
 - **`[slurs] plainPerformance`'s shift** (2026-10-17, docs/PLAYBACK_SETTINGS.md › Plain Performance): the plain set plays
   it as the Performance patch's Kontakt track's Track Delay (-plainShift; `tst_liveequivalence::plainPerformanceLive`:
   every note-on, note-off and the patch's CC1 where MuseScore plays them). *Live plays the score*'s clips and the route
@@ -1824,7 +1836,7 @@ do.
 (Moved from CLAUDE.md on 2026-10-04, to keep that file short: agents read it whole.)
 
 `libmscore/midisync.h`, `liveset.*` (automation from a set), `liveclips.*` + `mscore/liveclips.*`
-(Live plays the score; carrier notes 114-127, converted by the device only on a track holding a "MuseScore: …" clip, protocol 8), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
+(Live plays the score; carrier notes 113-127, converted by the device only on a track holding a "MuseScore: …" clip, protocol 8; key 113 CC119 from protocol 11), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
 tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
 (`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
 `libmscore/livetimingoverride.*` (timing set in Live: a note's override, ms after its written start / end, metaTag

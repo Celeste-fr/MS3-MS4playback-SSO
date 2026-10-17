@@ -127,6 +127,7 @@ constexpr int CARRIER_COUNT      = 12;
 // the controller each carrier pitch stands for: pitch 127 - i -> CARRIER_CCS[i] (the device has the same table)
 extern const int CARRIER_CCS[CARRIER_COUNT];
 int carrierPitch(int cc);                     // -1: none
+int carrierController(int pitch);             // the controller a carrier key stands for (-1: none, or the bend's)
 // pitch bend (14 bit, 0-16383, centre 8192) as two carriers below the controllers': its upper 7 bits on BEND_MSB,
 // its lower 7 on BEND_LSB, each as carrierVelocity has it. The device keeps the last of each and sends the whole
 // bend at either, so the pair is right in any order (a chase at a mid-song start). Only the half that changed is
@@ -134,7 +135,13 @@ int carrierPitch(int cc);                     // -1: none
 // the device starting at the centre)
 constexpr int BEND_MSB           = 115;
 constexpr int BEND_LSB           = 114;
-constexpr int CARRIER_LOW        = 114;       // keys CARRIER_LOW … 127 are carriers, never played as notes
+// carriers below the bend's (the device's protocol 11): key 113 CC119, SSO's Performance speed ([slurs] speedFromWritten:
+// the renderer's, the patch's script writes none). A device of protocol 10 or less would play key 113 as a note: its
+// clips get none (mscore/liveclips.cpp, dropped as other controllers are)
+constexpr int EXTRA_CARRIER_COUNT = 1;
+extern const int EXTRA_CARRIERS[EXTRA_CARRIER_COUNT][2];      // (key, cc)
+constexpr int EXTRA_CARRIER_PROTOCOL = 11;    // the device's protocol from which it converts them
+constexpr int CARRIER_LOW        = 113;       // keys CARRIER_LOW … 127 are carriers, never played as notes
 // a carrier's velocity (1-127: 0 is a note-off) for a value 0-127, and the value the device makes of it. 128
 // values in 127 velocities: the UACC switch (key 127) is value + 1 (UACC 1 … 126 exact; 127 is no articulation);
 // the other controllers and the bend halves are the value, 0 as 1 (so 127, CC11's and a pedal's usual value, is
@@ -178,6 +185,9 @@ struct Note {
       // the clip): an edit of it in Live becomes the note's timing override (livetimingoverride.h)
       const Ms::Note* source { nullptr };
       int utick { 0 };
+      // the plain set: the speed controller's value sent right before it ([slurs] speedFromWritten: the patch's speedCC,
+      // the technique clip's envelope; -1: none; not part of the clip's note)
+      int speed { -1 };
       bool operator==(const Note& o) const {
             return pitch == o.pitch && start == o.start && length == o.length && velocity == o.velocity && muted == o.muted;
             }
@@ -235,6 +245,9 @@ struct Track {
       };
 
 QString clipName(const QString& part, const QString& patch, bool main, int lane);
+// a track's extra carriers (EXTRA_CARRIERS) left out, counted in dropped, its hash made again (a device older than
+// EXTRA_CARRIER_PROTOCOL)
+void dropExtraCarriers(Track* t);
 std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, const EventMap& events,
                           const QStringList& portNames, const Timeline& tl);
 quint32 hashOf(const Track& t);

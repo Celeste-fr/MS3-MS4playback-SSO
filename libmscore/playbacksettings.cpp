@@ -119,6 +119,15 @@ static const std::vector<Definition> DEFINITIONS = {
         "written start, velocity 64, a staccato a spiccato attack ending 45 ms before the next note, no early start of its own; "
         "every event of the patch sent the map's plainShift early (one measured constant per patch, 0 where not measured); "
         "0: as the other settings choose", true },
+      // (the owner approved, 2026-10-17: MuseScore takes over the Performance script's CC119 (its "Leg. Speed CC"), set from
+      // the written spacing so that early starts can't move a transition into another speed band; 0 in both presets until
+      // the owner has heard it after the null test. Per score: the hosted instances of a score whose value differs are
+      // loaded again with their state, SoundLibraryHost)
+      { "slurs/speedFromWritten", 0, 0, 1, "on/off",
+        "1: on the Performance patches whose script picks the transition's speed variant by a controller it writes from the "
+        "note-on spacing (SSO's string sections: CC119), that controller is MuseScore's: the script's own writing is off in "
+        "the patch's state and each legato note-on gets the value from the WRITTEN spacing, so notes started early keep their "
+        "band; 0: the script writes it from the spacing as played", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -417,7 +426,8 @@ QString iniTemplate()
 //    levels/context, levels/sectionBalance, levels/realRange) and
 //    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance, slurs/transitions, slurs/smoothStart) differ between them;
 //    slurs/transitionsEarly (1 in Recommended since 2026-10-15, 0 in Library default); slurs/plainPerformance (1 in Recommended and by default, 0 in Library default,
-//    since 2026-10-17: the owner chose it by ear on the five string sections). The other settings are not in the table because: legato/keepMs acts
+//    since 2026-10-17: the owner chose it by ear on the five string sections); slurs/speedFromWritten (0 in both since
+//    2026-10-17: the owner flips it after the null test and listening). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -439,10 +449,10 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/speedFromWritten", 0 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/speedFromWritten", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 } } },
             };

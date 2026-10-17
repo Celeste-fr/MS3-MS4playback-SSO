@@ -264,6 +264,7 @@ class NPlayEvent : public PlayEvent {
       signed char _libPatch = 0;          // which of the part's library patches plays it
       bool _libDelayed = false;           // moved by its track's delay already (trackdelays.h)
       bool _libLevel = false;             // a value a note's level set (rendermidi.cpp libraryNoteLevels), not as written
+      bool _libSpeed = false;             // a legato note-on's speed controller ([slurs] speedFromWritten: librarySpeeds)
 
    public:
       NPlayEvent() : PlayEvent() {}
@@ -294,6 +295,8 @@ class NPlayEvent : public PlayEvent {
       bool libraryDelayed() const { return _libDelayed; }
       void setLibraryLevel(bool v) { _libLevel = v; }
       bool libraryLevel() const { return _libLevel; }
+      void setLibrarySpeed(bool v) { _libSpeed = v; }
+      bool librarySpeed() const { return _libSpeed; }
       void setPortamento(bool p) { _portamento = p; }
       bool portamento() const { 
             return (_portamento == true || 

@@ -828,6 +828,10 @@ void LiveClipsLink::finish()
             tracks = LiveClips::tracks(_score, *library, _events, _portNames, _timeline);
       if (library)
             resolveParameterIds(&tracks, *library);
+      // (a device older than protocol 11 plays the extra carriers' keys as notes: left out, counted as dropped)
+      if (_deviceProtocol > 0 && _deviceProtocol < LiveClips::EXTRA_CARRIER_PROTOCOL)
+            for (LiveClips::Track& t : tracks)
+                  LiveClips::dropExtraCarriers(&t);
       _events.clear();
 
       sendMode();

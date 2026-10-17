@@ -763,6 +763,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         if (ok && std::isfinite(v))
                               li.plainShiftMs = std::max(0.0, std::min(1000.0, v));   // (TrackDelays' range)
                         }
+                  if (a.hasAttribute("speedCC") && a.hasAttribute("speedScript")) {
+                        li.speedCC = qBound(0, a.value("speedCC").toInt(), 127);
+                        li.speedScript = a.value("speedScript").toString();
+                        if (li.speedScript.isEmpty())
+                              li.speedCC = 0;
+                        }
                   li.sectionLevelDb = a.value("sectionLevel").toDouble();
                   li.hasSectionLevel2 = a.hasAttribute("sectionLevel2");
                   li.sectionLevel2Db = a.value("sectionLevel2").toDouble();
@@ -1119,6 +1125,35 @@ static Choice choosePerformance(const std::vector<const LibInstrument*>& patches
       if (!c || c.base != "legato" || !c.articulation->modifiers.contains("performance") || c.articulation->attacks.empty())
             return Choice();
       return c;
+      }
+
+//---------------------------------------------------------
+//   speedFromWritten
+//    [slurs] speedFromWritten (the owner approved, 2026-10-17; private design: the Performance script's "Leg. Speed CC"):
+//    SSO's Performance script writes CC119 at each legato note-on from the spacing it measures (ms since the voice's
+//    previous note-on), and the string sections' transition groups pick their speed variant by it (RUNS 114-127, RUNS RT
+//    95-113, FAST LEGATO 0-94 on 1-3 semitone steps). Notes started early by their onset or modelled arrival moved
+//    that spacing and so the band; with the setting the script's own writing is off (speedScript = 0 in the patch's
+//    state) and the renderer sends the controller from the written spacing, by the same formula
+//---------------------------------------------------------
+
+bool speedFromWritten(const LibInstrument* patch, const Score* score)
+      {
+      return patch && patch->speedCC > 0 && !patch->speedScript.isEmpty() && Playback::on("slurs/speedFromWritten", score);
+      }
+
+int speedValue(double ms)
+      {
+      const long whole = std::max(0L, std::lround(ms));
+      return 126 - int(std::min(126L, whole * 127 / 1000));
+      }
+
+std::map<QString, QByteArray> playbackScriptValues(const LibInstrument& patch, const Score* score)
+      {
+      std::map<QString, QByteArray> out;
+      if (speedFromWritten(&patch, score))
+            out[patch.speedScript] = "0";
+      return out;
       }
 
 const Articulation* plainPerformanceArticulation(const LibInstrument& patch)

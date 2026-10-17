@@ -18,7 +18,7 @@ sz32 <JSON size + 2>, of32 16, vers 0, flag 0x11, mdat 0), each length counting 
 The MIDI path is plain Max objects in the scheduler thread (the script is never in it):
   midiin -> midiparse; notes -> gate 2 2 (the carriers' gate, MuseScoreLink.js › Carriers: the script's outlet 9
     "gate 1" on a track holding a MuseScore clip, "gate 2", the initial state, elsewhere): outlet 2 every note on
-    unchanged (through the velocity shaper, below), keys 114-127 too; outlet 1 -> route 127 … 116 (the carrier keys,
+    unchanged (through the velocity shaper, below), keys 113-127 too; outlet 1 -> route 127 … 116 (the carrier keys,
     liveclips.h's table):
     a carrier's note-on (velocity v > 0) -> sel 0 -> the value -> prepend 176 <cc> -> iter -> midiout
     (a control change on channel 1), its note-off dropped. The value (liveclips.h carrierValue): UACC (key 127)
@@ -28,6 +28,8 @@ The MIDI path is plain Max objects in the scheduler thread (the script is never 
     inlet 1: lower), then a bang to its left inlet:
     the whole bend (status 224 = pitch bend on channel 1, lower, upper) -> iter -> midiout. Either half sends it
     with the other's last value, so a pair chased in any order ends right; note-offs dropped;
+  route 113 (protocol 11, liveclips.cpp EXTRA_CARRIERS): CC119 (SSO's Performance speed, [slurs] speedFromWritten), as
+    the controllers above;
     any other note -> the velocity shaper -> the timing's gate -> midiformat (with the rest of midiparse's messages and
     its channel) -> midiout; controllers -> the timing's gate -> midiformat. Written clips (MuseScoreLink.js › Written
     clips): with a timing record the gates send notes and controllers through [pipe]s delayed by the ring ---mslt's
@@ -54,6 +56,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 CARRIER_CCS = [32, 1, 11, 64, 2, 4, 21, 5, 65, 66, 67, 68]     # pitch 127 - i -> CARRIER_CCS[i] (liveclips.cpp)
 BEND_MSB, BEND_LSB = 115, 114                                   # the pitch bend's carriers (liveclips.h)
+EXTRA_CARRIERS = [(113, 119)]                                   # (key, cc) below the bend's: liveclips.cpp EXTRA_CARRIERS
 DEVICE_WIDTH = 330
 SLOTS = 16                                                      # parameters a track's device drives (MuseScoreLink.js SLOTS)
 STORES = 4                                                      # [pattr Lanes] … kept in the set (MuseScoreLink.js STORES)
@@ -135,9 +138,11 @@ def build(script):
     # --- MIDI: carriers to controllers, everything else through
     midiin = p.obj("midiin", 1, 1, 30, 30, outlettype=["int"])
     parse = p.obj("midiparse", 1, 8, 30, 70, outlettype=["", "", "", "int", "int", "", "int", ""])
-    keys = " ".join(str(127 - i) for i in range(len(CARRIER_CCS))) + f" {BEND_MSB} {BEND_LSB}"
+    keys = " ".join(str(127 - i) for i in range(len(CARRIER_CCS))) + f" {BEND_MSB} {BEND_LSB}" \
+        + "".join(f" {k}" for k, _ in EXTRA_CARRIERS)
     n = len(CARRIER_CCS)
-    route = p.obj(f"route {keys}", 1, n + 3, 30, 110, w=400)
+    other = n + 2 + len(EXTRA_CARRIERS)    # (route's last outlet: any other note)
+    route = p.obj(f"route {keys}", 1, other + 1, 30, 110, w=460)
     # the carriers' gate (MuseScoreLink.js › Carriers): outlet 1 the route above, outlet 2 (initially open) past it
     cgate = p.obj("gate 2 2", 2, 2, 30, 90, outlettype=["", ""])
     fmt = p.obj("midiformat", 7, 2, 30, 330, outlettype=["int", ""])
@@ -171,6 +176,16 @@ def build(script):
         p.connect(trig, 1, bend, inlet)
         p.connect(trig, 0, bend, 0)
     p.connect(bend, 0, it, 0)
+    # the carriers below the bend's (protocol 11: CC119, SSO's Performance speed, [slurs] speedFromWritten): as the others
+    for j, (key, cc) in enumerate(EXTRA_CARRIERS):
+        x = 30 + (n + 2 + j) * 60
+        sel = p.obj("sel 0", 2, 2, x, 160, outlettype=["bang", ""])
+        minus = value(x)
+        pre = p.obj(f"prepend 176 {cc}", 1, 1, x, 240, w=100)
+        p.connect(route, n + 2 + j, sel, 0)
+        p.connect(sel, 1, minus, 0)
+        p.connect(minus, 0, pre, 0)
+        p.connect(pre, 0, it, 0)
     # (any other note: through the velocity shaper, below, to midiformat; the controllers through the timing's gate)
     for k in range(1, 7):
         if k != 2:
@@ -267,7 +282,7 @@ def build(script):
     vexpr = p.obj(VEL_EXPR, 2, 1, 450, 270, w=360, outlettype=[""])
     vunp = p.obj("unpack 0 0", 1, 2, 30, 270, outlettype=["int", "int"])
     vpack = p.obj("pack 0 0", 2, 1, 30, 300, outlettype=[""])
-    p.connect(route, n + 2, shp, 0)
+    p.connect(route, other, shp, 0)
     p.connect(cgate, 1, shp, 0)
     p.connect(shp, 2, vexpr, 1)
     p.connect(phasor, 0, vsnap, 0)

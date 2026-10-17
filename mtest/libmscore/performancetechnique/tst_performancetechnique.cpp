@@ -206,7 +206,22 @@ void TestPerformanceTechnique::map()
       QCOMPARE(violins->attack("spiccato")->low, 10);
       QCOMPARE(violins->attack("spiccato")->high, 116);
       QCOMPARE(violins->attack("accented")->velocity, 122);
-      QCOMPARE(violins->transition("portamento")->velocity, 10);
+      QCOMPARE(violins->transition("portamento")->velocity, 5);        // (1-9: FING plays from 10, sso_performance_layers.json)
+      // the portamento where PORT plays alone (sso_performance_layers.json: FING from 10, the Basses' from 20); the speed
+      // controller ([slurs] speedFromWritten) on the five sections' Performance patches only
+      int speed = 0;
+      for (const auto* list : { &lib->instruments, &lib->otherPatches })
+            for (const auto& i : *list) {
+                  const bool section = QStringList({ "Violins 1", "Violins 2", "Violas", "Celli", "Basses" }).contains(i.name.section(" - ", 0, 0))
+                                       && i.name.endsWith(" - Performance") && !i.name.contains("Sul ");
+                  QCOMPARE(i.speedCC, section ? 119 : 0);
+                  QCOMPARE(i.speedScript, section ? QString("$vfm12") : QString());
+                  speed += section ? 1 : 0;
+                  for (const auto& a : i.articulations)
+                        if (section && !a.transitions.empty())
+                              QCOMPARE(a.transition("portamento")->velocity, i.name.startsWith("Basses") ? 10 : 5);
+                  }
+      QCOMPARE(speed, 5);
       QCOMPARE(violins->transition("fingered")->velocity, 69);
       QCOMPARE(violins->transition("bowed")->velocity, 93);
       QVERIFY(!violins->attack("bowed"));
@@ -225,7 +240,7 @@ void TestPerformanceTechnique::map()
 //    Auto plays the notation: C5 after silence smooth (5; [slurs] smoothStart 0: spiccato, 112); D5 starts the slur right after C5: a re-attack (106),
 //    C5 ending 54 ms before it; E5 and F5 fingered (69; [slurs] transitions 0: bowed, 93), the note before ending 24 ms
 //    after them; G5's accent accented
-//    (122), F5 ending 54 ms before it; A5 right after it a re-attack (106); B5 after the glissando portamento (10),
+//    (122), F5 ending 54 ms before it; A5 right after it a re-attack (106); B5 after the glissando portamento (5),
 //    A5 ending 24 ms after it
 //---------------------------------------------------------
 
@@ -242,7 +257,7 @@ void TestPerformanceTechnique::autoTechniques()
       QCOMPARE(k[77].velocity, 69);
       QCOMPARE(k[79].velocity, 122);
       QCOMPARE(k[81].velocity, 106);          // A5 right after G5: a re-attack
-      QCOMPARE(k[83].velocity, 10);
+      QCOMPARE(k[83].velocity, 5);            // (the map's portamento: 1-9, PORT without FING)
       auto within = [](double a, double b) { return std::abs(a - b) < 2.5; };   // a tick each way, rounding
       QVERIFY2(within(ms(k[74].on - k[72].off), 54), qPrintable(QString::number(ms(k[74].on - k[72].off))));
       QVERIFY2(within(ms(k[74].off - k[76].on), 24), qPrintable(QString::number(ms(k[74].off - k[76].on))));
@@ -421,7 +436,7 @@ void TestPerformanceTechnique::trace()
 //   overrides
 //    the Inspector's choice on several notes at once: C5 and G5 smooth (5); E5 fingered (69); G5's transition
 //    fingered: it joins F5 (no slur) by a fingered transition, F5 ending 24 ms after it, its attack unused; D5's
-//    portamento (10)
+//    portamento (5)
 //---------------------------------------------------------
 
 void TestPerformanceTechnique::overrides()
@@ -436,7 +451,7 @@ void TestPerformanceTechnique::overrides()
       set({ n[1] }, Pid::PERFORMANCE_TRANSITION, int(Transition::PORTAMENTO));
       std::map<int, Key> k = render(s, lib);
       QCOMPARE(k[72].velocity, 5);
-      QCOMPARE(k[74].velocity, 10);
+      QCOMPARE(k[74].velocity, 5);
       QCOMPARE(k[76].velocity, 69);
       QCOMPARE(k[77].velocity, 69);           // (Auto under a slur: fingered, [slurs] transitions)
       QCOMPARE(k[79].velocity, 69);

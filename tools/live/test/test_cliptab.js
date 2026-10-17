@@ -65,8 +65,8 @@ test("every copy names its [receive] after its track (outlet 7), and says its pr
       assert.deepStrictEqual(s.hub.out.find((m) => m[0] === 7), [7, "set", "msl_m" + s.synth.id]);
       assert.deepStrictEqual(s.other.out.find((m) => m[0] === 7), [7, "set", "msl_m" + s.bass.id]);
       const r = JSON.parse(s.shared.musescore_link.devices);
-      assert.ok(Object.values(r).every((e) => e.protocol === 10));
-      assert.strictEqual(s.hub.sent("/live/hello")[0][1], 10);
+      assert.ok(Object.values(r).every((e) => e.protocol === 11));
+      assert.strictEqual(s.hub.sent("/live/hello")[0][1], 11);
       });
 
 test("the hub's udpreceive goes into the patcher's [route /ms/midi] (msl_in) when it has one, else through a deferlow", () => {

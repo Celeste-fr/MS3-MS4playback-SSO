@@ -277,10 +277,10 @@ function test(name, fn) {
             }
       }
 
-test("on a track without a MuseScore clip (the gate as loaded, \"gate 2 2\", or the script's \"gate 2\") every note passes, keys 114-127 too", () => {
+test("on a track without a MuseScore clip (the gate as loaded, \"gate 2 2\", or the script's \"gate 2\") every note passes, keys 113-127 too", () => {
       assert.ok((wires[carrierGate + ":0"] || []).some(([d]) => /^route 127 /.test(boxes[d].text)));
       const pass = () => {
-            for (let key = 114; key <= 127; ++key) {
+            for (let key = 113; key <= 127; ++key) {
                   assert.deepStrictEqual(play([0x90, key, 65]), [0x90, key, 65]);
                   assert.deepStrictEqual(play([0x90, key, 1]), [0x90, key, 1]);
                   assert.deepStrictEqual(play([0x90, key, 127]), [0x90, key, 127]);
@@ -303,7 +303,7 @@ test("on a track without a MuseScore clip (the gate as loaded, \"gate 2 2\", or 
 test("notes pass unchanged", () => {
       assert.deepStrictEqual(play([0x90, 60, 90]), [0x90, 60, 90]);
       assert.deepStrictEqual(play([0x80, 60, 0]), [0x90, 60, 0]);            // (a note-off as note-on 0)
-      assert.deepStrictEqual(play([0x90, 113, 20]), [0x90, 113, 20]);        // just below the carriers
+      assert.deepStrictEqual(play([0x90, 112, 20]), [0x90, 112, 20]);        // just below the carriers
       });
 
 test("each carrier key's note-on becomes its controller (UACC: velocity - 1; the others: the velocity, 1 as 0); its note-off goes", () => {
@@ -317,6 +317,14 @@ test("each carrier key's note-on becomes its controller (UACC: velocity - 1; the
             assert.deepStrictEqual(play([0x80, key, 64]), []);
             assert.deepStrictEqual(play([0x90, key, 0]), []);
             });
+      });
+
+test("key 113 (protocol 11) becomes CC119 (SSO's Performance speed; the velocity, 1 as 0), its note-off goes", () => {
+      assert.deepStrictEqual(play([0x90, 113, 63]), [0xb0, 119, 63]);
+      assert.deepStrictEqual(play([0x90, 113, 1]), [0xb0, 119, 0]);
+      assert.deepStrictEqual(play([0x90, 113, 126]), [0xb0, 119, 126]);
+      assert.deepStrictEqual(play([0x80, 113, 0]), []);
+      assert.deepStrictEqual(play([0x90, 113, 0]), []);
       });
 
 test("the pitch bend carriers (115 upper, 114 lower 7 bits; the velocity, 1 as 0) become one pitch bend", () => {
@@ -341,8 +349,10 @@ test("MuseScore's pitch bend carriers: the same keys (libmscore/liveclips.h)", (
       const h = fs.readFileSync(path.join(dir, "..", "..", "libmscore", "liveclips.h"), "utf8");
       assert.ok(/BEND_MSB\s*= 115;/.test(h));
       assert.ok(/BEND_LSB\s*= 114;/.test(h));
-      assert.ok(/CARRIER_LOW\s*= 114;/.test(h));
-      assert.ok(patcher.boxes.some((b) => b.box.text === "route 127 126 125 124 123 122 121 120 119 118 117 116 115 114"));
+      assert.ok(/CARRIER_LOW\s*= 113;/.test(h));
+      assert.ok(patcher.boxes.some((b) => b.box.text === "route 127 126 125 124 123 122 121 120 119 118 117 116 115 114 113"));
+      const cpp = fs.readFileSync(path.join(dir, "..", "..", "libmscore", "liveclips.cpp"), "utf8");
+      assert.ok(/EXTRA_CARRIERS\[EXTRA_CARRIER_COUNT\]\[2\] = \{ \{ 113, 119 \} \};/.test(cpp));
       });
 
 test("other messages pass: controllers, program, pressure, bend, on their channel", () => {
@@ -403,7 +413,7 @@ test("the carrier table is MuseScore's (libmscore/liveclips.cpp)", () => {
       assert.ok(m);
       assert.deepStrictEqual(m[1].split(",").map((x) => Number(x.trim())), CARRIER_CCS);
       const pre = patcher.boxes.filter((b) => /^prepend 176 /.test(b.box.text || "")).map((b) => Number(b.box.text.split(" ")[2]));
-      assert.deepStrictEqual(pre, CARRIER_CCS);
+      assert.deepStrictEqual(pre, CARRIER_CCS.concat([119]));
       });
 
 test("parameter lanes: the song position in ms (phasor~ locked to Live's transport, *~ from the script), 16 slots", () => {
