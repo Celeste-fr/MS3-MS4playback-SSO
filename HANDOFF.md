@@ -56,7 +56,18 @@ Goal: edits respond fast with SSO, sound unchanged (the owner's rule: speedups s
   event-loop lateness in an edit's window p50 409 -> 138, 538 -> 162, 448 -> 294, 702 -> 253 ms (a warm-up step is one
   10-measure chunk, ~80-200 ms here). Pitch edits and select still render at once (the click's preview needs the
   edit's renders): pitch-up 562 -> 366, 781 -> 413 ms.
-- **Open**: the VM run (needs a Windows build: `go.cmd <tag> o+b-+b+b-+b+a-+a 5 stopped`); the 0xC0000005 crash
+- **Windows VM** (Kontakt 8 + SSO, Whence, Inspector open; combined build integrate-1017 @ 16d3dbdcf8, CI run
+  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39034459356; probe `el1`, phases o,b-,b,b-,b,a-,a x 5
+  rounds, stopped; quiet.lock held, no kthost, Debian 1-min load 0.02-0.29): all-edit **sync** p50 295 -> 19, 271 -> 19
+  (even levels on), 244 -> 18 ms (off); **worst event-loop lateness** in an edit's window p50 313 -> 91, 277 -> 84,
+  248 -> 72 ms; response to idle p50 341 -> 244, 293 -> 242, 266 -> 224 ms (Windows' dispatcher runs the warm-up's
+  0 ms steps before it idles: range step p50 ~63, trim step ~52 ms). Per action (sync / worst lateness p50, b- -> b,
+  2nd pair): undo 270/272 -> 17/55, inspector open 118/116 -> 16/15, staccato add 272/280 -> 17/83, lane point add
+  219/214 -> 19/88, select 174/173 -> 118/113, pitch-up 383/388 -> 224/228 (the click still needs the edit's renders).
+  Measurer instance loads: main-thread parts 61-101 ms (begin) and 44 ms (finish), against 1.8-3.2 s before (build 442).
+  Left on the main thread with even levels: each EvenAutoMeasurer::onResult re-renders the master trim (p50 125 ms at
+  opening). Exit 0xC000000D at the probe's _Exit (the known headless-Kontakt exit), no crash. Logs local only.
+- **Open**: the 0xC0000005 crash
   (rerun1 phase e): not ours on the evidence (below). Fixed (coordinator, 2026-10-17): the note preview's chunk cache
   ignored even levels written without an undo step (a click after such a write replayed the chunk rendered before it);
   `NotePreview::stateKey` now holds `EvenLevels::generation` (editLagIdentical checks every step's click against a fresh
