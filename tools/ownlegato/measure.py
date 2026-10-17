@@ -70,8 +70,11 @@ def measure_file(log, x):
             lo, hi = RANGE
             f0, fh = hc.track(seg, SR, lo, hi)
             t = np.arange(len(f0)) * fh
-            ta, why = hc.transition_time(f0, fh, B['on'] - w0, A['key'], B['key'], after_s=A['on'] - w0 + 0.5,
-                                         until_s=None)
+            # the note before taken as heard 0.5 s after its note-on, or at the new note-on if it is held less (record.py
+            # fast: A held 0.1 / 0.2 s); looked for until the next note-on
+            nxt = notes[i + 1]['on'] - w0 if i + 1 < len(notes) else None
+            ta, why = hc.transition_time(f0, fh, B['on'] - w0, A['key'], B['key'],
+                                         after_s=min(A['on'] + 0.5, B['on']) - w0, until_s=nxt)
             lv = None
             if ta is not None:
                 lv, _ = leave_arrive(t, f0, A['key'], B['key'], ta - 1e-6)
@@ -80,6 +83,13 @@ def measure_file(log, x):
                        next=notes[i + 1]['on'] if i + 1 < len(notes) else None,
                        arrive=None if ta is None else round((ta + w0 - B['on']) * 1000, 1),
                        leave=None if lv is None else round((lv + w0 - B['on']) * 1000, 1), why=why)
+            if s['kind'] == 'fast':     # the set SSO picks: by the time since the previous legato note-on
+                rec.update(kind='transition' if s['roles'][i] == 'b' else 'slowA', dt=round(B['on'] - A['on'], 3),
+                           role=s['roles'][i], set='runs' if B['on'] - A['on'] < 0.115 else 'fast' if B['on'] - A['on'] < 0.35 else 'slow')
+            if s['kind'] == 'run':      # record.py runs: every transition but the first follows one of the same set
+                dt = B['on'] - A['on']
+                rec.update(kind='transition' if i > 1 else 'runFirst', dt=round(dt, 3),
+                           set='runs' if dt < 0.115 and abs(B['key'] - A['key']) <= 3 else 'fast' if dt < 0.35 else 'slow')
             if ta is not None:
                 ia = int(round(((ta + w0) * 1000 + hc.LATENCY_MS - first) / hop))
                 ib = int(round(((ta + w0) * 1000 + 400 + hc.LATENCY_MS - first) / hop))

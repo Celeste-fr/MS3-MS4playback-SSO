@@ -18,6 +18,20 @@ Open: the latency against fast notes (L_t 100 ms: 40 % of regions start less tha
 between regions (11 LEVEL warnings against SSO's 6), slur first notes' onsets, the licence question (owner). Listening
 page `nmb-ownlegato/` (untracked). Commit message: every number.
 
+Round 2 (2026-10-16, "our joins must reach the same quality as Kontakt + SSO's own"): **not reached in the tail**. A
+held-out test set (`record.py test`, 48 phrases, 401 joins; SSO renders it, `test_events.py` + sfzrender ours,
+`test_eval.py` measures, `tails.py` counts joins worse than SSO's own 99th percentile): medians match SSO (flux z 2.65 /
+2.47, dip -4.64 / -4.7 dB), pitch continuity and LEVEL steps reach or beat it, but 8.7 % of our joins are worse than
+SSO's p99 in flux / dip / pump / HF / scoop against SSO's 5.2-5.5 %. Tried (make_sfz.py options): equal-power crossfades
+30-150 ms (`--xf`: longer is smoother, 150 ms 2.5 % flux tail, but runs past the arrival at L_t 100), fast / runs sets
+(`record.py fast` / `runs`, `--sets`: sfizz lotimer / hitimer), velocity-coded sets with L_slow 250 (`--vel-sets`), level
+match (`--level-match`), head / click screening (`--head-check`): none beyond the noise (±1.5 %). Kept (round 2 =
+`--lt 80 --release sw --reattack`): releases by sw_previous (no CC68; test render within -50 dB of the CC68 one), legato
+re-attacks at velocity 111-116 / 117-127 (`score_events.py --reattack`, note before off 30 ms after the attack's onset: no
+gap), L_t 80. Bends: every quarter tone within 1.5 cents median, 8 max (`tuning_check.py`; SSO via kthost 40-100 cents
+off in bar 8). Open: the join tail (needs >= 150 ms crossfades without late arrivals: a custom engine or MuseScore-side
+lookahead, not a static SFZ), slur first notes (+18 ms on the test set, -21 in Whence: the rule reads the slur's peak).
+
 ## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; not merged)
 
 The owner, 2026-10-16: "is there any way at all we can make SSO load even faster"; rule the same day: "no optimizations

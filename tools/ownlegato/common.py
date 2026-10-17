@@ -21,11 +21,12 @@ def stereo(path):
     return x if x.ndim == 2 else np.stack([x, x], 1)
 
 
-def f0(x, lo=48, hi=76, sr=SR, hop=HOP):
+def f0(x, lo=48, hi=76, sr=SR, hop=HOP, resolution=0.1):
     """pYIN (librosa) in MIDI numbers (nan unvoiced) and the frames' centre times (s from x's start)."""
     import librosa
     f, v, _ = librosa.pyin(np.asarray(x, dtype=np.float64), fmin=librosa.midi_to_hz(lo), fmax=librosa.midi_to_hz(hi),
-                           sr=sr, frame_length=2048, hop_length=hop, center=True)
+                           sr=sr, frame_length=2048, hop_length=hop, center=True,
+                           resolution=resolution)
     m = librosa.hz_to_midi(np.where(v, f, np.nan))
     return np.arange(len(m)) * hop / sr, m
 

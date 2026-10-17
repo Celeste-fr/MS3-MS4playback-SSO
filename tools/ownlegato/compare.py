@@ -73,7 +73,7 @@ def main():
                scatterAll=stats([n['heardMs'] for n in notes]),
                unheard=sum(1 for n in tr if n['heardMs'] is None))
     # joins: each transition's note-on on its route's render; the baseline at quiet points of the same routes' notes
-    J, B = [], []
+    J, B, HO = [], [], []
     for route in a.perf_routes.split(','):
         p = os.path.join(a.wavs, route + '.wav')
         if not os.path.exists(p):
@@ -90,8 +90,21 @@ def main():
             if ons[i + 1] - h > 0.10:
                 bt.append((h + ons[i + 1]) / 2)
         J += joins.all_measures(x, jt)
+        from scipy.signal import butter, sosfilt
+        hp = sosfilt(butter(4, 5000, 'highpass', fs=joins.SR, output='sos'), x)
+        allons = sorted(((n['written'] + hc.OFFSET_S) * 1000 + lead + n['sentMs']) / 1000 for n in notes)
+        for k, n in enumerate(rn):
+            if not n['transition'] or k == 0:
+                continue
+            nxt = next((o for o in allons if o > ons[k] + 0.03), ons[k] + 0.4)
+            m = joins.handover(x, ons[k], nxt, rn[k - 1]['pitch'] + rn[k - 1].get('cents', 0) / 100,
+                               n['pitch'] + n.get('cents', 0) / 100, hp)
+            if m:
+                m.update(bar=n['bar'], beat=n['beat'], pitch=n['pitch'])
+                HO.append(m)
         B += joins.all_measures(x, bt)
-    out['joins'] = dict(handovers=joins.summary(J), baseline=joins.summary(B), each=J)
+    out['joins'] = dict(handovers=joins.summary(J), baseline=joins.summary(B), each=J,
+                        whole=joins.summary(HO, joins.HANDOVER_KEYS), wholeEach=HO)
     txt = ['%s' % a.title,
            'transitions heard - written: %s' % out['scatterTransitions'],
            'attacks (Performance routes): %s' % out['scatterAttacks'],
@@ -102,6 +115,7 @@ def main():
         txt.append('%s %s: max dp %s heard %s written %s' % (g['kind'], g['label'], g['maxDeviation'], g['heardIoiMs'], g['writtenIoiMs']))
     txt.append('joins: %s' % json.dumps(out['joins']['handovers']))
     txt.append('baseline: %s' % json.dumps(out['joins']['baseline']))
+    txt.append('whole hand-overs: %s' % json.dumps(out['joins']['whole']))
     print('\n'.join(txt))
     if a.o:
         with open(a.o, 'w') as f:

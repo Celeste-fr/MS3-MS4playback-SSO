@@ -4,6 +4,10 @@ then make our own patch"): kthost event files that play SSO's Violas - Performan
 offline) so that each sound the patch makes can be cut out of the render, plus a JSON log of what was sent and when.
 
     record.py probe <out dir>                    the probe: round robins, velocity bands, CC11 law, determinism
+    record.py fast  <out dir> --keys 52-70 --types fingered:69,bowed:100 --cc1 64 [--dts 0.2:7,0.1:3] [--rr 2]
+                                                 transitions as SSO plays them in quick notes (its fast / runs sets)
+    record.py runs  <out dir> --types fingered:69,bowed:100 --cc1 64 --dts 0.136:7,0.2:7,0.1:3 --chain 24
+                                                 the same, each in runs at dt (every transition after a transition)
     record.py pairs <out dir> --chains 55-63-55 [--name sup] [--types ...] [--cc1 ...] [--rr 2]
                                                  a supplement of chosen chains
     record.py plan  <out dir> --keys 52-70 [--intervals 7] [--types fingered:69,bowed:100,portamento:10]
@@ -35,6 +39,8 @@ HOLD_S = 1.5        # each note of a chain (the task: A held ~1.5 s, then B ~1.5
 OVERLAP_S = 0.024   # the map's overlap="24": the note before ends 24 ms after the new note-on
 REST_S = 3.2        # silence after a chain (Violas - Performance release="2620" ms)
 ATTACK_HOLD_S = 2.5 # a chain's first note (the attack): its own attack sample is recorded apart (atk), held SMOOTH_HOLD_S
+RUN_END_S = 1.5    # runs: a run's last note held this long
+FAST_HOLD_S = 1.3   # fast: B held this long after its fast-set transition
 SMOOTH_HOLD_S = 6.0 # the attack recordings: attack + a sustain long enough to loop, then the release
 START_S = 1.0
 
@@ -58,8 +64,10 @@ class File:
     def off(self, t, k):
         self.ev.append((round(t, 6), 'off', k, 0))
 
-    def chain(self, keys, attack_vel, trans_vels, cc1, kind='chain', hold=HOLD_S, attack_hold=ATTACK_HOLD_S, **meta):
-        """keys[0] attacked (attack_vel), each next key a transition at trans_vels[i-1]; then a release and REST_S."""
+    def chain(self, keys, attack_vel, trans_vels, cc1, kind='chain', hold=HOLD_S, attack_hold=ATTACK_HOLD_S, holds=None,
+              **meta):
+        """keys[0] attacked (attack_vel), each next key a transition at trans_vels[i-1]; then a release and REST_S.
+        holds: each transition note's own hold (s), else `hold`."""
         self.cc(self.t - REST_S / 2 if self.t > START_S else self.t - 0.4, 1, cc1)
         t = self.t
         notes = [{'key': keys[0], 'vel': attack_vel, 'on': round(t, 6)}]
@@ -71,7 +79,7 @@ class File:
             self.off(t + OVERLAP_S, keys[i])
             notes[-1]['off'] = round(t + OVERLAP_S, 6)
             notes.append({'key': k, 'vel': v, 'on': round(t, 6)})
-            t += hold
+            t += holds[i] if holds else hold
         self.off(t, keys[-1])
         notes[-1]['off'] = round(t, 6)
         seg = dict(kind=kind, cc1=cc1, notes=notes, end=round(t + REST_S, 6))
@@ -206,9 +214,103 @@ def pairs(out, name, chains, types, cc1s, rr):
     print('%s: %.0f s' % (name, d))
 
 
+def fast(out, keys, maxint, types, cc1, rr, dts, maxpairs, name='fast'):
+    """Transitions played the way SSO's faster sample sets are picked (read from the patch's script, the legato-switch
+    branch: the set by the time since the previous legato note-on, fallback bands 115 / 350 ms; the 'runs' set only for
+    minor 2nd, major 2nd, minor 3rd): for each wanted pair (A, B) A is reached by a transition and held dt (s), then B
+    by a transition (so B's transition comes from the dt set) and held FAST_HOLD_S, long enough to cut B's sustain from.
+    Chained: ... B_i -> A_{i+1} (a slow-set transition after FAST_HOLD_S, logged as such) -> B_{i+1} ...; each chain
+    begins with a smooth attack on a neighbour X of A_1 held 0.6 s. dts: {dt: max |interval|}."""
+    files, lst = [], []
+    for dt, lim in dts:
+        pairs = [(a, b) for a in keys for b in keys if a != b and abs(a - b) <= min(maxint, lim)]
+        for tname, tvel in types:
+            for r in range(rr):
+                todo = list(pairs)
+                f = File('%s_%03d_%s_%d' % (name, int(dt * 1000), tname[:4], r))
+                files.append(f)
+                lst.append('%s|Violas - Performance' % f.name)
+                while todo:
+                    a, b = todo.pop(0)
+                    x = a - 2 if a - 2 in keys else a + 2
+                    ks, hs, vs, roles = [x, a, b], [dt, FAST_HOLD_S], [tvel, tvel], ['x', 'a', 'b']
+                    n = 1
+                    while todo and n < maxpairs:
+                        nxt = next((p for p in todo if p[0] != ks[-1] and abs(p[0] - ks[-1]) <= maxint), None)
+                        if nxt is None:
+                            break
+                        todo.remove(nxt)
+                        ks += [nxt[0], nxt[1]]
+                        hs += [dt, FAST_HOLD_S]
+                        vs += [tvel, tvel]
+                        roles += ['a', 'b']
+                        n += 1
+                    f.chain(ks, 5, vs, cc1, kind='fast', holds=hs, attack_hold=0.6, type=tname, tvel=tvel, rep=r, dt=dt,
+                            roles=roles)
+    total = sum(f.write(out) for f in files)
+    with open(os.path.join(out, 'list.txt'), 'w') as fl:
+        fl.write(''.join(l + '\n' for l in lst))
+    print('%d files, %.0f s' % (len(files), total))
+
+
+def runs(out, keys, maxint, types, cc1, rr, dts, chain_len, name='run'):
+    """Runs: every note dt after the one before (so every transition but a run's first comes from SSO's set for dt, read
+    from the patch's script: runs < 115 ms (minor 2nd .. minor 3rd only), fast < 350 ms, and follows a transition of the
+    same set, as in a real run), covering every directed pair once per take (euler_chains, chain_len transitions a run);
+    the run's first note a smooth attack held dt, its last held RUN_END_S (the tail to cut a held note's sustain from),
+    then REST_S (SSO resets its legato after 1.5 s of silence). dts: [(dt, max |interval|)]."""
+    files, lst = [], []
+    for dt, lim in dts:
+        chains = euler_chains(keys, min(maxint, lim), chain_len)
+        for tname, tvel in types:
+            for r in range(rr):
+                f = File('%s_%03d_%s_%d' % (name, int(round(dt * 1000)), tname[:4], r))
+                files.append(f)
+                lst.append('%s|Violas - Performance' % f.name)
+                for c in chains:
+                    f.chain(c, 5, [tvel] * (len(c) - 1), cc1, kind='run', hold=dt, attack_hold=dt,
+                            holds=[dt] * (len(c) - 2) + [RUN_END_S], type=tname, tvel=tvel, rep=r, dt=dt)
+    total = sum(f.write(out) for f in files)
+    with open(os.path.join(out, 'list.txt'), 'w') as fl:
+        fl.write(''.join(l + '\n' for l in lst))
+    print('%d files, %.0f s' % (len(files), total))
+
+
+TEST_IOIS = [0.136, 0.136, 0.2, 0.273, 0.5, 1.0]   # Whence's Violas sixteenths / eighths, and slower notes
+
+
+def test(out, keys, types, cc1, phrases, seed, name='test'):
+    """A held-out test set (never cut into the patch): random phrases in Whence's Violas register, each a smooth attack
+    and 5-11 slurred notes, intervals 1-5 semitones, every note's length from TEST_IOIS (a phrase keeps one length but
+    its last note, held 0.8 s), the type per phrase (types' velocities). SSO plays it (run_vm.cmd), our patch plays the
+    same notes (ol2/testevents.py), and joins / arrivals / level steps are compared on the same music."""
+    import random
+    rnd = random.Random(seed)
+    f = File(name)
+    for p in range(phrases):
+        n = rnd.randint(6, 12)
+        ks = [rnd.choice(keys)]
+        while len(ks) < n:
+            k = ks[-1] + rnd.choice([-1, 1]) * rnd.randint(1, 5)
+            if keys[0] <= k <= keys[-1]:
+                ks.append(k)
+        ioi = rnd.choice(TEST_IOIS)
+        tname, tvel = types[p % len(types)]
+        f.chain(ks, 5, tvel, cc1, kind='test', hold=ioi, attack_hold=max(ioi, 0.273), holds=[ioi] * (n - 2) + [0.8],
+                type=tname, tvel=tvel, ioi=ioi)
+    total = f.write(out)
+    with open(os.path.join(out, 'list.txt'), 'w') as fl:
+        fl.write('%s|Violas - Performance\n' % f.name)
+    print('1 file, %.0f s' % total)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['probe', 'plan', 'pairs'])
+    ap.add_argument('cmd', choices=['probe', 'plan', 'pairs', 'fast', 'runs', 'test'])
+    ap.add_argument('--phrases', type=int, default=48)
+    ap.add_argument('--seed', type=int, default=20261016)
+    ap.add_argument('--dts', default='0.2:7,0.1:3', help='fast: dt (s) : largest |interval|, comma separated')
+    ap.add_argument('--maxpairs', type=int, default=10)
     ap.add_argument('out')
     ap.add_argument('--keys', default='52-70')
     ap.add_argument('--intervals', type=int, default=7)
@@ -224,6 +326,17 @@ def main():
     types = [(t.split(':')[0], int(t.split(':')[1])) for t in a.types.split(',')]
     if a.cmd == 'probe':
         probe(a.out)
+    elif a.cmd == 'fast':
+        lo, hi = (int(x) for x in a.keys.split('-'))
+        fast(a.out, list(range(lo, hi + 1)), a.intervals, types, int(a.cc1.split(',')[0]), a.rr,
+             [(float(d.split(':')[0]), int(d.split(':')[1])) for d in a.dts.split(',')], a.maxpairs)
+    elif a.cmd == 'test':
+        lo, hi = (int(x) for x in a.keys.split('-'))
+        test(a.out, list(range(lo, hi + 1)), types, int(a.cc1.split(',')[0]), a.phrases, a.seed)
+    elif a.cmd == 'runs':
+        lo, hi = (int(x) for x in a.keys.split('-'))
+        runs(a.out, list(range(lo, hi + 1)), a.intervals, types, int(a.cc1.split(',')[0]), a.rr,
+             [(float(d.split(':')[0]), int(d.split(':')[1])) for d in a.dts.split(',')], a.chain)
     elif a.cmd == 'pairs':
         pairs(a.out, a.name, [[int(k) for k in c.split('-')] for c in a.chains.split(',')], types,
               [int(c) for c in a.cc1.split(',')], a.rr)

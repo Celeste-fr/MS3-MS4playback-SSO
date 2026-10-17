@@ -86,11 +86,32 @@ ATTACKS = {'smooth': (1, 9), 'spiccato': (10, 116), 'accented': (117, 127)}
 KEY_LO, KEY_HI = 40, 90   # previous keys covered by the gap rule
 
 
-def hand(trigger):
-    """a <group> header: the hand-over (see DESIGN). The old voice ends at its own note-off (MuseScore's overlap) with
-    ampeg_release REL_MS; a transition region fades in over XF_MS, an attack over 2 ms"""
+def hand(trigger, xf=0.0):
+    """a <group> header: the hand-over (see DESIGN). xf 0 (round 1): the old voice ends at its own note-off
+    (MuseScore's overlap) with ampeg_release REL_MS; a transition region fades in over XF_MS, an attack over 2 ms.
+    xf > 0 (ms, round 2): an equal-power crossfade: the old voice's release T = EP_T_PER_F * xf from its note-off,
+    sent with the new note-on (sfizz's release falls 80 dB over T, exponentially: measured with sfzrender), the new
+    region's fade-in sqrt(1 - 10^(-8 t / T)) baked into its sample (ep_fade)"""
+    if xf:
+        return '<group> group=1 ampeg_attack=0 ampeg_release=%s trigger=%s' % (EP_T_PER_F * xf / 1000, trigger)
     return '<group> group=1 ampeg_attack=%s ampeg_release=%s trigger=%s' % (
         (XF_MS if trigger == 'legato' else 2.0) / 1000, REL_MS / 1000, trigger)
+
+
+EP_T_PER_F = 6.0      # round 2: the old voice's release T = 6 F: 13.3 dB down at F, the new region 0.2 dB under full
+
+
+def ep_fade(xf):
+    """the new region's equal-power fade-in against sfizz's exponential release of the old voice (T = EP_T_PER_F xf)"""
+    T = EP_T_PER_F * xf / 1000
+    return lambda t: np.sqrt(np.clip(1 - 10 ** (-8 * np.minimum(t, T) / T), 0, 1))
+
+
+# SSO's sample sets by the time since the previous legato note-on (read from the patch's script, the legato-switch
+# branch: bands 115 / 350 ms; runs only for intervals of 1-3 semitones) as sfizz's lotimer / hitimer (s since the
+# previous voice start in the group: checked with sfzrender). A pair without a set plays the nearest set it has.
+SETS = {'slow': dict(lotimer=0.35), 'fast': dict(lotimer=0.115, hitimer=0.35), 'runs': dict(hitimer=0.115)}
+SET_FALLBACK = {'slow': ['slow', 'fast', 'runs'], 'fast': ['fast', 'runs', 'slow'], 'runs': ['runs', 'fast', 'slow']}
 
 
 def layers(cc1s):
@@ -126,17 +147,228 @@ class Cutter:
             self.cache[name] = stereo(next(p for p in cands if os.path.exists(p)))
         return self.cache[name]
 
-    def cut(self, file, t0, t1, name):
+    def cut(self, file, t0, t1, name, gain=None):
+        """the recording's [t0, t1] s as samples/<name>.flac; gain: a function of the time from the cut's start (s,
+        numpy array) giving an amplitude factor, baked in (the hand-over's fade-in, the level match)"""
         p = os.path.join(self.out, 'samples', name + '.flac')
         if self.reuse and os.path.exists(p):
             self.bytes += os.path.getsize(p)
             return 'samples/%s.flac' % name, sf.info(p).frames / SR
         x = self.x(file)
         a, b = max(0, int(round(t0 * SR))), min(len(x), int(round(t1 * SR)))
-        p = os.path.join(self.out, 'samples', name + '.flac')
-        sf.write(p, x[a:b], SR, subtype='PCM_24')
+        y = x[a:b]
+        if gain is not None:
+            y = y * gain(np.arange(len(y)) / SR)[:, None]
+        sf.write(p, y, SR, subtype='PCM_24')
         self.bytes += os.path.getsize(p)
         return 'samples/%s.flac' % name, (b - a) / SR
+
+
+LONG_TAIL_S = 0.3     # round 2: a fast / runs take is used only with this much of the new note recorded after its
+                      # arrival (record.py fast's held notes, a run's last note): a run's inner notes end at the next
+                      # note-on, too soon for a note held longer
+LEVEL_MATCH_MS = 15.0 # round 2: the level at a join, RMS of the region's first LEVEL_MATCH_MS
+LEVEL_MATCH_MAX_DB = 6.0
+HEAD_MS = 30.0        # round 2 --head-check: the region's first HEAD_MS must be the note before at its pitch ...
+HEAD_SHARE = 0.7      # ... in this share of pYIN's frames (a fast / runs group without such a take falls back to a set
+                      # with one; a slow group keeps its best)
+# round 2 --vel-sets: the set by velocity (MuseScore picks it by the note before's length: slow from 350 ms), each type's
+# band of SSO's split in two; runs / fast by sfizz's timer (lotimer / hitimer 0.115 s) inside the fast band
+VEL_SETS = {('portamento', 'slow'): (1, 9), ('portamento', 'fast'): (10, 19), ('fingered', 'slow'): (20, 52),
+            ('fingered', 'fast'): (53, 84), ('bowed', 'slow'): (85, 97), ('bowed', 'fast'): (98, 110)}
+
+
+CLICK_SPAN_S = 0.5    # round 2 --head-check also drops a take with a click in its first L + CLICK_SPAN_S: spectral flux
+CLICK_Z = 6.0         # more than CLICK_Z SDs over its median (SSO's faulty samples: 54 -> 58 bowed's both takes 8.7-9.2;
+                      # clean takes ~2-3)
+
+
+def click_z(x):
+    """the largest spectral-flux z of x (1024-point Hann, hop 128) against its own median and SD"""
+    N, H = 1024, 128
+    if len(x) < 4 * N:
+        return 0.0
+    fr = np.array([x[k:k + N] * np.hanning(N) for k in range(0, len(x) - N, H)])
+    S = np.log(np.abs(np.fft.rfft(fr, axis=1)) + 1e-9)
+    fl = np.maximum(0, np.diff(S, axis=0)).sum(1)
+    return float((fl.max() - np.median(fl)) / (fl.std() + 1e-9))
+
+
+def lat(a, q):
+    """the latency a take is cut for: L_slow for the slow set with --vel-sets, else L_t"""
+    return (a.lt_slow or a.lt) if (a.vel_sets and q.get('set', 'slow') == 'slow') else a.lt
+
+
+def round2(a, tr, lt, la, lay, c, lines, regions, atk):
+    """Round 2's transition regions (see DESIGN, round 2): each take cut from L_t before its arrival (no offset: the fade
+    is baked at the cut's start), sets by timers, the level matched at the join, re-attacks; returns pair_types (the
+    gap rule's recorded pairs) and the count of heads shorter than PRE_MS."""
+    rng = tuple(int(v) for v in a.keys.split('-')) if a.keys else None
+    types = dict(TYPES)
+    if a.reattack:
+        types['bowed'] = (85, 110)
+    use = []
+    for q in tr:
+        q.setdefault('set', 'slow')
+        if rng and not rng[0] <= q['b'] <= rng[1]:
+            continue
+        if not a.sets and q['set'] != 'slow':
+            continue
+        end = (q['next'] - 0.005) if q['next'] else q['off']
+        if q['set'] != 'slow' and end - (q['on'] + q['arrive'] / 1000) < LONG_TAIL_S:
+            continue
+        L = lat(a, q)
+        if q['on'] + (q['arrive'] - L) / 1000 < q['aOn'] + 0.05:   # the cut would start in the note before's attack
+            continue
+        use.append((q, end))
+    # the head: the note before must sound at its pitch where the region starts (its first HEAD_MS within 30 cents of
+    # a in HEAD_SHARE of pYIN's frames), or the hand-over plays the recording's own unsettled context (a scoop: a fast
+    # take whose note before was cut short, a slow glide longer than L): such takes are dropped while their group has
+    # another
+    if a.head_check:
+        from common import f0 as pyin
+        ok, nclick = [], 0
+        for q, end in use:
+            x = c.x(q['file'])
+            t0 = q['on'] + (q['arrive'] - lat(a, q)) / 1000
+            seg = x[int(t0 * SR):int((t0 + HEAD_MS / 1000) * SR) + 2048].mean(1).astype(np.float64)
+            _, m = pyin(seg, min(q['a'], q['b']) - 3, max(q['a'], q['b']) + 3)
+            m = m[:max(1, int(HEAD_MS / 1000 * SR / 128))]
+            q['headShare'] = float(np.mean(np.abs(np.nan_to_num(m, nan=0) - q['a']) <= 0.30))
+            q['clickZ'] = click_z(x[int(t0 * SR):int((t0 + lat(a, q) / 1000 + CLICK_SPAN_S) * SR)].mean(1))
+            if q['clickZ'] > CLICK_Z:
+                nclick += 1
+                continue
+            ok.append((q, end))
+        best = {}
+        for q, end in ok:
+            k = (q['a'], q['b'], q['type'], q['cc1'], q['set'])
+            best[k] = max(best.get(k, 0), q['headShare'])
+        use = [(q, end) for q, end in ok if q['headShare'] >= HEAD_SHARE
+               or (q['set'] == 'slow' and best[(q['a'], q['b'], q['type'], q['cc1'], q['set'])] < HEAD_SHARE)]
+        print('head check: %d of %d takes kept (%d dropped for a click)' % (len(use), len(ok) + nclick, nclick))
+    # the level at each join: the recording's RMS over the cut's first LEVEL_MATCH_MS; the reference for the note before
+    # (key a): the median over every take leaving a, so every region starts at the level a typical one has there
+    pre = {}
+    for q, end in use:
+        x = c.x(q['file'])
+        t0 = q['on'] + (q['arrive'] - lat(a, q)) / 1000
+        w = x[int(t0 * SR):int((t0 + LEVEL_MATCH_MS / 1000) * SR)]
+        pre[id(q)] = 10 * np.log10(np.mean(w ** 2) + 1e-20)
+    ref = {}
+    for q, end in use:
+        ref.setdefault((q['a'], q['cc1']), []).append(pre[id(q)])
+    ref = {k: float(np.median(v)) for k, v in ref.items()}
+    fade = ep_fade(a.xf) if a.xf else None
+    groups = {}
+    for q, end in use:
+        groups.setdefault((q['a'], q['b'], q['type'], q['cc1'], q['set']), []).append((q, end))
+    for qs in groups.values():
+        qs.sort(key=lambda p: (p[0]['rep'] if p[0]['rep'] is not None else 0, p[0]['file'], p[0]['seg']))
+    cut = {}
+    late = [0]
+
+    def cutg(key, Lms):
+        """the takes of group key cut for latency Lms (cached)"""
+        if (key, Lms) in cut:
+            return cut[(key, Lms)]
+        ka, kb, ty, cc1, st = key
+        out = []
+        for i, (q, end) in enumerate(groups[key]):
+            t0 = q['on'] + (q['arrive'] - Lms) / 1000
+            if t0 < q['aOn'] + 0.05:
+                continue
+            if q['arrive'] - q['leave'] + PRE_MS > Lms:
+                late[0] += 1
+            g0 = float(np.clip(ref[(ka, cc1)] - pre[id(q)], -LEVEL_MATCH_MAX_DB, LEVEL_MATCH_MAX_DB)) \
+                if a.level_match and Lms == lat(a, q) else 0.0
+            L = Lms / 1000
+
+            def gain(t, g0=g0, L=L):
+                g = 10 ** ((g0 * np.clip(1 - t / L, 0, 1)) / 20)
+                return g * (fade(t) if fade else 1.0)
+            name = 't2_%d_%d_%s_%d_%s_%d_L%d' % (ka, kb, ty[:4], cc1, st, i, Lms)
+            path, dur = c.cut(q['file'], t0, end, name, gain if (fade or g0) else None)
+            out.append(dict(sample=path, dur=dur, L=L))
+            regions.append(dict(kind='transition', set=st, a=ka, b=kb, type=ty, cc1=cc1, take=i, sample=path, L=Lms,
+                                leave=q['leave'], arrive=q['arrive'], D=round(q['arrive'] - q['leave'], 1),
+                                levelMatchDb=round(g0, 2), headShare=q.get('headShare'),
+                                src='%s/%d/%d' % (q['file'], q['seg'], q['idx'])))
+        cut[(key, Lms)] = out
+        return out
+    lines.append(hand('legato', a.xf))
+    pair_types = {}
+    for (ka, kb, ty, cc1, st) in groups:
+        pair_types.setdefault((ka, kb), set()).add(ty)
+    centre = {t: (lo + hi) / 2 for t, (lo, hi) in types.items()}
+    cc1s = sorted({k[3] for k in groups})
+    emitted = 0
+    have_at = {}
+    for (ka, kb, ty, cc1, st) in groups:
+        have_at.setdefault((ka, kb, cc1), set()).add(ty)
+    for (ka, kb), have in sorted(pair_types.items()):
+        for ty in types:
+            for cc1 in cc1s:
+                # a pair without takes at this CC1 layer: the nearest layer's, playing in this one
+                src_cc1 = min((c for c in cc1s if (ka, kb, c) in have_at), key=lambda c: abs(c - cc1))
+                hv = have_at[(ka, kb, src_cc1)]
+                src_ty = ty if ty in hv else min(hv, key=lambda h: abs(centre[h] - centre[ty]))
+                bands = ['slow', 'fast', 'runs'] if a.sets else ['slow']
+                if abs(ka - kb) > 3 and a.sets:
+                    bands = ['slow', 'fast']     # no runs set: the fast set below 115 ms too
+                for band in bands:
+                    Lb = (a.lt_slow or lt) if (band == 'slow' and a.vel_sets) else lt
+                    src = next((s for s in SET_FALLBACK[band] if (ka, kb, src_ty, src_cc1, s) in groups
+                                and cutg((ka, kb, src_ty, src_cc1, s), Lb)), None)
+                    if src is None:
+                        continue
+                    if a.vel_sets:
+                        # the set by velocity (MuseScore knows the note before's length), runs / fast by timer
+                        vlo, vhi = VEL_SETS[(ty, 'slow' if band == 'slow' else 'fast')]
+                        if ty == 'bowed' and band != 'slow' and not a.reattack:
+                            vhi = 127
+                        timer = {'runs': dict(hitimer=0.115), 'fast': dict(lotimer=0.115) if abs(ka - kb) <= 3 else {},
+                                 'slow': {}}[band]
+                    else:
+                        vlo, vhi = types[ty]
+                        timer = dict(SETS[band]) if a.sets else {}
+                        if band == 'fast' and abs(ka - kb) > 3:
+                            timer.pop('lotimer', None)
+                    takes = cutg((ka, kb, src_ty, src_cc1, src), Lb)
+                    for i, r in enumerate(takes):
+                        reg = dict(sample=r['sample'], key=kb, pitch_keycenter=kb, sw_previous=ka, lovel=vlo, hivel=vhi)
+                        reg.update(timer)
+                        if len(takes) > 1:
+                            reg.update(seq_length=len(takes), seq_position=i + 1)
+                        reg.update(lay[cc1])
+                        ls, le = r['L'] + LOOP_FROM_MS / 1000, r['dur'] - 0.03
+                        if le - ls > 0.2:
+                            reg.update(loop_mode='loop_continuous', loop_start=int(ls * SR), loop_end=int(le * SR),
+                                       loop_crossfade=round(min(0.25, (le - ls) / 2), 3))
+                        note = '' if (src_ty == ty and src == band and src_cc1 == cc1) else \
+                            '  // %s %s cc1 %d from %s %s cc1 %d' % (ty, band, cc1, src_ty, src, src_cc1)
+                        lines.append('<region> ' + opc(reg) + note)
+                        emitted += 1
+    if a.reattack:
+        # a re-attack straight after a legato note: the spiccato / accented attack (record.py's atk) as a legato
+        # region, its onset at L_t (delay L_t - onset); MuseScore sends the note before's note-off at the onset
+        # (score_events.py --reattack), so the old voice hands over to the attack itself, no gap
+        for q in atk:
+            if q['attack'] not in ('spiccato', 'accented'):
+                continue
+            path = 'samples/a_%s_%d_%d.flac' % (q['attack'], q['key'], q['cc1'])
+            c.cut(q['file'], q['on'], q['off'], 'a_%s_%d_%d' % (q['attack'], q['key'], q['cc1']))
+            lo, hi = (111, 116) if q['attack'] == 'spiccato' else (117, 127)
+            reg = dict(sample=path, key=q['key'], pitch_keycenter=q['key'], lovel=lo, hivel=hi,
+                       delay=round(max(0.0, lt - q['onset']) / 1000, 4))
+            dur = q['off'] - q['on']
+            ls, le = max(0.6, q['onset'] / 1000 + 0.4), dur - 0.03
+            if le - ls > 0.2:
+                reg.update(loop_mode='loop_continuous', loop_start=int(ls * SR), loop_end=int(le * SR),
+                           loop_crossfade=round(min(0.25, (le - ls) / 2), 3))
+            lines.append('<region> ' + opc(reg) + '  // re-attack')
+    print('round 2: %d takes used (%d groups), %d regions' % (len(use), len(cut), emitted))
+    return dict(pair_types=pair_types, late=late[0])
 
 
 def main():
@@ -148,6 +380,18 @@ def main():
     ap.add_argument('--la', type=float)
     ap.add_argument('--name', default='violas_performance')
     ap.add_argument('--reuse', action='store_true', help='keep samples already cut (same cut, another --lt / --la)')
+    ap.add_argument('--xf', type=float, default=0.0, help='round 2: equal-power hand-over of this many ms (0: round 1)')
+    ap.add_argument('--sets', action='store_true', help='round 2: slow / fast / runs sets by sfizz lotimer / hitimer')
+    ap.add_argument('--release', choices=['cc68', 'sw'], default='cc68',
+                    help='sw: release regions with sw_previous = their own key (none in legato, no CC68)')
+    ap.add_argument('--level-match', action='store_true', help='round 2: each region at its join to the median level')
+    ap.add_argument('--reattack', action='store_true',
+                    help='round 2: legato regions at velocity 111-116 / 117-127 play the spiccato / accented attack')
+    ap.add_argument('--vel-sets', action='store_true', help='round 2: slow / fast set by velocity, own latency each')
+    ap.add_argument('--lt-slow', type=float, help='round 2 --vel-sets: the slow set latency (ms)')
+    ap.add_argument('--head-check', action='store_true', help='round 2: drop takes whose head is not the note before')
+    ap.add_argument('--keys', help='only transitions into these keys, lo-hi (a quicker cut for comparisons)')
+    ap.add_argument('--attack-adjust', help='json {key: ms}: added to each smooth attack region delay')
     a = ap.parse_args()
     items = []
     for p in a.index:
@@ -169,11 +413,15 @@ def main():
              '<control> default_path=./',
              '<global> volume=%.2f amp_veltrack=0 amplitude_oncc11=100 bend_up=100 bend_down=-100 xf_cccurve=power' % SFIZZ_GAIN_DB]
     regions, late = [], 0
+    r2on = bool(a.xf or a.sets or a.head_check or a.vel_sets or a.level_match or a.reattack)
+    if r2on:
+        r2 = round2(a, tr, lt, la, lay, c, lines, regions, atk)
+        late = r2['late']
     # transitions, grouped by (a, b, type, cc1): their takes are the round robins
     groups = {}
-    for q in tr:
+    for q in (tr if not r2on else []):
         groups.setdefault((q['a'], q['b'], q['type'], q['cc1']), []).append(q)
-    lines.append(hand('legato'))
+    lines.append(hand('legato', a.xf))
     pair_types = {}
     for (ka, kb, ty, cc1), qs in sorted(groups.items()):
         pair_types.setdefault((ka, kb), set()).add(ty)
@@ -212,8 +460,11 @@ def main():
                     reg = dict(sample=r['sample'], key=kb, pitch_keycenter=kb, sw_previous=ka, lovel=TYPES[ty][0], hivel=TYPES[ty][1],
                                offset=int(round((CUT_PRE_MS - lt) / 1000 * SR)))
                     lines.append('<region> ' + opc(reg) + ' ' + opc(lay[cc1]) + '  // %s missing: %s' % (ty, src))
+    if r2on:
+        pair_types = r2['pair_types']
+    adjust = {int(k): v for k, v in load_json(a.attack_adjust).items()} if a.attack_adjust else {}
     # attacks after silence (trigger=first) and their releases
-    lines.append(hand('first'))
+    lines.append(hand('first', a.xf))
     smooth_by = {}
     for q in atk:
         name = 'a_%s_%d_%d' % (q['attack'], q['key'], q['cc1'])
@@ -221,7 +472,7 @@ def main():
         reg = dict(sample=path, key=q['key'], pitch_keycenter=q['key'], lovel=ATTACKS[q['attack']][0], hivel=ATTACKS[q['attack']][1])
         if q['attack'] == 'smooth':
             reg.update(lay[q['cc1']])
-            reg['delay'] = round(max(0.0, (la - q['onset']) / 1000), 4)
+            reg['delay'] = round(max(0.0, (la - q['onset'] + adjust.get(q['key'], 0.0)) / 1000), 4)
             smooth_by[(q['key'], q['cc1'])] = (path, q['onset'], dur)
         ls, le = 2.0 if dur > 3 else max(0.6, q['onset'] / 1000 + 0.4), dur - 0.03
         if le - ls > 0.2:
@@ -230,13 +481,23 @@ def main():
         lines.append('<region> ' + opc(reg))
         regions.append(dict(kind='attack', attack=q['attack'], key=q['key'], cc1=q['cc1'], sample=path, onset=q['onset'],
                             level=q.get('level')))
-    lines.append('<group> group=2 trigger=release hicc68=63 ampeg_attack=%s ampeg_release=0.3' % (REL_MS / 1000))
+    if a.release == 'sw':
+        # sfizz's sw_previous is the last note-on's key, also for a release trigger: in legato the note before's note-off
+        # comes after the new note-on, so its release doesn't play; a line's last note-off plays it (checked with
+        # sfzrender: a 1 kHz release region heard only at the last note-off). No CC68 needed.
+        lines.append('<group> group=2 trigger=release ampeg_attack=%s ampeg_release=0.3'
+                     % ((a.xf if a.xf else REL_MS) / 1000))
+    else:
+        lines.append('<group> group=2 trigger=release hicc68=63 ampeg_attack=%s ampeg_release=0.3' % (REL_MS / 1000))
     for q in [q for q in atk if q['attack'] == 'smooth']:
         name = 'r_%d_%d' % (q['key'], q['cc1'])
         path, dur = c.cut(q['file'], q['off'], q['off'] + REL_LEN_S, name)
-        lines.append('<region> ' + opc(dict(sample=path, key=q['key'], pitch_keycenter=q['key'])) + ' ' + opc(lay[q['cc1']]))
+        rr = dict(sample=path, key=q['key'], pitch_keycenter=q['key'])
+        if a.release == 'sw':
+            rr['sw_previous'] = q['key']
+        lines.append('<region> ' + opc(rr) + ' ' + opc(lay[q['cc1']]))
     # gaps: a previous key never recorded before key b: b's smooth attack, its onset at L_t (delay or cut)
-    lines.append(hand('legato'))
+    lines.append(hand('legato', a.xf))
     keys = sorted({k for k, _ in smooth_by})
     gaps = 0
     for kb in keys:
@@ -249,6 +510,8 @@ def main():
                     continue
                 path, onset, dur = smooth_by[(kb, cc1)]
                 reg = dict(sample=path, key=kb, pitch_keycenter=kb, sw_previous=ka)
+                if a.reattack:
+                    reg['hivel'] = 110
                 if onset <= lt:
                     reg['delay'] = round((lt - onset) / 1000, 4)
                 else:

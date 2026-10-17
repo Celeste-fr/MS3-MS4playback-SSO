@@ -69,6 +69,10 @@ def main():
     n = int(0.3 * 44100)
     mixd[-n:] *= np.linspace(1, 0, n)[:, None]
     pk = np.abs(mixd).max()
+    if a.out.endswith('.wav'):          # for measuring: the mix itself
+        sf.write(a.out, mixd, 44100, subtype='FLOAT')
+        print('%s: peak %.1f dBFS' % (a.out, 20 * np.log10(pk + 1e-12)))
+        return
     with tempfile.TemporaryDirectory() as d:
         w = os.path.join(d, 'm.wav')
         sf.write(w, mixd, 44100, subtype='FLOAT')
