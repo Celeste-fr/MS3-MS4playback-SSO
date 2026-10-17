@@ -5,6 +5,27 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Lag probe (2026-10-16/17, branch `lag-probe`, from integrate-1012 1133362748; not merged)
+
+`MS_LAG_PROBE=<log>` (off by default; libmscore/lagprobe.h, mscore/lagprobesession.h, tools/lagprobe/). Windows VM,
+Kontakt 8 + SSO, build 442, Whence, Inspector open; logs local only (worktree `.lagprobe/res/`; state and details:
+`~/MuseScore/ms3fork/private/lag-probe-state.md`).
+- Every edit's response > 100 ms with SSO (stopped, 20 rounds, b: select ~210-270, pitch-up ~470-580, undo ~310-440,
+  Inspector open ~150-180, lane point ~250-320 ms p50); scrolling 6-8 ms. MS4 mode (e): 45-116 ms. Causes: renders on
+  the main thread per edit (Inspector's NoteLane::onPerformancePatch, masterTrim, realRangeTops, the click preview).
+- **evenLevels 0 (a) is not slower than 1 (b)**: full1/rerun1 showed a slower because the host's CPU load moved
+  (the Debian VM's builds: 1-min load ~3-5 during b, ~7-10 during a in rerun1); a does the same work minus the
+  measurement (identical scope counts), and every scope, paint and layout included, was uniformly slower. Interleaved
+  blocks (b,a,b,a,b,a x 5 rounds; `tools/lagprobe/compare_blocks.py`): all-edit medians b -> a 485 -> 452,
+  383 -> 308, 682 -> 524 ms. Even levels' own cost: +7..+30 % per edit (its threads compete for 4 vCPUs), detect
+  82-141 ms after each edit's debounce, measurer instance loads 1.8-3.2 s main-thread stalls.
+- **Short slurs: don't skip them for lag.** Whence's Performance notes are all in 3-4-note slurs joined into long
+  passages; skipping 2-4-note slurs would drop even levels from Whence, where it measurably helps (even_need
+  a69ebef56a); and the lag without even levels is still 308-524 ms per edit. Fix the renders instead (cache by undo
+  state, off the main thread; measurer instances loaded on a worker).
+- Open: rerun1's phase e playing crashed (0xC0000005, after a Kontakt VirtualUnlock error); a crashed probe leaves the
+  playback mode at MS4 in `C:\claude\lagprobe\cfg` (check `soundLibrary=` before a run).
+
 ## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; not merged)
 
 The owner, 2026-10-16: "is there any way at all we can make SSO load even faster"; rule the same day: "no optimizations
