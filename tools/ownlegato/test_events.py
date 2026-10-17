@@ -27,6 +27,7 @@ def main():
     ev = [(0.3, 'cc', 1, 64), (0.3, 'cc', 11, 127), (0.3, 'pb', 8192, 0)]
     for s in J['segments']:
         ns = s['notes']
+        ev.append((ns[0]['on'] - 1.0, 'cc', 1, s['cc1']))     # the phrase's CC1, as record.py set it for SSO
         for i, n in enumerate(ns):
             slow = bool(i) and a.lt_slow is not None and n['on'] - ns[i - 1]['on'] >= SLOW_FROM_S
             on = n['on'] - ((a.lt_slow if slow else a.lt) if i else a.la) / 1000
