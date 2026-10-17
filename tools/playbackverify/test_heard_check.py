@@ -188,6 +188,33 @@ class EndToEnd(unittest.TestCase):
         self.assertFalse(d[("Violas - Performance", "transition after transition")]["drifting"])
         self.assertIn("RHYTHM", H.report_text(res))
 
+    def test_export_pairing(self):
+        """the export renderer: sample 0 = score time 0, and the note-on as the export sent it (its events.tsv, 10 ms
+        after the dump's): a staccato whose hard start sounds at the export's note-on reads (sent + 10) - 24 ms"""
+        lead_ms = 100.0
+        w = 0.5
+        tmp = tempfile.mkdtemp()
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + row(w, w + 0.2, 62, "0-8", "Violas", "Spiccato",
+                                                                         "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0,
+                                                                         -1, 0.0, -1, 0, 0, 1) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        on = w + lead_ms / 1000 - 0.020
+        H._write(os.path.join(tmp, "0-8 museScore.txt"), "%.6f on 62 64\n%.6f off 62 0\n" % (on, on + 0.2))
+        H._write(os.path.join(tmp, "score events.tsv"), "time\ttick\tslot\ttype\ta\tb\tswitch\n"
+                 "%.4f\t0\t7\ton\t62\t64\t0\n%.4f\t0\t7\toff\t62\t0\t0\n" % (on + 0.010, on + 0.21))
+        n = int(2.0 * SR)
+        t = np.arange(n) / SR
+        s = on + 0.010
+        x = saw(hz(62), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40)])
+        res = H.analyse(tmp, tmp, load=lambda r: (x, SR) if r == "0-8" else None, export=True)
+        heard = res["notes"][0]["heardMs"]
+        self.assertLess(abs(heard - (-20 + 10 - HARD_BIAS_MS)), 6, heard)
+        self.assertEqual(res["pairing"]["0-8"]["paired"], 1)
+        self.assertAlmostEqual(res["pairing"]["0-8"]["medianMs"], 10.0, places=1)
+        self.assertIn("export renderer: 1 of the dump's 1", H.report_text(res))
+
 
 if __name__ == "__main__":
     unittest.main()

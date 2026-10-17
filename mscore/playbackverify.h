@@ -23,6 +23,9 @@
 //  verifyInBackground: its own setups copy, lock, log). tools/playbackverify/read_verify_report.py
 //  reads it; VERIFY.md explains it for the owner and for agents.
 //
+//  MS_VERIFY_ROUTES=1 with --verify-wav: each library route rendered alone, "<score> route <port>-<channel>.wav", and
+//  nothing else (the heard check's export renderer: tools/playbackverify/heard_check.sh, HC_RENDER=export).
+//
 //  --verify-shareable: only report.json and summary.txt (the flagged notes and their context): no
 //  clips, no lists of every note and event, so a report on the owner's own music can be posted.
 //
