@@ -59,13 +59,18 @@ j['rule'] = rule
 # slurs), stac (staccatos: a spiccato attack each), single (notes outside a slur, touching), gain = held - figure. The
 # staccatos' D ([levels] calibrated 2: real players' staccato against the held note, technique_offsets.json) is not in
 # the cells: the renderer adds the D of the technique the note would play otherwise (the Spiccato's heldOffset), as for
-# a velocity technique. The map's contextLevelPlain / contextLevelStaccato / contextLevelSingle.
+# a velocity technique. It added it in the grid's renders too (the zeroed grid: gain 0, + D), so a staccato cell is
+# held - figure + D (D = technique_offsets.json staccato "use", the five sections' Spiccato / Short 0.5 heldOffset):
+# without, D counted twice (the first VM check, 2026-10-17: calib's staccatos 3.4 dB over the held notes at mp, Whence's
+# 1.2 over the slurs, where D puts them 3.4 under). The map's contextLevelPlain / contextLevelStaccato / contextLevelSingle.
 if 'plain' in j:
+    D_STAC = json.load(open(os.path.join(D, '..', 'technique_offsets.json')))['staccato']['use']
     pj = j['plain']; PG = pj['grid']
     prule = dict(metric=M, relation='gain = held - figure',
                  note='gain dB over the plain Performance legato at CC1 = d for a phrase of median IOI ioiMs and median pitch p '
                       '(a staccato or a note outside a slur: the note alone, its length as its IOI): the section\'s All techniques '
-                      'Long held at CC1 = d less the figure at CC1 = d (metric P); per kind, key "d|ioiMs|p"', kinds={})
+                      'Long held at CC1 = d less the figure at CC1 = d (metric P; a staccato + D: rendered with D in place); '
+                      'per kind, key "d|ioiMs|p"', dStaccato=D_STAC, kinds={})
     noise = []
     for kind in ('slur', 'stac', 'single'):
         prule['kinds'][kind] = {}
@@ -80,7 +85,7 @@ if 'plain' in j:
                     for i in PG['ioiMs']:
                         f = m[kind][f'{d}|{i}|{p}']
                         noise.append(f['A'] - f['B'])
-                        cells[f'{d}|{i}|{p}'] = round(mean(h) - mean(f), 1)
+                        cells[f'{d}|{i}|{p}'] = round(mean(h) - mean(f) + (D_STAC if kind == 'stac' else 0.0), 1)
             prule['kinds'][kind][s] = cells
             print(s)
             for d in PG['dynamic']:

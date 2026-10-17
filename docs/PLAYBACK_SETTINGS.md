@@ -372,6 +372,64 @@ differences now follow the held notes' (mp: slurs Va - V1 -4.3, Vc - Va +8.0 aga
 Test: `tst_soundlibrary::levelContext` (the grid, the layers, CC1 at the written value, one CC11 per slur, the volumes),
 `tst_liveequivalence::liveContextLevel` (Live's clips, the plain set's lanes and Kontakt volumes).
 
+#### Under `[slurs] plainPerformance` (2026-10-17, branch plain-levels)
+
+With `[slurs] plainPerformance` (1 in Recommended and by default since 2026-10-17) every bowed note of the five sections
+plays the plain Performance legato at velocity 64, staccatos (a spiccato attack each) and notes outside a slur
+included, which the grid above never measured (it had slurs only, on `[slurs] performance`'s own legato). So the grid
+was measured again as Recommended plays it today, per kind of note, and a plain note takes its kind's gains:
+
+- **Kinds** (`ContextLevel::plainKind`): a staccato or staccatissimo as written (the tie chain's first note's; also
+  inside a slur: it plays a spiccato attack) → the map's `contextLevelStaccato`; a note in a slur → `contextLevelPlain`;
+  any other → `contextLevelSingle` (a kind the map lacks: `contextLevel`'s). A staccato or single note is a phrase of
+  one, its length as its spacing (as the grid's figures). A staccato then also plays `[levels] calibrated` 2's **D** of
+  the technique it would play otherwise (`Choice::plainFrom`: the Spiccato / Short 0.5, D -3.4 dB), so staccatos sit D
+  under the held notes as a velocity technique's do. With plainPerformance on, the score's largest gain G counts every
+  chord of those parts (the plain kinds too; a superset again).
+- **Renders**: the Windows VM, build 16d3dbd (integrate-1017, run
+  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39034459356), `--verify-playback --verify-wav` of
+  `grid_score.py`'s scores, the map's `contextLevel*` zeroed in the VM's copy: per section, dynamic and grid pitch, the
+  held reference (four half notes under staff text "non performance", the All techniques Long) and, at each IOI 100 /
+  136 / 200 / 300 / 500 / 1000 ms, three figures of eight sixteenths on the plain Performance legato: two touching slurs
+  of four, every note staccato, no slur. Takes A and B (B in reverse order), one score per take and dynamic (each part's
+  WAV of a 39-minute take didn't fit the VM's disk); take to take sd 0.19 dB per figure. `grid_ana.py cells` →
+  `sso_performance_context.json` › `plain`; `level_rule.py` → its `rule`: gain = held - figure (a staccato + D: the
+  renders played D already, the zeroed gain plus D). The 2026-10-15 slur grid stays (top level) for
+  `[slurs] performance` without plainPerformance.
+- Gains at IOI 136 ms, mid register, slur / staccato / single (dB):
+
+| Section | 32 | 64 | 96 | 112 |
+|---|---|---|---|---|
+| Violins 1 | 18.8 / 21.1 / 17.2 | 11.2 / 13.4 / 10.8 | 7 / 9.1 / 5.9 | 5.1 / 7 / 4.2 |
+| Violins 2 | 13.8 / 19.8 / 11.7 | 8 / 12.2 / 6.9 | 4.2 / 7.7 / 3.6 | 2.8 / 5.5 / 2.4 |
+| Violas | 19.8 / 27.5 / 16.8 | 16.4 / 21.8 / 13.4 | 9.4 / 14.2 / 8.9 | 7.2 / 10.9 / 6.7 |
+| Celli | 28.7 / 30.3 / 23.8 | 16.7 / 18.1 / 13 | 10 / 10 / 7 | 7.3 / 7.8 / 5.1 |
+| Basses | 9 / 9.5 / -1.9 | 3.2 / 3.6 / -2.7 | 0.4 / 0.6 / -1.8 | 2.4 / 2.2 / 0.7 |
+
+  The plain slurs' gains lie within about 2 dB of the 2026-10-15 slurs'; at 136 ms the staccatos need 3-11 dB more than
+  the slurs (velocity 64's spiccato attack is quiet at a low CC1), notes outside a slur 0-5 dB less (the Basses' at pp
+  11 dB less: SSO plays fast unslurred notes louder).
+- **Validation** (same build, full Recommended, the new map in the VM's copy; before: the branch's map without the plain
+  grids, every plain note on the slur grid). Calibration score (`grid_score.py`'s calib.mscx: 8 held halves, then 8
+  slurred / staccato / single quarters at q = 60), figure - held per section Violins 1 / 2, Violas, Celli, Basses
+  (`grid_ana.py groups`; target: slurs and single notes 0, staccatos D = -3.4):
+  - mp: slur +0.3 / -0.6 / +0.1 / +1.0 / -1.1 (before -0.7 / +0.1 / +0.5 / +0.9 / -0.4); staccato -3.4 / -3.2 / -0.5 /
+    -1.1 / -2.6 (before -2.9 / -3.4 / -6.6 / -1.9 / -5.3); single -0.9 / +0.3 / +0.3 / +2.0 / -1.1 (before +0.4 / +0.8 /
+    +0.7 / +2.1 / -0.1).
+  - f: slur +0.8 / -0.3 / -0.1 / -0.8 / -0.1 (before +0.5 / -0.3 / 0.0 / -0.7 / +0.4); staccato -1.9 / -4.3 / -2.7 /
+    -2.7 / -3.7 (before -4.2 / -2.2 / -2.8 / -1.7 / -4.5); single +0.8 / -0.4 / +0.3 / +0.3 / -0.1 (before +1.3 / +0.6 /
+    +1.0 / +0.2 / +0.5).
+  - RMS error over both markings and five sections: staccatos 1.4 dB (before 1.5), single notes 0.8 (0.9), slurs 0.6
+    (0.5). The staccatos' errors are left over from the grid's figure against the calibration's (the Violas at mp +3.0,
+    Celli +2.3), not from the gains' arithmetic (the events are as designed: `tst_liveequivalence` dumps).
+  *Whence* (each part rendered alone; per kind from the score: staccato - slurred, target D = -3.4): Violins 1 -1.8
+  (before -4.4), Violas -1.8 (before -6.0); Violins 2 (staccatos only) 1.9 dB louder than before; the sections'
+  Performance medians Va - V1 -1.2, Vc - Va +8.3 dB (before -0.9 / +8.2). The dump (Linux) changes only CC11 on the
+  Performance routes (and the patches' gain stage).
+- The first VM check counted D twice (the grid's renders had it in place; calib's staccatos 3.4 dB over the held notes
+  at mp, Whence's 1.2 over the slurs): `level_rule.py` adds D to the staccato cells since.
+- Tests: `tst_soundlibrary::levelContextPlain` (the kinds' grids, the fallback, `plainKind`, the top, CC11 per kind).
+
 ### Section balance
 
 **Since 2026-10-14 Recommended and the default play `[levels] sectionBalance` 2, the Clark & Luce balance** (the owner,
@@ -799,6 +857,15 @@ the design.
   pairs where the old nodes were wrong in 2 of 2; at 180 ms both swell on the figure's note 3, SSO's own E3 -> Eb3
   transition (`sso_note3_check.json`), which no value per note reaches. Values measured with the old nodes are stale
   (the context's hash changed) and measured again.
+- **Under `[slurs] plainPerformance`** (2026-10-17): every plain transition is a fingered one (velocity 64), so the
+  "bowed transition starts a slur" rule no longer saw the score's slurs and a passage of several slurs was fitted to one
+  median, flattening the level rule's step between them. A plain note now starts a slur of its own where its phrase
+  (`ContextLevel::phraseSlur`: the written slur, or the note alone outside one) differs from the joined note before
+  (`tst_performancetechnique::evenLevelsPlain`). Even levels plays measured values only: a score without them (*Whence*
+  has none: no `evenLevels` metaTag) plays no glide until the job or the background measurer has measured it, which
+  needs the plug-in (Kontakt + SSO): a Linux dump never shows glides. Checked on the VM (build 16d3dbd, the new map):
+  `--even-levels` on *Whence* measured 16 plain passages (4 slow ones skipped), the envelope off its slurs' medians
+  1.03 dB uncorrected, 0.49 after round 2.
 - **Slow slurs are skipped** (the owner's blind tests of real SSO: 2026-10-13, slow slurred passages sound the same
   uncorrected and corrected at 500 ms and 1 s; the tempo-line test, 350 and 500 ms, figure and line: no difference,
   neither wrong; the limit lowered from 500 to 350 ms by the owner, 2026-10-14, once the mid-note correction was fine at
@@ -1149,7 +1216,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Transitions early, `[slurs] transitionsEarly` (the owner, 2026-10-14: "sure let's hear them started early"; 2026-10-15: 1, by ear and measured): a Performance legato transition (SSO's five string sections) is sent early: 1 by its modelled arrival (the measured `bendGlide` by the note before's length, else `legatoDelay` by interval with `libFastDelay`: the audit's model), the new pitch arrives on the beat; 2 by the measured leave + 23.5 ms, the change heard on the beat (Polfreman 2013, ISMIR: a legato note on a modelled bowed string is perceived 23.5 ms after its pitch change starts, SD 22.8); 3 the middle of the measured glide on the beat; 2 / 3 without a measured glide as 1 (the audit lists those patches). Capped in every mode: the note before on its patch keeps `[legato] keepMs` as played and never less than 15 ms (SSO doesn't play a legato note-on closer to the one before: the audit's DROPPED); the note before still ends `overlap` after the moved note-on (a transition, not a re-attack); the bend's glide moves with the note-on; Live: the written clips + Track Delay + MuseScore Link's delays play the moved note-ons (LiveTiming), *Live plays the score*'s clips carry them (below, Transitions early) | **1 (Recommended 1, Library default 0; since 2026-10-15)** | `rendermidi.cpp` `collect` (`libTransitionsEarly`, `onsetEarliest`, `libShifts`, `libJoins`), `MidiRenderer::TRANSITION_MIN_GAP_MS`, `HEARD_AFTER_LEAVE_MS`; audit: `Report::transitionShiftsMs` | `[slurs] transitionsEarly` 0-3; score: `playbackSettings` |
 | Plain Performance, `[slurs] plainPerformance` (the owner, 2026-10-17, "C" by ear on Whence's Violas bars 8-13): every bowed note of a string section with a Performance legato (attacks listed) on it, staccatos too, velocity 64, at its written start (no early start of its own), a staccato a spiccato attack (its neighbours on the patch ending 45 ms before the next note-on), slurred transitions overlapping as before, other notes their written length; pizzicato, tremolo, trills, harmonics, mutes … keep their technique; "non performance" opts out; every event of the patch the map's `plainShift` early (Violins 1 65.8, Violins 2 66.0, Violas 111.0, Celli 80.2, Basses 59.1 ms, measured; another patch 0, the audit lists it), everything else later by it; Live: the Kontakt track's Track Delay (above, Plain Performance) | 1 (Recommended 1, Library default 0; the owner, 2026-10-17) | `soundlibrary.cpp` (`choosePlain`, `plainPerformanceArticulation`, `plainPerformancePatches`), `rendermidi.cpp` (`performanceNote`, `collect`, `PLAIN_VELOCITY`, `PLAIN_STACCATO_GAP_MS`, `libraryTrackDelays`), `TrackDelays::Delays::plain` / `plainMs`, `plainliveset.cpp`; data: map `plainShift` from `sso_plain_performance_shift.json` | `[slurs] plainPerformance`; score: `playbackSettings` |
 | Speed from written, `[slurs] speedFromWritten` (the owner approved, 2026-10-17): on SSO's five string-section Performance patches CC119 (the transition's speed variant: RUNS / RUNS RT / FAST LEGATO) is MuseScore's: the patch's state has the script's own writing off (`$vfm12` 0, map `speedCC` / `speedScript`), each legato note-on gets 126 - floor(written ms from the note before x 127 / 1000) right before it, so early starts keep the written band; attacks none (above, Speed from written) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`speedFromWritten`, `speedValue`, `playbackScriptValues`), `rendermidi.cpp` (`libSpeed`, `librarySpeeds`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`, `Slot::values`), `liveclips.cpp` (`EXTRA_CARRIERS`), `plainliveset.cpp` (`speedEnvelope`); data: `sso_performance_layers.json` | `[slurs] speedFromWritten`; score: `playbackSettings` |
-| Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' gain stage, the rest of the part's patches at 0 dB (above, Level rule; the owner, 2026-10-10; the gain stage 2026-10-15) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
+| Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' gain stage, the rest of the part's patches at 0 dB (above, Level rule; the owner, 2026-10-10; the gain stage 2026-10-15); with `[slurs] plainPerformance` a plain note takes its kind's grid (slur / staccato + calibrated 2's D / single note; 2026-10-17) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `plainKind`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel`, `contextLevelPlain` / `Staccato` / `Single` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, by the patches' gain stage less the score's master trim (above, Section balance, Gain stage and master trim; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |
 | Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' nodes (halfway from each note-on to the next, since 2026-10-14), every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
