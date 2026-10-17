@@ -5944,7 +5944,8 @@ void TestLiveEquivalence::playbackSettingsWidget()
 //    without an undo step, a setting changed and undone. Each step's TrackDelays (the gains, the master trim), the master
 //    trim, NoteLane::onPerformancePatch for every chosen note, the note preview's events and the score's chunked render
 //    (as Seq plays it) recorded with EditLag off and on, compared. MS_EDITLAG_SCORE=<score> (e.g. Whence) instead of
-//    the test's; MS_EDITLAG_SETTINGS=<metaTag>; MS_EDITLAG_TIMES=1 prints each step's Inspector + preview time in both
+//    the test's; MS_EDITLAG_SETTINGS=<metaTag>; MS_EDITLAG_TIMES=1 prints each step's Inspector + preview time in both.
+//    Also, at every step, the click's preview (its Previewer kept across the steps) equals a fresh Previewer's
 //---------------------------------------------------------
 
 static QString eventsText(const EventMap& events)
@@ -5989,7 +5990,9 @@ static QString delaysText(const MasterScore* score)
 
 void TestLiveEquivalence::editLagIdentical()
       {
-      struct Reset { ~Reset() { ContextLevel::dropWarmup(); SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); EditLag::setOn(true); } } reset;
+      struct Reset { ~Reset() { ContextLevel::dropWarmup(); SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); EditLag::setOn(true);
+                                Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/evenLevels", "1" } });     // (Recommended otherwise; even levels played)
       QString error;
       const QString share = root + "/../share/soundlibraries/";       // (the shipped map and calibration)
       std::shared_ptr<SoundLib::Library> lib = SoundLib::Library::load(share + "Spitfire Symphony Orchestra.xml", &error);
@@ -6007,9 +6010,12 @@ void TestLiveEquivalence::editLagIdentical()
       for (int pass = 0; pass < 2; ++pass) {
             EditLag::setOn(pass == 1);
             MasterScore* score = qEnvironmentVariableIsSet("MS_EDITLAG_SCORE") ? readCreatedScore(qEnvironmentVariable("MS_EDITLAG_SCORE"))
-                                                                              : readScore(DIR + "real-range.musicxml");
+                                                                              : readScore(DIR + "even-auto.musicxml");
             QVERIFY(score);
             keep.emplace_back(score);
+            if (!qEnvironmentVariableIsSet("MS_EDITLAG_SCORE"))
+                  for (Part* part : score->parts())         // (the test's slurred violin as SSO's Violins 1: its Performance patch)
+                        part->instrument()->setInstrumentId("violins");
             score->rebuildMidiMapping();
             score->doLayout();
             if (qEnvironmentVariableIsSet("MS_EDITLAG_SETTINGS"))
@@ -6029,6 +6035,7 @@ void TestLiveEquivalence::editLagIdentical()
             SynthesizerState synth;
             QElapsedTimer clock;
             int stepNo = 0;
+            Note* evenNote = nullptr;           // (the even-level step's note, from then on)
             auto record = [&](const QString& step) {
                   // the warm-up (editwarmup.h: on only) a few steps in, as far as events let it before the next question
                   // (0, 1, 2 steps, or to the end), then as the app asks after a command: the Inspector twice, the
@@ -6046,6 +6053,22 @@ void TestLiveEquivalence::editLagIdentical()
                   clock.restart();
                   const NotePreview::Preview pv = previewer.preview({ notes[0] }, synth);
                   const double previewMs = clock.nsecsElapsed() / 1e6;
+                  // the click plays what a fresh render plays (its chunk cache kept across edits and even levels)
+                  NotePreview::Previewer fresh;
+                  const NotePreview::Preview pf = fresh.preview({ notes[0] }, synth);
+                  auto same = [](const NotePreview::Preview& a, const NotePreview::Preview& b) {
+                        if (a.on.size() != b.on.size() || a.off.size() != b.off.size())
+                              return false;
+                        for (size_t e = 0; e < a.on.size(); ++e)
+                              if (a.on[e].type() != b.on[e].type() || a.on[e].dataA() != b.on[e].dataA() || a.on[e].dataB() != b.on[e].dataB()
+                                  || a.on[e].extChannel() != b.on[e].extChannel() || a.on[e].tuning() != b.on[e].tuning())
+                                    return false;
+                        return true;
+                        };
+                  QVERIFY2(same(pv, pf), qPrintable(step + ": the click against a fresh render"));
+                  if (evenNote)
+                        QVERIFY2(same(previewer.preview({ evenNote }, synth), NotePreview::Previewer().preview({ evenNote }, synth)),
+                                 qPrintable(step + ": the even-level note's click against a fresh render"));
                   timings[size_t(pass)] << QString("%1: warm-up %2 ms (%3), inspector %4 ms, preview %5 ms").arg(step).arg(warmMs, 0, 'f', 1)
                                            .arg(warm == 3 ? QString("all") : QString::number(warm)).arg(inspectorMs, 0, 'f', 1).arg(previewMs, 0, 'f', 1);
                   QStringList r;
@@ -6091,14 +6114,37 @@ void TestLiveEquivalence::editLagIdentical()
                   score->endCmd();
                   };
             auto undo = [&](bool u) { score->undoRedo(u, nullptr); };
-            auto even = [&](Note* n, double db) {       // (as EvenAuto::Session::write: no undo step)
-                  for (ScoreElement* l : n->linkList())
+            // an even level on a Performance legato note with its real context (as EvenAuto::Session::write: no undo
+            // step), its click cached at this state first: the click after the write must play the new level
+            auto even = [&](double db) {
+                  std::vector<EvenLevels::NoteInfo> infos;
+                  {
+                        EventMap ev;
+                        MidiRenderer midi(score);
+                        midi.setMinChunkSize(10);
+                        midi.setEvenLevelsInfo(&infos);
+                        MidiRenderer::Context ctx { synth };
+                        ctx.metronome = false;
+                        ctx.renderHarmony = true;
+                        midi.renderScore(&ev, ctx);
+                  }
+                  QVERIFY(!infos.empty());
+                  const EvenLevels::NoteInfo& info = infos[infos.size() / 2];
+                  evenNote = const_cast<Note*>(info.note);
+                  const NotePreview::Preview before = NotePreview::Previewer().preview({ evenNote }, synth);
+                  previewer.preview({ evenNote }, synth);       // (cached at this state)
+                  for (ScoreElement* l : evenNote->linkList())
                         if (l->isNote()) {
                               toNote(l)->setEvenLevel(db);
-                              toNote(l)->setEvenContext(QString("%1|test").arg(lib->instruments.empty() ? QString() : lib->instruments.front().name));
+                              toNote(l)->setEvenContext(info.context);
                               }
                   score->setPlaylistDirty();
                   EvenLevels::changed();
+                  const NotePreview::Preview after = NotePreview::Previewer().preview({ evenNote }, synth);
+                  bool differs = before.on.size() != after.on.size();
+                  for (size_t e = 0; !differs && e < before.on.size(); ++e)
+                        differs = before.on[e].dataB() != after.on[e].dataB() || before.on[e].dataA() != after.on[e].dataA();
+                  QVERIFY2(differs, "the even level written changes the note's click (else this step tests nothing)");
                   };
             auto setting = [&](const QString& v) {
                   QMap<QString, QString> tags = score->metaTags();
@@ -6118,7 +6164,7 @@ void TestLiveEquivalence::editLagIdentical()
             staccato(notes[0]);               record("staccato");
             undo(true);                       record("undo");
             undo(false);                      record("redo");
-            even(notes[0], 1.5);              record("even level written");
+            even(-3.0);                       record("even level written");
             undo(true);                       record("undo after even level");
             undo(false);                      record("redo after even level");
             setting(settingsWas + (settingsWas.isEmpty() ? "" : ";") + "levels/realRange=0");  record("setting");

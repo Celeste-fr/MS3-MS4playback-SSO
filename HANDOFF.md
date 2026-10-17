@@ -27,9 +27,10 @@ Goal: edits respond fast with SSO, sound unchanged (the owner's rule: speedups s
   10-measure chunk, ~80-200 ms here). Pitch edits and select still render at once (the click's preview needs the
   edit's renders): pitch-up 562 -> 366, 781 -> 413 ms.
 - **Open**: the VM run (needs a Windows build: `go.cmd <tag> o+b-+b+b-+b+a-+a 5 stopped`); the 0xC0000005 crash
-  (rerun1 phase e): not ours on the evidence (below); the note preview's chunk cache ignores even levels written without
-  an undo step (`NotePreview::stateKey`): a click after such a write can replay the chunk rendered before it (a
-  correctness fix changes what the click plays: owner's call).
+  (rerun1 phase e): not ours on the evidence (below). Fixed (coordinator, 2026-10-17): the note preview's chunk cache
+  ignored even levels written without an undo step (a click after such a write replayed the chunk rendered before it);
+  `NotePreview::stateKey` now holds `EvenLevels::generation` (editLagIdentical checks every step's click against a fresh
+  render; without the fix it fails at "even level written").
 - Crash (rerun1, phase e playing, logs only): the "VirtualUnlock failed" lines (19108, errno 158 ERROR_NOT_LOCKED) came
   while the 8 playback instances were released at the switch to MS4 (01:22:32-57), 3 min 15 s before the exit; the
   process was then shrinking (ws 5006 -> 1739 MB, physical free >= 5432 MB throughout; commit not logged); no stdout in

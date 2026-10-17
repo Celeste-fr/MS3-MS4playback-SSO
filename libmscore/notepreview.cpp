@@ -26,6 +26,7 @@
 #include "synthesizerstate.h"
 #include "undo.h"
 #include "lagprobe.h"
+#include "evenlevels.h"
 
 namespace Ms {
 namespace NotePreview {
@@ -223,7 +224,9 @@ QString stateKey(const MasterScore* score, const SynthesizerState& synthState)
              .arg(SoundLib::routesGeneration()).arg(Playback::generation()).arg(int(SoundLib::output()))
              .arg(synthState.method())
              + QString("|%1|%2|%3|%4").arg(int(SoundLib::active())).arg(int(PartPlaybackModes::libraryDefault()))
-             .arg(score->nstaves()).arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first()));
+             .arg(score->nstaves()).arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first()))
+             // (even levels written without an undo step: the chunk renders again, as Play would play it)
+             + QString("|%1").arg(EvenLevels::generation());
       }
 
 //---------------------------------------------------------
