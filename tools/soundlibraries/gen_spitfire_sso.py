@@ -341,10 +341,26 @@ LEGATO_VELOCITY = {'Violas - Performance': 100}
 # with: smooth 5 (the velocity measured slow), portamento 10 and accented 122 (the middles of their bands), spiccato
 # 112, fingered 69, bowed 93, a re-attack 106 after a 54 ms gap, transitions overlapping by 24 ms (the owner's own set,
 # 2026-10-10: its first note, lower neighbour, median transition, medians of its 9 re-attacks and of its overlaps).
-# The string sections only (the other Performance patches not measured: none, their notes play as before)
-PERFORMANCE_TECHNIQUES = (' attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122"'
-                          ' transitions="portamento:1-19:10 fingered:20-84:69 bowed:85-127:93"'
-                          ' reattack="106" reattackGap="54" overlap="24" legatoGap="39"')
+# The string sections only (the other Performance patches not measured: none, their notes play as before).
+# The portamento's velocity (2026-10-17, sso_performance_layers.json: the patches' own group data): the middle of the
+# band where PORT plays alone, below FING's lowest velocity: Violins 1 / 2, Violas, Celli 1-9 -> 5 (FING from 10: the
+# 10 of the article's band middle also played FING); Basses 1-19 -> 10 (FING from 20)
+PERFORMANCE_LAYERS = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                                   'sso_performance_layers.json'), encoding='utf-8')).items()
+                      if not k.startswith('_')}
+def portamentoVelocity(patch):
+    l = PERFORMANCE_LAYERS[patch]
+    low, high = l['portamento'][0], min(l['portamento'][1], l['fingeredLow'] - 1)
+    return (low + high) // 2
+def performanceTechniques(patch):
+    return (' attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122"'
+            f' transitions="portamento:1-19:{portamentoVelocity(patch)} fingered:20-84:69 bowed:85-127:93"'
+            ' reattack="106" reattackGap="54" overlap="24" legatoGap="39"')
+# [slurs] speedFromWritten (the owner approved, 2026-10-17): the controller the patch's script writes at each legato
+# note-on (Leg. Speed CC) and the script value that turns that off (set to 0 with the setting on), from the same file
+def speedAttributes(patch):
+    l = PERFORMANCE_LAYERS.get(patch)
+    return f' speedCC="{l["speedCC"]}" speedScript="{l["speedScript"]}"' if l else ''
 # the smooth attack's own onset (attackOnset="smooth:median;pitch:ms,…"): a lone first note at velocity 5 is heard much
 # later than the onset= measured at velocity 80 (Violas 236 against 111 ms). Measured 2026-10-12 (kthost on the test VM,
 # CC1 64, 5 pitches x 2 repeats, the onset= method; sso_smooth_onset.json): the median over the 10 notes and each
@@ -1653,6 +1669,9 @@ for i, line in enumerate(out):
             if current in PLAIN_SHIFT:
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + f' plainShift="{PLAIN_SHIFT[current]["shiftMs"]:g}"' + end
+            if speedAttributes(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + speedAttributes(current) + end
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) + end
@@ -1695,7 +1714,7 @@ for i, line in enumerate(out):
         if current in LEGATO_VELOCITY:
             extra += f' legatoVelocity="{LEGATO_VELOCITY[current]}"'
         if current in PERFORMANCE_TECHNIQUE_PATCHES:
-            extra += PERFORMANCE_TECHNIQUES
+            extra += performanceTechniques(current)
             ao = attackOnset(current)
             if ao:
                 extra += f' attackOnset="{ao}"'

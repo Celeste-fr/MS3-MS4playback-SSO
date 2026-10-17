@@ -141,6 +141,9 @@ class MidiRenderer {
       // Articulation::bendGlideAt; else both at its legato delay)
       struct LibGlide { double leaveMs; double arriveMs; double smoothingMs { 0 }; };   // (smoothing: bendSmoothing)
       std::map<const Note*, LibGlide> libGlide;
+      // [slurs] speedFromWritten (soundlibrary.h speedFromWritten): a legato note-on's speed controller value, from the written
+      // spacing (SoundLib::speedValue); put right before the note-on on its route (librarySpeeds)
+      std::map<const Note*, int> libSpeed;
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
@@ -227,6 +230,9 @@ class MidiRenderer {
             // performanceNote), interval semitones from it (the playbackaudit's DROPPED and LEAP); nullptr: an attack
             const Note* from { nullptr };
             int interval { 0 };
+            // [slurs] speedFromWritten: the speed controller sent right before its note-on (the patch's speedCC, from the
+            // written spacing to `from`'s note-on); -1: none
+            int speed { -1 };
             // [slurs] transitionsEarly: how early the transition was meant to start (ms; -1: not moved), and whether its patch
             // has no measured glide so that modes 2 / 3 fell back to the arrival (mode 1's model)
             double earlyMeantMs { -1 };
@@ -314,6 +320,7 @@ class MidiRenderer {
       void finishLibraryEvents(const Chunk&, EventMap* events);
       void libraryMaxVelocity(const Chunk&, EventMap* events);
       void libraryPitchBends(const Chunk&, EventMap* events);
+      void librarySpeeds(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);
       void libraryTrackDelays(const Chunk&, EventMap* events);
       void libraryTimingOverrides(const Chunk&, EventMap* events);      // livetimingoverride.h

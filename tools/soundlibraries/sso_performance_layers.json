@@ -1,0 +1,8 @@
+{
+  "_about": "SSO's five string-section Performance patches: numbers read 2026-10-17 from each .nki's group metadata (the interval groups' velocity ranges) and the patch's saved script values (the owner's library, Symphonic Strings; the reading tool and the script stay private, only these numbers are here). portamento: the PORT interval groups' velocity range; fingeredLow: the lowest velocity of the FING interval groups (from it up a transition also plays FING); speedCC: the script's saved 'Leg. Speed CC' (the controller it writes at each legato note-on: 126 - floor(ms since the voice's previous note-on x 127 / 1000), clamped to 0-126), speedScript its script value name; legatoGapMs: the saved 'Legato overlap' (a note-on less than this many ms after the note-off before, another pitch, is a transition). gen_spitfire_sso.py: the portamento transition's velocity = the middle of the band it plays alone (portamento low .. fingeredLow - 1, rounded down: the map's band-middle rule), and speedCC= / speedScript= on the patch's <Instrument> ([slurs] speedFromWritten).",
+  "Violins 1 - Performance": {"portamento": [1, 19], "fingeredLow": 10, "speedCC": 119, "speedScript": "$vfm12", "legatoGapMs": 40},
+  "Violins 2 - Performance": {"portamento": [1, 19], "fingeredLow": 10, "speedCC": 119, "speedScript": "$vfm12", "legatoGapMs": 40},
+  "Violas - Performance": {"portamento": [1, 19], "fingeredLow": 10, "speedCC": 119, "speedScript": "$vfm12", "legatoGapMs": 40},
+  "Celli - Performance": {"portamento": [1, 19], "fingeredLow": 10, "speedCC": 119, "speedScript": "$vfm12", "legatoGapMs": 40},
+  "Basses - Performance": {"portamento": [1, 19], "fingeredLow": 20, "speedCC": 119, "speedScript": "$vfm12", "legatoGapMs": 40}
+}

@@ -143,6 +143,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainWritten_data();
       void plainWritten();
       void plainPerformanceLive();
+      void speedFromWrittenLive();
       void delayedTrackLevel();
       void verifyExportMix();
       void liveTimingOverride();
@@ -159,11 +160,13 @@ class TestLiveEquivalence : public QObject, public MTest
       void exportInstancesOfParts();
       void liveEquivalenceByPart();
       void preparedStates();
+      void speedSetupState();
       void updateLiveSet();
       void updateLiveSetKnobs();
       void controllerPatchDefault();
       void liveGainStage();
       void utilitySet();
+      void scriptValuesSet();
       void dumpEvents();
       void playbackSettingsWidget();
       };
@@ -504,7 +507,7 @@ void TestLiveEquivalence::liveClipsBend()
       QFETCH(QString, legato);
       QCOMPARE(LiveClips::BEND_MSB, 115);
       QCOMPARE(LiveClips::BEND_LSB, 114);
-      QCOMPARE(LiveClips::CARRIER_LOW, 114);
+      QCOMPARE(LiveClips::CARRIER_LOW, 113);
       QCOMPARE(LiveClips::carrierPitch(68), 116);
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
@@ -2610,6 +2613,142 @@ void TestLiveEquivalence::plainPerformanceLive()
       }
 
 //---------------------------------------------------------
+//   speedFromWrittenLive
+//    [slurs] speedFromWritten in Live (the rule "Live and MuseScore sound alike"), plain-performance.musicxml with
+//    plainPerformance (D5, A5, B5: CC119 63 right before each): the route clip carries it on key 113 (the device's
+//    protocol 11) EPSILON before its note, so the device's MIDI has CC119 63 before each of those note-ons; a device of
+//    protocol 10 gets none (dropExtraCarriers). The plain set: the Legato track's clip has a CC119 envelope stepping to 63
+//    one unit before each of those notes as Live plays them (0 before the first), the Kontakt's Controllers clip none
+//---------------------------------------------------------
+
+void TestLiveEquivalence::speedFromWrittenLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/speedFromWritten", "1" } });
+      QCOMPARE(LiveClips::CARRIER_LOW, 113);
+      QCOMPARE(LiveClips::carrierPitch(119), 113);
+      QCOMPARE(LiveClips::carrierController(113), 119);
+      QCOMPARE(LiveClips::carrierController(116), 68);
+      QCOMPARE(LiveClips::carrierController(115), -1);       // (the bend's)
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo pizzicato'/>"
+         "<Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "<Articulation name='Staccato' value='40' techniques='short' onset='8'/>"
+         "<Articulation name='Pizzicato' value='56' techniques='pizzicato' onset='3'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='80' speedCC='119' speedScript='$vfm12'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:5 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-performance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      auto render = [score](bool written) {
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setWrittenTiming(written);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      const std::set<int> speedKeys { 74, 81, 83 };          // D5, A5, B5
+      // the route clip: a carrier on 113 before each, the device's MIDI CC119 63 before its note-on
+      const EventMap played = render(false);
+      std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *lib, played, { "MuseScore A" }, tl);
+      int found = 0;
+      for (LiveClips::Track& c : clips) {
+            if (c.patch != "Violin - Performance")
+                  continue;
+            ++found;
+            int carriers = 0;
+            for (const LiveClips::Note& n : c.notes) {
+                  if (n.pitch != 113)
+                        continue;
+                  ++carriers;
+                  QCOMPARE(LiveClips::carrierValue(n.pitch, n.velocity), 63);
+                  bool before = false;
+                  for (const LiveClips::Note& m : c.notes)
+                        before |= speedKeys.count(m.pitch) && m.start > n.start && m.start - n.start <= 4 * LiveClips::EPSILON;
+                  QVERIFY2(before, qPrintable(QString::number(n.start)));
+                  }
+            QCOMPARE(carriers, 3);
+            const std::vector<LiveEquivalence::DeviceEvent> midi = LiveEquivalence::deviceMidi(c.notes, tl.bpm, 48000);
+            int last = -1, checked = 0;
+            for (const LiveEquivalence::DeviceEvent& e : midi) {
+                  if (e.type == ME_CONTROLLER && e.a == 119)
+                        last = e.b;
+                  else if (e.type == ME_NOTEON && e.b > 0 && speedKeys.count(e.a)) {
+                        QCOMPARE(last, 63);
+                        ++checked;
+                        last = -1;
+                        }
+                  }
+            QCOMPARE(checked, 3);
+            // a device of protocol 10: none, counted as dropped
+            const int dropped = c.dropped;
+            const quint32 hash = c.hash;
+            LiveClips::dropExtraCarriers(&c);
+            QCOMPARE(c.dropped, dropped + 3);
+            QVERIFY(c.hash != hash);
+            QVERIFY(std::none_of(c.notes.begin(), c.notes.end(), [](const LiveClips::Note& n) { return n.pitch == 113; }));
+            }
+      QCOMPARE(found, 1);
+
+      // the plain set: the Performance patch's technique clip
+      const EventMap written = render(true);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+      for (bool link : { true, false }) {
+            const std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(l, link);
+            int legato = 0;
+            for (const LiveSetWriter::Track& t : tracks) {
+                  for (const LiveSetWriter::Clip& c : t.clips)
+                        for (const LiveSetWriter::Clip::Envelope& e : c.envelopes)
+                              QVERIFY2(e.controller != 119 || t.midiTo >= 0, qPrintable(t.name));      // (not the Kontakt's)
+                  // (the patch's one technique track: a patch that doesn't switch names it after itself)
+                  if (t.midiTo < 0 || t.tuningCopy || tracks[size_t(t.midiTo)].patch != "Violin - Performance")
+                        continue;
+                  ++legato;
+                  QCOMPARE(int(t.clips.size()), 1);
+                  const LiveSetWriter::Clip& c = t.clips[0];
+                  const LiveSetWriter::Clip::Envelope* env = nullptr;
+                  for (const LiveSetWriter::Clip::Envelope& e : c.envelopes)
+                        if (e.controller == 119)
+                              env = &e;
+                  QVERIFY(env);
+                  // 0 from the start, a step to 63 one unit before D5 as Live plays it, then 63 (A5 and B5 the same value)
+                  QCOMPARE(env->points.front().second, 0.0);
+                  QCOMPARE(env->points.back().second, 63.0);
+                  QCOMPARE(int(env->points.size()), 3);
+                  double d5 = -1;
+                  for (const LiveSetWriter::Clip::Note& n : c.notes)
+                        if (n.pitch == 74)
+                              d5 = n.start;
+                  QVERIFY(d5 >= 0);
+                  const double unit = 1.0 / LiveClips::UNITS_PER_BEAT;
+                  const double step = env->points[1].first;
+                  QCOMPARE(env->points[2].first, step);
+                  // (with the device: its played start + the lookahead; D5 plays as written, so the step is before it by a unit
+                  // plus the track's lookahead)
+                  const double look = link ? LiveTiming::msToUnits(t.lookaheadMs, tl.bpm) * unit : 0.0;
+                  QVERIFY2(std::fabs(step - (d5 + look - unit)) < 1.5 * unit, qPrintable(QString("%1 against %2").arg(step).arg(d5 + look - unit)));
+                  }
+            QCOMPARE(legato, 1);
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   liveTimingOverride
 //    timing set in Live (livetimingoverride.h; the owner, 2026-10-11: "if I manually adjust the timings in Live, it
 //    stays overridden like that"): a note of a "Live plays the score" clip moved earlier and lengthened in Live becomes
@@ -4569,6 +4708,80 @@ void TestLiveEquivalence::liveEquivalenceByPart()
 //    the file is damaged
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   speedSetupState
+//    [slurs] speedFromWritten's script value in the hosted state (SoundLibraryHost::setupState): a patch with speedCC /
+//    speedScript gets speedScript = 0 on top of its setup (the synthetic .nki's $stgrp, "127" in the setup made: a value
+//    of another length, as SSO's $vfm12 119 -> 0), made once (prepared); off: the setup as before (the voice limit
+//    only). The setup file keeps its own value; the score's setting over playback.ini's; scriptValuesFor
+//---------------------------------------------------------
+
+void TestLiveEquivalence::speedSetupState()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      LiveHost host(this, " nki='Violins 2 - All techniques.nki'", { "Violin" },
+                    "<SoundLibrary name='SpeedT'><Files registry='SpeedT'/><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin' nki='Violins 2 - All techniques.nki' speedCC='119' speedScript='$stgrp'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      SoundLibraryHost::setLibraryFolder(lib, root + "/" + DIR + "kontakt");
+      QFile::remove(SoundLibraryHost::setupFile(lib, "Violin"));
+      QString error;
+      const QString path = SoundLibraryHost::pluginPath(lib, &error);
+      QVERIFY2(!path.isEmpty(), qPrintable(error));
+      {
+            QFile e(root + "/" + DIR + "kontakt/empty.bin");
+            QVERIFY(e.open(QIODevice::ReadOnly));
+            QFile f(SoundLibraryHost::setupsFolder(lib) + "/Kontakt empty.vst3state");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(Vst3Plugin::joinState("MS Test Synth", e.readAll(), QByteArray()));
+            QJsonObject from;
+            from["plugin"] = path;
+            from["modified"] = QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate);
+            QFile m(SoundLibraryHost::setupsFolder(lib) + "/made setups.json");
+            QVERIFY(m.open(QIODevice::WriteOnly));
+            m.write(QJsonDocument(QJsonObject { { "(empty)", from } }).toJson());
+      }
+      auto stgrp = [](const QByteArray& state) {
+            QString name;
+            QByteArray component, controller;
+            if (!Vst3Plugin::splitState(state, &name, &component, &controller))
+                  return QByteArray("?");
+            const std::map<QString, QByteArray> v = KontaktSetup::scriptValues(KontaktSetup::slotProgram(component, nullptr));
+            return v.count("$stgrp") ? v.at("$stgrp") : QByteArray("-");
+            };
+      // off: the voice limit only, as before
+      Playback::setIniValuesForTest({ { "slurs/speedFromWritten", "0" } });
+      const QByteArray saved = SoundLibraryHost::savedSetupState(lib, "Violin", path, &error);
+      QVERIFY2(!saved.isEmpty(), qPrintable(error));
+      QCOMPARE(stgrp(saved), QByteArray("127"));
+      const QByteArray off = SoundLibraryHost::setupState(lib, "Violin", path, &error);
+      QCOMPARE(off, SoundLibraryHost::maxVoicesState(lib, "Violin", path, &error));
+      QCOMPARE(stgrp(off), QByteArray("127"));
+      QVERIFY(SoundLibraryHost::scriptValuesFor(lib, "Violin", nullptr).empty());
+      // on: 0 in the state, the setup file as it was; the same bytes again (prepared)
+      Playback::setIniValuesForTest({ { "slurs/speedFromWritten", "1" } });
+      QCOMPARE(SoundLibraryHost::scriptValuesFor(lib, "Violin", nullptr).at("$stgrp"), QByteArray("0"));
+      const QByteArray on = SoundLibraryHost::setupState(lib, "Violin", path, &error);
+      QVERIFY2(!on.isEmpty(), qPrintable(error));
+      QCOMPARE(stgrp(on), QByteArray("0"));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error), on);
+      QCOMPARE(stgrp(SoundLibraryHost::savedSetupState(lib, "Violin", path, &error)), QByteArray("127"));
+      QCOMPARE(stgrp(SoundLibraryHost::maxVoicesState(lib, "Violin", path, &error)), QByteArray("127"));
+      // a score's 0 over the ini's 1
+      MasterScore* score = readScore(DIR + "plain-performance.musicxml");
+      QVERIFY(score);
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/speedFromWritten", 0 } }));
+      QVERIFY(SoundLibraryHost::scriptValuesFor(lib, "Violin", score).empty());
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), off);
+      Playback::setIniValuesForTest({ { "slurs/speedFromWritten", "0" } });
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/speedFromWritten", 1 } }));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), on);
+      delete score;
+      }
+
 void TestLiveEquivalence::preparedStates()
       {
       LiveHost host(this, " nki='Violins 2 - All techniques.nki'", { "Violin" },
@@ -5452,6 +5665,44 @@ void TestLiveEquivalence::controllerPatchDefault()
 //    Update Live Set does); written to MS_UTILITY_OUT (gzip). Each Kontakt track's fader and Utility as read back
 //    (LiveSet::read) go to stdout. For checking in real Live what a Linux build writes (the VM, LIVE.md)
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   scriptValuesSet
+//    a tool (skipped without its inputs): a setup state (.vst3state, MuseScore's form) with script values set, as
+//    SoundLibraryHost::setupStateWith sets the playback settings' ([slurs] speedFromWritten: "$vfm12=0"), for renders
+//    outside MuseScore (kthost on the test VM): MS_SCRIPT_VALUES_IN=<in.vst3state> MS_SCRIPT_VALUES_OUT=<out.vst3state>
+//    MS_SCRIPT_VALUES="$name=value;…"
+//---------------------------------------------------------
+
+void TestLiveEquivalence::scriptValuesSet()
+      {
+      if (!qEnvironmentVariableIsSet("MS_SCRIPT_VALUES_IN"))
+            QSKIP("a tool: MS_SCRIPT_VALUES_IN=<in.vst3state> MS_SCRIPT_VALUES_OUT=<out.vst3state> MS_SCRIPT_VALUES=\"$name=value;…\"");
+      QFile in(qEnvironmentVariable("MS_SCRIPT_VALUES_IN"));
+      QVERIFY(in.open(QIODevice::ReadOnly));
+      QString name;
+      QByteArray component, controller;
+      QVERIFY(Vst3Plugin::splitState(in.readAll(), &name, &component, &controller));
+      std::map<QString, QByteArray> set;
+      for (const QString& kv : qEnvironmentVariable("MS_SCRIPT_VALUES").split(";", QString::SkipEmptyParts)) {
+            const int eq = kv.indexOf('=');
+            if (eq > 0)
+                  set[kv.left(eq).trimmed()] = kv.mid(eq + 1).trimmed().toUtf8();
+            }
+      QVERIFY(!set.empty());
+      QString error;
+      int count = 0;
+      const QByteArray out = KontaktSetup::withScriptValues(component, set, &error, &count);
+      QVERIFY2(!out.isEmpty(), qPrintable(error));
+      QVERIFY2(count >= int(set.size()), qPrintable(QString("%1 of %2 set").arg(count).arg(set.size())));
+      const std::map<QString, QByteArray> now = KontaktSetup::scriptValues(KontaktSetup::slotProgram(out, nullptr));
+      for (const auto& v : set)
+            QCOMPARE(now.at(v.first), v.second);
+      QFile f(qEnvironmentVariable("MS_SCRIPT_VALUES_OUT"));
+      QVERIFY(f.open(QIODevice::WriteOnly));
+      const QByteArray state = Vst3Plugin::joinState(name, out, controller);
+      QCOMPARE(f.write(state), qint64(state.size()));
+      }
 
 void TestLiveEquivalence::utilitySet()
       {

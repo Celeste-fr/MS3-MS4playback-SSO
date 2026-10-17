@@ -208,6 +208,24 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                         }
                   return false;
                   };
+            // [slurs] speedFromWritten: the patch's speed controller (CC119) right before a note-on at its tick is that note's:
+            // its technique clip's envelope (the note's Track Delay and timing), not the Controllers clip
+            const int speedCC = SoundLib::speedFromWritten(li, score) ? li->speedCC : -1;
+            auto speeds = [speedCC](const std::vector<std::pair<int, const NPlayEvent*>>& list) {
+                  std::map<const NPlayEvent*, int> out;     // note-on -> value
+                  if (speedCC < 0)
+                        return out;
+                  std::pair<int, int> last { -1, -1 };     // (tick, value)
+                  for (const auto& item : list) {
+                        const NPlayEvent& e = *item.second;
+                        if (e.type() == ME_CONTROLLER && e.controller() == speedCC && !e.librarySwitch())
+                              last = { item.first, e.value() };
+                        else if (e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch() && last.first == item.first)
+                              out[&e] = last.second;
+                        }
+                  return out;
+                  };
+            const std::map<const NPlayEvent*, int> speedOf = speeds(r.second);
             // a controller or bend right before a note-on at its tick (its track level's CC11, a dynamic, a lane's
             // bend) is that note's: its lane point moves by the note's technique's own delay, which the technique's
             // MIDI track plays (the Kontakt track has the patch's, the part group the part's), as the renderer moves
@@ -255,6 +273,8 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                   const bool off = e.type() == ME_NOTEOFF || (e.type() == ME_NOTEON && e.velo() == 0);
                   if (setsSwitch(e, value))
                         continue;
+                  if (speedCC >= 0 && e.type() == ME_CONTROLLER && e.controller() == speedCC)
+                        continue;
                   // (a point a tick after the lane's last one: a glide's step, Lane::glides)
                   auto lanePoint = [&](int cc, int v) {
                         std::vector<std::pair<int, int>>& pts = b.lanes[cc];
@@ -292,6 +312,9 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                         n.muted = voiceOff(e);
                         n.source = e.note();             // (Update Live Set: a timing edit in Live becomes its override)
                         n.utick = item.first;
+                        auto sp = speedOf.find(&e);
+                        if (sp != speedOf.end())
+                              n.speed = sp->second;
                         open[n.pitch].push_back({ t, n });
                         }
                   else if (off && !written) {
@@ -315,11 +338,14 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                   if (wi == writtenByRoute.end())
                         continue;
                   int wvalue = -1;
+                  const std::map<const NPlayEvent*, int> wspeedOf = speeds(wi->second);
                   std::map<int, std::deque<std::pair<size_t, LiveClips::Note>>> wopen;
                   for (const auto& item : wi->second) {
                         const NPlayEvent& e = *item.second;
                         const int at = tl.units(item.first);
                         if (setsSwitch(e, wvalue))
+                              continue;
+                        if (speedCC >= 0 && e.type() == ME_CONTROLLER && e.controller() == speedCC)
                               continue;
                         if (e.type() == ME_NOTEON && e.velo() > 0) {
                               LiveClips::Note n;
@@ -329,6 +355,9 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
                               n.muted = voiceOff(e);
                               n.source = e.note();             // (Update Live Set: a timing edit in Live becomes its override)
                               n.utick = item.first;
+                              auto sp = wspeedOf.find(&e);
+                              if (sp != wspeedOf.end())
+                                    n.speed = sp->second;
                               auto key = writtenKeys.find(&e);
                               auto span = key == writtenKeys.end() ? playedTimes.end() : playedTimes.find(key->second);
                               if (span != playedTimes.end()) {
@@ -611,6 +640,61 @@ QString tuningName(const Kontakt& k)
       return QString(" (%1%2 cents)").arg(c < 0 ? QString(QChar(0x2212)) : QString("+"), n);
       }
 
+//---------------------------------------------------------
+//   speedEnvelope
+//    [slurs] speedFromWritten: the speed controller (CC119) of a technique's notes as an envelope of its clips, a step one
+//    unit before each note as Live plays it (the controllers pass the MuseScore Link device at once, the notes it delays:
+//    so with the device, written timing, the step is at the note's played start plus the track's lookahead; without it
+//    at the written note, moved with it by the Track Delay). On the technique's track, not the Kontakt's Controllers
+//    clip: it gets the note's own Track Delay (lookaheadMs < 0: no device)
+//---------------------------------------------------------
+
+static void speedEnvelope(const Kontakt& k, const Technique& tq, double lookaheadMs, double bpm, std::vector<LiveSetWriter::Clip>* clips)
+      {
+      if (!k.instrument || k.instrument->speedCC <= 0)
+            return;
+      std::vector<std::pair<int, int>> points;             // (units, value)
+      const int look = lookaheadMs >= 0 ? int(std::lround(LiveTiming::msToUnits(lookaheadMs, bpm))) : 0;
+      for (const LiveClips::Note& n : tq.notes) {
+            if (n.speed < 0 || n.muted)
+                  continue;
+            const int base = lookaheadMs >= 0 ? (n.timed ? n.playedStart : n.start) + look : n.start;
+            points.push_back({ std::max(0, base - 1), n.speed });
+            }
+      if (points.empty())
+            return;
+      std::stable_sort(points.begin(), points.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) { return a.first < b.first; });
+      for (LiveSetWriter::Clip& c : *clips) {
+            const int from = int(std::lround(c.start * LiveClips::UNITS_PER_BEAT));
+            const int to = int(std::lround(c.end * LiveClips::UNITS_PER_BEAT));
+            LiveSetWriter::Clip::Envelope e;
+            e.controller = k.instrument->speedCC;
+            // (before the first: 0, the controller's value in a patch just loaded, as MuseScore plays it; the script itself
+            // sends 0 when it loads, with its own writing on)
+            int value = 0;
+            bool any = false;
+            for (const auto& p : points) {
+                  if (p.first >= to)
+                        break;
+                  if (p.first < from) {
+                        value = p.second;
+                        continue;
+                        }
+                  any = true;
+                  if (e.points.empty())
+                        e.points.push_back({ 0.0, double(value) });
+                  if (p.second != value) {
+                        const double at = beats(p.first - from);
+                        e.points.push_back({ at, double(value) });
+                        e.points.push_back({ at, double(p.second) });
+                        value = p.second;
+                        }
+                  }
+            if (any)
+                  c.envelopes.push_back(e);
+            }
+      }
+
 std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
       {
       std::vector<LiveSetWriter::Track> out;
@@ -790,6 +874,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                                     tt.delayMs -= tt.lookaheadMs;
                                     if (link && timing.any())
                                           tt.linkTiming = LiveTiming::record(timing);
+                                    speedEnvelope(kc, kc.techniques[i], link ? tt.lookaheadMs : -1.0, layout.bpm, &tt.clips);
                                     for (const LiveClips::Note& n : kc.techniques[i].notes)
                                           if (!n.muted)
                                                 tt.sourceNotes.push_back({ n.pitch, n.start, n.length, n.velocity, n.source, n.utick });

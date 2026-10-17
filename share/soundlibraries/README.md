@@ -199,11 +199,13 @@ switch value of each articulation. For example:
     joins by transition (a note's own join in the Join lane: longer re-attacks). Names MuseScore knows: attacks `smooth`,
     `spiccato`, `accented`; transitions `portamento`, `fingered`, `bowed` (Note › Performance attack / transition
     in the Inspector; Auto: a slur's notes bowed, after a glissando portamento, an accent or marcato accented,
-    else spiccato). SSO (`gen_spitfire_sso.py` PERFORMANCE_TECHNIQUES, the five string sections' Performance
-    Legato): `attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122" transitions="portamento:1-19:10
+    else spiccato). SSO (`gen_spitfire_sso.py` performanceTechniques, the five string sections' Performance
+    Legato): `attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122" transitions="portamento:1-19:5
     fingered:20-84:69 bowed:85-127:93" reattack="106" reattackGap="54" overlap="24" legatoGap="39"` (bands: Spitfire's article and
-    measured on Violins 1 - Performance, as is legatoGap; velocities and times: the owner's own set, HANDOFF.md). A bowed transition
-    plays at `legatoVelocity` where the map has one.
+    measured on Violins 1 - Performance, as is legatoGap; velocities and times: the owner's own set, HANDOFF.md). The
+    portamento's velocity is the middle of the band where the patch's PORT groups play alone: 5 (FING plays from 10 on
+    Violins 1 / 2, Violas, Celli), the Basses' 10 (FING from 20) (2026-10-17, `sso_performance_layers.json`; it was 10
+    everywhere, which also played FING). A bowed transition plays at `legatoVelocity` where the map has one.
   - `attackOnset="name:median[;pitch:ms,…] …"` on such an `Articulation`: an attack's own onset (ms after the note-on,
     measured as `onset`: the median over the measured notes, optionally by played pitch). With `[slurs] smoothStart`
     on, a note on that attack starts early by it (`[heldNotes] byPitch`: by pitch, else the median) instead of the
@@ -292,6 +294,12 @@ switch value of each articulation. For example:
     written latency of plain notes, measured in context: `tools/soundlibraries/sso_plain_performance_shift.json`;
     SSO's Violas - Performance 95.2). Left out: the notes play as written and the playback audit lists the patch
     (docs/PLAYBACK_SETTINGS.md › Plain Performance).
+  - `speedCC` and `speedScript` on an `Instrument` (a controller 1-127 and a script value name; both or neither): the
+    controller the patch's own script writes at each legato note-on from the note-on spacing, and the script value that
+    sets which (0: none). With `[slurs] speedFromWritten` the patch's state gets `speedScript` = 0 and MuseScore sends the
+    controller itself, by the same formula from the written spacing (docs/PLAYBACK_SETTINGS.md › Speed from written).
+    SSO's five string-section Performance patches: `speedCC="119" speedScript="$vfm12"` (the script's "Leg. Speed CC",
+    read from the patches' saved values: `tools/soundlibraries/sso_performance_layers.json`).
   - `maxVelocity` on an `Instrument` (1-127, left out: 127): the loudest velocity MuseScore sends to the patch;
     a louder note-on is sent at this. For a patch whose own script turns the top velocity into a different
     sound: SSO's percussion script (Kickstart) plays velocity 127 as a roll where its option "Roll on high

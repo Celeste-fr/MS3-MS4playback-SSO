@@ -5,6 +5,37 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Speed from written (branch `cc119-control`, 2026-10-17)
+
+The owner approved taking over the Performance patches' CC119 (2026-10-17). `[slurs] speedFromWritten` (0 by default
+and in both presets; the owner flips Recommended after listening): the five string sections' Performance patches load
+with the script's own CC119 writing off ($vfm12 = 0, applied by the host as a prepared state; the setup file keeps the
+library's value) and MuseScore sends CC119 = 126 - floor(ms*127/1000) just before each transition note-on, ms = the
+WRITTEN time from the first note of the previous note's tie chain. First notes and attacks get none (the script writes
+none there either: the value before stays). Map fix: the Performance portamento velocity 10 also fell in FING's range
+(10-...) on Violins 1/2, Violas, Celli; it is now 5 (Basses 10, FING from 20), from `sso_performance_layers.json`
+(group data and saved script values). Live: carrier key 113 (device protocol 11), the plain set's technique clip
+envelope at its notes' Track Delay.
+
+**Null test** (Windows test VM, kthost, Kontakt 8 + SSO; Whence, plainPerformance 1, lane 0 of each section; ~37 s
+renders, 2 passes each): A = library state ($vfm12 119, no MuseScore CC119), B = speedFromWritten 1, C = control
+($vfm12 0, no CC119). Waveform nulls are dominated by pass-to-pass variation (A1-A2 whole file: Basses -25.1 dB,
+Violins 1 -9.3, Violas -9.0, Celli -7.4; A vs B in the same range). Third-octave bands, 46 ms frames, mean / p95 |dB|:
+
+| Section | A1-A2 (floor) | B1-B2 | A vs B (4 pairs) | A vs C |
+|---|---|---|---|---|
+| Basses | 0.12 / 0.71 | 0.18 / 1.15 | 0.10-0.17 / 0.58-0.94 | 0.34-0.35 / 2.1-2.2 |
+| Violins 1 | 0.53 / 2.09 | 0.53 / 2.04 | 0.51-0.55 / 1.99-2.16 | 3.04-3.05 / 8.5 |
+| Violas | 0.61 / 2.56 | 0.62 / 2.62 | 0.61-0.63 / 2.56-2.80 | 3.06-3.07 / 10.8-10.9 |
+| Celli | 0.80 / 3.46 | 0.81 / 3.55 | 0.80-0.87 / 3.43-3.76 | 4.41-4.43 / 12.3 |
+
+So where written = played, MuseScore's CC119 sounds as the script's own (within the floor), and $vfm12 = 0 is in
+effect (the control differs by 3-4 dB mean on the upper strings). Violins 2 has no transitions in Whence.
+
+Open: Live paths untried in real Live; the host's resave restore and reload when the setting changes untried with real
+Kontakt; lanes other than 0 not rendered; a slur over a repeat jump sends none; other Performance patches (Sul, solo,
+winds) not covered; Live's carrier value 1 plays as 0.
+
 ## Plain Performance (branch `plain-performance`, 2026-10-17)
 
 The owner chose "C" by ear (Whence Violas bars 8-13): plain SSO Performance, the whole part early by one constant.

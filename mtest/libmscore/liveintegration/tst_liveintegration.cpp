@@ -1305,7 +1305,10 @@ void TestLiveIntegration::clipsOsc()
       QCOMPARE(LiveClips::carrierPitch(1), 126);
       QCOMPARE(LiveClips::carrierPitch(64), 124);
       QCOMPARE(LiveClips::carrierPitch(68), 116);
-      QCOMPARE(LiveClips::CARRIER_LOW, LiveClips::BEND_LSB);      // (below the controllers: the pitch bend's two)
+      // (below the controllers: the pitch bend's two, then the extra carriers: CC119 on 113, protocol 11)
+      QCOMPARE(LiveClips::BEND_LSB, 114);
+      QCOMPARE(LiveClips::carrierPitch(119), 113);
+      QCOMPARE(LiveClips::CARRIER_LOW, 113);
       QCOMPARE(LiveClips::carrierPitch(7), -1);
       }
 

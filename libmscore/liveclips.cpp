@@ -34,6 +34,8 @@ namespace LiveClips {
 // the same table as the device's (tools/live/MuseScoreLink.js, CARRIER_CCS): UACC switch, dynamics,
 // expression, pedal, breath, foot, a library's own (21), portamento, sostenuto, soft pedal, legato, hold 2
 const int CARRIER_CCS[CARRIER_COUNT] = { 32, 1, 11, 64, 2, 4, 21, 5, 65, 66, 67, 68 };
+// (the device's EXTRA_CARRIERS, tools/live/make_device.py)
+const int EXTRA_CARRIERS[EXTRA_CARRIER_COUNT][2] = { { 113, 119 } };
 
 int carrierVelocity(int pitch, int value)
       {
@@ -55,6 +57,20 @@ int carrierPitch(int cc)
       for (int i = 0; i < CARRIER_COUNT; ++i)
             if (CARRIER_CCS[i] == cc)
                   return 127 - i;
+      for (int i = 0; i < EXTRA_CARRIER_COUNT; ++i)
+            if (EXTRA_CARRIERS[i][1] == cc)
+                  return EXTRA_CARRIERS[i][0];
+      return -1;
+      }
+
+int carrierController(int pitch)
+      {
+      const int i = 127 - pitch;
+      if (i >= 0 && i < CARRIER_COUNT)
+            return CARRIER_CCS[i];
+      for (int k = 0; k < EXTRA_CARRIER_COUNT; ++k)
+            if (EXTRA_CARRIERS[k][0] == pitch)
+                  return EXTRA_CARRIERS[k][1];
       return -1;
       }
 
@@ -410,6 +426,21 @@ quint32 hashOf(const Track& t)
             f.mix(quint32(n.muted));
             }
       return f.h;
+      }
+
+void dropExtraCarriers(Track* t)
+      {
+      const size_t before = t->notes.size();
+      t->notes.erase(std::remove_if(t->notes.begin(), t->notes.end(), [](const Note& n) {
+            for (int k = 0; k < EXTRA_CARRIER_COUNT; ++k)
+                  if (EXTRA_CARRIERS[k][0] == n.pitch)
+                        return true;
+            return false;
+            }), t->notes.end());
+      if (t->notes.size() != before) {
+            t->dropped += int(before - t->notes.size());
+            t->hash = hashOf(*t);
+            }
       }
 
 std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, const EventMap& events,

@@ -2,10 +2,10 @@
 // libmscore/liveclips.h, mscore/liveclips.h).
 //
 // One copy goes on each MIDI track that plays a library part, BEFORE the instrument (Kontakt). In
-// every copy the patcher (not this script) turns the carrier notes of MuseScore's clips (keys 114-127: controllers, pitch bend)
+// every copy the patcher (not this script) turns the carrier notes of MuseScore's clips (keys 113-127: controllers, pitch bend)
 // into their MIDI controllers, in Max's scheduler, sample-timed with the notes; this script is not in
 // that path. It does so only on a track holding a MuseScore clip (protocol 8; below, "Carriers"): elsewhere (the plain
-// set's technique tracks, any other track) every note, keys 114-127 too, passes unchanged.
+// set's technique tracks, any other track) every note, keys 113-127 too, passes unchanged.
 // One copy (the first loaded; another takes over when it goes) is the hub:
 //   - it listens to MuseScore (OSC over UDP on localhost, port 9001 by default; answers on port + 1);
 //   - it writes each part's clip on its track: found by MIDI From = the part's MuseScore port and
@@ -96,8 +96,8 @@
 //   arrangement clips and clip slots, each slot's has_clip and each clip's name), every CARRIER_NAMES_EVERY seconds in
 //   any case, and at once when the hub makes or deletes a clip on the track (messnamed("msl_carriers", track) -> every
 //   copy's [receive msl_carriers] -> deferlow). The whole track
-//   counts: another clip on a track with a MuseScore clip has its keys 114-127 converted too (the hub makes no clip
-//   over a track's other clips). A note on 114-127 sounding while the gate goes to 1 (a MuseScore clip made on its
+//   counts: another clip on a track with a MuseScore clip has its keys 113-127 converted too (the hub makes no clip
+//   over a track's other clips). A note on 113-127 sounding while the gate goes to 1 (a MuseScore clip made on its
 //   track just then) loses its note-off, as the carriers' are dropped.
 //
 // Plain ECMAScript 5 so it runs in [js] and [v8] alike, and in the Node tests (tools/live/test).
@@ -112,7 +112,7 @@ outlets = 10;     // 0: OSC to MuseScore (udpsend), 1: udpsend's host / port, 2:
                   // 9: the velocity shaper ("bias <ticks>", "log 0/1"), the carriers' gate ("gate 1/2": Carriers) and
                   //    the written clips' timing ("tgate 1/2", "tdef <on> <off>", "tbias <ticks>": Written clips)
 
-var PROTOCOL = 10;                      // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
+var PROTOCOL = 11;                      // 2: editing Live clips; 3: parameter lanes; 4: clip tabs play through their track;
                                         // 5: the tracks' parameters and the clips' places (automation lanes of any track);
                                         // 6: an arrangement clip's place in the song, Live's tempo reported as it changes;
                                         // 7: velocity curves of clip tabs, kept through the MuseScore Envelopes script;
@@ -120,6 +120,7 @@ var PROTOCOL = 10;                      // 2: editing Live clips; 3: parameter l
                                         // 9: written clips, their timing put back by the patcher (Written clips)
                                         // 10: a MuseScore clip edited in Live is reported, not written over (Timing
                                         //     set in Live)
+                                        // 11: key 113 carries CC119 (the patcher; libmscore/liveclips.cpp EXTRA_CARRIERS)
 var CLIP_PREFIX = "MuseScore: ";        // liveclips.cpp clipName
 var CARRIER_NAMES_EVERY = 5;            // s: the clips' names read again (a rename) without a change of their ids
 var UNITS = 3840;                       // LiveClips::UNITS_PER_BEAT
@@ -1543,7 +1544,7 @@ function reportEdit(key, notes, content) {
       var rows = [];
       for (var i = 0; i < notes.length; ++i) {
             var n = notes[i];
-            if (num(n.pitch) >= 114)
+            if (num(n.pitch) >= 113)
                   continue;
             rows.push([num(n.pitch), Math.round(num(n.start_time) * UNITS), Math.round(num(n.duration) * UNITS),
                        Math.round(num(n.velocity)), num(n.mute) ? 1 : 0]);

@@ -2012,6 +2012,23 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           t.attack = perf.timedAttack;
                                           }
                                     }
+                              // [slurs] speedFromWritten (the owner approved, 2026-10-17): a legato note-on (a transition from the
+                              // note before on the patch: slurred, joined, a plain note touching it) gets the patch's speed
+                              // controller from the WRITTEN spacing, the script's own formula (126 - ms x 127 / 1000), so an
+                              // early start can't move it into another band; an attack none, as the script writes none at a
+                              // note-on it doesn't play legato (the value before stays). The note-on it follows: the first of the
+                              // note before's tie chain (the script counts from the voice's previous note-on)
+                              libSpeed.erase(note);
+                              if (perf.on && perf.from && SoundLib::speedFromWritten(libPatches[libChoice.patch], score)) {
+                                    const int t0 = perf.from->firstTiedNote()->chord()->tick().ticks() + tickOffset;
+                                    const int t1 = note->chord()->tick().ticks() + tickOffset;
+                                    if (t0 < t1) {
+                                          const int v = SoundLib::speedValue((score->utick2utime(t1) - score->utick2utime(t0)) * 1000.0);
+                                          libSpeed[note] = v;
+                                          if (libTrace && !libTrace->empty() && libTrace->back().note == note)
+                                                libTrace->back().speed = v;
+                                          }
+                                    }
                               // an attack at a velocity whose recording at this key is faulty (the map's avoid: SSO's
                               // Celli - Performance C3, a round robin with its own narrow tone near 1180 Hz): the nearest
                               // clean velocity measured ([notes] avoidBadSamples; a note's own velocity stays)
@@ -2973,6 +2990,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                   ++at;
             events->insert(at, c);
             }
+      librarySpeeds(chunk, events);
       libraryNoteLevels(chunk, events);
       libraryPitchBends(chunk, events);
       libraryTimingOverrides(chunk, events);
@@ -3723,6 +3741,40 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                         events->insert(events->lower_bound(in.first), std::make_pair(in.first, controllerEvent(like, in.second)));
                   s = e + 1;
                   }
+            }
+      }
+
+//---------------------------------------------------------
+//   librarySpeeds
+//    [slurs] speedFromWritten: each legato note-on with a speed value (libSpeed) gets its patch's speed controller (SSO's
+//    Performance: CC119, the script's "Leg. Speed CC", its own writing off in the patch's state) right before it on its
+//    route, at its tick, as played (an early start included: the value is the written spacing's). One value a transition,
+//    at the transition, as the script sets it: the interval sample still sounding has CC119 modulators, so a value sent
+//    earlier would reshape it. Before the passes that move a note with the controllers right before it (timing overrides,
+//    track delays) and before the levels' CC11, which go between it and the note
+//---------------------------------------------------------
+
+void MidiRenderer::librarySpeeds(const Chunk& chunk, EventMap* events)
+      {
+      if (libSpeed.empty())
+            return;
+      for (auto i = events->lower_bound(chunk.utick1()); i != events->end() && i->first < chunk.utick2(); ++i) {
+            const NPlayEvent& ev = i->second;
+            if (ev.type() != ME_NOTEON || ev.velo() == 0 || ev.librarySwitch() || !ev.isExternal() || !ev.note())
+                  continue;
+            auto s = libSpeed.find(ev.note());
+            if (s == libSpeed.end())
+                  continue;
+            auto rp = libRoutePatches.find(ev.extPort() * 16 + ev.extChannel());
+            const SoundLib::LibInstrument* li = rp == libRoutePatches.end() ? nullptr : rp->second.second;
+            if (!li || li->speedCC <= 0)
+                  continue;
+            NPlayEvent c(ME_CONTROLLER, ev.channel(), li->speedCC, s->second);
+            c.setLibraryPatch(ev.libraryPatch());
+            c.setOriginatingStaff(ev.getOriginatingStaff());
+            c.setExternal(ev.extPort(), ev.extChannel());
+            c.setLibrarySpeed(true);
+            events->insert(i, std::make_pair(i->first, c));         // (just before it)
             }
       }
 
@@ -5674,8 +5726,9 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       int lastChannel = -1;
       int lastController = -1;
       int lastValue = -1;
+      // (not a legato note-on's speed controller: one a transition, as SSO's script sends it, librarySpeeds)
       for (auto i = events->begin(); i != events->end();) {
-            if (i->second.type() == ME_CONTROLLER) {
+            if (i->second.type() == ME_CONTROLLER && !i->second.librarySpeed()) {
                   auto& event = i->second;
                   // (a sound library part's events on one channel can go to several routes)
                   const int channel = event.isExternal() ? 0x10000 + event.extPort() * 16 + event.extChannel() : event.channel();
@@ -5762,6 +5815,7 @@ void MidiRenderer::updateState()
             libBend.clear();
             libGlideFrom.clear();
             libGlide.clear();
+            libSpeed.clear();
             library = SoundLib::current();
             libGeneration = SoundLib::routesGeneration();
             if (library) {

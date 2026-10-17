@@ -85,6 +85,8 @@ class SoundLibraryHost : public QObject {
             QString tuning;               // its slots' tunings (tuningKey: a patch's copies in one instance, or a copy
                                           // by its Tune); empty: plain, tuned by varispeed
             std::vector<int> routes;      // the slots it plays (SoundLib::Instance::routes; empty: its own)
+            QString values;               // the script values its score's playback settings put in its state
+                                          // (scriptValuesFor, as text); another score's: loaded again
             };
       std::array<Slot, 64> _slots;
       // the part each slot plays (its patch, an extra, a copy for another tuning) and the score, from
@@ -106,7 +108,8 @@ class SoundLibraryHost : public QObject {
       std::vector<std::unique_ptr<Pending>> _pending;
       std::unique_ptr<Pending> beginLoad(int slot, const QString& name, bool setup, const std::vector<double>& cents,
                                          const std::vector<int>& routes, const SoundLib::Library& library,
-                                         const QString& path, QString* error);
+                                         const QString& path, QString* error,
+                                         const std::map<QString, QByteArray>& values = std::map<QString, QByteArray>());
       // the instances' slots linked to their instance (Vst3Synth::setLink), from the slots loaded
       void applyLinks();
       bool _resync { false };             // a patch's tuned instance fell back to plain: its copies need instances of their own
@@ -172,13 +175,22 @@ class SoundLibraryHost : public QObject {
       // MS_KONTAKT_MAX_VOICES (0: the patch's own)
       static constexpr int KONTAKT_MAX_VOICES = 512;
       static int kontaktMaxVoices();
+      // score: whose playback settings set the patch's script values on top of the setup (SoundLib::playbackScriptValues:
+      // [slurs] speedFromWritten); nullptr: playback.ini's
       static QByteArray setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                   QString* error = nullptr);            // made first when needed
+                                   QString* error = nullptr, const Score* score = nullptr);   // made first when needed
+      // (the same with those script values given: scriptValuesFor)
+      static QByteArray setupStateWith(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
+                                       const std::map<QString, QByteArray>& values, QString* error);
+      static std::map<QString, QByteArray> scriptValuesFor(const SoundLib::Library& library, const QString& patch, const Score* score);
+      // (the setup with the voice limit: setupState before the script values)
+      static QByteArray maxVoicesState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
+                                       QString* error);
       // (the setup as made or resaved, before setupState sets the voice limit)
       static QByteArray savedSetupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                         QString* error);
       static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
-                            const QString& pluginPath, QString* error = nullptr);
+                            const QString& pluginPath, QString* error = nullptr, const Score* score = nullptr);
       // hosted tuning by slots (SoundLib::Instance, [tuning] hostedTuning): a setup state (setupState's form) tuned by
       // Kontakt's Tune, one slot (cents of one: KontaktSetup::withTune) or a multi of the patch, a slot per copy on its
       // own MIDI channel (KontaktSetup::withSlots, as the plain Live set's); empty with *error when the state isn't
@@ -196,7 +208,8 @@ class SoundLibraryHost : public QObject {
       // made setup not yet resaved goes in plain first (resaved: Kontakt's own state; a multi of a made one would
       // load each slot as slowly), then tuned. *tuned: its tuning is in its state (false: plain, varispeed tunes it)
       static bool loadInstanceSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
-                                    const std::vector<double>& cents, const QString& pluginPath, QString* error, bool* tuned);
+                                    const std::vector<double>& cents, const QString& pluginPath, QString* error, bool* tuned,
+                                    const Score* score = nullptr);
       // patches whose setup can't be tuned (not Kontakt's): their copies play plain, an instance each
       static std::set<QString>& untunable();
       // a part's plug-in parameter settings (its flat automation lanes: partcontrollers.h) as MuseScore's playback sets
