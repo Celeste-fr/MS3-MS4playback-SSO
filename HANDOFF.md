@@ -89,6 +89,12 @@ Performance). Shifts in `sso_plain_performance_shift.json` (all-notes medians, P
 Violins 1 65.8, Violins 2 66.0, Violas 111.0, Celli 80.2, Basses 59.1 ms; no UNMEASURED Performance patch of the five
 remains. Tested on Linux only (test synth, dumps); not in Kontakt or real Live.
 
+**Plain levels** (branch `plain-levels` 86263cdd5a, merged into integrate-1017): `[levels] context` with plain Performance
+takes per-kind grids measured on the Windows VM (map `contextLevelPlain` / `contextLevelStaccato` / `contextLevelSingle`,
+`sso_performance_context.json` › `plain`; docs/PLAYBACK_SETTINGS.md › Level rule). **The owner chose the "after" levels
+(2026-10-17).** Open: staccatos are still off by up to ±3 dB per section in the calibration score, unexplained; suspected:
+the grid's all-staccato figure (every note staccato, no slur) against staccatos inside real music.
+
 ## Paused 2026-10-17: where to pick up
 
 The owner paused the project to start a new session. `integrate-1012` (pushed) holds everything finished: crash fixes
