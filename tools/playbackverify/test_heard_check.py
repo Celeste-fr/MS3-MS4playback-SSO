@@ -211,9 +211,42 @@ class EndToEnd(unittest.TestCase):
         res = H.analyse(tmp, tmp, load=lambda r: (x, SR) if r == "0-8" else None, export=True)
         heard = res["notes"][0]["heardMs"]
         self.assertLess(abs(heard - (-20 + 10 - HARD_BIAS_MS)), 6, heard)
-        self.assertEqual(res["pairing"]["0-8"]["paired"], 1)
-        self.assertAlmostEqual(res["pairing"]["0-8"]["medianMs"], 10.0, places=1)
-        self.assertIn("export renderer: 1 of the dump's 1", H.report_text(res))
+        self.assertEqual(res["pairing"]["paired"], 1)
+        self.assertAlmostEqual(res["pairing"]["medianMs"], 10.0, places=1)
+        self.assertIn("export renderer: 1 of 1 notes paired", H.report_text(res))
+
+    def test_export_split_runs(self):
+        """HC_SPLIT=parts: a run that plays one part has its own start lead (here 150 ms less): its notes paired by the
+        run's shift, each note's heard time against its run's lead"""
+        lead_ms = 200.0
+        tmp = tempfile.mkdtemp()
+        ws = [0.5 + 0.3 * i for i in range(6)]
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(
+            row(w, w + 0.2, 62 + i, "0-8", "Violas", "Spiccato", "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0, -1, 0.0, -1,
+                0, 0, 1 + i) for i, w in enumerate(ws)) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        ons = [w + lead_ms / 1000 - 0.020 for w in ws]
+        H._write(os.path.join(tmp, "0-8 museScore.txt"), "".join("%.6f on %d 64\n" % (t, 62 + i) for i, t in enumerate(ons)))
+        root = os.path.join(tmp, "out")
+        for k, sh in ((1, 0.0), (2, -0.150)):
+            d = os.path.join(root, "score-%d" % k, "Playback verify")
+            os.makedirs(d)
+            ev = "" if k == 1 else "".join("%.4f\t0\t0\ton\t%d\t64\t0\n" % (t + sh, 62 + i) for i, t in enumerate(ons))
+            H._write(os.path.join(d, "score-%d events.tsv" % k), "time\ttick\tslot\ttype\ta\tb\tswitch\n" + ev)
+        n = int(3.0 * SR)
+        t = np.arange(n) / SR
+        x = np.zeros(n)
+        for i, o in enumerate(ons):
+            s = o - 0.150
+            x += saw(hz(62 + i), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40),
+                                                   (s + 0.25, -120)])
+        res = H.analyse(tmp, root, load=lambda r: (x, SR) if r == "1/0-1" else None, export=True)
+        self.assertEqual(res["pairing"]["paired"], 6, res["pairing"])
+        self.assertEqual(res["pairing"]["shiftsMs"], [-150.0])
+        for note in res["notes"]:
+            self.assertLess(abs(note["heardMs"] - (-20 - HARD_BIAS_MS)), 10, note)
 
 
 if __name__ == "__main__":

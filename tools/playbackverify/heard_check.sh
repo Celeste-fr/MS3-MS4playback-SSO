@@ -13,7 +13,10 @@
 # 5. measured and judged (heard_check.py analyse [--export]): <work>/report.txt, report.json; exit 1 on a FAIL
 # Environment:
 #   HC_RENDER export (default) or kthost
-#   HC_EXE    (export) the VM's MuseScore3Evo.exe (default C:\claude\loadprof\b441\bin\MuseScore3Evo.exe, build 441)
+#   HC_SPLIT  (export) parts (default): one MuseScore run per library part, the other parts on MS4's sounds (each run loads
+#             only its part's instances; a run that crashes loses one part, 2026-10-16: --verify-wav of the whole passages
+#             crashed after 24 of 34 routes); whole: one run of the whole score
+#   HC_EXE    (export) the VM's MuseScore3Evo.exe, build 443 or later (default C:\claude\heardcheck2\b443\bin\MuseScore3Evo.exe)
 #   HC_RUN    a wrapper that runs a command string in the build dir (e.g. ~/MuseScore/ms3fork/run-<name>.sh); else
 #   HC_BUILD  the build dir itself (default: build.dir next to this repo's tools)
 #   HC_VM     ssh target (default user@192.168.1.45), HC_KEY its key (default ~/.ssh/id_ed25519_winvm)
@@ -21,7 +24,7 @@
 #   HC_WORK   local work folder (default ~/.cache/heardcheck/<run>); HC_KEEP=1 keeps the renders
 # The VM side writes only C:\claude\<HC_VMDIR>\<run>. Never commit a report of the owner's score.
 set -u
-[ $# -ge 1 ] || { sed -n '2,23p' "$0"; exit 2; }
+[ $# -ge 1 ] || { sed -n '2,26p' "$0"; exit 2; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 SCORE=$(readlink -f "$1")
@@ -30,7 +33,9 @@ PARTS=${3:-}
 [ -f "$SCORE" ] || { echo "no score $SCORE"; exit 2; }
 RENDER=${HC_RENDER:-export}
 case "$RENDER" in export|kthost) ;; *) echo "HC_RENDER must be export or kthost"; exit 2;; esac
-EXE=${HC_EXE:-C:\\claude\\loadprof\\b441\\bin\\MuseScore3Evo.exe}
+SPLIT=${HC_SPLIT:-parts}
+case "$SPLIT" in parts|whole) ;; *) echo "HC_SPLIT must be parts or whole"; exit 2;; esac
+EXE=${HC_EXE:-C:\\claude\\heardcheck2\\b443\\bin\\MuseScore3Evo.exe}
 VM=${HC_VM:-user@192.168.1.45}
 KEY=${HC_KEY:-$HOME/.ssh/id_ed25519_winvm}
 VMDIR=${HC_VMDIR:-heardcheck}
@@ -62,6 +67,7 @@ if [ "$RENDER" = export ]; then
       SRC=$WORK/conv.mscz;;
   esac
   python3 "$HERE/heard_check.py" score "$SRC" "$WORK/score.mscz" "$PRESET" > "$WORK/settings.txt" || exit 2
+  # (the musicxml path left the VM's folder with in.musicxml; the export's run uses it again)
   DUMPSCORE=$WORK/score.mscz
 else
   DUMPSCORE=$SCORE
@@ -86,16 +92,30 @@ printf "== 3. render on the VM (%s, %s)\n" "$RENDER" "$VMRUN_SCP"
 if [ "$RENDER" = export ]; then
   $SSH "if not exist $VMRUN mkdir $VMRUN" || exit 2
   sed 's/$/\r/' "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
-  $SCP "$WORK/score.mscz" "$WORK/heard_export_vm.cmd" "$VM:$VMRUN_SCP/" || exit 2
+  if [ "$SPLIT" = parts ]; then
+    # (one copy per library part; the parts asked for only)
+    mkdir -p "$WORK/split"
+    I=0
+    python3 "$HERE/heard_check.py" parts "$WORK/score.mscz" "$WORK/dump" > "$WORK/parts.txt" || exit 2
+    while IFS= read -r P; do
+      I=$((I + 1))
+      if [ -n "$PARTS" ]; then case ",$PARTS," in *",$P,"*) ;; *) continue;; esac; fi
+      python3 "$HERE/heard_check.py" score "$SRC" "$WORK/split/score-$I.mscz" "$PRESET" --part "$P" > /dev/null || exit 2
+    done < "$WORK/parts.txt"
+    $SCP "$WORK/split/"score-*.mscz "$WORK/heard_export_vm.cmd" "$VM:$VMRUN_SCP/" || exit 2
+  else
+    $SCP "$WORK/score.mscz" "$WORK/heard_export_vm.cmd" "$VM:$VMRUN_SCP/" || exit 2
+  fi
   T1=$(date +%s)
   $SSH "$VMRUN\\heard_export_vm.cmd $VMRUN $EXE" | tail -1
   T2=$(date +%s)
   $SCP -r "$VM:$VMRUN_SCP/out" "$WORK/wav/" || echo "(the export's folder not fetched)"
-  $SCP "$VM:$VMRUN_SCP/run.out" "$VM:$VMRUN_SCP/stdout.txt" "$VM:$VMRUN_SCP/stderr.txt" "$WORK/" 2>/dev/null
-  WAVS=$(ls -d "$WORK/wav/out/Playback verify"* 2>/dev/null | head -1)
-  [ -n "$WAVS" ] || { echo "no export (see $WORK/stdout.txt, $WORK/stderr.txt; VM folder kept: $VMRUN_SCP)"; exit 2; }
-  echo "$(ls "$WAVS" | grep -c ' route .*\.wav$') route renders; $(tail -1 "$WORK/run.out" 2>/dev/null)"
-  DEL="if exist $VMRUN\\score.mscz rmdir /s /q $VMRUN"
+  $SCP "$VM:$VMRUN_SCP/run.out" "$WORK/" 2>/dev/null
+  WAVS=$WORK/wav/out
+  [ -n "$(find "$WAVS" -name '* events.tsv' 2>/dev/null)" ] || { echo "no export (see $WORK/run.out, $WAVS; VM folder kept: $VMRUN_SCP)"; exit 2; }
+  echo "$(find "$WAVS" -name '* route *.wav' | wc -l) route renders; $(grep -c exit "$WORK/run.out" 2>/dev/null) runs:" \
+    "$(grep exit "$WORK/run.out" | tr '\r\n' '  ')"
+  DEL="if exist $VMRUN\\heard_export_vm.cmd rmdir /s /q $VMRUN"
 else
   sed 's/$/\r/' "$HERE/heard_check_vm.cmd" | sed "s/^set \"HC=C:\\\\claude\\\\heardcheck\"/set \"HC=C:\\\\claude\\\\$VMDIR\"/" > "$WORK/ev/heard_check_vm.cmd"
   $SCP -r "$WORK/ev" "$VM:$VMRUN_SCP" || exit 2
