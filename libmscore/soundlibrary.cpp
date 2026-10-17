@@ -267,8 +267,17 @@ const Articulation::Technique* Articulation::transition(const QString& name) con
       return nullptr;
       }
 
-double Articulation::contextLevelAt(double cc, double ms, double pitch) const
+const std::vector<Articulation::ContextLevel>& Articulation::contextGrid(ContextKind kind) const
       {
+      if (kind == ContextKind::SLUR)
+            return contextLevels;
+      const std::vector<ContextLevel>& g = plainContextLevels[int(kind) - 1];
+      return g.empty() ? contextLevels : g;
+      }
+
+double Articulation::contextLevelAt(double cc, double ms, double pitch, ContextKind kind) const
+      {
+      const std::vector<ContextLevel>& contextLevels = contextGrid(kind);
       if (contextLevels.empty())
             return 0.0;
       std::vector<double> ccs, mss, pitches;
@@ -422,20 +431,27 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       std::sort(art.heldOffsets.begin(), art.heldOffsets.end());
       if (art.heldOffsets.size() > 1 && art.heldOffsets.front().first < 0)
             return false;
-      for (const QString& t : a.value("contextLevel").toString().split(' ', QString::SkipEmptyParts)) {
-            const QStringList f = t.left(t.indexOf(':')).split('/');
-            bool ok[4] = { false, false, false, false };
-            if (f.size() != 3 || t.indexOf(':') < 0)
-                  return false;
-            const Articulation::ContextLevel l { f[0].toInt(&ok[0]), f[1].toDouble(&ok[1]), f[2].toInt(&ok[2]),
-                                                 t.mid(t.indexOf(':') + 1).toDouble(&ok[3]) };
-            if (!ok[0] || !ok[1] || !ok[2] || !ok[3] || l.ms <= 0)
-                  return false;
-            art.contextLevels.push_back(l);
-            }
-      std::sort(art.contextLevels.begin(), art.contextLevels.end(), [](const Articulation::ContextLevel& x, const Articulation::ContextLevel& y) {
-            return x.cc != y.cc ? x.cc < y.cc : x.ms != y.ms ? x.ms < y.ms : x.pitch < y.pitch;
-            });
+      // contextLevel and [slurs] plainPerformance's per kind: "cc/ms/pitch:dB …"
+      auto contextGrid = [&a](const char* attribute, std::vector<Articulation::ContextLevel>& out) {
+            for (const QString& t : a.value(attribute).toString().split(' ', QString::SkipEmptyParts)) {
+                  const QStringList f = t.left(t.indexOf(':')).split('/');
+                  bool ok[4] = { false, false, false, false };
+                  if (f.size() != 3 || t.indexOf(':') < 0)
+                        return false;
+                  const Articulation::ContextLevel l { f[0].toInt(&ok[0]), f[1].toDouble(&ok[1]), f[2].toInt(&ok[2]),
+                                                       t.mid(t.indexOf(':') + 1).toDouble(&ok[3]) };
+                  if (!ok[0] || !ok[1] || !ok[2] || !ok[3] || l.ms <= 0)
+                        return false;
+                  out.push_back(l);
+                  }
+            std::sort(out.begin(), out.end(), [](const Articulation::ContextLevel& x, const Articulation::ContextLevel& y) {
+                  return x.cc != y.cc ? x.cc < y.cc : x.ms != y.ms ? x.ms < y.ms : x.pitch < y.pitch;
+                  });
+            return true;
+            };
+      if (!contextGrid("contextLevel", art.contextLevels) || !contextGrid("contextLevelPlain", art.plainContextLevels[0])
+          || !contextGrid("contextLevelStaccato", art.plainContextLevels[1]) || !contextGrid("contextLevelSingle", art.plainContextLevels[2]))
+            return false;
       art.legatoVelocity = a.hasAttribute("legatoVelocity") ? a.value("legatoVelocity").toInt() : -1;
       if (a.hasAttribute("legatoVelocity") && (art.legatoVelocity < 1 || art.legatoVelocity > 127))
             return false;

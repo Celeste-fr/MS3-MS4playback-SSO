@@ -1509,9 +1509,14 @@ def quickLevel(patch, sound):
 #   the patch at CC1 = the written dynamic's value, by dynamic, median note spacing and median pitch ([levels] context,
 #   the owner, 2026-10-10: the same written dynamic sounds equally loud in every string part and technique, in context):
 #   the "rule" of sso_performance_context.json (performance_context/level_rule.py, from the Windows VM's renders)
+# - contextLevelPlain= / contextLevelStaccato= / contextLevelSingle= (the same format): [slurs] plainPerformance's gains
+#   for a note played plain, a slur's / a staccato's / a note's outside a slur, measured on the same grid with every note
+#   as Recommended plays it today (2026-10-17, branch plain-levels: the "plain" rule of sso_performance_context.json)
 CONTEXT_RULE = loadFit('sso_performance_context.json').get('rule', {}).get('sections', {})
-def contextLevel(patch, sound):
-    cells = CONTEXT_RULE.get(patch.replace(' - Performance', '')) if patch in PERFORMANCE_TECHNIQUE_PATCHES and sound == 'Legato' else None
+PLAIN_RULE = loadFit('sso_performance_context.json').get('plain', {}).get('rule', {}).get('kinds', {})
+def contextLevel(patch, sound, kind=None):
+    rule = CONTEXT_RULE if kind is None else PLAIN_RULE.get(kind, {})
+    cells = rule.get(patch.replace(' - Performance', '')) if patch in PERFORMANCE_TECHNIQUE_PATCHES and sound == 'Legato' else None
     if not cells:
         return None
     key = lambda k: tuple(int(x) for x in k.split('|'))
@@ -1726,6 +1731,10 @@ for i, line in enumerate(out):
         if c:
             extra += f' contextLevel="{c}"'
             contextLevelCount += 1
+        for kind, attr in (('slur', 'contextLevelPlain'), ('stac', 'contextLevelStaccato'), ('single', 'contextLevelSingle')):
+            c = contextLevel(current, sound, kind)
+            if c:
+                extra += f' {attr}="{c}"'
         legatoGridUsed.add(current)
         up, down = octaveDelays(current)
         if up:

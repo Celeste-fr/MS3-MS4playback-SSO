@@ -1342,13 +1342,23 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   auto contextDb = [&](const Note* note, const SoundLib::Choice& c) {
                         if (!contextOn || !c || !ContextLevel::has(c.articulation) || c.articulation->attacks.empty())
                               return double(NAN);
-                        const std::pair<const Chord*, int> key { note->chord(), tickOffset };
+                        // ([slurs] plainPerformance: the plain note's own grid, ContextLevel::plainKind; a staccato also
+                        // [levels] calibrated 2's D of the technique it would play otherwise, as that technique would: the
+                        // cells are measured against the held Long, as D is)
+                        using Kind = SoundLib::Articulation::ContextKind;
+                        const Kind kind = c.plain ? ContextLevel::plainKind(note, ctx.dynamics, tickOffset) : Kind::SLUR;
+                        const std::tuple<const Chord*, int, int> key { note->chord(), tickOffset, int(kind) };
                         auto g = libContextGain.find(key);
                         if (g == libContextGain.end())
-                              g = libContextGain.insert({ key, ContextLevel::gain(*c.articulation, note->chord(), ctx.dynamics, tickOffset) }).first;
+                              g = libContextGain.insert({ key, ContextLevel::gain(*c.articulation, note->chord(), ctx.dynamics, tickOffset, kind) }).first;
                         auto d = libTrackDelays.find(st1->part());
                         const double top = d == libTrackDelays.end() ? 0.0 : d->second.ruleTop;
-                        return std::max(TrackDelays::MIN_DB, std::min(0.0, g->second - top));
+                        double db = std::min(0.0, g->second - top);
+                        if (kind == Kind::STACCATO && c.plainFrom) {
+                              const int cc = Ms4::expressionLevel(ctx.dynamics.levelAt(note->chord()->track(), note->chord()->tick().ticks() + tickOffset));
+                              db += loudEnd(note, SoundLib::Choice { c.plainFrom, QString(), c.plainFromPatch }, cc);
+                              }
+                        return std::max(TrackDelays::MIN_DB, db);
                         };
                   auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
                         const double db = levelOf(note) + quickDb(note, c);
@@ -1703,6 +1713,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (!a || a->attacks.empty() || note->tieBack())
                               return p;
                         p.on = true;
+                        if (c.plain)
+                              libPlainNotes.insert(note);
                         int interval = 0;
                         double lenBefore = 0;
                         const Note* slurred = legatoTransition(note, c, &p.interval, &p.lenBefore);
@@ -3649,6 +3661,14 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                                     in.newSlur = t.name == PerformanceTechnique::transitionName(PerformanceTechnique::Transition::BOWED);
                                     break;
                                     }
+                        // [slurs] plainPerformance: every transition at velocity 64 (fingered), so a written slur's start
+                        // and a note outside a slur start a slur of their own: one level per phrase, as the level rule
+                        // gives it (ContextLevel::phraseSlur; without, the glide flattened a passage of several slurs to
+                        // one median, undoing the rule's step between them)
+                        if (!in.newSlur && libPlainNotes.count(o.note)) {
+                              const Slur* here = ContextLevel::phraseSlur(o.note->chord());
+                              in.newSlur = !here || here != ContextLevel::phraseSlur(ns[k - 1].note->chord());
+                              }
                         }
                   in.windowMs = EvenLevels::windowStartMs(*a, o.pitch, o.velocity, o.joined, o.joined ? ns[k - 1].pitch : -1);
                   in.context = EvenLevels::contextOf(c);
@@ -5803,6 +5823,7 @@ void MidiRenderer::updateState()
             libRoutes.clear();
             libTrackDelays.clear();
             libContextGain.clear();
+            libPlainNotes.clear();
             libRangeTables.clear();
             libMics.clear();
             libTrackRoutes.clear();

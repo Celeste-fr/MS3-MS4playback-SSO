@@ -143,10 +143,13 @@
 #include <QString>
 #include "automation.h"
 #include "partcontrollers.h"
+#include "soundlibrary.h"
 
 namespace Ms {
 
 class Chord;
+class Note;
+class Slur;
 class MasterScore;
 class Part;
 class Score;
@@ -170,7 +173,16 @@ bool has(const SoundLib::LibInstrument* patch);
 // (utick = tick + tickOffset). Measured against the section's own held Long (2026-10-15 grid: gain = held - slurred,
 // level_rule.py), so [levels] calibrated 2's D for the staccatos does not move it (until 2026-10-15 every slur gain took
 // the section's Spiccato D, the gains having been fitted against the staccatos: that would now count it twice)
-double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset);
+// kind: [slurs] plainPerformance's grid for a note played plain (plainKind): a staccato's or a single note's phrase is the
+// chord alone, its length as its spacing (the grid's figures: staccato / unslurred sixteenths at the IOI)
+double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset,
+            SoundLib::Articulation::ContextKind kind = SoundLib::Articulation::ContextKind::SLUR);
+// the slur (not a phrase mark) a chord's phrase is (on its staff and voice); nullptr: none, the chord alone
+const Slur* phraseSlur(const Chord* chord);
+// [slurs] plainPerformance: which grid a note played plain takes: STACCATO for a staccato or staccatissimo as written (its
+// tie chain's first note's: the renderer's spiccato attack, also inside a slur), PLAIN_SLUR in a slur (not a phrase
+// mark), else SINGLE
+SoundLib::Articulation::ContextKind plainKind(const Note* note, const Ms4::Dynamics& dynamics, int tickOffset);
 
 // whether [levels] realRange is on for the score (1 or 2)
 bool realRange(const Score* score);

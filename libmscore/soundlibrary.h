@@ -181,8 +181,15 @@ struct Articulation {
       // (<Articulation contextLevel="cc/ms/pitch:dB …">: a full grid, measured in context, performance_context/level_rule.py)
       struct ContextLevel { int cc; double ms; int pitch; double db; };
       std::vector<ContextLevel> contextLevels;       // sorted by cc, ms, pitch
+      // [slurs] plainPerformance (branch plain-levels, 2026-10-17): the same gain for a note played plain, measured per
+      // kind on the same grid (<Articulation contextLevelPlain / contextLevelStaccato / contextLevelSingle>: a slur's, a
+      // staccato's (a spiccato attack; the note alone), a note's outside a slur (the note alone); level_rule.py's "plain")
+      enum class ContextKind { SLUR, PLAIN_SLUR, STACCATO, SINGLE };
+      std::vector<ContextLevel> plainContextLevels[3];   // PLAIN_SLUR, STACCATO, SINGLE; each sorted as contextLevels
+      // the kind's grid; a plain kind without one: the slurs' (contextLevels)
+      const std::vector<ContextLevel>& contextGrid(ContextKind kind) const;
       // linear in cc and pitch, log-linear in ms, each within the grid (the nearest end's beyond); 0: none
-      double contextLevelAt(double cc, double ms, double pitch) const;
+      double contextLevelAt(double cc, double ms, double pitch, ContextKind kind = ContextKind::SLUR) const;
       // velocities whose attack plays a faulty recording at these keys (<Articulation avoid="48:100-116:90 …">:
       // key or low-high keys, the velocity band, the nearest clean velocity measured; a round robin with its own narrow
       // tone, SSO's Celli - Performance C3: tools/soundlibraries/sso_bad_samples.json). An attack (not a legato
