@@ -13,8 +13,8 @@
 #   2026-10-17 ([slurs] plainPerformance, branch plain-levels): every Performance note as Recommended plays it today
 #   (plainPerformance 1, levels/calibrated 2), the staccato and single figures new; 2026-10-15: the slurs only, on
 #   [slurs] performance's own legato (smooth start, fingered within a slur, bowed into the next).
-# Take B is take A in reverse order (round robins, drift). Writes <out>/gridA.mscx, gridB.mscx, calib.mscx and
-# index.json (every note of every part in time order: kind, d, ioi, p).
+# Take B is take A in reverse order (round robins, drift). Writes <out>/gridA_<d>.mscx, gridB_<d>.mscx (one per dynamic),
+# calib.mscx and index.json (every note of every part in time order: kind, d, ioi, p).
 #   calib.mscx: the 2026-10-15 check's calibration score: 8 held halves at mp, two 8-quarter slurs at q = 60 (IOI 1 s),
 #   since 2026-10-17 8 staccato quarters and 8 single quarters, then all of it at f.
 # The playbackSettings metaTag: Recommended's values (Playback::presets()) written out; MEASURE (the grid) also turns off
@@ -77,8 +77,9 @@ def slur(n, frac):  # a slur from this chord over the next n - 1 chords of lengt
     return a, b
 
 
-def grid_blocks(reverse):
+def grid_blocks(reverse, only=None):
     blocks = [b for d in DYN for pi in range(3) for b in [(d, pi, None, 'held')] + [(d, pi, i, k) for i in IOIS for k in KINDS]]
+    blocks = [b for b in blocks if only is None or b[0] == only]
     return blocks[::-1] if reverse else blocks
 
 
@@ -94,10 +95,11 @@ def figure(kind, p0):
     return x + rest('half'), notes
 
 
-def grid(reverse):
-    """measures: a list of (tempo marking or '', {section: voice xml}), and every part's notes in time order"""
+def grid(reverse, only=None):
+    """measures: a list of (tempo marking or '', {section: voice xml}), and every part's notes in time order (only: that
+    dynamic's blocks only)"""
     ms, notes, last, perf = [], {s: [] for s in SEC}, None, None
-    for d, pi, ioi, kind in grid_blocks(reverse):
+    for d, pi, ioi, kind in grid_blocks(reverse, only):
         mark = (d, pi) != last  # a dynamic at every new (d, pitch) block
         last = (d, pi)
         held = kind == 'held'
@@ -181,9 +183,12 @@ if __name__ == '__main__':
     O = sys.argv[1] if len(sys.argv) > 1 else '.'
     os.makedirs(O, exist_ok=True)
     idx = {}
+    # one score per take and dynamic (about 10 min each: each part's WAV of a 39-min take would not fit the VM's disk);
+    # take B's dynamics in reverse order too
     for name, rev in (('gridA', False), ('gridB', True)):
-        ms, notes = grid(rev)
-        write(f'{O}/{name}.mscx', ms, True); idx[name] = notes
+        for d in (DYN[::-1] if rev else DYN):
+            ms, notes = grid(rev, d)
+            write(f'{O}/{name}_{d[0]}.mscx', ms, True); idx[f'{name}_{d[0]}'] = notes
     ms, notes = calib()
     write(f'{O}/calib.mscx', ms, False); idx['calib'] = notes
     json.dump(dict(sections=SEC, pitches=PITCHES, dynamics=[d[2] for d in DYN], ioiMs=IOIS, scores=idx),

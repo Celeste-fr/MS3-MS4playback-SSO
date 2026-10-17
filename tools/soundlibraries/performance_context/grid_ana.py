@@ -76,7 +76,7 @@ if __name__ == '__main__':
         cells = {}
         for sec in idx['sections']:
             c = {}
-            for take, score in (('A', 'gridA'), ('B', 'gridB')):
+            for take, score in [(sc[4], sc) for sc in idx['scores'] if sc.startswith('grid')]:   # (gridA_<d>, gridB_<d>)
                 for n in matched(idx, F, score, sec):
                     key = f"{n['d']}|{n['p']}" if n['kind'] == 'held' else f"{n['d']}|{n['ioi']}|{n['p']}"
                     for M in 'PL':
