@@ -156,6 +156,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void hostedSlots();
       void hostedSlotsGain();
       void exportInstancesOfParts();
+      void liveEquivalenceByPart();
       void preparedStates();
       void updateLiveSet();
       void updateLiveSetKnobs();
@@ -4350,6 +4351,62 @@ void TestLiveEquivalence::exportInstancesOfParts()
       vst->process(4800, b.data(), nullptr, nullptr);
       vst->endExport();
       QVERIFY(rms(b, 0) > 1e-4);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveEquivalenceByPart
+//    --live-equivalence loads one library part's instances at a time (every part's at once ran the 16 GB Windows VM
+//    out of memory, as --even-levels and --verify-playback did: 7f51a91979). The null test: MuseScore's render with the
+//    parts loaded one at a time is the same samples as with every part's loaded at once (Options::wholeScore, the old way),
+//    and so is Live's render and the verdict
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveEquivalenceByPart()
+      {
+      qputenv("MSTESTSYNTH_INIT_MS", "40");
+      LiveHost host(this, QString(), { "Violin", "Viola" },
+                    "<SoundLibrary name='PartsT'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "</SoundLibrary>");
+      QVERIFY(host.ok);
+      Playback::setIniValuesForTest({});
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(int(score->parts().size()), 2);
+      setPartMix(score->parts()[0], 90, 20);
+      setPartMix(score->parts()[1], 70, 100);
+      LiveEquivalence::Options o;
+      o.thresholds.roundRobins = false;
+      const LiveEquivalence::Result byPart = LiveEquivalence::compare(score, *host.lib, o);
+      QVERIFY2(byPart.error.isEmpty(), qPrintable(byPart.error));
+      o.wholeScore = true;
+      const LiveEquivalence::Result whole = LiveEquivalence::compare(score, *host.lib, o);
+      QVERIFY2(whole.error.isEmpty(), qPrintable(whole.error));
+      // one part's instances at a time, against every part's at once
+      QCOMPARE(byPart.partsLoaded, 2);
+      QCOMPARE(byPart.mostPartsAtOnce, 1);
+      QCOMPARE(whole.partsLoaded, 1);
+      QCOMPARE(whole.mostPartsAtOnce, 2);
+      // the null: sample for sample (each route renders on its own instance, the mix is added up in slot order)
+      QVERIFY(byPart.museScore.size() > 48000);
+      QCOMPARE(byPart.museScore.size(), whole.museScore.size());
+      float maxDiff = 0, peak = 0;
+      for (size_t i = 0; i < whole.museScore.size(); ++i) {
+            maxDiff = std::max(maxDiff, std::fabs(byPart.museScore[i] - whole.museScore[i]));
+            peak = std::max(peak, std::fabs(whole.museScore[i]));
+            }
+      qDebug("by part against whole score: max difference %g, peak %g, %d frames", double(maxDiff), double(peak),
+             int(whole.museScore.size() / 2));
+      QVERIFY(peak > 1e-3f);                    // (it is not a null of silence)
+      QCOMPARE(maxDiff, 0.f);
+      QVERIFY(byPart.live == whole.live);
+      QCOMPARE(byPart.passed, whole.passed);
+      QCOMPARE(byPart.correlation, whole.correlation);
+      QCOMPARE(byPart.residualDb, whole.residualDb);
+      QCOMPARE(byPart.notes.size(), whole.notes.size());
       delete score;
       }
 

@@ -264,52 +264,90 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
       qint64 total = 0;
       std::map<int, std::vector<float>> msTrack, liveTrack;        // by slot (port × 16 + channel)
       {
-            std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, float(rate), &error);
-            if (!vst) {
-                  r.error = error;
-                  return r;
-                  }
-            for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
-                  vst->setExportMix(k, 100, 64, false);
             const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
-            for (const SoundLib::Route& rt : routes) {
-                  const SoundLib::PartMix m = SoundLib::partMix(rt.part, false);
-                  const double gain = TrackDelays::patchGain(library, TrackDelays::of(rt.part, delays), rt.instrument->name);
-                  vst->setExportMix(rt.port * 16 + rt.channel, m.volume, m.pan, m.muted, float(gain));
-                  }
             const qint64 last = qint64((score->utick2utime(events.rbegin()->first)) * rate);
             total = last + 3 * rate;
             r.museScore.assign(size_t(2 * total), 0.f);
-            // one route at a time (the same instances; Vst3Synth sums its slots, so the mix is their sum): each
-            // part's notes measured on its own, not through another part's
+            // the instances: one library part's at a time (only its routes play in its render; the part before's released
+            // first). Every part's at once ran the 16 GB Windows VM out of memory on big scores (--even-levels and
+            // --verify-playback, 2026-10-16: 7f51a91979); wholeScore loads them all at once, as before. Each route's
+            // render is on its own instance(s) either way, so the tracks are the same samples; the mix is their sum
+            // added up in slot order below, as it always was.
             std::set<int> routeSlots;
+            std::map<const Part*, std::set<int>> slotsOfPart;
+            std::vector<const Part*> partOrder;
             for (const SoundLib::Route& rt : routes)
-                  if (rt.instrument && !rt.instrument->kit)
-                        routeSlots.insert(rt.port * 16 + rt.channel);
-            for (int slot : routeSlots) {
-                  std::vector<float>& out = msTrack[slot];
-                  out.assign(size_t(2 * total), 0.f);
-                  vst->beginExport(float(rate));
-                  const unsigned FRAMES = 512;
-                  qint64 pos = 0;
-                  auto processTo = [&](qint64 to) {
-                        while (pos < to) {
-                              const unsigned n = unsigned(std::min<qint64>(FRAMES, to - pos));
-                              vst->process(n, out.data() + 2 * pos, nullptr, nullptr);
-                              pos += n;
-                              }
-                        };
-                  for (const auto& te : events) {
-                        const NPlayEvent& e = te.second;
-                        if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != slot)
-                              continue;
-                        processTo(std::min(total, qint64(score->utick2utime(te.first) * rate)));
-                        PlayEvent pe(e);
-                        pe.setChannel(slot);
-                        vst->play(pe);
+                  if (rt.instrument && !rt.instrument->kit) {
+                        const int slot = rt.port * 16 + rt.channel;
+                        routeSlots.insert(slot);
+                        if (!slotsOfPart.count(rt.part))
+                              partOrder.push_back(rt.part);
+                        slotsOfPart[rt.part].insert(slot);
                         }
-                  processTo(total);
-                  vst->endExport();
+            std::vector<std::set<const Part*>> groups;
+            if (options.wholeScore) {
+                  std::set<const Part*> every;
+                  for (const SoundLib::Route& rt : routes)
+                        every.insert(rt.part);
+                  groups.push_back(every);
+                  }
+            else
+                  for (const Part* p : partOrder)
+                        groups.push_back({ p });
+            for (const std::set<const Part*>& group : groups) {
+                  std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, float(rate), &error, nullptr,
+                                                                                    options.wholeScore ? nullptr : &group);
+                  if (!vst) {
+                        r.error = error;
+                        return r;
+                        }
+                  ++r.partsLoaded;
+                  r.mostPartsAtOnce = std::max(r.mostPartsAtOnce, int(group.size()));
+                  for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+                        vst->setExportMix(k, 100, 64, false);
+                  for (const SoundLib::Route& rt : routes) {
+                        if (!group.count(rt.part))
+                              continue;
+                        const SoundLib::PartMix m = SoundLib::partMix(rt.part, false);
+                        const double gain = TrackDelays::patchGain(library, TrackDelays::of(rt.part, delays), rt.instrument->name);
+                        vst->setExportMix(rt.port * 16 + rt.channel, m.volume, m.pan, m.muted, float(gain));
+                        }
+                  // one route at a time (the same instances; Vst3Synth sums its slots, so the mix is their sum): each
+                  // part's notes measured on its own, not through another part's
+                  for (int slot : routeSlots) {
+                        const SoundLib::Route* owner = nullptr;
+                        for (const SoundLib::Route& rt : routes)
+                              if (rt.port * 16 + rt.channel == slot)
+                                    owner = &rt;
+                        if (!owner || !group.count(owner->part))
+                              continue;
+                        std::vector<float>& out = msTrack[slot];
+                        out.assign(size_t(2 * total), 0.f);
+                        vst->beginExport(float(rate));
+                        const unsigned FRAMES = 512;
+                        qint64 pos = 0;
+                        auto processTo = [&](qint64 to) {
+                              while (pos < to) {
+                                    const unsigned n = unsigned(std::min<qint64>(FRAMES, to - pos));
+                                    vst->process(n, out.data() + 2 * pos, nullptr, nullptr);
+                                    pos += n;
+                                    }
+                              };
+                        for (const auto& te : events) {
+                              const NPlayEvent& e = te.second;
+                              if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != slot)
+                                    continue;
+                              processTo(std::min(total, qint64(score->utick2utime(te.first) * rate)));
+                              PlayEvent pe(e);
+                              pe.setChannel(slot);
+                              vst->play(pe);
+                              }
+                        processTo(total);
+                        vst->endExport();
+                        }
+                  }                  // (vst released here: the next part's instances load after)
+            for (int slot : routeSlots) {
+                  const std::vector<float>& out = msTrack[slot];
                   for (size_t i = 0; i < out.size(); ++i)
                         r.museScore[i] += out[i];
                   }
