@@ -158,6 +158,7 @@
 #include "libmscore/partplayback.h"
 #include "playbackmode.h"
 #ifdef USE_VST3
+#include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #endif
 #include "libmscore/sym.h"
@@ -580,6 +581,12 @@ void MuseScore::closeEvent(QCloseEvent* ev)
             }
 
       writeSettings();
+#ifdef USE_VST3
+      // the hosted plug-ins' instances go now (the sequencer stopped in writeSettings), so main unloads their modules
+      // with ExitDll before the process ends (Vst3Plugin::unloadModules: left to the loader, Kontakt 8's teardown ended
+      // MuseScore with 0xC000000D)
+      SoundLibraryHost::instance()->release();
+#endif
 
       ev->accept();
 
@@ -5188,7 +5195,16 @@ static bool verifyInBackground(const QStringList& argv)
 #ifdef Q_OS_WIN
             DialogWatch watch;
 #endif
-            folder = PlaybackVerifier::run(options, log);
+            // (out of memory: said in the log, the process ends with a failure instead of std::terminate's fail-fast; the
+            // report folder keeps what was written)
+            try {
+                  folder = PlaybackVerifier::run(options, log);
+                  }
+            catch (const std::bad_alloc&) {
+                  log("out of memory: the playback verification stops (the plug-in's instances and the renders need more "
+                      "memory than this computer has free)");
+                  folder.clear();
+                  }
       }
       if (!folder.isEmpty() && verifyOut.isEmpty())
             QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(folder).absolutePath()));
@@ -5264,7 +5280,14 @@ static bool evenLevelsInBackground(const QStringList&)
 #ifdef Q_OS_WIN
             DialogWatch watch;
 #endif
-            folder = EvenLevelsJob::run(evenLevelsOptions, log);
+            try {
+                  folder = EvenLevelsJob::run(evenLevelsOptions, log);
+                  }
+            catch (const std::bad_alloc&) {
+                  log("out of memory: the even-levels measurement stops (the plug-in's instances and the renders need more "
+                      "memory than this computer has free); nothing written");
+                  folder.clear();
+                  }
       }
       return !folder.isEmpty();
       }
@@ -9914,12 +9937,21 @@ int runApplication(int& argc, char** av)
             qApp->processEvents();
 #endif
             const bool ok = processNonGui(cmdLineParseResult.argv);
+#ifdef USE_VST3
+            // the background jobs' instances are gone: their modules unloaded as the SDK unloads them (ExitDll), not by
+            // the loader at exit (Vst3Plugin::unloadModules: Kontakt's teardown then crashed every job, 0xC000000D)
+            Vst3Plugin::unloadModules();
+#endif
             return ok ? EXIT_SUCCESS : EXIT_FAILURE;
             }
 
       QDir::setCurrent(app->applicationDirPath());
 
-      return qApp->exec();
+      const int rc = qApp->exec();
+#ifdef USE_VST3
+      Vst3Plugin::unloadModules();        // (the modules no instance holds any more)
+#endif
+      return rc;
       }
 
 //---------------------------------------------------------

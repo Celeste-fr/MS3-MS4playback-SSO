@@ -233,9 +233,30 @@ static FUnknown* hostContext()
 
 static std::map<QString, std::shared_ptr<VST3::Hosting::Module>>& modules()
       {
-      // never destroyed: no unloading at exit either, after the plug-ins' own teardown
+      // never destroyed by the static destructors (their order is unknown): Vst3Plugin::unloadModules empties it before
+      // the process ends, once the instances are gone
       static auto* m = new std::map<QString, std::shared_ptr<VST3::Hosting::Module>>;
       return *m;
+      }
+
+//---------------------------------------------------------
+//   unloadModules
+//---------------------------------------------------------
+
+int Vst3Plugin::unloadModules()
+      {
+      int n = 0;
+      std::map<QString, std::shared_ptr<VST3::Hosting::Module>>& m = modules();
+      for (auto i = m.begin(); i != m.end();) {
+            if (i->second && i->second.use_count() > 1) {         // (an instance still uses it: it goes with the instance)
+                  ++i;
+                  continue;
+                  }
+            i->second.reset();                // ExitDll, FreeLibrary
+            i = m.erase(i);
+            ++n;
+            }
+      return n;
       }
 
 //---------------------------------------------------------

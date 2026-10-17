@@ -166,6 +166,23 @@ jobs:
       with:
         name: MuseScore-soundlibrary-win64-${{ env.SHORT_SHA }}
         path: msvc.install_x64\
+    # (the program's symbols, apart: a crash dump from the VM read with them; 2026-10-16 the crashes had none)
+    - name: Find the program's symbols
+      if: ${{ always() }}
+      continue-on-error: true
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force pdb | Out-Null
+        Get-ChildItem msvc.build_x64 -Recurse -Filter MuseScore3Evo.pdb | Select-Object -First 1 | Copy-Item -Destination pdb\
+        Get-ChildItem pdb
+    - name: Upload the symbols
+      if: ${{ always() }}
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: MuseScore-soundlibrary-win64-pdb-${{ env.SHORT_SHA }}
+        path: pdb\
+        retention-days: 14
     - name: Fail if the tuning or playability tests failed
       if: ${{ steps.tuning.outcome == 'failure' || steps.playability.outcome == 'failure' }}
       shell: cmd

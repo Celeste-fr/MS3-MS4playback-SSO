@@ -70,6 +70,12 @@ class Vst3Plugin {
       static bool splitState(const QByteArray& state, QString* name, QByteArray* component, QByteArray* controller);
       // and put together (a Live Set's ProcessorState and ControllerState as a state setState takes)
       static QByteArray joinState(const QString& name, const QByteArray& component, const QByteArray& controller);
+      // before the process ends: every loaded module no instance uses any more destroyed (the SDK's Module calls the
+      // plug-in's ExitDll, then FreeLibrary). A module left loaded at exit has its DLL's own teardown run by the loader
+      // after the process's other threads are gone: Kontakt 8's ended every MuseScore on Windows with 0xC000000D in
+      // ntdll's TppRaiseInvalidParameter (2026-10-16, kthost on the VM: returning with the module loaded crashed so,
+      // with ExitDll + FreeLibrary first it exited 0). How many modules were unloaded
+      static int unloadModules();
 
       // audio thread
       // MuseScore's event types (ME_NOTEON …); a note-on's tuning in cents from equal temperament

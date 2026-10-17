@@ -66,6 +66,7 @@
 #include "audio/vst3/playbackverify.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
+#include "audio/vst3/wavwriter.h"
 #include "libmscore/segment.h"
 #include "libmscore/slur.h"
 #include "libmscore/measure.h"
@@ -201,6 +202,8 @@ class TestSoundLibrary : public QObject, public MTest
       void kontaktKickstartUnpurge();
       void kontaktSetupReal();
       void vst3Plugin();
+      void vst3UnloadModules();
+      void wavWriterHeader();
       void vst3LoadTimes();
       void vst3LooseTitle();
       void vst3Render();
@@ -10666,6 +10669,82 @@ static void synthesize(std::vector<float>& x, double rate, const std::vector<Syn
       }
 
 }
+
+//---------------------------------------------------------
+//   vst3UnloadModules
+//    before the process ends its modules are unloaded by the SDK (ExitDll, FreeLibrary), not by the loader at exit (Kontakt
+//    8's own teardown then ended every MuseScore on Windows with 0xC000000D, 2026-10-16): a module an instance still uses
+//    stays until the instance goes; a module unloaded loads again
+//---------------------------------------------------------
+
+void TestSoundLibrary::vst3UnloadModules()
+      {
+      QString error;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(p, qPrintable(error));
+      Vst3Plugin::unloadModules();                    // (an instance uses the test synth's: kept)
+      QCOMPARE(Vst3Plugin::unloadModules(), 0);
+      std::vector<float> buffer(2 * 512, 0.f);
+      p->midi(ME_NOTEON, 0, 60, 100);
+      p->process(512, buffer.data());
+      QVERIFY(peak(buffer) > 0.f);                   // (the instance plays)
+      p.reset();
+      QCOMPARE(Vst3Plugin::unloadModules(), 1);       // (no instance: unloaded here)
+      QCOMPARE(Vst3Plugin::unloadModules(), 0);
+      quint32 uid[4];
+      QString name;
+      QVERIFY(Vst3Plugin::classInfo(TESTSYNTH, &name, uid, &error));
+      QCOMPARE(Vst3Plugin::unloadModules(), 1);       // (classInfo's module, no instance)
+      std::unique_ptr<Vst3Plugin> r = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      QVERIFY2(r, qPrintable(error));                 // (loads again)
+      }
+
+//---------------------------------------------------------
+//   wavWriterHeader
+//    the verification's WAVs (--verify-wav): the header at open, its sizes brought up to date every second of audio and at
+//    close, so a render that stops early leaves a valid file (2026-10-16: a crashed run's WAV said no data)
+//---------------------------------------------------------
+
+void TestSoundLibrary::wavWriterHeader()
+      {
+      QTemporaryDir dir;
+      const QString path = dir.path() + "/t.wav";
+      auto sizes = [&path](quint32* riff, quint32* data, qint64* fileSize) {
+            QFile f(path);
+            if (!f.open(QIODevice::ReadOnly))
+                  return false;
+            const QByteArray h = f.read(44);
+            *fileSize = f.size();
+            if (h.size() < 44 || h.left(4) != "RIFF" || h.mid(8, 8) != "WAVEfmt " || h.mid(36, 4) != "data")
+                  return false;
+            auto u32 = [&h](int at) { return quint32(uchar(h[at])) | quint32(uchar(h[at + 1])) << 8 | quint32(uchar(h[at + 2])) << 16
+                                             | quint32(uchar(h[at + 3])) << 24; };
+            *riff = u32(4);
+            *data = u32(40);
+            return true;
+            };
+      quint32 riff = 0, data = 0;
+      qint64 size = 0;
+      {
+            WavWriter w(path, 2, 1000, true);
+            QVERIFY(w.ok());
+            QVERIFY(sizes(&riff, &data, &size));
+            QCOMPARE(data, 0u);                       // a valid empty file at once
+            QCOMPARE(riff, 36u);
+            std::vector<float> x(2 * 100, 0.25f);
+            for (int k = 0; k < 25; ++k)              // 2.5 s at 1000 Hz
+                  w.write(x.data(), 100);
+            // (not closed, as a render that crashes: the file on disk says the first 2 s)
+            QVERIFY(sizes(&riff, &data, &size));
+            QCOMPARE(data, quint32(2000 * 8));
+            QCOMPARE(riff, 36 + data);
+            QVERIFY(size >= 44 + qint64(data));
+      }
+      QVERIFY(sizes(&riff, &data, &size));            // closed: all of it
+      QCOMPARE(data, quint32(2500 * 8));
+      QCOMPARE(riff, 36 + data);
+      QCOMPARE(size, 44 + qint64(data));
+      }
 
 void TestSoundLibrary::playbackVerify()
       {

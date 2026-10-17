@@ -491,25 +491,42 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
             }
       actualTimes(score.get(), events0, passages);
 
-      // the instances
+      // the instances: one part's at a time (only it plays in its renders), released before the next part's load: every
+      // part's at once needed more memory than the Windows VM's 16 GB (the passages' score, 2026-10-16: SSO's five string
+      // sections, 10 Kontakt instances for 34 routes, 18 GB committed, a std::bad_alloc after round 0 ended the job). The
+      // part loaded last stays for the next round, rendered first there (a single part: loaded once)
       const int rate = 44100;
       QString error;
-      std::map<int, QString> patches;
-      QElapsedTimer t;
-      t.start();
-      std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score.get(), float(rate), &error, &patches);
-      if (!vst) {
-            score->setMetaTag(Playback::metaTag, originalSettings);
-            log("the library's plug-in: " + error);
-            return QString();
-            }
-      std::set<int> hosts;                    // (hosted slots: a patch's copies share one: Vst3Synth::hostOf)
-      for (const auto& sp : patches)
-            hosts.insert(vst->hostOf(sp.first));
-      log(QString("%1: %2 instances for %3 routes loaded in %4 s").arg(name).arg(hosts.size()).arg(patches.size())
-          .arg(t.elapsed() / 1000.0, 0, 'f', 1));
+      std::shared_ptr<Vst3Synth> vst;
+      const Part* loadedPart = nullptr;
       QJsonObject waited;
-      PlaybackVerifier::waitUntilSounding(vst, patches, rate, name, log, &waited);
+      double loadSeconds = 0.0;
+      auto loadPart = [&](const Part* part) {
+            if (vst && loadedPart == part)
+                  return true;
+            vst.reset();                          // (the part before's instances go first)
+            loadedPart = nullptr;
+            std::map<int, QString> patches;
+            QElapsedTimer t;
+            t.start();
+            const std::set<const Part*> only { part };
+            vst = SoundLibraryExport::loadInstances(score.get(), float(rate), &error, &patches, &only);
+            if (!vst) {
+                  log("the library's plug-in: " + error);
+                  return false;
+                  }
+            std::set<int> hosts;                  // (hosted slots: a patch's copies share one: Vst3Synth::hostOf)
+            for (const auto& sp : patches)
+                  hosts.insert(vst->hostOf(sp.first));
+            log(QString("%1: %2: %3 instances for %4 routes loaded in %5 s").arg(name, part->partName()).arg(hosts.size())
+                .arg(patches.size()).arg(t.elapsed() / 1000.0, 0, 'f', 1));
+            QJsonObject w;
+            PlaybackVerifier::waitUntilSounding(vst, patches, rate, name + ": " + part->partName(), log, &w);
+            waited[part->partName()] = w;
+            loadSeconds += t.elapsed() / 1000.0;
+            loadedPart = part;
+            return true;
+            };
 
       // a part's routes
       std::map<const Part*, std::set<int>> partRoutes;
@@ -519,15 +536,27 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
       for (size_t k = 0; k < passages.size(); ++k)
             partPassages[passages[k].part].push_back(k);
 
-      // renders each part with passages to measure (only: the passages' indices) and measures round r
+      // the parts to render, in the order measure renders them (the part loaded last first in the next round)
+      std::vector<const Part*> partOrder;
+      for (const auto& pp : partPassages)
+            partOrder.push_back(pp.first);
+      // renders each part with passages to measure (only: the passages' indices) and measures round r; false: the plug-in
+      // could not be loaded
       auto measure = [&](const EventMap& events, int round, const std::set<size_t>& only) {
-            for (const auto& pp : partPassages) {
+            std::vector<const Part*> order = partOrder;
+            auto last = std::find(order.begin(), order.end(), loadedPart);
+            if (last != order.end())
+                  std::rotate(order.begin(), last, last + 1);
+            for (const Part* part : order) {
+                  const auto pp = *partPassages.find(part);
                   std::vector<size_t> mine;
                   for (size_t k : pp.second)
                         if (only.empty() || only.count(k))
                               mine.push_back(k);
                   if (mine.empty())
                         continue;
+                  if (!loadPart(pp.first))
+                        return false;
                   const std::set<int> partSlots = partRoutes[pp.first];
                   double from = 1e9, to = 0, end = 0;
                   for (size_t k : mine) {
@@ -558,6 +587,11 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                         p.measured[round] = true;
                         }
                   }
+            return true;
+            };
+      auto failed = [&]() {
+            score->setMetaTag(Playback::metaTag, originalSettings);
+            return QString();
             };
       auto setValues = [&](int round) {
             for (PassageRec& p : passages)
@@ -581,7 +615,8 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                    .arg(median(r), 0, 'f', 2).arg(median(e), 0, 'f', 2);
             };
 
-      measure(events0, 0, {});
+      if (!measure(events0, 0, {}))
+            return failed();
       for (PassageRec& p : passages) {
             // (the fit / CC11's measured factor, as the background measurer's)
             p.values[1] = EvenLevels::fitGlide(p.fit, p.env[0], &p.fitRms[0], &p.envRms[0]);
@@ -606,7 +641,8 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
       }
       if (changedContexts)
             log(QString("%1: %2 note context(s) differ between the renders (not played: stale)").arg(name).arg(changedContexts));
-      measure(events1, 1, {});
+      if (!measure(events1, 1, {}))
+            return failed();
       log(QString("%1: round 1: %2").arg(name, rangeText(1)));
 
       // round 2: fitted again from round 1's measurement, scaled by round 1's measured / predicted change of the envelope
@@ -629,7 +665,8 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
             setValues(2);
             EventMap events2;
             renderEvents(score.get(), true, &events2, nullptr);
-            measure(events2, 2, again);
+            if (!measure(events2, 2, again))
+                  return failed();
             log(QString("%1: round 2 (%2 passage(s)): %3").arg(name).arg(again.size()).arg(rangeText(2)));
             }
       // the best round per passage
@@ -716,7 +753,8 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                       .arg(EvenLevels::PASSES).arg(EvenLevels::RIDGE).arg(EvenLevels::SMOOTH_MS).arg(EvenLevels::LAG_MS)
                       .arg(EvenLevels::STEP_MS).arg(EvenLevels::CC11_FACTOR).arg(EvenLevels::WINDOW_MS);
       top["changedContexts"] = changedContexts;
-      top["soundWait"] = waited;
+      top["soundWait"] = waited;                // (per part: each part's load)
+      top["loadSeconds"] = loadSeconds;
       top["preflight"] = RenderPreflight::json();
       top["passages"] = pj;
       top["seconds"] = clock.elapsed() / 1000.0;
@@ -739,7 +777,7 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                   log("could not save " + QDir::toNativeSeparators(on.filePath()));
             score->setMetaTag(Playback::metaTag, originalSettings);
             }
-      vst->allNotesOff(-1);
+      vst.reset();
       log(QString("%1: done in %2 s; %3").arg(name).arg(clock.elapsed() / 1000.0, 0, 'f', 0).arg(QDir::toNativeSeparators(folder)));
       return folder;
       }
