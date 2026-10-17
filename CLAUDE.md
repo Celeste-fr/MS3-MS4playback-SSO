@@ -358,7 +358,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `dynamics_from_check.py`, `rest_from_check.py`, `onset_from_check.py`, `nki_articulation_details.py`.
 - Checks and extracts: `audio/vst3/articulationcheck.*` + `mscore/soundlibrarycheck.*` (*Check articulations…*);
   `audio/vst3/pluginextract.*`; `tools/soundlibraries/` readers (`read_check_names.py`, `read_loaded_patches.py`,
-  `*_from_check.py`, `read_plugin_data.py`) and `extract_library_files.py` (decrypts nothing, copies no script). **Never read a patch's script** (its PAR_SCRIPT chunks), with these readers or one-off code: learn a patch's behaviour only by measuring its sound (2026-10-16: an agent dumped the Performance patch's script to read its rules; `legato-switch` stays unmerged for it).
+  `*_from_check.py`, `read_plugin_data.py`) and `extract_library_files.py` (decrypts nothing, copies no script). **A patch's script may be read locally** (its PAR_SCRIPT chunks: plain text in the owner's `.nki`, nothing decrypted; the owner, 2026-10-16: "script text is fucking useful"): dumps live only outside the repo, in `~/MuseScore/ms3fork/private/sso-scripts/`, never committed, published or quoted on a page; numbers and rules taken from a script are recorded with that source ("read from the patch's script") and confirmed by measurement where they set playback; still never decrypt or bypass any protection.
   HANDOFF.md › When a check zip arrives has the procedure.
 - Owner reports a problem: suspect Kontakt's MIDI channel (we send 1), editor sizing, sample loading in offline
   export; crackles / slow loads: memory (Kontakt's preload override at 30 kB).
