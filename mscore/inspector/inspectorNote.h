@@ -37,6 +37,7 @@ class InspectorNote : public InspectorElementBase {
       std::vector<Note*> selectedNotes() const;
       void setTechniques();
       void setPerformanceShown();
+      QMetaObject::Connection _whenWarmed;      // (setPerformanceShown waits for the edit's renders: editwarmup.h)
       void techniqueChosen(int index);
       void setEvenShown();
 

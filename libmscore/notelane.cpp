@@ -18,9 +18,13 @@
 #include "repeatlist.h"
 #include "score.h"
 #include "synthesizerstate.h"
+#include "lagprobe.h"
+#include "recentresults.h"
+#include "undo.h"
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 #include <set>
 
 namespace Ms {
@@ -40,6 +44,7 @@ std::map<const Part*, std::vector<Mark>> marks(MasterScore* score)
       std::map<const Part*, std::vector<Mark>> out;
       if (!score)
             return out;
+      LagProbe::Scope probe("NoteLane::marks render");
       // (as Seq renders: its chunks; the score's repeats as they are)
       std::vector<MidiRenderer::LibTrace> trace;
       MidiRenderer midi(score);
@@ -97,6 +102,24 @@ std::set<const Note*> onPerformancePatch(const std::vector<const Note*>& notes)
             m = m->firstTiedNote();
             played[m].push_back(n);
             }
+      // (asked twice per command by the Inspector, and again for each selection: the last few answers by everything they
+      // depend on, recentresults.h)
+      const UndoStack* undo = master->undoStack();
+      QString key;
+      if (undo && !undo->active() && EditLag::on()) {
+            key = QString("%1|%2|%3|%4|%5|").arg(quintptr(master)).arg(undo->getCurIdx()).arg(undo->state()).arg(master->nstaves())
+                  .arg(master->parts().isEmpty() ? 0 : quintptr(master->parts().first())) + untrackedInputs(master);
+            for (const Note* n : notes)
+                  key += QString("|%1").arg(quintptr(n));
+            }
+      static RecentResults<std::set<const Note*>> cache;
+      static std::mutex mutex;
+      if (!key.isEmpty()) {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (const std::set<const Note*>* hit = cache.find(key, QString()))
+                  return *hit;
+            }
+      LagProbe::Scope probe("NoteLane::onPerformancePatch render");
       // (as Seq renders: its chunks)
       MidiRenderer midi(master);
       midi.setMinChunkSize(10);
@@ -122,6 +145,10 @@ std::set<const Note*> onPerformancePatch(const std::vector<const Note*>& notes)
             auto it = played.find(t.note);
             if (it != played.end())
                   out.insert(it->second.begin(), it->second.end());
+            }
+      if (!key.isEmpty()) {
+            std::lock_guard<std::mutex> lock(mutex);
+            cache.put(key, QString(), out);
             }
       return out;
       }

@@ -26,6 +26,7 @@
 #include "scoreaccessibility.h"
 #include "scoretab.h"
 #include "scoreview.h"
+#include "libmscore/lagprobe.h"
 #include "seq.h"
 #include "splitstaff.h"
 #include "textcursor.h"
@@ -1105,6 +1106,7 @@ void ScoreView::paintEvent(QPaintEvent* ev)
       {
       if (!_score)
             return;
+      LagProbe::Scope probe("ScoreView::paintEvent");
       QPainter vp(this);
       vp.setRenderHint(QPainter::Antialiasing, preferences.getBool(PREF_UI_CANVAS_MISC_ANTIALIASEDDRAWING));
       vp.setRenderHint(QPainter::TextAntialiasing, true);

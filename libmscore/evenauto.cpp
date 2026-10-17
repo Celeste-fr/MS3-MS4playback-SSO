@@ -23,6 +23,7 @@
 #include "score.h"
 #include "soundlibrary.h"
 #include "trackdelays.h"
+#include "lagprobe.h"
 
 namespace Ms {
 namespace EvenAuto {
@@ -116,6 +117,7 @@ void Session::write(const Note* note, double db, const QString& context)
       if (changed) {
             _score->setEvenLevelsWritten(true);
             _score->setPlaylistDirty();
+            EvenLevels::changed();
             }
       }
 
@@ -235,6 +237,7 @@ Job Session::makeJob(Work& w, int round, const EventMap& events)
 
 std::vector<Job> Session::detect()
       {
+      LagProbe::Scope probe("EvenAuto::Session::detect");
       std::vector<Job> jobs;
       _edited = false;
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();

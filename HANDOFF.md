@@ -35,6 +35,39 @@ effect (the control differs by 3-4 dB mean on the upper strings). Violins 2 has 
 Open: Live paths untried in real Live; the host's resave restore and reload when the setting changes untried with real
 Kontakt; lanes other than 0 not rendered; a slur over a repeat jump sends none; other Performance patches (Sul, solo,
 winds) not covered; Live's carrier value 1 plays as 0.
+## Edit lag (branch `edit-lag`, 2026-10-17, from plain-performance 44114ac529 + lag-probe; merged into integrate-1017)
+
+Goal: edits respond fast with SSO, sound unchanged (the owner's rule: speedups sound-identical or dropped).
+- **Redundant**: the Inspector asked `NoteLane::onPerformancePatch` twice per command (selectionChanged, then endCmd:
+  same undo state, same notes); an undo / redo back to a state seen seconds earlier rendered realRangeTops and the master
+  trim again (one cached result per score). **Needed but not now**: the first Inspector question after an edit paid
+  both whole-score renders (~200 ms of each VM edit), only needed for the next sound. **Main-thread stalls**: the
+  measurer's instance loads (setState 1.8-3.2 s on the VM).
+- **Changed** (CLAUDE.md › Edit lag): RecentResults (8 per score), onPerformancePatch kept by inputs, EditWarmup
+  (the edit's renders one chunk per event-loop pass while stopped; the mixer timer and the Inspector's Performance
+  rows wait; preview / Play / export finish the same job at once), measurer setState on a worker
+  (`SoundLibraryExport::beginInstance`). `MS_EDIT_LAG_OFF=1` = the code before; probe phases `b-` / `a-` = off.
+- **Proof** (Linux): `editLagIdentical` (21 steps, off vs on, Whence 44314 lines per step) identical; before/after
+  `dumpEvents` (6 scores x Recommended / plainPerformance 1 x default / chunked / live) + audit dumps: 1213 files
+  byte-identical; run_fork_tests all passed. Not proven with Kontakt: the measurer's threaded setState (the same bytes;
+  Kontakt took threaded setState in the 2026-10-03 load-times run) and the mixer gains set after the warm-up (stopped).
+- **Linux probe** (test synth, Whence, 5 rounds, interleaved off/on blocks b-,b,b-,b,a-,a,a-,a; host load 10-12 of 12
+  cores from other builds): all-edit response p50 384 -> 34, 495 -> 40 (b), 418 -> 99, 668 -> 76 ms (a); worst
+  event-loop lateness in an edit's window p50 409 -> 138, 538 -> 162, 448 -> 294, 702 -> 253 ms (a warm-up step is one
+  10-measure chunk, ~80-200 ms here). Pitch edits and select still render at once (the click's preview needs the
+  edit's renders): pitch-up 562 -> 366, 781 -> 413 ms.
+- **Open**: the VM run (needs a Windows build: `go.cmd <tag> o+b-+b+b-+b+a-+a 5 stopped`); the 0xC0000005 crash
+  (rerun1 phase e): not ours on the evidence (below). Fixed (coordinator, 2026-10-17): the note preview's chunk cache
+  ignored even levels written without an undo step (a click after such a write replayed the chunk rendered before it);
+  `NotePreview::stateKey` now holds `EvenLevels::generation` (editLagIdentical checks every step's click against a fresh
+  render; without the fix it fails at "even level written").
+- Crash (rerun1, phase e playing, logs only): the "VirtualUnlock failed" lines (19108, errno 158 ERROR_NOT_LOCKED) came
+  while the 8 playback instances were released at the switch to MS4 (01:22:32-57), 3 min 15 s before the exit; the
+  process was then shrinking (ws 5006 -> 1739 MB, physical free >= 5432 MB throughout; commit not logged); no stdout in
+  the last 3 min; no code path found that touches a released instance (setPlugin under the mutex, the audio thread's
+  try_lock, the measurer joins its workers first). Most consistent with Kontakt's own fault after its purge; next time:
+  WER LocalDumps on the VM, commit headroom in monitor.ps1, phase e alone. (The measurer's instances stay loaded in MS4
+  mode: EvenAuto::active follows the current library; releasing them there would save memory, not proven related.)
 
 ## Plain Performance (branch `plain-performance`, 2026-10-17)
 
@@ -81,6 +114,26 @@ heard check (Before a build goes to the owner).
    joins; a 1-hour null test of two identical SSO passes would decide, ~65 % if it nulls). SSO's splice rules,
    read from the patch's script: `~/MuseScore/ms3fork/private/sso-splice-notes.md` (local only). Plan:
    `private/own-legato-plan.md`; branch `own-legato`.
+## Lag probe (2026-10-16/17, branch `lag-probe`, from integrate-1012 1133362748; not merged)
+
+`MS_LAG_PROBE=<log>` (off by default; libmscore/lagprobe.h, mscore/lagprobesession.h, tools/lagprobe/). Windows VM,
+Kontakt 8 + SSO, build 442, Whence, Inspector open; logs local only (worktree `.lagprobe/res/`; state and details:
+`~/MuseScore/ms3fork/private/lag-probe-state.md`).
+- Every edit's response > 100 ms with SSO (stopped, 20 rounds, b: select ~210-270, pitch-up ~470-580, undo ~310-440,
+  Inspector open ~150-180, lane point ~250-320 ms p50); scrolling 6-8 ms. MS4 mode (e): 45-116 ms. Causes: renders on
+  the main thread per edit (Inspector's NoteLane::onPerformancePatch, masterTrim, realRangeTops, the click preview).
+- **evenLevels 0 (a) is not slower than 1 (b)**: full1/rerun1 showed a slower because the host's CPU load moved
+  (the Debian VM's builds: 1-min load ~3-5 during b, ~7-10 during a in rerun1); a does the same work minus the
+  measurement (identical scope counts), and every scope, paint and layout included, was uniformly slower. Interleaved
+  blocks (b,a,b,a,b,a x 5 rounds; `tools/lagprobe/compare_blocks.py`): all-edit medians b -> a 485 -> 452,
+  383 -> 308, 682 -> 524 ms. Even levels' own cost: +7..+30 % per edit (its threads compete for 4 vCPUs), detect
+  82-141 ms after each edit's debounce, measurer instance loads 1.8-3.2 s main-thread stalls.
+- **Short slurs: don't skip them for lag.** Whence's Performance notes are all in 3-4-note slurs joined into long
+  passages; skipping 2-4-note slurs would drop even levels from Whence, where it measurably helps (even_need
+  a69ebef56a); and the lag without even levels is still 308-524 ms per edit. Fix the renders instead (cache by undo
+  state, off the main thread; measurer instances loaded on a worker).
+- Open: rerun1's phase e playing crashed (0xC0000005, after a Kontakt VirtualUnlock error); a crashed probe leaves the
+  playback mode at MS4 in `C:\claude\lagprobe\cfg` (check `soundLibrary=` before a run).
 
 ## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; not merged)
 

@@ -331,6 +331,16 @@ class SoundLibraryExport {
       // one route's patch, as loadInstances loads it, on slot 0 of an instance of its own (the even levels measured in
       // the background: mscore/evenautomeasurer.h)
       static std::shared_ptr<Vst3Synth> loadInstance(Score* score, const SoundLib::Route& route, float sampleRate, QString* error);
+      // loadInstance in steps, its plug-in's setState (Kontakt's instrument load: seconds) on a worker thread meanwhile
+      // (the edit lag, 2026-10-17: the measurer's loads were 1.8-3.2 s stalls of the window). The same calls in the same
+      // order on the same bytes as loadInstance; only setState runs on another thread, as the host's own
+      // io/soundLibraryLoadThreads does (Kontakt takes it: HISTORY › load times). begin on the main thread; ready
+      // polls; finish (main thread) waits if needed and completes it: the instance, or nullptr and error
+      struct InstanceLoad;
+      static std::unique_ptr<InstanceLoad, void(*)(InstanceLoad*)> beginInstance(Score* score, const SoundLib::Route& route,
+                                                                                 float sampleRate, QString* error);
+      static bool instanceReady(const InstanceLoad* load);
+      static std::shared_ptr<Vst3Synth> finishInstance(InstanceLoad* load, Score* score, QString* error);
       void finish();                            // before the MasterSynthesizer goes
       bool play(const NPlayEvent& event);       // true: a library part's event, played here
       };

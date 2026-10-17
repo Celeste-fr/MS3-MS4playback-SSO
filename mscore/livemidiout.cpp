@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "livemidiout.h"
+#include "libmscore/lagprobe.h"
 
 #include <QHostAddress>
 #include <QUdpSocket>
@@ -24,7 +25,7 @@ LiveMidiOut* LiveMidiOut::instance()
 
 LiveMidiOut::LiveMidiOut()
       {
-      _thread = std::thread([this]() { run(); });
+      _thread = std::thread([this]() { LagProbe::nameThread("live midi out"); run(); });
       _thread.detach();
       }
 

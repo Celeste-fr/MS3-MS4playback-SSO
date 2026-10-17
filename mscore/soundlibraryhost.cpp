@@ -9,6 +9,8 @@
 //=============================================================================
 
 #include "soundlibraryhost.h"
+#include "libmscore/lagprobe.h"
+#include "editwarmup.h"
 #include "liveclipedit.h"
 #include "liveclips.h"
 #include "livesetexport.h"
@@ -110,8 +112,14 @@ SoundLibraryHost::SoundLibraryHost()
       qApp->installEventFilter(this);         // (the user's input: preloadStep waits for a pause)
       _idle.setInterval(50);
       connect(&_idle, &QTimer::timeout, this, [this]() {
-            if (Vst3Synth* s = synth())
+            if (Vst3Synth* s = synth()) {
+                  LagProbe::Scope probe("host idle: Vst3Synth::idle");
                   s->idle();
+                  }
+            // (just edited, stopped: the gains wait for the edit's renders, made between events: editwarmup.h)
+            if (EditWarmup::instance()->pending(_slotScore))
+                  return;
+            LagProbe::Scope probe("host idle: applyMixer");
             applyMixer();
             });
       _settleTimer.setInterval(250);
@@ -1549,6 +1557,7 @@ static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, c
 
 bool SoundLibraryHost::sync(Score* score, QString* error)
       {
+      LagProbe::Scope probe("SoundLibraryHost::sync");
       _preloadTimer.stop();
       _resync = false;
       bool ok = syncSome(score, error, -1, nullptr);
@@ -1619,6 +1628,7 @@ bool SoundLibraryHost::eventFilter(QObject* o, QEvent* e)
 
 void SoundLibraryHost::preloadStep()
       {
+      LagProbe::Scope probe("SoundLibraryHost::preloadStep");
 #ifdef USE_VST3
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (_syncing)
@@ -1795,6 +1805,7 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
                   const QByteArray state = pl->state;
                   pl->clock.start();
                   pl->done = std::async(std::launch::async, [p, state]() {
+                        LagProbe::nameThread("library load");
                         workerThread(true);
                         const bool ok = p->setState(state);
                         workerThread(false);
@@ -2637,7 +2648,142 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const 
       own->setPlugin(0, std::move(p));
       return own;
       }
+
+struct SoundLibraryExport::InstanceLoad {
+      SoundLib::Route route;
+      std::shared_ptr<Vst3Synth> own;
+      std::unique_ptr<Vst3Plugin> plugin;
+      QByteArray state;
+      double setupMs { 0 };
+      std::future<bool> done;                   // setState on its worker (valid: a setup to load)
+      bool failed { false };                    // begin's error: finish gives nullptr
+      QString error;
+      ~InstanceLoad()
+            {
+            if (done.valid())
+                  done.wait();                  // (the plug-in goes after its setState)
+            }
+      };
+
+static void deleteInstanceLoad(SoundLibraryExport::InstanceLoad* l)
+      {
+      delete l;
+      }
+
+std::unique_ptr<SoundLibraryExport::InstanceLoad, void(*)(SoundLibraryExport::InstanceLoad*)>
+SoundLibraryExport::beginInstance(Score* score, const SoundLib::Route& r, float sampleRate, QString* error)
+      {
+      Q_UNUSED(score);
+      std::unique_ptr<InstanceLoad, void(*)(InstanceLoad*)> l(new InstanceLoad, deleteInstanceLoad);
+      l->route = r;
+      // (as loadInstance, to its loadSetup)
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!library || !r.instrument) {
+            l->failed = true;
+            l->error = QObject::tr("No sound library");
+            }
+      const QString path = l->failed ? QString() : SoundLibraryHost::pluginPath(*library, &l->error);
+      if (path.isEmpty())
+            l->failed = true;
+      if (!l->failed) {
+            l->own.reset(new Vst3Synth);
+            l->own->init(sampleRate);
+            l->own->setVarispeed(library->varispeed);
+            l->plugin = Vst3Plugin::load(path, sampleRate, 4096, &l->error);
+            if (!l->plugin)
+                  l->failed = true;
+            }
+      if (!l->failed && SoundLibraryHost::hasSetup(*library, r.instrument->name)) {
+            // (loadSetup's steps: the state made here, set on the worker; an empty one: loadSetup's false, warned)
+            QElapsedTimer t;
+            t.start();
+            QString e;
+            l->state = SoundLibraryHost::setupState(*library, r.instrument->name, path, &e);
+            l->setupMs = t.nsecsElapsed() / 1e6;
+            if (l->state.isEmpty())
+                  qWarning("Sound library: %s", qPrintable(e));
+            else {
+                  Vst3Plugin* p = l->plugin.get();
+                  const QByteArray state = l->state;
+                  l->done = std::async(std::launch::async, [p, state]() {
+                        LagProbe::nameThread("even levels: setState");
+                        SoundLibraryHost::workerThread(true);
+                        const bool ok = p->setState(state);
+                        SoundLibraryHost::workerThread(false);
+                        return ok;
+                        });
+                  }
+            }
+      if (l->failed && error)
+            *error = l->error;
+      return l;
+      }
+
+bool SoundLibraryExport::instanceReady(const InstanceLoad* l)
+      {
+      return !l || !l->done.valid() || l->done.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+      }
+
+std::shared_ptr<Vst3Synth> SoundLibraryExport::finishInstance(InstanceLoad* l, Score* score, QString* error)
+      {
+      if (!l || l->failed) {
+            if (error && l)
+                  *error = l->error;
+            return nullptr;
+            }
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      const SoundLib::Route& r = l->route;
+      Vst3Plugin* p = l->plugin.get();
+      if (l->done.valid()) {
+            // (loadSetup's rest, on the main thread as there)
+            if (l->done.get() && library) {
+                  SoundLibraryHost::setupLoaded(p, *library, r.instrument->name, l->state, l->setupMs);
+                  p->settle();
+                  SoundLibraryHost::recordSetupValues(p, *library, r.instrument->name);
+                  }
+            else {
+                  qWarning("Sound library: the setup of %s could not be loaded", qPrintable(r.instrument->name));
+                  qWarning("Sound library: %s", qPrintable(QObject::tr("The setup of %1 could not be loaded into the plug-in.").arg(r.instrument->name)));
+                  }
+            }
+      if (!library) {
+            if (error)
+                  *error = QObject::tr("No sound library");
+            return nullptr;
+            }
+      // (as loadInstance from here: the routes and controllers as they are now)
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      LibraryControllers::applyParameters(p, r, Automation::read(score->masterScore()), nullptr);
+      l->own->setParameterIds(0, parameterIds(p, r, routes));
+      l->own->setPlugin(0, std::move(l->plugin));
+      return l->own;
+      }
 #else
+struct SoundLibraryExport::InstanceLoad {};
+
+static void deleteInstanceLoad(SoundLibraryExport::InstanceLoad* l)
+      {
+      delete l;
+      }
+
+std::unique_ptr<SoundLibraryExport::InstanceLoad, void(*)(SoundLibraryExport::InstanceLoad*)>
+SoundLibraryExport::beginInstance(Score*, const SoundLib::Route&, float, QString* error)
+      {
+      if (error)
+            *error = QObject::tr("This MuseScore was built without plug-in hosting.");
+      return std::unique_ptr<InstanceLoad, void(*)(InstanceLoad*)>(nullptr, deleteInstanceLoad);
+      }
+
+bool SoundLibraryExport::instanceReady(const InstanceLoad*)
+      {
+      return true;
+      }
+
+std::shared_ptr<Vst3Synth> SoundLibraryExport::finishInstance(InstanceLoad*, Score*, QString*)
+      {
+      return nullptr;
+      }
+
 std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score*, const SoundLib::Route&, float, QString* error)
       {
       if (error)

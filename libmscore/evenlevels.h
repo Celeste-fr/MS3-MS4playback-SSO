@@ -101,6 +101,11 @@ int count(const Score* score);           // notes with a value
 // the note at its chord's tick, track, grace chord's index (-1: the chord itself) and pitch; nullptr: none
 Note* find(Score* score, int tick, int track, int grace, int pitch);
 
+// changes whenever values are written on the score's notes outside the undo stack (read, the measurer's results; not
+// the measurer's own trial values, put back at once): caches keyed by the undo state add it (recentresults.h)
+int generation();
+void changed();
+
 // the patch of a context ("<patch>|<hash>")
 QString contextPatch(const QString& context);
 // the headroom: per part, each patch's largest value (0 when none is above 0)

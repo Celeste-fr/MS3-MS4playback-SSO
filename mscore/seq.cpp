@@ -30,6 +30,7 @@
 #include "preferences.h"
 #include "scoreview.h"
 #include "seq.h"
+#include "libmscore/lagprobe.h"
 #include "libmscore/partplayback.h"
 #include "synthcontrol.h"
 
@@ -428,6 +429,7 @@ bool Seq::canStart()
 
 void Seq::start()
       {
+      LagProbe::Scope probe("Seq::start");
       if (!_driver) {
             qDebug("No driver!");
             return;
@@ -1131,6 +1133,12 @@ void Seq::addCountInClicks()
 void Seq::process(unsigned framesPerPeriod, float* buffer)
       {
       _periodStart = std::chrono::steady_clock::now();
+      struct AudioProbe {                 // (MS_LAG_PROBE: the callback's time against its period)
+            qint64 start { -1 };
+            qint64 period { 0 };
+            AudioProbe(unsigned frames) { if (LagProbe::on()) { start = LagProbe::nowNs(); period = qint64(1e9 * frames / MScore::sampleRate); } }
+            ~AudioProbe() { if (start >= 0) LagProbe::addAudio(LagProbe::nowNs() - start, period); }
+            } audioProbe(framesPerPeriod);
       unsigned framesRemain = framesPerPeriod; // the number of frames remaining to be processed by this call to Seq::process
       Transport driverState = _driver->getState();
       // Checking for the reposition from JACK Transport
@@ -1543,6 +1551,7 @@ void Seq::initInstruments(bool realTime)
 
 void Seq::renderChunk(const MidiRenderer::Chunk& ch, EventMap* eventMap)
       {
+      LagProbe::Scope probe("Seq::renderChunk");
       SynthesizerState synState = mscore->synthesizerState();
       MidiRenderer::Context ctx(synState);
       ctx.metronome = true;
@@ -1568,6 +1577,7 @@ void Seq::updateEventsEnd()
 
 void Seq::collectEvents(int utick)
       {
+      LagProbe::Scope probe("Seq::collectEvents");
       //do not collect even while playing
       if (state == Transport::PLAY && playlistChanged)
             return;
@@ -1613,6 +1623,7 @@ void Seq::collectEvents(int utick)
 
 void Seq::renderAgainPlaying()
       {
+      LagProbe::Scope probe("Seq::renderAgainPlaying");
       if (!cs || state != Transport::PLAY || cs->playMode() != PlayMode::SYNTHESIZER || _swapState.load() != 0)
             return;
       if (midiRenderFuture.isRunning())
@@ -1740,6 +1751,7 @@ void Seq::ensureBufferAsync(int utick)
                   const MidiRenderer::Chunk chunk = midi.getChunkAt(unrenderedUtick);
                   if (chunk) {
                         midiRenderFuture = QtConcurrent::run([this, chunk]() {
+                              LagProbe::nameThread("seq render (pool)");
                               renderChunk(chunk, &renderEvents);
                               });
                         }
@@ -1927,6 +1939,7 @@ void Seq::startNote(int channel, int pitch, int velo, int duration, double nt)
 
 bool Seq::playNotes(const std::vector<const Note*>& notes, int duration)
       {
+      LagProbe::Scope probe("Seq::playNotes");
       if (!cs || notes.empty() || state != Transport::STOP || cs->playMode() != PlayMode::SYNTHESIZER)
             return false;
       const Note* first = NotePreview::playedNote(notes.front());
@@ -3022,6 +3035,7 @@ void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
 
 void Seq::heartBeatTimeout()
       {
+      LagProbe::Scope probe("Seq::heartBeatTimeout");
       SynthControl* sc = mscore->getSynthControl();
       if (sc && _driver) {
             if (++peakTimer[0] >= peakHold)
