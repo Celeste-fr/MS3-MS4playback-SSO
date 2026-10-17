@@ -73,6 +73,7 @@ std::shared_ptr<SoundLib::Library> TestPlaybackAudit::loadMap(const QString& xml
 // the Recommended preset's values (Playback::presets()), plus extra
 void TestPlaybackAudit::recommended(std::map<QString, QString> extra)
       {
+      extra.insert({ "slurs/plainPerformance", "0" });         // (plain Performance has its own tests: these expect the parts' own choices)
       for (const Playback::Preset& p : Playback::presets())
             if (QString(p.id) == "recommended")
                   for (const auto& v : p.values)

@@ -8,12 +8,11 @@ a section there when you need the background of that topic. Commit messages desc
 ## Plain Performance (branch `plain-performance`, 2026-10-17)
 
 The owner chose "C" by ear (Whence Violas bars 8-13): plain SSO Performance, the whole part early by one constant.
-`[slurs] plainPerformance` (0 by default and in both presets: the owner flips Recommended after hearing all five string
-sections; docs/PLAYBACK_SETTINGS.md › Plain Performance). Measured shift: Violas - Performance only (95.2 ms,
-`sso_plain_performance_shift.json`); Violins 1 / 2, Celli, Basses play plain on the beat until measured the same way
-(abl.py's PLAINb per section, median heard - written; the audit lists them). Next: measure the other four sections,
-render all five for the owner (listening page), then he decides Recommended. Tested on Linux only (test synth,
-dumps); not in Kontakt or real Live.
+2026-10-17, after the five-section listening round of Whence: he chose plain Performance on and the all-notes constants.
+`[slurs] plainPerformance` is 1 by default and in Recommended, 0 in Library default (docs/PLAYBACK_SETTINGS.md › Plain
+Performance). Shifts in `sso_plain_performance_shift.json` (all-notes medians, PLAINb, 2 passes, "Heard passages.musicxml"):
+Violins 1 65.8, Violins 2 66.0, Violas 111.0, Celli 80.2, Basses 59.1 ms; no UNMEASURED Performance patch of the five
+remains. Tested on Linux only (test synth, dumps); not in Kontakt or real Live.
 
 ## Paused 2026-10-17: where to pick up
 
