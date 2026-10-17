@@ -5,6 +5,19 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Own legato pilot (2026-10-16, branch `own-legato`, from integrate-1012 e7760ba3c7; not merged, a pilot)
+
+The owner, 2026-10-16: "build our own plugin out of it: record all the samples the performance patch uses, and then make
+our own patch". Pilot: Violas - Performance, what Whence bars 8-13 need. Tools in `tools/ownlegato/` (each header holds
+its rules): `record.py` (kthost event files + logs) -> `run_vm.cmd` (VM, `C:\claude\ownlegato`) -> `measure.py` (the heard
+check's rules) -> `make_sfz.py` (the SFZ; its header is the design) -> `score_events.py` + `sfzrender.cpp` (libsfizz 1.2.3,
+built from the official release) -> `compare.py` / `joins.py` / `mix.py`. Recordings, SFZ and samples are the owner's:
+`~/.cache/ownlegato` and `C:\claude\ownlegato\flac` only. Results (heard check rules, bars 8-13): SSO's transitions
+-29 / -28 ms median, SD 25 / 21 ms (two takes), slur first notes 111-119 ms early; ours +2 ms, SD 7, first notes -39 .. +29.
+Open: the latency against fast notes (L_t 100 ms: 40 % of regions start less than 30 ms before their glide), level steps
+between regions (11 LEVEL warnings against SSO's 6), slur first notes' onsets, the licence question (owner). Listening
+page `nmb-ownlegato/` (untracked). Commit message: every number.
+
 ## Load profile (2026-10-16, branch `load-profile`, from integrate-1012 41cdbbb311; not merged)
 
 The owner, 2026-10-16: "is there any way at all we can make SSO load even faster"; rule the same day: "no optimizations
