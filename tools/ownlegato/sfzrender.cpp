@@ -1,8 +1,9 @@
 // sfzrender: kthost's event files rendered offline through sfizz (libsfizz, https://sfz.tools/sfizz), so the own-legato
 // pilot's SFZ plays exactly the events Kontakt + SSO got (tools/ownlegato/, the heard check's kthost format).
 //
-//   sfzrender <instrument.sfz> <events.txt> <out.wav> [--tail s] [--block n] [--voices n]
+//   sfzrender <instrument.sfz> <events.txt> <out.wav> [--tail s] [--block n] [--voices n] [--floor]
 //   events: lines "time on|off|cc|pb a b" (seconds; pb a = 0..16383, 8192 centre, as kthost); 44.1 kHz stereo float WAV.
+// --floor: an event at frame floor(t * rate), as kthost places them (its default mode; else the nearest frame).
 // Events are sample-accurate (sfizz's delay within the block). Free-wheeling: sfizz waits for its file loads (no
 // streaming underruns offline).
 //
@@ -36,11 +37,12 @@ static void writeWav(const std::string& path, const std::vector<float>& lr, int 
 int main(int argc, char** argv)
 {
     if (argc < 4) { fprintf(stderr, "usage: sfzrender <sfz> <events> <out.wav> [--tail s] [--block n] [--voices n]\n"); return 2; }
-    double tail = 3.0; int block = 256; int voices = 128;
+    double tail = 3.0; int block = 256; int voices = 128; bool floorFrames = false;
     for (int i = 4; i < argc; ++i) {
         if (!strcmp(argv[i], "--tail") && i + 1 < argc) tail = atof(argv[++i]);
         else if (!strcmp(argv[i], "--block") && i + 1 < argc) block = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--voices") && i + 1 < argc) voices = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--floor")) floorFrames = true;
     }
     const int rate = 44100;
     std::vector<Ev> evs;
@@ -55,7 +57,7 @@ int main(int argc, char** argv)
             int type = ty == "on" ? 0 : ty == "off" ? 1 : ty == "cc" ? 2 : ty == "pb" ? 3 : -1;
             if (type < 0) continue;
             if (type == 0 && b == 0) type = 1;
-            evs.push_back({ (long long)llround(t * rate), type, a, b });
+            evs.push_back({ floorFrames ? (long long)(t * rate) : (long long)llround(t * rate), type, a, b });
         }
         std::stable_sort(evs.begin(), evs.end(), [](const Ev& x, const Ev& y) { return x.frame < y.frame; });
     }
