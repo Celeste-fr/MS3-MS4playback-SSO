@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "soundlibraryhost.h"
+#include "libmscore/lagprobe.h"
 #include "liveclipedit.h"
 #include "liveclips.h"
 #include "livesetexport.h"
@@ -110,8 +111,11 @@ SoundLibraryHost::SoundLibraryHost()
       qApp->installEventFilter(this);         // (the user's input: preloadStep waits for a pause)
       _idle.setInterval(50);
       connect(&_idle, &QTimer::timeout, this, [this]() {
-            if (Vst3Synth* s = synth())
+            if (Vst3Synth* s = synth()) {
+                  LagProbe::Scope probe("host idle: Vst3Synth::idle");
                   s->idle();
+                  }
+            LagProbe::Scope probe("host idle: applyMixer");
             applyMixer();
             });
       _settleTimer.setInterval(250);
@@ -1453,6 +1457,7 @@ static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, c
 
 bool SoundLibraryHost::sync(Score* score, QString* error)
       {
+      LagProbe::Scope probe("SoundLibraryHost::sync");
       _preloadTimer.stop();
       _resync = false;
       bool ok = syncSome(score, error, -1, nullptr);
@@ -1523,6 +1528,7 @@ bool SoundLibraryHost::eventFilter(QObject* o, QEvent* e)
 
 void SoundLibraryHost::preloadStep()
       {
+      LagProbe::Scope probe("SoundLibraryHost::preloadStep");
 #ifdef USE_VST3
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (_syncing)
@@ -1697,6 +1703,7 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
                   const QByteArray state = pl->state;
                   pl->clock.start();
                   pl->done = std::async(std::launch::async, [p, state]() {
+                        LagProbe::nameThread("library load");
                         workerThread(true);
                         const bool ok = p->setState(state);
                         workerThread(false);

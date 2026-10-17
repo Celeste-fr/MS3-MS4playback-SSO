@@ -138,6 +138,8 @@
 #include "libmscore/playbacksettings.h"
 #include "soundlibraryhost.h"
 #include "evenautomeasurer.h"
+#include "lagprobesession.h"
+#include "libmscore/lagprobe.h"
 #include "libmscore/renderpreflight.h"
 #include "liveintegration.h"
 #include "liveclips.h"
@@ -3191,6 +3193,7 @@ void MuseScore::updatePaletteBeamMode()
 
 void MuseScore::updateInspector()
       {
+      LagProbe::Scope probe("MuseScore::updateInspector");
       // skip update if no inspector, or if inspector is hidden and there is a GUI
       // (important not to skip when running test scripts)
       if (_inspector && (_inspector->isVisible() || MScore::testMode || scriptTestMode))
@@ -6423,6 +6426,7 @@ void MuseScore::readSettings()
 
 void MuseScore::play(Element* e) const
       {
+      LagProbe::Scope probe("MuseScore::play (note preview)");
       if (noSeq || !(seq && seq->isRunning()) || !preferences.getBool(PREF_SCORE_NOTE_PLAYONCLICK))
             return;
 
@@ -7687,6 +7691,8 @@ void MuseScore::cmd(QAction* a)
       MScore::setError(MS_NO_ERROR);
 
       QString cmdn(a->data().toString());
+      LagProbe::Scope probe("MuseScore::cmd");
+      probe.setDetail(cmdn);
 
       if (MScore::debugMode)
             qDebug("MuseScore::cmd <%s>", qPrintable(cmdn));
@@ -7759,6 +7765,7 @@ void MuseScore::cmd(QAction* a)
 
 void MuseScore::endCmd(bool undoRedo)
       {
+      LagProbe::Scope probe("MuseScore::endCmd");
 #ifdef SCRIPT_INTERFACE
       getPluginEngine()->beginEndCmd(this, undoRedo);
 #endif
@@ -7767,7 +7774,10 @@ void MuseScore::endCmd(bool undoRedo)
       if (MScore::_error != MS_NO_ERROR)
             showError();
       if (cs) {
-            EvenAutoMeasurer::instance()->edited(cs);    // (an edit: even levels near it measured in the background)
+            {
+                  LagProbe::Scope evenProbe("EvenAutoMeasurer::edited");
+                  EvenAutoMeasurer::instance()->edited(cs);    // (an edit: even levels near it measured in the background)
+            }
             setPos(cs->inputState().tick());
             updateInputState(cs);
             updateUndoRedo();
@@ -7801,6 +7811,7 @@ void MuseScore::endCmd(bool undoRedo)
             if (e && (cs->playNote() || cs->playChord())
                         && entryMethod != NoteEntryMethod::REALTIME_AUTO
                         && entryMethod != NoteEntryMethod::REALTIME_MANUAL) {
+                  LagProbe::Scope playProbe("endCmd: note preview");
                   if (cs->playChord() && preferences.getBool(PREF_SCORE_CHORD_PLAYONADDNOTE) &&  e->type() == ElementType::NOTE)
                         play(static_cast<Note*>(e)->chord());
                   else
@@ -10298,6 +10309,7 @@ void MuseScore::init(QStringList& argv)
             showSplashMessage(sc, tr("Loading scores…"));
             loadScores(argv);
             }
+      LagProbeSession::startIfRequested();      // (MS_LAG_PROBE: the scripted session, lagprobesession.h)
 
       if (mscore->hasToCheckForExtensionsUpdate())
             mscore->checkForExtensionsUpdate();

@@ -25,6 +25,7 @@
 #include "soundlibrary.h"
 #include "synthesizerstate.h"
 #include "undo.h"
+#include "lagprobe.h"
 
 namespace Ms {
 namespace NotePreview {
@@ -172,6 +173,7 @@ Preview fromEvents(const EventMap& events, const std::vector<const Note*>& notes
 Preview render(MidiRenderer& renderer, const SynthesizerState& synthState, const std::vector<const Note*>& notes,
                EventMap* chunkEvents, int* chunkKey)
       {
+      LagProbe::Scope probe("NotePreview::render");
       std::vector<const Note*> played;
       for (const Note* n : notes) {
             const Note* p = playedNote(n);

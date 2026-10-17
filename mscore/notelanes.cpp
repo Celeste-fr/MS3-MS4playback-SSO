@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "notelanes.h"
+#include "libmscore/lagprobe.h"
 #include "musescore.h"
 #include "scoreview.h"
 #include "seq.h"
@@ -306,6 +307,7 @@ QString NoteLanes::hoverText(const Row& r, const QPointF& p) const
 
 void NoteLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible) const
       {
+      LagProbe::Scope probe("NoteLanes::paintLane");
       const double px = _lanes->pixel();
       const bool join = isJoin(r);
       const int rng = range(r);

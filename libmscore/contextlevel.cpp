@@ -26,6 +26,7 @@
 #include "repeatlist.h"
 #include "synthesizerstate.h"
 #include "undo.h"
+#include "lagprobe.h"
 #include <QMutex>
 #include <QRegularExpression>
 #include <algorithm>
@@ -357,6 +358,7 @@ std::map<const Part*, double> realRangeTops(const MasterScore* score)
             return tops;
       ++rangePass;
       {
+            LagProbe::Scope probe("realRangeTops render");
             MasterScore* ms = const_cast<MasterScore*>(score);
             MidiRenderer midi(ms);
             midi.setMinChunkSize(10);
@@ -409,6 +411,7 @@ std::map<const Part*, Volumes> volumes(const MasterScore* score)
       QMutexLocker lock(&mutex);
       if (cache.size() > 16)
             cache.clear();
+      LagProbe::Scope probe("ContextLevel::volumes compute");
       std::map<const Part*, Volumes> out = compute(score, *library, context, sectionMode, ranges, mics);
       cache[score] = { key, out };
       return out;
@@ -814,6 +817,7 @@ MasterTrim masterTrim(const MasterScore* score)
       }
       MasterTrim t;
       {
+            LagProbe::Scope probe("masterTrim render");
             TrimGuard guard;
             t = computeTrim(score, *library, delays);
       }

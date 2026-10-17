@@ -67,6 +67,7 @@
 #include "utils.h"
 #include "volta.h"
 #include "xml.h"
+#include "lagprobe.h"
 
 namespace Ms {
 
@@ -239,6 +240,7 @@ void Score::undoRedo(bool undo, EditData* ed)
 
 void Score::endCmd(bool rollback)
       {
+      LagProbe::Scope probe("Score::endCmd");
       if (!undoStack()->active()) {
             qDebug("Score::endCmd(): no cmd active");
             update();
