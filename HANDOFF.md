@@ -29,10 +29,14 @@ heard check (Before a build goes to the owner).
    loses them (14 one-change variants ready, `whence_variants.py`); Celli: SSO's own Performance transitions don't
    finish below ~300 ms per note, in 12-TET too (no fix on our side; another way of playing fast celli slurs would
    be the owner's decision).
-3. **Lag with SSO loaded** (branch `lag-probe` d13748d3e1, build 442): phases o, b, c, d and a-stopped measured (20
-   rounds, undisturbed: the ablation never rendered): every edit's response > 100 ms, scrolling ~6 ms; a (evenLevels 0)
-   slower than b, unexplained: re-run. Resume: `C:\claude\lagprobe\go.cmd <tag> a+e 20 stopped+playing` on a quiet VM;
-   state in `~/MuseScore/ms3fork/private/lag-probe-state.md`. Even levels: whether to skip short slurs waits on those numbers.
+3. **Lag with SSO loaded** (branch `lag-probe` 517dfb90c9, build 442; its HANDOFF section): measured. Every edit's
+   response > 100 ms with SSO (pitch-up ~470-580 ms p50, MS4 mode 116), scrolling ~6 ms; the cause is the renders on
+   the main thread per edit (onPerformancePatch, masterTrim, realRangeTops, click preview). Phase a (evenLevels 0) is
+   NOT slower: interleaved with b (2026-10-17) all-edit medians b -> a 485 -> 452, 383 -> 308, 682 -> 524 ms; the
+   earlier gap was the host's CPU load moving (the Debian VM's builds). Even levels costs +7..+30 % per edit, detect
+   82-141 ms after the debounce, 1.8-3.2 s instance-load stalls. Short slurs: don't skip them for lag (Whence's
+   Performance notes are all in 3-4-note slurs, where even levels measurably helps; lag without it still 308-524 ms).
+   Next: speed-only fixes for the renders (not started); state in `~/MuseScore/ms3fork/private/lag-probe-state.md`.
 4. **Own legato: paused** (the owner's ear: plain SSO already beats our build in bars 9-12, so what we add comes
    first). 12-TET only when it resumes. Diagnosis: six bugs fixable in sfizz (CC1 reviving faded layers, same-key
    note-off cutting the new note, leaps > ±7 unrecorded, ~0.9 s loops, releases after long holds only, sfizz 1.2.3
