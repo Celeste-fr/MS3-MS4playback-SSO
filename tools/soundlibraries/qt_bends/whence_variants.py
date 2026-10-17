@@ -5,7 +5,8 @@
 #   A   as rendered;
 #   E   the second dump (transitions sent on the beat), when given;
 #   V   every legato transition at the map's legatoVelocity (Violas 100, else 93) instead of the Performance technique's;
-#   M   CC1 64 throughout (the level rule plays the written dynamic: Whence's p is 32);
+#   M   CC1 64 throughout (the level rule plays the written dynamic; in the 2026-10-17 dump CC1 was already 64 on both
+#       routes, so M = A event for event: its render is a second pass of A, the noise floor);
 #   L   no CC11 (even levels, track levels);
 #   B   no pitch bend (the keys in 12-TET: how far the bend has to carry);
 #   S   each note's bend as a step at its note-on (no glide).
