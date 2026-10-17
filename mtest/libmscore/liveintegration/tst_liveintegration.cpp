@@ -62,6 +62,9 @@
 #include "mscore/automationlanes.h"
 #include "mscore/notelanes.h"
 #include "mscore/soundlibraryhost.h"
+#include "mscore/inspector/inspectorNote.h"
+#include "mscore/icons.h"
+#include "ui_inspector_note.h"
 #include <QGroupBox>
 #include <QLabel>
 #include <QPushButton>
@@ -133,6 +136,7 @@ class TestLiveIntegration : public QObject, public MTest
       void lanePointsOnBarLines();
       void noteLaneRubber();
       void soundLibraryWindow();
+      void inspectorNoteRows();
       void laneEvenBeats();
       void liveParamLanes();
       void clipTabMidi();
@@ -3419,6 +3423,59 @@ void TestLiveIntegration::laneDashedLine()
             p.end();
             QVERIFY(both.save(dir + "/lanes-dashed.png"));
             }
+      }
+
+//---------------------------------------------------------
+//   inspectorNoteRows
+//    Inspector › Note: no two widgets share a grid cell. The Technique row (inspectorNote.cpp) moves the .ui's
+//    Performance rows down one; the Start / End from Live rows must move with them, or the transition and Start from
+//    Live drew over each other (the owner's screenshot, 2026-10-16)
+//---------------------------------------------------------
+
+void TestLiveIntegration::inspectorNoteRows()
+      {
+      // (the Note panel as InspectorNote lays it out: its .ui and placePlayRows, which the constructor calls; the
+      // inspector itself needs a selected element)
+      if (!icons[int(Icons::reset_ICON)]) {     // (the reset buttons' icon: the app makes the set at start)
+            iconPath = QString(":/data/icons/");
+            genIcons();
+            }
+      QWidget panel;
+      Ui::InspectorNote n;
+      n.setupUi(&panel);
+      QLabel techniqueLabel(&panel), evenLabel(&panel), evenState(&panel);
+      QComboBox technique(&panel);
+      QDoubleSpinBox evenLevel(&panel);
+      QToolButton resetTechnique(&panel), resetEvenLevel(&panel);
+      techniqueLabel.setObjectName("techniqueLabel");
+      technique.setObjectName("technique");
+      evenLabel.setObjectName("evenLabel");
+      evenLevel.setObjectName("evenLevel");
+      evenState.setObjectName("evenState");
+      InspectorNote::placePlayRows(n, &techniqueLabel, &technique, &resetTechnique, &evenLabel, &evenLevel, &resetEvenLevel, &evenState);
+      QGridLayout* grid = n.gridLayout_2;
+      QMap<QPair<int, int>, QString> cells;
+      for (int i = 0; i < grid->count(); ++i) {
+            int row, column, rowSpan, columnSpan;
+            grid->getItemPosition(i, &row, &column, &rowSpan, &columnSpan);
+            QLayoutItem* item = grid->itemAt(i);
+            const QString name = item->widget() ? item->widget()->objectName() : QString("layout item %1").arg(i);
+            for (int r = row; r < row + rowSpan; ++r)
+                  for (int c = column; c < column + columnSpan; ++c) {
+                        const QPair<int, int> cell(r, c);
+                        QVERIFY2(!cells.contains(cell), qPrintable(QString("%1 and %2 share row %3, column %4")
+                                                                   .arg(cells.value(cell), name).arg(r).arg(c)));
+                        cells.insert(cell, name);
+                        }
+            }
+      // the order the owner sees
+      int row, column, rowSpan, columnSpan;
+      grid->getItemPosition(grid->indexOf(n.performanceTransition), &row, &column, &rowSpan, &columnSpan);
+      const int transitionRow = row;
+      grid->getItemPosition(grid->indexOf(n.liveStart), &row, &column, &rowSpan, &columnSpan);
+      QCOMPARE(row, transitionRow + 1);
+      grid->getItemPosition(grid->indexOf(&evenLevel), &row, &column, &rowSpan, &columnSpan);
+      QCOMPARE(row, transitionRow + 3);
       }
 
 //---------------------------------------------------------

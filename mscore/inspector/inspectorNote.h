@@ -65,6 +65,11 @@ class InspectorNote : public InspectorElementBase {
    public:
       InspectorNote(QWidget* parent);
       virtual void setElement() override;
+      // the play panel's rows below Velocity, one row each in this order: Technique, the .ui's Performance attack /
+      // transition and Start / End from Live, then Even level and its state (the .ui has no Technique row: the rows
+      // after Velocity move down one; tst_liveintegration::inspectorNoteRows checks no two share a cell)
+      static void placePlayRows(Ui::InspectorNote& n, QWidget* techniqueLabel, QWidget* technique, QWidget* resetTechnique,
+                                QWidget* evenLabel, QWidget* evenLevel, QWidget* resetEvenLevel, QWidget* evenState);
       };
 
 

@@ -24,6 +24,7 @@
 #include "libmscore/staff.h"
 #include "inspector.h"
 #include "inspectorNote.h"
+#include <array>
 #include "resetButton.h"
 
 #include <algorithm>
@@ -132,10 +133,6 @@ InspectorNote::InspectorNote(QWidget* parent)
       resetEvenLevel->setAccessibleName(tr("Reset 'Even level' value"));
       evenState = new QLabel(n.playWidget);
       evenState->setWordWrap(true);
-      n.gridLayout_2->addWidget(evenLabel, 11, 0);
-      n.gridLayout_2->addWidget(evenLevel, 11, 1);
-      n.gridLayout_2->addWidget(resetEvenLevel, 11, 2);
-      n.gridLayout_2->addWidget(evenState, 12, 0, 1, 3);
 
       const std::vector<InspectorItem> iiList = {
             { Pid::SMALL,          0, n.isSmall,       n.resetSmall         },
@@ -184,15 +181,7 @@ InspectorNote::InspectorNote(QWidget* parent)
       resetTechnique->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
       resetTechnique->setMinimumSize(10, 0);
       resetTechnique->setAccessibleName(tr("Reset 'Technique' value"));
-      n.gridLayout_2->addWidget(techniqueLabel, 7, 0);
-      n.gridLayout_2->addWidget(technique, 7, 1);
-      n.gridLayout_2->addWidget(resetTechnique, 7, 2);
-      n.gridLayout_2->addWidget(n.label_performanceAttack, 8, 0);
-      n.gridLayout_2->addWidget(n.performanceAttack, 8, 1);
-      n.gridLayout_2->addWidget(n.resetPerformanceAttack, 8, 2);
-      n.gridLayout_2->addWidget(n.label_performanceTransition, 9, 0);
-      n.gridLayout_2->addWidget(n.performanceTransition, 9, 1);
-      n.gridLayout_2->addWidget(n.resetPerformanceTransition, 9, 2);
+      placePlayRows(n, techniqueLabel, technique, resetTechnique, evenLabel, evenLevel, resetEvenLevel, evenState);
       connect(technique, QOverload<int>::of(&QComboBox::activated), this, &InspectorNote::techniqueChosen);
       connect(resetTechnique, &ResetButton::resetClicked, this, [this] { techniqueChosen(-1); });
 
@@ -204,6 +193,32 @@ InspectorNote::InspectorNote(QWidget* parent)
       connect(n.stem,     SIGNAL(clicked()),     SLOT(stemClicked()));
       connect(n.beam,     SIGNAL(clicked()),     SLOT(beamClicked()));
       connect(n.tuplet,   SIGNAL(clicked()),     SLOT(tupletClicked()));
+      }
+
+//---------------------------------------------------------
+//   placePlayRows
+//    (a row shared by two widgets draws them over each other: Performance transition and Start from Live did, the
+//    owner's screenshot of 2026-10-16, when Technique moved the Performance rows down but not the Live ones)
+//---------------------------------------------------------
+
+void InspectorNote::placePlayRows(Ui::InspectorNote& n, QWidget* techniqueLabel, QWidget* technique, QWidget* resetTechnique,
+                                  QWidget* evenLabel, QWidget* evenLevel, QWidget* resetEvenLevel, QWidget* evenState)
+      {
+      const std::vector<std::array<QWidget*, 3>> rows = {
+            { techniqueLabel, technique, resetTechnique },
+            { n.label_performanceAttack, n.performanceAttack, n.resetPerformanceAttack },
+            { n.label_performanceTransition, n.performanceTransition, n.resetPerformanceTransition },
+            { n.label_liveStart, n.liveStart, n.reset_liveStart },
+            { n.label_liveEnd, n.liveEnd, n.reset_liveEnd },
+            { evenLabel, evenLevel, resetEvenLevel },
+            };
+      int row = 7;      // (the .ui's rows 0-6: Play … Velocity)
+      for (const std::array<QWidget*, 3>& r : rows) {
+            for (int column = 0; column < 3; ++column)
+                  n.gridLayout_2->addWidget(r[column], row, column);
+            ++row;
+            }
+      n.gridLayout_2->addWidget(evenState, row, 0, 1, 3);
       }
 
 //---------------------------------------------------------
