@@ -21,6 +21,7 @@
 #define __RENDERMIDI_H__
 
 #include <set>
+#include <tuple>
 
 #include "fraction.h"
 #include "measure.h"
@@ -183,7 +184,8 @@ class MidiRenderer {
       std::map<const Note*, LibLevel> libLevels;
       // track delays and levels (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)
       std::map<const Part*, TrackDelays::Delays> libTrackDelays;
-      std::map<std::pair<const Chord*, int>, double> libContextGain;  // [levels] context: a chord's phrase gain (contextlevel.h), per tickOffset
+      std::set<const Note*> libPlainNotes;                      // [slurs] plainPerformance: the notes played plain
+      std::map<std::tuple<const Chord*, int, int>, double> libContextGain;  // [levels] context: a chord's phrase gain (contextlevel.h), per tickOffset and kind
       std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>> libTrackRoutes;
       // [levels] evenLevels (evenlevels.h): every route's part and patch, whether the setting is on, what the measurement
       // reads (setEvenLevelsInfo)

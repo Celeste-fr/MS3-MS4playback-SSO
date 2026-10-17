@@ -319,9 +319,26 @@ static std::vector<const Chord*> phrase(const Chord* chord)
       return chords;
       }
 
-double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset)
+const Slur* phraseSlur(const Chord* chord)
       {
-      const std::vector<const Chord*> chords = phrase(chord);
+      return slurOf(chord);
+      }
+
+SoundLib::Articulation::ContextKind plainKind(const Note* note, const Ms4::Dynamics& dynamics, int tickOffset)
+      {
+      const Note* first = note->firstTiedNote();
+      for (const Ms4::ArtRef& r : Ms4::noteArticulations(first, Ms4::chordArticulations(first->chord(), dynamics, tickOffset)))
+            if (r.art == Ms4::Art::Staccato || r.art == Ms4::Art::Staccatissimo)
+                  return SoundLib::Articulation::ContextKind::STACCATO;
+      return slurOf(note->chord()) ? SoundLib::Articulation::ContextKind::PLAIN_SLUR : SoundLib::Articulation::ContextKind::SINGLE;
+      }
+
+double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dynamics& dynamics, int tickOffset,
+            SoundLib::Articulation::ContextKind kind)
+      {
+      using Kind = SoundLib::Articulation::ContextKind;
+      const std::vector<const Chord*> chords = kind == Kind::STACCATO || kind == Kind::SINGLE ? std::vector<const Chord*> { chord }
+                                                                                           : phrase(chord);
       const TempoMap* tempo = chord->score()->masterScore()->tempomap();
       std::vector<double> pitches, iois;
       for (size_t i = 0; i < chords.size(); ++i) {
@@ -335,7 +352,7 @@ double gain(const SoundLib::Articulation& a, const Chord* chord, const Ms4::Dyna
             iois.push_back(1000.0 * tempo->writtenTime(chords.front()->tick().ticks(),
                                                         chords.front()->tick().ticks() + chords.front()->actualTicks().ticks()));
       const int cc = Ms4::expressionLevel(dynamics.levelAt(chords.front()->track(), chords.front()->tick().ticks() + tickOffset));
-      return a.contextLevelAt(cc, median(iois), median(pitches));
+      return a.contextLevelAt(cc, median(iois), median(pitches), kind);
       }
 
 static std::map<const Part*, Volumes> compute(const MasterScore* score, const SoundLib::Library& library, bool context, int sectionMode,
@@ -493,15 +510,24 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
             // every slur's phrase ([slurs] performance plays slurs on it: a superset of what plays on it). A note on
             // it outside slurs (staff text "performance") is not counted: louder than G it plays at G (the renderer)
             std::set<const Slur*> done;
+            const bool plain = Playback::on("slurs/plainPerformance", score);
             for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
                   for (int track = part->startTrack(); track < part->endTrack(); ++track) {
                         const Element* e = seg->element(track);
                         if (!e || !e->isChord())
                               continue;
                         const Slur* s = slurOf(toChord(e));
-                        if (!s || !done.insert(s).second)
+                        // ([slurs] plainPerformance: every chord plays on it, a staccato or a note outside a slur alone,
+                        // by its own grid; a superset again: "non performance" and techniques it doesn't play counted)
+                        SoundLib::Articulation::ContextKind kind = SoundLib::Articulation::ContextKind::SLUR;
+                        if (plain && !toChord(e)->notes().empty()) {
+                              kind = plainKind(toChord(e)->notes().front(), dynamics, 0);
+                              if (kind != SoundLib::Articulation::ContextKind::PLAIN_SLUR)
+                                    s = nullptr;
+                              }
+                        if (s ? !done.insert(s).second : !plain)
                               continue;
-                        const double g = gain(*a, toChord(e), dynamics, 0);
+                        const double g = gain(*a, toChord(e), dynamics, 0, kind);
                         top = std::max(top, g);
                         auto t = partTop.find(pp.first);
                         if (t == partTop.end())

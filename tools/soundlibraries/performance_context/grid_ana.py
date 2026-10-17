@@ -1,7 +1,8 @@
 # Per-note levels of grid_score.py's renders (MuseScore3Evo --verify-playback --verify-wav: "<score> <part> library.wav"
 # and "<score> <part> notes.tsv" per part), matched to index.json's notes in time order.
-#   grid_ana.py cells <index.json> <folder>         -> <folder>/cells.json (every cell: held, slurred, per take, both metrics)
-#   grid_ana.py groups <index.json> <folder> <score> -> held / slurred medians per dynamic and part (calib.mscx)
+#   grid_ana.py cells <index.json> <folder> <date> -> <folder>/cells.json (every cell: held, slur, stac, single, per take,
+#                                                     both metrics) and sso_performance_context.json's "plain"
+#   grid_ana.py groups <index.json> <folder> <score> -> each figure less held per dynamic and part (calib.mscx)
 #   grid_ana.py parts <folder> <score>               -> per part: Performance / other notes' medians (any score: Whence)
 # Metrics: P, ArticulationCheck::perceivedLoudnessDb (perceived.py: the peak short-term loudness, the measure the
 # calibration curves and the 2026-10-15 check used), window from the note-on as sent to the next note-on of the part
@@ -83,24 +84,28 @@ if __name__ == '__main__':
             cells[sec] = {M: {kind: {k: {t: round(st.median(v), 2) for t, v in by.items()} for k, by in kk.items()}
                               for kind, kk in mm.items()} for M, mm in c.items()}
         json.dump(cells, open(f'{F}/cells.json', 'w'), indent=1)
-        # the measured part of sso_performance_context.json (level_rule.py adds the rule)
+        # the measured part of sso_performance_context.json's "plain" (level_rule.py adds its rule; the 2026-10-15 grid of
+        # [slurs] performance's own legato, the slurs only, stays at the top level)
         out = dict(
-            source='Windows test VM, Kontakt 8 + Spitfire Symphony Orchestra, 2026-10-15: MuseScore3Evo.exe --verify-playback '
-                   '--verify-wav (build 435, run https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38810472364) of '
-                   "performance_context/grid_score.py's scores, each part rendered alone through the hosted plug-ins, Recommended "
-                   'with slurs/transitionsEarly 1 (the current default) and, cancelling in held - slurred, sectionBalance / '
-                   "realRange / micCompensation 0, evenLevels 0; the map's contextLevel zeroed in the VM's copy",
+            source='Windows test VM, Kontakt 8 + Spitfire Symphony Orchestra, ' + sys.argv[4] + ': MuseScore3Evo.exe '
+                   "--verify-playback --verify-wav of performance_context/grid_score.py's scores, each part rendered alone "
+                   'through the hosted plug-ins, Recommended ([slurs] plainPerformance 1, [levels] calibrated 2) with, cancelling '
+                   "in held - figure, sectionBalance / realRange / micCompensation 0, evenLevels 0; the map's contextLevel* "
+                   "zeroed in the VM's copy",
             metric='P: ArticulationCheck::perceivedLoudnessDb (perceived.py) from the note-on as sent to the next note-on (or '
                    'its end + 0.3 s); L: loudest 50 ms RMS (5 ms hop, mono) from the note-on to max(off, on + 150 ms) + 50 ms; '
                    'median per figure, per take (A, B: B in reverse order)',
-            figure='held: four half notes [p, p-2, p+2, p] at q = 60, All techniques Long at CC1 = d; slurred: two touching '
-                   'slurs of four sixteenths [p, p-2, p, p+1] [p, p+2, p, p-1] at the IOI, Performance Legato at CC1 = d '
-                   '(a smooth first note, fingered within, bowed into the second slur, transitions sent by their modelled arrival)',
-            relation='gain = held - slurred (level_rule.py)',
+            figure='held: four half notes [p, p-2, p+2, p] at q = 60 under "non performance", All techniques Long at CC1 = d; '
+                   'slur / stac / single: eight sixteenths [p, p-2, p, p+1, p, p+2, p, p-1] at the IOI, the plain Performance '
+                   'legato at CC1 = d, velocity 64: two touching slurs of four / every note staccato (a spiccato attack, 45 ms '
+                   'gap) / no slur, no articulation (touching)',
+            relation='gain = held - figure (level_rule.py)',
             grid=dict(dynamic=idx['dynamics'], ioiMs=idx['ioiMs'], pitches=idx['pitches']),
             sections=cells)
         P = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'sso_performance_context.json')
-        open(P, 'w').write(json.dumps(out, indent=1) + '\n')
+        j = json.load(open(P))
+        j['plain'] = out
+        open(P, 'w').write(json.dumps(j, indent=1) + '\n')
     elif what == 'groups':
         idx = json.load(open(sys.argv[2])); F = sys.argv[3]; score = sys.argv[4]
         res = {}
@@ -109,13 +114,15 @@ if __name__ == '__main__':
             for n in matched(idx, F, score, sec):
                 g.setdefault((n['d'], n['kind']), []).append(n['P'])
             res[sec] = {k: st.median(v) for k, v in g.items()}
+        kinds = [k for k in ('slur', 'stac', 'single') if any((d, k) in r for r in res.values() for d in idx['dynamics'] + [64, 96])]
         for d in sorted({k[0] for r in res.values() for k in r}):
-            line = [f'd {d}:']
-            for sec in idx['sections']:
-                r = res[sec]
-                line.append(f"{sec} held {r[(d, 'held')]:.2f} slur {r[(d, 'slur')]:.2f} (slur-held {r[(d, 'slur')] - r[(d, 'held')]:+.2f})")
-            print('  '.join(line))
-            for kind in ('held', 'slur'):
+            for kind in kinds:
+                line = [f'd {d} {kind} - held:']
+                for sec in idx['sections']:
+                    r = res[sec]
+                    line.append(f"{sec} {r[(d, kind)] - r[(d, 'held')]:+.2f}")
+                print('  '.join(line))
+            for kind in ['held'] + kinds:
                 v = {s: res[s][(d, kind)] for s in idx['sections']}
                 print(f"   {kind}: Va-V1 {v['Violas'] - v['Violins 1']:+.2f}  Vc-Va {v['Celli'] - v['Violas']:+.2f}  "
                       f"V2-V1 {v['Violins 2'] - v['Violins 1']:+.2f}  Cb-Vc {v['Basses'] - v['Celli']:+.2f}")

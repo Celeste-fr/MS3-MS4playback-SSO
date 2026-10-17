@@ -167,6 +167,7 @@ class TestSoundLibrary : public QObject, public MTest
       void transitionsEarly();
       void plainPerformance();
       void levelContext();
+      void levelContextPlain();
       void levelSectionBalance();
       void levelTechniqueBalance();
       void levelMicCompensation();
@@ -2801,6 +2802,108 @@ void TestSoundLibrary::slurPerformance()
                   QCOMPARE(c.articulation->name, QString("Long"));
                   }
       SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   levelContextPlain
+//    [levels] context with [slurs] plainPerformance (branch plain-levels): a note played plain takes its kind's grid
+//    (contextLevelPlain / contextLevelStaccato / contextLevelSingle; a kind without one: contextLevel's): a staccato
+//    and a note outside a slur alone, a slur's notes their slur's; the score's top counts them all (plain on); CC11 per
+//    note = its gain less the top. plain-performance.musicxml: C5 D5 single, E5 F5 staccato, G5 A5 B5 slurred
+//---------------------------------------------------------
+
+void TestSoundLibrary::levelContextPlain()
+      {
+      auto grid = [](double db) {
+            QString g;
+            for (int cc : { 32, 96 })
+                  for (int ms : { 100, 1000 })
+                        for (int p : { 60, 84 })
+                              g += QString("%1/%2/%3:%4 ").arg(cc).arg(ms).arg(p).arg(db);
+            return g.trimmed();
+            };
+      auto lib = loadMap(QString(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1' contextLevelPlain='%2' contextLevelStaccato='%3'/>"
+         "</Instrument></SoundLibrary>").arg(grid(10), grid(20), grid(30)).toUtf8().constData());
+      QVERIFY(lib);
+      using Kind = SoundLib::Articulation::ContextKind;
+      const SoundLib::Articulation* legato = nullptr;
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            for (const SoundLib::Articulation& a : li.articulations)
+                  if (a.name == "Legato")
+                        legato = &a;
+      QVERIFY(legato);
+      QCOMPARE(int(legato->contextLevels.size()), 8);
+      QCOMPARE(int(legato->plainContextLevels[0].size()), 8);
+      QCOMPARE(int(legato->plainContextLevels[1].size()), 8);
+      QVERIFY(legato->plainContextLevels[2].empty());
+      QCOMPARE(legato->contextLevelAt(64, 200, 72), 10.0);
+      QCOMPARE(legato->contextLevelAt(64, 200, 72, Kind::PLAIN_SLUR), 20.0);
+      QCOMPARE(legato->contextLevelAt(64, 200, 72, Kind::STACCATO), 30.0);
+      QCOMPARE(legato->contextLevelAt(64, 200, 72, Kind::SINGLE), 10.0);         // (no grid of its own: the slurs')
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'><Articulation name='L' value='1' techniques='long'"
+                       " contextLevelSingle='64/100'/></Instrument></SoundLibrary>"));       // (malformed: the map is refused)
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-performance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto noteOf = [score](int pitch) -> const Note* {
+            for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  if (s->element(0) && s->element(0)->isChord())
+                        for (const Note* n : toChord(s->element(0))->notes())
+                              if (n->ppitch() == pitch)
+                                    return n;
+            return nullptr;
+            };
+      Ms4::Dynamics dynamics;
+      dynamics.build(score, score->parts()[0]);
+      QCOMPARE(ContextLevel::plainKind(noteOf(72), dynamics, 0), Kind::SINGLE);
+      QCOMPARE(ContextLevel::plainKind(noteOf(76), dynamics, 0), Kind::STACCATO);
+      QCOMPARE(ContextLevel::plainKind(noteOf(79), dynamics, 0), Kind::PLAIN_SLUR);
+      QCOMPARE(ContextLevel::gain(*legato, noteOf(76)->chord(), dynamics, 0, Kind::STACCATO), 30.0);
+      // the top: the slurs' alone without plain, every chord's with it
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      std::map<const Part*, ContextLevel::Volumes> v = ContextLevel::volumes(score);
+      QCOMPARE(int(v.size()), 1);
+      QCOMPARE(v.begin()->second.top, 10.0);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" } });
+      v = ContextLevel::volumes(score);
+      QCOMPARE(v.begin()->second.top, 30.0);
+      // played: each note's CC11 its kind's gain less the top (30): staccato 0 dB, slur -10, single -20
+      score->setPlaylistDirty();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::map<int, int> cc11;
+      std::map<int, int> at;                  // pitch -> CC11 in force at its first note-on on the Performance patch
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal() || ev.librarySwitch())
+                  continue;
+            const int route = ev.extPort() * 16 + ev.extChannel();
+            if (ev.type() == ME_CONTROLLER && ev.controller() == 11)
+                  cc11[route] = ev.value();
+            else if (ev.type() == ME_NOTEON && ev.velo() > 0 && ev.libraryPatch() == 1 && !at.count(ev.pitch()))
+                  at[ev.pitch()] = cc11.count(route) ? cc11[route] : 127;
+            }
+      auto cc = [](double db) { return int(std::lround(127 * std::pow(10.0, db / 20.0))); };
+      QVERIFY2(at.count(76) && std::abs(at[76] - 127) <= 1, qPrintable(QString::number(at[76])));
+      QVERIFY2(at.count(79) && std::abs(at[79] - cc(-10)) <= 1, qPrintable(QString::number(at[79])));
+      QVERIFY2(at.count(74) && std::abs(at[74] - cc(-20)) <= 1, qPrintable(QString::number(at[74])));
+      Playback::setIniValuesForTest({});
+      SoundLib::setCurrent(nullptr);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      delete score;
       }
 
 //---------------------------------------------------------

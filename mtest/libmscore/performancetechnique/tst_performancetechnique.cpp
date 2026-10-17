@@ -155,7 +155,7 @@ class TestPerformanceTechnique : public QObject, public MTest
             }
 
    private slots:
-      void initTestCase() { initMTest(); }
+      void initTestCase() { initMTest(); Playback::setIniValuesForTest({}); }        // (the test ini leaves slurs/plainPerformance off: setIniValuesForTest)
       void cleanup() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); }
       void map();
       void autoTechniques();
@@ -178,6 +178,7 @@ class TestPerformanceTechnique : public QObject, public MTest
       void duplicateAutomation();
       void slurTransitions();
       void evenLevels();
+      void evenLevelsPlain();
       };
 
 //---------------------------------------------------------
@@ -1262,6 +1263,44 @@ void TestPerformanceTechnique::slurTransitions()
       QVERIFY2(c5.size() == 2, qPrintable(all.join('\n')));
       QCOMPARE(c5[0], 5);
       QCOMPARE(c5[1], 112);       // (spiccato)
+      delete s;
+      }
+
+//---------------------------------------------------------
+//   evenLevelsPlain
+//    [slurs] plainPerformance: every note of slurs.musicxml at velocity 64, touching (joined), so every transition is
+//    a fingered one; the even levels' slurs still start at each written slur (G5, D6: the level rule's phrases), not
+//    only at the passage's first note (without, the glide flattened the three slurs to one median)
+//---------------------------------------------------------
+
+void TestPerformanceTechnique::evenLevelsPlain()
+      {
+      auto lib = sso();
+      QVERIFY(lib);
+      MasterScore* s = score(false, "slurs.musicxml");
+      QVERIFY(s);
+      s->setMetaTag(Playback::metaTag, "slurs/plainPerformance=1");
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MidiRenderer midi(s);
+      midi.setMinChunkSize(10);
+      std::vector<EvenLevels::NoteInfo> in;
+      midi.setEvenLevelsInfo(&in);
+      EventMap events;
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      midi.renderScore(&events, ctx);
+      SoundLib::setCurrent(nullptr);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      std::sort(in.begin(), in.end(), [](const EvenLevels::NoteInfo& a, const EvenLevels::NoteInfo& b) { return a.on < b.on; });
+      QCOMPARE(int(in.size()), 10);
+      for (size_t k = 0; k < in.size(); ++k) {
+            QCOMPARE(in[k].velocity, MidiRenderer::PLAIN_VELOCITY);
+            QVERIFY(in[k].context.startsWith("Violins 1 - Performance|"));
+            QCOMPARE(in[k].joined, k != 0);
+            QCOMPARE(in[k].newSlur, k == 0 || k == 4 || k == 8);
+            }
       delete s;
       }
 
