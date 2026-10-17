@@ -19,15 +19,20 @@ heard check (Before a build goes to the owner).
    All techniques and each technique is sent early by its own onset, so staccatos and slurs drift apart. Candidate:
    keep staccatos on the Performance patch (spiccato attack) and send the whole patch early by one constant (its
    median heard latency; two constants only if attacks and transitions differ by > 20 ms). The ablation (PLAIN,
-   PLAIN-SHIFT, CURRENT, CURRENT-ON-PERF, one adjustment off at a time) was started on branch `qt-bends`; state in
-   `~/MuseScore/ms3fork/private/violas-ablation-state.md`, renders in `~/.cache/qtbends/abl/`. Then a listening page
-   for the owner (the owner decides what is heard).
+   PLAIN-SHIFT, CURRENT, CURRENT-ON-PERF, one adjustment off at a time) is prepared on branch `qt-bends` (67f90e1a06:
+   `abl.py`, `ablana.py`), NOT rendered yet: event files and tuned setups are on the VM in `C:\claude\qtbends\abl`
+   (8 kthost processes), state in `~/MuseScore/ms3fork/private/violas-ablation-state.md`. PLAIN-SHIFT(-2) need PLAIN's
+   measured latency first. From the dumps (bars 8-13): CC1 64 throughout; the slurs' first notes go out 236 ms early,
+   the staccatos 19.9 ms (the drift the owner hears, likely); Performance plays 16.3 dB louder than All techniques
+   (gain stages -3.64 / -19.96 dB). Then a listening page for the owner (the owner decides what is heard).
 2. **Quarter tones in fast slurs** (`qt-bends`): Violas' bends work in isolation, something in Whence's context
    loses them (14 one-change variants ready, `whence_variants.py`); Celli: SSO's own Performance transitions don't
    finish below ~300 ms per note, in 12-TET too (no fix on our side; another way of playing fast celli slurs would
    be the owner's decision).
-3. **Lag with SSO loaded**: the lag probe's full run was stopped; state in `~/MuseScore/ms3fork/private/lag-probe-state.md`.
-   Re-run it on a quiet VM. Even levels: whether to skip short slurs waits on those numbers.
+3. **Lag with SSO loaded** (branch `lag-probe` d13748d3e1, build 442): phases o, b, c, d and a-stopped measured (20
+   rounds, undisturbed: the ablation never rendered): every edit's response > 100 ms, scrolling ~6 ms; a (evenLevels 0)
+   slower than b, unexplained: re-run. Resume: `C:\claude\lagprobe\go.cmd <tag> a+e 20 stopped+playing` on a quiet VM;
+   state in `~/MuseScore/ms3fork/private/lag-probe-state.md`. Even levels: whether to skip short slurs waits on those numbers.
 4. **Own legato: paused** (the owner's ear: plain SSO already beats our build in bars 9-12, so what we add comes
    first). 12-TET only when it resumes. Diagnosis: six bugs fixable in sfizz (CC1 reviving faded layers, same-key
    note-off cutting the new note, leaps > ±7 unrecorded, ~0.9 s loops, releases after long holds only, sfizz 1.2.3
