@@ -474,14 +474,12 @@ heard (data decide).
 
 ## Remind the owner (raise these at the start of the next conversation)
 
-- **Violas' runs at fingered 69** (2026-10-12): `[slurs] transitions` sends the Violas' slurred notes fingered at 69;
-  until then they went at 100 (map `legatoVelocity`, chosen 2026-10-07 for timing: a run's arrival SD 54 -> 39 ms,
-  never judged by ear at 69). Ask the owner to listen to Whence's Violas runs in build 422; if they smear, offer a
-  measured tighter velocity inside the fingered band (20-84) as an option.
 - **Stage A verdict** (2026-10-12): the listening page https://claude.ai/artifact/SYgoXqPuHmJpicoCRrTRpc (the owner's new account, 2026-10-13) (db collection
   `realrange1`) A/Bs `[levels] realRange` on a ppp -> fff ladder per section; read the verdicts (ArtifactData) and put
   realRange into Recommended only for what the owner approves. A score with written dynamics is the next test (Whence has
   almost none).
+- **After the next Windows build** (the owner, 2026-10-18): ask how the winds and brass sit against the strings and how
+  the wider dynamics sound (the questions of builds 433 / 434 below, never answered).
 - **Build 434 for the owner** (2026-10-15, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38692403474,
   integrate-1012 44cfae4a5e, artifact MuseScore-soundlibrary-win64-44cfae4): Clark & Luce spans (`realRange` 2) and
   balance (`sectionBalance` 2). Since then on integrate-1012 (341ac3dd84, no Windows build yet): balance refinement
@@ -501,12 +499,6 @@ heard (data decide).
   per stem partly unknown, basses against three other sources; a 5.3 dB question between its two sessions, being checked
   with the sessions' hand claps). Ask after the next build how the dynamics sound, mostly ppp (now one step under pp,
   not the single-note extreme) and the horns' / trombones' wider range.
-- **Even levels in Whence** (2026-10-14, build 431 https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38567243409,
-  integrate-1012 e07750c20a, artifact MuseScore-soundlibrary-win64-e07750c): Recommended now measures in the
-  background (no Tools step), with the mid-note fix and the 350 ms skip. The owner listens to Whence's slurred string
-  passages with Recommended, then with Even levels 0 (Mixer › Advanced Options… › Playback adjustments) for comparison,
-  in the music rather than test passages (the 180 ms note-3 swell is SSO's tone and borderline: HANDOFF › Where the
-  correction works). Ask: how it sounds, how long the waits at Play are, any swell left that matters.
 - **Try in the next build:** the automation headers for every part (fold at will; `( + | All )`, round Draw Mode button,
   Grid menu), the bar ruler (View > Bar Ruler), Update Live Set (Mixer > Advanced Options > Ableton Live), the MuseScore
   Link device fix (copy the new device from the build into the User Library; Live no longer stalls with 28 copies, phrase-
