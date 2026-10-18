@@ -26,6 +26,7 @@
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QTemporaryFile>
+#include <QRegularExpression>
 #include <QXmlStreamReader>
 
 #include "audio/midi/event.h"
@@ -74,6 +75,8 @@
 #include "mscore/preferences.h"
 #include "mscore/soundlibraryhost.h"
 #include "mscore/playbacksettingswidget.h"
+#include "mscore/playbackverify.h"
+#include "mscore/icons.h"
 #include "libmscore/playbacksettings.h"
 #include "libmscore/tuning.h"
 #include <QDoubleSpinBox>
@@ -164,6 +167,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void hostedSlots();
       void hostedSlotsGain();
       void exportInstancesOfParts();
+      void verifyRoutesByPart();
       void liveEquivalenceByPart();
       void preparedStates();
       void speedSetupState();
@@ -4648,6 +4652,71 @@ void TestLiveEquivalence::exportInstancesOfParts()
       vst->endExport();
       QVERIFY(rms(b, 0) > 1e-4);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   verifyRoutesByPart
+//    --verify-playback --verify-wav with MS_VERIFY_ROUTES=1 (the heard check's export renderer) on a score of two library
+//    parts: every route rendered alone, one part's instances at a time. From crash-fixes (7f51a91979, 2026-10-16) to
+//    2026-10-18 the pass ran only when the instances were loaded up front, for a single part: a score of more parts (the
+//    heard check's split copies keep every part) wrote no route and the check measured nothing. No route rendered (no
+//    library): an error and run() fails, not an empty pass
+//---------------------------------------------------------
+
+void TestLiveEquivalence::verifyRoutesByPart()
+      {
+      LiveHost host(this, QString(), { "Violin", "Viola" },
+                    "<SoundLibrary name='PartsT'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "</SoundLibrary>");
+      QVERIFY(host.ok);
+      Playback::setIniValuesForTest({});
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(int(score->parts().size()), 2);
+      std::set<QString> codes;
+      std::set<const Part*> libParts;
+      for (const SoundLib::Route& r : SoundLib::routes(score, *host.lib)) {
+            codes.insert(QString("%1-%2").arg(r.port).arg(r.channel + 1));
+            libParts.insert(r.part);
+            }
+      QCOMPARE(int(libParts.size()), 2);
+      QTemporaryDir tmp;
+      QFileInfo fi(tmp.path() + "/twoparts.mscz");
+      QVERIFY(score->Score::saveCompressedFile(fi, false, false));
+      delete score;
+      if (!icons[int(Icons::arrowsMoveToTop_ICON)]) {     // (the renders' built-in synth makes FluidGui: the app's icons)
+            iconPath = QString(":/data/icons/");
+            genIcons();
+            }
+      qputenv("MS_VERIFY_ROUTES", "1");
+      struct Unset { ~Unset() { qunsetenv("MS_VERIFY_ROUTES"); } } unset;
+      PlaybackVerifier::Options o;
+      o.inputs = QStringList { fi.absoluteFilePath() };
+      o.out = tmp.path() + "/out";
+      o.wav = true;
+      QStringList logLines;
+      const QString folder = PlaybackVerifier::run(o, [&logLines](const QString& l) { logLines << l; });
+      QVERIFY2(!folder.isEmpty(), qPrintable(logLines.join("\n")));
+      std::set<QString> wavs;
+      for (const QString& f : QDir(folder).entryList({ "twoparts route *.wav" }, QDir::Files))
+            wavs.insert(f.mid(QString("twoparts route ").size()).chopped(4));
+      QCOMPARE(wavs, codes);
+      // one part's instances at a time: a load line per part
+      QCOMPARE(logLines.filter(QRegularExpression(": \\d+ instances for \\d+ routes loaded")).size(), 2);
+      QFile j(folder + "/report.json");
+      QVERIFY(j.open(QIODevice::ReadOnly));
+      const QJsonObject top = QJsonDocument::fromJson(j.readAll()).object();
+      QCOMPARE(top.value("verdict").toString(), QString("pass"));
+      QCOMPARE(top.value("scores").toArray().at(0).toObject().value("routes").toArray().size(), int(codes.size()));
+
+      // no library: nothing rendered, an error and run() fails
+      SoundLib::setCurrent(nullptr);
+      logLines.clear();
+      QVERIFY(PlaybackVerifier::run(o, [&logLines](const QString& l) { logLines << l; }).isEmpty());
+      QVERIFY2(!logLines.filter("MS_VERIFY_ROUTES").isEmpty(), qPrintable(logLines.join("\n")));
       }
 
 //---------------------------------------------------------

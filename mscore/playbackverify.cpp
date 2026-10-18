@@ -993,7 +993,13 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
             report->summary << lines;
             report->totals["error"]++;
             };
-      std::unique_ptr<MasterScore> score(mscore->readScore(path));
+      // (without a MuseScore window, as in tst_liveequivalence's verifyRoutesByPart: the file read alone)
+      std::unique_ptr<MasterScore> score(mscore ? mscore->readScore(path) : nullptr);
+      if (!mscore) {
+            score.reset(new MasterScore(MScore::baseStyle()));
+            if (readScore(score.get(), path, false) != Score::FileError::FILE_NO_ERROR)
+                  score.reset();
+            }
       if (!score)
             return fail("cannot read the score");
       score->rebuildMidiMapping();
@@ -1123,27 +1129,62 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
       // stage, the plug-in parameters), "<score> route <port>-<channel + 1>.wav" (the playback audit's route codes), and
       // nothing else: no mix, no per-part analysis, no built-in renders. A route's events, plus the plug-in parameters
       // sent to any slot of its instance (a multi's parameters are the instance's). Sample 0 is score time 0, as in
-      // events.tsv
-      if (vst && options.wav && !shareable && qEnvironmentVariableIntValue("MS_VERIFY_ROUTES") == 1) {
+      // events.tsv. The instances: the single library part's, loaded above; with more parts (the heard check's split copies
+      // keep every part, the others on MS4's sounds) one library part's at a time, released before the next, as the
+      // per-part renders below (every part's at once ran the Windows VM out of memory, 2026-10-16). Until 2026-10-18 this
+      // pass needed the instances loaded above, which crash-fixes (7f51a91979) load only for a single part: every split copy
+      // skipped it and wrote no route, and the heard check measured nothing. No route rendered: an error, the heard check
+      // has nothing to measure (and PlaybackVerifier::run fails)
+      if (fileAudio.empty() && options.wav && !shareable && qEnvironmentVariableIntValue("MS_VERIFY_ROUTES") == 1) {
             QJsonArray routesJs;
-            for (const auto& sp : patches) {
-                  const int slot = sp.first;
-                  const int host = vst->hostOf(slot);
-                  const QString code = QString("%1-%2").arg(slot / 16).arg(slot % 16 + 1);
-                  Vst3Synth* v = vst.get();
-                  const Render r = render(score.get(), libEvents, rate, state, vst,
-                                          [slot, host, v](const NPlayEvent& e) {
-                                                if (!e.isExternal())
-                                                      return false;
-                                                const int s = e.extPort() * 16 + e.extChannel();
-                                                return s == slot || (e.type() == ME_PARAMETER && v->hostOf(s) == host);
-                                                },
-                                          report->folder + "/" + prefix + " route " + code + ".wav");
-                  log(QString("%1: route %2 (%3) rendered alone in %4 s").arg(name, code, sp.second).arg(r.seconds, 0, 'f', 1));
-                  routesJs.append(QJsonObject { { "route", code }, { "patch", sp.second }, { "renderSeconds", r.seconds },
-                                                { "peakDb", std::round(r.peakDb * 10) / 10 },
-                                                { "seconds", double(r.mono.size()) / rate } });
+            // the routes among slots that have a loaded patch, each with its instance's parameters
+            auto renderRoutes = [&](const std::set<int>& slotSet) {
+                  for (int slot : slotSet) {
+                        if (!patches.count(slot))
+                              continue;
+                        const QString patch = patches[slot];
+                        const int host = vst->hostOf(slot);
+                        const QString code = QString("%1-%2").arg(slot / 16).arg(slot % 16 + 1);
+                        Vst3Synth* v = vst.get();
+                        const Render r = render(score.get(), libEvents, rate, state, vst,
+                                                [slot, host, v](const NPlayEvent& e) {
+                                                      if (!e.isExternal())
+                                                            return false;
+                                                      const int s = e.extPort() * 16 + e.extChannel();
+                                                      return s == slot || (e.type() == ME_PARAMETER && v->hostOf(s) == host);
+                                                      },
+                                                report->folder + "/" + prefix + " route " + code + ".wav");
+                        log(QString("%1: route %2 (%3) rendered alone in %4 s").arg(name, code, patch).arg(r.seconds, 0, 'f', 1));
+                        routesJs.append(QJsonObject { { "route", code }, { "patch", patch }, { "renderSeconds", r.seconds },
+                                                      { "peakDb", std::round(r.peakDb * 10) / 10 },
+                                                      { "seconds", double(r.mono.size()) / rate } });
+                        }
+                  };
+            if (vst) {
+                  std::set<int> all;
+                  for (const auto& sp : patches)
+                        all.insert(sp.first);
+                  renderRoutes(all);
                   }
+            else {
+                  for (const auto& bp : byPart) {
+                        const Part* p = bp.first;
+                        if (slotsOf[p].empty())
+                              continue;
+                        QString error;
+                        const std::set<const Part*> only { p };
+                        if (!loadInstances(&only, name + ": " + p->partName(), &error)) {
+                              vst.reset();
+                              return fail("the library's plug-in: " + error);
+                              }
+                        renderRoutes(slotsOf[p]);
+                        vst.reset();
+                        }
+                  }
+            vst.reset();
+            if (routesJs.isEmpty())
+                  return fail("MS_VERIFY_ROUTES: no library route rendered (no part plays on the library, or no patch loaded): "
+                              "nothing for the heard check to measure");
             js["routes"] = routesJs;
             js["seconds"] = clock_.elapsed() / 1000.0;
             js["findingCount"] = 0;
@@ -1396,6 +1437,12 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
             *zip = z;
       log(QString("done: %1 finding(s) in %2 s; %3").arg(report.findings).arg(t.elapsed() / 1000.0, 0, 'f', 0)
           .arg(QDir::toNativeSeparators(z)));
+      // (MS_VERIFY_ROUTES, the heard check's export renderer: a score that rendered no route is a failure of the run, not an
+      // empty pass: the process exits non-zero, the folder and its report kept)
+      if (routesOnly && report.totals.count("error")) {
+            log(QString("MS_VERIFY_ROUTES: %1 score(s) with an error (no route rendered, or see summary.txt)").arg(report.totals["error"]));
+            return QString();
+            }
       return folder;
       }
 

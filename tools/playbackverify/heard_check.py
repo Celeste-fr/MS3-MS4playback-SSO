@@ -784,10 +784,28 @@ def analyse(dump, wavs, parts=None, load=None, export=False):
                                 rhythmFail=RHYTHM_FAIL, rhythmProposed=False, levelDlDb=LEVEL_DL_DB, driftMs=DRIFT_MS))
 
 
+def nothing_measured(res):
+    """why the check measured nothing (a failure, not an empty pass), else None: no library note, no route's render found
+    (2026-10-16 .. 18 the export renderer wrote no route WAV for a score of more than one part, crash-fixes 7f51a91979, and
+    the check reported all zeros), or no note's heard time read"""
+    n = res["notes"]
+    routes = {x["route"] for x in n}
+    if not n:
+        return "no library note in the dump (the parts asked for: none on the library?)"
+    if routes and set(res["missingRenders"]) >= routes:
+        return "no render found for any of the %d routes (0 route WAVs): nothing measured, the renderer failed" % len(routes)
+    if not any(x["heardMs"] is not None for x in n):
+        return "0 of %d notes measured" % len(n)
+    return None
+
+
 def report_text(res, title=""):
     out = []
     if title:
         out.append(title)
+    why = nothing_measured(res)
+    if why:
+        out.append("FAIL: NOTHING MEASURED: %s. The counts below are empty, not a pass." % why)
     n = res["notes"]
     meas = [x for x in n if x["heardMs"] is not None]
     masked = sum(1 for x in meas if x["how"] == "envelope (masked)")
@@ -884,6 +902,9 @@ def main(argv=None):
         _write(args.report, text)
     if args.json:
         _write(args.json, json.dumps(res, indent=1))
+    if nothing_measured(res):
+        sys.stderr.write("heard check: FAIL: nothing measured: %s\n" % nothing_measured(res))
+        return 1
     return 1 if any(f["severity"] == "FAIL" for f in res["findings"]) else 0
 
 
