@@ -402,9 +402,100 @@ def iso8(out):
     print('i8_nf / i8_ns: %d segments, %.0f s each' % (len(ff.seg), ff.write(out)), fs.write(out))
     write_list(out, ['i8_nf', 'i8_ns'])
 
+BLK = 512
+IOI9, ATK9, END9, MID9 = 13, 26, 86, 260      # blocks: 150.9 ms (CC119 107), the attack 301.8 ms, last note 1.0 s, held 3 s
+KEYS9 = list(range(55, 63))
+INTS9 = (2, 3, 4, 5)
+
+
+def blk(n):
+    """block n's first frame as a time kthost puts on that frame (it truncates; +0.25 frame against the rounding)"""
+    return (n * BLK + 0.25) / 44100
+
+
+def chain9(f, keys, holds, **meta):
+    """a chain on the block grid: keys[0] attacked (vel 5), the rest vel 64; holds in blocks (the last: its note-off)"""
+    n0 = -(-int(round(f.t * 44100)) // BLK) + 1
+    f.t = blk(n0)
+    t0 = n0
+    notes = []
+    f.cc(blk(t0) - 0.4, 1, 64)
+    for i, k in enumerate(keys):
+        on = blk(t0)
+        if i:
+            f.cc(on, 119, cc119((on - notes[-1]['on']) * 1000))
+            f.off(on + OVERLAP_S, keys[i - 1])
+            notes[-1]['off'] = round(on + OVERLAP_S, 6)
+        f.on(on, k, PORT if i == 0 else NORM)
+        notes.append({'key': k, 'vel': PORT if i == 0 else NORM, 'on': round(on, 6), 'blk': t0})
+        t0 += holds[i]
+    f.off(blk(t0), keys[-1])
+    notes[-1]['off'] = round(blk(t0), 6)
+    seg = dict(notes=notes, end=round(blk(t0) + REST_S, 6), cc1=64)
+    seg.update(meta)
+    f.seg.append(seg)
+    f.t = blk(t0) + REST_S
+    return seg
+
+
+def iso9(out, phrases=16, seed=20261018):
+    """round-4 layer instrument, 150 ms class: held-out test phrases t9 (keys 55-62, intervals 2-5, an attack held
+    26 blocks then notes every 13 blocks = 150.9 ms, CC119 107, the last held 86 blocks; all on Kontakt's 512-frame
+    grid) and the layer recordings each needs, one file per destination key and direction (key-solo renders):
+      run  U (attacked, 26) -> A (13) -> B: B's layer at CC119 107
+      atk  K (attacked, 26) -> N: N's layer at CC119 88 (the phrase's second note), K's attack layer with and without N
+    each 'mid' (destination held 3 s) and 'end' (held 86 blocks, then released)"""
+    rnd = random.Random(seed)
+    f = File('t9')
+    need = set()
+    for p in range(phrases):
+        n = rnd.randint(7, 10)
+        ks = [rnd.choice(KEYS9)]
+        while len(ks) < n:
+            k = ks[-1] + rnd.choice([-1, 1]) * rnd.choice(INTS9)
+            if KEYS9[0] <= k <= KEYS9[-1]:
+                ks.append(k)
+        chain9(f, ks, [ATK9] + [IOI9] * (n - 2) + [END9], kind='test', phrase=p)
+        need.add(('atk', None, ks[0], ks[1]))
+        for i in range(2, n):
+            need.add(('run', ks[i - 2], ks[i - 1], ks[i]))
+    f.write(out)
+    names = ['t9']
+    groups = {}
+    for kind, x, a, b in sorted(need, key=str):
+        groups.setdefault((b, 'u' if b > a else 'd'), []).append((kind, a))
+    man = []
+    for (b, dr), lst in sorted(groups.items()):
+        g = File('l9_b%d%s' % (b, dr))
+        for kind, a in sorted(set(lst)):
+            for var, hold in (('mid', MID9), ('end', END9)):
+                if kind == 'run':
+                    u = a - 3 * (1 if b > a else -1)
+                    if u == b or abs(u - a) > 12: u = a + 3 * (1 if b > a else -1)
+                    chain9(g, [u, a, b], [ATK9, IOI9, hold], kind='run', a=a, b=b, var=var)
+                else:
+                    chain9(g, [a, b], [ATK9, hold], kind='atk', a=a, b=b, var=var)
+        g.write(out)
+        names.append(g.name)
+        man.append(dict(file=g.name, solo=[b, b - 24 if dr == 'u' else b + 24], b=b, dir=dr))
+    akeys = sorted({a for kind, x, a, b in need if kind == 'atk'})
+    for k in akeys:
+        g = File('a9_k%d' % k)
+        for kind, x, a, b in sorted(need, key=str):
+            if kind == 'atk' and a == k:
+                chain9(g, [k, b], [ATK9, MID9], kind='atkfull', a=k, b=b)
+        chain9(g, [k], [ATK9 + MID9], kind='atkheld', a=k)
+        g.write(out)
+        names.append(g.name)
+        man.append(dict(file=g.name, solo=[k], a=k))
+    write_list(out, names)
+    json.dump(man, open(os.path.join(out, 'manifest.json'), 'w'), indent=1)
+    print('t9: %d phrases; %d layer files, %d attack files' % (phrases, len(groups), len(akeys)))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8'])
+    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8', 'iso9'])
     ap.add_argument('--dts', default='0.5,0.3')
     ap.add_argument('out')
     ap.add_argument('--keys')
@@ -447,6 +538,8 @@ def main():
         iso6(a.out)
     elif a.cmd == 'iso8':
         iso8(a.out)
+    elif a.cmd == 'iso9':
+        iso9(a.out)
     else:
         test(a.out, a.kind, rng('54-68' if a.kind == 'port' else '54-66'), a.phrases, a.seed)
 
