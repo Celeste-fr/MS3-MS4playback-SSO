@@ -30,6 +30,20 @@ DESIGN
     loops its settled part for notes held longer than recorded.
   First notes (trigger=first): the smooth attacks (p3atk) from their note-on; releases (trigger=release,
     sw_previous = own key: none inside a legato line) from their note-off.
+  Releases after slurred lines (round 4, --rel n_rel,p_rel from r3.py rel: X -> B, B held 1.2 s then released): SSO's
+    own release cut at the note-off, by velocity band (the line's type) and, with --xf-fast, by the CC119 range whose
+    old-voice release T it must complement. It sounds the note itself at first, so it rises as the amplitude
+    complement 1 - exp(-9 t / T) of the old voice's exponential release (round 2's tail tell: the old voice fell -15 dB
+    by 0.1 s against a linear 0.2 s attack of a release cut after a 6 s smooth attack: a dip, then a re-swell). The
+    p3atk releases stay only for keys without a slurred-line release.
+  --xf-fast T [--fast-from 95]: when the new note-on's CC119 >= fast-from (RUNS RT / RUNS), the old voice releases
+    with T (ampeg_dynamic + a step curve on CC119: the CC119 sent with the new note-on, 1 ms before the old note-off,
+    sets it) and the new region fades in as its complement (round 2's join tell: in 150 ms runs the old voice and the
+    new region both sound the note before, correlated 0.5-0.7: +5 dB). T by the old region's own band instead left a
+    -11 dB dip where a fast note met a slow transition (n5, 2.62 s).
+  --trim-takes K: keep the K takes per transition whose arrival is nearest the takes' median (round 4: our arrival
+    error had no bias but a wider spread than SSO's).
+  --events f,..: experiments only: keep the transitions these kthost event files play.
   Exact copy: sample_quality=1 (sfizz's default 2 leaves a -59 dB residual at pitch ratio 1, 1 is exact: -140 dB,
     measured); with bends (microtones) it is linear interpolation.
   Exact level: sfizz plays a sample at -11.522749 dB at its defaults (CC7 100, CC10 64; measured with sfzrender on noise,
@@ -120,6 +134,20 @@ class Audio:
         return x
 
 
+def arrival(A, q, key):
+    """seconds from a take's note-on to its arrival at key (librosa.yin, first hop of 256 within 50 cents for 6 hops;
+    None: not within 0.9 s)"""
+    import librosa
+    s0 = kframe(q['on']) + LAG
+    y = A.seg(q['file'], s0, s0 + int(0.9 * SR)).mean(1).astype(np.float64)
+    f0 = librosa.yin(y, fmin=150, fmax=700, sr=SR, frame_length=2048, hop_length=256, center=False)
+    near = np.abs(1200 * np.log2(f0 / 440) + 6900 - 100 * key) < 50
+    for j in range(len(near) - 6):
+        if near[j:j + 6].all():
+            return (j * 256 + 1024) / SR
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--rec', required=True)
@@ -138,6 +166,11 @@ def main():
                     'instead of released at its note-off, and the new region rises from its note-on over the same time (round 3: '
                     'sfizz then sends the old note a note-off and its release region plays: worse, not used)')
     ap.add_argument('--name', default='violas_r3')
+    ap.add_argument('--rel', help='slurred-line release recordings (r3.py rel), e.g. n_rel,p_rel')
+    ap.add_argument('--xf-fast', type=float, default=0.0)
+    ap.add_argument('--fast-from', type=int, default=95)
+    ap.add_argument('--trim-takes', type=int, default=0)
+    ap.add_argument('--events')
     ap.add_argument('--reuse', action='store_true')
     a = ap.parse_args()
     os.makedirs(os.path.join(a.out, 'samples'), exist_ok=True)
@@ -145,15 +178,20 @@ def main():
     logs = {}
     for d in a.rec.split(','):
         for f in os.listdir(d):
-            if f.endswith('.json') and (not a.files or f[:-5] in a.files.split(',')):
+            if f.endswith('.json') and (not a.files or f[:-5] in a.files.split(',') + (a.rel.split(',') if a.rel else [])):
                 J = json.load(open(os.path.join(d, f)))
                 if 'segments' in J:
                     logs[f[:-5]] = J
     T = a.choke if a.choke else a.xf
     if a.choke:
         a.overlap = 0.0
-    fadein = (lambda t: np.sqrt(np.clip(1 - np.exp(-18 * t / T), 0, 1))) if a.fade == 'ep' else \
-        (lambda t: np.clip(1 - np.exp(-9 * t / T), 0, 1))
+    def fadein(t, T=T):
+        if a.fade == 'ep':
+            return np.sqrt(np.clip(1 - np.exp(-18 * t / T), 0, 1))
+        return np.clip(1 - np.exp(-9 * t / T), 0, 1)
+
+    def t_of(vel, lo_cc):
+        return a.xf_fast if (a.xf_fast and vel == 64 and lo_cc >= a.fast_from) else T
     nbytes = [0]
 
     def write(name, y):
@@ -164,7 +202,7 @@ def main():
         return 'samples/%s.flac' % name
 
     # every transition note with a long note after it, per (a, b, vel, band): its takes
-    groups, attacks = {}, []
+    groups, attacks, rels = {}, [], []
     for name, J in sorted(logs.items()):
         passes = []
         for d in a.audio.split(','):
@@ -178,6 +216,9 @@ def main():
             fname = name if p == 0 else '%s_p%d' % (name, p)
             for si, s in enumerate(J['segments']):
                 ns = s['notes']
+                if s.get('kind') == 'release':
+                    rels.append(dict(file=fname, p=p, key=ns[-1]['key'], vel=ns[-1]['vel'], off=ns[-1]['off']))
+                    continue
                 if s.get('attack') == 'smooth' and len(ns) == 1:
                     attacks.append(dict(file=fname, key=ns[0]['key'], on=ns[0]['on'], off=ns[0]['off']))
                     continue
@@ -191,29 +232,56 @@ def main():
                     k = (ns[i - 1]['key'], ns[i]['key'], ns[i]['vel'], band_of(ns[i]['cc119']))
                     groups.setdefault(k, []).append(dict(file=fname, on=ns[i]['on'], end=end, seg=si, i=i, cc119=ns[i]['cc119'],
                                                          ext=EXT_S if i + 1 < len(ns) else 0.0))
+    # --xf-fast: the old voice's release T follows CC119 while it releases (ampeg_dynamic): the CC119 sent with the
+    # NEW note-on (1 ms before the old note-off) picks T, the same value that picked the new region's fade-in; a step
+    # curve: T below fast-from, xf-fast from it (round 4: T by the old region's own band left a -11 dB dip where a
+    # fast note was followed by a slow one, n5 at 2.62 s)
+    dyn = ''
+    if a.xf_fast:
+        dyn = ' ampeg_dynamic=1 ampeg_release_oncc119=%g ampeg_release_curvecc119=7' % (a.xf_fast - T)
     lines = ['// own legato round 3: Violas - Performance (tools/ownlegato/make_sfz3.py; design in its header)',
              '<control> default_path=./',
+             ('<curve> curve_index=7 v000=0 v%03d=0 v%03d=1 v127=1' % (a.fast_from - 1, a.fast_from)) if a.xf_fast else '//',
              '<global> volume=%.6f amp_veltrack=0 amplitude_oncc11=100 bend_up=100 bend_down=-100 sample_quality=1' % SFIZZ_GAIN_DB,
-             '<group> group=1 trigger=legato ampeg_attack=0 ampeg_release=%s%s' % (a.xf, CHOKE % T if a.choke else '')]
+             '<group> group=1 trigger=legato ampeg_attack=0 ampeg_release=%s%s%s' % (a.xf, CHOKE % T if a.choke else '', dyn)]
     regions = []
     share_at = None if a.no_share else a.share
     recorded = {}
     for (ka, kb, vel, band) in groups:
         recorded.setdefault((ka, kb, vel), set()).add(band)
+    if a.events:
+        used = set()
+        for fn in a.events.split(','):
+            prev = None
+            for l in open(fn):
+                w = l.split()
+                if len(w) >= 4 and w[1] == 'on' and int(w[3]) > 0:
+                    if prev is not None:
+                        used.add((prev, int(w[2])))
+                    prev = int(w[2])
+        groups = {g: v for g, v in groups.items() if (g[0], g[1]) in used}
     cc_by = {k: cc_ranges(k[2], sorted(v)) for k, v in recorded.items()}
     for (ka, kb, vel, band), takes in sorted(groups.items()):
         takes.sort(key=lambda q: (q['file'], q['seg'], q['i']))
+        if a.trim_takes and len(takes) > a.trim_takes:
+            arr = [arrival(A, q, kb) for q in takes]
+            ok = [x for x in arr if x is not None]
+            if ok:
+                med = float(np.median(ok))
+                keep = sorted(range(len(takes)), key=lambda i: abs(arr[i] - med) if arr[i] is not None else 9.0)[:a.trim_takes]
+                takes = [takes[i] for i in sorted(keep)]
         lo, hi = TYPES[vel]
         rngs = cc_by[(ka, kb, vel)][band]
         if len(rngs) != 1:
             print('note: %d -> %d vel %d CC119 %d covers %s' % (ka, kb, vel, band, rngs))
         cond = dict(key=kb, pitch_keycenter=kb, sw_previous=ka, lovel=lo, hivel=hi, locc119=rngs[0][0], hicc119=rngs[0][1])
+        Tv = t_of(vel, rngs[0][0])
         for ti, q in enumerate(takes):
             s0 = kframe(q['on']) + LAG
             stop = q['end'] + q['ext'] if share_at is None else min(q['end'] + q['ext'], q['on'] + share_at + XF_LIN_S)
             y = A.seg(q['file'], s0, kframe(stop) + LAG).astype(np.float64)
             t = np.arange(len(y)) / SR
-            g = np.where(t < a.overlap, 0.0, fadein(np.maximum(t - a.overlap, 0)))
+            g = np.where(t < a.overlap, 0.0, fadein(np.maximum(t - a.overlap, 0), Tv))
             if share_at is not None and stop < q['end']:
                 g = g * np.clip((share_at + XF_LIN_S - t) / XF_LIN_S, 0, 1)
             else:
@@ -247,7 +315,7 @@ def main():
                            loop_crossfade=LOOP_XF_S)
             lines.append('<region> ' + opc(reg) + '  // shared sustain')
     # first notes and releases
-    lines.append('<group> group=1 trigger=first ampeg_attack=0 ampeg_release=%s%s' % (a.xf, CHOKE % T if a.choke else ''))
+    lines.append('<group> group=1 trigger=first ampeg_attack=0 ampeg_release=%s%s%s' % (a.xf, CHOKE % T if a.choke else '', dyn))
     # (an attack's sample: to its note-off, looped while held; its release is the release region's)
     seen = {}
     for q in attacks:
@@ -261,10 +329,36 @@ def main():
                    loop_end=len(y) - int(0.03 * SR), loop_crossfade=0.25)
         lines.append('<region> ' + opc(reg))
     lines.append('<group> group=2 trigger=release ampeg_attack=%s ampeg_release=0.3' % (T / 3))
+    relk = {}
+    for r in sorted(rels, key=lambda r: r['p']):
+        relk.setdefault((r['key'], r['vel']), r)
+    rel_keys = {k for k, v in relk}
     for k, (q, _) in sorted(seen.items()):
+        if k in rel_keys:
+            continue
         s0 = kframe(q['off']) + LAG
         path = write('r3r_%d' % k, A.seg(q['file'], s0, s0 + 3 * SR))
         lines.append('<region> ' + opc(dict(sample=path, key=k, pitch_keycenter=k, sw_previous=k)))
+    if relk:
+        lines.append('<group> group=2 trigger=release ampeg_attack=0 ampeg_release=0.3')
+        nrel = 0
+        for (k, vel), q in sorted(relk.items()):
+            s0 = kframe(q['off']) + LAG
+            y = A.seg(q['file'], s0, s0 + 3 * SR).astype(np.float64)
+            t = np.arange(len(y)) / SR
+            lo, hi = TYPES[vel]
+            spans = [(0, 127, T)]
+            if a.xf_fast and vel == 64:
+                spans = [(0, a.fast_from - 1, T), (a.fast_from, 127, a.xf_fast)]
+            for clo, chi, Tv in spans:
+                g = np.clip(1 - np.exp(-9 * t / Tv), 0, 1) * np.clip((len(y) / SR - t) / 0.05, 0, 1)
+                path = write('r4r_%d_%d_%s' % (k, vel, ('%g' % Tv).replace('.', 'p')), y * g[:, None])
+                reg = dict(sample=path, key=k, pitch_keycenter=k, sw_previous=k, lovel=lo, hivel=hi)
+                if len(spans) > 1:
+                    reg.update(locc119=clo, hicc119=chi)
+                lines.append('<region> ' + opc(reg) + '  // release after a slurred line')
+                nrel += 1
+        print('%d slurred-line release regions' % nrel)
     with open(os.path.join(a.out, a.name + '.sfz'), 'w') as f:
         f.write('\n'.join(lines) + '\n')
     with open(os.path.join(a.out, a.name + '.json'), 'w') as f:

@@ -26,6 +26,13 @@ Round 3 rules (the owner, 2026-10-17; private/own-legato-plan.md, "Result 2026-1
                                            RUNS RT for 1-2 semitones), 89 ms (115: RUNS for 1-3); 150 / 89 are the
                                            sections' speed bins read from the group data
                                  rendered with run_vm.cmd <work> <batch> N: N fresh processes = N takes
+    r3.py bands <out> --dts 0.6,0.5357 [--keys 54-66]
+                                 more normal speed bands, as norm's n_350/n_150/n_089 (n_<ms>): the CC119 values the
+                                 blind-test phrases send that no band had (50 for 600 ms, 58 for 536 ms; round 2's
+                                 timing tell: takes recorded at CC119 0 arrived up to 148 ms off SSO at CC119 50)
+    r3.py rel <out>              releases after slurred lines (round 2's tail tell: the release region was cut after a
+                                 6 s smooth attack): n_rel (vel 64, keys 54-66) and p_rel (vel 5, keys 52-70), each key B
+                                 as X -> B, X attacked and held 0.6 s, B held 1.2 s, then released (REST_S)
     r3.py test <out> --kind port|norm [--phrases 30] [--seed s]
                                  held-out phrases (never cut): a smooth attack and 5-11 slurred notes, one IOI per
                                  phrase (port: 0.3 / 0.5 / 1.0 / 1.5 s, intervals 1-12; norm: 0.089 / 0.136 / 0.15 /
@@ -217,8 +224,27 @@ def norm(out, keys):
         add_cc119(f, s)
     print('n_slow: %d transitions, %.0f s' % (sum(len(c) - 1 for c in chains), f.write(out)))
     names.append('n_slow')
+    names += band_files(out, keys, BANDS)
+    write_list(out, names)
+
+
+def rel(out):
+    names = []
+    for name, vel, keys in (('n_rel', NORM, list(range(54, 67))), ('p_rel', PORT, list(range(52, 71)))):
+        f = File(name)
+        for b in keys:
+            x = b + (2 if b < (keys[0] + keys[-1]) / 2 else -2)
+            s = f.chain([x, b], PORT, vel, 64, kind='release', attack_hold=0.6, holds=[1.2], type='release', tvel=vel)
+            add_cc119(f, s)
+        print('%s: %d keys, %.0f s' % (name, len(keys), f.write(out)))
+        names.append(name)
+    write_list(out, names)
+
+
+def band_files(out, keys, bands):
+    names = []
     pairs = [(a, b) for a in keys for b in keys if a != b and abs(a - b) <= 12]
-    for name, dt in BANDS:
+    for name, dt in bands:
         f = File(name)
         todo = list(pairs)
         rnd = random.Random(int(dt * 1000))
@@ -239,7 +265,7 @@ def norm(out, keys):
             add_cc119(f, s)
         print('%s: %d pairs, %.0f s' % (name, len(pairs), f.write(out)))
         names.append(name)
-    write_list(out, names)
+    return names
 
 
 def test(out, kind, keys, phrases, seed):
@@ -267,7 +293,7 @@ def test(out, kind, keys, phrases, seed):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'test'])
+    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test'])
     ap.add_argument('--dts', default='0.5,0.3')
     ap.add_argument('out')
     ap.add_argument('--keys')
@@ -295,6 +321,11 @@ def main():
         port(a.out, rng('52-70'))
     elif a.cmd == 'norm':
         norm(a.out, rng('54-66'))
+    elif a.cmd == 'bands':
+        dts = [float(v) for v in a.dts.split(',')]
+        write_list(a.out, band_files(a.out, rng('54-66'), [('n_%03d' % int(round(d * 1000)), d) for d in dts]))
+    elif a.cmd == 'rel':
+        rel(a.out)
     else:
         test(a.out, a.kind, rng('54-68' if a.kind == 'port' else '54-66'), a.phrases, a.seed)
 
