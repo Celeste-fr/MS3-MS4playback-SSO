@@ -5,6 +5,30 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Paused 2026-10-18: where to pick up
+
+The owner paused the project. This branch (`integrate-1017`) holds everything merged; all fork tests pass on Linux.
+It has no Windows build yet (the last one is 98572aa). Merged since then: `trim-render` (playback settings reads
+cached: the Even levels master-trim render 200 -> 20 ms, byte-identical) and `stac-levels` (the plain grid measured
+in loudness metric P0: calib staccato RMS error 1.36 -> 0.72 dB, Whence 1.6 -> 0.8 dB; open: slurs and single notes
+0.5-1 dB under the held note at mp, unexplained).
+
+Not merged, each with its own "Paused 2026-10-18" note on its branch:
+- `own-legato`: our own legato instrument from SSO layers recorded with zones muted (recording-only). Slow slurs
+  passed a blind test; run joins at 150 ms pass on held-out phrases except the first (attacked) note into the second.
+  Next: that join, then an sfizz build and a new blind round. 89 ms runs not attempted.
+- `load-small`: Kontakt's module loaded on a worker thread after an idle launch; no mixer / even-levels work between
+  instance loads (`MS_LOAD_SMALL_OFF=1` to compare). Windows build passed (run 39117026222); only the "before" timing
+  exists. Next: "after" timing on the VM, the SSO null test, then merge if it gains.
+- `kontakt-procs`: Kontakt instances in parallel host processes, `[soundlibrary] hostProcesses` (0 = in-process,
+  the default). Linux only; with 2 processes forced, tst_soundlibrary vst3Settle and transportRestart fail (bugs),
+  vst3LoadTimes / vst3UnloadModules / pluginDescribe need a decision. Next: those, a Windows build, null and
+  dropout tests, load times.
+- `instance-reuse`: a pool of unused instances; null-tested, but no measured load-time gain. Not merging.
+
+Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
+per slot); MuseScore's own work is about 4 % of a score open.
+
 ## Speed from written (branch `cc119-control`, 2026-10-17)
 
 The owner approved taking over the Performance patches' CC119 (2026-10-17). `[slurs] speedFromWritten` (0 by default
