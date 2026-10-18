@@ -85,6 +85,7 @@
 #include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/librarycontrollers.h"
 #include "audio/vst3/vst3plugin.h"
+#include "audio/vst3/vst3remote.h"
 #include "audio/vst3/vst3synth.h"
 #include "vst3editor.h"
 #endif
@@ -115,6 +116,7 @@ SoundLibraryHost::SoundLibraryHost()
             if (Vst3Synth* s = synth()) {
                   LagProbe::Scope probe("host idle: Vst3Synth::idle");
                   s->idle();
+                  checkHostProcesses();
                   }
             // (just edited, stopped: the gains wait for the edit's renders, made between events: editwarmup.h)
             if (EditWarmup::instance()->pending(_slotScore))
@@ -487,7 +489,11 @@ int SoundLibraryHost::loadThreads()
       {
       bool ok = false;
       const int env = qEnvironmentVariableIntValue("MS_SOUNDLIBRARY_LOAD_THREADS", &ok);
-      const int n = ok ? env : preferences.getInt("io/soundLibraryLoadThreads");
+      int n = ok ? env : preferences.getInt("io/soundLibraryLoadThreads");
+#ifdef USE_VST3
+      // (instances in host processes: a setState per process at once, Vst3Remote; the worker threads only wait)
+      n = std::max(n, Vst3Remote::processes());
+#endif
       return qBound(0, n, 16);
       }
 
@@ -1569,6 +1575,38 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
       }
 
 //---------------------------------------------------------
+//   checkHostProcesses
+//    an instance whose host process ended (Vst3Remote) plays nothing: said once, and loaded again in the background
+//    (syncSome's fits() takes it for a slot to load)
+//---------------------------------------------------------
+
+void SoundLibraryHost::checkHostProcesses()
+      {
+#ifdef USE_VST3
+      Vst3Synth* vst = synth();
+      if (!vst)
+            return;
+      QStringList lost;
+      for (int k = 0; k < vst->slotCount(); ++k) {
+            const Vst3Plugin* p = vst->plugin(k);
+            if (p && !p->alive() && !_lostSlots.count(k)) {
+                  _lostSlots.insert(k);
+                  lost << _slots[size_t(k)].instrument;
+                  }
+            else if (p && p->alive())
+                  _lostSlots.erase(k);
+            }
+      if (lost.isEmpty())
+            return;
+      qWarning("Sound library: a plug-in host process ended: %s", qPrintable(lost.join(", ")));
+      if (mscore)
+            mscore->showMessage(tr("A plug-in host process ended (%1): loading again…").arg(lost.join(", ")), 10000);
+      if (_slotScore)
+            preloadSoon(const_cast<MasterScore*>(_slotScore));
+#endif
+      }
+
+//---------------------------------------------------------
 //   preloadSoon
 //    the score's instances loaded when it is opened (or shown), every part's, with or without
 //    notes (the owner, 2026-09-27: "just load everything at score open", no loading as parts get
@@ -2188,7 +2226,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             n.valuesText = valuesKey(n.values);
             }
       auto fits = [&path](const Vst3Plugin* p, const Slot& s, const Need& n) {
-            return p && p->path() == path && s.instrument == n.name && (s.hasSetup || s.setupFailed || !n.setup)
+            return p && p->alive() && p->path() == path && s.instrument == n.name && (s.hasSetup || s.setupFailed || !n.setup)
                    && s.tuning == n.tuning && s.values == n.valuesText;
             };
 
@@ -2248,6 +2286,9 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       bool waiting = false;
       int loads = 0;
       const int threads = loadThreads();
+      // (host processes: started together for what this batch loads, each loading the plug-in's module meanwhile)
+      if (!toLoad.empty())
+            Vst3Plugin::prepareHosts(path, maxLoads < 0 ? int(toLoad.size()) : std::min(int(toLoad.size()), std::max(1, threads)));
       if (!toLoad.empty() && (maxLoads < 0 || loads < maxLoads)) {
             batchStart(maxLoads < 0 ? "At play" : "At score open");
             _batch->routesMs += routesMs;
@@ -2529,6 +2570,15 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
             return false;
             }
       Slot& s = _slots[slot];
+      if (p->remote()) {
+            // (in a host process: its window, that process's)
+            if (!p->showRemoteEditor(QString("%1 – %2 (%3)").arg(s.instrument, p->name(), s.part))) {
+                  if (error)
+                        *error = tr("%1 has no editor.").arg(p->name());
+                  return false;
+                  }
+            return true;
+            }
       if (s.editor) {
             s.editor->show();
             s.editor->raise();

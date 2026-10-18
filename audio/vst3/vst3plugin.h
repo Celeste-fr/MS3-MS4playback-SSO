@@ -76,12 +76,23 @@ class Vst3Plugin {
       // ntdll's TppRaiseInvalidParameter (2026-10-16, kthost on the VM: returning with the module loaded crashed so,
       // with ExitDll + FreeLibrary first it exited 0). How many modules were unloaded
       static int unloadModules();
+      // host processes (vst3remote.h, [soundlibrary] hostProcesses): load() makes a remote instance when the setting
+      // asks for them; prepareHosts starts the processes a load batch of instances will use (each loading the
+      // module meanwhile), shutdownHosts ends them (MuseScore's exit, before unloadModules)
+      static void prepareHosts(const QString& path, int instances);
+      static void shutdownHosts();
+      bool remote() const;                // in a host process
+      bool alive() const;                 // false: its host process ended (it plays nothing)
+      int hostProcess() const;            // which (-1: MuseScore's own)
 
       // audio thread
       // MuseScore's event types (ME_NOTEON …); a note-on's tuning in cents from equal temperament
       // (the score's tuning: tuning.h) goes in VST 3's NoteOnEvent::tuning, for the plug-ins that honour it
       void midi(int type, int channel, int a, int b, float tuning = 0.f);
       void process(int frames, float* interleavedStereo);   // adds its output
+      // a remote instance starts rendering the block now (so that several processes render at once: Vst3Synth posts
+      // every slot's block, then collects them with process(), the same frames); a local one does nothing
+      void beginProcess(int frames);
       // varispeed: the plug-in played faster or slower, so everything it plays is higher or lower
       // by cents (and its time runs 2^(cents/1200) times as fast: 3 % for a quarter tone), for a
       // plug-in that ignores a note's tuning (Kontakt). The plug-in renders into a buffer read back
@@ -141,7 +152,8 @@ class Vst3Plugin {
             };
       const Times& times() const;
       bool singleComponent() const;       // its component is its controller too (one object)
-      Steinberg::IPlugView* createEditor();     // nullptr: no editor; the caller releases it
+      Steinberg::IPlugView* createEditor();     // nullptr: no editor (or remote); the caller releases it
+      bool showRemoteEditor(const QString& title);    // a remote instance's editor, a window of its host process
       // what the plug-in says its keys play, as DAWs show it (drum maps, keyswitch lanes): the
       // program's pitch names (IUnitInfo) and the keyswitches (IKeyswitchController, "KS "
       // prefix). source: which of the two answered, or why none did

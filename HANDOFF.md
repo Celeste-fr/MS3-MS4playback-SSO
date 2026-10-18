@@ -5,6 +5,14 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Paused 2026-10-18: Kontakt in host processes (branch `kontakt-procs`, WIP, not merged)
+Design + status: ~/MuseScore/ms3fork/private/kontakt-procs-design.md (local). Built on Linux only: audio/vst3/vst3remote.*,
+msvst3host, `[soundlibrary] hostProcesses` (default 0 = in-process, unchanged behaviour). In-process: all fork tests pass.
+With MS_VST3_HOST_PROCESSES=2, 5 tst_soundlibrary tests fail. **Next step:** fix vst3Settle (remote settle has no effect)
+and transportRestart (restart not seen) first, then unlink the Linux request segment after the child's hello, then decide
+the 3 in-process-assumption tests (vst3LoadTimes, vst3UnloadModules, pluginDescribe/hostQueries). Then MSVC build
+(check_windows_names.sh, [windows-build] via workflow_dispatch: branch isn't claude/**), VM null/dropout/load-time tests.
+
 ## Speed from written (branch `cc119-control`, 2026-10-17)
 
 The owner approved taking over the Performance patches' CC119 (2026-10-17). `[slurs] speedFromWritten` (0 by default

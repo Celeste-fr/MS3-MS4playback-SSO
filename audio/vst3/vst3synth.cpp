@@ -328,6 +328,11 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       const std::array<Mix, 64>& mix = _exporting ? _exportMix : _mix;
       if (_scratch.size() < size_t(2 * frames))
             _scratch.resize(size_t(2 * frames));
+      // (instances in host processes: every one's block started first, so the processes render it at the same time;
+      // collected below in slot order, each added as before)
+      for (const auto& p : _slots)
+            if (p)
+                  p->beginProcess(int(frames));
       for (int k = 0; k < int(_slots.size()); ++k) {
             Vst3Plugin* p = _slots[size_t(k)].get();
             if (!p)

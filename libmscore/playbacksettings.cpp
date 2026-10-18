@@ -240,6 +240,12 @@ static const std::vector<Definition> DEFINITIONS = {
       // offered, rounded up to 1 ms: Vst3Plugin::SETTLE_SECONDS, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
       { "hosting/settleSeconds", 0.047, 0, 10, "s",
         "a patch just loaded runs this long before its controllers are set (its script initialises)", false },
+      // [soundlibrary] (global). hostProcesses: Kontakt's setState is one CPU-bound thread per process (sso-load-profile.md:
+      // KSP compiled once per tuning slot), so instances load at the same time only in separate processes (Vst3Remote). 0
+      // keeps them in MuseScore's process (as before); -1: one per physical core (QThread::idealThreadCount() / 2)
+      { "soundlibrary/hostProcesses", 0, -1, 64, "processes",
+        "hosted plug-in instances in up to this many separate host processes, so that they load in parallel (0: in "
+        "MuseScore's own process; -1: one per CPU core). Read when instances load", false },
       };
 
 const std::vector<Definition>& definitions()

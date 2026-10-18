@@ -9953,6 +9953,7 @@ int runApplication(int& argc, char** av)
 #ifdef USE_VST3
             // the background jobs' instances are gone: their modules unloaded as the SDK unloads them (ExitDll), not by
             // the loader at exit (Vst3Plugin::unloadModules: Kontakt's teardown then crashed every job, 0xC000000D)
+            Vst3Plugin::shutdownHosts();      // (host processes: their instances and modules, in each)
             Vst3Plugin::unloadModules();
 #endif
             return ok ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -9962,6 +9963,7 @@ int runApplication(int& argc, char** av)
 
       const int rc = qApp->exec();
 #ifdef USE_VST3
+      Vst3Plugin::shutdownHosts();        // (host processes: their instances and modules, in each)
       Vst3Plugin::unloadModules();        // (the modules no instance holds any more)
 #endif
       return rc;
