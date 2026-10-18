@@ -54,7 +54,16 @@ struct EvenAutoMeasurer::Instance {
 EvenAutoMeasurer::EvenAutoMeasurer()
       {
       _debounce.setSingleShot(true);
-      connect(&_debounce, &QTimer::timeout, this, [this]() { detect(); });
+      connect(&_debounce, &QTimer::timeout, this, [this]() {
+            // (while the score's own instances load: after them, as its own loads wait (loadStep). Its detect between two
+            // of the score's loads delayed the next one by its render, 0.4 s at Whence's open on the Windows VM,
+            // 2026-10-18; it can't measure before they are in anyway. Play and export ask at once: prepare)
+            if (SoundLibraryHost::loadSmall() && SoundLibraryHost::instance()->preloading()) {
+                  _debounce.start(LOAD_WAIT_MS);
+                  return;
+                  }
+            detect();
+            });
       _loadTimer.setSingleShot(true);
       _loadTimer.setInterval(0);
       connect(&_loadTimer, &QTimer::timeout, this, [this]() { loadStep(); });

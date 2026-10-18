@@ -119,6 +119,10 @@ SoundLibraryHost::SoundLibraryHost()
             // (just edited, stopped: the gains wait for the edit's renders, made between events: editwarmup.h)
             if (EditWarmup::instance()->pending(_slotScore))
                   return;
+            // (the score's instances still loading: each load step applies the Mixer as its instance goes in, syncSome,
+            // and so does every play's sync; here it only delayed the next load, 2026-10-18)
+            if (loadSmall() && _preloadTimer.isActive())
+                  return;
             LagProbe::Scope probe("host idle: applyMixer");
             applyMixer();
             });
@@ -1597,6 +1601,38 @@ void SoundLibraryHost::preloadSoon(Score* score)
       }
 
 //---------------------------------------------------------
+//   warmUpSoon / loadSmall
+//---------------------------------------------------------
+
+bool SoundLibraryHost::loadSmall()
+      {
+      static const bool on = qEnvironmentVariable("MS_LOAD_SMALL_OFF") != "1";
+      return on;
+      }
+
+void SoundLibraryHost::warmUpSoon()
+      {
+#ifdef USE_VST3
+      if (!loadSmall())
+            return;
+      QTimer::singleShot(0, instance(), []() {
+            SoundLibraryHost* h = instance();
+            const std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+            if (!library || SoundLib::output() != SoundLib::Output::PLUGIN || !h->synth())
+                  return;
+            if (h->_loads > 0 || h->_syncing || h->preloading())
+                  return;                 // (a score's loads came first: the first of them loads the module, as before)
+            const QString path = pluginPath(*library);
+            if (path.isEmpty())
+                  return;
+            if (Vst3Plugin::preloadModule(path, &SoundLibraryHost::workerThread))
+                  logTime(*library, QString("After startup: the plug-in's module loading in the background (%1)")
+                          .arg(QFileInfo(path).fileName()));
+            });
+#endif
+      }
+
+//---------------------------------------------------------
 //   eventFilter
 //    the time of the user's last key, click or wheel (preloadStep)
 //---------------------------------------------------------
@@ -1769,9 +1805,11 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
                   }
             pl->createMs = t.nsecsElapsed() / 1e6;
             const Vst3Plugin::Times& tm = pl->plugin->times();
-            logTime(library, QString("%1: a new instance of the plug-in in %2 ms (module %3, create %4, buses %5, activate %6 ms%7)")
+            logTime(library, QString("%1: a new instance of the plug-in in %2 ms (module %3, create %4, buses %5, activate %6 ms%7%8)")
                     .arg(name, ms(pl->createMs), ms(tm.module), ms(tm.create), ms(tm.buses), ms(tm.activate))
-                    .arg(pl->plugin->singleComponent() ? "; component and controller one object" : ""));
+                    .arg(pl->plugin->singleComponent() ? "; component and controller one object" : "")
+                    .arg(tm.preloaded >= 0 ? QString("; its module was loaded in the background after startup in %1 ms").arg(ms(tm.preloaded))
+                                           : QString()));
             }
       if (setup) {
             t.restart();

@@ -62,6 +62,7 @@
 
 #ifdef USE_VST3
 #include "audio/vst3/playbackverify.h"
+#include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #endif
 
@@ -1338,6 +1339,15 @@ QString PlaybackVerifier::run(const Options& options, std::function<void(const Q
           .arg(library ? library->name : QString("no sound library")).arg(QDir::toNativeSeparators(folder)));
       QElapsedTimer t;
       t.start();
+#ifdef USE_VST3
+      // the plug-in's module loaded on a worker thread while the first score is read and rendered (as after the GUI's
+      // startup: SoundLibraryHost::warmUpSoon); its first instance takes it
+      if (library && options.audio.isEmpty() && SoundLibraryHost::loadSmall()) {
+            const QString path = SoundLibraryHost::pluginPath(*library);
+            if (!path.isEmpty() && Vst3Plugin::preloadModule(path, &SoundLibraryHost::workerThread))
+                  log("the plug-in's module loading in the background");
+            }
+#endif
       for (const QString& f : files)
             verifyScore(f, options, &report, log);
 

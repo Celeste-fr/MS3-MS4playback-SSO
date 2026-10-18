@@ -76,6 +76,13 @@ class Vst3Plugin {
       // ntdll's TppRaiseInvalidParameter (2026-10-16, kthost on the VM: returning with the module loaded crashed so,
       // with ExitDll + FreeLibrary first it exited 0). How many modules were unloaded
       static int unloadModules();
+      // GUI thread: the plug-in's module (its library loaded, InitDll, the factory: Kontakt 8's 1.4-2.2 s, mostly its
+      // licence checks) loaded on a worker thread ahead of its first instance (SoundLibraryHost::warmUp, at idle after
+      // startup), so that no window waits for it. The first load() or classInfo() of that path takes it: done, or waited
+      // for (the event loop running meanwhile, user input excluded, as SoundLibraryHost::harvest waits), else loaded
+      // there as before. Nothing else differs: the same module, its instances made by load() as before. threadHook(true)
+      // / (false): on the worker before and after (COM, as for setState on a worker). False: loaded or loading already
+      static bool preloadModule(const QString& path, void (*threadHook)(bool) = nullptr);
 
       // audio thread
       // MuseScore's event types (ME_NOTEON …); a note-on's tuning in cents from equal temperament
@@ -130,7 +137,8 @@ class Vst3Plugin {
       // how long the last load() and setState() took, by step, in ms (load times.log, the load
       // times measurement: where a Kontakt instance's time goes)
       struct Times {
-            double module { 0 };          // load(): the plug-in's module (its file), the first time only
+            double module { 0 };          // load(): the plug-in's module (its file), the first time only (preloaded: the wait for it)
+            double preloaded { -1 };      //   preloadModule: its load on the worker thread, ms (-1: not preloaded)
             double create { 0 };          //   the component and controller made, initialized, connected
             double buses { 0 };           //   buses, arrangements, setupProcessing, the MIDI mapping
             double activate { 0 };        //   setActive, setProcessing

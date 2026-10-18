@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <future>
 #include <map>
 
 #include <QDataStream>
@@ -24,6 +25,8 @@
 #include <QDebug>
 #include <QFile>
 #include <QFileInfo>
+#include <QCoreApplication>
+#include <QThread>
 #include <QJsonArray>
 #include <QJsonDocument>
 
@@ -240,12 +243,77 @@ static std::map<QString, std::shared_ptr<VST3::Hosting::Module>>& modules()
       }
 
 //---------------------------------------------------------
+//   preloadModule
+//    (GUI thread only: the map below is touched there alone; the worker loads into its future)
+//---------------------------------------------------------
+
+struct PreloadedModule {
+      std::shared_ptr<VST3::Hosting::Module> module;
+      double ms { 0 };
+      };
+
+static std::map<QString, std::future<PreloadedModule>>& preloads()
+      {
+      static auto* m = new std::map<QString, std::future<PreloadedModule>>;
+      return *m;
+      }
+
+bool Vst3Plugin::preloadModule(const QString& path, void (*threadHook)(bool))
+      {
+      const QString key = QFileInfo(path).absoluteFilePath();
+      auto i = modules().find(key);
+      if ((i != modules().end() && i->second) || preloads().count(key))
+            return false;
+      const std::string file = path.toStdString();
+      preloads()[key] = std::async(std::launch::async, [file, threadHook]() {
+            if (threadHook)
+                  threadHook(true);
+            QElapsedTimer t;
+            t.start();
+            std::string err;
+            PreloadedModule m;
+            m.module = VST3::Hosting::Module::create(file, err);
+            m.ms = t.nsecsElapsed() / 1e6;
+            if (threadHook)
+                  threadHook(false);
+            if (!m.module)
+                  qWarning("VST 3: the module %s was not preloaded: %s", file.c_str(), err.c_str());
+            return m;
+            });
+      return true;
+      }
+
+// a preloaded module of key into modules(), waited for when still loading; its load's ms (-1: none)
+static double takePreloaded(const QString& key)
+      {
+      auto i = preloads().find(key);
+      if (i == preloads().end())
+            return -1;
+      std::future<PreloadedModule> f = std::move(i->second);
+      preloads().erase(i);
+      // (waiting: the event loop runs, input excluded; a plug-in's module init may want the GUI thread, as harvest says)
+      const bool gui = QCoreApplication::instance() && QThread::currentThread() == QCoreApplication::instance()->thread();
+      while (f.wait_for(std::chrono::milliseconds(gui ? 5 : 100)) != std::future_status::ready)
+            if (gui)
+                  QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 5);
+      PreloadedModule m = f.get();
+      if (!m.module)
+            return -1;            // (loaded again by the caller, which reports why it failed)
+      std::shared_ptr<VST3::Hosting::Module>& slot = modules()[key];
+      if (!slot)
+            slot = m.module;
+      return m.ms;
+      }
+
+//---------------------------------------------------------
 //   unloadModules
 //---------------------------------------------------------
 
 int Vst3Plugin::unloadModules()
       {
       int n = 0;
+      while (!preloads().empty())               // (one still loading: done first, then unloaded as the others)
+            takePreloaded(preloads().begin()->first);
       std::map<QString, std::shared_ptr<VST3::Hosting::Module>>& m = modules();
       for (auto i = m.begin(); i != m.end();) {
             if (i->second && i->second.use_count() > 1) {         // (an instance still uses it: it goes with the instance)
@@ -486,6 +554,7 @@ Vst3Plugin::~Vst3Plugin()
 static std::shared_ptr<VST3::Hosting::Module> moduleOf(const QString& path, QString* error)
       {
       const QString key = QFileInfo(path).absoluteFilePath();
+      takePreloaded(key);
       std::shared_ptr<VST3::Hosting::Module> module = modules()[key];
       if (!module) {
             std::string err;
@@ -562,6 +631,7 @@ std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleR
             return ms;
             };
       const QString key = QFileInfo(path).absoluteFilePath();
+      p->d->times.preloaded = takePreloaded(key);
       p->d->module = modules()[key];
       if (!p->d->module) {
             std::string err;

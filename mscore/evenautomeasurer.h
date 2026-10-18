@@ -71,6 +71,7 @@ class EvenAutoMeasurer : public QObject {
       static constexpr int RATE = 44100;              // the job's
       static constexpr int DEBOUNCE_MS = 600;         // (UI timing: after the last edit)
       static constexpr int OPEN_DELAY_MS = 1500;      // (UI timing: after a score is shown)
+      static constexpr int LOAD_WAIT_MS = 200;        // (UI timing: asking again while the score's instances load, as loadStep)
       static constexpr int LOAD_POLL_MS = 20;         // (UI timing: a load's setState on its worker looked at)
 
       struct Instance;

@@ -10364,6 +10364,8 @@ void MuseScore::init(QStringList& argv)
 
       // Ableton Live's helpers in its User Library (livehelpers.h): checked after startup, a prompt only when needed
       QTimer::singleShot(3000, mscore, []() { LiveIntegration::LiveHelpers::startupCheck(mscore); });
+      // the sound library's plug-in module, loaded in the background once startup is done (soundlibraryhost.h)
+      SoundLibraryHost::warmUpSoon();
       }
 
 

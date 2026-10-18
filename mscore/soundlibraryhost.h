@@ -268,6 +268,14 @@ class SoundLibraryHost : public QObject {
       Vst3Synth* synth() const;
       bool sync(Score* score, QString* error = nullptr);    // the score's routes' instances
       void preloadSoon(Score* score);     // load them all when the score is opened or shown
+      // at idle after startup (MuseScore's main: the first event-loop pass), when the library plays through its plug-in
+      // and nothing is loading yet: the plug-in's module loaded on a worker thread (Vst3Plugin::preloadModule; Kontakt
+      // 8's 1.4-2.2 s on the Windows VM, 2026-10-18), so the first score opened needn't wait for it. Never blocks the
+      // window; a score opened meanwhile loads as before, taking the module once it is in. Sound: the same module
+      static void warmUpSoon();
+      // the load-time measures of 2026-10-18 (warmUpSoon, the background work held back while a score's instances load)
+      // switched off by MS_LOAD_SMALL_OFF=1 in the environment: for measuring them against the old ways only
+      static bool loadSmall();
       // that loading still going on (more instances to load, or setups being set on worker threads): the even levels'
       // own instances wait for it (mscore/evenautomeasurer.h), so the playback's load first
       bool preloading() const;
