@@ -17,9 +17,10 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 - `own-legato`: our own legato instrument from SSO layers recorded with zones muted (recording-only). Slow slurs
   passed a blind test; run joins at 150 ms pass on held-out phrases except the first (attacked) note into the second.
   Next: that join, then an sfizz build and a new blind round. 89 ms runs not attempted.
-- `load-small`: Kontakt's module loaded on a worker thread after an idle launch; no mixer / even-levels work between
-  instance loads (`MS_LOAD_SMALL_OFF=1` to compare). Windows build passed (run 39117026222); only the "before" timing
-  exists. Next: "after" timing on the VM, the SSO null test, then merge if it gains.
+- `load-small`: NOT merging (measured on the VM 2026-10-18, private/load-small-work/RESULT.md). Fix 1 (Kontakt's module
+  loaded on a worker thread) hangs Kontakt in every run: the first setState never returns (GUI, 150 s), the headless
+  verify waits with no CPU; it saves only ~1 s on the first instance. Fix 2 (no mixer / even-levels work between loads)
+  is worth at most 0.3-0.6 s, inside the 24-31 s spread of a Whence open; re-measure it alone only if load time matters.
 - `kontakt-procs`: Kontakt instances in parallel host processes, `[soundlibrary] hostProcesses` (0 = in-process,
   the default). Linux only; with 2 processes forced, tst_soundlibrary vst3Settle and transportRestart fail (bugs),
   vst3LoadTimes / vst3UnloadModules / pluginDescribe need a decision. Next: those, a Windows build, null and
