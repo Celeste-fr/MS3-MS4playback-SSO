@@ -248,6 +248,32 @@ class EndToEnd(unittest.TestCase):
         for note in res["notes"]:
             self.assertLess(abs(note["heardMs"] - (-20 - HARD_BIAS_MS)), 10, note)
 
+    def test_nothing_measured_fails(self):
+        """no route render (the export wrote no route WAV, 2026-10-16 .. 18): not an empty pass: the report says
+        NOTHING MEASURED and main exits 1; with the render it measures and passes"""
+        lead_ms = 100.0
+        w = 0.5
+        tmp = tempfile.mkdtemp()
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + row(w, w + 0.2, 62, "0-8", "Violas", "Spiccato",
+                                                                         "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0,
+                                                                         -1, 0.0, -1, 0, 0, 1) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        res = H.analyse(tmp, tmp, load=lambda r: None)
+        self.assertEqual(res["findings"], [])
+        self.assertIn("0 route WAVs", H.nothing_measured(res))
+        self.assertIn("NOTHING MEASURED", H.report_text(res))
+        self.assertEqual(H.main(["analyse", tmp, tmp]), 1)              # (no wav in tmp)
+        n = int(2.0 * SR)
+        t = np.arange(n) / SR
+        s = w + H.OFFSET_S + lead_ms / 1000 - 0.020
+        x = saw(hz(62), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40)])
+        import soundfile as sf
+        sf.write(os.path.join(tmp, "0-8.wav"), x, SR)
+        self.assertIsNone(H.nothing_measured(H.analyse(tmp, tmp)))
+        self.assertEqual(H.main(["analyse", tmp, tmp]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

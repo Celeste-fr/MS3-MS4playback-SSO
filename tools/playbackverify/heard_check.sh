@@ -115,6 +115,13 @@ if [ "$RENDER" = export ]; then
   [ -n "$(find "$WAVS" -name '* events.tsv' 2>/dev/null)" ] || { echo "no export (see $WORK/run.out, $WAVS; VM folder kept: $VMRUN_SCP)"; exit 2; }
   echo "$(find "$WAVS" -name '* route *.wav' | wc -l) route renders; $(grep -c exit "$WORK/run.out" 2>/dev/null) runs:" \
     "$(grep exit "$WORK/run.out" | tr '\r\n' '  ')"
+  # (no route render: the export ran but measured nothing, a failure, not an all-zero pass: 2026-10-16 .. 18 every
+  # split copy rendered no route, crash-fixes 7f51a91979, and the report said 0 fail of 0)
+  if [ "$(find "$WAVS" -name '* route *.wav' | wc -l)" -eq 0 ]; then
+    echo "HEARD CHECK FAILED: the export wrote no route WAV, nothing to measure (MS_VERIFY_ROUTES pass skipped or failed;"
+    echo "  see $WORK/run.out and each part's summary.txt / stdout.txt under $WAVS; VM folder kept: $VMRUN_SCP)"
+    exit 2
+  fi
   DEL="if exist $VMRUN\\heard_export_vm.cmd rmdir /s /q $VMRUN"
 else
   sed 's/$/\r/' "$HERE/heard_check_vm.cmd" | sed "s/^set \"HC=C:\\\\claude\\\\heardcheck\"/set \"HC=C:\\\\claude\\\\$VMDIR\"/" > "$WORK/ev/heard_check_vm.cmd"

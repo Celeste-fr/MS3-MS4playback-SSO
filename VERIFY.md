@@ -230,6 +230,12 @@ deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores o
     start lead (the passages' parts 133-216 ms less than the score's), taken out per run; a note the dump put on another
     lane is re-routed (once in 13 dumps of Whence the dump gave Violas - Performance 2 lanes, the export 3: the renderer
     isn't always deterministic there; not investigated).
+    **Measured nothing from crash-fixes (7f51a91979, 2026-10-16) to verify-routes (2026-10-18)**: the route pass ran only
+    with the instances loaded up front, which crash-fixes do for a single part only; the split copies keep every part, so
+    each run wrote no route WAV and the report's zeros were 0 of 0 (builds 98572aa7e2 and e1386f9e57 included; build 443
+    was before). Now the pass loads one library part's instances at a time, and no route rendered is an error: the
+    MuseScore run exits non-zero, `heard_check.sh` stops with "HEARD CHECK FAILED" (exit 2) and `heard_check.py analyse`
+    reports "NOTHING MEASURED" and exits 1 when no route's render is found or no note was measured.
   - `HC_RENDER=kthost`: each route through kthost (one Kontakt instance with MuseScore's setup of the route's patch from
     the VM's setups folder), the dump's events + 1.0 s. It lacks the tuning slots (a non-bending patch's quarter tones
     play in 12-TET), the gain stage, master trim and mix (the passages' Performance routes ~30-50 dB quieter in
