@@ -38,12 +38,12 @@ namespace Vst3Remote {
 // GUI-thread calls (control channel)
 enum class Op : quint32 {
       PREWARM = 1,      // path: the plug-in's module loaded (a process's first instance waits less)
-      LOAD,             // id, path, sampleRate, maxBlock, segment name, command capacity -> ok, error, name, times, single
+      LOAD,             // id, path, sampleRate, maxBlock, segment name, command capacity, environment -> ok, error, name, times, single
       DESTROY,          // id
       SET_OFFLINE,      // id, bool -> bool
       SET_SAMPLE_RATE,  // id, double -> bool
       STATE,            // id -> bytes
-      SET_STATE,        // id, bytes -> bool, times
+      SET_STATE,        // id, bytes, environment (added by Instance::call) -> bool, times
       KEY_NAMES,        // id -> map, source
       IDLE,             // id
       DESCRIBE,         // id, has base, base (JSON) -> JSON

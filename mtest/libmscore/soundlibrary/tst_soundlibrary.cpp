@@ -8496,8 +8496,10 @@ void TestSoundLibrary::pluginDescribe()
       QCOMPARE(d.value("component").toObject().value("state").toObject().value("bytes").toInt(), 24);
       QVERIFY(d.value("editor").isNull());
 
-      // what it asked of MuseScore
-      QVERIFY(!Vst3Plugin::hostQueries().isEmpty());
+      // what it asked of MuseScore (the description carries it: a remote instance's queries are its host process's)
+      QVERIFY(!d.value("hostQueries").toObject().isEmpty());
+      if (!p->remote())
+            QCOMPARE(d.value("hostQueries").toObject(), Vst3Plugin::hostQueries());
 
       // against an earlier description (Extract plug-in data, each patch against the empty plug-in):
       // unchanged parameters take their texts from it, one whose value changed asks the plug-in
@@ -11437,6 +11439,9 @@ void TestSoundLibrary::vst3UnloadModules()
       QString error;
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
       QVERIFY2(p, qPrintable(error));
+      // (in a host process the module is that process's: unloaded when it quits, Vst3Remote::childMain)
+      if (p->remote())
+            QSKIP("the instance is in a host process (MS_VST3_HOST_PROCESSES): MuseScore's process holds no module of it");
       Vst3Plugin::unloadModules();                    // (an instance uses the test synth's: kept)
       QCOMPARE(Vst3Plugin::unloadModules(), 0);
       std::vector<float> buffer(2 * 512, 0.f);

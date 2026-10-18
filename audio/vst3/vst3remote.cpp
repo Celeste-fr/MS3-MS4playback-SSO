@@ -27,6 +27,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QProcessEnvironment>
 #include <QThread>
 
 #ifdef _WIN32
@@ -576,6 +577,7 @@ void Process::died()
 
 Process::~Process()
       {
+      reqShm.unlink();                    // (a child that ended before its hello)
       if (watcher.joinable())
             watcher.join();
       closePipe(toChild);
@@ -597,6 +599,7 @@ bool Process::send(Op op, quint32 id, const QByteArray& args, QByteArray* reply,
                   return false;
                   }
             helloRead = true;
+            reqShm.unlink();              // (Linux: the child has it open; the name goes, the memory stays)
             }
       QByteArray m = pack([&](QDataStream& ds) { ds << quint32(op) << id; });
       m += args;
@@ -729,6 +732,43 @@ Instance::~Instance()
       --d->proc->count;
       }
 
+//---------------------------------------------------------
+//   the environment
+//    a host process is started once and kept, but an in-process plug-in reads MuseScore's environment as it is at
+//    the call (the test synth's MSTESTSYNTH_*, set by a test before it loads an instance): each LOAD carries the
+//    parent's environment and the child takes it over before loading (only the variables that differ: none in a
+//    normal session, so no setenv while other instances play). Not taken: what the child sets for itself
+//---------------------------------------------------------
+
+static bool ownVariable(const QString& name)
+      {
+      return name.isEmpty() || name.startsWith('=') || name == "MS_VST3_HOST_PROCESSES" || name == "QT_QPA_PLATFORM";
+      }
+
+static QStringList environment()
+      {
+      return QProcessEnvironment::systemEnvironment().toStringList();
+      }
+
+#ifdef VST3_HOST_CHILD
+static void takeEnvironment(const QStringList& parent)
+      {
+      const QProcessEnvironment now = QProcessEnvironment::systemEnvironment();
+      QProcessEnvironment want;
+      for (const QString& e : parent) {
+            const int eq = e.indexOf('=', 1);
+            if (eq > 0)
+                  want.insert(e.left(eq), e.mid(eq + 1));
+            }
+      for (const QString& k : want.keys())
+            if (!ownVariable(k) && (!now.contains(k) || now.value(k) != want.value(k)))
+                  qputenv(k.toLocal8Bit().constData(), want.value(k).toLocal8Bit());
+      for (const QString& k : now.keys())
+            if (!ownVariable(k) && !want.contains(k))
+                  qunsetenv(k.toLocal8Bit().constData());
+      }
+#endif
+
 std::unique_ptr<Instance> Instance::load(const QString& path, double sampleRate, int maxBlock, QString* error, QByteArray* loadReply)
       {
       auto fail = [error](const QString& m) {
@@ -781,7 +821,7 @@ std::unique_ptr<Instance> Instance::load(const QString& path, double sampleRate,
             proc->instances.insert(&d);
       }
       const QByteArray args = pack([&](QDataStream& ds) {
-            ds << path << sampleRate << qint32(maxBlock) << segName << qint32(d.cmdCapacity);
+            ds << path << sampleRate << qint32(maxBlock) << segName << qint32(d.cmdCapacity) << environment();
             });
       QByteArray reply;
       bool sent = false;
@@ -831,7 +871,9 @@ QByteArray Instance::call(Op op, const QByteArray& args, bool* ok, bool flush)
       bool sent = false;
       {
             std::lock_guard<std::mutex> lock(d->proc->rpc);
-            sent = d->proc->send(op, d->id, args, &reply);
+            // (setState: the environment too, as at LOAD; the test synth reads it there)
+            sent = d->proc->send(op, d->id, op == Op::SET_STATE ? args + pack([](QDataStream& ds) { ds << environment(); }) : args,
+                                 &reply);
       }
       if (ok)
             *ok = sent;
@@ -1109,7 +1151,9 @@ void Child::handle(const QByteArray& request)
             QString path, segName;
             double rate = 0;
             qint32 maxBlock = 0, cmdCapacity = 0;
-            ds >> path >> rate >> maxBlock >> segName >> cmdCapacity;
+            QStringList env;
+            ds >> path >> rate >> maxBlock >> segName >> cmdCapacity >> env;
+            takeEnvironment(env);
             QString err;
             std::unique_ptr<ChildInstance> in(new ChildInstance);
             in->id = id;
@@ -1189,7 +1233,9 @@ void Child::handle(const QByteArray& request)
                   break;
             case Op::SET_STATE: {
                   QByteArray state;
-                  ds >> state;
+                  QStringList env;
+                  ds >> state >> env;
+                  takeEnvironment(env);
                   const bool ok = p->setState(state);
                   in->h->sinceState.store(p->secondsSinceState(), std::memory_order_release);
                   o << ok;

@@ -7,11 +7,25 @@ a section there when you need the background of that topic. Commit messages desc
 
 ## Paused 2026-10-18: Kontakt in host processes (branch `kontakt-procs`, WIP, not merged)
 Design + status: ~/MuseScore/ms3fork/private/kontakt-procs-design.md (local). Built on Linux only: audio/vst3/vst3remote.*,
-msvst3host, `[soundlibrary] hostProcesses` (default 0 = in-process, unchanged behaviour). In-process: all fork tests pass.
-With MS_VST3_HOST_PROCESSES=2, 5 tst_soundlibrary tests fail. **Next step:** fix vst3Settle (remote settle has no effect)
-and transportRestart (restart not seen) first, then unlink the Linux request segment after the child's hello, then decide
-the 3 in-process-assumption tests (vst3LoadTimes, vst3UnloadModules, pluginDescribe/hostQueries). Then MSVC build
-(check_windows_names.sh, [windows-build] via workflow_dispatch: branch isn't claude/**), VM null/dropout/load-time tests.
+msvst3host, `[soundlibrary] hostProcesses` (default 0 = in-process, unchanged behaviour). Build/test through
+~/MuseScore/ms3fork/ovl-kprocs/kp.sh (overlay on build-integrate; queue with build-queue.sh).
+**State (2026-10-18, second session):** Linux tests pass both ways. tst_soundlibrary 106 passed, 4 skipped in-process
+(the integrate base's count: trim-render added settingsReadIdentical and the env-gated evenTrimTrace; CLAUDE.md's 105/3
+predates it) and 105 passed, 5 skipped with MS_VST3_HOST_PROCESSES=2 (vst3UnloadModules skips: the module lives in the
+host process); tst_liveequivalence 51 passed, 3 skipped both ways; no /dev/shm/msvst3-* or msvst3host left after a run.
+- vst3Settle / transportRestart were one bug: a host process keeps the environment it was started with, the plug-in
+  in it never saw the variables set later (MSTESTSYNTH_INIT_MS, _TRANSPORT_LOG). LOAD and SET_STATE now carry the
+  parent's environment; the child sets only what differs (none in a normal session), never MS_VST3_HOST_PROCESSES or
+  QT_QPA_PLATFORM. The same fixed vst3LoadTimes (it passes remotely unchanged).
+- Linux: the request segment's name is unlinked after the child's hello (or when its Process goes before one).
+- pluginDescribe checks the description's own hostQueries (a remote instance's are its process's); Op::HOST_QUERIES
+  still has no parent-side caller (Vst3Plugin::hostQueries() is MuseScore's process only).
+- tools/check_windows_names.sh flags `INFINITE` twice (WaitForSingleObject inside #ifdef _WIN32): windows.h's own
+  constant, used as meant; nothing to rename.
+**Next:** MSVC build (workflow_dispatch: the branch isn't claude/**; ask the owner first), then on the VM with real SSO:
+null test in-process vs hostProcesses=K (--verify-playback --verify-wav, compare_renders.py), real-time dropout count
+on Whence both ways, GUI load times (load times.log) both ways, memory of all processes; then the default K. Open:
+SoundLibraryExport::loadSynth still loads one by one.
 
 ## Speed from written (branch `cc119-control`, 2026-10-17)
 
