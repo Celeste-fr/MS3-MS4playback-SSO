@@ -17,6 +17,9 @@
 #include <limits>
 #include <memory>
 #include <mutex>
+#include <cstring>
+#include <string_view>
+#include <unordered_map>
 
 #include <QDir>
 #include <QFile>
@@ -249,12 +252,32 @@ bool Definition::mapDefault() const
       return std::isnan(value);
       }
 
+// (the lookups below ran 100 string compares, and a QString made of the id, per read; an index of the same ids, the first
+// of a duplicate winning as the loop did)
+static const std::unordered_map<std::string_view, const Definition*>& definitionIndex()
+      {
+      static const std::unordered_map<std::string_view, const Definition*> index = [] {
+            std::unordered_map<std::string_view, const Definition*> m;
+            for (const Definition& d : DEFINITIONS)
+                  m.emplace(std::string_view(d.id), &d);
+            return m;
+            }();
+      return index;
+      }
+
+static const Definition* definitionOf(const char* id)
+      {
+      const auto& index = definitionIndex();
+      auto it = index.find(std::string_view(id));
+      return it == index.end() ? nullptr : it->second;
+      }
+
 const Definition* definition(const QString& id)
       {
-      for (const Definition& d : DEFINITIONS)
-            if (id == d.id)
-                  return &d;
-      return nullptr;
+      const QByteArray utf8 = id.toUtf8();
+      if (utf8.contains('\0'))           // (QString == const char* stops at the first NUL of the id: as before, never equal)
+            return nullptr;
+      return definitionOf(utf8.constData());
       }
 
 QString sourceName(Source s)
@@ -654,12 +677,20 @@ double iniValue(const char* id)
 
 const char* metaTag = "playbackSettings";
 
-std::map<QString, double> scoreValues(const Score* score)
+// (parsed from the score's tag, a pure function of its text: kept per thread for the last text asked, as every read of
+// a setting parsed the whole tag again, and a render reads thousands)
+static std::shared_ptr<const std::map<QString, double>> scoreValuesShared(const Score* score)
       {
-      std::map<QString, double> out;
+      static const std::shared_ptr<const std::map<QString, double>> none = std::make_shared<const std::map<QString, double>>();
       if (!score || !score->masterScore())
-            return out;
-      const QString tag = score->masterScore()->metaTag(metaTag);
+            return none;
+      static const QString key = QString::fromLatin1(metaTag);
+      const QString tag = score->masterScore()->metaTag(key);
+      thread_local QString lastTag;
+      thread_local std::shared_ptr<const std::map<QString, double>> last;
+      if (last && tag == lastTag)
+            return last;
+      std::map<QString, double> out;
       for (const QString& item : tag.split(';', QString::SkipEmptyParts)) {
             const QString id = item.section('=', 0, 0).trimmed();
             bool ok = false;
@@ -668,7 +699,14 @@ std::map<QString, double> scoreValues(const Score* score)
             if (ok && d)
                   out[id] = qBound(d->min, v, d->max);
             }
-      return out;
+      lastTag = tag;
+      last = std::make_shared<const std::map<QString, double>>(std::move(out));
+      return last;
+      }
+
+std::map<QString, double> scoreValues(const Score* score)
+      {
+      return *scoreValuesShared(score);
       }
 
 QString writeScoreValues(const std::map<QString, double>& values)
@@ -685,9 +723,8 @@ QString writeScoreValues(const std::map<QString, double>& values)
 // the older per-score metaTags (their own UI rows: Mixer > Advanced Options...)
 bool hasOwnMetaTag(const char* id)
       {
-      const QString s = id;
-      return s == "heldNotes/early" || s.startsWith("tuning/") && s != "tuning/waitForRelease"
-             && s != "tuning/pitchBend" && s != "tuning/bendAtArrival" && s != "tuning/hostedTuning";
+      return !strcmp(id, "heldNotes/early") || (!strncmp(id, "tuning/", 7) && strcmp(id, "tuning/waitForRelease")
+             && strcmp(id, "tuning/pitchBend") && strcmp(id, "tuning/bendAtArrival") && strcmp(id, "tuning/hostedTuning"));
       }
 
 static bool ownMetaTagValue(const char* id, const Score* score, double* v)
@@ -725,11 +762,11 @@ static bool ownMetaTagValue(const char* id, const Score* score, double* v)
 
 Source source(const char* id, const Score* score, double mapValue)
       {
-      const Definition* d = definition(id);
+      const Definition* d = definitionOf(id);
       if (!d)
             return Source::DEFAULT;
       double v;
-      if (d->perScore && (ownMetaTagValue(id, score, &v) || scoreValues(score).count(id)))
+      if (d->perScore && (ownMetaTagValue(id, score, &v) || scoreValuesShared(score)->count(QString::fromUtf8(id))))
             return Source::SCORE;
       // (the generated file holds every default: a value equal to the built-in one counts as the default)
       if (iniHas(id) && (d->mapDefault() || iniValue(id) != d->value))
@@ -739,7 +776,7 @@ Source source(const char* id, const Score* score, double mapValue)
 
 double value(const char* id, const Score* score, double mapValue)
       {
-      const Definition* d = definition(id);
+      const Definition* d = definitionOf(id);
       Q_ASSERT(d);
       if (!d)
             return 0;
@@ -747,10 +784,12 @@ double value(const char* id, const Score* score, double mapValue)
             double v;
             if (ownMetaTagValue(id, score, &v))
                   return v;
-            const std::map<QString, double> sv = scoreValues(score);
-            auto it = sv.find(id);
-            if (it != sv.end())
-                  return it->second;
+            const auto sv = scoreValuesShared(score);
+            if (!sv->empty()) {
+                  auto it = sv->find(QString::fromUtf8(id));
+                  if (it != sv->end())
+                        return it->second;
+                  }
             }
       if (iniHas(id))
             return iniValue(id);

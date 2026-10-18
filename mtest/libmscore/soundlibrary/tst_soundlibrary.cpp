@@ -57,6 +57,7 @@
 #include "mtest/testutils.h"
 
 #include "libmscore/evenauto.h"
+#include "libmscore/lagprobe.h"
 #include "libmscore/undo.h"
 #ifdef TESTSYNTH
 #include "audio/vst3/evenmeasure.h"
@@ -180,6 +181,8 @@ class TestSoundLibrary : public QObject, public MTest
       void evenAutoWindows();
       void evenAutoSession();
       void evenAutoSlow();
+      void evenTrimTrace();
+      void settingsReadIdentical();
       void playbackPresets();
       void renderKit();
       void renderKitMaxVelocity();
@@ -10436,6 +10439,200 @@ static double rms(const std::vector<float>& b, int side)
 static double dB(double a, double b)
       {
       return 20 * std::log10(a / b);
+      }
+
+//---------------------------------------------------------
+//   evenTrimTrace
+//    a tool, skipped unless MS_TRIM_SCORE, MS_TRIM_MAP and MS_TRIM_OUT are set (MS_TRIM_SETTINGS: the score's playback
+//    settings "id=value;..."; MS_TRIM_CALIBRATION: a dynamics.json): the even levels' session run on the score with
+//    fakeMeasure (the stand-in for the plug-in), every result as the host's onResult takes it. MS_TRIM_OUT/trace.txt:
+//    per result the job's gain (the plug-in's gain, trim included), the master trim and the patch gains after it, then
+//    every note's even level and the whole score's events, all at full precision: two builds' files must be identical
+//    (the master trim's cost may move, never its value). MS_TRIM_OUT/times.txt: the main-thread time of each result
+//    (Session::result, whose next-round render and next job ask for the trim), then the time of the gains (master trim) the
+//    host's mixer timer asks right after, in ms, and their sums
+//---------------------------------------------------------
+
+void TestSoundLibrary::evenTrimTrace()
+      {
+      if (!qEnvironmentVariableIsSet("MS_TRIM_SCORE") || !qEnvironmentVariableIsSet("MS_TRIM_MAP") || !qEnvironmentVariableIsSet("MS_TRIM_OUT"))
+            QSKIP("MS_TRIM_SCORE, MS_TRIM_MAP, MS_TRIM_OUT not set");
+      QString error;
+      std::shared_ptr<SoundLib::Library> lib = SoundLib::Library::load(qEnvironmentVariable("MS_TRIM_MAP"), &error);
+      QVERIFY2(lib, qPrintable(error));
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); } } reset;
+      if (qEnvironmentVariableIsSet("MS_TRIM_CALIBRATION")) {
+            auto cal = SoundLib::readCalibration(QString(), qEnvironmentVariable("MS_TRIM_CALIBRATION"));
+            QVERIFY(cal);
+            SoundLib::setDynamicsCalibration(cal);
+            }
+      MasterScore* score = readCreatedScore(qEnvironmentVariable("MS_TRIM_SCORE"));
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      if (qEnvironmentVariableIsSet("MS_TRIM_SETTINGS"))
+            score->setMetaTag(Playback::metaTag, qEnvironmentVariable("MS_TRIM_SETTINGS"));
+      QStringList trace, times;
+      auto exact = [](double v) { return QString::number(v, 'g', 17); };
+      auto gains = [&]() {
+            const ContextLevel::MasterTrim mt = ContextLevel::masterTrim(score);
+            const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+            QString g = QString("trim %1 peak %2 amp %3 at %4 sounding %5 fallback %6 notes %7 uncal %8").arg(exact(mt.db), exact(mt.peakDb),
+                         exact(mt.peakAmplitudeDb), exact(mt.atSeconds)).arg(mt.sounding).arg(exact(mt.fallbackDb)).arg(mt.notes).arg(mt.uncalibrated);
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib))
+                  g += QString(" %1/%2:%3").arg(r.part->partName(), r.instrument->name,
+                        exact(TrackDelays::patchGain(*lib, TrackDelays::of(r.part, delays), r.instrument->name)));
+            return g;
+            };
+      double sum = 0.0, sum2 = 0.0;
+      int n = 0;
+      if (EvenAuto::active(score)) {
+            EvenLevels::Cache cache;
+            EvenAuto::Session session(score, &cache);
+            session.edited();
+            std::vector<EvenAuto::Job> jobs = session.detect();
+            trace << "start " + gains();
+            while (!jobs.empty()) {
+                  const EvenAuto::Job j = jobs.back();
+                  jobs.pop_back();
+                  const EvenAuto::Result r = fakeMeasure(j);
+                  EvenAuto::Job next;
+                  QElapsedTimer t;
+                  t.start();
+                  const bool more = session.result(r, &next);
+                  const double ms = t.nsecsElapsed() / 1e6;
+                  if (more)
+                        jobs.push_back(next);
+                  // (then what the host's mixer timer asks: the gains with the master trim, rendered when the score's
+                  // levels changed)
+                  QElapsedTimer t2;
+                  t2.start();
+                  const QString g = gains();
+                  const double ms2 = t2.nsecsElapsed() / 1e6;
+                  trace << QString("result %1 round %2 more %3 gain %4 next %5 | %6").arg(j.id).arg(j.round).arg(more ? 1 : 0)
+                        .arg(exact(j.gain)).arg(more ? exact(next.gain) : QString("-"), g);
+                  times << QString("%1 %2").arg(ms, 0, 'f', 3).arg(ms2, 0, 'f', 3);
+                  sum += ms;
+                  sum2 += ms2;
+                  ++n;
+                  }
+            }
+      else
+            trace << "no session; " + gains();
+      QDir().mkpath(qEnvironmentVariable("MS_TRIM_OUT"));
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (int tr = 0; tr < score->ntracks(); ++tr) {
+                  Element* e = s->element(tr);
+                  if (!e || !e->isChord())
+                        continue;
+                  for (const Note* nt : toChord(e)->notes())
+                        if (EvenLevels::isSet(nt->evenLevel()))
+                              trace << QString("note %1 %2 %3 %4 %5").arg(s->tick().ticks()).arg(tr).arg(nt->pitch()).arg(exact(nt->evenLevel()), nt->evenContext());
+                  }
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            trace << QString("ev %1 %2 %3 %4 %5 %6").arg(te.first).arg(int(e.type())).arg(e.dataA()).arg(e.dataB()).arg(e.isExternal() ? e.extPort() * 16 + e.extChannel() : -1).arg(e.tuning(), 0, 'g', 17);
+            }
+      times << QString("results %1 sum %2 ms, gains after them %3 ms").arg(n).arg(sum, 0, 'f', 1).arg(sum2, 0, 'f', 1);
+      if (LagProbe::on()) {           // (MS_LAG_PROBE set: the scopes' counts and time, by name)
+            std::map<QString, std::pair<int, double>> by;
+            for (const LagProbe::Sample& x : LagProbe::take()) {
+                  auto& b = by[QString("%1 (in %2)").arg(x.name, x.parent ? x.parent : "-")];
+                  ++b.first;
+                  b.second += x.durNs / 1e6;
+                  }
+            for (const auto& b : by)
+                  times << QString("scope %1: %2 x, %3 ms").arg(b.first).arg(b.second.first).arg(b.second.second, 0, 'f', 1);
+            }
+      QFile tf(qEnvironmentVariable("MS_TRIM_OUT") + "/trace.txt");
+      QVERIFY(tf.open(QIODevice::WriteOnly | QIODevice::Text));
+      tf.write((trace.join("\n") + "\n").toUtf8());
+      QFile mf(qEnvironmentVariable("MS_TRIM_OUT") + "/times.txt");
+      QVERIFY(mf.open(QIODevice::WriteOnly | QIODevice::Text));
+      mf.write((times.join("\n") + "\n").toUtf8());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   settingsReadIdentical
+//    Playback::value / source / on / scoreValues / definition read the settings through an index and the last parsed
+//    tag (a render reads thousands of them); here against the plain way (every id looked up in definitions(), the tag
+//    parsed at every read) for every id, with tags that are edited between the reads, junk, repeated, out of range,
+//    spaced, and with the older per-score metaTags
+//---------------------------------------------------------
+
+void TestSoundLibrary::settingsReadIdentical()
+      {
+      Playback::setIniValuesForTest({ { "levels/evenLevels", "1" }, { "slurs/performance", "1" } });
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "even-auto.musicxml");
+      QVERIFY(score);
+      auto parse = [](const QString& tag) {
+            std::map<QString, double> out;
+            for (const QString& item : tag.split(';', QString::SkipEmptyParts)) {
+                  const QString id = item.section('=', 0, 0).trimmed();
+                  bool ok = false;
+                  const double v = item.section('=', 1).trimmed().toDouble(&ok);
+                  const Playback::Definition* d = nullptr;
+                  for (const Playback::Definition& x : Playback::definitions())
+                        if (id == x.id) {
+                              d = &x;
+                              break;
+                              }
+                  if (ok && d)
+                        out[id] = qBound(d->min, v, d->max);
+                  }
+            return out;
+            };
+      const QStringList tags = {
+            QString(), "levels/evenLevels=0", "levels/evenLevels=0;slurs/performance=0", " levels/evenLevels = 0 ; junk=3 ;;",
+            "levels/evenLevels=7;slurs/performance=-4", "levels/evenLevels=abc", "levels/evenLevels=0;levels/evenLevels=1",
+            "tuning/tolerance=12;heldNotes/early=33;levels/context=0", "levels/evenLevels", "=3;;;", "hosting/maxVoices=100",
+            "levels/evenLevels=0", QString() };
+      for (const QString& tag : tags) {
+            score->setMetaTag(Playback::metaTag, tag);
+            if (tag.contains("tuning/"))
+                  score->setMetaTag("soundLibraryLanes", "tolerance=20 tail=3 max=4");
+            const std::map<QString, double> want = parse(tag);
+            QVERIFY2(Playback::scoreValues(score) == want, qPrintable(tag));
+            QVERIFY(Playback::scoreValues(nullptr).empty());
+            for (const Playback::Definition& d : Playback::definitions()) {
+                  QCOMPARE(Playback::definition(QString::fromUtf8(d.id)) != nullptr, true);
+                  const bool own = Playback::hasOwnMetaTag(d.id);
+                  const bool wantOwn = QString(d.id) == "heldNotes/early" || (QString(d.id).startsWith("tuning/")
+                        && QString(d.id) != "tuning/waitForRelease" && QString(d.id) != "tuning/pitchBend"
+                        && QString(d.id) != "tuning/bendAtArrival" && QString(d.id) != "tuning/hostedTuning");
+                  QCOMPARE(own, wantOwn);
+                  const double v = Playback::value(d.id, score, 0.5);
+                  const Playback::Source src = Playback::source(d.id, score, 0.5);
+                  auto it = want.find(d.id);
+                  if (d.perScore && !own && it != want.end()) {
+                        QCOMPARE(v, it->second);
+                        QVERIFY(src == Playback::Source::SCORE);
+                        }
+                  else if (!d.perScore || it == want.end()) {
+                        QVERIFY(src != Playback::Source::SCORE || own);
+                        }
+                  QCOMPARE(Playback::on(d.id, score), Playback::value(d.id, score) >= 0.5);
+                  QCOMPARE(Playback::value(d.id, nullptr, 0.5) >= 0, true);
+                  }
+            QVERIFY(Playback::definition("no/such") == nullptr);
+            QVERIFY(Playback::definition(QString()) == nullptr);
+            }
+      // a second score with another tag, read between the first's reads
+      MasterScore* other = readScore(DIR + "even-auto.musicxml");
+      QVERIFY(other);
+      score->setMetaTag(Playback::metaTag, "levels/evenLevels=0");
+      other->setMetaTag(Playback::metaTag, "levels/evenLevels=1");
+      for (int i = 0; i < 3; ++i) {
+            QVERIFY(!Playback::on("levels/evenLevels", score));
+            QVERIFY(Playback::on("levels/evenLevels", other));
+            }
+      delete other;
+      delete score;
       }
 
 //---------------------------------------------------------

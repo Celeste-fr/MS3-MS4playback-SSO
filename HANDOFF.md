@@ -67,6 +67,17 @@ Goal: edits respond fast with SSO, sound unchanged (the owner's rule: speedups s
   Measurer instance loads: main-thread parts 61-101 ms (begin) and 44 ms (finish), against 1.8-3.2 s before (build 442).
   Left on the main thread with even levels: each EvenAutoMeasurer::onResult re-renders the master trim (p50 125 ms at
   opening). Exit 0xC000000D at the probe's _Exit (the known headless-Kontakt exit), no crash. Logs local only.
+- **Settings reads (branch `trim-render`, 2026-10-17)**: the 125 ms master-trim re-render per Even-levels result was not
+  the trim's own arithmetic (the event walk: 0.4-3 ms) but the whole-score render under it (and under every Even next-round
+  render and `SoundLib::routes`): ~77 % of that time was `Playback::value` -> `scoreValues`, which split and parsed the
+  score's whole `playbackSettings` tag, and looked the id up in ~100 definitions with a QString made of it, at every read
+  (thousands per render). Now `definition` is an index (first duplicate wins, as the loop), `scoreValues` keeps the last
+  tag's parse per thread (a pure function of the tag text), `hasOwnMetaTag` compares C strings. Same values by
+  construction; `settingsReadIdentical` (old algorithm vs new, tags edited between reads) and `evenTrimTrace` (MS_TRIM_*:
+  Whence + fakeMeasure, every job gain, trim, patch gain, even level and event at full precision) are byte-identical to
+  integrate-1017 with Even levels on and off; `dumpEvents` Whence chunked (Recommended, evenLevels 1 and 0): ev/, gains.txt,
+  instances.txt, trace.txt identical. Linux, interleaved base/new x4, 48 results: Session::result sum 6.8-9.5 s -> 0.9-1.1 s,
+  the gains (master trim) the mixer timer asks after each result 2.4-3.6 s -> 0.23-0.29 s (one trim render ~200 -> ~20 ms).
 - **Open**: the 0xC0000005 crash
   (rerun1 phase e): not ours on the evidence (below). Fixed (coordinator, 2026-10-17): the note preview's chunk cache
   ignored even levels written without an undo step (a click after such a write replayed the chunk rendered before it);
