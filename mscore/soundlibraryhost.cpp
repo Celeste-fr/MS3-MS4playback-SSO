@@ -1687,6 +1687,9 @@ struct SoundLibraryHost::Pending {
       QString name;
       bool setup { false };               // it has a setup to load
       std::unique_ptr<Vst3Plugin> plugin;
+      // the instance pool's instance of this patch (Spare), kept until this one has its setup: Kontakt then finds the
+      // samples in memory; it goes with this (after finishLoad)
+      std::unique_ptr<Vst3Plugin> keepSamples;
       QByteArray state;                   // its setup (empty: none, or it could not be made: error)
       QString error;
       std::future<bool> done;             // valid: set on a worker thread
@@ -1751,12 +1754,18 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
       QElapsedTimer t;
       t.start();
       if (setup) {
-            // a spare of the same patch first (the instance pool: its samples are in memory already); else, when memory
-            // runs short, the least recently used spare takes this patch (its own samples go); else a new instance, the
-            // spares kept for the patches they play
-            Spare* same = sameSpare(path, name);
-            auto i = same ? _spares.begin() + (same - _spares.data()) : _spares.end();
-            if (!same && memoryShort()) {
+            // a spare of the same patch (the instance pool) stays until the new instance has its setup, so Kontakt finds
+            // the samples in memory: the new one is a new instance all the same (plays as one, whatever the plug-in
+            // keeps across setState). Else, when memory runs short, the least recently used spare takes this patch (its
+            // own samples go; as before the pool); else a new instance, the spares kept for the patches they play
+            if (Spare* same = sameSpare(path, name)) {
+                  logTime(library, QString("%1: the instance pool's %2 instance of it keeps the samples in memory while a "
+                                           "new one loads").arg(name, same->pooled ? "kept" : "spare"));
+                  pl->keepSamples = std::move(same->plugin);
+                  _spares.erase(_spares.begin() + (same - _spares.data()));
+                  }
+            auto i = _spares.end();
+            if (!pl->keepSamples && memoryShort()) {
                   i = _spares.end();
                   for (auto j = _spares.begin(); j != _spares.end(); ++j)
                         if (j->plugin && j->plugin->path() == path && (i == _spares.end() || j->used < i->used))
@@ -1764,15 +1773,9 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
                   }
             if (i != _spares.end()) {
                   qDebug("Sound library: the instance of %s loads %s", qPrintable(i->slot.instrument), qPrintable(name));
-                  if (same)
-                        logTime(library, QString("%1: the instance pool's %2 instance of it, its setup set again (samples "
-                                                 "in memory)").arg(name, i->pooled ? "kept" : "spare"));
-                  else
-                        logTime(library, QString("%1: memory short, the instance of %2 (least recently used) takes it")
-                                .arg(name, i->slot.instrument));
+                  logTime(library, QString("%1: memory short, the instance of %2 (least recently used) takes it")
+                          .arg(name, i->slot.instrument));
                   pl->plugin = std::move(i->plugin);
-                  pl->plugin->setOffline(false);
-                  pl->plugin->setSampleRate(MScore::sampleRate);
                   _spares.erase(i);
                   }
             }
@@ -2240,7 +2243,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       for (const Need& n : needs) {
             if (vst->plugin(n.slot) || pendingOn(n.slot))
                   continue;
-            // (a pooled spare, from an earlier sync, has played since its setup went in: it is loaded again, beginLoad)
+            // (a pooled spare, from an earlier sync, has played since its setup went in: a new instance loads beside it,
+            // beginLoad)
             auto i = std::find_if(_spares.begin(), _spares.end(), [&](const Spare& sp) { return !sp.pooled && fits(sp.plugin.get(), sp.slot, n); });
             if (i == _spares.end()) {
                   toLoad.push_back(&n);
@@ -2504,12 +2508,12 @@ std::unique_ptr<Vst3Plugin> SoundLibraryHost::takePooled(const QString& path, co
       Spare* sp = sameSpare(path, name);
       if (!sp)
             return nullptr;
+      Q_UNUSED(sampleRate);
       std::unique_ptr<Vst3Plugin> p = std::move(sp->plugin);
       _spares.erase(_spares.begin() + (sp - _spares.data()));
-      p->setOffline(false);
-      p->setSampleRate(sampleRate);
       if (std::shared_ptr<const SoundLib::Library> library = SoundLib::current())
-            logTime(*library, QString("%1: the instance pool's kept instance of it, its setup set again (samples in memory)").arg(name));
+            logTime(*library, QString("%1: the instance pool's kept instance of it keeps the samples in memory while a new one "
+                                      "loads").arg(name));
       return p;
 #else
       Q_UNUSED(path);
@@ -2736,12 +2740,12 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             if (!r || (parts && !parts->count(r->part)))
                   continue;
             const bool setup = SoundLibraryHost::hasSetup(*library, in.instrument->name);
-            std::unique_ptr<Vst3Plugin> p = setup ? SoundLibraryHost::instance()->takePooled(path, in.instrument->name, sampleRate)
-                                                  : nullptr;
-            if (!p) {
+            // (the pool's instance of the patch, if any, until this new one has its setup: the samples in memory)
+            std::unique_ptr<Vst3Plugin> keepSamples = setup ? SoundLibraryHost::instance()->takePooled(path, in.instrument->name, sampleRate)
+                                                            : nullptr;
+            if (!keepSamples)
                   SoundLibraryHost::instance()->trimPool();       // (room for it first)
-                  p = Vst3Plugin::load(path, sampleRate, 4096, error);
-                  }
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
             if (!p)
                   return nullptr;
             QString e;
@@ -2759,6 +2763,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
                         all.push_back(one);
                         }
                   }
+            keepSamples.reset();
             LibraryControllers::applyParameters(p.get(), *r, lanes, nullptr);
             for (size_t i = 0; i < in.routes.size() && (tuned || i == 0); ++i) {
                   const SoundLib::Route* ri = routeAt(in.routes[i]);

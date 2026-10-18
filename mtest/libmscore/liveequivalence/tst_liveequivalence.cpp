@@ -4888,8 +4888,9 @@ void TestLiveEquivalence::preparedStates()
 //---------------------------------------------------------
 //   instancePool
 //    SoundLibraryHost's instance pool (private/sso-load-profile.md, option 1): an export's instances go to the pool when
-//    its Vst3Synth goes, and the next load of the same patch takes the very instance with its setup set again: it plays
-//    as a fresh one (a parameter changed on it before is the setup's again), bit for bit
+//    its Vst3Synth goes; the next load of the same patch takes the pooled one, keeps it while a new instance gets its
+//    setup (Kontakt's samples stay in memory), then lets it go: the new one plays as the first fresh one did, bit for
+//    bit, though the pooled one was played on and changed (the test synth keeps its round robins across setState)
 //---------------------------------------------------------
 
 void TestLiveEquivalence::instancePool()
@@ -4940,12 +4941,12 @@ void TestLiveEquivalence::instancePool()
       render(a.get(), slot);
       a.reset();
       QCOMPARE(h->pooledCount(), 1);
-      // loaded again: the same instance, its setup set again, plays as the fresh one did
+      // loaded again: the pooled one taken (and gone), a new one plays as the fresh one did
       std::map<int, QString> patches2;
       std::shared_ptr<Vst3Synth> b = SoundLibraryExport::loadInstances(score, 48000, &error, &patches2);
       QVERIFY2(b, qPrintable(error));
       QCOMPARE(h->pooledCount(), 0);
-      QVERIFY(b->plugin(slot) == first);
+      QVERIFY(b->plugin(slot));
       const std::vector<float> reused = render(b.get(), slot);
       QVERIFY2(reused == fresh, "the pooled instance plays as a fresh one");
       b.reset();
