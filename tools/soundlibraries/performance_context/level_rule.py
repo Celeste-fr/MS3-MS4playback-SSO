@@ -63,20 +63,26 @@ j['rule'] = rule
 # held - figure + D (D = technique_offsets.json staccato "use", the five sections' Spiccato / Short 0.5 heldOffset):
 # without, D counted twice (the first VM check, 2026-10-17: calib's staccatos 3.4 dB over the held notes at mp, Whence's
 # 1.2 over the slurs, where D puts them 3.4 under). The map's contextLevelPlain / contextLevelStaccato / contextLevelSingle.
+# Metric P0 (2026-10-17, branch stac-levels): P without its threshold term (perceived.py a = 0). P grows 1.1-1.4 dB per dB
+# of gain in SSO's quiet notes (measured on calib.mscx's renders: the threshold LOUDNESS_A sits near their filters'
+# levels), so held - figure in P is more than the gain in dB the figure needs, the more so the quieter the figure: the
+# staccatos (17 dB under the held note at mp on the Violas) took up to 3.8 dB too much (calib: Violas mp +2.9, Celli +2.3).
+# P0 moves 0.996 dB per dB at any level, so its held - figure is the gain in dB at whatever level the score plays.
+PM = 'P0'
 if 'plain' in j:
     D_STAC = json.load(open(os.path.join(D, '..', 'technique_offsets.json')))['staccato']['use']
     pj = j['plain']; PG = pj['grid']
-    prule = dict(metric=M, relation='gain = held - figure',
+    prule = dict(metric=PM, relation='gain = held - figure',
                  note='gain dB over the plain Performance legato at CC1 = d for a phrase of median IOI ioiMs and median pitch p '
                       '(a staccato or a note outside a slur: the note alone, its length as its IOI): the section\'s All techniques '
-                      'Long held at CC1 = d less the figure at CC1 = d (metric P; a staccato + D: rendered with D in place); '
+                      'Long held at CC1 = d less the figure at CC1 = d (metric P0; a staccato + D: rendered with D in place); '
                       'per kind, key "d|ioiMs|p"', dStaccato=D_STAC, kinds={})
     noise = []
     for kind in ('slur', 'stac', 'single'):
         prule['kinds'][kind] = {}
-        print(f'plain {kind}: gain dB ({M}); rows d, columns IOI {PG["ioiMs"]} ms; low / mid / high register')
+        print(f'plain {kind}: gain dB ({PM}); rows d, columns IOI {PG["ioiMs"]} ms; low / mid / high register')
         for s in SEC:
-            m = pj['sections'][s][M]; regs = PG['pitches'][s]; cells = {}
+            m = pj['sections'][s][PM]; regs = PG['pitches'][s]; cells = {}
             for d in PG['dynamic']:
                 for p in regs:
                     h = m['held'][f'{d}|{p}']

@@ -54,7 +54,9 @@ def filters(sr, N=2048):
     return W
 
 
-def perceived_db(st, sr):
+def perceived_db(st, sr, a=LOUDNESS_A):
+    # (a = 0: P0, the same model without the threshold term: specific loudness E^0.3, so a gain of g dB moves it by
+    # 0.996 g at any level; with LOUDNESS_A it grows 1.1-1.4 dB per dB in SSO's quiet notes: branch stac-levels)
     frames = len(st)
     if frames == 0:
         return FLOOR_DB
@@ -74,7 +76,7 @@ def perceived_db(st, sr):
         seg[idx >= frames] = 0
         P = np.abs(np.fft.rfft(seg, axis=1)[:, :N // 2]) ** 2
         E = P @ W
-        loud = ((E + LOUDNESS_A) ** 0.3 - LOUDNESS_A ** 0.3).sum(axis=1)
+        loud = ((E + a) ** 0.3 - a ** 0.3).sum(axis=1)
         for l in loud:
             stl += (att if l > stl else rel) * (l - stl)
             if stl > 0:

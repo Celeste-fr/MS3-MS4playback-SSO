@@ -426,6 +426,32 @@ was measured again as Recommended plays it today, per kind of note, and a plain 
   (before -4.4), Violas -1.8 (before -6.0); Violins 2 (staccatos only) 1.9 dB louder than before; the sections'
   Performance medians Va - V1 -1.2, Vc - Va +8.3 dB (before -0.9 / +8.2). The dump (Linux) changes only CC11 on the
   Performance routes (and the patches' gain stage).
+- **Metric P0** (2026-10-17, branch stac-levels; the cause of the staccatos' ±3 dB above). P
+  (`ArticulationCheck::perceivedLoudnessDb`) has a threshold term (`LOUDNESS_A`) that sits near the levels of SSO's quiet
+  notes, so P grows 1.1-1.4 dB per dB of gain there (calib.mscx, P at +5 vs -5 dB: held notes 1.07-1.17, the zeroed
+  grid's staccatos up to 1.41 on the Violas at mp, 17 dB under the held note). held - figure in P was taken as a gain in
+  dB, so the quietest figures got too much: on calib (kthost renders, current map vs the map's grids zeroed) the gain the
+  staccatos played moved them 3.8 dB (Violas mp), 2.2 (Celli mp) more in P than the map's gain. Ruled out by measurement:
+  round robins (two passes in one Kontakt, every figure the same to 0.1 dB), the window against the staccato's length
+  (a staccato's length is its written one, as the grid's: `ContextLevel::gain`), even levels (no CC11 changes on calib),
+  CC11's law (the dump's levels against the renders: median 0.5 dB, the rest is P's slope). The plain grid is now
+  measured in **P0**, P without the threshold (`perceived.py` a = 0: specific loudness E^0.3, 0.996 dB per dB at any
+  level): `grid_ana.py` writes P, L and P0 per cell, `level_rule.py`'s plain rule reads P0 (the 2026-10-15 slur grid,
+  `[slurs] performance` without plainPerformance, keeps P). Renders: the grid's eight scores dumped on Linux (build
+  98572aa, map's `contextLevel*` zeroed, the grid's settings) and rendered per route through kthost
+  (`performance_context/grid_kthost.py`, `run.cmd`; against the verify renders: kthost - verify P per cell median
+  -0.03 dB, sd 0.12-0.34 per section and dynamic, the take-to-take sd 0.19). The map's plain gains moved by median
+  -0.9 (slur), -1.7 (staccato), -0.7 (single) dB, most at pp and short IOIs (up to -9.6).
+  - Validation, calib.mscx (kthost, Recommended, figure - held, Violins 1 / 2, Violas, Celli, Basses; target slurs and
+    single notes 0, staccatos -3.4), P (P0): mp staccato -4.7 / -4.4 / -2.8 / -4.1 / -3.8 (-4.1 / -3.8 / -2.2 / -3.6 /
+    -3.0), f staccato -3.1 / -4.5 / -3.5 / -3.3 / -3.7 (-2.7 / -4.1 / -3.1 / -3.0 / -3.2); mp slur -0.6 / -0.7 / -0.8 /
+    -0.9 / -1.2, f slur +0.4 / -0.4 / -0.9 / -1.0 / +0.4. RMS error, P: staccatos 0.72 dB (before 1.36), single notes
+    0.66 (0.78), slurs 0.78 (0.63); P0: staccatos 0.58 (1.53), single 0.51 (0.67), slurs 0.66 (0.53); largest staccato
+    error 1.3 dB (before 2.9). The slurs and single notes now sit 0.5-1 dB under the held notes at mp in all five
+    sections alike (calib against the grid's own figure; not explained).
+  - *Whence* (kthost, the part's routes mixed; staccato - slurred, target -3.4), P: Violins 1 -2.3 (before -1.6),
+    Violas -3.0 (-2.0): mean error 0.8 dB (1.6); P0: -2.0 (-1.4), -2.6 (-1.7). The dump changes only CC11 on the
+    Performance routes and the patches' gain stage; the playback audit's findings are unchanged.
 - The first VM check counted D twice (the grid's renders had it in place; calib's staccatos 3.4 dB over the held notes
   at mp, Whence's 1.2 over the slurs): `level_rule.py` adds D to the staccato cells since.
 - Tests: `tst_soundlibrary::levelContextPlain` (the kinds' grids, the fallback, `plainKind`, the top, CC11 per kind).
