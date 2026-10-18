@@ -5,6 +5,22 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Paused 2026-10-18: load-small (branch `load-small` from integrate-1017 @ 5964f331df; NOT merged, WIP)
+- Implemented (f84d2b9521): (1) Kontakt's VST3 module preloaded on a worker thread at idle after GUI startup
+  (SoundLibraryHost::warmUpSoon -> Vst3Plugin::preloadModule; load() takes it, waiting with the event loop running);
+  verify runs preload it too. (2) Between score-open loads: the even-levels measurer's debounced detect waits for the
+  preload, the 50 ms idle timer skips applyMixer while a preload step is pending. MS_LOAD_SMALL_OFF=1 = old behaviour
+  (measurement only). Fork tests all pass (Linux). Windows CI PASSED:
+  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39117026222 (artifact MuseScore-soundlibrary-win64-f84d2b9).
+- Measured (VM, GUI, idle start then Whence opened by a 2nd invocation, kttrace injected; only the OFF run finished):
+  OFF: first instance 2001 ms (module 1530, create 471); 10 instances loaded in 27.0 s; "MuseScore between loads"
+  0.4 s (was 0.9 s on 98572aa: trim-render already cut the 0.39 s gap). Data: private/load-small-work/g1off.
+  ON runs, before/after comparison and the SSO null test were NOT done.
+- Next step: put the CI artifact in C:\claude\lsmall (scripts in ~/MuseScore/ms3fork/private/load-small-work/up:
+  mkcfg.ps1 makes cfg0, guiall.cmd via an /IT task runs off/on twice, ver.cmd = null test off/on twice; summ.py
+  summarises), then compare_renders.py per part (floor = off vs off). Untested risk: Kontakt's InitDll on a worker
+  thread (if anything misbehaves, drop fix 1). Expected gain small: ~1.5-2 s first open after an idle start, <=0.4 s gaps.
+
 ## Speed from written (branch `cc119-control`, 2026-10-17)
 
 The owner approved taking over the Performance patches' CC119 (2026-10-17). `[slurs] speedFromWritten` (0 by default
