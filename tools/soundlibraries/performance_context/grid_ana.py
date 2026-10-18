@@ -51,7 +51,8 @@ def measure_wav(folder, score, part):
         t = ons[i]; ln = float(r['length'])
         end = max(min(t + ln + 0.3, ons[i + 1] if i + 1 < len(rows) else 1e9), t + 0.1)
         out.append(dict(on=t, length=ln, pitch=midi(r['pitch']), articulation=r['articulation'],
-                        P=perceived.perceived_db(a[int(t * sr):int(end * sr)], sr), L=loud50(mono, sr, t, t + ln)))
+                        P=perceived.perceived_db(a[int(t * sr):int(end * sr)], sr), L=loud50(mono, sr, t, t + ln),
+                        P0=perceived.perceived_db(a[int(t * sr):int(end * sr)], sr, 0.0)))
     return out
 
 
@@ -79,7 +80,7 @@ if __name__ == '__main__':
             for take, score in [(sc[4], sc) for sc in idx['scores'] if sc.startswith('grid')]:   # (gridA_<d>, gridB_<d>)
                 for n in matched(idx, F, score, sec):
                     key = f"{n['d']}|{n['p']}" if n['kind'] == 'held' else f"{n['d']}|{n['ioi']}|{n['p']}"
-                    for M in 'PL':
+                    for M in ('P', 'L', 'P0'):
                         c.setdefault(M, {}).setdefault(n['kind'], {}).setdefault(key, {}).setdefault(take, []).append(n[M])
             cells[sec] = {M: {kind: {k: {t: round(st.median(v), 2) for t, v in by.items()} for k, by in kk.items()}
                               for kind, kk in mm.items()} for M, mm in c.items()}
@@ -87,13 +88,14 @@ if __name__ == '__main__':
         # the measured part of sso_performance_context.json's "plain" (level_rule.py adds its rule; the 2026-10-15 grid of
         # [slurs] performance's own legato, the slurs only, stays at the top level)
         out = dict(
-            source='Windows test VM, Kontakt 8 + Spitfire Symphony Orchestra, ' + sys.argv[4] + ': MuseScore3Evo.exe '
-                   "--verify-playback --verify-wav of performance_context/grid_score.py's scores, each part rendered alone "
-                   'through the hosted plug-ins, Recommended ([slurs] plainPerformance 1, [levels] calibrated 2) with, cancelling '
+            source='Windows test VM, Kontakt 8 + Spitfire Symphony Orchestra, ' + sys.argv[4] + ': ' + (sys.argv[5] if len(sys.argv) > 5 else
+                   "MuseScore3Evo.exe --verify-playback --verify-wav of performance_context/grid_score.py's scores, each part rendered alone "
+                   'through the hosted plug-ins') + ', Recommended ([slurs] plainPerformance 1, [levels] calibrated 2) with, cancelling '
                    "in held - figure, sectionBalance / realRange / micCompensation 0, evenLevels 0; the map's contextLevel* "
                    "zeroed in the VM's copy",
             metric='P: ArticulationCheck::perceivedLoudnessDb (perceived.py) from the note-on as sent to the next note-on (or '
-                   'its end + 0.3 s); L: loudest 50 ms RMS (5 ms hop, mono) from the note-on to max(off, on + 150 ms) + 50 ms; '
+                   'its end + 0.3 s); P0: the same without its threshold term (perceived.py a = 0: level-independent, 0.996 dB '
+                   'per dB of gain; the level rule\'s metric since 2026-10-17, branch stac-levels); L: loudest 50 ms RMS (5 ms hop, mono) from the note-on to max(off, on + 150 ms) + 50 ms; '
                    'median per figure, per take (A, B: B in reverse order)',
             figure='held: four half notes [p, p-2, p+2, p] at q = 60 under "non performance", All techniques Long at CC1 = d; '
                    'slur / stac / single: eight sixteenths [p, p-2, p, p+1, p, p+2, p, p-1] at the IOI, the plain Performance '
@@ -109,10 +111,11 @@ if __name__ == '__main__':
     elif what == 'groups':
         idx = json.load(open(sys.argv[2])); F = sys.argv[3]; score = sys.argv[4]
         res = {}
+        M = os.environ.get('GRID_METRIC', 'P0')   # (P0 the level rule's metric since 2026-10-17; P the older one)
         for sec in idx['sections']:
             g = {}
             for n in matched(idx, F, score, sec):
-                g.setdefault((n['d'], n['kind']), []).append(n['P'])
+                g.setdefault((n['d'], n['kind']), []).append(n[M])
             res[sec] = {k: st.median(v) for k, v in g.items()}
         kinds = [k for k in ('slur', 'stac', 'single') if any((d, k) in r for r in res.values() for d in idx['dynamics'] + [64, 96])]
         for d in sorted({k[0] for r in res.values() for k in r}):

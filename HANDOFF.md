@@ -92,8 +92,10 @@ remains. Tested on Linux only (test synth, dumps); not in Kontakt or real Live.
 **Plain levels** (branch `plain-levels` 86263cdd5a, merged into integrate-1017): `[levels] context` with plain Performance
 takes per-kind grids measured on the Windows VM (map `contextLevelPlain` / `contextLevelStaccato` / `contextLevelSingle`,
 `sso_performance_context.json` › `plain`; docs/PLAYBACK_SETTINGS.md › Level rule). **The owner chose the "after" levels
-(2026-10-17).** Open: staccatos are still off by up to ±3 dB per section in the calibration score, unexplained; suspected:
-the grid's all-staccato figure (every note staccato, no slur) against staccatos inside real music.
+(2026-10-17).** The staccatos' ±3 dB per section in the calibration score: found (branch stac-levels, not merged): the
+grid's metric P grows 1.1-1.4 dB per dB in SSO's quiet notes (its threshold term), so the quietest figures (staccatos)
+got too much gain; the plain grid is now measured in P0 (no threshold, level-independent), calib staccato RMS error
+1.36 -> 0.72 dB (P), Whence staccato - slurred error 1.6 -> 0.8 dB (docs/PLAYBACK_SETTINGS.md › Metric P0).
 
 ## Paused 2026-10-17: where to pick up
 
