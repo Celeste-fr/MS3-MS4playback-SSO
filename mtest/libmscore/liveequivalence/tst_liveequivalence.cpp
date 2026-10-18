@@ -163,6 +163,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveTracksJson();
       void hostedSlots();
       void hostedSlotsGain();
+      void instancePool();
       void exportInstancesOfParts();
       void liveEquivalenceByPart();
       void preparedStates();
@@ -4883,6 +4884,76 @@ void TestLiveEquivalence::preparedStates()
 //    linked slots' own Mixer values change nothing. Every copy's slot gets the same gain (one per part and patch). The
 //    plain Live set: one Kontakt track (the multi) with one Utility "MuseScore gain" at +12 dB, its copies' MIDI tracks none
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   instancePool
+//    SoundLibraryHost's instance pool (private/sso-load-profile.md, option 1): an export's instances go to the pool when
+//    its Vst3Synth goes, and the next load of the same patch takes the very instance with its setup set again: it plays
+//    as a fresh one (a parameter changed on it before is the setup's again), bit for bit
+//---------------------------------------------------------
+
+void TestLiveEquivalence::instancePool()
+      {
+      LiveHost host(this, "", { "Violin" });
+      QVERIFY(host.ok);
+      if (!SoundLibraryHost::poolOn())
+            QSKIP("MS_INSTANCE_POOL=0");
+      SoundLibraryHost* h = SoundLibraryHost::instance();
+      h->releasePool();
+      QCOMPARE(h->pooledCount(), 0);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      // CC1 and a cycle of the test synth's round robins (12 notes), offline as an export renders
+      auto render = [](Vst3Synth* vst, int slot) {
+            vst->beginExport(48000);
+            vst->play(PlayEvent(ME_CONTROLLER, slot, 1, 100));
+            std::vector<float> out;
+            std::vector<float> b(2 * 2400, 0.f);
+            for (int i = 0; i < 12; ++i) {
+                  vst->play(PlayEvent(ME_NOTEON, slot, 60 + i, 100));
+                  vst->process(2400, b.data(), nullptr, nullptr);
+                  out.insert(out.end(), b.begin(), b.end());
+                  vst->play(PlayEvent(ME_NOTEOFF, slot, 60 + i, 0));
+                  }
+            std::vector<float> tail(2 * 48000, 0.f);
+            vst->process(48000, tail.data(), nullptr, nullptr);
+            out.insert(out.end(), tail.begin(), tail.end());
+            vst->endExport();
+            return out;
+            };
+      QString error;
+      std::map<int, QString> patches;
+      std::shared_ptr<Vst3Synth> a = SoundLibraryExport::loadInstances(score, 48000, &error, &patches);
+      QVERIFY2(a && !patches.empty(), qPrintable(error));
+      const int slot = a->hostOf(patches.begin()->first);
+      Vst3Plugin* first = a->plugin(slot);
+      QVERIFY(first);
+      const std::vector<float> fresh = render(a.get(), slot);
+      QVERIFY(rms(fresh, 0) > 1e-4);
+      // played on and changed: another Tone, more notes (the round robins move on)
+      const long tone = first->parameterId("Tone");
+      QVERIFY(tone >= 0);
+      first->setParameter(unsigned(tone), 0.1);
+      const std::vector<float> changed = render(a.get(), slot);
+      QVERIFY(changed != fresh);
+      render(a.get(), slot);
+      a.reset();
+      QCOMPARE(h->pooledCount(), 1);
+      // loaded again: the same instance, its setup set again, plays as the fresh one did
+      std::map<int, QString> patches2;
+      std::shared_ptr<Vst3Synth> b = SoundLibraryExport::loadInstances(score, 48000, &error, &patches2);
+      QVERIFY2(b, qPrintable(error));
+      QCOMPARE(h->pooledCount(), 0);
+      QVERIFY(b->plugin(slot) == first);
+      const std::vector<float> reused = render(b.get(), slot);
+      QVERIFY2(reused == fresh, "the pooled instance plays as a fresh one");
+      b.reset();
+      QCOMPARE(h->pooledCount(), 1);
+      h->releasePool();
+      QCOMPARE(h->pooledCount(), 0);
+      delete score;
+      }
 
 void TestLiveEquivalence::hostedSlotsGain()
       {

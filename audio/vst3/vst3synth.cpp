@@ -94,8 +94,17 @@ Vst3Synth::Vst3Synth()
 
 Vst3Synth::~Vst3Synth()
       {
-      std::lock_guard<std::mutex> lock(_mutex);
-      _slots.clear();
+      std::vector<std::pair<int, std::unique_ptr<Vst3Plugin>>> handed;
+      {
+            std::lock_guard<std::mutex> lock(_mutex);
+            if (_releaser)
+                  for (size_t k = 0; k < _slots.size(); ++k)
+                        if (_slots[k])
+                              handed.emplace_back(int(k), std::move(_slots[k]));
+            _slots.clear();
+      }
+      for (auto& h : handed)                    // (outside the lock: setReleaser)
+            _releaser(h.first, std::move(h.second));
       }
 
 void Vst3Synth::init(float sampleRate)

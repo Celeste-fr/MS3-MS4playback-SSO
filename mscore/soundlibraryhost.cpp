@@ -29,6 +29,7 @@
 #include <set>
 
 #include <QApplication>
+#include <QThread>
 #include <QCryptographicHash>
 #include <QDataStream>
 #include <QDateTime>
@@ -1750,16 +1751,33 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
       QElapsedTimer t;
       t.start();
       if (setup) {
-            auto i = std::find_if(_spares.begin(), _spares.end(), [&path](const Spare& sp) {
-                  return sp.plugin && sp.plugin->path() == path;
-                  });
+            // a spare of the same patch first (the instance pool: its samples are in memory already); else, when memory
+            // runs short, the least recently used spare takes this patch (its own samples go); else a new instance, the
+            // spares kept for the patches they play
+            Spare* same = sameSpare(path, name);
+            auto i = same ? _spares.begin() + (same - _spares.data()) : _spares.end();
+            if (!same && memoryShort()) {
+                  i = _spares.end();
+                  for (auto j = _spares.begin(); j != _spares.end(); ++j)
+                        if (j->plugin && j->plugin->path() == path && (i == _spares.end() || j->used < i->used))
+                              i = j;
+                  }
             if (i != _spares.end()) {
                   qDebug("Sound library: the instance of %s loads %s", qPrintable(i->slot.instrument), qPrintable(name));
+                  if (same)
+                        logTime(library, QString("%1: the instance pool's %2 instance of it, its setup set again (samples "
+                                                 "in memory)").arg(name, i->pooled ? "kept" : "spare"));
+                  else
+                        logTime(library, QString("%1: memory short, the instance of %2 (least recently used) takes it")
+                                .arg(name, i->slot.instrument));
                   pl->plugin = std::move(i->plugin);
+                  pl->plugin->setOffline(false);
+                  pl->plugin->setSampleRate(MScore::sampleRate);
                   _spares.erase(i);
                   }
             }
       if (!pl->plugin) {
+            trimPool();                         // (room for it first)
             QString err;
             pl->plugin = Vst3Plugin::load(path, MScore::sampleRate, 4096, &err);
             if (!pl->plugin) {
@@ -1900,7 +1918,7 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
       const int k = pl->slot;
       if (!vst || vst->plugin(k)) {
             if (vst)
-                  _spares.push_back(Spare { std::move(pl->plugin), info });
+                  _spares.push_back(Spare { std::move(pl->plugin), info, ++_spareClock });
             }
       else {
             Slot& s = _slots[size_t(k)];
@@ -1911,6 +1929,7 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
             const qint64 memoryBefore = pl->memoryBefore;
             const qint64 memoryAfter = processMemory();
             s.memory = memoryBefore >= 0 && memoryAfter >= 0 ? std::max<qint64>(0, memoryAfter - memoryBefore) : -1;
+            _largestInstance = std::max(_largestInstance, s.memory);
             applyLinks();
             const int loadNumber = _loads;
             const QString name = pl->name;
@@ -1919,6 +1938,7 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
                   if (_loads != loadNumber || _slots[size_t(k)].instrument != name || memoryBefore < 0 || now < 0)
                         return;
                   _slots[size_t(k)].memory = std::max(_slots[size_t(k)].memory, now - memoryBefore);
+                  _largestInstance = std::max(_largestInstance, _slots[size_t(k)].memory);
                   emit changed();
                   });
             }
@@ -2207,6 +2227,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             if (current) {
                   Spare spare { vst->takePlugin(k), _slots[k] };
                   spare.slot.editor.clear();
+                  spare.used = ++_spareClock;
                   _spares.push_back(std::move(spare));
                   }
             const QString part = _slots[k].part;
@@ -2219,7 +2240,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       for (const Need& n : needs) {
             if (vst->plugin(n.slot) || pendingOn(n.slot))
                   continue;
-            auto i = std::find_if(_spares.begin(), _spares.end(), [&](const Spare& sp) { return fits(sp.plugin.get(), sp.slot, n); });
+            // (a pooled spare, from an earlier sync, has played since its setup went in: it is loaded again, beginLoad)
+            auto i = std::find_if(_spares.begin(), _spares.end(), [&](const Spare& sp) { return !sp.pooled && fits(sp.plugin.get(), sp.slot, n); });
             if (i == _spares.end()) {
                   toLoad.push_back(&n);
                   continue;
@@ -2323,7 +2345,14 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   _slots[k] = Slot();
                   }
             }
-      _spares.clear();
+      // the spares: kept (the instance pool), each to be loaded again before it plays, while memory allows
+      if (poolOn()) {
+            for (Spare& sp : _spares)
+                  sp.pooled = true;
+            trimPool();
+            }
+      else
+            _spares.clear();
       if (_batch && !_batch->ended)
             batchEnd(*library);
       else if (maxLoads < 0 && syncClock.elapsed() >= 50)
@@ -2399,6 +2428,114 @@ void SoundLibraryHost::release()
       _spares.clear();
       _idle.stop();
       emit changed();
+#endif
+      }
+
+//---------------------------------------------------------
+//   the instance pool (Spare)
+//---------------------------------------------------------
+
+bool SoundLibraryHost::poolOn()
+      {
+      static const bool on = qEnvironmentVariable("MS_INSTANCE_POOL") != "0";
+      return on;
+      }
+
+int SoundLibraryHost::pooledCount() const
+      {
+#ifdef USE_VST3
+      return int(std::count_if(_spares.begin(), _spares.end(), [](const Spare& sp) { return sp.pooled && sp.plugin; }));
+#else
+      return 0;
+#endif
+      }
+
+#ifdef USE_VST3
+SoundLibraryHost::Spare* SoundLibraryHost::sameSpare(const QString& path, const QString& name)
+      {
+      Spare* best = nullptr;
+      for (Spare& sp : _spares)
+            if (sp.plugin && sp.plugin->path() == path && sp.slot.instrument == name
+                && (!best || (sp.pooled && !best->pooled) || (sp.pooled == best->pooled && sp.used > best->used)))
+                  best = &sp;
+      return best;
+      }
+
+bool SoundLibraryHost::memoryShort() const
+      {
+      qint64 total = -1;
+      qint64 available = -1;
+      systemMemory(&total, &available);
+      return available >= 0 && available < std::max(_largestInstance, POOL_RESERVE_BYTES);
+      }
+#endif
+
+void SoundLibraryHost::trimPool()
+      {
+#ifdef USE_VST3
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      while (memoryShort()) {
+            auto lru = _spares.end();
+            for (auto j = _spares.begin(); j != _spares.end(); ++j)
+                  if (lru == _spares.end() || j->used < lru->used)
+                        lru = j;
+            if (lru == _spares.end())
+                  break;
+            if (library)
+                  logTime(*library, QString("Instance pool: memory short, %1 released (%2 kept)").arg(lru->slot.instrument)
+                          .arg(_spares.size() - 1));
+            _spares.erase(lru);           // (the plug-in goes here)
+            }
+#endif
+      }
+
+void SoundLibraryHost::releasePool()
+      {
+#ifdef USE_VST3
+      _spares.clear();
+#endif
+      }
+
+std::unique_ptr<Vst3Plugin> SoundLibraryHost::takePooled(const QString& path, const QString& name, double sampleRate)
+      {
+#ifdef USE_VST3
+      if (!poolOn())
+            return nullptr;
+      Spare* sp = sameSpare(path, name);
+      if (!sp)
+            return nullptr;
+      std::unique_ptr<Vst3Plugin> p = std::move(sp->plugin);
+      _spares.erase(_spares.begin() + (sp - _spares.data()));
+      p->setOffline(false);
+      p->setSampleRate(sampleRate);
+      if (std::shared_ptr<const SoundLib::Library> library = SoundLib::current())
+            logTime(*library, QString("%1: the instance pool's kept instance of it, its setup set again (samples in memory)").arg(name));
+      return p;
+#else
+      Q_UNUSED(path);
+      Q_UNUSED(name);
+      Q_UNUSED(sampleRate);
+      return nullptr;
+#endif
+      }
+
+void SoundLibraryHost::pool(std::unique_ptr<Vst3Plugin> plugin, const QString& name)
+      {
+#ifdef USE_VST3
+      if (!plugin || !poolOn() || name.isEmpty())
+            return;                       // (the plug-in goes here)
+      plugin->allNotesOff();
+      Spare sp;
+      sp.plugin = std::move(plugin);
+      sp.slot.instrument = name;
+      sp.slot.hasSetup = true;
+      sp.used = ++_spareClock;
+      sp.pooled = true;
+      _spares.push_back(std::move(sp));
+      trimPool();
+#else
+      Q_UNUSED(plugin);
+      Q_UNUSED(name);
 #endif
       }
 
@@ -2573,6 +2710,15 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
       std::shared_ptr<Vst3Synth> own(new Vst3Synth);
       own->init(sampleRate);
       own->setVarispeed(library->varispeed);
+      // its instances go to the instance pool when it goes (SoundLibraryHost::pool), each with its patch: a later load
+      // of the same patch in this process sets its setup on one of them, its samples in memory already
+      std::shared_ptr<std::map<int, QString>> poolNames(new std::map<int, QString>);
+      if (SoundLibraryHost::poolOn() && QThread::currentThread() == qApp->thread())
+            own->setReleaser([poolNames](int slot, std::unique_ptr<Vst3Plugin> p) {
+                  auto i = poolNames->find(slot);
+                  if (i != poolNames->end() && QThread::currentThread() == qApp->thread())
+                        SoundLibraryHost::instance()->pool(std::move(p), i->second);
+                  });
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       const std::map<const Part*, Automation::PartLanes> lanes = Automation::read(score->masterScore());
       auto routeAt = [&routes](int slot) -> const SoundLib::Route* {
@@ -2589,7 +2735,13 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             const SoundLib::Route* r = routeAt(in.slot);
             if (!r || (parts && !parts->count(r->part)))
                   continue;
-            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
+            const bool setup = SoundLibraryHost::hasSetup(*library, in.instrument->name);
+            std::unique_ptr<Vst3Plugin> p = setup ? SoundLibraryHost::instance()->takePooled(path, in.instrument->name, sampleRate)
+                                                  : nullptr;
+            if (!p) {
+                  SoundLibraryHost::instance()->trimPool();       // (room for it first)
+                  p = Vst3Plugin::load(path, sampleRate, 4096, error);
+                  }
             if (!p)
                   return nullptr;
             QString e;
@@ -2616,6 +2768,8 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
                   if (patches)
                         (*patches)[in.routes[i]] = in.instrument->name;
                   }
+            if (setup)
+                  (*poolNames)[in.slot] = in.instrument->name;
             own->setPlugin(in.slot, std::move(p));
             }
       return own;

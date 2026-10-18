@@ -100,8 +100,20 @@ class SoundLibraryHost : public QObject {
       struct Spare {
             std::unique_ptr<Vst3Plugin> plugin;
             Slot slot;
+            quint64 used { 0 };           // when it last played or was set aside (_spareClock: least recently used goes first)
+            bool pooled { false };        // kept from an earlier sync (the instance pool): loaded again before it plays
             };
+      // the instance pool (the owner, 2026-10-18, option 1 of private/sso-load-profile.md): an instance no score plays
+      // now stays loaded, so a score that needs its patch again (reopened, reloaded, another score) sets its setup on
+      // it and Kontakt finds the samples already in memory (measured on the VM: the setup's 1.3-1.8 s again, but none
+      // of the 15-18 s of sample loading after it). Its setup always goes in again (setState): the instance plays as a
+      // new one (round robins, script, controllers), never as it was left. Instances go when the computer's memory
+      // runs short (trimPool), at exit and when the library stops playing (release)
       std::vector<Spare> _spares;
+      quint64 _spareClock { 0 };
+      qint64 _largestInstance { -1 };     // the most memory an instance took so far (Slot::memory), bytes
+      Spare* sameSpare(const QString& path, const QString& name);   // a spare of this patch (pooled first), else nullptr
+      bool memoryShort() const;           // trimPool's test
       // loads whose setup is being set on a worker thread (loadThreads() > 0), finished (resaved,
       // put in their slot) on the GUI thread
       struct Pending;
@@ -272,6 +284,20 @@ class SoundLibraryHost : public QObject {
       // own instances wait for it (mscore/evenautomeasurer.h), so the playback's load first
       bool preloading() const;
       void release();                     // no instances
+      // the instance pool (Spare): an instance of the patch kept loaded (its setup is set again by whoever takes it),
+      // else nullptr; and an instance handed back to it (SoundLibraryExport's own instances when they go). Off with
+      // MS_INSTANCE_POOL=0 in the environment (to compare: tests only, it changes no sound)
+      static bool poolOn();
+      std::unique_ptr<Vst3Plugin> takePooled(const QString& path, const QString& name, double sampleRate);
+      void pool(std::unique_ptr<Vst3Plugin> plugin, const QString& name);
+      // pooled instances released, least recently used first, while the computer's available memory is below the most
+      // an instance took (measured: Slot::memory; at least POOL_RESERVE_BYTES)
+      void trimPool();
+      // 1017 MB: the most one SSO patch took alone (Windows VM, Kontakt 8, 2026-10-15, --measure-load-times on Whence,
+      // "each patch alone 425-1017 MB", HANDOFF.md › Kontakt slots for tuning copies)
+      static constexpr qint64 POOL_RESERVE_BYTES = 1017LL * 1024 * 1024;
+      int pooledCount() const;
+      void releasePool();                 // the spares released (before the modules unload at exit)
       bool loaded(int slot) const;
       qint64 memory(int slot) const       { return slot >= 0 && slot < int(_slots.size()) ? _slots[size_t(slot)].memory : -1; }
       static qint64 processMemory();      // the process's own memory (Task Manager's "Memory"), bytes; -1: unknown

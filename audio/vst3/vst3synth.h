@@ -27,6 +27,7 @@
 
 #include <array>
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -41,6 +42,9 @@ namespace Ms {
 class Vst3Synth : public Synthesizer {
       mutable std::mutex _mutex;          // the slots: GUI thread changes, audio thread plays
       std::vector<std::unique_ptr<Vst3Plugin>> _slots;
+      // (GUI thread) when it goes: each instance it holds handed to this instead of destroyed (the sound library's
+      // instance pool: SoundLibraryHost::pool), with its slot
+      std::function<void(int, std::unique_ptr<Vst3Plugin>)> _releaser;
       std::vector<std::array<unsigned char, 128>> _sounding;   // per slot, per key: notes on
       std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
                                                     // controller index (ME_PARAMETER events), -1: none
@@ -151,6 +155,7 @@ class Vst3Synth : public Synthesizer {
       Vst3Plugin* plugin(int slot) const;
       void setPlugin(int slot, std::unique_ptr<Vst3Plugin> plugin);
       std::unique_ptr<Vst3Plugin> takePlugin(int slot);
+      void setReleaser(std::function<void(int, std::unique_ptr<Vst3Plugin>)> releaser) { _releaser = std::move(releaser); }
       int slotCount() const;
       void idle();                        // Vst3Plugin::idle of each
       void beginExport(float sampleRate); // the calling thread plays them, offline
