@@ -33,6 +33,12 @@ Round 3 rules (the owner, 2026-10-17; private/own-legato-plan.md, "Result 2026-1
     r3.py rel <out>              releases after slurred lines (round 2's tail tell: the release region was cut after a
                                  6 s smooth attack): n_rel (vel 64, keys 54-66) and p_rel (vel 5, keys 52-70), each key B
                                  as X -> B, X attacked and held 0.6 s, B held 1.2 s, then released (REST_S)
+    r3.py iso <out>              voice-isolation probe E1 (iso_e1.py): transitions A -> B (A 57 / 62, +-1/2/3/5/7) after
+                                 three deterministic histories of A (A attacked vel 5; W -> A portamento, W = A -+ 4; W -> A
+                                 vel 15 FING + PORT, W = A -+ 2), each twice: 'full' (A held dt, then B held 1.2 s) and 'S'
+                                 (the same events without B's note-on: A held on, CC119 still sent at B's time), in files
+                                 with identical timing (i_pf / i_ps portamento B vel 5 at dt 0.3 / 0.5 / 1.0; i_nf / i_ns
+                                 normal B vel 64 at dt 0.089 / 0.15)
     r3.py test <out> --kind port|norm [--phrases 30] [--seed s]
                                  held-out phrases (never cut): a smooth attack and 5-11 slurred notes, one IOI per
                                  phrase (port: 0.3 / 0.5 / 1.0 / 1.5 s, intervals 1-12; norm: 0.089 / 0.136 / 0.15 /
@@ -291,9 +297,84 @@ def test(out, kind, keys, phrases, seed):
     print('%s: %d phrases, %.0f s' % (name, phrases, d))
 
 
+ISO_KEYS = (57, 62)
+ISO_INTS = (1, -1, 2, -2, 3, -3, 5, -5, 7, -7)
+ISO_HIST = (('atk', None, None), ('p4', 4, PORT), ('f2', 2, 15))   # (name, |W - A| on the side away from B, A's vel)
+
+
+def iso_seg(ff, fs, a, b, dt, bvel, hist, meta):
+    """one history of A, then B (ff) / A held on (fs); hist: [] (A attacked) or [(dw, vel, hold), ...] the notes before
+    A from the earliest: key A - dw * sign(B - A), attacked / reached at vel, held hold s"""
+    sg = 1 if b > a else -1
+    if not hist:
+        sf_ = ff.chain([a, b], PORT, [bvel], 64, attack_hold=dt, holds=[SHARE_HOLD - 0.1], **meta)
+        ss_ = fs.chain([a], PORT, [], 64, attack_hold=dt + SHARE_HOLD - 0.1, **meta)
+    else:
+        ks = [a - dw * sg for dw, _, _ in hist] + [a]
+        vs = [v for _, v, _ in hist[1:]]
+        hs = [hd for _, _, hd in hist]
+        sf_ = ff.chain(ks + [b], PORT, vs + [hist[-1][1] if len(hist) > 1 else hist[0][1], bvel], 64, attack_hold=hs[0],
+                       holds=hs[1:] + [dt, SHARE_HOLD - 0.1], **meta)
+        ss_ = fs.chain(ks, PORT, vs + [hist[-1][1] if len(hist) > 1 else hist[0][1]], 64, attack_hold=hs[0],
+                       holds=hs[1:] + [dt + SHARE_HOLD - 0.1], **meta)
+    add_cc119(ff, sf_)
+    add_cc119(fs, ss_)
+    tb = sf_['notes'][-1]['on']
+    fs.cc(tb, 119, cc119(dt * 1000))
+    ss_['tb'] = tb
+    assert abs(ff.t - fs.t) < 1e-9
+
+
+def iso(out):
+    """E1: see the docstring (r3.py iso)"""
+    names = []
+    hists = {'atk': [], 'p4': [(4, PORT, 0.6)], 'f2': [(2, 15, 0.6)]}
+    for tag, bvel, dts in (('p', PORT, (0.3, 0.5, 1.0)), ('n', NORM, (0.089, 0.15))):
+        ff, fs = File('i_%sf' % tag), File('i_%ss' % tag)
+        for a in ISO_KEYS:
+            for iv in ISO_INTS:
+                for dt in dts:
+                    for hn in ('atk', 'p4', 'f2'):
+                        iso_seg(ff, fs, a, a + iv, dt, bvel, hists[hn], dict(kind='iso', type=tag, hist=hn, a=a, b=a + iv, dt=dt))
+        print('i_%sf / i_%ss: %d segments, %.0f s each' % (tag, tag, len(ff.seg), ff.write(out)), fs.write(out))
+        names += ['i_%sf' % tag, 'i_%ss' % tag]
+    write_list(out, names)
+
+
+def iso2(out):
+    """E2: which part of A's history changes the new note's components N (normal B vel 64 at 89 / 150 ms)?
+    W -> A interval 2 / 3 / 4 / 5 (vel 5), 2 at vel 15, W held 1.2 s instead of 0.6, two notes before A (U -> W -> A),
+    A attacked; 8 pairs"""
+    hists = {'atk': [], 'p2': [(2, PORT, 0.6)], 'p3': [(3, PORT, 0.6)], 'p4': [(4, PORT, 0.6)], 'p5': [(5, PORT, 0.6)],
+             'f2': [(2, 15, 0.6)], 'p4L': [(4, PORT, 1.2)], 'p4x': [(7, PORT, 0.6), (4, PORT, 0.6)],
+             'p4f': [(7, PORT, 0.6), (4, PORT, 0.15)]}
+    ff, fs = File('i2_nf'), File('i2_ns')
+    for a, iv in ((57, 1), (57, -2), (57, 3), (57, -5), (62, -1), (62, 2), (62, -3), (62, 5)):
+        for dt in (0.089, 0.15):
+            for hn, h in hists.items():
+                iso_seg(ff, fs, a, a + iv, dt, NORM, h, dict(kind='iso', type='n', hist=hn, a=a, b=a + iv, dt=dt))
+    print('i2_nf / i2_ns: %d segments, %.0f s each' % (len(ff.seg), ff.write(out)), fs.write(out))
+    write_list(out, ['i2_nf', 'i2_ns'])
+
+
+def iso3(out):
+    """E3: A reached inside a fast run (every note held dt, so no "transition release" tail voices: their gate needs
+    > 500 ms): W -> A interval 2 / 3 / 4 / 5 (vel 5), 4 at vel 15, another note before W, a longer run"""
+    ff, fs = File('i3_nf'), File('i3_ns')
+    for a, iv in ((57, 1), (57, -2), (57, 3), (57, -5), (62, -1), (62, 2), (62, -3), (62, 5)):
+        for dt in (0.089, 0.15):
+            hists = {'r2': [(4, PORT, dt), (2, PORT, dt)], 'r3': [(5, PORT, dt), (3, PORT, dt)],
+                     'r4': [(6, PORT, dt), (4, PORT, dt)], 'r5': [(7, PORT, dt), (5, PORT, dt)],
+                     'r4v': [(6, PORT, dt), (4, 15, dt)], 'r4u': [(9, PORT, dt), (4, PORT, dt)],
+                     'r4l': [(2, PORT, dt), (8, PORT, dt), (6, PORT, dt), (4, PORT, dt)]}
+            for hn, h in hists.items():
+                iso_seg(ff, fs, a, a + iv, dt, NORM, h, dict(kind='iso', type='n', hist=hn, a=a, b=a + iv, dt=dt))
+    print('i3_nf / i3_ns: %d segments, %.0f s each' % (len(ff.seg), ff.write(out)), fs.write(out))
+    write_list(out, ['i3_nf', 'i3_ns'])
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test'])
+    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3'])
     ap.add_argument('--dts', default='0.5,0.3')
     ap.add_argument('out')
     ap.add_argument('--keys')
@@ -326,6 +407,12 @@ def main():
         write_list(a.out, band_files(a.out, rng('54-66'), [('n_%03d' % int(round(d * 1000)), d) for d in dts]))
     elif a.cmd == 'rel':
         rel(a.out)
+    elif a.cmd == 'iso':
+        iso(a.out)
+    elif a.cmd == 'iso2':
+        iso2(a.out)
+    elif a.cmd == 'iso3':
+        iso3(a.out)
     else:
         test(a.out, a.kind, rng('54-68' if a.kind == 'port' else '54-66'), a.phrases, a.seed)
 
