@@ -1,11 +1,18 @@
 // sfzrender: kthost's event files rendered offline through sfizz (libsfizz, https://sfz.tools/sfizz), so the own-legato
 // pilot's SFZ plays exactly the events Kontakt + SSO got (tools/ownlegato/, the heard check's kthost format).
 //
-//   sfzrender <instrument.sfz> <events.txt> <out.wav> [--tail s] [--block n] [--voices n] [--floor]
+//   sfzrender <instrument.sfz> <events.txt> <out.wav> [--tail s] [--block n] [--voices n] [--floor] [--stream]
 //   events: lines "time on|off|cc|pb a b" (seconds; pb a = 0..16383, 8192 centre, as kthost); 44.1 kHz stereo float WAV.
 // --floor: an event at frame floor(t * rate), as kthost places them (its default mode; else the nearest frame).
-// Events are sample-accurate (sfizz's delay within the block). Free-wheeling: sfizz waits for its file loads (no
-// streaming underruns offline).
+// Events are sample-accurate (sfizz's delay within the block).
+// Whole samples in RAM (default): free-wheeling alone does NOT prevent streaming underruns. sfizz 1.2.3's
+// renderBlock waits only for loading jobs its dispatcher thread has already picked up (FilePool::waitForBackgroundLoading),
+// so a voice started in the block before can find its file still queued and play silence after the preloaded
+// 8192 frames (measured 2026-10-17: blind-test clips cut 0.186 s after a region start, 1 of 16 repeat renders under
+// load). So the SFZ is loaded with only the regions these events can trigger (key played, and sw_previous absent,
+// equal to the key, or a previous key that note-on actually had), each preloaded whole: nothing streams. sfizz's
+// sequence counters are per region and count note-ons of their own key, so dropping other keys' and pairs' regions
+// leaves every kept region's take choice unchanged. --stream: the old behaviour (whole SFZ, 8192-frame preload).
 //
 // Build: g++ -O2 -std=c++17 sfzrender.cpp -I<sfizz>/include -L<sfizz>/lib -lsfizz -o sfzrender
 #include <sfizz.hpp>
@@ -15,6 +22,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -37,12 +45,13 @@ static void writeWav(const std::string& path, const std::vector<float>& lr, int 
 int main(int argc, char** argv)
 {
     if (argc < 4) { fprintf(stderr, "usage: sfzrender <sfz> <events> <out.wav> [--tail s] [--block n] [--voices n]\n"); return 2; }
-    double tail = 3.0; int block = 256; int voices = 128; bool floorFrames = false;
+    double tail = 3.0; int block = 256; int voices = 128; bool floorFrames = false; bool stream = false;
     for (int i = 4; i < argc; ++i) {
         if (!strcmp(argv[i], "--tail") && i + 1 < argc) tail = atof(argv[++i]);
         else if (!strcmp(argv[i], "--block") && i + 1 < argc) block = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--voices") && i + 1 < argc) voices = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--floor")) floorFrames = true;
+        else if (!strcmp(argv[i], "--stream")) stream = true;
     }
     const int rate = 44100;
     std::vector<Ev> evs;
@@ -66,7 +75,40 @@ int main(int argc, char** argv)
     synth.setSamplesPerBlock(block);
     synth.setNumVoices(voices);
     synth.enableFreeWheeling();
-    if (!synth.loadSfzFile(argv[1])) { fprintf(stderr, "cannot load %s\n", argv[1]); return 1; }
+    bool ok;
+    if (stream) {
+        ok = synth.loadSfzFile(argv[1]);
+    } else {
+        // (key, previous note-on key) pairs these events play; -1 = no previous note-on
+        std::set<std::pair<int, int>> pairs; std::set<int> keys;
+        int prev = -1;
+        for (const Ev& e : evs) if (e.type == 0) { pairs.insert({ e.a, prev }); keys.insert(e.a); prev = e.a; }
+        auto opInt = [](const std::string& line, const char* name, int dflt) {
+            const std::string key = std::string(" ") + name + "=";
+            const size_t p = line.find(key);
+            return p == std::string::npos ? dflt : atoi(line.c_str() + p + key.size());
+        };
+        std::ifstream f(argv[1]);
+        std::string line, text; size_t kept = 0, dropped = 0;
+        while (std::getline(f, line)) {
+            if (line.rfind("<region>", 0) == 0) {
+                if (line.find(" lokey=") != std::string::npos || line.find(" hikey=") != std::string::npos
+                    || line.find(" key=") == std::string::npos) {
+                    fprintf(stderr, "--stream needed: region without a single key= (%s)\n", line.c_str()); return 1;
+                }
+                const int k = opInt(line, "key", -1), sp = opInt(line, "sw_previous", -2);
+                bool keep = keys.count(k) && (sp == -2 || sp == k);
+                if (!keep && keys.count(k)) for (const auto& pr : pairs) if (pr.first == k && pr.second == sp) keep = true;
+                if (!keep) { ++dropped; continue; }
+                ++kept;
+            }
+            text += line; text += '\n';
+        }
+        synth.setPreloadSize(1u << 30);     // more than any sample: preloadFile loads min(frames, size + offset)
+        ok = synth.loadSfzString(argv[1], text);
+        fprintf(stderr, "whole samples in RAM: %zu regions kept, %zu dropped\n", kept, dropped);
+    }
+    if (!ok) { fprintf(stderr, "cannot load %s\n", argv[1]); return 1; }
     fprintf(stderr, "%d regions, %zu events\n", synth.getNumRegions(), evs.size());
     const long long end = (evs.empty() ? 0 : evs.back().frame) + (long long)(tail * rate);
     std::vector<float> L(block), R(block), out;
