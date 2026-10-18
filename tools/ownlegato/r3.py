@@ -372,9 +372,39 @@ def iso3(out):
     print('i3_nf / i3_ns: %d segments, %.0f s each' % (len(ff.seg), ff.write(out)), fs.write(out))
     write_list(out, ['i3_nf', 'i3_ns'])
 
+
+def iso6(out):
+    """E6: Kontakt's 512-frame block grid against history: E3's r4 / r2 runs for 4 pairs, each segment started on the
+    block grid at offsets 0, 0 again, 37, 128, 300 frames (segment starts aligned to 512 frames first)"""
+    ff, fs = File('i6_nf'), File('i6_ns')
+    for a, iv in ((57, 1), (57, -2), (62, 2), (62, -3)):
+        for dt in (0.089, 0.15):
+            for hn, h in (('r4', [(6, PORT, dt), (4, PORT, dt)]), ('r2', [(4, PORT, dt), (2, PORT, dt)])):
+                for k, off in enumerate((0, 0, 37, 128, 300)):
+                    for f in (ff, fs):
+                        f.t = (math.ceil(f.t * 44100 / 512) * 512 + off) / 44100
+                    iso_seg(ff, fs, a, a + iv, dt, NORM, h, dict(kind='iso', type='n', hist=hn, a=a, b=a + iv, dt=dt, off=off, rep=k))
+    print('i6_nf / i6_ns: %d segments, %.0f s each' % (len(ff.seg), ff.write(out)), fs.write(out))
+    write_list(out, ['i6_nf', 'i6_ns'])
+
+
+def iso8(out):
+    """E8 (for d1 renders): runs at vel 64 throughout (the real context): U attacked, U -> W -> A -> B, every note held
+    dt; W -> A interval 2 / 3 / 4 / 5 on the side away from B; A 57, B 59 / 60 / 55 / 54; segments block-aligned"""
+    ff, fs = File('i8_nf'), File('i8_ns')
+    for a, iv in ((57, 2), (57, 3), (57, -2), (57, -3)):
+        for dt in (0.089, 0.15):
+            for wd in (2, 3, 4, 5):
+                for f in (ff, fs):
+                    f.t = math.ceil(f.t * 44100 / 512) * 512 / 44100
+                iso_seg(ff, fs, a, a + iv, dt, NORM, [(wd + 2, PORT, dt), (wd, NORM, dt)],
+                        dict(kind='iso', type='n', hist='w%d' % wd, a=a, b=a + iv, dt=dt))
+    print('i8_nf / i8_ns: %d segments, %.0f s each' % (len(ff.seg), ff.write(out)), fs.write(out))
+    write_list(out, ['i8_nf', 'i8_ns'])
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3'])
+    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8'])
     ap.add_argument('--dts', default='0.5,0.3')
     ap.add_argument('out')
     ap.add_argument('--keys')
@@ -413,6 +443,10 @@ def main():
         iso2(a.out)
     elif a.cmd == 'iso3':
         iso3(a.out)
+    elif a.cmd == 'iso6':
+        iso6(a.out)
+    elif a.cmd == 'iso8':
+        iso8(a.out)
     else:
         test(a.out, a.kind, rng('54-68' if a.kind == 'port' else '54-66'), a.phrases, a.seed)
 
