@@ -197,6 +197,11 @@ struct Articulation {
       struct Avoid { int keyLow; int keyHigh; int low; int high; int velocity; };
       std::vector<Avoid> avoid;
       int avoidVelocity(int key, int velocity) const;    // the velocity to send (the same when not listed)
+      // semitones added to the key sent for a note on this articulation, on top of its patch's keyShift (<Articulation
+      // keyShift>, -48 .. 48): Ample's natural harmonics sound 12 semitones over the key held with C#0 (measured, Ample
+      // Guitar M 4.1.0, sounding 52-84), so the harmonic articulation says -12 and a harmonic note sends its sounding
+      // pitch - 12. Only the key: pitch tables, tuning and bends stay by the note's pitch. 0: none
+      int keyShift { 0 };
       };
 
 // an octave slur's delay from a table of measured start pitches (octaveUp / octaveDown): the start's own value;
@@ -243,7 +248,24 @@ struct Controller {
       // computer (partcontrollers.h unautomatedValue). MuseScore sends nothing for it. -1: not measured
       double patchDefault { -1 };
       std::vector<ControllerText> texts;
+      // a load-time setting kept only in a (non-Kontakt) plug-in's state (<Controller state="DBName" values="AGMFg AGMPk
+      // AGMSt">: Ample's sample set): its lane's value at the score's start picks values[round(v x (n - 1))], written into
+      // the part's state as it loads (stateValues(); SoundLibraryHost, audio/vst3/pluginstate.h); a change loads the part
+      // again. "Name" is the element <Name Value="…"/>, "Parameter:Title" the element <Parameter Name="Title" Value="…"/>.
+      // Never a MIDI controller or a parameter: it can't change while playing. Empty: not one
+      QString state;
+      QStringList stateValues;
+      // how the plug-in shows the value (<Controller steps="N" display="v:text …">, from the plug-in's own parameter
+      // texts, e.g. Ample's dump): steps, the parameter's discrete positions k / N (0: continuous); display, its text at
+      // lane values 0-1, ascending (a numeric text linear between neighbours; a stepped one the nearest position's).
+      // The lane editor shows it (controllerText); nothing is sent by it. Empty: the lane's 0-127
+      int steps { 0 };
+      std::vector<std::pair<double, QString>> display;
+      bool isState() const { return !state.isEmpty(); }
       };
+
+// the text the plug-in shows for a lane value 0-1 of the controller (its display), empty: none listed
+QString controllerText(const Controller& controller, double value);
 
 struct LibInstrument {
       QString name;                       // the library's name for it (the patch to load)

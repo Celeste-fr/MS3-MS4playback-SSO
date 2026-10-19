@@ -1072,6 +1072,13 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
+- **Ample Guitar M** (branch `ample-map`, 2026-10-18; a plug-in that isn't Kontakt): Create / Update Live Set and *Live
+  plays the score* were not made or tried for it. By the existing paths its track should get the plug-in's own default
+  state (a patch with a state setting has one: `SoundLibraryHost::defaultState`) with the part's sample set and flat
+  parameter lanes in it (`stateWithControllers` loads it with the part), and a moving parameter lane would go to the
+  MuseScore Link device by title; but Live's panel (*Configure*) is filled by Kontakt's rules, the plain set's
+  multis and Utility were made for Kontakt, and nothing of it was run. To do with phase 2 (HANDOFF.md › Ample guitars).
+
 - **Written clips** (the plain set, 2026-10-11, above): the device's delays are kept to 0.01 ms and Live's Track Delay to
   0.1 ms; the device reads its delays at the note's own song position (measured in Live 12.4.6, 2026-10-12), a tick on
   each side tolerated; a note moved or added in Live (or in a

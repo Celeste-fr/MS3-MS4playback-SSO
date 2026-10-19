@@ -131,6 +131,19 @@ bool glissandoPitchOffsets(const Spanner* spanner, std::vector<int>& pitchOffset
 //    the note the tie comes from (a tie into a first ending does not carry on into the second)
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   libKeyShift
+//    semitones from a library note's pitch to the key sent: its patch's keyShift plus its articulation's
+//---------------------------------------------------------
+
+static int libKeyShift(const std::vector<const SoundLib::LibInstrument*>& patches, const SoundLib::Choice& c)
+      {
+      int shift = c.patch >= 0 && c.patch < int(patches.size()) ? patches[size_t(c.patch)]->keyShift : 0;
+      if (c.articulation)
+            shift += c.articulation->keyShift;
+      return shift;
+      }
+
 static bool ms4SameRepeat(const Score* score, const Note* first, const Note* second, int tickOffset)
       {
       const RepeatList& repeats = score->repeatList();
@@ -1969,9 +1982,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     realRangeLevel(note, libChoice, libNote.velocity, r, level);
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
-                                    // a patch whose keys sound an octave off (SSO's timpani): the key sent is shifted
-                                    if (libChoice.patch >= 0 && libPatches[libChoice.patch]->keyShift != 0)
-                                          libNote.key = qBound(0, note->ppitch() + libPatches[libChoice.patch]->keyShift, 127);
+                                    // a patch whose keys sound an octave off (SSO's timpani), an articulation played a key away
+                                    // from its sound (Ample's natural harmonics, -12): the key sent is shifted
+                                    if (const int shift = libKeyShift(libPatches, libChoice))
+                                          libNote.key = qBound(0, note->ppitch() + shift, 127);
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
                                           LibTrace& t = libTrace->back();
                                           t.velocity = libNote.velocity;
@@ -2246,9 +2260,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           libNote.velocity = PLAIN_VELOCITY;
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
-                                    // a patch whose keys sound an octave off (SSO's timpani): the key sent is shifted
-                                    if (libChoice.patch >= 0 && libPatches[libChoice.patch]->keyShift != 0)
-                                          libNote.key = qBound(0, note->ppitch() + pitchOffset + libPatches[libChoice.patch]->keyShift, 127);
+                                    // a patch whose keys sound an octave off (SSO's timpani), an articulation played a key away
+                                    // from its sound (Ample's natural harmonics, -12): the key sent is shifted
+                                    if (const int shift = libKeyShift(libPatches, libChoice))
+                                          libNote.key = qBound(0, note->ppitch() + pitchOffset + shift, 127);
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {

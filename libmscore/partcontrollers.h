@@ -89,6 +89,18 @@ double unautomatedValue(const SoundLib::LibInstrument& patch, const SoundLib::Co
 // the hook: (patch, plug-in parameter title) -> 0-1, -1 unknown
 void setSetupValues(std::function<double(const QString& patch, const QString& param)> lookup);
 
+//---------------------------------------------------------
+//   state settings (SoundLib::Controller::state: a non-Kontakt plug-in's load-time setting, Ample's sample set)
+//    stateValue: the lane's value at the score's start, 0-1 (a lane's first point's: the state can't change while
+//    playing), else the map's default; -1: none (the plug-in's state keeps its own). stateValues: the patch's state
+//    controllers the part sets, as the names and values written into its state at load (audio/vst3/pluginstate.h),
+//    e.g. { "DBName": "AGMPk" }
+//---------------------------------------------------------
+
+double stateValue(const Part* part, const SoundLib::Controller& controller, const std::map<const Part*, Automation::PartLanes>& lanes);
+std::map<QString, QByteArray> stateValues(const Part* part, const SoundLib::LibInstrument& patch,
+                                          const std::map<const Part*, Automation::PartLanes>& lanes);
+
 }     // namespace PartControllers
 }     // namespace Ms
 #endif

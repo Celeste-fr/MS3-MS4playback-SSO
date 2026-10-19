@@ -283,6 +283,17 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Kickstart's arrays whole (`%c2lsa`, `%4jwcn`, `%x4jsr`, `$nd5ia=0`); `KontaktSetup::unpurgeSwitchedOn` loads the
   sample groups they switch on (Kickstart's purge rule; test `kontaktKickstartUnpurge`). Script values may change
   length (`kontaktScriptValueLengths`). Mics on 3-mic patches are Close, Tree, Ambient.
+- **Ample guitars** (branch `ample-map`, 2026-10-18; HANDOFF.md › Ample guitars): `share/soundlibraries/Ample Guitar
+  M.xml` is generated, never hand-edited: `python3 tools/soundlibraries/gen_ample.py <amphost dump> [out]` (the dump stays
+  outside the repo: `~/MuseScore/ms3fork/private/ample-map/agm-info.txt`). Hosted `AGM.vst3`, not Kontakt (no `<Files>`:
+  no setups made, `makesSetups` false); the steel-string guitar ids; every plug-in parameter (124) a `param` controller by
+  title with `steps` / `display` (the lane editor's text: `SoundLib::controllerText`), CC7 / CC1 / CC64, keyswitches 24-30
+  (`<Articulation keyShift>`: a natural harmonic's key = sounding - 12), dynamics by velocity (`<Dynamics cc="-1">`),
+  `maxVelocity` 126 (127 is Pop). **State settings** (`<Controller state values>`, `PartControllers::stateValues`,
+  `audio/vst3/pluginstate.h`): the sample set (`DBName`) written into the part's state as it loads
+  (`SoundLibraryHost::setupStateWith` for a non-Kontakt library; base: the setup file, else `defaultState`, a new
+  instance's), in the slot's `values` key, so a change loads the part again. Guitar notation (strums, strings, slides …)
+  is phase 2.
 - Microtones: Kontakt ignores VST 3 note tuning. **Tuning lanes** (patch copies per tuning, metaTag
   `soundLibraryLanes`) play by **varispeed** (`Vst3Plugin::setPitch`) or by **pitch bend** where the patch bends
   cleanly (`<Instrument bend>`; varispeed can't reach Live). A legato transition's bend glides with the

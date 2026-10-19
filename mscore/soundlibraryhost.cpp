@@ -83,6 +83,7 @@
 
 #ifdef USE_VST3
 #include "audio/vst3/kontaktsetup.h"
+#include "audio/vst3/pluginstate.h"
 #include "audio/vst3/librarycontrollers.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
@@ -314,13 +315,21 @@ QString SoundLibraryHost::setupFile(const SoundLib::Library& library, const QStr
       return setupFolder(library) + "/" + fileName(instrument) + ".vst3state";
       }
 
+// a patch whose map sets a state setting (SoundLib::Controller::state: Ample's sample set)
+static bool hasStateSettings(const SoundLib::LibInstrument& li)
+      {
+      return std::any_of(li.allControllers.begin(), li.allControllers.end(), [](const SoundLib::Controller& c) { return c.isState(); });
+      }
+
 bool SoundLibraryHost::hasSetup(const SoundLib::Library& library, const QString& instrument)
       {
       if (makesSetups(library)) {
             const QString nki = nkiPath(library, instrument);
             return !nki.isEmpty() && QFileInfo::exists(nki);
             }
-      return QFileInfo::exists(setupFile(library, instrument));
+      // (a non-Kontakt patch with state settings: from the plug-in's default state when it has no setup file)
+      const SoundLib::LibInstrument* li = findPatch(library, instrument);
+      return QFileInfo::exists(setupFile(library, instrument)) || (li && hasStateSettings(*li));
       }
 
 //---------------------------------------------------------
@@ -802,9 +811,39 @@ static QString valuesKey(const std::map<QString, QByteArray>& values)
       }
 
 QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                        QString* error, const Score* score)
+                                        QString* error, const Score* score, const Part* part)
       {
-      return setupStateWith(library, patch, pluginPath, scriptValuesFor(library, patch, score), error);
+      std::map<QString, QByteArray> values = scriptValuesFor(library, patch, score);
+      for (const auto& v : stateValuesFor(library, patch, part))
+            values[v.first] = v.second;
+      return setupStateWith(library, patch, pluginPath, values, error);
+      }
+
+std::map<QString, QByteArray> SoundLibraryHost::stateValuesFor(const SoundLib::Library& library, const QString& patch, const Part* part)
+      {
+      const SoundLib::LibInstrument* li = findPatch(library, patch);
+      if (makesSetups(library) || !part || !li || !hasStateSettings(*li) || !part->score())
+            return std::map<QString, QByteArray>();
+      return PartControllers::stateValues(PartPlaybackModes::masterPart(part), *li, Automation::read(part->score()->masterScore()));
+      }
+
+QByteArray SoundLibraryHost::defaultState(const QString& pluginPath, QString* error)
+      {
+      static std::mutex mutex;
+      static std::map<QString, QByteArray> states;
+      std::lock_guard<std::mutex> lock(mutex);
+      auto it = states.find(pluginPath);
+      if (it != states.end())
+            return it->second;
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
+      const QByteArray state = p ? p->state() : QByteArray();
+      if (state.isEmpty()) {
+            if (error && error->isEmpty())
+                  *error = tr("The plug-in gave no state.");
+            return state;
+            }
+      states[pluginPath] = state;
+      return state;
       }
 
 //---------------------------------------------------------
@@ -818,8 +857,22 @@ QByteArray SoundLibraryHost::setupStateWith(const SoundLib::Library& library, co
                                             const std::map<QString, QByteArray>& values, QString* error)
       {
       const QByteArray limitedState = maxVoicesState(library, patch, pluginPath, error);
-      if (limitedState.isEmpty() || values.empty() || !makesSetups(library))
+      if (limitedState.isEmpty() || values.empty())
             return limitedState;
+      if (!makesSetups(library)) {
+            // a non-Kontakt plug-in: the part's state settings (stateValuesFor) in its component's XML (pluginstate.h)
+            QString name, err;
+            QByteArray component, controller;
+            int set = 0;
+            const QByteArray withValues = readState(limitedState, &name, &component, &controller)
+                                          ? PluginState::withValues(component, values, &err, &set) : QByteArray();
+            if (withValues.isEmpty()) {
+                  qWarning("Sound library: %s: state values %s not set (%s)", qPrintable(patch), qPrintable(valuesKey(values)),
+                           qPrintable(err.isEmpty() ? QString("not a state MuseScore reads") : err));
+                  return limitedState;
+                  }
+            return writeState(name, withValues, controller);
+            }
       const QByteArray out = prepared(library, limitedState, "script values " + valuesKey(values), [&]() {
             QString name, err;
             QByteArray component, controller;
@@ -879,6 +932,9 @@ QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, c
             QFile f(file);
             if (f.open(QIODevice::ReadOnly))
                   return f.readAll();
+            // a non-Kontakt patch with state settings: the plug-in's own default state, the settings written over it
+            if (!makesSetups(library) && li && hasStateSettings(*li))
+                  return defaultState(pluginPath, error);
             *error = tr("%1 has no setup.").arg(patch);
             return QByteArray();
             }
@@ -1045,11 +1101,11 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
 //---------------------------------------------------------
 
 bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                 QString* error, const Score* score)
+                                 QString* error, const Score* score, const Part* part)
       {
       QElapsedTimer t;
       t.start();
-      const QByteArray state = setupState(library, patch, pluginPath, error, score);
+      const QByteArray state = setupState(library, patch, pluginPath, error, score, part);
       const double setupMs = t.nsecsElapsed() / 1e6;
       if (state.isEmpty())
             return false;
@@ -1184,7 +1240,7 @@ QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library& libra
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
       if (!p)
             return QByteArray();
-      if (!loadSetup(p.get(), library, r.instrument->name, pluginPath, error, r.part ? r.part->score() : nullptr))   // (its script settled)
+      if (!loadSetup(p.get(), library, r.instrument->name, pluginPath, error, r.part ? r.part->score() : nullptr, r.part))   // (its script settled)
             return QByteArray();
       LibraryControllers::applyParameters(p.get(), r, lanes, nullptr);
       // (the processor takes a change at its next process(), a script then sets its control: as in playback,
@@ -1219,7 +1275,7 @@ bool SoundLibraryHost::parametersOf(const SoundLib::Library& library, const Soun
       if (!r.instrument)
             return false;
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
-      if (!p || !loadSetup(p.get(), library, r.instrument->name, pluginPath, error, r.part ? r.part->score() : nullptr))
+      if (!p || !loadSetup(p.get(), library, r.instrument->name, pluginPath, error, r.part ? r.part->score() : nullptr, r.part))
             return false;
       std::map<long, QString> names;
       for (const Vst3Plugin::Parameter& pp : p->parameters())
@@ -1323,6 +1379,18 @@ std::map<QString, QByteArray> SoundLibraryHost::scriptValuesFor(const SoundLib::
       return std::map<QString, QByteArray>();
       }
 
+std::map<QString, QByteArray> SoundLibraryHost::stateValuesFor(const SoundLib::Library&, const QString&, const Part*)
+      {
+      return std::map<QString, QByteArray>();
+      }
+
+QByteArray SoundLibraryHost::defaultState(const QString&, QString* error)
+      {
+      if (error)
+            *error = tr("This MuseScore was built without plug-in hosting.");
+      return QByteArray();
+      }
+
 QByteArray SoundLibraryHost::setupStateWith(const SoundLib::Library&, const QString&, const QString&,
                                             const std::map<QString, QByteArray>&, QString* error)
       {
@@ -1346,14 +1414,16 @@ bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin*, const SoundLib::Library&, 
       return false;
       }
 
-QByteArray SoundLibraryHost::setupState(const SoundLib::Library&, const QString&, const QString&, QString* error, const Score*)
+QByteArray SoundLibraryHost::setupState(const SoundLib::Library&, const QString&, const QString&, QString* error, const Score*,
+                                        const Part*)
       {
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
       return QByteArray();
       }
 
-bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QString&, const QString&, QString* error, const Score*)
+bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QString&, const QString&, QString* error, const Score*,
+                                 const Part*)
       {
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
@@ -2185,6 +2255,9 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             }
       for (Need& n : needs) {
             n.values = scriptValuesFor(*library, n.name, score);
+            // (a non-Kontakt part's state settings: another sample set is another instance)
+            for (const auto& v : stateValuesFor(*library, n.name, _slotParts[size_t(n.slot)]))
+                  n.values[v.first] = v.second;
             n.valuesText = valuesKey(n.values);
             }
       auto fits = [&path](const Vst3Plugin* p, const Slot& s, const Need& n) {
@@ -2494,6 +2567,16 @@ std::vector<int> SoundLibraryHost::applyPartSettings(MasterScore* ms, const Part
       for (const Automation::Lane& lane : Automation::lanes(master, all))
             if (!lane.points.empty() && lane.flatValue() < 0)
                   skip.push_back(lane.target);
+      // a state setting changed (Ample's sample set: stateValuesFor): the part loads again at the next sync (play, export)
+      for (int k : slotsOf(master)) {
+            std::map<QString, QByteArray> values = scriptValuesFor(*library, _slotPatches[size_t(k)], ms);
+            for (const auto& v : stateValuesFor(*library, _slotPatches[size_t(k)], master))
+                  values[v.first] = v.second;
+            if (vst->plugin(k) && valuesKey(values) != _slots[size_t(k)].values) {
+                  routesMayChange();
+                  break;
+                  }
+            }
       return LibraryControllers::applyPart(vst, SoundLib::routes(ms, *library), master, all,
                                            [this](int slot) { return &_slots[size_t(slot)].patchValues; }, skip);
 #else
@@ -2640,7 +2723,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const 
             return nullptr;
       QString e;
       if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
-          && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e, score))
+          && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e, score, r.part))
             qWarning("Sound library: %s", qPrintable(e));
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       LibraryControllers::applyParameters(p.get(), r, Automation::read(score->masterScore()), nullptr);
@@ -2698,7 +2781,7 @@ SoundLibraryExport::beginInstance(Score* score, const SoundLib::Route& r, float 
             QElapsedTimer t;
             t.start();
             QString e;
-            l->state = SoundLibraryHost::setupState(*library, r.instrument->name, path, &e);
+            l->state = SoundLibraryHost::setupState(*library, r.instrument->name, path, &e, nullptr, r.part);
             l->setupMs = t.nsecsElapsed() / 1e6;
             if (l->state.isEmpty())
                   qWarning("Sound library: %s", qPrintable(e));
