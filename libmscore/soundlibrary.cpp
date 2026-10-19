@@ -543,6 +543,13 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       if (a.hasAttribute("octaveDown") && !readKeyedMs(a.value("octaveDown").toString(), art.octaveDownMs, art.octaveDown))
             return false;
       // (legatoLevel / legatoLevelLong: the legato level balance's, removed 2026-10-07; an older map's are ignored)
+      // keyShift="-12": the key sent for its notes (Ample's natural harmonics: the sounding pitch - 12)
+      if (a.hasAttribute("keyShift")) {
+            bool okk = false;
+            art.keyShift = a.value("keyShift").toInt(&okk);
+            if (!okk || art.keyShift < -48 || art.keyShift > 48)
+                  return false;
+            }
       bool ok = false;
       art.value = a.value("value").toInt(&ok);
       if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
@@ -569,6 +576,9 @@ static bool readController(QXmlStreamReader& r, Controller& c)
       if (a.hasAttribute("cc"))
             c.cc = a.value("cc").toInt(&ok);
       c.param = a.value("param").toString();
+      // state="DBName" values="AGMFg AGMPk AGMSt": a load-time setting of the plug-in's state (Controller::state)
+      c.state = a.value("state").toString();
+      c.stateValues = a.value("values").toString().split(' ', QString::SkipEmptyParts);
       if (a.hasAttribute("default")) {
             bool okd = false;
             c.defaultValue = a.value("default").toInt(&okd);
@@ -577,9 +587,26 @@ static bool readController(QXmlStreamReader& r, Controller& c)
       if (a.hasAttribute("patchDefault")) {
             bool okp = false;
             c.patchDefault = a.value("patchDefault").toDouble(&okp);
-            ok = ok && okp && c.patchDefault >= 0 && c.patchDefault <= 1 && !c.param.isEmpty();
+            ok = ok && okp && c.patchDefault >= 0 && c.patchDefault <= 1 && (!c.param.isEmpty() || c.isState());
             }
-      if (!ok || c.id.isEmpty() || (c.cc < 0) == c.param.isEmpty() || c.cc > 119)
+      // steps="N" display="0:Off 1:On" (how the plug-in shows the value: the lane editor's text)
+      if (a.hasAttribute("steps")) {
+            bool oks = false;
+            c.steps = a.value("steps").toInt(&oks);
+            ok = ok && oks && c.steps >= 1 && c.steps <= 1000;
+            }
+      double last = -1;
+      for (const QString& t : a.value("display").toString().split(' ', QString::SkipEmptyParts)) {
+            const int colon = t.indexOf(':');
+            bool okv = false;
+            const double v = colon > 0 ? t.left(colon).toDouble(&okv) : -1;
+            if (!okv || v < 0 || v > 1 || v <= last)
+                  return false;
+            last = v;
+            c.display.emplace_back(v, t.mid(colon + 1));
+            }
+      const int kinds = (c.cc >= 0 ? 1 : 0) + (c.param.isEmpty() ? 0 : 1) + (c.isState() ? 1 : 0);
+      if (!ok || c.id.isEmpty() || kinds != 1 || c.cc > 119 || c.isState() != !c.stateValues.isEmpty())
             return false;
       while (r.readNextStartElement()) {
             if (r.name() == "Text") {
@@ -595,6 +622,42 @@ static bool readController(QXmlStreamReader& r, Controller& c)
             r.skipCurrentElement();
             }
       return true;
+      }
+
+//---------------------------------------------------------
+//   controllerText
+//    a stepped controller: the text of its position nearest the value (the display entry nearest k / steps); a
+//    continuous one: numeric texts linear between the two entries around the value, to the decimals of the nearer, else
+//    the nearer entry's text
+//---------------------------------------------------------
+
+QString controllerText(const Controller& controller, double value)
+      {
+      const auto& d = controller.display;
+      if (d.empty())
+            return QString();
+      double v = std::min(1.0, std::max(0.0, value));
+      if (controller.steps > 0)
+            v = std::round(v * controller.steps) / controller.steps;
+      auto hi = std::lower_bound(d.begin(), d.end(), v, [](const std::pair<double, QString>& p, double x) { return p.first < x; });
+      if (hi == d.end())
+            return d.back().second;
+      if (hi == d.begin() || hi->first == v)
+            return hi->second;
+      auto lo = std::prev(hi);
+      const bool nearLo = v - lo->first <= hi->first - v;
+      if (controller.steps > 0)
+            return (nearLo ? lo : hi)->second;
+      bool ok1 = false, ok2 = false;
+      const double y1 = lo->second.toDouble(&ok1);
+      const double y2 = hi->second.toDouble(&ok2);
+      if (!ok1 || !ok2)
+            return (nearLo ? lo : hi)->second;
+      const QString& n = (nearLo ? lo : hi)->second;
+      const int dot = n.indexOf('.');
+      const int decimals = dot < 0 ? 0 : n.size() - dot - 1;
+      const double y = y1 + (y2 - y1) * (v - lo->first) / (hi->first - lo->first);
+      return QString::number(y, 'f', decimals);
       }
 
 // the library's controllers, then the instrument's own: one of the same id replaces it

@@ -65,6 +65,7 @@
 #include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/librarycontrollers.h"
 #include "audio/vst3/pluginextract.h"
+#include "audio/vst3/pluginstate.h"
 #include "audio/vst3/playbackverify.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
@@ -77,6 +78,12 @@
 #include "libmscore/chord.h"
 #include "libmscore/tempo.h"
 #endif
+
+#include "libmscore/chord.h"
+#include "libmscore/note.h"
+#include "libmscore/part.h"
+#include "libmscore/partcontrollers.h"
+#include "libmscore/segment.h"
 
 #define DIR QString("libmscore/soundlibrary/")
 
@@ -187,6 +194,9 @@ class TestSoundLibrary : public QObject, public MTest
       void renderKit();
       void renderKitMaxVelocity();
       void keyShift();
+      void ampleMap();
+      void ampleRender();
+      void controllerDisplay();
       void clickedNote();
       void renderKitRoll();
       void controllers();
@@ -200,6 +210,8 @@ class TestSoundLibrary : public QObject, public MTest
       void mixerScore();
       void liveSetTestSynth();
       void liveParameters();
+      void pluginStateValues();
+      void ampleParameters();
       void kontaktSetup();
       void kontaktScriptValues();
       void kontaktMaxVoices();
@@ -5867,6 +5879,243 @@ void TestSoundLibrary::keyShift()
       }
 
 //---------------------------------------------------------
+//   ampleMap
+//    the shipped Ample Guitar M map (tools/soundlibraries/gen_ample.py from the plug-in's parameter dump): loads; the
+//    steel-string guitars play it; every one of the plug-in's 124 parameters is a controller (a lane of the part: the
+//    lane editor offers a part every controller of its patches, AutomationLanes::libraryTargets), by its title, with its
+//    default (0-1) and, stepped, a text for each position; CC7 / CC1 / CC64; the sample set as a state setting; the
+//    keyswitches measured (Ample's C0 = MIDI 24), the natural harmonic a key 12 under its sound; velocity dynamics only
+//    (CC1 is Ample's vibrato); 126 at most (127 plays Pop)
+//---------------------------------------------------------
+
+void TestSoundLibrary::ampleMap()
+      {
+      QString error;
+      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      QVERIFY2(ample, qPrintable(error));
+      QCOMPARE(ample->name, QString("Ample Guitar M"));
+      QCOMPARE(ample->dynamicsCC, -1);
+      QCOMPARE(ample->plugins, QStringList({ "AGM.vst3" }));
+      QVERIFY(ample->registryName.isEmpty());                   // (not Kontakt: MuseScore makes no setups)
+      QCOMPARE(int(ample->instruments.size()), 1);
+      const SoundLib::LibInstrument& agm = ample->instruments[0];
+      for (const char* id : { "guitar-steel", "guitar-steel-treble-clef", "guitar-steel-tablature" })
+            QVERIFY2(agm.ids.contains(id), id);
+      QVERIFY(!agm.ids.contains("guitar-nylon"));               // (nylon: Ample Guitar L, later)
+      QCOMPARE(agm.maxVelocity, 126);
+      QVERIFY(agm.switchType == SoundLib::SwitchType::KEYSWITCH);
+
+      int params = 0, ccs = 0, states = 0;
+      std::set<QString> ids, titles;
+      for (const SoundLib::Controller& c : agm.allControllers) {
+            QVERIFY2(ids.insert(c.id).second, qPrintable(c.id));
+            if (!c.param.isEmpty()) {
+                  ++params;
+                  QVERIFY2(titles.insert(c.param).second, qPrintable(c.param));
+                  QVERIFY2(!c.param.startsWith("MIDI CC"), qPrintable(c.param));
+                  QVERIFY2(c.patchDefault >= 0 && c.patchDefault <= 1, qPrintable(c.id));
+                  QCOMPARE(c.defaultValue, -1);                 // (MuseScore leaves the plug-in's own value)
+                  if (c.steps > 0)
+                        QVERIFY2(int(c.display.size()) == c.steps + 1, qPrintable(c.id));
+                  }
+            else if (c.cc >= 0)
+                  ++ccs;
+            else if (c.isState())
+                  ++states;
+            }
+      QCOMPARE(params, 124);
+      QCOMPARE(ccs, 3);
+      QCOMPARE(states, 1);
+      auto byId = [&agm](const QString& id) -> const SoundLib::Controller* {
+            for (const SoundLib::Controller& c : agm.allControllers)
+                  if (c.id == id)
+                        return &c;
+            return nullptr;
+            };
+      for (const auto& cc : std::vector<std::pair<QString, int>> { { "volume", 7 }, { "vibrato", 1 }, { "hold-pedal", 64 } }) {
+            QVERIFY2(byId(cc.first) && byId(cc.first)->cc == cc.second, qPrintable(cc.first));
+            }
+      const SoundLib::Controller* set = byId("sample-set");
+      QVERIFY(set);
+      QCOMPARE(set->state, QString("DBName"));
+      QCOMPARE(set->stateValues, QStringList({ "AGMFg", "AGMPk", "AGMSt" }));
+      QCOMPARE(SoundLib::controllerText(*set, 0.5), QString("Pick"));
+      // a few parameters as the plug-in shows them
+      QVERIFY(byId("m-capo") && byId("m-capo")->param == "M-Capo" && byId("m-capo")->steps == 11);
+      QCOMPARE(SoundLib::controllerText(*byId("m-capo"), 2 / 11.0), QString("2"));
+      QCOMPARE(SoundLib::controllerText(*byId("poly-bender-tog"), 1.0), QString("On"));
+      QCOMPARE(SoundLib::controllerText(*byId("m-master-vol"), 0.5), QString("1.00"));
+      QCOMPARE(SoundLib::controllerText(*byId("str-6-tuner"), 0.0), QString("-2"));
+      QCOMPARE(SoundLib::controllerText(*byId("bend-range"), byId("bend-range")->patchDefault), QString("2"));
+      // the dump's own texts (1 + 999 v, rounded); not 0.5, a tie (500.5) the plug-in shows as 500
+      QCOMPARE(SoundLib::controllerText(*byId("s-strum-time"), byId("s-strum-time")->patchDefault), QString("29"));
+      QCOMPARE(SoundLib::controllerText(*byId("s-strum-time"), 1 / 22.0), QString("46"));
+
+      // the keyswitches
+      const std::vector<std::tuple<QString, int, int>> keys { { "Sustain", 24, 0 }, { "Natural Harmonic", 25, -12 },
+                                                              { "Palm Mute", 26, 0 }, { "Slide In / Out", 27, 0 },
+                                                              { "Legato Slide", 28, 0 }, { "Hammer-On / Pull-Off", 29, 0 },
+                                                              { "Slide Guitar", 30, 0 } };
+      QCOMPARE(agm.articulations.size(), keys.size());
+      for (size_t i = 0; i < keys.size(); ++i) {
+            QCOMPARE(agm.articulations[i].name, std::get<0>(keys[i]));
+            QCOMPARE(agm.articulations[i].value, std::get<1>(keys[i]));
+            QCOMPARE(agm.articulations[i].keyShift, std::get<2>(keys[i]));
+            }
+      QVERIFY(agm.articulations[1].modifiers.contains("harmonics"));
+      QVERIFY(agm.articulations[2].modifiers.contains("muted"));
+      }
+
+//---------------------------------------------------------
+//   ampleRender
+//    a steel-string guitar part on the Ample map: each note's keyswitch before it (sustain 24, a harmonic notehead's
+//    natural harmonic 25 on its sounding pitch - 12, "muted" palm mute 26, "open" sustain again); velocity only (no CC1
+//    unless the Vibrato lane sets it), 126 at most at fff; the CC lanes sent as CCs: a flat Volume lane CC7 from the
+//    start, Hold Pedal CC64, a Vibrato lane with a ramp CC1 along it; a parameter lane sends no MIDI
+//---------------------------------------------------------
+
+void TestSoundLibrary::ampleRender()
+      {
+      QString error;
+      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      QVERIFY2(ample, qPrintable(error));
+      SoundLib::setCurrent(ample);
+      MasterScore* score = readScore(DIR + "guitar.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Part* part = score->parts().front();
+      QVERIFY2(part->instrument()->getId().startsWith("guitar-steel"), qPrintable(part->instrument()->getId()));
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *ample);
+      QCOMPARE(int(routes.size()), 1);
+
+      std::vector<int> pitches;                 // the written notes' sounding pitches, in order
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  pitches.push_back(toChord(s->element(0))->upNote()->ppitch());
+      QCOMPARE(int(pitches.size()), 5);
+
+      auto render = [&](std::vector<std::tuple<int, int, int>>* ccs) {       // -> (key, velocity, switch before it)
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<std::tuple<int, int, int>> notes;
+            int lastSwitch = -1;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal())
+                        continue;
+                  if (ev.type() == ME_NOTEON && ev.velo() > 0 && ev.librarySwitch())
+                        lastSwitch = ev.pitch();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                        notes.push_back(std::make_tuple(ev.pitch(), ev.velo(), lastSwitch));
+                  else if (ev.type() == ME_CONTROLLER && ccs)
+                        ccs->push_back(std::make_tuple(te.first, ev.controller(), ev.value()));
+                  }
+            return notes;
+            };
+      std::vector<std::tuple<int, int, int>> ccs;
+      const auto notes = render(&ccs);
+      QCOMPARE(int(notes.size()), 5);
+      const int keys[] = { pitches[0], pitches[1] - 12, pitches[2], pitches[3], pitches[4] };
+      const int switches[] = { 24, 25, 26, 24, 24 };
+      for (int i = 0; i < 5; ++i) {
+            QCOMPARE(std::get<0>(notes[size_t(i)]), keys[i]);
+            QCOMPARE(std::get<2>(notes[size_t(i)]), switches[i]);
+            QVERIFY(std::get<1>(notes[size_t(i)]) >= 1 && std::get<1>(notes[size_t(i)]) <= 126);
+            }
+      QCOMPARE(std::get<1>(notes[4]), 126);                       // (fff: not Pop)
+      for (const auto& c : ccs)
+            QVERIFY2(std::get<1>(c) != 1, "CC1 without a Vibrato lane");
+
+      // the lanes: Volume flat 100, Hold Pedal flat 127, Vibrato 0 -> 127 over the first bar, a parameter (M-Capo) flat
+      Automation::Lane vibrato;
+      vibrato.target = "vibrato";
+      vibrato.points = { Automation::Point(0, 0.0, Automation::Curve::LINEAR), Automation::Point(1920, 1.0, Automation::Curve::STEP) };
+      std::map<const Part*, Automation::PartLanes> lanes;
+      lanes[part] = { settingLane("volume", 100), settingLane("hold-pedal", 127), vibrato, settingLane("m-capo", 23) };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
+      ccs.clear();
+      QCOMPARE(int(render(&ccs).size()), 5);
+      std::map<int, std::vector<std::pair<int, int>>> by;         // controller -> (tick, value)
+      for (const auto& c : ccs)
+            by[std::get<1>(c)].push_back({ std::get<0>(c), std::get<2>(c) });
+      QVERIFY(!by[7].empty() && by[7].front() == std::make_pair(0, 100));
+      QVERIFY(!by[64].empty() && by[64].front() == std::make_pair(0, 127));
+      QVERIFY2(by[1].size() > 20, qPrintable(QString::number(by[1].size())));     // (the ramp, step by step)
+      QCOMPARE(by[1].front().second, 0);
+      QCOMPARE(by[1].back().second, 127);
+      for (size_t i = 1; i < by[1].size(); ++i)
+            QVERIFY(by[1][i].second >= by[1][i - 1].second && by[1][i].first >= by[1][i - 1].first);
+      score->setMetaTag(Automation::metaTag, QString());
+      delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   controllerDisplay
+//    <Controller steps display> (how the plug-in shows a value: the lane editor's text) and <Controller state values>
+//    (a load-time setting of a non-Kontakt plug-in's state: Ample's sample set): read, refused when malformed; the
+//    text of a stepped and of a continuous value; a part's state values from its lane (its first point: the state
+//    can't change while playing), none without a lane
+//---------------------------------------------------------
+
+void TestSoundLibrary::controllerDisplay()
+      {
+      auto withController = [](const QString& c) {
+            return "<SoundLibrary name='t'><Switch type='keyswitch'/><Dynamics cc='-1'/>" + c
+                   + "<Instrument name='G' ids='guitar-steel'><Articulation name='Sus' value='24' techniques='long'/>"
+                     "<Articulation name='NH' value='25' techniques='long' modifiers='harmonics' keyShift='-12'/></Instrument>"
+                     "</SoundLibrary>";
+            };
+      auto lib = loadMap(withController("<Controller id='t' name='T' param='Tuner' steps='2' display='0:-2 0.5:-1 1:0'/>"
+                                        "<Controller id='g' name='G' param='Gain' display='0:0.00 0.5:1.00 1:2.00'/>"
+                                        "<Controller id='set' name='Set' state='DBName' values='AGMFg AGMPk AGMSt' patchDefault='0'/>"));
+      QVERIFY(lib);
+      QCOMPARE(lib->instruments[0].articulations[1].keyShift, -12);
+      const SoundLib::Controller& t = lib->controllers[0];
+      const SoundLib::Controller& g = lib->controllers[1];
+      const SoundLib::Controller& set = lib->controllers[2];
+      QCOMPARE(t.steps, 2);
+      QCOMPARE(SoundLib::controllerText(t, 0.0), QString("-2"));
+      QCOMPARE(SoundLib::controllerText(t, 0.3), QString("-1"));
+      QCOMPARE(SoundLib::controllerText(t, 0.8), QString("0"));
+      QCOMPARE(SoundLib::controllerText(g, 0.25), QString("0.50"));
+      QCOMPARE(SoundLib::controllerText(g, 1.0), QString("2.00"));
+      QCOMPARE(SoundLib::controllerText(set, 0.5), QString());          // (no display listed)
+      QVERIFY(set.isState() && set.param.isEmpty() && set.cc < 0);
+      for (const char* bad : { "<Controller id='x' param='P' display='0.5:a 0.2:b'/>",              // (not ascending)
+                               "<Controller id='x' param='P' display='1.5:a'/>",
+                               "<Controller id='x' param='P' steps='0'/>",
+                               "<Controller id='x' param='P' state='DBName' values='a b'/>",       // (two kinds)
+                               "<Controller id='x' state='DBName'/>",                               // (no values)
+                               "<Controller id='x' param='P' values='a b'/>",
+                               "<Controller id='x' cc='7' state='DBName' values='a'/>" })
+            QVERIFY2(!loadMap(withController(bad)), bad);
+      QVERIFY(loadMap(withController("")));
+      QVERIFY(!loadMap(withController("").replace("keyShift='-12'", "keyShift='-50'")));
+
+      // the part's state values, by its lane
+      SoundLib::setCurrent(lib);
+      MasterScore* score = readScore(DIR + "guitar.musicxml");
+      QVERIFY(score);
+      const Part* part = score->parts().front();
+      std::map<const Part*, Automation::PartLanes> lanes;
+      QVERIFY(PartControllers::stateValues(part, lib->instruments[0], lanes).empty());
+      QCOMPARE(PartControllers::unautomatedValue(lib->instruments[0], set), 0.0);
+      Automation::Lane l;
+      l.target = "set";
+      l.points = { Automation::Point(0, 0.5, Automation::Curve::STEP) };
+      lanes[part] = { l };
+      auto v = PartControllers::stateValues(part, lib->instruments[0], lanes);
+      QCOMPARE(int(v.size()), 1);
+      QCOMPARE(v["DBName"], QByteArray("AGMPk"));
+      lanes[part][0].points = { Automation::Point(480, 1.0, Automation::Curve::STEP), Automation::Point(960, 0.0, Automation::Curve::STEP) };
+      QCOMPARE(PartControllers::stateValues(part, lib->instruments[0], lanes)["DBName"], QByteArray("AGMSt"));
+      delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
 //   clickedNote
 //    a clicked note sounds as playback plays it (libmscore/notepreview.h): for every note of the score, the click's
 //    events (its own renderer, the note's chunk only) against the playback render (the whole score in Seq's chunks):
@@ -11379,6 +11628,132 @@ void TestSoundLibrary::liveParameters()
             delete score;
             }
       SoundLib::setOutput(SoundLib::Output::MIDI);
+      }
+
+//---------------------------------------------------------
+//   pluginStateValues
+//    PluginState::withValues (audio/vst3/pluginstate.h: a non-Kontakt plug-in's load-time settings in its state): in a
+//    JUCE VST 2 chunk as Ample writes it (VstW, CcnK / FBCh, VC2!), a value of the same length in place, one of another
+//    length with the three sizes set again (read back, set once more); <Name Value> and <Parameter Name Value>; a name the
+//    state lacks refused; plain XML of unknown layout: the same length only
+//---------------------------------------------------------
+
+static QByteArray juceState(const QByteArray& xml, const QByteArray& tail)
+      {
+      QByteArray c(176, '\0');
+      c.replace(0, 4, "VstW");
+      c[7] = 8;
+      c[11] = 1;
+      c.replace(16, 4, "CcnK");
+      c.replace(24, 4, "FBCh");
+      QByteArray chunk = "VC2!";
+      const quint32 n = quint32(xml.size());
+      chunk.append(char(n & 0xff)).append(char((n >> 8) & 0xff)).append(char((n >> 16) & 0xff)).append(char(n >> 24));
+      chunk += xml + tail;
+      auto be = [&c](int at, quint32 v) { c[at] = char(v >> 24); c[at + 1] = char(v >> 16); c[at + 2] = char(v >> 8); c[at + 3] = char(v); };
+      be(172, quint32(chunk.size()));
+      be(20, quint32(152 + chunk.size()));
+      return c + chunk;
+      }
+
+void TestSoundLibrary::pluginStateValues()
+      {
+      const QByteArray xml = "<?xml version=\"1.0\"?> <AAG_STATE Name=\"Default\"><Parameter Name=\"Master Tune\" Value=\"440\" Index=\"321\"/>"
+                             "<DBName Value=\"AGMFg\"/></AAG_STATE>";
+      const QByteArray tail = QByteArray("\0\x01JUCEPrivateData", 17);
+      const QByteArray state = juceState(xml, tail);
+      QCOMPARE(PluginState::value(state, "DBName"), QByteArray("AGMFg"));
+      QCOMPARE(PluginState::value(state, "Parameter:Master Tune"), QByteArray("440"));
+      QString error;
+      int set = 0;
+      // the same length: in place
+      const QByteArray pick = PluginState::withValues(state, { { "DBName", "AGMPk" } }, &error, &set);
+      QCOMPARE(set, 1);
+      QCOMPARE(pick.size(), state.size());
+      QCOMPARE(PluginState::value(pick, "DBName"), QByteArray("AGMPk"));
+      // another length: the sizes follow, the state as one written so (tail kept)
+      const QByteArray tuned = PluginState::withValues(state, { { "Parameter:Master Tune", "441.5" }, { "DBName", "AGMSt" } }, &error, &set);
+      QVERIFY2(!tuned.isEmpty(), qPrintable(error));
+      QCOMPARE(set, 2);
+      QCOMPARE(tuned, juceState(QByteArray(xml).replace("\"440\"", "\"441.5\"").replace("AGMFg", "AGMSt"), tail));
+      const QByteArray back = PluginState::withValues(tuned, { { "Parameter:Master Tune", "440" } }, &error);
+      QCOMPARE(back, juceState(QByteArray(xml).replace("AGMFg", "AGMSt"), tail));
+      // refused: a name it lacks; another length in a layout of unknown sizes
+      QVERIFY(PluginState::withValues(state, { { "Nothing", "1" } }, &error).isEmpty());
+      QVERIFY(error.contains("Nothing"));
+      QCOMPARE(PluginState::withValues(xml, { { "DBName", "AGMPk" } }), QByteArray(xml).replace("AGMFg", "AGMPk"));
+      QVERIFY(PluginState::withValues(xml, { { "DBName", "AGMPick" } }, &error).isEmpty());
+      // escaped
+      QVERIFY(PluginState::value(PluginState::withValues(state, { { "DBName", "a\"b" } }), "DBName") == "a&quot;b");
+      }
+
+//---------------------------------------------------------
+//   ampleParameters
+//    every plug-in parameter of the Ample map reaches the plug-in by the librarycontrollers path, as playback sets a
+//    part's settings (its flat lanes, LibraryControllers::applyParameters, found by title): the test synth given Ample
+//    Guitar M's 124 parameters by title (MSTESTSYNTH_PARAMS), each lane at its own value, each read back from the
+//    instance; the CC and state controllers set no parameter; the patch's own values put back when the lanes go
+//---------------------------------------------------------
+
+void TestSoundLibrary::ampleParameters()
+      {
+      QString error;
+      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      QVERIFY2(ample, qPrintable(error));
+      const SoundLib::LibInstrument& agm = ample->instruments[0];
+      QTemporaryFile titles;
+      QVERIFY(titles.open());
+      int params = 0;
+      for (const SoundLib::Controller& c : agm.allControllers)
+            if (!c.param.isEmpty()) {
+                  titles.write(QString("%1\t%2\t%3\n").arg(c.param).arg(c.steps).arg(c.patchDefault, 0, 'f', 6).toUtf8());
+                  ++params;
+                  }
+      titles.close();
+      QCOMPARE(params, 124);
+      qputenv("MSTESTSYNTH_PARAMS", titles.fileName().toLocal8Bit());
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+      qunsetenv("MSTESTSYNTH_PARAMS");
+      QVERIFY2(p, qPrintable(error));
+
+      SoundLib::setCurrent(ample);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "guitar.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts().front();
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *ample);
+      QCOMPARE(int(routes.size()), 1);
+      std::map<const Part*, Automation::PartLanes> lanes;
+      std::map<QString, double> want;               // title -> the lane's value
+      int i = 0;
+      for (const SoundLib::Controller& c : agm.allControllers) {
+            const int v = (i++ * 37 + 5) % 128;
+            lanes[part].push_back(settingLane(c.id, v));
+            if (!c.param.isEmpty())
+                  want[c.param] = v / 127.0;
+            }
+      std::map<unsigned, double> own;
+      LibraryControllers::applyParameters(p.get(), routes[0], lanes, &own);
+      int reached = 0;
+      for (const auto& w : want) {
+            const long id = p->parameterId(w.first);
+            QVERIFY2(id >= 0, qPrintable(w.first));
+            QVERIFY2(std::fabs(p->parameter(unsigned(id)) - w.second) < 1e-6,
+                     qPrintable(QString("%1: %2, set %3").arg(w.first).arg(p->parameter(unsigned(id))).arg(w.second)));
+            ++reached;
+            }
+      QCOMPARE(reached, 124);
+      QCOMPARE(int(own.size()), 124);                       // (each one's own value kept, to put back)
+      // the lanes gone: the patch's own (the map's patchDefault, the test synth's default here) back on every one
+      LibraryControllers::applyParameters(p.get(), routes[0], {}, &own);
+      for (const SoundLib::Controller& c : agm.allControllers)
+            if (!c.param.isEmpty())
+                  QVERIFY2(std::fabs(p->parameter(unsigned(p->parameterId(c.param))) - c.patchDefault) < 1e-6, qPrintable(c.param));
+      QVERIFY(own.empty());
+      delete score;
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      SoundLib::setCurrent(nullptr);
       }
 
 #endif

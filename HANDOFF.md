@@ -30,6 +30,47 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Ample guitars (branch `ample-map`, 2026-10-18, from integrate-1017 c0d2f7325c; not merged)
+
+The owner, 2026-10-18: "I want to be able to control all the parameters directly in MuseScore. ALL of them." Phase 1
+is Ample Guitar M (`AGM.vst3`, hosted directly, not Kontakt); the dump it is generated from stays outside the repo
+(`~/MuseScore/ms3fork/private/ample-map/agm-info.txt`, amphost).
+
+- **Generator**: `python3 tools/soundlibraries/gen_ample.py <dump> [out]` writes `share/soundlibraries/Ample Guitar M.xml`
+  (never hand-edited); test `tools/soundlibraries/test_gen_ample.py` (in run_fork_tests.sh).
+- **The map**: all 124 real plug-in parameters as `param` controllers by title (Bypass included; MIDI CC proxies left
+  out), each with its patchDefault, and steps / display where the dump gives texts (62): a linear table thinned to its
+  two ends, stepped when the texts are repeated integers. CC7 Volume, CC1 Vibrato, CC64 Hold Pedal. The sample set
+  (`DBName` AGMFg / AGMPk / AGMSt) is a state controller. Keyswitches Sustain 24, Natural Harmonic 25 (keyShift -12),
+  Palm Mute 26, and Slide In / Out, Legato Slide, Hammer-On / Pull-Off, Slide Guitar 27-30 (reference only: no notation
+  picks them yet). Dynamics by velocity only, maxVelocity 126 (127 plays Pop). Ids guitar-steel,
+  guitar-steel-treble-clef, guitar-steel-tablature. Ample's other keys are a comment in the map. Pitch bend is the
+  M-Pitch Bend parameter lane, not MIDI pitch bend (that would collide with the tuning bends).
+- **Map format** (README, parser, tests): `<Controller steps display>` (the lane editor shows the plug-in's text,
+  `SoundLib::controllerText`), `<Controller state values>` (a load-time setting kept only in the plug-in's state),
+  `<Articulation keyShift>`.
+- **State settings**: `audio/vst3/pluginstate.*` sets `<Name Value>` / `<Parameter Name Value>` in the state's XML and
+  resizes the JUCE VstW / CcnK / FBCh / VC2! chunk (layout checked against AGM's real state sizes). SoundLibraryHost
+  carries the values per part in the slot's values (a changed sample set loads the part again) and through
+  setupState / loadSetup (export, Even levels, Create Live Set). Without a setup file the base is the plug-in's
+  `defaultState`. A state-setting lane's value at the score's start is what counts. Test synth: `MSTESTSYNTH_PARAMS=<file>`
+  adds parameters by title.
+- 208 parameters exist only in AGM's state (Master Tune, reverb ...): settable by the mechanism, ranges unknown, so no
+  lanes yet.
+
+**Tests** (Linux, test synth, overlay build `~/MuseScore/ms3fork/ovl-amplemap/am.sh`; 2026-10-18): all fork tests pass;
+tst_soundlibrary 111 passed / 4 skipped (integrate-1017's 106 / 4 + ampleMap, ampleRender, controllerDisplay,
+pluginStateValues, ampleParameters), tst_liveequivalence 52 / 3, the rest unchanged. One fix: ampleMap compared
+S-Strum Time's text at 0.5, a rounding tie (500.5; the plug-in shows 500, `controllerText` 501); it now checks the
+dump's own texts at the default (29) and 1/22 (46). Not tried: the real AGM (Linux has none), Windows, Live, by ear.
+Untested assumptions: a diamond notehead in MusicXML import gives "harmonics"; fff renders at velocity 126.
+
+**Phase 2** (open): strums (Detect mode, strum keys with velocity bands, CC7 per strum, rolls on the single-string
+keys); string / fret forcing, capo, harmonics, slides, HO / PO, Pop and FX; two instances per sample set; the
+state-only settings; Live with a non-Kontakt plug-in (LIVE.md › What still differs); CC11 does nothing on Ample, so
+per-note levels on CC11 don't reach it; the other four guitars need their own dumps; a Windows build, then the owner
+listens.
+
 ## Speed from written (branch `cc119-control`, 2026-10-17)
 
 The owner approved taking over the Performance patches' CC119 (2026-10-17). `[slurs] speedFromWritten` (0 by default

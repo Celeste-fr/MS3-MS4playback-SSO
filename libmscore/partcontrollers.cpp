@@ -15,6 +15,7 @@
 #include "score.h"
 #include "soundlibrary.h"
 
+#include <algorithm>
 #include <cmath>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -150,6 +151,8 @@ double unautomatedValue(const SoundLib::LibInstrument& patch, const SoundLib::Co
       {
       if (controller.defaultValue >= 0)
             return controller.defaultValue / 127.0;
+      if (controller.isState())                 // (a state setting: the value shipped, the plug-in's default state)
+            return controller.patchDefault;
       if (controller.param.isEmpty())
             return -1;
       // the patch as it loaded on this computer (Kontakt's live value, as Live's panel shows it once loaded)
@@ -166,6 +169,36 @@ double unautomatedValue(const SoundLib::LibInstrument& patch, const SoundLib::Co
       if (m.hasMatch() && patch.hasMicLevels)
             return patch.micDefault[size_t(m.captured(1).toInt() - 1)] / 127.0;
       return -1;
+      }
+
+//---------------------------------------------------------
+//   stateValue / stateValues
+//---------------------------------------------------------
+
+double stateValue(const Part* part, const SoundLib::Controller& controller, const std::map<const Part*, Automation::PartLanes>& lanes)
+      {
+      const Automation::PartLanes own = Automation::lanes(part, lanes);
+      if (const Automation::Lane* l = laneOf(own, controller))
+            if (!l->points.empty())
+                  return std::min(1.0, std::max(0.0, l->points.front().value));
+      return controller.defaultValue >= 0 ? controller.defaultValue / 127.0 : -1.0;
+      }
+
+std::map<QString, QByteArray> stateValues(const Part* part, const SoundLib::LibInstrument& patch,
+                                          const std::map<const Part*, Automation::PartLanes>& lanes)
+      {
+      std::map<QString, QByteArray> out;
+      for (const SoundLib::Controller& c : patch.allControllers) {
+            if (!c.isState() || c.stateValues.isEmpty())
+                  continue;
+            const double v = stateValue(part, c, lanes);
+            if (v < 0)
+                  continue;
+            const int n = c.stateValues.size();
+            const int k = std::min(n - 1, std::max(0, int(std::lround(v * (n - 1)))));
+            out[c.state] = c.stateValues[k].toUtf8();
+            }
+      return out;
       }
 
 }     // namespace PartControllers

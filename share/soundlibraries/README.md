@@ -352,6 +352,18 @@ switch value of each articulation. For example:
                   onset="45"/>
   </Instrument>
   ```
+- `keyShift` on an `Articulation` (semitones, -48 .. 48, left out: 0): added to the key of a note on that articulation,
+  on top of its `Instrument`'s. Ample's natural harmonic (C#0 held) sounds 12 semitones over the key, so the map's
+  Natural Harmonic says `keyShift="-12"`: a harmonic note (diamond notehead, "harm.") sounding E4 goes on key E3.
+- `<Dynamics cc="-1"/>`: dynamics by note velocity only, no dynamics controller (Ample: CC1 is its vibrato).
+- **Ample Guitar M** (`Ample Guitar M.xml`, generated: `python3 tools/soundlibraries/gen_ample.py <dump>`, the dump
+  being amphost's parameter list of AGM 4.1.0, kept outside the repository): the steel-string guitars play it,
+  hosted as `AGM.vst3`, an instance per part; every one of its 124 parameters is a lane (by its title), with CC7
+  (Volume: the same gain as M-Master Vol, 64 = unity), CC1 (Vibrato), CC64 (Hold Pedal) and the sample set
+  (Finger / Pick / Strum); keyswitches (Ample calls MIDI 60 "C3": its C0 is MIDI 24) Sustain 24, Natural Harmonic 25,
+  Palm Mute 26 (staff text "muted", the palm mute line), Slide In / Out 27, Legato Slide 28, Hammer-On / Pull-Off 29,
+  Slide Guitar 30 (the last four listed, not yet chosen by the notation); velocity 127 is Pop, so notes stop at 126.
+  The map lists Ample's other keys (strings, positions, strummer, FX) as a comment.
 - **Microtones.** `<Tuning method="varispeed" [tolerance="…" tail="…" maxLanes="…"]/>`: a plug-in
   that ignores a note's tuning (Kontakt) plays a part's notes on copies of the patch ("lanes"),
   one tuning each. Where the patch has `bend`, a lane's tuning within the range is played by the
@@ -401,6 +413,26 @@ switch value of each articulation. For example:
     <Text match="molto vib\.?" value="127"/>
   </Controller>
   <Controller id="release" name="Release" param="Release" patchDefault="0.496"/>
+  ```
+
+  `steps` and `display` say how the plug-in shows a value (the lane editor shows that text instead of 0-127; nothing
+  is sent by them): `steps="N"`, the parameter's discrete positions k / N (a toggle 1, Ample's capo 11);
+  `display="v:text …"`, the plug-in's text at lane values 0-1, ascending, no spaces in a text (a numeric text is
+  read linearly between two entries, a stepped controller shows its nearest position's).
+
+  **State settings** (a non-Kontakt plug-in hosted in MuseScore): `<Controller id name state="Name" values="a b c">`
+  is a setting the plug-in keeps only in its state, no parameter, no key (Ample's sample set: `state="DBName"
+  values="AGMFg AGMPk AGMSt"`). Its lane's value at the score's start picks `values[round(v × (n − 1))]` (a lane's
+  first point: the state can't change while playing), written into the part's state as the part loads
+  (`audio/vst3/pluginstate.h`: `<Name Value="…"/>`, or `state="Parameter:Title"` for `<Parameter Name="Title"
+  Value="…"/>`); a changed value loads the part again at the next play or export. Without a lane the plug-in keeps its
+  own (`patchDefault`, 0-1, is that value on the lane's scale). A patch with state settings and no setup file starts
+  from the plug-in's own default state. Not for Kontakt (its script values: `setup`).
+
+  ```xml
+  <Controller id="m-capo" name="M-Capo" param="M-Capo" patchDefault="0" steps="11" display="0:0 0.0909:1 … 1:11"/>
+  <Controller id="sample-set" name="Sample set" state="DBName" values="AGMFg AGMPk AGMSt" patchDefault="0"
+              steps="2" display="0:Finger 0.5:Pick 1:Strum"/>
   ```
 
   A part's controllers are set by automation lanes only (Continuous View, under the part's header:

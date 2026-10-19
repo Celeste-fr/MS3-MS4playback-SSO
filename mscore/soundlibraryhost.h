@@ -177,12 +177,21 @@ class SoundLibraryHost : public QObject {
       static int kontaktMaxVoices();
       // score: whose playback settings set the patch's script values on top of the setup (SoundLib::playbackScriptValues:
       // [slurs] speedFromWritten); nullptr: playback.ini's
+      // part: whose state settings (SoundLib::Controller::state, a non-Kontakt plug-in's: Ample's sample set) go into the
+      // state (stateValuesFor); nullptr: none
       static QByteArray setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
-                                   QString* error = nullptr, const Score* score = nullptr);   // made first when needed
+                                   QString* error = nullptr, const Score* score = nullptr,
+                                   const Part* part = nullptr);   // made first when needed
       // (the same with those script values given: scriptValuesFor)
       static QByteArray setupStateWith(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                        const std::map<QString, QByteArray>& values, QString* error);
       static std::map<QString, QByteArray> scriptValuesFor(const SoundLib::Library& library, const QString& patch, const Score* score);
+      // a non-Kontakt library's state settings the part sets for the patch (PartControllers::stateValues, by its lanes);
+      // empty for Kontakt (makesSetups) or without a part. setupStateWith writes them into the state (pluginstate.h)
+      static std::map<QString, QByteArray> stateValuesFor(const SoundLib::Library& library, const QString& patch, const Part* part);
+      // a non-Kontakt plug-in's own state as a new instance has it (a patch with state settings and no setup file starts
+      // from it); kept for the process, by plug-in path. Empty with *error when the plug-in doesn't load
+      static QByteArray defaultState(const QString& pluginPath, QString* error = nullptr);
       // (the setup with the voice limit: setupState before the script values)
       static QByteArray maxVoicesState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                        QString* error);
@@ -190,7 +199,8 @@ class SoundLibraryHost : public QObject {
       static QByteArray savedSetupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                         QString* error);
       static bool loadSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
-                            const QString& pluginPath, QString* error = nullptr, const Score* score = nullptr);
+                            const QString& pluginPath, QString* error = nullptr, const Score* score = nullptr,
+                            const Part* part = nullptr);
       // hosted tuning by slots (SoundLib::Instance, [tuning] hostedTuning): a setup state (setupState's form) tuned by
       // Kontakt's Tune, one slot (cents of one: KontaktSetup::withTune) or a multi of the patch, a slot per copy on its
       // own MIDI channel (KontaktSetup::withSlots, as the plain Live set's); empty with *error when the state isn't

@@ -750,6 +750,19 @@ QString AutomationLanes::valueText(const QString& target, double v) const
             const Part* p = s && !s->masterScore()->parts().empty() ? s->masterScore()->parts().front() : nullptr;
             return LiveClipEdit::velocityText(v, LiveClipEdit::velMode(lane(p, target)));
             }
+      // a controller whose map lists how the plug-in shows it (<Controller display>: Ample's parameters): that text
+      if (const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current()) {
+            auto shown = [&](const SoundLib::Controller& c) {
+                  return c.id == target && !c.display.empty() ? SoundLib::controllerText(c, v) : QString();
+                  };
+            for (const SoundLib::Controller& c : lib->controllers)
+                  if (!shown(c).isEmpty())
+                        return shown(c);
+            for (const SoundLib::LibInstrument& li : lib->instruments)
+                  for (const SoundLib::Controller& c : li.controllers)
+                        if (!shown(c).isEmpty())
+                              return shown(c);
+            }
       const double x = v * 127;
       return std::fabs(x - std::round(x)) < 0.05 ? QString::number(int(std::lround(x))) : QString::number(x, 'f', 1);
       }

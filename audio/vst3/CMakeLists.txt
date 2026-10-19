@@ -21,6 +21,8 @@ add_library(vst3host STATIC
       pluginextract.h
       playbackverify.cpp
       playbackverify.h
+      pluginstate.cpp
+      pluginstate.h
       vst3plugin.cpp
       vst3plugin.h
       vst3synth.cpp
