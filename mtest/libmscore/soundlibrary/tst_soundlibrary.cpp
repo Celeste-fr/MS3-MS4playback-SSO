@@ -5947,7 +5947,9 @@ void TestSoundLibrary::ampleMap()
       QCOMPARE(SoundLib::controllerText(*byId("m-master-vol"), 0.5), QString("1.00"));
       QCOMPARE(SoundLib::controllerText(*byId("str-6-tuner"), 0.0), QString("-2"));
       QCOMPARE(SoundLib::controllerText(*byId("bend-range"), byId("bend-range")->patchDefault), QString("2"));
-      QCOMPARE(SoundLib::controllerText(*byId("s-strum-time"), 0.5), QString("500"));
+      // the dump's own texts (1 + 999 v, rounded); not 0.5, a tie (500.5) the plug-in shows as 500
+      QCOMPARE(SoundLib::controllerText(*byId("s-strum-time"), byId("s-strum-time")->patchDefault), QString("29"));
+      QCOMPARE(SoundLib::controllerText(*byId("s-strum-time"), 1 / 22.0), QString("46"));
 
       // the keyswitches
       const std::vector<std::tuple<QString, int, int>> keys { { "Sustain", 24, 0 }, { "Natural Harmonic", 25, -12 },
