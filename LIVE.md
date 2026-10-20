@@ -1078,6 +1078,10 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   parameter lanes in it (`stateWithControllers` loads it with the part), and a moving parameter lane would go to the
   MuseScore Link device by title; but Live's panel (*Configure*) is filled by Kontakt's rules, the plain set's
   multis and Utility were made for Kontakt, and nothing of it was run. To do with phase 2 (HANDOFF.md › Ample guitars).
+  Phase 2's guitar pass (branch `ample-phase2`, 2026-10-20, `guitarplayback.cpp`) adds only events on the part's route
+  (keys, CC7), which Live's clips carry as they carry any note; the capo is a plug-in parameter event, sent only to a
+  hosted plug-in (MIDI out: the keys are still sounding - capo, so Ample's own capo must match: set the M-Capo lane), and
+  none of it was tried in Live.
 
 - **Written clips** (the plain set, 2026-10-11, above): the device's delays are kept to 0.01 ms and Live's Track Delay to
   0.1 ms; the device reads its delays at the note's own song position (measured in Live 12.4.6, 2026-10-12), a tick on

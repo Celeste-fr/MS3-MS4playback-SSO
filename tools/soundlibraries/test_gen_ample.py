@@ -63,8 +63,17 @@ class GenAmpleTest(unittest.TestCase):
         self.assertEqual(ctrls["volume"].getAttribute("cc"), "7")
         self.assertEqual(ctrls["sample-set"].getAttribute("state"), "DBName")
         self.assertEqual(ctrls["sample-set"].getAttribute("values"), "AGMFg AGMPk AGMSt")
-        arts = doc.getElementsByTagName("Articulation")
+        insts = doc.getElementsByTagName("Instrument")
+        arts = insts[0].getElementsByTagName("Articulation")
         self.assertEqual([int(a.getAttribute("value")) for a in arts], [24, 25, 26, 27, 28, 29, 30])
+        # the guitar keys, and an extra patch (instance) per other sample set, its modifier on each articulation
+        self.assertEqual(insts[0].getElementsByTagName("Guitar")[0].getAttribute("stringKeys"), "36 35 34 33 32 31")
+        self.assertEqual([i.getAttribute("name") for i in insts[1:]], ["Ample Guitar M (Pick)", "Ample Guitar M (Strum)"])
+        strum = insts[2]
+        self.assertEqual(strum.getAttribute("with"), "Ample Guitar M")
+        self.assertEqual(strum.getElementsByTagName("Controller")[0].getAttribute("patchDefault"), "1")
+        self.assertEqual([a.getAttribute("modifiers") for a in strum.getElementsByTagName("Articulation")],
+                         ["strum", "harmonics strum", "muted strum"])
         self.assertEqual(arts[1].getAttribute("keyShift"), "-12")
         inst = doc.getElementsByTagName("Instrument")[0]
         self.assertEqual(inst.getAttribute("maxVelocity"), "126")
