@@ -10,7 +10,10 @@ layers (key-solo renders of the shipped patch, one per family: randomness on), a
 scaled from the next note-on by that family's measured old-note gain envelope R_f(t) (transition notes: E8's d1 fit at
 150 ms, PORTAMENTO FAST per incoming interval; the attack note: from its own renders with / without the next note).
 The older notes are ours too (no SSO audio from the test). Then r4_eval.py against SSO's 3 passes of the phrases.
-    iso10_build.py <iso dir> <out.wav> [--noR] [--atk ratk|loo|self]"""
+    iso10_build.py <iso dir> <out.wav> [--noR] [--atk ratk|loo|self] [--inc prev|own]
+--inc: which incoming interval picks a note's old-note gains R_f (E8 keys them by the interval INTO the old note A, the
+'w' history). prev (default, phase 1's numbers): |k[i-1] - k[i-2]|, the interval into the note before (an off-by-one
+found 2026-10-20); own: |k[i] - k[i-1]|, the interval into the note itself (what an sfz region knows: sw_previous)."""
 import json, os, sys
 import numpy as np
 import soundfile as sf
@@ -59,6 +62,7 @@ def main():
     d, outp = sys.argv[1], sys.argv[2]
     noR = '--noR' in sys.argv
     amode = sys.argv[sys.argv.index('--atk') + 1] if '--atk' in sys.argv else 'loo'
+    imode = sys.argv[sys.argv.index('--inc') + 1] if '--inc' in sys.argv else 'prev'
     B9 = d + '/b9'
     R = e8_gains(d)
     C = {}
@@ -126,7 +130,10 @@ def main():
                 sig = lay[(kind, ks[i - 1], ks[i], var, f)]
                 Rc = None
                 if nxt is not None:
-                    inc = abs(ks[i - 1] - ks[i - 2]) if i >= 2 else 'all'
+                    if imode == 'own':
+                        inc = abs(ks[i] - ks[i - 1]) if i >= 2 else 'all'
+                    else:
+                        inc = abs(ks[i - 1] - ks[i - 2]) if i >= 2 else 'all'
                     Rc = R[f].get(inc) if R[f].get(inc) is not None else R[f].get('all')
                     if Rc is None: Rc = np.zeros(1)
                 place(sig, on[i], Rc, nxt)

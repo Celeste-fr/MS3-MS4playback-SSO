@@ -1,0 +1,14 @@
+# sfizz 1.2.3 Voice::renderBlock: after a voice's first block age_ = min(age - triggerDelay, 0) leaves age 0, so the
+# next block re-reads the last sample ("take the first sample if the voice just started"): every voice plays 1 sample
+# late from its 2nd block on (make_sfz3.py's LAG=1 / ~300-sample "ramp-in"). Fix: max. Build: tools/ownlegato/sfz150_build.py.
+--- sfizz-1.2.3/src/sfizz/Voice.cpp	2024-01-14 13:25:14.370076200 -0800
++++ sfizz-1.2.3-agefix/src/sfizz/Voice.cpp	2026-10-20 00:54:49.565734567 -0700
+@@ -819,7 +819,7 @@
+     impl.age_ += buffer.getNumFrames();
+     if (impl.triggerDelay_) {
+         // Should be OK but just in case;
+-        impl.age_ = min(impl.age_ - *impl.triggerDelay_, 0);
++        impl.age_ = max(impl.age_ - *impl.triggerDelay_, 0);
+         impl.triggerDelay_ = absl::nullopt;
+     }
+ 
