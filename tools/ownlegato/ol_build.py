@@ -11,7 +11,8 @@ voice change, not a gain envelope, comes with it). No chokes, no gain envelopes.
   penultimate previous key A, key B, the class                      (layer 'pen': A -> B -> C, C held 86, released)
   last note   previous key A, key B, the class it is reached at      (layer 'end': held 86 blocks, then released)
 The player (MuseScore) knows the score, so it sends before each note-on: CC20 = position (0 attack, 1 2nd note, 2 later)
-and CC22 = the class code (1..4 = 150 / 300 / 600 / 1000 ms; +10 on the penultimate note; 0 on the last), see plan(); a transition's
+and CC22 = the class code (10 / 20 / 30 / 40 = 150 / 300 / 600 / 1000 ms; +5 on the penultimate note; 0 on the last;
+regions take +-2: sfizz 1.2.3 missed an exact locc22=13 hicc22=13), see plan(); a transition's
 own CC119 (the patch's speed value, sent anyway) also selects (locc119 / hicc119: the nearest class).
 
     ol_build.py cut <iso dir> <lib dir>              cut every iso11 layer from audio/b_11 into <lib>/samples (24-bit
@@ -32,7 +33,8 @@ from common import stereo, SR  # noqa
 
 BLK = 512
 CLS = {150: 13, 300: 26, 600: 52, 1000: 86}
-CODE = {150: 1, 300: 2, 600: 3, 1000: 4}
+CODE = {150: 10, 300: 20, 600: 30, 1000: 40}   # CC22 values, 10 apart: sfizz 1.2.3 missed an exact locc22=13 hicc22=13
+PEN = 5                                         # region window: value +-2
 TAIL_S = 3.15          # a layer runs to its recording's last note-off + 3.15 s (the recordings rest 3.2 s)
 SFIZZ_GAIN_DB = 11.522749
 
@@ -76,7 +78,7 @@ def plan(ns, pen=True):
             c = cls_of(on[i + 1] - on[i])
         kind = 'a' if i == 0 else 'end' if i == n - 1 else 'atk' if i == 1 else 'pen' if pen and i == n - 2 else 'thru'
         out.append((kind, ks[i - 1] if i else None, ks[i], c, 0 if i == 0 else 1 if i == 1 else 2,
-                    0 if i == n - 1 else CODE[c] + (10 if kind == 'pen' else 0)))
+                    0 if i == n - 1 else CODE[c] + (PEN if kind == 'pen' else 0)))
     return out
 
 
@@ -167,8 +169,8 @@ def cmd_sfz(lib, name):
             lo, hi = cc119_range(cls_of(max(CLS[c], 26) * BLK) if kind == 'atk' else c)
             cond = 'key=%d pitch_keycenter=%d sw_previous=%d trigger=legato locc20=%d hicc20=%d locc119=%d hicc119=%d' % (
                 b, b, a, 1 if kind == 'atk' else 2, 1 if kind == 'atk' else 2, lo, hi)
-        c22 = 0 if kind == 'end' else CODE[c] + (10 if kind == 'pen' else 0)
-        regs.append('<region> sample=%s %s locc22=%d hicc22=%d %s' % (sm, cond, c22, c22, common))
+        c22 = 0 if kind == 'end' else CODE[c] + (PEN if kind == 'pen' else 0)
+        regs.append('<region> sample=%s %s locc22=%d hicc22=%d %s' % (sm, cond, max(0, c22 - 2), c22 + 2, common))
     hdr = ['// own legato, general layer instrument (ol_build.py; generated: the samples stay outside the repository)',
            '<control> default_path=samples/',
            '<global> polyphony=512 volume=%.6f sample_quality=1' % SFIZZ_GAIN_DB]
