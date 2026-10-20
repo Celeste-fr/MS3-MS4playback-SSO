@@ -31,9 +31,11 @@
 
 #include "audio/midi/event.h"
 #include "audio/vst3/kontaktsetup.h"
+#include "audio/vst3/pluginstate.h"
 #include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #include "audio/midi/msynthesizer.h"
+#include "libmscore/arpeggio.h"
 #include "libmscore/articulation.h"
 #include "libmscore/chord.h"
 #include "libmscore/instrument.h"
@@ -174,6 +176,9 @@ class TestLiveEquivalence : public QObject, public MTest
       void updateLiveSet();
       void updateLiveSetKnobs();
       void controllerPatchDefault();
+      void liveGuitarSoftRoll();
+      void liveMasterVol();
+      void liveStateSettings();
       void liveGainStage();
       void utilitySet();
       void scriptValuesSet();
@@ -5730,6 +5735,333 @@ void TestLiveEquivalence::controllerPatchDefault()
       std::unique_ptr<Vst3Plugin> p2 = Vst3Plugin::load(TESTSYNTH, 48000, 4096, &error);
       QVERIFY(SoundLibraryHost::loadSetup(p2.get(), *host.lib, "Violin", TESTSYNTH, &error));
       QCOMPARE(logged().count("differ from the map's"), 1);
+      }
+
+//---------------------------------------------------------
+//   liveGuitarSoftRoll
+//    [guitar] softStrums 2 (Ample Guitar M, guitar-techniques.musicxml's ppp strum): Live's clips carry the roll of the
+//    six single-string keys as MuseScore renders it (keys, velocities, starts; strum mode, Detect, the chord keys), and
+//    no CC7 around it in either. A strum's level (softStrums 0, the recorded strum turned down) is no CC7 hosted or in
+//    Live: M-Master Vol (map hosted="m-master-vol"), in MuseScore's events and in the clips' parameter lane alike, at the
+//    same times and values (CC7 itself still has no carrier: PlainLiveSet::laneController leaves it to Live's fader);
+//    liveMasterVol checks the whole score and the plain set
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveGuitarSoftRoll()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      QString error;
+      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      QVERIFY2(ample, qPrintable(error));
+      const SoundLib::Guitar& g = *ample->instruments.front().guitar;
+      SoundLib::setCurrent(ample);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "guitar-techniques.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  if (Arpeggio* a = toChord(s->element(0))->arpeggio())
+                        a->setArpeggioType(a->arpeggioType() == ArpeggioType::UP ? ArpeggioType::UP_STRAIGHT
+                                           : a->arpeggioType() == ArpeggioType::DOWN ? ArpeggioType::DOWN_STRAIGHT : a->arpeggioType());
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      auto liveTracks = [&](EventMap* museScore) {
+            score->setPlaylistDirty();
+            score->renderMidi(museScore, false, true, SynthesizerState());
+            EventMap events;
+            SynthesizerState ss;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setMinChunkSize(1000);
+            MidiRenderer::Context ctx(ss);
+            r.renderChunk(r.getChunkAt(0), &events, ctx);
+            return LiveClips::tracks(score, *ample, events, QStringList(), tl);
+            };
+      const int from = tl.units(4 * DIVISION), to = tl.units(5 * DIVISION);    // bar 2 beat 1: the ppp strum
+      // MuseScore's and the clip's notes in bar 2's first beat on the main route: (start units, key, velocity)
+      auto window = [&](const EventMap& ev, const std::vector<LiveClips::Track>& clips, std::multiset<std::tuple<int, int, int>>* ms,
+                        std::multiset<std::tuple<int, int, int>>* live, int* cc7) {
+            *cc7 = 0;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  const int u = tl.units(te.first);
+                  if (!e.isExternal() || e.extPort() != 0 || e.extChannel() != 0 || u < from - tl.units(DIVISION / 2) || u >= to)
+                        continue;
+                  if (e.type() == ME_CONTROLLER && e.controller() == CTRL_VOLUME)
+                        ++*cc7;
+                  if (e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch() && u >= from)
+                        ms->insert({ u, e.pitch(), e.velo() });
+                  }
+            for (const LiveClips::Track& c : clips)
+                  if (c.key == "0:1")
+                        for (const LiveClips::Note& n : c.notes)
+                              if (n.pitch < LiveClips::CARRIER_LOW && n.start >= from && n.start < to)
+                                    live->insert({ n.start, n.pitch, n.velocity });
+            };
+      Playback::setIniValuesForTest({ { "guitar/strums", "1" }, { "guitar/softStrums", "2" } });
+      EventMap ms2;
+      const std::vector<LiveClips::Track> clips2 = liveTracks(&ms2);
+      std::multiset<std::tuple<int, int, int>> fromMs, fromLive;
+      int cc7 = 0;
+      window(ms2, clips2, &fromMs, &fromLive, &cc7);
+      QCOMPARE(cc7, 0);
+      int roll = 0, rv = -1;
+      for (const auto& n : fromLive)
+            if (std::get<1>(n) >= 62 && std::get<1>(n) <= 71) {
+                  ++roll;
+                  QVERIFY(rv < 0 || rv == std::get<2>(n));
+                  rv = std::get<2>(n);
+                  }
+      QCOMPARE(roll, 6);
+      QVERIFY(rv >= 20 && rv <= g.softStrum);
+      QVERIFY(fromLive.count({ from, g.detect, g.detectVelocity }) || fromLive.count({ from + LiveClips::EPSILON, g.detect, g.detectVelocity })
+              || std::any_of(fromLive.begin(), fromLive.end(), [&](const std::tuple<int, int, int>& n) { return std::get<1>(n) == g.detect; }));
+      QVERIFY2(fromLive == fromMs, qPrintable(QString("%1 clip notes, %2 MuseScore's").arg(fromLive.size()).arg(fromMs.size())));
+      for (const LiveClips::Track& c : clips2)
+            QCOMPARE(c.highNotes, 0);
+
+      // softStrums 0: the ppp strum's level as M-Master Vol in MuseScore's events (no CC7) and in the clip's lane, alike
+      Playback::setIniValuesForTest({ { "guitar/strums", "1" }, { "guitar/softStrums", "0" } });
+      EventMap ms0;
+      const std::vector<LiveClips::Track> clips0 = liveTracks(&ms0);
+      fromMs.clear();
+      fromLive.clear();
+      window(ms0, clips0, &fromMs, &fromLive, &cc7);
+      QCOMPARE(cc7, 0);
+      const int master = SoundLib::hostedParameter(ample->instruments.front(), CTRL_VOLUME);
+      QVERIFY(master >= 0);
+      std::map<int, float> msLevels, liveLevels;        // units -> value, in the strum's window
+      for (const auto& te : ms0) {
+            const NPlayEvent& e = te.second;
+            const int u = tl.units(te.first);
+            if (e.isExternal() && e.extPort() == 0 && e.extChannel() == 0 && e.type() == ME_PARAMETER && e.dataA() == master
+                && u >= from - tl.units(DIVISION / 2) && u < to)
+                  msLevels[u] = e.tuning();
+            }
+      for (const LiveClips::Track& c : clips0)
+            if (c.key == "0:1")
+                  for (const LiveClips::Track::ParamLane& pl : c.params)
+                        if (pl.title == "M-Master Vol")
+                              for (const auto& pe : pl.events)
+                                    if (pe.first >= from - tl.units(DIVISION / 2) && pe.first < to)
+                                          liveLevels[pe.first] = pe.second;
+      QVERIFY(!msLevels.empty());
+      bool lowered = false;
+      for (const auto& l : msLevels)
+            lowered = lowered || l.second < 0.3f;
+      QVERIFY(lowered);
+      QVERIFY2(liveLevels == msLevels, qPrintable(QString("%1 clip points, %2 MuseScore's").arg(liveLevels.size()).arg(msLevels.size())));
+      QCOMPARE(LiveClips::carrierPitch(CTRL_VOLUME), -1);
+      QVERIFY(!PlainLiveSet::laneController(CTRL_VOLUME, &ample->instruments.front()));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveMasterVol
+//    Ample's CC7 hosted and in Live is M-Master Vol (map hosted="m-master-vol", measured null against CC7: MV.md): a
+//    volume lane (96, a ramp to 48 over bar 2, 80 from bar 3) and softStrums 0's strum levels on guitar-techniques.musicxml.
+//    The plain set's Ample tracks carry M-Master Vol automation whose steps are MuseScore's hosted parameter events
+//    (units, value; a tick's last value, repeats dropped), route by route; the clips' lanes too; nothing as CC7
+//---------------------------------------------------------
+
+void TestLiveEquivalence::liveMasterVol()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      QString error;
+      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      QVERIFY2(ample, qPrintable(error));
+      SoundLib::setCurrent(ample);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "guitar-techniques.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      // (the strum lines made straight: a strum)
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  if (Arpeggio* a = toChord(s->element(0))->arpeggio())
+                        a->setArpeggioType(a->arpeggioType() == ArpeggioType::UP ? ArpeggioType::UP_STRAIGHT
+                                           : a->arpeggioType() == ArpeggioType::DOWN ? ArpeggioType::DOWN_STRAIGHT : a->arpeggioType());
+      Automation::Lane lane;
+      lane.target = "volume";
+      lane.points = { Automation::Point(0, 96 / 127.0, Automation::Curve::STEP),
+                      Automation::Point(4 * DIVISION, 96 / 127.0, Automation::Curve::LINEAR),
+                      Automation::Point(8 * DIVISION - 1, 48 / 127.0, Automation::Curve::STEP),
+                      Automation::Point(8 * DIVISION, 80 / 127.0, Automation::Curve::STEP) };
+      std::map<const Part*, Automation::PartLanes> lanes;
+      lanes[score->parts().front()] = { lane };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
+      Playback::setIniValuesForTest({ { "guitar/strums", "1" }, { "guitar/softStrums", "0" } });
+      const int master = SoundLib::hostedParameter(ample->instruments.front(), CTRL_VOLUME);
+      QVERIFY(master >= 0);
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      typedef std::vector<std::pair<int, float>> Steps;
+      auto collapse = [](const std::map<int, float>& m) {
+            Steps out;
+            for (const auto& p : m)
+                  if (out.empty() || out.back().second != p.second)
+                        out.push_back(p);
+            return out;
+            };
+      // MuseScore's hosted events: route -> units -> the tick's last value
+      score->setPlaylistDirty();
+      EventMap hosted;
+      score->renderMidi(&hosted, false, true, SynthesizerState());
+      std::map<int, std::map<int, float>> byRoute;
+      int cc7 = 0;
+      for (const auto& te : hosted) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal())
+                  continue;
+            if (e.type() == ME_CONTROLLER && e.controller() == CTRL_VOLUME)
+                  ++cc7;
+            if (e.type() == ME_PARAMETER && e.dataA() == master)
+                  byRoute[e.extPort() * 16 + e.extChannel()][tl.units(te.first)] = e.tuning();
+            }
+      QCOMPARE(cc7, 0);
+      QVERIFY(!byRoute.empty());
+      std::multiset<Steps> fromMs;
+      for (const auto& r : byRoute)
+            fromMs.insert(collapse(r.second));
+      bool ramp = false, low = false;
+      for (const Steps& st : fromMs)
+            for (const auto& p : st) {
+                  ramp = ramp || (p.second > 48.5f / 127 && p.second < 95.5f / 127);
+                  low = low || p.second < 40.0f / 127;
+                  }
+      QVERIFY(ramp && low);
+      // Live's render: the clips' lanes and the plain set's automation
+      EventMap events;
+      SynthesizerState ss;
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      r.setMinChunkSize(1000);
+      MidiRenderer::Context ctx(ss);
+      r.renderChunk(r.getChunkAt(0), &events, ctx);
+      std::multiset<Steps> fromClips;
+      for (const LiveClips::Track& c : LiveClips::tracks(score, *ample, events, QStringList(), tl))
+            for (const LiveClips::Track::ParamLane& pl : c.params)
+                  if (pl.title == "M-Master Vol") {
+                        std::map<int, float> m;
+                        for (const auto& pe : pl.events)
+                              m[pe.first] = pe.second;
+                        fromClips.insert(collapse(m));
+                        }
+      QVERIFY2(fromClips == fromMs, qPrintable(QString("%1 clip lanes, %2 MuseScore routes").arg(fromClips.size()).arg(fromMs.size())));
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *ample, events, tl);
+      std::multiset<Steps> fromPlain;
+      for (const LiveSetWriter::Track& t : PlainLiveSet::tracks(l)) {
+            for (const LiveSetWriter::ParameterAutomation& a : t.automation) {
+                  if (a.name != "M-Master Vol")
+                        continue;
+                  // (written as hold pairs: (b0, v0) (b1, v0) (b1, v1) …: every other point is a step)
+                  std::map<int, float> m;
+                  for (size_t i = 0; i < a.points.size(); i += 2)
+                        m[int(std::lround(a.points[i].first * LiveClips::UNITS_PER_BEAT))] = float(a.points[i].second);
+                  fromPlain.insert(collapse(m));
+                  }
+            }
+      QVERIFY2(fromPlain == fromMs, qPrintable(QString("%1 plain set lanes, %2 MuseScore routes").arg(fromPlain.size()).arg(fromMs.size())));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   liveStateSettings
+//    a non-Kontakt plug-in's state settings (Ample's DBName and Parameter:… state lanes) in Create Live Set's plug-in
+//    state, route set and plain set: each part's flat state-lane values, as hosted playback loads them (the very bytes of
+//    SoundLibraryHost::setupState with the part); two parts on one patch with different values get a state each; a lane
+//    that changes plays its value at the start (the lane's first point: state can't be automated in Live, nor change
+//    while MuseScore plays); a part without lanes keeps the setup's own values. Until 2026-10-20 the export made the
+//    state without the part: none of them reached Live
+//---------------------------------------------------------
+
+static QByteArray juceComponent(const QByteArray& xml)
+      {
+      const QByteArray tail = QByteArray("\0\x01JUCEPrivateData", 17);
+      QByteArray c(176, '\0');
+      c.replace(0, 4, "VstW");
+      c[7] = 8;
+      c[11] = 1;
+      c.replace(16, 4, "CcnK");
+      c.replace(24, 4, "FBCh");
+      QByteArray chunk = "VC2!";
+      const quint32 n = quint32(xml.size());
+      chunk.append(char(n & 0xff)).append(char((n >> 8) & 0xff)).append(char((n >> 16) & 0xff)).append(char(n >> 24));
+      chunk += xml + tail;
+      auto be = [&c](int at, quint32 v) { c[at] = char(v >> 24); c[at + 1] = char(v >> 16); c[at + 2] = char(v >> 8); c[at + 3] = char(v); };
+      be(172, quint32(chunk.size()));
+      be(20, quint32(152 + chunk.size()));
+      return c + chunk;
+      }
+
+void TestLiveEquivalence::liveStateSettings()
+      {
+      LiveHost host(this, QString(), { "Violin" },
+                    "<SoundLibrary name='StateT'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Controller id='sample-set' name='Sample set' state='DBName' values='AGMFg AGMPk AGMSt' patchDefault='0'/>"
+                    "<Controller id='vel-sensitivity' name='Velocity sensitivity' state='Parameter:Vel Sensitivity' range='0 100' patchDefault='1'/>"
+                    "<Instrument name='Violin' ids='violin viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "</SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      QVERIFY(!SoundLibraryHost::makesSetups(lib));
+      // the patch's setup: a state laid out as AGM's (JUCE), Finger, Vel Sensitivity 100
+      {
+            const QByteArray xml = "<?xml version=\"1.0\"?> <AAG_STATE Name=\"Default\"><Parameter Name=\"Vel Sensitivity\" Value=\"100\" Index=\"0\"/>"
+                                   "<DBName Value=\"AGMFg\"/></AAG_STATE>";
+            QFile f(SoundLibraryHost::setupFile(lib, "Violin"));
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(Vst3Plugin::joinState("MS Test Synth", juceComponent(xml), QByteArray()));
+      }
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(int(score->parts().size()), 2);
+      Part* first = score->parts()[0];
+      Part* second = score->parts()[1];
+      using namespace Automation;
+      Lane set;                     // Strum at the start, then Finger: the start's (a state lane can't change)
+      set.target = "sample-set";
+      set.points = { Point(0, 1.0, Curve::STEP), Point(1920, 0.0, Curve::STEP) };
+      Lane vel;
+      vel.target = "vel-sensitivity";
+      vel.points = { Point(0, 0.25, Curve::STEP) };
+      score->setMetaTag(metaTag, write(score, { { first, { set, vel } } }));
+      QString error;
+      const QString path = SoundLibraryHost::pluginPath(lib, &error);
+      QVERIFY2(!path.isEmpty(), qPrintable(error));
+      auto component = [](const QByteArray& state) {
+            QString name;
+            QByteArray c, ctl;
+            return Vst3Plugin::splitState(state, &name, &c, &ctl) ? c : QByteArray();
+            };
+      // hosted: the part's values in the state it loads
+      const QByteArray hostedFirst = component(SoundLibraryHost::setupState(lib, "Violin", path, &error, score, first));
+      const QByteArray hostedSecond = component(SoundLibraryHost::setupState(lib, "Violin", path, &error, score, second));
+      QCOMPARE(PluginState::value(hostedFirst, "DBName"), QByteArray("AGMSt"));
+      QCOMPARE(PluginState::value(hostedFirst, "Parameter:Vel Sensitivity"), QByteArray("25"));
+      QCOMPARE(PluginState::value(hostedSecond, "DBName"), QByteArray("AGMFg"));
+      QCOMPARE(PluginState::value(hostedSecond, "Parameter:Vel Sensitivity"), QByteArray("100"));
+      for (LiveIntegration::LiveSetKind kind : { LiveIntegration::LiveSetKind::ROUTES, LiveIntegration::LiveSetKind::PLAIN }) {
+            LiveIntegration::LiveSetPlan plan;
+            QVERIFY2(LiveIntegration::planLiveSet(score, lib, kind, &plan, &error), qPrintable(error));
+            std::map<const Part*, int> seen;
+            for (const LiveSetWriter::Track& t : plan.spec.tracks) {
+                  if (!t.hasPlugin)
+                        continue;
+                  ++seen[t.partRef];
+                  QCOMPARE(t.plugin.component, t.partRef == first ? hostedFirst : hostedSecond);
+                  }
+            QVERIFY2(seen.count(first) && seen.count(second), qPrintable(plan.left.join("; ")));
+            // the set's XML holds both states
+            const std::vector<QByteArray> states = setStates(LiveSetWriter::xml(plan.spec));
+            int st = 0, fg = 0;
+            for (const QByteArray& s : states) {
+                  st += PluginState::value(s, "DBName") == "AGMSt";
+                  fg += PluginState::value(s, "DBName") == "AGMFg";
+                  }
+            QVERIFY2(st >= 1 && fg >= 1, qPrintable(QString("%1 states: %2 Strum, %3 Finger").arg(states.size()).arg(st).arg(fg)));
+            }
+      delete score;
       }
 
 //---------------------------------------------------------

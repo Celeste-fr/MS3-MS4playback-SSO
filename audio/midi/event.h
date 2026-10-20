@@ -58,7 +58,8 @@ enum {
       ME_TICK2      = 0x4,  // metronome tick
       // a hosted plug-in's parameter (automation.h): dataA the index of the sound library controller
       // in the part's main patch (SoundLib::LibInstrument::allControllers), the value 0-1 in tuning()
-      // (a byte is too coarse); Vst3Synth only, never MIDI
+      // (a byte is too coarse); Vst3Synth only, never MIDI. dataB > 0: the MIDI controller it plays for the
+      // plug-in (soundlibrary.h Controller::hosted, e.g. Ample's CC7 as M-Master Vol): a MIDI file writes that CC
       ME_PARAMETER  = 0x5,
       };
 

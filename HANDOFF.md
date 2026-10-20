@@ -56,7 +56,57 @@ is Ample Guitar M (`AGM.vst3`, hosted directly, not Kontakt); the dump it is gen
   `defaultState`. A state-setting lane's value at the score's start is what counts. Test synth: `MSTESTSYNTH_PARAMS=<file>`
   adds parameters by title.
 - 208 parameters exist only in AGM's state (Master Tune, reverb ...): settable by the mechanism, ranges unknown, so no
-  lanes yet.
+  lanes yet. **Done on ample-fixes2 (2026-10-20)**, below.
+
+**State controllers** (ample-fixes2, 2026-10-20; measured in `~/MuseScore/ms3fork/private/ample-state/RESULT.md`, report
+`CTL.md` there): every setting AGM keeps only in its saved state is a lane.
+- `gen_ample.py` `state_settings()`: 204 `<Controller state="Parameter:…">` (all 208 state-only `<Parameter>`s but
+  Master Tune: setState stores it, the sound ignores it until moved in the GUI; Num Host Params; the transport toggles
+  S-SEQ Play Tog / T-Play Toggle). Menus as `values` + display texts (Cycle Separate / Round Robin / Random, FX toggles
+  -1 / 1, chord roots C-B, …), numbers as `range` (+ `decimals`: Reverb Send -60..0 by 0.1). Measured: Vel Sensitivity,
+  Max Voices, Auto Off Velocity, Cycle Mode / X3, Fret Sound, Capo Logic, Reverb IR / Size / Toggle / Send, SEQ slot,
+  chord slot root, Tab loop / playback; the other ranges and menus are assumptions in the generator (a Windows check
+  must confirm). The generator refuses a state setting that is a VST 3 parameter.
+- Velocity layers: `Layer[ID=1..3]` (pluginstate.h keyed names `Name[Key=k]`, `Name[Key=k]@Attr`, the latter added when
+  missing), 1-127, defaults 96 / 64 / 32.
+- CC map: `<State name="Control[ID=n]@Parameter">` writes Ample's seven MIDI-learn defaults into every instance's state
+  (`Library::fixedState`, `PartControllers::loadStateValues`, through `SoundLibraryHost::stateValuesFor`: hosted, export,
+  Create Live Set, live equivalence); MIDI out still needs the CC7 entry. (2026-10-20: Live's clips do NOT carry CC7.
+  Resolved 2026-10-20, third run: hosted and in Live the CC7 plays as M-Master Vol, below.)
+- **Volume by M-Master Vol** (third run, 2026-10-20; report `~/MuseScore/ms3fork/private/ample-state/MV.md`): map
+  `<Controller id="volume" cc="7" hosted="m-master-vol">` (`Controller::hosted`, `SoundLib::hostedParameter`,
+  gen_ample.py); `MidiRenderer::libraryHostedParameters` (after the duplicate-controller pass, plug-in output or Live's
+  clips) turns every CC7 on an Ample route (volume lane, flat volume, softStrums 0's levels and restores) into an
+  M-Master Vol ME_PARAMETER at the same tick, value CC / 127, dataB 7 (a MIDI file writes CC7 again). Measured (VM,
+  amphost, blocks 512 / 64): gain = 2 x normalized, linear (display = gain, 0.01 steps), CC7 and the parameter
+  bit-identical; either applies from the start of the host block holding it (never late) with ~4.4 ms one-pole
+  smoothing (95 % in ~13 ms, block-independent), to everything sounding: no lead. Hosted sound unchanged (both go
+  through `Vst3Plugin::addParam` with CC / 127). Seq::updateSynthesizerState now replays ME_PARAMETER events with
+  controllers on a seek (the volume, and the capo FIX2 listed as open). Live: route set by the clips' lane (Link
+  device), plain set as Ample track automation; M-Master Vol and M-Capo always in Live's Configure panel. Tests:
+  ampleMasterVol, `tst_liveequivalence::liveMasterVol`, liveGuitarSoftRoll updated.
+- Loads: the slot's values key (`PartControllers::valuesKey`) is compared once per slot at the sync: many changed lanes =
+  one load, an unchanged written text = none (ampleStateLoads).
+- `<PluginSettings>`: as an Ample state is made, `Documents/Ample Sound/AGM/Configs/AGM_info.xml` is read (read only;
+  `MS_PLUGIN_SETTINGS_DIR` for tests); midiGuitarMode true/1 logs to load times.log + qWarning and shows a status-bar
+  message once per session.
+- Live (second run, 2026-10-20): Create Live Set's route and plain sets now embed each part's state values (the start's
+  value of each lane, as hosted playback loads them: `setupState` with `t.partRef`, a state per patch and values key;
+  `tst_liveequivalence::liveStateSettings`); before, none reached Live and the (Pick) / (Strum) patches loaded Finger
+  there. A state lane can't be automated in Live (state), nor does hosted playback follow a change while playing: both
+  play the lane's first value (LIVE.md › What still differs). Update Live Set doesn't rewrite the state (only on a
+  tuning change): create the set again after a state lane changes.
+- `[guitar] softStrums` 2 (second run, 2026-10-20; the owner compares 0 / 1 / 2 by ear): a soft strum (velocity <= 30) as
+  a roll of the six single-string keys D3-B3 (map `rollKeys`) in strum mode with Detect and the chord keys held, at the
+  chord's velocity held within 20-40 and spaced 10 ms at v20 .. 15 ms at v40 (map `softRoll="20:10 40:15"`: meas3's level
+  pairs, the roll as loud as the CC7-lowered recorded strum; linear between = assumption), no CC7 (a lowered one restored
+  before it); a muted strum stays the strummer. Tests: ampleSoftStrums (value 2; value 1 unchanged and without CC7),
+  guitarSettings (map parse, mapping), `tst_liveequivalence::liveGuitarSoftRoll` (the clip's notes = MuseScore's, no CC7;
+  value 0's levels: since the third run M-Master Vol in both). Report: `~/MuseScore/ms3fork/private/ample-state/SS.md` Linux: tst_soundlibrary 127 / 0 / 4, tst_liveequivalence 54 / 0 / 3, tst_midi
+  97, run_fork_tests.sh all passed, check_windows_names none.
+- Tests (Linux, overlay ovl-fixes2): tst_soundlibrary 127 / 0 / 4 (+ ampleStateControllers, ampleStateLoads,
+  ampleStateWritten, ampleSettingsWarning; pluginStateValues' keyed names; ampleMap's counts); run_fork_tests.sh all
+  passed (liveequivalence 52 / 0 / 3, midi 97); test_gen_ample 4; check_windows_names none. Not tried: the real AGM.
 
 **Tests** (Linux, test synth, overlay build `~/MuseScore/ms3fork/ovl-amplemap/am.sh`; 2026-10-18): all fork tests pass;
 tst_soundlibrary 111 passed / 4 skipped (integrate-1017's 106 / 4 + ampleMap, ampleRender, controllerDisplay,
@@ -77,13 +127,20 @@ design), run last in `finishLibraryEvents`; the library facts are the map's `<Gu
   rolled 15 ms apart.
 - **Strings**: a tablature note's string (or a string number 1-6) → its key G0-C1 at 127 right before the note.
 - **Capo** (staff text's capo): the M-Capo parameter (plug-in output; not when the part has an M-Capo lane), keys
-  sounding - capo.
+  sounding - capo. AGM applies a change from its next process block only (ample-fixes2, measured 2026-10-20): a change
+  goes `capoLead` (50 ms) before its first note, not before the route's previous note-on; at the chunk start whenever
+  the staff has a capo text; a capo at the score's start plays the score 50 ms later (start lead), the parameter at 0.
+  Still open: playing from a later tick sends no parameter in force (Seq sends only controllers), so the instance keeps
+  the capo it last had; Live's clips get the parameter at 0 together with the first note (no start lead there).
 - **Harmonics**: natural as phase 1; artificial = a fretted note + a diamond note k frets above → only the harmonic, at
   stopped + partial (12/7/5/4/3 frets → +12/+19/+24/+28/+31) as a natural harmonic; pinch (`[guitar] pinchHarmonics`,
   off) = text "P.H.": C#0 + harmonic (fretted + 19, or the diamond), 2 ms later D0 + fretted v60 for 45 ms.
 - **Slides**: scoop / plop → D#0 before; fall / doit → D#0 200 ms before the end; glissando line → the first note alone
   (MuseScore's steps dropped) held 20 ms into the second, E0 before it. **HO / PO**: legato slur over two single notes of
   different pitch, or text H / P → the first held 20 ms into the second, F0 (velocity 1) before it.
+- **Palm mute text after "open"** (ample-fixes2): MS4 keeps a staff text "open" in force as Art::Open (`Ms4::ArtRef::technique`),
+  which ended every later "muted"; `SoundLib::want()` now lets the text state decide for a technique-text "open" (newest
+  of the two wins); only an "open" articulation on the note ends a mute there. MS4's own rendering unchanged.
 - **FX**: staff text scratch / slap / muting / strum mute / down|up noise (1|2) / hit top (open|mute) / hit rim → its key.
 - Each renderer note whose keyswitch an added one replaced gets it again (keyswitches latch, meas3).
 - **Sample sets**: staff text "pick" / "strum" / "finger" (the whole text; `TextTechniques`: modifiers pick / strum)

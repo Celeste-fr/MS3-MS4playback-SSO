@@ -214,9 +214,13 @@ static const std::vector<Definition> DEFINITIONS = {
         "the chord's notes as chord keys, a full strum down (arrow up: low strings first) or up, muted when every note has a "
         "cross notehead, as loud as its notes would be by CC7 (the map's StrumLevel); 0: its notes, spread as MuseScore "
         "plays an arpeggio", true },
-      { "guitar/softStrums", 0, 0, 1, "on/off",
-        "1 (with guitar/strums): a strum at velocity <= the map's softStrum (Ample: 30, where a roll is darker than a "
-        "quieter strum: measured) plays as its notes rolled rollGap ms apart instead; 0: the strummer at its CC7", true },
+      { "guitar/softStrums", 0, 0, 2, "",
+        "with guitar/strums, a strum at velocity <= the map's softStrum (Ample: 30, where a roll is darker than a quieter "
+        "strum: measured): 1 its notes rolled rollGap ms apart (strum mode off, at their velocity); 2 a roll of the "
+        "strummer's single-string keys (the map's rollKeys, strum mode on, the chord keys held) at the chord's velocity, "
+        "spaced by the map's softRoll (measured: a roll at velocity 20 / 40 with 10 / 15 ms is as loud as the recorded "
+        "strum turned down by CC7), no CC7 change (what still rings keeps its level); 0: the strummer turned down by CC7 "
+        "(StrumLevel)", true },
       { "guitar/pinchHarmonics", 0, 0, 1, "on/off",
         "1: a note under staff text P.H. / pinch harm. plays a layered approximation (the natural harmonic at its partial, "
         "then the fretted note palm-muted and short: the map's pinch, measured closest by numbers); 0: the note as written", true },

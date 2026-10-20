@@ -1166,8 +1166,11 @@ std::vector<ArtRef> chordArticulations(const Chord* chord, const Dynamics& dynam
       // called "open", but MS4 sees a technique only where a text asks for one)
       {
             const Art art = dynamics.techniqueAt(tick + tickOffset);
-            if (art != Art::COUNT)
-                  arts.push_back({ art, false, 1 });          // NoteArticulationsParser::parsePlayingTechnique
+            if (art != Art::COUNT) {
+                  ArtRef r { art, false, 1 };                 // NoteArticulationsParser::parsePlayingTechnique
+                  r.technique = true;
+                  arts.push_back(r);
+                  }
       }
       return arts;
       }

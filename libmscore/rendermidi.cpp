@@ -5739,6 +5739,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             libStartLead = 0.0;
             for (const auto& l : libStartLost)
                   libStartLead = std::max(libStartLead, l.second);
+            libStartLead = std::max(libStartLead, guitarStartLeadMs());   // (a capo at the start: guitarplayback.cpp)
             libStartKnown = true;
             events->startEarlyMs = libStartLost;
             }
@@ -5786,7 +5787,61 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
                   i++;
                   }
             }
+      libraryHostedParameters(chunk, events);
       libraryDelayLead(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   libraryHostedParameters
+//    a MIDI controller the hosted plug-in plays by a parameter of its own (soundlibrary.h Controller::hosted: Ample's
+//    CC7 by M-Master Vol): with the plug-in output or for Live's clips each such CC event on a library route, whatever
+//    sent it (its lane, the part's controller, the guitar pass's strum levels and restores), becomes that parameter's
+//    ME_PARAMETER at the same tick, value cc / 127 (the plug-in's own MIDI learn maps it so: measured bit-identical,
+//    ~/MuseScore/ms3fork/private/ample-state/MV.md). No lead: Ample applies either from the start of the host block
+//    holding it (never late) and smooths it over ~13 ms (95 %). dataB keeps the controller number, so a MIDI file
+//    export writes the CC again (exportmidi.cpp). MIDI out: the CC as it was. After the duplicate-controller pass, so
+//    the parameter events are the CC events MIDI out would get
+//---------------------------------------------------------
+
+void MidiRenderer::libraryHostedParameters(const Chunk& chunk, EventMap* events)
+      {
+      if (!library || libRoutePatches.empty() || !(SoundLib::output() == SoundLib::Output::PLUGIN || forLiveClips))
+            return;
+      // route -> (cc -> the parameter's index in the part's main patch's allControllers: ME_PARAMETER's dataA)
+      std::map<int, std::map<int, int>> hosted;
+      for (const auto& r : libRoutePatches) {
+            const SoundLib::LibInstrument* li = r.second.second;
+            if (!li)
+                  continue;
+            auto lp = libParts.find(const_cast<Part*>(r.second.first));
+            const SoundLib::LibInstrument* main = lp != libParts.end() && lp->second.route.instrument ? lp->second.route.instrument : li;
+            for (const SoundLib::Controller& c : li->allControllers) {
+                  if (c.hosted.isEmpty() || c.cc < 0)
+                        continue;
+                  const int index = SoundLib::hostedParameter(*main, c.cc);
+                  if (index >= 0)
+                        hosted[r.first][c.cc] = index;
+                  }
+            }
+      if (hosted.empty())
+            return;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
+      for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+            NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.type() != ME_CONTROLLER)
+                  continue;
+            auto h = hosted.find(ev.extPort() * 16 + ev.extChannel());
+            if (h == hosted.end())
+                  continue;
+            auto c = h->second.find(ev.controller());
+            if (c == h->second.end())
+                  continue;
+            const int cc = ev.controller();
+            ev.setTuning(float(qBound(0, ev.value(), 127) / 127.0));
+            ev.setType(ME_PARAMETER);
+            ev.setDataA(c->second);
+            ev.setDataB(cc);
+            }
       }
 
 //---------------------------------------------------------

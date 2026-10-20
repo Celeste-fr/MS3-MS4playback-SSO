@@ -16,8 +16,11 @@
 //   are routed, delayed and capped already, so the keys it adds keep their exact velocities, e.g. 127 forcing a string).
 //   From the notation MuseScore 3 has:
 //   - capo (staff text's capo setting, Staff::capo; ppitch includes it): the capo parameter (<Guitar capo>, plug-in
-//     output only) at the chunk's start and at each change, every note's key sounding - capo (Ample keeps the fingering:
-//     it transposes what it gets). Not when the part has a lane on that parameter (the lane is the user's);
+//     output only) at the chunk's start (whenever the staff has a capo text) and at each change, every note's key
+//     sounding - capo (Ample keeps the fingering: it transposes what it gets). Ample applies a change from its next
+//     process block, so a change goes capoLead ms before its first note (not before the route's previous note-on), and
+//     a capo at the start plays the score capoLead later (the start lead, guitarStartLeadMs). Not when the part has a
+//     lane on that parameter (the lane is the user's);
 //   - strums ([guitar] strums): a chord with a straight arpeggio (a strum line; stretch <= 1: a stretched one is an
 //     arpeggio, its notes spread as MuseScore plays them) plays the strummer: CC7 (the strum as loud as its notes at
 //     their velocity: Guitar::strumLevel by the part's sample set, on the CC7 in force), Detect mode, strum mode on, the
@@ -25,7 +28,12 @@
 //     (arpeggio up = low to high = Ample's down strum; muted keys when every note has a cross notehead) at strumVelocity;
 //     at its end the keys off and strum mode off, before anything else at that tick; the CC7 in force again right
 //     before the route's next note that is not a strum (channel gain: a strum's level also changes what still rings).
-//     [guitar] softStrums: a strum at velocity <= softStrum plays as its notes rolled rollGap ms apart in strum order;
+//     [guitar] softStrums: a strum at velocity <= softStrum plays, 1: as its notes rolled rollGap ms apart in strum order
+//     (strum mode off, at their velocity); 2: as a roll of the strummer's single-string keys (rollKeys: strum mode on,
+//     Detect, the chord keys held, as a strum) in strum order at the chord's velocity held within softRoll's measured
+//     pairs, spaced by them (a roll as loud as the recorded strum lowered by StrumLevel's CC7), with no CC7 of its own
+//     (the CC7 in force: a lowered one restored before it), so what still rings keeps its level; a muted strum stays
+//     the strummer;
 //   - artificial harmonics: a chord of fretted notes and diamond notes whose distance is listed (Guitar::artificial):
 //     only the diamond notes sound, each as a natural harmonic (phase 1 chose the harmonic keyswitch for a diamond)
 //     at the stopped note + the partial's semitones (key: that + harmonicShift);
@@ -49,6 +57,7 @@
 //   measured rule says when the notation asks for it.
 //---------------------------------------------------------
 
+#include <algorithm>
 #include <set>
 
 #include "arpeggio.h"
@@ -79,6 +88,77 @@
 
 namespace Ms {
 
+// the capo parameter's index in li's allControllers when the pass sends it (plug-in output or Live's clips, no lane of
+// the part on it: the lane is the user's), else -1
+static int capoParamIndex(const Part* part, const SoundLib::LibInstrument* li,
+                          const std::map<const Part*, Automation::PartLanes>& lanes, bool forLiveClips)
+      {
+      if (!li || !li->guitar || li->guitar->capo.isEmpty()
+          || !(SoundLib::output() == SoundLib::Output::PLUGIN || forLiveClips))
+            return -1;
+      for (int i = 0; i < int(li->allControllers.size()); ++i) {
+            const SoundLib::Controller& c = li->allControllers[size_t(i)];
+            if (c.id != li->guitar->capo || c.param.isEmpty())
+                  continue;
+            if (lanes.find(part) != lanes.end())
+                  for (const Automation::Lane& l : Automation::lanes(part, lanes))
+                        if (l.target == c.id)
+                              return -1;
+            return i;
+            }
+      return -1;
+      }
+
+// a capo staff text anywhere on the staff (also "capo 0": fretId 1)
+static bool staffHasCapo(const Score* score, const Staff* staff)
+      {
+      for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
+            for (const Element* e : seg->annotations())
+                  if (e->isStaffTextBase() && e->staff() == staff && toStaffTextBase(e)->capo() > 0)
+                        return true;
+      return false;
+      }
+
+//---------------------------------------------------------
+//   guitarStartLeadMs
+//    the capo in force at the score's start goes out at tick 0 (the instance may still hold another one); a guitar
+//    note within capoLead of the start would share Ample's process block with it and play at the old capo, so the
+//    score plays later by the rest of capoLead (the start lead, libraryDelayLead: everything else moves, the capo
+//    parameter at 0 stays). Not for Live's clips (no start lead there)
+//---------------------------------------------------------
+
+double MidiRenderer::guitarStartLeadMs() const
+      {
+      if (forLiveClips || libParts.empty())
+            return 0.0;
+      double lead = 0.0;
+      std::map<const Part*, Automation::PartLanes> lanes;
+      bool lanesRead = false;
+      for (const auto& pl : libParts) {
+            const SoundLib::LibInstrument* li = pl.second.route.instrument;
+            if (!li || !li->guitar || li->guitar->capoLeadMs <= 0.0 || pl.first->staves()->empty())
+                  continue;
+            if (!lanesRead) {
+                  lanes = Automation::read(score->masterScore());
+                  lanesRead = true;
+                  }
+            const Staff* staff = pl.first->staves()->front();
+            if (capoParamIndex(pl.first, li, lanes, forLiveClips) < 0 || !staffHasCapo(score, staff))
+                  continue;
+            // the part's first chord
+            for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+                  bool found = false;
+                  for (int t = pl.first->startTrack(); t < pl.first->endTrack() && !found; ++t)
+                        found = seg->element(t) && seg->element(t)->isChord();
+                  if (found) {
+                        lead = std::max(lead, li->guitar->capoLeadMs - score->utick2utime(seg->tick().ticks()) * 1000.0);
+                        break;
+                        }
+                  }
+            }
+      return std::max(0.0, lead);
+      }
+
 void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
       {
       if (libRoutes.empty())
@@ -101,7 +181,6 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   lanesRead = true;
                   }
             GuitarPart gp { pl.first, li->guitar.get(), {}, -1 };
-            const auto pls = lanes.find(pl.first);
             for (int i = 0; i < int(li->allControllers.size()); ++i) {
                   const SoundLib::Controller& c = li->allControllers[size_t(i)];
                   if (c.id == gp.g->sampleSet && c.isState() && !c.stateValues.isEmpty()) {
@@ -114,16 +193,8 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                               gp.sampleSets.push_back(v != values.end() ? QString::fromUtf8(v->second) : own);
                               }
                         }
-                  if (c.id == gp.g->capo && !c.param.isEmpty()
-                      && (SoundLib::output() == SoundLib::Output::PLUGIN || forLiveClips)) {
-                        bool laned = false;
-                        if (pls != lanes.end())
-                              for (const Automation::Lane& l : Automation::lanes(pl.first, lanes))
-                                    laned = laned || l.target == c.id;
-                        if (!laned)
-                              gp.capoParam = i;
-                        }
                   }
+            gp.capoParam = capoParamIndex(pl.first, li, lanes, forLiveClips);
             for (const auto& ip : *pl.first->instruments()) {
                   const int ch = ip.second->channel(0)->channel();
                   if (libRoutes.count(ch))
@@ -134,7 +205,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             return;
 
       const bool strums = Playback::on("guitar/strums", score);
-      const bool softStrums = Playback::on("guitar/softStrums", score);
+      const int softStrums = int(std::lround(Playback::value("guitar/softStrums", score)));
       const bool pinch = Playback::on("guitar/pinchHarmonics", score);
       const int utick1 = chunk.utick1();
       const int utick2 = chunk.utick2();
@@ -272,10 +343,17 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             return false;
             };
 
-      // capo: the parameter, and every note's key relative to it
+      // capo: the parameter, and every note's key relative to it. Ample applies a change from its next process block
+      // (Guitar::capoLeadMs): a change goes capoLead before the first note under it, not before the route's previous
+      // note-on (a ringing note keeps its pitch, a note starting after the change takes it); at the chunk's start the
+      // capo in force whenever the staff has a capo text anywhere (an instance keeps the last one it got: playing
+      // again from the start after "capo 2" would otherwise stay at 2), at 0 kept there by the start lead
+      // (guitarStartLeadMs), at a chunk boundary where it changes capoLead before
       {
       std::map<int, int> sent;                    // channel -> capo sent in this chunk
-      for (On& o : ons) {
+      std::map<const Staff*, bool> anyCapo;
+      for (size_t k = 0; k < ons.size(); ++k) {
+            On& o = ons[k];
             const int capo = capoOf(o.note);
             if (capo > 0) {
                   o.on->second.setPitch(qMax(0, o.on->second.pitch() - capo));
@@ -285,21 +363,50 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             if (o.gp->capoParam < 0)
                   continue;
             const int ch = o.on->second.channel();
-            const bool hasCapo = capo > 0 || o.note->staff()->capo(Fraction::fromTicks(utick1 - offset)) != 0;
+            const Staff* staff = o.note->staff();
+            auto ac = anyCapo.find(staff);
+            if (ac == anyCapo.end())
+                  ac = anyCapo.emplace(staff, staffHasCapo(score, staff)).first;
             auto s = sent.find(ch);
-            if (s == sent.end() && !hasCapo)
+            if (s == sent.end() && !ac->second)
                   continue;
+            const int lead = o.gp->g->capoLeadMs > 0.0 ? msTicks(o.on->first, o.gp->g->capoLeadMs) : 0;
+            auto value = [&](int c) { return float(qBound(0, c, o.gp->g->capoMax)) / o.gp->g->capoMax; };
+            int floor = utick1;                   // a change not before the chunk's own capo event
             if (s == sent.end()) {
-                  const int start = o.note->staff()->capo(Fraction::fromTicks(utick1 - offset));
+                  const int startFret = staff->capo(Fraction::fromTicks(utick1 - offset));
+                  const int start = startFret > 0 ? startFret - 1 : 0;
                   NPlayEvent p = make(o.on->second, ME_PARAMETER, o.gp->capoParam, 0);
-                  p.setTuning(float(qBound(0, start > 0 ? start - 1 : 0, o.gp->g->capoMax)) / o.gp->g->capoMax);
-                  addFirst(utick1, p);
-                  s = sent.emplace(ch, start > 0 ? start - 1 : 0).first;
+                  p.setTuning(value(start));
+                  if (utick1 == 0) {
+                        p.setLibraryDelayed(true);      // (stays at 0: the start lead moves the rest)
+                        addFirst(0, p);
+                        }
+                  else {
+                        const int beforeFret = staff->capo(Fraction::fromTicks(qMax(0, utick1 - offset - 1)));
+                        if ((beforeFret > 0 ? beforeFret - 1 : 0) != start && lead > 0)
+                              floor = qMax(0, utick1 - lead);
+                        addFirst(floor, p);
+                        }
+                  s = sent.emplace(ch, start).first;
                   }
             if (s->second != capo) {
                   NPlayEvent p = make(o.on->second, ME_PARAMETER, o.gp->capoParam, 0);
-                  p.setTuning(float(qBound(0, capo, o.gp->g->capoMax)) / o.gp->g->capoMax);
-                  addFirst(o.note->chord()->tick().ticks() + offset, p);
+                  p.setTuning(value(capo));
+                  const int on = o.on->first;
+                  // the route's previous note-on (before this chord's)
+                  int previous = -1;
+                  for (size_t j = k; j-- > 0;) {
+                        if (ons[j].on->first < on && sameRoute(ons[j].on->second, o.on->second)) {
+                              previous = ons[j].on->first;
+                              break;
+                              }
+                        }
+                  const int at = std::min(on, std::max({ on - lead, previous + 1, floor }));
+                  if (at >= on)
+                        addFirst(on, p);              // (no room: before the note, as close as it gets)
+                  else
+                        add(at, p);
                   s->second = capo;
                   }
             }
@@ -308,6 +415,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
       // strums
       struct Strum { const NPlayEvent* like; int t0; int end; int base; int cc; };
       std::vector<Strum> strumList;
+      std::set<const NPlayEvent*> rollStarts;       // softStrums 2: each key roll's first event (the CC7 in force before it)
       std::set<const Chord*> strumChords;
       for (const Chord* chord : chords) {
             if (!strums || chord->notes().size() < 2)
@@ -329,7 +437,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   end = std::max(end, offTick(*o));
                   v = std::max(v, o->on->second.velo());
                   }
-            if (softStrums && v <= g.softStrum) {
+            if (softStrums == 1 && v <= g.softStrum) {
                   // a roll in strum order, rollGap apart
                   std::sort(group.begin(), group.end(), [down](const On* x, const On* y) {
                         return down ? x->note->ppitch() < y->note->ppitch() : x->note->ppitch() > y->note->ppitch();
@@ -352,6 +460,46 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             if (key < 0 || g.detect < 0 || g.strumMode < 0)
                   continue;
             const NPlayEvent like = group.front()->on->second;
+            std::set<int> keys;
+            int low = 128;
+            for (On* o : group)
+                  low = std::min(low, o->note->ppitch());
+            const int root = g.chordLow + (low % 12);
+            for (On* o : group)
+                  keys.insert(root + ((o->note->ppitch() - low) % 12 + 12) % 12);
+            const bool rollKeys = std::find(g.rollKeys.begin(), g.rollKeys.end(), -1) == g.rollKeys.end();
+            if (softStrums == 2 && v <= g.softStrum && !muted && rollKeys) {
+                  // a roll of the single-string keys in strum order (down: string 6 first), the chord keys held, at the
+                  // roll's velocity and spacing (Guitar::softRoll); no CC7: what still rings keeps its level
+                  const int rv = g.softRollVelocity(v);
+                  int gap = msTicks(t0, g.softRollGapMs(v));
+                  if (t0 + 5 * gap >= end)
+                        gap = std::max(1, (end - t0 - 1) / 5);
+                  for (On* o : group) {
+                        o->strummed = true;
+                        drop(o->on);
+                        drop(o->off);
+                        }
+                  auto first = add(t0, make(like, ME_NOTEON, g.detect, g.detectVelocity));
+                  add(t0, make(like, ME_NOTEON, g.detect, 0));
+                  tapAt(t0, like, g.strumMode, g.strumOn, false);
+                  for (int k : keys)
+                        add(t0, make(like, ME_NOTEON, k, 100));
+                  std::vector<int> order(g.rollKeys.begin(), g.rollKeys.end());
+                  if (!down)
+                        std::reverse(order.begin(), order.end());
+                  for (int k = 0; k < int(order.size()); ++k)
+                        add(t0 + k * gap, make(like, ME_NOTEON, order[size_t(k)], rv));
+                  auto at = events->lower_bound(end);
+                  for (int k : keys)
+                        addBefore(at, make(like, ME_NOTEON, k, 0), end);
+                  for (int k : order)
+                        addBefore(at, make(like, ME_NOTEON, k, 0), end);
+                  tapBefore(at, like, g.strumMode, g.strumOff, false, end);
+                  rollStarts.insert(&first->second);
+                  strumChords.insert(chord);
+                  continue;
+                  }
             // the CC7 in force on the route (the part's Volume), else unity
             int base = 64;
             for (auto i = events->lower_bound(t0); i != events->begin();) {
@@ -363,13 +511,6 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                         }
                   }
             const int cc = qBound(1, int(std::lround(base * g.strumLevel(sampleSetOf(*group.front()), v) / 64.0)), 127);
-            std::set<int> keys;
-            int low = 128;
-            for (On* o : group)
-                  low = std::min(low, o->note->ppitch());
-            const int root = g.chordLow + (low % 12);
-            for (On* o : group)
-                  keys.insert(root + ((o->note->ppitch() - low) % 12 + 12) % 12);
             for (On* o : group) {
                   o->strummed = true;
                   drop(o->on);
@@ -618,7 +759,8 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   }
             }
 
-      // after a strum, the CC7 in force again before the route's next note that is not a strum
+      // after a strum, the CC7 in force again before the route's next note that is not a strum (a softStrums 2 key roll
+      // counts as such a note: it plays at the CC7 in force)
       for (const Strum& st : strumList) {
             if (st.cc == st.base)
                   continue;
@@ -628,6 +770,10 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   const NPlayEvent& e = i->second;
                   if (!sameRoute(e, *st.like))
                         continue;
+                  if (rollStarts.count(&e)) {
+                        next = i;
+                        break;
+                        }
                   if (e.type() == ME_CONTROLLER && e.controller() == CTRL_VOLUME && mine.count(&e) && i->first > st.t0) {
                         nextStrum = true;
                         break;

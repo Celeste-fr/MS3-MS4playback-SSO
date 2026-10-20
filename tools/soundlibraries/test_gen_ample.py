@@ -79,6 +79,70 @@ class GenAmpleTest(unittest.TestCase):
         self.assertEqual(inst.getAttribute("maxVelocity"), "126")
         self.assertIn("guitar-steel", inst.getAttribute("ids").split())
 
+    def test_state_controllers(self):
+        text, _ = gen_ample.generate(gen_ample.read_dump(self.path))
+        doc = xml.dom.minidom.parseString(text)
+        top = [c for c in doc.getElementsByTagName("Controller") if c.parentNode.tagName == "SoundLibrary"]
+        ctrls = {c.getAttribute("id"): c for c in top}
+        states = [c for c in top if c.getAttribute("state").startswith(("Parameter:", "Layer["))]
+        self.assertEqual(len(states), len(gen_ample.state_settings()) + 3)
+        # a menu: its written values and shown texts; a number: its range, decimals, steps only when whole
+        cycle = ctrls["cycle-mode"]
+        self.assertEqual(cycle.getAttribute("state"), "Parameter:Cycle Mode Switch")
+        self.assertEqual(cycle.getAttribute("values"), "0 1 2")
+        self.assertEqual(cycle.getAttribute("display"), "0:Separate 0.5:Round\u00a0Robin 1:Random")
+        self.assertEqual(ctrls["fx-reverb-toggle"].getAttribute("values"), "-1 1")         # (FX toggles 1 / -1)
+        self.assertEqual(ctrls["fx-reverb-toggle"].getAttribute("patchDefault"), "1")
+        vel = ctrls["vel-sensitivity"]
+        self.assertEqual((vel.getAttribute("range"), vel.getAttribute("steps"), vel.getAttribute("patchDefault")),
+                         ("0 100", "100", "1"))
+        send = ctrls["fx-reverb-send"]
+        self.assertEqual((send.getAttribute("range"), send.getAttribute("decimals"), send.getAttribute("steps")),
+                         ("-60 0", "1", ""))
+        self.assertEqual(send.getAttribute("display"), "0:-60.0 1:0.0")
+        # Ample's own spelling of the delay taps' names
+        self.assertEqual(ctrls["fx-delay-highcut-enabled1"].getAttribute("state"), "Parameter:FX-Delay-Highcut-Enabled1")
+        self.assertEqual(ctrls["fx-delay-highcut-enabled3"].getAttribute("state"), "Parameter:FX-Delay-HighcutEnabled3")
+        # the velocity layers
+        for n, default in ((1, 96), (2, 64), (3, 32)):
+            c = ctrls["velocity-layer-%d" % n]
+            self.assertEqual(c.getAttribute("state"), "Layer[ID=%d]" % n)
+            self.assertAlmostEqual(float(c.getAttribute("patchDefault")) * 126 + 1, default, places=3)
+        # left out: Master Tune (setState ignores it), the transport toggles
+        names = [c.getAttribute("state") for c in states]
+        for left in ("Parameter:Master Tune", "Parameter:Num Host Params", "Parameter:T-Play Toggle",
+                     "Parameter:S-SEQ Play Tog"):
+            self.assertNotIn(left, names)
+        # CC7 played hosted / in Live by M-Master Vol (a parameter controller of the map)
+        # (this dump has no M-Master Vol: CC7 alone; with it, hosted="m-master-vol", test_master_vol)
+        self.assertEqual((ctrls["volume"].getAttribute("cc"), ctrls["volume"].getAttribute("hosted")), ("7", ""))
+        # the fixed MIDI-learn defaults (CC7 -> M-Master Vol) and the global settings warning
+        fixed = {e.getAttribute("name"): e.getAttribute("value") for e in doc.getElementsByTagName("State")}
+        self.assertEqual(fixed["Control[ID=12]@Parameter"], "M-Master Vol")
+        self.assertEqual(len(fixed), 7)
+        ps = doc.getElementsByTagName("PluginSettings")[0]
+        self.assertEqual((ps.getAttribute("name"), ps.getAttribute("bad")), ("midiGuitarMode", "true 1"))
+
+    def test_master_vol(self):
+        # a dump with M-Master Vol: CC7 is hosted="m-master-vol", a parameter controller of the map
+        path = self.path + ".mv"
+        self.addCleanup(os.unlink, path)
+        with open(path, "w") as f:
+            f.write(DUMP.replace("0\tid=48\tM-Mic 1 Vol", "0\tid=50\tM-Master Vol"))
+        text, _ = gen_ample.generate(gen_ample.read_dump(path))
+        doc = xml.dom.minidom.parseString(text)
+        ctrls = {c.getAttribute("id"): c for c in doc.getElementsByTagName("Controller")}
+        self.assertEqual((ctrls["volume"].getAttribute("cc"), ctrls["volume"].getAttribute("hosted")), ("7", "m-master-vol"))
+        self.assertEqual(ctrls["m-master-vol"].getAttribute("param"), "M-Master Vol")
+
+    def test_state_not_a_parameter(self):
+        # a state setting that is a VST 3 parameter in the dump is refused (it stays a parameter lane)
+        dump = DUMP.replace("FX-Bypassed", "Vel Sensitivity")
+        with open(self.path, "w") as f:
+            f.write(dump)
+        with self.assertRaises(SystemExit):
+            gen_ample.generate(gen_ample.read_dump(self.path))
+
     def test_slug(self):
         self.assertEqual(gen_ample.slug("M-Mic 1 Vol"), "m-mic-1-vol")
         self.assertEqual(gen_ample.slug("FX-EQ-Freq-Ex1"), "fx-eq-freq-ex1")

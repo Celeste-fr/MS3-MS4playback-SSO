@@ -365,15 +365,19 @@ switch value of each articulation. For example:
   (glissando line) and `hammer` (a legato slur, or text H / P, between two single notes): the first note held
   `overlap` ms into the second; the strummer: `strumMode` with `strumOn` / `strumOff` velocities, `detect` at
   `detectVelocity`, chord keys from `chordLow`, `strumKeys="down up downMuted upMuted"` at `strumVelocity`, `softStrum`
-  and `rollGap` ms (`[guitar] softStrums`); `sampleSet` (the state controller whose value picks a `<StrumLevel
+  and `rollGap` ms (`[guitar] softStrums` 1), `rollKeys` (six single-string keys in strum mode, strings 6..1: `[guitar]
+  softStrums` 2's roll, the chord keys held) and `softRoll="velocity:ms …"` (the roll's velocity, the chord's held within
+  the pairs' range, and its keys' spacing, linear between); `sampleSet` (the state controller whose value picks a `<StrumLevel
   set levels="velocity:CC7 …">`: the CC7 a strum plays at, log-linear between) and `capo` / `capoMax` (the capo
-  parameter's controller id: a capo staff text sends it, each note's key sounding - capo); `pinch="partial velocity
+  parameter's controller id: a capo staff text sends it, each note's key sounding - capo) and `capoLead` (ms a change
+  goes before the first note under it, after the previous note-on: Ample applies it from its next process block; a
+  capo at the score's start plays the score that much later, the parameter at 0); `pinch="partial velocity
   delayMs lengthMs"` (`[guitar] pinchHarmonics`); `fxLength` ms and `<Fx text="regex" key>` (staff text, the whole text,
   case-insensitive, that plays an FX noise key). A bad value refuses the map.
 - **Ample Guitar M** (`Ample Guitar M.xml`, generated: `python3 tools/soundlibraries/gen_ample.py <dump>`, the dump
   being amphost's parameter list of AGM 4.1.0, kept outside the repository): the steel-string guitars play it,
   hosted as `AGM.vst3`, an instance per part; every one of its 124 parameters is a lane (by its title), with CC7
-  (Volume: the same gain as M-Master Vol, 64 = unity), CC1 (Vibrato), CC64 (Hold Pedal) and the sample set
+  (Volume: the same gain as M-Master Vol, 64 = unity; hosted and in Live played as M-Master Vol, `hosted=`), CC1 (Vibrato), CC64 (Hold Pedal) and the sample set
   (Finger / Pick / Strum); keyswitches (Ample calls MIDI 60 "C3": its C0 is MIDI 24) Sustain 24, Natural Harmonic 25,
   Palm Mute 26 (staff text "muted", the palm mute line), Slide In / Out 27, Legato Slide 28, Hammer-On / Pull-Off 29,
   Slide Guitar 30 (the last four listed, not yet chosen by the notation); velocity 127 is Pop, so notes stop at 126.
@@ -434,6 +438,14 @@ switch value of each articulation. For example:
   `display="v:text …"`, the plug-in's text at lane values 0-1, ascending, no spaces in a text (a numeric text is
   read linearly between two entries, a stepped controller shows its nearest position's).
 
+  `hosted="id"` on a MIDI controller names a `param` controller of the same patch that plays it for the hosted
+  plug-in and in Live: every event of the CC on the patch's route (its lane, the part's value, the guitar pass's
+  strum levels) goes as that parameter at the same tick, value CC / 127; MIDI out keeps the CC (an external
+  plug-in's MIDI learn), a MIDI file writes the CC. For a CC Live can't carry (CC7: its clips have no carrier, the
+  plain set leaves it to Live's fader) when the plug-in has the same control as a parameter: Ample's
+  `<Controller id="volume" cc="7" hosted="m-master-vol"/>` (measured bit-identical to CC7). A name that is no
+  parameter controller of the patch refuses the map.
+
   **State settings** (a non-Kontakt plug-in hosted in MuseScore): `<Controller id name state="Name" values="a b c">`
   is a setting the plug-in keeps only in its state, no parameter, no key (Ample's sample set: `state="DBName"
   values="AGMFg AGMPk AGMSt"`). Its lane's value at the score's start picks `values[round(v × (n − 1))]` (a lane's
@@ -442,11 +454,38 @@ switch value of each articulation. For example:
   Value="…"/>`); a changed value loads the part again at the next play or export. Without a lane the plug-in keeps its
   own (`patchDefault`, 0-1, is that value on the lane's scale). A patch with state settings and no setup file starts
   from the plug-in's own default state. Not for Kontakt (its script values: `setup`).
+  - A number instead of a list: `range="min max"` (and `decimals="n"`, default 0) writes `min + v × (max − min)`
+    rounded, as the plug-in shows it ("61", "-23.1": no trailing zeros); `values` and `range` exclude each other. Give
+    it `display="0:min 1:max"` (and `steps` = max − min for whole numbers): a stepped controller listing only its two
+    ends reads linearly between them.
+  - State names (`pluginstate.h`): `Name` = `<Name Value>`; `Parameter:Title` = `<Parameter Name="Title" Value>`;
+    `Name[Key=k]` = the `Value` of the first `<Name>` whose `Key` is `k` (Ample's velocity layers `Layer[ID=1]`);
+    `Name[Key=k]@Attr` = that element's attribute `Attr`, the element added (after the last `<Name>`) when the state has
+    none.
+  - A display text can't hold a space (the list is split at spaces): the generator writes a no-break space (U+00A0).
+  - `<State name="…" value="…"/>` (top level): a value written into every instance's state, whatever the part sets
+    (`Library::fixedState`; the part's state settings go on top). Ample: its MIDI-learn defaults, `Control[ID=12]@Parameter`
+    = `M-Master Vol` (CC7, ID = 5 + CC) and the other six, so that a preset that dropped one can't silence the CC7
+    volume lane or the guitar pass's strum levels. Live's set gets the same state (`SoundLibraryHost::setupState`).
+  - `<PluginSettings file="…" name="…" bad="a b" text="…"/>` (top level): a plug-in's global settings file (a JUCE
+    PropertiesFile, `file` under the user's Documents folder), read as an instance's state is made; `name` at a `bad`
+    value logs `text` (load times.log, the console) and shows it in the status bar, once per session. Read only. Ample:
+    `Ample Sound/AGM/Configs/AGM_info.xml`, `midiGuitarMode` `true` (keys ≥ 62 go silent on channel 1 in every
+    instance).
+  - A changed state value loads the part again at the next sync (play, export): the slot keeps the written values as
+    one text (`PartControllers::valuesKey`), so any number of state lanes changed before it give one load, and an edit
+    that leaves every written text as it was (a later point, a value rounding to the same number) none.
 
   ```xml
   <Controller id="m-capo" name="M-Capo" param="M-Capo" patchDefault="0" steps="11" display="0:0 0.0909:1 … 1:11"/>
   <Controller id="sample-set" name="Sample set" state="DBName" values="AGMFg AGMPk AGMSt" patchDefault="0"
               steps="2" display="0:Finger 0.5:Pick 1:Strum"/>
+  <Controller id="vel-sensitivity" name="Velocity sensitivity" state="Parameter:Vel Sensitivity" range="0 100"
+              patchDefault="1" steps="100" display="0:0 1:100"/>
+  <Controller id="fx-reverb-send" name="Reverb send (dB)" state="Parameter:FX-Reverb-Send" range="-60 0" decimals="1"
+              patchDefault="0.8" display="0:-60.0 1:0.0"/>
+  <Controller id="velocity-layer-1" name="Velocity layer 1 threshold" state="Layer[ID=1]" range="1 127" …/>
+  <State name="Control[ID=12]@Parameter" value="M-Master Vol"/>
   ```
 
   A part's controllers are set by automation lanes only (Continuous View, under the part's header:

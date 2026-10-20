@@ -322,6 +322,7 @@ class MidiRenderer {
       void finishLibraryEvents(const Chunk&, EventMap* events);
       void libraryMaxVelocity(const Chunk&, EventMap* events);
       void libraryGuitar(const Chunk&, EventMap* events);              // guitarplayback.cpp
+      double guitarStartLeadMs() const;                                // … the start lead a capo at the start needs
       void libraryPitchBends(const Chunk&, EventMap* events);
       void librarySpeeds(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);
@@ -329,6 +330,7 @@ class MidiRenderer {
       void libraryTimingOverrides(const Chunk&, EventMap* events);      // livetimingoverride.h
       void libraryEvenLevels(const Chunk&, EventMap* events);           // evenlevels.h
       void libraryDelayLead(const Chunk&, EventMap* events);
+      void libraryHostedParameters(const Chunk&, EventMap* events);    // soundlibrary.h Controller::hosted
 
    public:
       explicit MidiRenderer(Score* s) : score(s) {}

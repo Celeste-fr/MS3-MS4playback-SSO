@@ -604,6 +604,9 @@ static bool readGuitar(QXmlStreamReader& r, Guitar& g)
       const std::vector<int> strings = ints("stringKeys", 6);
       for (size_t i = 0; i < strings.size() && i < 6; ++i)
             g.stringKeys[i] = strings[i];
+      const std::vector<int> rolls = ints("rollKeys", 6);
+      for (size_t i = 0; i < rolls.size() && i < 6; ++i)
+            g.rollKeys[i] = rolls[i];
       const std::vector<int> strums = ints("strumKeys", 4);          // down, up, down muted, up muted
       if (strums.size() == 4) {
             g.strumDown = strums[0];
@@ -628,12 +631,16 @@ static bool readGuitar(QXmlStreamReader& r, Guitar& g)
       key("softStrum", g.softStrum, 0);
       number("rollGap", g.rollGapMs);
       key("capoMax", g.capoMax, 1, 24);
+      number("capoLead", g.capoLeadMs);
       number("overlap", g.overlapMs);
       number("slideOut", g.slideOutMs);
       number("fxLength", g.fxMs);
       g.sampleSet = a.value("sampleSet").toString();
       g.capo = a.value("capo").toString();
       g.artificial = pairs(a.value("artificial").toString());
+      g.softRoll = pairs(a.value("softRoll").toString());
+      for (const auto& p : g.softRoll)
+            good = good && p.first >= 1 && p.first <= 127 && p.second >= 1 && p.second <= 200;
       if (a.hasAttribute("pinch")) {                                  // partial, velocity, delay ms, length ms
             const QStringList p = a.value("pinch").toString().split(' ', QString::SkipEmptyParts);
             bool ok[4] = { false, false, false, false };
@@ -689,6 +696,27 @@ int Guitar::strumLevel(const QString& set, int velocity) const
       return v.back().second;
       }
 
+int Guitar::softRollVelocity(int velocity) const
+      {
+      if (softRoll.empty())
+            return qBound(1, velocity, 127);
+      return qBound(softRoll.front().first, velocity, softRoll.back().first);
+      }
+
+double Guitar::softRollGapMs(int velocity) const
+      {
+      if (softRoll.empty())
+            return rollGapMs;
+      const int v = softRollVelocity(velocity);
+      for (size_t i = 1; i < softRoll.size(); ++i) {
+            if (v > softRoll[i].first)
+                  continue;
+            const double f = double(v - softRoll[i - 1].first) / (softRoll[i].first - softRoll[i - 1].first);
+            return (1.0 - f) * softRoll[i - 1].second + f * softRoll[i].second;
+            }
+      return softRoll.back().second;
+      }
+
 int Guitar::artificialShift(int frets) const
       {
       for (const auto& p : artificial)
@@ -713,9 +741,26 @@ static bool readController(QXmlStreamReader& r, Controller& c)
       if (a.hasAttribute("cc"))
             c.cc = a.value("cc").toInt(&ok);
       c.param = a.value("param").toString();
+      // hosted="m-master-vol": the parameter controller that plays it when hosted (Controller::hosted; checked at the end)
+      c.hosted = a.value("hosted").toString();
+      ok = ok && (c.hosted.isEmpty() || c.cc >= 0);
       // state="DBName" values="AGMFg AGMPk AGMSt": a load-time setting of the plug-in's state (Controller::state)
       c.state = a.value("state").toString();
       c.stateValues = a.value("values").toString().split(' ', QString::SkipEmptyParts);
+      // range="0 100" decimals="1": a number (Controller::stateRange)
+      if (a.hasAttribute("range")) {
+            const QStringList r = a.value("range").toString().split(' ', QString::SkipEmptyParts);
+            bool ok1 = false, ok2 = false;
+            c.stateRange = true;
+            c.stateMin = r.size() == 2 ? r[0].toDouble(&ok1) : 0;
+            c.stateMax = r.size() == 2 ? r[1].toDouble(&ok2) : 0;
+            ok = ok && ok1 && ok2 && c.stateMax > c.stateMin;
+            }
+      if (a.hasAttribute("decimals")) {
+            bool okd = false;
+            c.stateDecimals = a.value("decimals").toInt(&okd);
+            ok = ok && okd && c.stateDecimals >= 0 && c.stateDecimals <= 6 && c.stateRange;
+            }
       if (a.hasAttribute("default")) {
             bool okd = false;
             c.defaultValue = a.value("default").toInt(&okd);
@@ -743,7 +788,8 @@ static bool readController(QXmlStreamReader& r, Controller& c)
             c.display.emplace_back(v, t.mid(colon + 1));
             }
       const int kinds = (c.cc >= 0 ? 1 : 0) + (c.param.isEmpty() ? 0 : 1) + (c.isState() ? 1 : 0);
-      if (!ok || c.id.isEmpty() || kinds != 1 || c.cc > 119 || c.isState() != !c.stateValues.isEmpty())
+      if (!ok || c.id.isEmpty() || kinds != 1 || c.cc > 119 || c.isState() != (!c.stateValues.isEmpty() || c.stateRange)
+          || (c.stateRange && !c.stateValues.isEmpty()))
             return false;
       while (r.readNextStartElement()) {
             if (r.name() == "Text") {
@@ -768,6 +814,37 @@ static bool readController(QXmlStreamReader& r, Controller& c)
 //    the nearer entry's text
 //---------------------------------------------------------
 
+QString Controller::stateText(double value) const
+      {
+      const double v = std::min(1.0, std::max(0.0, value));
+      if (!stateRange) {
+            const int n = stateValues.size();
+            return n ? stateValues[std::min(n - 1, std::max(0, int(std::lround(v * (n - 1)))))] : QString();
+            }
+      const double scale = std::pow(10.0, stateDecimals);
+      const double x = std::round((stateMin + v * (stateMax - stateMin)) * scale) / scale;
+      QString t = QString::number(x, 'f', stateDecimals);
+      if (t.contains('.')) {
+            while (t.endsWith('0'))
+                  t.chop(1);
+            if (t.endsWith('.'))
+                  t.chop(1);
+            }
+      return t == "-0" ? QString("0") : t;
+      }
+
+int hostedParameter(const LibInstrument& li, int cc)
+      {
+      for (const Controller& c : li.allControllers) {
+            if (c.cc != cc || c.hosted.isEmpty())
+                  continue;
+            for (int i = 0; i < int(li.allControllers.size()); ++i)
+                  if (li.allControllers[size_t(i)].id == c.hosted && !li.allControllers[size_t(i)].param.isEmpty())
+                        return i;
+            }
+      return -1;
+      }
+
 QString controllerText(const Controller& controller, double value)
       {
       const auto& d = controller.display;
@@ -783,7 +860,9 @@ QString controllerText(const Controller& controller, double value)
             return hi->second;
       auto lo = std::prev(hi);
       const bool nearLo = v - lo->first <= hi->first - v;
-      if (controller.steps > 0)
+      // (a stepped controller listing every position: the nearest's text; one listing its ends only, a state range's
+      // "0:1 1:127", linear between them like a continuous one)
+      if (controller.steps > 0 && int(d.size()) > controller.steps)
             return (nearLo ? lo : hi)->second;
       bool ok1 = false, ok2 = false;
       const double y1 = lo->second.toDouble(&ok1);
@@ -922,6 +1001,23 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   if (!readController(r, c))
                         return fail(QString("%1:%2: bad Controller").arg(path).arg(r.lineNumber()));
                   lib->controllers.push_back(c);
+                  }
+            else if (r.name() == "State") {
+                  // <State name="Control[ID=12]@Parameter" value="M-Master Vol"/> (Library::fixedState)
+                  if (a.value("name").isEmpty() || !a.hasAttribute("value"))
+                        return fail(QString("%1:%2: bad State").arg(path).arg(r.lineNumber()));
+                  lib->fixedState[a.value("name").toString()] = a.value("value").toString().toUtf8();
+                  r.skipCurrentElement();
+                  }
+            else if (r.name() == "PluginSettings") {
+                  // <PluginSettings file="…" name="…" bad="…" text="…"/> (Library::settingsChecks)
+                  Library::SettingsCheck check { a.value("file").toString(), a.value("name").toString(),
+                                                 a.value("bad").toString().split(' ', QString::SkipEmptyParts),
+                                                 a.value("text").toString() };
+                  if (check.file.isEmpty() || check.name.isEmpty() || check.bad.isEmpty() || check.text.isEmpty())
+                        return fail(QString("%1:%2: bad PluginSettings").arg(path).arg(r.lineNumber()));
+                  lib->settingsChecks.push_back(check);
+                  r.skipCurrentElement();
                   }
             else if (r.name() == "Files") {
                   // <Files registry="Spitfire Symphony Orchestra"/>: where the library is installed
@@ -1095,8 +1191,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
       if (lib->name.isEmpty())
             lib->name = QFileInfo(path).completeBaseName();
       // (a <Controller> of the library may come after the instruments)
-      for (LibInstrument& li : lib->instruments)
+      for (LibInstrument& li : lib->instruments) {
             li.allControllers = mergeControllers(lib->controllers, li.controllers);
+            for (const Controller& c : li.allControllers)
+                  if (!c.hosted.isEmpty() && hostedParameter(li, c.cc) < 0)
+                        return fail(QString("%1: \"%2\": controller \"%3\" is hosted by \"%4\", not a parameter controller of the patch")
+                                    .arg(path, li.name, c.id, c.hosted));
+            }
       // extra patches to their main patch (the vector is complete: the pointers stay valid);
       // they take its instrument ids (the articulation check's test pitch; match() skips them)
       for (LibInstrument& li : lib->instruments) {
@@ -2732,7 +2833,14 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             if (!w.modifiers.contains("muted"))
                   w.modifiers.append("muted");
             }
-      if (has(Art::Open))
+      // "open" ends a mute. MS4 keeps a staff text "open" in force as its technique Art::Open until "natural" /
+      // "mute" … (Dynamics::addTechnique), so it would also end a later text "muted" (which isn't in MS4's table):
+      // for the library the text state decides, as it holds the newest of the two texts (TextTechniques::apply
+      // drops "muted" at "open"); only an "open" articulation on the note itself ends it here
+      bool openArt = false;
+      for (const Ms4::ArtRef& r : arts)
+            openArt |= r.art == Art::Open && !r.technique;
+      if (openArt)
             w.modifiers.removeAll("muted");
       if (has(Art::Harmonic) || has(Art::DiamondNote) || text.harmonics)
             w.modifiers.append("harmonics");

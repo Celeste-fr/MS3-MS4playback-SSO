@@ -3155,7 +3155,9 @@ void Seq::updateSynthesizerState(int tick1, int tick2)
       EventMap::const_iterator i2 = ev.upper_bound(tick2);
 
       for (; i1 != i2; ++i1) {
-            if (i1->second.type() == ME_CONTROLLER)
+            // (and a hosted plug-in's parameters, ME_PARAMETER: automation, Ample's capo and its CC7 as M-Master Vol;
+            // in order, the last one in force wins)
+            if (i1->second.type() == ME_CONTROLLER || i1->second.type() == ME_PARAMETER)
                   playEvent(i1->second, 0);
             }
       }

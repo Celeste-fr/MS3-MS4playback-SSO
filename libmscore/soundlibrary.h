@@ -241,6 +241,12 @@ struct Controller {
       QString name;                       // shown
       int cc { -1 };                      // a MIDI controller (0-119)
       QString param;                      // else a plug-in parameter's title (hosted plug-in only)
+      // a MIDI controller the hosted plug-in and Live play by a parameter of its own (<Controller cc="7"
+      // hosted="m-master-vol">: Ample's CC7 and its M-Master Vol are one gain, measured null; Live's clips and the plain set
+      // carry no CC7): with the plug-in output or for Live every event of the CC on the patch's route becomes that
+      // controller's ME_PARAMETER (value cc / 127, same tick: MidiRenderer::libraryHostedParameters); MIDI out keeps the CC
+      // (an external plug-in's MIDI learn). The id of a param controller of the same patch; empty: none
+      QString hosted;
       int defaultValue { -1 };            // 0-127; -1: MuseScore leaves the patch's own value
       // the patch's own value as the library ships it (<Controller patchDefault>: the plug-in's normalized value, 0-1,
       // measured once in the real plug-in with MuseScore's setup loaded and settled, nothing set; the owner, 2026-10-15:
@@ -252,20 +258,35 @@ struct Controller {
       // AGMSt">: Ample's sample set): its lane's value at the score's start picks values[round(v x (n - 1))], written into
       // the part's state as it loads (stateValues(); SoundLibraryHost, audio/vst3/pluginstate.h); a change loads the part
       // again. "Name" is the element <Name Value="…"/>, "Parameter:Title" the element <Parameter Name="Title" Value="…"/>.
-      // Never a MIDI controller or a parameter: it can't change while playing. Empty: not one
+      // Never a MIDI controller or a parameter: it can't change while playing. Empty: not one.
+      // A number instead of a list (<Controller state="Parameter:Vel Sensitivity" range="0 100" decimals="0">): the lane's
+      // value v writes min + v x (max - min), rounded to decimals, as the plug-in shows it (no trailing zeros: "61",
+      // "-23.1"); stateValues empty then
       QString state;
       QStringList stateValues;
+      bool stateRange { false };
+      double stateMin { 0 };
+      double stateMax { 0 };
+      int stateDecimals { 0 };
       // how the plug-in shows the value (<Controller steps="N" display="v:text …">, from the plug-in's own parameter
       // texts, e.g. Ample's dump): steps, the parameter's discrete positions k / N (0: continuous); display, its text at
-      // lane values 0-1, ascending (a numeric text linear between neighbours; a stepped one the nearest position's).
+      // lane values 0-1, ascending (a numeric text linear between neighbours; a stepped one the nearest position's,
+      // unless only its ends are listed: a state range's "0:1 1:127", linear).
       // The lane editor shows it (controllerText); nothing is sent by it. Empty: the lane's 0-127
       int steps { 0 };
       std::vector<std::pair<double, QString>> display;
       bool isState() const { return !state.isEmpty(); }
+      // the text written into the state for a lane value 0-1 (a list's entry, a range's number)
+      QString stateText(double value) const;
       };
 
 // the text the plug-in shows for a lane value 0-1 of the controller (its display), empty: none listed
 QString controllerText(const Controller& controller, double value);
+
+struct LibInstrument;
+// the index in li's allControllers of the parameter controller that plays MIDI controller cc when hosted
+// (Controller::hosted), -1: none
+int hostedParameter(const LibInstrument& li, int cc);
 
 //---------------------------------------------------------
 //   Guitar
@@ -299,6 +320,15 @@ struct Guitar {
       int strumVelocity { 110 };          // within the band that plays all six strings (96-126)
       int softStrum { 30 };               // [guitar] softStrums: a strum at this velocity or under plays as a roll
       double rollGapMs { 15 };            // … its notes this far apart
+      // [guitar] softStrums 2: such a strum as a roll of the strummer's single-string keys (strum mode on, the chord keys
+      // held; strings 6..1, low to high: <Guitar rollKeys>) with no CC7 change: at the chord's velocity held within the
+      // measured pairs' range and spaced by them (<Guitar softRoll="20:10 40:15">: velocity:ms, a roll at that velocity
+      // that far apart as loud as the recorded strum turned down by StrumLevel's CC7; linear between, the nearest
+      // end's beyond, as StrumLevel holds its ends)
+      std::array<int, 6> rollKeys {{ -1, -1, -1, -1, -1, -1 }};
+      std::vector<std::pair<int, int>> softRoll;
+      int softRollVelocity(int velocity) const;   // the roll's velocity for a chord at velocity
+      double softRollGapMs(int velocity) const;   // … and its keys' spacing (rollGapMs without pairs)
       // a strum as loud as its chord's notes at their velocity: CC7 for the sample set (its state value) by velocity
       // (<StrumLevel set="AGMSt" levels="20:8 …">: the measured CC7 at which the recorded Full strum (strumVelocity) is
       // as loud as a six-string roll at that velocity), log-linear between, the nearest end's beyond
@@ -306,6 +336,10 @@ struct Guitar {
       QString sampleSet;                  // the state controller holding the sample set (its values index strumLevels)
       QString capo;                       // the capo parameter's controller id (steps 0 .. capoMax)
       int capoMax { 11 };
+      // a capo change reaches the notes this many ms before the first note under it: Ample applies a parameter change
+      // from its next process block only (measured 2026-10-20, ample-wincheck/FIX2.md: a note-on in the same block as
+      // the change plays at the old capo; a ringing note keeps its pitch), so the change goes in an earlier block
+      double capoLeadMs { 0 };
       // an artificial harmonic (a fretted note with a diamond note above it): frets from the stopped note to the touched
       // one -> semitones the harmonic sounds over the stopped note (string physics)
       std::vector<std::pair<int, int>> artificial;
@@ -483,6 +517,20 @@ class Library {
       std::map<int, double> micFader;
       std::map<int, std::array<double, 3>> micMix;
       std::vector<Controller> controllers;          // for all its instruments
+      // a non-Kontakt plug-in's state values every instance gets, whatever the part sets (<State name="…" value="…"/>,
+      // names as pluginstate.h: Ample's MIDI-learn defaults <Control ID="12" Parameter="M-Master Vol"/>, which the CC7
+      // lane and the guitar pass's strum levels rely on); the part's state controllers go on top
+      std::map<QString, QByteArray> fixedState;
+      // a plug-in's global settings file to check as a part loads (<PluginSettings file="Ample Sound/AGM/Configs/
+      // AGM_info.xml" name="midiGuitarMode" bad="true 1" text="…"/>: file under the user's Documents folder, a JUCE
+      // PropertiesFile; a value of name in bad: text is logged and shown). Read only, never written
+      struct SettingsCheck {
+            QString file;
+            QString name;
+            QStringList bad;
+            QString text;
+            };
+      std::vector<SettingsCheck> settingsChecks;
       std::vector<LibInstrument> instruments;
       // the library's other patches (<Patch>): none of the map's, but set up and checked (Check
       // articulations lists them, and scans them)
