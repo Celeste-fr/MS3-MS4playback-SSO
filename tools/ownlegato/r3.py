@@ -493,9 +493,26 @@ def iso9(out, phrases=16, seed=20261018):
     print('t9: %d phrases; %d layer files, %d attack files' % (phrases, len(groups), len(akeys)))
 
 
+def iso10(out, keys=(57, 60), t1s=(13, 26, 52, 87)):
+    """attack-note tail vs hold time (iso10): K attacked, held t1 blocks, then N = K+2 (and K-3 at 26 blocks), N held
+    3 s; and K held alone. Rendered K-solo, per sustain sub-family (mute_setups.py 'sus.*') and all families."""
+    names, man = [], []
+    for k in keys:
+        g = File('a10_k%d' % k)
+        for t1 in t1s:
+            chain9(g, [k, k + 2], [t1, MID9], kind='atkfull', a=k, b=k + 2, t1=t1)
+        chain9(g, [k, k - 3], [26, MID9], kind='atkfull', a=k, b=k - 3, t1=26)
+        chain9(g, [k], [max(t1s) + MID9], kind='atkheld', a=k)
+        g.write(out)
+        names.append(g.name)
+        man.append(dict(file=g.name, solo=[k], a=k))
+    write_list(out, names)
+    json.dump(man, open(os.path.join(out, 'manifest.json'), 'w'), indent=1)
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8', 'iso9'])
+    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8', 'iso9', 'iso10'])
     ap.add_argument('--dts', default='0.5,0.3')
     ap.add_argument('out')
     ap.add_argument('--keys')
@@ -540,6 +557,8 @@ def main():
         iso8(a.out)
     elif a.cmd == 'iso9':
         iso9(a.out)
+    elif a.cmd == 'iso10':
+        iso10(a.out)
     else:
         test(a.out, a.kind, rng('54-68' if a.kind == 'port' else '54-66'), a.phrases, a.seed)
 

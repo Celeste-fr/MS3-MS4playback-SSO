@@ -18,6 +18,18 @@ import layer_isolation as LI  # noqa: E402
 FAMS = ('fing', 'portFast', 'runs', 'runsRT', 'fastLegato', 'sustain', 'release', 'other')
 
 
+def subfamily(name):
+    """the 'sustain' family split by group kind (iso10): sus.long, sus.dest, sus.spicc, sus.across, else the family"""
+    f = LI.family(name)
+    if f != 'sustain':
+        return f
+    u = name.upper()
+    for tag, sub in (('DEST-NT_SUS', 'dest'), ('ACROSS STRINGS', 'across'), ('SPICC', 'spicc'), ('LONG ', 'long')):
+        if tag in u:
+            return 'sus.' + sub
+    return 'sus.other'
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('src'); ap.add_argument('out'); ap.add_argument('--det', action='store_true')
@@ -31,6 +43,7 @@ def main():
     prog = M.setup_parts(comp)
     groups, zones = LI.program_layout(prog)
     fam = [LI.family(n) for n, m in groups]
+    sub = [subfamily(n) for n, m in groups]
     mods = LI.modulators(prog)
     pre = 'd1_' if a.det else ''
     todo = a.only.split(',') if a.only else list(FAMS) + ['all', 'silent']
@@ -41,7 +54,7 @@ def main():
             fl = None
             if '/' in n:                            # name/family or name/-family: that family alone / all but it
                 n, fl = n.split('/')
-            solo['solo_' + n + ('_' + fl.replace('-', 'no') if fl else '')] = ([int(k) for k in ks.split('+')], fl)
+            solo['solo_' + n + ('_' + fl.replace('-', 'no').replace('.', '') if fl else '')] = ([int(k) for k in ks.split('+')], fl)
         todo = list(solo)
     keys = [struct.unpack_from('<2H', prog, o - 30 + 16) for g, o in zones]
     info = {}
@@ -55,6 +68,8 @@ def main():
                 mute = not any(kl <= k <= kh for k in ks)
                 if fl and fl.startswith('-'):
                     mute = mute or fam[g] == fl[1:]
+                elif fl and fl.startswith('sus.'):     # a sustain sub-family (iso10)
+                    mute = mute or sub[g] != fl
                 elif fl:
                     mute = mute or fam[g] != fl
             elif f == 'ghost':                     # the GHOST groups alone (one zone over all keys each)
