@@ -1078,10 +1078,24 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   parameter lanes in it (`stateWithControllers` loads it with the part), and a moving parameter lane would go to the
   MuseScore Link device by title; but Live's panel (*Configure*) is filled by Kontakt's rules, the plain set's
   multis and Utility were made for Kontakt, and nothing of it was run. To do with phase 2 (HANDOFF.md › Ample guitars).
-  Phase 2's guitar pass (branch `ample-phase2`, 2026-10-20, `guitarplayback.cpp`) adds only events on the part's route
-  (keys, CC7), which Live's clips carry as they carry any note; the capo is a plug-in parameter event, sent only to a
-  hosted plug-in (MIDI out: the keys are still sounding - capo, so Ample's own capo must match: set the M-Capo lane), and
-  none of it was tried in Live.
+  Phase 2's guitar pass (branch `ample-phase2`, 2026-10-20, `guitarplayback.cpp`) adds only events on the part's route:
+  its keys Live's clips and the plain set carry as they carry any note (`[guitar] softStrums` 2's key roll too,
+  `tst_liveequivalence::liveGuitarSoftRoll`), but **not its CC7**: CC7 has no carrier (the clips drop it, counted as
+  dropped) and the plain set leaves CC7 to Live's fader (`PlainLiveSet::laneController`), so in Live a strum
+  (`[guitar] strums`, softStrums 0 or 1) plays the recorded strum at the CC7 in force, not turned down to its notes'
+  level (StrumLevel), and the volume lane's CC7 doesn't reach Ample either (found 2026-10-20; the fix would be a CC7
+  carrier, a new device protocol, or Ample's MIDI-learn moved off CC7: not done). The capo is a plug-in parameter event,
+  sent only to a hosted plug-in (MIDI out: the keys are still sounding - capo, so Ample's own capo must match: set the
+  M-Capo lane), and none of it was tried in Live.
+  **State settings** (Ample's sample set `DBName`, the 204 `Parameter:…` settings, the velocity layers; ample-fixes2,
+  2026-10-20): Create Live Set's route set and plain set embed each part's flat state-lane values in the track's Ample
+  state, the same bytes hosted playback loads (`SoundLibraryHost::setupState` with the part; a state per patch and set
+  of values, `tst_liveequivalence::liveStateSettings`); before, the export made the state without the part, so only the
+  map's fixed `<State>` reached Live and the extra patches (Pick) / (Strum) loaded Finger. A state lane that changes
+  can't be followed: a plug-in's state isn't automatable in Live, and hosted playback loads the state once too
+  (`PartControllers::stateValue`: the lane's first point, its value at the score's start; a later change loads the part
+  again only at the next sync, not while it plays). Both play the start's value. Update Live Set doesn't rewrite a
+  track's plug-in state: after a state lane changes, create the set again.
 
 - **Written clips** (the plain set, 2026-10-11, above): the device's delays are kept to 0.01 ms and Live's Track Delay to
   0.1 ms; the device reads its delays at the note's own song position (measured in Live 12.4.6, 2026-10-12), a tick on

@@ -267,7 +267,9 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
       if (!plugin)
             plan->notes << QObject::tr("No plug-in on the tracks: %1").arg(pluginError.isEmpty() ? QObject::tr("the library's plug-in "
                                                                                                           "was not found") : pluginError);
-      std::map<QString, LiveSetWriter::Plugin> made;     // by patch (copies for other tunings share it)
+      // by patch and the part's state settings (a non-Kontakt plug-in's load-time values, e.g. Ample's DBName: their flat
+      // lanes, SoundLibraryHost::stateValuesFor, as hosted playback loads them; copies for other tunings share it)
+      std::map<QString, LiveSetWriter::Plugin> made;
       std::map<QString, QString> failed;
       // a part's plug-in parameter settings (its flat lanes: partcontrollers.h): its routes' states with them set, as
       // MuseScore plays them
@@ -294,13 +296,16 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   plan->left << QString("%1: %2").arg(t.name, failed[patch]);
                   continue;
                   }
-            if (!made.count(patch)) {
+            // the part's state settings (a state can't be automated in Live, nor change while MuseScore plays: each lane's
+            // value at the start, PartControllers::stateValue; LIVE.md › What still differs)
+            const QString madeKey = patch + "\n" + PartControllers::valuesKey(SoundLibraryHost::stateValuesFor(library, patch, t.partRef));
+            if (!made.count(madeKey)) {
                   QString err;
                   QByteArray state;
                   if (!SoundLibraryHost::hasSetup(library, patch))
                         err = QObject::tr("no setup (its .nki was not found: View › Sound Library… › Library folder…)");
                   else
-                        state = SoundLibraryHost::setupState(library, patch, pluginPath, &err, score);
+                        state = SoundLibraryHost::setupState(library, patch, pluginPath, &err, score, t.partRef);
                   LiveSetWriter::Plugin p;
                   QString stateName;
                   if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))
@@ -316,10 +321,10 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   p.audioOutputs = pluginName.contains("Kontakt", Qt::CaseInsensitive) ? 16 : 2;
                   if (SoundLibraryHost::makesSetups(library) && KontaktSetup::sampleListVersion(p.component) == 2)
                         ++slow;
-                  made[patch] = p;
+                  made[madeKey] = p;
                   }
             t.hasPlugin = true;
-            t.plugin = made[patch];
+            t.plugin = made[madeKey];
 
             SoundLib::Route r;
             r.part = t.partRef;
@@ -334,7 +339,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                         QString err;
                         std::vector<SoundLibraryHost::AppliedParameter> applied;
                         const QByteArray state = SoundLibraryHost::stateWithControllers(library, r, values, pluginPath, &applied, &err);
-                        LiveSetWriter::Plugin p = made[patch];
+                        LiveSetWriter::Plugin p = made[madeKey];
                         QString stateName;
                         if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))
                               err = QObject::tr("the plug-in's state could not be read");

@@ -28,7 +28,12 @@
 //     (arpeggio up = low to high = Ample's down strum; muted keys when every note has a cross notehead) at strumVelocity;
 //     at its end the keys off and strum mode off, before anything else at that tick; the CC7 in force again right
 //     before the route's next note that is not a strum (channel gain: a strum's level also changes what still rings).
-//     [guitar] softStrums: a strum at velocity <= softStrum plays as its notes rolled rollGap ms apart in strum order;
+//     [guitar] softStrums: a strum at velocity <= softStrum plays, 1: as its notes rolled rollGap ms apart in strum order
+//     (strum mode off, at their velocity); 2: as a roll of the strummer's single-string keys (rollKeys: strum mode on,
+//     Detect, the chord keys held, as a strum) in strum order at the chord's velocity held within softRoll's measured
+//     pairs, spaced by them (a roll as loud as the recorded strum lowered by StrumLevel's CC7), with no CC7 of its own
+//     (the CC7 in force: a lowered one restored before it), so what still rings keeps its level; a muted strum stays
+//     the strummer;
 //   - artificial harmonics: a chord of fretted notes and diamond notes whose distance is listed (Guitar::artificial):
 //     only the diamond notes sound, each as a natural harmonic (phase 1 chose the harmonic keyswitch for a diamond)
 //     at the stopped note + the partial's semitones (key: that + harmonicShift);
@@ -52,6 +57,7 @@
 //   measured rule says when the notation asks for it.
 //---------------------------------------------------------
 
+#include <algorithm>
 #include <set>
 
 #include "arpeggio.h"
@@ -199,7 +205,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             return;
 
       const bool strums = Playback::on("guitar/strums", score);
-      const bool softStrums = Playback::on("guitar/softStrums", score);
+      const int softStrums = int(std::lround(Playback::value("guitar/softStrums", score)));
       const bool pinch = Playback::on("guitar/pinchHarmonics", score);
       const int utick1 = chunk.utick1();
       const int utick2 = chunk.utick2();
@@ -409,6 +415,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
       // strums
       struct Strum { const NPlayEvent* like; int t0; int end; int base; int cc; };
       std::vector<Strum> strumList;
+      std::set<const NPlayEvent*> rollStarts;       // softStrums 2: each key roll's first event (the CC7 in force before it)
       std::set<const Chord*> strumChords;
       for (const Chord* chord : chords) {
             if (!strums || chord->notes().size() < 2)
@@ -430,7 +437,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   end = std::max(end, offTick(*o));
                   v = std::max(v, o->on->second.velo());
                   }
-            if (softStrums && v <= g.softStrum) {
+            if (softStrums == 1 && v <= g.softStrum) {
                   // a roll in strum order, rollGap apart
                   std::sort(group.begin(), group.end(), [down](const On* x, const On* y) {
                         return down ? x->note->ppitch() < y->note->ppitch() : x->note->ppitch() > y->note->ppitch();
@@ -453,6 +460,46 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             if (key < 0 || g.detect < 0 || g.strumMode < 0)
                   continue;
             const NPlayEvent like = group.front()->on->second;
+            std::set<int> keys;
+            int low = 128;
+            for (On* o : group)
+                  low = std::min(low, o->note->ppitch());
+            const int root = g.chordLow + (low % 12);
+            for (On* o : group)
+                  keys.insert(root + ((o->note->ppitch() - low) % 12 + 12) % 12);
+            const bool rollKeys = std::find(g.rollKeys.begin(), g.rollKeys.end(), -1) == g.rollKeys.end();
+            if (softStrums == 2 && v <= g.softStrum && !muted && rollKeys) {
+                  // a roll of the single-string keys in strum order (down: string 6 first), the chord keys held, at the
+                  // roll's velocity and spacing (Guitar::softRoll); no CC7: what still rings keeps its level
+                  const int rv = g.softRollVelocity(v);
+                  int gap = msTicks(t0, g.softRollGapMs(v));
+                  if (t0 + 5 * gap >= end)
+                        gap = std::max(1, (end - t0 - 1) / 5);
+                  for (On* o : group) {
+                        o->strummed = true;
+                        drop(o->on);
+                        drop(o->off);
+                        }
+                  auto first = add(t0, make(like, ME_NOTEON, g.detect, g.detectVelocity));
+                  add(t0, make(like, ME_NOTEON, g.detect, 0));
+                  tapAt(t0, like, g.strumMode, g.strumOn, false);
+                  for (int k : keys)
+                        add(t0, make(like, ME_NOTEON, k, 100));
+                  std::vector<int> order(g.rollKeys.begin(), g.rollKeys.end());
+                  if (!down)
+                        std::reverse(order.begin(), order.end());
+                  for (int k = 0; k < int(order.size()); ++k)
+                        add(t0 + k * gap, make(like, ME_NOTEON, order[size_t(k)], rv));
+                  auto at = events->lower_bound(end);
+                  for (int k : keys)
+                        addBefore(at, make(like, ME_NOTEON, k, 0), end);
+                  for (int k : order)
+                        addBefore(at, make(like, ME_NOTEON, k, 0), end);
+                  tapBefore(at, like, g.strumMode, g.strumOff, false, end);
+                  rollStarts.insert(&first->second);
+                  strumChords.insert(chord);
+                  continue;
+                  }
             // the CC7 in force on the route (the part's Volume), else unity
             int base = 64;
             for (auto i = events->lower_bound(t0); i != events->begin();) {
@@ -464,13 +511,6 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                         }
                   }
             const int cc = qBound(1, int(std::lround(base * g.strumLevel(sampleSetOf(*group.front()), v) / 64.0)), 127);
-            std::set<int> keys;
-            int low = 128;
-            for (On* o : group)
-                  low = std::min(low, o->note->ppitch());
-            const int root = g.chordLow + (low % 12);
-            for (On* o : group)
-                  keys.insert(root + ((o->note->ppitch() - low) % 12 + 12) % 12);
             for (On* o : group) {
                   o->strummed = true;
                   drop(o->on);
@@ -719,7 +759,8 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   }
             }
 
-      // after a strum, the CC7 in force again before the route's next note that is not a strum
+      // after a strum, the CC7 in force again before the route's next note that is not a strum (a softStrums 2 key roll
+      // counts as such a note: it plays at the CC7 in force)
       for (const Strum& st : strumList) {
             if (st.cc == st.base)
                   continue;
@@ -729,6 +770,10 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   const NPlayEvent& e = i->second;
                   if (!sameRoute(e, *st.like))
                         continue;
+                  if (rollStarts.count(&e)) {
+                        next = i;
+                        break;
+                        }
                   if (e.type() == ME_CONTROLLER && e.controller() == CTRL_VOLUME && mine.count(&e) && i->first > st.t0) {
                         nextStrum = true;
                         break;

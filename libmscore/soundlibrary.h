@@ -309,6 +309,15 @@ struct Guitar {
       int strumVelocity { 110 };          // within the band that plays all six strings (96-126)
       int softStrum { 30 };               // [guitar] softStrums: a strum at this velocity or under plays as a roll
       double rollGapMs { 15 };            // … its notes this far apart
+      // [guitar] softStrums 2: such a strum as a roll of the strummer's single-string keys (strum mode on, the chord keys
+      // held; strings 6..1, low to high: <Guitar rollKeys>) with no CC7 change: at the chord's velocity held within the
+      // measured pairs' range and spaced by them (<Guitar softRoll="20:10 40:15">: velocity:ms, a roll at that velocity
+      // that far apart as loud as the recorded strum turned down by StrumLevel's CC7; linear between, the nearest
+      // end's beyond, as StrumLevel holds its ends)
+      std::array<int, 6> rollKeys {{ -1, -1, -1, -1, -1, -1 }};
+      std::vector<std::pair<int, int>> softRoll;
+      int softRollVelocity(int velocity) const;   // the roll's velocity for a chord at velocity
+      double softRollGapMs(int velocity) const;   // … and its keys' spacing (rollGapMs without pairs)
       // a strum as loud as its chord's notes at their velocity: CC7 for the sample set (its state value) by velocity
       // (<StrumLevel set="AGMSt" levels="20:8 …">: the measured CC7 at which the recorded Full strum (strumVelocity) is
       // as loud as a six-string roll at that velocity), log-linear between, the nearest end's beyond

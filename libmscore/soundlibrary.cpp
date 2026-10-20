@@ -604,6 +604,9 @@ static bool readGuitar(QXmlStreamReader& r, Guitar& g)
       const std::vector<int> strings = ints("stringKeys", 6);
       for (size_t i = 0; i < strings.size() && i < 6; ++i)
             g.stringKeys[i] = strings[i];
+      const std::vector<int> rolls = ints("rollKeys", 6);
+      for (size_t i = 0; i < rolls.size() && i < 6; ++i)
+            g.rollKeys[i] = rolls[i];
       const std::vector<int> strums = ints("strumKeys", 4);          // down, up, down muted, up muted
       if (strums.size() == 4) {
             g.strumDown = strums[0];
@@ -635,6 +638,9 @@ static bool readGuitar(QXmlStreamReader& r, Guitar& g)
       g.sampleSet = a.value("sampleSet").toString();
       g.capo = a.value("capo").toString();
       g.artificial = pairs(a.value("artificial").toString());
+      g.softRoll = pairs(a.value("softRoll").toString());
+      for (const auto& p : g.softRoll)
+            good = good && p.first >= 1 && p.first <= 127 && p.second >= 1 && p.second <= 200;
       if (a.hasAttribute("pinch")) {                                  // partial, velocity, delay ms, length ms
             const QStringList p = a.value("pinch").toString().split(' ', QString::SkipEmptyParts);
             bool ok[4] = { false, false, false, false };
@@ -688,6 +694,27 @@ int Guitar::strumLevel(const QString& set, int velocity) const
             return qBound(1, int(std::lround(std::pow(10.0, db))), 127);
             }
       return v.back().second;
+      }
+
+int Guitar::softRollVelocity(int velocity) const
+      {
+      if (softRoll.empty())
+            return qBound(1, velocity, 127);
+      return qBound(softRoll.front().first, velocity, softRoll.back().first);
+      }
+
+double Guitar::softRollGapMs(int velocity) const
+      {
+      if (softRoll.empty())
+            return rollGapMs;
+      const int v = softRollVelocity(velocity);
+      for (size_t i = 1; i < softRoll.size(); ++i) {
+            if (v > softRoll[i].first)
+                  continue;
+            const double f = double(v - softRoll[i - 1].first) / (softRoll[i].first - softRoll[i - 1].first);
+            return (1.0 - f) * softRoll[i - 1].second + f * softRoll[i].second;
+            }
+      return softRoll.back().second;
       }
 
 int Guitar::artificialShift(int frets) const

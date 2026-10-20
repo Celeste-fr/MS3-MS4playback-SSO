@@ -365,7 +365,9 @@ switch value of each articulation. For example:
   (glissando line) and `hammer` (a legato slur, or text H / P, between two single notes): the first note held
   `overlap` ms into the second; the strummer: `strumMode` with `strumOn` / `strumOff` velocities, `detect` at
   `detectVelocity`, chord keys from `chordLow`, `strumKeys="down up downMuted upMuted"` at `strumVelocity`, `softStrum`
-  and `rollGap` ms (`[guitar] softStrums`); `sampleSet` (the state controller whose value picks a `<StrumLevel
+  and `rollGap` ms (`[guitar] softStrums` 1), `rollKeys` (six single-string keys in strum mode, strings 6..1: `[guitar]
+  softStrums` 2's roll, the chord keys held) and `softRoll="velocity:ms …"` (the roll's velocity, the chord's held within
+  the pairs' range, and its keys' spacing, linear between); `sampleSet` (the state controller whose value picks a `<StrumLevel
   set levels="velocity:CC7 …">`: the CC7 a strum plays at, log-linear between) and `capo` / `capoMax` (the capo
   parameter's controller id: a capo staff text sends it, each note's key sounding - capo) and `capoLead` (ms a change
   goes before the first note under it, after the previous note-on: Ample applies it from its next process block; a

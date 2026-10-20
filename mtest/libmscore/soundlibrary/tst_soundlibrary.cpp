@@ -6224,8 +6224,9 @@ void TestSoundLibrary::ampleStrums()
       }
 
 //---------------------------------------------------------
-//   ampleSoftStrums: [guitar] softStrums: the ppp strum (velocity <= 30) as its notes rolled 15 ms (14 ticks) apart,
-//   low to high (up arrow), at their velocity, no strum key; the muted strum at f stays the strummer
+//   ampleSoftStrums: [guitar] softStrums 1: the ppp strum (velocity <= 30) as its notes rolled 15 ms (14 ticks) apart,
+//   low to high (up arrow), at their velocity, no strum key; the muted strum at f stays the strummer. 2: the six
+//   single-string keys rolled in strum mode at softRoll's velocity and spacing, no CC7
 //---------------------------------------------------------
 
 void TestSoundLibrary::ampleSoftStrums()
@@ -6253,6 +6254,64 @@ void TestSoundLibrary::ampleSoftStrums()
       for (const GuitarEvent& e : v)
             muted = muted || (e.type == ME_NOTEON && e.a == 83 && e.b == 110);
       QVERIFY(muted);
+      // no CC7 of its own around the roll (value 1, unchanged)
+      for (const GuitarEvent& e : v)
+            QVERIFY(!(e.type == ME_CONTROLLER && e.a == 7 && e.tick > 4 * DIVISION - DIVISION / 2 && e.tick < 5 * DIVISION));
+
+      // 2: a roll of the six single-string keys (D3-B3, string 6 first: up arrow), strum mode on, Detect, the chord keys
+      // (E: 40 44 47) held, at the chord's velocity held within softRoll (20-40) and spaced by it (v20 10 ms, v40 15 ms,
+      // linear between); the chord's notes not sent, no strum key, no CC7 at all between the strum before and the next
+      // chord's restore; at its end the keys off and strum mode off
+      Playback::setIniValuesForTest({ { "guitar/strums", "1" }, { "guitar/softStrums", "2" } });
+      v = guitarEvents(score);
+      QCOMPARE(guitarNoteOn(v, c[4]), -1);
+      const int rv = g.softRollVelocity(vel);
+      const int gap = int(std::lround(g.softRollGapMs(vel) / 1000.0 * 2.0 * DIVISION));     // (120 bpm)
+      qDebug("ppp strum: velocity %d -> roll velocity %d, %.2f ms (%d ticks) apart", vel, rv, g.softRollGapMs(vel), gap);
+      QVERIFY(rv >= 20 && rv <= g.softStrum);
+      std::vector<std::pair<int, int>> keys;                        // (tick, key) at the roll's velocity
+      bool detect = false, modeOn = false, modeOff = false, strumKey = false;
+      std::set<int> chordKeys, chordOffs;
+      for (const GuitarEvent& e : v) {
+            if (e.type != ME_NOTEON || e.tick < 4 * DIVISION || e.tick >= 5 * DIVISION || e.sw)
+                  continue;
+            if (e.a >= 62 && e.a <= 71 && e.b == rv)
+                  keys.push_back({ e.tick, e.a });
+            detect = detect || (e.a == 86 && e.b == 127 && e.tick == 4 * DIVISION);
+            modeOn = modeOn || (e.a == 97 && e.b == 100 && e.tick == 4 * DIVISION);
+            modeOff = modeOff || (e.a == 97 && e.b == 1 && e.tick > 4 * DIVISION);
+            strumKey = strumKey || (e.a == 72 || e.a == 76);
+            if (e.a >= 36 && e.a < 60 && e.b == 100 && e.tick == 4 * DIVISION)
+                  chordKeys.insert(e.a);
+            if (e.a >= 36 && e.a < 60 && e.b == 0 && e.tick > 4 * DIVISION)
+                  chordOffs.insert(e.a);
+            }
+      QCOMPARE(int(keys.size()), 6);
+      for (int k = 0; k < 6; ++k) {
+            QCOMPARE(keys[size_t(k)].second, g.rollKeys[size_t(k)]);
+            QCOMPARE(keys[size_t(k)].first, 4 * DIVISION + k * gap);
+            }
+      QVERIFY(detect && modeOn && modeOff && !strumKey);
+      QCOMPARE(chordKeys, (std::set<int> { 40, 44, 47 }));
+      QCOMPARE(chordOffs, chordKeys);
+      // no CC7 from the strum before (bar 1's down strum lowered it) to the roll: the restore comes before the roll
+      int restore = -1, rollAt = -1;
+      for (int i = 0; i < int(v.size()); ++i) {
+            const GuitarEvent& e = v[size_t(i)];
+            if (e.type == ME_CONTROLLER && e.a == 7 && e.tick >= 3 * DIVISION && e.tick < 5 * DIVISION)
+                  QVERIFY2(e.b == 64 && restore < 0, qPrintable(QString("CC7 %1 at %2").arg(e.b).arg(e.tick)));
+            if (e.type == ME_CONTROLLER && e.a == 7 && e.tick >= 3 * DIVISION && e.tick < 5 * DIVISION)
+                  restore = i;
+            if (e.type == ME_NOTEON && e.a == 86 && e.tick == 4 * DIVISION && rollAt < 0)
+                  rollAt = i;
+            }
+      QVERIFY(rollAt >= 0);
+      if (restore >= 0)
+            QVERIFY(restore < rollAt);
+      muted = false;
+      for (const GuitarEvent& e : v)
+            muted = muted || (e.type == ME_NOTEON && e.a == 83 && e.b == 110);
+      QVERIFY(muted);                                               // (the muted strum at f: the strummer)
       Playback::setIniValuesForTest({});
       delete score;
       }
@@ -6598,6 +6657,7 @@ void TestSoundLibrary::ampleOpenMuted()
 
 void TestSoundLibrary::guitarSettings()
       {
+      QCOMPARE(Playback::definition("guitar/softStrums")->max, 2.0);
       for (const char* id : { "guitar/strums", "guitar/softStrums", "guitar/pinchHarmonics" }) {
             QVERIFY(Playback::definition(id));
             QCOMPARE(Playback::value(id), 0.0);
@@ -6639,7 +6699,26 @@ void TestSoundLibrary::guitarSettings()
       QCOMPARE(g.strumLevel("S", 60), int(std::lround(std::sqrt(8.0 * 64.0))));   // (log-linear between)
       QCOMPARE(g.strumLevel("X", 60), 64);
       QVERIFY(g.fx.size() == 1 && g.fx[0].text.match("Slap").hasMatch() && !g.fx[0].text.match("slaps").hasMatch());
+      // softStrums 2's roll: without softRoll the chord's velocity and rollGap; with it held within the pairs, linear between
+      QCOMPARE(g.rollKeys[0], -1);
+      QCOMPARE(g.softRollVelocity(25), 25);
+      QCOMPARE(g.softRollGapMs(25), g.rollGapMs);
+      {
+            auto lib2 = loadMap(guitarMap("<Guitar rollKeys='62 64 65 67 69 71' softRoll='20:10 40:15'/>"));
+            QVERIFY(lib2 && lib2->instruments[0].guitar);
+            const SoundLib::Guitar& g2 = *lib2->instruments[0].guitar;
+            QCOMPARE(g2.rollKeys[0], 62);
+            QCOMPARE(g2.rollKeys[5], 71);
+            QCOMPARE(g2.softRollVelocity(12), 20);
+            QCOMPARE(g2.softRollVelocity(30), 30);
+            QCOMPARE(g2.softRollVelocity(90), 40);
+            QCOMPARE(g2.softRollGapMs(12), 10.0);
+            QCOMPARE(g2.softRollGapMs(30), 12.5);
+            QCOMPARE(g2.softRollGapMs(40), 15.0);
+            QCOMPARE(g2.softRollGapMs(100), 15.0);
+      }
       for (const char* bad : { "<Guitar stringKeys='36 35'/>", "<Guitar strumKeys='72 76 79 200'/>", "<Guitar pinch='19 60'/>",
+                               "<Guitar rollKeys='62 64 65'/>", "<Guitar softRoll='40:15 20:10'/>", "<Guitar softRoll='20:0'/>",
                                "<Guitar><StrumLevel set='S' levels='100:64 20:8'/></Guitar>", "<Guitar><Fx text='(' key='90'/></Guitar>" })
             QVERIFY2(!loadMap(guitarMap(bad)), bad);
       }

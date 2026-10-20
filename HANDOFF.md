@@ -72,14 +72,28 @@ is Ample Guitar M (`AGM.vst3`, hosted directly, not Kontakt); the dump it is gen
 - CC map: `<State name="Control[ID=n]@Parameter">` writes Ample's seven MIDI-learn defaults into every instance's state
   (`Library::fixedState`, `PartControllers::loadStateValues`, through `SoundLibraryHost::stateValuesFor`: hosted, export,
   Create Live Set, live equivalence). Chosen over playing volume by M-Master Vol: CC7 is also the guitar pass's strum
-  level, and Live's clips carry CC7 with the notes, so both paths stay one.
+  level. (Correction, 2026-10-20: Live's clips do NOT carry CC7, it has no carrier, and the plain set leaves CC7 to the
+  fader: in Live the strum levels and the volume lane don't reach Ample; LIVE.md › What still differs. To decide: a CC7
+  carrier (device protocol), or volume by M-Master Vol plus strums without CC7, e.g. `softStrums` 2's roll.)
 - Loads: the slot's values key (`PartControllers::valuesKey`) is compared once per slot at the sync: many changed lanes =
   one load, an unchanged written text = none (ampleStateLoads).
 - `<PluginSettings>`: as an Ample state is made, `Documents/Ample Sound/AGM/Configs/AGM_info.xml` is read (read only;
   `MS_PLUGIN_SETTINGS_DIR` for tests); midiGuitarMode true/1 logs to load times.log + qWarning and shows a status-bar
   message once per session.
-- Not done: Live's panel for state lanes (they reach Live only through the state the set is written with: the part's
-  values are not passed there today, `livesetexport.cpp` calls setupState without a part; the fixed `<State>` values are).
+- Live (second run, 2026-10-20): Create Live Set's route and plain sets now embed each part's state values (the start's
+  value of each lane, as hosted playback loads them: `setupState` with `t.partRef`, a state per patch and values key;
+  `tst_liveequivalence::liveStateSettings`); before, none reached Live and the (Pick) / (Strum) patches loaded Finger
+  there. A state lane can't be automated in Live (state), nor does hosted playback follow a change while playing: both
+  play the lane's first value (LIVE.md › What still differs). Update Live Set doesn't rewrite the state (only on a
+  tuning change): create the set again after a state lane changes.
+- `[guitar] softStrums` 2 (second run, 2026-10-20; the owner compares 0 / 1 / 2 by ear): a soft strum (velocity <= 30) as
+  a roll of the six single-string keys D3-B3 (map `rollKeys`) in strum mode with Detect and the chord keys held, at the
+  chord's velocity held within 20-40 and spaced 10 ms at v20 .. 15 ms at v40 (map `softRoll="20:10 40:15"`: meas3's level
+  pairs, the roll as loud as the CC7-lowered recorded strum; linear between = assumption), no CC7 (a lowered one restored
+  before it); a muted strum stays the strummer. Tests: ampleSoftStrums (value 2; value 1 unchanged and without CC7),
+  guitarSettings (map parse, mapping), `tst_liveequivalence::liveGuitarSoftRoll` (the clip's notes = MuseScore's, no CC7;
+  value 0's CC7 dropped by the clips). Report: `~/MuseScore/ms3fork/private/ample-state/SS.md` Linux: tst_soundlibrary 127 / 0 / 4, tst_liveequivalence 54 / 0 / 3, tst_midi
+  97, run_fork_tests.sh all passed, check_windows_names none.
 - Tests (Linux, overlay ovl-fixes2): tst_soundlibrary 127 / 0 / 4 (+ ampleStateControllers, ampleStateLoads,
   ampleStateWritten, ampleSettingsWarning; pluginStateValues' keyed names; ampleMap's counts); run_fork_tests.sh all
   passed (liveequivalence 52 / 0 / 3, midi 97); test_gen_ample 4; check_windows_names none. Not tried: the real AGM.

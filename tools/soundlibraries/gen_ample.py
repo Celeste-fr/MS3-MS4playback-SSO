@@ -72,6 +72,12 @@ SAMPLE_SETS = [("Finger", "AGMFg"), ("Pick", "AGMPk"), ("Strum", "AGMSt")]
 #   numbers (an assumption: its in-band velocity range is Finger's, meas2 A);
 # - softStrum 30: rolls are darker than a CC7-lowered strum only at v <= 30 (meas3); rollGap 15 ms (10-25 ms all lie
 #   inside the recorded strums' spread);
+# - rollKeys / softRoll ([guitar] softStrums 2): the single-string keys D3-B3 (strings 6..1) in strum mode play the held
+#   chord's strings one at a time (meas, meas2 B; no damping at note-off); meas3 item 1's level pairs: a six-string keys
+#   roll at velocity 20 / 40 is as loud as the CC7-lowered recorded strum at 10 / 15 ms apart (Strum set: v20 10 ms
+#   -29.2 dB vs the CC7-7 strum's -29.1; v40 15 ms -23.0 vs CC7 19's -22.8; Finger within 0.6 dB). The roll takes
+#   the chord's velocity held within 20-40 (as StrumLevel holds its ends: below v20 the strum plays at v20's CC7, so
+#   does the roll), the spacing linear between the two pairs (an assumption: only the ends measured as pairs);
 # - artificial harmonics: string physics (touching k frets above the stopped note sounds partial n: 12 -> 2nd, +12;
 #   7 -> 3rd, +19; 5 -> 4th, +24; 4 -> 5th, +28; 3 -> 6th, +31), played as the natural harmonic at that pitch (the only
 #   harmonic timbre Ample has, meas);
@@ -97,6 +103,7 @@ GUITAR = [
     ("palmMute", "26"), ("slide", "27"), ("legatoSlide", "28"), ("hammer", "29"),
     ("strumMode", "97"), ("strumOn", "100"), ("strumOff", "1"), ("detect", "86"), ("detectVelocity", "127"),
     ("chordLow", "36"), ("strumKeys", "72 76 79 83"), ("strumVelocity", "110"), ("softStrum", "30"), ("rollGap", "15"),
+    ("rollKeys", "62 64 65 67 69 71"), ("softRoll", "20:10 40:15"),
     ("sampleSet", "sample-set"), ("capo", "m-capo"), ("capoMax", "11"), ("capoLead", "50"), ("artificial", "3:31 4:28 5:24 7:19 12:12"),
     ("pinch", "19 60 2 45"), ("overlap", "20"), ("slideOut", "200"), ("fxLength", "500"),
 ]
