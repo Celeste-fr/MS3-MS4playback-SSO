@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """sfz150: the 150 ms class layer instrument (iso10_build.py's model) as an SFZ for sfizz, plus t9's events for it.
 
-    sfz150_build.py <iso dir> <out dir> [--inc own|prev]
+    sfz150_build.py <iso dir> <out dir> [--inc own|prev] [--end-tail S]
+--end-tail S: the last note's 'end' layer runs to S s after its recorded note-off (the recordings rest 3.2 s there)
+instead of the model's 3.2 s from its note-on (= 2.2 s after the note-off, where SSO's release still sounds at ~-30 dB
+re the phrase: an audible cut in a clip). Changes nothing before that point.
 
 Writes <out>/samples/*.flac (24-bit cuts of the key-solo family-layer recordings, the instrument's audio: stays outside
 the repository), <out>/ol150.sfz and <out>/t9_sfz.txt (t9.txt with the two position controllers added). Render:
@@ -44,6 +47,7 @@ STEP = (W - 0.5) / SR      # an EG hold stage: sfizz ends a stage on the first f
 def main():
     d, out = sys.argv[1], sys.argv[2]
     imode = sys.argv[sys.argv.index('--inc') + 1] if '--inc' in sys.argv else 'own'
+    etail = float(sys.argv[sys.argv.index('--end-tail') + 1]) if '--end-tail' in sys.argv else None
     if imode != 'own':
         sys.exit('--inc prev picks R_f by the interval before the previous note: no sfz region can see that')
     B9 = d + '/b9'
@@ -123,7 +127,11 @@ def main():
             y = get('solo_%s_%s__%s' % (name, f, name))
             for s in json.load(open(os.path.join(B9, fn)))['segments']:
                 i = int(round(s['notes'][-1]['on'] * SR))
-                lay[(s['kind'], s['a'], s['b'], s['var'], f)] = y[i:i + int(3.2 * SR)].copy()
+                n = int(3.2 * SR)
+                if etail is not None and s['var'] == 'end':
+                    n = int(round((s['notes'][-1]['off'] + etail) * SR)) - i
+                    assert s['notes'][-1]['off'] + etail < s['end']
+                lay[(s['kind'], s['a'], s['b'], s['var'], f)] = y[i:i + n].copy()
     pairs = sorted({(kd, a, b) for (kd, a, b, v, f) in lay})
     for kd, a, b in pairs:
         pos = 1 if kd == 'atk' else 2
