@@ -189,16 +189,32 @@ std::map<QString, QByteArray> stateValues(const Part* part, const SoundLib::LibI
       {
       std::map<QString, QByteArray> out;
       for (const SoundLib::Controller& c : patch.allControllers) {
-            if (!c.isState() || c.stateValues.isEmpty())
+            if (!c.isState() || (c.stateValues.isEmpty() && !c.stateRange))
                   continue;
             const double v = stateValue(part, c, lanes);
             if (v < 0)
                   continue;
-            const int n = c.stateValues.size();
-            const int k = std::min(n - 1, std::max(0, int(std::lround(v * (n - 1)))));
-            out[c.state] = c.stateValues[k].toUtf8();
+            out[c.state] = c.stateText(v).toUtf8();
             }
       return out;
+      }
+
+std::map<QString, QByteArray> loadStateValues(const SoundLib::Library& library, const Part* part, const SoundLib::LibInstrument& patch,
+                                              const std::map<const Part*, Automation::PartLanes>& lanes)
+      {
+      std::map<QString, QByteArray> out = library.fixedState;
+      if (part)
+            for (const auto& v : stateValues(part, patch, lanes))
+                  out[v.first] = v.second;
+      return out;
+      }
+
+QString valuesKey(const std::map<QString, QByteArray>& values)
+      {
+      QStringList v;
+      for (const auto& p : values)
+            v << p.first + "=" + QString::fromUtf8(p.second);
+      return v.join(";");
       }
 
 }     // namespace PartControllers

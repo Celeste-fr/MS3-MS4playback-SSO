@@ -47,7 +47,7 @@ namespace Ms {
 class MasterScore;
 class Part;
 
-namespace SoundLib { struct Controller; struct LibInstrument; }
+namespace SoundLib { struct Controller; struct LibInstrument; class Library; }
 
 namespace PartControllers {
 
@@ -100,6 +100,14 @@ void setSetupValues(std::function<double(const QString& patch, const QString& pa
 double stateValue(const Part* part, const SoundLib::Controller& controller, const std::map<const Part*, Automation::PartLanes>& lanes);
 std::map<QString, QByteArray> stateValues(const Part* part, const SoundLib::LibInstrument& patch,
                                           const std::map<const Part*, Automation::PartLanes>& lanes);
+// all a non-Kontakt instance's state gets as it loads: the library's fixed values (Library::fixedState: Ample's MIDI-learn
+// defaults), the part's state values on top (part null: the fixed ones only)
+std::map<QString, QByteArray> loadStateValues(const SoundLib::Library& library, const Part* part, const SoundLib::LibInstrument& patch,
+                                              const std::map<const Part*, Automation::PartLanes>& lanes);
+// the values as one text ("name=value;…", by name): what a loaded slot keeps (SoundLibraryHost::Slot::values). The part
+// loads again only when it changes: many state lanes changed before the next sync give one load; a lane edit that leaves
+// every written text as it was (a later point, the same value, a value rounding to the same text) none
+QString valuesKey(const std::map<QString, QByteArray>& values);
 
 }     // namespace PartControllers
 }     // namespace Ms

@@ -56,7 +56,33 @@ is Ample Guitar M (`AGM.vst3`, hosted directly, not Kontakt); the dump it is gen
   `defaultState`. A state-setting lane's value at the score's start is what counts. Test synth: `MSTESTSYNTH_PARAMS=<file>`
   adds parameters by title.
 - 208 parameters exist only in AGM's state (Master Tune, reverb ...): settable by the mechanism, ranges unknown, so no
-  lanes yet.
+  lanes yet. **Done on ample-fixes2 (2026-10-20)**, below.
+
+**State controllers** (ample-fixes2, 2026-10-20; measured in `~/MuseScore/ms3fork/private/ample-state/RESULT.md`, report
+`CTL.md` there): every setting AGM keeps only in its saved state is a lane.
+- `gen_ample.py` `state_settings()`: 204 `<Controller state="Parameter:…">` (all 208 state-only `<Parameter>`s but
+  Master Tune: setState stores it, the sound ignores it until moved in the GUI; Num Host Params; the transport toggles
+  S-SEQ Play Tog / T-Play Toggle). Menus as `values` + display texts (Cycle Separate / Round Robin / Random, FX toggles
+  -1 / 1, chord roots C-B, …), numbers as `range` (+ `decimals`: Reverb Send -60..0 by 0.1). Measured: Vel Sensitivity,
+  Max Voices, Auto Off Velocity, Cycle Mode / X3, Fret Sound, Capo Logic, Reverb IR / Size / Toggle / Send, SEQ slot,
+  chord slot root, Tab loop / playback; the other ranges and menus are assumptions in the generator (a Windows check
+  must confirm). The generator refuses a state setting that is a VST 3 parameter.
+- Velocity layers: `Layer[ID=1..3]` (pluginstate.h keyed names `Name[Key=k]`, `Name[Key=k]@Attr`, the latter added when
+  missing), 1-127, defaults 96 / 64 / 32.
+- CC map: `<State name="Control[ID=n]@Parameter">` writes Ample's seven MIDI-learn defaults into every instance's state
+  (`Library::fixedState`, `PartControllers::loadStateValues`, through `SoundLibraryHost::stateValuesFor`: hosted, export,
+  Create Live Set, live equivalence). Chosen over playing volume by M-Master Vol: CC7 is also the guitar pass's strum
+  level, and Live's clips carry CC7 with the notes, so both paths stay one.
+- Loads: the slot's values key (`PartControllers::valuesKey`) is compared once per slot at the sync: many changed lanes =
+  one load, an unchanged written text = none (ampleStateLoads).
+- `<PluginSettings>`: as an Ample state is made, `Documents/Ample Sound/AGM/Configs/AGM_info.xml` is read (read only;
+  `MS_PLUGIN_SETTINGS_DIR` for tests); midiGuitarMode true/1 logs to load times.log + qWarning and shows a status-bar
+  message once per session.
+- Not done: Live's panel for state lanes (they reach Live only through the state the set is written with: the part's
+  values are not passed there today, `livesetexport.cpp` calls setupState without a part; the fixed `<State>` values are).
+- Tests (Linux, overlay ovl-fixes2): tst_soundlibrary 127 / 0 / 4 (+ ampleStateControllers, ampleStateLoads,
+  ampleStateWritten, ampleSettingsWarning; pluginStateValues' keyed names; ampleMap's counts); run_fork_tests.sh all
+  passed (liveequivalence 52 / 0 / 3, midi 97); test_gen_ample 4; check_windows_names none. Not tried: the real AGM.
 
 **Tests** (Linux, test synth, overlay build `~/MuseScore/ms3fork/ovl-amplemap/am.sh`; 2026-10-18): all fork tests pass;
 tst_soundlibrary 111 passed / 4 skipped (integrate-1017's 106 / 4 + ampleMap, ampleRender, controllerDisplay,

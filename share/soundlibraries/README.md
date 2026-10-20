@@ -444,11 +444,38 @@ switch value of each articulation. For example:
   Value="…"/>`); a changed value loads the part again at the next play or export. Without a lane the plug-in keeps its
   own (`patchDefault`, 0-1, is that value on the lane's scale). A patch with state settings and no setup file starts
   from the plug-in's own default state. Not for Kontakt (its script values: `setup`).
+  - A number instead of a list: `range="min max"` (and `decimals="n"`, default 0) writes `min + v × (max − min)`
+    rounded, as the plug-in shows it ("61", "-23.1": no trailing zeros); `values` and `range` exclude each other. Give
+    it `display="0:min 1:max"` (and `steps` = max − min for whole numbers): a stepped controller listing only its two
+    ends reads linearly between them.
+  - State names (`pluginstate.h`): `Name` = `<Name Value>`; `Parameter:Title` = `<Parameter Name="Title" Value>`;
+    `Name[Key=k]` = the `Value` of the first `<Name>` whose `Key` is `k` (Ample's velocity layers `Layer[ID=1]`);
+    `Name[Key=k]@Attr` = that element's attribute `Attr`, the element added (after the last `<Name>`) when the state has
+    none.
+  - A display text can't hold a space (the list is split at spaces): the generator writes a no-break space (U+00A0).
+  - `<State name="…" value="…"/>` (top level): a value written into every instance's state, whatever the part sets
+    (`Library::fixedState`; the part's state settings go on top). Ample: its MIDI-learn defaults, `Control[ID=12]@Parameter`
+    = `M-Master Vol` (CC7, ID = 5 + CC) and the other six, so that a preset that dropped one can't silence the CC7
+    volume lane or the guitar pass's strum levels. Live's set gets the same state (`SoundLibraryHost::setupState`).
+  - `<PluginSettings file="…" name="…" bad="a b" text="…"/>` (top level): a plug-in's global settings file (a JUCE
+    PropertiesFile, `file` under the user's Documents folder), read as an instance's state is made; `name` at a `bad`
+    value logs `text` (load times.log, the console) and shows it in the status bar, once per session. Read only. Ample:
+    `Ample Sound/AGM/Configs/AGM_info.xml`, `midiGuitarMode` `true` (keys ≥ 62 go silent on channel 1 in every
+    instance).
+  - A changed state value loads the part again at the next sync (play, export): the slot keeps the written values as
+    one text (`PartControllers::valuesKey`), so any number of state lanes changed before it give one load, and an edit
+    that leaves every written text as it was (a later point, a value rounding to the same number) none.
 
   ```xml
   <Controller id="m-capo" name="M-Capo" param="M-Capo" patchDefault="0" steps="11" display="0:0 0.0909:1 … 1:11"/>
   <Controller id="sample-set" name="Sample set" state="DBName" values="AGMFg AGMPk AGMSt" patchDefault="0"
               steps="2" display="0:Finger 0.5:Pick 1:Strum"/>
+  <Controller id="vel-sensitivity" name="Velocity sensitivity" state="Parameter:Vel Sensitivity" range="0 100"
+              patchDefault="1" steps="100" display="0:0 1:100"/>
+  <Controller id="fx-reverb-send" name="Reverb send (dB)" state="Parameter:FX-Reverb-Send" range="-60 0" decimals="1"
+              patchDefault="0.8" display="0:-60.0 1:0.0"/>
+  <Controller id="velocity-layer-1" name="Velocity layer 1 threshold" state="Layer[ID=1]" range="1 127" …/>
+  <State name="Control[ID=12]@Parameter" value="M-Master Vol"/>
   ```
 
   A part's controllers are set by automation lanes only (Continuous View, under the part's header:

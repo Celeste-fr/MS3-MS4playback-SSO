@@ -717,6 +717,20 @@ static bool readController(QXmlStreamReader& r, Controller& c)
       // state="DBName" values="AGMFg AGMPk AGMSt": a load-time setting of the plug-in's state (Controller::state)
       c.state = a.value("state").toString();
       c.stateValues = a.value("values").toString().split(' ', QString::SkipEmptyParts);
+      // range="0 100" decimals="1": a number (Controller::stateRange)
+      if (a.hasAttribute("range")) {
+            const QStringList r = a.value("range").toString().split(' ', QString::SkipEmptyParts);
+            bool ok1 = false, ok2 = false;
+            c.stateRange = true;
+            c.stateMin = r.size() == 2 ? r[0].toDouble(&ok1) : 0;
+            c.stateMax = r.size() == 2 ? r[1].toDouble(&ok2) : 0;
+            ok = ok && ok1 && ok2 && c.stateMax > c.stateMin;
+            }
+      if (a.hasAttribute("decimals")) {
+            bool okd = false;
+            c.stateDecimals = a.value("decimals").toInt(&okd);
+            ok = ok && okd && c.stateDecimals >= 0 && c.stateDecimals <= 6 && c.stateRange;
+            }
       if (a.hasAttribute("default")) {
             bool okd = false;
             c.defaultValue = a.value("default").toInt(&okd);
@@ -744,7 +758,8 @@ static bool readController(QXmlStreamReader& r, Controller& c)
             c.display.emplace_back(v, t.mid(colon + 1));
             }
       const int kinds = (c.cc >= 0 ? 1 : 0) + (c.param.isEmpty() ? 0 : 1) + (c.isState() ? 1 : 0);
-      if (!ok || c.id.isEmpty() || kinds != 1 || c.cc > 119 || c.isState() != !c.stateValues.isEmpty())
+      if (!ok || c.id.isEmpty() || kinds != 1 || c.cc > 119 || c.isState() != (!c.stateValues.isEmpty() || c.stateRange)
+          || (c.stateRange && !c.stateValues.isEmpty()))
             return false;
       while (r.readNextStartElement()) {
             if (r.name() == "Text") {
@@ -769,6 +784,25 @@ static bool readController(QXmlStreamReader& r, Controller& c)
 //    the nearer entry's text
 //---------------------------------------------------------
 
+QString Controller::stateText(double value) const
+      {
+      const double v = std::min(1.0, std::max(0.0, value));
+      if (!stateRange) {
+            const int n = stateValues.size();
+            return n ? stateValues[std::min(n - 1, std::max(0, int(std::lround(v * (n - 1)))))] : QString();
+            }
+      const double scale = std::pow(10.0, stateDecimals);
+      const double x = std::round((stateMin + v * (stateMax - stateMin)) * scale) / scale;
+      QString t = QString::number(x, 'f', stateDecimals);
+      if (t.contains('.')) {
+            while (t.endsWith('0'))
+                  t.chop(1);
+            if (t.endsWith('.'))
+                  t.chop(1);
+            }
+      return t == "-0" ? QString("0") : t;
+      }
+
 QString controllerText(const Controller& controller, double value)
       {
       const auto& d = controller.display;
@@ -784,7 +818,9 @@ QString controllerText(const Controller& controller, double value)
             return hi->second;
       auto lo = std::prev(hi);
       const bool nearLo = v - lo->first <= hi->first - v;
-      if (controller.steps > 0)
+      // (a stepped controller listing every position: the nearest's text; one listing its ends only, a state range's
+      // "0:1 1:127", linear between them like a continuous one)
+      if (controller.steps > 0 && int(d.size()) > controller.steps)
             return (nearLo ? lo : hi)->second;
       bool ok1 = false, ok2 = false;
       const double y1 = lo->second.toDouble(&ok1);
@@ -923,6 +959,23 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   if (!readController(r, c))
                         return fail(QString("%1:%2: bad Controller").arg(path).arg(r.lineNumber()));
                   lib->controllers.push_back(c);
+                  }
+            else if (r.name() == "State") {
+                  // <State name="Control[ID=12]@Parameter" value="M-Master Vol"/> (Library::fixedState)
+                  if (a.value("name").isEmpty() || !a.hasAttribute("value"))
+                        return fail(QString("%1:%2: bad State").arg(path).arg(r.lineNumber()));
+                  lib->fixedState[a.value("name").toString()] = a.value("value").toString().toUtf8();
+                  r.skipCurrentElement();
+                  }
+            else if (r.name() == "PluginSettings") {
+                  // <PluginSettings file="…" name="…" bad="…" text="…"/> (Library::settingsChecks)
+                  Library::SettingsCheck check { a.value("file").toString(), a.value("name").toString(),
+                                                 a.value("bad").toString().split(' ', QString::SkipEmptyParts),
+                                                 a.value("text").toString() };
+                  if (check.file.isEmpty() || check.name.isEmpty() || check.bad.isEmpty() || check.text.isEmpty())
+                        return fail(QString("%1:%2: bad PluginSettings").arg(path).arg(r.lineNumber()));
+                  lib->settingsChecks.push_back(check);
+                  r.skipCurrentElement();
                   }
             else if (r.name() == "Files") {
                   // <Files registry="Spitfire Symphony Orchestra"/>: where the library is installed

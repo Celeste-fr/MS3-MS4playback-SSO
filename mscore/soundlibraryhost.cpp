@@ -804,10 +804,7 @@ std::map<QString, QByteArray> SoundLibraryHost::scriptValuesFor(const SoundLib::
 
 static QString valuesKey(const std::map<QString, QByteArray>& values)
       {
-      QStringList v;
-      for (const auto& p : values)
-            v << p.first + "=" + QString::fromUtf8(p.second);
-      return v.join(";");
+      return PartControllers::valuesKey(values);
       }
 
 QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
@@ -822,9 +819,52 @@ QByteArray SoundLibraryHost::setupState(const SoundLib::Library& library, const 
 std::map<QString, QByteArray> SoundLibraryHost::stateValuesFor(const SoundLib::Library& library, const QString& patch, const Part* part)
       {
       const SoundLib::LibInstrument* li = findPatch(library, patch);
-      if (makesSetups(library) || !part || !li || !hasStateSettings(*li) || !part->score())
+      if (makesSetups(library) || !li || (library.fixedState.empty() && !hasStateSettings(*li)))
             return std::map<QString, QByteArray>();
-      return PartControllers::stateValues(PartPlaybackModes::masterPart(part), *li, Automation::read(part->score()->masterScore()));
+      if (!part || !part->score() || !hasStateSettings(*li))
+            return PartControllers::loadStateValues(library, nullptr, *li, {});
+      return PartControllers::loadStateValues(library, PartPlaybackModes::masterPart(part), *li,
+                                              Automation::read(part->score()->masterScore()));
+      }
+
+//---------------------------------------------------------
+//   checkPluginSettings
+//    a library's <PluginSettings> (SoundLib::Library::settingsChecks: Ample's global AGM_info.xml, midiGuitarMode true
+//    silences keys >= 62 on channel 1 in every instance): read as an instance's state is made; a bad value logged (load
+//    times.log, qWarning) and shown in the status bar, once per file and value. Read only
+//---------------------------------------------------------
+
+QString SoundLibraryHost::pluginSettingsFile(const QString& file)
+      {
+      const QString env = qEnvironmentVariable("MS_PLUGIN_SETTINGS_DIR");      // (tests: instead of Documents)
+      const QString documents = env.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) : env;
+      return documents.isEmpty() ? QString() : QDir(documents).filePath(file);
+      }
+
+QStringList SoundLibraryHost::checkPluginSettings(const SoundLib::Library& library)
+      {
+      static std::mutex mutex;
+      static std::set<QString> told;
+      QStringList warnings;
+      for (const SoundLib::Library::SettingsCheck& c : library.settingsChecks) {
+            const QString path = pluginSettingsFile(c.file);
+            QFile f(path);
+            if (path.isEmpty() || !f.open(QIODevice::ReadOnly))
+                  continue;
+            const QString v = PluginState::propertiesValue(f.readAll(), c.name);
+            if (v.isNull() || !c.bad.contains(v, Qt::CaseInsensitive))
+                  continue;
+            const QString text = QString("%1: %2 (%3 = %4 in %5)").arg(library.name, c.text, c.name, v, QDir::toNativeSeparators(path));
+            warnings << text;
+            std::lock_guard<std::mutex> lock(mutex);
+            if (!told.insert(path + "\n" + c.name + "=" + v).second)
+                  continue;
+            qWarning("Sound library: %s", qPrintable(text));
+            logTime(library, text);
+            if (mscore)
+                  QMetaObject::invokeMethod(mscore, [text]() { mscore->showMessage(text, 15000); }, Qt::QueuedConnection);
+            }
+      return warnings;
       }
 
 QByteArray SoundLibraryHost::defaultState(const QString& pluginPath, QString* error)
@@ -861,6 +901,7 @@ QByteArray SoundLibraryHost::setupStateWith(const SoundLib::Library& library, co
             return limitedState;
       if (!makesSetups(library)) {
             // a non-Kontakt plug-in: the part's state settings (stateValuesFor) in its component's XML (pluginstate.h)
+            checkPluginSettings(library);
             QString name, err;
             QByteArray component, controller;
             int set = 0;
@@ -1382,6 +1423,16 @@ std::map<QString, QByteArray> SoundLibraryHost::scriptValuesFor(const SoundLib::
 std::map<QString, QByteArray> SoundLibraryHost::stateValuesFor(const SoundLib::Library&, const QString&, const Part*)
       {
       return std::map<QString, QByteArray>();
+      }
+
+QStringList SoundLibraryHost::checkPluginSettings(const SoundLib::Library&)
+      {
+      return QStringList();
+      }
+
+QString SoundLibraryHost::pluginSettingsFile(const QString&)
+      {
+      return QString();
       }
 
 QByteArray SoundLibraryHost::defaultState(const QString&, QString* error)

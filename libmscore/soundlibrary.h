@@ -252,16 +252,26 @@ struct Controller {
       // AGMSt">: Ample's sample set): its lane's value at the score's start picks values[round(v x (n - 1))], written into
       // the part's state as it loads (stateValues(); SoundLibraryHost, audio/vst3/pluginstate.h); a change loads the part
       // again. "Name" is the element <Name Value="…"/>, "Parameter:Title" the element <Parameter Name="Title" Value="…"/>.
-      // Never a MIDI controller or a parameter: it can't change while playing. Empty: not one
+      // Never a MIDI controller or a parameter: it can't change while playing. Empty: not one.
+      // A number instead of a list (<Controller state="Parameter:Vel Sensitivity" range="0 100" decimals="0">): the lane's
+      // value v writes min + v x (max - min), rounded to decimals, as the plug-in shows it (no trailing zeros: "61",
+      // "-23.1"); stateValues empty then
       QString state;
       QStringList stateValues;
+      bool stateRange { false };
+      double stateMin { 0 };
+      double stateMax { 0 };
+      int stateDecimals { 0 };
       // how the plug-in shows the value (<Controller steps="N" display="v:text …">, from the plug-in's own parameter
       // texts, e.g. Ample's dump): steps, the parameter's discrete positions k / N (0: continuous); display, its text at
-      // lane values 0-1, ascending (a numeric text linear between neighbours; a stepped one the nearest position's).
+      // lane values 0-1, ascending (a numeric text linear between neighbours; a stepped one the nearest position's,
+      // unless only its ends are listed: a state range's "0:1 1:127", linear).
       // The lane editor shows it (controllerText); nothing is sent by it. Empty: the lane's 0-127
       int steps { 0 };
       std::vector<std::pair<double, QString>> display;
       bool isState() const { return !state.isEmpty(); }
+      // the text written into the state for a lane value 0-1 (a list's entry, a range's number)
+      QString stateText(double value) const;
       };
 
 // the text the plug-in shows for a lane value 0-1 of the controller (its display), empty: none listed
@@ -487,6 +497,20 @@ class Library {
       std::map<int, double> micFader;
       std::map<int, std::array<double, 3>> micMix;
       std::vector<Controller> controllers;          // for all its instruments
+      // a non-Kontakt plug-in's state values every instance gets, whatever the part sets (<State name="…" value="…"/>,
+      // names as pluginstate.h: Ample's MIDI-learn defaults <Control ID="12" Parameter="M-Master Vol"/>, which the CC7
+      // lane and the guitar pass's strum levels rely on); the part's state controllers go on top
+      std::map<QString, QByteArray> fixedState;
+      // a plug-in's global settings file to check as a part loads (<PluginSettings file="Ample Sound/AGM/Configs/
+      // AGM_info.xml" name="midiGuitarMode" bad="true 1" text="…"/>: file under the user's Documents folder, a JUCE
+      // PropertiesFile; a value of name in bad: text is logged and shown). Read only, never written
+      struct SettingsCheck {
+            QString file;
+            QString name;
+            QStringList bad;
+            QString text;
+            };
+      std::vector<SettingsCheck> settingsChecks;
       std::vector<LibInstrument> instruments;
       // the library's other patches (<Patch>): none of the map's, but set up and checked (Check
       // articulations lists them, and scans them)
