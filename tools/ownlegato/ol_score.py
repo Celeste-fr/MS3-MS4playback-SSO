@@ -3,7 +3,8 @@
 bump / dip / hf / spec, arrival, tails; joinbreak.py's positions): median |ours - SSO_k| over joins and k vs the floor
 median |SSO_i - SSO_j|. Phrases are classed by their run IOI (nearest of 150 / 300 / 600 / 1000 ms).
     ol_score.py <test.json> <ours.wav> <sso1> <sso2> [<sso3> ...] [--json out.json] [--loo]
---loo: also score each SSO pass as 'ours' against the others (the floor's own spread)."""
+--loo: also score each SSO pass as 'ours' against the others (the floor's own spread).
+--semi: also per class and join position for semitone joins ('<cls>/<pos>/semi') and the rest ('.../non')."""
 import json, os, sys
 import numpy as np
 import soundfile as sf
@@ -15,15 +16,17 @@ from ol_build import cls_of, frames  # noqa
 MS = ('bump', 'dip', 'hf', 'spec')
 
 
-def labels(tp):
+def labels(tp, semi=False):
     T = json.load(open(tp))
     lab, tl = [], []
     for s in T['segments']:
         on = [frames(q['on']) for q in s['notes']]
+        ks = [q['key'] for q in s['notes']]
         c = cls_of(on[2] - on[1]) if len(on) > 2 else cls_of(on[1] - on[0])
         n = len(on)
         for i in range(1, n):
-            lab.append((c, 'a2' if i == 1 else 'last' if i == n - 1 else 'run'))
+            lab.append((c, 'a2' if i == 1 else 'last' if i == n - 1 else 'run') +
+                       ((('semi' if abs(ks[i] - ks[i - 1]) == 1 else 'non'),) if semi else ()))
         tl.append(c)
     return lab, tl
 
@@ -33,9 +36,11 @@ def score(F0, Fs, lab, tl):
     def d(a, b, k, idx):
         return [np.sqrt(np.mean((a[0][i]['bands'] - b[0][i]['bands']) ** 2)) if k == 'spec' else abs(a[0][i][k] - b[0][i][k])
                 for i in idx]
+    sm = ('', '/semi', '/non') if lab and len(lab[0]) > 2 else ('',)
     for c in sorted(set(x[0] for x in lab)) + ['all']:
-        for pos in ('a2', 'run', 'last', 'all'):
-            idx = [i for i, (cc, pp) in enumerate(lab) if (c == 'all' or cc == c) and (pos == 'all' or pp == pos)]
+        for pos, st in [(p, t) for p in ('a2', 'run', 'last', 'all') for t in sm]:
+            idx = [i for i, x in enumerate(lab) if (c == 'all' or x[0] == c) and (pos == 'all' or x[1] == pos)
+                   and (st == '' or x[2] == st[1:])]
             if not idx:
                 continue
             row = {}
@@ -50,7 +55,7 @@ def score(F0, Fs, lab, tl):
             if ar_o and ar_f:
                 row['arr_ms'] = (round(float(np.median(ar_o)), 1), round(float(np.median(ar_f)), 1))
             row['n'] = len(idx)
-            out['%s/%s' % (c, pos)] = row
+            out['%s/%s%s' % (c, pos, st)] = row
         pi = [i for i, cc in enumerate(tl) if c == 'all' or cc == c]
         to = np.median([np.abs(F0[1][pi] - F[1][pi]) for F in Fs], 0)
         tf = np.median([np.abs(Fs[a][1][pi] - Fs[b][1][pi]) for a in range(len(Fs)) for b in range(a + 1, len(Fs))], 0)
@@ -65,7 +70,7 @@ def show(out, title):
         if k.endswith('/tail'):
             print('  %-10s tails ' % k[:-5] + ' '.join('+%s %.2f [%.2f]' % (t, a, b) for t, (a, b) in row.items()))
             continue
-        print('  %-10s n=%3d ' % (k, row['n']) + ' | '.join('%s %.2f [%.2f]' % (m, *row[m]) for m in MS) +
+        print('  %-15s n=%3d ' % (k, row['n']) + ' | '.join('%s %.2f [%.2f]' % (m, *row[m]) for m in MS) +
               (' | arr %.1f [%.1f] ms' % row['arr_ms'] if 'arr_ms' in row else ''))
 
 
@@ -76,7 +81,7 @@ def main():
         a.remove(jo)
     tp, ours, ssos = a[0], a[1], a[2:]
     L = E.lines(tp)
-    lab, tl = labels(tp)
+    lab, tl = labels(tp, '--semi' in sys.argv)
     F0 = E.feats(sf.read(ours, always_2d=True)[0], L)
     Fs = [E.feats(sf.read(p, always_2d=True)[0], L) for p in ssos]
     res = {'ours': score(F0, Fs, lab, tl)}

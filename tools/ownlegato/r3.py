@@ -658,9 +658,156 @@ def iso11pen(out):
     print('%d pen files' % len(names))
 
 
+KEYS12 = list(range(57, 63))                     # the semitone pilot's keys (STUDY.md 4.2): sustain-zone pairs 57/58,
+MAXINT12 = 3                                     # 59/60, 61/62 and the pairs across them; intervals +-1..3
+CL12 = {150: 13, 300: 26}                        # the worst semitone classes of t11
+ID12 = ([54, 57, 58, 55, 52], [63, 62, 61, 60, 63])   # identity phrases: A, B = the 2nd / 3rd notes (semitone)
+
+
+def iso12id(out):
+    """the re-split identity test (STUDY.md 4.2 step 2): file id12, two phrases U -> A -> B -> C -> D with A, B a
+    semitone (57 -> 58 up in one sustain zone, 150 ms; 62 -> 61 down, A and B's minor-2nd transition keys 86 / 85 in one
+    zone, 300 ms). Splits (mute_setups.py, --det): A = {57, 33, 62, 86}, B = {58, 34, 61, 85} (the notes' keys and
+    their transition keys), rest = every zone holding neither; no other played key shares a zone with A or B."""
+    f = File('id12')
+    for ks, cms in zip(ID12, (150, 300)):
+        c = CL12[cms]
+        chain9(f, ks, [atk11(c), c, c, c, 86], kind='id', cls=cms)
+    f.write(out)
+    sa, sb = [], []
+    for ks in ID12:
+        for i, S in ((1, sa), (2, sb)):
+            S += [ks[i], ks[i] - 24 if ks[i] > ks[i - 1] else ks[i] + 24]
+    json.dump(dict(A=sa, B=sb), open(os.path.join(out, 'id12_sets.json'), 'w'))
+    print('id12: A %s B %s' % (sa, sb))
+
+
+def test12(f, phrases, seed, semi=0.6):
+    """held-out phrases on KEYS12, intervals 1..3, one class per phrase (150 / 300 alternating), >= semi of the
+    joins semitones (a walk with p = 0.6 semitone steps, redrawn until the whole set meets semi)"""
+    rnd = random.Random(seed)
+    while True:
+        P = []
+        for p in range(phrases):
+            n = rnd.randint(6, 9)
+            ks = [rnd.choice(KEYS12)]
+            while len(ks) < n:
+                d = 1 if rnd.random() < 0.6 else rnd.randint(2, MAXINT12)
+                k = ks[-1] + rnd.choice([-1, 1]) * d
+                if KEYS12[0] <= k <= KEYS12[-1]:
+                    ks.append(k)
+            P.append(ks)
+        j = [abs(b - a) for ks in P for a, b in zip(ks, ks[1:])]
+        if sum(1 for x in j if x == 1) >= semi * len(j):
+            break
+    cl = list(CL12)
+    for p, ks in enumerate(P):
+        cms = cl[p % len(cl)]
+        c = CL12[cms]
+        chain9(f, ks, [atk11(c)] + [c] * (len(ks) - 2) + [86], kind='test', phrase=p, cls=cms)
+    return sum(1 for x in j if x == 1), len(j)
+
+
+def iso12(out, phrases=12, seed=20261021):
+    """the semitone pilot, arm T (STUDY.md 4.2): t12 (held-out phrases for SSO's passes) and iso11's through layers
+    for KEYS12 / MAXINT12 / CL12, recorded with the zone re-split key-solo (mute_setups.py --solo-keys-split). One file
+    per destination key and direction holds every kind (thru / atk / end / pen; iso11 + iso11pen in one batch):
+      l12_b<b><u|d>: solo [b, b -+ 24];  a12_k<K>: K attacked, two different 2nd notes per class; solo [K]
+    Context notes (C, N) are never a test phrase's note there (t12, t11 and t9 held out)."""
+    f = File('t12')
+    ns, nj = test12(f, phrases, seed)
+    f.write(out)
+    tests = [([q['key'] for q in s['notes']], s['cls']) for s in f.seg]
+    for prev in (('b11', 't11'), ('b9', 't9')):
+        pp = os.path.join(out, '..', prev[0], prev[1] + '.json')
+        if os.path.exists(pp):
+            tests += [([q['key'] for q in sg['notes']], sg.get('cls', 150)) for sg in json.load(open(pp))['segments']]
+    ex = contexts11(tests)
+    names, man = ['t12'], []
+    pairs = [(a, b) for a in KEYS12 for b in KEYS12 if 1 <= abs(a - b) <= MAXINT12]
+    groups = {}
+    for a, b in pairs:
+        groups.setdefault((b, 'u' if b > a else 'd'), []).append(a)
+    for (b, dr), srcs in sorted(groups.items()):
+        g = File('l12_b%d%s' % (b, dr))
+        sg = 1 if dr == 'u' else -1
+        for a in sorted(srcs):
+            u = a - 3 * sg
+            for cms, c in CL12.items():
+                ca = atk11(c)
+                cr = pick_next(b, {a, u}, ex.get(('run', a, b, cms), set()))
+                chain9(g, [u, a, b, cr, after(b, cr)], [ca, c, c, c, 86], kind='thru', a=a, b=b, cls=cms, nxt=cr)
+                ck = pick_next(b, {a}, ex.get(('atk', a, b, cms), set()))
+                chain9(g, [a, b, ck, after(b, ck)], [ca, c, c, 86], kind='atk', a=a, b=b, cls=cms, nxt=ck)
+                chain9(g, [u, a, b], [ca, c, 86], kind='end', a=a, b=b, cls=cms)
+                cp = pick_next(b, {a, u}, ex.get(('pen', a, b, cms), set()))
+                chain9(g, [u, a, b, cp], [ca, c, c, 86], kind='pen', a=a, b=b, cls=cms, nxt=cp)
+        g.write(out)
+        names.append(g.name)
+        man.append(dict(file=g.name, solo=[b, b - 24 if dr == 'u' else b + 24], b=b, dir=dr))
+    for k in KEYS12:
+        g = File('a12_k%d' % k)
+        for cms, c in CL12.items():
+            ca = atk11(c)
+            avoid = {k}
+            for j in range(2):
+                n = pick_next(k, avoid, ex.get(('a', k, cms), set()))
+                avoid.add(n)
+                cn = pick_next(n, {k}, set())
+                dn = after(n, cn)
+                if dn == k:
+                    dn = cn + (cn - n)
+                chain9(g, [k, n, cn, dn], [ca, c, c, 86], kind='atkthru', a=k, b=n, cls=cms, nxt=cn, rep=j)
+        g.write(out)
+        names.append(g.name)
+        man.append(dict(file=g.name, solo=[k], a=k))
+    write_list(out, names)
+    json.dump(man, open(os.path.join(out, 'manifest.json'), 'w'), indent=1)
+    print('t12: %d phrases, %d of %d joins semitones; %d layer files, %d attack files' % (phrases, ns, nj, len(groups), len(KEYS12)))
+
+
+def iso12n(out, phrases=12, seed=20261022):
+    """t12n: held-out phrases WITHOUT semitone joins on iso12's coverage (KEYS12, intervals 2..3, CL12), for a blind
+    round with half its trials free of semitones. iso12's layers were planned before t12n, so a phrase is kept only if
+    no layer it plays recorded the phrase's own next note (the held-out rule, checked against the l12 / a12 plans)."""
+    rec = {}
+    for fn in os.listdir(out):
+        if fn.startswith(('l12_', 'a12_')) and fn.endswith('.json'):
+            for sg in json.load(open(os.path.join(out, fn)))['segments']:
+                if sg['kind'] == 'atkthru':                         # attack K: its context is the 2nd note N
+                    if sg.get('rep', 0) == 0:
+                        rec[('a', sg['a'], None, sg['cls'])] = sg['b']
+                else:
+                    rec[(sg['kind'], sg['a'], sg['b'], sg['cls'])] = sg.get('nxt')
+    rnd = random.Random(seed)
+    f = File('t12n')
+    cl = list(CL12)
+    p = tries = 0
+    while p < phrases:
+        tries += 1
+        cms = cl[p % len(cl)]
+        n = rnd.randint(6, 9)
+        ks = [rnd.choice(KEYS12)]
+        while len(ks) < n:
+            k = ks[-1] + rnd.choice([-1, 1]) * rnd.randint(2, MAXINT12)
+            if KEYS12[0] <= k <= KEYS12[-1]:
+                ks.append(k)
+        bad = rec.get(('a', ks[0], None, cms)) == ks[1]
+        for i in range(1, n - 1):
+            kind = 'atk' if i == 1 else 'pen' if i == n - 2 else 'thru'
+            bad = bad or rec.get((kind, ks[i - 1], ks[i], cms)) == ks[i + 1]
+        if bad:
+            continue
+        c = CL12[cms]
+        chain9(f, ks, [atk11(c)] + [c] * (n - 2) + [86], kind='test', phrase=p, cls=cms)
+        p += 1
+    f.write(out)
+    print('t12n: %d phrases (%d drawn)' % (phrases, tries))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8', 'iso9', 'iso10', 'iso11', 'iso11pen'])
+    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8', 'iso9', 'iso10', 'iso11', 'iso11pen', 'iso12id', 'iso12', 'iso12n'])
     ap.add_argument('--dts', default='0.5,0.3')
     ap.add_argument('out')
     ap.add_argument('--keys')
@@ -711,6 +858,12 @@ def main():
         iso11(a.out)
     elif a.cmd == 'iso11pen':
         iso11pen(a.out)
+    elif a.cmd == 'iso12id':
+        iso12id(a.out)
+    elif a.cmd == 'iso12':
+        iso12(a.out)
+    elif a.cmd == 'iso12n':
+        iso12n(a.out)
     else:
         test(a.out, a.kind, rng('54-68' if a.kind == 'port' else '54-66'), a.phrases, a.seed)
 

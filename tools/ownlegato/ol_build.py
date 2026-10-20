@@ -15,7 +15,8 @@ and CC22 = the class code (10 / 20 / 30 / 40 = 150 / 300 / 600 / 1000 ms; +5 on 
 regions take +-2: sfizz 1.2.3 missed an exact locc22=13 hicc22=13), see plan(); a transition's
 own CC119 (the patch's speed value, sent anyway) also selects (locc119 / hicc119: the nearest class).
 
-    ol_build.py cut <iso dir> <lib dir>              cut every iso11 layer from audio/b_11 into <lib>/samples (24-bit
+    ol_build.py cut <iso dir> <lib dir> [--plan=b11 --audio='b_11*']   (both given, in this order; iso12: b12, b_12*)
+                                                     cut every iso11 layer from audio/b_11 into <lib>/samples (24-bit
                                                      FLAC; the instrument's audio, stays outside the repository) and
                                                      <lib>/layers.json
     ol_build.py checks <lib dir>                     next-note (C) / no-D / 2nd-note (N) independence of the layers
@@ -82,19 +83,19 @@ def plan(ns, pen=True):
     return out
 
 
-def cmd_cut(d, lib):
+def cmd_cut(d, lib, plan='b11', audio='b_11*'):
     os.makedirs(lib + '/samples', exist_ok=True)
-    man = json.load(open(d + '/b11/manifest.json'))
-    if os.path.exists(d + '/b11/manifest_pen.json'):
-        man += json.load(open(d + '/b11/manifest_pen.json'))
+    man = json.load(open('%s/%s/manifest.json' % (d, plan)))
+    if os.path.exists('%s/%s/manifest_pen.json' % (d, plan)):
+        man += json.load(open('%s/%s/manifest_pen.json' % (d, plan)))
     L = json.load(open(lib + '/layers.json')) if os.path.exists(lib + '/layers.json') else []
     done = {e['src'] for e in L}
     man = [m for m in man if m['file'] not in done]
     for m in man:
         name = m['file']
-        J = json.load(open('%s/b11/%s.json' % (d, name)))
+        J = json.load(open('%s/%s/%s.json' % (d, plan, name)))
         import glob
-        src = glob.glob('%s/audio/b_11*/solo_%s__%s.flac' % (d, name, name))
+        src = glob.glob('%s/audio/%s/solo_%s__%s.flac' % (d, audio, name, name))
         if not src:
             print('missing', name)
             continue
@@ -253,7 +254,7 @@ def cmd_checks(lib):
 def main():
     a = sys.argv[1:]
     if a[0] == 'cut':
-        cmd_cut(a[1], a[2])
+        cmd_cut(a[1], a[2], *[x.split('=', 1)[1] for x in a[3:] if x.startswith(('--plan=', '--audio='))])
     elif a[0] == 'checks':
         cmd_checks(a[1])
     elif a[0] == 'model':
