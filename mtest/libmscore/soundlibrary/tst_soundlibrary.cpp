@@ -205,6 +205,7 @@ class TestSoundLibrary : public QObject, public MTest
       void ampleSlides();
       void ampleHammer();
       void ampleFx();
+      void ampleFxMute();
       void guitarSettings();
       void ampleSampleSets();
       void controllerDisplay();
@@ -6100,13 +6101,13 @@ static std::vector<GuitarEvent> guitarEvents(MasterScore* score)
       }
 
 // the score's chords in order (track 0), its strum lines made straight
-static std::vector<Chord*> guitarChords(MasterScore* score)
+static std::vector<Ms::Chord*> guitarChords(MasterScore* score)
       {
-      std::vector<Chord*> chords;
+      std::vector<Ms::Chord*> chords;
       for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest)) {
             if (!s->element(0) || !s->element(0)->isChord())
                   continue;
-            Chord* c = toChord(s->element(0));
+            Ms::Chord* c = toChord(s->element(0));
             if (Arpeggio* a = c->arpeggio()) {
                   if (a->arpeggioType() == ArpeggioType::UP)
                         a->setArpeggioType(ArpeggioType::UP_STRAIGHT);
@@ -6119,7 +6120,7 @@ static std::vector<Chord*> guitarChords(MasterScore* score)
       }
 
 // the first note-on of a chord's notes (index in v), -1: none
-static int guitarNoteOn(const std::vector<GuitarEvent>& v, const Chord* c, int from = 0)
+static int guitarNoteOn(const std::vector<GuitarEvent>& v, const Ms::Chord* c, int from = 0)
       {
       for (int i = from; i < int(v.size()); ++i)
             if (v[size_t(i)].type == ME_NOTEON && v[size_t(i)].b > 0 && !v[size_t(i)].sw && v[size_t(i)].note
@@ -6151,7 +6152,7 @@ static bool guitarTapBefore(const std::vector<GuitarEvent>& v, int i, int key, i
       MasterScore* score = readScore(DIR + "guitar-techniques.musicxml"); \
       QVERIFY(score); \
       score->rebuildMidiMapping(); \
-      const std::vector<Chord*> c = guitarChords(score); \
+      const std::vector<Ms::Chord*> c = guitarChords(score); \
       QCOMPARE(int(c.size()), 18); \
       (void)g;
 
@@ -6441,6 +6442,55 @@ void TestSoundLibrary::ampleFx()
       }
 
 //---------------------------------------------------------
+//   ampleFxMute: the map's FX texts that contain "mute" ("strum mute", "hit top mute", "hit top muted") are noises only:
+//   the notes after them don't get the palm-mute keyswitch (26); "muted" / "mute" alone still do
+//---------------------------------------------------------
+
+void TestSoundLibrary::ampleFxMute()
+      {
+      GUITAR_SETUP
+      auto text = [&](Ms::Chord* ch, const QString& t) {
+            StaffText* st = new StaffText(score);
+            st->setXmlText(t);
+            st->setTrack(0);
+            st->setParent(ch->segment());
+            ch->segment()->add(st);
+            };
+      // a palm-mute keyswitch on before the chord's note-on
+      auto palmMuted = [&](const std::vector<GuitarEvent>& v, const Ms::Chord* ch) {
+            const int i = guitarNoteOn(v, ch);
+            if (i < 0)
+                  return false;
+            int sw = -1;
+            for (int k = 0; k < i; ++k)
+                  if (v[size_t(k)].sw && v[size_t(k)].b > 0)
+                        sw = v[size_t(k)].a;
+            return sw == 26;
+            };
+      text(c[0], "strum mute");
+      text(c[1], "hit top mute");
+      text(c[2], "Hit Top Muted");
+      std::vector<GuitarEvent> v = guitarEvents(score);
+      for (int i = 0; i < 4; ++i)
+            QVERIFY2(guitarNoteOn(v, c[size_t(i)]) >= 0 && !palmMuted(v, c[size_t(i)]), qPrintable(QString::number(i)));
+      int fx = 0;
+      for (const GuitarEvent& e : v)
+            if (e.type == ME_NOTEON && e.b == 100 && !e.note && (e.a == 92 || e.a == 102))
+                  ++fx;
+      QVERIFY(fx >= 3);                                             // (still played as noises)
+      text(c[3], "muted");
+      v = guitarEvents(score);
+      QVERIFY(palmMuted(v, c[3]));                                  // (the text's own chord)
+      QVERIFY(palmMuted(v, c[4]));
+      for (const char* t : { "mute", "muted", "con sord." }) {
+            SoundLib::TextState st;
+            SoundLib::TextTechniques::apply(t, st);
+            QVERIFY(st.modifiers.contains("muted"));
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   guitarSettings: [guitar] strums / softStrums / pinchHarmonics: 0 by default, the ini's value, the score's over it;
 //   0 in Library default, not in Recommended (the owner decides by ear); the map's <Guitar> read, a bad one refused
 //---------------------------------------------------------
@@ -6502,7 +6552,7 @@ void TestSoundLibrary::guitarSettings()
 void TestSoundLibrary::ampleSampleSets()
       {
       GUITAR_SETUP
-      auto text = [&](Chord* ch, const QString& t) {
+      auto text = [&](Ms::Chord* ch, const QString& t) {
             StaffText* st = new StaffText(score);
             st->setXmlText(t);
             st->setTrack(0);

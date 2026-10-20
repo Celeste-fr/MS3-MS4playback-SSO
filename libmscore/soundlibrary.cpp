@@ -2636,7 +2636,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
             s.tremolo = true;
       }
 
-void TextTechniques::build(Score* score, const Part* part)
+void TextTechniques::build(Score* score, const Part* part, const Guitar* guitar)
       {
       _states.clear();
       const int strack = part->startTrack();
@@ -2646,8 +2646,15 @@ void TextTechniques::build(Score* score, const Part* part)
             for (Element* e : seg->annotations()) {
                   if (!e->isStaffText() || e->track() < strack || e->track() >= etrack)
                         continue;
+                  const QString plain = toStaffText(e)->plainText();
+                  if (guitar) {
+                        const QString simple = plain.simplified();
+                        if (std::any_of(guitar->fx.begin(), guitar->fx.end(),
+                                        [&](const Guitar::Fx& f) { return f.text.match(simple).hasMatch(); }))
+                              continue;
+                        }
                   const TextState before = state;
-                  apply(toStaffText(e)->plainText(), state);
+                  apply(plain, state);
                   if (!state.sameTechnique(before))
                         state.db = toStaffText(e)->level();
                   _states[seg->tick().ticks()] = state;

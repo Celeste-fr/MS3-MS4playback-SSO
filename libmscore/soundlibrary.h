@@ -878,7 +878,8 @@ struct TextState {
 class TextTechniques {
       std::map<int, TextState> _states;   // tick -> state from there
    public:
-      void build(Score* score, const Part* part);
+      // guitar: its map's FX texts (<Fx>) are noises only ("strum mute", "hit top muted"): they set no technique
+      void build(Score* score, const Part* part, const Guitar* guitar = nullptr);
       TextState at(int tick) const;
       static void apply(const QString& text, TextState& state);
       };

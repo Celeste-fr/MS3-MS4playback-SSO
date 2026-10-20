@@ -5886,7 +5886,7 @@ void MidiRenderer::updateState()
                         LibPart& lp = libParts[part];
                         lp.route = r;
                         lp.velocityDynamics = library->velocityDynamics;
-                        lp.text.build(score, part);
+                        lp.text.build(score, part, r.instrument->guitar.get());
                         // automation: a lane takes its controller's place (its part value, its staff texts)
                         QSet<QString> automated;
                         const QStringList liveTargets = LiveClips::liveLanes(Automation::lanes(part, allLanes));
