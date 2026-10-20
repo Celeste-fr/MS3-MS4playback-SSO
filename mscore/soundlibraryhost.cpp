@@ -802,6 +802,10 @@ std::map<QString, QByteArray> SoundLibraryHost::scriptValuesFor(const SoundLib::
       return li ? SoundLib::playbackScriptValues(*li, score) : std::map<QString, QByteArray>();
       }
 
+// [slurs] fixedTransitions' pseudo script value (SoundLib::playbackScriptValues): the intensity the random generator's
+// modulators get in the state loaded
+static const QString RANDOM_SOURCES("@randomSources");
+
 static QString valuesKey(const std::map<QString, QByteArray>& values)
       {
       return PartControllers::valuesKey(values);
@@ -919,13 +923,40 @@ QByteArray SoundLibraryHost::setupStateWith(const SoundLib::Library& library, co
             QByteArray component, controller;
             if (!readState(limitedState, &name, &component, &controller))
                   return limitedState;
-            int set = 0;
-            const QByteArray withValues = KontaktSetup::withScriptValues(component, values, &err, &set);
-            if (withValues.isEmpty() || set < 1) {
-                  qWarning("Sound library: %s: script values %s not set (%s)", qPrintable(patch), qPrintable(valuesKey(values)),
-                           qPrintable(err));
-                  return limitedState;
+            // ([slurs] fixedTransitions: the pseudo value "@randomSources" = the random generator's modulators' intensity,
+            // KontaktSetup::withRandomSources; SoundLib::playbackScriptValues)
+            std::map<QString, QByteArray> script = values;
+            QByteArray randomIntensity;
+            auto r = script.find(RANDOM_SOURCES);
+            if (r != script.end()) {
+                  randomIntensity = r->second;
+                  script.erase(r);
                   }
+            QByteArray withValues = component;
+            if (!script.empty()) {
+                  int set = 0;
+                  withValues = KontaktSetup::withScriptValues(component, script, &err, &set);
+                  if (withValues.isEmpty() || set < 1) {
+                        qWarning("Sound library: %s: script values %s not set (%s)", qPrintable(patch), qPrintable(valuesKey(script)),
+                                 qPrintable(err));
+                        return limitedState;
+                        }
+                  }
+            if (!randomIntensity.isEmpty()) {
+                  int set = 0;
+                  const float v = randomIntensity.toFloat();
+                  const QByteArray fixed = KontaktSetup::withRandomSources(withValues, { v }, &err, &set);
+                  if (fixed.isEmpty())
+                        qWarning("Sound library: %s: random sources not set to %s (%s)", qPrintable(patch), randomIntensity.constData(),
+                                 qPrintable(err));
+                  else {
+                        withValues = fixed;
+                        logTime(library, QString("%1: %2 random sources at %3 (playback settings)").arg(patch).arg(set)
+                                .arg(QString::fromLatin1(randomIntensity)));
+                        }
+                  }
+            if (withValues == component)
+                  return limitedState;
             logTime(library, QString("%1: script values %2 (playback settings)").arg(patch, valuesKey(values)));
             return writeState(name, withValues, controller);
             });
@@ -1123,6 +1154,30 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
                         return;
                         }
                   saved = writeState(name, back, controller);
+                  }
+            }
+      // ([slurs] fixedTransitions: the random sources' intensities as made, so the file stays the library's)
+      if (!li.speedScript.isEmpty()) {
+            QFile f(SoundLibraryHost::setupFile(library, li.name));
+            QString fileName, err;
+            QByteArray fileComponent, fileController, savedComponent, savedController;
+            const std::vector<float> made = f.open(QIODevice::ReadOnly) && readState(f.readAll(), &fileName, &fileComponent, &fileController)
+                                            ? KontaktSetup::randomSources(fileComponent, &err) : std::vector<float>();
+            if (!made.empty() && readState(saved, &fileName, &savedComponent, &savedController)) {
+                  const std::vector<float> now = KontaktSetup::randomSources(savedComponent, &err);
+                  if (now.size() != made.size()) {
+                        logTime(library, QString("%1: not resaved (its random sources differ from the setup made: %2 against %3)")
+                                .arg(li.name).arg(now.size()).arg(made.size()));
+                        return;
+                        }
+                  if (now != made) {
+                        const QByteArray back = KontaktSetup::withRandomSources(savedComponent, made, &err);
+                        if (back.isEmpty()) {
+                              logTime(library, QString("%1: not resaved (its random sources could not be put back: %2)").arg(li.name, err));
+                              return;
+                              }
+                        saved = writeState(fileName, back, savedController);
+                        }
                   }
             }
       if (!writeFile(SoundLibraryHost::setupFile(library, li.name), saved))

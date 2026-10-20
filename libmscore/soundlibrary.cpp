@@ -1472,11 +1472,31 @@ int speedValue(double ms)
       return 126 - int(std::min(126L, whole * 127 / 1000));
       }
 
+//---------------------------------------------------------
+//   [slurs] fixedTransitions (2026-10-20, branch sso-legato-fixes; 0 by default and in both presets until the owner has
+//   heard it): on the patches with a speed script (SSO's five string sections' Performance patches, the ones measured:
+//   each has 100-130 modulators from Kontakt's random generator, 90 of them on its PORTAMENTO FAST / RUNS / RUNS RT
+//   groups' envelope level, read from the patches' group data) those modulators' intensity is 0 in the state loaded, so
+//   every play of a passage sounds the same (Windows test VM, kthost: two renders of Whence null at -71..-97 dB, -7..-21 dB
+//   as shipped; per note as loud as the shipped takes' mean, median within 0.15 dB; RESULT of sso-legato-fixes). The
+//   script has no setting for it (its "random detune" switch acts on LFO_RAND modulators, which these patches don't
+//   have, and is read back from the groups at load). Carried as the pseudo script value "@randomSources" = the intensity
+//   ("0"): SoundLibraryHost::setupStateWith sets it by KontaktSetup::withRandomSources, never in the setup file (resave
+//   puts the made intensities back)
+//---------------------------------------------------------
+
+static bool fixedTransitions(const LibInstrument* patch, const Score* score)
+      {
+      return patch && !patch->speedScript.isEmpty() && Playback::on("slurs/fixedTransitions", score);
+      }
+
 std::map<QString, QByteArray> playbackScriptValues(const LibInstrument& patch, const Score* score)
       {
       std::map<QString, QByteArray> out;
       if (speedFromWritten(&patch, score))
             out[patch.speedScript] = "0";
+      if (fixedTransitions(&patch, score))
+            out["@randomSources"] = "0";
       return out;
       }
 

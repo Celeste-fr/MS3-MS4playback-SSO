@@ -1180,6 +1180,47 @@ velocity picks). A note sent early (`transitionsEarly`, an onset) changes Δt an
   clip envelope (LIVE.md › What still differs).
 - **Null test** (plainPerformance 1, where written = played): see HANDOFF.md › Speed from written.
 
+## Fixed transitions
+
+2026-10-20 (branch `sso-legato-fixes`; measured, not yet heard by the owner): SSO's five string-section Performance patches
+carry 100-130 external modulators whose source is Kontakt's random generator (source type 10, read from the patches' group
+data): 90 on the PORTAMENTO FAST / RUNS / RUNS RT groups' flex envelope level 1 (intensity 1), 10-40 on sustain groups'
+pitch (0.02-0.04). Each voice draws a new value, so two plays of the same passage differ (two kthost renders of Whence:
+-7..-9 dB as a null on the upper strings and Celli, -21 dB on Basses). The script has no setting for them: its "random
+detune" switch acts on `LFO_RAND` modulators, which these patches don't have, and is read back from the groups at load.
+`[slurs] fixedTransitions` (0 by default and in both presets; per score):
+
+- **The state**: a patch with a speed script (`<Instrument speedScript>`: the five sections' Performance patches) loads
+  with those modulators' intensity at 0 (`SoundLib::playbackScriptValues`' pseudo value `@randomSources`,
+  `SoundLibraryHost::setupStateWith`, `KontaktSetup::withRandomSources`; made once: prepared). The setup file keeps the
+  library's intensities (the first load's resave puts them back); an instance whose score's value differs is loaded again
+  (`Slot::values`). Create Live Set embeds the same state, so the plain set plays it too (LIVE.md › Live against
+  MuseScore: Update Live Set and *Live plays the score* don't).
+- **Measured** (Windows test VM, kthost, Kontakt 8 + SSO; Whence lane 0 as plainPerformance plays it; private RESULT of
+  sso-legato-fixes): two renders null at -73.5 dB (Violas), -70.4 (Violins 1), -96.6 (Celli); Basses -85.8 with the 90
+  envelope modulators alone. Each note's perceived level against the mean of two shipped takes: median +0.00 / -0.06 /
+  +0.14 dB, SD 0.30 / 0.22 / 0.50 (the shipped takes differ from each other by SD 0.32 / 0.25 / 0.52); third-octave spectra
+  within 0.07-0.30 dB on average; the swell inside slurs unchanged (SD 1.07 against 1.11 dB, Violas). So it plays an
+  average take, the same each time. Not deterministic: bowed transitions (velocity 85+) at 120-200 ms note spacing (the
+  Across Strings sustain groups vary from take to take with no random modulator; not a modulator, perhaps Kontakt's group
+  start options).
+
+## Fast transitions
+
+2026-10-20 (branch `sso-legato-fixes`; measured, not yet heard by the owner): SSO's legato ignores a note-on that comes less
+than 15 ms after the note-on before at velocity 64 or less (its chord guard, read from the patch's script; the audit's
+DROPPED, a fail). Measured on the Windows test VM (kthost, Violas / Violins 1 - Performance, a whole step after a held note,
+deterministic copies): at 64 the step 10 or 14 ms after is silent, 16 ms after it plays; at 65, 70 and 84 10 ms after it
+plays as the 64 sent 20 ms after (third-octave spectrum within 0.3-0.5 dB on Violas, 0.6-1.0 dB on Violins 1, the same
+arrival 210 / 160 ms: FING + PORTAMENTO FAST), at 85 another family (DETACHED: 3.7-4.7 dB, arrival 60-90 ms).
+`[slurs] fastTransitions` (0 by default and in both presets; per score): such a note-on (a route whose patch has a legato
+articulation, a note of another chord than the note-on before on the route, velocity 20-64) is sent at 65
+(`MidiRenderer::libraryFastTransitions`, after the track delays; `FAST_TRANSITION_VELOCITY`). Velocities 1-19 (portamento)
+have no velocity of their family above 64 and stay; the audit still lists them. MuseScore's own early starts never make
+one (`TRANSITION_MIN_GAP_MS` caps them); written notes closer than 15 ms do (64th notes at 300 bpm, grace notes).
+Live: the velocity is in the clips; the plain set's written clips decide by the written spacing.
+`tst_playbackaudit::droppedFindings`: fast-legato.musicxml's three DROPPED gone, those notes at 65.
+
 ## Clicked and entered notes
 
 The owner (2026-10-15): "send a clicked note on a library part to its SSO patch, with its technique and the same patch
@@ -1245,6 +1286,8 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Soft strums, `[guitar] softStrums` (2026-10-20; value 2 the same day, ample-fixes2; the owner compares by ear): with strums on, a strum at velocity <= the map's `softStrum` (Ample 30: where a roll is darker than a CC7-lowered strum, meas3) plays **0** the strummer turned down by CC7 (StrumLevel: CC7 is the channel's gain, so whatever still rings is turned down with it until the CC7 in force comes back before the next note); **1** its notes rolled `rollGap` ms (15) apart in strum order, strum mode off, at their velocity; **2** a roll of the strummer's single-string keys (map `rollKeys`, Ample D3-B3 = strings 6..1, string 6 first for a down strum) with strum mode on, Detect and the chord keys held as for a strum, at the chord's velocity held within the map's `softRoll` pairs (Ample `20:10 40:15`: meas3, a six-string key roll at velocity 20 10 ms apart / 40 15 ms apart as loud as the recorded strum turned down by StrumLevel's CC7, within 0.2 dB in the Strum set; below 20 the roll plays at 20 as value 0's strum plays at v20's CC7), its keys spaced linearly between the pairs (an assumption: 12.5 ms at v30), no CC7 of its own (a lowered one is restored before it); a muted strum stays the strummer. Live: the roll is notes (clips and plain set carry it, `tst_liveequivalence::liveGuitarSoftRoll`); value 0's CC7 is not carried (LIVE.md › What still differs) | 0 (Recommended: not set, Library default 0) | `guitarplayback.cpp`, `soundlibrary.cpp` (`Guitar::softRollVelocity` / `softRollGapMs`); map: `gen_ample.py` GUITAR | `[guitar] softStrums` 0-2; score: `playbackSettings` |
 | Pinch harmonics, `[guitar] pinchHarmonics` (2026-10-20; off: Ample has no pinch sound, the owner decides by ear): a chord under staff text P.H. / pinch harm.: the natural harmonic keyswitch and the note at its partial (a diamond note's pitch, else fretted + 19), 2 ms later palm mute and the fretted note at velocity 60 for 45 ms (map `pinch`: meas3's closest by numbers), the next note's keyswitch again | 0 (Recommended: not set, Library default 0) | `guitarplayback.cpp` | `[guitar] pinchHarmonics`; score: `playbackSettings` |
 | Speed from written, `[slurs] speedFromWritten` (the owner approved, 2026-10-17): on SSO's five string-section Performance patches CC119 (the transition's speed variant: RUNS / RUNS RT / FAST LEGATO) is MuseScore's: the patch's state has the script's own writing off (`$vfm12` 0, map `speedCC` / `speedScript`), each legato note-on gets 126 - floor(written ms from the note before x 127 / 1000) right before it, so early starts keep the written band; attacks none (above, Speed from written) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`speedFromWritten`, `speedValue`, `playbackScriptValues`), `rendermidi.cpp` (`libSpeed`, `librarySpeeds`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`, `Slot::values`), `liveclips.cpp` (`EXTRA_CARRIERS`), `plainliveset.cpp` (`speedEnvelope`); data: `sso_performance_layers.json` | `[slurs] speedFromWritten`; score: `playbackSettings` |
+| Fixed transitions, `[slurs] fixedTransitions` (2026-10-20, not yet heard by the owner): on SSO's five string sections' Performance patches the modulators from Kontakt's random generator (source type 10: the transitions' envelope level, the sustains' pitch) at intensity 0 in the state loaded, so every play of a passage sounds the same, an average take (above, Fixed transitions) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`fixedTransitions`, `playbackScriptValues`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`), `audio/vst3/kontaktsetup.cpp` (`randomSources`, `withRandomSources`) | `[slurs] fixedTransitions`; score: `playbackSettings` |
+| Fast transitions, `[slurs] fastTransitions` (2026-10-20, not yet heard by the owner): a legato note-on less than 15 ms after the note-on before on its route at velocity 20-64, which SSO ignores (the audit's DROPPED), sent at 65, the lowest that plays, the same transition family (above, Fast transitions) | 0 (Recommended 0, Library default 0) | `rendermidi.cpp` (`libraryFastTransitions`) | `[slurs] fastTransitions`; score: `playbackSettings` |
 | Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' gain stage, the rest of the part's patches at 0 dB (above, Level rule; the owner, 2026-10-10; the gain stage 2026-10-15); with `[slurs] plainPerformance` a plain note takes its kind's grid (slur / staccato + calibrated 2's D / single note; 2026-10-17) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `plainKind`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel`, `contextLevelPlain` / `Staccato` / `Single` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, by the patches' gain stage less the score's master trim (above, Section balance, Gain stage and master trim; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |

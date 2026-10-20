@@ -1128,6 +1128,12 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   (Linux, test synth): the route clip's carriers and the device's MIDI (CC119 63 before each transition), the plain set's
   envelope. A carrier's value 1 plays as 0 (as for every carrier). Untried in real Live.
 
+- **`[slurs] fixedTransitions`** (2026-10-20, docs/PLAYBACK_SETTINGS.md › Fixed transitions): the random generator's
+  modulators at 0 are in the Kontakt state Create Live Set embeds (`SoundLibraryHost::setupState` with the score;
+  `tst_liveequivalence::randomSetupState`), so the plain set plays the same fixed take as MuseScore. Update Live Set
+  rewrites a Kontakt's state only when its slots' tunings change, so a set made with the other value keeps its own (make
+  the set again); *Live plays the score* plays the owner's own Kontakt, as it is. Untried in real Live.
+
 - **`[slurs] plainPerformance`'s shift** (2026-10-17, docs/PLAYBACK_SETTINGS.md › Plain Performance): the plain set plays
   it as the Performance patch's Kontakt track's Track Delay (-plainShift; `tst_liveequivalence::plainPerformanceLive`:
   every note-on, note-off and the patch's CC1 where MuseScore plays them). *Live plays the score*'s clips and the route

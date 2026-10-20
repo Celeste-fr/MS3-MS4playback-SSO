@@ -373,7 +373,8 @@ void TestPlaybackAudit::cappedArrival()
 //   droppedFindings
 //    SSO's legato engine plays no legato note started less than 15 ms after the previous one's note-on at velocity
 //    64 or lower (fast-legato.musicxml: slurred 64th notes at 300 bpm, 12.5 ms apart, then slurred quarters): at
-//    the map's legatoVelocity 60 the three fast transitions are DROPPED fails; at 65, or at a slow tempo, none
+//    the map's legatoVelocity 60 the three fast transitions are DROPPED fails; at 65, or at a slow tempo, none; with
+//    [slurs] fastTransitions those three are sent at 65, none dropped (and G4, 12.5 ms after F4, too)
 //---------------------------------------------------------
 
 void TestPlaybackAudit::droppedFindings()
@@ -412,6 +413,38 @@ void TestPlaybackAudit::droppedFindings()
       QVERIFY2(r.text().contains("DROPPED"), qPrintable(r.text()));
       r = audit(65);
       QVERIFY2(r.count(PlaybackAudit::Kind::DROPPED) == 0, qPrintable(r.text()));
+      // [slurs] fastTransitions: the three sent at 65 (MidiRenderer's libraryFastTransitions), so none is dropped; G4 (the
+      // next slur's first note, 12.5 ms after F4's note-on: SSO's legato would drop it too) as well; every other note as
+      // without the setting
+      auto velocities = [&]() {
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> trace;
+            PlaybackAudit::render(score, &events, &trace);
+            std::map<int, int> v;               // pitch -> velocity of its first note-on
+            for (const auto& e : events)
+                  if (e.second.isExternal() && e.second.type() == ME_NOTEON && e.second.velo() > 0 && !e.second.librarySwitch()
+                      && !v.count(e.second.pitch()))
+                        v[e.second.pitch()] = e.second.velo();
+            return v;
+            };
+      audit(60);
+      const std::map<int, int> off = velocities();
+      recommended({ { "levels/calibrated", "0" }, { "slurs/fastTransitions", "1" } });
+      r = audit(60);
+      QVERIFY2(r.count(PlaybackAudit::Kind::DROPPED) == 0, qPrintable(r.text()));
+      const std::map<int, int> on = velocities();
+      QString all;
+      for (const auto& v : on)
+            all += QString(" %1:%2/%3").arg(v.first).arg(off.at(v.first)).arg(v.second);
+      QCOMPARE(int(on.size()), 7);
+      for (const auto& v : on) {
+            if (v.first == 62 || v.first == 64 || v.first == 65)
+                  QVERIFY2(v.second == 65 && off.at(v.first) == 60, qPrintable(all));
+            else if (v.first == 67)
+                  QVERIFY2(v.second == 65, qPrintable(all));
+            else
+                  QVERIFY2(v.second == off.at(v.first), qPrintable(all));
+            }
       delete score;
       }
 

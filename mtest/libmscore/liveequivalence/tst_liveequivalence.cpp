@@ -173,6 +173,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveEquivalenceByPart();
       void preparedStates();
       void speedSetupState();
+      void randomSetupState();
       void updateLiveSet();
       void updateLiveSetKnobs();
       void controllerPatchDefault();
@@ -4858,6 +4859,92 @@ void TestLiveEquivalence::speedSetupState()
       QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), off);
       Playback::setIniValuesForTest({ { "slurs/speedFromWritten", "0" } });
       score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/speedFromWritten", 1 } }));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), on);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   randomSetupState
+//    [slurs] fixedTransitions in the state MuseScore loads and Create Live Set writes (SoundLibraryHost::setupState, the
+//    one both use): a patch with a speed script (SSO's string sections' Performance patches) gets its random generator's
+//    modulators ("RVU...") at intensity 0 on top of its setup (the made-up Violas - Performance of
+//    soundlibrary/kontakt/make_random_fixture.py: 1 and 0.75), made once (prepared), with speedFromWritten's script value
+//    too; off: the setup as before. The setup file keeps the library's; the score's setting over playback.ini's
+//---------------------------------------------------------
+
+void TestLiveEquivalence::randomSetupState()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      LiveHost host(this, " nki='Violas - Performance (random sources).nki'", { "Violin" },
+                    "<SoundLibrary name='RandomT'><Files registry='RandomT'/><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin' nki='Violas - Performance (random sources).nki' speedCC='119' speedScript='$stgrp'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      SoundLibraryHost::setLibraryFolder(lib, root + "/" + DIR + "kontakt");
+      QFile::remove(SoundLibraryHost::setupFile(lib, "Violin"));
+      QString error;
+      const QString path = SoundLibraryHost::pluginPath(lib, &error);
+      QVERIFY2(!path.isEmpty(), qPrintable(error));
+      {
+            QFile e(root + "/" + DIR + "kontakt/empty.bin");
+            QVERIFY(e.open(QIODevice::ReadOnly));
+            QFile f(SoundLibraryHost::setupsFolder(lib) + "/Kontakt empty.vst3state");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(Vst3Plugin::joinState("MS Test Synth", e.readAll(), QByteArray()));
+            QJsonObject from;
+            from["plugin"] = path;
+            from["modified"] = QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate);
+            QFile m(SoundLibraryHost::setupsFolder(lib) + "/made setups.json");
+            QVERIFY(m.open(QIODevice::WriteOnly));
+            m.write(QJsonDocument(QJsonObject { { "(empty)", from } }).toJson());
+      }
+      auto sources = [](const QByteArray& state) {
+            QString name, err;
+            QByteArray component, controller;
+            if (!Vst3Plugin::splitState(state, &name, &component, &controller))
+                  return std::vector<float> { -1.0f };
+            return KontaktSetup::randomSources(component, &err);
+            };
+      auto stgrp = [](const QByteArray& state) {
+            QString name;
+            QByteArray component, controller;
+            if (!Vst3Plugin::splitState(state, &name, &component, &controller))
+                  return QByteArray("?");
+            const std::map<QString, QByteArray> v = KontaktSetup::scriptValues(KontaktSetup::slotProgram(component, nullptr));
+            return v.count("$stgrp") ? v.at("$stgrp") : QByteArray("-");
+            };
+      const std::vector<float> library { 1.0f, 0.75f };
+      const std::vector<float> zero { 0.0f, 0.0f };
+      // off: the voice limit only, as before
+      Playback::setIniValuesForTest({ { "slurs/fixedTransitions", "0" } });
+      const QByteArray off = SoundLibraryHost::setupState(lib, "Violin", path, &error);
+      QVERIFY2(!off.isEmpty(), qPrintable(error));
+      QCOMPARE(off, SoundLibraryHost::maxVoicesState(lib, "Violin", path, &error));
+      QCOMPARE(sources(off), library);
+      // on: 0 in the state, the script values and the setup file as they were; the same bytes again (prepared)
+      Playback::setIniValuesForTest({ { "slurs/fixedTransitions", "1" } });
+      QCOMPARE(SoundLibraryHost::scriptValuesFor(lib, "Violin", nullptr).at("@randomSources"), QByteArray("0"));
+      const QByteArray on = SoundLibraryHost::setupState(lib, "Violin", path, &error);
+      QVERIFY2(!on.isEmpty(), qPrintable(error));
+      QCOMPARE(sources(on), zero);
+      QCOMPARE(stgrp(on), QByteArray("127"));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error), on);
+      QCOMPARE(sources(SoundLibraryHost::savedSetupState(lib, "Violin", path, &error)), library);
+      // with speedFromWritten: both
+      Playback::setIniValuesForTest({ { "slurs/fixedTransitions", "1" }, { "slurs/speedFromWritten", "1" } });
+      const QByteArray both = SoundLibraryHost::setupState(lib, "Violin", path, &error);
+      QCOMPARE(sources(both), zero);
+      QCOMPARE(stgrp(both), QByteArray("0"));
+      // a score's 0 over the ini's 1, its 1 over the ini's 0
+      MasterScore* score = readScore(DIR + "plain-performance.musicxml");
+      QVERIFY(score);
+      Playback::setIniValuesForTest({ { "slurs/fixedTransitions", "1" } });
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/fixedTransitions", 0 } }));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), off);
+      Playback::setIniValuesForTest({ { "slurs/fixedTransitions", "0" } });
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/fixedTransitions", 1 } }));
       QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), on);
       delete score;
       }
