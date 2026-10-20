@@ -741,6 +741,9 @@ static bool readController(QXmlStreamReader& r, Controller& c)
       if (a.hasAttribute("cc"))
             c.cc = a.value("cc").toInt(&ok);
       c.param = a.value("param").toString();
+      // hosted="m-master-vol": the parameter controller that plays it when hosted (Controller::hosted; checked at the end)
+      c.hosted = a.value("hosted").toString();
+      ok = ok && (c.hosted.isEmpty() || c.cc >= 0);
       // state="DBName" values="AGMFg AGMPk AGMSt": a load-time setting of the plug-in's state (Controller::state)
       c.state = a.value("state").toString();
       c.stateValues = a.value("values").toString().split(' ', QString::SkipEmptyParts);
@@ -828,6 +831,18 @@ QString Controller::stateText(double value) const
                   t.chop(1);
             }
       return t == "-0" ? QString("0") : t;
+      }
+
+int hostedParameter(const LibInstrument& li, int cc)
+      {
+      for (const Controller& c : li.allControllers) {
+            if (c.cc != cc || c.hosted.isEmpty())
+                  continue;
+            for (int i = 0; i < int(li.allControllers.size()); ++i)
+                  if (li.allControllers[size_t(i)].id == c.hosted && !li.allControllers[size_t(i)].param.isEmpty())
+                        return i;
+            }
+      return -1;
       }
 
 QString controllerText(const Controller& controller, double value)
@@ -1176,8 +1191,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
       if (lib->name.isEmpty())
             lib->name = QFileInfo(path).completeBaseName();
       // (a <Controller> of the library may come after the instruments)
-      for (LibInstrument& li : lib->instruments)
+      for (LibInstrument& li : lib->instruments) {
             li.allControllers = mergeControllers(lib->controllers, li.controllers);
+            for (const Controller& c : li.allControllers)
+                  if (!c.hosted.isEmpty() && hostedParameter(li, c.cc) < 0)
+                        return fail(QString("%1: \"%2\": controller \"%3\" is hosted by \"%4\", not a parameter controller of the patch")
+                                    .arg(path, li.name, c.id, c.hosted));
+            }
       // extra patches to their main patch (the vector is complete: the pointers stay valid);
       // they take its instrument ids (the articulation check's test pitch; match() skips them)
       for (LibInstrument& li : lib->instruments) {

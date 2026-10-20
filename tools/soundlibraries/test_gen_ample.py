@@ -113,12 +113,27 @@ class GenAmpleTest(unittest.TestCase):
         for left in ("Parameter:Master Tune", "Parameter:Num Host Params", "Parameter:T-Play Toggle",
                      "Parameter:S-SEQ Play Tog"):
             self.assertNotIn(left, names)
+        # CC7 played hosted / in Live by M-Master Vol (a parameter controller of the map)
+        # (this dump has no M-Master Vol: CC7 alone; with it, hosted="m-master-vol", test_master_vol)
+        self.assertEqual((ctrls["volume"].getAttribute("cc"), ctrls["volume"].getAttribute("hosted")), ("7", ""))
         # the fixed MIDI-learn defaults (CC7 -> M-Master Vol) and the global settings warning
         fixed = {e.getAttribute("name"): e.getAttribute("value") for e in doc.getElementsByTagName("State")}
         self.assertEqual(fixed["Control[ID=12]@Parameter"], "M-Master Vol")
         self.assertEqual(len(fixed), 7)
         ps = doc.getElementsByTagName("PluginSettings")[0]
         self.assertEqual((ps.getAttribute("name"), ps.getAttribute("bad")), ("midiGuitarMode", "true 1"))
+
+    def test_master_vol(self):
+        # a dump with M-Master Vol: CC7 is hosted="m-master-vol", a parameter controller of the map
+        path = self.path + ".mv"
+        self.addCleanup(os.unlink, path)
+        with open(path, "w") as f:
+            f.write(DUMP.replace("0\tid=48\tM-Mic 1 Vol", "0\tid=50\tM-Master Vol"))
+        text, _ = gen_ample.generate(gen_ample.read_dump(path))
+        doc = xml.dom.minidom.parseString(text)
+        ctrls = {c.getAttribute("id"): c for c in doc.getElementsByTagName("Controller")}
+        self.assertEqual((ctrls["volume"].getAttribute("cc"), ctrls["volume"].getAttribute("hosted")), ("7", "m-master-vol"))
+        self.assertEqual(ctrls["m-master-vol"].getAttribute("param"), "M-Master Vol")
 
     def test_state_not_a_parameter(self):
         # a state setting that is a VST 3 parameter in the dump is refused (it stays a parameter lane)

@@ -330,6 +330,7 @@ class MidiRenderer {
       void libraryTimingOverrides(const Chunk&, EventMap* events);      // livetimingoverride.h
       void libraryEvenLevels(const Chunk&, EventMap* events);           // evenlevels.h
       void libraryDelayLead(const Chunk&, EventMap* events);
+      void libraryHostedParameters(const Chunk&, EventMap* events);    // soundlibrary.h Controller::hosted
 
    public:
       explicit MidiRenderer(Score* s) : score(s) {}

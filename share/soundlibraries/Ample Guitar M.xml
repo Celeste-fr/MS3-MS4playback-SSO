@@ -8,8 +8,10 @@
   <Plugin files="AGM.vst3"/>
   <!-- MIDI controllers measured to act (CC7 and M-Master Vol are one gain: 64 = 1.0 = unity, 127 = +6 dB; use
        one of the two. CC11 and CC12 do nothing measurable). Pitch bend: the M-Pitch Bend parameter, heard
-       only with Poly Bender Tog on -->
-  <Controller id="volume" name="Volume (CC7)" cc="7"/>
+       only with Poly Bender Tog on. CC7 hosted and in Live as M-Master Vol, value cc / 127 (bit-identical to CC7,
+       applied from the start of the host block holding it, smoothed ~13 ms; Live's clips carry no CC7), MIDI
+       out as CC7 -->
+  <Controller id="volume" name="Volume (CC7)" cc="7" hosted="m-master-vol"/>
   <Controller id="vibrato" name="Vibrato (CC1)" cc="1"/>
   <Controller id="hold-pedal" name="Hold Pedal (CC64)" cc="64"/>
   <!-- the sample set, kept only in the plug-in's state: written into the part's state as it loads -->
@@ -350,7 +352,8 @@
   <Controller id="velocity-layer-2" name="Velocity layer 2 threshold" state="Layer[ID=2]" range="1 127" patchDefault="0.5" steps="126" display="0:1 1:127"/>
   <Controller id="velocity-layer-3" name="Velocity layer 3 threshold" state="Layer[ID=3]" range="1 127" patchDefault="0.246032" steps="126" display="0:1 1:127"/>
   <!-- written into every instance's state: Ample's MIDI-learn defaults (CC7 = M-Master Vol: the volume lane and the
-       strum levels rely on it). Master Tune is not a state controller: setState stores it but the sound ignores it -->
+       strum levels rely on it through MIDI out). Master Tune is not a state controller: setState stores it but the
+       sound ignores it -->
   <State name="Control[ID=4]@Parameter" value="M-Pitch Bend"/>
   <State name="Control[ID=6]@Parameter" value="M-Vibrato"/>
   <State name="Control[ID=7]@Parameter" value="M-FA Gain"/>

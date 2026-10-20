@@ -377,7 +377,7 @@ switch value of each articulation. For example:
 - **Ample Guitar M** (`Ample Guitar M.xml`, generated: `python3 tools/soundlibraries/gen_ample.py <dump>`, the dump
   being amphost's parameter list of AGM 4.1.0, kept outside the repository): the steel-string guitars play it,
   hosted as `AGM.vst3`, an instance per part; every one of its 124 parameters is a lane (by its title), with CC7
-  (Volume: the same gain as M-Master Vol, 64 = unity), CC1 (Vibrato), CC64 (Hold Pedal) and the sample set
+  (Volume: the same gain as M-Master Vol, 64 = unity; hosted and in Live played as M-Master Vol, `hosted=`), CC1 (Vibrato), CC64 (Hold Pedal) and the sample set
   (Finger / Pick / Strum); keyswitches (Ample calls MIDI 60 "C3": its C0 is MIDI 24) Sustain 24, Natural Harmonic 25,
   Palm Mute 26 (staff text "muted", the palm mute line), Slide In / Out 27, Legato Slide 28, Hammer-On / Pull-Off 29,
   Slide Guitar 30 (the last four listed, not yet chosen by the notation); velocity 127 is Pop, so notes stop at 126.
@@ -437,6 +437,14 @@ switch value of each articulation. For example:
   is sent by them): `steps="N"`, the parameter's discrete positions k / N (a toggle 1, Ample's capo 11);
   `display="v:text …"`, the plug-in's text at lane values 0-1, ascending, no spaces in a text (a numeric text is
   read linearly between two entries, a stepped controller shows its nearest position's).
+
+  `hosted="id"` on a MIDI controller names a `param` controller of the same patch that plays it for the hosted
+  plug-in and in Live: every event of the CC on the patch's route (its lane, the part's value, the guitar pass's
+  strum levels) goes as that parameter at the same tick, value CC / 127; MIDI out keeps the CC (an external
+  plug-in's MIDI learn), a MIDI file writes the CC. For a CC Live can't carry (CC7: its clips have no carrier, the
+  plain set leaves it to Live's fader) when the plug-in has the same control as a parameter: Ample's
+  `<Controller id="volume" cc="7" hosted="m-master-vol"/>` (measured bit-identical to CC7). A name that is no
+  parameter controller of the patch refuses the map.
 
   **State settings** (a non-Kontakt plug-in hosted in MuseScore): `<Controller id name state="Name" values="a b c">`
   is a setting the plug-in keeps only in its state, no parameter, no key (Ample's sample set: `state="DBName"

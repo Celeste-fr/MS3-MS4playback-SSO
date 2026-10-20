@@ -199,6 +199,7 @@ class TestSoundLibrary : public QObject, public MTest
       void ampleRender();
       void ampleStrums();
       void ampleSoftStrums();
+      void ampleMasterVol();
       void ampleStrings();
       void ampleCapo();
       void ampleHarmonics();
@@ -6335,6 +6336,128 @@ void TestSoundLibrary::ampleStrings()
       for (int k = 31; k <= 36; ++k)
             QVERIFY(!guitarTapBefore(v, i17, k, 127));
       delete score;
+      }
+
+//---------------------------------------------------------
+//   ampleMasterVol: Ample's CC7 (the volume lane, softStrums 0's strum levels and their restores) plays as M-Master Vol
+//   hosted and for Live (map hosted="m-master-vol"; measured bit-identical to CC7, MV.md): with the plug-in output every
+//   CC7 event MIDI out gets is an ME_PARAMETER of M-Master Vol at the same tick, value cc / 127, dataB 7 (a MIDI file
+//   writes the CC), and no CC7 is left; MIDI out: CC7 as before, no M-Master Vol parameter. A hosted= naming no
+//   parameter controller of the patch, or on a controller without cc, is refused
+//---------------------------------------------------------
+
+void TestSoundLibrary::ampleMasterVol()
+      {
+      GUITAR_SETUP
+      struct Reset { ~Reset() { SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      const auto& all = ample->instruments.front().allControllers;
+      int master = -1;
+      for (int i = 0; i < int(all.size()); ++i)
+            if (all[size_t(i)].id == "m-master-vol")
+                  master = i;
+      QVERIFY(master >= 0);
+      QCOMPARE(SoundLib::hostedParameter(ample->instruments.front(), 7), master);
+      QCOMPARE(SoundLib::hostedParameter(ample->instruments.front(), 1), -1);
+      // the volume lane: 96 from the start, a ramp 96 -> 48 over bar 2 (4 beats), 80 from bar 3; strums on (their levels
+      // on the CC7 in force)
+      Automation::Lane lane;
+      lane.target = "volume";
+      lane.points = { Automation::Point(0, 96 / 127.0, Automation::Curve::STEP),
+                      Automation::Point(4 * DIVISION, 96 / 127.0, Automation::Curve::LINEAR),
+                      Automation::Point(8 * DIVISION - 1, 48 / 127.0, Automation::Curve::STEP),
+                      Automation::Point(8 * DIVISION, 80 / 127.0, Automation::Curve::STEP) };
+      std::map<const Part*, Automation::PartLanes> lanes;
+      lanes[score->parts().front()] = { lane };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, lanes));
+      Playback::setIniValuesForTest({ { "guitar/strums", "1" }, { "guitar/softStrums", "0" } });
+      // (tick, route, value 0-127) of CC7 / of M-Master Vol, each route's repeats of one value dropped
+      auto volumes = [&](bool param) {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<std::tuple<int, int, int>> out;
+            std::map<int, int> last;
+            int other = 0;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal())
+                        continue;
+                  const int route = e.extPort() * 16 + e.extChannel();
+                  int value = -1;
+                  if (!param && e.type() == ME_CONTROLLER && e.controller() == CTRL_VOLUME)
+                        value = e.value();
+                  else if (param && e.type() == ME_PARAMETER && e.dataA() == master) {
+                        value = int(std::lround(e.tuning() * 127));
+                        if (e.dataB() != CTRL_VOLUME || std::fabs(e.tuning() * 127 - value) > 1e-4)
+                              ++other;
+                        }
+                  else if ((!param && e.type() == ME_PARAMETER && e.dataA() == master)
+                           || (param && e.type() == ME_CONTROLLER && e.controller() == CTRL_VOLUME))
+                        ++other;                // (the other kind: none may be left)
+                  if (value < 0)
+                        continue;
+                  auto l = last.find(route);
+                  if (l != last.end() && l->second == value)
+                        continue;
+                  last[route] = value;
+                  out.push_back(std::make_tuple(te.first, route, value));
+                  }
+            if (other)
+                  out.push_back(std::make_tuple(-1, -1, other));
+            return out;
+            };
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      const auto cc = volumes(false);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      const auto par = volumes(true);
+      // the MIDI render has the lane (96 at 0, the ramp's steps, 80) and strum levels lower than the lane
+      QVERIFY(cc.size() > 10);
+      QVERIFY(std::get<0>(cc.front()) >= 0);
+      QCOMPARE(std::get<2>(cc.front()), 96);
+      bool ramp = false, strumLevel = false, at80 = false;
+      for (const auto& t : cc) {
+            ramp = ramp || (std::get<0>(t) > 4 * DIVISION && std::get<0>(t) < 8 * DIVISION && std::get<2>(t) > 48 && std::get<2>(t) < 96);
+            strumLevel = strumLevel || std::get<2>(t) < 40;
+            at80 = at80 || (std::get<0>(t) == 8 * DIVISION && std::get<2>(t) == 80);
+            }
+      QVERIFY(ramp && strumLevel && at80);
+      // hosted: the same changes at the same ticks, as M-Master Vol; no CC7 left, every parameter dataB 7
+      QCOMPARE(int(par.size()), int(cc.size()));
+      for (size_t i = 0; i < cc.size(); ++i)
+            QVERIFY2(par[i] == cc[i], qPrintable(QString("%1: CC7 %2 at %3, parameter %4 at %5").arg(i).arg(std::get<2>(cc[i]))
+                                                 .arg(std::get<0>(cc[i])).arg(std::get<2>(par[i])).arg(std::get<0>(par[i]))));
+      // Live's clips (MIDI output, rendered for Live): M-Master Vol too
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      {
+            score->setPlaylistDirty();
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            r.renderScore(&events, ctx);
+            int params = 0, ccs = 0;
+            for (const auto& te : events) {
+                  params += te.second.type() == ME_PARAMETER && te.second.dataA() == master ? 1 : 0;
+                  ccs += te.second.isExternal() && te.second.type() == ME_CONTROLLER && te.second.controller() == CTRL_VOLUME ? 1 : 0;
+                  }
+            QVERIFY(params > 10);
+            QCOMPARE(ccs, 0);
+      }
+      delete score;
+
+      auto withController = [](const QString& c) {
+            return "<SoundLibrary name='t'><Switch type='keyswitch'/><Dynamics cc='-1'/>" + c
+                   + "<Instrument name='G' ids='guitar-steel'><Articulation name='Sus' value='24' techniques='long'/></Instrument>"
+                     "</SoundLibrary>";
+            };
+      auto lib = loadMap(withController("<Controller id='v' cc='7' hosted='mv'/><Controller id='mv' param='M-Master Vol'/>"));
+      QVERIFY(lib);
+      QCOMPARE(SoundLib::hostedParameter(lib->instruments.front(), 7), 1);
+      QVERIFY(!loadMap(withController("<Controller id='v' cc='7' hosted='nothing'/>")));
+      QVERIFY(!loadMap(withController("<Controller id='v' cc='7' hosted='w'/><Controller id='w' cc='11'/>")));
+      QVERIFY(!loadMap(withController("<Controller id='v' param='X' hosted='mv'/><Controller id='mv' param='M-Master Vol'/>")));
       }
 
 //---------------------------------------------------------

@@ -1080,11 +1080,19 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   multis and Utility were made for Kontakt, and nothing of it was run. To do with phase 2 (HANDOFF.md › Ample guitars).
   Phase 2's guitar pass (branch `ample-phase2`, 2026-10-20, `guitarplayback.cpp`) adds only events on the part's route:
   its keys Live's clips and the plain set carry as they carry any note (`[guitar] softStrums` 2's key roll too,
-  `tst_liveequivalence::liveGuitarSoftRoll`), but **not its CC7**: CC7 has no carrier (the clips drop it, counted as
-  dropped) and the plain set leaves CC7 to Live's fader (`PlainLiveSet::laneController`), so in Live a strum
-  (`[guitar] strums`, softStrums 0 or 1) plays the recorded strum at the CC7 in force, not turned down to its notes'
-  level (StrumLevel), and the volume lane's CC7 doesn't reach Ample either (found 2026-10-20; the fix would be a CC7
-  carrier, a new device protocol, or Ample's MIDI-learn moved off CC7: not done). The capo is a plug-in parameter event,
+  `tst_liveequivalence::liveGuitarSoftRoll`). **Volume and strum levels** (ample-fixes2, 2026-10-20): CC7 has no
+  carrier (the clips drop it, the plain set leaves CC7 to Live's fader, `PlainLiveSet::laneController`), so Ample's
+  CC7 is played hosted and in Live as Ample's own **M-Master Vol** parameter (map `<Controller id="volume" cc="7"
+  hosted="m-master-vol">`, `MidiRenderer::libraryHostedParameters`): the volume lane, the part's flat volume and
+  softStrums 0's strum levels and restores become M-Master Vol parameter events at the CC's ticks, value CC / 127 (VM,
+  amphost: bit-identical audio to CC7, both applied from the start of the host block holding them and smoothed ~13 ms;
+  `~/MuseScore/ms3fork/private/ample-state/MV.md`). Route set: the clips' parameter lane, played by the MuseScore Link
+  device; plain set: the Ample track's M-Master Vol automation (steps), a flat lane a one-value envelope as a flat CC
+  lane is; both list M-Master Vol (and M-Capo) in Live's panel (*Configure*). MIDI out keeps CC7. Tests
+  `tst_liveequivalence::liveMasterVol` (the plain set's automation and the clips' lanes = MuseScore's parameter events),
+  `liveGuitarSoftRoll`. Still differs: Ample starts a change at the start of the host block holding it, so in Live it
+  may begin up to one Live buffer early (≤ 11.6 ms at 512), where MuseScore's hosting starts it at its frame; a strum's
+  level can dip what rings that much earlier (not measured in Live). Not run in Live yet. The capo is a plug-in parameter event,
   sent only to a hosted plug-in (MIDI out: the keys are still sounding - capo, so Ample's own capo must match: set the
   M-Capo lane), and none of it was tried in Live.
   **State settings** (Ample's sample set `DBName`, the 204 `Parameter:…` settings, the velocity layers; ample-fixes2,

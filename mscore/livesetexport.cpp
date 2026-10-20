@@ -413,6 +413,20 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   for (const SoundLib::Controller& c : t.instrument->allControllers)
                         if (c.id == lane.target && c.cc < 0 && !c.param.isEmpty() && lane.flatValue() < 0)   // (flat: in the state)
                               titles << c.param;
+            // and the parameters the renderer sends for Live without a lane of their own: a MIDI controller played by a
+            // parameter (Controller::hosted: Ample's CC7 as M-Master Vol: its lane, the guitar pass's strum levels) and
+            // the guitar pass's capo (M-Capo)
+            for (const SoundLib::Controller& c : t.instrument->allControllers) {
+                  if (c.hosted.isEmpty())
+                        continue;
+                  const int index = SoundLib::hostedParameter(*t.instrument, c.cc);
+                  if (index >= 0 && !titles.contains(t.instrument->allControllers[size_t(index)].param))
+                        titles << t.instrument->allControllers[size_t(index)].param;
+                  }
+            if (t.instrument->guitar && !t.instrument->guitar->capo.isEmpty())
+                  for (const SoundLib::Controller& c : t.instrument->allControllers)
+                        if (c.id == t.instrument->guitar->capo && !c.param.isEmpty() && !titles.contains(c.param))
+                              titles << c.param;
             if (!titles.isEmpty()) {
                   if (!laneParameters.count(key)) {
                         QString err;

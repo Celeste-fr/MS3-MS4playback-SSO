@@ -241,6 +241,12 @@ struct Controller {
       QString name;                       // shown
       int cc { -1 };                      // a MIDI controller (0-119)
       QString param;                      // else a plug-in parameter's title (hosted plug-in only)
+      // a MIDI controller the hosted plug-in and Live play by a parameter of its own (<Controller cc="7"
+      // hosted="m-master-vol">: Ample's CC7 and its M-Master Vol are one gain, measured null; Live's clips and the plain set
+      // carry no CC7): with the plug-in output or for Live every event of the CC on the patch's route becomes that
+      // controller's ME_PARAMETER (value cc / 127, same tick: MidiRenderer::libraryHostedParameters); MIDI out keeps the CC
+      // (an external plug-in's MIDI learn). The id of a param controller of the same patch; empty: none
+      QString hosted;
       int defaultValue { -1 };            // 0-127; -1: MuseScore leaves the patch's own value
       // the patch's own value as the library ships it (<Controller patchDefault>: the plug-in's normalized value, 0-1,
       // measured once in the real plug-in with MuseScore's setup loaded and settled, nothing set; the owner, 2026-10-15:
@@ -276,6 +282,11 @@ struct Controller {
 
 // the text the plug-in shows for a lane value 0-1 of the controller (its display), empty: none listed
 QString controllerText(const Controller& controller, double value);
+
+struct LibInstrument;
+// the index in li's allControllers of the parameter controller that plays MIDI controller cc when hosted
+// (Controller::hosted), -1: none
+int hostedParameter(const LibInstrument& li, int cc);
 
 //---------------------------------------------------------
 //   Guitar

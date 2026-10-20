@@ -17,6 +17,7 @@
 
 #include "libmscore/chordrest.h"
 #include "libmscore/key.h"
+#include "libmscore/liveclips.h"
 #include "libmscore/lyrics.h"
 #include "libmscore/measure.h"
 #include "libmscore/part.h"
@@ -355,7 +356,11 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                                                      event.dataA(), event.dataB()));
                                     }
                               else if (event.type() == ME_PARAMETER) {
-                                    // (automation of a hosted plug-in's parameter: not MIDI)
+                                    // (automation of a hosted plug-in's parameter: not MIDI; one playing a MIDI controller
+                                    // for the plug-in, Controller::hosted, as that controller)
+                                    if (event.dataB() > 0 && event.dataB() < 128 && event.dataA() != LiveClips::LIVE_PARAM)
+                                          track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_CONTROLLER, channel,
+                                                event.dataB(), qBound(0, int(std::lround(event.tuning() * 127)), 127)));
                                     }
                               else {
                                     qDebug("writeMidi: unknown midi event 0x%02x", event.type());

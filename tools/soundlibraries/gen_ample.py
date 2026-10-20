@@ -14,7 +14,9 @@ What the map gets:
   "-" ("M-Mic 1 Vol" -> "m-mic-1-vol"; the Lite's titles are the same, its VST 3 ids are not: controllers are found by
   title). patchDefault: the dump's default. steps / display: how the plug-in shows the value (README: Controllers).
 - the MIDI controllers measured to do something (~/MuseScore/ms3fork/private/ample-full/meas2/RESULT.md): CC7 (the
-  same gain as M-Master Vol, 64 = unity), CC1 (vibrato), CC64 (hold pedal: listed, little measured effect).
+  same gain as M-Master Vol, 64 = unity), CC1 (vibrato), CC64 (hold pedal: listed, little measured effect). CC7 is
+  hosted="m-master-vol": hosted and in Live it plays as M-Master Vol (value cc / 127; measured bit-identical to CC7,
+  ~/MuseScore/ms3fork/private/ample-state/MV.md), MIDI out as CC7.
 - the sample set (Finger / Pick / Strum), kept only in the plug-in's state (<DBName Value="AGMFg|AGMPk|AGMSt"/>), as a
   state controller (README: Controllers, state=).
 - the keyswitches measured (Ample names MIDI 60 "C3", so its C0 is MIDI 24): sustain C0 24, natural harmonic C#0 25
@@ -271,10 +273,9 @@ VELOCITY_LAYERS = [(1, 96), (2, 64), (3, 32)]
 
 # Ample's MIDI-learn defaults (<Control ID="5 + CC" Parameter="…"/>; ID 4 = pitch bend), written into every instance's
 # state (<State>, Library::fixedState), so that a preset or setup that dropped one can't silence a lane: the map's CC7
-# volume lane and the guitar pass's strum levels (CC7), CC1 vibrato, CC64 hold pedal, and Ample's other defaults. CC7 stays
-# a MIDI controller (not M-Master Vol) because Live's clips carry it as they carry the notes (CLAUDE.md: Live and
-# MuseScore sound alike): the Live set's state gets the same entries (SoundLibraryHost::setupState). Measured: without
-# ID 12, CC7 127 -> 20 changes nothing (h07)
+# volume lane and the guitar pass's strum levels as CC7 for MIDI out (an external Ample; hosted and in Live they play as
+# M-Master Vol, hosted="m-master-vol"), CC1 vibrato, CC64 hold pedal, and Ample's other defaults. The Live set's state
+# gets the same entries (SoundLibraryHost::setupState). Measured: without ID 12, CC7 127 -> 20 changes nothing (h07)
 CONTROL_DEFAULTS = [(4, "M-Pitch Bend"), (6, "M-Vibrato"), (7, "M-FA Gain"), (12, "M-Master Vol"), (15, "M-Pan"),
                     (69, "Hold Pedal Tog"), (77, "M-Res Release")]
 
@@ -463,8 +464,12 @@ def generate(params):
     w('  <Plugin files="AGM.vst3"/>')
     w("  <!-- MIDI controllers measured to act (CC7 and M-Master Vol are one gain: 64 = 1.0 = unity, 127 = +6 dB; use")
     w("       one of the two. CC11 and CC12 do nothing measurable). Pitch bend: the M-Pitch Bend parameter, heard")
-    w("       only with Poly Bender Tog on -->")
-    w('  <Controller id="volume" name="Volume (CC7)" cc="7"/>')
+    w("       only with Poly Bender Tog on. CC7 hosted and in Live as M-Master Vol, value cc / 127 (bit-identical to CC7,")
+    w("       applied from the start of the host block holding it, smoothed ~13 ms; Live's clips carry no CC7), MIDI")
+    w("       out as CC7 -->")
+    # (hosted= only when the dump has the parameter: the map refuses one naming no parameter controller)
+    hosted = ' hosted="m-master-vol"' if any(p["title"] == "M-Master Vol" for p in real) else ""
+    w('  <Controller id="volume" name="Volume (CC7)" cc="7"%s/>' % hosted)
     w('  <Controller id="vibrato" name="Vibrato (CC1)" cc="1"/>')
     w('  <Controller id="hold-pedal" name="Hold Pedal (CC64)" cc="64"/>')
     w("  <!-- the sample set, kept only in the plug-in's state: written into the part's state as it loads -->")
@@ -489,7 +494,8 @@ def generate(params):
     for n, default in VELOCITY_LAYERS:
         w(layer_controller_xml(n, default))
     w("  <!-- written into every instance's state: Ample's MIDI-learn defaults (CC7 = M-Master Vol: the volume lane and the")
-    w("       strum levels rely on it). Master Tune is not a state controller: setState stores it but the sound ignores it -->")
+    w("       strum levels rely on it through MIDI out). Master Tune is not a state controller: setState stores it but the")
+    w("       sound ignores it -->")
     for cid, param in CONTROL_DEFAULTS:
         w('  <State name="Control[ID=%d]@Parameter" value=%s/>' % (cid, quoteattr(param)))
     f, name, bad, text = MIDI_GUITAR_WARNING

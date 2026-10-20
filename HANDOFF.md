@@ -71,10 +71,20 @@ is Ample Guitar M (`AGM.vst3`, hosted directly, not Kontakt); the dump it is gen
   missing), 1-127, defaults 96 / 64 / 32.
 - CC map: `<State name="Control[ID=n]@Parameter">` writes Ample's seven MIDI-learn defaults into every instance's state
   (`Library::fixedState`, `PartControllers::loadStateValues`, through `SoundLibraryHost::stateValuesFor`: hosted, export,
-  Create Live Set, live equivalence). Chosen over playing volume by M-Master Vol: CC7 is also the guitar pass's strum
-  level. (Correction, 2026-10-20: Live's clips do NOT carry CC7, it has no carrier, and the plain set leaves CC7 to the
-  fader: in Live the strum levels and the volume lane don't reach Ample; LIVE.md › What still differs. To decide: a CC7
-  carrier (device protocol), or volume by M-Master Vol plus strums without CC7, e.g. `softStrums` 2's roll.)
+  Create Live Set, live equivalence); MIDI out still needs the CC7 entry. (2026-10-20: Live's clips do NOT carry CC7.
+  Resolved 2026-10-20, third run: hosted and in Live the CC7 plays as M-Master Vol, below.)
+- **Volume by M-Master Vol** (third run, 2026-10-20; report `~/MuseScore/ms3fork/private/ample-state/MV.md`): map
+  `<Controller id="volume" cc="7" hosted="m-master-vol">` (`Controller::hosted`, `SoundLib::hostedParameter`,
+  gen_ample.py); `MidiRenderer::libraryHostedParameters` (after the duplicate-controller pass, plug-in output or Live's
+  clips) turns every CC7 on an Ample route (volume lane, flat volume, softStrums 0's levels and restores) into an
+  M-Master Vol ME_PARAMETER at the same tick, value CC / 127, dataB 7 (a MIDI file writes CC7 again). Measured (VM,
+  amphost, blocks 512 / 64): gain = 2 x normalized, linear (display = gain, 0.01 steps), CC7 and the parameter
+  bit-identical; either applies from the start of the host block holding it (never late) with ~4.4 ms one-pole
+  smoothing (95 % in ~13 ms, block-independent), to everything sounding: no lead. Hosted sound unchanged (both go
+  through `Vst3Plugin::addParam` with CC / 127). Seq::updateSynthesizerState now replays ME_PARAMETER events with
+  controllers on a seek (the volume, and the capo FIX2 listed as open). Live: route set by the clips' lane (Link
+  device), plain set as Ample track automation; M-Master Vol and M-Capo always in Live's Configure panel. Tests:
+  ampleMasterVol, `tst_liveequivalence::liveMasterVol`, liveGuitarSoftRoll updated.
 - Loads: the slot's values key (`PartControllers::valuesKey`) is compared once per slot at the sync: many changed lanes =
   one load, an unchanged written text = none (ampleStateLoads).
 - `<PluginSettings>`: as an Ample state is made, `Documents/Ample Sound/AGM/Configs/AGM_info.xml` is read (read only;
@@ -92,7 +102,7 @@ is Ample Guitar M (`AGM.vst3`, hosted directly, not Kontakt); the dump it is gen
   pairs, the roll as loud as the CC7-lowered recorded strum; linear between = assumption), no CC7 (a lowered one restored
   before it); a muted strum stays the strummer. Tests: ampleSoftStrums (value 2; value 1 unchanged and without CC7),
   guitarSettings (map parse, mapping), `tst_liveequivalence::liveGuitarSoftRoll` (the clip's notes = MuseScore's, no CC7;
-  value 0's CC7 dropped by the clips). Report: `~/MuseScore/ms3fork/private/ample-state/SS.md` Linux: tst_soundlibrary 127 / 0 / 4, tst_liveequivalence 54 / 0 / 3, tst_midi
+  value 0's levels: since the third run M-Master Vol in both). Report: `~/MuseScore/ms3fork/private/ample-state/SS.md` Linux: tst_soundlibrary 127 / 0 / 4, tst_liveequivalence 54 / 0 / 3, tst_midi
   97, run_fork_tests.sh all passed, check_windows_names none.
 - Tests (Linux, overlay ovl-fixes2): tst_soundlibrary 127 / 0 / 4 (+ ampleStateControllers, ampleStateLoads,
   ampleStateWritten, ampleSettingsWarning; pluginStateValues' keyed names; ampleMap's counts); run_fork_tests.sh all
