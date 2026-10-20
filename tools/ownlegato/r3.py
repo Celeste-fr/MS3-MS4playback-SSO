@@ -510,9 +510,157 @@ def iso10(out, keys=(57, 60), t1s=(13, 26, 52, 87)):
     json.dump(man, open(os.path.join(out, 'manifest.json'), 'w'), indent=1)
 
 
+CL11 = {150: 13, 300: 26, 600: 52, 1000: 86}   # hold classes (blocks): 150.9 / 301.8 / 603.6 / 998.4 ms
+KEYS11 = list(range(54, 67))                     # the instrument's keys (the normal-legato recording range)
+MAXINT11 = 7                                     # intervals +-1..7 (n3test's)
+LO11, HI11 = 48, 79                              # context notes (never sounded in a layer) stay on playable keys
+
+
+def atk11(c):
+    """the attack's hold before the 2nd note for class c (blocks): max(c, 26) (n3test's max(ioi, 0.3))"""
+    return max(c, 26)
+
+
+def test11(f, phrases, seed, classes=(150, 300, 600, 1000)):
+    """held-out phrases: one hold class per phrase (uniform IOI), attack held atk11(c), the last note held 86 blocks"""
+    rnd = random.Random(seed)
+    for p in range(phrases):
+        cms = classes[p % len(classes)]
+        c = CL11[cms]
+        n = rnd.randint(6, 9)
+        ks = [rnd.choice(KEYS11)]
+        while len(ks) < n:
+            k = ks[-1] + rnd.choice([-1, 1]) * rnd.randint(1, MAXINT11)
+            if KEYS11[0] <= k <= KEYS11[-1]:
+                ks.append(k)
+        chain9(f, ks, [atk11(c)] + [c] * (n - 2) + [86], kind='test', phrase=p, cls=cms)
+
+
+def contexts11(tests):
+    """the test phrases' next notes per layer context, so every recorded layer is held out: its context notes (the
+    next note C, the 2nd note N of an attack) are never the ones a test phrase plays there.
+    tests: [(keys, class ms)] -> dict"""
+    ex = {}
+    for ks, cms in tests:
+        ex.setdefault(('a', ks[0], cms), set()).add(ks[1])
+        for i in range(1, len(ks) - 1):
+            ex.setdefault(('atk' if i == 1 else 'run', ks[i - 1], ks[i], cms), set()).add(ks[i + 1])
+            if i == len(ks) - 2:
+                ex.setdefault(('pen', ks[i - 1], ks[i], cms), set()).add(ks[i + 1])
+    return ex
+
+
+def pick_next(b, avoid, ex):
+    for d in (2, -2, 3, -3, 4, -4, 1, -1, 5, -5):
+        c = b + d
+        if LO11 <= c <= HI11 and c not in avoid and c not in ex:
+            return c
+    raise ValueError((b, avoid, ex))
+
+
+def after(b, c):
+    """D: one more step away from b (never b's key)"""
+    return c + (2 if c > b else -2)
+
+
+def iso11(out, phrases=32, seed=20261020, checks=6):
+    """generalised layer instrument (iso11): 'through' layers per hold class. Every note's layer is its key-solo
+    render (all families) in the context it plays in, through the next two note-ons (its tail after them included):
+      atk11 a11_k<K>: K attacked, held atk11(c), -> N (c) -> C (c) -> D (86); K-solo; two different N per class
+      thru  l11_b<b><u|d>: U (attacked, atk11(c)) -> A (c) -> B (c) -> C (c) -> D (86): B's layer for a run note
+      atk   K (atk11(c)) -> N (c) -> C (c) -> D (86): N's layer as the phrase's 2nd note
+      end   U (atk11(c)) -> A (c) -> B (86, released): B's layer as the last note
+    for every (A, B) with A, B in KEYS11, 1 <= |A - B| <= 7, every class; C / N never a test phrase's note there.
+    checks: pairs that also get 'thruC2' (another next note C2) and 'thruNoD' (C held 86 as the last note, no D).
+    Writes t11 (held-out phrases for SSO's passes), the layer files and manifest.json (solo keys per file)."""
+    f = File('t11')
+    test11(f, phrases, seed)
+    f.write(out)
+    tests = [([q['key'] for q in s['notes']], s['cls']) for s in f.seg]
+    t9p = os.path.join(out, '..', 'b9', 't9.json')
+    if os.path.exists(t9p):        # t9 (150 ms class, same keys) is held out too
+        tests += [([q['key'] for q in s['notes']], 150) for s in json.load(open(t9p))['segments']]
+    ex = contexts11(tests)
+    names, man = ['t11'], []
+    pairs = [(a, b) for a in KEYS11 for b in KEYS11 if 1 <= abs(a - b) <= MAXINT11]
+    rnd = random.Random(seed + 1)
+    chk = set(rnd.sample(pairs, checks))
+    groups = {}
+    for a, b in pairs:
+        groups.setdefault((b, 'u' if b > a else 'd'), []).append(a)
+    for (b, dr), srcs in sorted(groups.items()):
+        g = File('l11_b%d%s' % (b, dr))
+        sg = 1 if dr == 'u' else -1
+        for a in sorted(srcs):
+            u = a - 3 * sg
+            for cms, c in CL11.items():
+                ca = atk11(c)
+                cr = pick_next(b, {a, u}, ex.get(('run', a, b, cms), set()))
+                chain9(g, [u, a, b, cr, after(b, cr)], [ca, c, c, c, 86], kind='thru', a=a, b=b, cls=cms, nxt=cr)
+                ck = pick_next(b, {a}, ex.get(('atk', a, b, cms), set()))
+                chain9(g, [a, b, ck, after(b, ck)], [ca, c, c, 86], kind='atk', a=a, b=b, cls=cms, nxt=ck)
+                chain9(g, [u, a, b], [ca, c, 86], kind='end', a=a, b=b, cls=cms)
+                if (a, b) in chk:
+                    c2 = pick_next(b, {a, u, cr, 2 * b - cr}, ex.get(('run', a, b, cms), set()) | {b + d for d in range(-1, 2)})
+                    c2 = 2 * b - cr if LO11 <= 2 * b - cr <= HI11 and 2 * b - cr not in {a, u} and \
+                        2 * b - cr not in ex.get(('run', a, b, cms), set()) else c2
+                    chain9(g, [u, a, b, c2, after(b, c2)], [ca, c, c, c, 86], kind='thruC2', a=a, b=b, cls=cms, nxt=c2)
+                    chain9(g, [u, a, b, cr], [ca, c, c, 86], kind='thruNoD', a=a, b=b, cls=cms, nxt=cr)
+        g.write(out)
+        names.append(g.name)
+        man.append(dict(file=g.name, solo=[b, b - 24 if dr == 'u' else b + 24], b=b, dir=dr))
+    for k in KEYS11:
+        g = File('a11_k%d' % k)
+        for cms, c in CL11.items():
+            ca = atk11(c)
+            avoid = {k}
+            for j in range(2):
+                n = pick_next(k, avoid, ex.get(('a', k, cms), set()))
+                avoid.add(n)
+                cn = pick_next(n, {k}, set())
+                dn = after(n, cn)
+                if dn == k:
+                    dn = cn + (cn - n)
+                chain9(g, [k, n, cn, dn], [ca, c, c, 86], kind='atkthru', a=k, b=n, cls=cms, nxt=cn, rep=j)
+        g.write(out)
+        names.append(g.name)
+        man.append(dict(file=g.name, solo=[k], a=k))
+    write_list(out, names)
+    json.dump(man, open(os.path.join(out, 'manifest.json'), 'w'), indent=1)
+    print('t11: %d phrases; %d layer files, %d attack files' % (phrases, len(groups), len(KEYS11)))
+
+
+def iso11pen(out):
+    """iso11's 'pen' layers (the penultimate note: its tail through the last note's release, which the 'thru' layer's
+    D changes at 600 / 1000 ms): U (atk11(c)) -> A (c) -> B (c) -> C (86, released), B's key-solo, every pair and
+    class; C never the test phrases' last note there. Files l11p_b<b><u|d> (+ manifest_pen.json)."""
+    tests = [([q['key'] for q in sg['notes']], sg['cls']) for sg in json.load(open(os.path.join(out, 't11.json')))['segments']]
+    t9p = os.path.join(out, '..', 'b9', 't9.json')
+    if os.path.exists(t9p):
+        tests += [([q['key'] for q in sg['notes']], 150) for sg in json.load(open(t9p))['segments']]
+    ex = contexts11(tests)
+    pairs = [(a, b) for a in KEYS11 for b in KEYS11 if 1 <= abs(a - b) <= MAXINT11]
+    groups, names, man = {}, [], []
+    for a, b in pairs:
+        groups.setdefault((b, 'u' if b > a else 'd'), []).append(a)
+    for (b, dr), srcs in sorted(groups.items()):
+        g = File('l11p_b%d%s' % (b, dr))
+        sg = 1 if dr == 'u' else -1
+        for a in sorted(srcs):
+            u = a - 3 * sg
+            for cms, c in CL11.items():
+                cp = pick_next(b, {a, u}, ex.get(('pen', a, b, cms), set()))
+                chain9(g, [u, a, b, cp], [atk11(c), c, c, 86], kind='pen', a=a, b=b, cls=cms, nxt=cp)
+        g.write(out)
+        names.append(g.name)
+        man.append(dict(file=g.name, solo=[b, b - 24 if dr == 'u' else b + 24], b=b, dir=dr))
+    json.dump(man, open(os.path.join(out, 'manifest_pen.json'), 'w'), indent=1)
+    print('%d pen files' % len(names))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8', 'iso9', 'iso10'])
+    ap.add_argument('cmd', choices=['probe', 'probe2', 'probe3', 'pgrid', 'port', 'norm', 'bands', 'rel', 'test', 'iso', 'iso2', 'iso3', 'iso6', 'iso8', 'iso9', 'iso10', 'iso11', 'iso11pen'])
     ap.add_argument('--dts', default='0.5,0.3')
     ap.add_argument('out')
     ap.add_argument('--keys')
@@ -559,6 +707,10 @@ def main():
         iso9(a.out)
     elif a.cmd == 'iso10':
         iso10(a.out)
+    elif a.cmd == 'iso11':
+        iso11(a.out)
+    elif a.cmd == 'iso11pen':
+        iso11pen(a.out)
     else:
         test(a.out, a.kind, rng('54-68' if a.kind == 'port' else '54-66'), a.phrases, a.seed)
 

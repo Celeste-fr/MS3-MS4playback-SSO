@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Blind clips, round 5 (150 ms class, held-out t9 phrases): ours vs SSO, the same phrases, levels matched, names random.
+"""Blind clips, round 5 (150 ms class, held-out t9 phrases; also round 6: t11, any hold class): ours vs SSO, the same phrases, levels matched, names random.
 
     blind5_prep.py <ours.wav> <t9.json> <out dir> <answers.json> <sso_pass1> <sso_pass2> <sso_pass3> [--seed N]
 
@@ -31,8 +31,11 @@ def main():
     src = {'ours': sf.read(ours, always_2d=True, dtype='float64')[0]}
     for i, p in enumerate(ssos):
         src['sso%d' % (i + 1)] = sf.read(p, always_2d=True, dtype='float64')[0]
-    clips = {}
+    clips, extra = {}, {}
     for s in T['segments']:
+        ks = [q['key'] for q in s['notes']]
+        if 'cls' in s:      # t11 (ol_build): the phrase's hold class and its semitone joins (publishable: names no source)
+            extra[s['phrase']] = dict(hold_ms=s['cls'], semitone_joins=sum(abs(x - y) == 1 for x, y in zip(ks, ks[1:])))
         ph = s['phrase']
         b0, b1 = int(round((s['notes'][0]['on'] - PRE) * SR)), int(round((s['notes'][-1]['off'] + REL) * SR))
         two = sorted(rnd.choice([1, 2, 3], 2, replace=False).tolist())
@@ -73,7 +76,7 @@ def main():
         vs = ss[int(rnd.integers(2))]
         ref = [k for k in ss if k != vs][0]
         ab = ['ours', vs] if rnd.integers(2) else [vs, 'ours']
-        trials.append(dict(trial=t + 1, A=names[(ph, ab[0])], B=names[(ph, ab[1])], ref=names[(ph, ref)]))
+        trials.append(dict(trial=t + 1, A=names[(ph, ab[0])], B=names[(ph, ab[1])], ref=names[(ph, ref)], **extra.get(ph, {})))
         key.append(dict(trial=t + 1, phrase=ph, A=ab[0], B=ab[1], ref=ref, ours='A' if ab[0] == 'ours' else 'B'))
     json.dump(dict(target_lufs=round(target, 2), clip_window=dict(pre=PRE, rel=REL, fade_in=FADE_IN, fade_out=FADE_OUT),
                    trials=trials), open(out + '/trials.json', 'w'), indent=1)
