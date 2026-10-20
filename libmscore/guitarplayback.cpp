@@ -40,6 +40,9 @@
 //   - string forcing: a note with a string (a tablature note's, also on its linked staff; else a string number text
 //     1-6) gets its string's key at stringVelocity right before it (not for strums or harmonics);
 //   - FX noises: staff text naming one (Guitar::fx) plays its key at its tick, velocity 100, fxLength ms;
+//   - sample sets: staff text "pick" / "strum" / "finger" (TextTechniques: modifiers pick / strum) chooses the map's
+//     extra patch for that set (gen_ample.py: one per other set, its own state controller), loaded as an instance of
+//     its own where used; a strum's level takes its route's set;
 //   then each note of the renderer whose articulation keyswitch an added keyswitch replaced gets it again right before
 //   it (Ample's keyswitches latch: measured 2026-10-18, meas3; finishLibraryEvents dropped it as already selected).
 //   Palm mute (P.M. line, "muted" text) and natural harmonics are the map's articulations (phase 1). Pop is left: no
@@ -83,7 +86,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
       struct GuitarPart {
             const Part* part;
             const SoundLib::Guitar* g;
-            QString sampleSet;
+            std::vector<QString> sampleSets;      // by patch (libraryPatch): an extra patch is another instance's set
             int capoParam { -1 };         // the capo controller's index in allControllers, -1: none / not sent
             };
       std::map<int, GuitarPart> byChannel;          // the part's MIDI channel (as rendered, before routing)
@@ -97,16 +100,19 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   lanes = Automation::read(score->masterScore());
                   lanesRead = true;
                   }
-            GuitarPart gp { pl.first, li->guitar.get(), QString(), -1 };
+            GuitarPart gp { pl.first, li->guitar.get(), {}, -1 };
             const auto pls = lanes.find(pl.first);
             for (int i = 0; i < int(li->allControllers.size()); ++i) {
                   const SoundLib::Controller& c = li->allControllers[size_t(i)];
                   if (c.id == gp.g->sampleSet && c.isState() && !c.stateValues.isEmpty()) {
-                        double v = PartControllers::stateValue(pl.first, c, lanes);
-                        if (v < 0)
-                              v = qMax(0.0, c.patchDefault);
+                        // no value (the main patch without a lane): the plug-in's own, the map's patchDefault (Finger)
                         const int n = c.stateValues.size();
-                        gp.sampleSet = c.stateValues[qBound(0, int(std::lround(v * (n - 1))), n - 1)];
+                        const QString own = c.stateValues[qBound(0, int(std::lround(qMax(0.0, c.patchDefault) * (n - 1))), n - 1)];
+                        for (const SoundLib::LibInstrument* patch : pl.second.patches) {
+                              const auto values = PartControllers::stateValues(pl.first, *patch, lanes);
+                              const auto v = values.find(c.state);
+                              gp.sampleSets.push_back(v != values.end() ? QString::fromUtf8(v->second) : own);
+                              }
                         }
                   if (c.id == gp.g->capo && !c.param.isEmpty()
                       && (SoundLib::output() == SoundLib::Output::PLUGIN || forLiveClips)) {
@@ -246,6 +252,11 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
       for (const On& o : ons)
             if (std::find(chords.begin(), chords.end(), o.note->chord()) == chords.end())
                   chords.push_back(o.note->chord());
+      auto sampleSetOf = [](const On& o) {
+            const auto& sets = o.gp->sampleSets;
+            const int p = o.on->second.libraryPatch();
+            return p >= 0 && p < int(sets.size()) ? sets[size_t(p)] : QString();
+            };
       auto capoOf = [](const Note* n) {
             const int c = n->staff()->capo(n->chord()->tick());
             return c > 0 ? c - 1 : 0;
@@ -351,7 +362,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                         break;
                         }
                   }
-            const int cc = qBound(1, int(std::lround(base * g.strumLevel(group.front()->gp->sampleSet, v) / 64.0)), 127);
+            const int cc = qBound(1, int(std::lround(base * g.strumLevel(sampleSetOf(*group.front()), v) / 64.0)), 127);
             std::set<int> keys;
             int low = 128;
             for (On* o : group)

@@ -181,4 +181,16 @@
          107: position mode (manual: low velocity Melody, high Chord)
     -->
   </Instrument>
+  <Instrument name="Ample Guitar M (Pick)" with="Ample Guitar M" maxVelocity="126">
+    <Controller id="sample-set-pick" name="Sample set (Pick instance)" state="DBName" values="AGMFg AGMPk AGMSt" default="64" patchDefault="0.5"/>
+    <Articulation name="Sustain" value="24" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato" modifiers="pick"/>
+    <Articulation name="Natural Harmonic" value="25" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato" modifiers="harmonics pick" keyShift="-12"/>
+    <Articulation name="Palm Mute" value="26" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato" modifiers="muted pick"/>
+  </Instrument>
+  <Instrument name="Ample Guitar M (Strum)" with="Ample Guitar M" maxVelocity="126">
+    <Controller id="sample-set-strum" name="Sample set (Strum instance)" state="DBName" values="AGMFg AGMPk AGMSt" default="127" patchDefault="1"/>
+    <Articulation name="Sustain" value="24" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato" modifiers="strum"/>
+    <Articulation name="Natural Harmonic" value="25" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato" modifiers="harmonics strum" keyShift="-12"/>
+    <Articulation name="Palm Mute" value="26" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato" modifiers="muted strum"/>
+  </Instrument>
 </SoundLibrary>

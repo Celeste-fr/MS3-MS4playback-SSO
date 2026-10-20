@@ -206,6 +206,7 @@ class TestSoundLibrary : public QObject, public MTest
       void ampleHammer();
       void ampleFx();
       void guitarSettings();
+      void ampleSampleSets();
       void controllerDisplay();
       void clickedNote();
       void renderKitRoll();
@@ -1936,11 +1937,13 @@ void TestSoundLibrary::playbackPresets()
                                 + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
-      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0));
+      // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
+      const QString guitarOff = "\n[guitar]\npinchHarmonics=0\nsoftStrums=0\nstrums=0\n";
+      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0) + guitarOff);
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n"));
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
@@ -5907,7 +5910,9 @@ void TestSoundLibrary::ampleMap()
       QCOMPARE(ample->dynamicsCC, -1);
       QCOMPARE(ample->plugins, QStringList({ "AGM.vst3" }));
       QVERIFY(ample->registryName.isEmpty());                   // (not Kontakt: MuseScore makes no setups)
-      QCOMPARE(int(ample->instruments.size()), 1);
+      QCOMPARE(int(ample->instruments.size()), 3);             // (and an extra patch per other sample set: phase 2)
+      QCOMPARE(ample->instruments[1].name, QString("Ample Guitar M (Pick)"));
+      QCOMPARE(ample->instruments[2].with, QString("Ample Guitar M"));
       const SoundLib::LibInstrument& agm = ample->instruments[0];
       for (const char* id : { "guitar-steel", "guitar-steel-treble-clef", "guitar-steel-tablature" })
             QVERIFY2(agm.ids.contains(id), id);
@@ -6070,7 +6075,7 @@ void TestSoundLibrary::ampleRender()
 //   order and tick (120 bpm: a tick 1.04 ms)
 //---------------------------------------------------------
 
-struct GuitarEvent { int tick; int type; int a; int b; bool sw; const Note* note; };
+struct GuitarEvent { int tick; int type; int a; int b; bool sw; const Note* note; int route { -1 }; };
 
 static std::vector<GuitarEvent> guitarEvents(MasterScore* score)
       {
@@ -6083,10 +6088,11 @@ static std::vector<GuitarEvent> guitarEvents(MasterScore* score)
             const NPlayEvent& ev = te.second;
             if (!ev.isExternal())
                   continue;
+            const int route = ev.extPort() * 16 + ev.extChannel();
             if (ev.type() == ME_NOTEON)
-                  v.push_back({ te.first, ME_NOTEON, ev.pitch(), ev.velo(), ev.librarySwitch(), ev.note() });
+                  v.push_back({ te.first, ME_NOTEON, ev.pitch(), ev.velo(), ev.librarySwitch(), ev.note(), route });
             else if (ev.type() == ME_CONTROLLER)
-                  v.push_back({ te.first, ME_CONTROLLER, ev.controller(), ev.value(), false, nullptr });
+                  v.push_back({ te.first, ME_CONTROLLER, ev.controller(), ev.value(), false, nullptr, route });
             else if (ev.type() == ME_PARAMETER)
                   v.push_back({ te.first, ME_PARAMETER, ev.pitch(), int(std::lround(ev.tuning() * 1000)), false, nullptr });
             }
@@ -6485,6 +6491,51 @@ void TestSoundLibrary::guitarSettings()
       for (const char* bad : { "<Guitar stringKeys='36 35'/>", "<Guitar strumKeys='72 76 79 200'/>", "<Guitar pinch='19 60'/>",
                                "<Guitar><StrumLevel set='S' levels='100:64 20:8'/></Guitar>", "<Guitar><Fx text='(' key='90'/></Guitar>" })
             QVERIFY2(!loadMap(guitarMap(bad)), bad);
+      }
+
+//---------------------------------------------------------
+//   ampleSampleSets: staff text "strum" at the second strum, "finger" at the plain chord: the second strum plays on the
+//   map's extra patch Ample Guitar M (Strum) (a route, an instance, of its own; its state DBName AGMSt, the main
+//   patch's AGMFg), at the Strum set's level (StrumLevel AGMSt); the plain chord back on the main route
+//---------------------------------------------------------
+
+void TestSoundLibrary::ampleSampleSets()
+      {
+      GUITAR_SETUP
+      auto text = [&](Chord* ch, const QString& t) {
+            StaffText* st = new StaffText(score);
+            st->setXmlText(t);
+            st->setTrack(0);
+            st->setParent(ch->segment());
+            ch->segment()->add(st);
+            };
+      text(c[1], "strum");
+      text(c[2], "finger");
+      Part* part = score->parts().front();
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *ample);
+      QCOMPARE(int(routes.size()), 2);
+      QCOMPARE(routes[1].instrument->name, QString("Ample Guitar M (Strum)"));
+      const auto lanes = Automation::read(score);
+      QCOMPARE(PartControllers::stateValues(part, *routes[1].instrument, lanes).at("DBName"), QByteArray("AGMSt"));
+      QCOMPARE(int(PartControllers::stateValues(part, *routes[0].instrument, lanes).count("DBName")), 0);   // (its own: Finger)
+      Playback::setIniValuesForTest({ { "guitar/strums", "1" } });
+      std::vector<GuitarEvent> v = guitarEvents(score);
+      int r0 = -1, r1 = -1, cc1 = -1;
+      for (const GuitarEvent& e : v) {
+            if (e.type == ME_NOTEON && e.a == 72 && e.b == 110 && e.tick == 0)
+                  r0 = e.route;
+            if (e.type == ME_NOTEON && e.a == 76 && e.b == 110 && e.tick == DIVISION)
+                  r1 = e.route;
+            if (e.type == ME_CONTROLLER && e.a == 7 && e.tick == DIVISION && cc1 < 0)
+                  cc1 = e.b;
+            }
+      QVERIFY(r0 >= 0 && r1 >= 0 && r0 != r1);
+      const int i2 = guitarNoteOn(v, c[2]);
+      QVERIFY(i2 >= 0);
+      QCOMPARE(v[size_t(i2)].route, r0);
+      QCOMPARE(cc1, g.strumLevel("AGMSt", v[size_t(i2)].b));
+      Playback::setIniValuesForTest({});
+      delete score;
       }
 
 //---------------------------------------------------------

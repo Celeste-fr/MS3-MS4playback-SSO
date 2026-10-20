@@ -2562,6 +2562,20 @@ void TextTechniques::apply(const QString& text, TextState& s)
             s.modifiers.removeAll("muted");
       else if (has("\\b(con\\s+sord|sord\\.|sordin|mute|muted|harmon|stopped|gestopft|bouche|copert[oi]|muffled|damped)"))
             addModifier(s, "muted");
+      // a guitar's sample set (Ample's Finger / Pick / Strum: an extra patch per set, guitarplayback.cpp; the whole text,
+      // so "strum mute" stays an FX noise)
+      if (has("^\\s*(pick|picked|plectrum|with pick)\\.?\\s*$")) {
+            s.modifiers.removeAll("strum");
+            addModifier(s, "pick");
+            }
+      else if (has("^\\s*(strum|strums|strummed|strumming)\\.?\\s*$")) {
+            s.modifiers.removeAll("pick");
+            addModifier(s, "strum");
+            }
+      else if (has("^\\s*(finger|fingers|fingerstyle|fingerpicking|fingerpicked)\\.?\\s*$")) {
+            s.modifiers.removeAll("pick");
+            s.modifiers.removeAll("strum");
+            }
       if (has("\\bpizz"))
             s.pizzicato = true, s.colLegno = false;
       if (has("\\barco\\b"))

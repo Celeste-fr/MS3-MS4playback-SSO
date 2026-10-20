@@ -280,6 +280,26 @@ def generate(params):
         w("         %s: %s" % (keys, what.replace("--", "-")))
     w("    -->")
     w("  </Instrument>")
+    # a second (third) instance when a part's staff text asks for another sample set ("pick", "strum"; "finger" back):
+    # an extra patch per set, its articulations with the set's modifier (chosen over the main patch's), its own state
+    # controller picking its DBName (the part's Sample set lane sets the main patch only). Loaded only where used.
+    for i, (set_name, db) in enumerate(SAMPLE_SETS):
+        if i == 0:
+            continue
+        mod = set_name.lower()
+        w('  <Instrument name="Ample Guitar M (%s)" with="Ample Guitar M" maxVelocity="126">' % set_name)
+        w('    <Controller id="sample-set-%s" name="Sample set (%s instance)" state="DBName" values=%s default="%d" patchDefault="%s"/>'
+          % (mod, set_name, quoteattr(" ".join(d for _, d in SAMPLE_SETS)), round(127 * i / (len(SAMPLE_SETS) - 1)),
+             fmt(i / (len(SAMPLE_SETS) - 1))))
+        for name, key, techniques, modifiers, shift in KEYSWITCHES:
+            if not techniques:
+                continue
+            a = [("name", name), ("value", str(key)), ("techniques", techniques),
+                 ("modifiers", (modifiers + " " + mod).strip())]
+            if shift:
+                a.append(("keyShift", str(shift)))
+            w("    <Articulation %s/>" % " ".join("%s=%s" % (k, quoteattr(v)) for k, v in a))
+        w("  </Instrument>")
     w("</SoundLibrary>")
     return "\n".join(out) + "\n", len(real)
 
