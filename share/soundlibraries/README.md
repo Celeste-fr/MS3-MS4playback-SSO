@@ -356,6 +356,20 @@ switch value of each articulation. For example:
   on top of its `Instrument`'s. Ample's natural harmonic (C#0 held) sounds 12 semitones over the key, so the map's
   Natural Harmonic says `keyShift="-12"`: a harmonic note (diamond notehead, "harm.") sounding E4 goes on key E3.
 - `<Dynamics cc="-1"/>`: dynamics by note velocity only, no dynamics controller (Ample: CC1 is its vibrato).
+- `<Guitar>` in an `Instrument` (branch `ample-phase2`, 2026-10-20; `SoundLib::Guitar`): the keys and rules guitar notation
+  plays with (`libmscore/guitarplayback.cpp`, the renderer's last library pass). Attributes (keys are MIDI numbers, -1 or
+  left out: none): `stringKeys` (strings 1..6, high to low; tapped at `stringVelocity` before a note with a string:
+  tablature, or a string number 1-6), `harmonic` / `harmonicShift` (artificial harmonics: a fretted note with a diamond
+  note `artificial="frets:semitones …"` above it sounds the stopped note + semitones, played as the natural harmonic),
+  `palmMute`, `slide` (scoop / plop before the note, fall / doit `slideOut` ms before its end), `legatoSlide`
+  (glissando line) and `hammer` (a legato slur, or text H / P, between two single notes): the first note held
+  `overlap` ms into the second; the strummer: `strumMode` with `strumOn` / `strumOff` velocities, `detect` at
+  `detectVelocity`, chord keys from `chordLow`, `strumKeys="down up downMuted upMuted"` at `strumVelocity`, `softStrum`
+  and `rollGap` ms (`[guitar] softStrums`); `sampleSet` (the state controller whose value picks a `<StrumLevel
+  set levels="velocity:CC7 …">`: the CC7 a strum plays at, log-linear between) and `capo` / `capoMax` (the capo
+  parameter's controller id: a capo staff text sends it, each note's key sounding - capo); `pinch="partial velocity
+  delayMs lengthMs"` (`[guitar] pinchHarmonics`); `fxLength` ms and `<Fx text="regex" key>` (staff text, the whole text,
+  case-insensitive, that plays an FX noise key). A bad value refuses the map.
 - **Ample Guitar M** (`Ample Guitar M.xml`, generated: `python3 tools/soundlibraries/gen_ample.py <dump>`, the dump
   being amphost's parameter list of AGM 4.1.0, kept outside the repository): the steel-string guitars play it,
   hosted as `AGM.vst3`, an instance per part; every one of its 124 parameters is a lane (by its title), with CC7

@@ -148,7 +148,24 @@
     <Articulation name="Legato Slide" value="28" techniques=""/>
     <Articulation name="Hammer-On / Pull-Off" value="29" techniques=""/>
     <Articulation name="Slide Guitar" value="30" techniques=""/>
-    <!-- Ample's other keys, for phase 2 (MIDI numbers):
+    <!-- guitar notation's keys and rules (libmscore/guitarplayback.cpp; measured, gen_ample.py GUITAR) -->
+    <Guitar stringKeys="36 35 34 33 32 31" stringVelocity="127" harmonic="25" harmonicShift="-12" palmMute="26" slide="27" legatoSlide="28" hammer="29" strumMode="97" strumOn="100" strumOff="1" detect="86" detectVelocity="127" chordLow="36" strumKeys="72 76 79 83" strumVelocity="110" softStrum="30" rollGap="15" sampleSet="sample-set" capo="m-capo" capoMax="11" artificial="3:31 4:28 5:24 7:19 12:12" pinch="19 60 2 45" overlap="20" slideOut="200" fxLength="500">
+      <StrumLevel set="AGMSt" levels="20:8 40:16 60:20 80:32 100:64 120:69"/>
+      <StrumLevel set="AGMFg" levels="20:6 40:11 60:13 80:27 100:39 120:50"/>
+      <StrumLevel set="AGMPk" levels="20:6 40:11 60:13 80:27 100:39 120:50"/>
+      <Fx text="scratch" key="89"/>
+      <Fx text="slap" key="90"/>
+      <Fx text="muting" key="91"/>
+      <Fx text="strum mute" key="92"/>
+      <Fx text="down ?noise( 1)?" key="93"/>
+      <Fx text="up ?noise( 1)?" key="94"/>
+      <Fx text="down ?noise 2" key="95"/>
+      <Fx text="up ?noise 2" key="96"/>
+      <Fx text="hit top( open)?" key="101"/>
+      <Fx text="hit top mute(d)?" key="102"/>
+      <Fx text="hit rim" key="103"/>
+    </Guitar>
+    <!-- Ample's other keys, for reference (MIDI numbers):
          31-36: string forcing, strings 6..1 (velocity 127 also forces the fret position)
          37; 40-56: position forcing (C#1, then a position key E1-G#2)
          36-59: strummer chord keys (Detect: the chord's notes; Select: slot C1 + n)

@@ -560,6 +560,143 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       return true;
       }
 
+// <Guitar stringKeys="36 35 34 33 32 31" harmonic="25" … strumKeys="72 76 79 83" artificial="12:12 7:19" pinch="19 60 2 45" …>
+//   <StrumLevel set="AGMSt" levels="20:8 40:16 …"/>  <Fx text="slap" key="90"/>
+// </Guitar> (soundlibrary.h Guitar); the reader is on the element and reads it to its end
+static bool readGuitar(QXmlStreamReader& r, Guitar& g)
+      {
+      const QXmlStreamAttributes a = r.attributes();
+      bool good = true;
+      auto key = [&](const char* name, int& v, int low = 0, int high = 127) {
+            if (!a.hasAttribute(name))
+                  return;
+            bool ok = false;
+            v = a.value(name).toInt(&ok);
+            good = good && ok && v >= low && v <= high;
+            };
+      auto number = [&](const char* name, double& v) {
+            if (!a.hasAttribute(name))
+                  return;
+            bool ok = false;
+            v = a.value(name).toDouble(&ok);
+            good = good && ok && v >= 0.0 && v <= 10000.0;
+            };
+      auto ints = [&](const char* name, int n) {
+            std::vector<int> v;
+            for (const QString& t : a.value(name).toString().split(' ', QString::SkipEmptyParts)) {
+                  bool ok = false;
+                  v.push_back(t.toInt(&ok));
+                  good = good && ok && v.back() >= 0 && v.back() <= 127;
+                  }
+            if (a.hasAttribute(name) && int(v.size()) != n)
+                  good = false;
+            return v;
+            };
+      auto pairs = [&](const QString& text) {
+            std::vector<std::pair<int, int>> v;
+            for (const QString& t : text.split(' ', QString::SkipEmptyParts)) {
+                  bool ok1 = false, ok2 = false;
+                  v.push_back({ t.section(':', 0, 0).toInt(&ok1), t.section(':', 1).toInt(&ok2) });
+                  good = good && ok1 && ok2 && t.count(':') == 1 && (v.size() < 2 || v.back().first > v[v.size() - 2].first);
+                  }
+            return v;
+            };
+      const std::vector<int> strings = ints("stringKeys", 6);
+      for (size_t i = 0; i < strings.size() && i < 6; ++i)
+            g.stringKeys[i] = strings[i];
+      const std::vector<int> strums = ints("strumKeys", 4);          // down, up, down muted, up muted
+      if (strums.size() == 4) {
+            g.strumDown = strums[0];
+            g.strumUp = strums[1];
+            g.strumDownMuted = strums[2];
+            g.strumUpMuted = strums[3];
+            }
+      key("stringVelocity", g.stringVelocity, 1);
+      key("harmonic", g.harmonic);
+      key("harmonicShift", g.harmonicShift, -48, 48);
+      key("palmMute", g.palmMute);
+      key("slide", g.slide);
+      key("legatoSlide", g.legatoSlide);
+      key("hammer", g.hammer);
+      key("strumMode", g.strumMode);
+      key("strumOn", g.strumOn, 1);
+      key("strumOff", g.strumOff, 1);
+      key("detect", g.detect);
+      key("detectVelocity", g.detectVelocity, 1);
+      key("chordLow", g.chordLow, 0, 104);
+      key("strumVelocity", g.strumVelocity, 1);
+      key("softStrum", g.softStrum, 0);
+      number("rollGap", g.rollGapMs);
+      key("capoMax", g.capoMax, 1, 24);
+      number("overlap", g.overlapMs);
+      number("slideOut", g.slideOutMs);
+      number("fxLength", g.fxMs);
+      g.sampleSet = a.value("sampleSet").toString();
+      g.capo = a.value("capo").toString();
+      g.artificial = pairs(a.value("artificial").toString());
+      if (a.hasAttribute("pinch")) {                                  // partial, velocity, delay ms, length ms
+            const QStringList p = a.value("pinch").toString().split(' ', QString::SkipEmptyParts);
+            bool ok[4] = { false, false, false, false };
+            if (p.size() == 4) {
+                  g.pinchPartial = p[0].toInt(&ok[0]);
+                  g.pinchVelocity = p[1].toInt(&ok[1]);
+                  g.pinchDelayMs = p[2].toDouble(&ok[2]);
+                  g.pinchOffMs = p[3].toDouble(&ok[3]);
+                  }
+            good = good && ok[0] && ok[1] && ok[2] && ok[3] && g.pinchPartial > 0 && g.pinchPartial <= 48
+                   && g.pinchVelocity >= 1 && g.pinchVelocity <= 127 && g.pinchDelayMs >= 0 && g.pinchOffMs > 0;
+            }
+      while (r.readNextStartElement()) {
+            const QXmlStreamAttributes aa = r.attributes();
+            if (r.name() == "StrumLevel") {
+                  const QString set = aa.value("set").toString();
+                  const auto levels = pairs(aa.value("levels").toString());
+                  good = good && !set.isEmpty() && !levels.empty();
+                  for (const auto& l : levels)
+                        good = good && l.first >= 1 && l.first <= 127 && l.second >= 1 && l.second <= 127;
+                  g.strumLevels[set] = levels;
+                  }
+            else if (r.name() == "Fx") {
+                  Guitar::Fx f;
+                  bool ok = false;
+                  f.key = aa.value("key").toInt(&ok);
+                  f.text = QRegularExpression("^(?:" + aa.value("text").toString() + ")$", QRegularExpression::CaseInsensitiveOption);
+                  good = good && ok && f.key >= 0 && f.key <= 127 && f.text.isValid() && !aa.value("text").isEmpty();
+                  g.fx.push_back(f);
+                  }
+            r.skipCurrentElement();
+            }
+      return good;
+      }
+
+int Guitar::strumLevel(const QString& set, int velocity) const
+      {
+      auto t = strumLevels.find(set);
+      if (t == strumLevels.end() || t->second.empty())
+            return 64;
+      const auto& v = t->second;
+      if (velocity <= v.front().first)
+            return v.front().second;
+      if (velocity >= v.back().first)
+            return v.back().second;
+      for (size_t i = 1; i < v.size(); ++i) {
+            if (velocity > v[i].first)
+                  continue;
+            const double f = double(velocity - v[i - 1].first) / (v[i].first - v[i - 1].first);
+            const double db = (1.0 - f) * std::log10(v[i - 1].second) + f * std::log10(v[i].second);
+            return qBound(1, int(std::lround(std::pow(10.0, db))), 127);
+            }
+      return v.back().second;
+      }
+
+int Guitar::artificialShift(int frets) const
+      {
+      for (const auto& p : artificial)
+            if (p.first == frets)
+                  return p.second;
+      return 0;
+      }
+
 // <Controller id="vibrato" name="Vibrato" cc="21" default="64">
 //   <Text match="senza vib\.?" value="0"/>
 // </Controller>
@@ -931,6 +1068,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                                     return fail(QString("%1:%2: bad Controller").arg(path).arg(r.lineNumber()));
                               li.controllers.push_back(c);
                               continue;         // (readController read the element to its end)
+                              }
+                        else if (r.name() == "Guitar") {
+                              auto g = std::make_shared<Guitar>();
+                              if (!readGuitar(r, *g))
+                                    return fail(QString("%1:%2: bad Guitar").arg(path).arg(r.lineNumber()));
+                              li.guitar = g;
+                              continue;         // (readGuitar read the element to its end)
                               }
                         r.skipCurrentElement();
                         }

@@ -32,7 +32,7 @@ KEYSWITCHES = [
     ("Sustain", 24, "long legato short staccatissimo spiccato tenuto marcato longmarcato", "", 0),
     ("Natural Harmonic", 25, "long legato short staccatissimo spiccato tenuto marcato longmarcato", "harmonics", -12),
     ("Palm Mute", 26, "long legato short staccatissimo spiccato tenuto marcato longmarcato", "muted", 0),
-    # (reference: no notation asks for them yet, phase 2)
+    # (the guitar pass plays these from slides and hammer-ons: <Guitar>; slide guitar: no notation asks for it)
     ("Slide In / Out", 27, "", "", 0),
     ("Legato Slide", 28, "", "", 0),
     ("Hammer-On / Pull-Off", 29, "", "", 0),
@@ -60,6 +60,53 @@ OTHER_KEYS = [
 ]
 
 SAMPLE_SETS = [("Finger", "AGMFg"), ("Pick", "AGMPk"), ("Strum", "AGMSt")]
+
+# guitar notation's keys and rules (<Guitar>, soundlibrary.h Guitar, played by libmscore/guitarplayback.cpp; phase 2,
+# 2026-10-20). Measured in AGM 4.1.0 (2026-10-18, the private measurements meas / meas2 / meas3) unless said:
+# - string forcing G0-C1 = strings 6..1 at velocity 127 (127 also forces the fret position);
+# - the strummer: strum mode C#6 (velocity >= 64 on, <= 63 off), Detect D5 at 127, the chord's notes in C1-B2 with the
+#   root in C1-B1, strum keys C4 down open, E4 up open, G4 down muted, B4 up muted; velocity 96-126 plays all six
+#   strings (110: inside the band; the band's level moves only 1-2 dB, its timbre not at all);
+# - STRUM_LEVELS: the CC7 at which the recorded Full strum (v110) is as loud as a six-string roll at that velocity
+#   (meas3 item 1, "CC7 for equal level"; CC7 is a clean gain, 64 = unity). The Pick set was not measured: Finger's
+#   numbers (an assumption: its in-band velocity range is Finger's, meas2 A);
+# - softStrum 30: rolls are darker than a CC7-lowered strum only at v <= 30 (meas3); rollGap 15 ms (10-25 ms all lie
+#   inside the recorded strums' spread);
+# - artificial harmonics: string physics (touching k frets above the stopped note sounds partial n: 12 -> 2nd, +12;
+#   7 -> 3rd, +19; 5 -> 4th, +24; 4 -> 5th, +28; 3 -> 6th, +31), played as the natural harmonic at that pitch (the only
+#   harmonic timbre Ample has, meas);
+# - pinch: the 3rd harmonic (+19, the measured targets), the palm-muted fretted note at v60, 2 ms after, 45 ms long
+#   (meas3 item 2: closest by numbers to a pinch's profile, one instance; keyswitches latch);
+# - overlap 20 ms (a legato slide / hammer-on needs the two notes to overlap; any overlap measured works: the fork's
+#   choice), slideOut 200 ms (the slide out falls within 160 ms, meas), FX keys F5-C6, F6-G6 (all 11 sound, meas).
+STRUM_LEVELS = [
+    ("AGMSt", "20:8 40:16 60:20 80:32 100:64 120:69"),
+    ("AGMFg", "20:6 40:11 60:13 80:27 100:39 120:50"),
+    ("AGMPk", "20:6 40:11 60:13 80:27 100:39 120:50"),
+]
+GUITAR_FX = [
+    ("scratch", 89), ("slap", 90), ("muting", 91), ("strum mute", 92), ("down ?noise( 1)?", 93), ("up ?noise( 1)?", 94),
+    ("down ?noise 2", 95), ("up ?noise 2", 96), ("hit top( open)?", 101), ("hit top mute(d)?", 102), ("hit rim", 103),
+]
+GUITAR = [
+    ("stringKeys", "36 35 34 33 32 31"), ("stringVelocity", "127"), ("harmonic", "25"), ("harmonicShift", "-12"),
+    ("palmMute", "26"), ("slide", "27"), ("legatoSlide", "28"), ("hammer", "29"),
+    ("strumMode", "97"), ("strumOn", "100"), ("strumOff", "1"), ("detect", "86"), ("detectVelocity", "127"),
+    ("chordLow", "36"), ("strumKeys", "72 76 79 83"), ("strumVelocity", "110"), ("softStrum", "30"), ("rollGap", "15"),
+    ("sampleSet", "sample-set"), ("capo", "m-capo"), ("capoMax", "11"), ("artificial", "3:31 4:28 5:24 7:19 12:12"),
+    ("pinch", "19 60 2 45"), ("overlap", "20"), ("slideOut", "200"), ("fxLength", "500"),
+]
+
+
+def guitar_xml():
+    out = ["    <!-- guitar notation's keys and rules (libmscore/guitarplayback.cpp; measured, gen_ample.py GUITAR) -->",
+           "    <Guitar %s>" % " ".join("%s=%s" % (k, quoteattr(v)) for k, v in GUITAR)]
+    for sample_set, levels in STRUM_LEVELS:
+        out.append("      <StrumLevel set=%s levels=%s/>" % (quoteattr(sample_set), quoteattr(levels)))
+    for text, key in GUITAR_FX:
+        out.append("      <Fx text=%s key=\"%d\"/>" % (quoteattr(text), key))
+    out.append("    </Guitar>")
+    return out
 
 INSTRUMENT_IDS = "guitar-steel guitar-steel-treble-clef guitar-steel-tablature"
 
@@ -227,7 +274,8 @@ def generate(params):
         if shift:
             a.append(("keyShift", str(shift)))
         w("    <Articulation %s/>" % " ".join("%s=%s" % (k, quoteattr(v)) for k, v in a))
-    w("    <!-- Ample's other keys, for phase 2 (MIDI numbers):")
+    out.extend(guitar_xml())
+    w("    <!-- Ample's other keys, for reference (MIDI numbers):")
     for what, keys in OTHER_KEYS:
         w("         %s: %s" % (keys, what.replace("--", "-")))
     w("    -->")

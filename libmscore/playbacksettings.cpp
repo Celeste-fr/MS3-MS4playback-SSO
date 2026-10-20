@@ -206,6 +206,20 @@ static const std::vector<Definition> DEFINITIONS = {
       { "notes/avoidBadSamples", 1, 0, 1, "on/off",
         "1: an attack at a velocity whose recording at that key is faulty (the map's avoid: SSO's Celli - Performance C3) plays "
         "at the nearest clean velocity measured; a note's own velocity stays; 0: as chosen", true },
+      // [guitar] (a guitar library's <Guitar>: Ample Guitar M; guitarplayback.cpp. Choices of sound, so off by default and in
+      // Library default until the owner decides by ear, 2026-10-20; the notation's techniques themselves (strings, capo,
+      // harmonics, slides, hammer-ons, FX texts) are not settings)
+      { "guitar/strums", 0, 0, 1, "on/off",
+        "1: a chord with a strum line (a straight arpeggio, stretch at most 1) plays the guitar library's strummer: Detect mode, "
+        "the chord's notes as chord keys, a full strum down (arrow up: low strings first) or up, muted when every note has a "
+        "cross notehead, as loud as its notes would be by CC7 (the map's StrumLevel); 0: its notes, spread as MuseScore "
+        "plays an arpeggio", true },
+      { "guitar/softStrums", 0, 0, 1, "on/off",
+        "1 (with guitar/strums): a strum at velocity <= the map's softStrum (Ample: 30, where a roll is darker than a "
+        "quieter strum: measured) plays as its notes rolled rollGap ms apart instead; 0: the strummer at its CC7", true },
+      { "guitar/pinchHarmonics", 0, 0, 1, "on/off",
+        "1: a note under staff text P.H. / pinch harm. plays a layered approximation (the natural harmonic at its partial, "
+        "then the fretted note palm-muted and short: the map's pinch, measured closest by numbers); 0: the note as written", true },
       // [tuning]
       { "tuning/tolerance", MAP, 0, 50, "cents",
         "a note this close to a tuning copy's tuning plays on it (default: the map's <Tuning tolerance>, else half the smallest gap between two accidentals' values, 0.083: ScoreTuning::smallestAccidentalGap)", true },
@@ -477,7 +491,8 @@ const std::vector<Preset>& presets()
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/speedFromWritten", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
-                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 } } },
+                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 },
+                                              { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
             };
       return P;
       }

@@ -3025,6 +3025,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       libraryEvenLevels(chunk, events);
       libraryTrackDelays(chunk, events);
       libraryMaxVelocity(chunk, events);
+      libraryGuitar(chunk, events);       // (guitarplayback.cpp: last, its keys' velocities exact)
       }
 
 //---------------------------------------------------------

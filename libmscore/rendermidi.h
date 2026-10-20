@@ -321,6 +321,7 @@ class MidiRenderer {
                                    const SoundLib::Choice& choice, int utick, int staffIdx);
       void finishLibraryEvents(const Chunk&, EventMap* events);
       void libraryMaxVelocity(const Chunk&, EventMap* events);
+      void libraryGuitar(const Chunk&, EventMap* events);              // guitarplayback.cpp
       void libraryPitchBends(const Chunk&, EventMap* events);
       void librarySpeeds(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);
