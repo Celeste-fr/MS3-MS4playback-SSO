@@ -322,6 +322,7 @@ class MidiRenderer {
       void finishLibraryEvents(const Chunk&, EventMap* events);
       void libraryMaxVelocity(const Chunk&, EventMap* events);
       void libraryGuitar(const Chunk&, EventMap* events);              // guitarplayback.cpp
+      double guitarStartLeadMs() const;                                // … the start lead a capo at the start needs
       void libraryPitchBends(const Chunk&, EventMap* events);
       void librarySpeeds(const Chunk&, EventMap* events);
       void libraryNoteLevels(const Chunk&, EventMap* events);

@@ -16,8 +16,11 @@
 //   are routed, delayed and capped already, so the keys it adds keep their exact velocities, e.g. 127 forcing a string).
 //   From the notation MuseScore 3 has:
 //   - capo (staff text's capo setting, Staff::capo; ppitch includes it): the capo parameter (<Guitar capo>, plug-in
-//     output only) at the chunk's start and at each change, every note's key sounding - capo (Ample keeps the fingering:
-//     it transposes what it gets). Not when the part has a lane on that parameter (the lane is the user's);
+//     output only) at the chunk's start (whenever the staff has a capo text) and at each change, every note's key
+//     sounding - capo (Ample keeps the fingering: it transposes what it gets). Ample applies a change from its next
+//     process block, so a change goes capoLead ms before its first note (not before the route's previous note-on), and
+//     a capo at the start plays the score capoLead later (the start lead, guitarStartLeadMs). Not when the part has a
+//     lane on that parameter (the lane is the user's);
 //   - strums ([guitar] strums): a chord with a straight arpeggio (a strum line; stretch <= 1: a stretched one is an
 //     arpeggio, its notes spread as MuseScore plays them) plays the strummer: CC7 (the strum as loud as its notes at
 //     their velocity: Guitar::strumLevel by the part's sample set, on the CC7 in force), Detect mode, strum mode on, the
@@ -79,6 +82,77 @@
 
 namespace Ms {
 
+// the capo parameter's index in li's allControllers when the pass sends it (plug-in output or Live's clips, no lane of
+// the part on it: the lane is the user's), else -1
+static int capoParamIndex(const Part* part, const SoundLib::LibInstrument* li,
+                          const std::map<const Part*, Automation::PartLanes>& lanes, bool forLiveClips)
+      {
+      if (!li || !li->guitar || li->guitar->capo.isEmpty()
+          || !(SoundLib::output() == SoundLib::Output::PLUGIN || forLiveClips))
+            return -1;
+      for (int i = 0; i < int(li->allControllers.size()); ++i) {
+            const SoundLib::Controller& c = li->allControllers[size_t(i)];
+            if (c.id != li->guitar->capo || c.param.isEmpty())
+                  continue;
+            if (lanes.find(part) != lanes.end())
+                  for (const Automation::Lane& l : Automation::lanes(part, lanes))
+                        if (l.target == c.id)
+                              return -1;
+            return i;
+            }
+      return -1;
+      }
+
+// a capo staff text anywhere on the staff (also "capo 0": fretId 1)
+static bool staffHasCapo(const Score* score, const Staff* staff)
+      {
+      for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
+            for (const Element* e : seg->annotations())
+                  if (e->isStaffTextBase() && e->staff() == staff && toStaffTextBase(e)->capo() > 0)
+                        return true;
+      return false;
+      }
+
+//---------------------------------------------------------
+//   guitarStartLeadMs
+//    the capo in force at the score's start goes out at tick 0 (the instance may still hold another one); a guitar
+//    note within capoLead of the start would share Ample's process block with it and play at the old capo, so the
+//    score plays later by the rest of capoLead (the start lead, libraryDelayLead: everything else moves, the capo
+//    parameter at 0 stays). Not for Live's clips (no start lead there)
+//---------------------------------------------------------
+
+double MidiRenderer::guitarStartLeadMs() const
+      {
+      if (forLiveClips || libParts.empty())
+            return 0.0;
+      double lead = 0.0;
+      std::map<const Part*, Automation::PartLanes> lanes;
+      bool lanesRead = false;
+      for (const auto& pl : libParts) {
+            const SoundLib::LibInstrument* li = pl.second.route.instrument;
+            if (!li || !li->guitar || li->guitar->capoLeadMs <= 0.0 || pl.first->staves()->empty())
+                  continue;
+            if (!lanesRead) {
+                  lanes = Automation::read(score->masterScore());
+                  lanesRead = true;
+                  }
+            const Staff* staff = pl.first->staves()->front();
+            if (capoParamIndex(pl.first, li, lanes, forLiveClips) < 0 || !staffHasCapo(score, staff))
+                  continue;
+            // the part's first chord
+            for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+                  bool found = false;
+                  for (int t = pl.first->startTrack(); t < pl.first->endTrack() && !found; ++t)
+                        found = seg->element(t) && seg->element(t)->isChord();
+                  if (found) {
+                        lead = std::max(lead, li->guitar->capoLeadMs - score->utick2utime(seg->tick().ticks()) * 1000.0);
+                        break;
+                        }
+                  }
+            }
+      return std::max(0.0, lead);
+      }
+
 void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
       {
       if (libRoutes.empty())
@@ -101,7 +175,6 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   lanesRead = true;
                   }
             GuitarPart gp { pl.first, li->guitar.get(), {}, -1 };
-            const auto pls = lanes.find(pl.first);
             for (int i = 0; i < int(li->allControllers.size()); ++i) {
                   const SoundLib::Controller& c = li->allControllers[size_t(i)];
                   if (c.id == gp.g->sampleSet && c.isState() && !c.stateValues.isEmpty()) {
@@ -114,16 +187,8 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                               gp.sampleSets.push_back(v != values.end() ? QString::fromUtf8(v->second) : own);
                               }
                         }
-                  if (c.id == gp.g->capo && !c.param.isEmpty()
-                      && (SoundLib::output() == SoundLib::Output::PLUGIN || forLiveClips)) {
-                        bool laned = false;
-                        if (pls != lanes.end())
-                              for (const Automation::Lane& l : Automation::lanes(pl.first, lanes))
-                                    laned = laned || l.target == c.id;
-                        if (!laned)
-                              gp.capoParam = i;
-                        }
                   }
+            gp.capoParam = capoParamIndex(pl.first, li, lanes, forLiveClips);
             for (const auto& ip : *pl.first->instruments()) {
                   const int ch = ip.second->channel(0)->channel();
                   if (libRoutes.count(ch))
@@ -272,10 +337,17 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             return false;
             };
 
-      // capo: the parameter, and every note's key relative to it
+      // capo: the parameter, and every note's key relative to it. Ample applies a change from its next process block
+      // (Guitar::capoLeadMs): a change goes capoLead before the first note under it, not before the route's previous
+      // note-on (a ringing note keeps its pitch, a note starting after the change takes it); at the chunk's start the
+      // capo in force whenever the staff has a capo text anywhere (an instance keeps the last one it got: playing
+      // again from the start after "capo 2" would otherwise stay at 2), at 0 kept there by the start lead
+      // (guitarStartLeadMs), at a chunk boundary where it changes capoLead before
       {
       std::map<int, int> sent;                    // channel -> capo sent in this chunk
-      for (On& o : ons) {
+      std::map<const Staff*, bool> anyCapo;
+      for (size_t k = 0; k < ons.size(); ++k) {
+            On& o = ons[k];
             const int capo = capoOf(o.note);
             if (capo > 0) {
                   o.on->second.setPitch(qMax(0, o.on->second.pitch() - capo));
@@ -285,21 +357,50 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             if (o.gp->capoParam < 0)
                   continue;
             const int ch = o.on->second.channel();
-            const bool hasCapo = capo > 0 || o.note->staff()->capo(Fraction::fromTicks(utick1 - offset)) != 0;
+            const Staff* staff = o.note->staff();
+            auto ac = anyCapo.find(staff);
+            if (ac == anyCapo.end())
+                  ac = anyCapo.emplace(staff, staffHasCapo(score, staff)).first;
             auto s = sent.find(ch);
-            if (s == sent.end() && !hasCapo)
+            if (s == sent.end() && !ac->second)
                   continue;
+            const int lead = o.gp->g->capoLeadMs > 0.0 ? msTicks(o.on->first, o.gp->g->capoLeadMs) : 0;
+            auto value = [&](int c) { return float(qBound(0, c, o.gp->g->capoMax)) / o.gp->g->capoMax; };
+            int floor = utick1;                   // a change not before the chunk's own capo event
             if (s == sent.end()) {
-                  const int start = o.note->staff()->capo(Fraction::fromTicks(utick1 - offset));
+                  const int startFret = staff->capo(Fraction::fromTicks(utick1 - offset));
+                  const int start = startFret > 0 ? startFret - 1 : 0;
                   NPlayEvent p = make(o.on->second, ME_PARAMETER, o.gp->capoParam, 0);
-                  p.setTuning(float(qBound(0, start > 0 ? start - 1 : 0, o.gp->g->capoMax)) / o.gp->g->capoMax);
-                  addFirst(utick1, p);
-                  s = sent.emplace(ch, start > 0 ? start - 1 : 0).first;
+                  p.setTuning(value(start));
+                  if (utick1 == 0) {
+                        p.setLibraryDelayed(true);      // (stays at 0: the start lead moves the rest)
+                        addFirst(0, p);
+                        }
+                  else {
+                        const int beforeFret = staff->capo(Fraction::fromTicks(qMax(0, utick1 - offset - 1)));
+                        if ((beforeFret > 0 ? beforeFret - 1 : 0) != start && lead > 0)
+                              floor = qMax(0, utick1 - lead);
+                        addFirst(floor, p);
+                        }
+                  s = sent.emplace(ch, start).first;
                   }
             if (s->second != capo) {
                   NPlayEvent p = make(o.on->second, ME_PARAMETER, o.gp->capoParam, 0);
-                  p.setTuning(float(qBound(0, capo, o.gp->g->capoMax)) / o.gp->g->capoMax);
-                  addFirst(o.note->chord()->tick().ticks() + offset, p);
+                  p.setTuning(value(capo));
+                  const int on = o.on->first;
+                  // the route's previous note-on (before this chord's)
+                  int previous = -1;
+                  for (size_t j = k; j-- > 0;) {
+                        if (ons[j].on->first < on && sameRoute(ons[j].on->second, o.on->second)) {
+                              previous = ons[j].on->first;
+                              break;
+                              }
+                        }
+                  const int at = std::min(on, std::max({ on - lead, previous + 1, floor }));
+                  if (at >= on)
+                        addFirst(on, p);              // (no room: before the note, as close as it gets)
+                  else
+                        add(at, p);
                   s->second = capo;
                   }
             }

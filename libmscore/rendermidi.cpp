@@ -5739,6 +5739,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             libStartLead = 0.0;
             for (const auto& l : libStartLost)
                   libStartLead = std::max(libStartLead, l.second);
+            libStartLead = std::max(libStartLead, guitarStartLeadMs());   // (a capo at the start: guitarplayback.cpp)
             libStartKnown = true;
             events->startEarlyMs = libStartLost;
             }

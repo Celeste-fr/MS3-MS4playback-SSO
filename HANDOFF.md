@@ -77,13 +77,20 @@ design), run last in `finishLibraryEvents`; the library facts are the map's `<Gu
   rolled 15 ms apart.
 - **Strings**: a tablature note's string (or a string number 1-6) → its key G0-C1 at 127 right before the note.
 - **Capo** (staff text's capo): the M-Capo parameter (plug-in output; not when the part has an M-Capo lane), keys
-  sounding - capo.
+  sounding - capo. AGM applies a change from its next process block only (ample-fixes2, measured 2026-10-20): a change
+  goes `capoLead` (50 ms) before its first note, not before the route's previous note-on; at the chunk start whenever
+  the staff has a capo text; a capo at the score's start plays the score 50 ms later (start lead), the parameter at 0.
+  Still open: playing from a later tick sends no parameter in force (Seq sends only controllers), so the instance keeps
+  the capo it last had; Live's clips get the parameter at 0 together with the first note (no start lead there).
 - **Harmonics**: natural as phase 1; artificial = a fretted note + a diamond note k frets above → only the harmonic, at
   stopped + partial (12/7/5/4/3 frets → +12/+19/+24/+28/+31) as a natural harmonic; pinch (`[guitar] pinchHarmonics`,
   off) = text "P.H.": C#0 + harmonic (fretted + 19, or the diamond), 2 ms later D0 + fretted v60 for 45 ms.
 - **Slides**: scoop / plop → D#0 before; fall / doit → D#0 200 ms before the end; glissando line → the first note alone
   (MuseScore's steps dropped) held 20 ms into the second, E0 before it. **HO / PO**: legato slur over two single notes of
   different pitch, or text H / P → the first held 20 ms into the second, F0 (velocity 1) before it.
+- **Palm mute text after "open"** (ample-fixes2): MS4 keeps a staff text "open" in force as Art::Open (`Ms4::ArtRef::technique`),
+  which ended every later "muted"; `SoundLib::want()` now lets the text state decide for a technique-text "open" (newest
+  of the two wins); only an "open" articulation on the note ends a mute there. MS4's own rendering unchanged.
 - **FX**: staff text scratch / slap / muting / strum mute / down|up noise (1|2) / hit top (open|mute) / hit rim → its key.
 - Each renderer note whose keyswitch an added one replaced gets it again (keyswitches latch, meas3).
 - **Sample sets**: staff text "pick" / "strum" / "finger" (the whole text; `TextTechniques`: modifiers pick / strum)

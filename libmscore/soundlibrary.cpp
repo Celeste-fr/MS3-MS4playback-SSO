@@ -628,6 +628,7 @@ static bool readGuitar(QXmlStreamReader& r, Guitar& g)
       key("softStrum", g.softStrum, 0);
       number("rollGap", g.rollGapMs);
       key("capoMax", g.capoMax, 1, 24);
+      number("capoLead", g.capoLeadMs);
       number("overlap", g.overlapMs);
       number("slideOut", g.slideOutMs);
       number("fxLength", g.fxMs);
@@ -2732,7 +2733,14 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             if (!w.modifiers.contains("muted"))
                   w.modifiers.append("muted");
             }
-      if (has(Art::Open))
+      // "open" ends a mute. MS4 keeps a staff text "open" in force as its technique Art::Open until "natural" /
+      // "mute" … (Dynamics::addTechnique), so it would also end a later text "muted" (which isn't in MS4's table):
+      // for the library the text state decides, as it holds the newest of the two texts (TextTechniques::apply
+      // drops "muted" at "open"); only an "open" articulation on the note itself ends it here
+      bool openArt = false;
+      for (const Ms4::ArtRef& r : arts)
+            openArt |= r.art == Art::Open && !r.technique;
+      if (openArt)
             w.modifiers.removeAll("muted");
       if (has(Art::Harmonic) || has(Art::DiamondNote) || text.harmonics)
             w.modifiers.append("harmonics");

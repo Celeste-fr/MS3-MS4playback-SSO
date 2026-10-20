@@ -206,6 +206,7 @@ class TestSoundLibrary : public QObject, public MTest
       void ampleHammer();
       void ampleFx();
       void ampleFxMute();
+      void ampleOpenMuted();
       void guitarSettings();
       void ampleSampleSets();
       void controllerDisplay();
@@ -6272,7 +6273,10 @@ void TestSoundLibrary::ampleStrings()
 
 //---------------------------------------------------------
 //   ampleCapo: staff text with capo 2 (fretId 3): M-Capo 2/11 at the start (plug-in output), every note's key 2 under
-//   its sounding pitch; MIDI out: no parameter, the keys still relative
+//   its sounding pitch; MIDI out: no parameter, the keys still relative. Ample applies a change from its next process
+//   block (capoLead): the first note plays later than the parameter at 0 (the start lead), a later "capo 0" goes
+//   capoLead before its note (after the previous note-on); a capo only later still sends the start's 0 at tick 0 (an
+//   instance keeps the last capo it got), with the start lead
 //---------------------------------------------------------
 
 void TestSoundLibrary::ampleCapo()
@@ -6302,6 +6306,59 @@ void TestSoundLibrary::ampleCapo()
       for (const GuitarEvent& e : v)
             param = param || (e.type == ME_PARAMETER && e.a == capoIndex && e.tick == 0 && e.b == int(std::lround(2000.0 / 11)));
       QVERIFY(param);
+      QVERIFY(g.capoLeadMs > 0.0);
+      QVERIFY(v[size_t(guitarNoteOn(v, c[0]))].tick > 0);          // (the start lead: a later block than the capo)
+      auto leadTicks = [&](int tick) {
+            return int(std::lround(g.capoLeadMs / 1000.0 * score->tempomap()->tempo(tick) * DIVISION));
+            };
+      auto capoChange = [&](const std::vector<GuitarEvent>& ev, int value) {
+            int t = -1;
+            for (const GuitarEvent& e : ev)
+                  if (e.type == ME_PARAMETER && e.a == capoIndex && e.tick > 0 && e.b == value)
+                        t = e.tick;
+            return t;
+            };
+      {
+            StaffText* st0 = new StaffText(score);
+            st0->setXmlText("capo 0");
+            st0->setCapo(1);
+            st0->setTrack(0);
+            Segment* seg3 = c[3]->segment();
+            st0->setParent(seg3);
+            seg3->add(st0);
+            score->updateCapo();
+            v = guitarEvents(score);
+            const int on2 = v[size_t(guitarNoteOn(v, c[2]))].tick;
+            const int on3 = v[size_t(guitarNoteOn(v, c[3]))].tick;
+            QCOMPARE(v[size_t(guitarNoteOn(v, c[3]))].a, before);  // (capo 0: the key is the sounding pitch)
+            const int change = capoChange(v, 0);
+            QVERIFY2(change > on2 && change < on3, qPrintable(QString("%1 %2 %3").arg(on2).arg(change).arg(on3)));
+            QVERIFY(on3 - change >= std::min(leadTicks(on3), on3 - on2 - 1));
+            seg3->remove(st0);
+            delete st0;
+            seg->remove(st);
+            delete st;
+            }
+      {
+            // a capo only from c[3]: 0 at the start (tick 0), 2 capoLead before c[3]
+            StaffText* st2 = new StaffText(score);
+            st2->setXmlText("capo 2");
+            st2->setCapo(3);
+            st2->setTrack(0);
+            Segment* seg3 = c[3]->segment();
+            st2->setParent(seg3);
+            seg3->add(st2);
+            score->updateCapo();
+            v = guitarEvents(score);
+            bool zero = false;
+            for (const GuitarEvent& e : v)
+                  zero = zero || (e.type == ME_PARAMETER && e.a == capoIndex && e.tick == 0 && e.b == 0);
+            QVERIFY(zero);
+            const int on3 = v[size_t(guitarNoteOn(v, c[3]))].tick;
+            const int change = capoChange(v, int(std::lround(2000.0 / 11)));
+            QVERIFY(change > v[size_t(guitarNoteOn(v, c[2]))].tick && change < on3);
+            QVERIFY(v[size_t(guitarNoteOn(v, c[0]))].tick > 0);   // (the start's 0 at tick 0: the start lead too)
+            }
       SoundLib::setOutput(SoundLib::Output::MIDI);
       v = guitarEvents(score);
       QCOMPARE(v[size_t(guitarNoteOn(v, c[3]))].a, before);
@@ -6487,6 +6544,43 @@ void TestSoundLibrary::ampleFxMute()
             SoundLib::TextTechniques::apply(t, st);
             QVERIFY(st.modifiers.contains("muted"));
             }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   ampleOpenMuted: "muted" after an "open" text palm-mutes (keyswitch 26) its chord and the plain notes after it (MS4
+//   keeps the text "open" in force as its technique Art::Open, which had ended every later "muted"); "open" again ends it
+//---------------------------------------------------------
+
+void TestSoundLibrary::ampleOpenMuted()
+      {
+      GUITAR_SETUP
+      auto text = [&](Ms::Chord* ch, const QString& t) {
+            StaffText* st = new StaffText(score);
+            st->setXmlText(t);
+            st->setTrack(0);
+            st->setParent(ch->segment());
+            ch->segment()->add(st);
+            };
+      auto palmMuted = [&](const std::vector<GuitarEvent>& v, const Ms::Chord* ch) {
+            const int i = guitarNoteOn(v, ch);
+            int sw = -1;
+            for (int k = 0; k < i; ++k)
+                  if (v[size_t(k)].sw && v[size_t(k)].b > 0)
+                        sw = v[size_t(k)].a;
+            return i >= 0 && sw == 26;
+            };
+      text(c[0], "open");
+      text(c[2], "muted");
+      std::vector<GuitarEvent> v = guitarEvents(score);
+      QVERIFY(guitarNoteOn(v, c[0]) >= 0 && !palmMuted(v, c[0]));
+      QVERIFY(guitarNoteOn(v, c[1]) >= 0 && !palmMuted(v, c[1]));
+      QVERIFY(palmMuted(v, c[2]));                                  // (the text's own chord)
+      QVERIFY(palmMuted(v, c[3]));                                  // (plain notes after it)
+      text(c[4], "open");
+      v = guitarEvents(score);
+      QVERIFY(palmMuted(v, c[3]));
+      QVERIFY(guitarNoteOn(v, c[4]) >= 0 && !palmMuted(v, c[4]));
       delete score;
       }
 

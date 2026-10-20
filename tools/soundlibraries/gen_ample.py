@@ -77,6 +77,10 @@ SAMPLE_SETS = [("Finger", "AGMFg"), ("Pick", "AGMPk"), ("Strum", "AGMSt")]
 #   harmonic timbre Ample has, meas);
 # - pinch: the 3rd harmonic (+19, the measured targets), the palm-muted fretted note at v60, 2 ms after, 45 ms long
 #   (meas3 item 2: closest by numbers to a pinch's profile, one instance; keyswitches latch);
+# - capoLead 50 ms: AGM applies an M-Capo change from its next process block only (2026-10-20, amphost, 80 trials at
+#   blocks of 64-2048 frames: a note-on in the same block as the change plays at the old capo wherever it lies in the
+#   block, one in a later block at the new; a ringing note keeps its pitch). MuseScore's hosting splits its blocks at
+#   events, so any lead works there; 50 ms covers a host's fixed blocks up to 2048 frames at 44.1 kHz (Live's buffer);
 # - overlap 20 ms (a legato slide / hammer-on needs the two notes to overlap; any overlap measured works: the fork's
 #   choice), slideOut 200 ms (the slide out falls within 160 ms, meas), FX keys F5-C6, F6-G6 (all 11 sound, meas).
 STRUM_LEVELS = [
@@ -93,7 +97,7 @@ GUITAR = [
     ("palmMute", "26"), ("slide", "27"), ("legatoSlide", "28"), ("hammer", "29"),
     ("strumMode", "97"), ("strumOn", "100"), ("strumOff", "1"), ("detect", "86"), ("detectVelocity", "127"),
     ("chordLow", "36"), ("strumKeys", "72 76 79 83"), ("strumVelocity", "110"), ("softStrum", "30"), ("rollGap", "15"),
-    ("sampleSet", "sample-set"), ("capo", "m-capo"), ("capoMax", "11"), ("artificial", "3:31 4:28 5:24 7:19 12:12"),
+    ("sampleSet", "sample-set"), ("capo", "m-capo"), ("capoMax", "11"), ("capoLead", "50"), ("artificial", "3:31 4:28 5:24 7:19 12:12"),
     ("pinch", "19 60 2 45"), ("overlap", "20"), ("slideOut", "200"), ("fxLength", "500"),
 ]
 

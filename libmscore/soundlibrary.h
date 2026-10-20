@@ -306,6 +306,10 @@ struct Guitar {
       QString sampleSet;                  // the state controller holding the sample set (its values index strumLevels)
       QString capo;                       // the capo parameter's controller id (steps 0 .. capoMax)
       int capoMax { 11 };
+      // a capo change reaches the notes this many ms before the first note under it: Ample applies a parameter change
+      // from its next process block only (measured 2026-10-20, ample-wincheck/FIX2.md: a note-on in the same block as
+      // the change plays at the old capo; a ringing note keeps its pitch), so the change goes in an earlier block
+      double capoLeadMs { 0 };
       // an artificial harmonic (a fretted note with a diamond note above it): frets from the stopped note to the touched
       // one -> semitones the harmonic sounds over the stopped note (string physics)
       std::vector<std::pair<int, int>> artificial;

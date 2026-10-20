@@ -149,7 +149,7 @@
     <Articulation name="Hammer-On / Pull-Off" value="29" techniques=""/>
     <Articulation name="Slide Guitar" value="30" techniques=""/>
     <!-- guitar notation's keys and rules (libmscore/guitarplayback.cpp; measured, gen_ample.py GUITAR) -->
-    <Guitar stringKeys="36 35 34 33 32 31" stringVelocity="127" harmonic="25" harmonicShift="-12" palmMute="26" slide="27" legatoSlide="28" hammer="29" strumMode="97" strumOn="100" strumOff="1" detect="86" detectVelocity="127" chordLow="36" strumKeys="72 76 79 83" strumVelocity="110" softStrum="30" rollGap="15" sampleSet="sample-set" capo="m-capo" capoMax="11" artificial="3:31 4:28 5:24 7:19 12:12" pinch="19 60 2 45" overlap="20" slideOut="200" fxLength="500">
+    <Guitar stringKeys="36 35 34 33 32 31" stringVelocity="127" harmonic="25" harmonicShift="-12" palmMute="26" slide="27" legatoSlide="28" hammer="29" strumMode="97" strumOn="100" strumOff="1" detect="86" detectVelocity="127" chordLow="36" strumKeys="72 76 79 83" strumVelocity="110" softStrum="30" rollGap="15" sampleSet="sample-set" capo="m-capo" capoMax="11" capoLead="50" artificial="3:31 4:28 5:24 7:19 12:12" pinch="19 60 2 45" overlap="20" slideOut="200" fxLength="500">
       <StrumLevel set="AGMSt" levels="20:8 40:16 60:20 80:32 100:64 120:69"/>
       <StrumLevel set="AGMFg" levels="20:6 40:11 60:13 80:27 100:39 120:50"/>
       <StrumLevel set="AGMPk" levels="20:6 40:11 60:13 80:27 100:39 120:50"/>

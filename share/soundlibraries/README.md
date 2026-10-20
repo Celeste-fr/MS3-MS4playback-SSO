@@ -367,7 +367,9 @@ switch value of each articulation. For example:
   `detectVelocity`, chord keys from `chordLow`, `strumKeys="down up downMuted upMuted"` at `strumVelocity`, `softStrum`
   and `rollGap` ms (`[guitar] softStrums`); `sampleSet` (the state controller whose value picks a `<StrumLevel
   set levels="velocity:CC7 …">`: the CC7 a strum plays at, log-linear between) and `capo` / `capoMax` (the capo
-  parameter's controller id: a capo staff text sends it, each note's key sounding - capo); `pinch="partial velocity
+  parameter's controller id: a capo staff text sends it, each note's key sounding - capo) and `capoLead` (ms a change
+  goes before the first note under it, after the previous note-on: Ample applies it from its next process block; a
+  capo at the score's start plays the score that much later, the parameter at 0); `pinch="partial velocity
   delayMs lengthMs"` (`[guitar] pinchHarmonics`); `fxLength` ms and `<Fx text="regex" key>` (staff text, the whole text,
   case-insensitive, that plays an FX noise key). A bad value refuses the map.
 - **Ample Guitar M** (`Ample Guitar M.xml`, generated: `python3 tools/soundlibraries/gen_ample.py <dump>`, the dump
