@@ -115,6 +115,17 @@ struct Slot {
       };
 std::vector<Slot> slotsOf(const QByteArray& component);   // a state's slots, in order
 
+// SSO's string sections' Performance patches' random sources ([slurs] fixedTransitions): the intensities of a state's
+// first slot's external modulators whose source is Kontakt's random generator (source type 10), in program order;
+// empty (*error) when its group list can't be read. withRandomSources: the state with them set (values: one value for
+// all, or one each), everything else kept (the very bytes when they already are); *count how many changed. Measured
+// (Windows test VM, kthost, 2026-10-20, sso-legato-fixes RESULT): at 0, two renders of Whence null at -93 dB (Violas),
+// -71 (Violins 1), -97 (Celli), -86 (Basses) against -7..-21 as shipped; each note as loud as the shipped takes' mean
+// (median within 0.15 dB)
+std::vector<float> randomSources(const QByteArray& component, QString* error);
+QByteArray withRandomSources(const QByteArray& component, const std::vector<float>& values, QString* error,
+                             int* count = nullptr);
+
 } // namespace KontaktSetup
 } // namespace Ms
 #endif

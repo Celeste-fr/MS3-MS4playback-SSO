@@ -131,6 +131,19 @@ static const std::vector<Definition> DEFINITIONS = {
         "note-on spacing (SSO's string sections: CC119), that controller is MuseScore's: the script's own writing is off in "
         "the patch's state and each legato note-on gets the value from the WRITTEN spacing, so notes started early keep their "
         "band; 0: the script writes it from the spacing as played", true },
+      // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM, 0 in both presets until the owner has heard
+      // it; SoundLib::fixedTransitions. Per score: the hosted instances of a score whose value differs are loaded again)
+      { "slurs/fixedTransitions", 0, 0, 1, "on/off",
+        "1: the Performance patches' random transition variation off (SSO's string sections: the modulators from Kontakt's "
+        "random generator on their portamento and run transitions at 0 in the patch's state), so every play of a passage "
+        "sounds the same, as loud as the library's takes on average; 0: as the library plays them, each play a little "
+        "different", true },
+      // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM, 0 in both presets until the owner has heard
+      // it; MidiRenderer::libraryFastTransitions)
+      { "slurs/fastTransitions", 0, 0, 1, "on/off",
+        "1: a legato note started less than 15 ms after the note before on its patch, which SSO's legato ignores at velocity 64 "
+        "or less (the audit's DROPPED), is sent at velocity 65, the lowest it plays, the same transition family (velocities "
+        "20-64 only: a portamento has none above 64); 0: sent as chosen", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -468,7 +481,8 @@ QString iniTemplate()
 //    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance, slurs/transitions, slurs/smoothStart) differ between them;
 //    slurs/transitionsEarly (1 in Recommended since 2026-10-15, 0 in Library default); slurs/plainPerformance (1 in Recommended and by default, 0 in Library default,
 //    since 2026-10-17: the owner chose it by ear on the five string sections); slurs/speedFromWritten (0 in both since
-//    2026-10-17: the owner flips it after the null test and listening). The other settings are not in the table because: legato/keepMs acts
+//    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions and slurs/fastTransitions (0 in
+//    both since 2026-10-20, until the owner has heard them). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -490,10 +504,10 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/speedFromWritten", 0 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/speedFromWritten", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },

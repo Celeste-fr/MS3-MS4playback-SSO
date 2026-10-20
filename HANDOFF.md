@@ -30,6 +30,39 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## SSO legato fixes (branch `sso-legato-fixes`, 2026-10-20, from integrate-1017 e8a330c429; not merged)
+
+Four tests of SSO's Performance legato on the Windows test VM (kthost, Kontakt 8 + SSO, `--wait 2`, two kthost side by
+side: renders equal `--wait 60` / serial ones at -93 dB, the fresh-process floor). Violas and Violins 1 - Performance
+(Celli, Basses for test 2): Whence lane 0 as plainPerformance plays it (~37 s) and a grid of 16 ten-note legato phrases
+(IOI 120 / 200 / 350 / 600 ms; velocity 5 attack, 93 / 69 transitions). Measurement copies of MuseScore's setups only.
+1. **CC102 "since note-on" ramp: no effect, nothing to fix.** The script's switch for it (a saved script value, read from
+   the patch's script) turned off, CC102 held at 0, 40, 90 or 126 from the start or from 0.5 s, and the stock ramp all null
+   against each other at -93 dB (Violas) / -70 (Violins 1), Whence and the 350 / 600 ms phrases. The ramp rebuilt from
+   the note-ons and sent as MIDI changed the sound (-17 dB, +0.2 dB per note), but the same stream on an unused CC (20),
+   or CC102 held at 64 re-sent every 5 ms, changed it alike: dense MIDI events, not CC102 (probably Kontakt's blocks split at each
+   event; even levels' CC11 glides send one every 5 ms, so they may carry a +0.1..0.2 dB effect of their own: open).
+   The swell inside slurs is not the CC102 ramp's.
+2. **Random modulators: off makes plays repeatable (built: `[slurs] fixedTransitions`).** No script setting does it (its
+   random-detune switch acts on modulators these patches don't have and is read back from the groups at load). In the
+   state: the 100-130 external modulators from Kontakt's random generator (source type 10) at intensity 0. Two plays of
+   Whence null at -73.5 dB (Violas), -70.4 (Violins 1), -96.6 (Celli), Basses -85.8 (its 90 transition-level modulators
+   only), against -9.0 / -8.9 / -7.2 / -21.4 shipped. Per note against the mean of two shipped takes: median +0.00 / -0.06
+   / +0.14 dB, SD 0.30 / 0.22 / 0.50 (the takes differ by SD 0.32 / 0.25 / 0.52); spectra within 0.07-0.30 dB on average;
+   swell unchanged. Still random: bowed (85+) transitions at 120-200 ms (Across Strings sustain groups, no random
+   modulator). Listening clips (private): Whence stock take 1 / 2 / fixed per section.
+3. **Dropped transitions: confirmed (built: `[slurs] fastTransitions`).** A whole step 10 or 14 ms after a note at velocity
+   64 is silent, 16 ms plays; at 65 / 70 / 84 10 ms after it plays as the 64 sent 20 ms after (spectrum within 0.3-1.0 dB,
+   arrival the same), at 85 another family (DETACHED). Sent at 65 by the setting (velocities 20-64 only).
+4. **The 500 ms transition release: confirmed.** In a release-family-only copy, Violas' old-key release voice is silent at
+   holds 450 / 480 ms (-101..-129 dB) and sounds at 520 / 550 ms (-58.6 dB); Violins 1 has an old-key release at every
+   hold (-59 dB, probably its CC119 release group) and +3.3 dB more above 500 ms. Nothing built for it.
+
+Both settings: 0 by default and in both presets until the owner has heard them; docs/PLAYBACK_SETTINGS.md › Fixed
+transitions / Fast transitions; LIVE.md (Create Live Set embeds the fixed state; the velocity is in the clips). Tests:
+`tst_soundlibrary::kontaktRandomSources` (+ speedFromWritten's layers), `tst_liveequivalence::randomSetupState`,
+`tst_playbackaudit::droppedFindings`. Untried in MuseScore with Kontakt (the state is the one measured by kthost).
+
 ## Ample guitars (branch `ample-map`, 2026-10-18, from integrate-1017 c0d2f7325c; not merged)
 
 The owner, 2026-10-18: "I want to be able to control all the parameters directly in MuseScore. ALL of them." Phase 1

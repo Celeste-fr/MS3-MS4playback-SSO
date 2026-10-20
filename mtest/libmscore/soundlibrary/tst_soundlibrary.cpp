@@ -234,6 +234,7 @@ class TestSoundLibrary : public QObject, public MTest
       void kontaktScriptValues();
       void kontaktMaxVoices();
       void kontaktTune();
+      void kontaktRandomSources();
       void kontaktSlots();
       void kontaktScriptValueLengths();
       void kontaktKickstartUnpurge();
@@ -1941,7 +1942,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1950,15 +1951,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -2544,6 +2545,19 @@ void TestSoundLibrary::speedFromWritten()
       QCOMPARE(int(values.size()), 1);
       QCOMPARE(values.at("$vfm12"), QByteArray("0"));
       QVERIFY(SoundLib::playbackScriptValues(*main, score).empty());
+      // ([slurs] fixedTransitions, the same patches: the pseudo value for the random sources, SoundLibraryHost::setupStateWith;
+      // the score's 0 over the ini's 1)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/fixedTransitions", "1" } });
+      QCOMPARE(SoundLib::playbackScriptValues(*perf, score), (std::map<QString, QByteArray> { { "@randomSources", "0" } }));
+      QVERIFY(SoundLib::playbackScriptValues(*main, score).empty());
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/fixedTransitions", 0 } }));
+      QVERIFY(SoundLib::playbackScriptValues(*perf, score).empty());
+      score->setMetaTag(Playback::metaTag, QString());
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/speedFromWritten", "1" },
+                                      { "slurs/fixedTransitions", "1" } });
+      QCOMPARE(SoundLib::playbackScriptValues(*perf, score),
+               (std::map<QString, QByteArray> { { "$vfm12", "0" }, { "@randomSources", "0" } }));
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/speedFromWritten", "1" } });
       std::vector<On> plain = render();
       QCOMPARE(speedAt(plain, 480, 74), 63);
       QCOMPARE(speedAt(plain, 2400, 81), 63);
@@ -7821,6 +7835,77 @@ void TestSoundLibrary::kontaktTune()
       QCOMPARE(withTune(made, 0.0, &error, &before), made);
       QVERIFY(withTune(empty, -50.0, &error).isEmpty());
       QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
+//   kontaktRandomSources
+//    [slurs] fixedTransitions: the modulators of a state's program whose source is Kontakt's random generator (source
+//    type 10; SSO's string sections' Performance patches), read and set, everything else as it was: the made-up Violas -
+//    Performance of kontakt/make_random_fixture.py (1 and 0.75; a controller's 0.5 and an internal modulator's kept: only
+//    the two floats change). With MS_RANDOM_STATE=<MuseScore's setup of an SSO string section's Performance patch> (the
+//    owner's file) also the real one: 100-130, 90 of them at 1, all 0, back as made
+//---------------------------------------------------------
+
+void TestSoundLibrary::kontaktRandomSources()
+      {
+      using namespace KontaktSetup;
+      auto read = [this](const QString& name) {
+            QFile f(root + "/" + DIR + "kontakt/" + name);
+            return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
+            };
+      const QByteArray nki = read("Violas - Performance (random sources).nki");
+      const QByteArray empty = read("empty.bin");
+      QString error;
+      const QByteArray made = fromEmpty(empty, nki, "D:/Libs/SSO/Instruments/Symphonic Strings", {}, &error);
+      QVERIFY2(!made.isEmpty(), qPrintable(error));
+      QCOMPARE(randomSources(made, &error), (std::vector<float> { 1.0f, 0.75f }));
+
+      int count = -1;
+      const QByteArray fixed = withRandomSources(made, { 0.0f }, &error, &count);
+      QVERIFY2(!fixed.isEmpty(), qPrintable(error));
+      QCOMPARE(count, 2);
+      QCOMPARE(randomSources(fixed, &error), (std::vector<float> { 0.0f, 0.0f }));
+      // only those floats: same size, at most 8 bytes differ; script values, sample list, marker as they were
+      const QByteArray p0 = slotProgram(made, nullptr);
+      const QByteArray p1 = slotProgram(fixed, nullptr);
+      QCOMPARE(p1.size(), p0.size());
+      int differ = 0;
+      for (int i = 0; i < p0.size(); ++i)
+            differ += p0.at(i) != p1.at(i);
+      QVERIFY(differ >= 2 && differ <= 8);
+      QCOMPARE(scriptValues(p1), scriptValues(p0));
+      QCOMPARE(samplePaths(fixed, &error), samplePaths(made, &error));
+      QCOMPARE(presetTail(fixed), presetTail(made));
+      // back as made (one value each); already so: the very bytes; a wrong number of values or no program: empty
+      QCOMPARE(slotProgram(withRandomSources(fixed, { 1.0f, 0.75f }, &error, &count), nullptr), p0);
+      QCOMPARE(count, 2);
+      QCOMPARE(withRandomSources(fixed, { 0.0f }, &error, &count), fixed);
+      QCOMPARE(count, 0);
+      QVERIFY(withRandomSources(made, { 0.0f, 0.0f, 0.0f }, &error).isEmpty());
+      QVERIFY(withRandomSources(empty, { 0.0f }, &error).isEmpty());
+      QVERIFY(!error.isEmpty());
+      // a program whose groups have none: nothing to set, the very bytes
+      const QByteArray other = fromEmpty(empty, read("Violins 2 - All techniques.nki"), "D:/Libs/SSO/Instruments/Symphonic Strings",
+                                         {}, &error);
+      QVERIFY(randomSources(other, &error).empty());
+      QCOMPARE(withRandomSources(other, { 0.0f }, &error, &count), other);
+      QCOMPARE(count, 0);
+
+      if (!qEnvironmentVariableIsSet("MS_RANDOM_STATE"))
+            return;
+      QFile f(qEnvironmentVariable("MS_RANDOM_STATE"));
+      QVERIFY(f.open(QIODevice::ReadOnly));
+      QString name;
+      QByteArray component, controller;
+      QVERIFY(Vst3Plugin::splitState(f.readAll(), &name, &component, &controller));
+      const std::vector<float> real = randomSources(component, &error);
+      QVERIFY2(real.size() >= 100 && real.size() <= 130, qPrintable(QString::number(real.size())));
+      QCOMPARE(int(std::count(real.begin(), real.end(), 1.0f)), 90);
+      const QByteArray realFixed = withRandomSources(component, { 0.0f }, &error, &count);
+      QCOMPARE(count, int(real.size()));
+      for (float v : randomSources(realFixed, &error))
+            QCOMPARE(v, 0.0f);
+      QCOMPARE(slotProgram(withRandomSources(realFixed, real, &error), nullptr), slotProgram(component, nullptr));
       }
 
 //---------------------------------------------------------

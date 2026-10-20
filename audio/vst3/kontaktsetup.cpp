@@ -1777,5 +1777,203 @@ std::vector<int> purgedGroups(const QByteArray& program)
       return out;
       }
 
+//---------------------------------------------------------
+//   random sources ([slurs] fixedTransitions, 2026-10-20, branch sso-legato-fixes): SSO's string sections' Performance
+//   patches have external modulators whose source is Kontakt's random generator (source type 10: 90 named "RVU_TIME1"
+//   on the PORTAMENTO FAST / RUNS / RUNS RT groups' flex envelope level 1, intensity 1, and 10-40 named
+//   "SB_LEG_INTPITCH" on sustain groups' pitch, intensity 0.02-0.04). They draw a new value for every voice, so no two
+//   plays of a passage are alike (two renders of Whence null at -7..-9 dB). The walk, as
+//   tools/soundlibraries/layer_isolation.py's modulators() (read 2026-10-13 from the patches' group data): the program's
+//   GROUP_LIST (0x33): u32 count, each group a structured body whose children (u16 id, u32 size, body) 0x3B / 0x3C
+//   hold its modulators: u8, u16 version (from 0x13 4 bytes more), then per slot a present byte and, when 1, a
+//   modulator (u16 id, u32 size, record): record +11 the u32 length of its target's name, +15 the name, then its
+//   intensity (float); id 0x0C an external one, its source the record's last "<u32 n><NAME><01 00 00 00><type> 00 00 00"
+//   (layer_isolation.py's sourceType)
+//---------------------------------------------------------
+
+namespace {
+
+const quint16 GROUP_LIST = 0x33;
+const int RANDOM_SOURCE = 10;       // an external modulator's source type: Kontakt's random generator
+
+quint16 get16(const QByteArray& d, int at)
+      {
+      return qFromLittleEndian<quint16>(reinterpret_cast<const uchar*>(d.constData() + at));
+      }
+
+// an external modulator's source type: from the record's last "<u32 n><NAME><01 00 00 00><type <= 0x20> 00 00 00"; -1: none
+int sourceType(const QByteArray& d, int from, int to)
+      {
+      int type = -1;
+      for (int i = from; i + 4 <= to; ++i) {
+            const quint32 n = get32(d, i);
+            if (n < 3 || n > 31 || i + 4 + int(n) + 8 > to)
+                  continue;
+            const char* c = d.constData() + i + 4;
+            bool ok = c[0] >= 'A' && c[0] <= 'Z';
+            for (quint32 k = 1; ok && k < n; ++k)
+                  ok = (c[k] >= 'A' && c[k] <= 'Z') || (c[k] >= '0' && c[k] <= '9') || c[k] == '_';
+            const int after = i + 4 + int(n);
+            ok = ok && get32(d, after) == 1 && uchar(d.at(after + 4)) <= 0x20 && d.at(after + 5) == 0 && d.at(after + 6) == 0
+                 && d.at(after + 7) == 0;
+            if (ok)
+                  type = uchar(d.at(after + 4));
+            }
+      return type;
+      }
+
+// the offsets (in the group list's bytes) of the intensities of the external modulators from the random generator
+// (source type 10), in group order; false when the list isn't one this walk reads
+bool randomSourceOffsets(const QByteArray& gl, std::vector<int>* out)
+      {
+      if (gl.size() < 4)
+            return false;
+      const quint32 groups = get32(gl, 0);
+      int p = 4;
+      for (quint32 g = 0; g < groups; ++g) {
+            int privAt, privSize, end;
+            if (!structAt(gl, p, &privAt, &privSize, &end))
+                  return false;
+            const int pubSize = int(get32(gl, privAt + privSize));
+            int k = privAt + privSize + 4 + pubSize + 4;          // its children
+            while (k < end) {
+                  if (k + 6 > end)
+                        return false;
+                  const quint16 id = get16(gl, k);
+                  const quint32 an = get32(gl, k + 2);
+                  const int a = k + 6;
+                  if (an > quint32(end - a))
+                        return false;
+                  const int aEnd = a + int(an);
+                  if (id == 0x3B || id == 0x3C) {
+                        if (an < 3)
+                              return false;
+                        int r = a + 3 + (get16(gl, a + 1) >= 0x13 ? 4 : 0);
+                        while (r < aEnd) {
+                              const char present = gl.at(r++);
+                              if (!present)
+                                    continue;
+                              if (r + 6 > aEnd)
+                                    return false;
+                              const quint16 mid = get16(gl, r);
+                              const quint32 ml = get32(gl, r + 2);
+                              const int mo = r + 6;
+                              if (ml < 19 || ml > quint32(aEnd - mo))
+                                    return false;
+                              const quint32 tl = get32(gl, mo + 11);
+                              const int at = mo + 15 + int(tl);
+                              if (tl > ml || at + 4 > mo + int(ml))
+                                    return false;
+                              if (mid == 0x0C && sourceType(gl, mo, mo + int(ml)) == RANDOM_SOURCE)
+                                    out->push_back(at);
+                              r = mo + int(ml);
+                              }
+                        }
+                  k = aEnd;
+                  }
+            if (k != end)
+                  return false;
+            p = end;
+            }
+      return p == gl.size();
+      }
+
+float floatAt(const QByteArray& d, int at)
+      {
+      const quint32 bits = get32(d, at);
+      float f;
+      std::memcpy(&f, &bits, 4);
+      return f;
+      }
+
+void setFloatAt(QByteArray& d, int at, float f)
+      {
+      quint32 bits;
+      std::memcpy(&bits, &f, 4);
+      const QByteArray b = le32(bits);
+      d.replace(at, 4, b);
+      }
+
+// the program's random sources' intensities (read), or set (values: one for all, or one each); false: not read
+bool programRandomSources(QByteArray& program, std::vector<float>* read,
+                          const std::vector<float>* values, int* set)
+      {
+      Struct st;
+      std::vector<PChunk> kids;
+      if (!st.read(program) || !chunks(st.kids, kids))
+            return false;
+      bool found = false;
+      std::vector<float> all;
+      int changed = 0;
+      for (PChunk& k : kids) {
+            if (k.id != GROUP_LIST)
+                  continue;
+            std::vector<int> at;
+            if (found || !randomSourceOffsets(k.body, &at))
+                  return false;
+            found = true;
+            for (size_t i = 0; i < at.size(); ++i) {
+                  all.push_back(floatAt(k.body, at[i]));
+                  if (!values)
+                        continue;
+                  if (values->size() != 1 && values->size() != at.size())
+                        return false;
+                  const float v = values->size() == 1 ? values->front() : (*values)[i];
+                  if (floatAt(k.body, at[i]) != v) {
+                        setFloatAt(k.body, at[i], v);
+                        ++changed;
+                        }
+                  }
+            }
+      if (!found)
+            return false;
+      if (read)
+            *read = all;
+      if (set)
+            *set = changed;
+      if (changed) {
+            st.kids = join(kids);
+            program = st.body();
+            }
+      return true;
+      }
+
+} // namespace
+
+std::vector<float> randomSources(const QByteArray& component, QString* error)
+      {
+      QString dummy;
+      if (!error)
+            error = &dummy;
+      std::vector<float> out;
+      QByteArray program = slotProgram(component, error);
+      if (program.isEmpty())
+            return out;
+      if (!programRandomSources(program, &out, nullptr, nullptr))
+            *error = "the program's group list could not be read";
+      return out;
+      }
+
+QByteArray withRandomSources(const QByteArray& component, const std::vector<float>& values, QString* error, int* count)
+      {
+      QString dummy;
+      if (!error)
+            error = &dummy;
+      int set = 0;
+      bool read = true;
+      bool changed = false;
+      const QByteArray out = editSlotProgram(component, [&](QByteArray& program) {
+            read = programRandomSources(program, nullptr, &values, &set);
+            return read && set > 0;
+            }, error, &changed);
+      if (count)
+            *count = set;
+      if (!out.isEmpty() && !read) {
+            *error = "the program's group list could not be read (or the values don't match its sources)";
+            return QByteArray();
+            }
+      return out;
+      }
+
 } // namespace KontaktSetup
 } // namespace Ms

@@ -2793,6 +2793,11 @@ void MidiRenderer::putLibrarySwitch(EventMap* events, const SoundLib::LibInstrum
             }
       }
 
+// ([slurs] fastTransitions, below)
+static void libraryFastTransitions(const Score* score,
+                                   const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                                   int chunkUtick1, EventMap* events);
+
 //---------------------------------------------------------
 //   finishLibraryEvents
 //    the library parts' events of the chunk: each switch that selects what is selected
@@ -3024,8 +3029,61 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       libraryTimingOverrides(chunk, events);
       libraryEvenLevels(chunk, events);
       libraryTrackDelays(chunk, events);
+      libraryFastTransitions(score, libRoutePatches, chunk.utick1(), events);
       libraryMaxVelocity(chunk, events);
       libraryGuitar(chunk, events);       // (guitarplayback.cpp: last, its keys' velocities exact)
+      }
+
+//---------------------------------------------------------
+//   libraryFastTransitions
+//    [slurs] fastTransitions (2026-10-20, branch sso-legato-fixes; 0 by default and in both presets until the owner has
+//    heard it): SSO's legato ignores a note-on less than 15 ms after the note-on before at velocity 64 or less (its chord
+//    guard, read from the patch's script; the audit's DROPPED). Measured (Windows test VM, kthost, Violas / Violins 1 -
+//    Performance, a whole step 10 / 14 ms after the note before: silent at 64; 16 ms plays): velocities 65-84 at 10 ms play
+//    the same family as 64 sent 16-20 ms after (FING + PORTAMENTO FAST; third-octave spectrum within 0.3-1.0 dB, the same
+//    arrival), 85 another (DETACHED: 3.7-4.7 dB, arrival 60-90 ms against 160-210). So such a note-on (on a route whose
+//    patch has a legato articulation, a note of another chord than the note-on before, velocity 20-64) is sent at 65, the
+//    lowest that plays. 1-19 (portamento) have no velocity of their family above 64 and stay (the audit still lists them).
+//    After the track delays: the times as played (Live's written clips: as written)
+//---------------------------------------------------------
+
+static const int FAST_TRANSITION_VELOCITY = 65;
+static const int FAST_TRANSITION_LOWEST = 20;
+
+static void libraryFastTransitions(const Score* score,
+                                   const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                                   int chunkUtick1, EventMap* events)
+      {
+      if (!Playback::on("slurs/fastTransitions", score))
+            return;
+      std::set<int> legato;                                       // the routes whose patch plays transitions
+      for (const auto& r : libRoutePatches) {
+            if (!r.second.second)
+                  continue;
+            for (const SoundLib::Articulation& a : r.second.second->articulations)
+                  if (a.playsTransitions())
+                        legato.insert(r.first);
+            }
+      if (legato.empty())
+            return;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunkUtick1) - 2.0));
+      std::map<int, std::pair<double, const Chord*>> before;     // route -> the note-on before (s, its chord)
+      for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+            NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.type() != ME_NOTEON || ev.librarySwitch() || ev.velo() == 0)
+                  continue;
+            const int route = ev.extPort() * 16 + ev.extChannel();
+            if (!legato.count(route))
+                  continue;
+            const double t = score->utick2utime(i->first);
+            const Chord* chord = ev.note() ? ev.note()->chord() : nullptr;
+            auto b = before.find(route);
+            if (b != before.end() && chord && b->second.second && b->second.second != chord
+                && (t - b->second.first) * 1000.0 < MidiRenderer::TRANSITION_MIN_GAP_MS && ev.velo() >= FAST_TRANSITION_LOWEST
+                && ev.velo() <= FAST_TRANSITION_VELOCITY - 1)
+                  ev.setDataB(FAST_TRANSITION_VELOCITY);
+            before[route] = { t, chord };
+            }
       }
 
 //---------------------------------------------------------
