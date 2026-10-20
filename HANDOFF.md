@@ -85,6 +85,25 @@ is Ample Guitar M (`AGM.vst3`, hosted directly, not Kontakt); the dump it is gen
   controllers on a seek (the volume, and the capo FIX2 listed as open). Live: route set by the clips' lane (Link
   device), plain set as Ample track automation; M-Master Vol and M-Capo always in Live's Configure panel. Tests:
   ampleMasterVol, `tst_liveequivalence::liveMasterVol`, liveGuitarSoftRoll updated.
+- **ample-fixes3** (2026-10-20, from integrate-1017 37e02f842f; findings `~/MuseScore/ms3fork/private/ample-check453/RESULT.md`,
+  report FIX3.md there; Linux only, not yet on Windows):
+  - The command-line renders (`--verify-playback`, `--live-equivalence`, `--even-levels`, the audio export without a
+    sequencer: `SoundLibraryExport::loadInstances`) made each instance's state without its part, so state lanes (Vel
+    Sensitivity, Max Voices, velocity layers, the sample set) never played there; `loadInstanceSetup` now takes the route's
+    part on to `loadSetup` / `setupState`, as hosted playback and Create Live Set did. Also the live-equivalence fault
+    `no-controllers`' state. The background measurer's `loadInstance` / `beginInstance` passed it already. Test:
+    `tst_liveequivalence::liveStateSettings` (`SoundLibraryHost::loadedStateObserver`: the very states loaded, all parts,
+    one part at a time, `loadInstance`).
+  - A volume-lane point under a softStrums-0 strum replaced the strum's level (a ppp strum on a ramp played at full
+    volume). The guitar pass now multiplies: every CC7 of the part's own on the route from the strum to its restore plays
+    lane x level / 64 (Ample's gain is linear in the value), the exact value in the event's tuning (the CC rounded for
+    MIDI out; `libraryHostedParameters` takes the exact one when it rounds to the CC; the duplicate-controller pass keeps
+    two CCs of one value with different exact values); the restore is the lane's value by then (before: the value at the
+    strum's start, which also undid a lane step between). The strum's own level is exact too (it was rounded to a CC:
+    up to 0.5 CC unit different now). Also the CC7 at the strum's own tick now counts as the one in force. Tests:
+    ampleMasterVol (the product per lane tick under both bar-2 strums, nothing above the ppp level, 80 in force at bar 3),
+    `tst_liveequivalence::liveMasterVol` (the plain set's automation under the ppp strum). Both new checks fail on the
+    old code (run).
 - Loads: the slot's values key (`PartControllers::valuesKey`) is compared once per slot at the sync: many changed lanes =
   one load, an unchanged written text = none (ampleStateLoads).
 - `<PluginSettings>`: as an Ample state is made, `Documents/Ample Sound/AGM/Configs/AGM_info.xml` is read (read only;

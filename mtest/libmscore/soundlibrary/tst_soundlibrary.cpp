@@ -6389,7 +6389,8 @@ void TestSoundLibrary::ampleMasterVol()
                         value = e.value();
                   else if (param && e.type() == ME_PARAMETER && e.dataA() == master) {
                         value = int(std::lround(e.tuning() * 127));
-                        if (e.dataB() != CTRL_VOLUME || std::fabs(e.tuning() * 127 - value) > 1e-4)
+                        // (its exact value: the strum levels and the lane under them multiplied, rounding to the CC's)
+                        if (e.dataB() != CTRL_VOLUME || std::fabs(e.tuning() * 127 - value) > 0.5 + 1e-4)
                               ++other;
                         }
                   else if ((!param && e.type() == ME_PARAMETER && e.dataA() == master)
@@ -6415,18 +6416,77 @@ void TestSoundLibrary::ampleMasterVol()
       QVERIFY(cc.size() > 10);
       QVERIFY(std::get<0>(cc.front()) >= 0);
       QCOMPARE(std::get<2>(cc.front()), 96);
-      bool ramp = false, strumLevel = false, at80 = false;
+      // (bar 2's ramp lies under its two strums: their levels x the ramp, several values, below)
+      std::set<int> ramp;
+      bool strumLevel = false, at80 = false;
+      QString bar2;
       for (const auto& t : cc) {
-            ramp = ramp || (std::get<0>(t) > 4 * DIVISION && std::get<0>(t) < 8 * DIVISION && std::get<2>(t) > 48 && std::get<2>(t) < 96);
+            if (std::get<0>(t) > 4 * DIVISION && std::get<0>(t) < 8 * DIVISION) {
+                  ramp.insert(std::get<2>(t));
+                  bar2 += QString(" %1:%2").arg(std::get<0>(t)).arg(std::get<2>(t));
+                  }
             strumLevel = strumLevel || std::get<2>(t) < 40;
             at80 = at80 || (std::get<0>(t) == 8 * DIVISION && std::get<2>(t) == 80);
             }
-      QVERIFY(ramp && strumLevel && at80);
+      QVERIFY2(ramp.size() >= 6 && strumLevel && at80, qPrintable(QString("%1 %2 %3:%4").arg(ramp.size()).arg(strumLevel).arg(at80).arg(bar2)));
       // hosted: the same changes at the same ticks, as M-Master Vol; no CC7 left, every parameter dataB 7
       QCOMPARE(int(par.size()), int(cc.size()));
       for (size_t i = 0; i < cc.size(); ++i)
             QVERIFY2(par[i] == cc[i], qPrintable(QString("%1: CC7 %2 at %3, parameter %4 at %5").arg(i).arg(std::get<2>(cc[i]))
                                                  .arg(std::get<0>(cc[i])).arg(std::get<2>(par[i])).arg(std::get<0>(par[i]))));
+      // a strum on the ramp (bar 2: ppp at 4 D, the muted f strum at 5 D, then the rest; bar 3's note at 8 D): the lane's
+      // values under it x its level / 64 (the gains multiply), exact in the parameter; the value in force again before
+      // the next note the lane's then (80), not the one at the strum's start. Until 2026-10-20 the ramp's points played
+      // unscaled under the ppp strum (ample-check453 RESULT.md › Problems 2: full volume, +4.2 dBFS)
+      {
+            auto exact = [&](const QString& strums) {             // (tick, value 0-1, note-on after it at its tick)
+                  Playback::setIniValuesForTest({ { "guitar/strums", strums }, { "guitar/softStrums", "0" } });
+                  score->setPlaylistDirty();
+                  EventMap events;
+                  SynthesizerState ss;
+                  score->renderMidi(&events, false, true, ss);
+                  std::vector<std::pair<int, double>> out;
+                  for (const auto& te : events)
+                        if (te.second.type() == ME_PARAMETER && te.second.dataA() == master)
+                              out.push_back({ te.first, te.second.tuning() });
+                  return out;
+                  };
+            const auto laneOnly = exact("0");
+            const auto both = exact("1");
+            Playback::setIniValuesForTest({});
+            const std::vector<GuitarEvent> plain = guitarEvents(score);
+            const int lppp = g.strumLevel("AGMFg", plain[size_t(guitarNoteOn(plain, c[4]))].b);
+            const int lf = g.strumLevel("AGMFg", plain[size_t(guitarNoteOn(plain, c[5]))].b);
+            QVERIFY2(lppp < 32 && lf != 64, qPrintable(QString("%1 %2").arg(lppp).arg(lf)));
+            auto at = [&](int tick) {
+                  std::vector<double> v;
+                  for (const auto& e : both)
+                        if (e.first == tick)
+                              v.push_back(e.second);
+                  return v;
+                  };
+            int under[2] = { 0, 0 };
+            for (const auto& e : laneOnly) {
+                  if (e.first <= 4 * DIVISION || e.first >= 8 * DIVISION)
+                        continue;
+                  const int level = e.first < 5 * DIVISION ? lppp : lf;
+                  const double want = qBound(1.0, e.second * 127 * level / 64.0, 127.0) / 127.0;
+                  const std::vector<double> got = at(e.first);
+                  QVERIFY2(got.size() == 1 && std::fabs(got[0] - want) < 1e-5,
+                           qPrintable(QString("tick %1: lane %2, want %3, got %4").arg(e.first).arg(e.second * 127).arg(want * 127)
+                                      .arg(got.empty() ? -1.0 : got[0] * 127)));
+                  ++under[e.first < 5 * DIVISION ? 0 : 1];
+                  }
+            QVERIFY2(under[0] >= 3 && under[1] >= 6, qPrintable(QString("%1 %2").arg(under[0]).arg(under[1])));
+            for (const auto& e : both)
+                  if (e.first >= 4 * DIVISION && e.first < 5 * DIVISION)
+                        QVERIFY2(e.second * 127 <= 96.0 * lppp / 64.0 + 0.5, qPrintable(QString("tick %1: %2").arg(e.first).arg(e.second * 127)));
+            double inForce = -1;
+            for (const auto& e : both)
+                  if (e.first <= 8 * DIVISION)
+                        inForce = e.second;
+            QVERIFY2(std::fabs(inForce * 127 - 80) < 1e-4, qPrintable(QString::number(inForce * 127)));
+      }
       // Live's clips (MIDI output, rendered for Live): M-Master Vol too
       SoundLib::setOutput(SoundLib::Output::MIDI);
       {

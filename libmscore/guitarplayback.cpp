@@ -28,6 +28,9 @@
 //     (arpeggio up = low to high = Ample's down strum; muted keys when every note has a cross notehead) at strumVelocity;
 //     at its end the keys off and strum mode off, before anything else at that tick; the CC7 in force again right
 //     before the route's next note that is not a strum (channel gain: a strum's level also changes what still rings).
+//     The part's own CC7 until then (its volume lane: a ramp under the strum) plays x the strum's level / 64: the gains
+//     multiply (hosted and in Live both are M-Master Vol, linear: libraryHostedParameters, the exact product in the
+//     event's tuning), and the value in force again is the lane's by then (2026-10-20: a lane point replaced it).
 //     [guitar] softStrums: a strum at velocity <= softStrum plays, 1: as its notes rolled rollGap ms apart in strum order
 //     (strum mode off, at their velocity); 2: as a roll of the strummer's single-string keys (rollKeys: strum mode on,
 //     Detect, the chord keys held, as a strum) in strum order at the chord's velocity held within softRoll's measured
@@ -413,7 +416,8 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
       }
 
       // strums
-      struct Strum { const NPlayEvent* like; int t0; int end; int base; int cc; };
+      // level: Guitar::strumLevel (64 = unity): the strum's channel gain is the CC7 in force x level / 64
+      struct Strum { const NPlayEvent* like; int t0; int end; int base; int cc; int level; };
       std::vector<Strum> strumList;
       std::set<const NPlayEvent*> rollStarts;       // softStrums 2: each key roll's first event (the CC7 in force before it)
       std::set<const Chord*> strumChords;
@@ -500,9 +504,9 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   strumChords.insert(chord);
                   continue;
                   }
-            // the CC7 in force on the route (the part's Volume), else unity
+            // the CC7 in force on the route (the part's Volume, its lane: one at t0 too), else unity
             int base = 64;
-            for (auto i = events->lower_bound(t0); i != events->begin();) {
+            for (auto i = events->upper_bound(t0); i != events->begin();) {
                   --i;
                   const NPlayEvent& e = i->second;
                   if (e.type() == ME_CONTROLLER && e.controller() == CTRL_VOLUME && sameRoute(e, like) && !mine.count(&e)) {
@@ -510,13 +514,16 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                         break;
                         }
                   }
-            const int cc = qBound(1, int(std::lround(base * g.strumLevel(sampleSetOf(*group.front()), v) / 64.0)), 127);
+            const int level = g.strumLevel(sampleSetOf(*group.front()), v);
+            const double exact = qBound(1.0, base * level / 64.0, 127.0);
+            const int cc = qBound(1, int(std::lround(exact)), 127);
             for (On* o : group) {
                   o->strummed = true;
                   drop(o->on);
                   drop(o->off);
                   }
             auto first = add(t0, make(like, ME_CONTROLLER, CTRL_VOLUME, cc));
+            first->second.setTuning(float(exact / 127.0));      // (the exact value 0-1: libraryHostedParameters)
             tapAt(t0, like, g.detect, g.detectVelocity, false);
             tapAt(t0, like, g.strumMode, g.strumOn, false);
             for (int k : keys)
@@ -528,7 +535,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   addBefore(at, make(like, ME_NOTEON, k, 0), end);
             addBefore(at, make(like, ME_NOTEON, key, 0), end);
             tapBefore(at, like, g.strumMode, g.strumOff, false, end);
-            strumList.push_back({ &first->second, t0, end, base, cc });
+            strumList.push_back({ &first->second, t0, end, base, cc, level });
             strumChords.insert(chord);
             }
 
@@ -760,11 +767,17 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             }
 
       // after a strum, the CC7 in force again before the route's next note that is not a strum (a softStrums 2 key roll
-      // counts as such a note: it plays at the CC7 in force)
+      // counts as such a note: it plays at the CC7 in force). The part's own CC7 events until then (its volume lane: a
+      // ramp under the strum) play x level / 64 too, the gains multiplied (Ample's gain is linear in the value: 2 x
+      // cc / 127, MV.md), each with its exact value in tuning (libraryHostedParameters: the parameter's value; MIDI out
+      // the CC rounded); the CC7 in force again is the lane's value by then (before 2026-10-20 a lane point under a strum
+      // replaced its level: a ppp strum on a ramp played at full volume, ample-check453 RESULT.md › 2)
+      std::set<const NPlayEvent*> scaled;
       for (const Strum& st : strumList) {
-            if (st.cc == st.base)
+            if (st.level == 64)
                   continue;
             EventMap::iterator next = events->end();
+            EventMap::iterator stop = events->end();          // where the strum's level ends (the restore goes there)
             bool nextStrum = false;
             for (auto i = events->upper_bound(st.t0); i != events->end(); ++i) {
                   const NPlayEvent& e = i->second;
@@ -776,6 +789,7 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                         }
                   if (e.type() == ME_CONTROLLER && e.controller() == CTRL_VOLUME && mine.count(&e) && i->first > st.t0) {
                         nextStrum = true;
+                        stop = i;
                         break;
                         }
                   if (e.type() == ME_NOTEON && e.velo() > 0 && e.note() && !dropped.count(&e) && !mine.count(&e)) {
@@ -783,23 +797,39 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                         break;
                         }
                   }
-            if (nextStrum)
-                  continue;
-            NPlayEvent v = make(*st.like, ME_CONTROLLER, CTRL_VOLUME, st.base);
+            const int restoreTick = std::max(st.end, utick2 - 1);
             if (next != events->end()) {
                   // before its keyswitch and string key too, if any at its tick
-                  auto at = next;
-                  while (at != events->begin()) {
-                        auto p = std::prev(at);
+                  stop = next;
+                  while (stop != events->begin()) {
+                        auto p = std::prev(stop);
                         if (p->first != next->first || !sameRoute(p->second, *st.like) || p->second.type() != ME_NOTEON
                             || (p->second.note() && !p->second.librarySwitch()))
                               break;
-                        at = p;
+                        stop = p;
                         }
-                  addBefore(at, v);
                   }
+            else if (!nextStrum)
+                  stop = events->upper_bound(restoreTick);
+            // the part's CC7 events under the strum: x level / 64
+            int now = st.base;                        // the part's CC7 in force (unscaled)
+            for (auto i = events->upper_bound(st.t0); i != stop; ++i) {
+                  NPlayEvent& e = i->second;
+                  if (!sameRoute(e, *st.like) || e.type() != ME_CONTROLLER || e.controller() != CTRL_VOLUME || mine.count(&e)
+                      || dropped.count(&e) || !scaled.insert(&e).second)
+                        continue;
+                  now = e.value();
+                  const double exact = qBound(1.0, now * st.level / 64.0, 127.0);
+                  e.setValue(qBound(1, int(std::lround(exact)), 127));
+                  e.setTuning(float(exact / 127.0));
+                  }
+            if (nextStrum)
+                  continue;
+            NPlayEvent v = make(*st.like, ME_CONTROLLER, CTRL_VOLUME, now);
+            if (next != events->end())
+                  addBefore(stop, v);
             else
-                  add(std::max(st.end, utick2 - 1), v);
+                  add(restoreTick, v);
             }
 
       // the renderer's keyswitch again where an added one replaced it (keyswitches latch)
