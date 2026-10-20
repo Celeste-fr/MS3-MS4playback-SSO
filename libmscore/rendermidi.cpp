@@ -5765,6 +5765,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       int lastChannel = -1;
       int lastController = -1;
       int lastValue = -1;
+      float lastExact = 0.f;              // (a CC's exact value, the guitar pass's: libraryHostedParameters)
       // (not a legato note-on's speed controller: one a transition, as SSO's script sends it, librarySpeeds)
       for (auto i = events->begin(); i != events->end();) {
             if (i->second.type() == ME_CONTROLLER && !i->second.librarySpeed()) {
@@ -5773,13 +5774,14 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
                   const int channel = event.isExternal() ? 0x10000 + event.extPort() * 16 + event.extChannel() : event.channel();
                   if (channel == lastChannel &&
                      event.controller() == lastController &&
-                     event.value() == lastValue) {
+                     event.value() == lastValue && event.tuning() == lastExact) {
                         i = events->erase(i);
                         }
                   else {
                         lastChannel = channel;
                         lastController = event.controller();
                         lastValue = event.value();
+                        lastExact = event.tuning();
                         i++;
                         }
                   }
@@ -5800,7 +5802,9 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
 //    ~/MuseScore/ms3fork/private/ample-state/MV.md). No lead: Ample applies either from the start of the host block
 //    holding it (never late) and smooths it over ~13 ms (95 %). dataB keeps the controller number, so a MIDI file
 //    export writes the CC again (exportmidi.cpp). MIDI out: the CC as it was. After the duplicate-controller pass, so
-//    the parameter events are the CC events MIDI out would get
+//    the parameter events are the CC events MIDI out would get. A CC event may carry its exact value 0-1 in tuning (the
+//    guitar pass's strum levels and the volume lane under a strum, multiplied: guitarplayback.cpp): that value then,
+//    when it rounds to the CC's (else cc / 127)
 //---------------------------------------------------------
 
 void MidiRenderer::libraryHostedParameters(const Chunk& chunk, EventMap* events)
@@ -5837,7 +5841,9 @@ void MidiRenderer::libraryHostedParameters(const Chunk& chunk, EventMap* events)
             if (c == h->second.end())
                   continue;
             const int cc = ev.controller();
-            ev.setTuning(float(qBound(0, ev.value(), 127) / 127.0));
+            const float exact = ev.tuning();
+            const bool hasExact = exact > 0.f && exact <= 1.f && std::abs(exact * 127.0 - ev.value()) <= 0.5 + 1e-4;
+            ev.setTuning(hasExact ? exact : float(qBound(0, ev.value(), 127) / 127.0));
             ev.setType(ME_PARAMETER);
             ev.setDataA(c->second);
             ev.setDataB(cc);

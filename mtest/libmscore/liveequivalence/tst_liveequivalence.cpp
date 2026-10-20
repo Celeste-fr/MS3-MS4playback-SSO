@@ -5961,6 +5961,29 @@ void TestLiveEquivalence::liveMasterVol()
                   }
             }
       QVERIFY2(fromPlain == fromMs, qPrintable(QString("%1 plain set lanes, %2 MuseScore routes").arg(fromPlain.size()).arg(fromMs.size())));
+      // the ppp strum at the ramp's start (bar 2 beat 1, until the muted strum on beat 2): the plain set's automation holds
+      // the lane's ramp x the strum's level (several values, falling, none above the strum's own), not the lane's (until
+      // 2026-10-20: 95, 94, 93 … under the strum, ample-check453 RESULT.md › Problems 2)
+      {
+            const int u4 = tl.units(4 * DIVISION), u5 = tl.units(5 * DIVISION);
+            int strumLanes = 0;
+            for (const Steps& st : fromPlain) {
+                  float strum = -1;
+                  std::set<float> under;
+                  for (const auto& p : st) {
+                        if (p.first == u4)
+                              strum = p.second;
+                        else if (p.first > u4 && p.first < u5)
+                              under.insert(p.second);
+                        }
+                  if (strum < 0 || strum >= 40.0f / 127)
+                        continue;
+                  ++strumLanes;
+                  QVERIFY2(under.size() >= 3, qPrintable(QString::number(under.size())));
+                  QVERIFY2(*under.rbegin() <= strum + 1e-6f, qPrintable(QString("%1 > %2").arg(*under.rbegin() * 127).arg(strum * 127)));
+                  }
+            QCOMPARE(strumLanes, 1);
+      }
       delete score;
       }
 
@@ -6041,6 +6064,43 @@ void TestLiveEquivalence::liveStateSettings()
       QCOMPARE(PluginState::value(hostedFirst, "Parameter:Vel Sensitivity"), QByteArray("25"));
       QCOMPARE(PluginState::value(hostedSecond, "DBName"), QByteArray("AGMFg"));
       QCOMPARE(PluginState::value(hostedSecond, "Parameter:Vel Sensitivity"), QByteArray("100"));
+      // an export's instances of its own (--verify-playback, --live-equivalence, --even-levels, the command-line audio
+      // export: SoundLibraryExport::loadInstances; all parts, one part at a time; the background measurer's
+      // loadInstance / beginInstance): each part's state as hosted playback loads it (until 2026-10-20 loadInstances
+      // made it without the part: only the map's fixed state, ample-check453 RESULT.md › Problems 1)
+      {
+            struct Observer {
+                  std::vector<QByteArray> loaded;
+                  Observer()  { SoundLibraryHost::loadedStateObserver() = [this](const QString&, const QByteArray& s) { loaded.push_back(s); }; }
+                  ~Observer() { SoundLibraryHost::loadedStateObserver() = nullptr; }
+                  };
+            auto components = [&](const std::vector<QByteArray>& states) {
+                  std::multiset<QByteArray> c;
+                  for (const QByteArray& s : states)
+                        c.insert(component(s));
+                  return c;
+                  };
+            {
+                  Observer o;
+                  std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000.f, &error);
+                  QVERIFY2(vst, qPrintable(error));
+                  QCOMPARE(components(o.loaded), std::multiset<QByteArray>({ hostedFirst, hostedSecond }));
+            }
+            for (Part* part : { first, second }) {
+                  Observer o;
+                  const std::set<const Part*> only { part };
+                  std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000.f, &error, nullptr, &only);
+                  QVERIFY2(vst, qPrintable(error));
+                  QCOMPARE(components(o.loaded), std::multiset<QByteArray>({ part == first ? hostedFirst : hostedSecond }));
+                  }
+            for (const SoundLib::Route& r : SoundLib::routes(score, lib)) {
+                  if (r.part != first || !r.instrument)
+                        continue;
+                  Observer o;
+                  QVERIFY2(SoundLibraryExport::loadInstance(score, r, 48000.f, &error), qPrintable(error));
+                  QCOMPARE(components(o.loaded), std::multiset<QByteArray>({ hostedFirst }));
+                  }
+      }
       for (LiveIntegration::LiveSetKind kind : { LiveIntegration::LiveSetKind::ROUTES, LiveIntegration::LiveSetKind::PLAIN }) {
             LiveIntegration::LiveSetPlan plan;
             QVERIFY2(LiveIntegration::planLiveSet(score, lib, kind, &plan, &error), qPrintable(error));

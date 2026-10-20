@@ -1163,6 +1163,12 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin* p, const SoundLib::Library& library
       return false;
       }
 
+std::function<void(const QString&, const QByteArray&)>& SoundLibraryHost::loadedStateObserver()
+      {
+      static std::function<void(const QString&, const QByteArray&)> observer;
+      return observer;
+      }
+
 //---------------------------------------------------------
 //   tunedState / loadInstanceSetup
 //    hosted tuning by slots (soundlibrary.h › hosted tuning)
@@ -1219,18 +1225,18 @@ bool SoundLibraryHost::setupResaved(const SoundLib::Library& library, const QStr
 
 bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
                                          const std::vector<double>& cents, const QString& pluginPath, QString* error, bool* tuned,
-                                         const Score* score)
+                                         const Score* score, const Part* part)
       {
       if (tuned)
             *tuned = false;
       if (cents.empty() || untunable().count(patch))
-            return loadSetup(p, library, patch, pluginPath, error, score);
+            return loadSetup(p, library, patch, pluginPath, error, score, part);
       const bool first = !setupResaved(library, patch);
-      if (first && !loadSetup(p, library, patch, pluginPath, error, score))     // (resaved by it)
+      if (first && !loadSetup(p, library, patch, pluginPath, error, score, part))     // (resaved by it)
             return false;
       QElapsedTimer t;
       t.start();
-      const QByteArray plain = setupState(library, patch, pluginPath, error, score);
+      const QByteArray plain = setupState(library, patch, pluginPath, error, score, part);
       if (plain.isEmpty())
             return false;
       QString err;
@@ -1239,7 +1245,7 @@ bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin* p, const SoundLib::Library&
             untunable().insert(patch);
             logTime(library, QString("%1: its copies can't be tuned in the setup (%2): plain, an instance each, by varispeed")
                     .arg(patch, err));
-            return first || loadSetup(p, library, patch, pluginPath, error, score);
+            return first || loadSetup(p, library, patch, pluginPath, error, score, part);
             }
       const double setupMs = t.nsecsElapsed() / 1e6;
       if (!p->setState(state)) {
@@ -1374,6 +1380,8 @@ void SoundLibraryHost::setupLoaded(Vst3Plugin* p, const SoundLib::Library& libra
                                    double setupMs)
       {
       const SoundLib::LibInstrument* li = findPatch(library, patch);
+      if (loadedStateObserver())
+            loadedStateObserver()(patch, state);
       const bool resaved = readMade(library).value(patch).toObject().value("resaved").toBool();
       const Vst3Plugin::Times& tm = p->times();
       const double set = tm.component + tm.controllerComponent + tm.controller + tm.mapping;
@@ -1390,6 +1398,12 @@ std::set<QString>& SoundLibraryHost::untunable()
       {
       static std::set<QString> names;
       return names;
+      }
+
+std::function<void(const QString&, const QByteArray&)>& SoundLibraryHost::loadedStateObserver()
+      {
+      static std::function<void(const QString&, const QByteArray&)> observer;
+      return observer;
       }
 
 QString SoundLibraryHost::tuningKey(const std::vector<double>&)
@@ -1458,7 +1472,7 @@ QByteArray SoundLibraryHost::maxVoicesState(const SoundLib::Library&, const QStr
       }
 
 bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin*, const SoundLib::Library&, const QString&, const std::vector<double>&,
-                                         const QString&, QString* error, bool*, const Score*)
+                                         const QString&, QString* error, bool*, const Score*, const Part*)
       {
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");
@@ -2729,7 +2743,8 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             QString e;
             bool tuned = false;
             if (SoundLibraryHost::hasSetup(*library, in.instrument->name)
-                && !SoundLibraryHost::loadInstanceSetup(p.get(), *library, in.instrument->name, in.cents, path, &e, &tuned, score))
+                && !SoundLibraryHost::loadInstanceSetup(p.get(), *library, in.instrument->name, in.cents, path, &e, &tuned, score,
+                                                         r->part))   // (its state settings: stateValuesFor)
                   qWarning("Sound library: %s", qPrintable(e));
             if (in.tuned() && !tuned && in.multi()) {
                   // (its setup isn't Kontakt's: the other copies an instance each, plain)

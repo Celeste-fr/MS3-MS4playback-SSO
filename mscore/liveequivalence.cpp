@@ -373,7 +373,7 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
             std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, rate, 4096, &error);
             QByteArray state = p ? Vst3Plugin::joinState(p->name(), t.plugin.component, t.plugin.controller) : QByteArray();
             if (fault.contains("no-controllers"))
-                  state = SoundLibraryHost::setupState(library, t.patch, pluginPath, &error, score);
+                  state = SoundLibraryHost::setupState(library, t.patch, pluginPath, &error, score, t.partRef);
             if (!p || !p->setState(state)) {
                   r.error = QString("%1: the set's state could not be loaded (%2)").arg(t.name, error);
                   return r;

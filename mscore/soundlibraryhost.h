@@ -33,6 +33,7 @@
 #include "config.h"
 
 #include <array>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -219,12 +220,16 @@ class SoundLibraryHost : public QObject {
       // the prepared states (setupState's voice limit, tunedState's tunings: made once, the very bytes, kept in memory
       // and in "<setups folder>/prepared") forgotten in memory (the files stay); made: how many were made so far
       static void forgetPrepared(int* made = nullptr);
-      // an instance's setup into p as MuseScore plays it: plain (cents empty) as loadSetup, else tuned (tunedState); a
+      // an instance's setup into p as MuseScore plays it (part: whose state settings, as setupState): plain (cents empty)
+      // as loadSetup, else tuned (tunedState); a
       // made setup not yet resaved goes in plain first (resaved: Kontakt's own state; a multi of a made one would
       // load each slot as slowly), then tuned. *tuned: its tuning is in its state (false: plain, varispeed tunes it)
       static bool loadInstanceSetup(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch,
                                     const std::vector<double>& cents, const QString& pluginPath, QString* error, bool* tuned,
-                                    const Score* score = nullptr);
+                                    const Score* score = nullptr, const Part* part = nullptr);
+      // tests: called with each state loaded into an instance (loadSetup, loadInstanceSetup: the patch and the very
+      // bytes), on the loading thread; empty: none
+      static std::function<void(const QString& patch, const QByteArray& state)>& loadedStateObserver();
       // patches whose setup can't be tuned (not Kontakt's): their copies play plain, an instance each
       static std::set<QString>& untunable();
       // a part's plug-in parameter settings (its flat automation lanes: partcontrollers.h) as MuseScore's playback sets
