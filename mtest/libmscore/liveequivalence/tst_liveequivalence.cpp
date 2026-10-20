@@ -4231,7 +4231,7 @@ void TestLiveEquivalence::updateLiveSet()
             Element* el = s->element(0);
             if (!el || !el->isChord())
                   continue;
-            Chord* c = toChord(el);
+            Ms::Chord* c = toChord(el);
             const int tick = c->tick().ticks();
             if (tick == 1920 + 1440) {           // (a short accented note: the marcato patch)
                   Articulation* a = new Articulation(score);
