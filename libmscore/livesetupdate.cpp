@@ -1387,8 +1387,10 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                         if (a.points.empty())
                               continue;
                         if (a.keepLive) {
-                              rep.skipped << QObject::tr("%1: %2 changed in Live and in MuseScore (not chosen): Live's left as it is")
-                                             .arg(name, a.name);
+                              rep.skipped << (a.keepNote.isEmpty()
+                                              ? QObject::tr("%1: %2 changed in Live and in MuseScore (not chosen): Live's left as it is")
+                                                .arg(name, a.name)
+                                              : QString("%1: %2").arg(name, a.keepNote));
                               continue;
                               }
                         int p = findParam(a.name);

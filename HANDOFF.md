@@ -30,6 +30,25 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Update Live Set on Ample parts (branch `liveset-hosted-readback`, 2026-10-21, from integrate-1017 56bbe38c6e; not merged)
+
+From the Ample check of build 456 (private: `~/MuseScore/ms3fork/private/ample-check456/RESULT.md` › Findings 2; report
+`~/MuseScore/ms3fork/private/liveset-readback/RESULT.md`).
+
+- **A second lane on read-back**: the plain set plays the volume lane (CC7) as Ample's M-Master Vol automation, strum
+  levels multiplied in; the read-back took it as a lane `m-master-vol` next to `volume`. Now such "derived" envelopes
+  (a `hosted=` controller's parameter, the guitar pass's capo) are recorded as written (`liveTracks` › written ›
+  `derived`) and an unchanged one comes back as nothing. Edited in Live: an envelope that was the lane's plain values
+  (no strums) is an edit of the volume lane (merge rules; `basePoints` in `Automation::merge`'s classify), else reported
+  and left in the set by Update Live Set until the score changes it. LIVE.md › The plain set › Read back › Derived
+  parameters.
+- **Every update modified the score**: Update Live Set stripped the lanes' Live marks as an undo step before planning,
+  recordWritten put them back: tags equal, undo stack dirty, the command line saved. Now `planLiveSet` sets the marks
+  aside in place for plain sets (`LiveMarksOff`), which also fixes Create Live Set made again leaving lanes Live had
+  marked out of the new set.
+- **Open**: the first update after Create Live Set still records the linked set (metaTag `liveSet`), so it modifies the
+  score once; not run in real Live or with AGM (test synth as AGM, `tst_liveequivalence::hostedReadBack`).
+
 ## Lane jumps and Ample's background load (branch `lane-steps`, 2026-10-20, from integrate-1017 71da2b227b; not merged)
 
 From the Ample check of build 455 (private: `~/MuseScore/ms3fork/private/ample-check455/RESULT.md`, FIX4.md there).

@@ -191,6 +191,54 @@ static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const S
       }
 
 //---------------------------------------------------------
+//   LiveMarksOff
+//    while a plain set is planned: the score's lanes without the marks of a Live set (automation.h: liveHash, pointsHash,
+//    source), so that the render for Live plays every lane (a lane Live plays itself, Lane::playedByLive, is left out of
+//    it: right for Live playing the score, where Live has it; a plain set is written whole, so it must have them all).
+//    The automation metaTag set directly, not as an undoable step, and put back as it was: planning changes nothing in
+//    the score (until 2026-10-21 Update Live Set wrote the stripped lanes as an undo step and recordWritten marked them
+//    again: the score was modified by every update, ample-check456 RESULT.md › Findings 2; Create Live Set left marked
+//    lanes out of a set made again)
+//---------------------------------------------------------
+
+struct LiveMarksOff {
+      MasterScore* score { nullptr };
+      QString before;
+      bool changed { false };
+      explicit LiveMarksOff(MasterScore* s) : score(s)
+            {
+            if (!score)
+                  return;
+            before = score->metaTag(Automation::metaTag);
+            std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+            bool any = false;
+            for (auto& pl : all)
+                  for (Automation::Lane& l : pl.second)
+                        if (l.playedByLive() || l.extra.contains("liveHash")) {
+                              l.extra.remove("source");
+                              l.extra.remove("liveHash");
+                              l.extra.remove("pointsHash");
+                              any = true;
+                              }
+            if (!any)
+                  return;
+            const QString stripped = Automation::write(score, all);
+            if (stripped == before)
+                  return;
+            score->setMetaTag(Automation::metaTag, stripped);
+            score->setPlaylistDirty();
+            changed = true;
+            }
+      ~LiveMarksOff()
+            {
+            if (!changed)
+                  return;
+            score->setMetaTag(Automation::metaTag, before);
+            score->setPlaylistDirty();
+            }
+      };
+
+//---------------------------------------------------------
 //   planLiveSet
 //---------------------------------------------------------
 
@@ -200,6 +248,9 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
             *error = QObject::tr("No score is open.");
             return false;
             }
+      std::unique_ptr<LiveMarksOff> marksOff;
+      if (kind == LiveSetKind::PLAIN || kind == LiveSetKind::PLAIN_LINKED)
+            marksOff.reset(new LiveMarksOff(score));
       const QStringList ports = outputPortNames();
       std::vector<LiveSetWriter::Track> tracks = LiveSetWriter::tracks(score, library, ports);
       plan->routes = int(tracks.size());
@@ -603,6 +654,26 @@ int recordWritten(MasterScore* score, const LiveSetWriter::Spec& spec, const QBy
             for (auto& e : w)
                   if (e.second.kind == "kontakt" && inFile.count(e.first))
                         e.second.params = LiveTracks::knobs(*inFile.at(e.first));
+            // the derived envelopes (livetracks.h › Derived parameters) as the file has them (an updated set's Kontakts
+            // are the file's: the XML written for the plan has no device for them); one Update Live Set left as Live has
+            // it (keepLive) keeps its record of what MuseScore wrote, so that Live's edit is still known as one
+            for (const LiveSetWriter::Track& t : spec.tracks) {
+                  auto wi = w.find(t.annotation);
+                  if (wi == w.end() || wi->second.kind != "kontakt" || !inFile.count(t.annotation))
+                        continue;
+                  size_t index = 0;
+                  while (&file.tracks[index] != inFile.at(t.annotation))
+                        ++index;
+                  wi->second.derived = LiveTracks::writtenDerived(score, t, file, index);
+                  auto old = data.written.find(t.annotation);
+                  for (const LiveSetWriter::ParameterAutomation& a : t.automation) {
+                        if (!a.keepLive || old == data.written.end())
+                              continue;
+                        for (const auto& od : old->second.derived)
+                              if (LiveSet::looseTitle(od.first) == LiveSet::looseTitle(a.name))
+                                    wi->second.derived[od.first] = od.second;
+                        }
+                  }
             for (const LiveSetWriter::Track& t : spec.tracks) {
                   auto wi = w.find(t.annotation);
                   if (wi == w.end())
@@ -798,22 +869,9 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                   }
       }
 
-      // the lanes the read-back took from Live are MuseScore's to write into the set now (a render for Live leaves out
-      // lanes Live plays: Lane::playedByLive), else the Controllers clip written would lose the owner's edit
-      {
-            std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
-            bool any = false;
-            for (auto& pl : all)
-                  for (Automation::Lane& l : pl.second)
-                        if (l.playedByLive() || l.extra.contains("liveHash")) {
-                              l.extra.remove("source");
-                              l.extra.remove("liveHash");
-                              l.extra.remove("pointsHash");
-                              any = true;
-                              }
-            if (any)
-                  LiveTracks::undoWrite(score, LiveTracks::read(score), &all);
-      }
+      // (the lanes the read-back took from Live are MuseScore's to write into the set now: planLiveSet plans the plain
+      // set without Live's marks, LiveMarksOff, else the Controllers clip written would lose the owner's edit; the score's
+      // lanes keep them until recordWritten below, so an unchanged update leaves the score unmodified)
 
       // 2. the plain set for the score now (no plug-in state for the Kontakts the set has, unless their slots changed)
       const LiveTracks::Data data = LiveTracks::read(score);
@@ -852,9 +910,12 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                   if (t.group || t.midiTo >= 0 || !t.instrument || !t.partRef)
                         continue;
                   const Part* master = PartPlaybackModes::masterPart(t.partRef);
+                  auto unchosenTarget = [&](const QString& id) {
+                        return unchosen.count({ master, id }) || unchosen.count({ t.partRef, id });
+                        };
                   auto undecided = [&](const QString& title) {
                         for (const SoundLib::Controller& c : t.instrument->allControllers)
-                              if (c.param == title && (unchosen.count({ master, c.id }) || unchosen.count({ t.partRef, c.id })))
+                              if (c.param == title && unchosenTarget(c.id))
                                     return true;
                         return false;
                         };
@@ -863,6 +924,41 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                   for (LiveSetWriter::Constant& c : t.constants)
                         c.keepLive = undecided(c.name);
                   auto st = byKey.find(t.annotation);
+                  // a parameter MuseScore derives (livetracks.h › Derived parameters) changed in Live: taken back as its
+                  // lane (the read-back), MuseScore's to write now unless that was left undecided; else Live's stays while
+                  // MuseScore would write what it wrote last time, and MuseScore's replaces it once the score changes it
+                  auto rec0 = data.written.find(t.annotation);
+                  if (st != byKey.end() && rec0 != data.written.end() && !rec0->second.derived.empty()) {
+                        for (LiveSetWriter::ParameterAutomation& a : t.automation) {
+                              const LiveTracks::Derived* d = LiveTracks::derivedOf(rec0->second, a.name);
+                              if (!d || a.keepLive)
+                                    continue;
+                              const LiveSet::Envelope* le = nullptr;
+                              for (const LiveSet::Envelope& e : st->second->envelopes)
+                                    if (!le && e.kind == LiveSet::Envelope::Kind::PARAMETER
+                                        && LiveSet::looseTitle(e.parameter) == LiveSet::looseTitle(a.name))
+                                          le = &e;
+                              if (le && LiveSet::eventsHash(le->initial, le->events) == d->hash)
+                                    continue;               // (as MuseScore wrote it)
+                              if (le && t.mainPatch && d->plain && !d->target.isEmpty()) {
+                                    a.keepLive = unchosenTarget(d->target);
+                                    continue;
+                                    }
+                              if (LiveTracks::automationHash(a.points) == d->planned) {
+                                    a.keepLive = true;
+                                    a.keepNote = QObject::tr("%1 %2 in Live: Live's left as it is (MuseScore writes it from %3, which "
+                                                             "hasn't changed since; it can't be taken back as a lane)")
+                                                 .arg(a.name, le ? QObject::tr("changed") : QObject::tr("deleted"),
+                                                      d->target.isEmpty() ? QObject::tr("the notation")
+                                                                          : QObject::tr("the \"%1\" lane").arg(d->target));
+                                    }
+                              else
+                                    result->notes << QObject::tr("%1: %2 %3 in Live, replaced by MuseScore's (its \"%4\" changed in the "
+                                                                 "score since the set was written)")
+                                                     .arg(t.name, a.name, le ? QObject::tr("changed") : QObject::tr("deleted"),
+                                                          d->target.isEmpty() ? QObject::tr("notation") : d->target);
+                              }
+                        }
                   if (st == byKey.end())
                         continue;               // (a new Kontakt: Create Live Set's state and panel)
                   const std::map<QString, double> knobs = LiveTracks::knobs(*st->second);

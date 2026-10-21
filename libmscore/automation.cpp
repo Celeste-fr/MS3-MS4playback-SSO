@@ -394,6 +394,9 @@ static Side classify(const Lane& m, const Lane& l)
             return Side::MINE;                    // Live's as it was: MuseScore's (edited here or not) goes on
       if (!base.isEmpty() && m.playedByLive())
             return Side::LIVE;                    // unedited here: Live's newer one
+      // (an envelope MuseScore derives from this lane, livetracks.h › Derived parameters: the lane as it was when written)
+      if (base.isEmpty() && l.extra.contains("basePoints") && l.extra.value("basePoints").toString() == pointsHash(m.points))
+            return Side::LIVE;                    // unedited here since it was written: Live's newer one
       if (pointsHash(m.points) == pointsHash(l.points))
             return Side::LIVE;                    // the same envelope: they agree (Live's marks taken)
       return Side::CONFLICT;
@@ -428,7 +431,9 @@ std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& a
             const PartLanes live = with.count(part) ? with.at(part) : PartLanes();
             PartLanes res;
             std::set<QString> taken;
-            for (const Lane& l : live) {
+            for (const Lane& lv : live) {
+                  Lane l = lv;
+                  l.extra.remove("basePoints");     // (classify's, not kept)
                   const Lane* m = nullptr;
                   for (const Lane& x : mine)
                         if (x.target == l.target)
@@ -438,7 +443,7 @@ std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& a
                         res.push_back(l);
                         continue;
                         }
-                  Side side = classify(*m, l);
+                  Side side = classify(*m, lv);
                   if (side == Side::CONFLICT) {
                         auto c = choices.find({ part, l.target });
                         const Keep k = c == choices.end() ? Keep::MUSESCORE : c->second;
