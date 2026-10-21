@@ -50,8 +50,14 @@ Keep this file current: close an item by deleting it (the commit message says wh
   Mixed: attacks −7 … +3, transitions V1 +1, V2 −17, Va +4, Vc +42, Cb −42 ms; within ±30 ms of the beat 58 → 67 %.
   Whence: attacks −4 … +27 (V2's +27 masked readings), transitions −52 … +18; ARRIVAL 35/26 → 36/19, RHYTHM slurs
   1/0 → 3/1 (worse), runs 9/6 → 7/3, max beat spread 814 → 336 ms but median 62 → 93 ms.
-- **Own**: hear plainTiming 0 vs 1 (clips: `whence_9-31s_plainTiming0/1.mp3`, `mixed_A/B_*`; per-section click clips
-  in progress in private `solo-clicks/`).
+- **Own (heard 2026-10-21)**: the owner, each section alone with a metronome click (Whence bars 5-14, real SSO, build 458):
+  Violins 1 **A** (plainTiming 0) better, Violins 2 no difference, Violas "maybe B, can't really tell", Celli **A** (B
+  "sounds early"), Basses **A** ("B is way too early"). So plainTiming stays 0. **This contradicts the heard check**:
+  by its readings (attacks −15 dB, transitions at pitch arrival) B was closer to the beat for Celli and Basses, and A's
+  transitions are +130 … +200 ms "late", yet A sounds on time. The ear places a Performance transition near where the
+  pitch LEAVES the note before (Polfreman 2013's leave + 23.5 ms, `transitionsEarly` 2's rule), not at its arrival.
+  Next: re-judge the heard check's transitions by leave time and re-check against these answers before any timing model
+  is changed (item 3; private `plain-timing/OWNER_EARS.txt`).
 - **Untried**: *Live plays the score* and the route set don't apply the shift at all (Violas 95.2 ms late there); the
   plain set's Track Delay untried in real Live.
 - See also items 3, 9, 15.

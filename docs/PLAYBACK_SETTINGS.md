@@ -95,7 +95,7 @@ five string sections, with the all-notes constants; below, Plain Performance): s
 `slurs/plainAccents` is 2 in Recommended and by default, 0 in Library default (2026-10-21: the owner chose 2, the accented
 attack, at real players' level, heard 2026-10-21 on Whence bars 7-9: "fine"; below, Plain accents); 1 or 3 by hand shows "(Custom)".
 
-`slurs/plainTiming` is 0 in both presets (2026-10-21: plain notes early each by its own model instead of the patch's one shift; the owner decides by ear; below, Plain timing): set by hand to 1 it shows "(Custom)".
+`slurs/plainTiming` is 0 in both presets (2026-10-21: plain notes early each by its own model instead of the patch's one shift; the owner heard each section alone with a click the same day: 0 better for Violins 1, Celli, Basses, no difference for Violins 2, Violas undecided: stays 0; below, Plain timing): set by hand to 1 it shows "(Custom)".
 
 `slurs/speedFromWritten` is 0 in both presets (2026-10-17: the owner approved MuseScore taking over the Performance
 patches' CC119 and flips Recommended after the null test and listening; below, Speed from written): set by hand to 1 it
