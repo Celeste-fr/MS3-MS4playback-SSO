@@ -30,6 +30,34 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Lane jumps and Ample's background load (branch `lane-steps`, 2026-10-20, from integrate-1017 71da2b227b; not merged)
+
+From the Ample check of build 455 (private: `~/MuseScore/ms3fork/private/ample-check455/RESULT.md`, FIX4.md there).
+
+- **Lane jumps** (every library): two points at one tick (a jump; Live writes and reads one so, `LiveSet::lanes`) played
+  the first value: `Lane::events` skipped the second point, while `valueAt` (and so a chunk starting after it) gave the
+  second. Now `events` keeps one value a tick, the later point's (the renderer inserts each at `lower_bound`, so two
+  would have played the earlier one); a ramp into the jump ends at its first value. `flatValue` (a jump at tick 0) and
+  `PartControllers::stateValue` (a jump at the lane's first point) take the later value too. Everything else (hosted
+  CC / parameters, Live's clips, the plain set, the route set, Update Live Set) follows from the rendered events; the
+  editor and `valueAt` already treated the later point as the one that holds. Tests `tst_soundlibrary::automationJumps`,
+  `tst_liveequivalence::laneJumpsLive` (written as two breakpoints at one time, read back, played the same). Whence has
+  no automation lanes: its dumps are unchanged.
+- **Ample's background load**: Ample loads a state's sample set (Pick / Strum) on its own thread after setState
+  (~0.6 s of one core, warm disk), and notes meanwhile play whatever is loaded. The verification started rendering at
+  once, so the three-instance score rendered differently each run (VM, #455: the Finger route's hash differed in 4 of 4
+  runs, kept or fresh `parameter values.json`; Pick and Strum the same in those 4). `parameter values.json` changes no
+  hosted render (the events and the Pick / Strum WAVs identical, fresh or kept). Reproduced in amphost5 (three
+  instances in one process): without a wait the Finger slot differed in 3 of 3 runs; with the wait 8 of 8 identical;
+  one run without waiting between instances crashed AGM.vst3 (access violation) while a second instance was set up
+  during the first's load. Fix: map `<Plugin backgroundLoad="60">` (gen_ample.py), `audio/vst3/backgroundload.*`,
+  `SoundLibraryExport::loadInstances` / `loadInstance` wait after each instance (load times.log: "its background load
+  done in … s"). **To confirm on the next Windows build**: agm2-on verified 3 times (`MS_VERIFY_ROUTES=1`): bit-identical
+  route WAVs, load times.log with three "background load done" lines (Pick / Strum ~0.6 s, Finger ~0.2 s).
+- **Open**: hosted playback (`SoundLibraryHost::sync`, parallel loads on worker threads) doesn't wait: Play right after a
+  load may sound wrong for about a second, and parallel Ample loads might crash as amphost5 did once (not seen in
+  MuseScore). The even-levels background measurer (SSO only) doesn't wait either.
+
 ## Chords on monophonic patches (branch `chord-voices`, 2026-10-20, from integrate-1017 09f6847772; not merged)
 
 The owner: "of course it should play every note". Whence's Celli divisi (bars 9-16) lost a note in each of its

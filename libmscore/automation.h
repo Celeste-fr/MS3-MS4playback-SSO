@@ -141,11 +141,12 @@ struct Lane {
       int cc() const;                     // "cc<n>": n (0-127); else -1
       // the value at tick: -1 before the first point
       double valueAt(int tick) const;
-      // a flat lane: its first point at the score's start and every point at one value; that value (else -1). A flat lane
+      // a flat lane: its first point at the score's start and every point at one value (a jump at tick 0: every later point
+      // at the value it jumps to); that value (else -1). A flat lane
       // on a map controller is the controller's setting (partcontrollers.h): played as the part's value once was
       double flatValue() const;
       // what to send in [tick1, tick2): the value in force at tick1 (when there is one), then each
-      // point, and along a ramp each tick at which the value, counted in steps of resolution (rounded), changes:
+      // point (one value a tick: of a jump, two points at one tick, the later one's), and along a ramp each tick at which the value, counted in steps of resolution (rounded), changes:
       // a MIDI controller gets every one of its 128 values a ramp passes, at the tick it reaches it (the
       // owner's criterion, 2026-10-03: a step whenever the value changes by one MIDI step), no fixed step
       std::vector<std::pair<int, double>> events(int tick1, int tick2, double resolution) const;

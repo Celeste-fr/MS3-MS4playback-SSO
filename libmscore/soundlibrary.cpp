@@ -929,10 +929,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Plugin") {
-                  // <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3"/>
+                  // <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3" [backgroundLoad="60"]/>
                   for (const QString& f : a.value("files").toString().split(';'))
                         if (!f.trimmed().isEmpty())
                               lib->plugins.append(f.trimmed());
+                  if (a.hasAttribute("backgroundLoad"))
+                        lib->backgroundLoad = std::max(0.0, a.value("backgroundLoad").toDouble());
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Tuning") {

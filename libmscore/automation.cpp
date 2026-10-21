@@ -134,10 +134,12 @@ double Lane::flatValue() const
       {
       if (points.empty() || points.front().tick > 0)
             return -1;
+      // (a jump at the start: the later point's value from it, as valueAt; the points before it at tick 0 never play)
+      const double v = valueAt(0);
       for (const Point& p : points)
-            if (std::fabs(p.value - points.front().value) > 1e-9)
+            if (p.tick > 0 && std::fabs(p.value - v) > 1e-9)
                   return -1;
-      return points.front().value;
+      return v;
       }
 
 const char* const VELOCITY_TARGET = "velocity";
@@ -224,8 +226,13 @@ std::vector<std::pair<int, double>> Lane::events(int tick1, int tick2, double re
             const Point& p = points[i];
             if (p.tick >= tick2)
                   break;
-            if (p.tick >= tick1 && p.tick > (out.empty() ? tick1 - 1 : out.back().first)) {
-                  out.push_back({ p.tick, p.value });
+            // (a jump, two points at one tick, as Live writes and reads one: the later one holds from it, as valueAt; one
+            // value a tick, the renderer inserting each ahead of the tick's other events)
+            if (p.tick >= tick1) {
+                  if (!out.empty() && out.back().first == p.tick)
+                        out.back().second = p.value;
+                  else
+                        out.push_back({ p.tick, p.value });
                   last = p.value;
                   }
             // along a ramp to the next point, inside [tick1, tick2): at each tick where it reaches another step

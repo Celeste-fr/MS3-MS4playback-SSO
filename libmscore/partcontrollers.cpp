@@ -180,7 +180,7 @@ double stateValue(const Part* part, const SoundLib::Controller& controller, cons
       const Automation::PartLanes own = Automation::lanes(part, lanes);
       if (const Automation::Lane* l = laneOf(own, controller))
             if (!l->points.empty())
-                  return std::min(1.0, std::max(0.0, l->points.front().value));
+                  return std::min(1.0, std::max(0.0, l->valueAt(l->points.front().tick)));    // (a jump there: its later point)
       return controller.defaultValue >= 0 ? controller.defaultValue / 127.0 : -1.0;
       }
 
