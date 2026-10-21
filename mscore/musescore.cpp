@@ -153,6 +153,7 @@
 #include "livesetexport.h"
 #include "livehelpers.h"
 #include "libmscore/livesetwriter.h"
+#include "libmscore/liveset.h"
 #include <QLockFile>
 #include <atomic>
 #include <map>
@@ -5357,7 +5358,17 @@ static bool liveSetInBackground(const QStringList& argv)
                   ok = false;
                   }
             else {
-                  const QString report = LiveIntegration::reportText(plan, liveSetOut, false);
+                  // what was written, recorded in the score as the window's Create Live Set records it (recordWritten:
+                  // an unchanged envelope MuseScore wrote, e.g. a hosted M-Master Vol, then comes back as nothing), and
+                  // the score saved when that changed it, as Update Live Set below saves it
+                  LiveIntegration::recordWritten(score.get(), plan.spec, LiveSetWriter::xml(plan.spec), LiveSet::read(liveSetOut), false);
+                  QString report = LiveIntegration::reportText(plan, liveSetOut, false);
+                  if (!score->undoStack()->isClean()) {
+                        if (score->saveFile(false))
+                              report += "\n" + QString("The score was saved (%1).").arg(score->masterScore()->fileInfo()->absoluteFilePath());
+                        else
+                              report += "\n" + QString("The score could not be saved: %1").arg(MScore::lastError);
+                        }
                   log(report);
                   QFile f(liveSetOut + ".txt");       // (the console isn't seen on Windows)
                   if (f.open(QIODevice::WriteOnly | QIODevice::Text))
