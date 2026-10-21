@@ -153,6 +153,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainWritten_data();
       void plainWritten();
       void plainPerformanceLive();
+      void plainAccentsLive_data();
+      void plainAccentsLive();
       void speedFromWrittenLive();
       void editLagIdentical();
       void delayedTrackLevel();
@@ -2627,6 +2629,178 @@ void TestLiveEquivalence::plainPerformanceLive()
       const std::vector<LiveSet::PartInfo> parts = LiveSet::partInfos(score, QStringList());
       LiveTracks::Import im = LiveTracks::import(score, set, parts, "a.als", QDateTime(), again);
       QCOMPARE(LiveTracks::delaysTag(score, im), QString());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainAccentsLive
+//    [slurs] plainAccents in Live (the rule "Live and MuseScore sound alike"), plain-accents.musicxml with plainPerformance
+//    and [levels] context, each value 0-3: *Live plays the score*'s clips (per route: the notes' velocities, the CC1 and
+//    CC11 values in order) and the plain set (the Performance patch's technique clips: each note's velocity; its Kontakt's
+//    CC1 / CC11 lanes: the values in order) carry what MuseScore plays: the accented attack's 122 (2 / 3), the accents'
+//    raised CC1 (1 / 3)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainAccentsLive_data()
+      {
+      QTest::addColumn<int>("setting");
+      QTest::newRow("0 as a plain note") << 0;
+      QTest::newRow("1 level") << 1;
+      QTest::newRow("2 attack") << 2;
+      QTest::newRow("3 both") << 3;
+      }
+
+void TestLiveEquivalence::plainAccentsLive()
+      {
+      QFETCH(int, setting);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
+                                      { "slurs/plainAccents", QString::number(setting) } });
+      QString grid;
+      for (int cc : { 32, 96 })
+            for (int ms : { 100, 1000 })
+                  for (int p : { 60, 84 })
+                        grid += QString("%1/%2/%3:10 ").arg(cc).arg(ms).arg(p);
+      auto lib = loadMap(QString(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='80'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long longmarcato' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1'/>"
+         "</Instrument></SoundLibrary>").arg(grid.trimmed()).toUtf8().constData());
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-accents.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      auto patchOf = [&](const NPlayEvent& e, bool forLive) {
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib, forLive))
+                  if (r.port == e.extPort() && r.channel == e.extChannel())
+                        return r.instrument->name;
+            return QString();
+            };
+      auto values = [](const std::vector<std::pair<int, int>>& v) {
+            QStringList out;
+            for (const auto& p : v)
+                  if (out.isEmpty() || out.last() != QString::number(p.second))
+                        out << QString::number(p.second);
+            return out.join(' ');
+            };
+      // MuseScore's playback: per patch the notes' "pitch velocity" and the CC1 / CC11 values in order
+      EventMap playback;
+      score->renderMidi(&playback, false, true, SynthesizerState());
+      std::map<QString, QStringList> want;
+      std::map<std::pair<QString, int>, std::vector<std::pair<int, int>>> wantCC;
+      int accented = 0;
+      for (const auto& te : playback) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch())
+                  continue;
+            const QString patch = patchOf(e, false);
+            if (e.type() == ME_NOTEON && e.velo() > 0) {
+                  want[patch] << QString("%1 %2").arg(e.pitch()).arg(e.velo());
+                  accented += e.velo() == 122;
+                  }
+            else if (e.type() == ME_CONTROLLER && (e.controller() == 1 || e.controller() == 11)) {
+                  std::vector<std::pair<int, int>>& v = wantCC[{ patch, e.controller() }];
+                  if (!v.empty() && v.back().first == te.first)
+                        v.back().second = e.value();
+                  else
+                        v.push_back({ te.first, e.value() });
+                  }
+            }
+      QCOMPARE(accented, (setting & 2) ? 4 : 0);
+      for (const auto& c : wantCC)
+            want[c.first.first] << QString("cc%1: %2").arg(c.first.second).arg(values(c.second));
+      for (auto& w : want)
+            w.second.sort();
+      const QString all = want["Violin - Performance"].join(", ");
+      QVERIFY2(all.contains("cc1: ") && (setting & 1 ? all.section("cc1: ", 1).contains(' ') : !all.section("cc1: ", 1).section(',', 0, 0).contains(' ')),
+               qPrintable(all));          // (1 / 3: CC1 up at the accents and back; 0 / 2: one CC1)
+      qDebug("plainAccents %d, MuseScore: %s", setting, qPrintable(all));
+
+      // *Live plays the score*'s clips
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const std::vector<LiveClips::Track> clips = LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl);
+      std::map<QString, QStringList> fromEvents, fromClips;
+      std::map<std::pair<QString, int>, std::vector<std::pair<int, int>>> ccEvents;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch())
+                  continue;
+            const QString key = QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1);
+            if (e.type() == ME_NOTEON && e.velo() > 0)
+                  fromEvents[key] << QString("%1 %2").arg(e.pitch()).arg(e.velo());
+            else if (e.type() == ME_CONTROLLER && (e.controller() == 1 || e.controller() == 11)) {
+                  std::vector<std::pair<int, int>>& v = ccEvents[{ key, e.controller() }];
+                  const int at = tl.units(te.first);
+                  if (!v.empty() && v.back().first == at)
+                        v.back().second = e.value();
+                  else
+                        v.push_back({ at, e.value() });
+                  }
+            }
+      for (const auto& c : ccEvents)
+            fromEvents[c.first.first] << QString("cc%1: %2").arg(c.first.second).arg(values(c.second));
+      for (const LiveClips::Track& c : clips) {
+            std::map<int, std::vector<std::pair<int, int>>> carriers;
+            std::vector<LiveClips::Note> notes = c.notes;
+            std::sort(notes.begin(), notes.end());
+            for (const LiveClips::Note& n : notes) {
+                  if (n.pitch < LiveClips::CARRIER_LOW)
+                        fromClips[c.key] << QString("%1 %2").arg(n.pitch).arg(n.velocity);
+                  else if (n.pitch == LiveClips::carrierPitch(1) || n.pitch == LiveClips::carrierPitch(11))
+                        carriers[n.pitch == LiveClips::carrierPitch(1) ? 1 : 11].push_back({ n.start, LiveClips::carrierValue(n.pitch, n.velocity) });
+                  }
+            for (const auto& cc : carriers)
+                  fromClips[c.key] << QString("cc%1: %2").arg(cc.first).arg(values(cc.second));
+            }
+      for (auto& r : fromEvents)
+            r.second.sort();
+      for (auto& r : fromClips)
+            r.second.sort();
+      for (const auto& r : fromEvents)
+            QVERIFY2(fromClips[r.first] == r.second, qPrintable(r.first + ": MuseScore " + r.second.join(", ") + " / Live "
+                                                               + fromClips[r.first].join(", ")));
+
+      // the plain set (written clips, the Controllers clip at played times)
+      auto render = [score](bool written) {
+            EventMap ev;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setWrittenTiming(written);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&ev, ctx);
+            return ev;
+            };
+      const EventMap played = render(false);
+      const EventMap written = render(true);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+      std::map<QString, QStringList> got;
+      for (const PlainLiveSet::Section& s : l.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                        for (const PlainLiveSet::Technique& t : k.techniques)
+                              for (const LiveClips::Note& n : t.notes)
+                                    got[k.patch] << QString("%1 %2").arg(n.pitch).arg(n.velocity);
+                        for (const PlainLiveSet::Lane& lane : k.lanes)
+                              if (lane.cc == 1 || lane.cc == 11)
+                                    got[k.patch] << QString("cc%1: %2").arg(lane.cc).arg(values(lane.points));
+                        }
+      for (auto& g : got)
+            g.second.sort();
+      QVERIFY2(got["Violin - Performance"] == want["Violin - Performance"],
+               qPrintable("MuseScore " + want["Violin - Performance"].join(", ") + " / the plain set " + got["Violin - Performance"].join(", ")));
       delete score;
       }
 

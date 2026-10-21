@@ -1221,6 +1221,40 @@ one (`TRANSITION_MIN_GAP_MS` caps them); written notes closer than 15 ms do (64t
 Live: the velocity is in the clips; the plain set's written clips decide by the written spacing.
 `tst_playbackaudit::droppedFindings`: fast-legato.musicxml's three DROPPED gone, those notes at 65.
 
+## Plain accents
+
+2026-10-20 (branch `plain-accents`; not yet heard by the owner). Under `[slurs] plainPerformance` an accented note played
+exactly as a plain one: velocity 64 (a spiccato attack) and no level of its own, because `performanceNote` sets 64 before it
+reads the accent and the plain choice's base "long" is no velocity technique, so MS4.7.5's articulation offset (which
+`[levels] calibrated` gives a technique on velocity, `libVelocity`) was never added (private/bars9-12/ACCENT.md: Whence bar
+8's staccato + accent 1.6 dB under the slur before it in SSO, +3 to +5 dB over it in the built-in synth).
+`[slurs] plainAccents` (0 by default and in both presets; per score), for a plain Performance note (`Choice::plain`):
+
+- **1, the level**: a note with an accent, marcato or soft accent (the articulations MS4.7.5's tables give a louder curve:
+  their curves peak at 7000 against 5000 for strings, 6000 for the other families) plays MS4's offset for all its
+  articulations, 40 log10(share) (`Ms4::NoteResult::share`: its velocity over a plain note's at the same dynamic), the same
+  number calibrated levels add on velocity techniques: strings' accent, staccato + accent, marcato or soft accent +5.3 dB.
+  It is the note's own level (`marcatoLevel`'s `plainAccentDb`, added to the MarcatoLevel / text level): louder by the
+  dynamics CC along the patch's own measured curve (`DynamicsCurve::raise`; SoundFont 2's law without one), on top of the
+  level rule's CC11, as a positive MarcatoLevel plays; slurred notes too (the route's CC1 back after it).
+- **2, the attack**: an accent or marcato on an Auto attack without a velocity of its own that plays an attack (a staccato,
+  a note after silence, a note touching the one before outside a slur) takes the Performance legato's `accented` attack
+  (SSO: velocity 122, band 117-127) instead of 64, as `[slurs] performance` gives it; a note touching the one before on the
+  patch is re-attacked (the note before ends the map's `reattackGap`, 54 ms, before it) instead of SSO's transition from
+  it. A slur's transition stays a transition at 64 (as under `[slurs] performance`), and so does a soft accent.
+- **3**: both.
+- **Measured** (Windows test VM, kthost, Kontakt 8 + SSO, the VM MuseScore's own setups of the five Performance patches,
+  2026-10-20; private/plain-accents): the accented attack (122) against the spiccato attack (64) after silence, CC1 64,
+  CC11 as Whence bar 8's staccatos, 150 ms notes, 3 pitches x 4 rounds (the rounds within 0.5): perceived peak (the
+  fork's perceived envelope, loudness-level units) +6.4 dB Violins 1 (+4.2 .. +9.2 by pitch), +7.8 Violins 2 (+1.8 ..
+  +8.6), +8.5 Violas (+3.5 .. +8.9), +5.3 Celli (+4.9 .. +6.4), +5.4 Basses (+4.3 .. +8.0); the loudest 50 ms +0.8 ..
+  +9.6 dB. So 2 alone is about as loud as 1 (+5.3) and 3 adds both, about +11 dB: for the owner to judge by ear.
+  The accented attack's timing (heard against the plainShift measured on velocity 64) is not measured: the audit treats
+  it as every plain note.
+- **Live**: the level is the note's CC1 / CC11 in the clips and the plain set's lanes, the attack its velocity
+  (`tst_liveequivalence::plainAccentsLive`).
+- `tst_soundlibrary::plainAccents`.
+
 ## Chords on monophonic patches (voice lanes)
 
 2026-10-20 (branch `chord-voices`; a correctness fix, the owner: "of course it should play every note"; not a setting, in
@@ -1331,6 +1365,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Speed from written, `[slurs] speedFromWritten` (the owner approved, 2026-10-17): on SSO's five string-section Performance patches CC119 (the transition's speed variant: RUNS / RUNS RT / FAST LEGATO) is MuseScore's: the patch's state has the script's own writing off (`$vfm12` 0, map `speedCC` / `speedScript`), each legato note-on gets 126 - floor(written ms from the note before x 127 / 1000) right before it, so early starts keep the written band; attacks none (above, Speed from written) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`speedFromWritten`, `speedValue`, `playbackScriptValues`), `rendermidi.cpp` (`libSpeed`, `librarySpeeds`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`, `Slot::values`), `liveclips.cpp` (`EXTRA_CARRIERS`), `plainliveset.cpp` (`speedEnvelope`); data: `sso_performance_layers.json` | `[slurs] speedFromWritten`; score: `playbackSettings` |
 | Fixed transitions, `[slurs] fixedTransitions` (2026-10-20, not yet heard by the owner): on SSO's five string sections' Performance patches the modulators from Kontakt's random generator (source type 10: the transitions' envelope level, the sustains' pitch) at intensity 0 in the state loaded, so every play of a passage sounds the same, an average take (above, Fixed transitions) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`fixedTransitions`, `playbackScriptValues`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`), `audio/vst3/kontaktsetup.cpp` (`randomSources`, `withRandomSources`) | `[slurs] fixedTransitions`; score: `playbackSettings` |
 | Fast transitions, `[slurs] fastTransitions` (2026-10-20, not yet heard by the owner): a legato note-on less than 15 ms after the note-on before on its route at velocity 20-64, which SSO ignores (the audit's DROPPED), sent at 65, the lowest that plays, the same transition family (above, Fast transitions) | 0 (Recommended 0, Library default 0) | `rendermidi.cpp` (`libraryFastTransitions`) | `[slurs] fastTransitions`; score: `playbackSettings` |
+| Plain accents, `[slurs] plainAccents` (2026-10-20, not yet heard by the owner): under plainPerformance an accent, marcato or soft accent plays 1 MS4.7.5's offset for its articulations (40 log10 share, strings +5.3 dB) by the dynamics CC along the patch's curve, slurred notes too; 2 an accent or marcato on an attack the Performance legato's accented attack (SSO 122) instead of 64, a touching note re-attacked (reattackGap); 3 both (above, Plain accents) | 0 (Recommended 0, Library default 0) | `rendermidi.cpp` (`performanceNote`, `marcatoLevel`'s `plainAccentDb`) | `[slurs] plainAccents`; score: `playbackSettings` |
 | Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' gain stage, the rest of the part's patches at 0 dB (above, Level rule; the owner, 2026-10-10; the gain stage 2026-10-15); with `[slurs] plainPerformance` a plain note takes its kind's grid (slur / staccato + calibrated 2's D / single note; 2026-10-17) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `plainKind`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel`, `contextLevelPlain` / `Staccato` / `Single` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, by the patches' gain stage less the score's master trim (above, Section balance, Gain stage and master trim; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |

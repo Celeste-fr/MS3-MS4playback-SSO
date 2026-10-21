@@ -144,6 +144,15 @@ static const std::vector<Definition> DEFINITIONS = {
         "1: a legato note started less than 15 ms after the note before on its patch, which SSO's legato ignores at velocity 64 "
         "or less (the audit's DROPPED), is sent at velocity 65, the lowest it plays, the same transition family (velocities "
         "20-64 only: a portamento has none above 64); 0: sent as chosen", true },
+      // (2026-10-20, branch plain-accents: plainPerformance played every accent as a plain note, velocity 64 and no MS4
+      // offset (private/bars9-12/ACCENT.md); four ways to compare by ear, 0 in both presets until the owner has heard them;
+      // performanceNote, marcatoLevel's plainAccentDb)
+      { "slurs/plainAccents", 0, 0, 3, "",
+        "[slurs] plainPerformance's notes with an accent, marcato or soft accent: 1 MuseScore 4's offset for its articulations "
+        "(40 log10 of its velocity over a plain note's, as [levels] calibrated gives a technique on velocity: strings' accent "
+        "+5.3 dB), by the dynamics CC along the patch's own curve, slurred notes too; 2 an accent or marcato that plays an "
+        "attack (not a slur's transition) the Performance legato's accented attack (SSO: velocity 122) instead of velocity "
+        "64, a note touching the one before re-attacked; 3 both; 0: as a plain note", true },
       // [levels]
       // (the owner, 2026-10-08: "bring back the calibrated short velocity and include it in the recommended preset",
       // "MuseScore 4.7.5's articulation profiles for everything incl. marcato"; controller techniques keep the library's
@@ -482,7 +491,8 @@ QString iniTemplate()
 //    slurs/transitionsEarly (1 in Recommended since 2026-10-15, 0 in Library default); slurs/plainPerformance (1 in Recommended and by default, 0 in Library default,
 //    since 2026-10-17: the owner chose it by ear on the five string sections); slurs/speedFromWritten (0 in both since
 //    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions and slurs/fastTransitions (0 in
-//    both since 2026-10-20, until the owner has heard them). The other settings are not in the table because: legato/keepMs acts
+//    both since 2026-10-20, until the owner has heard them); slurs/plainAccents (0 in both since 2026-10-20, until the owner
+//    has compared its values by ear). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -504,10 +514,10 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
