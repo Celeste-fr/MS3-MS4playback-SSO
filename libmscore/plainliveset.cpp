@@ -155,6 +155,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             k.patchIndex = r.patch;
             k.lane = r.lane;
             k.cents = r.cents;
+            k.voice = r.voice;
             p->kontakts.push_back(k);
             }
       // (pointers once every vector has its size)
@@ -629,7 +630,22 @@ QStringList keyPath(const QString& annotation)
       return annotation.mid(int(strlen(KEY_PREFIX))).split(" / ");
       }
 
+static QString tuningOnlyName(const Kontakt& k);
+
+// (a monophonic patch's voice copy, Route::voice: " (voice n)" after its tuning's name, so that two voices at one tuning
+// have tracks of their own)
 QString tuningName(const Kontakt& k)
+      {
+      if (k.voice <= 0)
+            return tuningOnlyName(k);
+      // (a voice's copy at a fixed tuning named as its voice's first: no "+0 cents"; a bending copy by its copy number)
+      Kontakt named = k;
+      if (!std::isnan(k.cents))
+            named.lane = 0;
+      return tuningOnlyName(named) + QString(" (%1 %2)").arg(QObject::tr("voice")).arg(k.voice + 1);
+      }
+
+static QString tuningOnlyName(const Kontakt& k)
       {
       if (std::isnan(k.cents))
             return k.lane == 0 ? QString() : QString(" (%1 %2)").arg(QObject::tr("copy")).arg(k.lane + 1);

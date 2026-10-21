@@ -390,6 +390,12 @@ struct LibInstrument {
       // tools/soundlibraries/sso_plain_performance_shift.json -> gen_spitfire_sso.py). NaN: not measured (sent as written,
       // the playback audit lists it)
       double plainShiftMs { NAN };
+      // a monophonic patch (<Instrument mono="1">: SSO's Performance patches, whose script plays ONE legato line: a note-on
+      // while a note is held is a transition that ends it, one < 15 ms after the note-on before at velocity <= 64 is
+      // dropped; read from the patch's script, ownlegato-study): two notes sounding together on one of its slots lose one.
+      // So its notes are spread over voices (lanes(): a chord's or an overlapping voice's extra notes each on a copy of
+      // the patch of their own, "voice lanes"; the owner, 2026-10-20: "of course it should play every note")
+      bool mono { false };
       // [slurs] speedFromWritten (the owner approved, 2026-10-17): the controller this patch's script writes at each legato
       // note-on from the note-on spacing it measures (SSO's Performance: "Leg. Speed CC", CC119 = 126 - floor(ms since the
       // voice's previous note-on x 127 / 1000); the groups pick RUNS / RUNS RT / FAST LEGATO ... by it) and the script value
@@ -744,7 +750,12 @@ struct Route {
       int lane { 0 };                     // a copy of the patch for another tuning (Library::varispeed)
       double cents { 0 };                 // the copy's tuning when it never changes (forLive: Lanes::fixed); NaN: it
                                           // varies (a lane retuned once silent, a bending patch's lanes)
+      int voice { 0 };                    // a monophonic patch's (LibInstrument::mono) voice this copy plays (Lanes::voice):
+                                          // 0 the line, 1.. a chord's other notes
       };
+
+// a monophonic patch among them (LibInstrument::mono: its notes over voice lanes, Lanes)
+bool anyMono(const std::vector<const LibInstrument*>& patches);
 
 // forLive: the routes of Live's tracks (Create Live Set, Live's clips): a copy per tuning, each at a fixed tuning
 // (lanes(…, fixedTuning)), which a copy's Kontakt keeps as its Tune (KontaktSetup::withTune): Live can't varispeed
@@ -823,6 +834,18 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
 //    to a lane that is silent by then (its notes ended and their tail gone), retuned; else to a
 //    new lane. count: lanes per patch (1 where no note
 //    needs another), lane: each note's (0 when not listed)
+//   Voice lanes (a monophonic patch, LibInstrument::mono; the owner, 2026-10-20): its notes are first given voices, so
+//    that no two notes of a voice sound together as written: in the order they start, the notes starting together
+//    from the lowest pitch up, each the lowest voice free then (its last note ended, as written, by this note's start;
+//    a grace note its chord's lowest note's voice). So voice 0 is the line (a lone note, a chord's lowest), a chord
+//    after a chord continues voice by voice in pitch order (its own legato line), and a part without overlapping notes
+//    keeps all its notes in voice 0, its lanes exactly as before. Each voice then gets its own lanes by tuning as
+//    above, voice 0's first (lane 0 ...), then voice 1's, ...: voice: per patch, per lane, its voice. On a bending patch a
+//    chord's note (or the note right after a chord) played plain (Choice::plain) that touches its voice's note before
+//    stays on that note's lane, as a slurred note does (SSO plays it as a transition: the old note ends without its
+//    release, so the bend may move); lone notes after lone notes keep the lanes they had. Every copy is a
+//    route as a tuning copy is (hosted: a slot of the patch's instance, its own MIDI channel; Live: a track of the
+//    patch's multi; MIDI out: a channel)
 //---------------------------------------------------------
 
 struct Lanes {
@@ -831,6 +854,7 @@ struct Lanes {
       std::map<const Note*, double> cents;          // the tuning each note plays at (its lane's)
       std::vector<std::vector<double>> fixed;       // per patch, per lane: its tuning (cents) when it never changes
                                                     // (fixedTuning), NaN where it does; empty: none fixed
+      std::vector<std::vector<int>> voice;          // per patch, per lane: its voice (a monophonic patch's; 0 the line)
       };
 // (tailSeconds: a lane is silent after its notes' end plus the longer of it and the note's articulation's
 // releaseMs ([tuning] waitForRelease); < 0: plus the note's laneRing. maxLanes <= 0: memoryMaxLanes)

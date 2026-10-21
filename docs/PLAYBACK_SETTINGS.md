@@ -1221,6 +1221,49 @@ one (`TRANSITION_MIN_GAP_MS` caps them); written notes closer than 15 ms do (64t
 Live: the velocity is in the clips; the plain set's written clips decide by the written spacing.
 `tst_playbackaudit::droppedFindings`: fast-legato.musicxml's three DROPPED gone, those notes at 65.
 
+## Chords on monophonic patches (voice lanes)
+
+2026-10-20 (branch `chord-voices`; a correctness fix, the owner: "of course it should play every note"; not a setting, in
+every preset). SSO's Performance patches play ONE legato line per Kontakt slot (read from the patch's script, Violas -
+Performance: a note-on while a note is held is a legato transition that ends it; one less than 15 ms after the note-on
+before at velocity 64 or less is dropped). So two notes of a chord on one slot lose one: Whence's Celli, four three-note
+chords, one note of each silent (private/bars9-12, VM run 2 of 2026-10-20). The map marks such a patch
+`<Instrument mono="1">` (`gen_spitfire_sso.py` `MONO`: every "... - Performance" / "... - Total Performance" patch, 42;
+the others share the Violas script, an assumption checked on Celli).
+
+- **Voices** (`SoundLib::lanes`, `Lanes::voice`, `Route::voice`): a mono patch's notes, in the order they start, those
+  starting together from the lowest pitch up, each take the lowest voice free then (its last note ended, as written,
+  by this note's start; a grace note its chord's lowest note's voice). Voice 0 is the line (a lone note, a chord's
+  lowest note); a chord after a chord continues voice by voice in pitch order, so each voice is a legato line of its
+  own. A part without overlapping notes has all its notes in voice 0: its lanes exactly as before.
+- **Copies**: each voice gets its own tuning lanes (as before, within the voice), voice 0's first. On a bending patch
+  a note of a chord (or right after one) played plain (`[slurs] plainPerformance`), touching its voice's note before,
+  stays on that note's copy and glides there, as a slurred note does (SSO plays it as a transition, which ends the
+  old note without its release); a lone note after a lone note keeps the lanes it had. Every copy is a
+  route like a tuning copy: hosted, a slot of the patch's instance on its own MIDI channel (hosted slots; the gain
+  stage, Mixer and parameters the instance's, once), the command-line renders' instances the same; Live's plain set a
+  slot of the patch's multi and a MIDI track named "<part> (voice n)" (with its tuning when not 0 cents); the route set
+  and *Live plays the score* a track / clip per copy; MIDI out a channel. A library without varispeed: one untuned copy
+  per voice.
+- **Transitions**: where a chord comes before or is the note's own, a note goes on legato (transition, join, bend
+  glide) only from the note before on its own copy (`otherLane` in rendermidi.cpp); a chord's other notes attack. A
+  lone note after a lone note as ever.
+- Level rule, section balance, real range, master trim, even levels: by patch (a voice copy is its patch); even levels
+  measure a voice copy's passages on its own route.
+- **Audit**: CHORD (fail), a note-on less than 15 ms after the note-on before on its route while that one still sounds,
+  on a mono patch.
+- Whence (Recommended, `dumpEvents` before / after, lanes pinned at max=8): only Celli - Performance changes, from 19.67 s
+  to 34.94 s (bars 9-16, the divisi passage: five two-note then four three-note chords), and one copy more (4 instead of
+  3: a slot more in its instance). Every other route, every note's time, the gains, volumes and the trim are identical. The three
+  voices now play three legato lines, a copy each (before: three chord notes shared a copy with another chord note at the
+  same instant, one dropped; other chord notes "joined" a note on another copy). The audit: CHORD 0 (the same rule
+  on the old routing: 3), every other check unchanged (all 0).
+- Level: each voice copy plays at its patch's levels, so a three-note divisi chord sounds three full sections (a real
+  divided section plays each note with a third of its players). Not corrected: no divisi data yet (an open item).
+- Cost: a slot per extra voice (Kontakt compiles its script per slot, ~1.3-1.7 s at load; ~220 MB).
+- Tests: `tst_soundlibrary::chordVoices`, `tst_liveequivalence::chordVoicesLive` / `chordVoicesHosted`,
+  `tst_playbackaudit::chordFindings`. Untried with Kontakt / SSO and in Live.
+
 ## Clicked and entered notes
 
 The owner (2026-10-15): "send a clicked note on a library part to its SSO patch, with its technique and the same patch

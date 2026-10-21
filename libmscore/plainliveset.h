@@ -120,6 +120,7 @@ struct Kontakt {
       std::vector<Lane> lanes;            // by controller, the pitch bend last
       std::vector<ParamLane> params;
       int lane { 0 };                     // the route's tuning lane (SoundLib::Route::lane, Live's: one per tuning)
+      int voice { 0 };                    // a monophonic patch's voice (SoundLib::Route::voice): its copy's name says it
       double cents { 0 };                 // its tuning: the Kontakt's Tune (KontaktSetup::withTune, by the export);
                                           // NaN: a bending patch's lane, tuned by its bends
       double gain { 1.0 };                // its whole gain (TrackDelays::patchGain: what MuseScore's slot plays)

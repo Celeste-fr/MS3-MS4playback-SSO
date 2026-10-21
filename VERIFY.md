@@ -171,6 +171,10 @@ sound: whether the onsets are right is the Windows VM's job (above). Checks:
   sent less than 15 ms after the previous legato note-on on its route, at velocity 64 or lower. SSO's legato engine
   doesn't play such a note at all (behaviour from reading its script privately, not quoted). Notes of one chord are not
   compared. Part, bar, beat, pitch, velocity, gap in ms.
+- **CHORD** (fail): on a monophonic patch (`<Instrument mono="1">`, SSO's Performance patches: one line per slot), a
+  note-on less than 15 ms after the note-on before on its route while that one still sounds (a chord's notes on one
+  copy). SSO drops it (velocity 64 or lower) or plays it as a transition ending the other. Voice lanes give each such
+  note a copy of its own (docs/PLAYBACK_SETTINGS.md › Chords on monophonic patches), so it guards against a regression.
 - **LEAP** (warn): a legato transition whose interval from the note before exceeds an octave (12 semitones; with
   microtones 1200 cents by `ScoreTuning`). SSO gives it no transition: it releases the note before and attacks afresh,
   so the note's Performance technique, `legatoDelay` timing and level calibration don't apply. Same fields plus the

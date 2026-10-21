@@ -47,6 +47,7 @@ const char* kindName(Kind k)
             case Kind::LEVEL_STEP: return "LEVEL STEP";
             case Kind::DROPPED:    return "DROPPED";
             case Kind::LEAP:       return "LEAP";
+            case Kind::CHORD:      return "CHORD";
             }
       return "";
       }
@@ -158,7 +159,7 @@ QString Report::text(const QString& title) const
                      "Rasch 1979, warn > %3 ms, fail > %4 ms; level steps: values, proposed threshold (not enforced, owner to "
                      "approve) the difference limen at 60 dB SL, Jesteadt, Wier & Green 1977: %5 dB, marked \"> DL\"")
                      .arg(notes).arg(keepMs).arg(TIMING_WARN_MS).arg(TIMING_FAIL_MS).arg(differenceLimenDb(), 0, 'f', 2);
-      for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP, Kind::DROPPED, Kind::LEAP })
+      for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP, Kind::DROPPED, Kind::LEAP, Kind::CHORD })
             out << QString("  %1: %2 fail, %3 warn, %4 info").arg(kindName(k), -12).arg(count(k, Severity::FAIL))
                    .arg(count(k, Severity::WARN)).arg(count(k, Severity::INFO));
       if (!plainShifts.empty()) {
@@ -684,6 +685,25 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   finding(Kind::LEAP, Severity::WARN, p, QString("transition from pitch %1: %2 semitones (%3 cents) beyond an octave, SSO "
                           "attacks afresh (velocity %4); its Performance technique, legato delay and level calibration don't apply")
                           .arg(from->ppitch()).arg(cents / 100.0, 0, 'f', 2).arg(cents, 0, 'f', 0).arg(p->velocity), cents);
+            }
+
+      // (f2) notes sounding together on one route of a monophonic patch (LibInstrument::mono: SSO's Performance legato
+      // plays one line per slot): a note-on less than 15 ms after the note-on before on its route while that one still
+      // sounds, a chord's notes too: SSO drops the second (velocity <= 64) or plays it as a transition that ends the first.
+      // Voice lanes (SoundLib::Lanes::voice) give such notes a copy each
+      std::map<int, const Played*> lastOnRoute;           // route -> the previous note-on
+      for (const auto& up : played) {
+            const Played* p = up.get();
+            const Played* before = lastOnRoute[p->route];
+            lastOnRoute[p->route] = p;
+            if (!before || !p->trace || !p->trace->patch || !p->trace->patch->mono)
+                  continue;
+            const double gap = ms(p->on) - ms(before->on);
+            if (gap < DROP_GAP_MS && (before->off < 0 || before->off > p->on))
+                  finding(Kind::CHORD, Severity::FAIL, p, QString("%1 ms after the note-on of pitch %2 on its route (%3-%4), which still "
+                          "sounds: %5 plays one line per slot (velocity %6: %7)").arg(gap, 0, 'f', 1).arg(before->pitch)
+                          .arg(p->route / 16).arg(p->route % 16 + 1).arg(p->trace->patch->name).arg(p->velocity)
+                          .arg(p->velocity <= DROP_MAX_VELOCITY ? "dropped" : "a transition ending it"), gap);
             }
 
       // (g) the rows for the heard check: every note-on with a choice, its prediction and its place in its line and slur
