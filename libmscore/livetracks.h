@@ -46,7 +46,9 @@
 //      "written": {key: {"kind": "section" | "part" | "kontakt" | "copy" | "technique", "part": index, "patch": n,
 //                        "hashes": {"cc1": hash, …}, "delayKey": trackdelays.h key, "lookahead": ms,
 //                        "clips": hash, "notes": base64, "slots": "0.00 -50.00",
-//                        "params": {"Vibrato": 0.5, …}}}}   (livesetupdate.h: Update Live Set; Knobs below)
+//                        "params": {"Vibrato": 0.5, …},
+//                        "derived": {"M-Master Vol": {"hash": h, "target": "volume", "points": h, "plain": true, "planned": h}}}}}
+//                                       (livesetupdate.h: Update Live Set; Knobs and Derived parameters below)
 //   Track delays: each part's tracks' TrackDelay comes back as the part's delays (trackdelays.h; "part": its group's,
 //   "delayKey": a Kontakt's or technique's; a technique track's with its written notes' lookahead added back, livetiming.h:
 //   Create Live Set wrote it that much earlier); one in samples (Live's toggle) is reported, not imported.
@@ -68,6 +70,10 @@ namespace Ms {
 class MasterScore;
 class Part;
 class Score;
+
+namespace SoundLib {
+struct LibInstrument;
+}
 
 namespace LiveTracks {
 
@@ -91,6 +97,44 @@ struct State {
       bool empty() const { return !hasVolume && !hasPan && !hasActive && envelopes.empty(); }
       };
 
+//---------------------------------------------------------
+//   Derived parameters (2026-10-21, ample-check456 RESULT.md › Findings 2): plug-in parameter automation the renderer
+//   writes on a Kontakt track that is no lane of the score: a MIDI controller the plug-in plays by a parameter
+//   (SoundLib::Controller::hosted: Ample's CC7 as M-Master Vol: the volume lane, the part's volume, the guitar pass's
+//   strum levels multiplied in) and the guitar pass's capo (M-Capo, from the notation). Create / Update Live Set record
+//   each envelope as written (its eventsHash); the read-back (import) leaves an unchanged one out (MuseScore's own render,
+//   as a Controllers clip's), so it never becomes a lane of its own. Changed in Live:
+//     - "plain" (the envelope was the source lane's own values, nothing multiplied in, on the part's main Kontakt): taken
+//       back as an edit of that lane (target "volume": M-Master Vol = CC7 / 127, the lane's own scale), Automation::merge
+//       deciding as for any lane (the lane as it was when written: "basePoints"; unedited here: Live's taken; edited here
+//       too: a conflict);
+//     - else (strum levels in it, the capo, an extra patch's Kontakt, the envelope deleted): it can't be taken back as a
+//       lane (dividing the strum levels out isn't defined between the rendered events) and isn't imported (reported).
+//       Update Live Set leaves Live's envelope in the set while MuseScore would write the same as last time (the score
+//       unchanged there), and writes MuseScore's over it once the score changes it (reported either way), as Live's own
+//       clip edits are kept (livesetupdate.h).
+//   A part with a lane on the parameter itself (an "m-master-vol" lane): that lane is the parameter's (markWrittenLanes).
+//---------------------------------------------------------
+
+struct Derived {
+      QString hash;                 // LiveSet::eventsHash of the envelope as written
+      QString target;               // the lane it comes from ("volume"; "": none, the capo)
+      QString points;               // that lane's pointsHash when written ("": no lane)
+      bool plain { false };         // every point the lane's value (within half a MIDI step): invertible
+      QString planned;              // automationHash of the automation MuseScore planned (Update Live Set: the score changed
+                                    // there when its plan now differs)
+      };
+// a hash of a plan's parameter automation (LiveSetWriter::ParameterAutomation::points, rounded)
+QString automationHash(const std::vector<std::pair<double, double>>& points);
+
+struct DerivedParameter {
+      QString title;                // the plug-in parameter's title (Live's envelope's)
+      QString target;               // the lane it comes from, "" none
+      QString paramId;              // the parameter's own controller id
+      };
+// the patch's derived parameters (above), without those the part has a lane of their own for
+std::vector<DerivedParameter> derivedParameters(const SoundLib::LibInstrument* li, const Automation::PartLanes& lanes);
+
 // a track Create Live Set wrote
 struct Written {
       QString kind;                 // "section", "part", "kontakt", "copy" (a tuning copy's MIDI track: its Controllers
@@ -109,7 +153,12 @@ struct Written {
       // a Kontakt track's plug-in parameters in Live's panel as written, without automation: their values (Manual, 0-1)
       // by title. A knob the owner turns in Live (another value, still no automation) comes back as a lane (import)
       std::map<QString, double> params;
+      // a Kontakt track's parameter automation MuseScore derives, not a lane of its own (Derived above), by title
+      std::map<QString, Derived> derived;
       };
+
+// w's record for a parameter title (loose), nullptr none
+const Derived* derivedOf(const Written& w, const QString& title);
 
 struct Data {
       std::map<QString, State> tracks;
@@ -127,6 +176,9 @@ bool undoWrite(MasterScore* score, const Data& data, const std::map<const Part*,
 // written; "" none
 QString key(const LiveSet::Set& set, size_t i, const Data& data);
 
+// a Kontakt track's derived envelopes (Derived parameters) as the set read back has them (its track readIndex)
+std::map<QString, Derived> writtenDerived(const Score* score, const LiveSetWriter::Track& t, const LiveSet::Set& readBack,
+                                          size_t readIndex);
 // what Create Live Set wrote: the tracks (their annotations are the keys) and the written file read back
 std::map<QString, Written> written(const Score* score, const std::vector<LiveSetWriter::Track>& tracks, const LiveSet::Set& readBack);
 

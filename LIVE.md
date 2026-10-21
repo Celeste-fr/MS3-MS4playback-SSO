@@ -550,6 +550,19 @@ in a section collapsible at the same time".
     becomes lanes; Create Live Set gives the score's parameter lanes the written envelope's liveHash, so an unchanged
     one keeps MuseScore's lane (Automation::merge). An extra patch's Kontakt: its changed envelopes are reported, not
     imported.
+  - **Derived parameters** (2026-10-21, branch `liveset-hosted-readback`; `livetracks.h` › Derived parameters): parameter
+    automation MuseScore writes on a Kontakt (or Ample) track that is no lane of the score: a MIDI controller the
+    plug-in plays by a parameter (`hosted=`: Ample's CC7 as **M-Master Vol**, the volume lane with the strum levels
+    multiplied in) and the guitar pass's capo (M-Capo). Each envelope is recorded as written (`liveTracks` › written ›
+    `derived`: its hash, its lane, that lane's pointsHash, `plain`: the envelope is the lane's own values). Unchanged it
+    comes back as nothing (before, the read-back made it a lane `m-master-vol` next to `volume`, strum levels baked in,
+    which went on driving M-Master Vol after the volume lane was edited: ample-check456 RESULT.md › Findings 2). Changed
+    in Live: a plain one on the main track is an edit of its lane (M-Master Vol = CC7 / 127, the lane's scale), merged as
+    any lane (unedited here: Live's; edited here too: asked); else (strum levels in it, the capo, an extra patch's
+    Kontakt, deleted) it can't be divided back into a lane: reported, not imported, and Update Live Set leaves Live's
+    envelope while MuseScore would write what it wrote last time, writing MuseScore's (reported) once the score changes
+    it. The route set keeps such lanes in the MuseScore Link device's store, which isn't read back: nothing to recognise
+    there. Tested with the test synth as AGM (`tst_liveequivalence::hostedReadBack`); not in real Live.
   - **Knobs turned in Live** (the owner, 2026-10-15: "yea sure"; `livetracks.h` › Knobs): a Kontakt parameter Live's
     panel lists without automation has one value, its Manual value. On the part's main Kontakt track, one that differs
     from what MuseScore wrote there (`liveTracks` › written › `params`; a set without that record: from what the score
@@ -785,6 +798,9 @@ its own copy and would save it over the update), is brought up to date with the 
    stays in the set, the report says so, and the next update asks again. **Live's own clip edits** (velocities, notes added or deleted) stay while the score's notes on
    that track are unchanged since the last write (`liveTracks` › written › `clips`); changed in the score too, the score's
    clip replaces them (reported). A main patch's Controllers clip is always the score's (its edits came back as lanes).
+   **A derived parameter's envelope** (M-Master Vol with strum levels, M-Capo; Read back › Derived parameters) edited
+   in Live the same way: Live's stays while MuseScore would write what it wrote last time, the score's replaces it once
+   the score changes it (reported either way).
 4. **Everything else stays byte for byte**: devices added on any track (after Kontakt too), return tracks and sends,
    other tracks, names (a renamed track is found by its Info text), colours, the mixer, automation MuseScore doesn't
    write, locators, tempo, scenes, Live's version attributes. The file is edited as text (`LiveSetUpdate::Xml`: the tags
@@ -800,7 +816,10 @@ its own copy and would save it over the update), is brought up to date with the 
    must pass it after, else nothing is written. A report lists the tracks updated (and what: clips, Track Delay, timing,
    automation, state), added, cleared, Live edits kept or replaced, removed parts, what was skipped, and how many of the
    owner's devices, other tracks and return tracks were kept. The command line writes it to `<set>.update.txt` and saves
-   the score when the update changed it.
+   the score when the update changed it. An unchanged score and set leave the score unmodified too: the plan is made with
+   the lanes' Live marks set aside in place (no undo step, `LiveMarksOff` in livesetexport.cpp; until 2026-10-21 that was
+   an undo step, re-marked afterwards, so every update modified the score and the command line saved it; Create Live Set
+   made again also left lanes Live had marked out of the new set).
 
 Tested here (`tst_liveequivalence` `updateLiveSet`, the test synth as Kontakt): a set Create Live Set wrote, edited as
 in Live (an effect after Kontakt, a return track with a send on every track, an audio track with an EQ, a Kontakt's

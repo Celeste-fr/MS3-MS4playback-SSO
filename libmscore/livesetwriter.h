@@ -126,6 +126,7 @@ struct ParameterAutomation {
       long id { -1 };                     // (Update Live Set) the plug-in's id of it, when known: a parameter Live's panel
                                           // doesn't list yet gets a free slot of the panel
       bool keepLive { false };            // (Update Live Set) changed in Live and in MuseScore, not chosen: Live's left
+      QString keepNote;                   // (keepLive) the report's reason, "": changed in both, not chosen
       };
 
 // (Update Live Set, livesetupdate.h; not written by Create Live Set, whose Kontakt state and Plugin::parameters carry the

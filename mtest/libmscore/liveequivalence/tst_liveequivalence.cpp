@@ -186,6 +186,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void controllerPatchDefault();
       void liveGuitarSoftRoll();
       void liveMasterVol();
+      void hostedReadBack();
       void liveStateSettings();
       void liveGainStage();
       void utilitySet();
@@ -6475,6 +6476,353 @@ static QByteArray juceComponent(const QByteArray& xml)
       be(172, quint32(chunk.size()));
       be(20, quint32(152 + chunk.size()));
       return c + chunk;
+      }
+
+//---------------------------------------------------------
+//   hostedReadBack
+//    the plain set's derived parameter automation read back (livetracks.h › Derived parameters; ample-check456
+//    RESULT.md › Findings 2): Ample's CC7 as M-Master Vol, the volume lane with the strum levels multiplied in. Create
+//    Live Set, then Update Live Set on the unchanged score: no lane of its own for M-Master Vol, nothing written, the
+//    score unmodified (until 2026-10-21 the first update imported a "param M-Master Vol" lane, rewrote the automation,
+//    and every update modified the score); the volume lane edited here: the set's M-Master Vol follows; the envelope
+//    edited in Live with strum levels in it: not a lane, Live's kept until the score changes it, then MuseScore's; without
+//    strums (the lane's plain values): Live's edit comes back as the volume lane. A plain set made again carries every
+//    lane (Live's marks don't leave one out); a route set read back gives no lane. The test synth with Ample's
+//    parameters' titles (MSTESTSYNTH_PARAMS) as AGM
+//---------------------------------------------------------
+
+// a plain set's track by its Info text (the plain set's key), -1 none
+static int keyTrack(const LiveSetUpdate::Xml& x, const QString& key)
+      {
+      const int tracks = x.path(x.root(), { "LiveSet", "Tracks" });
+      for (int t : x.children(tracks))
+            if (x.childValue(x.child(t, "Name"), "Annotation") == key)
+                  return t;
+      return -1;
+      }
+// the track's automation envelope of the panel parameter, -1 none
+static int paramEnvelope(const LiveSetUpdate::Xml& x, int track, int param)
+      {
+      const QByteArray id = x.rawAttr(x.path(param, { "ParameterValue", "AutomationTarget" }), "Id");
+      for (int e : x.children(x.path(track, { "AutomationEnvelopes", "Envelopes" }), "AutomationEnvelope"))
+            if (x.rawAttr(x.path(e, { "EnvelopeTarget", "PointeeId" }), "Value") == id)
+                  return e;
+      return -1;
+      }
+
+void TestLiveEquivalence::hostedReadBack()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); qunsetenv("MSTESTSYNTH_PARAMS"); } } reset;
+      QTemporaryFile titles;
+      QVERIFY(titles.open());
+      titles.write("M-Master Vol\t0\t0.5\nM-Capo\t11\t0\nM-Pan\t0\t0.5\n");
+      titles.close();
+      qputenv("MSTESTSYNTH_PARAMS", titles.fileName().toLocal8Bit());
+      QFile mf(root + "/../share/soundlibraries/Ample Guitar M.xml");
+      QVERIFY(mf.open(QIODevice::ReadOnly));
+      const QString mapText = QString::fromUtf8(mf.readAll());
+      LiveHost host(this, "", {}, mapText);
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      // the patches' setups: states laid out as AGM's (JUCE)
+      for (const QString& patch : { "Ample Guitar M", "Ample Guitar M (Pick)", "Ample Guitar M (Strum)" }) {
+            const QByteArray xml = "<?xml version=\"1.0\"?> <AAG_STATE Name=\"Default\"><DBName Value=\"AGMFg\"/></AAG_STATE>";
+            QFile f(SoundLibraryHost::setupFile(lib, patch));
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(Vst3Plugin::joinState("MS Test Synth", juceComponent(xml), QByteArray()));
+            }
+      MasterScore* score = readScore(DIR + "guitar-techniques.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  if (Arpeggio* a = toChord(s->element(0))->arpeggio())
+                        a->setArpeggioType(a->arpeggioType() == ArpeggioType::UP ? ArpeggioType::UP_STRAIGHT
+                                           : a->arpeggioType() == ArpeggioType::DOWN ? ArpeggioType::DOWN_STRAIGHT : a->arpeggioType());
+      const Part* guitar = score->parts().front();
+      auto setVolume = [&](double bar3) {
+            std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+            Automation::PartLanes& pl = all[guitar];
+            Automation::Lane* l = nullptr;
+            for (Automation::Lane& x : pl)
+                  if (x.target == "volume")
+                        l = &x;
+            if (!l) {
+                  pl.push_back(Automation::Lane());
+                  l = &pl.back();
+                  l->target = "volume";
+                  }
+            l->points = { Automation::Point(0, 96 / 127.0, Automation::Curve::STEP),
+                          Automation::Point(4 * DIVISION, 96 / 127.0, Automation::Curve::LINEAR),
+                          Automation::Point(8 * DIVISION - 1, 48 / 127.0, Automation::Curve::STEP),
+                          Automation::Point(8 * DIVISION, bar3, Automation::Curve::STEP) };
+            score->setMetaTag(Automation::metaTag, Automation::write(score, all));
+            };
+      setVolume(80 / 127.0);
+      // and a parameter lane of its own (M-Pan, changing: the Ample track's automation, marked as Live's by Create Live Set)
+      {
+            std::map<const Part*, Automation::PartLanes> all = Automation::read(score);
+            Automation::Lane pan;
+            pan.target = "m-pan";
+            pan.points = { Automation::Point(0, 0.5, Automation::Curve::STEP), Automation::Point(4 * DIVISION, 0.3, Automation::Curve::STEP) };
+            all[guitar].push_back(pan);
+            score->setMetaTag(Automation::metaTag, Automation::write(score, all));
+      }
+      Playback::setIniValuesForTest({ { "guitar/strums", "1" }, { "guitar/softStrums", "0" } });
+      auto targets = [&]() {
+            QStringList t;
+            for (const Automation::Lane& l : Automation::lanes(guitar, Automation::read(score)))
+                  t << l.target;
+            t.sort();
+            return t.join(",");
+            };
+      auto volumeLane = [&]() {
+            for (const Automation::Lane& l : Automation::lanes(guitar, Automation::read(score)))
+                  if (l.target == "volume")
+                        return l;
+            return Automation::Lane();
+            };
+      const QString path = host.dir.path() + "/Hosted Project/Hosted.als";
+      QDir().mkpath(QFileInfo(path).absolutePath());
+      auto create = [&]() {
+            LiveIntegration::LiveSetPlan plan;
+            QString error;
+            QVERIFY2(LiveIntegration::planLiveSet(score, lib, LiveIntegration::LiveSetKind::PLAIN_LINKED, &plan, &error), qPrintable(error));
+            QVERIFY2(LiveSetWriter::write(path, plan.spec, &error), qPrintable(error));
+            LiveIntegration::recordWritten(score, plan.spec, LiveSetWriter::xml(plan.spec), LiveSet::read(path), false);
+            };
+      auto update = [&](LiveIntegration::UpdateResult* res) {
+            QString error;
+            QVERIFY2(LiveIntegration::updateLiveSet(score, lib, path, res, &error), qPrintable(error));
+            QCOMPARE(LiveSetWriter::validate(readSet(path)), QString());
+            };
+      // the main Kontakt (Ample) track's key and its record
+      auto mainKey = [&]() {
+            for (const auto& w : LiveTracks::read(score).written)
+                  if (w.second.kind == "kontakt" && w.second.patch == 0)
+                        return w.first;
+            return QString();
+            };
+      // the set's M-Master Vol envelope on the main track: its events' Value attributes in order
+      auto envelopeValues = [&]() {
+            const LiveSetUpdate::Xml x(readSet(path));
+            const int t = keyTrack(x, mainKey());
+            const int p = t >= 0 ? panelParam(x, t, "M-Master Vol") : -1;
+            const int e = p >= 0 ? paramEnvelope(x, t, p) : -1;
+            QStringList v;
+            if (e >= 0)
+                  for (int ev : x.children(x.path(e, { "Automation", "Events" })))
+                        v << QString::fromUtf8(x.rawAttr(ev, "Value"));
+            return v;
+            };
+      // the set's M-Pan automation on the main track: its events
+      auto panEvents = [&]() {
+            const LiveSetUpdate::Xml x(readSet(path));
+            const int t = keyTrack(x, mainKey());
+            const int p = t >= 0 ? panelParam(x, t, "M-Pan") : -1;
+            const int e = p >= 0 ? paramEnvelope(x, t, p) : -1;
+            return e >= 0 ? int(x.children(x.path(e, { "Automation", "Events" })).size()) : 0;
+            };
+      auto panLane = [&]() {
+            for (const Automation::Lane& l : Automation::lanes(guitar, Automation::read(score)))
+                  if (l.target == "m-pan")
+                        return l;
+            return Automation::Lane();
+            };
+      // what a Create Live Set would write now for M-Master Vol on the main track (its events' values)
+      auto plannedValues = [&]() {
+            LiveIntegration::LiveSetPlan plan;
+            QString error;
+            if (!LiveIntegration::planLiveSet(score, lib, LiveIntegration::LiveSetKind::PLAIN_LINKED, &plan, &error))
+                  return QStringList();
+            const LiveSetUpdate::Xml x(LiveSetWriter::xml(plan.spec));
+            const int t = keyTrack(x, mainKey());
+            const int p = t >= 0 ? panelParam(x, t, "M-Master Vol") : -1;
+            const int e = p >= 0 ? paramEnvelope(x, t, p) : -1;
+            QStringList v;
+            if (e >= 0)
+                  for (int ev : x.children(x.path(e, { "Automation", "Events" })))
+                        v << QString::fromUtf8(x.rawAttr(ev, "Value"));
+            return v;
+            };
+      // an edit "in Live": the envelope's event k set to v
+      auto editInLive = [&](int k, double v) {
+            const QByteArray xml = readSet(path);
+            const LiveSetUpdate::Xml x(xml);
+            const int t = keyTrack(x, mainKey());
+            const int p = panelParam(x, t, "M-Master Vol");
+            const int e = paramEnvelope(x, t, p);
+            QVERIFY(e >= 0);
+            const std::vector<int> evs = x.children(x.path(e, { "Automation", "Events" }));
+            QVERIFY(k < int(evs.size()));
+            int a = 0, b = 0;
+            QVERIFY(x.attrRange(evs[size_t(k)], "Value", &a, &b));
+            QByteArray out;
+            QVERIFY(LiveSetUpdate::apply(xml, { { a, b, QByteArray::number(v, 'g', 10) } }, &out));
+            writeSet(path, out);
+            };
+
+      //---------------------------------------------------------
+      //   Create Live Set: M-Master Vol as the Ample track's automation, recorded as derived (strum levels in it)
+      //---------------------------------------------------------
+      create();
+      QVERIFY(!mainKey().isEmpty());
+      const QStringList written0 = envelopeValues();
+      QVERIFY2(written0.size() > 10, qPrintable(written0.join(" ")));
+      QCOMPARE(written0, plannedValues());
+      {
+            const LiveTracks::Data d = LiveTracks::read(score);
+            const LiveTracks::Derived* dr = LiveTracks::derivedOf(d.written.at(mainKey()), "M-Master Vol");
+            QVERIFY(dr);
+            QCOMPARE(dr->target, QString("volume"));
+            QVERIFY(!dr->plain);                      // (the ppp strum's level in it)
+            QVERIFY(!dr->points.isEmpty());
+      }
+      QCOMPARE(targets(), QString("m-pan,volume"));
+      QVERIFY(panEvents() >= 2);
+      QVERIFY(panLane().playedByLive());           // (Live's set has it as it is)
+
+      //---------------------------------------------------------
+      //   Update on the unchanged score: no new lane, nothing written, the score unmodified; twice
+      //---------------------------------------------------------
+      score->undoStack()->setClean();
+      for (int round = 0; round < 2; ++round) {
+            const QByteArray before = fileBytes(path);
+            const QMap<QString, QString> tags = score->metaTags();
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(!res.written, qPrintable(res.text()));
+            QCOMPARE(fileBytes(path), before);
+            QCOMPARE(targets(), QString("m-pan,volume"));
+            QVERIFY2(!res.importReport.contains("M-Master Vol"), qPrintable(res.importReport));
+            if (round == 1) {           // (the first may link the set: the liveSet metaTag)
+                  QVERIFY2(score->undoStack()->isClean(), qPrintable(res.text()));
+                  QVERIFY(score->metaTags() == tags);
+                  }
+            score->undoStack()->setClean();
+            }
+
+      //---------------------------------------------------------
+      //   the volume lane edited here: the set's M-Master Vol follows, still no lane of its own
+      //---------------------------------------------------------
+      setVolume(100 / 127.0);
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(res.written, qPrintable(res.text()));
+            QVERIFY2(res.report.text().contains("M-Master Vol automation"), qPrintable(res.text()));
+            QCOMPARE(targets(), QString("m-pan,volume"));
+            const QStringList now = envelopeValues();
+            QVERIFY(now != written0);
+            QCOMPARE(now, plannedValues());
+            LiveIntegration::UpdateResult again;
+            update(&again);
+            QVERIFY2(!again.written, qPrintable(again.text()));
+      }
+
+      //---------------------------------------------------------
+      //   the envelope edited in Live (strum levels in it): not a lane; Live's kept while the score is unchanged there,
+      //   MuseScore's once the volume lane changes
+      //---------------------------------------------------------
+      const int k = envelopeValues().size() / 2;
+      editInLive(k, 0.2);
+      const QStringList liveEdited = envelopeValues();
+      QCOMPARE(liveEdited[k], QString("0.2"));
+      const QString laneBefore = Automation::pointsHash(volumeLane().points);
+      for (int round = 0; round < 2; ++round) {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(!res.written, qPrintable(res.text()));
+            QCOMPARE(envelopeValues(), liveEdited);
+            QCOMPARE(targets(), QString("m-pan,volume"));
+            QCOMPARE(Automation::pointsHash(volumeLane().points), laneBefore);
+            QVERIFY2(res.importReport.contains("strum levels"), qPrintable(res.importReport));
+            QVERIFY2(res.report.skipped.join("\n").contains("M-Master Vol changed in Live: Live's left as it is"), qPrintable(res.text()));
+            }
+      setVolume(90 / 127.0);
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(res.written, qPrintable(res.text()));
+            QVERIFY2(res.notes.join("\n").contains("replaced by MuseScore's"), qPrintable(res.text()));
+            QCOMPARE(envelopeValues(), plannedValues());
+            QCOMPARE(targets(), QString("m-pan,volume"));
+      }
+
+      //---------------------------------------------------------
+      //   no strums: the envelope is the volume lane's own (plain); edited in Live it comes back as the volume lane
+      //---------------------------------------------------------
+      Playback::setIniValuesForTest({ { "guitar/strums", "0" }, { "guitar/softStrums", "0" } });
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(res.written, qPrintable(res.text()));      // (the strum levels gone from it)
+            QCOMPARE(envelopeValues(), plannedValues());
+            const LiveTracks::Data d = LiveTracks::read(score);
+            const LiveTracks::Derived* dr = LiveTracks::derivedOf(d.written.at(mainKey()), "M-Master Vol");
+            QVERIFY(dr);
+            QVERIFY2(dr->plain, qPrintable(envelopeValues().join(" ")));
+            LiveIntegration::UpdateResult again;
+            update(&again);
+            QVERIFY2(!again.written, qPrintable(again.text()));
+      }
+      {
+            const int kk = envelopeValues().size() / 2;
+            editInLive(kk, 0.2);
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(res.importReport.contains("changed in Live: the \"volume\" lane"), qPrintable(res.importReport));
+            QCOMPARE(targets(), QString("m-pan,volume"));
+            bool has = false;
+            for (const Automation::Point& p : volumeLane().points)
+                  has = has || std::fabs(p.value - 0.2) < 1e-4;
+            QVERIFY2(has, qPrintable(Automation::write(score, Automation::read(score))));
+            // (the set now has MuseScore's render of that lane: CC steps)
+            QCOMPARE(envelopeValues(), plannedValues());
+            LiveIntegration::UpdateResult again;
+            update(&again);
+            QVERIFY2(!again.written, qPrintable(again.text()));
+            QCOMPARE(targets(), QString("m-pan,volume"));
+            score->undoStack()->setClean();
+            LiveIntegration::UpdateResult third;
+            update(&third);
+            QVERIFY2(!third.written, qPrintable(third.text()));
+            QVERIFY2(score->undoStack()->isClean(), qPrintable(third.text()));
+      }
+
+      //---------------------------------------------------------
+      //   a plain set made again after an import that marked the lanes as Live's (the volume lane from Live's edit, M-Pan
+      //   as written): every lane in it (until 2026-10-21 a lane Live played was left out of the new set)
+      //---------------------------------------------------------
+      {
+            editInLive(envelopeValues().size() / 3, 0.3);
+            QString report;
+            QVERIFY(LiveIntegration::importSet(score, path, false, &report));
+            QVERIFY2(volumeLane().playedByLive(), qPrintable(report));
+            QVERIFY(panLane().playedByLive());
+            create();
+            QVERIFY(panEvents() >= 2);
+            bool has = false;
+            for (const QString& v : envelopeValues())
+                  has = has || std::fabs(v.toDouble() - 38 / 127.0) < 1e-4;      // (the lane's 0.3 as CC 38)
+            QVERIFY2(has, qPrintable(envelopeValues().join(" ")));
+            QCOMPARE(envelopeValues(), plannedValues());
+            QCOMPARE(targets(), QString("m-pan,volume"));
+      }
+      {
+            LiveIntegration::LiveSetPlan plan;
+            QString error;
+            QVERIFY2(LiveIntegration::planLiveSet(score, lib, LiveIntegration::LiveSetKind::ROUTES, &plan, &error), qPrintable(error));
+            const QString routes = host.dir.path() + "/Routes.als";
+            QVERIFY2(LiveSetWriter::write(routes, plan.spec, &error), qPrintable(error));
+            QString report;
+            QVERIFY(LiveIntegration::importSet(score, routes, false, &report));
+            // (no M-Master Vol lane: the route set keeps the lanes in the MuseScore Link device's store, not read back;
+            // M-Pan, marked as the plain set's, goes as any lane Live's set no longer has: Automation::merge)
+            QVERIFY2(!targets().contains("m-master-vol"), qPrintable(targets()));
+            QVERIFY2(targets().contains("volume"), qPrintable(targets()));
+      }
+      delete score;
       }
 
 void TestLiveEquivalence::liveStateSettings()
