@@ -176,6 +176,14 @@ struct Articulation {
       // Empty: none listed (SoundLib::techniqueOffsetDb takes the library's own loud-end difference)
       std::vector<std::pair<int, double>> heldOffsets;   // cc -> dB, sorted; one entry with cc -1: every marking
       double heldOffsetAt(int cc) const;  // (heldOffsets not empty)
+      // [slurs] plainAccents 2 / 3: how much louder the accented attack plays than the spiccato attack at velocity 64 (the
+      // plain note's), perceived peak in the 0.4 s after the note-on, by played pitch and the note's length as played
+      // (<Articulation accentedLevel="pitch/ms:dB …">, as quickLevel; tools/soundlibraries/sso_accent_attack.json, kthost +
+      // Kontakt 8 + SSO on the test VM: every semitone, 100-450 ms; the 64 swells while held, so the difference falls with
+      // the length): the renderer plays such a note by CC11 at PLAIN_ACCENT_DB over the spiccato attack (rendermidi.cpp).
+      // Empty: not measured (the accented attack as it plays)
+      std::vector<QuickLevel> accentedLevels;       // sorted by pitch, then ms
+      double accentedLevelAt(int pitch, double ms) const;   // as quickLevelAt (not empty)
       // [levels] context (contextlevel.h): the gain in dB a slur on this articulation needs over the patch at the
       // dynamics CC = cc (the written dynamic's value), for the slur's median note spacing (ms) and median pitch
       // (<Articulation contextLevel="cc/ms/pitch:dB …">: a full grid, measured in context, performance_context/level_rule.py)

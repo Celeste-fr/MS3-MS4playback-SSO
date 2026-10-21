@@ -1948,12 +1948,12 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
-      QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1));
+                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+      QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
       const QString guitarOff = "\n[guitar]\npinchHarmonics=0\nsoftStrums=0\nstrums=0\n";
-      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0) + guitarOff);
+      QCOMPARE(Playback::applyPresetToText(out, *lib), withPitch.arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0).arg(0) + guitarOff);
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
@@ -1961,11 +1961,11 @@ void TestSoundLibrary::playbackPresets()
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1986,7 +1986,7 @@ void TestSoundLibrary::playbackPresets()
       f.close();
       QVERIFY(Playback::applyPreset("recommended", path));
       QVERIFY(f.open(QIODevice::ReadOnly));
-      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1));
+      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2));
       f.close();
       // detection, from the file read and from values
       Playback::setIniPath(path);
@@ -1995,8 +1995,12 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
+      // plainAccents left out: its default 2 (since 2026-10-21), Recommended's; Library default needs 0; 1 / 3 neither
+      QCOMPARE(Playback::detectPreset({ { "slurs/plainAccents", 2 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "slurs/plainAccents", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "slurs/plainAccents", 1 } }), QString());
       // quick left out: its default 2, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "slurs/quick", 0 } }), QString());
@@ -2017,7 +2021,7 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                         { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
+                                         { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
                                          { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
@@ -3150,7 +3154,10 @@ void TestSoundLibrary::levelContextPlain()
 //    by CC1 (no curve measured here: SoundFont 2's law, MarcatoLevel::velocity), on staccato + accent, accent, marcato,
 //    soft accent, the slurred A5 too, the other notes unchanged; 2 the accented attack (122) on the accents and the
 //    marcato that play an attack (not the slurred A5, not the soft accent), C6 re-attacked (B5 ends the map's reattackGap,
-//    54 ms, before it, instead of touching it), the CC1 as 0; 3 both. Both presets and the default 0.
+//    54 ms, before it, instead of touching it), the CC1 as 0; 3 both. Default 2, Recommended 2, Library default 0 (since
+//    2026-10-21). With the map's accentedLevel (branch accent-level; here flat in length, 9 dB at C4 to 3 dB at C6) 2's and
+//    3's accented notes play CC11 PLAIN_ACCENT_DB - accentedLevel at their pitch (D5 -0.5, F5 +0.25, E5 0, C6 +2 dB), the
+//    others as without it; accentedLevelAt log-linear in ms, linear in pitch
 //    plain-accents.musicxml: m1 C5 stacc., D5 stacc. + accent, rest, F5 accent; m2 G5 A5(accent) B5 slurred, C6 accent;
 //    m3 rest, E5 marcato, rest, G5; m4 rest, C5 soft accent
 //---------------------------------------------------------
@@ -3158,23 +3165,24 @@ void TestSoundLibrary::levelContextPlain()
 void TestSoundLibrary::plainAccents()
       {
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
-      QCOMPARE(Playback::definition("slurs/plainAccents")->value, 0.0);
+      QCOMPARE(Playback::definition("slurs/plainAccents")->value, 2.0);
       QCOMPARE(Playback::definition("slurs/plainAccents")->max, 3.0);
       for (const Playback::Preset& p : Playback::presets()) {
             bool listed = false;
             for (const auto& kv : p.values)
                   if (QString(kv.first) == "slurs/plainAccents") {
                         listed = true;
-                        QCOMPARE(kv.second, 0.0);
+                        QCOMPARE(kv.second, QString(p.id) == "recommended" ? 2.0 : 0.0);
                         }
             QVERIFY2(listed, p.id);
             }
+      QCOMPARE(MidiRenderer::PLAIN_ACCENT_DB, 5.0);
       QString grid;
       for (int cc : { 32, 96 })
             for (int ms : { 100, 1000 })
                   for (int p : { 60, 84 })
                         grid += QString("%1/%2/%3:10 ").arg(cc).arg(ms).arg(p);
-      auto lib = loadMap(QString(
+      auto mapText = [&](const QString& accentedLevel) { return QString(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo'/>"
          "<Instrument name='Violin' ids='violin'>"
          "<Articulation name='Long' value='1' techniques='long legato'/>"
@@ -3185,15 +3193,39 @@ void TestSoundLibrary::plainAccents()
          "<Switch type='none'/>"
          "<Articulation name='Legato' value='20' techniques='legato long longmarcato' modifiers='performance' prefer='long'"
          " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
-         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1'/>"
-         "</Instrument></SoundLibrary>").arg(grid.trimmed()).toUtf8().constData());
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1'%2/>"
+         "</Instrument></SoundLibrary>").arg(grid.trimmed()).arg(accentedLevel).toUtf8(); };
+      auto lib = loadMap(mapText("").constData());
       QVERIFY(lib);
+      // a broken accentedLevel fails the map; without an accented attack too
+      QVERIFY(!loadMap(mapText(" accentedLevel='60:9'").constData()));
+      QVERIFY(!loadMap(mapText(" accentedLevel='60/0:9'").constData()));
+      QVERIFY(!loadMap(QString(mapText(" accentedLevel='60/100:9'")).replace(" accented:117-127:122", "").toUtf8().constData()));
+      auto measured = loadMap(mapText(" accentedLevel='60/100:9 60/400:9 84/100:3 84/400:3'").constData());
+      QVERIFY(measured);
+      {
+            auto grid2 = loadMap(mapText(" accentedLevel='60/100:8 60/400:2 84/100:-1'").constData());
+            QVERIFY(grid2);
+            const SoundLib::Articulation* legato = nullptr;
+            for (const SoundLib::LibInstrument& li : grid2->instruments)
+                  for (const SoundLib::Articulation& a : li.articulations)
+                        if (a.name == "Legato")
+                              legato = &a;
+            QVERIFY(legato && legato->accentedLevels.size() == 3);
+            QCOMPARE(legato->accentedLevelAt(60, 100), 8.0);
+            QCOMPARE(legato->accentedLevelAt(60, 50), 8.0);            // (the nearest end's beyond)
+            QCOMPARE(legato->accentedLevelAt(60, 1000), 2.0);
+            QVERIFY(qAbs(legato->accentedLevelAt(60, 200) - 5.0) < 1e-9);       // (log-linear in ms: halfway)
+            QCOMPARE(legato->accentedLevelAt(84, 300), -1.0);
+            QVERIFY(qAbs(legato->accentedLevelAt(72, 200) - 2.0) < 1e-9);       // (linear in pitch: (5 + -1) / 2)
+            QCOMPARE(legato->accentedLevelAt(30, 100), 8.0);
+      }
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       MasterScore* score = readScore(DIR + "plain-accents.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
-      struct N { int velo = -1; int cc1 = -1; int cc11 = 127; double on = -1; double off = -1; bool plain = false;
+      struct N { int velo = -1; int cc1 = -1; int cc11 = 127; double on = -1; double off = -1; bool plain = false; int pitch = -1;
                  MidiRenderer::LibPerformance kind = MidiRenderer::LibPerformance::NONE; };
       std::vector<MidiRenderer::LibTrace> trace;
       auto render = [&](int setting) {
@@ -3224,6 +3256,7 @@ void TestSoundLibrary::plainAccents()
                   else if (e.type() == ME_NOTEON && e.velo() > 0 && e.libraryPatch() == 1 && e.note()) {
                         N& n = notes[e.note()->chord()->tick().ticks()];
                         n.velo = e.velo();
+                        n.pitch = e.pitch();
                         n.cc1 = cc1.count(route) ? cc1[route] : -1;
                         n.cc11 = cc11.count(route) ? cc11[route] : 127;
                         n.on = t;
@@ -3302,6 +3335,27 @@ void TestSoundLibrary::plainAccents()
                   QVERIFY(std::fabs(on.at(2880).off - off.at(2880).off) < 0.01);
                   }
             }
+      // the measured accented attack: by CC11 at PLAIN_ACCENT_DB over the spiccato attack (C6 louder, D5 softer, E5 as it was)
+      SoundLib::setCurrent(measured);
+      bool lower = false, higher = false;
+      for (int setting : { 0, 1, 2, 3 }) {
+            const std::map<int, N> on = render(setting);
+            for (int t : ticks) {
+                  const bool attack = (setting & 2) && attacks.count(t);
+                  QVERIFY2(on.at(t).velo == (attack ? 122 : MidiRenderer::PLAIN_VELOCITY), qPrintable(QString("%1: %2").arg(setting).arg(t)));
+                  int expected = off.at(t).cc11;
+                  if (attack) {
+                        const double level = 9.0 + (3.0 - 9.0) * (on.at(t).pitch - 60) / 24.0;
+                        expected = qBound(1, int(std::lround(off.at(t).cc11 * std::pow(10.0, (MidiRenderer::PLAIN_ACCENT_DB - level) / 20.0))), 127);
+                        lower |= expected < off.at(t).cc11;
+                        higher |= expected > off.at(t).cc11;
+                        }
+                  QVERIFY2(std::abs(on.at(t).cc11 - expected) <= 1, qPrintable(QString("%1: %2 (pitch %3) CC11 %4 against %5")
+                                                                         .arg(setting).arg(t).arg(on.at(t).pitch).arg(on.at(t).cc11).arg(expected)));
+                  }
+            }
+      QVERIFY(lower);         // (higher where CC11 has room: at 127 it stays, libraryNoteLevels caps it)
+      SoundLib::setCurrent(lib);
       // the score's 3 over the ini's 0
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" } });
       score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/plainAccents", 3 } }));

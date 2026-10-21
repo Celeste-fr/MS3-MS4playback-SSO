@@ -748,6 +748,13 @@ heard (data decide).
   per stem partly unknown, basses against three other sources; a 5.3 dB question between its two sessions, being checked
   with the sessions' hand claps). Ask after the next build how the dynamics sound, mostly ppp (now one step under pp,
   not the single-note extreme) and the horns' / trombones' wider range.
+- **Accents at real players' level** (2026-10-21, branch `accent-level`): `[slurs] plainAccents` 2 is now the default and
+  Recommended's: the accented attack (velocity 122) by CC11 at +5.0 dB over the spiccato attack (Spheres K. 550's sf at f;
+  docs/PLAYBACK_SETTINGS.md › Plain accents › Level of the accented attack). Ask whether Whence's bar 8 accents now sound
+  natural (clips accent_2b_ensemble / accent_2b_v2 at the old clips' gain). Open: a ">" may play softer than an sf (no
+  ">" data; Romeo and Juliet has them in the strings); option 1's CC1 raise still overshoots on short notes (+10 dB on
+  Violins 1 / Violas against +5.3: the held curve, no short-note curve measured); a positive D only up to CC11 127 (e.g.
+  Violas Eb4 at 211 ms from CC11 86: +3.4 of +4.7 dB; Whence's, from CC11 35, fits); the accented attack's own onset is unmeasured (the plainShift is velocity 64's).
 - **Try in the next build:** the automation headers for every part (fold at will; `( + | All )`, round Draw Mode button,
   Grid menu), the bar ruler (View > Bar Ruler), Update Live Set (Mixer > Advanced Options > Ableton Live), the MuseScore
   Link device fix (copy the new device from the build into the User Library; Live no longer stalls with 28 copies, phrase-

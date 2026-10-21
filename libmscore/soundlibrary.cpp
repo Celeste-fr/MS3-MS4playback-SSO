@@ -90,7 +90,8 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
 //               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
-//               [bendGlide="136:-8:100 300:70:230 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]/>;
+//               [bendGlide="136:-8:100 300:70:230 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]
+//               [accentedLevel="72/100:3.4 72/150:4.2 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -143,6 +144,8 @@ static double keyedMsAt(const std::vector<std::pair<int, double>>& table, double
             }
       return table.back().second;
       }
+
+static double levelGridAt(const std::vector<Articulation::QuickLevel>& grid, int pitch, double ms);
 
 double octaveDelayAt(const std::vector<std::pair<int, double>>& table, double fallback, int fromPitch)
       {
@@ -318,6 +321,11 @@ double Articulation::contextLevelAt(double cc, double ms, double pitch, ContextK
       return db;
       }
 
+double Articulation::accentedLevelAt(int pitch, double ms) const
+      {
+      return levelGridAt(accentedLevels, pitch, ms);
+      }
+
 double Articulation::heldOffsetAt(int cc) const
       {
       if (heldOffsets.empty())
@@ -333,6 +341,12 @@ double Articulation::heldOffsetAt(int cc) const
       }
 
 double Articulation::quickLevelAt(int pitch, double ms) const
+      {
+      return levelGridAt(quickLevels, pitch, ms);
+      }
+
+// a pitch/ms:dB grid's value (quickLevel, accentedLevel): log-linear in ms, linear in pitch, the nearest end's beyond; 0: none
+static double levelGridAt(const std::vector<Articulation::QuickLevel>& quickLevels, int pitch, double ms)
       {
       // each measured pitch's level at ms, then between the two pitches around the note
       std::vector<std::pair<int, double>> byPitch;
@@ -492,6 +506,25 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
                         return false;
                   tq->onsetMs = median;
                   }
+            }
+      // accentedLevel="pitch/ms:dB …" (as quickLevel), with an accented attack listed in attacks=
+      if (a.hasAttribute("accentedLevel")) {
+            if (!art.attack("accented"))
+                  return false;
+            for (const QString& t : a.value("accentedLevel").toString().split(' ', QString::SkipEmptyParts)) {
+                  const int slash = t.indexOf('/'), colon = t.indexOf(':');
+                  bool ok1 = false, ok2 = false, ok3 = false;
+                  const Articulation::QuickLevel l { t.left(slash).toInt(&ok1), t.mid(slash + 1, colon - slash - 1).toDouble(&ok2),
+                                                      t.mid(colon + 1).toDouble(&ok3) };
+                  if (slash < 0 || colon < slash || !ok1 || !ok2 || !ok3 || l.ms <= 0 || l.pitch < 0 || l.pitch > 127)
+                        return false;
+                  art.accentedLevels.push_back(l);
+                  }
+            if (art.accentedLevels.empty())
+                  return false;
+            std::sort(art.accentedLevels.begin(), art.accentedLevels.end(), [](const Articulation::QuickLevel& x, const Articulation::QuickLevel& y) {
+                  return x.pitch != y.pitch ? x.pitch < y.pitch : x.ms < y.ms;
+                  });
             }
       // key[-key]:low-high:velocity …, the velocity outside its band
       if (a.hasAttribute("avoid")) {

@@ -375,6 +375,19 @@ def attackOnset(patch):
         return None
     by = sorted((int(k), v) for k, v in m['byPitch']['smooth'].items())
     return f"smooth:{m['median']['smooth']:g};" + ','.join(f'{k}:{v:g}' for k, v in by)
+# [slurs] plainAccents 2 / 3: how much louder the accented attack (velocity 122) plays than the spiccato attack at 64
+# (accentedLevel="pitch/ms:dB …"), perceived peak in the 0.4 s after the note-on, after silence, every semitone x note
+# lengths 100-450 ms (kthost on the test VM, 2026-10-21; sso_accent_attack.json): the renderer plays such a note by CC11 at
+# real players' +5.0 dB over the spiccato attack (rendermidi.h PLAIN_ACCENT_DB)
+ACCENT_ATTACK = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_accent_attack.json'),
+                               encoding='utf-8'))['sections']
+def accentedLevel(patch):
+    """the accentedLevel= text of a Performance patch (None: not measured)"""
+    m = ACCENT_ATTACK.get(patch)
+    if not m:
+        return None
+    return ' '.join(f'{int(p)}/{int(ms)}:{v["db"]:g}' for p, lens in sorted(m['byPitch'].items(), key=lambda kv: int(kv[0]))
+                    for ms, v in sorted(lens.items(), key=lambda kv: int(kv[0])))
 # velocities whose attack plays a faulty recording (avoid="keys:low-high:velocity …"): a round robin with its own narrow
 # tone, measured with kthost on the test VM (sso_bad_samples.json: the bands, the clean velocity next to them and the
 # renders; the owner, 2026-10-10, heard it in Whence's Celli)
@@ -1733,6 +1746,9 @@ for i, line in enumerate(out):
             ao = attackOnset(current)
             if ao:
                 extra += f' attackOnset="{ao}"'
+            al = accentedLevel(current)
+            if al:
+                extra += f' accentedLevel="{al}"'
             if current in BAD_SAMPLES:
                 extra += ' avoid="' + ' '.join(
                     (f"{b['keys'][0]}" if b['keys'][0] == b['keys'][1] else f"{b['keys'][0]}-{b['keys'][1]}")
