@@ -855,7 +855,16 @@ struct Lanes {
       std::vector<std::vector<double>> fixed;       // per patch, per lane: its tuning (cents) when it never changes
                                                     // (fixedTuning), NaN where it does; empty: none fixed
       std::vector<std::vector<int>> voice;          // per patch, per lane: its voice (a monophonic patch's; 0 the line)
+      // a monophonic patch's notes: how many of its voices sound at the note's start as written, the note itself and
+      // the notes starting with it included (a grace note: its chord's count); only where more than 1 ([levels] divisi:
+      // divisiDb; a note held under a chord change keeps the count at its own start)
+      std::map<const Note*, int> sounding;
       };
+// [levels] divisi (the owner, 2026-10-20, "yes": as a real orchestra plays it): a section divided into n groups, each
+// note played by 1 / n of the players: n equal incoherent groups add up as powers to one section, so each plays
+// 10 log10(n) dB under the whole (n = 2: -3.01 dB, 3: -4.77 dB). An assumption from player counts, not measured
+// divisi data. dB, <= 0 (n <= 1: 0)
+double divisiDb(int voices);
 // (tailSeconds: a lane is silent after its notes' end plus the longer of it and the note's articulation's
 // releaseMs ([tuning] waitForRelease); < 0: plus the note's laneRing. maxLanes <= 0: memoryMaxLanes)
 // fixedTuning (Live: no varispeed there; the owner, 2026-10-10: "I will not accept losing microtones"): a patch that

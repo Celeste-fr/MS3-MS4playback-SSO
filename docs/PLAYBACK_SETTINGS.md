@@ -75,10 +75,10 @@ and then reads it as Reload Playback Settings does, playback going on. The box s
 the open score has its own value of a preset key (not cleared). "(Custom)" shows when the ini matches none (not
 selectable).
 
-| Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel | slurs/performance | slurs/transitions | slurs/smoothStart | levels/context | levels/sectionBalance | levels/realRange | levels/evenLevels | levels/micCompensation |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 2: techniques on velocity matched to the held note plus D, real players' difference (staccatos -4.2 dB, pizzicato Meyer's), MS4's offset on top (below, Calibrated levels; the owner, 2026-10-15, option B'; 1, the match alone, Recommended 2026-10-08 to 10-15, by hand: "(Custom)") | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: Auto fingered within a slur, bowed from a slur into the next (the owner, 2026-10-12) | 1: a phrase's first note smooth (the owner, 2026-10-12) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) | 2: each section at its level from Clark & Luce's orchestral scales, `sectionLevel2` (below, Section balance; the owner, 2026-10-14: real data; 1, the TU Berlin M, by hand: "(Custom)") | 2: each note at the real player's level for its written dynamic, the markings in equal steps of the instrument's pp -> ff as orchestral players play it (below, Real range › Clark & Luce spans; the owner, 2026-10-13 on, 2026-10-14 the spans; 1, the Meyer rule, by hand: "(Custom)") | 1: slurred passages evened out by measurement (below, Even levels; the owner, 2026-10-13) | 1: a part's mics change tone and space, not its level (below, Mic compensation; the owner, 2026-10-15) |
-| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) | 0: on the All techniques patch | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel | slurs/performance | slurs/transitions | slurs/smoothStart | levels/context | levels/sectionBalance | levels/realRange | levels/evenLevels | levels/micCompensation | levels/divisi |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 2: techniques on velocity matched to the held note plus D, real players' difference (staccatos -4.2 dB, pizzicato Meyer's), MS4's offset on top (below, Calibrated levels; the owner, 2026-10-15, option B'; 1, the match alone, Recommended 2026-10-08 to 10-15, by hand: "(Custom)") | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: Auto fingered within a slur, bowed from a slur into the next (the owner, 2026-10-12) | 1: a phrase's first note smooth (the owner, 2026-10-12) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) | 2: each section at its level from Clark & Luce's orchestral scales, `sectionLevel2` (below, Section balance; the owner, 2026-10-14: real data; 1, the TU Berlin M, by hand: "(Custom)") | 2: each note at the real player's level for its written dynamic, the markings in equal steps of the instrument's pp -> ff as orchestral players play it (below, Real range › Clark & Luce spans; the owner, 2026-10-13 on, 2026-10-14 the spans; 1, the Meyer rule, by hand: "(Custom)") | 1: slurred passages evened out by measurement (below, Even levels; the owner, 2026-10-13) | 1: a part's mics change tone and space, not its level (below, Mic compensation; the owner, 2026-10-15) | 1: a chord on a monophonic patch adds up to one section (below, Divisi level; the owner, 2026-10-20) |
+| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) | 0: on the All techniques patch | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 `byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
 run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
@@ -1292,11 +1292,60 @@ the others share the Violas script, an assumption checked on Celli).
   voices now play three legato lines, a copy each (before: three chord notes shared a copy with another chord note at the
   same instant, one dropped; other chord notes "joined" a note on another copy). The audit: CHORD 0 (the same rule
   on the old routing: 3), every other check unchanged (all 0).
-- Level: each voice copy plays at its patch's levels, so a three-note divisi chord sounds three full sections (a real
-  divided section plays each note with a third of its players). Not corrected: no divisi data yet (an open item).
+- Level: with `[levels] divisi` (1 by default and in Recommended since 2026-10-20) each voice of a chord plays
+  10 log10(n) dB softer, so the chord adds up to one section (below, Divisi level); with it off each voice copy plays at
+  its patch's levels, a three-note divisi chord three full sections.
 - Cost: a slot per extra voice (Kontakt compiles its script per slot, ~1.3-1.7 s at load; ~220 MB).
 - Tests: `tst_soundlibrary::chordVoices`, `tst_liveequivalence::chordVoicesLive` / `chordVoicesHosted`,
   `tst_playbackaudit::chordFindings`. Untried with Kontakt / SSO and in Live.
+
+## Divisi level
+
+2026-10-20 (branch `divisi-level`; the owner, 2026-10-20, "yes" to playing it as a real orchestra does). `[levels] divisi` (1 by default
+and in Recommended, 0 in Library default; per score). With voice lanes (above) every chord note on a monophonic patch
+plays the whole section's patch, so a three-note divisi chord sounded three full sections. A real section divided into
+n groups plays each note with 1 / n of its players; n equal groups playing independently (incoherent) add up as
+powers, so each group plays **10 log10(n) dB under the whole section** and the chord adds up to one section's
+loudness: n = 2 → -3.01 dB, 3 → -4.77 dB, 4 → -6.02 dB.
+
+**An assumption from player counts, not measured divisi data** (CLAUDE.md › levels come from real data: we have
+no measurement of a divided section's level against the whole; the rule takes the players as equal and their sum as
+powers). It
+ignores that a divided section's players may play a little louder (a gap without data).
+
+- **n per note**: the voices of the note's part on that patch sounding at the note's start as written, the note itself
+  and the notes starting with it included (`SoundLib::Lanes::sounding`, computed with the voices in `SoundLib::lanes`;
+  a grace note its chord's count). Voice 0 (the line) is lowered too while it is part of a chord: every voice of a
+  chord plays the same share. A note after the chord (n = 1) plays at the whole section's level again.
+- **A note held under a chord change keeps the level of its own start** (no CC11 move inside a note). Why: the level is
+  set per note-on through the per-note level schedule, which changes only at note-ons; a CC11 glide inside a held note
+  would be a level change the listener hears on that note (SSO's CC11 is a plain volume), and a new mechanism. The
+  cost: while a voice enters under a held one, that moment is up to +1.8 dB over one section (held at 1 + the newcomer
+  at 1/2, two voices), until the held note's next note-on. Whence's divisi (Celli, bars 9-16) are block chords (all
+  notes start together, a bar each), so there it is exact.
+- **How**: by CC11 per note on its route, through the per-note level schedule (`MidiRenderer::libraryNoteLevels`,
+  `libLevels` volumeDb: dB add up with the level rule, real range, track levels, mic compensation, even levels'
+  headroom), so it reaches Live's clips, the plain set's CC11 lanes, the route set and MIDI out as every other note
+  level does (`divisiLevel` in rendermidi.cpp, `MidiRenderer::libDivisi`). A library whose dynamics are CC11 has no plain
+  volume for it: not applied there (SSO's are CC1).
+- **Master trim / gain stage**: the trim renders the score and reads each route's CC11 (`ContextLevel::masterTrim`), so it
+  sees the lower levels (a chord that was the score's loudest moment now trims less). The gain stage is per patch and
+  unchanged.
+- **Even levels**: they measure slurred passages faster than 350 ms per note (`EvenLevels::SLOW_IOI_S`); a fast slurred
+  line that enters a chord would see the divisi step in its envelope and the fit would flatten it (an open item; none in
+  Whence: its divisi are a bar per chord).
+- Whence (Recommended, `dumpEvents` chunked and `MS_DUMP_LIVE`, lanes pinned at max=8, divisi 0 against 1, same
+  build): only Celli - Performance's copies 1-3 change (the divisi's three voices; copy 0 and every other route
+  identical), and only their CC11: the 20 notes of the four two-note chords (17.45-26.18 s) -2.90 .. -3.02 dB, of the
+  four three-note chords (26.18-34.91 s) -4.72 .. -4.83 dB (CC11 73-76 -> 52-54 / 42-44: the rounding of a 7-bit value).
+  Note times, velocities, notes.txt, trace, volumes, headroom, tunings identical; the trim stays 0 dB (its loudest moment
+  moves from 33.41 s in the Celli's chords, -5.62 dBFS, to 15.41 s, -5.81); the audit unchanged, every check 0. divisi 0
+  is identical to the chord-voices branch's own dump (headroom.txt's rows in another order).
+- Tests: `tst_soundlibrary::divisiLevel` (two- and three-note chords -3.01 / -4.77 dB against a lone note, back to 0
+  after, a held note keeping its start's level, hosted / Live's clips / MIDI out, off, not mono),
+  `tst_liveequivalence::divisiLive` (Live's clips carry MuseScore's CC11 route for route, the plain set's copies' CC11
+  lanes the chord values; off: none), `tst_soundlibrary::playbackPresets`. Untried with Kontakt / SSO and in Live; not
+  heard.
 
 ## Clicked and entered notes
 
@@ -1370,6 +1419,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, by the patches' gain stage less the score's master trim (above, Section balance, Gain stage and master trim; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |
 | Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' nodes (halfway from each note-on to the next, since 2026-10-14), every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
+| Divisi level, `[levels] divisi` (the owner, 2026-10-20): while n voices of a monophonic patch's part (voice lanes) sound together, each note plays 10 log10(n) dB softer by CC11 (2: -3.0, 3: -4.8 dB), the line's too, so the chord adds up to one section; a note keeps its start's level; an assumption from player counts, no divisi data (above, Divisi level) | 1 (Recommended, the default; 0 in Library default) | `soundlibrary.cpp` (`lanes`: `Lanes::sounding`, `divisiDb`), `rendermidi.cpp` (`divisiLevel`, `libDivisi`, `libraryNoteLevels`) | `[levels] divisi`; score: `playbackSettings` |
 | Mic compensation: a part whose mic controllers (Mic 1-5, Mic Mix Distance; values or lanes) give another mix than the default plays as loud as the default mix, by its patches' volumes (lanes: the largest by the volume, each note's own at its start by CC11); measured mic levels and laws, mics as powers (above, Mic compensation; the owner, 2026-10-15) | 1 (Recommended, the default; 0 in Library default) | `contextlevel.cpp` (`micLevelDb`, `micValues`, `micTops`, `volumes`), `rendermidi.cpp` `trackLevel`, `TrackDelays::patchGain`; data: map `<Mics>`, `micLevels` / `micDefault` from `mic_levels.py` | `[levels] micCompensation`; score: `playbackSettings` |
 | Real range: each note of the five string sections and the main woodwind / brass patches as loud as a real player at its written dynamic (the Meyer rule, 2026-10-14: TU Berlin's single-note pp / ff are ppp / fff, written pp / ff at Meyer's in-play levels, p .. f equal steps between, from mp; rule D, 7 equal steps, where Meyer has no figures), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 2, Clark & Luce spans (Recommended, the default since 2026-10-14; 1 the Meyer rule; 0 in Library default; the owner, 2026-10-13 / 14) | `contextlevel.cpp` (`realRangeDb`, `clarkLuceSpans`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` / `realPlay` / `realSteps` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |
 | Pedal changes after their chord (legato pedalling) | up one tick after, down the tick after (since 2026-10-06; the pianist's timing, `[pedal]`, removed 2026-10-07) | `renderSpanners` (pedal) | fixed |

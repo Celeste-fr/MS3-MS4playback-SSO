@@ -171,6 +171,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void hostedSlots();
       void chordVoicesHosted();
       void chordVoicesLive();
+      void divisiLive();
       void hostedSlotsGain();
       void exportInstancesOfParts();
       void verifyRoutesByPart();
@@ -6947,6 +6948,121 @@ void TestLiveEquivalence::chordVoicesLive()
       QCOMPARE(int(LiveSetWriter::tracks(score, *lib, { "MuseScore A" }).size()), 4);
       delete score;
       SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   divisiLive
+//    [levels] divisi (branch divisi-level) reaches Live: divisi.musicxml (m1 C5 | C5 E5 | C5 E5 G5 | C5, m2 D5 held under
+//    a voice-2 F5) on a monophonic patch's voice copies plays each chord note 10 log10(n) dB softer by CC11 (n = 2: 90,
+//    3: 73 against 127). Live's clips carry MuseScore's CC11 route for route (the carrier notes), the plain set's copies'
+//    CC11 lanes have the chord values (copy 0 and 1: 90 and 73, copy 2: 73), and with the setting off no copy has them
+//---------------------------------------------------------
+
+void TestLiveEquivalence::divisiLive()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin' mono='1'>"
+         "<Articulation name='Legato' value='20' techniques='legato long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "divisi.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const int two = int(std::lround(127 * std::pow(10.0, SoundLib::divisiDb(2) / 20)));
+      const int three = int(std::lround(127 * std::pow(10.0, SoundLib::divisiDb(3) / 20)));
+      QCOMPARE(two, 90);
+      QCOMPARE(three, 73);
+      auto run = [&](bool on) {
+            Playback::setIniValuesForTest({ { "levels/divisi", on ? "1" : "0" } });
+            score->setPlaylistDirty();
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            EventMap events;
+            for (int utick = 0;;) {
+                  const MidiRenderer::Chunk c = r.getChunkAt(utick);
+                  if (!c)
+                        break;
+                  r.renderChunk(c, &events, ctx);
+                  utick = c.utick2();
+                  }
+            const LiveClips::Timeline tl = LiveClips::timeline(score);
+            // MuseScore: each route's CC11 values in order, and the CC11 in force at each note-on
+            std::map<int, QStringList> fromEvents, fromClips;
+            std::map<int, int> cc11;
+            std::map<int, std::vector<int>> atNotes;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch())
+                        continue;
+                  const int route = e.extChannel();
+                  if (e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION) {
+                        if (fromEvents[route].isEmpty() || fromEvents[route].last() != QString::number(e.value()))
+                              fromEvents[route] << QString::number(e.value());
+                        cc11[route] = e.value();
+                        }
+                  else if (e.type() == ME_NOTEON && e.velo() > 0)
+                        atNotes[route].push_back(cc11.count(route) ? cc11.at(route) : 127);
+                  }
+            if (on) {
+                  // route 0 the line: C5 127, C5 90, C5 73, C5 127, D5 127; route 1: E5 90, E5 73, F5 90; route 2: G5 73
+                  QCOMPARE(atNotes[0], std::vector<int>({ 127, two, three, 127, 127 }));
+                  QCOMPARE(atNotes[1], std::vector<int>({ two, three, two }));
+                  QCOMPARE(atNotes[2], std::vector<int>({ three }));
+                  }
+            else {
+                  for (const auto& a : atNotes)
+                        for (int v : a.second)
+                              QCOMPARE(v, 127);
+                  }
+            // Live's clips: the same CC11 on each route
+            for (const LiveClips::Track& c : LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl)) {
+                  std::vector<LiveClips::Note> notes = c.notes;
+                  std::sort(notes.begin(), notes.end());
+                  const int route = c.key.section(':', 1).toInt() - 1;
+                  for (const LiveClips::Note& n : notes)
+                        if (n.pitch == LiveClips::carrierPitch(CTRL_EXPRESSION)) {
+                              const QString v = QString::number(LiveClips::carrierValue(n.pitch, n.velocity));
+                              if (fromClips[route].isEmpty() || fromClips[route].last() != v)
+                                    fromClips[route] << v;
+                              }
+                  }
+            for (const auto& r : fromEvents)
+                  QVERIFY2(fromClips[r.first] == r.second, qPrintable(QString("route %1: MuseScore %2 / Live %3").arg(r.first)
+                                                                     .arg(r.second.join(' ')).arg(fromClips[r.first].join(' '))));
+            // the plain set: each copy's CC11 lane
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, tl);
+            const PlainLiveSet::PartTracks& p = l.sections[0].parts[0];
+            QCOMPARE(int(p.kontakts.size()), 3);
+            std::vector<std::set<int>> lanes(3);
+            for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                  QVERIFY(k.lane >= 0 && k.lane < 3);
+                  QCOMPARE(k.voice, k.lane);
+                  for (const PlainLiveSet::Lane& ln : k.lanes)
+                        if (ln.cc == CTRL_EXPRESSION)
+                              for (const auto& pt : ln.points)
+                                    lanes[size_t(k.lane)].insert(pt.second);
+                  }
+            for (int c = 0; c < 3; ++c) {
+                  const std::set<int>& v = lanes[size_t(c)];
+                  if (on) {
+                        QVERIFY2(v.count(three), qPrintable(QString("copy %1: no CC11 %2").arg(c).arg(three)));
+                        QVERIFY2(c == 2 || v.count(two), qPrintable(QString("copy %1: no CC11 %2").arg(c).arg(two)));
+                        }
+                  else
+                        QVERIFY2(!v.count(two) && !v.count(three), qPrintable(QString("copy %1: a divisi CC11 with the setting off").arg(c)));
+                  }
+            };
+      run(true);
+      run(false);
+      delete score;
       }
 
 //---------------------------------------------------------

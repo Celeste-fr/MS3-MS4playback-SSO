@@ -1502,6 +1502,19 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (db != 0.0)
                               libLevels[note].volumeDb += db;
                         };
+                  // [levels] divisi (SoundLib::divisiDb; the owner, 2026-10-20): a note of a monophonic patch's chord (its
+                  // voices sounding at its start as written: SoundLib::Lanes::sounding, n > 1) plays 10 log10(n) dB softer
+                  // by CC11 (a volume on top of the others: dB add up), every voice the line's too, so the chord adds up to
+                  // one section; the level at the note's own start for as long as it sounds (a held note keeps it under a
+                  // chord change: no CC11 move inside a note). An assumption from player counts, not measured divisi data
+                  const bool divisiOn = li && Playback::on("levels/divisi", score) && library->dynamicsCC != CTRL_EXPRESSION;
+                  auto divisiLevel = [&](const Note* note, const SoundLib::Choice& c) {
+                        if (!divisiOn || !c || c.patch < 0 || c.patch >= int(libPatches.size()) || !libPatches[size_t(c.patch)]->mono)
+                              return;
+                        auto d = libDivisi.find(note);
+                        if (d != libDivisi.end() && d->second > 1)
+                              libLevels[note].volumeDb += SoundLib::divisiDb(d->second);
+                        };
                   // [levels] realRange (contextlevel.h › Real range): the note's CC11 by the dynamics CC in force as written
                   // (realDb at its pitch), less its part's R (the patches' volumes play it: TrackDelays::patchGain); a
                   // short whose calibrated velocity is capped (127 and still under the level it should have, or 1 and still
@@ -2024,6 +2037,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libNote.velocity = libVelocity(note, libChoice, r, level, &under);
                                     marcatoLevel(note, libChoice, libNote.velocity, level, r);
                                     trackLevel(note, libChoice);
+                                    divisiLevel(note, libChoice);
                                     if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
                                           libLevels[note].volumeDb += under;
                                     realRangeLevel(note, libChoice, libNote.velocity, r, level);
@@ -2300,6 +2314,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset), &under);
                                     marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset), r);
                                     trackLevel(note, libChoice);
+                                    divisiLevel(note, libChoice);
                                     if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
                                           libLevels[note].volumeDb += under;
                                     realRangeLevel(note, libChoice, libNote.velocity, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
@@ -6016,6 +6031,7 @@ void MidiRenderer::updateState()
             libStartLead = 0.0;
             libStartKnown = false;
             libLanes.clear();
+            libDivisi.clear();
             libLaneCents.clear();
             libBend.clear();
             libGlideFrom.clear();
@@ -6135,6 +6151,7 @@ void MidiRenderer::updateState()
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
+                              libDivisi.insert(l.sounding.begin(), l.sounding.end());
                               for (const auto& nc : l.cents) {
                                     libLaneCents[nc.first] = nc.second;
                                     tuned = tuned || std::fabs(nc.second) > 1e-6;
@@ -6147,6 +6164,7 @@ void MidiRenderer::updateState()
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
+                              libDivisi.insert(l.sounding.begin(), l.sounding.end());
                               }
                         for (const auto& ip : *part->instruments()) {
                               const SoundLib::LibInstrument* li = library->match(ip.second, part);

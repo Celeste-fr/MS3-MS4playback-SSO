@@ -221,6 +221,7 @@ class TestSoundLibrary : public QObject, public MTest
       void controllerPatchDefaults();
       void partMix();
       void chordVoices();
+      void divisiLevel();
 #ifdef TESTSYNTH
       void evenAutoTestSynth();
       void mixerSlot();
@@ -1944,7 +1945,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1953,15 +1954,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -1991,7 +1992,7 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // quick left out: its default 2, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 } }), QString());
@@ -2014,7 +2015,7 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                          { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
-                                         { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 } }),
+                                         { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 } }), QString());
@@ -2025,6 +2026,9 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/sectionBalance", 2 } }), QString("recommended"));
+      // divisi left out: its default 1, Recommended's; Library default needs 0 (the owner, 2026-10-20)
+      QCOMPARE(Playback::detectPreset({ { "levels/divisi", 0 } }), QString());
+      QCOMPARE(Playback::detectPreset({ { "levels/divisi", 1 } }), QString("recommended"));
       // realRange left out: its default 2, Recommended's; Library default needs 0 (the owner, 2026-10-13; 2 since
       // 2026-10-14); 1 (the Meyer rule) is neither
       QCOMPARE(Playback::detectPreset({ { "levels/realRange", 1 } }), QString());
@@ -13804,6 +13808,105 @@ void TestSoundLibrary::chordVoices()
       // not monophonic: one route, the chords on it as before
       SoundLib::setCurrent(map(false, false));
       QCOMPARE(int(SoundLib::routes(score, *SoundLib::current()).size()), 1);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   divisiLevel
+//    [levels] divisi (branch divisi-level; the owner, 2026-10-20): on a monophonic patch's voice copies, while n voices
+//    sound together each note plays 10 log10(n) dB softer by CC11 (the line's too), so a chord adds up to one section.
+//    divisi.musicxml at 120: m1 C5 | C5 E5 | C5 E5 G5 | C5 (quarters), m2 voice 1 a half note D5, voice 2 F5 on beat 2
+//    (D5 held under it). The CC11 in force at each note-on on its route against a lone note's: 0 | -3.01 x 2 |
+//    -4.77 x 3 | 0 (back after the chord) | D5 0 (it keeps the level of its own start), F5 -3.01. Hosted (varispeed),
+//    Live's clips, MIDI out alike; the setting off, or the patch not monophonic: every note as the lone one
+//---------------------------------------------------------
+
+void TestSoundLibrary::divisiLevel()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::PLUGIN); Playback::setIniValuesForTest({}); } } reset;
+      QCOMPARE(Playback::definition("levels/divisi")->value, 1.0);
+      QCOMPARE(SoundLib::divisiDb(1), 0.0);
+      QVERIFY(std::fabs(SoundLib::divisiDb(2) + 3.0103) < 1e-3);
+      QVERIFY(std::fabs(SoundLib::divisiDb(3) + 4.7712) < 1e-3);
+      auto map = [&](bool mono) {
+            return loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+               "<Instrument name='Violin' ids='violin'%1>"
+               "<Articulation name='Legato' value='20' techniques='legato long'/>"
+               "</Instrument></SoundLibrary>").arg(mono ? " mono='1'" : ""));
+            };
+      auto lib = map(true);
+      QVERIFY(lib);
+      MasterScore* score = readScore(DIR + "divisi.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts()[0];
+      std::vector<const Note*> notes;               // in score order, each chord from the lowest
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (int track = 0; track < 2; ++track)
+                  if (s->element(track) && s->element(track)->isChord())
+                        for (const Note* n : toChord(s->element(track))->notes())
+                              notes.push_back(n);
+      QCOMPARE(int(notes.size()), 9);
+      // the voices sounding at each note's start (Lanes::sounding: only where more than 1)
+      const SoundLib::Lanes l = SoundLib::lanes(score, part, { &lib->instruments[0] }, 3, 0.5, 4, true);
+      const std::vector<int> sounding = { 1, 2, 2, 3, 3, 3, 1, 1, 2 };
+      for (size_t i = 0; i < notes.size(); ++i)
+            QCOMPARE(l.sounding.count(notes[i]) ? l.sounding.at(notes[i]) : 1, sounding[i]);
+      auto render = [&](bool forLive) {
+            score->setPlaylistDirty();
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(forLive);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      // each note's CC11 in force at its note-on on its route, in dB against 127 (a lone note's: no level of its own)
+      auto levels = [&](const EventMap& events) {
+            std::map<int, int> cc11;
+            std::map<const Note*, double> db;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION)
+                        cc11[route] = ev.value();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0 && ev.note())
+                        db[ev.note()] = 20.0 * std::log10((cc11.count(route) ? cc11.at(route) : 127) / 127.0);
+                  }
+            std::vector<double> v;
+            for (const Note* n : notes)
+                  v.push_back(db.count(n) ? db.at(n) : 99.0);
+            return v;
+            };
+      const std::vector<double> expected = { 0, -3.01, -3.01, -4.77, -4.77, -4.77, 0, 0, -3.01 };
+      auto check = [&](const std::vector<double>& got, const std::vector<double>& want, const char* what) {
+            for (size_t i = 0; i < want.size(); ++i)
+                  QVERIFY2(std::fabs(got[i] - want[i]) < 0.1, qPrintable(QString("%1: note %2 (pitch %3): %4 dB, expected %5")
+                                                                        .arg(what).arg(i).arg(notes[i]->pitch()).arg(got[i]).arg(want[i])));
+            };
+      const std::vector<double> none(notes.size(), 0.0);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      Playback::setIniValuesForTest({});
+      check(levels(render(false)), expected, "hosted (varispeed)");
+      check(levels(render(true)), expected, "Live's clips");
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      check(levels(render(false)), expected, "MIDI out");
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      // off: every voice at the whole section's level
+      Playback::setIniValuesForTest({ { "levels/divisi", "0" } });
+      check(levels(render(false)), none, "off");
+      check(levels(render(true)), none, "off, Live's clips");
+      // not monophonic: one route, the chord's notes as before
+      Playback::setIniValuesForTest({});
+      SoundLib::setCurrent(map(false));
+      check(levels(render(false)), none, "not monophonic");
       delete score;
       }
 
