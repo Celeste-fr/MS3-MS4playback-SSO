@@ -30,6 +30,37 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Mixed techniques (branch `mixed-techniques`, 2026-10-21, from integrate-1017 3d783a6ac7; not merged)
+
+The owner's question (2026-10-21): with `[slurs] plainPerformance` a part switching between its Performance patch and
+another technique on All techniques, do they play in time and at one level? Test score `share/verifyplayback/Mixed
+techniques.musicxml` (generator `tools/playbackverify/make_mixed_techniques.py`, CC0). Heard check on the VM (build 457,
+export, Recommended, two takes: attacks identical, transitions within ~10 ms) and the audit. Nothing changed in the code.
+
+- **Routing** (audit dump): every technique reaches its articulation; the Basses' "con sord." and "espress." have no
+  sample (no CS, no Rachm.), fall back to All techniques Long / Spiccato and so leave the Performance patch
+  (`choosePlain` refuses any modifier, even one the choice dropped). Audit: OVERLAP 0, ARRIVAL 2 fail (Violins 2 bar 38:
+  Super Sul Tasto's 767 ms early start CAPPED by 211 ms after a 417 ms note), CAPPED 3, UNMEASURED 69 info (every All
+  techniques onset is an isolated-note measurement).
+- **Timing** (heard - written, medians, -15 dB rule): quick All techniques notes -16 … +4 ms; Performance fresh attacks
+  Violins 1 -46, Violins 2 -37, Violas -74, Celli -41, Basses -21; Performance transitions +88 … +202 (unslurred touching
+  notes +110 … +223, slurred +49 … +188; 60 bpm +150 … +208, 144 bpm +100 … +131). So a pizz. / col legno / tremolo on a beat
+  sounds ~30 ms after another section's Performance attack and ~150 ms before its transition. Cause: one constant
+  `plainShift` per patch (65.8 / 66.0 / 111.0 / 80.2 / 59.1 ms, the all-notes median measured on "Heard passages" in
+  kthost) can't place attacks and transitions both; All techniques notes start early each by their own onset. At -6 dB the
+  attack gap is gone (both +23 … +61), so the attack part depends on the onset rule (open, owner); the transitions' isn't.
+- **Slow techniques**: Long Sul Tasto / Super Sul Tasto, Flautando, Long Harmonics start 380-770 ms early and are 16-54 dB
+  softer than the Performance notes at the same mf (dynamics.json: Super Sul Tasto ~50 dB under Long at CC1 80): heard as
+  a faint swell starting a beat or two early. Levels of the others against the Performance attacks: pizz. -8 … -13 dB,
+  col legno -8 … -19 (Basses +3.5), Bartók +1 … +12, tremolo -2 … -7, trem. sul pont. -6 … -15, con sord. -4 … -6, espressivo
+  -2 … -6.
+- **Proposals** (none built; each a setting, off in Library default, for the owner to hear): (1) plain transitions early
+  by their modelled arrival less plainShift (the `transitionsEarly` model; ~100-150 ms here); (2) an attacks-only shift
+  for fresh Performance attacks (20 / 29 / 37 / 39 / 38 ms by these export readings at -15 dB, 0 by -6 dB); (3) level
+  calibration of CC1 techniques (sul tasto, flautando, harmonics) to the Long, less a real-data offset (none found yet:
+  an assumption); (4) Basses' unsampled modifiers stay plain Performance. Private report and clips:
+  `~/MuseScore/ms3fork/private/mixed-techniques/RESULT.md`.
+
 ## Update Live Set on Ample parts (branch `liveset-hosted-readback`, 2026-10-21, from integrate-1017 56bbe38c6e; not merged)
 
 From the Ample check of build 456 (private: `~/MuseScore/ms3fork/private/ample-check456/RESULT.md` › Findings 2; report
