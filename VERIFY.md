@@ -315,6 +315,17 @@ staccatos (within 3 ms) and the transitions; it differs where the export plays w
   transitions heard: 32 / 141 kthost, 26 / 141 export; median closest approach of the unreached ones 60 cents (Violas,
   Violins 1), 90 (Celli).
 
+**Mixed techniques** (2026-10-21, build 457, Recommended, export, two takes alike within a few ms): `share/verifyplayback/Mixed
+techniques.musicxml` (`make_mixed_techniques.py`): the five sections alternating plain / slurred Performance notes with
+every technique the map plays from All techniques (pizz., Bartók, col legno, tremolo, trem. sul pont., trills, harmonics,
+con sord., sul pont., sul tasto, flautando, espressivo) at 60 / 100 / 144 bpm. Heard - written, medians (-15 dB rule):
+the All techniques' quick techniques -16 … +4 ms (pizz. -3, Bartók -16, col legno -9, tremolo -10, con sord. -3); the
+Performance patch's fresh attacks -21 (Basses) … -74 ms (Violas), its transitions (slurred or plain notes touching)
++88 … +202 ms. At -6 dB the attacks agree (Performance +27 … +61, quick techniques +23 … +61). Sul tasto, flautando,
+long harmonics: 380-770 ms early starts, heard -580 … +870 ms, and 16-54 dB softer than the Performance notes (the
+library's own balance: techniques on CC1 aren't calibrated). Trills +51 ms (first trill note; the second, masked,
+unreliable). Report: HANDOFF.md › Mixed techniques.
+
 Not covered: chords on one Performance route (not pitch-tracked); the export renderer's split runs play each part with
 its own start lead and master trim (levels are compared within a route only, timing against each run's own lead).
 
