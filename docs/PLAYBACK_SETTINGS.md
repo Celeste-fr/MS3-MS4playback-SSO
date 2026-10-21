@@ -93,7 +93,7 @@ spans): set by hand it shows "(Custom)".
 five string sections, with the all-notes constants; below, Plain Performance): set by hand it shows "(Custom)".
 
 `slurs/plainAccents` is 2 in Recommended and by default, 0 in Library default (2026-10-21: the owner chose 2, the accented
-attack, at real players' level; below, Plain accents); 1 or 3 by hand shows "(Custom)".
+attack, at real players' level, heard 2026-10-21 on Whence bars 7-9: "fine"; below, Plain accents); 1 or 3 by hand shows "(Custom)".
 
 `slurs/speedFromWritten` is 0 in both presets (2026-10-17: the owner approved MuseScore taking over the Performance
 patches' CC119 and flips Recommended after the null test and listening; below, Speed from written): set by hand to 1 it
