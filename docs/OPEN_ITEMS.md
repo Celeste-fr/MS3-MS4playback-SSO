@@ -1,0 +1,526 @@
+# Open items: every known imperfection in playback, ranked
+
+State of integrate-1017 @ 0ab003951f, 2026-10-21. Gathered from CLAUDE.md, HANDOFF.md, LIVE.md, VERIFY.md,
+PLAYABILITY.md, docs/*.md, the commit messages since 2026-10-08 and the private investigation reports (private, not in
+repo: `~/MuseScore/ms3fork/private/<folder>/RESULT.md` and others). The tools named here are described in
+`docs/TOOLS.md`; tools that don't exist yet are in **Missing tools** at the end.
+
+How to read an item: **W** what's wrong (numbers) · **Src** where it was measured · **Cause** suspected · **Tool** to
+measure it · **Fix** proposed · **Miss** data missing · **Own** owner decision pending · **Untried** what has never run
+on the real thing. Ranks are by audibility (how much a listener would notice in normal scores), then by reach.
+"Tested with" follows CLAUDE.md: Linux = stand-in only; VM = real Kontakt + SSO / real AGM demo, offline renders;
+owner = heard.
+
+Keep this file current: close an item by deleting it (the commit message says what fixed it), add new ones in rank.
+
+---
+
+## Tier 1: clearly audible, or makes results untrustworthy
+
+### 1. Chord voice lanes not deterministic between renders (Windows build #458)
+- **W**: in #458's export (`--verify-playback --verify-wav`, `MS_VERIFY_ROUTES=1`), Whence's Violins 1 chord voices
+  went onto different slots from one render to the next with a byte-identical input score: one take put all 92 notes on
+  one slot, another split them 59/23/10; the Linux dump gives 63/18/10/1. Five of six later re-renders matched the
+  dump. No other section was affected. Renders aren't repeatable, so every A/B, null test and heard check on such a part
+  is suspect.
+- **Src**: VM, 2026-10-21, private (not in repo): `private/solo-clicks/` (runs `wv0`, `wv0a/b/c`, `wv1`).
+  A related earlier sign: once in 13 Linux dumps Violas - Performance got 2 lanes instead of 3 (commit 94d8f845ef,
+  never investigated).
+- **Cause**: suspected nondeterministic voice-lane assignment from branch `chord-voices` (`Lanes::voice`,
+  `libmscore/soundlibrary*`): a pointer-ordered container (`std::map`/`QMap`/`std::set` keyed by pointer, or a
+  `QHash` iteration) or uninitialised state, possibly Windows-only (MSVC allocator order).
+- **Tool**: dumpEvents `routemap.txt` + `notes.txt` repeated N times (Linux, also under ASan / valgrind); on the VM
+  N repeated `--verify-playback --verify-wav` with `MS_VERIFY_ROUTES=1`, counting note-ons per slot from
+  `events.tsv`. Missing: a repeat-determinism tool (Missing tools #3).
+- **Fix**: audit `Lanes::voice` and `SoundLib::lanes` for pointer-keyed ordering and uninitialised members; key by
+  (tick, pitch, track); add an mtest rendering one score 10× in fresh `Score` objects comparing routemaps.
+- **Untried**: whether Linux reproduces at all (5 runs per check so far).
+
+### 2. Plain Performance timing (default `[slurs] plainPerformance` 1 with one `plainShift` per patch)
+- **W** (Mixed techniques, build 457, export, −15 dB rule): Performance fresh attacks early (V1 −46, V2 −37, Va −74,
+  Vc −41, Cb −21 ms), transitions late (+86 … +203 ms; 60 bpm +150 … +208, 144 bpm +100 … +131). A beat's sections
+  spread 160-230 ms; an All-techniques quick note (pizz., col legno, tremolo) sounds ~30 ms after another section's
+  Performance attack and ~150 ms before its transition. Whence: attacks −50/−19/−62/−31/−9, transitions
+  (V1/Va/Vc/Cb) +43/−3/+134/+182 ms.
+- **Src**: HANDOFF.md › Mixed techniques; commit 83857c4a45; private `mixed-techniques/RESULT.md`.
+- **Cause**: one constant per patch (65.8 / 66.0 / 111.0 / 80.2 / 59.1 ms, the all-notes median) can't place both
+  attacks and transitions.
+- **Tool**: heard check (export), private `spread.py` / `tdrift.py`.
+- **Fix**: `[slurs] plainTiming` 1 (7e6f20f5fd): attacks by `plainAttack`, transitions by their modelled arrival.
+  Mixed: attacks −7 … +3, transitions V1 +1, V2 −17, Va +4, Vc +42, Cb −42 ms; within ±30 ms of the beat 58 → 67 %.
+  Whence: attacks −4 … +27 (V2's +27 masked readings), transitions −52 … +18; ARRIVAL 35/26 → 36/19, RHYTHM slurs
+  1/0 → 3/1 (worse), runs 9/6 → 7/3, max beat spread 814 → 336 ms but median 62 → 93 ms.
+- **Own**: hear plainTiming 0 vs 1 (clips: `whence_9-31s_plainTiming0/1.mp3`, `mixed_A/B_*`; per-section click clips
+  in progress in private `solo-clicks/`).
+- **Untried**: *Live plays the score* and the route set don't apply the shift at all (Violas 95.2 ms late there); the
+  plain set's Track Delay untried in real Live.
+- See also items 3, 9, 15.
+
+### 3. Plain Performance transitions: the model misses Celli / Basses and transitions after a held note
+- **W** (plainTiming 1, build 458, one take): Mixed Celli transitions +42 ms, Basses −42 ms; Whence Celli −52 (the
+  other sign). Transitions scatter ±100 ms p10-p90; by tempo the model is off −65 … +63 ms. Whence Violas bars 9 and
+  13 (written 273/136/136 ms slurs) heard 174/194/115 and 189/194/101: the second note's transition after a held first
+  note arrives ~100 ms sooner than modelled (two new RHYTHM slur fails). Solo-click runs (same build): Whence ARRIVAL
+  32/28 → 39/17, RHYTHM slurs 1 → 6 fail; drift Celli transition-after-attack +82, transition-after-transition −80 ms;
+  Violins 1 alone bar 14 beats 3-3.5 heard IOI −77 ms (order inversion) and a −9.85 dB LEVEL step at beat 3.75.
+- **Src**: private `plain-timing/RESULT.md` (› Open 1), `solo-clicks/` (w0, w1, wv0, wv1); HANDOFF.md › Plain timing.
+- **Cause**: `bendGlide`'s arrival is modelled only by the note-before's length (measured on runs of equal notes);
+  after an attack or a long note SSO's Performance legato behaves differently; random modulators (item 11).
+- **Tool**: heard check, private `tdrift.py`; missing: the per-patch × situation drift report (Missing tools #2) and
+  a transition sweep by interval × IOI × preceding length × preceding kind (Missing tools #1).
+- **Fix**: a transition-after-attack / after-held model by preceding length, fitted on a dedicated sweep (Heard
+  passages, plain), with ≥ 2 takes per cell.
+- **Miss**: transitions by preceding note kind and length, per section; take-to-take spread per cell.
+- **Own**: the Violas bars 9/13 passage is behind his "C" choice: needs his ear.
+
+### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing
+- **W levels** (Mixed techniques, perceived peak against the Performance attacks at mf): sul tasto V1 −30.2, V2 −19.5,
+  Va −53.5, Vc −41.8, Cb −32.7 dB; flautando −27.5/−16.0/−30.6/−23.5/−25.1; Basses harmonics −31.4. Others: pizz. −8 …
+  −13, col legno −19.1 … +3.5, Bartók +0.9 … +12.2, tremolo −2 … −7, trem. sul pont. −6 … −15, con sord. −4 … −6.
+  The shipped dynamics.json agrees (Super Sul Tasto perceives 3-8 at CC1 80 against Long's 40-58).
+- **W timing**: Long Sul Tasto / Super Sul Tasto / Flautando / Long Harmonics start 380-770 ms early and are heard
+  −580 … +870 ms from the beat (sul tasto −188 ms median, at 144 bpm −537; flautando −123; harmonics −55); Violins 2 bar
+  38 Super Sul Tasto's 767 ms early start is cut 211 ms after a 417 ms note (2 ARRIVAL fails, also under plainTiming).
+  Violins 1 flautando's low register +256 ms (2026-10-02, never closed).
+- **Src**: private `mixed-techniques/RESULT.md`; HANDOFF.md › Plain timing › Open 3, Mixed techniques.
+- **Cause**: techniques on CC1 keep the library's balance (uncalibrated); slow attacks have no onset rule that fits
+  (item 16).
+- **Tool**: `--check-dynamics`, `sso_cc1_sweep.py`, heard check.
+- **Fix**: calibrate CC1 techniques to the Long minus a real-player offset (HANDOFF proposal 3).
+- **Miss**: any real-player data for sul tasto / flautando / harmonics against ordinario (searched: none found). Without
+  it the offset is an assumption (CLAUDE.md: balance from real data; a gap is marked as one).
+- **Own**: whether to use an assumption until data exists.
+
+### 5. Fast quarter-tone slurs never reach their pitch
+- **W**: Whence Violas bar 8 never within 30 cents of 61.5 / 64.5 (40-60 c off); Celli bar 1 70-180 c off; quarter-tone
+  transitions reached 32/141 (kthost), 26/141 (export); 69 of 147 bending-copy quarter tones never settle; 141 notes in
+  tune for less than half their length (mean 10-16 %); UNHEARD 126-142 on Whence.
+- **Src**: HANDOFF.md (legato bends, qt-bends), VERIFY.md heard check runs.
+- **Cause**: SSO's legato is slower than 136 ms notes; the bend retunes the note still sounding; Kontakt smooths a
+  bend over 71-80 ms.
+- **Tool**: heard check (UNHEARD), `legato_glide/`.
+- **Fix**: none on the fork's side known; branch `qt-bends` (67f90e1a06, 14 variants, not merged) unfinished. Options:
+  another technique for fast quarter-tone runs (All techniques shorts with tuning slots), owner's choice.
+- **Own**: yes, how to play them.
+
+### 6. *Live plays the score* and the route set lack most level and timing layers
+- **W**: no Track Delay through Live's API: played timing kept, plainShift missing (Violas 95.2 ms late), start lead
+  lost (Whence Celli 172 ms late); no gain stage / Utility, so level rule, section balance, realRange, mic compensation,
+  even levels and master trim are all absent; track delays absent; a clicked note plays 3.6's click.
+- **Src**: LIVE.md › Live against MuseScore › What still differs.
+- **Tool**: `tst_liveequivalence`, `--live-equivalence` (simulation).
+- **Fix**: write Track Delays and a Utility per track in the route set (hand-made tracks would need them typed).
+- **Own**: whether the route set should write them. The plain set (Create Live Set) is the path that carries them.
+
+### 7. Live parameter-lane edges late by a per-start constant; a silent Solo Violin 1 route
+- **W**: parameter-lane edges in Live playback late by +11 / +17 / +40 / +40 / +52 ms, a constant per transport start
+  (`plugphasor~` +17 / −0.2). Build 49b00a0's lanes test: the Solo Violin 1 route exported silence from Live, never
+  investigated.
+- **Src**: LIVE.md.
+- **Cause**: not found.
+- **Tool**: `tools/live/research/edges.py <wav> [bpm]`; missing: a real-Live check script (Missing tools #5).
+- **Untried**: real Live re-check of both.
+
+### 8. Chords on mono Performance patches: unconfirmed on Windows
+- **W**: chord-voices (da91f0b459) is meant to make Whence Celli bars 15-16 sound all three chord notes (two had
+  been dropped: −0.5 / +3.9 dB against 38-40 for the kept note). A Windows build must confirm. The 42 patches are
+  assumed to share the Violas' script (checked on Celli only). Each extra voice costs ~1.3-1.7 s load, ~220 MB.
+- **Src**: private `bars9-12/SILENT.md`, `CHORDS.md`; HANDOFF.md › Chords on monophonic patches.
+- **Tool**: `--verify-playback` with `MS_VERIFY_ROUTES=1`; audit CHORD.
+- **Untried**: with Kontakt / SSO in the GUI and in Live. Linked to item 1.
+
+### 9. Accents under plainAccents 2 (default since 2026-10-21): onset unmeasured, Basses' C2
+- **W**: the accented attack (velocity 122) uses `plainAttack` (or, under plainShift, velocity 64's shift): its own
+  onset is unmeasured. Level: target +5.0 dB, 90 % [+3.8, +6.0] (Spheres K. 550 sf at f, 34 instances); in context
+  (Whence bars 8-9) V1 +5.9, V2 +3.3 … +5.3, Va +4.5, Vc +4.9, **Cb +3.3**: the Basses' C2 at 205 ms misses ±1.5 dB
+  (the held C2 before it releases into the measuring window); earlier, the accented C2 played −6.3 dB under its own
+  held C2 (38.5 vs 44.8; the built-in synth +4.1), and in plain-accents about 13 dB under whatever the value. A positive
+  D is capped at CC11 127 (Violas Eb4 211 ms: +3.4 of +4.7 dB). SSO's 122 − 64 is +5.6 … +8.0 dB at 100 ms but +1.2 …
+  +6.1 at 450 ms; per key −9.0 … +5.9.
+- **Src**: private `accent-level/RESULT.md`, `accent-spheres/RESULT.md`, `bars9-12/ACCENT*.md`, `plain-accents/`;
+  HANDOFF.md › Remind; PS › Plain accents. The owner heard plainAccents 2 on Whence bars 7-9: "fine" (3d783a6ac7).
+- **Cause**: Basses - Performance's register / attack behaviour at C2 (not investigated); the release overlap.
+- **Tool**: private accent grids (`mkgrid.py` / `anafull2.py`); missing: onset by velocity in the patch sweep
+  (Missing tools #1).
+- **Miss**: the accented attack's onset by section and pitch; "&gt;" (not sf) in real players (next source: Romeo and
+  Juliet's strings, Spheres, not aligned); a short-note CC1 curve (for value 1, which overshoots to +10 dB on V1 / Va).
+
+### 10. Quiet or dark Ample sounds and Ample-specific gaps
+- **W**: strums starting at multiples of 15 s of render time are quiet and dark (30 s −31.9 dB / 348 Hz vs −18 dB /
+  557 Hz; 45, 60 s decaying): probably the demo, needs the activated copy. CC11 does nothing on Ample, so every
+  per-note CC11 level (divisi, track levels, marcato / Inspector levels, even levels) never reaches it: untracked
+  until now. Strums ≈ 2.7 dB quieter than the same chord as a 60 ms roll; pp renders at velocity 32-33, above
+  `softStrum` 30, so only ppp gets the soft forms; strum route level −13.0 dB from #455 vs #453's −9.4 (not cross-checked);
+  a 6-note chord leaves B3 22 dB under its register; scapo clips at +0.7 dBFS.
+- **Src**: private `ample-check453/455/456/457/RESULT.md`, `ample-wincheck/`, `mv/`.
+- **Tool**: the private Ample check harness; amphost.
+- **Fix**: route Ample's per-note levels by velocity or M-Master Vol (CC7) instead of CC11.
+- **Own**: `[guitar] strums`, `softStrums` 0/1/2 (ppp: 0 −32.5, 1 −26.5, 2 −28.2 dB), `pinchHarmonics` (Ample has no
+  pinch sound): all 0, unheard.
+
+### 11. SSO Performance patches aren't repeatable (random modulators)
+- **W**: two passes null only at −6.9 … −8.4 dB; per note ±2-6 dB; one heard-check run is one take, and take spread ≈
+  renderer difference (Whence 33/30 vs 41/27).
+- **Fix**: `[slurs] fixedTransitions` (b990008a7d), 0 everywhere: nulls −73.5 (Va) / −70.4 (V1) / −96.6 (Vc) / −85.8
+  (Cb) dB, per-note SD 0.22-0.50. Still random: bowed (velocity 85+) fast transitions at IOI ≤ 251 ms (Across Strings
+  groups); Basses (D1 states) and Violins 2 never rendered; spectra up to 2.5 dB off the stock mean (lowest band, Celli).
+- **Src**: private `sso-legato-fixes/RESULT.md`; HANDOFF.md › SSO legato fixes.
+- **Untried**: in MuseScore with Kontakt; Update Live Set and *Live plays the score* don't carry it.
+- **Own**: hear it (`/data/ssolf/listen/` on the dev machine).
+
+---
+
+## Tier 2: audible in some passages, or on all notes but small
+
+### 12. Ample: hosted playback doesn't wait for the background load; AGM load crashes on the VM
+- **W wait**: `SoundLibraryHost::sync` loads in parallel without waiting for Ample's own sample-set thread: Play right
+  after a load may play the wrong set for ~1 s (Pick G3 −34.4 dB at 0 s pre-roll, −67.6 at 0.5 s, stable −25.5 from
+  1 s). Offline renders wait (`backgroundLoad="60"`, 4488ee93e4; #456 3/3 bit-identical). The even-levels measurer
+  doesn't wait either (SSO only today).
+- **W crash**: AGM crashes during instance load (0xC0000005, VCRUNTIME140 memcpy): #457 3 of 21 verify runs; reruns
+  #457 6/12, #456 4/12 (0/27 the day before). 9 minidumps: only AGM.vst3, msvcp140 and cryptnet.dll frames on the
+  faulting thread, no MuseScore / Qt. Probably AGM's licence / demo check (network-dependent; rose after the VM's
+  reboot and address change). Rerun is enough; every rerun matched.
+- **Src**: private `ample-check457/RESULT.md` (Finding 3), `ample-check455/FIX4.md`; HANDOFF.md › Lane jumps and
+  Ample's background load.
+- **Fix**: wait per instance in `sync` (`waitForBackgroundLoad`), serialise Ample loads, let `Seq::start` wait as for
+  even levels; retry crashed runs automatically in VM batch scripts and the heard check (as `superviseExtract` does).
+- **Miss**: whether an activated AGM crashes at all; a crash-rate run with the VM's network cut.
+- **Untried**: GUI (a GUI crash would take MuseScore down). AGM trial ends ~2026-10-25.
+
+### 13. Ample capo, state lanes and other Ample limits
+- **W**: playing from a later tick may keep the instance's last capo (HANDOFF › Phase 2 says not resent; MV.md says
+  `Seq::updateSynthesizerState` replays ME_PARAMETER on seek: contradictory, untried in the GUI). Live's clips get the
+  capo at 0 with the first note (no start lead); over MIDI out M-Capo is set by hand. State lanes: hosted and Live play
+  the lane's first value only; Update Live Set doesn't rewrite the state. M-Master Vol in Live may act up to one buffer
+  (≤ 11.6 ms) early. Max Voices 1: which string survives changes between VM sessions (−14.3 vs −21.6 dB).
+- **Not measured / assumed**: Auto Legato values (which is Off), Pop (no rule), slide speed by velocity (510 / 330 / 170 /
+  40 ms at 20 / 60 / 100 / 127, on the Lite; not modelled), softRoll's linear spacing between 20:10 and 40:15 ms,
+  StrumLevel for Pick = Finger's, hammer-on evidence weak; 204 state settings with menus / ranges partly assumed (EQ
+  type 0-4, chord type 0-23, delay grid 0-8, reverb size 0-200, ±12 tone, …; Capo Logic / Open String / S-TempoMode
+  meaning unknown); Master Tune ignored by setState.
+- **Src**: private `ample-state/CTL.md`, `ample-check453-457/`; HANDOFF.md › Ample guitars.
+- **Fix**: read each assumed setting at both ends in AGM's GUI (review-page rule for the screenshots), regenerate with
+  `gen_ample.py`.
+- **Untried**: everything Ample in real Live; the GUI seek.
+
+### 14. Only one sound library plays at a time
+- **W**: `SoundLib::current()` holds one library (preference `io/soundLibrary`): a score can't play SSO and Ample parts
+  together. Found reading the code; not documented elsewhere.
+- **Fix**: per-instrument `<Plugin>` / several libraries active (new C++), or one "Ample Guitars" map hosting several
+  plug-ins.
+- **Own**: whether that matters, and how the four other guitars ship (Missing tools #6).
+
+### 15. plainAttack and plainShift come from one take each
+- **W**: `plainAttack` (V1 19.5, V2 29.2, Va 37.1, Vc 38.7, Cb 37.5 ms) = medians of 39 attacks per section in one heard
+  check (#457); `plainShift` measured at velocity 64 on kthost. Take spread is as large as the renderer difference.
+- **Fix**: ≥ 3 takes per value (needs Missing tools #1 / #4).
+
+### 16. The onset rule (−15 dB vs −6 dB under the peak)
+- **W**: map onsets and the heard check use −15 dB under the peak, −30 ms. The owner's ear on Whence's Violas smooth
+  first notes (~200 / 210 / 105 ms) matches −6 dB; at −6 dB the Mixed attack gap vanishes (Performance +27 … +61,
+  quick +23 … +61) while 8 of 10 Violas slurs then fail RHYTHM. Measured latency 24 ms isolated but ~3 ms in context
+  (30 chosen). If −6 dB is right, the slow-attack onsets in the map are 50-100 ms off.
+- **Src**: private `plain-timing/RESULT.md` › Onset rule (literature: Vos & Rasch 1981 ≈ −15 dB at normal levels,
+  −7 dB only ~20 dB above threshold; Gordon 1987 ≈ −18 … −22 dB on 100-300 ms rises; Villing 2010; Polfreman 2013
+  +23.5 ms SD 22.8; Collins 2006). Decision there: keep −15 dB. Evidence moderate to weak (synthetic rises ≤ 160 ms,
+  nothing on real section strings with 200-300 ms rises, listeners scatter 20-60 ms).
+- **Fix**: a listening test with real SSO attacks: the owner aligns clicks against slow attacks (Missing tools #7).
+- **Own**: yes. Matters under plainPerformance 0 for `smoothStart`'s `attackOnset`; under plainTiming the attacks are
+  spiccato (19-39 ms after note-on) and the question is moot.
+
+### 17. Even levels: benefit doubtful outside Whence; background measurer untried with Kontakt
+- **W benefit**: Whence step medians roughly halve (V1 1.70 → 0.90, Va 0.88 → 0.48, Vc 0.97 → 0.44 dB); on Heard
+  passages (2-4-note mixed slurs) no reduction or worse (V2 2.32 → 3.78, Cb 4.94 → 7.12 dB) (a69ebef56a,
+  `even_need.py`). Dense CC streams themselves change Kontakt's sound (+0.21 dB per note on Violas, p90 +0.49; a −17 dB
+  null on an unused CC): the 5 ms CC11 glides may carry a +0.1-0.2 dB effect of their own.
+- **W measurer**: never run in MuseScore with Kontakt / SSO: time per edit (est. 1.5-2.5 s a part), memory (+1 Kontakt
+  per part and patch, ~85-90 MB plus samples), threaded setState, the countdown, a whole score at open; only 4 patches
+  have a measured gap (rest 3 s, 3 passes); it doesn't wait for a plug-in's background load (item 12); Whence ships no
+  stored values, so it plays no glide until measured; passages with a repeated note play uncorrected.
+- **Src**: HANDOFF.md › Even levels; private `sso-legato-fixes/RESULT.md`.
+- **Own**: whether even levels stays on (it is 1 in Recommended).
+
+### 18. Joins across 10-measure chunks and tuning lanes; glissando / ornament velocity
+- **W**: a slur crossing a chunk boundary may re-attack; joins across tuning lanes aren't made; glissando steps and
+  ornament sub-notes keep plain velocity (891a142ed3).
+- **Fix**: carry the join state across chunks.
+
+### 19. Fast Celli transitions don't finish below ~300 ms a note; SSO's 500 ms transition release
+- **W**: Celli Performance transitions don't complete below ~300 ms per note, in 12-TET too. SSO releases a transition
+  at holds ≤ 480 ms (Violas silent; Vn1 +3.3 dB above 500 ms; Violins 1 also has an old-key release under 500 ms).
+- **Fix**: none built. **Own**: yes.
+
+### 20. DROPPED transitions; speed from written
+- **W**: SSO ignores a legato note-on < 15 ms after the previous at velocity ≤ 64. `[slurs] fastTransitions` sends 65
+  (0 everywhere); portamento velocities 1-19 stay dropped. Whence has 0. `[slurs] speedFromWritten` (0 everywhere,
+  approved in principle; null test equal within the floor): lanes other than 0 not rendered, a slur over a repeat sends
+  no CC119, other Performance patches not covered, Live carrier value 1 plays as 0, a device of protocol ≤ 10 plays key
+  113 as a note, resave restore untried with real Kontakt.
+- **Src**: private `cc119-null/`, HANDOFF.md › Speed from written.
+
+### 21. Basses con sord. / espressivo leave the Performance patch
+- **W**: no con sord. / Rachm. sample for the Basses: the notes fall back to All techniques Long / Spiccato
+  (`choosePlain` refuses a dropped modifier). Fixed only under plainTiming 1 (12 notes in Mixed, none in Whence).
+- **Fix**: move the mapping fix out of plainTiming into the default (it changes the sound: owner).
+
+### 22. Section and technique balance: assumptions and uncertainties
+- **W**: technique D (calibrated 2): staccato −3.4 dB, 90 % [−5.7, −0.9], sections disagree (V1 −0.4, Vc −6.7, Cb −3.1;
+  SD 3.1); V2 / Va pooled; same D at every marking (untested at p); Basses' Bartók / col legno 0 (SSO's two metrics
+  differ ~10 dB). Calibration per part, not per pitch: Horn F4 staccato mf −10.4, Flute E4 staccato −9.9, Vn D6 pizz
+  +6.9 dB worst cases. Celli's Long spans ~8 dB, so Celli shorts play velocity ~95-127 at every dynamic.
+  Section balance 2: horn from player 1 only (±4 dB; players disagree 14-22 dB); eight gap patches use a family member's
+  level; harp −9.81 ±4, timpani −6.92 ±3, Grand Piano −1.11 ±3; celeste, mallets, bells, other percussion: SSO's own;
+  Strings Ensemble +11.93 (keys SD 2.03; basses-only bottom 2-4 dB hot); pitch slope 2-4 dB off at range ends;
+  woodwinds against Spheres 3-6 dB apart. Real range 2: Celli / Basses miss single markings by 1.4-3.9 dB (round
+  robins 0.6-5.5 dB apart); Cor Anglais pp plays above p; flute ppp +7.4. Level rule: slurs and single notes 0.5-1 dB
+  under held at mp in all five sections (unexplained). Mic compensation: power-sum error up to +1.4 dB; Mic Mix
+  Distance fit 2.05 dB; timpani Close empty offline. Master trim: crest from strings only; single soft takes peak up to
+  20.2 dB (trim up to ~6 dB short). MIDI out: the receiver's CC7 law unmeasured.
+- **Src**: docs/BALANCE_LOG.md, docs/PLAYBACK_SETTINGS.md, HANDOFF.md.
+- **Miss**: per-pitch technique curves; real data for gap instruments; review pages unread by the owner (Table II
+  5W2xDamjK9vLRcJ4S6cFC2, Skålevik JKYSTkAFHEv4hjZviRhCEn, C&L 67i6bLfUGkfrkLVLWQdT2e, winds B8 1Eyi6i8tTt8wkzXaEtUZE9,
+  Stage A ladder SYgoXqPuHmJpicoCRrTRpc).
+- **Untried**: none of calibrated 2, sectionBalance 2, realRange 2 with music that has dynamics, micCompensation or
+  divisi has been heard by the owner.
+
+### 23. Live first-note and plain-set limits
+- **W**: the plain set's Controllers clip starts at 0, so the first early note's CC1 arrives up to its start lead late
+  (Whence Celli 172 ms; a plainTiming attack at the start 20-39 ms). A note at time 0: first note −0.9 dB, the legato
+  after it +1.2 dB (VM simulation). Simultaneous techniques on one Kontakt and program-change switches are reported, not
+  written; Bank / Sub not re-sent on a locate while stopped; a CC32 envelope is dropped at load. Volume tops at +6 dB:
+  headroom × a Mixer above 100 loses up to ~4 dB. Plug-in parameter lanes up to 1 ms late. Microtones: a bending copy
+  beyond its bend range plays by varispeed in MuseScore, which Live can't; many tunings can exhaust 64 routes.
+- **Src**: LIVE.md.
+
+---
+
+## Tier 3: small or rare
+
+24. **Divisi level is an assumption** (10 log10 n from player counts, no data); a voice entering under a held note gives
+    up to +1.8 dB over one section; a fast slurred line entering a chord would have its step flattened by even levels.
+25. **Long (Rachm.)**: Violas / Celli context fits unused; quickLevel's length not modelled (held-out −3.7 dB, ~−6 at
+    4-8 32nds); hold-out Violas ~+70 ms never refitted. Celli C3 bad round robin avoided only at velocity 100-116.
+    Same-pitch re-attack barely audible (+0.9-1.9 dB).
+26. **D6 at a fast slur's end shortened**: `PLAIN_STACCATO_GAP_MS` (45 ms) ends a note before a staccato that plays on
+    another slot (Whence V1 D6 91 instead of 136 ms, heard in its release). Options: skip the gap across slots; hold a
+    fast slur's last note ≥ legatoDelay + ~100 ms (private `bars9-12/SILENT.md`). Owner.
+27. **Phrase break needs a gap ≥ 40 ms**; pedal timing waits for the owner's PC (his export lost 1 chord in 8);
+    octave corrections to re-sweep (Oboe Solo +12, Violins 2 ±12 −30); silent sounds (Long Sul G / Sul C in Vn1 / Vn2 /
+    Celli; Rain Sheet Swell mp; Tam Tam FX Scrape, Wind Gong FX Bow missed the rest check); parameters measured only in
+    5 steps at the test pitch.
+28. **Hosting / load** (not sound): setState 17-18 s for Whence's 8 instances, +1.3-1.7 s per tuning slot (KSP compile
+    55 %, redone per slot); VM numbers aren't the owner's (SMB streaming). `load-small` fix 1 hangs Kontakt 4/4 (drop
+    it); `kontakt-procs` (parallel host processes, the one real lever: 3 patches 4-7 s vs 8-14 s) never compiled with
+    MSVC, no VM null test. Kontakt's own background sample loading isn't waited for either. A 0xC0000005 after a Kontakt
+    "VirtualUnlock failed" while playing (lag-probe phase e) left the playback mode at MS4. Clicked notes: the first
+    click on a route whose patch isn't loaded is silent. `LANE_COPY_BYTES` (245 MB) stale against 425-1017 MB measured.
+29. **Update Live Set after a rewrite saves the score once more** (`liveSet.setTime` recorded before the rewrite;
+    harmless). The command-line Create → Update fix (2ef9dd9dfb) is not yet re-run on the VM with AGM.
+30. **MS4 / built-in**: `ab/trace/regress.sh` not run since edb5eec (and its paths are stale); MIDI export's
+    same-instant order fixed 2026-10-04 but the 3.6 round trip not re-run.
+31. **Playability**: microtone threshold below 200 Hz clamped at 5.9 c (from pure tones); scordatura view not saved.
+
+---
+
+## Tier 4: tool defects (no sound, but they hide or invent problems)
+
+32. **Verify detector false positives on Performance legato** (private `bars9-12/SILENT.md`, build #454):
+    - Offset alias: `bestOffset`'s onset-flux curve is flat for soft legato parts (V2 0.060 s within 0.6 % of the
+      chosen 0.335 s; Celli 1.2 %; Violas 0.1 %), so a part is read one note late: V2 C6 "24 dB under" is a false
+      positive (−9.5 dB at the real offset). Fix: report the curve's margin and mark "offset ambiguous" (< ~3 % above
+      any offset ≥ 50 ms away), demoting legato missing-note findings; or align on each note's expected onset (sent +
+      onset) with a ±60 ms search. Anchor-only and pitch-aware variants (private `offset_anchor.py`, `offset_pitch.py`)
+      weren't robust.
+    - Short legato notes (< ~0.25 s) are read at len − 20 ms, before SSO's transition lands. Fix: judge on the peak over
+      [on + 0.05, off + 0.25].
+    - Quarter tones are measured on 12-TET bins (`finePartialBins` takes the integer pitch). Fix: pass each note's cents
+      (`playbackTuning` under a `ScoreTuningScope`) into `PV::Note` and use fractional bins.
+    - `--verify-playback` thresholds were tuned on one piano piece; misses wrong articulation / sample, re-strikes under
+      the pedal, masked chord notes.
+33. **Heard-check limits**: one take; masked re-attacked Longs unreliable (Celli bar 11 +539 ms); kthost reads
+    Performance attacks 30-60 ms later than export; Violins 1 tuned-copy Longs swell in export (+67 / +225, suspected
+    the vibrato 0 flat lane); chords on one route not pitch-tracked; a whole-passages run crashed 0xC0000409 after 24/34
+    routes (avoid with `HC_SPLIT=parts`); `HC_VM`'s default address is stale; builds 98572aa7e2 / e1386f9e57 measured
+    nothing (results void); RHYTHM borderline slurs (~7 / ~12 %) still to check by ear.
+34. **Audit**: checks only its own model (reported 0 fails while the Violas played a triplet); with plainPerformance on
+    the strings' audit is nearly vacuous; LEVEL STEP 0.69 dB still "proposed".
+35. **Onset detectors**: harmonics SD 56 ms on SSO unexplained (synthetic ≤ 17); loudness reads only near-isolated
+    notes (2-30 of 120-207).
+36. **Tools that can't be re-run as they stand**: `octave_measure/analyze.py` / `fam.py` (hard-coded paths);
+    `qt_bends/abl.py` (not in this tree); `ab/` (stale install paths, incl. `roundtrip2.py`, CLAUDE.md's round-trip
+    test); `compare_renders.py` ZeroDivisionError on a silent note; 14 jsons feeding the map have no committed producer
+    (TOOLS.md › 6); `run_fork_tests.sh` skips `test_timing.js` / `test_load.js`; kthost has no source (Missing tools #4).
+37. **Docs drift**: CLAUDE.md says `[slurs] plainAccents` 0 everywhere (2 by default and in Recommended since
+    4cec902067); its `sectionLevel2` numbers differ from PLAYBACK_SETTINGS.md (V1 −0.13 vs −0.03, V2 +1.02 vs +1.12,
+    Va −7.03 vs −7.08, Vc +2.69 vs +2.56, Cb +3.45 vs +3.43, Trumpets a6 +19.67 vs +20.45); PLAYBACK_SETTINGS.md gives the
+    harp as −9.81 and −10.41 and the presets table still says staccato D −4.2 (now −3.4); HANDOFF l.1320's "other
+    patches ~24 dB lower" was superseded by the gain stage (a7b8520990). Check against the map and fix.
+
+---
+
+## Owner decisions pending
+
+**Settings 0 by default "until the owner has heard it"**: `[slurs] plainTiming` (item 2), `speedFromWritten`
+(20), `fixedTransitions` (11), `fastTransitions` (20), `[guitar] strums`, `softStrums` 0/1/2, `pinchHarmonics` (10);
+`[slurs] evenTransitions` (weak proposal).
+
+**On by default, never heard or confirmed**: calibrated 2 (B′), sectionBalance 2, realRange 2 on music with
+dynamics, micCompensation, divisi, chord voices, evenLevels outside Whence, legato bend glide and settle, keepMs 40,
+the Velocity / Join lanes.
+
+**Other decisions**: the onset rule (16); LEVEL STEP 0.69 dB; CC1-technique levels without data (4); plain-timing
+proposals 1-4 (HANDOFF › Mixed techniques); route set Track Delays / Utility (6); fast quarter-tone runs (5); fast
+Celli slurs (19); D6 slur-end options (26); Basses' modifier mapping in the default (21); one library at a time (14);
+review pages (22); RHYTHM borderline check; LIVE.md's open questions.
+
+## Untried in real Live
+
+Update Live Set end to end (Manual values over the state, Configure slots, ControllerTargets, backups, inserted sends,
+derived-parameter and M-Master Vol read-back); hosted slot gain with Utility and panel values; timing overrides (hash
+stability, `get_all_notes_extended` cost); written clips (one-decimal Track Delay, Bank / Sub through the device,
+`"Timing"` restore, group delays); the plain set's plainShift / plainTiming, start-lead CC1, voice copies, divisi,
+speedFromWritten (key 113), fixedTransitions' state, fastTransitions, plainAccents' CC11; everything Ample (Create /
+Update / Live plays the score, Configure panel, capo, state lanes, soft rolls); the route set in 12.2, the device from
+the User Library, Add missing tracks; *Live plays the score* write speed, chase at a mid-song start, long pieces; the
+whole clip-tab chain; a tempo change while playing; Live helpers; a real Live export A/B with SSO (only simulated: run
+271 correlation 0.99961, residual −31.1 dB). Confirmed in Live 12.4.6: the Utility (to 0.001 dB), Tune slots, a negative
+Track Delay moving MIDI To, the device's CPU fix, phrase-first notes within 3.3 ms in export.
+
+## Untried with Kontakt / SSO (or AGM) in the MuseScore GUI
+
+Even levels' background measurer, Play's wait and countdown, the Tools-menu job; edit-lag warm-up with Kontakt; chord
+voices and divisi; calibrated 2; mic compensation (a mic changed alone after Mic Mix Distance); hosted slot gain;
+fixedTransitions, fastTransitions, speedFromWritten's resave / reload; transport-restart round robins (play twice, same
+sample sequence); the start lead; play from a tick; `renderAgainPlaying` after a Mixer change; flat-lane dashed values
+before a patch ever loaded; clicked notes; the Performance technique / Velocity / Join lanes; Ample's hosted-sync wait
+(not built) and every Ample phase except the #453 / #455 / #456 / #457 offline checks. Kontakt's own window values are
+never read anywhere.
+
+---
+
+# Missing tools (to build this month), ranked
+
+Ranked by how many Tier 1-2 items each unlocks per day of work. Effort is for one agent session on the dev machine plus
+VM time. Every tool: in the repo (no Spitfire / NI / Ample files, no owner scores, no personal paths), a `--help`, a
+test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text report, VM locks honoured.
+
+### 1. `measure_patch.py`: one-command "measure any patch" sweep
+- **Spec**: `tools/soundlibraries/measure_patch.py plan --library <map.xml> --patch "<patch>" [--articulation a]
+  [--what level,onset,transition,release] [--pitches lo:hi:step] [--cc1 16:127:8] [--velocity …] [--takes 3]
+  [--intervals -12..12] [--ioi 80,120,180,270,400,600] [--before attack,held,transition,staccato]
+  [--before-len 100,250,500,1000] --out <work>` → kthost event files + `list.txt` + `plan.json` (cells, ABBA order,
+  gaps from `even_gap_check`); `run_vm.sh <work>` (scp, VM locks, kthost per file with a watchdog and automatic retry,
+  fetch, clean); `analyze <work> -o <patch>.json` → per cell: perceived level (`loudness.py`), onset at −15 and −6 dB,
+  transition leave / arrive (pYIN / YIN from `legato_glide/f0.py`), release; medians, take SD, CI; `report` → text +
+  one PNG per quantity. Generalises `sso_cc1_sweep`, `string_dynamics_sweep`, `legato_glide`, `legato_pair_scan`, the
+  accent grids and `crest_sweep`; output schema documented so `gen_spitfire_sso.py` (or a future library's generator)
+  can read it.
+- **Effort**: 2-3 days (the parts exist; the work is one plan format, one analysis, retries). VM: ~1-3 h per patch for
+  a full transition grid.
+- **Unlocks**: 3 (transition model by preceding kind / length), 4 (CC1 technique levels and slow-attack onsets), 9
+  (accented attack onset, Basses' C2), 15 (multi-take plainAttack), 19, 25, any new library.
+
+### 2. `heard_summary.py`: whole-score heard-check summary, regression and drift report
+- **Spec**: `tools/playbackverify/heard_summary.py <report.json>… [--baseline <report.json>…] [--by section,kind,
+  tempo,bar] -o <dir>` → for each run and against a baseline: ARRIVAL / RHYTHM / LEVEL / UNHEARD counts with deltas,
+  beat spread (median, p90, max) across sections (from private `spread.py`), heard − written medians per section × kind
+  (attack, transition after attack / held / transition, staccato, quick technique), **model drift = heard − predicted
+  per patch × situation** (from `tdrift.py`) with n, median, p10-p90 and a flag when |median| > 20 ms or the sign
+  differs between scores; take-to-take spread when several runs of one setting are given; a "worst 20 notes" list with
+  bar / beat; markdown and JSON. Plus `heard_check.sh --takes N` to run N takes in one go.
+- **Effort**: 1-1.5 days (folds `spread.py`, `tdrift.py`, `mixed2.py`, `cmp.py`).
+- **Unlocks**: 2, 3, 11, 15, 16, 17 (evidence on every timing change, before/after per build), Tier 4 #33.
+
+### 3. Repeat-determinism checker (Linux and VM)
+- **Spec**: `tools/playbackverify/repeat_check.sh <score> [settings] [--n 10] [--vm]`: Linux: dumpEvents N times in
+  fresh processes (and once under ASan), diff `routemap.txt`, `notes.txt` lanes, every `museScore.txt`; VM: N
+  `--verify-playback --verify-wav` with `MS_VERIFY_ROUTES=1`, comparing `events.tsv` note-ons per slot / route and WAV
+  hashes (with fixedTransitions 1 so audio can null). Report: first differing event, which route, per-run slot counts.
+  Plus an mtest that renders a chord-voice score 10× and compares routemaps.
+- **Effort**: 0.5-1 day.
+- **Unlocks**: 1 (rank 1), 8, 11's residual randomness, item "2 vs 3 lanes once in 13 dumps"; guards every later
+  A/B.
+
+### 4. kthost source in the repo
+- **Spec**: `tools/soundlibraries/kthost/kthost.cpp` + `CMakeLists.txt` (msvc-wine like `ktload`), re-implementing the
+  restored binary's options (`--tail --wait --probe-pitch --param --param-late --param-first-block --offsets --warm
+  --warm-block --realtime --rtfast --from --to --list-params --editor --block --offline --repeat --report`) on the fork's
+  `thirdparty/vst3sdk` and the dumpEvents event format; add what it lacks: several states as slots in one instance (tuning
+  slots), a gain per slot (gain stage / trim), flat-lane parameters from a dump's `instances.txt`, and an exit code per
+  failure; a null test against the restored binary on 5 routes.
+- **Effort**: 1.5-2 days (ktload and amphost5 are close templates).
+- **Unlocks**: every kthost measurement surviving a lost VM folder (it happened on 2026-10-10); kthost renders matching
+  MuseScore's export (heard-check limit #33); tool #1.
+
+### 5. Real-Live check script (VM, Live 12.4.6 trial, ends ~2026-11-01)
+- **Spec**: `tools/live/live_check/`: `run_vm.ps1 <set.als> <out> [--export-wav] [--bars a-b]` drives Live on the VM
+  desktop (scheduled task + `tscon`, as the private lc1012 / ug drivers do): opens the set, waits for Kontakt states, runs
+  Live's export of the arrangement (or records the master), saves, closes; `compare.py <live.wav> <musescore.wav>
+  <notes.txt>` → correlation, residual, per-note level / onset (the `--live-equivalence` metrics) and parameter-lane edge
+  times (`edges.py`); a checklist run for LIVE.md's untried items (Update twice, timing overrides, written clips).
+- **Effort**: 2-3 days (GUI automation is the risk). VM: one heavy job.
+- **Unlocks**: 6, 7, 23, the whole "Untried in real Live" list; Ample in Live (13).
+
+### 6. Ample per-guitar map pipeline (for the four guitars bought later)
+- **Spec**: `tools/soundlibraries/amphost/` (sanitized amphost `info` / `render` / multi-instance, msvc-wine) and
+  `ample_state.py` (st.py: read / diff / set a state); `gen_ample.py --product <code> <dump> [out]` with a per-product
+  table (vst3 file, library / instrument names and ids: steel / nylon / 12-string, sample-set DBName codes, keyswitch and
+  natural-harmonic ranges, slide guitar key, strings / courses, capo parameter, config folder) and measured numbers in
+  `tools/soundlibraries/ample_<code>.json`; `measure_ample.py` running the per-guitar measurements: keyswitches, strummer
+  bands and single-string keys, CC7 / M-Master Vol law, StrumLevel per sample set, softRoll pairs, capo block lead,
+  background-load time per set (→ `backgroundLoad`), velocity layers; a check harness (the private check453 → 457 one:
+  test scores, settings into the .mscz, hashes, watchdog, automatic retry for AGM's load crashes). Tests stop
+  hard-coding AGMFg / AGM counts.
+- **Effort**: 3-4 days for the pipeline with AGM as the regression case; then ~0.5-1 day + VM per guitar.
+- **Unlocks**: 10, 12, 13, 14 (needs the owner's decision on one library vs several), the post-purchase list.
+
+### 7. Listening-clip maker (per section, with click)
+- **Spec**: `tools/playbackverify/clips.py <heard-check work dir | verify folder> --score-bars a-b [--parts …]
+  [--solo] [--click beats|written] [--count-in 1] [--variants A=<dir> B=<dir>] [--shared-gain] [--pre 0.3] -o <dir>` →
+  MP3 clips with one gain per comparison, a click on every written beat from `bars.txt`, a notes JSON (each note's
+  written and heard second), and a ready review page skeleton (HTML) for an artifact. Folds `soloclips.py`,
+  `mixroutes.py` and the four private `clips.py`. Optionally a "tap" page: the owner taps where he hears each
+  onset, giving the data for the onset rule.
+- **Effort**: 1 day (+0.5 for the tap page).
+- **Unlocks**: every "Own: hear it" decision (2, 3, 10, 11, 20, 26), 16 (onset rule, with the tap page).
+
+### 8. Verify-detector fixes as a tested tool
+- **Spec**: in `audio/vst3/playbackverify.*`: offset margin + "offset ambiguous", expected-onset alignment ±60 ms,
+  short-legato peak window, fractional (cents) bins; a Python replica (`offset_curve.py`, `legato_level.py` moved into
+  `tools/playbackverify/`) and a regression set from Whence bar 8's known false positives and the Celli chord notes
+  (true positives).
+- **Effort**: 1-1.5 days (code change: owner rule "sound-identical" doesn't apply, it is a checker).
+- **Unlocks**: 32; makes `--verify-playback` usable on Performance parts and quarter tones.
+
+### 9. Dump compare and audit wrapper
+- **Spec**: `tools/playbackverify/dump_compare.py <dumpA> <dumpB> [--route-by part,patch,lane] [--only notes|cc|pb]`
+  (from private `cmpdump.py`, `cmpacc.py`, `cmp.py`): per route the first differing event, counts of changed note-ons /
+  CCs, velocity and timing deltas per note; `dump_and_audit.sh <score> <settings> <out>` running dumpEvents (chunked,
+  with calibration) and the audit through a given wrapper.
+- **Effort**: 0.5 day.
+- **Unlocks**: the "sound-identical or dropped" proofs (CLAUDE.md › Edit lag), 1, every refactor.
+
+### 10. VM job runner with locks and retry
+- **Spec**: `tools/vm/vmjob.sh <job dir> <cmd>`: checks MemAvailable locally, takes `C:\claude\quiet.lock` and
+  `private/VM_PAUSE`, scp in, runs under a watchdog, retries a crash (exit 0xC0000005 / 0xC0000409) up to N times
+  logging each, fetches, deletes the VM folder by a guarded literal path, releases locks; VM address and key from one
+  config file outside the repo. Used by heard_check, measure_patch, live_check, the Ample harness.
+- **Effort**: 0.5-1 day.
+- **Unlocks**: 12 (AGM crash retries), fewer stuck VM locks; prerequisite polish for 1, 5, 6.
+
+### 11. Re-runnable producers for the 14 jsons without one; fixed stale tools
+- **Spec**: commit sanitized producers (or a `method` key pointing at measure_patch.py's equivalent cells) for
+  `sso_accent_attack`, `sso_bad_samples`, `sso_smooth_onset`, `sso_plain_performance_shift`, `sso_performance_layers`,
+  `sso_percussion_levels`, `sso_rachm_cc1_sweep`, `sso_rachm_context_match`, `sso_slur_swell`, `spheres_k550_staccato`
+  (Spheres stem fetcher `rzip.py` too); fix `octave_measure/analyze.py` paths, `compare_renders.py`'s ZeroDivisionError,
+  `run_fork_tests.sh`'s missing Node tests, `ab/` paths (or move `roundtrip2.py` into the repo).
+- **Effort**: 1-2 days.
+- **Unlocks**: re-measuring after an SSO update; 36; the round-trip rule.
+
+### 12. Patch tone / noise analyzer
+- **Spec**: `tools/soundlibraries/tone_check.py <wav> <notes.txt>`: per note spectral centroid, tilt, noise floor,
+  click / pop detection at note-on / off, round-robin outliers (the method behind `sso_bad_samples.json`), against the
+  patch's own median; feeds `avoid` and flags faulty samples automatically.
+- **Effort**: 1 day.
+- **Unlocks**: Stage B (tone) of the dynamics plan, bad round robins in new patches, Ample's quiet / dark strum (10).
