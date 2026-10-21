@@ -2481,6 +2481,11 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
 //   lanes
 //---------------------------------------------------------
 
+double divisiDb(int voices)
+      {
+      return voices > 1 ? -10.0 * std::log10(double(voices)) : 0.0;
+      }
+
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
             double toleranceCents, double tailSeconds, int maxLanes, bool fixedTuning)
       {
@@ -2621,6 +2626,43 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             it.voice = std::max(0, v);
             }
       }
+
+      // [levels] divisi: each monophonic patch's voices sounding at each note's start, as written (the notes starting
+      // together all counted; a grace note its chord's count)
+      for (size_t p = 0; p < patches.size(); ++p) {
+            if (!patches[p]->mono)
+                  continue;
+            std::vector<double> ends;                     // the started notes' written ends
+            std::map<double, int> atStart;                // a start (seconds) -> the voices sounding then
+            for (size_t i = 0; i < items.size();) {
+                  if (items[i].patch != int(p) || items[i].grace) {
+                        ++i;
+                        continue;
+                        }
+                  const double on = items[i].on;
+                  ends.erase(std::remove_if(ends.begin(), ends.end(), [on](double e) { return e <= on + 1e-6; }), ends.end());
+                  std::vector<size_t> group;
+                  for (; i < items.size() && (items[i].patch != int(p) || items[i].grace || std::fabs(items[i].on - on) <= 1e-9); ++i) {
+                        if (items[i].patch != int(p) || items[i].grace)
+                              continue;
+                        group.push_back(i);
+                        if (items[i].off > on + 1e-6)
+                              ends.push_back(items[i].off);
+                        }
+                  const int n = std::max(int(ends.size()), 1);
+                  atStart[on] = n;
+                  if (n > 1)
+                        for (size_t g : group)
+                              out.sounding[items[g].note] = n;
+                  }
+            for (const Item& it : items) {
+                  if (it.patch != int(p) || !it.grace)
+                        continue;
+                  auto a = atStart.find(it.on);
+                  if (a != atStart.end() && a->second > 1)
+                        out.sounding[it.note] = a->second;
+                  }
+            }
 
       struct Lane {
             double cents { 0 };

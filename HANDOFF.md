@@ -48,9 +48,30 @@ audit all 0, CHORD 0. Untried with Kontakt / SSO and in Live: a Windows build sh
 sound all three notes (the verify run of SILENT.md, Celli m15 / m16), and that Celli - Performance loads one slot more
 (~1.5 s, ~220 MB).
 
-Open for the owner (nothing decided): each voice is a whole section's patch at the section's level, so a three-note
-divisi chord sounds three full sections (a real section divided plays each note with a third of its players). No level
-correction is applied for it: that would need data on divisi levels (none yet), so it is left as it is and marked here.
+Divisi level: done on branch `divisi-level` (below).
+
+## Divisi level (branch `divisi-level`, 2026-10-20, from integrate-1017 e263421d2c; not merged)
+
+The owner, 2026-10-20, "yes": a chord on a mono patch should add up to one section, as a real section divided into n
+groups does. `[levels] divisi` (1 by default and in Recommended, 0 in Library default): while n voices sound together
+(the note's part, its patch, as written at the note's start, the note itself included: `SoundLib::Lanes::sounding`)
+every chord note plays 10 log10(n) dB softer by CC11 (2: -3.01, 3: -4.77 dB), voice 0 too; a note after the chord at
+full level again; a note held while voices enter keeps the level of its own start (no CC11 move inside a note: at
+worst +1.8 dB over one section while a voice enters under a held one). An assumption from player counts (equal,
+incoherent groups), no measured divisi data. Code: `divisiDb`, `Lanes::sounding` (soundlibrary.cpp `lanes`),
+`MidiRenderer::libDivisi` / `divisiLevel` (on `libLevels`' volumeDb, so `libraryNoteLevels` schedules it and it reaches
+Live's clips, the plain set's CC11 lanes, MIDI out). The master trim reads the rendered CC11, so it sees it.
+Details: docs/PLAYBACK_SETTINGS.md › Divisi level; report private/bars9-12/DIVISI.md.
+
+Checked on Linux only (test synth, rendered events). Whence (Recommended, `dumpEvents` chunked and `MS_DUMP_LIVE`, lanes
+pinned max=8, divisi 0 vs 1, same build): only Celli - Performance copies 1-3 change, only CC11, exactly the 20 chord
+notes (four two-note chords -2.90 .. -3.02 dB, four three-note -4.72 .. -4.83, 7-bit rounding); everything else identical,
+trim 0 dB both, audit all 0; divisi 0 = the chord-voices dump. Tests: tst_soundlibrary 132 / 0 / 4 (divisiLevel),
+tst_liveequivalence 63 / 0 / 3 (divisiLive), playbackaudit 10 / 0 / 1, midi 97, the other fork tests pass.
+
+Open: a fast slurred line (IOI < 350 ms) entering a chord would have its divisi step flattened by even levels' fit (it
+measures the envelope with the step in it); none in Whence (its divisi are a bar per chord). Not heard; untried with
+Kontakt / SSO and in Live.
 
 ## SSO legato fixes (branch `sso-legato-fixes`, 2026-10-20, from integrate-1017 e8a330c429; not merged)
 

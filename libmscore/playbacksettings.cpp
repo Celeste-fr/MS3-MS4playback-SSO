@@ -211,6 +211,14 @@ static const std::vector<Definition> DEFINITIONS = {
         "powers), by the patches' volumes (everything lower together past Live's Volume top, +6 dB); automated mics: the "
         "largest change by the volume, each note's own at its start by CC11; the mics then change tone and space, not the "
         "balance; 0: the mix's own level", true },
+      // (the owner, 2026-10-20, "yes": a chord on a monophonic patch (SSO's Performance patches, voice lanes) as a real
+      // section divided, the chord as loud as one section; an assumption from player counts, no divisi data; on in
+      // Recommended and by default, off in Library default; SoundLib::divisiDb)
+      { "levels/divisi", 1, 0, 1, "on/off",
+        "1: while n notes of a monophonic patch's part sound together (a chord on SSO's Performance patches, each note its "
+        "own voice copy), each plays 10 log10(n) dB softer by CC11 (2: -3.0 dB, 3: -4.8 dB), the line's note too, as a "
+        "section divided into n groups adds up to one section (an assumption from player counts, not measured divisi "
+        "data); a note keeps the level of its own start; 0: every voice at the whole section's level", true },
       // (the owner, 2026-10-12: SSO's Performance legato plays some slurred notes louder than others, by context; evened
       // out by a glide of CC11 measured in place, the blind listening test's choice; 2026-10-13, MuseScore's playback
       // verified on the VM (3.6 -> 0.60 dB), the owner: "why is this not in recommended": on in Recommended and by default,
@@ -492,7 +500,8 @@ QString iniTemplate()
 //    since 2026-10-17: the owner chose it by ear on the five string sections); slurs/speedFromWritten (0 in both since
 //    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions and slurs/fastTransitions (0 in
 //    both since 2026-10-20, until the owner has heard them); slurs/plainAccents (0 in both since 2026-10-20, until the owner
-//    has compared its values by ear). The other settings are not in the table because: legato/keepMs acts
+//    has compared its values by ear); levels/divisi (1 in Recommended and by default, 0 in Library default, since
+//    2026-10-20: the owner approved the rule). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -515,11 +524,11 @@ const std::vector<Preset>& presets()
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
-                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 },
+                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
             };
       return P;
