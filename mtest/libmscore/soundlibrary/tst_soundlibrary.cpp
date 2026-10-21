@@ -177,6 +177,7 @@ class TestSoundLibrary : public QObject, public MTest
       void smoothOnset();
       void transitionsEarly();
       void plainPerformance();
+      void plainTiming();
       void speedFromWritten();
       void levelContext();
       void levelContextPlain();
@@ -1948,7 +1949,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1957,15 +1958,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -2873,6 +2874,263 @@ void TestSoundLibrary::plainPerformance()
                   listed |= f.kind == PlaybackAudit::Kind::UNMEASURED && f.part == "Violin - Performance" && f.text.contains("plainShift");
             QVERIFY(listed);
             QVERIFY(rep.text().contains("Violin - Performance not measured (0)"));
+      }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainTiming
+//    [slurs] plainTiming (branch plain-timing, 2026-10-21; 0 in both presets): with plainPerformance each plain note starts
+//    early by its own model instead of the patch's one plainShift: an attack (after silence, a staccato's spiccato attack, the
+//    note after a staccato) by the map's plainAttack, a transition (touching, slurred) by its modelled arrival (legatoDelay
+//    here: no bendGlide), capped so that the note before keeps [legato] keepMs; no plainShift track delay; the start lead
+//    takes the first note's early start; a modifier the patches have no articulation for stays plain, one they have keeps
+//    its technique; the audit predicts every plain note on its written time
+//---------------------------------------------------------
+
+void TestSoundLibrary::plainTiming()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      const QString map = "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo pizzicato'/>"
+         "<Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "<Articulation name='Staccato' value='40' techniques='short' onset='8'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo' onset='8'/>"
+         "<Articulation name='Pizzicato' value='56' techniques='pizzicato' onset='3'/>"
+         "<Articulation name='Tremolo' value='60' techniques='tremolo'/>"
+         "<Articulation name='Long Harmonics' value='70' techniques='long' modifiers='harmonics' onset='200'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='80'%1>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " legatoDelay='200'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300'/>"
+         "</Instrument></SoundLibrary>";
+      // the presets and the default: 0
+      for (const Playback::Preset& p : Playback::presets()) {
+            bool listed = false;
+            for (const auto& kv : p.values)
+                  if (QString(kv.first) == "slurs/plainTiming") {
+                        listed = true;
+                        QCOMPARE(kv.second, 0.0);
+                        }
+            QVERIFY2(listed, p.id);
+            }
+      QCOMPARE(Playback::definition("slurs/plainTiming")->value, 0.0);
+      auto lib = loadMap(map.arg(" plainAttack='30'"));
+      QVERIFY(lib);
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            QCOMPARE(li.name == "Violin - Performance", li.plainAttackMs == 30.0);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-performance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* violin = score->parts()[0];
+
+      struct N { double on; double off; int tick; int pitch; QString patch; bool plain; };
+      struct R { std::vector<N> notes; double piano = -1; double lead = 0; double delayLead = 0; double startLead = 0;
+                 std::map<std::pair<int, int>, MidiRenderer::LibPerformance> perf; };
+      auto render = [&]() {
+            R r;
+            score->setPlaylistDirty();
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> trace;
+            MidiRenderer midi(score);
+            midi.setLibraryTrace(&trace);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            midi.renderScore(&events, ctx);
+            r.delayLead = events.delayLeadMs;
+            r.startLead = events.startLeadMs;
+            r.lead = r.delayLead + r.startLead;
+            std::map<std::pair<int, int>, bool> plain;
+            for (const MidiRenderer::LibTrace& t : trace)
+                  if (t.note) {
+                        plain[{ t.utick, t.note->ppitch() }] = t.choice.plain;
+                        r.perf[{ t.utick, t.note->ppitch() }] = t.performance;
+                        }
+            const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+            auto patchOf = [&](const NPlayEvent& e) {
+                  for (const SoundLib::Route& rt : routes)
+                        if (rt.port == e.extPort() && rt.channel == e.extChannel())
+                              return rt.instrument->name;
+                  return QString();
+                  };
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  const double t = score->utick2utime(te.first) * 1000.0 - r.lead;
+                  if (!e.isExternal()) {
+                        if (e.type() == ME_NOTEON && e.velo() > 0 && e.pitch() == 60 && r.piano < 0)
+                              r.piano = t;
+                        continue;
+                        }
+                  if (e.librarySwitch() || e.type() == ME_CONTROLLER)
+                        continue;
+                  const QString patch = patchOf(e);
+                  if (e.type() == ME_NOTEON && e.velo() > 0) {
+                        const int tick = e.note() ? e.note()->chord()->tick().ticks() : -1;
+                        auto pl = plain.find({ tick, e.pitch() });
+                        r.notes.push_back({ t, -1, tick, e.pitch(), patch, pl != plain.end() && pl->second });
+                        }
+                  else if (e.type() == ME_NOTEOFF || (e.type() == ME_NOTEON && e.velo() == 0)) {
+                        for (N& n : r.notes)
+                              if (n.pitch == e.pitch() && n.off < 0 && n.patch == patch)
+                                    n.off = t;
+                        }
+                  }
+            return r;
+            };
+      auto at = [](const R& r, int tick, int pitch) {
+            for (const N& n : r.notes)
+                  if (n.tick == tick && n.pitch == pitch)
+                        return n;
+            return N { -1, -1, tick, pitch, QString(), false };
+            };
+      auto ms = [&](int tick) { return score->utick2utime(tick) * 1000.0; };
+      auto withinMs = [](double a, double b, double tol = 1.1) { return std::fabs(a - b) <= tol; };   // (a tick: 1.04 ms)
+
+      // 0 (as before): the patch's plainShift, every plain note at its written time
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" } });
+      const R zero = render();
+      QCOMPARE(TrackDelays::plainMs(TrackDelays::of(violin, TrackDelays::read(score)), "Violin - Performance"), -80.0);
+      QCOMPARE(zero.delayLead, 80.0);
+      QVERIFY(withinMs(at(zero, 2400, 81).on, ms(2400) - 80));      // (render takes the lead off: the shift remains)
+
+      // 1: no track delay; each note early by its own model
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainTiming", "1" } });
+      const R on = render();
+      QVERIFY(TrackDelays::of(violin, TrackDelays::read(score)).plain.empty());
+      QCOMPARE(on.delayLead, 0.0);
+      QVERIFY2(withinMs(on.startLead, 30.0), qPrintable(QString::number(on.startLead)));     // (C5's attack at the score's start)
+      struct E { int tick; int pitch; double early; MidiRenderer::LibPerformance perf; };
+      const std::vector<E> expected = {
+            { 0, 72, 30, MidiRenderer::LibPerformance::ATTACK },              // after silence
+            { 480, 74, 200, MidiRenderer::LibPerformance::TRANSITION },       // touching C5: SSO's transition, its arrival
+            { 960, 76, 30, MidiRenderer::LibPerformance::ATTACK },            // the staccato's spiccato attack
+            { 1440, 77, 30, MidiRenderer::LibPerformance::ATTACK },           // after the staccato
+            { 1920, 79, 30, MidiRenderer::LibPerformance::ATTACK },           // the slur's first note
+            { 2400, 81, 200, MidiRenderer::LibPerformance::TRANSITION },      // slurred
+            { 2880, 83, 200, MidiRenderer::LibPerformance::TRANSITION },
+            { 4800, 76, 30, MidiRenderer::LibPerformance::ATTACK } };         // arco after the pizzicato
+      for (const E& e : expected) {
+            const N n = at(on, e.tick, e.pitch);
+            QVERIFY2(n.patch == "Violin - Performance" && n.plain, qPrintable(QString("%1: %2").arg(e.pitch).arg(n.patch)));
+            QVERIFY2(on.perf.at({ e.tick, e.pitch }) == e.perf, qPrintable(QString::number(e.pitch)));
+            QVERIFY2(withinMs(n.on, ms(e.tick) - e.early), qPrintable(QString("%1: %2 against %3").arg(e.pitch).arg(n.on).arg(ms(e.tick) - e.early)));
+            }
+      // the joins follow the moved note-ons: C5 ends at D5's note-on (touching, a transition); D5 ends 45 ms before the staccato's moved note-on; the slur's notes overlap the next by 24 ms as played
+      QVERIFY2(withinMs(at(on, 0, 72).off, at(on, 480, 74).on), qPrintable(QString::number(at(on, 0, 72).off)));
+      QVERIFY2(at(on, 480, 74).off <= at(on, 960, 76).on - 45 + 1.1, qPrintable(QString::number(at(on, 480, 74).off)));
+      QVERIFY2(withinMs(at(on, 2400, 81).off, at(on, 2880, 83).on + 24), qPrintable(QString::number(at(on, 2400, 81).off)));
+      // the staccato: MS4's note-off (no extra length), so its note-on to note-off is MS4's length plus its early start
+      QVERIFY2(withinMs(at(on, 960, 76).off - at(on, 960, 76).on, at(zero, 960, 76).off - at(zero, 960, 76).on - 8 + 30, 2.2),
+               qPrintable(QString("%1 against %2").arg(at(on, 960, 76).off - at(on, 960, 76).on).arg(at(zero, 960, 76).off - at(zero, 960, 76).on)));
+      // the other notes as without plainPerformance's lead: the piano at 0, the pizzicato early by its own 3 ms
+      QVERIFY2(withinMs(on.piano, 0.0), qPrintable(QString::number(on.piano)));
+      QVERIFY2(withinMs(at(on, 3840, 72).on, ms(3840) - 3), qPrintable(QString::number(at(on, 3840, 72).on)));
+      // a transition capped: keepMs 400 leaves the note before 400 ms as played (B5 after A5: A5 starts 200 early)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainTiming", "1" },
+                                      { "legato/keepMs", "400" } });
+      const R capped = render();
+      QVERIFY2(at(capped, 2880, 83).on >= at(capped, 2400, 81).on + 400 - 1.1 && at(capped, 2880, 83).on < ms(2880) - 1,
+               qPrintable(QString("%1, A5 %2").arg(at(capped, 2880, 83).on).arg(at(capped, 2400, 81).on)));
+      // heldNotes/early 0: the attacks as written, the transitions still by their arrival (transitionsEarly's model)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainTiming", "1" },
+                                      { "heldNotes/early", "0" } });
+      const R noEarly = render();
+      QVERIFY(withinMs(at(noEarly, 1920, 79).on, ms(1920)));
+      QVERIFY(withinMs(at(noEarly, 2400, 81).on, ms(2400) - 200));
+      // transitionsEarly 2 (no measured glide here: as 1)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainTiming", "1" },
+                                      { "slurs/transitionsEarly", "2" } });
+      QVERIFY(withinMs(at(render(), 2400, 81).on, ms(2400) - 200));
+      // without plainPerformance plainTiming does nothing
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "0" }, { "slurs/plainTiming", "1" } });
+      QCOMPARE(at(render(), 0, 72).patch, QString("Violin"));
+
+      // layers: the score's 0 over the ini's 1 (the shift back), the score's 1 over the ini's 0, saved and read back
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/plainTiming", 0 } }));
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainTiming", "1" } });
+      QCOMPARE(Playback::source("slurs/plainTiming", score), Playback::Source::SCORE);
+      QCOMPARE(render().delayLead, 80.0);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" } });
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/plainTiming", 1 } }));
+      QCOMPARE(score->metaTag(Playback::metaTag), QString("slurs/plainTiming=1"));
+      QVERIFY(saveScore(score, "plain-timing-saved.mscx"));
+      delete score;
+      score = readCreatedScore("plain-timing-saved.mscx");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(Playback::source("slurs/plainTiming", score), Playback::Source::SCORE);
+      {
+            const R saved = render();
+            QCOMPARE(saved.delayLead, 0.0);
+            QVERIFY(withinMs(at(saved, 2400, 81).on, ms(2400) - 200));
+      }
+      score->setMetaTag(Playback::metaTag, QString());
+
+      // modifiers: one the patches have no articulation for (a mute here, SSO's Basses' con sord. / espressivo) plays plain
+      // with plainTiming, as the rest of the line; one they have (harmonics) keeps its technique
+      std::vector<const SoundLib::LibInstrument*> patches;
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.name == "Violin")
+                  patches = li.patches();
+      SoundLib::TextState muted;
+      muted.modifiers << "muted";
+      SoundLib::TextState harmonics;
+      harmonics.modifiers << "harmonics";
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" } });
+      QVERIFY(!SoundLib::choose(patches, SoundLib::want({}, muted, 0.5, 0, score)).plain);
+      QVERIFY(!SoundLib::want({}, muted, 0.5, 0, score).plainTiming);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainTiming", "1" } });
+      QVERIFY(SoundLib::want({}, muted, 0.5, 0, score).plainTiming);
+      QVERIFY(SoundLib::choose(patches, SoundLib::want({}, muted, 0.5, 0, score)).plain);
+      const SoundLib::Choice h = SoundLib::choose(patches, SoundLib::want({}, harmonics, 0.5, 0, score));
+      QVERIFY(!h.plain);
+      QCOMPARE(h.articulation->name, QString("Long Harmonics"));
+      QVERIFY(!SoundLib::choose(patches, SoundLib::want({ { Ms4::Art::Tremolo16th, false } }, SoundLib::TextState(), 0.5, 0, score)).plain);
+
+      // the audit: every plain note arrives on its written time (an attack sent 30 early + plainAttack, a transition 200 early +
+      // its arrival); no plainShift listed
+      {
+            EventMap ev;
+            std::vector<MidiRenderer::LibTrace> tr;
+            PlaybackAudit::render(score, &ev, &tr);
+            const PlaybackAudit::Report rep = PlaybackAudit::audit(score, ev, tr, PlaybackAudit::Measured());
+            QVERIFY(rep.plainShifts.empty());
+            int rows = 0;
+            for (const PlaybackAudit::NoteRow& row : rep.rows)
+                  if (row.patch == "Violin - Performance") {
+                        ++rows;
+                        QVERIFY2(row.hasArrival && withinMs(row.arrivalMs, 0.0),
+                                 qPrintable(QString("%1: sent %2 arrives %3").arg(row.written).arg(row.sentMs).arg(row.arrivalMs)));
+                        }
+            QCOMPARE(rows, 8);
+            for (const PlaybackAudit::Finding& f : rep.findings)
+                  QVERIFY2(!((f.kind == PlaybackAudit::Kind::UNMEASURED || f.kind == PlaybackAudit::Kind::ARRIVAL) && f.part == "Violin - Performance"),
+                           qPrintable(f.text));
+      }
+
+      // without plainAttack: the attacks as written, listed as unmeasured; transitions still early
+      lib = loadMap(map.arg(""));
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      const R none = render();
+      QVERIFY(withinMs(at(none, 1920, 79).on, ms(1920)));
+      QVERIFY(withinMs(at(none, 2400, 81).on, ms(2400) - 200));
+      {
+            EventMap ev;
+            std::vector<MidiRenderer::LibTrace> tr;
+            PlaybackAudit::render(score, &ev, &tr);
+            const PlaybackAudit::Report rep = PlaybackAudit::audit(score, ev, tr, PlaybackAudit::Measured());
+            bool listed = false;
+            for (const PlaybackAudit::Finding& f : rep.findings)
+                  listed |= f.kind == PlaybackAudit::Kind::UNMEASURED && f.part == "Violin - Performance" && f.text.contains("plainAttack");
+            QVERIFY(listed);
       }
       delete score;
       }

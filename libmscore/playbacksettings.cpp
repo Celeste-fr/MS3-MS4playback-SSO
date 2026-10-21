@@ -122,6 +122,15 @@ static const std::vector<Definition> DEFINITIONS = {
         "written start, velocity 64, a staccato a spiccato attack ending 45 ms before the next note, no early start of its own; "
         "every event of the patch sent the map's plainShift early (one measured constant per patch, 0 where not measured); "
         "0: as the other settings choose", true },
+      // (2026-10-21, branch plain-timing: the heard check of "Mixed techniques" (Kontakt 8 + SSO, build 457) found plainShift's
+      // one constant per patch places the Performance attacks 21-74 ms early and its transitions 88-191 ms late, the sections
+      // 160-230 ms apart on each beat; 0 in both presets until the owner has heard it)
+      { "slurs/plainTiming", 0, 0, 1, "on/off",
+        "with [slurs] plainPerformance, 1: each plain note starts early by its own model instead of the patch's one plainShift: "
+        "an attack (after silence, a staccato's spiccato attack) by the patch's measured plain attack (map plainAttack, 15 dB "
+        "under the peak), a transition by its modelled arrival ([slurs] transitionsEarly's mode, 1 where that is 0); a modifier "
+        "the section has no sample for (SSO's Basses: con sord., espressivo) stays on the Performance patch; 0: the patch's "
+        "events all go plainShift early", true },
       // (the owner approved, 2026-10-17: MuseScore takes over the Performance script's CC119 (its "Leg. Speed CC"), set from
       // the written spacing so that early starts can't move a transition into another speed band; 0 in both presets until
       // the owner has heard it after the null test. Per score: the hosted instances of a score whose value differs are
@@ -501,7 +510,8 @@ QString iniTemplate()
 //    levels/context, levels/sectionBalance, levels/realRange) and
 //    the slurred notes' technique (slurs/quick, slurs/quickLevel, slurs/performance, slurs/transitions, slurs/smoothStart) differ between them;
 //    slurs/transitionsEarly (1 in Recommended since 2026-10-15, 0 in Library default); slurs/plainPerformance (1 in Recommended and by default, 0 in Library default,
-//    since 2026-10-17: the owner chose it by ear on the five string sections); slurs/speedFromWritten (0 in both since
+//    since 2026-10-17: the owner chose it by ear on the five string sections); slurs/plainTiming (0 in both since 2026-10-21
+//    until the owner has heard it); slurs/speedFromWritten (0 in both since
 //    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions and slurs/fastTransitions (0 in
 //    both since 2026-10-20, until the owner has heard them); slurs/plainAccents (0 in both from 2026-10-20 until the owner
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
@@ -528,10 +538,10 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },

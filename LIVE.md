@@ -1142,6 +1142,9 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   decide; HANDOFF.md › Written clips in the plain set). For the same reason their first note can't start before the clip:
   a note at the score's start whose onset MuseScore plays early by the start lead (`libraryDelayLead`, 2026-10-14;
   Whence's first Celli note, 172 ms) starts at 0 there, late by its onset; the plain set plays it early (Track Delay).
+  The plain set's Controllers clip can't start before 0 either: such a note's controllers (CC1 at the dynamic), which
+  MuseScore sends with its early note-on, come at 0 in Live, up to the start lead after the note-on (Whence's first
+  Celli note 172 ms, a `[slurs] plainTiming` attack at the score's start 20-39 ms; `tst_liveequivalence::plainTimingLive`).
 
 - **`[slurs] speedFromWritten`** (2026-10-17, docs/PLAYBACK_SETTINGS.md › Speed from written): the Performance patch's
   CC119 before each legato note-on reaches Live as a carrier on key 113 (*Live plays the score*, protocol 11) and, in the

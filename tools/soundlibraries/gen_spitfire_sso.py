@@ -1263,6 +1263,9 @@ def bendRange(name):
 # Performance patch has every event of the patch sent early by one constant, plainShift= on the patch's <Instrument>
 # (ms): the median heard - written latency of the plain notes, measured in context (sso_plain_performance_shift.json,
 # each entry with its source). A Performance patch without one: shift 0 (the playback audit lists it)
+# plainAttack= (ms; [slurs] plainTiming, 2026-10-21): with it a plain note that is no transition starts this much early
+# instead (the same file's attackMs: the median heard - sent of plain attacks in context, 15 dB under the peak); a
+# transition by its modelled arrival (bendGlide / legatoDelay)
 # mono="1": a monophonic patch: SSO's Performance patches (every "... - Performance" / "... - Total Performance", the
 # Sul G / Sul C ones too) play ONE legato line (read from the patch's script, Violas - Performance, 2026-10-20:
 # a note-on while a note is held is a transition that ends it; one < 15 ms after the note-on before at velocity <= 64 is
@@ -1697,6 +1700,8 @@ for i, line in enumerate(out):
             if current in PLAIN_SHIFT:
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + f' plainShift="{PLAIN_SHIFT[current]["shiftMs"]:g}"' + end
+                if 'attackMs' in PLAIN_SHIFT[current]:
+                    out[i] = out[i][:-len(end)] + f' plainAttack="{PLAIN_SHIFT[current]["attackMs"]:g}"' + end
             if speedAttributes(current):
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + speedAttributes(current) + end

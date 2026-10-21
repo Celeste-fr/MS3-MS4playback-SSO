@@ -155,6 +155,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainWritten_data();
       void plainWritten();
       void plainPerformanceLive();
+      void plainTimingLive();
       void plainAccentsLive_data();
       void plainAccentsLive();
       void speedFromWrittenLive();
@@ -2809,6 +2810,172 @@ void TestLiveEquivalence::plainPerformanceLive()
                               }
                         }
       QCOMPARE(plainNotes, 8);
+      QCOMPARE(got.size(), want.size());
+      auto g = got.begin();
+      for (auto w = want.begin(); w != want.end(); ++w, ++g) {
+            QCOMPARE(std::get<0>(*g), std::get<0>(*w));
+            QCOMPARE(std::get<1>(*g), std::get<1>(*w));
+            QVERIFY2(std::abs(std::get<2>(*g) - std::get<2>(*w)) <= tickUnits, qPrintable(QString("%1 key %2 %3: %4 against %5")
+                     .arg(std::get<0>(*w)).arg(std::get<1>(*w)).arg(std::get<3>(*w) ? "on" : "off").arg(std::get<2>(*g)).arg(std::get<2>(*w))));
+            }
+      // read back: the shift isn't the score's (no trackDelays metaTag)
+      const QByteArray x = LiveSetWriter::xml(spec);
+      QCOMPARE(LiveSetWriter::validate(x), QString());
+      const LiveSet::Set set = LiveSet::parse(x);
+      QVERIFY(set.error.isEmpty());
+      LiveTracks::Data data;
+      data.written = LiveTracks::written(score, spec.tracks, set);
+      const LiveTracks::Data again = LiveTracks::fromJson(LiveTracks::toJson(data));
+      const std::vector<LiveSet::PartInfo> parts = LiveSet::partInfos(score, QStringList());
+      LiveTracks::Import im = LiveTracks::import(score, set, parts, "a.als", QDateTime(), again);
+      QCOMPARE(LiveTracks::delaysTag(score, im), QString());
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainTimingLive
+//    [slurs] plainTiming in Live (branch plain-timing, 2026-10-21): plain notes start early each by its own model (an attack
+//    the map's plainAttack, a transition its modelled arrival) instead of the patch's plainShift; the plain set's written
+//    clips, the technique tracks' Track Delay (their lookahead) and the MuseScore Link device's per-note delays play every
+//    note-on and note-off as MuseScore does; the Kontakt tracks have no Track Delay; reading back keeps trackDelays empty
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainTimingLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainTiming", "1" } });
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo pizzicato'/>"
+         "<Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "<Articulation name='Staccato' value='40' techniques='short' onset='8'/>"
+         "<Articulation name='Pizzicato' value='56' techniques='pizzicato' onset='3'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='80' plainAttack='30'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60' legatoDelay='200'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-performance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      auto patchOf = [&](const NPlayEvent& e, bool forLive) {
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib, forLive))
+                  if (r.port == e.extPort() && r.channel == e.extChannel())
+                        return r.instrument->name;
+            return QString();
+            };
+      // MuseScore's playback (the track delays applied, everything else later by their lead)
+      EventMap playback;
+      score->renderMidi(&playback, false, true, SynthesizerState());
+      QCOMPARE(playback.delayLeadMs, 0.0);                          // (no plainShift track delay)
+      QVERIFY2(std::fabs(playback.startLeadMs - 30.0) < 1.1, qPrintable(QString::number(playback.startLeadMs)));   // (the first attack)
+      // (MuseScore moves the other events by the lead to a tick: within a tick of Live's exact Track Delay, 1.04 ms here)
+      const double leadUnits = LiveTiming::msToUnits(playback.delayLeadMs + playback.startLeadMs, tl.bpm);
+      const int tickUnits = tl.units(1) - tl.units(0);
+      std::multiset<std::tuple<QString, int, int, bool>> want;          // (patch, key, units, on)
+      std::map<QString, std::vector<std::pair<int, int>>> wantCC1;      // patch -> (units, value)
+      for (const auto& te : playback) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch())
+                  continue;
+            const int units = int(std::lround(tl.units(te.first) - leadUnits));
+            if (e.type() == ME_NOTEON || e.type() == ME_NOTEOFF)
+                  want.insert(std::make_tuple(patchOf(e, false), e.pitch(), units, e.type() == ME_NOTEON && e.velo() > 0));
+            else if (e.type() == ME_CONTROLLER && e.controller() == 1)
+                  wantCC1[patchOf(e, false)].push_back({ units, e.value() });
+            }
+      // the plain set (written clips)
+      auto render = [score](bool written) {
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setWrittenTiming(written);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      const EventMap played = render(false);
+      const EventMap written = render(true);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+      LiveSetWriter::Spec spec;
+      spec.tracks = PlainLiveSet::tracks(l, true);
+      std::map<QString, double> delayOf;                                // track name -> Track Delay
+      for (const LiveSetWriter::Track& t : spec.tracks)
+            delayOf[t.annotation] = t.delayMs;
+      // the Kontakt tracks: no Track Delay (no plainShift); the technique tracks carry the notes' early starts
+      int kontakts = 0;
+      double groupDelay = 0.0;
+      for (const LiveSetWriter::Track& t : spec.tracks) {
+            if (t.group && t.partRef)
+                  groupDelay = t.delayMs;
+            if (t.group || t.midiTo >= 0)
+                  continue;
+            ++kontakts;
+            QCOMPARE(t.delayMs, 0.0);
+            QCOMPARE(t.lookaheadMs, 0.0);
+            }
+      QCOMPARE(kontakts, 2);
+      QCOMPARE(groupDelay, 0.0);
+      std::multiset<std::tuple<QString, int, int, bool>> got;
+      int plainNotes = 0;
+      for (const PlainLiveSet::Section& s : l.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                        double kontaktDelay = 0.0;
+                        for (const LiveSetWriter::Track& t : spec.tracks)
+                              if (!t.group && t.midiTo < 0 && t.patch == k.patch)
+                                    kontaktDelay = t.delayMs;
+                        const double extra = LiveTiming::msToUnits(kontaktDelay + groupDelay, tl.bpm);
+                        for (const PlainLiveSet::Technique& t : k.techniques) {
+                              QCOMPARE(t.timing.offsLate, 0);
+                              for (const LiveClips::Note& n : t.notes) {
+                                    const std::pair<double, double> at = LiveTiming::playedBy(t.timing, n, tl.bpm);
+                                    got.insert(std::make_tuple(k.patch, n.pitch, int(std::lround(at.first + extra)), true));
+                                    got.insert(std::make_tuple(k.patch, n.pitch, int(std::lround(at.second + extra)), false));
+                                    if (k.patch == "Violin - Performance") {
+                                          ++plainNotes;
+                                          QCOMPARE(n.velocity, MidiRenderer::PLAIN_VELOCITY);
+                                          }
+                                    }
+                              }
+                        // its controllers (the Kontakt track's Controllers clip, played times): CC1 by the Track Delay
+                        for (const PlainLiveSet::Lane& lane : k.lanes) {
+                              if (lane.cc != 1)
+                                    continue;
+                              const std::vector<std::pair<int, int>>& w = wantCC1[k.patch];
+                              QVERIFY(!w.empty() && !lane.points.empty());
+                              const int first = int(std::lround(lane.points.front().first + extra));
+                              // (the score's first note starts its attack early by the start lead, its controllers with it:
+                              // before 0 in MuseScore, at 0 in the Controllers clip, which can't start earlier; LIVE.md ›
+                              // What still differs)
+                              const int meant = std::max(w.front().first, 0);
+                              QVERIFY2(w.front().first >= -int(std::lround(LiveTiming::msToUnits(playback.startLeadMs, tl.bpm))) - tickUnits,
+                                       qPrintable(QString::number(w.front().first)));
+                              QVERIFY2(std::abs(first - meant) <= tickUnits, qPrintable(QString("%1 CC1: %2 against %3")
+                                       .arg(k.patch).arg(first).arg(meant)));
+                              }
+                        }
+      QCOMPARE(plainNotes, 8);
+      // (the plain notes really start early: the slur's A5 200 ms, the staccato E5 30 ms)
+      bool early = false;
+      for (const auto& w : want)
+            early |= std::get<0>(w) == "Violin - Performance" && std::get<1>(w) == 81 && std::get<3>(w)
+                     && std::abs(std::get<2>(w) - int(std::lround(tl.units(2400) - LiveTiming::msToUnits(200.0, tl.bpm)))) <= tickUnits;
+      QVERIFY(early);
+      int maxLook = 0;
+      for (const LiveSetWriter::Track& t : spec.tracks)
+            if (t.midiTo >= 0)
+                  maxLook = std::max(maxLook, int(std::lround(t.lookaheadMs)));
+      QVERIFY2(maxLook >= 199, qPrintable(QString::number(maxLook)));       // (a technique track's lookahead: its earliest note)
       QCOMPARE(got.size(), want.size());
       auto g = got.begin();
       for (auto w = want.begin(); w != want.end(); ++w, ++g) {

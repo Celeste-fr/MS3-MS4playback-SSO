@@ -151,6 +151,10 @@ class MidiRenderer {
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
       bool libAvoidBad = true;                                    // [notes] avoidBadSamples (the map's avoid)
       int libTransitionsEarly = 0;                                // [slurs] transitionsEarly 0-3 (this chunk; not written timing)
+      // [slurs] plainTiming (this chunk; not written timing): plain Performance notes start early each by its own model (an
+      // attack by the patch's plainAttack, a transition by its modelled arrival as transitionsEarly 1, or the mode set
+      // there), instead of the patch's one plainShift
+      bool libPlainTiming = false;
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]
