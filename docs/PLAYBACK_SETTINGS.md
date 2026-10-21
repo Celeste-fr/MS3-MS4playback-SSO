@@ -1205,6 +1205,16 @@ plainPerformance 1:
   track's Track Delay its lookahead, the MuseScore Link device's per-note delays); the Kontakt track has no plainShift Track
   Delay (`tst_liveequivalence::plainTimingLive`). *Live plays the score*'s clips are rendered as played.
 - Tests: `tst_soundlibrary::plainTiming`, `tst_liveequivalence::plainTimingLive`.
+- **Measured** (heard check, Kontakt 8 + SSO on the Windows VM, build 458, MuseScore's export, Recommended with plainTiming
+  0 / 1, one take each; heard - written medians, -15 dB rule): *Mixed techniques*: Performance attacks -74 .. -21 ms -> -7 .. +3;
+  Performance transitions +86 .. +203 -> Violins 1 +1, Violins 2 -17, Violas +4, Celli +42, Basses -42 (10-90 % about +-100 ms);
+  All techniques' quick techniques -16 .. +2 (unchanged); a quick technique against another section's Performance attack on the
+  same beat +32 -> -10 ms, against its transition -150 -> +9; notes within 30 ms of their beat's median 58 -> 67 % (without
+  sul tasto / flautando / harmonics). *Whence*: attacks -62 .. -9 -> -4 .. +27 (Violins 2's +27 from masked readings; its clean
+  ones 14-20 ms after the note-on), transitions -3 .. +182 -> -52 .. +18 (Basses +182 -> -24, Celli +134 -> -52); ARRIVAL
+  35 fail / 26 warn -> 36 / 19, RHYTHM slurs 1 / 0 -> 3 / 1 (the Violas' 273 / 136 / 136 slurs, bars 9 and 13: the second note's
+  transition after a held first note arrives ~100 ms sooner than modelled; masked onsets), runs 9 / 6 -> 7 / 3. Open: the
+  transition model is off by 40-50 ms on Celli and Basses, with opposite signs in the two scores (no constant fixes it).
 
 ## Speed from written
 

@@ -30,6 +30,31 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Plain timing (branch `plain-timing`, 2026-10-21, from integrate-1017 15820b7b46; not merged)
+
+`[slurs] plainTiming` (0 by default and in both presets; the owner decides by ear): with plainPerformance each plain note
+starts early by its own model instead of the patch's one plainShift: an attack by the map's new `plainAttack` (Mixed
+techniques' measured plain attacks, 19.5-38.7 ms), a transition by its modelled arrival (transitionsEarly's mode, at least 1);
+the Basses' unsampled con sord. / espressivo stay on the Performance patch. Onset rule kept at -15 dB under the peak (Vos &
+Rasch 1981; Gordon 1987 and Villing 2010 point lower; -6 dB unsupported at normal levels): docs/PLAYBACK_SETTINGS.md › Plain
+timing. Windows build #458 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39682778298), installed in
+`C:\claude\bpt\ms` on the VM.
+
+- **Heard check** (VM, build 458, export, one take each; heard - written medians): Mixed techniques: attacks -74 .. -21 ->
+  -7 .. +3 ms, transitions +86 .. +203 -> -42 .. +42 (Violins 1 +1, Violins 2 -17, Violas +4, Celli +42, Basses -42), quick
+  All techniques notes unchanged (-16 .. +2). Whence: attacks -62 .. -9 -> -4 .. +27, transitions -3 .. +182 -> -52 .. +18;
+  ARRIVAL 35 / 26 -> 36 / 19, RHYTHM slurs 1 / 0 -> 3 / 1, runs 9 / 6 -> 7 / 3. Audit (Recommended + plainTiming 1): Whence
+  CAPPED 1 info, ARRIVAL 0 fail / 2 warn (the Celli's 2nd note, as with plainPerformance 0); Mixed as before.
+- **Open**: (1) the transition model (bendGlide's arrival) misses Celli and Basses by 40-50 ms with opposite signs in the
+  two scores, and the Violas' slurs after a held first note in Whence bars 9 / 13 arrive ~100 ms sooner than modelled: a
+  model of transitions after an attack, by note length, needs more data (Heard passages); (2) the accented attack's own onset
+  is unmeasured (plainAttack used); (3) **sul tasto / flautando levels**: 16-54 dB under the Performance notes at the same
+  mf (Mixed techniques), no real-player data found for the offset to the Long, so nothing changed; (4) Live: the plain set's
+  Controllers clip starts at 0, so the score's first early note's CC1 comes up to its start lead late in Live (LIVE.md).
+- Clips for the owner (not published): `~/MuseScore/ms3fork/ms37/.claude/worktrees/integrate-1017/.mixedtech/clips/`
+  `*_plainTiming1.mp3` (A, B: same cut and gain as the existing pairs) and `whence_9-31s_plainTiming0/1.mp3` (bars 5-14);
+  times in `clips_plainTiming_notes.json`. Private report: `~/MuseScore/ms3fork/private/plain-timing/RESULT.md`.
+
 ## Mixed techniques (branch `mixed-techniques`, 2026-10-21, from integrate-1017 3d783a6ac7; not merged)
 
 The owner's question (2026-10-21): with `[slurs] plainPerformance` a part switching between its Performance patch and
