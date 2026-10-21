@@ -5,7 +5,8 @@
   <Switch type="keyswitch"/>
   <!-- dynamics by velocity only: CC1 is Ample's vibrato -->
   <Dynamics cc="-1"/>
-  <Plugin files="AGM.vst3"/>
+  <!-- the sample set loads on Ample's own thread after setState: offline renders wait for it (at most 60 s) -->
+  <Plugin files="AGM.vst3" backgroundLoad="60"/>
   <!-- MIDI controllers measured to act (CC7 and M-Master Vol are one gain: 64 = 1.0 = unity, 127 = +6 dB; use
        one of the two. CC11 and CC12 do nothing measurable). Pitch bend: the M-Pitch Bend parameter, heard
        only with Poly Bender Tog on. CC7 hosted and in Live as M-Master Vol, value cc / 127 (bit-identical to CC7,

@@ -477,6 +477,13 @@ switch value of each articulation. For example:
     value logs `text` (load times.log, the console) and shows it in the status bar, once per session. Read only. Ample:
     `Ample Sound/AGM/Configs/AGM_info.xml`, `midiGuitarMode` `true` (keys ≥ 62 go silent on channel 1 in every
     instance).
+  - `<Plugin files="…" backgroundLoad="s"/>`: the plug-in goes on loading on threads of its own after its state is set
+    (Ample: the state's sample set, ~0.6 s of one core). An offline render's instances (the verification, live
+    equivalence, audio export: `SoundLibraryExport::loadInstances`) each wait, at most `s` seconds, until every thread
+    the instance started has ended or gone quiet and the process's memory has stopped growing
+    (`audio/vst3/backgroundload.h`; logged in load times.log; `MS_BACKGROUND_LOAD_WAIT=<s>` overrides, 0 turns it off).
+    Without it, Ample's renders differed from run to run (the Ample check of build 455). Kontakt needs none: the
+    verification plays each patch a test note until it sounds.
   - A changed state value loads the part again at the next sync (play, export): the slot keeps the written values as
     one text (`PartControllers::valuesKey`), so any number of state lanes changed before it give one load, and an edit
     that leaves every written text as it was (a later point, a value rounding to the same number) none.

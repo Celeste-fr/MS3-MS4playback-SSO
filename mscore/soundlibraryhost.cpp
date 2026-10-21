@@ -82,6 +82,7 @@
 #include "seq.h"
 
 #ifdef USE_VST3
+#include "audio/vst3/backgroundload.h"
 #include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/pluginstate.h"
 #include "audio/vst3/librarycontrollers.h"
@@ -2761,6 +2762,27 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
 //---------------------------------------------------------
 
 #ifdef USE_VST3
+//---------------------------------------------------------
+//   waitForBackgroundLoad
+//    a map's <Plugin backgroundLoad>: the instance's own loading threads (Ample's sample set) done before the next
+//    instance is made and before an offline render plays it (audio/vst3/backgroundload.h); logged in load times.log
+//---------------------------------------------------------
+
+static void waitForBackgroundLoad(const SoundLib::Library& library, const BackgroundLoad& since, const QString& patch)
+      {
+      if (library.backgroundLoad <= 0)
+            return;
+      const BackgroundLoad::Result r = since.wait(library.backgroundLoad);
+      const QString line = QString("%1: its background load %2 in %3 s (%4 new threads, the busiest's last %5 ms: %6; "
+                                   "memory %7 MB)")
+                           .arg(patch, r.quiet ? QString("done") : QString("NOT done (the limit)"))
+                           .arg(r.seconds, 0, 'f', 2).arg(r.threads).arg(BackgroundLoad::WINDOW_MS).arg(r.busiest, 0, 'g', 3)
+                           .arg(r.memoryMB, 0, 'f', 1);
+      logTime(library, line);
+      if (!r.quiet)
+            qWarning("Sound library: %s", qPrintable(line));
+      }
+
 std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float sampleRate, QString* error,
                                                              std::map<int, QString>* patches, const std::set<const Part*>* parts)
       {
@@ -2792,6 +2814,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             const SoundLib::Route* r = routeAt(in.slot);
             if (!r || (parts && !parts->count(r->part)))
                   continue;
+            const BackgroundLoad since;
             std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
             if (!p)
                   return nullptr;
@@ -2801,6 +2824,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
                 && !SoundLibraryHost::loadInstanceSetup(p.get(), *library, in.instrument->name, in.cents, path, &e, &tuned, score,
                                                          r->part))   // (its state settings: stateValuesFor)
                   qWarning("Sound library: %s", qPrintable(e));
+            waitForBackgroundLoad(*library, since, in.instrument->name);
             if (in.tuned() && !tuned && in.multi()) {
                   // (its setup isn't Kontakt's: the other copies an instance each, plain)
                   for (size_t i = 1; i < in.routes.size(); ++i) {
@@ -2839,6 +2863,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const 
       std::shared_ptr<Vst3Synth> own(new Vst3Synth);
       own->init(sampleRate);
       own->setVarispeed(library->varispeed);
+      const BackgroundLoad since;
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
       if (!p)
             return nullptr;
@@ -2846,6 +2871,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const 
       if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
           && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e, score, r.part))
             qWarning("Sound library: %s", qPrintable(e));
+      waitForBackgroundLoad(*library, since, r.instrument->name);
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       LibraryControllers::applyParameters(p.get(), r, Automation::read(score->masterScore()), nullptr);
       own->setParameterIds(0, parameterIds(p.get(), r, routes));

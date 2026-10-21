@@ -492,6 +492,10 @@ class Library {
       QString path;
       int dynamicsCC { 1 };               // single-note dynamics (Spitfire: CC1); -1: velocity only
       QStringList plugins;                // the plug-in to host, by file name, in order of preference
+      // <Plugin backgroundLoad="s">: the plug-in goes on loading on threads of its own after setState (Ample's sample
+      // sets): an offline render's instances (SoundLibraryExport::loadInstances) each wait until those are done, at
+      // most s seconds (audio/vst3/backgroundload.h); 0: no wait (Kontakt: PlaybackVerifier::waitUntilSounding)
+      double backgroundLoad { 0 };
       int expressionValue { 127 };        // CC11 at the start (when dynamicsCC is not 11)
       // the articulation bases whose dynamics are the note's velocity, not the dynamics CC
       // (<Dynamics velocity="short spiccato …">; Spitfire's shorts): those notes' velocity is their

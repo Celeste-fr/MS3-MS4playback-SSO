@@ -62,6 +62,7 @@
 #include "libmscore/undo.h"
 #ifdef TESTSYNTH
 #include "audio/vst3/evenmeasure.h"
+#include "audio/vst3/backgroundload.h"
 #include "audio/vst3/articulationcheck.h"
 #include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/librarycontrollers.h"
@@ -138,6 +139,7 @@ class TestSoundLibrary : public QObject, public MTest
       void spitfireMap();
       void routesTiming();
       void automation();
+      void automationJumps();
       void automationCurves();
       void automationEditing();
       void automationMerge();
@@ -246,6 +248,7 @@ class TestSoundLibrary : public QObject, public MTest
       void vst3UnloadModules();
       void wavWriterHeader();
       void vst3LoadTimes();
+      void backgroundLoad();
       void vst3LooseTitle();
       void vst3Render();
       void vst3Settle();
@@ -8566,6 +8569,105 @@ void TestSoundLibrary::vst3LoadTimes()
       }
 
 //---------------------------------------------------------
+//   backgroundLoad
+//    BackgroundLoad (audio/vst3/backgroundload.h): the wait for a plug-in's own loading threads (Ample's sample sets,
+//    FIX4 of the Ample check of build 455): over while a new thread is busy or the process's memory grows, at once for
+//    an idle new thread, at the limit, off by MS_BACKGROUND_LOAD_WAIT=0; the test synth's "samples" (MSTESTSYNTH_STREAM_MS
+//    / _MB) loaded when it returns; the map's <Plugin backgroundLoad>
+//---------------------------------------------------------
+
+void TestSoundLibrary::backgroundLoad()
+      {
+      auto spin = [](int ms) {
+            return std::thread([ms]() {
+                  QElapsedTimer t;
+                  t.start();
+                  volatile double x = 0;
+                  while (t.elapsed() < ms)
+                        x = x + std::sqrt(x + 1.0);
+                  });
+            };
+      // a busy thread: until it ends
+      {
+            const BackgroundLoad since;
+            std::thread th = spin(500);
+            const BackgroundLoad::Result r = since.wait(10);
+            th.join();
+            QVERIFY2(r.quiet && r.seconds >= 0.45 && r.seconds < 3, qPrintable(QString::number(r.seconds)));
+      }
+      // memory arriving with little CPU (a loader waiting on a disk): until it stops
+      {
+            const BackgroundLoad since;
+            std::vector<std::unique_ptr<char[]>> blocks;
+            std::thread th([&blocks]() {
+                  for (int i = 0; i < 12; ++i) {
+                        std::unique_ptr<char[]> b(new char[8 * 1024 * 1024]);
+                        std::memset(b.get(), 1 + i, 8 * 1024 * 1024);
+                        blocks.push_back(std::move(b));
+                        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                        }
+                  });
+            const BackgroundLoad::Result r = since.wait(10);
+            th.join();
+            QVERIFY2(r.quiet && r.seconds >= 0.5 && r.seconds < 3, qPrintable(QString("%1 s, %2 MB").arg(r.seconds).arg(r.memoryMB)));
+      }
+      // an idle new thread (a plug-in's timer, its message thread): one window
+      {
+            const BackgroundLoad since;
+            std::atomic<bool> stop { false };
+            std::thread th([&stop]() { while (!stop) std::this_thread::sleep_for(std::chrono::milliseconds(20)); });
+            const BackgroundLoad::Result r = since.wait(10);
+            stop = true;
+            th.join();
+            QVERIFY2(r.quiet && r.seconds >= 0.15 && r.seconds < 0.6, qPrintable(QString::number(r.seconds)));
+            QVERIFY(r.threads >= 1);
+      }
+      // the limit; the environment's 0
+      {
+            const BackgroundLoad since;
+            std::thread th = spin(1500);
+            const BackgroundLoad::Result r = since.wait(0.3);
+            QVERIFY2(!r.quiet && r.seconds >= 0.3 && r.seconds < 1.0, qPrintable(QString::number(r.seconds)));
+            qputenv("MS_BACKGROUND_LOAD_WAIT", "0");
+            const BackgroundLoad::Result off = since.wait(10);
+            qunsetenv("MS_BACKGROUND_LOAD_WAIT");
+            th.join();
+            QCOMPARE(off.seconds, 0.0);
+            QVERIFY(!off.quiet);
+      }
+      // the test synth's "samples", loading on its own thread after setState: a note plays once the wait returns
+      {
+            QString error;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+            QVERIFY2(p, qPrintable(error));
+            const QByteArray state = p->state();
+            qputenv("MSTESTSYNTH_STREAM_MS", "600");
+            qputenv("MSTESTSYNTH_STREAM_MB", "48");
+            const BackgroundLoad since;
+            std::unique_ptr<Vst3Plugin> q = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
+            QVERIFY2(q, qPrintable(error));
+            QVERIFY(q->setState(state));
+            const BackgroundLoad::Result r = since.wait(10);
+            qunsetenv("MSTESTSYNTH_STREAM_MS");
+            qunsetenv("MSTESTSYNTH_STREAM_MB");
+            QVERIFY2(r.quiet && r.seconds >= 0.5, qPrintable(QString("%1 s, %2 MB").arg(r.seconds).arg(r.memoryMB)));
+            std::vector<float> buffer(2 * 1024, 0.f);
+            q->midi(ME_NOTEON, 0, 69, 100);
+            q->process(512, buffer.data());
+            QVERIFY(peak(buffer) > 0.01f);
+      }
+      // the map
+      QString error;
+      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      QVERIFY2(ample, qPrintable(error));
+      QCOMPARE(ample->backgroundLoad, 60.0);
+      auto plain = loadMap("<SoundLibrary name='t'><Plugin files='a.vst3'/><Instrument name='Violin' ids='violin'>"
+                           "<Articulation name='Long' value='1' techniques='long'/></Instrument></SoundLibrary>");
+      QVERIFY(plain);
+      QCOMPARE(plain->backgroundLoad, 0.0);
+      }
+
+//---------------------------------------------------------
 //   vst3LooseTitle
 //    Vst3Plugin::looseTitle, written out by hand, gives what the two regular expressions it replaces
 //    gave, on titles like Kontakt's and on every combination of the characters that matter
@@ -11936,6 +12038,146 @@ void TestSoundLibrary::automation()
       QVERIFY2(full > 0 && none > 0 && 20 * std::log10(full / none) > 10, qPrintable(QString("%1 %2").arg(full).arg(none)));
       }
 
+
+//---------------------------------------------------------
+//   automationJumps
+//    two points at one tick are a jump (automation.h, as Live writes and reads one): the later one holds from that tick,
+//    in valueAt, in what the renderer sends (Lane::events: one value a tick, the later point's; a ramp into the jump
+//    ends at the earlier one), in flatValue and in a state setting's value (the Ample check of build 455: the vol
+//    lane's 80 at bar 3 played 48)
+//---------------------------------------------------------
+
+void TestSoundLibrary::automationJumps()
+      {
+      using namespace Automation;
+      Lane lane;
+      lane.target = "vibrato";
+      lane.points = { { 0, 0.75, Curve::LINEAR }, { 3840, 0.378, Curve::LINEAR }, { 3840, 0.6299, Curve::STEP } };
+      QCOMPARE(lane.valueAt(3840), 0.6299);
+      QVERIFY(std::fabs(lane.valueAt(3839) - (0.75 + (0.378 - 0.75) * 3839 / 3840)) < 1e-12);    // (the ramp: to the first)
+      QCOMPARE(lane.valueAt(9999), 0.6299);
+      auto at = [](const std::vector<std::pair<int, double>>& ev, int tick) {
+            std::vector<double> v;
+            for (const auto& e : ev)
+                  if (e.first == tick)
+                        v.push_back(e.second);
+            return v;
+            };
+      // the whole lane, a chunk ending at the jump, one starting at it, one inside the bar after
+      const auto whole = lane.events(0, 7680, CC_RESOLUTION);
+      QCOMPARE(at(whole, 3840), std::vector<double>({ 0.6299 }));
+      QCOMPARE(whole.back(), std::make_pair(3840, 0.6299));
+      for (size_t i = 1; i < whole.size(); ++i)
+            QVERIFY(whole[i].first > whole[i - 1].first);                      // (one value a tick)
+      QVERIFY(std::lround(whole[whole.size() - 2].second * 127) <= std::lround(0.378 * 127) + 1);  // (the ramp's end)
+      const auto before = lane.events(0, 3840, CC_RESOLUTION);
+      QVERIFY(at(before, 3840).empty());
+      QVERIFY(std::fabs(before.back().second - 0.378) < 1.5 / 127);
+      QCOMPARE(lane.events(3840, 7680, CC_RESOLUTION), (std::vector<std::pair<int, double>>({ { 3840, 0.6299 } })));
+      QCOMPARE(lane.events(4000, 7680, CC_RESOLUTION), (std::vector<std::pair<int, double>>({ { 4000, 0.6299 } })));
+      // a jump on a parameter lane, a step's points the other way round (down), three points at one tick
+      Lane three;
+      three.points = { { 0, 0.1, Curve::STEP }, { 960, 0.9, Curve::STEP }, { 960, 0.4, Curve::STEP }, { 960, 0.2, Curve::LINEAR },
+                       { 1920, 0.6, Curve::STEP } };
+      const auto t3 = three.events(0, 3840, PARAM_RESOLUTION);
+      QCOMPARE(at(t3, 960), std::vector<double>({ 0.2 }));
+      QCOMPARE(three.valueAt(960), 0.2);
+      QVERIFY(std::fabs(three.valueAt(1440) - 0.4) < 1e-12);                  // (the ramp from the last point at 960)
+      // flat: a jump at the start, then that value
+      Lane flat;
+      flat.points = { { 0, 0.2, Curve::STEP }, { 0, 0.5, Curve::STEP }, { 1920, 0.5, Curve::STEP } };
+      QCOMPARE(flat.flatValue(), 0.5);
+      flat.points.push_back({ 3840, 0.2, Curve::STEP });
+      QCOMPARE(flat.flatValue(), -1.0);
+      Lane flat0;
+      flat0.points = { { 0, 0.3, Curve::STEP }, { 0, 0.3, Curve::STEP } };
+      QCOMPARE(flat0.flatValue(), 0.3);
+
+      // rendered: the CC and the parameter at the jump's tick play the later value, once
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      Lane tone;
+      tone.target = "tone";
+      tone.points = { { 0, 0.2, Curve::LINEAR }, { 1920, 0.5, Curve::LINEAR }, { 1920, 0.9, Curve::STEP } };
+      Lane vib;
+      vib.target = "vibrato";
+      vib.points = { { 0, 0.25, Curve::STEP }, { 1920, 0.25, Curve::LINEAR }, { 3840, 0.378, Curve::LINEAR },
+                     { 3840, 0.6299, Curve::STEP } };
+      score->setMetaTag(metaTag, write(score, { { score->parts()[0], { vib, tone } } }));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Controller id='vibrato' name='Vibrato' cc='21' default='64'/>"
+         "<Controller id='tone' name='Tone' param='Tone'/>"
+         "<Controller id='sample-set' name='Sample set' state='DBName' values='A B C'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      const SoundLib::Output output = SoundLib::output();
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      score->rebuildMidiMapping();
+      const int ch = score->parts()[0]->instrument()->channel(0)->channel();
+      int toneIndex = -1;
+      const SoundLib::Controller* sampleSet = nullptr;
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            for (int i = 0; i < int(li.allControllers.size()); ++i) {
+                  if (li.allControllers[size_t(i)].id == "tone")
+                        toneIndex = i;
+                  if (li.allControllers[size_t(i)].id == "sample-set")
+                        sampleSet = &li.allControllers[size_t(i)];
+                  }
+      QVERIFY(toneIndex >= 0 && sampleSet);
+      auto render = [&](bool chunked) {
+            EventMap events;
+            SynthesizerState ss;
+            if (chunked) {
+                  // (a chunk a measure: ones starting at the jumps, valueAt there)
+                  MidiRenderer r(score);
+                  r.setMinChunkSize(1);
+                  MidiRenderer::Context ctx(ss);
+                  for (int utick = 0;;) {
+                        const MidiRenderer::Chunk c = r.getChunkAt(utick);
+                        if (!c)
+                              break;
+                        r.renderChunk(c, &events, ctx);
+                        utick = c.utick2();
+                        }
+                  }
+            else
+                  score->renderMidi(&events, false, true, ss);
+            std::map<int, std::vector<int>> cc21;
+            std::map<int, std::vector<double>> params;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (e.channel() != ch)
+                        continue;
+                  if (e.type() == ME_CONTROLLER && e.dataA() == 21)
+                        cc21[te.first].push_back(e.dataB());
+                  if (e.type() == ME_PARAMETER && e.dataA() == toneIndex)
+                        params[te.first].push_back(e.tuning());
+                  }
+            QCOMPARE(cc21[3840], std::vector<int>({ 80 }));              // 0.6299: 80, not 0.378's 48
+            QVERIFY(cc21.lower_bound(3840) != cc21.begin());
+            QCOMPARE(std::prev(cc21.lower_bound(3840))->second.back(), 48);   // (the ramp's end)
+            QCOMPARE(cc21.rbegin()->second.back(), 80);
+            QCOMPARE(int(params[1920].size()), 1);
+            QVERIFY(std::fabs(params[1920][0] - 0.9) < 1e-6);
+            QVERIFY(std::fabs(std::prev(params.lower_bound(1920))->second.back() - 0.5) < 2e-4);
+            };
+      render(false);
+      render(true);
+      // a state setting (loaded at the score's start): a jump at its first point, the later value
+      Lane set;
+      set.target = "sample-set";
+      set.points = { { 0, 0.0, Curve::STEP }, { 0, 1.0, Curve::STEP } };
+      std::map<const Part*, PartLanes> withSet { { score->parts()[0], { set } } };
+      QCOMPARE(PartControllers::stateValue(score->parts()[0], *sampleSet, withSet), 1.0);
+      SoundLib::setOutput(output);
+      SoundLib::setCurrent(nullptr);
+      delete score;
+      }
 
 //---------------------------------------------------------
 //   setPartMix

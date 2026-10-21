@@ -461,7 +461,11 @@ def generate(params):
     w('  <Switch type="keyswitch"/>')
     w("  <!-- dynamics by velocity only: CC1 is Ample's vibrato -->")
     w('  <Dynamics cc="-1"/>')
-    w('  <Plugin files="AGM.vst3"/>')
+    # backgroundLoad: Ample loads a state's sample set (DBName) on a thread of its own after setState, ~0.6 s of one core
+    # (FIX4 of the Ample check of build 455, 2026-10-20: offline renders that started at once differed run to run); an
+    # offline render's instances wait for it, at most 60 s (audio/vst3/backgroundload.h)
+    w("  <!-- the sample set loads on Ample's own thread after setState: offline renders wait for it (at most 60 s) -->")
+    w('  <Plugin files="AGM.vst3" backgroundLoad="60"/>')
     w("  <!-- MIDI controllers measured to act (CC7 and M-Master Vol are one gain: 64 = 1.0 = unity, 127 = +6 dB; use")
     w("       one of the two. CC11 and CC12 do nothing measurable). Pitch bend: the M-Pitch Bend parameter, heard")
     w("       only with Poly Bender Tog on. CC7 hosted and in Live as M-Master Vol, value cc / 127 (bit-identical to CC7,")

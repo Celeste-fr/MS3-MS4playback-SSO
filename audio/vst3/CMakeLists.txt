@@ -13,6 +13,8 @@
 add_library(vst3host STATIC
       articulationcheck.cpp
       articulationcheck.h
+      backgroundload.cpp
+      backgroundload.h
       kontaktsetup.cpp
       kontaktsetup.h
       librarycontrollers.cpp

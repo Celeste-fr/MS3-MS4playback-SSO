@@ -149,6 +149,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSet();
       void plainSetLinked();
       void plainSetReadBack();
+      void laneJumpsLive();
+      void backgroundLoadInstances();
       void plainSetTrackDelays();
       void plainWritten_data();
       void plainWritten();
@@ -1925,6 +1927,201 @@ void TestLiveEquivalence::plainSetLinked()
             report.write(LiveIntegration::reportText(plan, file, false).toUtf8());
             }
       delete whole;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   laneJumpsLive
+//    a jump (two points at one tick) through the plain set and back: the Controllers clip's envelope and the parameter's
+//    automation have it as Live does, two breakpoints at one time (the value before, then the later point's); read back
+//    (LiveTracks::import, as Update Live Set and the import read a set) the lanes play what the score's did, the jump's
+//    later value from its tick (the Ample check of build 455: the vol lane's 80 at bar 3 was written and played as 48)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::laneJumpsLive()
+      {
+      using namespace Automation;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Controller id='tone' name='Tone' param='Tone'/>"
+         "<Controller id='vibrato' name='Vibrato' cc='21' default='64'/>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "articulations.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts()[0];
+      Lane tone;
+      tone.target = "tone";
+      tone.points = { Point(0, 0.2, Curve::LINEAR), Point(1920, 0.5, Curve::LINEAR), Point(1920, 0.9, Curve::STEP) };
+      Lane vib;
+      vib.target = "vibrato";
+      vib.points = { Point(0, 0.25, Curve::STEP), Point(1920, 0.25, Curve::LINEAR), Point(3840, 0.378, Curve::LINEAR),
+                     Point(3840, 0.6299, Curve::STEP) };
+      score->setMetaTag(metaTag, write(score, { { part, { tone, vib } } }));
+      const int ch = part->instrument()->channel(0)->channel();
+      int toneIndex = -1;
+      for (int i = 0; i < int(lib->instruments.front().allControllers.size()); ++i)
+            if (lib->instruments.front().allControllers[size_t(i)].id == "tone")
+                  toneIndex = i;
+      QVERIFY(toneIndex >= 0);
+      // what MuseScore plays: tick -> the tick's CC21 values / Tone values, in order
+      struct Played { std::map<int, std::vector<int>> cc21; std::map<int, std::vector<double>> tone; };
+      auto play = [&]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            Played p;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (e.channel() != ch)
+                        continue;
+                  if (e.type() == ME_CONTROLLER && e.dataA() == 21)
+                        p.cc21[te.first].push_back(e.dataB());
+                  if (e.type() == ME_PARAMETER && e.dataA() == toneIndex)
+                        p.tone[te.first].push_back(e.tuning());
+                  }
+            return std::make_pair(p, events);
+            };
+      const auto first = play();
+      const Played& was = first.first;
+      QCOMPARE(was.cc21.at(3840), std::vector<int>({ 80 }));
+      QCOMPARE(std::prev(was.cc21.lower_bound(3840))->second.back(), 48);
+      QCOMPARE(int(was.tone.at(1920).size()), 1);
+      QVERIFY(std::fabs(was.tone.at(1920)[0] - 0.9) < 1e-6);
+
+      // the plain set (its Kontakt showing "Tone", as plainSetReadBack)
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, first.second, LiveClips::timeline(score));
+      LiveSetWriter::Spec spec;
+      spec.tracks = PlainLiveSet::tracks(l);
+      int kontakt = -1;
+      for (size_t i = 0; i < spec.tracks.size(); ++i)
+            if (!spec.tracks[i].group && spec.tracks[i].midiTo < 0 && kontakt < 0)
+                  kontakt = int(i);
+      QVERIFY(kontakt >= 0);
+      LiveSetWriter::Track& kt = spec.tracks[size_t(kontakt)];
+      kt.hasPlugin = true;
+      kt.plugin.name = "Kontakt 8";
+      kt.plugin.parameters.push_back({ 5, "Tone", 0.5 });
+      // the jumps as Live has them: two breakpoints at one time
+      auto twoAt = [](const std::vector<std::pair<double, double>>& pts, double beat, double before, double after, double tol) {
+            for (size_t i = 0; i + 1 < pts.size(); ++i)
+                  if (std::fabs(pts[i].first - beat) < 1e-9 && std::fabs(pts[i + 1].first - beat) < 1e-9
+                      && std::fabs(pts[i].second - before) <= tol && std::fabs(pts[i + 1].second - after) <= tol)
+                        return true;
+            return false;
+            };
+      bool envelope = false;
+      for (const LiveSetWriter::Clip& c : kt.clips)
+            for (const LiveSetWriter::Clip::Envelope& e : c.envelopes)
+                  if (e.controller == 21)
+                        envelope = twoAt(e.points, 8.0, 48, 80, 0);
+      QVERIFY(envelope);
+      bool automation = false;
+      for (const LiveSetWriter::ParameterAutomation& a : kt.automation)
+            if (a.name == "Tone")
+                  automation = twoAt(a.points, 4.0, 0.5, 0.9, 2e-4);
+      QVERIFY(automation);
+      const QByteArray xml = LiveSetWriter::xml(spec);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      const LiveSet::Set set = LiveSet::parse(xml);
+      QVERIFY(set.error.isEmpty());
+
+      // read back (no record of what was written: every envelope a lane) and played: as the score's lanes
+      LiveTracks::Import im = LiveTracks::import(score, set, LiveSet::partInfos(score, QStringList()), "a.als", QDateTime(),
+                                                 LiveTracks::Data());
+      QVERIFY2(im.lanes.count(part), qPrintable(im.report.text()));
+      const Lane* backVib = nullptr;
+      const Lane* backTone = nullptr;
+      for (const Lane& b : im.lanes.at(part)) {
+            if (b.target == "vibrato")
+                  backVib = &b;
+            if (b.target == "tone")
+                  backTone = &b;
+            }
+      QVERIFY2(backVib && backTone, qPrintable(im.report.text()));
+      QCOMPARE(backVib->valueAt(3840), 80 / 127.0);
+      QCOMPARE(backVib->valueAt(3839), 48 / 127.0);
+      QVERIFY(std::fabs(backTone->valueAt(1920) - 0.9) < 1e-4);
+      QVERIFY(std::fabs(backTone->valueAt(1919) - 0.5) < 2e-4);
+      for (int t = 0; t < 4 * 1920; t += 60) {
+            QVERIFY2(std::lround(backVib->valueAt(t) * 127) == std::lround(vib.valueAt(t) * 127)
+                     || std::abs(std::lround(backVib->valueAt(t) * 127) - std::lround(vib.valueAt(t) * 127)) <= 1,
+                     qPrintable(QString("vibrato at %1: %2 / %3").arg(t).arg(backVib->valueAt(t)).arg(vib.valueAt(t))));
+            QVERIFY2(std::fabs(backTone->valueAt(t) - tone.valueAt(t)) < 2e-4,
+                     qPrintable(QString("tone at %1: %2 / %3").arg(t).arg(backTone->valueAt(t)).arg(tone.valueAt(t))));
+            }
+      Lane v2 = *backVib, t2 = *backTone;
+      v2.extra = QJsonObject();
+      t2.extra = QJsonObject();
+      score->setMetaTag(metaTag, write(score, { { part, { t2, v2 } } }));
+      const Played again = play().first;
+      QCOMPARE(again.cc21.at(3840), std::vector<int>({ 80 }));
+      QCOMPARE(std::prev(again.cc21.lower_bound(3840))->second.back(), 48);
+      QCOMPARE(int(again.tone.at(1920).size()), 1);
+      QVERIFY(std::fabs(again.tone.at(1920)[0] - 0.9) < 1e-4);
+      QCOMPARE(again.cc21.rbegin()->second.back(), 80);
+      delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   backgroundLoadInstances
+//    a map's <Plugin backgroundLoad> (Ample): an offline render's instances (SoundLibraryExport::loadInstances: the
+//    verification, live equivalence, audio export) each wait until the plug-in's own loading is done (the test synth's
+//    "samples", MSTESTSYNTH_STREAM_MS / _MB), logged in load times.log, so that the first note sounds; without it they
+//    don't wait (a note at once: silent)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::backgroundLoadInstances()
+      {
+      struct Env { ~Env() { qunsetenv("MSTESTSYNTH_STREAM_MS"); qunsetenv("MSTESTSYNTH_STREAM_MB"); } } env;
+      for (const bool wait : { true, false }) {
+            LiveHost host(this, "", { "Violin" },
+               QString("<SoundLibrary name='LiveB%1'><Switch type='cc' number='32'/><Dynamics cc='1'/>").arg(wait ? 1 : 0)
+               + (wait ? "<Plugin files='x.vst3' backgroundLoad='10'/>" : "")
+               + "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/>"
+                 "</Instrument></SoundLibrary>");
+            QVERIFY(host.ok);
+            QCOMPARE(host.lib->backgroundLoad, wait ? 10.0 : 0.0);
+            MasterScore* score = readScore(DIR + "articulations.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            qputenv("MSTESTSYNTH_STREAM_MS", "600");
+            qputenv("MSTESTSYNTH_STREAM_MB", "48");
+            QElapsedTimer t;
+            t.start();
+            QString error;
+            std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000, &error);
+            QVERIFY2(vst, qPrintable(error));
+            const qint64 ms = t.elapsed();
+            vst->beginExport(48000);
+            vst->play(PlayEvent(ME_CONTROLLER, 0, 1, 100));
+            vst->play(PlayEvent(ME_NOTEON, 0, 69, 100));
+            std::vector<float> b(2 * 4800, 0.f);
+            vst->process(4800, b.data(), nullptr, nullptr);
+            vst->endExport();
+            QFile f(SoundLibraryHost::setupsFolder(*host.lib) + "/load times.log");
+            const QString log = f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+            if (wait) {
+                  QVERIFY2(ms >= 550, qPrintable(QString::number(ms)));
+                  QVERIFY2(log.contains("Violin: its background load done in"), qPrintable(log));
+                  QVERIFY(rms(b, 0) > 1e-4);
+                  }
+            else {
+                  QVERIFY2(!log.contains("background load"), qPrintable(log));
+                  QCOMPARE(rms(b, 0), 0.0);                           // (still loading: nothing)
+                  }
+            vst.reset();
+            delete score;
+            }
       SoundLib::setCurrent(nullptr);
       }
 
