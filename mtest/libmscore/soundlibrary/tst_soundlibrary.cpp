@@ -178,6 +178,7 @@ class TestSoundLibrary : public QObject, public MTest
       void speedFromWritten();
       void levelContext();
       void levelContextPlain();
+      void plainAccents();
       void levelSectionBalance();
       void levelTechniqueBalance();
       void levelMicCompensation();
@@ -1943,7 +1944,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1952,15 +1953,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -3132,6 +3133,173 @@ void TestSoundLibrary::levelContextPlain()
       Playback::setIniValuesForTest({});
       SoundLib::setCurrent(nullptr);
       SoundLib::setOutput(SoundLib::Output::MIDI);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainAccents
+//    [slurs] plainAccents (branch plain-accents) under [slurs] plainPerformance with [levels] context: 0 an accent plays
+//    as a plain note (velocity 64, the CC1 of the written dynamic); 1 MS4's offset for its articulations, 40 log10(share),
+//    by CC1 (no curve measured here: SoundFont 2's law, MarcatoLevel::velocity), on staccato + accent, accent, marcato,
+//    soft accent, the slurred A5 too, the other notes unchanged; 2 the accented attack (122) on the accents and the
+//    marcato that play an attack (not the slurred A5, not the soft accent), C6 re-attacked (B5 ends the map's reattackGap,
+//    54 ms, before it, instead of touching it), the CC1 as 0; 3 both. Both presets and the default 0.
+//    plain-accents.musicxml: m1 C5 stacc., D5 stacc. + accent, rest, F5 accent; m2 G5 A5(accent) B5 slurred, C6 accent;
+//    m3 rest, E5 marcato, rest, G5; m4 rest, C5 soft accent
+//---------------------------------------------------------
+
+void TestSoundLibrary::plainAccents()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      QCOMPARE(Playback::definition("slurs/plainAccents")->value, 0.0);
+      QCOMPARE(Playback::definition("slurs/plainAccents")->max, 3.0);
+      for (const Playback::Preset& p : Playback::presets()) {
+            bool listed = false;
+            for (const auto& kv : p.values)
+                  if (QString(kv.first) == "slurs/plainAccents") {
+                        listed = true;
+                        QCOMPARE(kv.second, 0.0);
+                        }
+            QVERIFY2(listed, p.id);
+            }
+      QString grid;
+      for (int cc : { 32, 96 })
+            for (int ms : { 100, 1000 })
+                  for (int p : { 60, 84 })
+                        grid += QString("%1/%2/%3:10 ").arg(cc).arg(ms).arg(p);
+      auto lib = loadMap(QString(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo short'/>"
+         "<Articulation name='Marcato' value='52' techniques='marcato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long longmarcato' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1'/>"
+         "</Instrument></SoundLibrary>").arg(grid.trimmed()).toUtf8().constData());
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-accents.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      struct N { int velo = -1; int cc1 = -1; int cc11 = 127; double on = -1; double off = -1; bool plain = false;
+                 MidiRenderer::LibPerformance kind = MidiRenderer::LibPerformance::NONE; };
+      std::vector<MidiRenderer::LibTrace> trace;
+      auto render = [&](int setting) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
+                                            { "slurs/plainAccents", QString::number(setting) } });
+            score->setPlaylistDirty();
+            EventMap events;
+            trace.clear();
+            MidiRenderer midi(score);
+            midi.setLibraryTrace(&trace);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            midi.renderScore(&events, ctx);
+            std::map<int, N> notes;                       // tick -> its note on the Performance patch
+            std::map<int, int> cc1, cc11;                 // route -> in force
+            std::map<std::pair<int, int>, int> sounding;  // (route, key) -> tick
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch())
+                        continue;
+                  const int route = e.extPort() * 16 + e.extChannel();
+                  const double t = score->utick2utime(te.first) * 1000.0;
+                  if (e.type() == ME_CONTROLLER && e.controller() == 1)
+                        cc1[route] = e.value();
+                  else if (e.type() == ME_CONTROLLER && e.controller() == 11)
+                        cc11[route] = e.value();
+                  else if (e.type() == ME_NOTEON && e.velo() > 0 && e.libraryPatch() == 1 && e.note()) {
+                        N& n = notes[e.note()->chord()->tick().ticks()];
+                        n.velo = e.velo();
+                        n.cc1 = cc1.count(route) ? cc1[route] : -1;
+                        n.cc11 = cc11.count(route) ? cc11[route] : 127;
+                        n.on = t;
+                        sounding[{ route, e.pitch() }] = e.note()->chord()->tick().ticks();
+                        }
+                  else if (e.type() == ME_NOTEOFF || (e.type() == ME_NOTEON && e.velo() == 0)) {
+                        auto s = sounding.find({ route, e.pitch() });
+                        if (s != sounding.end()) {
+                              notes[s->second].off = t;
+                              sounding.erase(s);
+                              }
+                        }
+                  }
+            for (const MidiRenderer::LibTrace& t : trace)
+                  if (t.note && notes.count(t.utick)) {
+                        notes[t.utick].plain = t.choice.plain;
+                        notes[t.utick].kind = t.performance;
+                        }
+            return notes;
+            };
+      const std::vector<int> ticks = { 0, 480, 1440, 1920, 2400, 2880, 3360, 4320, 5280, 6240 };
+      const std::set<int> accents = { 480, 1440, 2400, 3360, 4320, 6240 };
+      const std::set<int> attacks = { 480, 1440, 3360, 4320 };       // (accent / marcato on an attack: the accented attack)
+      const std::map<int, N> off = render(0);
+      for (int t : ticks) {
+            QVERIFY2(off.count(t) && off.at(t).plain, qPrintable(QString::number(t)));
+            QCOMPARE(off.at(t).velo, MidiRenderer::PLAIN_VELOCITY);
+            QCOMPARE(off.at(t).cc1, off.at(0).cc1);                  // (one dynamic: one CC1)
+            QCOMPARE(off.at(t).cc11, off.at(0).cc11);                // (one gain everywhere)
+            }
+      QVERIFY(off.at(0).cc1 > 0);
+      QVERIFY(off.at(2400).kind == MidiRenderer::LibPerformance::TRANSITION);
+      QVERIFY(off.at(3360).kind == MidiRenderer::LibPerformance::TRANSITION);  // (C6 touching B5: SSO's transition)
+      const double ms3360 = score->utick2utime(3360) * 1000.0;
+      QVERIFY2(std::fabs(off.at(2880).off - ms3360) <= 1.1, qPrintable(QString::number(off.at(2880).off)));
+      // MS4's offsets (strings, mf): an accent's and a marcato's curve peak higher than a plain note's
+      const int mf = 5250;
+      auto share = [mf](std::initializer_list<Ms4::Art> arts) {
+            std::vector<Ms4::ArtRef> refs;
+            for (Ms4::Art a : arts)
+                  refs.push_back({ a, false });
+            return Ms4::note(Ms4::Family::Strings, refs, mf, true).share;
+            };
+      const double accentDb = 40 * std::log10(share({ Ms4::Art::Accent, Ms4::Art::Staccato }));
+      QVERIFY2(accentDb > 4.0 && accentDb < 7.0, qPrintable(QString::number(accentDb)));       // (ACCENT.md: +5.3)
+      QVERIFY(std::fabs(40 * std::log10(share({ Ms4::Art::Accent })) - accentDb) < 1e-9);
+      QVERIFY(std::fabs(40 * std::log10(share({ Ms4::Art::Marcato })) - accentDb) < 1e-9);
+      QVERIFY(std::fabs(40 * std::log10(share({ Ms4::Art::SoftAccent })) - accentDb) < 1e-9);
+      const int raised = MarcatoLevel::velocity(off.at(0).cc1, accentDb);
+      QVERIFY(raised > off.at(0).cc1);
+      for (int setting : { 1, 2, 3 }) {
+            const std::map<int, N> on = render(setting);
+            for (int t : ticks) {
+                  QVERIFY2(on.count(t) && on.at(t).plain, qPrintable(QString("%1: %2").arg(setting).arg(t)));
+                  const bool level = (setting & 1) && accents.count(t);
+                  const bool attack = (setting & 2) && attacks.count(t);
+                  QCOMPARE(on.at(t).cc11, off.at(t).cc11);
+                  if (level && t != 2400)
+                        QVERIFY2(std::abs(on.at(t).cc1 - raised) <= 1, qPrintable(QString("%1: %2 %3 against %4").arg(setting).arg(t).arg(on.at(t).cc1).arg(raised)));
+                  else if (level)
+                        QVERIFY2(on.at(t).cc1 > off.at(t).cc1, qPrintable(QString("%1: %2 %3").arg(setting).arg(t).arg(on.at(t).cc1)));
+                  else
+                        QVERIFY2(on.at(t).cc1 == off.at(t).cc1, qPrintable(QString("%1: %2 %3 against %4").arg(setting).arg(t).arg(on.at(t).cc1).arg(off.at(t).cc1)));
+                  QVERIFY2(on.at(t).velo == (attack ? 122 : MidiRenderer::PLAIN_VELOCITY), qPrintable(QString("%1: %2 velocity %3").arg(setting).arg(t).arg(on.at(t).velo)));
+                  if (t != 2880)
+                        QVERIFY2(std::fabs(on.at(t).on - off.at(t).on) < 0.01, qPrintable(QString("%1: %2").arg(setting).arg(t)));
+                  }
+            // the slurred A5 a transition in every setting; C6 re-attacked under 2 / 3: B5 ends 54 ms before it
+            QVERIFY(on.at(2400).kind == MidiRenderer::LibPerformance::TRANSITION);
+            if (setting & 2) {
+                  QVERIFY(on.at(3360).kind == MidiRenderer::LibPerformance::ATTACK);
+                  QVERIFY2(std::fabs(on.at(2880).off - (ms3360 - 54)) <= 1.1, qPrintable(QString::number(on.at(2880).off)));
+                  }
+            else {
+                  QVERIFY(on.at(3360).kind == MidiRenderer::LibPerformance::TRANSITION);
+                  QVERIFY(std::fabs(on.at(2880).off - off.at(2880).off) < 0.01);
+                  }
+            }
+      // the score's 3 over the ini's 0
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" } });
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/plainAccents", 3 } }));
+      QCOMPARE(Playback::source("slurs/plainAccents", score), Playback::Source::SCORE);
+      QCOMPARE(Playback::value("slurs/plainAccents", score), 3.0);
       delete score;
       }
 

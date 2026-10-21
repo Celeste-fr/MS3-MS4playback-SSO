@@ -1373,8 +1373,23 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         return std::max(TrackDelays::MIN_DB, db);
                         };
-                  auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
-                        const double db = levelOf(note) + quickDb(note, c);
+                  // [slurs] plainAccents (1 / 3): a plain Performance note (Choice::plain) with an accent-like articulation
+                  // (accent, marcato, soft accent: the ones MS4.7.5's tables give a louder curve) plays MS4's offset for its
+                  // articulations, 40 log10(share), as [levels] calibrated gives a technique on velocity (libVelocity); the
+                  // plain note's base "long" is no velocity technique, so without this it plays none (private/bars9-12/ACCENT.md).
+                  // Its own level on top below: louder by the dynamics CC along the patch's own curve, slurred notes too
+                  const int plainAccents = li ? int(std::lround(Playback::value("slurs/plainAccents", score))) : 0;
+                  auto accentLike = [](const Ms4::NoteResult& r) {
+                        for (Ms4::Art art : r.arts)
+                              if (art == Ms4::Art::Accent || art == Ms4::Art::Marcato || art == Ms4::Art::SoftAccent)
+                                    return true;
+                        return false;
+                        };
+                  auto plainAccentDb = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r) {
+                        return (plainAccents & 1) && c && c.plain && accentLike(r) && r.share > 0 ? 40.0 * std::log10(r.share) : 0.0;
+                        };
+                  auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel, const Ms4::NoteResult& r) {
+                        const double db = levelOf(note) + quickDb(note, c) + (velocity > 0 ? 0.0 : plainAccentDb(c, r));
                         const double context = velocity > 0 ? double(NAN) : contextDb(note, c);
                         if (!std::isnan(context)) {
                               // its own level on top: louder along its own curve from the written dynamic's value, softer
@@ -1798,9 +1813,19 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const bool plain = c.plain && !ownJoin;
                         const bool explicitTechnique = tr != PerformanceTechnique::Transition::AUTO || at != PerformanceTechnique::Attack::AUTO;
                         const int plainVelocity = own > 0 ? own : PLAIN_VELOCITY;
+                        // [slurs] plainAccents 2 / 3: an accent or marcato (as `accent` above) on Auto, without a velocity of its
+                        // own, that plays an attack (a staccato's, or a note outside a slur) takes the accented attack instead
+                        // of 64, as [slurs] performance gives it; a note touching the one before on the patch is re-attacked
+                        // (the note before ends the map's reattackGap before it) instead of SSO's transition from it. A slur's
+                        // transition stays one (as under [slurs] performance)
+                        const SoundLib::Articulation::Technique* accented = (plainAccents & 2) && plain && accent && own <= 0
+                                                                            && at == PerformanceTechnique::Attack::AUTO
+                                                                            ? a->attack("accented") : nullptr;
                         if (plain && (staccatoNote(note) || (joinable && staccatoNote(joinable)))) {
                               if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at))))
                                     p.velocity = own > 0 ? own : t->velocity;
+                              else if (accented)
+                                    p.velocity = accented->velocity;
                               else
                                     p.velocity = plainVelocity;
                               if (joinable) {
@@ -1824,6 +1849,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               return p;
                               }
                         if (plain) {
+                              if (accented) {
+                                    p.velocity = accented->velocity;
+                                    if (joinable && a->reattackGapMs > 0) {       // (a re-attack, not SSO's transition)
+                                          p.before = joinable;
+                                          p.endMs = -a->reattackGapMs;
+                                          p.shortenOnly = true;
+                                          }
+                                    return p;
+                                    }
                               if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at))))
                                     p.velocity = own > 0 ? own : t->velocity;
                               else
@@ -1988,7 +2022,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libChoice = librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
                                     double under = 0.0;
                                     libNote.velocity = libVelocity(note, libChoice, r, level, &under);
-                                    marcatoLevel(note, libChoice, libNote.velocity, level);
+                                    marcatoLevel(note, libChoice, libNote.velocity, level, r);
                                     trackLevel(note, libChoice);
                                     if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
                                           libLevels[note].volumeDb += under;
@@ -2264,7 +2298,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libChoice = librarySwitch(note, noteArts, start, length);
                                     double under = 0.0;
                                     libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset), &under);
-                                    marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset));
+                                    marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset), r);
                                     trackLevel(note, libChoice);
                                     if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
                                           libLevels[note].volumeDb += under;
