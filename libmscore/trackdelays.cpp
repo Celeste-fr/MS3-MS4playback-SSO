@@ -137,8 +137,9 @@ std::map<const Part*, Delays> read(const MasterScore* score)
                         delays[part].evenAll = -rest;
                   }
             }
-      // [slurs] plainPerformance: each plain Performance patch's measured shift (the map's plainShift), early
-      if (library) {
+      // [slurs] plainPerformance: each plain Performance patch's measured shift (the map's plainShift), early; not with
+      // [slurs] plainTiming, whose notes start early each by its own model (the renderer's early starts)
+      if (library && !Playback::on("slurs/plainTiming", score)) {
             for (const auto& pp : SoundLib::plainPerformancePatches(score, *library))
                   for (const auto& p : pp.second)
                         if (std::isfinite(p.second) && p.second > 0.0)

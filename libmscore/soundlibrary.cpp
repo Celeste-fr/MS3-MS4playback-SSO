@@ -1111,6 +1111,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         if (ok && std::isfinite(v))
                               li.plainShiftMs = std::max(0.0, std::min(1000.0, v));   // (TrackDelays' range)
                         }
+                  if (a.hasAttribute("plainAttack")) {
+                        bool ok = false;
+                        const double v = a.value("plainAttack").toDouble(&ok);
+                        if (ok && std::isfinite(v))
+                              li.plainAttackMs = std::max(0.0, std::min(1000.0, v));
+                        }
                   if (a.hasAttribute("speedCC") && a.hasAttribute("speedScript")) {
                         li.speedCC = qBound(0, a.value("speedCC").toInt(), 127);
                         li.speedScript = a.value("speedScript").toString();
@@ -1572,9 +1578,13 @@ static Choice choosePlain(const std::vector<const LibInstrument*>& patches, cons
       static const QStringList BOWED = { "long", "legato", "longmarcato", "marcato", "tenuto", "short", "spiccato", "staccatissimo" };
       if (!want.plainPerformance || !held)
             return Choice();
-      for (const QString& m : want.modifiers)
-            if (m != "performance")
-                  return Choice();
+      // (a modifier asked for: the note keeps its technique; with [slurs] plainTiming only a modifier the choice kept, its
+      // articulation's own, below: one the patches can't play (SSO's Basses have no con sord. or espressivo sample, their
+      // choice the plain Long) stays on the plain Performance legato with the rest of the line)
+      if (!want.plainTiming)
+            for (const QString& m : want.modifiers)
+                  if (m != "performance")
+                        return Choice();
       for (int p = 0; p < int(patches.size()); ++p) {
             const Articulation* a = plainPerformanceArticulation(*patches[size_t(p)]);
             if (!a)
@@ -3029,6 +3039,7 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
             }
       w.modifiers = text.modifiers;
       w.plainPerformance = !text.performanceOff && Playback::on("slurs/plainPerformance", score);
+      w.plainTiming = w.plainPerformance && Playback::on("slurs/plainTiming", score);
       w.staccato = has(Art::Staccato) || has(Art::Staccatissimo);
       if (has(Art::Mute) || has(Art::PalmMute)) {
             if (!w.modifiers.contains("muted"))

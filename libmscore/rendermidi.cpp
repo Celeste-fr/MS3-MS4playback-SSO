@@ -1835,9 +1835,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const SoundLib::Articulation::Technique* accented = (plainAccents & 2) && plain && accent && own <= 0
                                                                             && at == PerformanceTechnique::Attack::AUTO
                                                                             ? a->attack("accented") : nullptr;
+                        // ([slurs] plainTiming: an attack chosen in the Inspector with its own measured onset, smooth, starts
+                        // early by it: timedAttack)
                         if (plain && (staccatoNote(note) || (joinable && staccatoNote(joinable)))) {
-                              if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at))))
+                              if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at)))) {
                                     p.velocity = own > 0 ? own : t->velocity;
+                                    if (libPlainTiming && t->hasOnset())
+                                          p.timedAttack = t;
+                                    }
                               else if (accented) {
                                     p.velocity = accented->velocity;
                                     p.accentAttack = true;
@@ -1875,8 +1880,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           }
                                     return p;
                                     }
-                              if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at))))
+                              if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at)))) {
                                     p.velocity = own > 0 ? own : t->velocity;
+                                    if (libPlainTiming && t->hasOnset())
+                                          p.timedAttack = t;
+                                    }
                               else
                                     p.velocity = plainVelocity;
                               if (joinable) {         // (touching: SSO's transition from it)
@@ -2192,13 +2200,16 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // played, the audit's DROPPED); not before the chunk or the pass. The bend's glide (ms after
                                     // the note-on as played) moves with it. Written timing (Live's clips): as written, LiveTiming
                                     // puts it back at playback
-                                    // ([slurs] plainPerformance: none, its patch's events go early together, TrackDelays)
-                                    if (libTransitionsEarly > 0 && perf.on && perf.from && offset == 0 && g.arriveMs > 0 && !libChoice.plain) {
+                                    // ([slurs] plainPerformance: none, its patch's events go early together, TrackDelays; with
+                                    // [slurs] plainTiming each plain transition by this model, mode 1 where transitionsEarly is 0)
+                                    const int transitionsMode = libChoice.plain ? (libPlainTiming ? std::max(1, libTransitionsEarly) : 0)
+                                                                                : libTransitionsEarly;
+                                    if (transitionsMode > 0 && perf.on && perf.from && offset == 0 && g.arriveMs > 0) {
                                           double shiftMs = g.arriveMs;
-                                          const bool fallback = libTransitionsEarly >= 2 && !glideMeasured;
-                                          if (libTransitionsEarly == 2 && glideMeasured)
+                                          const bool fallback = transitionsMode >= 2 && !glideMeasured;
+                                          if (transitionsMode == 2 && glideMeasured)
                                                 shiftMs = g.leaveMs + HEARD_AFTER_LEAVE_MS;
-                                          else if (libTransitionsEarly == 3 && glideMeasured)
+                                          else if (transitionsMode == 3 && glideMeasured)
                                                 shiftMs = (g.leaveMs + g.arriveMs) / 2.0;
                                           if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
                                                 libTrace->back().earlyMeantMs = shiftMs;
@@ -2214,6 +2225,31 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                 config.libWrittenOn = &libShiftWritten;
                                                 libShiftOn = libShiftWritten = -1;
                                                 }
+                                          }
+                                    }
+                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && libChoice.plain && libPlainTiming && perf.on
+                                       && !note->tieBack()) {
+                                    // [slurs] plainTiming: a plain Performance note that is no transition (an attack after silence,
+                                    // a staccato's spiccato attack, an accented re-attack) early by its patch's measured plain
+                                    // attack (<Instrument plainAttack>: heard - sent of plain attacks at velocity 64 in context, by
+                                    // the onset rule the map's onsets use, 15 dB under the peak: Vos & Rasch 1981), times
+                                    // heldNotes/early %; an attack chosen in the Inspector with its own onset (smooth) by that one
+                                    const SoundLib::LibInstrument* pi = libPatches[libChoice.patch];
+                                    double onsetMs = std::isfinite(pi->plainAttackMs) ? pi->plainAttackMs : 0.0;
+                                    if (perf.timedAttack)
+                                          for (const Note* n : note->chord()->notes())
+                                                if (n->play())
+                                                      onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(perf.timedAttack, n->ppitch(), libOnsetByPitch));
+                                    const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
+                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice, gapMs) : -1;
+                                    const double earlyMs = onsetMs * libOnsetEarly / 100.0;
+                                    if (earliest >= 0 && earlyMs > 0) {
+                                          config.libEarly = earlyMs / 1000.0;
+                                          config.libEarliest = earliest;
+                                          config.libLost = &libStartLost;
+                                          config.libOn = &libShiftOn;
+                                          config.libWrittenOn = &libShiftWritten;
+                                          libShiftOn = libShiftWritten = -1;
                                           }
                                     }
                               else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack() && !libChoice.plain
@@ -2256,7 +2292,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (li && !libNote.builtIn && libChoice.plain && offset == 0) {
                               if (!staccatoNote(note))
                                     config.ms4Dur = Ms4::HUNDRED;
-                              else if (libChoice.plainFrom && libOnsetEarly > 0 && !note->tieBack()
+                              else if (libChoice.plainFrom && libOnsetEarly > 0 && !note->tieBack() && !libPlainTiming
                                        && (libChoice.plainFrom->onsetMs > 0 || !libChoice.plainFrom->onsets.empty())) {
                                     const SoundLib::Articulation* oa = libChoice.plainFrom;
                                     double onsetMs = 0;
@@ -5854,6 +5890,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libAvoidBad = Playback::on("notes/avoidBadSamples", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libTransitionsEarly = library && !writtenTiming ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;
+      libPlainTiming = library && !writtenTiming && Playback::on("slurs/plainPerformance", score) && Playback::on("slurs/plainTiming", score);
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();

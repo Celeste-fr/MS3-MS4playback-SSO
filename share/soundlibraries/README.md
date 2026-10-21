@@ -294,6 +294,12 @@ switch value of each articulation. For example:
     written latency of plain notes, measured in context: `tools/soundlibraries/sso_plain_performance_shift.json`;
     SSO's five string sections' Performance patches, e.g. Violas 111.0). Left out: the notes play as written and the playback audit lists the patch
     (docs/PLAYBACK_SETTINGS.md › Plain Performance).
+  - `plainAttack` on an `Instrument` (ms, 0 .. 1000, left out: not measured): with `[slurs] plainTiming` a plain note
+    on this patch that is no transition (an attack after silence, a staccato's spiccato attack) starts this much early
+    instead of `plainShift` (the median heard - sent of plain attacks at velocity 64 in context, 15 dB under the peak:
+    the same file's `attackMs`; e.g. Violas 37.1); a transition starts early by its modelled arrival (`bendGlide`,
+    else `legatoDelay`). Left out: the attacks play as written and the audit lists the patch
+    (docs/PLAYBACK_SETTINGS.md › Plain timing).
   - `mono` on an `Instrument` (`"1"`, left out: not): a monophonic patch, one line per plug-in slot (SSO's Performance
     patches: a note-on while a note is held is a legato transition that ends it). MuseScore gives a chord's other
     notes, and any note overlapping another, copies of the patch of their own ("voice lanes": `SoundLib::lanes`;

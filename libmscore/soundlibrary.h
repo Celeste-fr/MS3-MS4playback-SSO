@@ -398,6 +398,11 @@ struct LibInstrument {
       // tools/soundlibraries/sso_plain_performance_shift.json -> gen_spitfire_sso.py). NaN: not measured (sent as written,
       // the playback audit lists it)
       double plainShiftMs { NAN };
+      // [slurs] plainTiming (branch plain-timing, 2026-10-21): with it a plain note that is no transition (an attack after
+      // silence, a staccato's spiccato attack) starts this many ms early instead of the patch's plainShift (<Instrument
+      // plainAttack>, ms: the median heard - sent of the plain attacks at velocity 64, measured in context, 15 dB under the
+      // peak; sso_plain_performance_shift.json `attackMs`); a transition by its modelled arrival. NaN: not measured (as written)
+      double plainAttackMs { NAN };
       // a monophonic patch (<Instrument mono="1">: SSO's Performance patches, whose script plays ONE legato line: a note-on
       // while a note is held is a transition that ends it, one < 15 ms after the note-on before at velocity <= 64 is
       // dropped; read from the patch's script, ownlegato-study): two notes sounding together on one of its slots lose one.
@@ -485,6 +490,9 @@ struct Want {
       // legato (plainPerformanceArticulation) when the technique chosen otherwise is a bowed one it plays (long, legato,
       // the shorts, tenuto, marcato) without modifiers; choose()
       bool plainPerformance { false };
+      // [slurs] plainTiming with plainPerformance: a modifier the patches have no articulation for (SSO's Basses: con sord.,
+      // espressivo) that the choice dropped doesn't keep the note off the plain Performance legato; choosePlain
+      bool plainTiming { false };
       // the note is a staccato, staccatissimo or spiccato as written (with plainPerformance: a spiccato attack on the
       // Performance patch, the renderer's plain lengths)
       bool staccato { false };

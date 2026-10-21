@@ -393,9 +393,14 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
       const int onsetEarlyPct = lib ? SoundLib::onsetEarly(score, *lib) : 0;
       const bool transitionsEarly = Playback::value("slurs/transitionsEarly", score) >= 0.5;
       report.transitionsEarlyMode = int(std::lround(Playback::value("slurs/transitionsEarly", score)));
+      // ([slurs] plainTiming: a plain note's own early starts; an attack by the patch's plainAttack, a transition by its
+      // modelled arrival, transitionsEarly's mode, at least 1)
+      const bool plainTiming = Playback::on("slurs/plainPerformance", score) && Playback::on("slurs/plainTiming", score);
       auto onsetOf = [&](const Played* p, int pitch) {
             const SoundLib::Choice& c = p->trace->choice;
             const SoundLib::Articulation* a = c.articulation;
+            if (plainTiming && c.plain && !p->trace->attack)
+                  return std::isfinite(p->trace->patch->plainAttackMs) ? p->trace->patch->plainAttackMs : 0.0;
             return Playback::adjust("heldNotes.onset", p->trace->patch->name, a->name, pitch,
                                     a->startOnset(p->trace->attack, pitch, byPitchAll));   // (a smooth attack: its own)
             };
@@ -412,6 +417,8 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             p->sub = std::any_of(w.begin(), w.end(), [&](int x) { return x < p->written && p->written - x < len; });
             const SoundLib::Articulation* a = p->trace->choice.articulation;
             p->hasOnset = a->onsetMs > 0 || !a->onsets.empty() || p->trace->attack;
+            if (plainTiming && p->trace->choice.plain)
+                  p->hasOnset = std::isfinite(p->trace->patch->plainAttackMs) || p->trace->attack;
             if (p->hasOnset) {
                   p->onset = onsetOf(p, p->pitch);
                   p->arrival = sent(p) + p->onset - ms(p->written);
@@ -430,7 +437,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   p->hasArrival = false;
             // [slurs] plainPerformance: every note of the patch heard its measured latency (the map's plainShift: the median
             // heard - written of plain notes, attacks and transitions alike) after its note-on; unmeasured: no arrival
-            if (p->trace->choice.plain) {
+            if (p->trace->choice.plain && !plainTiming) {
                   const double shift = p->trace->patch->plainShiftMs;
                   p->hasOnset = std::isfinite(shift);
                   p->onset = p->hasOnset ? shift : 0.0;
@@ -451,7 +458,16 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const QString inst = p->trace->patch->name;
             const QString art = c.articulation->name;
             // ([slurs] plainPerformance: no early start of its own, its patch's shift; listed when the map has none)
-            if (c.plain) {
+            if (c.plain && plainTiming && !p->transition && !std::isfinite(p->trace->patch->plainAttackMs) && !p->trace->attack) {
+                  Missing& mm = missing[{ inst, art }];
+                  ++mm.notes;
+                  mm.maxEarly = std::max(mm.maxEarly, early);
+                  mm.bars.insert(p->note->chord()->measure()->no() + 1);
+                  mm.what = "plain attack ([slurs] plainTiming): no measured plainAttack in the map "
+                            "(sso_plain_performance_shift.json attackMs), sent as written";
+                  continue;
+                  }
+            if (c.plain && !plainTiming) {
                   report.plainShifts[inst] = p->trace->patch->plainShiftMs;
                   if (!std::isfinite(p->trace->patch->plainShiftMs)) {
                         Missing& mm = missing[{ inst, art }];
@@ -465,7 +481,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   }
             // ([slurs] transitionsEarly: a transition is meant its modelled arrival early, not its onset: capped when the
             // note before keeps keepMs (or SSO's 15 ms) as played, TRANSITION_MIN_GAP_MS; its shift is listed in the report)
-            if (transitionsEarly && p->transition && !p->sub && p->trace->earlyMeantMs >= 0) {
+            if ((transitionsEarly || (plainTiming && c.plain)) && p->transition && !p->sub && p->trace->earlyMeantMs >= 0) {
                   const double meant = p->trace->earlyMeantMs;
                   if (p->trace->earlyFallback)
                         report.transitionsFallback.insert(p->trace->patch->name);
@@ -508,8 +524,10 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   }
             if (!c.swapped && early <= 0.5 && p->hasOnset)
                   continue;
-            if (transitionsEarly && p->transition && !c.swapped)
+            if ((transitionsEarly || (plainTiming && c.plain)) && p->transition && !c.swapped)
                   continue;         // (early by the transition's modelled arrival, not by an onset)
+            if (plainTiming && c.plain && !p->transition)
+                  continue;         // (a plain attack: early by the map's measured plainAttack, in context)
             QStringList what;
             if (!p->hasOnset)
                   what << "no onset in the map (arrival unknown)";
