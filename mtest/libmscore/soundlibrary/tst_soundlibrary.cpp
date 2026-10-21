@@ -219,6 +219,7 @@ class TestSoundLibrary : public QObject, public MTest
       void controllerSettings();
       void controllerPatchDefaults();
       void partMix();
+      void chordVoices();
 #ifdef TESTSYNTH
       void evenAutoTestSynth();
       void mixerSlot();
@@ -13491,6 +13492,152 @@ void TestSoundLibrary::vst3SynthLinks()
       QVERIFY(level(play(1, 0.f)) < 1e-6);
       }
 #endif
+
+//---------------------------------------------------------
+//   chordVoices
+//    a monophonic patch (<Instrument mono="1">, SSO's Performance legato: one line per slot) plays a chord's notes each
+//    on a copy of its own (voice lanes, SoundLib::lanes; the owner, 2026-10-20: "of course it should play every note").
+//    chords.musicxml at 120, all slurred in m1: B4 | C5 E5 G5 | D5 F5 A5 | E5; m3 the chord C5 E5- G5 (E quarter-flat).
+//    Voices from the lowest pitch: voice 0 B4 C5 D5 E5 C5, voice 1 E5 F5 E5-, voice 2 G5 A5 G5. Live / MIDI out (a lane
+//    per tuning in each voice): lanes 0 (v0), 1 (v1, 0 cents), 2 (v1, -50), 3 (v2); hosted by varispeed: 0, 1, 2. The
+//    same map without mono: the lanes as before (2). A chord's note goes on legato only from the note before on its own
+//    copy: C5 from B4, D5 from C5, F5 from E5, A5 from G5, the last E5 from D5 (its nearest, F5, plays on another copy);
+//    the chord's other notes attack. A library without varispeed: one copy per voice, untuned
+//---------------------------------------------------------
+
+void TestSoundLibrary::chordVoices()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::PLUGIN); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({});
+      auto map = [&](bool mono, bool varispeed) {
+            return loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>%1"
+               "<Instrument name='Violin' ids='violin'%2>"
+               "<Articulation name='Legato' value='20' techniques='legato long'/>"
+               "</Instrument></SoundLibrary>").arg(varispeed ? "<Tuning method='varispeed' tolerance='3' tail='0.5'/>" : "")
+               .arg(mono ? " mono='1'" : ""));
+            };
+      auto lib = map(true, true);
+      QVERIFY(lib);
+      QVERIFY(lib->instruments[0].mono);
+      QVERIFY(!map(false, true)->instruments[0].mono);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "chords.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts()[0];
+      std::vector<const Note*> notes;               // in score order, each chord from the lowest
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  for (const Note* n : toChord(s->element(0))->notes())
+                        notes.push_back(n);
+      QCOMPARE(int(notes.size()), 11);
+      auto lanesOf = [&](const SoundLib::Lanes& l) {
+            std::vector<int> v;
+            for (const Note* n : notes)
+                  v.push_back(l.lane.count(n) ? l.lane.at(n) : 0);
+            return v;
+            };
+      // fixed tunings (Live, MIDI out, hosted slots): a lane per tuning in each voice
+      const SoundLib::Lanes fixed = SoundLib::lanes(score, part, { &lib->instruments[0] }, 3, 0.5, 4, true);
+      QCOMPARE(fixed.count[0], 4);
+      QCOMPARE(fixed.fixed[0], std::vector<double>({ 0.0, 0.0, -50.0, 0.0 }));
+      QCOMPARE(fixed.voice[0], std::vector<int>({ 0, 1, 1, 2 }));
+      QCOMPARE(lanesOf(fixed), std::vector<int>({ 0, 0, 1, 3, 0, 1, 3, 0, 0, 2, 3 }));
+      QCOMPARE(fixed.cents.at(notes[9]), -50.0);
+      // varispeed: a voice's lane retuned once silent
+      const SoundLib::Lanes vari = SoundLib::lanes(score, part, { &lib->instruments[0] }, 3, 0.5, 4, false);
+      QCOMPARE(vari.count[0], 3);
+      QCOMPARE(vari.voice[0], std::vector<int>({ 0, 1, 2 }));
+      QCOMPARE(lanesOf(vari), std::vector<int>({ 0, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2 }));
+      // not monophonic: the lanes as before (by tuning only)
+      auto poly = map(false, true);
+      const SoundLib::Lanes before = SoundLib::lanes(score, part, { &poly->instruments[0] }, 3, 0.5, 4, true);
+      QCOMPARE(before.count[0], 2);
+      QCOMPARE(before.fixed[0], std::vector<double>({ 0.0, -50.0 }));
+      QCOMPARE(before.voice[0], std::vector<int>({ 0, 0 }));
+      QCOMPARE(lanesOf(before), std::vector<int>({ 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 }));
+      QCOMPARE(SoundLib::lanes(score, part, { &poly->instruments[0] }, 3, 0.5, 4, false).count[0], 2);
+
+      // the routes: a copy per lane, its voice
+      const std::vector<SoundLib::Route> live = SoundLib::routes(score, *lib, true);
+      QCOMPARE(int(live.size()), 4);
+      for (int i = 0; i < 4; ++i) {
+            QCOMPARE(live[size_t(i)].lane, i);
+            QCOMPARE(live[size_t(i)].channel, i);
+            QCOMPARE(live[size_t(i)].voice, fixed.voice[0][size_t(i)]);
+            QCOMPARE(live[size_t(i)].cents, fixed.fixed[0][size_t(i)]);
+            }
+
+      // rendered: every note on its lane's channel; no two note-ons of one channel together; the transitions on a copy
+      std::vector<MidiRenderer::LibTrace> trace;
+      auto render = [&](bool forLive) {
+            score->setPlaylistDirty();
+            EventMap events;
+            trace.clear();
+            MidiRenderer r(score);
+            r.setForLiveClips(forLive);
+            r.setLibraryTrace(&trace);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      auto check = [&](const EventMap& events, const std::vector<int>& expected, const char* what) {
+            std::map<const Note*, int> channelOf;
+            std::map<int, int> lastOn;                  // channel -> tick of its last note-on
+            int ons = 0;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch() || ev.type() != ME_NOTEON || ev.velo() == 0)
+                        continue;
+                  ++ons;
+                  channelOf[ev.note()] = ev.extChannel();
+                  auto l = lastOn.find(ev.extChannel());
+                  QVERIFY2(l == lastOn.end() || te.first - l->second > 10, qPrintable(QString("%1: two note-ons together on channel %2 at %3")
+                                                                                     .arg(what).arg(ev.extChannel()).arg(te.first)));
+                  lastOn[ev.extChannel()] = te.first;
+                  }
+            QCOMPARE(ons, 11);
+            std::vector<int> got;
+            for (const Note* n : notes)
+                  got.push_back(channelOf.count(n) ? channelOf.at(n) : -1);
+            QVERIFY2(got == expected, what);
+            std::map<const Note*, const Note*> from;
+            for (const MidiRenderer::LibTrace& t : trace)
+                  if (t.note)
+                        from[t.note] = t.from;
+            const std::vector<int> fromIndex = { -1, 0, -1, -1, 1, 2, 3, 4, -1, -1, -1 };
+            for (size_t i = 0; i < notes.size(); ++i) {
+                  const Note* f = from.count(notes[i]) ? from.at(notes[i]) : nullptr;
+                  const Note* want = fromIndex[i] < 0 ? nullptr : notes[size_t(fromIndex[i])];
+                  QVERIFY2(f == want, qPrintable(QString("%1: note %2 (pitch %3) from %4").arg(what).arg(i).arg(notes[i]->pitch())
+                                                  .arg(f ? f->pitch() : -1)));
+                  }
+            };
+      check(render(false), { 0, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2 }, "hosted (varispeed)");
+      check(render(true), { 0, 0, 1, 3, 0, 1, 3, 0, 0, 2, 3 }, "Live's clips");
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      check(render(false), { 0, 0, 1, 3, 0, 1, 3, 0, 0, 2, 3 }, "MIDI out");
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+
+      // a library without varispeed: a copy per voice, untuned (the plug-in tunes each note)
+      auto plain = map(true, false);
+      SoundLib::setCurrent(plain);
+      const std::vector<SoundLib::Route> hosted = SoundLib::routes(score, *plain);
+      QCOMPARE(int(hosted.size()), 3);
+      for (int i = 0; i < 3; ++i) {
+            QCOMPARE(hosted[size_t(i)].voice, i);
+            QCOMPARE(hosted[size_t(i)].cents, 0.0);
+            }
+      check(render(false), { 0, 0, 1, 2, 0, 1, 2, 0, 0, 1, 2 }, "without varispeed");
+      // not monophonic: one route, the chords on it as before
+      SoundLib::setCurrent(map(false, false));
+      QCOMPARE(int(SoundLib::routes(score, *SoundLib::current()).size()), 1);
+      delete score;
+      }
 
 QTEST_MAIN(TestSoundLibrary)
 #include "tst_soundlibrary.moc"

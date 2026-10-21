@@ -1617,6 +1617,18 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         auto it = libPlayedOn.find({ first, tickOffset });
                         return it != libPlayedOn.end() ? it->second : first->chord()->tick().ticks() + tickOffset;
                         };
+                  // a monophonic patch's voice lanes (SoundLib::Lanes::voice: a chord's notes each on a copy of the patch of
+                  // their own): where a chord of several notes comes before or is this note's, only the note before on
+                  // this note's own lane (the copy it plays on) joins it; a lone note after a lone note as ever
+                  auto otherLane = [&](const Note* note, const Note* before, int patch) {
+                        if (patch < 0 || patch >= int(libPatches.size()) || !libPatches[size_t(patch)]->mono)
+                              return false;
+                        if (note->chord()->notes().size() < 2 && before->chord()->notes().size() < 2)
+                              return false;
+                        auto la = libLanes.find(note);
+                        auto lb = libLanes.find(before);
+                        return (la == libLanes.end() ? 0 : la->second) != (lb == libLanes.end() ? 0 : lb->second);
+                        };
                   // a legato transition: a note whose note before on its track (the chord just before, ending
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
                   // patch, an articulation that plays transitions: playsTransitions()). Returns that note (nullptr:
@@ -1655,7 +1667,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const Chord* fc = first->chord();
                               const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
-                              if (!pc || (pc.base != "legato" && !joinable) || pc.patch != c.patch || !pc.articulation->playsTransitions())
+                              if (!pc || (pc.base != "legato" && !joinable) || pc.patch != c.patch || !pc.articulation->playsTransitions()
+                                  || otherLane(note, pn, c.patch))
                                     continue;
                               const int start = fc->tick().ticks() + tickOffset;
                               *interval = note->ppitch() - pn->ppitch();
@@ -1700,7 +1713,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const Chord* fc = first->chord();
                               const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
-                              if (pc && pc.patch == c.patch)
+                              if (pc && pc.patch == c.patch && !otherLane(note, pn, c.patch))
                                     return true;
                               }
                         return false;
@@ -6092,6 +6105,14 @@ void MidiRenderer::updateState()
                                     libLaneCents[nc.first] = nc.second;
                                     tuned = tuned || std::fabs(nc.second) > 1e-6;
                                     }
+                              }
+                        else if (SoundLib::anyMono(lp.patches) && !r.instrument->kit) {
+                              // (a monophonic patch without varispeed: its voices' copies only, untuned, as routes() gives them)
+                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, std::numeric_limits<double>::infinity(),
+                                                                          SoundLib::laneSettings(score, *library).tail, 1, false);
+                              for (const auto& nl : l.lane)
+                                    if (nl.second > 0)
+                                          libLanes[nl.first] = nl.second;
                               }
                         for (const auto& ip : *part->instruments()) {
                               const SoundLib::LibInstrument* li = library->match(ip.second, part);

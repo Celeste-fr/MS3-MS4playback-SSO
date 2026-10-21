@@ -294,6 +294,11 @@ switch value of each articulation. For example:
     written latency of plain notes, measured in context: `tools/soundlibraries/sso_plain_performance_shift.json`;
     SSO's five string sections' Performance patches, e.g. Violas 111.0). Left out: the notes play as written and the playback audit lists the patch
     (docs/PLAYBACK_SETTINGS.md › Plain Performance).
+  - `mono` on an `Instrument` (`"1"`, left out: not): a monophonic patch, one line per plug-in slot (SSO's Performance
+    patches: a note-on while a note is held is a legato transition that ends it). MuseScore gives a chord's other
+    notes, and any note overlapping another, copies of the patch of their own ("voice lanes": `SoundLib::lanes`;
+    docs/PLAYBACK_SETTINGS.md › Chords on monophonic patches), as it gives tunings copies. The SSO map's generator
+    marks every "... - Performance" patch (`MONO`).
   - `speedCC` and `speedScript` on an `Instrument` (a controller 1-127 and a script value name; both or neither): the
     controller the patch's own script writes at each legato note-on from the note-on spacing, and the script value that
     sets which (0: none). With `[slurs] speedFromWritten` the patch's state gets `speedScript` = 0 and MuseScore sends the

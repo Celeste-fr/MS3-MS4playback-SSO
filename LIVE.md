@@ -426,6 +426,12 @@ in a section collapsible at the same time".
   up to it, then the new one: Live ramps linearly between breakpoints; a glide's tick-apart steps as breakpoints, the
   straight stretches' ends only; parameter automation as steps too). Every tuning's Kontakt has its patch's
   volume and gain. Tests: `tst_liveequivalence` `plainTuned`, `tst_soundlibrary` `tuningLanesLive`, `kontaktTune`.
+- **Chords on a monophonic patch** (2026-10-20, branch `chord-voices`): a Performance patch's chord notes play on
+  copies of their own (voice lanes, `Route::voice`; docs/PLAYBACK_SETTINGS.md › Chords on monophonic patches), which
+  the set treats as tuning copies: slots of the patch's multi, a MIDI track each named "Violoncellos (voice 2)" (with its
+  tuning when not 0 cents, a bending copy "(copy n) (voice 2)"), the notes of that voice in its technique clips; the
+  route set and *Live plays the score* a track / clip per copy. Tests: `tst_liveequivalence` `chordVoicesLive`. Untried in
+  Live.
 - **A patch's copies share one Kontakt** (since 2026-10-10, `PlainLiveSet::multis`): a Kontakt multi, the patch's
   slot once per copy, each slot its own Tune (bent copies as made), slot *i* on MIDI channel *i*
   (`KontaktSetup::withSlots`, by the export). The Kontakt track carries the first copy's Controllers clip and its

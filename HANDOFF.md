@@ -30,6 +30,28 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Chords on monophonic patches (branch `chord-voices`, 2026-10-20, from integrate-1017 09f6847772; not merged)
+
+The owner: "of course it should play every note". Whence's Celli divisi (bars 9-16) lost a note in each of its
+three-note chords: SSO's Performance patches play one legato line per slot, and two chord notes shared a slot at the same
+instant (private/bars9-12/SILENT.md). Now a patch marked `<Instrument mono="1">` (the generator's `MONO`: the 42
+Performance patches) spreads its notes over voices, each voice its own copies of the patch ("voice lanes", riding the
+tuning-lane machinery: `SoundLib::lanes` › Voice lanes, `Lanes::voice`, `Route::voice`), so every chord note has a slot
+of its own: hosted (slots of the part's one instance), command-line renders, Live's plain set (a "(voice n)" MIDI track
+per copy in the multi), route set, clips, MIDI out. Voice 0 is the line; a chord after a chord continues voice by voice
+in pitch order; a note goes on legato only from the note before on its own copy (rendermidi.cpp `otherLane`). The audit
+has a new fail, CHORD. Details: docs/PLAYBACK_SETTINGS.md › Chords on monophonic patches.
+
+Checked on Linux only (test synth, rendered events): Whence before / after (Recommended, `dumpEvents`, lanes pinned
+max=8): only Celli - Performance from 19.67 s on changes, plus one copy (4 instead of 3); every other route identical;
+audit all 0, CHORD 0. Untried with Kontakt / SSO and in Live: a Windows build should check that the four chords now
+sound all three notes (the verify run of SILENT.md, Celli m15 / m16), and that Celli - Performance loads one slot more
+(~1.5 s, ~220 MB).
+
+Open for the owner (nothing decided): each voice is a whole section's patch at the section's level, so a three-note
+divisi chord sounds three full sections (a real section divided plays each note with a third of its players). No level
+correction is applied for it: that would need data on divisi levels (none yet), so it is left as it is and marked here.
+
 ## SSO legato fixes (branch `sso-legato-fixes`, 2026-10-20, from integrate-1017 e8a330c429; not merged)
 
 Four tests of SSO's Performance legato on the Windows test VM (kthost, Kontakt 8 + SSO, `--wait 2`, two kthost side by

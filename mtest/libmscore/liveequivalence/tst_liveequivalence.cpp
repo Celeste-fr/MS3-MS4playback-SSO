@@ -167,6 +167,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveMicCompensation();
       void liveTracksJson();
       void hostedSlots();
+      void chordVoicesHosted();
+      void chordVoicesLive();
       void hostedSlotsGain();
       void exportInstancesOfParts();
       void verifyRoutesByPart();
@@ -6681,6 +6683,183 @@ void TestLiveEquivalence::dumpEvents()
             f.write((lines.join("\n") + "\n").toUtf8());
             qDebug("%s: %s, %d notes", qPrintable(c.key), qPrintable(c.clip), int(c.notes.size()));
             }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   chordVoicesLive
+//    a monophonic patch's chords (voice lanes, SoundLib::lanes; <Instrument mono="1">) in Live: the plain set gives each
+//    copy (voice x tuning) a slot of the patch's one Kontakt, named by its voice where it isn't the line, and each copy's
+//    technique clip holds the notes MuseScore plays on that copy (chords.musicxml: lane 0 B4 C5 D5 E5 C5, lane 1 E5 F5,
+//    lane 2 E5- (-50 cents), lane 3 G5 A5 G5); the route set a track per copy
+//---------------------------------------------------------
+
+void TestLiveEquivalence::chordVoicesLive()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin' mono='1'>"
+         "<Articulation name='Legato' value='20' techniques='legato long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "chords.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      {
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+      }
+      // MuseScore's own (Live's routes): each copy's note-ons
+      std::map<int, std::vector<int>> museScore;
+      for (const auto& te : events)
+            if (te.second.isExternal() && !te.second.librarySwitch() && te.second.type() == ME_NOTEON && te.second.velo() > 0)
+                  museScore[te.second.extChannel()].push_back(te.second.pitch());
+      const std::vector<std::vector<int>> pitches = { { 71, 72, 74, 76, 72 }, { 76, 77 }, { 76 }, { 79, 81, 79 } };
+      QCOMPARE(int(museScore.size()), 4);
+      for (int c = 0; c < 4; ++c)
+            QCOMPARE(museScore[c], pitches[size_t(c)]);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, LiveClips::timeline(score));
+      const PlainLiveSet::PartTracks& p = l.sections[0].parts[0];
+      QCOMPARE(int(p.kontakts.size()), 4);
+      const std::vector<double> cents = { 0, 0, -50, 0 };
+      const std::vector<int> voices = { 0, 1, 1, 2 };
+      for (size_t i = 0; i < 4; ++i) {
+            const PlainLiveSet::Kontakt& k = p.kontakts[i];
+            QCOMPARE(k.lane, int(i));
+            QCOMPARE(k.voice, voices[i]);
+            QCOMPARE(k.cents, cents[i]);
+            std::vector<int> got;
+            for (const PlainLiveSet::Technique& t : k.techniques)
+                  for (const LiveClips::Note& n : t.notes)
+                        got.push_back(n.pitch);
+            std::sort(got.begin(), got.end());
+            std::vector<int> want = pitches[i];
+            std::sort(want.begin(), want.end());
+            QCOMPARE(got, want);
+            }
+      QCOMPARE(int(PlainLiveSet::multis(p.kontakts).size()), 1);
+      const std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(l);
+      QStringList kontakts, copies;
+      for (const LiveSetWriter::Track& t : tracks) {
+            if (t.group)
+                  continue;
+            if (t.midiTo < 0) {
+                  kontakts << t.name;
+                  QCOMPARE(t.slotCents, cents);
+                  }
+            else if (t.tuningCopy)
+                  copies << t.name;
+            }
+      QCOMPARE(kontakts, QStringList({ "Violin" }));
+      QCOMPARE(copies, QStringList({ "Violin (voice 2)", QString("Violin (%1 cents) (voice 2)").arg(QString(QChar(0x2212)) + "50"),
+                                     "Violin (voice 3)" }));
+      QCOMPARE(int(QSet<QString>(copies.begin(), copies.end()).size()), copies.size());
+      {
+            LiveSetWriter::Spec spec;
+            spec.tracks = tracks;
+            for (LiveSetWriter::Track& t : spec.tracks)
+                  t.link = false;
+            QCOMPARE(LiveSetWriter::validate(LiveSetWriter::xml(spec)), QString());
+      }
+      // the route set: a track per copy
+      QCOMPARE(int(LiveSetWriter::tracks(score, *lib, { "MuseScore A" }).size()), 4);
+      delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   chordVoicesHosted
+//    hosted (slots: a Kontakt library with varispeed): a monophonic patch's voice copies are slots of the part's one
+//    instance, each on its own MIDI channel at its tuning (as tuning copies: hostedSlots), and a chord's notes each reach
+//    their own slot; the export's instances (the command-line renders) the same
+//---------------------------------------------------------
+
+void TestLiveEquivalence::chordVoicesHosted()
+      {
+      LiveHost host(this, " nki='Violins 2 - All techniques.nki'", { "Violin" },
+                    "<SoundLibrary name='VoicesT'><Files registry='VoicesT'/><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+                    "<Instrument name='Violin' ids='violin' mono='1' nki='Violins 2 - All techniques.nki'>"
+                    "<Articulation name='Legato' value='20' techniques='legato long'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      SoundLibraryHost::setLibraryFolder(lib, root + "/" + DIR + "kontakt");
+      QFile::remove(SoundLibraryHost::setupFile(lib, "Violin"));
+      {
+            QFile e(root + "/" + DIR + "kontakt/empty.bin");
+            QVERIFY(e.open(QIODevice::ReadOnly));
+            QString error;
+            const QString path = SoundLibraryHost::pluginPath(lib, &error);
+            QVERIFY2(!path.isEmpty(), qPrintable(error));
+            QFile f(SoundLibraryHost::setupsFolder(lib) + "/Kontakt empty.vst3state");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(Vst3Plugin::joinState("MS Test Synth", e.readAll(), QByteArray()));
+            QJsonObject from;
+            from["plugin"] = path;
+            from["modified"] = QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate);
+            QFile m(SoundLibraryHost::setupsFolder(lib) + "/made setups.json");
+            QVERIFY(m.open(QIODevice::WriteOnly));
+            m.write(QJsonDocument(QJsonObject { { "(empty)", from } }).toJson());
+      }
+      Playback::setIniValuesForTest({});
+      MasterScore* score = readScore(DIR + "chords.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QVERIFY(SoundLib::hostedSlots(score, lib));
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, lib);
+      QCOMPARE(int(routes.size()), 4);
+      const std::vector<double> cents = { 0, 0, -50, 0 };
+      const std::vector<SoundLib::Instance> ins = SoundLib::instances(score, lib, routes);
+      QCOMPARE(int(ins.size()), 1);
+      QCOMPARE(ins[0].routes, std::vector<int>({ 0, 1, 2, 3 }));
+      QCOMPARE(ins[0].cents, cents);
+      {
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::vector<int> channels;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal() && ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch()) {
+                        channels.push_back(ev.extChannel());
+                        QVERIFY(std::fabs(ev.tuning() - routes[size_t(ev.extChannel())].cents) < 0.01);
+                        }
+                  }
+            // (in time order, each chord from the lowest: B4 | C5 E5 G5 | D5 F5 A5 | E5 || C5 E5- G5)
+            QCOMPARE(channels, std::vector<int>({ 0, 0, 1, 3, 0, 1, 3, 0, 0, 2, 3 }));
+      }
+      auto slotsOf = [](Vst3Plugin* p) {
+            QString name;
+            QByteArray component, controller;
+            return p && Vst3Plugin::splitState(p->state(), &name, &component, &controller) ? KontaktSetup::slotsOf(component)
+                                                                                         : std::vector<KontaktSetup::Slot>();
+            };
+      QString error;
+      std::map<int, QString> patches;
+      std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000, &error, &patches);
+      QVERIFY2(vst, qPrintable(error));
+      QVERIFY(vst->plugin(0));
+      for (int i = 1; i < 4; ++i) {
+            QVERIFY(!vst->plugin(i));
+            QCOMPARE(vst->instance(i), vst->plugin(0));
+            }
+      const std::vector<KontaktSetup::Slot> s = slotsOf(vst->plugin(0));
+      QCOMPARE(int(s.size()), 4);
+      for (int i = 0; i < 4; ++i) {
+            QCOMPARE(s[size_t(i)].channel, i + 1);
+            QVERIFY(std::fabs(s[size_t(i)].cents - cents[size_t(i)]) < 1e-3);
+            }
+      vst.reset();
+      SoundLibraryHost::setLibraryFolder(lib, QString());
       delete score;
       }
 

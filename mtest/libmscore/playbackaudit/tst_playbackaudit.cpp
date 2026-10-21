@@ -52,6 +52,7 @@ class TestPlaybackAudit : public QObject, public MTest
       void swapByPitch();
       void cappedArrival();
       void droppedFindings();
+      void chordFindings();
       void leapFindings();
       void transitionArrival();
       void auditScore();
@@ -681,12 +682,65 @@ void TestPlaybackAudit::auditScore()
             qInfo("%s", qPrintable(text));
       for (PlaybackAudit::Kind k : { PlaybackAudit::Kind::OVERLAP, PlaybackAudit::Kind::UNMEASURED, PlaybackAudit::Kind::CAPPED,
                                      PlaybackAudit::Kind::ARRIVAL, PlaybackAudit::Kind::LEVEL_STEP,
-                                     PlaybackAudit::Kind::DROPPED, PlaybackAudit::Kind::LEAP })
+                                     PlaybackAudit::Kind::DROPPED, PlaybackAudit::Kind::LEAP, PlaybackAudit::Kind::CHORD })
             qInfo("%s: %d fail, %d warn, %d info", PlaybackAudit::kindName(k), r.count(k, PlaybackAudit::Severity::FAIL),
                   r.count(k, PlaybackAudit::Severity::WARN), r.count(k, PlaybackAudit::Severity::INFO));
       const int overlaps = r.count(PlaybackAudit::Kind::OVERLAP);
       delete score;
       QVERIFY2(overlaps == 0, qPrintable(QString("%1 OVERLAP").arg(overlaps)));
+      }
+
+//---------------------------------------------------------
+//   chordFindings
+//    notes sounding together on one route of a monophonic patch (<Instrument mono="1">): CHORD fails. chords.musicxml (the
+//    soundlibrary test's: m1 B4 | C5 E5 G5 | D5 F5 A5 | E5 slurred, m3 C5 E5- G5) on a mono patch: every chord note on a
+//    copy of its own (voice lanes), no CHORD; the same events with every note moved to the first copy (as before voice
+//    lanes): the chords' other notes fail, 6; a patch that isn't monophonic: none
+//---------------------------------------------------------
+
+void TestPlaybackAudit::chordFindings()
+      {
+      recommended({ { "levels/calibrated", "0" } });
+      MasterScore* score = readScore(QString("libmscore/soundlibrary/") + "chords.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto audit = [&](bool mono, bool collapse) {
+            auto lib = loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+               "<Instrument name='Violin' ids='violin'%1>"
+               "<Articulation name='Legato' value='20' techniques='legato long'/>"
+               "</Instrument></SoundLibrary>").arg(mono ? " mono='1'" : ""));
+            SoundLib::setCurrent(lib);
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            score->setPlaylistDirty();
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> trace;
+            PlaybackAudit::render(score, &events, &trace);
+            if (collapse)
+                  for (auto& te : events)
+                        if (te.second.isExternal())
+                              te.second.setExternal(te.second.extPort(), 0);
+            return PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+            };
+      PlaybackAudit::Report r = audit(true, false);
+      QVERIFY2(r.count(PlaybackAudit::Kind::CHORD) == 0, qPrintable(r.text()));
+      QCOMPARE(r.count(PlaybackAudit::Kind::OVERLAP), 0);
+      r = audit(true, true);
+      QVERIFY2(r.count(PlaybackAudit::Kind::CHORD, PlaybackAudit::Severity::FAIL) == 6, qPrintable(r.text()));
+      std::set<int> pitches;
+      for (const PlaybackAudit::Finding& f : r.findings)
+            if (f.kind == PlaybackAudit::Kind::CHORD) {
+                  pitches.insert(f.pitch);
+                  QCOMPARE(f.part, QString("Violin"));
+                  QVERIFY2(f.text.contains("still sounds") && f.text.contains("dropped"), qPrintable(f.text));
+                  }
+      QCOMPARE(pitches, (std::set<int> { 76, 77, 79, 81 }));      // (E5 G5, F5 A5; m3's E5- and G5 again)
+      QVERIFY2(r.text().contains("CHORD"), qPrintable(r.text()));
+      r = audit(false, false);
+      QVERIFY2(r.count(PlaybackAudit::Kind::CHORD) == 0, qPrintable(r.text()));
+      SoundLib::setCurrent(nullptr);
+      delete score;
       }
 
 QTEST_MAIN(TestPlaybackAudit)

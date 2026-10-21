@@ -67,6 +67,10 @@
 //                 microtones 1200 cents, ScoreTuning): SSO gives it no transition, it releases the note before and
 //                 attacks afresh, so its Performance technique, legatoDelay timing and level calibration don't apply.
 //                 A warning, with the interval
+//     CHORD       notes sounding together on one route of a monophonic patch (<Instrument mono="1">, SSO's Performance
+//                 patches: one legato line per slot): a note-on less than 15 ms after the note-on before on its route while
+//                 that one still sounds (a chord's notes on one copy): SSO drops it (velocity <= 64) or plays it as a
+//                 transition that ends the other. A fault (voice lanes, SoundLib::lanes, give each its own copy)
 //   Run: tst_playbackaudit (fixtures; MS_AUDIT_SCORE for any score, VERIFY.md › Playback audit)
 //---------------------------------------------------------
 
@@ -85,7 +89,7 @@ class Score;
 
 namespace PlaybackAudit {
 
-enum class Kind : signed char { OVERLAP, UNMEASURED, CAPPED, ARRIVAL, LEVEL_STEP, DROPPED, LEAP };
+enum class Kind : signed char { OVERLAP, UNMEASURED, CAPPED, ARRIVAL, LEVEL_STEP, DROPPED, LEAP, CHORD };
 // LEVEL_STEP's proposed threshold (not enforced; owner to approve): Jesteadt, Wier & Green 1977 at sensationLevel dB
 double differenceLimenDb(double sensationLevel = 60.0);
 enum class Severity : signed char { FAIL, WARN, INFO };

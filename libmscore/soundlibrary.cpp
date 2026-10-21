@@ -1065,6 +1065,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.kit = a.value("kit").toString() == "1";
                   li.keyScan = a.value("keyScan").toString() == "1";
                   li.bendCents = std::max(0.0, a.value("bend").toDouble());
+                  li.mono = a.value("mono").toString() == "1";
                   if (a.hasAttribute("keyShift"))
                         li.keyShift = qBound(-48, a.value("keyShift").toInt(), 48);
                   if (a.hasAttribute("maxVelocity"))
@@ -2105,6 +2106,11 @@ PartMix partMix(const Part* part, bool withSolo)
 //   routes
 //---------------------------------------------------------
 
+bool anyMono(const std::vector<const LibInstrument*>& patches)
+      {
+      return std::any_of(patches.begin(), patches.end(), [](const LibInstrument* p) { return p && p->mono; });
+      }
+
 std::vector<Route> routes(const Score* score, const Library& library, bool forLive)
       {
       std::vector<Route> result;
@@ -2135,13 +2141,20 @@ std::vector<Route> routes(const Score* score, const Library& library, bool forLi
                   continue;
             std::vector<int> laneCount(patches.size(), 1);
             std::vector<std::vector<double>> fixed(patches.size());
-            const bool laned = library.varispeed && !li->kit;
+            std::vector<std::vector<int>> voices(patches.size());
+            // (lanes: copies by tuning where the library plays tunings by varispeed; a monophonic patch's voices in any
+            // library, without varispeed one copy per voice, untuned)
+            const bool laned = (library.varispeed || anyMono(patches)) && !li->kit;
             if (laned) {
                   const LaneSettings ls = laneSettings(score, library);
-                  const Lanes l = lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes, fixedLanes(score, library, forLive));
+                  const Lanes l = library.varispeed
+                                  ? lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes, fixedLanes(score, library, forLive))
+                                  : lanes(score, part, patches, std::numeric_limits<double>::infinity(), ls.tail, 1, false);
                   laneCount = l.count;
                   fixed = l.fixed;
                   fixed.resize(patches.size());
+                  voices = l.voice;
+                  voices.resize(patches.size());
                   }
             for (int p = 0; p < int(patches.size()); ++p) {
                   if (p > 0 && (!used[p] || !available(*patches[p])))
@@ -2152,8 +2165,9 @@ std::vector<Route> routes(const Score* score, const Library& library, bool forLi
                               return result;
                         // (a lane's tuning: fixed; untuned without lanes; else it may vary)
                         const double cents = lane < int(fixed[size_t(p)].size()) ? fixed[size_t(p)][size_t(lane)]
-                                             : !laned ? 0.0 : std::numeric_limits<double>::quiet_NaN();
-                        result.push_back(Route { part, patches[p], k / 16, k % 16, p, lane, cents });
+                                             : !laned || !library.varispeed ? 0.0 : std::numeric_limits<double>::quiet_NaN();
+                        const int voice = lane < int(voices[size_t(p)].size()) ? voices[size_t(p)][size_t(lane)] : 0;
+                        result.push_back(Route { part, patches[p], k / 16, k % 16, p, lane, cents, voice });
                         ++k;
                         }
                   }
@@ -2493,6 +2507,10 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             double cents;
             bool slurred;                 // under a slur: legato from the note before on its track
             int track;
+            const Chord* grace { nullptr };     // a grace note's: the chord it belongs to (no voice of its own)
+            int voice { 0 };              // a monophonic patch's voice (0 the line)
+            bool plain { false };         // [slurs] plainPerformance's (Choice::plain): touching the note before, a transition
+            int chordNotes { 1 };         // its chord's notes on its patch (a monophonic patch's chord: > 1)
             };
       std::vector<Item> items;
       std::map<const Note*, const Note*> tiedTo;     // a tied note -> the note it continues
@@ -2509,7 +2527,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   const Chord* chord = toChord(e);
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, dynamics);
                   const int tick = chord->tick().ticks();
-                  auto add = [&](const Note* note, double on, double off) {
+                  auto add = [&](const Note* note, double on, double off, const Chord* graceOf) {
                         const double seconds = noteSeconds(note);
                         if (note->tieBack() && note->firstTiedNote() && note->firstTiedNote() != note) {
                               tiedTo[note] = note->firstTiedNote();
@@ -2530,16 +2548,79 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                         const double ring = tailSeconds < 0 ? laneRing(*patches[size_t(c ? c.patch : 0)], c ? c.articulation : nullptr, patches)
                                                             : std::max(tailSeconds, waitForRelease ? measured : 0.0);
                         items.push_back({ note, c ? c.patch : 0, on, off, ring,
-                                          playbackTuning(note), slurred, track });
+                                          playbackTuning(note), slurred, track, graceOf, 0, c && c.plain });
                         };
                   for (const Chord* g : chord->graceNotes())
                         for (const Note* n : g->notes())
-                              add(n, tm->tick2time(tick), tm->tick2time(tick) + 0.1);
+                              add(n, tm->tick2time(tick), tm->tick2time(tick) + 0.1, chord);
                   for (const Note* n : chord->notes())
-                        add(n, tm->tick2time(tick), end(n));
+                        add(n, tm->tick2time(tick), end(n), nullptr);
                   }
             }
       std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.on < b.on; });
+
+      {                                                 // (a chord's notes on each patch)
+      std::map<std::pair<const Chord*, int>, int> perChord;
+      for (const Item& it : items)
+            if (!it.grace)
+                  ++perChord[{ it.note->chord(), it.patch }];
+      for (Item& it : items)
+            if (!it.grace)
+                  it.chordNotes = perChord[{ it.note->chord(), it.patch }];
+      }
+      // voices (a monophonic patch: LibInstrument::mono): the notes starting together from the lowest pitch up, each
+      // the lowest voice free by its start as written; a grace note its chord's lowest note's voice
+      int voiceCount = 1;
+      {
+      std::map<const Note*, int> voiceOfNote;
+      for (size_t p = 0; p < patches.size(); ++p) {
+            if (!patches[p]->mono)
+                  continue;
+            std::vector<double> voiceEnd;                // per voice: its last note's written end
+            std::vector<size_t> group;
+            auto place = [&]() {
+                  std::stable_sort(group.begin(), group.end(), [&](size_t a, size_t b) {
+                        const Note* na = items[a].note;
+                        const Note* nb = items[b].note;
+                        return na->ppitch() != nb->ppitch() ? na->ppitch() < nb->ppitch() : items[a].cents < items[b].cents;
+                        });
+                  for (size_t i : group) {
+                        Item& it = items[i];
+                        int v = 0;
+                        while (v < int(voiceEnd.size()) && voiceEnd[size_t(v)] > it.on + 1e-6)
+                              ++v;
+                        if (v == int(voiceEnd.size()))
+                              voiceEnd.push_back(-1);
+                        voiceEnd[size_t(v)] = it.off;
+                        it.voice = v;
+                        voiceOfNote[it.note] = v;
+                        voiceCount = std::max(voiceCount, v + 1);
+                        }
+                  group.clear();
+                  };
+            for (size_t i = 0; i < items.size(); ++i) {
+                  if (items[i].patch != int(p) || items[i].grace)
+                        continue;
+                  if (!group.empty() && std::fabs(items[group.front()].on - items[i].on) > 1e-9)
+                        place();
+                  group.push_back(i);
+                  }
+            place();
+            }
+      for (Item& it : items) {
+            if (!it.grace || !patches[size_t(it.patch)]->mono)
+                  continue;
+            int v = -1;
+            for (const Note* n : it.grace->notes()) {                    // (its lowest note on the patch)
+                  auto f = voiceOfNote.find(n->tieBack() && n->firstTiedNote() ? n->firstTiedNote() : n);
+                  if (f != voiceOfNote.end()) {
+                        v = f->second;
+                        break;
+                        }
+                  }
+            it.voice = std::max(0, v);
+            }
+      }
 
       struct Lane {
             double cents { 0 };
@@ -2548,8 +2629,10 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             double lastOn { -1 };         // its last note's start and end
             double lastEnd { -1 };
             int lastTrack { -1 };
+            int lastChordNotes { 1 };
             };
-      std::vector<std::vector<Lane>> byPatch(patches.size());
+      // per patch, per voice: its lanes (a voice's lanes take only its own notes: the lanes by tuning, as ever)
+      std::vector<std::vector<std::vector<Lane>>> byPool(patches.size(), std::vector<std::vector<Lane>>(size_t(voiceCount)));
       // (fixedTuning: the patches whose lanes keep their tuning: those that don't bend)
       std::vector<bool> fixed(patches.size(), false);
       if (fixedTuning) {
@@ -2558,7 +2641,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   fixed[p] = !(bend && patches[p]->bendCents > 0);
             }
       for (const Item& it : items) {
-            std::vector<Lane>& lanes = byPatch[size_t(it.patch)];
+            std::vector<Lane>& lanes = byPool[size_t(it.patch)][size_t(it.voice)];
             if (lanes.empty())
                   lanes.emplace_back();
             int chosen = -1;
@@ -2580,10 +2663,13 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   out.cents[it.note] = lane.cents;
                   continue;
                   }
-            if (it.slurred) {                                                // legato: its lane, which glides
-                  for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)
-                        if (lanes[l].lastTrack == it.track && lanes[l].lastOn < it.on && std::fabs(lanes[l].lastEnd - it.on) <= 0.1)
-                              chosen = l;
+            // (a monophonic patch's chord, or a note after one, played plain: touching the note before on its voice, SSO
+            // plays a transition, which glides on the lane as a slur's does)
+            const bool mono = patches[size_t(it.patch)]->mono;
+            for (int l = 0; l < int(lanes.size()) && chosen < 0 && (it.slurred || mono); ++l) {     // legato: its lane, which glides
+                  const bool legato = it.slurred || (it.plain && (it.chordNotes > 1 || lanes[l].lastChordNotes > 1));
+                  if (legato && lanes[l].lastTrack == it.track && lanes[l].lastOn < it.on && std::fabs(lanes[l].lastEnd - it.on) <= 0.1)
+                        chosen = l;
                   }
             for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)       // already at its tuning
                   if (!lanes[l].tuned || std::fabs(lanes[l].cents - it.cents) <= toleranceCents)
@@ -2611,36 +2697,56 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             lane.lastOn = it.on;
             lane.lastEnd = it.off;
             lane.lastTrack = it.track;
+            lane.lastChordNotes = it.chordNotes;
             out.lane[it.note] = chosen;
             out.cents[it.note] = cents;
             }
-      // (fixed: lane 0 the tuning nearest 0, then by distance, below first)
+      // (fixed: within each voice, lane 0 the tuning nearest 0, then by distance, below first)
       out.fixed.assign(patches.size(), std::vector<double>());
+      out.voice.assign(patches.size(), std::vector<int>());
+      std::vector<std::vector<int>> offset(patches.size(), std::vector<int>(size_t(voiceCount), 0));
       for (size_t p = 0; p < patches.size(); ++p) {
-            if (!fixed[p])
-                  continue;
-            if (byPatch[p].empty()) {                       // (no notes: its one lane untuned)
-                  out.fixed[p].push_back(0.0);
-                  continue;
-                  }
-            std::vector<int> order(byPatch[p].size());
-            for (size_t l = 0; l < order.size(); ++l)
-                  order[l] = int(l);
-            std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
-                  const double ca = byPatch[p][size_t(a)].cents, cb = byPatch[p][size_t(b)].cents;
-                  return std::fabs(ca) != std::fabs(cb) ? std::fabs(ca) < std::fabs(cb) : ca < cb;
-                  });
-            std::vector<int> newIndex(order.size());
-            for (size_t l = 0; l < order.size(); ++l) {
-                  newIndex[size_t(order[l])] = int(l);
-                  out.fixed[p].push_back(byPatch[p][size_t(order[l])].cents);
-                  }
-            for (const Item& it : items)
-                  if (it.patch == int(p)) {
-                        auto nl = out.lane.find(it.note);
-                        if (nl != out.lane.end())
-                              nl->second = newIndex[size_t(nl->second)];
+            int at = 0;
+            for (int v = 0; v < voiceCount; ++v) {
+                  std::vector<Lane>& pool = byPool[p][size_t(v)];
+                  offset[p][size_t(v)] = at;
+                  if (v == 0 && pool.empty()) {           // (no notes: its one lane, untuned)
+                        if (fixed[p])
+                              out.fixed[p].push_back(0.0);
+                        out.voice[p].push_back(0);
+                        ++at;
+                        continue;
                         }
+                  at += int(pool.size());
+                  for (size_t l = 0; l < pool.size(); ++l)
+                        out.voice[p].push_back(v);
+                  if (!fixed[p])
+                        continue;
+                  std::vector<int> order(pool.size());
+                  for (size_t l = 0; l < order.size(); ++l)
+                        order[l] = int(l);
+                  std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+                        const double ca = pool[size_t(a)].cents, cb = pool[size_t(b)].cents;
+                        return std::fabs(ca) != std::fabs(cb) ? std::fabs(ca) < std::fabs(cb) : ca < cb;
+                        });
+                  std::vector<int> newIndex(order.size());
+                  for (size_t l = 0; l < order.size(); ++l) {
+                        newIndex[size_t(order[l])] = int(l);
+                        out.fixed[p].push_back(pool[size_t(order[l])].cents);
+                        }
+                  for (const Item& it : items)
+                        if (it.patch == int(p) && it.voice == v) {
+                              auto nl = out.lane.find(it.note);
+                              if (nl != out.lane.end())
+                                    nl->second = newIndex[size_t(nl->second)];
+                              }
+                  }
+            out.count[p] = std::max(1, at);
+            }
+      for (const Item& it : items) {                  // (a voice's lanes after the voices before)
+            auto nl = out.lane.find(it.note);
+            if (nl != out.lane.end())
+                  nl->second += offset[size_t(it.patch)][size_t(it.voice)];
             }
       for (const auto& t : tiedTo) {
             auto l = out.lane.find(t.second);
@@ -2649,8 +2755,6 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   out.cents[t.first] = out.cents[t.second];
                   }
             }
-      for (size_t p = 0; p < patches.size(); ++p)
-            out.count[p] = std::max(1, int(byPatch[p].size()));
       return out;
       }
 
