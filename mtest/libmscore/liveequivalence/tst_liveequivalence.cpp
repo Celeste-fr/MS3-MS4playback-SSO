@@ -2837,24 +2837,32 @@ void TestLiveEquivalence::plainPerformanceLive()
 //    and [levels] context, each value 0-3: *Live plays the score*'s clips (per route: the notes' velocities, the CC1 and
 //    CC11 values in order) and the plain set (the Performance patch's technique clips: each note's velocity; its Kontakt's
 //    CC1 / CC11 lanes: the values in order) carry what MuseScore plays: the accented attack's 122 (2 / 3), the accents'
-//    raised CC1 (1 / 3)
+//    raised CC1 (1 / 3); with the map's accentedLevel (branch accent-level, rows "real level") 2's / 3's accented notes'
+//    CC11 at PLAIN_ACCENT_DB over the spiccato attack (D5 -2 dB here), in MuseScore's CC11 and Live's alike
 //---------------------------------------------------------
 
 void TestLiveEquivalence::plainAccentsLive_data()
       {
       QTest::addColumn<int>("setting");
-      QTest::newRow("0 as a plain note") << 0;
-      QTest::newRow("1 level") << 1;
-      QTest::newRow("2 attack") << 2;
-      QTest::newRow("3 both") << 3;
+      QTest::addColumn<bool>("measured");
+      QTest::newRow("0 as a plain note") << 0 << false;
+      QTest::newRow("1 level") << 1 << false;
+      QTest::newRow("2 attack") << 2 << false;
+      QTest::newRow("3 both") << 3 << false;
+      QTest::newRow("0, accentedLevel") << 0 << true;
+      QTest::newRow("2 attack at the real level") << 2 << true;
+      QTest::newRow("3 both at the real level") << 3 << true;
       }
 
 void TestLiveEquivalence::plainAccentsLive()
       {
       QFETCH(int, setting);
+      QFETCH(bool, measured);
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
       Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
                                       { "slurs/plainAccents", QString::number(setting) } });
+      // (7 dB at D5 .. E5: 2 dB softer than the spiccato attack + PLAIN_ACCENT_DB)
+      const QString accentedLevel = measured ? " accentedLevel='60/100:7 60/400:7 84/100:7 84/400:7'" : "";
       QString grid;
       for (int cc : { 32, 96 })
             for (int ms : { 100, 1000 })
@@ -2870,8 +2878,8 @@ void TestLiveEquivalence::plainAccentsLive()
          "<Switch type='none'/>"
          "<Articulation name='Legato' value='20' techniques='legato long longmarcato' modifiers='performance' prefer='long'"
          " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
-         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1'/>"
-         "</Instrument></SoundLibrary>").arg(grid.trimmed()).toUtf8().constData());
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' contextLevel='%1'%2/>"
+         "</Instrument></SoundLibrary>").arg(grid.trimmed()).arg(accentedLevel).toUtf8().constData());
       QVERIFY(lib);
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
@@ -2923,7 +2931,10 @@ void TestLiveEquivalence::plainAccentsLive()
       const QString all = want["Violin - Performance"].join(", ");
       QVERIFY2(all.contains("cc1: ") && (setting & 1 ? all.section("cc1: ", 1).contains(' ') : !all.section("cc1: ", 1).section(',', 0, 0).contains(' ')),
                qPrintable(all));          // (1 / 3: CC1 up at the accents and back; 0 / 2: one CC1)
-      qDebug("plainAccents %d, MuseScore: %s", setting, qPrintable(all));
+      // (the real level: CC11 down at the accented notes and back; else one CC11)
+      const bool cc11Moves = all.contains("cc11: ") && all.section("cc11: ", 1).section(',', 0, 0).contains(' ');
+      QVERIFY2(cc11Moves == (measured && (setting & 2)), qPrintable(all));
+      qDebug("plainAccents %d%s, MuseScore: %s", setting, measured ? " (accentedLevel)" : "", qPrintable(all));
 
       // *Live plays the score*'s clips
       EventMap events;

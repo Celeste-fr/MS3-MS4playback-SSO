@@ -1750,7 +1750,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   struct PerformanceNote { bool on = false; const Note* from = nullptr; int interval = 0; double lenBefore = 0;
                                            int velocity = -1; const Note* before = nullptr; double endMs = 0;
                                            const SoundLib::Articulation::Technique* timedAttack = nullptr;
-                                           bool shortenOnly = false; };
+                                           bool shortenOnly = false;
+                                           bool accentAttack = false; };  // [slurs] plainAccents 2 / 3: the accented attack
                   // a staccato as written (staccato, staccatissimo; the first of its tie chain's): [slurs] plainPerformance
                   // plays it as a spiccato attack
                   auto staccatoNote = [&](const Note* n) {
@@ -1837,8 +1838,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (plain && (staccatoNote(note) || (joinable && staccatoNote(joinable)))) {
                               if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at))))
                                     p.velocity = own > 0 ? own : t->velocity;
-                              else if (accented)
+                              else if (accented) {
                                     p.velocity = accented->velocity;
+                                    p.accentAttack = true;
+                                    }
                               else
                                     p.velocity = plainVelocity;
                               if (joinable) {
@@ -1864,6 +1867,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (plain) {
                               if (accented) {
                                     p.velocity = accented->velocity;
+                                    p.accentAttack = true;
                                     if (joinable && a->reattackGapMs > 0) {       // (a re-attack, not SSO's transition)
                                           p.before = joinable;
                                           p.endMs = -a->reattackGapMs;
@@ -2076,6 +2080,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4TiedTicks = tiedTicks;
                         config.ms4Once = once;
                         config.libPatch = libChoice.patch;
+                        bool accentAttack = false;
                         if (li && !libNote.builtIn && !li->kit) {
                               // a legato transition (SSO's Performance patches reach the new pitch 60-690 ms after the
                               // note-on, median 190, by patch and interval: the legato grid): its tuning lane glides
@@ -2083,6 +2088,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               int interval = 0;
                               double lenBefore = 0;
                               const PerformanceNote perf = offset == 0 ? performanceNote(note, libChoice, r) : PerformanceNote();
+                              accentAttack = perf.on && perf.accentAttack;
                               const Note* from = perf.on ? perf.from : legatoTransition(note, libChoice, &interval, &lenBefore);
                               if (perf.on) {
                                     interval = perf.interval;
@@ -2264,6 +2270,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     if (ticks > 0 && extra > 0)
                                           config.ms4Dur = r.dur + int(qint64(extra) * Ms4::HUNDRED / ticks);
                                     }
+                              }
+                        // [slurs] plainAccents 2 / 3 (performanceNote's accentAttack) at real players' level: PLAIN_ACCENT_DB over
+                        // the spiccato attack it replaces, which SSO's accented attack plays the map's accentedLevel over at the
+                        // note's pitch and length as played (written x the length factor just set; a join to the next note
+                        // may shorten it a little more), the rest by CC11 (dB add up; louder only as far as CC11 reaches 127,
+                        // libraryNoteLevels; not by CC1, which would change the tone too)
+                        if (accentAttack && libChoice && !libChoice.articulation->accentedLevels.empty()) {
+                              const double ms = SoundLib::noteSeconds(note) * 1000.0 * config.ms4Dur / double(Ms4::HUNDRED);
+                              libLevels[note].volumeDb += PLAIN_ACCENT_DB - libChoice.articulation->accentedLevelAt(note->ppitch(), ms);
                               }
                         config.libKey = libNote.key;
                         if (libNote.velocity > 0)

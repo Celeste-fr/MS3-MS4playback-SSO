@@ -255,6 +255,14 @@ class MidiRenderer {
       // before as a transition (the map's legatoGap, 39 ms, measured), so a spiccato attack needs 45 ms (abl.py's margin)
       static constexpr int PLAIN_VELOCITY = 64;
       static constexpr double PLAIN_STACCATO_GAP_MS = 45.0;
+      // [slurs] plainAccents 2 / 3: an accent or marcato on the accented attack plays this much louder than the spiccato
+      // attack at PLAIN_VELOCITY, by CC11 against the map's measured accentedLevel (Articulation::accentedLevelAt):
+      // real players' sf at f over the unaccented notes around it, +5.0 dB pooled over the five string sections (90 %
+      // [+3.8, +6.0]; the sections +4.1 .. +5.5 agree within one instance's noise, so one value), the Spheres dataset's
+      // Mozart K. 550 (Colibri Ensemble, arXiv 2511.21247), each section's close stem, perceived peak in the 0.4 s after
+      // the onset, the measure accentedLevel uses (private accent-spheres study, 2026-10-20; readings approved by the
+      // owner, 2026-10-21). An assumption: K. 550's strings have only sf, no ">" or marcato; a ">" may play softer
+      static constexpr double PLAIN_ACCENT_DB = 5.0;
       static const int DYNAMIC_LEVELS[8];         // MS4's levels of ppp … fff (ms4playback.cpp's dynamic table)
       static const char* const DYNAMIC_NAMES[8];
    private:
