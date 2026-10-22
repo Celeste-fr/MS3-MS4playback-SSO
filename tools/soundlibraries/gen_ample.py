@@ -82,9 +82,9 @@ SAMPLE_SETS = [("Finger", "AGMFg"), ("Pick", "AGMPk"), ("Strum", "AGMSt")]
 # - the strummer: strum mode C#6 (velocity >= 64 on, <= 63 off), Detect D5 at 127, the chord's notes in C1-B2 with the
 #   root in C1-B1, strum keys C4 down open, E4 up open, G4 down muted, B4 up muted; velocity 96-126 plays all six
 #   strings (110: inside the band; the band's level moves only 1-2 dB, its timbre not at all);
-# - STRUM_LEVELS: the CC7 at which the recorded Full strum (v110) is as loud as a six-string roll at that velocity
-#   (meas3 item 1, "CC7 for equal level"; CC7 is a clean gain, 64 = unity). The Pick set was not measured: Finger's
-#   numbers (an assumption: its in-band velocity range is Finger's, meas2 A);
+# - strumLevels (ample_<code>.json): the CC7 at which the recorded Full strum (v110) is as loud as a six-string roll at
+#   that velocity (CC7 is a clean gain, 64 = unity); measured per set 2026-10-21 with the set-up strumLead before the
+#   strum key (measure_ample.py strum; meas3's of 2026-10-20 were of the dark, partial same-block strums, Pick = Finger's);
 # - softStrum 30: rolls are darker than a CC7-lowered strum only at v <= 30 (meas3); rollGap 15 ms (10-25 ms all lie
 #   inside the recorded strums' spread);
 # - rollKeys / softRoll ([guitar] softStrums 2): the single-string keys D3-B3 (strings 6..1) in strum mode play the held
@@ -102,13 +102,13 @@ SAMPLE_SETS = [("Finger", "AGMFg"), ("Pick", "AGMPk"), ("Strum", "AGMSt")]
 #   blocks of 64-2048 frames: a note-on in the same block as the change plays at the old capo wherever it lies in the
 #   block, one in a later block at the new; a ringing note keeps its pitch). MuseScore's hosting splits its blocks at
 #   events, so any lead works there; 50 ms covers a host's fixed blocks up to 2048 frames at 44.1 kHz (Live's buffer);
+# - strumLead 50 ms: the strummer reads its set-up (strum mode, Detect, the chord keys) only from an earlier process
+#   block than the strum key; in the same block it plays dark and partial (centroid ~350-600 Hz against ~1200, 2-6 dB
+#   quieter) and, on multiples of 7.5 s of render time, quiet (2026-10-21, tools/ample/measure_ample.py strumtiming /
+#   strumlead / demo15: blocks 16-2048; a 25 ms lead at block 512 removed every quiet strum): 50 ms covers 2048-frame
+#   blocks as capoLead does; a previous strum's release moves to the set-up (its last 25 ms 0.6 dB lower, measured);
 # - overlap 20 ms (a legato slide / hammer-on needs the two notes to overlap; any overlap measured works: the fork's
 #   choice), slideOut 200 ms (the slide out falls within 160 ms, meas), FX keys F5-C6, F6-G6 (all 11 sound, meas).
-STRUM_LEVELS = [
-    ("AGMSt", "20:8 40:16 60:20 80:32 100:64 120:69"),
-    ("AGMFg", "20:6 40:11 60:13 80:27 100:39 120:50"),
-    ("AGMPk", "20:6 40:11 60:13 80:27 100:39 120:50"),
-]
 GUITAR_FX = [
     ("scratch", 89), ("slap", 90), ("muting", 91), ("strum mute", 92), ("down ?noise( 1)?", 93), ("up ?noise( 1)?", 94),
     ("down ?noise 2", 95), ("up ?noise 2", 96), ("hit top( open)?", 101), ("hit top mute(d)?", 102), ("hit rim", 103),
@@ -119,14 +119,15 @@ GUITAR = [
     ("strumMode", "97"), ("strumOn", "100"), ("strumOff", "1"), ("detect", "86"), ("detectVelocity", "127"),
     ("chordLow", "36"), ("strumKeys", "72 76 79 83"), ("strumVelocity", "110"), ("softStrum", "30"), ("rollGap", "15"),
     ("rollKeys", "62 64 65 67 69 71"), ("softRoll", "20:10 40:15"),
-    ("sampleSet", "sample-set"), ("capo", "m-capo"), ("capoMax", "11"), ("capoLead", "50"), ("artificial", "3:31 4:28 5:24 7:19 12:12"),
+    ("sampleSet", "sample-set"), ("capo", "m-capo"), ("capoMax", "11"), ("capoLead", "50"), ("strumLead", "50"), ("artificial", "3:31 4:28 5:24 7:19 12:12"),
     ("pinch", "19 60 2 45"), ("overlap", "20"), ("slideOut", "200"), ("fxLength", "500"),
 ]
 
 
 # GUITAR's entries that are measured per product (ample_<code>.json key, how it is written)
 GUITAR_MEASURED = {"strumVelocity": "strumVelocity", "softStrum": "softStrum", "rollGap": "rollGap",
-                   "softRoll": "softRoll", "capoMax": "capoMax", "capoLead": "capoLead", "pinch": "pinch"}
+                   "softRoll": "softRoll", "capoMax": "capoMax", "capoLead": "capoLead", "strumLead": "strumLead",
+                   "pinch": "pinch"}
 
 
 def resolve(product, allow_todo=False):

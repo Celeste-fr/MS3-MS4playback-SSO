@@ -33,6 +33,7 @@ Experiments (each says what it fills in ample_<product>.json):
 """
 
 import argparse
+import shutil
 import json
 import os
 import statistics
@@ -62,6 +63,7 @@ class Ctx:
         self.plugin = a.plugin or self.product["vst3Path"]
         self.n = a.n
         self.merge_to = a.merge_to
+        self.only = a.only.split(",") if a.only else None
         self.results = {}
         ss = self.product["sampleSets"]
         self.sets = ss if isinstance(ss, list) else self.product["sampleSetsGuess"]
@@ -118,7 +120,7 @@ def render(ctx, jobs, secs=240):
             amplevm.get(ctx.remote(name + ".wav"), lp)
             res[name] = audio.load(lp)
             if ctx.keep:
-                os.replace(lp, ctx.local(name + ".wav"))
+                shutil.move(lp, ctx.local(name + ".wav"))
         amplevm.ps("Remove-Item '%s\\*.wav' -ea 0" % ctx.vmdir, check=False)
     return res
 
@@ -146,14 +148,16 @@ def tap(t, key, vel=100):
     return [ev(t, "on", key, vel), ev(t, "off", key, 0)]
 
 
-def strum_events(ctx, t, chord=(40, 44, 47), vel=110, cc7=None, length=0.4979, key=None):
+def strum_events(ctx, t, chord=(40, 44, 47), vel=110, cc7=None, length=0.4979, key=None, lead=0.0):
+    """a strum as MuseScore's guitar pass sends it; lead: the mode / Detect / chord keys that much before the strum key"""
     g = ctx.product["guitar"]
     out = []
+    k = t - lead
     if cc7 is not None:
-        out.append(ev(t, "cc", 7, cc7))
-    out += tap(t, g["sustainKey"])
-    out += tap(t, g["detect"], g["detectVelocity"]) + tap(t, g["strumMode"], g["strumOn"])
-    out += [ev(t, "on", n, 100) for n in chord] + [ev(t, "on", key or g["strumKeys"][0], vel)]
+        out.append(ev(k, "cc", 7, cc7))
+    out += tap(k, g["sustainKey"])
+    out += tap(k, g["detect"], g["detectVelocity"]) + tap(k, g["strumMode"], g["strumOn"])
+    out += [ev(k, "on", n, 100) for n in chord] + [ev(t, "on", key or g["strumKeys"][0], vel)]
     e = t + length
     out += [ev(e, "off", n, 0) for n in chord] + [ev(e, "off", key or g["strumKeys"][0], 0)]
     out += tap(e, g["strumMode"], g["strumOff"])
@@ -232,6 +236,7 @@ def x_demo15(ctx):
     need_sets(ctx)
     s = state_path(ctx, first_set(ctx))
     variants = [
+        ("d_lead25", 1.5, "--pre 15 --lead"),
         ("d_every2", 2.0, "--pre 15"),
         ("d_every3", 3.0, "--pre 15"),
         ("d_every1_5", 1.5, "--pre 15"),
@@ -246,13 +251,16 @@ def x_demo15(ctx):
     times = {}
     for name, period, opts in variants:
         start = 1.0 if "--odd" in opts else 0.0
-        opts = opts.replace("--odd", "")
+        lead = 0.025 if "--lead" in opts else 0.0
+        opts = opts.replace("--odd", "").replace("--lead", "")
         ts = [start + k * period for k in range(int(70 / period) + 1) if start + k * period <= 70]
         evs = []
         for t in ts:
-            evs += strum_events(ctx, t, cc7=36)
+            evs += strum_events(ctx, t, cc7=36, lead=lead)
         times[name] = ts
         jobs.append((name, evs, "%s --tail 2 --state \"%s\"" % (opts, s)))
+    if ctx.only:
+        jobs = [j for j in jobs if j[0] in ctx.only]
     res = render(ctx, jobs, secs=400)
     out = {}
     for name, _, _ in jobs:
@@ -264,8 +272,10 @@ def x_demo15(ctx):
         med = statistics.median(l for _, l, _ in rows)
         quiet = [(t, round(l - med, 1), round(c)) for t, l, c in rows if l < med - 3]
         out[name] = {"median": round(med, 1), "quiet": quiet}
-        print("demo15 %s: median %.1f dB; quiet: %s" % (name, med, ", ".join("%.1f s %+.1f dB %d Hz" % q for q in quiet)
-                                                         or "none"))
+        cents = statistics.median(c for _, _, c in rows)
+        out[name]["medianCentroid"] = round(cents)
+        print("demo15 %s: median %.1f dB %d Hz; quiet: %s" % (name, med, cents, ", ".join("%.1f s %+.1f dB %d Hz" % q
+                                                                                         for q in quiet) or "none"))
     ctx.save("demo15", out)
 
 
@@ -519,42 +529,51 @@ def lsd(x, sr, t, y, sr2, u, d=0.6):
 
 
 def x_keys(ctx):
-    """each key outside the playing range tapped (after a Sustain tap) 0.1 s before G3: does the note change?"""
+    """each key outside the playing range tapped (after a Sustain tap) 0.1 s before G3: does the note change? Four plain
+    references first (the round robins cycle); after each key strum mode off (97 latches) and Sustain again. Changed:
+    the note's spectrum farther from every reference than the references from each other (+3 dB), its level 3 dB off
+    theirs, its decay 4 dB off theirs, or the tap itself sounding (> -35 dB)"""
     need_sets(ctx)
     g = ctx.product["guitar"]
     keys = [k for k in range(0, 128) if k < 40 or k > 88]
     evs, at = [], {}
     t = 1.0
-    for rep in range(2):                     # two plain references (the round robins alternate)
+    nref = 4
+    for rep in range(nref):
         evs += tap(t - 0.2, g["sustainKey"]) + note(t, 55, 100, 0.9)
         at["ref%d" % rep] = t
         t += 1.5
     for k in keys:
         evs += tap(t - 0.2, g["sustainKey"]) + tap(t - 0.1, k) + note(t, 55, 100, 0.9)
+        evs += tap(t + 1.0, g["strumMode"], g["strumOff"]) + tap(t + 1.05, g["sustainKey"])
         at[k] = t
         t += 1.5
     jobs = [("keys", evs, "--pre 5 --tail 1 --state \"%s\"" % state_path(ctx, first_set(ctx)))]
     r = render(ctx, jobs, secs=600)["keys"]
     sr, x = r[0], audio.mono(r[1])
-    refs = [at["ref0"], at["ref1"]]
+    refs = [at["ref%d" % i] for i in range(nref)]
     ref_l = [audio.loud50(x, sr, u, 0.9) for u in refs]
+    ref_dec = [audio.rms(x, sr, u + 0.5, 0.4) - l for u, l in zip(refs, ref_l)]
+    ref_lsd = max(lsd(x, sr, u, x, sr, v) for u in refs for v in refs if u != v)
     out = {}
     for k in keys:
         u = at[k]
         l = audio.loud50(x, sr, u, 0.9)
         pre = audio.rms(x, sr, u - 0.1, 0.09)
         d = min(lsd(x, sr, u, x, sr, v) for v in refs)
-        late = audio.rms(x, sr, u + 0.5, 0.4) - l
-        changed = d > 4 or abs(l - statistics.mean(ref_l)) > 3 or pre > -60
-        out[str(k)] = {"loud50": round(l, 1), "lsd": round(d, 1), "tapSound": round(pre, 1), "decay": round(late, 1),
+        dec = audio.rms(x, sr, u + 0.5, 0.4) - l
+        changed = (d > ref_lsd + 3 or min(abs(l - v) for v in ref_l) > 3 or min(abs(dec - v) for v in ref_dec) > 4
+                   or pre > -35)
+        out[str(k)] = {"loud50": round(l, 1), "lsd": round(d, 1), "tapSound": round(pre, 1), "decay": round(dec, 1),
                        "changed": bool(changed)}
     ch = [k for k in keys if out[str(k)]["changed"]]
-    print("keys: changed the note or sounded: %s" % ch)
-    ctx.save("keys", {"keys": out, "changed": ch, "refLoud50": [round(v, 1) for v in ref_l]})
+    print("keys: references' spread %.1f dB LSD; changed the note or sounded: %s" % (ref_lsd, ch))
+    ctx.save("keys", {"keys": out, "changed": ch, "refLoud50": [round(v, 1) for v in ref_l], "refLsd": round(ref_lsd, 1)})
 
 
 def x_range(ctx):
-    """each articulation key's playable notes (MIDI 28-100): sounding (loud50 > -70 dB) or not"""
+    """each articulation key's playable notes (MIDI 28-100), each note 1.2 s after the last: sounding = its loud50 at
+    least 20 dB over the 0.1 s before it and above -70 dB"""
     need_sets(ctx)
     g = ctx.product["guitar"]
     arts = [("sustain", g["sustainKey"]), ("harmonic", g["harmonic"]), ("palmMute", g["palmMute"])]
@@ -562,11 +581,12 @@ def x_range(ctx):
         arts.append(("slideGuitar", g["slideGuitarKey"]))
     jobs = []
     pitches = list(range(28, 101))
+    step = 1.2
     for name, key in arts:
         evs = []
         for i, p in enumerate(pitches):
-            t = 0.5 + i * 0.7
-            evs += tap(t - 0.1, key) + note(t, p, 100, 0.5)
+            t = 0.5 + i * step
+            evs += tap(t - 0.1, key) + note(t, p, 100, 0.4)
         jobs.append(("range_" + name, evs, "--pre 5 --tail 1 --state \"%s\"" % state_path(ctx, first_set(ctx))))
     res = render(ctx, jobs, secs=600)
     out = {}
@@ -575,11 +595,17 @@ def x_range(ctx):
         if not r:
             continue
         sr, x = r[0], audio.mono(r[1])
-        lv = {p: audio.loud50(x, sr, 0.5 + i * 0.7, 0.6) for i, p in enumerate(pitches)}
-        sounding = [p for p in pitches if lv[p] > -70]
-        out[name] = {"lowest": min(sounding) if sounding else None, "highest": max(sounding) if sounding else None,
-                     "levels": {str(p): round(v, 1) for p, v in lv.items()}}
-        print("range %s: sounds %s-%s" % (name, out[name]["lowest"], out[name]["highest"]))
+        lv, ok = {}, []
+        for i, p in enumerate(pitches):
+            t = 0.5 + i * step
+            l = audio.loud50(x, sr, t, 0.5)
+            before = audio.rms(x, sr, t - 0.12, 0.1)
+            lv[p] = (l, before)
+            if l > -70 and l - before > 20:
+                ok.append(p)
+        out[name] = {"lowest": min(ok) if ok else None, "highest": max(ok) if ok else None, "sounding": ok,
+                     "levels": {str(p): [round(a, 1), round(b, 1)] for p, (a, b) in lv.items()}}
+        print("range %s: sounds %s-%s (%d of %d)" % (name, out[name]["lowest"], out[name]["highest"], len(ok), len(pitches)))
     ctx.save("range", out)
 
 
@@ -618,6 +644,12 @@ def roll(t, keys, vel, gap, length=0.5):
     return evs
 
 
+def strum_lead(ctx):
+    """the set-up lead MuseScore plays (the product's strumLead, else AGM's 50 ms): seconds"""
+    v = ctx.product.get("strumLead")
+    return (v if isinstance(v, (int, float)) else 50) / 1000.0
+
+
 def strum_mode_on(ctx, t, chord=(40, 44, 47)):
     g = ctx.product["guitar"]
     return (tap(t, g["sustainKey"]) + tap(t, g["detect"], g["detectVelocity"]) + tap(t, g["strumMode"], g["strumOn"])
@@ -641,19 +673,20 @@ def x_strum(ctx):
     for set_name, db in ctx.sets:
         evs, at = [], {}
         t = 0.5
+        lead = strum_lead(ctx)
         for v in bandv:
-            evs += strum_events(ctx, t, vel=v, cc7=64)
+            evs += strum_events(ctx, t, vel=v, cc7=64, lead=lead)
             at["band%d" % v] = t
             t += 2.5
         for cc in ladder:
-            evs += strum_events(ctx, t, vel=g.get("strumVelocity", 110), cc7=cc)
+            evs += strum_events(ctx, t, vel=g.get("strumVelocity", 110), cc7=cc, lead=lead)
             at["cc%d" % cc] = t
             t += 2.5
         evs.append(ev(t - 0.5, "cc", 7, 64))
         for v in rollv:
             for rep in range(2):
-                evs += strum_mode_on(ctx, t) + roll(t + 0.05, g["rollKeys"], v, 0.015, 1.0) + strum_mode_off(ctx, t + 1.2)
-                at["roll%d_%d" % (v, rep)] = t + 0.05
+                evs += strum_mode_on(ctx, t) + roll(t + lead, g["rollKeys"], v, 0.015, 1.0) + strum_mode_off(ctx, t + 1.2)
+                at["roll%d_%d" % (v, rep)] = t + lead
                 t += 2.5
         res = render(ctx, [("strum_" + set_name, evs, "--pre 10 --tail 1 --state \"%s\"" % state_path(ctx, set_name))],
                      secs=600)
@@ -698,14 +731,14 @@ def x_softroll(ctx):
     t = 0.5
     for v in (20, 40):
         for rep in range(2):
-            evs += strum_events(ctx, t, vel=g.get("strumVelocity", 110), cc7=int(lv[str(v)]))
+            evs += strum_events(ctx, t, vel=g.get("strumVelocity", 110), cc7=int(lv[str(v)]), lead=strum_lead(ctx))
             at["strum%d_%d" % (v, rep)] = t
             t += 2.5
         evs.append(ev(t - 0.5, "cc", 7, 64))
         for gp in gaps:
             for rep in range(2):
-                evs += strum_mode_on(ctx, t) + roll(t + 0.05, g["rollKeys"], v, gp, 1.0) + strum_mode_off(ctx, t + 1.2)
-                at["roll%d_%g_%d" % (v, gp, rep)] = t + 0.05
+                evs += strum_mode_on(ctx, t) + roll(t + strum_lead(ctx), g["rollKeys"], v, gp, 1.0) + strum_mode_off(ctx, t + 1.2)
+                at["roll%d_%g_%d" % (v, gp, rep)] = t + strum_lead(ctx)
                 t += 2.5
     r = render(ctx, [("softroll", evs, "--pre 10 --tail 1 --state \"%s\"" % state_path(ctx, name))], secs=600)["softroll"]
     sr, x = r[0], audio.mono(r[1])
@@ -807,6 +840,11 @@ def x_merge(ctx):
     r = have("range")
     if r and "harmonic" in r:
         put("nhRange", [r["harmonic"]["lowest"], r["harmonic"]["highest"]], "range")
+    sl = have("strumlead")
+    if sl:
+        # the set-up must be in an earlier block: the least lead per block size measured; 50 ms covers 2048 frames
+        need = max([v for v in sl["leastLeadMs"].values() if v is not None] + [0])
+        put("strumLead", max(50, int(need)), "strumlead")
     k = have("keys")
     if k:
         put("keyswitchesSounding", k["changed"], "keys")
@@ -816,12 +854,110 @@ def x_merge(ctx):
     print("merge: %s (%d keys)" % (path, len(cur)))
 
 
+def x_strumtiming(ctx):
+    """the strum key after the chord keys by 0 / 3 / 6 / 12 / 25 ms, at blocks 64 / 512: does the strum need its chord
+    keys a block early? (demofine: at block 64 every strum came out darker and quieter)"""
+    need_sets(ctx)
+    g = ctx.product["guitar"]
+    leads = [0.0, 0.003, 0.006, 0.012, 0.025]
+    jobs, at = [], {}
+    for b in (64, 512):
+        evs = []
+        t = 0.5
+        for d in leads:
+            for rep in range(2):
+                evs += [ev(t - 0.3, "cc", 7, 36)] + tap(t - d, g["sustainKey"]) + tap(t - d, g["detect"], g["detectVelocity"])
+                evs += tap(t - d, g["strumMode"], g["strumOn"]) + [ev(t - d, "on", n, 100) for n in (40, 44, 47)]
+                evs += [ev(t, "on", g["strumKeys"][0], 110)]
+                evs += [ev(t + 0.5, "off", n, 0) for n in (40, 44, 47, g["strumKeys"][0])] + tap(t + 0.5, g["strumMode"], g["strumOff"])
+                at[(b, d, rep)] = t
+                t += 2.0
+        jobs.append(("st_%d" % b, evs, "--pre 5 --tail 1 --block %d --state \"%s\"" % (b, state_path(ctx, first_set(ctx)))))
+    res = render(ctx, jobs)
+    out = {}
+    for b in (64, 512):
+        r = res.get("st_%d" % b)
+        if not r:
+            continue
+        sr, x = r[0], audio.mono(r[1])
+        for d in leads:
+            ls = [audio.loud50(x, sr, at[(b, d, rep)], 0.5) for rep in range(2)]
+            cs = [audio.centroid(x, sr, at[(b, d, rep)], 0.3) for rep in range(2)]
+            out["%d_%g" % (b, d)] = [round(statistics.mean(ls), 1), round(statistics.mean(cs))]
+    print("strumtiming (block_lead: loud50, centroid): %s" % out)
+    ctx.save("strumtiming", out)
+
+
+def x_strumlead(ctx):
+    """how long before the strum key the strummer's setup (mode, Detect, chord keys) must come (leads 0-25 ms, blocks
+    16-2048), and back-to-back strums: the first strum's keys and mode released `lead` early so the second's setup can go
+    first (does the release cut the ringing first strum?)"""
+    need_sets(ctx)
+    g = ctx.product["guitar"]
+    leads = [0.0, 0.001, 0.002, 0.003, 0.004, 0.006, 0.008, 0.012, 0.025]
+    blocks = [16, 64, 512, 2048]
+    jobs, at = [], {}
+    for b in blocks:
+        evs = []
+        t = 0.5
+        for d in leads:
+            for rep in range(2):
+                evs += strum_events(ctx, t, cc7=64, lead=d)
+                at[(b, d, rep)] = t
+                t += 1.5
+        jobs.append(("sl_%d" % b, evs, "--pre 5 --tail 1 --block %d --state \"%s\"" % (b, state_path(ctx, first_set(ctx)))))
+    # back to back: E then A, the second at 1.0 s after the first; "same": the second's setup at its tick (the first's
+    # offs there too); "early": the first's offs and the second's setup 25 ms before the second's strum key
+    A = (45, 49, 52)
+    for kind in ("same", "early"):
+        evs = []
+        t = 0.5
+        for rep in range(3):
+            lead = 0.025 if kind == "early" else 0.0
+            e1 = strum_events(ctx, t, cc7=64, length=1.0 - lead, lead=0.025)
+            e2 = strum_events(ctx, t + 1.0, chord=A, cc7=64, length=1.0, lead=lead if kind == "early" else 0.0)
+            evs += e1 + e2
+            at[(kind, rep)] = t
+            t += 4.0
+        jobs.append(("b2b_" + kind, evs, "--pre 5 --tail 1 --block 512 --state \"%s\"" % state_path(ctx, first_set(ctx))))
+    res = render(ctx, jobs)
+    out = {"leads": {}, "backToBack": {}}
+    for b in blocks:
+        r = res.get("sl_%d" % b)
+        if not r:
+            continue
+        sr, x = r[0], audio.mono(r[1])
+        for d in leads:
+            ls = [audio.loud50(x, sr, at[(b, d, rep)], 0.5) for rep in range(2)]
+            cs = [audio.centroid(x, sr, at[(b, d, rep)], 0.3) for rep in range(2)]
+            out["leads"]["%d_%g" % (b, d * 1000)] = [round(statistics.mean(ls), 1), round(statistics.mean(cs))]
+    for kind in ("same", "early"):
+        r = res.get("b2b_" + kind)
+        if not r:
+            continue
+        sr, x = r[0], audio.mono(r[1])
+        rows = []
+        for rep in range(3):
+            t = at[(kind, rep)]
+            rows.append([round(audio.rms(x, sr, t + 0.9, 0.07), 1), round(audio.rms(x, sr, t + 0.97, 0.03), 1),
+                         round(audio.loud50(x, sr, t + 1.0, 0.5), 1), round(audio.centroid(x, sr, t + 1.0, 0.3))])
+        out["backToBack"][kind] = rows
+    good = {}
+    for b in blocks:
+        ok = [d for d in leads if out["leads"].get("%d_%g" % (b, d * 1000), [0, 0])[1] > 1000]
+        good[b] = min(ok) * 1000 if ok else None
+    out["leastLeadMs"] = good
+    print("strumlead: bright from (ms) %s; %s; back to back [first's rms .90-.97, .97-1.0, second's loud50, centroid]: %s"
+          % (good, out["leads"], out["backToBack"]))
+    ctx.save("strumlead", out)
+
+
 EXPERIMENTS = {"dump": x_dump, "sets": x_sets, "demo15": x_demo15, "crash": x_crash, "cc": x_cc, "bgload": x_bgload,
                "stateclamp": x_stateclamp, "demofine": x_demofine,
                "keys": x_keys, "range": x_range, "velocity": x_velocity, "strum": x_strum, "softroll": x_softroll,
-               "capo": x_capo, "merge": x_merge}
+               "capo": x_capo, "merge": x_merge, "strumtiming": x_strumtiming, "strumlead": x_strumlead}
 # what `all` runs, in order (crash and the demo experiments are diagnostics: by name only)
-ALL = ["dump", "sets", "keys", "range", "velocity", "cc", "strum", "softroll", "capo", "bgload", "stateclamp"]
+ALL = ["dump", "sets", "keys", "range", "velocity", "cc", "strumlead", "strum", "softroll", "capo", "bgload", "stateclamp"]
 
 
 def main(argv):
@@ -833,6 +969,7 @@ def main(argv):
     ap.add_argument("--keep-wav", action="store_true")
     ap.add_argument("--merge-to", help="merge: this file instead of tools/soundlibraries/ample_<code>.json (a regression "
                     "run against the committed numbers)")
+    ap.add_argument("--only", help="demo15: only these variants")
     ap.add_argument("-n", type=int, default=30, help="crash: loads per condition")
     ap.add_argument("experiments", nargs="+")
     a = ap.parse_args(argv[1:])

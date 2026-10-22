@@ -665,6 +665,7 @@ static bool readGuitar(QXmlStreamReader& r, Guitar& g)
       number("rollGap", g.rollGapMs);
       key("capoMax", g.capoMax, 1, 24);
       number("capoLead", g.capoLeadMs);
+      number("strumLead", g.strumLeadMs);
       number("overlap", g.overlapMs);
       number("slideOut", g.slideOutMs);
       number("fxLength", g.fxMs);

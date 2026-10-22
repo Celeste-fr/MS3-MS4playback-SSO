@@ -6,10 +6,10 @@
   "sampleSets": "state diff m32 / t00 (ample-state RESULT.md); proof h03",
   "maxVelocity": "velocity 127 on Sustain plays Pop (meas, centroid 3.5-4.7 kHz)",
   "strumVelocity": "strum keys' band 96-126 plays all six strings; 110 inside it (meas2 A)",
-  "strumLevels": "meas3 item 1: CC7 at which the recorded strum equals a six-string roll; Pick = Finger's (assumed)",
+  "strumLevels": "measure_ample.py strum, 2026-10-21 (AGM 4.1.0 demo, amphost, block 512): the CC7 at which the set's Full strum (v110, its set-up strumLead 50 ms before the strum key) is as loud (RMS of the first 1.5 s) as a six-string roll at that velocity; each set measured (Pick no longer Finger's). Replaces meas3's of 2026-10-20, which were measured with the set-up in the strum key's block: dark, partial strums (see strumLead)",
   "softStrum": "meas3: rolls darker than a CC7-lowered strum only at v <= 30",
   "rollGap": "meas3: 10-25 ms inside the recorded strums' spread",
-  "softRoll": "meas3 level pairs v20 10 ms / v40 15 ms",
+  "softRoll": "meas3 item 1's level pairs (2026-10-20) kept; measure_ample.py softroll 2026-10-21 with the lead: at v40 15 ms matches the strum (-21.8 / -21.2 dB), at v20 every gap 5-25 ms within 0.7 dB of it (level alone can't choose: meas3's 10 kept)",
   "capoLead": "2026-10-20, amphost, 80 trials at blocks 64-2048: a change applies from the next process block",
   "capoMax": "M-Capo's texts 0-11 in the dump",
   "backgroundLoad": "FIX4 (check of build 455): sample set loads on Ample's thread after setState, ~0.6 s of one core; offline renders wait at most 60 s",
@@ -18,14 +18,15 @@
   "velocityLayers": "the default state's <Layer> (s16 / s19; proof h09)",
   "stateOnly": "the default state's <Parameter>s that are no VST 3 parameter: 208 of 330",
   "keyswitchesSounding": "meas: keys 24-30 each change the note",
-  "nhRange": "manual MP 2.2.1 (E2-C5); meas N_nh"
+  "nhRange": "manual MP 2.2.1 (E2-C5); meas N_nh",
+  "strumLead": "measure_ample.py strumtiming / strumlead / demo15, 2026-10-21: set-up an earlier block than the strum key (16: 1 ms, 64: 2, 512: 6, 2048: one block); 50 ms as capoLead"
  },
  "version": "4.1.0",
  "vst3Parameters": 124,
  "sampleSets": [["Finger", "AGMFg"], ["Pick", "AGMPk"], ["Strum", "AGMSt"]],
  "maxVelocity": 126,
  "strumVelocity": 110,
- "strumLevels": [["AGMSt", "20:8 40:16 60:20 80:32 100:64 120:69"], ["AGMFg", "20:6 40:11 60:13 80:27 100:39 120:50"], ["AGMPk", "20:6 40:11 60:13 80:27 100:39 120:50"]],
+ "strumLevels": [["AGMSt", "20:6 40:19 60:23 80:37 100:62 120:67"], ["AGMFg", "20:4 40:13 60:20 80:42 100:59 120:76"], ["AGMPk", "20:6 40:13 60:19 80:34 100:52 120:68"]],
  "softStrum": 30,
  "rollGap": 15,
  "softRoll": "20:10 40:15",
@@ -37,5 +38,6 @@
  "velocityLayers": [[1, 96], [2, 64], [3, 32]],
  "stateOnly": 208,
  "keyswitchesSounding": [24, 25, 26, 27, 28, 29, 30],
- "nhRange": [40, 72]
+ "nhRange": [40, 72],
+ "strumLead": 50
 }

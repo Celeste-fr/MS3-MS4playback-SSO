@@ -203,6 +203,7 @@ class TestSoundLibrary : public QObject, public MTest
       void ampleRender();
       void ampleStrums();
       void ampleSoftStrums();
+      void ampleStrumLead();
       void ampleMasterVol();
       void ampleStrings();
       void ampleCapo();
@@ -6659,6 +6660,9 @@ static bool guitarTapBefore(const std::vector<GuitarEvent>& v, int i, int key, i
       QVERIFY2(ample, qPrintable(error)); \
       QVERIFY(ample->instruments.front().guitar); \
       const SoundLib::Guitar& g = *ample->instruments.front().guitar; \
+      for (const auto& in : ample->instruments)           /* (strumLead: its own test, ampleStrumLead) */ \
+            if (in.guitar) \
+                  const_cast<SoundLib::Guitar&>(*in.guitar).strumLeadMs = 0.0; \
       SoundLib::setCurrent(ample); \
       MasterScore* score = readScore(DIR + "guitar-techniques.musicxml"); \
       QVERIFY(score); \
@@ -6816,6 +6820,86 @@ void TestSoundLibrary::ampleSoftStrums()
             muted = muted || (e.type == ME_NOTEON && e.a == 83 && e.b == 110);
       QVERIFY(muted);                                               // (the muted strum at f: the strummer)
       Playback::setIniValuesForTest({});
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   ampleStrumLead: the map's strumLead (AGM's strummer reads its set-up only from an earlier process block): a strum's
+//   set-up (Detect, strum mode, the chord keys) goes strumLead before its strum key; the first strum, at the score's
+//   start, keeps its set-up at 0 and the start lead plays the rest strumLead later; the strum before releases at the next
+//   one's set-up, before it; softStrums 2's key roll the same
+//---------------------------------------------------------
+
+void TestSoundLibrary::ampleStrumLead()
+      {
+      GUITAR_SETUP
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      double leadMs = 0.0;
+      for (const auto& in : ample->instruments)
+            if (in.guitar) {
+                  QVERIFY(in.guitar->strumLeadMs == 0.0);                // (GUITAR_SETUP's)
+                  const_cast<SoundLib::Guitar&>(*in.guitar).strumLeadMs = 50.0;
+                  }
+      {
+      QString e2;
+      auto map = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &e2);
+      QVERIFY(map && map->instruments.front().guitar);
+      leadMs = map->instruments.front().guitar->strumLeadMs;
+      }
+      QCOMPARE(leadMs, 50.0);                                       // (the shipped map's)
+      const int lead = int(std::lround(leadMs / 1000.0 * 2.0 * DIVISION));      // (120 bpm: 48 ticks)
+      for (const char* soft : { "0", "2" }) {
+            Playback::setIniValuesForTest({ { "guitar/strums", "1" }, { "guitar/softStrums", soft } });
+            const std::vector<GuitarEvent> v = guitarEvents(score);
+            int key0 = -1;
+            for (const GuitarEvent& e : v)
+                  if (e.type == ME_NOTEON && e.a == 72 && e.b == 110 && key0 < 0)
+                        key0 = e.tick;
+            QVERIFY2(std::abs(key0 - lead) <= 1, qPrintable(QString("first strum key at %1, lead %2").arg(key0).arg(lead)));
+            const int shift = key0;                                 // (the start lead, in ticks)
+            // the first strum's set-up at 0
+            std::set<int> at0;
+            for (const GuitarEvent& e : v)
+                  if (e.tick == 0 && e.type == ME_NOTEON && e.b > 0 && !e.sw)
+                        at0.insert(e.a);
+            QVERIFY(at0.count(86) && at0.count(97) && at0.count(40) && at0.count(44) && at0.count(47));
+            QVERIFY(!at0.count(72));
+            // the second strum (beat 2, down: E4 76): its set-up lead before it, the first one's release there, first
+            int key1 = -1;
+            for (int i = 0; i < int(v.size()); ++i)
+                  if (v[size_t(i)].type == ME_NOTEON && v[size_t(i)].a == 76 && v[size_t(i)].b == 110)
+                        key1 = i;
+            QVERIFY(key1 >= 0);
+            QCOMPARE(v[size_t(key1)].tick, DIVISION + shift);
+            int detect = -1, off = -1;
+            for (int i = 0; i < key1; ++i) {
+                  const GuitarEvent& e = v[size_t(i)];
+                  if (e.type == ME_NOTEON && e.a == 86 && e.b == 127)
+                        detect = i;
+                  if (e.type == ME_NOTEON && e.a == 97 && e.b == 1)
+                        off = i;
+                  }
+            QVERIFY(detect >= 0 && off >= 0 && off < detect);
+            QCOMPARE(v[size_t(detect)].tick, DIVISION + shift - lead);
+            QCOMPARE(v[size_t(off)].tick, DIVISION + shift - lead);
+            if (QString(soft) == "2") {
+                  // the ppp strum's key roll (bar 2): Detect lead before its first roll key
+                  int roll = -1, d2 = -1;
+                  for (int i = 0; i < int(v.size()); ++i) {
+                        const GuitarEvent& e = v[size_t(i)];
+                        if (roll < 0 && e.type == ME_NOTEON && e.b > 0 && e.a >= 62 && e.a <= 71 && e.tick >= 4 * DIVISION)
+                              roll = i;
+                        }
+                  QVERIFY(roll >= 0);
+                  QCOMPARE(v[size_t(roll)].tick, 4 * DIVISION + shift);
+                  for (int i = 0; i < roll; ++i)
+                        if (v[size_t(i)].type == ME_NOTEON && v[size_t(i)].a == 86 && v[size_t(i)].b == 127)
+                              d2 = i;
+                  QVERIFY(d2 >= 0);
+                  QVERIFY2(v[size_t(d2)].tick >= 4 * DIVISION + shift - lead && v[size_t(d2)].tick < 4 * DIVISION + shift,
+                           qPrintable(QString("roll set-up at %1").arg(v[size_t(d2)].tick)));
+                  }
+            }
       delete score;
       }
 

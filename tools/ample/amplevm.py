@@ -84,8 +84,12 @@ class Lock:
             print("VM busy (%s), waiting" % out.strip(), file=sys.stderr)
             time.sleep(60)
         if PAUSE:
-            with open(PAUSE, "w") as f:
-                f.write(LOCK_NAME + "\n")
+            try:
+                with open(PAUSE, "w") as f:
+                    f.write(LOCK_NAME + "\n")
+            except OSError:
+                self.__exit__()                # (never leave the VM's lock behind)
+                raise
         return self
 
     def __exit__(self, *a):

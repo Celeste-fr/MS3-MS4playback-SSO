@@ -48,16 +48,18 @@ Keep every `--out` folder under `~/MuseScore/ms3fork/private/` (states, dumps, r
      screenshots on a review page, CLAUDE.md › Rules) or by saving a state after choosing each set in the GUI and
      `ample_state.py diff`. AGL (nylon, classical) may have no Pick / Strum set: write the sets it has into
      `ample_products.py` as a `sampleSets` override or `ample_<code>.json`.
-3. **Measurements**: `measure_ample.py --product <code> --out … keys range velocity cc strum softroll capo bgload stateclamp`
-   (or `all`, the same list after dump / sets). About 25 minutes of VM time. What each fills and what to look at:
+3. **Measurements**: `measure_ample.py --product <code> --out … keys range velocity cc strumlead strum softroll capo bgload stateclamp`
+   (or `all`, the same list after dump / sets). About 30 minutes of VM time. `strum` and `softroll` play the set-up
+   `strumLead` ahead (the product's, else AGM's 50 ms): run `strumlead` first and merge if it differs. What each fills and what to look at:
 
    | Experiment | Fills | Look at |
    |---|---|---|
-   | keys | `keyswitchesSounding` | keys 24-30 change the note (AGT / AGM: 30 slide guitar); the strummer / FX zone (85-107) sounds or changes; anything else changing is new: read the manual |
-   | range | `nhRange` | the natural harmonic's lowest note (manual: E1 on AGSJ / AG12, E2 on AGL / AGM / AGT); palm mute and sustain E1-C5 |
+   | keys | `keyswitchesSounding` | (a screen: read the json, AGM's palm mute 26 isn't caught) keys 24-30 change the note (AGT / AGM: 30 slide guitar); the strummer / FX zone (85-107) sounds or changes; anything else changing is new: read the manual |
+   | range | `nhRange` | (a screen) the natural harmonic's lowest note (manual: E1 on AGSJ / AG12, E2 on AGL / AGM / AGT); palm mute and sustain E1-C5 |
    | velocity | `maxVelocity` | 127's centroid jump (Pop): 126 when it is there |
    | cc | (finding) | CC7 a gain (64 unity, 127 +6 dB); CC1 / CC11 / CC64 nothing; with the MIDI-learn entry CC11 = M-Master Vol it acts as CC7 |
-   | strum | `strumLevels` | per set: the CC7 gain law's residual (< 1.5 dB), the band edges (velocity 31/32, 63/64, 95/96, 126/127), the CC7 per roll velocity |
+   | strumlead | `strumLead` | the least set-up lead per block size (16-2048) that makes a strum bright (~1200 Hz); 50 ms when 2048 needs no more than AGM's one block |
+   | strum | `strumLevels` | per set, the set-up `strumLead` before the strum key: the CC7 gain law's residual (< 1.5 dB), the band edges (velocity 31/32, 63/64, 95/96, 126/127), the CC7 per roll velocity |
    | softroll | `softRoll` | the 10-25 ms gaps at v20 / v40 against the strum at its StrumLevel |
    | capo | `capoLead` | the least lead before a note that works at blocks 64 / 512 / 2048 (AGM: the next block; 50 ms kept) |
    | bgload | `backgroundLoad` (check) | when a note after setState plays the asked set (AGM: Finger 0.25 s, Pick / Strum 1.0 s); the map's 60 s is a limit, not a time |
@@ -99,8 +101,8 @@ Keep every `--out` folder under `~/MuseScore/ms3fork/private/` (states, dumps, r
 | capo applies from the next block (capoLead 50) | measured | **check** (`capo`) |
 | background load after setState | Finger 0.25 s, Pick / Strum 1.0 s | **check** (`bgload`); the map's limit stays 60 |
 | state settings (208 state-only names) and their ranges | partly measured, partly assumed (`stateclamp`) | **dump** + `--state` drop / report the differences |
-| quiet / dark strums on multiples of 7.5 s of render time | AGM demo (2026-10-21) | **check** with `demo15` on the bought copy: it shows whether the artefact is the demo |
-| AGM load crash (cryptnet, licence check) | demo copy | **check** with `crash` on the bought copy |
+| strumLead (the strummer's set-up an earlier block than the strum key) | 50 ms (blocks 16-2048) | **measure** (`strumlead`, `demo15`): the same strummer engine is likely, the numbers not proven |
+| AGM load crash (cryptnet frames) | demo copy: amphost 0 / 60 (network on / blocked), MuseScore 2 / 15 | **check** with `crash` and `check.py` on the bought copy; check.py retries |
 | Master Tune ignored by setState | measured | assume the same (Ample 4.x) |
 
 ## Checklist
@@ -108,7 +110,7 @@ Keep every `--out` folder under `~/MuseScore/ms3fork/private/` (states, dumps, r
 - [ ] Owner installed and activated `<code>`; `<code>_info.xml` hashed
 - [ ] amphost built
 - [ ] `dump sets` run; DBName codes right (silent set = wrong code)
-- [ ] `keys range velocity cc strum softroll capo bgload stateclamp` run; findings read
+- [ ] `keys range velocity cc strumlead strum softroll capo bgload stateclamp` run; findings read
 - [ ] `demo15 crash` run once on the bought copy (compare with AGM's demo results below)
 - [ ] `merge`; `ample_<code>.json` sources filled; no TODO left but those the owner accepted as assumed
 - [ ] map generated with `--state`; diff against AGM's map reviewed
@@ -120,4 +122,22 @@ Keep every `--out` folder under `~/MuseScore/ms3fork/private/` (states, dumps, r
 
 ## AGM results of 2026-10-21 (the regression numbers)
 
-RESULTS_PLACEHOLDER
+All on the VM's AGM 4.1.0 trial (demo, not activated), amphost unless "MuseScore" is said; private
+`~/MuseScore/ms3fork/private/ample-pipeline/agm/*.json` and `check458/report.md`.
+
+| Experiment | Result |
+|---|---|
+| dump | byte-identical to the 2026-10-18 dump (reproducible); 124 parameters, 208 state-only names; the map regenerated from it byte-identical before strumLead |
+| sets | AGMFg / AGMPk / AGMSt load and sound (-14.1 / -13.6 / -21.7 dB) |
+| velocity | 127 plays Pop (centroid 3663 Hz against 1122 at 126): maxVelocity 126 |
+| cc | CC7 a clean gain (64 unity); CC1 / CC64 / CC11 nothing by default; with Control ID 16 -> M-Master Vol CC11 acts as CC7 and the two overwrite each other (last writer wins) |
+| strumtiming / strumlead / demo15 / demofine | **the "demo" quiet strums are a set-up timing rule**: the strummer's set-up (strum mode, Detect, chord keys) in the strum key's own process block plays dark, partial strums (350-600 Hz, 2-6 dB quieter) and quiet ones at exact multiples of 7.5 s of render time; any earlier block is bright (~1200 Hz). Least lead: block 16 1 ms, 64 2, 512 6, 2048 about one block. Map `strumLead` 50. Back-to-back strums: the first one's release moved 25 ms earlier costs 0.6 dB of its last 25 ms |
+| strum (with the lead) | StrumLevel Finger 20:4 40:13 60:20 80:42 100:59 120:76 (gain law residual SD 0.94 dB), Pick 20:6 40:13 60:19 80:34 100:52 120:68 (0.76), Strum 20:6 40:19 60:23 80:37 100:62 120:67 (0.80); bands at 31/32, 63/64, 95/96, 126/127 as before |
+| softroll (with the lead) | v40: 15 ms matches the strum (-21.8 / -21.2 dB); v20: 5-25 ms all within 0.7 dB (level can't choose; meas3's 10 ms kept) |
+| capo | least lead 2 ms at block 64, 12 at 512, 47 at 2048: capoLead 50 confirmed |
+| bgload | after setState, Finger plays the asked set from 0.25 s, Pick / Strum from 1.0 s (null < -70 dB). MuseScore's hosted sync now waits too (`setStateWaiting`, test backgroundLoadHosted) |
+| stateclamp | all 204 state settings at their assumed ends load and are kept; ~70 toggles clamp to 0/1 or -1/1; S-Pattern Index -1 / 8 and FX-Reverb-IRType -1 crash AGM (0xC0000005): 0-7 / >= 0 confirmed; T-Track Index forced to 0 without a tab; numbers are echoed as written (a range end isn't proven) |
+| keys | a screen, not a decision: changed / sounded 25, 27-39, 89-103 against four references 9.6 dB apart; palm mute (26) not caught by the spectral criterion (meas heard it); 37-39 sound (below the chord zone); read with the manual |
+| range | a screen: sustain / palm mute / slide guitar sound over 40-98; the harmonic in 41 of those notes (nhRange kept at the manual's 40-72) |
+| crash | amphost single loads: 0 / 30 with the network, 0 / 30 with amphost's outbound traffic blocked by a firewall rule. MuseScore #458 (check.py, network on): 2 load crashes in 15 render attempts (both retried fine). So the crash is not one plug-in load on its own: MuseScore's parallel loads of 3 instances |
+| check.py on #458 | 10 PASS, 1 FAIL (strum bright: 639 Hz, the strumLead fix isn't in #458), determinism 3/3, routes = sets, capo, capo from the start, state lanes, soft strums, volume lane, Create + 2 x Update Live Set, AGM_info.xml unchanged |

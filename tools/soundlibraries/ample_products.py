@@ -57,7 +57,7 @@ GUITAR_KEYS = {
 # what measure_ample.py fills (ample_<code>.json), and for AGM measured 2026-10-18 .. 10-21 (the keys' sources in
 # ample_AGM.json's "_sources")
 MEASURED = ["version", "vst3Parameters", "sampleSets", "maxVelocity", "strumVelocity", "strumLevels", "softStrum",
-            "rollGap", "softRoll", "capoLead", "capoMax", "backgroundLoad", "pinch", "controlDefaults",
+            "rollGap", "softRoll", "capoLead", "strumLead", "capoMax", "backgroundLoad", "pinch", "controlDefaults",
             "velocityLayers", "stateOnly", "keyswitchesSounding", "nhRange"]
 
 
@@ -96,7 +96,7 @@ def measure_for(key):
     return {"version": "dump", "vst3Parameters": "dump", "stateOnly": "dump", "controlDefaults": "dump",
             "velocityLayers": "dump", "sampleSets": "sets", "maxVelocity": "velocity", "strumVelocity": "strum",
             "strumLevels": "strum", "softStrum": "softroll", "rollGap": "softroll", "softRoll": "softroll",
-            "capoLead": "capo", "capoMax": "dump", "backgroundLoad": "bgload", "pinch": "pinch (by numbers; meas3)",
+            "capoLead": "capo", "strumLead": "strumlead", "capoMax": "dump", "backgroundLoad": "bgload", "pinch": "pinch (by numbers; meas3)",
             "keyswitchesSounding": "keys", "nhRange": "range"}.get(key, "?")
 
 

@@ -348,6 +348,12 @@ struct Guitar {
       // from its next process block only (measured 2026-10-20, ample-wincheck/FIX2.md: a note-on in the same block as
       // the change plays at the old capo; a ringing note keeps its pitch), so the change goes in an earlier block
       double capoLeadMs { 0 };
+      // a strum's set-up (strum mode on, Detect, the chord keys) goes this many ms before its strum key: AGM's strummer
+      // reads them only from an earlier process block; in the strum key's block it plays dark and partial (the chord's
+      // bass strings: centroid ~350-600 Hz against ~1200, 2-6 dB quieter), and on multiples of 7.5 s of render time quiet
+      // too (measured 2026-10-21, tools/ample/measure_ample.py strumtiming / strumlead / demo15, amphost, blocks 16-2048).
+      // A previous strum still held there releases its keys at the set-up (measured: its last 25 ms 0.6 dB lower)
+      double strumLeadMs { 0 };
       // an artificial harmonic (a fretted note with a diamond note above it): frets from the stopped note to the touched
       // one -> semitones the harmonic sounds over the stopped note (string physics)
       std::vector<std::pair<int, int>> artificial;

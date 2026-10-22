@@ -20,7 +20,7 @@ Cases (score, playback settings, lanes; what is checked):
               one route per sample set used (Finger, Pick, Strum); bar 21 (capo 2) G3 sounds A3 (220 Hz), bar 22 G3
   tech-off    techniques, the guitar settings 0: renders
   state0      state score, no lanes (the reference)
-  velsens0    Vel Sensitivity 0: ppp G3 within 4 dB of ff (state0: > 10 dB apart)
+  velsens0    Vel Sensitivity 0: ppp G3 over 8 dB louder than state0's (the soft layers still play: not as loud as ff)
   layers      velocity layers 20 / 15 / 10: differs from state0
   voices1     Max Voices 1: the chord loses notes (its level below state0's)
   soft0/1/2   soft, strums 1, softStrums 0 / 1 / 2: the ppp strum at 7.0 s sounds (> -45 dB)
@@ -137,9 +137,13 @@ class Check:
         self.a = a
         self.rows = []
         self.results = {"product": self.p["code"], "build": self.build, "cases": {}, "crashes": 0}
+        # (renders on /tmp, deleted after the analysis unless --keep-wav: the dev machine's disk is tight)
+        self.wavdir = os.path.join(self.out, "wav") if a.keep_wav else tempfile.mkdtemp(prefix="amplecheck-")
         self.settings_file = "C:\\Users\\user\\Documents\\" + self.p["settingsFile"].replace("/", "\\")
 
     def row(self, item, ok, numbers):
+        if not isinstance(ok, str):
+            ok = bool(ok)                 # (numpy's bools are no True / False)
         self.rows.append((item, "PASS" if ok is True else ("FAIL" if ok is False else str(ok)), numbers))
         print("%-28s %-6s %s" % (item, self.rows[-1][1], numbers))
 
@@ -193,7 +197,7 @@ class Check:
         for wname, h, full in wavs:
             if "built-in" in wname:
                 continue
-            lp = os.path.join(self.out, "wav", "%s%s %s" % (name, tag, wname))
+            lp = os.path.join(self.wavdir, "%s%s %s" % (name, tag, wname))
             os.makedirs(os.path.dirname(lp), exist_ok=True)
             amplevm.get(full, lp)
             res["wavs"][wname.replace(name + " ", "")] = {"md5": h, "file": lp}
@@ -223,10 +227,13 @@ class Check:
             f21 = audio.f0(x, sr, 40.1, 0.5, 150, 300)
             f22 = audio.f0(x, sr, 42.1, 0.5, 150, 300)
             self.row("capo 2 / capo 0 (bars 21-22)", abs(f21 - 220) < 6 and abs(f22 - 196) < 6, "%.1f / %.1f Hz" % (f21, f22))
-            q16 = audio.loud50(x, sr, 30.0, 0.5)
-            q1 = audio.loud50(x, sr, 0.0, 0.5)
-            self.row("bar 16 strum (30.0 s) vs bar 1", "INFO", "%.1f vs %.1f dB (demo artefact: measure_ample.py demo15)"
-                     % (q16, q1))
+            q16, c16 = audio.loud50(x, sr, 30.0, 0.5), audio.centroid(x, sr, 30.0, 0.3)
+            q1, c1 = audio.loud50(x, sr, 0.0, 0.5), audio.centroid(x, sr, 0.0, 0.3)
+            # a strum whose mode / Detect / chord keys share the strum key's block plays dark and partial (the chord's
+            # bass strings, ~300-600 Hz), and on multiples of 7.5 s of render time quiet too; with them a block earlier
+            # bright (~1200 Hz): measure_ample.py strumtiming / strumlead, 2026-10-21
+            self.row("strum bright (bar 1, set-up lead)", c1 > 900, "centroid %.0f Hz, %.1f dB" % (c1, q1))
+            self.row("bar 16 strum (30.0 s) not quiet", abs(q16 - q1) < 4, "%.1f dB %.0f Hz vs bar 1 %.1f dB" % (q16, c16, q1))
         if "tech-off" in done:
             r = done["tech-off"][0]
             self.row("tech-off renders", bool(r["wavs"]), r["state"])
@@ -241,7 +248,8 @@ class Check:
                 sr, y = self.lib_wav(done["velsens0"][0])
                 y = audio.mono(y)
                 ff, ppp = audio.loud50(y, sr, 0, 0.5), audio.loud50(y, sr, 1.0, 0.5)
-                self.row("Vel Sensitivity 0 lane", abs(ff - ppp) < 4, "ff %.1f / ppp %.1f dB" % (ff, ppp))
+                # (Vel Sensitivity 0 flattens the level, but the soft layers still play: check455 st1x -14.4 / -24.6)
+                self.row("Vel Sensitivity 0 lane", ppp - ppp0 > 8, "ff %.1f / ppp %.1f dB (state0's ppp %.1f)" % (ff, ppp, ppp0))
             if "layers" in done:
                 self.row("velocity layers lane", self.lib_md5(done["layers"][0]) != h0, "differs from state0")
             if "voices1" in done:
@@ -312,6 +320,8 @@ class Check:
             if self.a.map:
                 amplevm.put(self.a.map, self.build + "\\share\\soundlibraries\\%s.xml" % self.lib)
             self.scores()
+            if self.a.block_network:
+                self.ps("New-NetFirewallRule -DisplayName 'ample-check block' -Direction Outbound -Program '%s' -Action Block | Out-Null" % self.exe)
             done = {}
             for name, _, _, _, routes in self.cases():
                 n = self.a.repeat if name == "tech-on" else 1
@@ -320,6 +330,8 @@ class Check:
                                                 "wavs": {k: {"md5": v["md5"]} for k, v in r["wavs"].items()}} for r in done[name]]
             if not self.a.no_live and (not self.a.cases or "live" in self.a.cases.split(",")) and "vol" in [c[0] for c in self.cases()]:
                 self.live()
+            if self.a.block_network:
+                self.ps("Remove-NetFirewallRule -DisplayName 'ample-check block' -ea 0")
             h1 = self.ps("(Get-FileHash '%s' -ea 0).Hash" % self.settings_file).strip()
             restored = self.ps("".join("if ((Test-Path '%s\\pv%d.json') -and ((Get-FileHash '%s').Hash -ne (Get-FileHash '%s\\pv%d.json').Hash)) "
                                        "{ Copy-Item '%s\\pv%d.json' '%s' -Force; 'restored %d' }; " % (self.vm, i, p, self.vm, i, self.vm, i, p, i)
@@ -345,7 +357,7 @@ class Check:
                 f.write("| %s | %s | %s |\n" % (r[0], r[1], str(r[2]).replace("|", "/")))
         print("report: %s" % os.path.join(self.out, "report.md"))
         if not self.a.keep_wav:
-            shutil.rmtree(os.path.join(self.out, "wav"), ignore_errors=True)
+            shutil.rmtree(self.wavdir, ignore_errors=True)
         return 1 if fails else 0
 
 
@@ -360,6 +372,8 @@ def main(argv):
     ap.add_argument("--repeat", type=int, default=3)
     ap.add_argument("--retries", type=int, default=2)
     ap.add_argument("--no-live", action="store_true")
+    ap.add_argument("--block-network", action="store_true", help="a firewall rule blocks MuseScore's outbound traffic "
+                    "while the renders run (the load-crash question: is it the plug-in's licence check?)")
     ap.add_argument("--keep-wav", action="store_true")
     return Check(ap.parse_args(argv[1:])).main()
 
