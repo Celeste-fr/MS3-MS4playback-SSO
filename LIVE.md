@@ -815,9 +815,21 @@ Differs (open):
   re-struck accented (velocity 122) with no gap, is +8 dB louder in Live than in MuseScore, +14 dB with the off 0.15 ms
   first (by hand): Kontakt takes MuseScore's same-sample off / on otherwise than any gap; the renderer's reattackGap
   doesn't reach this note (OPEN_ITEMS).
-- **Whence's Celli - Performance is silent in Live** for the whole piece (#464 on 12.4.6 and #467 on 12.4.7; MuseScore's
-  export of the same routes plays). Not the start lead: with every Celli Track Delay set to 0 by hand still silent. Its
-  multi is the largest (four copies, two of them chord voices; state 17 MB). Cause not found.
+- **Whence's Celli - Performance is not silent in Live** (reported so on 2026-10-22, corrected the same day, branch
+  `live-celli`): Live plays it at MuseScore's level (rms +0.35 dB). The check's comparison had aligned it a figure off
+  (+407 ms; its repeating figure fooled the envelope match) and then showed the merged span's quietest window as the
+  track's level (-224.7 dB). `compare.py` now aligns a track far from the set's lag again near it (the other tracks'
+  consensus less its own Track Delay) when that correlates better, and gives a span's level over the whole span: the
+  Celli then compare like the other sections (corr 0.895, null -7.2 dB, -24.3 dB outside its spans).
+- **Chord voices' touching transitions** (Whence's Celli, bars 9-16: the voice copies of a monophonic patch, the
+  divisi level): at each chord change Live is +5.4 .. +7.6 dB louder for ~0.4 s, its transitions faster (the new pitch
+  ~0.3 s after the note-on, MuseScore's ~0.48 s); the rest nulls. A plain Performance note touching the note before on
+  its copy, unslurred, has no join: MuseScore sends the note-off at the note-on's instant, which the hosted Kontakt plays
+  as a slower, softer transition than any Live set can (touching, 1.1 ms apart, 1.1 / 27 ms overlapping, without the
+  device, with the CC11 steps 2 ms earlier: all the same within 0.6 dB). `[slurs] plainOverlap` 1 (0 in both presets, the
+  owner to hear) ends the note before the map's overlap after the note-on, as a slur's transition: MuseScore and Live
+  then send the same notes (`tst_liveequivalence::plainOverlapLive`). The divisi level itself (CC11 per voice) plays as
+  in MuseScore: between the chord changes the voices match within 0.1 dB (nulls -12 .. -14 dB).
 - Waveforms differ where Whence's quarter tones bend (Violins 1, Violas): levels within 0.3 dB, pitch within 2 cents on
   held notes, but nulls of −4 … −13 dB over the bent passages and glides that differ by up to ±120 cents within a window
   (Violins 1 at 11.25 s, 15.75 s); the rest of each track nulls at −23 … −30 dB.

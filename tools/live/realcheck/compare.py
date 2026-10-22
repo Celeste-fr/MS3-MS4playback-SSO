@@ -109,6 +109,46 @@ def align(live, ms, sr, max_lag_ms):
     return lag + fine
 
 
+def align_near(live, ms, sr, expected, window_ms=15.0):
+    """the lag (samples) within window_ms of expected (samples) that best correlates the waveforms"""
+    la, lb = mono(live), mono(ms)
+    a = shift(la, expected)
+    a, b = fit_length(a, lb)
+    return expected + xcorr_lag(a, b, max(1, int(window_ms / 1000 * sr)))
+
+
+def corr_at(live, ms, lag):
+    a = shift(mono(live), lag)
+    a, b = fit_length(a, mono(ms))
+    return float((a * b).sum() / math.sqrt(max((a ** 2).sum() * (b ** 2).sum(), 1e-30)))
+
+
+def best_lag(live, ms, sr, max_lag_ms, expected_ms=None, tolerance_ms=5.0):
+    """(lag in samples, note): align's lag, or, when the set's own lag (expected_ms: the other tracks' consensus, less
+    this track's Track Delay) lies more than tolerance_ms from it, the lag near that one when it correlates better. A
+    texture that repeats (Whence's Celli: a figure every three quarters) can make the envelopes' best match a figure
+    off (+407 ms where the set's lag was -30.7: corr 0.05 against 0.89, reported as a silent track until 2026-10-22)"""
+    lag = align(live, ms, sr, max_lag_ms)
+    if expected_ms is None:
+        return lag, None
+    exp = int(round(expected_ms / 1000 * sr))
+    if abs(lag - exp) <= tolerance_ms / 1000 * sr:
+        return lag, None
+    near = align_near(live, ms, sr, exp)
+    c0, c1 = corr_at(live, ms, lag), corr_at(live, ms, near)
+    if c1 > c0:
+        return near, "aligned at the set's lag %+.2f ms (the envelopes' best match %+.2f ms correlates %.5f, this %.5f)" % (
+            near / sr * 1000, lag / sr * 1000, c0, c1)
+    return lag, None
+
+
+def consensus_ms(rows):
+    """the set's lag (ms) from the compared Kontakt tracks: the median of lag + the track's own Track Delay (Live's
+    individual track files leave a track's own Track Delay out) over the tracks that correlate (corr >= 0.5)"""
+    v = sorted(r["lagMs"] + r["_td"] for r in rows if r.get("corr", 0) >= 0.5 and "_td" in r)
+    return v[len(v) // 2] if v else None
+
+
 def metrics(live, ms, sr, lag):
     a = shift(live, lag)
     a, b = fit_length(a, ms)
@@ -179,7 +219,10 @@ def note_metrics(a, b, sr, ons, max_local_ms=40):
 def spans(a, b, sr, win_s=0.25, worse_db=-20.0, quiet_db=-60.0):
     """where the aligned a (Live) and b (MuseScore) differ: the 250 ms windows (b's level within 60 dB of its peak)
     whose null is above -20 dB, merged into spans (s, on b's timeline: MuseScore's), each with Live's level against
-    MuseScore's: a note Live doesn't play shows as a span far below 0 dB"""
+    MuseScore's over the whole span (levelDb: their energies), its quietest window's (quietestDb) and its first
+    window's (firstDb): a note Live
+    doesn't play shows as a span far below 0 dB. (Until 2026-10-22 a span's level was its quietest window's: one
+    silent window, e.g. Live's dropped first note, marked a whole misaligned track "Live much quieter -224.7 dB")"""
     am, bm = mono(a), mono(b)
     n = min(len(am), len(bm))
     w = int(win_s * sr)
@@ -193,15 +236,20 @@ def spans(a, b, sr, win_s=0.25, worse_db=-20.0, quiet_db=-60.0):
         nd = 10 * math.log10(float(((x - y) ** 2).mean()) / ey + 1e-30)
         if nd <= worse_db:
             continue
-        lv = 10 * math.log10((float((x ** 2).mean()) + 1e-30) / ey)
+        ex = float((x ** 2).mean())
+        lv = 10 * math.log10((ex + 1e-30) / ey)
         if out and abs(out[-1]["end"] - i / sr) < 1e-9:
             o = out[-1]
             o["end"] = (i + w) / sr
             o["worstNullDb"] = max(o["worstNullDb"], round(nd, 1))
-            o["levelDb"] = round(min(o["levelDb"], lv), 1) if lv < 0 else round(max(o["levelDb"], lv), 1)
+            o["quietestDb"] = round(min(o["quietestDb"], lv), 1)
+            o["_ex"] += ex
+            o["_ey"] += ey
         else:
-            out.append({"start": i / sr, "end": (i + w) / sr, "worstNullDb": round(nd, 1), "levelDb": round(lv, 1)})
+            out.append({"start": i / sr, "end": (i + w) / sr, "worstNullDb": round(nd, 1), "quietestDb": round(lv, 1),
+                        "firstDb": round(lv, 1), "_ex": ex, "_ey": ey})
     for o in out:
+        o["levelDb"] = round(10 * math.log10((o.pop("_ex") + 1e-30) / o.pop("_ey")), 1)
         # (MuseScore's file ends: its render stops at the last note's tail, Live's export runs on to the render length)
         o["atEnd"] = o["end"] >= n / sr - 1.0
         o["start"], o["end"] = round(o["start"], 3), round(o["end"], 3)
@@ -373,6 +421,21 @@ def compare(a):
     for t in kont:
         patch_count[patches[t["id"]]] = patch_count.get(patches[t["id"]], 0) + 1
     used = set()
+    pending = []
+
+    def fill(row, live, ms, sr, lag, t_ons):
+        m, al, bl = metrics(live, ms, sr, lag)
+        notes = note_metrics(al, bl, sr, t_ons)
+        row.update(m)
+        row["notes"] = summary_notes(notes)
+        row["spans"] = spans(al, bl, sr)
+        row["nullOutsideSpansDb"] = null_outside(al, bl, sr, row["spans"])
+        row["verdict"] = judge(m, notes, a, row["spans"])
+        if a.edges:
+            el, em = edge_times(al, sr, a.edges), edge_times(bl, sr, a.edges)
+            row["edges"] = [{"t": e, "liveMs": x, "museScoreMs": y, "diffMs": round(x - y, 2) if x is not None and y is not None else None}
+                            for e, x, y in zip(a.edges, el, em)]
+
     for t in kont:
         patch = patches[t["id"]]
         lw = live_wav(t)
@@ -404,20 +467,23 @@ def compare(a):
             row["verdict"] = "ERROR (sample rates %s / %s)" % (sr, sr2)
             out["tracks"].append(row)
             continue
-        lag = align(live, ms, sr, a.max_lag_ms)
-        m, al, bl = metrics(live, ms, sr, lag)
         t_ons = sorted(x for r in rs for x in ons.get(r["slot"], []))
-        notes = note_metrics(al, bl, sr, t_ons)
-        row.update(m)
-        row["notes"] = summary_notes(notes)
-        row["spans"] = spans(al, bl, sr)
-        row["nullOutsideSpansDb"] = null_outside(al, bl, sr, row["spans"])
-        row["verdict"] = judge(m, notes, a, row["spans"])
-        if a.edges:
-            el, em = edge_times(al, sr, a.edges), edge_times(bl, sr, a.edges)
-            row["edges"] = [{"t": e, "liveMs": x, "museScoreMs": y, "diffMs": round(x - y, 2) if x is not None and y is not None else None}
-                            for e, x, y in zip(a.edges, el, em)]
+        fill(row, live, ms, sr, align(live, ms, sr, a.max_lag_ms), t_ons)
+        row["_td"] = t["trackDelayMs"]
+        pending.append((row, live, ms, sr, t_ons))
         out["tracks"].append(row)
+    # a track whose lag is far from the set's (the other tracks' consensus, less its own Track Delay): aligned again near
+    # the set's lag when that correlates better
+    set_lag = consensus_ms([p[0] for p in pending])
+    out["setLagMs"] = set_lag
+    for row, live, ms, sr, t_ons in pending:
+        td = row.pop("_td")
+        if set_lag is None:
+            continue
+        lag, note = best_lag(live, ms, sr, a.max_lag_ms, set_lag - td)
+        if note:
+            fill(row, live, ms, sr, lag, t_ons)
+            row["realigned"] = note
     # parts: a part group's export against the routes of its Kontakt tracks' patches
     for g in [t for t in tracks if t["kind"] == "GroupTrack"]:
         kids = [t for t in kont if t["group"] == g["id"]]
@@ -437,21 +503,20 @@ def compare(a):
             continue
         live, sr = read(lw)
         ms, _ = ms_sig(rs)
-        lag = align(live, ms, sr, a.max_lag_ms)
-        m, al, bl = metrics(live, ms, sr, lag)
-        notes = note_metrics(al, bl, sr, sorted(x for r in rs for x in ons.get(r["slot"], [])))
-        row.update(m)
-        row["notes"] = summary_notes(notes)
-        row["spans"] = spans(al, bl, sr)
-        row["nullOutsideSpansDb"] = null_outside(al, bl, sr, row["spans"])
-        row["verdict"] = judge(m, notes, a, row["spans"])
+        lag, note = best_lag(live, ms, sr, a.max_lag_ms, set_lag)
+        if note:
+            row["realigned"] = note
+        fill(row, live, ms, sr, lag, sorted(x for r in rs for x in ons.get(r["slot"], [])))
+        row.pop("edges", None)
         out["parts"].append(row)
     main = os.path.join(a.live, "%s.wav" % a.base)
     if os.path.exists(main) and routes:
         live, sr = read(main)
         ms, _ = ms_sig(routes)
-        lag = align(live, ms, sr, a.max_lag_ms)
+        lag, note = best_lag(live, ms, sr, a.max_lag_ms, set_lag)
         m, al, bl = metrics(live, ms, sr, lag)
+        if note:
+            m["realigned"] = note
         m["note"] = "Main includes the Main track's fader; MuseScore's routes have no master: gainDb shows it"
         out["main"] = m
     if a.floor:
@@ -491,11 +556,13 @@ def report_text(r):
             L.append("  %-40s %-22s lag %+8.2f ms  corr %.5f  null %6s dB  gain %+.2f dB  notes %s  level med %+.2f max %.2f dB, onset med %+.2f max %.2f ms"
                      % (t["track"], t["verdict"], t["lagMs"], t["corr"], t["nullDb"], t["gainDb"] or 0, n.get("n", 0),
                         n.get("levelMedianDb", 0), n.get("levelMaxAbsDb", 0), n.get("onsetMedianMs", 0), n.get("onsetMaxAbsMs", 0)))
+            if t.get("realigned"):
+                L.append("      %s" % t["realigned"])
             if t.get("spans"):
                 L.append("      without the spans below: null %s dB" % t.get("nullOutsideSpansDb"))
             for x in t.get("spans", [])[:12]:
-                L.append("      differs %7.2f-%7.2f s (MuseScore's time): null up to %+.1f dB, Live %+.1f dB" % (
-                    x["start"], x["end"], x["worstNullDb"], x["levelDb"]))
+                L.append("      differs %7.2f-%7.2f s (MuseScore's time): null up to %+.1f dB, Live %+.1f dB (quietest 250 ms %+.1f dB)" % (
+                    x["start"], x["end"], x["worstNullDb"], x["levelDb"], x.get("quietestDb", x["levelDb"])))
         else:
             L.append("  %-40s %s" % (t["track"], t["verdict"]))
     L.append("")

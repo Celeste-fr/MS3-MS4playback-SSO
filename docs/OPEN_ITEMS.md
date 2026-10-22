@@ -300,15 +300,29 @@ Keep this file current: close an item by deleting it (the commit message says wh
   shifted), or such notes go late by their onset in Live (as *Live plays the score* does). Untested whether Live's Play
   from 1.1.1 (not Export) behaves the same. **Own**: which.
 
-### 11d. Whence's Celli - Performance silent in real Live (2026-10-22)
-- **W**: the Celli - Performance Kontakt plays nothing in Live's export of Whence's plain set, the whole piece (#464 on
-  Live 12.4.6, #467 on 12.4.7); MuseScore's export of the same routes plays (−99 dB floor). Not the start lead: with
-  every Celli Track Delay set to 0 by hand still silent. The other four parts play (levels within 0.2 dB median).
-- **Src**: `tools/live/realcheck` runs `whence`, `w467`, the experiment exp2 (private `live-realcheck/`).
-- **Cause**: not found. Its multi is the largest: four copies (two chord voices: "(copy 3) (voice 2)", "(copy 4)
-  (voice 3)"), state 17 MB; Live at 6-12 GB on the 16 GB VM.
-- **Tool**: `realcheck.py run Whence.mscz --keep-wavs` and an edited set (LIVE.md › Checked in real Live); next: the
-  Celli part alone, the multi without its voice copies, Kontakt's window in Live.
+### 11d. Whence's Celli in real Live: not silent; its chord voices' touching transitions differ (2026-10-22)
+- **Was reported** "Celli - Performance silent the whole piece" (#464 / 12.4.6, #467 / 12.4.7, exp2). **Not so**: Live
+  plays it (rms within 0.35 dB of MuseScore's; the exported file's peak -14.2 dBFS). The real-Live check's comparison
+  aligned the track a figure off (+407 ms where the set's lag is -30.7 ms: the Celli's repeating three-quarter figure
+  fooled the envelope match; corr 0.05) and then reported the merged span's *quietest* 250 ms window (-224.7 dB: zero
+  padding) as the level of the whole track. Isolated on the VM (branch `live-celli`): Violas + Celli alone, Celli alone,
+  its multi as 1 / 3 / 4 slots, the full set re-saved, all-techniques Kontakts removed: Celli plays in every one, the same
+  render each time. **Fixed in the tool** (`compare.py`): a track far from the set's lag (the other tracks' consensus less
+  its own Track Delay) is aligned again near it when that correlates better (Celli: corr 0.895, gain -0.57 dB, null -7.2,
+  -24.3 dB outside its spans: like Violins 1 / Violas); a span's level is its energy over the span (`quietestDb`,
+  `firstDb` beside it); the start-lead feature reads the first window. `test_realcheck.py` (16).
+- **What does differ** (the divisi / voice-copy check, now testable): at each chord change of the voice copies (bars
+  9-16) Live is +5.4 .. +7.6 dB louder for ~0.4 s, then nulls again; the voices' transitions arrive faster in Live
+  (D3 ~0.3 s after the note-on, MuseScore ~0.48 s). Cause: a plain Performance note touching the note before on its copy
+  (not slurred) gets no join: MuseScore sends the note-off at the note-on's instant, which the hosted Kontakt plays as a
+  slower, softer transition; no Live set reproduces it (measured: touching, 1.1 ms apart, 1.1 or 27 ms overlapping, the
+  device removed, CC11 2 ms earlier: the same burst within 0.6 dB). The slurred line (joined by the map's overlap) nulls
+  at -24 dB. Basses' unslurred touches (11e's family) are the same instant.
+- **Fix (setting, owner)**: `[slurs] plainOverlap` 1 (0 in both presets): such a note's note before ends the map's
+  overlap after its note-on, as a slur's transition does; MuseScore and Live then send the same notes
+  (`tst_liveequivalence::plainOverlapLive`). It changes what MuseScore plays (the faster transition Live plays now).
+  Real Live with it: see `private/live-celli/RESULT.md`. **Own**: whether to hear it and make it the default.
+- **Src**: private `live-celli/` (exp E1-E3, F1-F2, G0-G10, w1), `live-realcheck/` (w467, exp2).
 
 ### 11e. A re-struck key on a Performance patch with no gap (real Live, 2026-10-22)
 - **W**: Whence's Basses, a plain C2 (bar 14) followed by the same C2 accented (velocity 122, plainAccents 2): MuseScore
@@ -576,7 +590,7 @@ lanes, Whence; Ample: Live fills empty panel slots, now ignored by the read-back
 (unchanged: writes nothing; edited: updated, reopened, exported, saved; the backup's name); the read-back of a saved set;
 written clips with Track Delay and the device's delays (onsets 0 ms, levels 0.2 dB median); plainShift's Track Delay;
 the gain-stage Utility; tuning slots in a multi; fixedTransitions' and speedFromWritten's states kept; parameter-lane
-edges. Found: 11c, 11d, 11e, the re-struck key (fixed, #467), Ample's empty slots (fixed, Linux only).
+edges. Found: 11c, 11d (the Celli not silent: the comparison misaligned it; fixed in the tool, branch live-celli), 11e, the re-struck key (fixed, #467), Ample's empty slots (fixed, Linux only).
 Still untried:
 Update Live Set end to end (Manual values over the state, Configure slots, ControllerTargets, backups, inserted sends,
 derived-parameter and M-Master Vol read-back); hosted slot gain with Utility and panel values; timing overrides (hash

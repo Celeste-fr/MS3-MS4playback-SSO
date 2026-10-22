@@ -433,9 +433,9 @@ def report(outdir):
                 f["result"] = "not in this set"
             elif f.get("startLead"):
                 rows = [t for t in (c1 or {}).get("tracks", []) if t.get("key") in set(f["kontakts"]) and "spans" in t]
-                lost = [(r, x) for r in rows for x in r["spans"] if x["start"] < 0.5 and x["levelDb"] < -10]
+                lost = [(r, x) for r in rows for x in r["spans"] if x["start"] < 0.5 and x.get("firstDb", x["levelDb"]) < -10]
                 f["result"] = ("differs: the first note not played" if lost else "confirmed") if rows else "not compared"
-                f["numbers"] = ["%s: Live %+.1f dB at %.2f-%.2f s" % (r["track"], x["levelDb"], x["start"], x["end"]) for r, x in lost] or \
+                f["numbers"] = ["%s: Live %+.1f dB at %.2f s" % (r["track"], x.get("firstDb", x["levelDb"]), x["start"]) for r, x in lost] or \
                     [row_numbers(r) for r in rows]
             else:
                 v, rows = verdict_of(c1, set(f["kontakts"]))

@@ -183,6 +183,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void microtoneBendsLive();
       void plainJoinsLive();
       void transitionLevelsLive();
+      void plainOverlapLive();
       void hostedSlotsGain();
       void exportInstancesOfParts();
       void verifyRoutesByPart();
@@ -8269,6 +8270,171 @@ void TestLiveEquivalence::plainJoinsLive()
       std::vector<std::pair<int, int>> sorted = museScore;
       std::sort(sorted.begin(), sorted.end());
       QCOMPARE(route, sorted);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainOverlapLive
+//    [slurs] plainOverlap (branch live-celli, 2026-10-22): Whence's Celli chord voices in real Live (tools/live/realcheck,
+//    OPEN_ITEMS 11d). A [slurs] plainPerformance note touching the note before on its patch (not slurred) is SSO's
+//    transition; MuseScore sent the note before's note-off at the same instant as the note-on, which the hosted Kontakt
+//    plays as a slower, softer transition than any Live set can (touching, 1 ms apart or overlapping: +5 .. +7.6 dB for
+//    ~0.4 s at each of the Celli's chord changes). plain-touch.musicxml: two voices of chords on a monophonic Performance
+//    patch that bends (two voice copies), touching (a quarter tone among them), then a touching single line. With 0 the
+//    note-offs and note-ons meet at one instant on each voice's route (what this test would have flagged); with 1 none
+//    does: each note before ends the map's overlap (24 ms) after the note-on, on every voice; the plain set's written
+//    clips, Track Delays and the MuseScore Link device's delays play every note-on and note-off as MuseScore does
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainOverlapLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' bend='100' plainShift='0' mono='1'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-touch.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const int tickUnits = tl.units(1) - tl.units(0);
+      int touchingWithout = -1;
+      for (int overlap : { 0, 1 }) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
+                                            { "slurs/plainOverlap", QString::number(overlap) } });
+            score->setPlaylistDirty();
+            EventMap playback;
+            score->renderMidi(&playback, false, true, SynthesizerState());
+            // MuseScore's own, by route: a note-on with a note-off of another key at its instant and no note held (touching),
+            // or with the note before still held (a join): how much later that note ends
+            std::map<std::pair<int, int>, std::set<int>> held;        // route -> keys down
+            std::map<std::pair<int, int>, std::multimap<int, int>> offs;      // route -> note-offs (tick, key)
+            std::set<std::pair<int, int>> routes;
+            for (const auto& te : playback) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && !e.librarySwitch() && (e.type() == ME_NOTEON || e.type() == ME_NOTEOFF)
+                      && (e.type() == ME_NOTEOFF || e.velo() == 0))
+                        offs[{ e.extPort(), e.extChannel() }].insert({ te.first, e.pitch() });
+                  }
+            int touching = 0, joined = 0, notes = 0;
+            for (const auto& te : playback) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF))
+                        continue;
+                  const std::pair<int, int> r { e.extPort(), e.extChannel() };
+                  routes.insert(r);
+                  if (e.type() == ME_NOTEOFF || e.velo() == 0) {
+                        held[r].erase(e.pitch());
+                        continue;
+                        }
+                  ++notes;
+                  if (!held[r].empty()) {
+                        ++joined;
+                        // (the note before ends the overlap after this note-on)
+                        const int before = *held[r].begin();
+                        int end = -1;
+                        for (auto o = offs[r].lower_bound(te.first); o != offs[r].end(); ++o)
+                              if (o->second == before) {
+                                    end = o->first;
+                                    break;
+                                    }
+                        const double ms = (score->utick2utime(end) - score->utick2utime(te.first)) * 1000.0;
+                        QVERIFY2(std::fabs(ms - 24.0) < 1.5, qPrintable(QString("overlap %1: key %2 ends %3 ms after key %4's note-on")
+                                 .arg(overlap).arg(before).arg(ms).arg(e.pitch())));
+                        }
+                  else {
+                        auto same = offs[r].equal_range(te.first);
+                        for (auto o = same.first; o != same.second; ++o)
+                              if (o->second != e.pitch()) {
+                                    ++touching;
+                                    break;
+                                    }
+                        }
+                  held[r].insert(e.pitch());
+                  }
+            QCOMPARE(int(routes.size()), 2);            // (two voices: a copy each)
+            QCOMPARE(notes, 10);
+            if (overlap == 0) {
+                  // C5 -> D5 -> E5 on voice 1, E5 -> G5 -50 -> A5 on voice 2; the line E5 -> G4 -> A4 +50 -> B4 -> C5
+                  QCOMPARE(touching, 8);
+                  QCOMPARE(joined, 0);
+                  touchingWithout = touching;
+                  }
+            else {
+                  QCOMPARE(touching, 0);
+                  QCOMPARE(joined, touchingWithout);
+                  }
+            // Live: the plain set's notes, played by their Track Delays and the device's delays, as MuseScore plays them
+            const double leadUnits = LiveTiming::msToUnits(playback.delayLeadMs + playback.startLeadMs, tl.bpm);
+            std::multiset<std::tuple<int, int, bool>> want;          // (key, units, on)
+            for (const auto& te : playback) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && !e.librarySwitch() && (e.type() == ME_NOTEON || e.type() == ME_NOTEOFF))
+                        want.insert(std::make_tuple(e.pitch(), int(std::lround(tl.units(te.first) - leadUnits)),
+                                                    e.type() == ME_NOTEON && e.velo() > 0));
+                  }
+            auto render = [score](bool written) {
+                  EventMap events;
+                  MidiRenderer r(score);
+                  r.setForLiveClips(true);
+                  r.setWrittenTiming(written);
+                  SynthesizerState ss;
+                  MidiRenderer::Context ctx(ss);
+                  ctx.metronome = false;
+                  r.renderScore(&events, ctx);
+                  return events;
+                  };
+            const EventMap played = render(false);
+            const EventMap written = render(true);
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+            LiveSetWriter::Spec spec;
+            spec.tracks = PlainLiveSet::tracks(l, true);
+            double groupDelay = 0.0;
+            for (const LiveSetWriter::Track& t : spec.tracks)
+                  if (t.group && t.partRef)
+                        groupDelay = t.delayMs;
+            std::multiset<std::tuple<int, int, bool>> got;
+            int copies = 0;
+            for (const PlainLiveSet::Section& s : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : s.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                              if (k.patch != "Violin - Performance")
+                                    continue;
+                              ++copies;
+                              double kontaktDelay = 0.0;
+                              for (const LiveSetWriter::Track& t : spec.tracks)
+                                    if (!t.group && t.midiTo < 0 && t.patch == k.patch)
+                                          kontaktDelay = t.delayMs;
+                              const double extra = LiveTiming::msToUnits(kontaktDelay + groupDelay, tl.bpm);
+                              for (const PlainLiveSet::Technique& t : k.techniques) {
+                                    QCOMPARE(t.timing.offsLate, 0);
+                                    for (const LiveClips::Note& n : t.notes) {
+                                          const std::pair<double, double> at = LiveTiming::playedBy(t.timing, n, tl.bpm);
+                                          got.insert(std::make_tuple(n.pitch, int(std::lround(at.first + extra)), true));
+                                          got.insert(std::make_tuple(n.pitch, int(std::lround(at.second + extra)), false));
+                                          }
+                                    }
+                              }
+            QCOMPARE(copies, 2);
+            QCOMPARE(got.size(), want.size());
+            auto g = got.begin();
+            for (auto w = want.begin(); w != want.end(); ++w, ++g) {
+                  QCOMPARE(std::get<0>(*g), std::get<0>(*w));
+                  QVERIFY2(std::abs(std::get<1>(*g) - std::get<1>(*w)) <= tickUnits, qPrintable(QString("overlap %1: key %2 %3: %4 against %5")
+                           .arg(overlap).arg(std::get<0>(*w)).arg(std::get<2>(*w) ? "on" : "off").arg(std::get<1>(*g)).arg(std::get<1>(*w))));
+                  }
+            }
       delete score;
       }
 
