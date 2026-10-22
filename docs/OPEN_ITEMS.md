@@ -110,7 +110,9 @@ Keep this file current: close an item by deleting it (the commit message says wh
 - **Tool**: heard check (UNHEARD), `legato_glide/` (`gen.py --velocity=64`, `glide.py --summarise --moving`).
 - **Fix**: `[slurs] microtoneBends` (0 in both presets, to be heard): 1 the key on the side of the note before + the
   fingered glide uncut, 2 the glide only. Whence Violas bars 5-8, quarter tones in tune 8-10 % -> 35-40 % of their
-  heard time; Violins 1 10 -> 31 %; Celli 6 -> 19 % (docs/PLAYBACK_SETTINGS.md › Microtone bends). Still a glide
+  heard time (kthost); in the export (run 462) Whence Violas bars 5-14 15 -> 27 %, the wrong-way hook of bar 7 40-44 % ->
+  0 %; Violins 1 12 -> 28 %, Celli 5 -> 14 %, their 12-TET notes after a quarter tone 39 -> 30 % and 28 -> 20 %
+  (docs/PLAYBACK_SETTINGS.md › Microtone bends). Still a glide
   through each sixteenth: SSO's fingered transition is longer than the note. Left: another technique for fast
   quarter-tone runs (the bowed transition 30-35 %, detached tuned attacks 25 %: both measured, neither better).
 - **Own**: yes, how to play them.

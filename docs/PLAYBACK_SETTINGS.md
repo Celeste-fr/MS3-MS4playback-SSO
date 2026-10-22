@@ -1330,6 +1330,22 @@ Measured on Whence in context (the same method, each variant two takes; quarter-
 (1 from renders with the map's glide or the nearest scanned leave / arrival: Violas 70-90 / 180-200, Violins 1 90 / 200,
 Celli 100 / 200; the best leave found for the Violas, 90 ms, 43-44 %.)
 
+In MuseScore's own export (the fast-microtones build, run 462, against build #458; the heard check's renders of Whence with
+`MS_VERIFY_ROUTES=1`, Recommended; the part's routes added up; fast notes alone in their part, judged over [written start,
+next written start]; two takes of 0 and 1, one of 2; the hook: the share of a quarter tone's first 136 ms heard beyond the
+note before, away from its pitch, by more than 30 c):
+
+| Part, bars | quarter tones in tune, 0 / 1 / 2 | 12-TET notes in tune, 0 / 1 / 2 | the hook, 0 / 1 / 2 |
+|---|---|---|---|
+| Violas, 5-14 | 15-16 / 27 / 26 % | 41-43 / 47-49 / 49 % | 10-12 / 0 / 17 % |
+| Violas, bar 7 | 2-10 / 16 / 12 % | 12-17 / 43-46 / 52 % | 40-44 / 0 / 49 % |
+| Violins 1, 5-14 | 11-13 / 28-29 / 18 % | 39-40 / 29-30 / 33 % | 17 / 0-1 / 6 % |
+| Celli, 1-14 | 5-6 / 14 / 15 % | 28-29 / 19-21 / 22 % | 15-16 / 1-2 / 2 % |
+
+1 takes the hook away everywhere (the spelling: 2 keeps it in the Violas) and doubles to triples the quarter tones' time in
+tune; the Violins' and Celli's 12-TET notes after a quarter tone lose some (the glide of the quarter tone runs on into them),
+so over all their fast notes the Violins 1 gain 25 -> 29 %, the Celli none (17 -> 17-18 %); the Violas 28-29 -> 37-38 %.
+
 The pitch still glides through each sixteenth: SSO's fingered transition takes longer than the note, and no bend makes it
 settle within tens of ms. A real violist's quarter tone is a finger placed there, in tune from the note's start; SSO's
 bowed transition (velocity 85+) is faster (Violas mid-way 59 ms against 102; with today's bends 30-35 % in tune) but is a

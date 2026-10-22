@@ -45,6 +45,10 @@ Private: `~/MuseScore/ms3fork/private/fast-microtones/` (RESULT.md, the variant 
 - **Measured scans** (two takes each, quarter tones in tune within 30 c of their heard time): Violas bars 5-8 8-10 % as now,
   35-40 % with 1; the best leave scanned (90 ms, cut at the next note-on) 43-44 %; bowed (velocity 100) 30-35 %; detached
   tuned attacks 25 %; RUNS (CC119 120) and a bend at the note-on worse. Violins 1 10 -> 31 %, Celli 6 -> 19-22 %.
+- **Export check** (run 462 on the VM against #458, heard check renders, two takes): Violas bars 5-14 quarter tones in
+  tune 15-16 -> 27 %, bar 7's wrong-way hook 40-44 % -> 0 % of the first 136 ms (2 alone: 49 %); Violins 1 11-13 -> 28-29 %,
+  Celli 5-6 -> 14 %, but their 12-TET notes after a quarter tone 39-40 -> 29-30 % / 28-29 -> 19-21 % (the quarter tone's
+  glide runs on into them; 2 the same): a next step would be the glide back to 12-TET cut at the next note-on.
 - **Left**: SSO's fingered transition outlasts a 136 ms note, so the pitch still glides through each sixteenth; nothing in
   MuseScore's bend makes it settle within tens of ms. The owner decides by ear (violas_bend_A / _B clips); the next
   options are a technique choice (owner's), not a bend.
