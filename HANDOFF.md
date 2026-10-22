@@ -5,6 +5,22 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## The knowledge base (2026-10-21): read these before starting new playback work
+
+The owner's goal for October 2026: everything a later AI needs to make playback eventually sound perfect.
+- `docs/OPEN_ITEMS.md`: every known imperfection, ranked by audibility, with its data, cause, tool and fix; its end lists
+  the missing tools.
+- `docs/TOOLS.md`: every measurement / verification / generation tool, and how to run it.
+- `docs/RESEARCH.md`: published data for every playback question, and the ranked research tasks.
+- `docs/SSO_SCRIPT_KNOWLEDGE.md`: what SSO's 700 patches' scripts and group data do (legato, CC119, round robins,
+  releases, Tightness), marked used / contradicts / not used.
+- **The owner's ears beat the heard check on timing.** On 2026-10-21 he listened to each section alone with a click
+  and preferred plainTiming 0, which the heard check (transition = f0 arrival) calls 130-200 ms late. A legato
+  transition is heard near where the pitch leaves the note before. Judge transitions by leave time (OPEN_ITEMS.md
+  item 2). Private record: `~/MuseScore/ms3fork/private/plain-timing/OWNER_EARS.txt`.
+- **How he judges timing:** one section alone with a metronome click, long rests cut out, about 20 s a clip, one
+  question per page.
+
 ## Paused 2026-10-18: where to pick up
 
 The owner paused the project. This branch (`integrate-1017`) holds everything merged; all fork tests pass on Linux.
