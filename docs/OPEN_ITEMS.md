@@ -176,7 +176,7 @@ Keep this file current: close an item by deleting it (the commit message says wh
   bend followed the bowed one (`bendGlide`: from the note-on); and key and bend went opposite ways (B3 -50 after A3 sent
   on B3 bent down): the pitch hooked a quarter tone the wrong way first (the owner's "weird" bar 7 of the Violas).
 - **Tool**: heard check (UNHEARD), `legato_glide/` (`gen.py --velocity=64`, `glide.py --summarise --moving`).
-- **Fix**: `[slurs] microtoneBends` (1 in Recommended and by default since 2026-10-22: the owner heard B on Whence's Violas, "so much better it actually sounds right now"): 1 the key on the side of the note before + the
+- **Fix**: `[slurs] microtoneBends` (3 in Recommended and by default since 2026-10-22: the owner heard B on Whence's Violas (1), then Celli and Violins 1 "both B" (3)): 1 the key on the side of the note before + the
   fingered glide uncut, 2 the glide only. Whence Violas bars 5-8, quarter tones in tune 8-10 % -> 35-40 % of their
   heard time (kthost); in the export (run 462) Whence Violas bars 5-14 15 -> 27 %, the wrong-way hook of bar 7 40-44 % ->
   0 %; Violins 1 12 -> 28 %, Celli 5 -> 14 %, their 12-TET notes after a quarter tone 39 -> 30 % and 28 -> 20 %

@@ -147,9 +147,10 @@ static const std::vector<Definition> DEFINITIONS = {
       // sounding, against the step: the pitch hooked a quarter tone away first (B3 -50 heard at G#3 +50); 0 in both presets
       // until the owner had heard it; 1 by default and in Recommended since 2026-10-22, the owner on Whence's Violas alone:
       // "B is so much better it actually sounds right now"; MidiRenderer's microtoneSpelling, libraryPitchBends)
-      // 3 (2026-10-22, branch microtone-next; measured on the Windows test VM, not yet heard by the owner): as 1, and each plain
-      // fingered transition on such a patch early by its glide's middle less the patch's plainShift
-      { "slurs/microtoneBends", 1, 0, 3, "",
+      // 3 (2026-10-22, branch microtone-next; measured on the Windows test VM): as 1, and each plain fingered transition on
+      // such a patch early by its glide's middle less the patch's plainShift; 3 by default and in Recommended since
+      // 2026-10-22, the owner on Whence's Celli and Violins 1 alone with a click: "celli and violins 1 both B"
+      { "slurs/microtoneBends", 3, 0, 3, "",
         "a microtonal note reached by a legato transition on a patch that bends (SSO's Performance patches): 1 goes on the key "
         "on the side of the note before (B3 -50 after A3 on B-flat3 +50), so the key's step and the bend move the same way, "
         "and its bend glides with the transition that plays (a fingered one by the map's bendGlideFingered, measured apart "
@@ -581,7 +582,7 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 1 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
