@@ -242,6 +242,8 @@ class TestSoundLibrary : public QObject, public MTest
       void kontaktMaxVoices();
       void kontaktTune();
       void kontaktRandomSources();
+      void ssoScriptFindings();
+      void avoidCCDropped();
       void kontaktSlots();
       void kontaktScriptValueLengths();
       void kontaktKickstartUnpurge();
@@ -1950,7 +1952,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=0\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1959,15 +1961,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -8324,6 +8326,154 @@ void TestSoundLibrary::kontaktTune()
       QCOMPARE(withTune(made, 0.0, &error, &before), made);
       QVERIFY(withTune(empty, -50.0, &error).isEmpty());
       QVERIFY(!error.isEmpty());
+      }
+
+//---------------------------------------------------------
+//   ssoScriptFindings
+//    what reading SSO's patch scripts gave the map (branch sso-script-fixes2, docs/SSO_SCRIPT_KNOWLEDGE.md): the patches
+//    whose "Reset on transport" is saved off carry transportResetScript, [notes] transportReset sets it to 1 in the state
+//    (playbackScriptValues; the resave puts back every key playbackScriptKeys lists); the five string sections'
+//    Performance patches hallDrop 10; the two Total Performance brass patches avoidCC 112 113; the machine-wide shared
+//    settings checked (folder local, an .nka: PluginState::nkaValue, SettingsCheck::isBad on each index)
+//---------------------------------------------------------
+
+void TestSoundLibrary::ssoScriptFindings()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      auto patch = [&](const QString& name) -> const SoundLib::LibInstrument* {
+            for (const SoundLib::LibInstrument& li : sso->instruments)
+                  if (li.name == name)
+                        return &li;
+            return nullptr;
+            };
+      const QStringList sections { "Violins 1", "Violins 2", "Violas", "Celli", "Basses" };
+      int resets = 0, halls = 0, avoids = 0;
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            resets += !li.transportResetScript.isEmpty();
+            halls += li.hallDrop > 0;
+            avoids += !li.avoidCC.empty();
+            }
+      QCOMPARE(resets, 6);
+      QCOMPARE(halls, 5);
+      QCOMPARE(avoids, 2);
+      for (const QString& s : sections) {
+            const SoundLib::LibInstrument* perf = patch(s + " - Performance");
+            QVERIFY2(perf, qPrintable(s));
+            QCOMPARE(perf->transportResetScript, QString("$xqdzx"));
+            QCOMPARE(perf->hallDrop, 10);
+            QVERIFY(perf->avoidCC.empty());
+            QCOMPARE(SoundLib::playbackScriptKeys(*perf), (std::vector<QString> { "$vfm12", "$xqdzx" }));
+            const SoundLib::LibInstrument* main = patch(s);
+            QVERIFY(main && main->transportResetScript.isEmpty() && main->hallDrop == 0);
+            QVERIFY(SoundLib::playbackScriptKeys(*main).empty());
+            }
+      QCOMPARE(patch("Tuba Solo - Performance")->transportResetScript, QString("$xqdzx"));
+      QCOMPARE(patch("Tuba Solo - Performance")->hallDrop, 0);
+      for (const char* n : { "Trumpet Solo - Total Performance", "Tenor Trombone Solo - Total Performance" })
+            QCOMPARE(patch(n)->avoidCC, (std::set<int> { 112, 113 }));
+      // [notes] transportReset: 1 in the state loaded; off (the default, both presets) nothing; with the other script values
+      const SoundLib::LibInstrument* violas = patch("Violas - Performance");
+      Playback::setIniValuesForTest({ { "notes/transportReset", "0" } });
+      QVERIFY(SoundLib::playbackScriptValues(*violas, nullptr).empty());
+      Playback::setIniValuesForTest({ { "notes/transportReset", "1" } });
+      QCOMPARE(SoundLib::playbackScriptValues(*violas, nullptr), (std::map<QString, QByteArray> { { "$xqdzx", "1" } }));
+      QVERIFY(SoundLib::playbackScriptValues(*patch("Violas"), nullptr).empty());
+      Playback::setIniValuesForTest({ { "notes/transportReset", "1" }, { "slurs/fixedTransitions", "1" }, { "slurs/speedFromWritten", "1" } });
+      QCOMPARE(SoundLib::playbackScriptValues(*violas, nullptr),
+               (std::map<QString, QByteArray> { { "$vfm12", "0" }, { "$xqdzx", "1" }, { "@randomSources", "0" } }));
+      for (const Playback::Preset& p : Playback::presets()) {
+            auto v = std::find_if(p.values.begin(), p.values.end(), [](const std::pair<const char*, double>& x) {
+                  return QString(x.first) == "notes/transportReset"; });
+            QVERIFY2(v != p.values.end() && v->second == 0, p.id);
+            }
+      QCOMPARE(Playback::definition("notes/transportReset")->value, 0.0);
+
+      // the shared settings: six checks of one .nka in the local application data folder
+      QCOMPARE(int(sso->settingsChecks.size()), 6);
+      for (const SoundLib::Library::SettingsCheck& c : sso->settingsChecks) {
+            QCOMPARE(c.folder, QString("local"));
+            QCOMPARE(c.format, QString("nka"));
+            QCOMPARE(c.file, QString("Spitfire Symphony Orchestra/Data/Share__Settings.nka"));
+            QVERIFY(!c.isBad("-12345") && !c.isBad("-12344"));
+            }
+      const SoundLib::Library::SettingsCheck& mode = sso->settingsChecks[0];
+      QCOMPARE(mode.name, QString("1"));
+      QVERIFY(!mode.isBad("3"));
+      QVERIFY(mode.isBad("0") && mode.isBad("4"));
+      QVERIFY(sso->settingsChecks[1].isBad("0") && sso->settingsChecks[1].isBad("1"));       // (Reset on transport shared)
+      QVERIFY(!sso->settingsChecks[3].isBad("0") && sso->settingsChecks[3].isBad("12"));     // (transpose)
+      // an .nka as Kontakt writes it (the VM's, 2026-10-21: nothing shared)
+      QByteArray nka = "%Share__Settings\r\n1\r\n";
+      for (int i = 1; i < 64; ++i)
+            nka += (i == 60 || i == 61 ? QByteArray("0") : QByteArray("-12345")) + "\r\n";
+      QCOMPARE(PluginState::nkaValue(nka, 0), QString("1"));
+      QCOMPARE(PluginState::nkaValue(nka, 1), QString("-12345"));
+      QCOMPARE(PluginState::nkaValue(nka, 60), QString("0"));
+      QCOMPARE(PluginState::nkaValue(nka, 63), QString("-12345"));
+      QVERIFY(PluginState::nkaValue(nka, 64).isNull());
+      QVERIFY(PluginState::nkaValue("not an array\n1\n", 0).isNull());
+      QVERIFY(PluginState::nkaValue(QByteArray(), 0).isNull());
+      // (the Ample check as before: Documents, a JUCE file, bad=)
+      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      QVERIFY2(ample, qPrintable(error));
+      QVERIFY(ample->settingsChecks[0].folder.isEmpty() && ample->settingsChecks[0].format.isEmpty());
+      QVERIFY(ample->settingsChecks[0].isBad("true") && !ample->settingsChecks[0].isBad("false"));
+      }
+
+//---------------------------------------------------------
+//   avoidCCDropped
+//    a patch's avoidCC (SSO's Trumpet / Tenor Trombone Solo - Total Performance: CC112 / CC113 replace the note's
+//    velocity) is never sent, whatever sends it: "cc112" / "cc113" automation lanes on the part are dropped
+//    (MidiRenderer::libraryAvoidCC), another CC lane (cc21) still plays; a patch without avoidCC gets them
+//---------------------------------------------------------
+
+void TestSoundLibrary::avoidCCDropped()
+      {
+      using namespace Automation;
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" } });
+      MasterScore* score = readScore(DIR + "shorts-dynamics.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      std::map<const Part*, PartLanes> lanes;
+      for (const char* t : { "cc112", "cc113", "cc21" }) {
+            Lane l;
+            l.target = t;
+            l.points = { { 0, 0.5, Curve::STEP }, { 960, 0.8, Curve::STEP } };
+            lanes[score->parts()[0]].push_back(l);
+            }
+      score->setMetaTag(metaTag, write(score, lanes));
+      auto counts = [&](const QString& attr) {
+            auto lib = loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Instrument name='Violin' ids='violin'%1>"
+               "<Articulation name='Long' value='1' techniques='long legato'/>"
+               "<Articulation name='Staccato' value='40' techniques='short'/>"
+               "</Instrument></SoundLibrary>").arg(attr));
+            SoundLib::setCurrent(lib);
+            const SoundLib::Output output = SoundLib::output();
+            SoundLib::setOutput(SoundLib::Output::PLUGIN);
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            SoundLib::setOutput(output);
+            std::map<int, int> n;
+            for (const auto& te : events)
+                  if (te.second.isExternal() && te.second.type() == ME_CONTROLLER)
+                        ++n[te.second.controller()];
+            return n;
+            };
+      std::map<int, int> with = counts(" avoidCC='112 113'");
+      QVERIFY(!with.count(112) && !with.count(113));
+      QVERIFY(with[21] >= 2);
+      std::map<int, int> without = counts("");
+      QVERIFY(without[112] >= 2 && without[113] >= 2);
+      QCOMPARE(without[21], with[21]);
+      delete score;
       }
 
 //---------------------------------------------------------

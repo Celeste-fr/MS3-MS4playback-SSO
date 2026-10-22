@@ -76,6 +76,7 @@
 #include "mscore/livesetexport.h"
 #include "mscore/preferences.h"
 #include "mscore/soundlibraryhost.h"
+#include "libmscore/renderpreflight.h"
 #include "mscore/playbacksettingswidget.h"
 #include "mscore/playbackverify.h"
 #include "mscore/icons.h"
@@ -182,6 +183,8 @@ class TestLiveEquivalence : public QObject, public MTest
       void preparedStates();
       void speedSetupState();
       void randomSetupState();
+      void transportResetState();
+      void sharedSettingsWarning();
       void updateLiveSet();
       void updateLiveSetKnobs();
       void controllerPatchDefault();
@@ -5500,6 +5503,126 @@ void TestLiveEquivalence::randomSetupState()
       score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/fixedTransitions", 1 } }));
       QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), on);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   transportResetState
+//    [notes] transportReset in the state MuseScore loads and Create Live Set writes (SoundLibraryHost::setupState, the
+//    one both use): a patch with transportResetScript (SSO's "Reset on transport", here the synthetic .nki's $stgrp, 127
+//    in the setup made) gets it at 1 on top of its setup, made once (prepared); off: the setup as before. The setup file
+//    keeps the library's value; the score's setting over playback.ini's
+//---------------------------------------------------------
+
+void TestLiveEquivalence::transportResetState()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      LiveHost host(this, " nki='Violins 2 - All techniques.nki'", { "Violin" },
+                    "<SoundLibrary name='ResetT'><Files registry='ResetT'/><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin' nki='Violins 2 - All techniques.nki' transportResetScript='$stgrp'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      SoundLibraryHost::setLibraryFolder(lib, root + "/" + DIR + "kontakt");
+      QFile::remove(SoundLibraryHost::setupFile(lib, "Violin"));
+      QString error;
+      const QString path = SoundLibraryHost::pluginPath(lib, &error);
+      QVERIFY2(!path.isEmpty(), qPrintable(error));
+      {
+            QFile e(root + "/" + DIR + "kontakt/empty.bin");
+            QVERIFY(e.open(QIODevice::ReadOnly));
+            QFile f(SoundLibraryHost::setupsFolder(lib) + "/Kontakt empty.vst3state");
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(Vst3Plugin::joinState("MS Test Synth", e.readAll(), QByteArray()));
+            QJsonObject from;
+            from["plugin"] = path;
+            from["modified"] = QFileInfo(path).lastModified().toUTC().toString(Qt::ISODate);
+            QFile m(SoundLibraryHost::setupsFolder(lib) + "/made setups.json");
+            QVERIFY(m.open(QIODevice::WriteOnly));
+            m.write(QJsonDocument(QJsonObject { { "(empty)", from } }).toJson());
+      }
+      auto stgrp = [](const QByteArray& state) {
+            QString name;
+            QByteArray component, controller;
+            if (!Vst3Plugin::splitState(state, &name, &component, &controller))
+                  return QByteArray("?");
+            const std::map<QString, QByteArray> v = KontaktSetup::scriptValues(KontaktSetup::slotProgram(component, nullptr));
+            return v.count("$stgrp") ? v.at("$stgrp") : QByteArray("-");
+            };
+      Playback::setIniValuesForTest({ { "notes/transportReset", "0" } });
+      const QByteArray off = SoundLibraryHost::setupState(lib, "Violin", path, &error);
+      QVERIFY2(!off.isEmpty(), qPrintable(error));
+      QCOMPARE(off, SoundLibraryHost::maxVoicesState(lib, "Violin", path, &error));
+      QCOMPARE(stgrp(off), QByteArray("127"));
+      QVERIFY(SoundLibraryHost::scriptValuesFor(lib, "Violin", nullptr).empty());
+      Playback::setIniValuesForTest({ { "notes/transportReset", "1" } });
+      QCOMPARE(SoundLibraryHost::scriptValuesFor(lib, "Violin", nullptr).at("$stgrp"), QByteArray("1"));
+      const QByteArray on = SoundLibraryHost::setupState(lib, "Violin", path, &error);
+      QVERIFY2(!on.isEmpty(), qPrintable(error));
+      QCOMPARE(stgrp(on), QByteArray("1"));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error), on);
+      QCOMPARE(stgrp(SoundLibraryHost::savedSetupState(lib, "Violin", path, &error)), QByteArray("127"));
+      MasterScore* score = readScore(DIR + "plain-performance.musicxml");
+      QVERIFY(score);
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "notes/transportReset", 0 } }));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), off);
+      Playback::setIniValuesForTest({ { "notes/transportReset", "0" } });
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "notes/transportReset", 1 } }));
+      QCOMPARE(SoundLibraryHost::setupState(lib, "Violin", path, &error, score), on);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   sharedSettingsWarning
+//    SSO's machine-wide shared settings (Share__Settings.nka in <local application data>/Spitfire Symphony Orchestra/Data,
+//    read from the patch's script): the shipped map's checks against a file with nothing shared (as on the Windows test VM,
+//    2026-10-21): no warning, the file listed as read; the articulation mode shared at 0 and Reset on transport shared:
+//    two warnings, also in the render preflight's lines and warnings; no file: "not there". Read only
+//---------------------------------------------------------
+
+void TestLiveEquivalence::sharedSettingsWarning()
+      {
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      QTemporaryDir dir;
+      QVERIFY(dir.isValid());
+      qputenv("MS_PLUGIN_SETTINGS_LOCAL_DIR", dir.path().toLocal8Bit());
+      struct Unset { ~Unset() { qunsetenv("MS_PLUGIN_SETTINGS_LOCAL_DIR"); RenderPreflight::setPluginSettings({}, {}); } } unset;
+      QStringList checked;
+      QVERIFY(SoundLibraryHost::checkPluginSettings(*sso, &checked).isEmpty());
+      QCOMPARE(checked.size(), 1);
+      QVERIFY2(checked[0].contains("not there"), qPrintable(checked[0]));
+      QVERIFY(QDir(dir.path()).mkpath("Spitfire Symphony Orchestra/Data"));
+      const QString file = dir.path() + "/Spitfire Symphony Orchestra/Data/Share__Settings.nka";
+      auto write = [&](int mode, int reset) {
+            QByteArray nka = "%Share__Settings\r\n1\r\n";
+            for (int i = 1; i < 64; ++i)
+                  nka += QByteArray::number(i == 1 ? mode : i == 2 ? reset : i == 60 || i == 61 ? 0 : -12345) + "\r\n";
+            QFile f(file);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(nka);
+            };
+      write(-12345, -12345);
+      checked.clear();
+      QVERIFY(SoundLibraryHost::checkPluginSettings(*sso, &checked).isEmpty());
+      QCOMPARE(checked.size(), 1);
+      QVERIFY2(checked[0].endsWith(" read"), qPrintable(checked[0]));
+      write(3, -12345);
+      QVERIFY(SoundLibraryHost::checkPluginSettings(*sso).isEmpty());          // (UACC & UI, the map's: fine)
+      write(0, 1);
+      checked.clear();
+      const QStringList bad = SoundLibraryHost::checkPluginSettings(*sso, &checked);
+      QCOMPARE(bad.size(), 2);
+      QVERIFY2(bad[0].contains("articulation mode") && bad[0].contains("1 = 0"), qPrintable(bad[0]));
+      QVERIFY2(bad[1].contains("Reset on transport") && bad[1].contains("2 = 1"), qPrintable(bad[1]));
+      RenderPreflight::setPluginSettings(checked, bad);
+      const QStringList lines = RenderPreflight::lines("test");
+      QVERIFY2(std::count_if(lines.begin(), lines.end(), [](const QString& l) { return l.startsWith("  plug-in settings: Spitfire"); }) == 1,
+               qPrintable(lines.join("\n")));
+      QCOMPARE(lines.filter("WARNING: plug-in settings: Spitfire").size(), 2);
+      QCOMPARE(RenderPreflight::warnings().filter("WARNING: plug-in settings: ").size(), 2);
+      QCOMPARE(RenderPreflight::json().value("pluginSettings").toArray().size(), 1);
       }
 
 void TestLiveEquivalence::preparedStates()

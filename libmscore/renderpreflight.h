@@ -82,6 +82,10 @@ Calibration calibration();
 void setSetups(const Setups& s);
 Setups setups();
 void setLibrary(const QString& name, const QStringList& patches);   // the map's patches (uncalibrated ones listed)
+// the plug-in's machine-wide settings files the map checks (<PluginSettings>: Ample's AGM_info.xml, SSO's shared settings
+// Share__Settings.nka; SoundLibraryHost::checkPluginSettings): checked, a line per file; warnings, a value the map can't
+// play with (SSO: a shared articulation mode other than UACC, Reset on transport, transpose …)
+void setPluginSettings(const QStringList& checked, const QStringList& warnings);
 
 // the report: lines (job: "playback verification", "background extract" …), and as JSON
 QStringList lines(const QString& job);

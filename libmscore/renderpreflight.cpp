@@ -27,6 +27,8 @@ static std::mutex stateMutex;
 static Calibration currentCalibration;
 static Setups currentSetups;
 static QString libraryName;
+static QStringList pluginChecked;
+static QStringList pluginWarnings;
 static QStringList libraryPatches;
 
 static QByteArray readAll(const QString& path)
@@ -243,6 +245,13 @@ static QStringList patchesFrom(const Calibration& c, const char* from)
       return p;
       }
 
+void setPluginSettings(const QStringList& checked, const QStringList& warnings)
+      {
+      std::lock_guard<std::mutex> l(stateMutex);
+      pluginChecked = checked;
+      pluginWarnings = warnings;
+      }
+
 QStringList warnings()
       {
       const Calibration c = calibration();
@@ -264,6 +273,11 @@ QStringList warnings()
             w << "WARNING: setups copy refreshed: " + x;
       for (const QString& x : Playback::warnings())
             w << "WARNING: playback.ini: " + x;
+      {
+            std::lock_guard<std::mutex> l(stateMutex);
+            for (const QString& x : pluginWarnings)
+                  w << "WARNING: plug-in settings: " + x;
+      }
       return w;
       }
 
@@ -312,6 +326,11 @@ QStringList lines(const QString& job)
             if (s.warnings.isEmpty() && s.refreshed.isEmpty())
                   out << "  setups copy: calibration and other files as in the main folder";
             }
+      {
+            std::lock_guard<std::mutex> l(stateMutex);
+            for (const QString& x : pluginChecked)
+                  out << "  plug-in settings: " + x;
+      }
       const FileId ini = fileId(Playback::iniPath());
       const QString preset = Playback::currentPreset();
       out << "  playback.ini: " + describe(ini) + "; preset: " + (preset.isEmpty() ? QString("custom (no preset's values)") : preset);
@@ -352,6 +371,10 @@ QJsonObject json()
       QJsonObject ini = toJson(fileId(Playback::iniPath()));
       ini["preset"] = Playback::currentPreset();
       o["playbackIni"] = ini;
+      {
+            std::lock_guard<std::mutex> l(stateMutex);
+            o["pluginSettings"] = QJsonArray::fromStringList(pluginChecked);
+      }
       o["warnings"] = QJsonArray::fromStringList(warnings());
       return o;
       }

@@ -1162,6 +1162,12 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   rewrites a Kontakt's state only when its slots' tunings change, so a set made with the other value keeps its own (make
   the set again); *Live plays the score* plays the owner's own Kontakt, as it is. Untried in real Live.
 
+- **`[notes] transportReset`** (2026-10-21, docs/PLAYBACK_SETTINGS.md › Transport reset): "Reset on transport" at 1 is in
+  the Kontakt state Create Live Set embeds, the same way (`tst_liveequivalence::transportResetState`); in Live the patch
+  then resets its round robins at Live's own Play, as Live's other SSO patches do. Update Live Set and *Live plays the
+  score*: as fixedTransitions. **`[levels] hallGuard`**'s split CC1 steps are rendered events, so the clips and the plain
+  set carry them. Untried in real Live.
+
 - **`[slurs] plainPerformance`'s shift** (2026-10-17, docs/PLAYBACK_SETTINGS.md › Plain Performance): the plain set plays
   it as the Performance patch's Kontakt track's Track Delay (-plainShift; `tst_liveequivalence::plainPerformanceLive`:
   every note-on, note-off and the patch's CC1 where MuseScore plays them). *Live plays the score*'s clips and the route

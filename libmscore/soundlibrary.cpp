@@ -1046,10 +1046,15 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   }
             else if (r.name() == "PluginSettings") {
                   // <PluginSettings file="…" name="…" bad="…" text="…"/> (Library::settingsChecks)
+                  // (folder="local", format="nka", good="…": SSO's shared settings)
                   Library::SettingsCheck check { a.value("file").toString(), a.value("name").toString(),
                                                  a.value("bad").toString().split(' ', QString::SkipEmptyParts),
-                                                 a.value("text").toString() };
-                  if (check.file.isEmpty() || check.name.isEmpty() || check.bad.isEmpty() || check.text.isEmpty())
+                                                 a.value("text").toString(), a.value("folder").toString(),
+                                                 a.value("format").toString(),
+                                                 a.value("good").toString().split(' ', QString::SkipEmptyParts) };
+                  if (check.file.isEmpty() || check.name.isEmpty() || (check.bad.isEmpty() && check.good.isEmpty())
+                      || check.text.isEmpty() || !(check.folder.isEmpty() || check.folder == "local")
+                      || !(check.format.isEmpty() || check.format == "nka"))
                         return fail(QString("%1:%2: bad PluginSettings").arg(path).arg(r.lineNumber()));
                   lib->settingsChecks.push_back(check);
                   r.skipCurrentElement();
@@ -1116,6 +1121,15 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         const double v = a.value("plainAttack").toDouble(&ok);
                         if (ok && std::isfinite(v))
                               li.plainAttackMs = std::max(0.0, std::min(1000.0, v));
+                        }
+                  li.transportResetScript = a.value("transportResetScript").toString();
+                  li.hallDrop = qBound(0, a.value("hallDrop").toInt(), 127);
+                  for (const QString& c : a.value("avoidCC").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const int n = c.toInt(&ok);
+                        if (!ok || n < 0 || n > 127)
+                              return fail(QString("%1:%2: bad avoidCC \"%3\"").arg(path).arg(r.lineNumber()).arg(c));
+                        li.avoidCC.insert(n);
                         }
                   if (a.hasAttribute("speedCC") && a.hasAttribute("speedScript")) {
                         li.speedCC = qBound(0, a.value("speedCC").toInt(), 127);
@@ -1527,6 +1541,37 @@ int speedValue(double ms)
 //   puts the made intensities back)
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   [notes] transportReset (branch sso-script-fixes2, 2026-10-21; 0 by default and in both presets until the owner has
+//   decided): a patch with transportResetScript (SSO's "Reset on transport", saved off in the string sections' Performance
+//   patches and Tuba Solo - Performance: read from the patch's script) loads with it at 1, so its round robins start from
+//   the first take at every playback / export / verification pass, as the library's other patches do. Without it they
+//   reset only after 1.5 s without a note-on (read from the patch's script): a play started sooner, or a pass rendered
+//   after another, picks other takes. It changes which take plays: a setting
+//---------------------------------------------------------
+
+static bool transportReset(const LibInstrument* patch, const Score* score)
+      {
+      return patch && !patch->transportResetScript.isEmpty() && Playback::on("notes/transportReset", score);
+      }
+
+std::vector<QString> playbackScriptKeys(const LibInstrument& patch)
+      {
+      std::vector<QString> keys;
+      if (patch.speedCC > 0 && !patch.speedScript.isEmpty())
+            keys.push_back(patch.speedScript);
+      if (!patch.transportResetScript.isEmpty())
+            keys.push_back(patch.transportResetScript);
+      return keys;
+      }
+
+bool Library::SettingsCheck::isBad(const QString& value) const
+      {
+      if (bad.contains(value, Qt::CaseInsensitive))
+            return true;
+      return !good.isEmpty() && !good.contains(value, Qt::CaseInsensitive);
+      }
+
 static bool fixedTransitions(const LibInstrument* patch, const Score* score)
       {
       return patch && !patch->speedScript.isEmpty() && Playback::on("slurs/fixedTransitions", score);
@@ -1539,6 +1584,8 @@ std::map<QString, QByteArray> playbackScriptValues(const LibInstrument& patch, c
             out[patch.speedScript] = "0";
       if (fixedTransitions(&patch, score))
             out["@randomSources"] = "0";
+      if (transportReset(&patch, score))
+            out[patch.transportResetScript] = "1";
       return out;
       }
 

@@ -190,11 +190,13 @@ class SoundLibraryHost : public QObject {
       // a non-Kontakt library's state settings the part sets for the patch (PartControllers::stateValues, by its lanes);
       // empty for Kontakt (makesSetups) or without a part. setupStateWith writes them into the state (pluginstate.h)
       static std::map<QString, QByteArray> stateValuesFor(const SoundLib::Library& library, const QString& patch, const Part* part);
-      // the library's <PluginSettings> found bad (Ample's global midiGuitarMode on): the warnings, each logged and shown
-      // once (checkPluginSettings in soundlibraryhost.cpp); the file under the user's Documents folder
-      // (MS_PLUGIN_SETTINGS_DIR instead, for tests)
-      static QStringList checkPluginSettings(const SoundLib::Library& library);
-      static QString pluginSettingsFile(const QString& file);
+      // the library's <PluginSettings> found bad (Ample's global midiGuitarMode on, SSO's shared settings overriding the
+      // articulation mode …): the warnings, each logged and shown once (checkPluginSettings in soundlibraryhost.cpp);
+      // checked: a line per file read ("<library>: <path> read" / "not there"); the file under the user's Documents
+      // folder, folder="local": the local application data folder (MS_PLUGIN_SETTINGS_DIR / MS_PLUGIN_SETTINGS_LOCAL_DIR
+      // instead, for tests). Also in every render's preflight (loadCalibration: RenderPreflight::setPluginSettings)
+      static QStringList checkPluginSettings(const SoundLib::Library& library, QStringList* checked = nullptr);
+      static QString pluginSettingsFile(const QString& file, const QString& folder = QString());
       // a non-Kontakt plug-in's own state as a new instance has it (a patch with state settings and no setup file starts
       // from it); kept for the process, by plug-in path. Empty with *error when the plug-in doesn't load
       static QByteArray defaultState(const QString& pluginPath, QString* error = nullptr);

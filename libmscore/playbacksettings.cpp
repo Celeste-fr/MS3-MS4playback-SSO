@@ -241,6 +241,14 @@ static const std::vector<Definition> DEFINITIONS = {
         "gliding in dB between the notes' heard windows, every 5 ms, so a slur's notes sound equally loud; a correction "
         "whose note's context changed since (an edit nearby) is stale and not played; the largest correction of a patch "
         "by its volume (within Live's +6 dB); 0: as the library plays them", true },
+      // (2026-10-21, branch sso-script-fixes2: SSO's Performance patches play an extra diminuendo release on every held key at
+      // a CC1 step down of 10 or more (read from the patch's script and group data; measured on the Windows test VM); it
+      // changes the sound, so 0 in both presets until the owner decides; MidiRenderer's libraryHallGuard)
+      { "levels/hallGuard", 0, 0, 1, "on/off",
+        "1: on the patches that play an extra diminuendo release sample when the dynamics controller drops by their "
+        "threshold or more in one step while a note is held (SSO's string sections' Performance patches: 10), such a step "
+        "(a subito dynamic inside a slur, fp) is sent as smaller steps 1 ms apart ending at its time, so no release plays; "
+        "0: sent in one step, as the notation gives it (the playback audit's HALL)", true },
       // [notes]
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
@@ -249,6 +257,15 @@ static const std::vector<Definition> DEFINITIONS = {
       { "notes/avoidBadSamples", 1, 0, 1, "on/off",
         "1: an attack at a velocity whose recording at that key is faulty (the map's avoid: SSO's Celli - Performance C3) plays "
         "at the nearest clean velocity measured; a note's own velocity stays; 0: as chosen", true },
+      // (2026-10-21, branch sso-script-fixes2, from reading SSO's scripts: the string sections' Performance patches and Tuba
+      // Solo - Performance have "Reset on transport" saved off, so restartTransport() doesn't reset their round robins; it
+      // changes which take plays, so 0 in both presets until the owner decides; SoundLib::transportReset. Per score: the
+      // hosted instances of a score whose value differs are loaded again)
+      { "notes/transportReset", 0, 0, 1, "on/off",
+        "1: the patches whose round robins don't go back to the first take at a playback start (SSO's string sections' "
+        "Performance patches, Tuba Solo - Performance: \"Reset on transport\" off) load with it on, so every play, export and "
+        "verification pass from one place picks the same takes; 0: as the library has it (they reset only after 1.5 s "
+        "without a note)", true },
       // [guitar] (a guitar library's <Guitar>: Ample Guitar M; guitarplayback.cpp. Choices of sound, so off by default and in
       // Library default until the owner decides by ear, 2026-10-20; the notation's techniques themselves (strings, capo,
       // harmonics, slides, hammer-ons, FX texts) are not settings)
@@ -513,7 +530,8 @@ QString iniTemplate()
 //    since 2026-10-17: the owner chose it by ear on the five string sections); slurs/plainTiming (0 in both since 2026-10-21
 //    until the owner has heard it); slurs/speedFromWritten (0 in both since
 //    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions and slurs/fastTransitions (0 in
-//    both since 2026-10-20, until the owner has heard them); slurs/plainAccents (0 in both from 2026-10-20 until the owner
+//    both since 2026-10-20, until the owner has heard them); notes/transportReset and levels/hallGuard (0 in both since 2026-10-21
+//    until the owner decides); slurs/plainAccents (0 in both from 2026-10-20 until the owner
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
 //    2026-10-20: the owner approved the rule). The other settings are not in the table because: legato/keepMs acts
@@ -538,10 +556,10 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },

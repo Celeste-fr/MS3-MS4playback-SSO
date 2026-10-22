@@ -53,6 +53,8 @@ class TestPlaybackAudit : public QObject, public MTest
       void cappedArrival();
       void droppedFindings();
       void chordFindings();
+      void hallFindings();
+      void avoidedCCFindings();
       void leapFindings();
       void transitionArrival();
       void auditScore();
@@ -682,7 +684,8 @@ void TestPlaybackAudit::auditScore()
             qInfo("%s", qPrintable(text));
       for (PlaybackAudit::Kind k : { PlaybackAudit::Kind::OVERLAP, PlaybackAudit::Kind::UNMEASURED, PlaybackAudit::Kind::CAPPED,
                                      PlaybackAudit::Kind::ARRIVAL, PlaybackAudit::Kind::LEVEL_STEP,
-                                     PlaybackAudit::Kind::DROPPED, PlaybackAudit::Kind::LEAP, PlaybackAudit::Kind::CHORD })
+                                     PlaybackAudit::Kind::DROPPED, PlaybackAudit::Kind::LEAP, PlaybackAudit::Kind::CHORD,
+                                     PlaybackAudit::Kind::HALL, PlaybackAudit::Kind::AVOIDED_CC })
             qInfo("%s: %d fail, %d warn, %d info", PlaybackAudit::kindName(k), r.count(k, PlaybackAudit::Severity::FAIL),
                   r.count(k, PlaybackAudit::Severity::WARN), r.count(k, PlaybackAudit::Severity::INFO));
       const int overlaps = r.count(PlaybackAudit::Kind::OVERLAP);
@@ -739,6 +742,124 @@ void TestPlaybackAudit::chordFindings()
       QVERIFY2(r.text().contains("CHORD"), qPrintable(r.text()));
       r = audit(false, false);
       QVERIFY2(r.count(PlaybackAudit::Kind::CHORD) == 0, qPrintable(r.text()));
+      SoundLib::setCurrent(nullptr);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   hallFindings
+//    SSO's Hall trigger (<Instrument hallDrop>: a CC1 step down of 10 or more while a key is held plays a diminuendo
+//    release; read from the patch's script and group data, measured on the Windows test VM): hall.musicxml under the
+//    Recommended preset as it is (plain Performance), the shipped SSO map: the subito p inside m1's slur, m3's first note
+//    (mf after m2's diminuendo) and m4's fp fail HALL; m2's quick diminuendo (a ramp) and m5's p on a detached note don't.
+//    [levels] hallGuard 1: none, each such step sent as smaller steps (the audit's model of the script), every value the plain
+//    render sends sent too, at its tick or within 20 ms
+//---------------------------------------------------------
+
+void TestPlaybackAudit::hallFindings()
+      {
+      QString error;
+      std::shared_ptr<SoundLib::Library> lib = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(lib, qPrintable(error));
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "hall.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto run = [&](const char* guard, EventMap* events) {
+            std::map<QString, QString> values;
+            for (const Playback::Preset& p : Playback::presets())
+                  if (QString(p.id) == "recommended")
+                        for (const auto& v : p.values)
+                              values[v.first] = QString::number(v.second);
+            values["levels/hallGuard"] = guard;
+            Playback::setIniValuesForTest(values);
+            score->setPlaylistDirty();
+            std::vector<MidiRenderer::LibTrace> trace;
+            PlaybackAudit::render(score, events, &trace);
+            return PlaybackAudit::audit(score, *events, trace, PlaybackAudit::Measured());
+            };
+      EventMap plain, guarded;
+      PlaybackAudit::Report r = run("0", &plain);
+      QVERIFY2(r.count(PlaybackAudit::Kind::HALL, PlaybackAudit::Severity::FAIL) == 3, qPrintable(r.text()));
+      std::set<int> bars;
+      for (const PlaybackAudit::Finding& f : r.findings)
+            if (f.kind == PlaybackAudit::Kind::HALL) {
+                  bars.insert(f.bar);
+                  QCOMPARE(f.part, QString("Violins 1"));
+                  QVERIFY2(f.value >= 10 && f.text.contains("Violins 1 - Performance"), qPrintable(f.text));
+                  }
+      QCOMPARE(bars, (std::set<int> { 1, 3, 4 }));
+      r = run("1", &guarded);
+      QVERIFY2(r.count(PlaybackAudit::Kind::HALL) == 0, qPrintable(r.text()));
+      // the guarded CC1: steps of at most 9 while the route plays, each change at least 1 ms after the one before;
+      // the values the plain render reaches at each of its ticks, the guarded reaches there too
+      auto cc1 = [](const EventMap& e) {
+            std::vector<std::pair<int, int>> v;
+            for (const auto& te : e)
+                  if (te.second.isExternal() && te.second.type() == ME_CONTROLLER && te.second.controller() == 1)
+                        v.push_back({ te.first, te.second.value() });
+            return v;
+            };
+      const std::vector<std::pair<int, int>> a = cc1(plain), b = cc1(guarded);
+      QVERIFY(b.size() > a.size());
+      // (each value the plain render sends, the guarded sends too, at its tick or at most 20 ms later)
+      for (const auto& x : a) {
+            const double t = score->utick2utime(x.first);
+            const bool found = std::any_of(b.begin(), b.end(), [&](const std::pair<int, int>& y) {
+                  return y.second == x.second && y.first >= x.first && score->utick2utime(y.first) - t <= 0.020;
+                  });
+            QVERIFY2(found, qPrintable(QString("CC1 %1 at %2").arg(x.second).arg(x.first)));
+            }
+      SoundLib::setCurrent(nullptr);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   avoidedCCFindings
+//    a controller sent to a patch that must never get it (<Instrument avoidCC>: SSO's Trumpet / Tenor Trombone Solo - Total
+//    Performance, CC112 / CC113 replace the note velocity): none as rendered (MidiRenderer::libraryAvoidCC); one put in
+//    on the route fails AVOIDED CC, another controller doesn't
+//---------------------------------------------------------
+
+void TestPlaybackAudit::avoidedCCFindings()
+      {
+      recommended({ { "levels/calibrated", "0" } });
+      MasterScore* score = readScore(DIR + "fast-legato.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto lib = loadMap("<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                         "<Instrument name='Violin' ids='violin' avoidCC='112 113'>"
+                         "<Articulation name='Long' value='1' techniques='long legato'/>"
+                         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;
+      PlaybackAudit::render(score, &events, &trace);
+      PlaybackAudit::Report r = PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+      QVERIFY2(r.count(PlaybackAudit::Kind::AVOIDED_CC) == 0, qPrintable(r.text()));
+      // a CC113 and a CC21 on the route of the first note
+      NPlayEvent first;
+      int at = -1;
+      for (const auto& te : events)
+            if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && !te.second.librarySwitch()) {
+                  first = te.second;
+                  at = te.first;
+                  break;
+                  }
+      QVERIFY(at >= 0);
+      for (int c : { 113, 21 }) {
+            NPlayEvent e(ME_CONTROLLER, first.channel(), c, 40);
+            e.setExternal(first.extPort(), first.extChannel());
+            events.insert({ at + 10, e });
+            }
+      r = PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+      QVERIFY2(r.count(PlaybackAudit::Kind::AVOIDED_CC, PlaybackAudit::Severity::FAIL) == 1, qPrintable(r.text()));
+      for (const PlaybackAudit::Finding& f : r.findings)
+            if (f.kind == PlaybackAudit::Kind::AVOIDED_CC)
+                  QVERIFY2(f.text.contains("CC113") && f.part == "Violin", qPrintable(f.text));
       SoundLib::setCurrent(nullptr);
       delete score;
       }

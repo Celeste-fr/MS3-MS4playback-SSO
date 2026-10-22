@@ -95,6 +95,10 @@ exports, known bugs); strings, winds and brass through Kontakt are untried.
   before trusting a render's levels** (2026-10-11: a partial `dynamics.json` left in the job's copy played
   Whence's staccatos uncalibrated, unnoticed until the owner heard it). A report without `preflight` came from an
   older build: which calibration it used is unknown.
+  Since 2026-10-21 also the plug-in's machine-wide settings files the map checks (`plug-in settings:` lines, `report.json`
+  `preflight.pluginSettings`): SSO's shared settings (`%LOCALAPPDATA%\Spitfire Symphony Orchestra\Data\Share__Settings.nka`,
+  read only) and Ample's `AGM_info.xml`; a value the map can't play with (SSO: a shared articulation mode other than
+  UACC, Reset on transport, a reset key, transpose, velocity from a controller, the Hall trigger off) is a `WARNING`.
 - The job's setups copy (`RenderPreflight::syncJobCopy`, VERIFY): at each start the calibration is made the main
   folder's (a copy's `dynamics.json` replaced, or removed when the main folder has none), other files the main
   folder has newer replace the copy's, missing ones are copied (with their time); made setups are kept (each is
@@ -175,6 +179,15 @@ sound: whether the onsets are right is the Windows VM's job (above). Checks:
   note-on less than 15 ms after the note-on before on its route while that one still sounds (a chord's notes on one
   copy). SSO drops it (velocity 64 or lower) or plays it as a transition ending the other. Voice lanes give each such
   note a copy of its own (docs/PLAYBACK_SETTINGS.md › Chords on monophonic patches), so it guards against a regression.
+- **HALL** (fail; 2026-10-21): on a route whose patch has a diminuendo-release trigger (`<Instrument hallDrop>`: SSO's
+  string sections' Performance patches, its Hall trigger, read from the patch's script and group data), the dynamics
+  controller (CC1) stepping down by `hallDrop` (10) or more from the value before its tick, while a key is held there
+  (values at one tick are one change, as measured). SSO then plays an extra diminuendo release on every held key (once,
+  until CC1 rises). Measured on the VM: a layer 14-25 dB under the note. Made by a subito dynamic inside a slur, fp; not
+  by hairpins. `[levels] hallGuard` splits such steps (docs/PLAYBACK_SETTINGS.md › Hall guard). Part, bar, the step.
+- **AVOIDED CC** (fail; 2026-10-21): a controller sent to a patch that must never get it (`<Instrument avoidCC>`: SSO's
+  Trumpet / Tenor Trombone Solo - Total Performance, CC112 / CC113 would replace the note velocity, read from the patch's
+  script). The renderer drops them (`MidiRenderer::libraryAvoidCC`), so it guards against a regression.
 - **LEAP** (warn): a legato transition whose interval from the note before exceeds an octave (12 semitones; with
   microtones 1200 cents by `ScoreTuning`). SSO gives it no transition: it releases the note before and attacks afresh,
   so the note's Performance technique, `legatoDelay` timing and level calibration don't apply. Same fields plus the

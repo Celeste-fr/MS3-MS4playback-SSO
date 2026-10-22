@@ -42,6 +42,7 @@
 #include <memory>
 #include <memory>
 #include <utility>
+#include <set>
 #include <vector>
 
 #include <QRegularExpression>
@@ -417,6 +418,20 @@ struct LibInstrument {
       // the WRITTEN spacing (speedValue). 0 / empty: none
       int speedCC { 0 };
       QString speedScript;
+      // [notes] transportReset (branch sso-script-fixes2, 2026-10-21): the script value that turns the patch's round-robin
+      // reset at a transport start on (<Instrument transportResetScript>: SSO's "Reset on transport", saved off in the five
+      // string sections' Performance patches and Tuba Solo - Performance, read from the patch's script; they reset only
+      // after 1.5 s without a note-on, so restartTransport() alone doesn't make a play repeat). With the setting on, the
+      // state loaded gets it at 1 (playbackScriptValues); the setup file keeps the library's 0. Empty: none
+      QString transportResetScript;
+      // the patch's diminuendo-release trigger (<Instrument hallDrop>: SSO's Hall trigger, read from the patch's group data
+      // and script): a Dynamics controller step down of hallDrop or more in one change while a key is held plays an extra
+      // release sample on every held key. The audit's HALL; [levels] hallGuard. 0: none known
+      int hallDrop { 0 };
+      // controllers never sent to this patch (<Instrument avoidCC="112 113">: SSO's Trumpet / Tenor Trombone Solo - Total
+      // Performance, whose helper script takes a note's velocity from CC112 / CC113 when they are not 0, read from the
+      // patch's script). MidiRenderer::libraryAvoidCC drops them; the audit's AVOIDED CC
+      std::set<int> avoidCC;
       // [levels] sectionBalance (contextlevel.h): every patch of the section plays this many dB louder, by its volume
       // (<Instrument sectionLevel>, dB, on the main patch; its extras take it: SSO's string sections, the owner's M,
       // 2026-10-11, mp by the Meyer rule since 2026-10-14; SSO's woodwinds and brass too since then, on the strings'
@@ -550,11 +565,19 @@ class Library {
       // a plug-in's global settings file to check as a part loads (<PluginSettings file="Ample Sound/AGM/Configs/
       // AGM_info.xml" name="midiGuitarMode" bad="true 1" text="…"/>: file under the user's Documents folder, a JUCE
       // PropertiesFile; a value of name in bad: text is logged and shown). Read only, never written
+      // (folder="local": under the user's local application data folder instead, %LOCALAPPDATA% on Windows; format="nka":
+      // a Kontakt array file, its name line then one value a line, name = the index; good="a b": a value not among them
+      // is bad, as a value among bad= is. SSO's shared settings, Share__Settings.nka: read from the patch's script)
       struct SettingsCheck {
             QString file;
             QString name;
             QStringList bad;
             QString text;
+            QString folder;               // "" Documents, "local" local application data
+            QString format;               // "" a JUCE PropertiesFile, "nka" a Kontakt array
+            QStringList good;
+            // value is bad (bad= holds it, or good= is given and doesn't)
+            bool isBad(const QString& value) const;
             };
       std::vector<SettingsCheck> settingsChecks;
       std::vector<LibInstrument> instruments;
@@ -611,7 +634,10 @@ bool speedFromWritten(const LibInstrument* patch, const Score* score);
 // 126 - min(126, floor(ms x 127 / 1000)), ms in whole ms as the script's clock counts them, rounded)
 int speedValue(double ms);
 // the script values the patch's state gets on top of its setup's (setupValues): with speedFromWritten, speedScript = 0
+// (with fixedTransitions "@randomSources" = 0; with [notes] transportReset transportResetScript = 1)
 std::map<QString, QByteArray> playbackScriptValues(const LibInstrument& patch, const Score* score);
+// the script values playbackScriptValues may set on the patch (whatever the settings): the ones a resave puts back
+std::vector<QString> playbackScriptKeys(const LibInstrument& patch);
 
 Choice choose(const LibInstrument& instrument, const Want& want);
 // of several patches: the best fit of all; of equal ones, the earlier patch

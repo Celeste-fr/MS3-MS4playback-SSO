@@ -71,6 +71,14 @@
 //                 patches: one legato line per slot): a note-on less than 15 ms after the note-on before on its route while
 //                 that one still sounds (a chord's notes on one copy): SSO drops it (velocity <= 64) or plays it as a
 //                 transition that ends the other. A fault (voice lanes, SoundLib::lanes, give each its own copy)
+//     HALL        on a route whose patch has a diminuendo-release trigger (<Instrument hallDrop>: SSO's string sections'
+//                 Performance patches, "Hall trigger", read from the patch's script and group data), the Dynamics
+//                 controller (CC1) stepping down by hallDrop (10) or more in one change while a key is held there: SSO plays
+//                 an extra diminuendo release sample on every held key (once, until the controller rises again). A fault;
+//                 [levels] hallGuard splits such steps
+//     AVOIDED CC  a controller the route's patch must never get (<Instrument avoidCC>: SSO's Trumpet / Tenor Trombone Solo
+//                 - Total Performance, whose helper script takes a note's velocity from CC112 / CC113 when not 0: read
+//                 from the patch's script). A fault (MidiRenderer::libraryAvoidCC drops them)
 //   Run: tst_playbackaudit (fixtures; MS_AUDIT_SCORE for any score, VERIFY.md › Playback audit)
 //---------------------------------------------------------
 
@@ -89,7 +97,7 @@ class Score;
 
 namespace PlaybackAudit {
 
-enum class Kind : signed char { OVERLAP, UNMEASURED, CAPPED, ARRIVAL, LEVEL_STEP, DROPPED, LEAP, CHORD };
+enum class Kind : signed char { OVERLAP, UNMEASURED, CAPPED, ARRIVAL, LEVEL_STEP, DROPPED, LEAP, CHORD, HALL, AVOIDED_CC };
 // LEVEL_STEP's proposed threshold (not enforced; owner to approve): Jesteadt, Wier & Green 1977 at sensationLevel dB
 double differenceLimenDb(double sensationLevel = 60.0);
 enum class Severity : signed char { FAIL, WARN, INFO };
