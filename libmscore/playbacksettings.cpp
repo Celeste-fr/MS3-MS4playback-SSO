@@ -239,6 +239,14 @@ static const std::vector<Definition> DEFINITIONS = {
       // (the owner, 2026-10-20, "yes": a chord on a monophonic patch (SSO's Performance patches, voice lanes) as a real
       // section divided, the chord as loud as one section; an assumption from player counts, no divisi data; on in
       // Recommended and by default, off in Library default; SoundLib::divisiDb)
+      // (branch slur-joins, 2026-10-22: Whence's Violas bars 12 / 16, a slur's F#4 into the G4 half note on one copy, the half's
+      // lower CC11 sent with its note-on turned the F#4 down 6-7 dB over its last 100 ms; 0 in both presets until the owner
+      // has heard it, proposed 1 in Recommended)
+      { "levels/transitionLevels", 0, 0, 1, "on/off",
+        "1: where a legato transition's level (CC11: level rule, real range, track and note levels) differs from the note "
+        "before's on its copy, the note before keeps its own level to the transition's glide leave, then CC11 moves to the "
+        "new note's linear in dB, reaching it at the glide's arrival (SSO's measured bendGlide, else the legato delay); "
+        "0: the new level with the note-on, while SSO still plays the note before", true },
       { "levels/divisi", 1, 0, 1, "on/off",
         "1: while n notes of a monophonic patch's part sound together (a chord on SSO's Performance patches, each note its "
         "own voice copy), each plays 10 log10(n) dB softer by CC11 (2: -3.0 dB, 3: -4.8 dB), the line's note too, as a "
@@ -546,7 +554,8 @@ QString iniTemplate()
 //    until the owner decides); slurs/microtoneBends (0 in both 2026-10-21, 1 in Recommended since 2026-10-22: the owner heard it); slurs/plainAccents (0 in both from 2026-10-20 until the owner
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
-//    2026-10-20: the owner approved the rule). The other settings are not in the table because: legato/keepMs acts
+//    2026-10-20: the owner approved the rule); levels/transitionLevels (0 in both since 2026-10-22, branch slur-joins, until the
+//    owner has heard it). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -569,11 +578,11 @@ const std::vector<Preset>& presets()
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 1 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
-                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 },
+                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
             };
       return P;

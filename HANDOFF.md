@@ -46,6 +46,35 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Slur joins (branch `slur-joins`, 2026-10-22, from integrate-1017 6d0eaddb57; not merged)
+
+The owner, Whence's Violas alone in build #464, Recommended: "viola bar 12 and 16 slur first note sounds disjointed from the
+note before". Bars 12 / 16: G4+50 staccato eighths (the key's quarter-sharp G), a slur of sixteenths G4+50 F#4 Eb4 F#4,
+then an unslurred G4+50 half note touching the slur's last F#4. The slur's first note after the staccato is played as in
+bars 9-11 / 13-15 (an attack after the staccato's gap, CC11 86 -> 108-110; envelopes the same within 1 unit). The join
+that only bars 12 / 16 have is **the slur's last F#4 into the G4+50 half note**: under plainPerformance a transition, but
+`SoundLib::lanes` put the half on the copy already at +50 (bar 11's G4+50), so it was attacked there 95 ms before its beat
+(pitch arrival; leave 162 ms before) while the F#4 kept sounding on its own copy for ~200 ms (two pitches a 3/4 tone
+apart). VM, #464's export, Violas alone; private `~/MuseScore/ms3fork/private/slur-joins/RESULT.md`.
+
+- **Fix, the default** (a bug: the plain rule says a touching note is SSO's transition): such a note stays on the note
+  before's copy (docs/PLAYBACK_SETTINGS.md › Plain Performance › Joins across tunings). Whence: 7 split joins -> 0 (also
+  Violins 1 bar 16, Basses bars 10, 11, 14, 15); every note's time / key / velocity unchanged. Windows build #466
+  (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39774787367), installed on the VM in `C:\claude\b466\ms`:
+  one sound through the join, the half's pitch +85 ms after its beat (a fingered transition under plainShift, as every
+  transition there: OPEN_ITEMS 2).
+- **`[levels] transitionLevels`** (0 everywhere until the owner has heard it; proposed 1 in Recommended): with the join on
+  one copy, the half's lower level-rule CC11 (a single note's 47 against the slur's 110), sent with its note-on, turned
+  the F#4 down 6-7 units over its last 100 ms (#466). 1 moves a transition's CC11 step over its glide (leave -> arrival).
+  kthost + SSO on the VM, Violas, Recommended with 0 / 1: the F#4 at 39.4-40.2 to 90 ms after the half's note-on with 1,
+  falling to 31-32 by then with 0 (docs/PLAYBACK_SETTINGS.md › Transition levels). Not in #466: the owner hears it in the
+  next build.
+- Quarter tones: both joins involve the key's quarter-sharp G (the half is reached by a bend glide from 0 to +50 on the one
+  copy now), so branch `microtone-next`'s glide changes act on them; this branch changes only the copy choice and the
+  level timing, not the glide.
+- Clips for the owner (not published): `~/MuseScore/ms3fork/ms37/.claude/worktrees/integrate-1017/.mixedtech/joins/clips/`
+  (A #464, B #466; bars 11-13 and 15-17; `clips.json` › `joins`: each join's clip second).
+
 ## Microtone bends (branch `fast-microtones`, 2026-10-21, from integrate-1017 0d30c7e614; not merged)
 
 The owner, Whence's Violas alone (build #458, Recommended): "the 3rd measure pitch bending sounds weird" (bar 7: A3, B3 -50,

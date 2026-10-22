@@ -1629,6 +1629,33 @@ ignores that a divided section's players may play a little louder (a gap without
   lanes the chord values; off: none), `tst_soundlibrary::playbackPresets`. Untried with Kontakt / SSO and in Live; not
   heard.
 
+## Transition levels
+
+`[levels] transitionLevels` (branch `slur-joins`, 2026-10-22; 0 by default and in both presets until the owner has heard it;
+proposed 1 in Recommended; per score). Every per-note level by CC11 (the level rule's gains, real range, track and note levels,
+divisi) goes on its route with the note's note-on (`libraryNoteLevels`), and so "what still rings of the note before takes the
+note's level". For an attack that is its release; for a legato transition it is the note before itself: SSO's transition
+leaves the old pitch 25-140 ms after the note-on and reaches the new one 130-300 ms after it (`bendGlide`). With 1:
+
+- where a note-on is a legato transition (`libGlide`: a slurred note, or a plain note touching the one before under
+  `[slurs] plainPerformance`) whose CC11 level differs from the note before's on its copy, the note before keeps its
+  level until the glide's leave, then CC11 moves to the new note's value linear in dB, a value every 5 ms
+  (`EvenLevels::STEP_MS`), reaching it at the glide's arrival, at the latest at the route's next note-on;
+- the leave and arrival are the ones the bend uses (`bendGlide` by the note before's length, `bendGlideFingered` under
+  `[slurs] microtoneBends`; else the legato delay at once);
+- only CC11 levels (a level on another controller switches at the note-on as before); a CC11 the score writes between the
+  note-on and the arrival (a hairpin's step) is mapped by the new note's level.
+
+Why: Whence's Violas bars 12 / 16 (after the lane fix above, Plain Performance › Joins across tunings): the slur's F#4
+plays the level rule's slur gain (CC11 110), the G4 half note after it a single note's (47). Sent with the half's note-on
+(111 ms before the beat, the patch's plainShift), the 47 turned the F#4 down 6-7 loudness units over its last 100 ms
+(MuseScore's export of #466 on the VM, Kontakt 8 + SSO, the perceived envelope of the Violas alone: 49.5 at -130 ms,
+43.0 at -30 ms, 42 at the beat), a diminuendo nobody wrote. Whence, Recommended: 38 transitions have a CC11 step at their
+note-on (the realRange steps of 1-4 values at bar lines, Celli bar 13 54 -> 42, the Violas' 110 -> 47 and Violins 1's
+64 -> 35 at bar 16). Measured (kthost + Kontakt 8 + SSO on the VM, the dump's Violas routes, Recommended with 0 / 1, the events at written time: no plainShift): with 0 the perceived envelope falls from 39.6 at the half's note-on to 31-32 by 90 ms after it, the F#4 still sounding; with 1 it stays 39.4-40.2 to 90 ms, then follows the glide down to 33 by 210 ms (both joins alike). Not yet in a Windows build. Live: the ramp is CC11 events like any level, so the
+route set's carrier notes and the plain set's CC11 lane carry it (`tst_liveequivalence::transitionLevelsLive`). Tests
+`tst_soundlibrary::transitionLevels`.
+
 ## Clicked and entered notes
 
 The owner (2026-10-15): "send a clicked note on a library part to its SSO patch, with its technique and the same patch
@@ -1704,6 +1731,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |
 | Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' nodes (halfway from each note-on to the next, since 2026-10-14), every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
 | Divisi level, `[levels] divisi` (the owner, 2026-10-20): while n voices of a monophonic patch's part (voice lanes) sound together, each note plays 10 log10(n) dB softer by CC11 (2: -3.0, 3: -4.8 dB), the line's too, so the chord adds up to one section; a note keeps its start's level; an assumption from player counts, no divisi data (above, Divisi level) | 1 (Recommended, the default; 0 in Library default) | `soundlibrary.cpp` (`lanes`: `Lanes::sounding`, `divisiDb`), `rendermidi.cpp` (`divisiLevel`, `libDivisi`, `libraryNoteLevels`) | `[levels] divisi`; score: `playbackSettings` |
+| Transition levels, `[levels] transitionLevels` (branch slur-joins, 2026-10-22, not yet heard by the owner): a legato transition whose CC11 level differs from the note before's on its copy keeps the note before's level to the glide's leave, then moves linear in dB to the new one by the glide's arrival (bendGlide), instead of with the note-on while SSO still plays the note before (above, Transition levels) | 0 (Recommended 0, Library default 0; proposed 1 in Recommended) | `rendermidi.cpp` (`libraryNoteLevels`: `transitionSwitch`, `libGlide`) | `[levels] transitionLevels`; score: `playbackSettings` |
 | Mic compensation: a part whose mic controllers (Mic 1-5, Mic Mix Distance; values or lanes) give another mix than the default plays as loud as the default mix, by its patches' volumes (lanes: the largest by the volume, each note's own at its start by CC11); measured mic levels and laws, mics as powers (above, Mic compensation; the owner, 2026-10-15) | 1 (Recommended, the default; 0 in Library default) | `contextlevel.cpp` (`micLevelDb`, `micValues`, `micTops`, `volumes`), `rendermidi.cpp` `trackLevel`, `TrackDelays::patchGain`; data: map `<Mics>`, `micLevels` / `micDefault` from `mic_levels.py` | `[levels] micCompensation`; score: `playbackSettings` |
 | Real range: each note of the five string sections and the main woodwind / brass patches as loud as a real player at its written dynamic (the Meyer rule, 2026-10-14: TU Berlin's single-note pp / ff are ppp / fff, written pp / ff at Meyer's in-play levels, p .. f equal steps between, from mp; rule D, 7 equal steps, where Meyer has no figures), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 2, Clark & Luce spans (Recommended, the default since 2026-10-14; 1 the Meyer rule; 0 in Library default; the owner, 2026-10-13 / 14) | `contextlevel.cpp` (`realRangeDb`, `clarkLuceSpans`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` / `realPlay` / `realSteps` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |
 | Pedal changes after their chord (legato pedalling) | up one tick after, down the tick after (since 2026-10-06; the pianist's timing, `[pedal]`, removed 2026-10-07) | `renderSpanners` (pedal) | fixed |
