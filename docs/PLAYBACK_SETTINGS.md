@@ -1468,14 +1468,20 @@ before keeps `[legato] keepMs`); attacks keep plainShift. Keys and bends as 1. T
 such slur (12 ARRIVAL fails on Whence): its model is the arrival, now about 65 ms before the beat, against the attack before.
 
 In MuseScore's own export (the heard check's renders, `MS_VERIFY_ROUTES=1`, Whence, Recommended; A build #464 = 1, B build
-#465 = 3; the quarter tones read at their sounding pitch, see below):
+#465 = 3; two takes each; the quarter tones read at their sounding pitch, see below):
 
-| Part, bars | quarter tones in tune, A / B | reached | 12-TET in tune, A / B | #458's 12-TET |
+| Part, bars | quarter tones in tune, A / B | reached, A / B | 12-TET in tune, A / B | #458's 12-TET |
 |---|---|---|---|---|
-| Violas, 5-14 | 36.8 / 37.2 % | 29 / 29 of 32 | 46.8 / 49.3 % | 41-43 % |
-| Violas, bar 7 | 27.0 / 32.0 % | 8 / 8 of 8 | 43.3 / 45.0 % | 12-17 % |
-| Violins 1, 5-14 | 22.9 / 34.0 % | 22 / 24 of 29 | 29.5 / 51.5 % | 39-40 % |
-| Celli, 1-14 | 11.4 / 23.6 % | 32 / 35 of 59 | 22.1 / 56.0 % | 28-29 % |
+| Violas, 5-14 | 35-37 / 37-41 % | 27-29 / 27-29 of 32 | 45-47 / 49 % | 41-43 % |
+| Violas, bar 7 | 27-30 / 31-32 % | 8 / 8 of 8 | 42-43 / 43-45 % | 12-17 % |
+| Violins 1, 5-14 | 23-24 / 31-34 % | 22-24 / 21-24 of 29 | 30 / 51-52 % | 39-40 % |
+| Celli, 1-14 | 11-13 / 24 % | 32-33 / 33-35 of 59 | 20-22 / 56-58 % | 28-29 % |
+
+The wrong-way hook (share of a quarter tone's first 136 ms beyond the note before, away from it): Violas 5-7 / 1 %, bar 7
+0 / 0, Violins 1 4 / 4, Celli 1 / 1. The heard check's counts (arrival reading) A / B: ARRIVAL 33-36 / 34-36 fail, RHYTHM
+11 / 10-12 fail; in the leave reading the same totals (ARRIVAL 111-112 / 110-118, RHYTHM 69-70 / 72) and more Celli RHYTHM
+(18-23 / 27-30): in these gliding runs the transition readings sit at their bound, 50 ms before the note-on (Celli median
+-129 ms in A, -190 in B), and move with it, so they don't judge this.
 
 The quarter tones' reading: predicted.tsv (the audit's dump, which the heard check and the in-tune measure read) gave a row
 the key it is sent on as `pitch` but the note's own cents, so with 1 a respelled note's pitch + cents was a semitone off (50
