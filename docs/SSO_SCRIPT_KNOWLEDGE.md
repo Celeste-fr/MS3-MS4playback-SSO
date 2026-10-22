@@ -66,7 +66,9 @@ Each finding below is marked (a) already used by the fork, (b) contradicts a for
     in the five string Performance patches**, and in Oboe Principal Total Performance and Tuba Solo Performance.
 - **(b)** `restartTransport()` does not reset those patches. A pass that starts less than 1.5 s after the previous one
   plays different takes.
-- **(c)** To try: turn "Reset on transport" on as a playback script value. kthost A/B.
+- **Built 2026-10-21**: `[notes] transportReset` (0 by default): "Reset on transport" on as a playback script value. kthost
+  on the VM: with it and fixedTransitions, passes repeat at -95 .. -100 dB; without it -3 .. -6 dB with the modulators fixed.
+  The 1.5 s idle reset also works offline (it counts processed audio).
 
 ### Dynamics, levels, releases (read from the patch's group data and script)
 
@@ -77,8 +79,10 @@ Each finding below is marked (a) already used by the fork, (b) contradicts a for
     level": nothing adjustable in the patch.)
 - **Velocity curve.** It is linear in every patch.
 - **(c) The Hall trigger.** When CC1 falls by 10 or more in one step while a Performance note is held, every held key
-  plays a diminuendo-release sample, at the level from before the drop. Whence has no such case. A playback-audit rule
-  is proposed for it.
+  plays a diminuendo-release sample, at the level from before the drop. Whence has no such case. **Built 2026-10-21**:
+  the audit's HALL; measured on the VM (one step 64 -> 50: a layer 14-25 dB under the note; two steps 1 ms apart: none;
+  two values at the same sample: as one step); MuseScore makes it at a subito dynamic inside a slur and at fp;
+  `[levels] hallGuard` (0 by default) splits such steps.
 - **Releases.**
   - All-techniques long releases are chosen by how long the note was held: 2000 ms span, 1500 for harmonics and
     flautando.
@@ -93,13 +97,18 @@ Each finding below is marked (a) already used by the fork, (b) contradicts a for
   - spiccato, pizzicato, Bartók and col legno skip 10 ms at the default and 20 ms at 0;
   - Short CS, Brushed and Short Harmonics skip nothing at the default and 20 ms at 1.
 
-  To try: measure the onset at 0, 0.5 and 1, then offer it as a setting.
+  **Measured 2026-10-21** (branch sso-script-fixes2, kthost on the Windows VM; docs/PLAYBACK_SETTINGS.md › Tightness): the
+  direction read here is the wrong way round. Tightness 1 starts spiccato, pizzicato and col legno 10 ms earlier (Celli's
+  pizzicato / col legno 15), Violins 1's Short CS 20 ms earlier; Tightness 0 the same amounts later; Short Brushed CS and
+  Celli's Short CS don't move; the level doesn't change. Not offered yet.
 
 ### Other (read from the patch's script)
 
 - **Shared settings.** A settings file in Kontakt's data folder, shared by every SSO patch on a machine, can override a
   patch's saved articulation mode, Reset on transport, reset key, transpose, CC-mapped velocity, Hall trigger and
-  keyswitch start. (c) To try: check the VM and the owner's PC for it, and add a preflight warning.
+  keyswitch start. **Built 2026-10-21**: on Windows the file is `%LOCALAPPDATA%\Spitfire Symphony Orchestra\Data\Share__Settings.nka`
+  (Kontakt's data folder for an encoded library); the map's `<PluginSettings>` check it as a patch loads and in every
+  render's preflight. The VM's (2026-10-21): nothing shared. The owner's PC: not checked.
 - **Tempo.** Some groups are gated by the host tempo: BPM ranges and tempo-sync flags. (c) To try: check the tempo that
   MuseScore reports to the plug-in.
 - **Kickstart.**
@@ -109,4 +118,5 @@ Each finding below is marked (a) already used by the fork, (b) contradicts a for
 - **Mics.** Mic levels never purge samples; only a mic's on/off button does. (a) Mic compensation is safe.
 - **Total Performance velocity preprocessor.** On Tenor Trombone Solo and Trumpet Solo Total Performance, a preprocessor
   replaces the first note's velocity with CC112, and an overlapping note's velocity with CC113, when those CCs are
-  non-zero. The fork must not send CC112 or CC113 to these two patches.
+  non-zero. The fork must not send CC112 or CC113 to these two patches. **Built 2026-10-21**: the map's `avoidCC="112 113"`;
+  the renderer drops them (a `cc112` automation lane was the only way to send them); the audit's AVOIDED CC.

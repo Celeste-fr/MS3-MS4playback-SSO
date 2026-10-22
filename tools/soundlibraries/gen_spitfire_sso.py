@@ -178,7 +178,23 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent (0: as written) -->',
 f'  <Onset early="{ONSET_EARLY}"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
-'  <Files registry="Spitfire Symphony Orchestra"/>']
+'  <Files registry="Spitfire Symphony Orchestra"/>',
+'  <!-- the settings SSO\'s patches share on a machine (a "share" tick in any patch\'s settings: read from the patch\'s',
+'       script; Kontakt keeps them in its data folder for the library, %LOCALAPPDATA%\\Spitfire Symphony Orchestra\\Data):',
+'       a shared value overrides every patch\'s own at load. Checked, read only, as a patch loads and in every render\'s',
+'       preflight; a value outside good= is reported (-12345 / -12344: not shared) -->']
+# (index in the shared array, good values, what a shared other value does; read from the patch's script)
+SHARED_SETTINGS = [
+    (1, '-12345 -12344 3', 'SSO\'s shared settings set the articulation mode of every patch to another mode than UACC & UI, which the map\'s switches need: articulations will not switch. Untick "share" for the articulation mode in any SSO patch\'s settings'),
+    (2, '-12345 -12344', 'SSO\'s shared settings set "Reset on transport" for every patch: round robins at a playback start differ from the library\'s defaults (and from [notes] transportReset). Untick "share" for it in any SSO patch\'s settings'),
+    (3, '-12345 -12344', 'SSO\'s shared settings turn on a round-robin reset key in every patch: that key resets the takes. Untick "share" for it in any SSO patch\'s settings'),
+    (4, '-12345 -12344 0', 'SSO\'s shared settings transpose every patch: notes sound at other pitches. Untick "share" for the transpose in any SSO patch\'s settings'),
+    (5, '-12345 -12344 0', 'SSO\'s shared settings take every patch\'s velocity from a controller: note velocities (the shorts\' dynamics, Performance techniques) are ignored. Untick "share" for it in any SSO patch\'s settings'),
+    (6, '-12345 -12344 1', 'SSO\'s shared settings turn the Hall trigger (diminuendo release) off in every patch: plays differ from the library\'s defaults. Untick "share" for it in any SSO patch\'s settings'),
+]
+for index, good, text in SHARED_SETTINGS:
+    out.append(f'  <PluginSettings folder="local" format="nka" file="Spitfire Symphony Orchestra/Data/Share__Settings.nka" '
+               f'name="{index}" good="{good}" text={q(text)}/>')
 # Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
 # value in View > Sound Library > Controllers…): (id, name shown, CC or None, plug-in parameter
 # title or None, default 0-127 or None (the patch's own value stays), [(staff text regexp, value)]).
@@ -361,6 +377,32 @@ def performanceTechniques(patch):
 def speedAttributes(patch):
     l = PERFORMANCE_LAYERS.get(patch)
     return f' speedCC="{l["speedCC"]}" speedScript="{l["speedScript"]}"' if l else ''
+# Read from the patches' scripts and group data (docs/SSO_SCRIPT_KNOWLEDGE.md, 2026-10-21; branch sso-script-fixes2):
+# - transportResetScript: the script value "Reset on transport" (round robins back to the first take at a transport
+#   start). Saved 0 (off) in these patches only, of the map's (read from the patch's script's saved values); MuseScore's
+#   restartTransport() relies on it. [notes] transportReset sets it to 1 in the state loaded (playbackScriptValues)
+# - hallDrop: the patch's diminuendo-release trigger (its "Hall trigger" on and an "Rls diminuendo" group, read from the
+#   patch's group data: a Dynamics (CC1) step down of this much or more in one change while a key is held plays an extra
+#   release on every held key). The five string sections' Performance patches checked; the other patches not read
+#   (Violins 2 - All techniques has no such group). The audit's HALL; [levels] hallGuard
+# - avoidCC: controllers MuseScore never sends to the patch (read from the patch's script: a helper on these two patches
+#   replaces the note-on velocity by CC112 (a first note) / CC113 (a note while another is held) when they are not 0).
+#   MidiRenderer::libraryAvoidCC drops them; the audit's AVOIDED CC
+TRANSPORT_RESET_OFF = ['Violins 1 - Performance', 'Violins 2 - Performance', 'Violas - Performance',
+                       'Celli - Performance', 'Basses - Performance', 'Tuba Solo - Performance',
+                       'Oboe Principal - Total Performance']
+HALL_DROP = {p: 10 for p in ['Violins 1 - Performance', 'Violins 2 - Performance', 'Violas - Performance',
+                             'Celli - Performance', 'Basses - Performance']}
+AVOID_CC = {'Trumpet Solo - Total Performance': '112 113', 'Tenor Trombone Solo - Total Performance': '112 113'}
+def scriptAttributes(patch):
+    a = ''
+    if patch in TRANSPORT_RESET_OFF:
+        a += ' transportResetScript="$xqdzx"'
+    if patch in HALL_DROP:
+        a += f' hallDrop="{HALL_DROP[patch]}"'
+    if patch in AVOID_CC:
+        a += f' avoidCC="{AVOID_CC[patch]}"'
+    return a
 # the smooth attack's own onset (attackOnset="smooth:median;pitch:ms,…"): a lone first note at velocity 5 is heard much
 # later than the onset= measured at velocity 80 (Violas 236 against 111 ms). Measured 2026-10-12 (kthost on the test VM,
 # CC1 64, 5 pitches x 2 repeats, the onset= method; sso_smooth_onset.json): the median over the 10 notes and each
@@ -1705,6 +1747,9 @@ for i, line in enumerate(out):
             if speedAttributes(current):
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + speedAttributes(current) + end
+            if scriptAttributes(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + scriptAttributes(current) + end
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) + end

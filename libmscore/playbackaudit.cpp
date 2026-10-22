@@ -48,6 +48,8 @@ const char* kindName(Kind k)
             case Kind::DROPPED:    return "DROPPED";
             case Kind::LEAP:       return "LEAP";
             case Kind::CHORD:      return "CHORD";
+            case Kind::HALL:       return "HALL";
+            case Kind::AVOIDED_CC: return "AVOIDED CC";
             }
       return "";
       }
@@ -159,7 +161,8 @@ QString Report::text(const QString& title) const
                      "Rasch 1979, warn > %3 ms, fail > %4 ms; level steps: values, proposed threshold (not enforced, owner to "
                      "approve) the difference limen at 60 dB SL, Jesteadt, Wier & Green 1977: %5 dB, marked \"> DL\"")
                      .arg(notes).arg(keepMs).arg(TIMING_WARN_MS).arg(TIMING_FAIL_MS).arg(differenceLimenDb(), 0, 'f', 2);
-      for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP, Kind::DROPPED, Kind::LEAP, Kind::CHORD })
+      for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP, Kind::DROPPED, Kind::LEAP, Kind::CHORD,
+                      Kind::HALL, Kind::AVOIDED_CC })
             out << QString("  %1: %2 fail, %3 warn, %4 info").arg(kindName(k), -12).arg(count(k, Severity::FAIL))
                    .arg(count(k, Severity::WARN)).arg(count(k, Severity::INFO));
       if (!plainShifts.empty()) {
@@ -723,6 +726,89 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                           .arg(p->route / 16).arg(p->route % 16 + 1).arg(p->trace->patch->name).arg(p->velocity)
                           .arg(p->velocity <= DROP_MAX_VELOCITY ? "dropped" : "a transition ending it"), gap);
             }
+
+      // (f3) the patch's diminuendo-release trigger (LibInstrument::hallDrop, SSO's Hall trigger: read from the patch's script
+      // and group data): a Dynamics controller step down of hallDrop or more in one change, while a key is held on the
+      // route, plays an extra release sample on every held key; armed again only by a rise (the script's own state, as
+      // read). And (f4) a controller the patch must never get (LibInstrument::avoidCC: SSO's Trumpet / Tenor Trombone Solo -
+      // Total Performance take a note's velocity from CC112 / CC113)
+      {
+            std::map<int, const SoundLib::LibInstrument*> patchOf;      // route -> its patch (by its notes' choices)
+            for (const auto& up : played)
+                  if (up->trace && up->trace->patch && !patchOf.count(up->route))
+                        patchOf[up->route] = up->trace->patch;
+            std::map<std::tuple<int, int, int>, const Played*> byOn;    // (route, pitch, on) -> the note
+            for (const auto& up : played)
+                  byOn[std::make_tuple(up->route, up->pitch, up->on)] = up.get();
+            const int dynamicsCC = lib ? lib->dynamicsCC : 1;
+            struct RouteState {
+                  std::map<int, std::vector<const Played*>> held;     // key -> notes on
+                  int last { -1 };                                     // the controller's value before
+                  int base { -1 };                                     // its value before this event's tick (values at one
+                  int baseTick { -1 };                                 // sample reach the patch as one change: measured)
+                  int armed { -1 };                                    // -1 not armed, -2 fired, else the value armed at
+                  };
+            std::map<int, RouteState> st;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal())
+                        continue;
+                  const int route = e.extPort() * 16 + e.extChannel();
+                  auto pp = patchOf.find(route);
+                  if (pp == patchOf.end())
+                        continue;
+                  const SoundLib::LibInstrument* li = pp->second;
+                  RouteState& rs = st[route];
+                  const bool on = e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch();
+                  const bool off = ((e.type() == ME_NOTEON && e.velo() == 0) || e.type() == ME_NOTEOFF) && !e.librarySwitch();
+                  if (on) {
+                        auto p = byOn.find(std::make_tuple(route, e.pitch(), te.first));
+                        rs.held[e.pitch()].push_back(p != byOn.end() ? p->second : nullptr);
+                        continue;
+                        }
+                  if (off) {
+                        auto k = rs.held.find(e.pitch());
+                        if (k != rs.held.end()) {
+                              k->second.erase(k->second.begin());
+                              if (k->second.empty())
+                                    rs.held.erase(k);
+                              }
+                        continue;
+                        }
+                  if (e.type() != ME_CONTROLLER)
+                        continue;
+                  const Played* sounding = nullptr;           // the latest note held (for the finding's place)
+                  for (const auto& k : rs.held)
+                        for (const Played* p : k.second)
+                              if (p && (!sounding || p->on > sounding->on))
+                                    sounding = p;
+                  if (li->avoidCC.count(e.controller()))
+                        finding(Kind::AVOIDED_CC, Severity::FAIL, sounding, QString("CC%1 = %2 sent to %3 at %4 s: its script takes a "
+                                "note's velocity from it when it is not 0").arg(e.controller()).arg(e.value()).arg(li->name)
+                                .arg(ms(te.first) / 1000, 0, 'f', 3), e.controller());
+                  if (li->hallDrop <= 0 || e.controller() != dynamicsCC)
+                        continue;
+                  const int v = e.value();
+                  if (te.first != rs.baseTick) {
+                        rs.base = rs.last;
+                        rs.baseTick = te.first;
+                        }
+                  const int drop = rs.base >= 0 ? rs.base - v : 0;
+                  if (rs.armed == -2 && drop < 0)
+                        rs.armed = -1;
+                  if (rs.armed == -1 || drop < 0)
+                        rs.armed = v;
+                  else if (rs.armed != -2 && drop >= li->hallDrop) {
+                        if (!rs.held.empty())
+                              finding(Kind::HALL, Severity::FAIL, sounding, QString("CC%1 %2 -> %3 in one step (%4 >= %5) at %6 s while %7 key(s) "
+                                      "are held on %8: SSO plays a diminuendo release on each held key")
+                                      .arg(dynamicsCC).arg(rs.base).arg(v).arg(drop).arg(li->hallDrop).arg(ms(te.first) / 1000, 0, 'f', 3)
+                                      .arg(rs.held.size()).arg(li->name), drop);
+                        rs.armed = -2;
+                        }
+                  rs.last = v;
+                  }
+      }
 
       // (g) the rows for the heard check: every note-on with a choice, its prediction and its place in its line and slur
       std::vector<const Slur*> slurs;

@@ -7,6 +7,7 @@
 //=============================================================================
 
 #include "pluginstate.h"
+#include <QList>
 
 namespace Ms {
 namespace PluginState {
@@ -216,6 +217,19 @@ QString propertiesValue(const QByteArray& xml, const QString& name)
       QString v = QString::fromUtf8(xml.mid(at, length));
       v.replace("&quot;", "\"").replace("&lt;", "<").replace("&gt;", ">").replace("&apos;", "'").replace("&amp;", "&");
       return v.isNull() ? QString("") : v;
+      }
+
+QString nkaValue(const QByteArray& nka, int index)
+      {
+      QList<QByteArray> lines = nka.split('\n');
+      for (QByteArray& l : lines)
+            l = l.trimmed();
+      while (!lines.isEmpty() && lines.last().isEmpty())
+            lines.removeLast();
+      if (lines.isEmpty() || !(lines[0].startsWith('%') || lines[0].startsWith('!') || lines[0].startsWith('?')) || index < 0
+          || index + 1 >= lines.size())
+            return QString();
+      return QString::fromUtf8(lines[index + 1]);
       }
 
 }     // namespace PluginState

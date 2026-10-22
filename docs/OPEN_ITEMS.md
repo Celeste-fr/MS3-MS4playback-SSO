@@ -173,6 +173,26 @@ Keep this file current: close an item by deleting it (the commit message says wh
 - **Src**: private `sso-legato-fixes/RESULT.md`; HANDOFF.md › SSO legato fixes.
 - **Untried**: in MuseScore with Kontakt; Update Live Set and *Live plays the score* don't carry it.
 - **Own**: hear it (`/data/ssolf/listen/` on the dev machine).
+- **Round robins too** (2026-10-21, branch `sso-script-fixes2`): the five string Performance patches and Tuba Solo -
+  Performance don't reset their round robins at a transport start ("Reset on transport" saved off, read from the
+  patch's script), only after 1.5 s without a note-on. kthost, Violas / Celli, passes 0.5 s apart: -3 .. -6 dB even with
+  fixedTransitions. **Fix**: `[notes] transportReset` 1 (0 everywhere): with fixedTransitions passes repeat at -95 ..
+  -100 dB. Proposed 1 in Recommended with fixedTransitions (owner). docs/PLAYBACK_SETTINGS.md › Transport reset.
+
+### 11a. SSO's Hall trigger: an extra release at a CC1 step while a Performance note is held (2026-10-21)
+- **W**: a CC1 step down of 10+ while a key is held plays a diminuendo release on every held key (read from the patch's
+  script; VM kthost: a layer 14 dB (Violas) / 25 dB (Celli) under the note for ~1 s). MuseScore makes it at a subito
+  dynamic inside a slur, at fp, at a dynamic on a slurred note after a diminuendo (`hall.musicxml`: 3); Whence, the
+  passages, Mixed techniques, Strings: none.
+- **Fix**: `[levels] hallGuard` (0 everywhere): steps of 9, 1 ms apart (measured: no release). Proposed 1 in Recommended.
+- **Tool**: the audit's HALL. **Own**: hear `hall.musicxml` bars 1 / 4 with 0 and 1.
+- **Unknown**: which other patches have an "Rls diminuendo" group (only the five string Performance patches read).
+
+### 11b. SSO's shared settings can change every patch on a machine (2026-10-21)
+- `%LOCALAPPDATA%\Spitfire Symphony Orchestra\Data\Share__Settings.nka` (read from the patch's script): a "share" tick
+  in any patch saves the articulation mode, Reset on transport, reset key, transpose, velocity source or Hall trigger for
+  every patch loaded later. Now checked as a patch loads (status bar, load times.log) and in every render's preflight.
+  The VM's: nothing shared. **Own**: the owner's PC not checked (the preflight shows it on the next render there).
 
 ---
 
@@ -326,6 +346,11 @@ Keep this file current: close an item by deleting it (the commit message says wh
 30. **MS4 / built-in**: `ab/trace/regress.sh` not run since edb5eec (and its paths are stale); MIDI export's
     same-instant order fixed 2026-10-04 but the 3.6 round trip not re-run.
 31. **Playability**: microtone threshold below 200 Hz clamped at 5.9 c (from pure tones); scordatura view not saved.
+32. **Tightness not offered** (2026-10-21, measured, VM kthost): the panel's Tightness 1 starts spiccato / pizzicato /
+    col legno 10 ms earlier (Celli's pizzicato / col legno 15), Violins 1's Short CS 20; Brushed CS and Celli's Short CS
+    don't move; level unchanged. Recommended already sends shorts early by their onset, so a setting would change the
+    attack (less pre-noise), and timing only as written (Library default). Needs `onset=` re-measured at the chosen value.
+    Owner. docs/PLAYBACK_SETTINGS.md › Tightness.
 
 ---
 
@@ -368,7 +393,7 @@ Keep this file current: close an item by deleting it (the commit message says wh
 ## Owner decisions pending
 
 **Settings 0 by default "until the owner has heard it"**: `[slurs] plainTiming` (item 2), `speedFromWritten`
-(20), `fixedTransitions` (11), `fastTransitions` (20), `[guitar] strums`, `softStrums` 0/1/2, `pinchHarmonics` (10);
+(20), `fixedTransitions` (11), `fastTransitions` (20), `[notes] transportReset` (11), `[levels] hallGuard` (11a), `[guitar] strums`, `softStrums` 0/1/2, `pinchHarmonics` (10);
 `[slurs] evenTransitions` (weak proposal).
 
 **On by default, never heard or confirmed**: calibrated 2 (B′), sectionBalance 2, realRange 2 on music with
@@ -397,7 +422,8 @@ Track Delay moving MIDI To, the device's CPU fix, phrase-first notes within 3.3 
 
 Even levels' background measurer, Play's wait and countdown, the Tools-menu job; edit-lag warm-up with Kontakt; chord
 voices and divisi; calibrated 2; mic compensation (a mic changed alone after Mic Mix Distance); hosted slot gain;
-fixedTransitions, fastTransitions, speedFromWritten's resave / reload; transport-restart round robins (play twice, same
+fixedTransitions, fastTransitions, speedFromWritten's resave / reload; transportReset and hallGuard in MuseScore (kthost
+only); transport-restart round robins (play twice, same
 sample sequence); the start lead; play from a tick; `renderAgainPlaying` after a Mixer change; flat-lane dashed values
 before a patch ever loaded; clicked notes; the Performance technique / Velocity / Join lanes; Ample's hosted-sync wait
 (not built) and every Ample phase except the #453 / #455 / #456 / #457 offline checks. Kontakt's own window values are

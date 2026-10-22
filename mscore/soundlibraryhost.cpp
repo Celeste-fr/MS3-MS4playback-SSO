@@ -275,6 +275,10 @@ void SoundLibraryHost::loadCalibration()
                         patches << li.name;
             RenderPreflight::setLibrary(library->name, patches);
             RenderPreflight::setCalibration(sources);
+            // (the plug-in's machine-wide settings: SSO's shared settings, Ample's global file)
+            QStringList checked;
+            const QStringList bad = checkPluginSettings(*library, &checked);
+            RenderPreflight::setPluginSettings(checked, bad);
             if (dataFolderOverride().isEmpty()) {
                   RenderPreflight::Setups main;
                   main.folder = main.mainFolder = setupFolder(*library);
@@ -839,25 +843,42 @@ std::map<QString, QByteArray> SoundLibraryHost::stateValuesFor(const SoundLib::L
 //    times.log, qWarning) and shown in the status bar, once per file and value. Read only
 //---------------------------------------------------------
 
-QString SoundLibraryHost::pluginSettingsFile(const QString& file)
+QString SoundLibraryHost::pluginSettingsFile(const QString& file, const QString& folder)
       {
-      const QString env = qEnvironmentVariable("MS_PLUGIN_SETTINGS_DIR");      // (tests: instead of Documents)
-      const QString documents = env.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) : env;
-      return documents.isEmpty() ? QString() : QDir(documents).filePath(file);
+      // (folder "local": the user's local application data, %LOCALAPPDATA% on Windows (Kontakt's data folder for an
+      // encoded library: <it>/<library>/Data); tests: MS_PLUGIN_SETTINGS_LOCAL_DIR)
+      const bool local = folder == "local";
+      const QString env = qEnvironmentVariable(local ? "MS_PLUGIN_SETTINGS_LOCAL_DIR" : "MS_PLUGIN_SETTINGS_DIR");
+      const QString base = !env.isEmpty() ? env
+                           : QStandardPaths::writableLocation(local ? QStandardPaths::GenericDataLocation
+                                                                    : QStandardPaths::DocumentsLocation);
+      return base.isEmpty() ? QString() : QDir(base).filePath(file);
       }
 
-QStringList SoundLibraryHost::checkPluginSettings(const SoundLib::Library& library)
+QStringList SoundLibraryHost::checkPluginSettings(const SoundLib::Library& library, QStringList* checked)
       {
       static std::mutex mutex;
       static std::set<QString> told;
       QStringList warnings;
+      std::map<QString, QByteArray> files;              // path -> contents (null: not there)
+      std::set<QString> listed;
       for (const SoundLib::Library::SettingsCheck& c : library.settingsChecks) {
-            const QString path = pluginSettingsFile(c.file);
-            QFile f(path);
-            if (path.isEmpty() || !f.open(QIODevice::ReadOnly))
+            const QString path = pluginSettingsFile(c.file, c.folder);
+            if (path.isEmpty())
                   continue;
-            const QString v = PluginState::propertiesValue(f.readAll(), c.name);
-            if (v.isNull() || !c.bad.contains(v, Qt::CaseInsensitive))
+            auto f = files.find(path);
+            if (f == files.end()) {
+                  QFile file(path);
+                  f = files.emplace(path, file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray()).first;
+                  if (checked && listed.insert(path).second)
+                        *checked << QString("%1: %2 %3").arg(library.name, RenderPreflight::shortPath(path),
+                                                             file.exists() ? QString("read") : QString("not there (nothing shared)"));
+                  }
+            if (f->second.isEmpty())
+                  continue;
+            const QString v = c.format == "nka" ? PluginState::nkaValue(f->second, c.name.toInt())
+                                                : PluginState::propertiesValue(f->second, c.name);
+            if (v.isNull() || !c.isBad(v))
                   continue;
             const QString text = QString("%1: %2 (%3 = %4 in %5)").arg(library.name, c.text, c.name, v, QDir::toNativeSeparators(path));
             warnings << text;
@@ -901,12 +922,13 @@ QByteArray SoundLibraryHost::defaultState(const QString& pluginPath, QString* er
 QByteArray SoundLibraryHost::setupStateWith(const SoundLib::Library& library, const QString& patch, const QString& pluginPath,
                                             const std::map<QString, QByteArray>& values, QString* error)
       {
+      // (the plug-in's machine-wide settings: told once in the status bar and the log when bad)
+      checkPluginSettings(library);
       const QByteArray limitedState = maxVoicesState(library, patch, pluginPath, error);
       if (limitedState.isEmpty() || values.empty())
             return limitedState;
       if (!makesSetups(library)) {
             // a non-Kontakt plug-in: the part's state settings (stateValuesFor) in its component's XML (pluginstate.h)
-            checkPluginSettings(library);
             QString name, err;
             QByteArray component, controller;
             int set = 0;
@@ -1137,7 +1159,9 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
       // (a script value the playback settings set at load, SoundLib::playbackScriptValues: the setup keeps its own, the
       // value of the setup made, so the file stays the library's default whatever the setting)
       QByteArray saved = state;
-      if (li.speedCC > 0 && !li.speedScript.isEmpty()) {
+      // ([slurs] speedFromWritten's speedScript, [notes] transportReset's transportResetScript: SoundLib::playbackScriptKeys)
+      const std::vector<QString> keys = SoundLib::playbackScriptKeys(li);
+      if (!keys.empty()) {
             // (made: the state loaded, the playback settings' values in it; the setup file still holds the one made)
             QFile f(SoundLibraryHost::setupFile(library, li.name));
             QString fileName;
@@ -1145,13 +1169,18 @@ static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundL
             const bool read = f.open(QIODevice::ReadOnly) && readState(f.readAll(), &fileName, &fileComponent, &fileController);
             const std::map<QString, QByteArray> madeValues = read ? KontaktSetup::scriptValues(KontaktSetup::slotProgram(fileComponent, nullptr))
                                                                   : std::map<QString, QByteArray>();
-            auto own = madeValues.find(li.speedScript);
-            auto now = values.find(li.speedScript);
-            if (own != madeValues.end() && now != values.end() && own->second != now->second) {
+            std::map<QString, QByteArray> putBack;
+            for (const QString& key : keys) {
+                  auto own = madeValues.find(key);
+                  auto now = values.find(key);
+                  if (own != madeValues.end() && now != values.end() && own->second != now->second)
+                        putBack[key] = own->second;
+                  }
+            if (!putBack.empty()) {
                   QString err;
-                  const QByteArray back = KontaktSetup::withScriptValues(component, { { li.speedScript, own->second } }, &err);
+                  const QByteArray back = KontaktSetup::withScriptValues(component, putBack, &err);
                   if (back.isEmpty()) {
-                        logTime(library, QString("%1: not resaved (%2 could not be put back: %3)").arg(li.name, li.speedScript, err));
+                        logTime(library, QString("%1: not resaved (%2 could not be put back: %3)").arg(li.name, valuesKey(putBack), err));
                         return;
                         }
                   saved = writeState(name, back, controller);
@@ -1495,12 +1524,12 @@ std::map<QString, QByteArray> SoundLibraryHost::stateValuesFor(const SoundLib::L
       return std::map<QString, QByteArray>();
       }
 
-QStringList SoundLibraryHost::checkPluginSettings(const SoundLib::Library&)
+QStringList SoundLibraryHost::checkPluginSettings(const SoundLib::Library&, QStringList*)
       {
       return QStringList();
       }
 
-QString SoundLibraryHost::pluginSettingsFile(const QString&)
+QString SoundLibraryHost::pluginSettingsFile(const QString&, const QString&)
       {
       return QString();
       }

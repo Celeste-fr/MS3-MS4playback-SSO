@@ -311,6 +311,19 @@ switch value of each articulation. For example:
     controller itself, by the same formula from the written spacing (docs/PLAYBACK_SETTINGS.md › Speed from written).
     SSO's five string-section Performance patches: `speedCC="119" speedScript="$vfm12"` (the script's "Leg. Speed CC",
     read from the patches' saved values: `tools/soundlibraries/sso_performance_layers.json`).
+  - `transportResetScript` on an `Instrument` (a script value name): the value that turns the patch's round-robin reset at
+    a transport start on. With `[notes] transportReset` the state loaded gets it at 1 (the setup file keeps the
+    library's value). SSO: `$xqdzx` ("Reset on transport", read from the patch's script) on the six map patches that
+    save it off: the five string sections' Performance patches and Tuba Solo - Performance (generator
+    `TRANSPORT_RESET_OFF`; docs/PLAYBACK_SETTINGS.md › Transport reset).
+  - `hallDrop` on an `Instrument` (1-127): the patch plays an extra release sample on every held key when its dynamics
+    controller steps down by this much or more in one change while a key is held (SSO's Hall trigger with an
+    "Rls diminuendo" group: 10, read from the patch's script and group data; the five string sections' Performance
+    patches, generator `HALL_DROP`). The playback audit's HALL; `[levels] hallGuard`.
+  - `avoidCC` on an `Instrument` (controller numbers, space-separated): never sent to the patch, whatever sends them (a
+    `cc<n>` automation lane; `MidiRenderer::libraryAvoidCC`, the audit's AVOIDED CC). SSO's Trumpet Solo and Tenor
+    Trombone Solo - Total Performance: `112 113` (a helper script takes a note's velocity from CC112 / CC113 when they
+    are not 0, read from the patch's script; generator `AVOID_CC`).
   - `maxVelocity` on an `Instrument` (1-127, left out: 127): the loudest velocity MuseScore sends to the patch;
     a louder note-on is sent at this. For a patch whose own script turns the top velocity into a different
     sound: SSO's percussion script (Kickstart) plays velocity 127 as a roll where its option "Roll on high
@@ -483,6 +496,13 @@ switch value of each articulation. For example:
     value logs `text` (load times.log, the console) and shows it in the status bar, once per session. Read only. Ample:
     `Ample Sound/AGM/Configs/AGM_info.xml`, `midiGuitarMode` `true` (keys ≥ 62 go silent on channel 1 in every
     instance).
+    `folder="local"`: the file under the user's local application data folder instead (`%LOCALAPPDATA%` on Windows);
+    `format="nka"`: a Kontakt array file (`%name` on the first line, one value a line), `name` = the index; `good="a b"`:
+    a value not among them is bad (as one among `bad` is). SSO: its patches' shared settings, `Spitfire Symphony
+    Orchestra/Data/Share__Settings.nka` (read from the patch's script: a "share" tick in any patch's settings saves the
+    value there and every patch loaded later takes it), indices 1-6 (articulation mode, Reset on transport, reset key,
+    transpose, velocity from a controller, Hall trigger; -12345 / -12344 not shared). Also listed in every render's
+    preflight (`RenderPreflight::setPluginSettings`).
   - `<Plugin files="…" backgroundLoad="s"/>`: the plug-in goes on loading on threads of its own after its state is set
     (Ample: the state's sample set, ~0.6 s of one core). An offline render's instances (the verification, live
     equivalence, audio export: `SoundLibraryExport::loadInstances`) each wait, at most `s` seconds, until every thread

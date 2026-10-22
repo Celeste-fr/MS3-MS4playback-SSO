@@ -47,6 +47,11 @@ QByteArray value(const QByteArray& component, const QString& name);
 // Documents/Ample Sound/AGM/Configs/AGM_info.xml), null: not in it
 QString propertiesValue(const QByteArray& xml, const QString& name);
 
+// a Kontakt array file's value at index (an .nka as a script's save_array writes it: the array's name, "%name", on the
+// first line, then one value a line; SSO's shared settings, Share__Settings.nka), null: not an array file or no such
+// index
+QString nkaValue(const QByteArray& nka, int index);
+
 }     // namespace PluginState
 }     // namespace Ms
 #endif

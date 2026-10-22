@@ -46,6 +46,24 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## SSO script fixes 2 (branch `sso-script-fixes2`, 2026-10-21, from integrate-1017 0a9319a9b7; not merged)
+
+From reading SSO's patch scripts (docs/SSO_SCRIPT_KNOWLEDGE.md). Measured on the Windows test VM with kthost (Kontakt 8 +
+SSO, copies of MuseScore's setups; private `~/MuseScore/ms3fork/private/sso-script-fixes2/RESULT.md`), not in MuseScore:
+- **`[notes] transportReset`** (0 everywhere, proposed 1 in Recommended): "Reset on transport" on in the state of the six
+  map patches that save it off. Three passes 0.5 s apart: -3 .. -6 dB as shipped or with fixedTransitions alone; with both
+  -95 .. -100 dB (pass 1 differs in its first 3 s only: the previous pass's tail). Passes 2.5 s apart reset by themselves.
+- **`[levels] hallGuard`** (0 everywhere, proposed 1): the Hall trigger measured (a one-step CC1 drop of 14 on a held
+  note adds a release 14-25 dB under it; split 1 ms apart: none; two values at one sample: as one step). The audit's HALL
+  finds 3 in `hall.musicxml`, none in Whence, the passages, Mixed techniques, Strings.
+- **avoidCC** on the two Total Performance brass patches (CC112 / CC113 never sent; only a `cc112` lane could); the
+  audit's AVOIDED CC.
+- **Shared settings** check (`Share__Settings.nka`, preflight + status bar). VM: nothing shared. Owner's PC: unknown.
+- **Tightness** measured: 1 = 10-20 ms earlier on spiccato / pizzicato / col legno / Violins 1 Short CS (the script
+  reading had the direction reversed), nothing built.
+- `MS_VERIFY_ROUTE_PASSES` (a verify-routes aid) untried on the VM. Open: hear transportReset / hallGuard in MuseScore;
+  Update Live Set and *Live plays the score* don't carry transportReset (as fixedTransitions).
+
 ## Plain timing (branch `plain-timing`, 2026-10-21, from integrate-1017 15820b7b46; not merged)
 
 `[slurs] plainTiming` (0 by default and in both presets; the owner decides by ear): with plainPerformance each plain note

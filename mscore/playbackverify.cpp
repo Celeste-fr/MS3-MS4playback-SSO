@@ -1155,6 +1155,35 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
                                                       },
                                                 report->folder + "/" + prefix + " route " + code + ".wav");
                         log(QString("%1: route %2 (%3) rendered alone in %4 s").arg(name, code, patch).arg(r.seconds, 0, 'f', 1));
+                        // MS_VERIFY_ROUTE_PASSES=n (n >= 2; a measurement aid, branch sso-script-fixes2): the route rendered
+                        // n times more in a row on the same instance, each pass a playback (the transport restarted:
+                        // PlaybackVerifier::renderPasses), MS_VERIFY_ROUTE_GAP s (default 0.5) after the last event before
+                        // the next, "<score> route <code> pass <k>.wav" (mono, float): whether a passage repeats ([notes]
+                        // transportReset, [slurs] fixedTransitions: SSO's round robins, random modulators)
+                        const int repeat = qEnvironmentVariableIntValue("MS_VERIFY_ROUTE_PASSES");
+                        if (repeat >= 2 && !libEvents.empty()) {
+                              bool gapOk = false;
+                              double gap = qEnvironmentVariable("MS_VERIFY_ROUTE_GAP").toDouble(&gapOk);
+                              if (!gapOk || gap < 0)
+                                    gap = 0.5;
+                              const double to = score->utick2utime(std::prev(libEvents.cend())->first);
+                              std::vector<double> starts;
+                              const std::vector<float> mono = PlaybackVerifier::renderPasses(score.get(), libEvents, rate, vst,
+                                    [slot, host, v](const NPlayEvent& e) {
+                                          if (!e.isExternal())
+                                                return false;
+                                          const int s = e.extPort() * 16 + e.extChannel();
+                                          return s == slot || (e.type() == ME_PARAMETER && v->hostOf(s) == host);
+                                          }, 0.0, to, repeat, gap, &starts);
+                              for (size_t k = 0; k < starts.size(); ++k) {
+                                    const qint64 a = qint64(std::llround(starts[k] * rate));
+                                    const qint64 b = k + 1 < starts.size() ? qint64(std::llround(starts[k + 1] * rate)) : qint64(mono.size());
+                                    WavWriter w(report->folder + "/" + prefix + " route " + code + QString(" pass %1.wav").arg(k + 1), 1, rate, true);
+                                    if (b > a)
+                                          w.write(mono.data() + a, b - a);
+                                    }
+                              log(QString("%1: route %2 rendered %3 passes more (gap %4 s)").arg(name, code).arg(starts.size()).arg(gap));
+                              }
                         routesJs.append(QJsonObject { { "route", code }, { "patch", patch }, { "renderSeconds", r.seconds },
                                                       { "peakDb", std::round(r.peakDb * 10) / 10 },
                                                       { "seconds", double(r.mono.size()) / rate } });

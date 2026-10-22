@@ -97,6 +97,8 @@ attack, at real players' level, heard 2026-10-21 on Whence bars 7-9: "fine"; bel
 
 `slurs/plainTiming` is 0 in both presets (2026-10-21: plain notes early each by its own model instead of the patch's one shift; the owner heard each section alone with a click the same day: 0 better for Violins 1, Celli, Basses, no difference for Violins 2, Violas undecided: stays 0; below, Plain timing): set by hand to 1 it shows "(Custom)".
 
+`notes/transportReset` and `levels/hallGuard` are 0 in both presets (2026-10-21, from reading SSO's scripts, measured on the VM; proposed 1 in Recommended, the owner decides; below, Transport reset and Hall guard): set by hand to 1 they show "(Custom)".
+
 `slurs/speedFromWritten` is 0 in both presets (2026-10-17: the owner approved MuseScore taking over the Performance
 patches' CC119 and flips Recommended after the null test and listening; below, Speed from written): set by hand to 1 it
 shows "(Custom)".
@@ -1281,6 +1283,87 @@ one (`TRANSITION_MIN_GAP_MS` caps them); written notes closer than 15 ms do (64t
 Live: the velocity is in the clips; the plain set's written clips decide by the written spacing.
 `tst_playbackaudit::droppedFindings`: fast-legato.musicxml's three DROPPED gone, those notes at 65.
 
+## Transport reset
+
+2026-10-21 (branch `sso-script-fixes2`, from reading SSO's patch scripts; measured, not yet heard by the owner): SSO's
+round robins count per key, +1 at each note-on, and go back to the first take after 1.5 s without a note-on on the
+Performance patches, and at a transport start where the script's "Reset on transport" is on (read from the patch's
+script). It is on in nearly all the library's patches, which is what `restartTransport()` relies on, but saved **off** in
+the five string sections' Performance patches and Tuba Solo - Performance (and Oboe Principal - Total Performance, not a
+map instrument). So a play, export or verification pass that starts less than 1.5 s after the last note-on of the one
+before picks other takes. `[notes] transportReset` (0 by default and in both presets; per score):
+
+- **The state**: a patch with `<Instrument transportResetScript>` (`$xqdzx` on those six) loads with it at 1
+  (`SoundLib::playbackScriptValues`, `SoundLibraryHost::setupStateWith`; made once: prepared). The setup file keeps the
+  library's 0 (`resave` puts back every key `SoundLib::playbackScriptKeys` lists: this one and speedFromWritten's); an
+  instance whose score's value differs is loaded again. Create Live Set embeds the same state (LIVE.md: Update Live Set
+  and *Live plays the score* don't).
+- **Measured** (Windows test VM, kthost, Kontakt 8 + SSO; Violas / Celli - Performance; a 9 s phrase: an attack and a
+  slur, ten same-key spiccato attacks, another slur; three passes in one process, each after a transport restart, 0.5 s
+  apart; nulls of pass 2 against pass 1, dB; private `sso-script-fixes2/rr_results.json`):
+
+  | | Violas | Celli |
+  |---|---|---|
+  | as shipped | -3.1 | -5.1 |
+  | `fixedTransitions` alone | -3.2 | -6.0 |
+  | `transportReset` alone | -16.9 | -13.0 |
+  | both | -37.2 (from 3 s: -95.4) | -23.5 (from 3 s: -99.3) |
+  | both, pass 3 against pass 2 | -94.8 | -100.2 |
+  | `fixedTransitions`, passes 2.5 s apart (the library's own 1.5 s reset) | -95.3 | -63.5 |
+
+  With both settings every pass after the first repeats at the floor; pass 1 differs only in its first 3 s, where the
+  passes after it start under the previous pass's release tail (kthost doesn't silence it; MuseScore's renders start from
+  silence). Without the reset, the takes differ even with the random modulators fixed (-3 .. -6 dB): the round robins,
+  not the modulators, decide most of it here (same-key repeated notes). Offline the 1.5 s idle reset counts processed
+  audio, so renders with 1.5 s or more between passes reset by themselves.
+- **Proposed**: 1 in Recommended (with `fixedTransitions` 1 a passage plays the same takes every time, as the library's
+  other patches do already); the owner's call. Live: the plain set's Kontakt state carries it.
+
+## Hall guard
+
+2026-10-21 (branch `sso-script-fixes2`; measured, not yet heard by the owner): SSO's Hall trigger (read from the patch's
+script and group data): on a patch with an "Rls diminuendo" group (the five string sections' Performance patches), a
+Dynamics (CC1) step down of 10 or more in one change while a key is held plays that group on every held key, at the level
+before the drop, once until CC1 rises again. Map `<Instrument hallDrop="10">`; the playback audit's HALL.
+
+- **Measured** (Windows test VM, kthost, Violas / Celli - Performance, one held note, CC1 64 -> 50 at 1.5 s, random
+  modulators fixed; private `hall_results.json`): one step, or two values (57, 50) at the same sample, adds a layer 14
+  dB (Violas) / 25 dB (Celli) under the note in the following 0.6 s, still -33 / -31 dB a second later; two steps of 7
+  1, 5 or 20 ms apart don't (they differ from each other by -34 .. -50 dB, from the slow ramp alike: the CC1 path only).
+  The note's level is unchanged (+0.05 .. +0.12 dB): it is a change of sound, a release under the held note.
+- **MuseScore makes such steps** (the audit on `mtest/libmscore/playbackaudit/hall.musicxml`, Recommended, the shipped
+  map): a subito dynamic inside a slur (the Performance legato's overlap still holds the note before: CC1 96 -> 48), a
+  dynamic on a slurred note after a diminuendo (80 -> 48 at the bar line), fp (80 -> 64). Not a hairpin (a ramp of small
+  steps) nor a dynamic on a detached note (no key held). Whence: none. Even levels' CC11 is another controller.
+- `[levels] hallGuard` (0 by default and in both presets; per score): on such a route, such a step while a key is held is
+  sent as steps of `hallDrop` - 1, 1 ms (at least a tick) apart, ending at the step's own time (`MidiRenderer::
+  libraryHallGuard`, after the track delays; starting there when an earlier CC1 event leaves no room). Values at one tick
+  count as one change (as measured). Live: the clips and the plain set carry the steps (rendered events).
+- **Proposed**: 1 in Recommended (the release is an artefact of a written subito, not a played diminuendo); the owner's
+  call, by ear: `hall.musicxml` bars 1 and 4 with 0 and 1.
+
+## Tightness (measured, nothing changed)
+
+2026-10-21 (branch `sso-script-fixes2`; Windows test VM, kthost, Kontakt 8 + SSO, Violins 1 and Celli - All techniques,
+CC1 64, velocity 80, 3 pitches x 4 round robins, Tightness 0 / 0.5039 (the default) / 1 set as the plug-in parameter;
+private `tight_results.json`): the panel's Tightness moves the start of the shorts' samples, the peak level unchanged
+(within 0.03 dB). Shift against the default, ms, by cross-correlation (the perceived onset, 15 dB under the peak, moves
+the same way, 7-15 ms):
+
+| | Spiccato | Pizzicato | Col Legno | Short CS | Short Brushed CS |
+|---|---|---|---|---|---|
+| Violins 1, Tightness 0 | +10.6 later | +10.6 | +10.6 | +20.0 (2-21 by pitch) | 0 |
+| Violins 1, Tightness 1 | -10.6 earlier | -10.6 | -10.6 | -21.2 (10-21) | 0 |
+| Celli, Tightness 0 | +10.0 (0.4-10.6) | +15.0 | +15.0 | 0 | 0 |
+| Celli, Tightness 1 | -10.0 | -15.0 | -15.0 | 0 | 0 |
+
+So Tightness 1 is "tighter" (the reading of the script's direction in docs/SSO_SCRIPT_KNOWLEDGE.md was the wrong way
+round: the slider up skips more). Against the map's onsets (measured at the default, minus the 30 ms latency rule): Violins 1
+Spiccato 15 -> about 8 at Tightness 1, Pizzicato 10 and Col Legno 10 -> 0 (the rule floors at 0). Under Recommended the
+shorts already start early by their onset, so a Tightness setting would change their attack (less of the bow / finger
+noise before it), not their timing; it would tighten Library default and notes played as written by 10-20 ms. Offering
+it means re-measuring `onset=` at the chosen value. Not built: the owner's call.
+
 ## Plain accents
 
 2026-10-20 (branch `plain-accents`); **2 in Recommended and by default since 2026-10-21** (branch `accent-level`; the owner,
@@ -1487,7 +1570,7 @@ host loads the score's patches in the background; the next click plays it.
 
 Not in the table, because they are corrections and not adjustments (no setting, the same in every preset): a percussion
 patch's `maxVelocity` (the 13 metal patches whose Kickstart option "Roll on high vel." is ticked are sent velocity 126 at
-most: 127 would play a roll the score did not ask for) and the transport restart (the hosted plug-ins see a transport
+most: 127 would play a roll the score did not ask for), a patch's `avoidCC` (SSO's Trumpet / Tenor Trombone Solo - Total Performance never get CC112 / CC113, which their helper script would take as the note's velocity: `MidiRenderer::libraryAvoidCC`) and the transport restart (the hosted plug-ins see a transport
 start with every playback, export and verification pass, so SSO's round robins reset as they do in Live).
 
 Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitfire Symphony Orchestra.xml`, made by
@@ -1537,6 +1620,8 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Real range: each note of the five string sections and the main woodwind / brass patches as loud as a real player at its written dynamic (the Meyer rule, 2026-10-14: TU Berlin's single-note pp / ff are ppp / fff, written pp / ff at Meyer's in-play levels, p .. f equal steps between, from mp; rule D, 7 equal steps, where Meyer has no figures), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 2, Clark & Luce spans (Recommended, the default since 2026-10-14; 1 the Meyer rule; 0 in Library default; the owner, 2026-10-13 / 14) | `contextlevel.cpp` (`realRangeDb`, `clarkLuceSpans`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` / `realPlay` / `realSteps` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |
 | Pedal changes after their chord (legato pedalling) | up one tick after, down the tick after (since 2026-10-06; the pianist's timing, `[pedal]`, removed 2026-10-07) | `renderSpanners` (pedal) | fixed |
 | A key struck again ends its sounding note just before | on | `finishLibraryEvents` | `[notes] sameKeyEndsFirst` |
+| Transport reset, `[notes] transportReset` (2026-10-21, not yet heard by the owner): the patches whose round robins don't go back to the first take at a transport start (SSO's string sections' Performance patches, Tuba Solo - Performance: "Reset on transport" off) load with it on, so every pass from one place picks the same takes (above, Transport reset) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`transportReset`, `playbackScriptValues`, `playbackScriptKeys`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`) | `[notes] transportReset`; score: `playbackSettings` |
+| Hall guard, `[levels] hallGuard` (2026-10-21, not yet heard by the owner): a CC1 step down of 10 or more while a note is held on a patch with a diminuendo-release trigger (SSO's string sections' Performance patches) is sent as steps of 9, 1 ms apart, so no extra release plays (above, Hall guard) | 0 (Recommended 0, Library default 0) | `rendermidi.cpp` (`libraryHallGuard`), map `hallDrop` | `[levels] hallGuard`; score: `playbackSettings` |
 | An attack at a velocity whose recording at that key is faulty plays at the nearest clean velocity measured (map `avoid`, `tools/soundlibraries/sso_bad_samples.json`: SSO's Celli - Performance B2-C3 at 100-116, the spiccato attack's top layer and the re-attack 106, plays its 5th round robin of 6 with a narrow tone near 1184 Hz, +9 .. +11 dB over the other attacks there; 99 and below clean; kthost on the Windows VM, 2026-10-10). Not legato transitions, not a note's own velocity (the Velocity lane). The owner, 2026-10-10: "the weird square wave-y noise problem" in Whence's Celli under the level rule (its CC1 64 makes the recording stand out: at CC1 89 it is there too, +3 dB) | on | `rendermidi.cpp` (`libAvoidBad`), `Articulation::avoidVelocity` | `[notes] avoidBadSamples`; score: `playbackSettings` |
 | Tuning copies: tolerance, tail, max copies. Computed when the map leaves them out (SSO's does since 2026-10-03). Tolerance: half the smallest gap between two distinct accidental values (`ScoreTuning::smallestAccidentalGap`: 16.5, MuseScore 3.6's 23-limit comma, against 16.667, a twelfth of a tone: 0.167, so 0.083 cents). Tail: each note's ring to 60 dB under (ISO 3382-1's reverberation time), twice its measured release to 30 dB under (`<Articulation release>`; T30 extrapolated as ISO 3382-1 does); unmeasured: its patch's longest, else the part's (`SoundLib::laneRing`). Max copies: 1 + the free memory (read once a run: Windows available physical memory, Linux MemAvailable) / (245 MB a copy, the owner's 1031 → 1276 MB × the parts that need copies: whose notes play at more than one tuning, `SoundLib::partsNeedingCopies`; the owner, 2026-10-04: an even share between those parts only) (`SoundLib::memoryMaxLanes`). Live and MIDI out (no varispeed, 2026-10-10): a patch without `bend=` gets a fixed copy per tuning, max copies not applied (`SoundLib::lanes` fixedTuning; LIVE.md › Microtones) | 0.083 cents; 2 × release; by memory | `SoundLib::lanes`, `libraryLaneSettings` | `[tuning] tolerance`, `tail`, `maxLanes`; score: `soundLibraryLanes` |
 | A copy waits for its notes' measured release | on (map `release`) | `SoundLib::lanes` | `[tuning] waitForRelease` |

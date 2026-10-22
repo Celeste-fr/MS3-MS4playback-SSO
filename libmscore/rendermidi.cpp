@@ -2910,6 +2910,13 @@ void MidiRenderer::putLibrarySwitch(EventMap* events, const SoundLib::LibInstrum
 static void libraryFastTransitions(const Score* score,
                                    const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
                                    int chunkUtick1, EventMap* events);
+// ([levels] hallGuard, below)
+static void libraryHallGuard(const Score* score, int dynamicsCC,
+                             const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                             int chunkUtick1, EventMap* events);
+// (a patch's avoidCC, below)
+static void libraryAvoidCC(const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                           int chunkUtick1, EventMap* events);
 
 //---------------------------------------------------------
 //   finishLibraryEvents
@@ -3145,6 +3152,8 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       libraryFastTransitions(score, libRoutePatches, chunk.utick1(), events);
       libraryMaxVelocity(chunk, events);
       libraryGuitar(chunk, events);       // (guitarplayback.cpp: last, its keys' velocities exact)
+      libraryHallGuard(score, library ? library->dynamicsCC : -1, libRoutePatches, chunk.utick1(), events);
+      libraryAvoidCC(libRoutePatches, chunk.utick1(), events);
       }
 
 //---------------------------------------------------------
@@ -3196,6 +3205,157 @@ static void libraryFastTransitions(const Score* score,
                 && ev.velo() <= FAST_TRANSITION_VELOCITY - 1)
                   ev.setDataB(FAST_TRANSITION_VELOCITY);
             before[route] = { t, chord };
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryHallGuard
+//    [levels] hallGuard (branch sso-script-fixes2, 2026-10-21; 0 by default and in both presets until the owner decides):
+//    a patch with a diminuendo-release trigger (LibInstrument::hallDrop: SSO's string sections' Performance patches, the
+//    Hall trigger, read from the patch's script and group data) plays an extra release sample on every held key when its
+//    dynamics controller steps down by hallDrop (10) or more in one change while a key is held. Measured (Windows test VM,
+//    kthost, Violas / Celli - Performance, a held note, CC1 64 -> 50): one step, or two values at the same sample, adds a
+//    layer 14 / 25 dB under the note for about a second; 64 -> 57 -> 50 one ms or more apart doesn't (as a slow ramp,
+//    within 34-50 dB). So such a step, on a route where a key is held, is sent as steps of hallDrop - 1, a tick (at least
+//    1 ms) apart, ending at the step's own time (or starting there, when an earlier event of the controller leaves no room).
+//    After the track delays (the times as played). MuseScore makes such steps at a subito dynamic inside a slur (the
+//    Performance legato's overlap holds the note before), fp, and a dynamic where a slurred note starts; the audit's HALL
+//---------------------------------------------------------
+
+static void libraryHallGuard(const Score* score, int dynamicsCC,
+                             const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                             int chunkUtick1, EventMap* events)
+      {
+      if (dynamicsCC < 0 || dynamicsCC > 127 || !Playback::on("levels/hallGuard", score))
+            return;
+      std::map<int, int> drop;                                    // route -> its patch's hallDrop
+      for (const auto& r : libRoutePatches)
+            if (r.second.second && r.second.second->hallDrop > 1)
+                  drop[r.first] = r.second.second->hallDrop;
+      if (drop.empty())
+            return;
+      struct State {
+            std::map<int, int> held;                              // key -> notes on
+            int last { -1 };                                      // the controller's value now
+            int base { -1 };                                      // its value before this tick (values at one sample
+            int baseTick { -1 };                                  // reach the patch as one change: measured)
+            };
+      std::map<int, State> st;
+      struct Split { int tick; int route; int from; int to; EventMap::iterator at; };
+      std::vector<Split> splits;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunkUtick1) - 2.0));
+      for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!ev.isExternal())
+                  continue;
+            const int route = ev.extPort() * 16 + ev.extChannel();
+            auto d = drop.find(route);
+            if (d == drop.end())
+                  continue;
+            State& s = st[route];
+            if (ev.type() == ME_NOTEON && !ev.librarySwitch()) {
+                  if (ev.velo() > 0)
+                        ++s.held[ev.pitch()];
+                  else if (s.held.count(ev.pitch()) && --s.held[ev.pitch()] <= 0)
+                        s.held.erase(ev.pitch());
+                  continue;
+                  }
+            if (ev.type() == ME_NOTEOFF && !ev.librarySwitch()) {
+                  if (s.held.count(ev.pitch()) && --s.held[ev.pitch()] <= 0)
+                        s.held.erase(ev.pitch());
+                  continue;
+                  }
+            if (ev.type() != ME_CONTROLLER || ev.controller() != dynamicsCC)
+                  continue;
+            if (i->first != s.baseTick) {
+                  s.base = s.last;
+                  s.baseTick = i->first;
+                  }
+            if (s.base >= 0 && !s.held.empty() && s.base - ev.value() >= d->second)
+                  splits.push_back({ i->first, route, s.base, ev.value(), i });
+            s.last = ev.value();
+            }
+      if (splits.empty())
+            return;
+      // (the room before each: the route's previous event of the controller)
+      std::map<std::pair<int, int>, int> before;                  // (route, tick) -> the controller's tick before it
+      {
+            std::map<int, int> lastAt;
+            for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (!ev.isExternal() || ev.type() != ME_CONTROLLER || ev.controller() != dynamicsCC)
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (!drop.count(route))
+                        continue;
+                  auto l = lastAt.find(route);
+                  if (!before.count({ route, i->first }))
+                        before[{ route, i->first }] = l != lastAt.end() ? l->second : -1;
+                  lastAt[route] = i->first;
+                  }
+      }
+      for (const Split& sp : splits) {
+            const int step = drop[sp.route] - 1;
+            std::vector<int> values;                              // the steps after from, the last = to
+            for (int v = sp.from - step; v > sp.to; v -= step)
+                  values.push_back(v);
+            values.push_back(sp.to);
+            const int n = int(values.size());
+            const double t = score->utick2utime(sp.tick);
+            int delta = std::max(1, score->utime2utick(t + 0.001) - sp.tick);
+            while (score->utick2utime(sp.tick + delta) - t < 0.001)
+                  ++delta;
+            const int prev = before.count({ sp.route, sp.tick }) ? before[{ sp.route, sp.tick }] : -1;
+            const int earliest = sp.tick - (n - 1) * delta;
+            const bool room = earliest > prev && earliest >= 0;
+            NPlayEvent proto = sp.at->second;
+            if (room) {
+                  // the earlier steps before it, the step itself at its own time
+                  for (int k = 0; k < n - 1; ++k) {
+                        NPlayEvent e = proto;
+                        e.setDataB(values[size_t(k)]);
+                        events->insert({ sp.tick - (n - 1 - k) * delta, e });
+                        }
+                  }
+            else {
+                  // from its time on: the first step there, the others after
+                  sp.at->second.setDataB(values[0]);
+                  for (int k = 1; k < n; ++k) {
+                        NPlayEvent e = proto;
+                        e.setDataB(values[size_t(k)]);
+                        events->insert({ sp.tick + k * delta, e });
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryAvoidCC
+//    a controller the route's patch must never get (SoundLib::LibInstrument::avoidCC: SSO's Trumpet / Tenor Trombone Solo -
+//    Total Performance, whose helper script replaces a note's velocity by CC112 / CC113 when they are not 0, read from the
+//    patch's script) is dropped, whatever sent it (a "cc<n>" automation lane, Live's read back). Last of all. A correctness
+//    fix, no setting; the audit's AVOIDED CC checks the result
+//---------------------------------------------------------
+
+static void libraryAvoidCC(const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                           int chunkUtick1, EventMap* events)
+      {
+      std::map<int, const std::set<int>*> avoid;                  // route -> its patch's controllers to drop
+      for (const auto& r : libRoutePatches)
+            if (r.second.second && !r.second.second->avoidCC.empty())
+                  avoid[r.first] = &r.second.second->avoidCC;
+      if (avoid.empty())
+            return;
+      for (auto i = events->lower_bound(std::max(0, chunkUtick1 - 8 * DIVISION)); i != events->end();) {
+            const NPlayEvent& ev = i->second;
+            if (ev.isExternal() && ev.type() == ME_CONTROLLER) {
+                  auto a = avoid.find(ev.extPort() * 16 + ev.extChannel());
+                  if (a != avoid.end() && a->second->count(ev.controller())) {
+                        i = events->erase(i);
+                        continue;
+                        }
+                  }
+            ++i;
             }
       }
 
