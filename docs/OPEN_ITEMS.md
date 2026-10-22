@@ -17,28 +17,16 @@ Keep this file current: close an item by deleting it (the commit message says wh
 
 ## Tier 1: clearly audible, or makes results untrustworthy
 
-### 1. Chord voice lanes not deterministic between renders (Windows build #458)
-- **W**: in #458's export (`--verify-playback --verify-wav`, `MS_VERIFY_ROUTES=1`), Whence's Violins 1 chord voices
-  went onto different slots from one render to the next with a byte-identical input score: one take put all 92 notes on
-  one slot, another split them 59/23/10; the Linux dump gives 63/18/10/1. Five of six later re-renders matched the
-  dump. No other section was affected. Renders aren't repeatable, so every A/B, null test and heard check on such a part
-  is suspect.
-- **Src**: VM, 2026-10-21, private (not in repo): `private/solo-clicks/` (runs `wv0`, `wv0a/b/c`, `wv1`).
-  A related earlier sign: once in 13 Linux dumps Violas - Performance got 2 lanes instead of 3 (commit 94d8f845ef,
-  never investigated).
-- **Cause** (found on branch voice-determinism, afd801287d, merged c3ef2da874): not the chord voices but the number of
-  tuning copies, `SoundLib::memoryMaxLanes` from the free memory read once a run; the VM's Hyper-V dynamic memory shows
-  little free after an idle spell (a first run 1-2 copies, later ones 4). Fixed by counting installed memory not yet
-  visible; `MS_FREE_MEMORY_MB` / `HC_FREE_MEMORY_MB` pin it.
-- **Tool**: `tools/playbackverify/repeat_check.py` (2026-10-21, kb-tools). Linux, 5 audit dumps of Whence (Recommended,
-  integrate-1017's build): all identical (Violins 1 lanes 63/18/10/1 every time). VM, build #458, Whence with only
-  Violins 1 on the library, 3 exports in one job (`repeat_check.py vm --part "Violins 1" --n 3`): **run 1 79/13/0/0
-  note-ons on slots 1-4, runs 2 and 3 63/18/10/1** (the dump's), every route's WAV hash different. As in the solo-clicks
-  runs, the first render of a batch is the odd one (the free memory after an idle spell: the cause above). Re-run with
-  a build carrying afd801287d: `repeat_check.py vm … --n 4` (without `--free-memory-mb`, to check the fix itself).
-- **Fix**: afd801287d (memory not yet visible counted; tst_soundlibrary::voiceLanesMemory). Linux reproduces it only with
-  `MS_FREE_MEMORY_MB` (1200 / 2500 / 16384 → 1 / 3 / 4 routes); 5 + 5 unpinned Linux runs never differed.
-- **Untried**: a Windows build with the fix through `repeat_check.py vm` (close this item when its runs match).
+### 1. CLOSED 2026-10-21 (Windows build #461): chord voice / tuning copy slots not repeatable between renders
+- Was: in #458's export Whence's Violins 1 line went onto 1, 2 or 4 copies from one render to the next (92 | 79/13 |
+  63/18/10/1 note-ons), byte-identical score; cause: the copies' maximum from the free memory, read once a run, on the
+  VM's Hyper-V dynamic memory (private `solo-clicks/`). Fixed by afd801287d (memory not yet visible counted), then made
+  moot by `all-copies` (fa08fef3de: every copy the music needs, memory only warns).
+- Closed by `repeat_check.py vm Whence.mscz --settings recommended --n 4` on build #461
+  (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39714089661, d673d96837), no `--free-memory-mb` pin:
+  note-ons per slot identical in all four runs (Violins 1 63/18/10/1, the Linux dump's) and every slot's event list
+  identical; the WAV hashes differ on 16 of 17 routes, as expected without `--fixed-transitions` (Performance legato
+  differs take to take). The heard check's two takes on #461 split Violins 1 the same way (private `check461/`).
 
 ### 2. Plain Performance timing (default `[slurs] plainPerformance` 1 with one `plainShift` per patch)
 - **W** (Mixed techniques, build 457, export, −15 dB rule): Performance fresh attacks early (V1 −46, V2 −37, Va −74,
