@@ -106,10 +106,28 @@ Track track(const std::vector<LiveClips::Note>& notes, double bpm, const std::mu
             keyOns = &ownOns;
             }
       const double margin = msToUnits(RETRIGGER_MARGIN_MS, bpm);
+      // a note-on of the note's key at its note-off (or just after; not its own): the off goes margin before it.
+      // Returns the played time the off must not pass (units), or a huge value
+      auto offLimit = [&](const LiveClips::Note& n) {
+            const int playedOff = n.timed ? n.playedEnd : n.start + n.length;
+            const int playedOn = n.timed ? n.playedStart : n.start;
+            double limit = 1e300;
+            const auto keys = keyOns->equal_range(n.pitch);
+            for (auto k = keys.first; k != keys.second; ++k)
+                  if (k->second > playedOn && k->second >= playedOff && k->second - playedOff < margin)
+                        limit = std::min(limit, k->second - margin);
+            return limit;
+            };
       double early = 0;                         // the latest early start or end (units)
-      for (const LiveClips::Note& n : notes)
+      for (const LiveClips::Note& n : notes) {
             if (n.timed)
                   early = std::max(early, double(std::max(n.start - n.playedStart, n.start + n.length - n.playedEnd)));
+            // (the lookahead makes room for a retrigger's earlier off too: a technique played as written has none
+            // otherwise, and the device's delays can't be negative; real Live 12.4.7, 2026-10-22, Whence's Basses)
+            const double limit = offLimit(n);
+            if (limit < 1e300)
+                  early = std::max(early, double(n.start + n.length) - limit);
+            }
       t.lookaheadMs = std::ceil(unitsToMs(early, bpm) * 10.0 - 1e-6) / 10.0;
       if (t.lookaheadMs < 0)
             t.lookaheadMs = 0;
@@ -123,15 +141,10 @@ Track track(const std::vector<LiveClips::Note>& notes, double bpm, const std::mu
             const double on = n.timed ? n.playedStart + l - n.start : l;
             double off = n.timed ? n.playedEnd + l - (n.start + n.length) : l;
             // a note-on of its key at its note-off (or just after): the off RETRIGGER_MARGIN_MS before it
-            const int playedOff = n.timed ? n.playedEnd : n.start + n.length;
-            const int playedOn = n.timed ? n.playedStart : n.start;
-            bool retrigger = false;
-            const auto keys = keyOns->equal_range(n.pitch);
-            for (auto k = keys.first; k != keys.second; ++k)
-                  if (k->second > playedOn && k->second >= playedOff && k->second - playedOff < margin) {
-                        off = std::min(off, k->second - margin + l - (n.start + n.length));
-                        retrigger = true;
-                        }
+            const double limit = offLimit(n);
+            const bool retrigger = limit < 1e300;
+            if (retrigger)
+                  off = std::min(off, limit + l - (n.start + n.length));
             if (off < 0) {
                   ++t.offsLate;
                   off = 0;

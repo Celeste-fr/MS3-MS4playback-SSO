@@ -504,9 +504,18 @@ std::map<QString, double> knobs(const LiveSet::Track& track)
       {
       std::map<QString, double> out;
       for (const LiveSet::Parameter& p : track.parameters)
-            if (!p.automated && p.manual >= 0 && !p.name.isEmpty() && !out.count(p.name))
+            if (!p.automated && p.manual >= 0 && !p.name.isEmpty() && !out.count(p.name) && !isEmptySlotValue(p.manual))
                   out[p.name] = p.manual;
       return out;
+      }
+
+// the value Live gives an empty slot of its panel (LiveSetWriter writes it so): Live 12.4.7 fills such a slot with a
+// parameter of its own choosing (Ample's AGM: S-Strum Toggle, S-Chord Mode) and keeps the value, which is no knob
+// anyone turned (real Live, 2026-10-22, tools/live/realcheck: Update Live Set read "S-Chord Mode at 0.1235" from an
+// unchanged set and wrote it into the state)
+bool isEmptySlotValue(double manual)
+      {
+      return std::fabs(manual - 0.1234567687) < 1e-6;
       }
 
 // a map controller of the patch by Live's parameter title (Vst3Plugin::parameterId's loose rule)

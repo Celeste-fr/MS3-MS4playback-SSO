@@ -57,13 +57,22 @@ function DeskMS([string[]]$a, [string]$outTxt, [int]$timeoutS, $envs) {
   return 124 }
 
 # ---- env
-$prefs = Join-Path $env:APPDATA 'Ableton\Live 12.4.6\Preferences\Preferences.cfg'
+# (the newest Live's preferences: Live updates itself, 12.4.6 -> 12.4.7 on the VM on 2026-10-22, and each version keeps
+# its own folder)
+$prefs = Get-ChildItem (Join-Path $env:APPDATA 'Ableton') -Directory -Filter 'Live 12*' -ErrorAction SilentlyContinue |
+  ? { Test-Path (Join-Path $_.FullName 'Preferences\Preferences.cfg') } |
+  Sort-Object { try { [version]($_.Name -replace '^Live ', '') } catch { [version]'0.0' } } | Select -Last 1 |
+  % { Join-Path $_.FullName 'Preferences\Preferences.cfg' }
+$liveExe = 'C:\ProgramData\Ableton\Live 12 Trial\Program\Ableton Live 12 Trial.exe'
+$liveVersion = if (Test-Path $liveExe) { (Get-Item $liveExe).VersionInfo.ProductVersion } else { '' }
+Set-Content -Encoding utf8 (Join-Path $res 'live-version.txt') $liveVersion
 $dev = Join-Path $env:USERPROFILE 'Documents\Ableton\User Library\Presets\MIDI Effects\Max MIDI Effect\MuseScore Link.amxd'
 $agm = Join-Path $env:USERPROFILE 'Documents\Ample Sound\AGM\Configs\AGM_info.xml'
 $bk = Join-Path $run 'backup'
 if (-not (Done 'env')) {
   New-Item -ItemType Directory -Force $bk | Out-Null
-  if (Test-Path $prefs) { Copy-Item $prefs (Join-Path $bk 'Preferences.cfg') -Force }
+  if (-not (Test-Path (Join-Path $bk 'started'))) { Set-Content -Encoding ascii (Join-Path $bk 'started') (Get-Date -Format o) }
+  if ($prefs -and (Test-Path $prefs)) { Copy-Item $prefs (Join-Path $bk 'Preferences.cfg') -Force; Set-Content -Encoding utf8 (Join-Path $bk 'prefs.path') $prefs }
   if (Test-Path $dev) { Copy-Item $dev (Join-Path $bk 'MuseScore Link.amxd') -Force }
   if (Test-Path $agm) { (Get-FileHash $agm).Hash | Set-Content (Join-Path $bk 'AGM_info.sha256') }
   $bdev = Join-Path (Split-Path $J.exe) 'MuseScore Link.amxd'
@@ -76,11 +85,17 @@ if (-not (Done 'env')) {
   if ($LASTEXITCODE -ne 0) { schtasks /create /f /tn claude-rc-gui /it /sc once /st 00:00 /tr "conhost.exe --headless powershell -NoProfile -ExecutionPolicy Bypass -File C:\claude\rc\gui.ps1" | Out-Null }
   schtasks /query /tn claude-rc-tscon *> $null
   if ($LASTEXITCODE -ne 0) { schtasks /create /f /tn claude-rc-tscon /ru SYSTEM /sc once /st 00:00 /tr C:\claude\rc\tscon.cmd | Out-Null }
-  Mark 'env' 'ok'; L 'env ready'
+  Mark 'env' 'ok'; L "env ready (Live $liveVersion)"
 }
 
 function Restore {
-  if (Test-Path (Join-Path $bk 'Preferences.cfg')) { Copy-Item (Join-Path $bk 'Preferences.cfg') $prefs -Force }
+  # Live's crash recovery files from this run (a Live the driver had to stop leaves them; the next start would ask to
+  # recover that set): the Crash folder's entries made since the run's env step
+  if ($prefs -and (Test-Path (Join-Path $bk 'started'))) {
+    $since = [datetime](Get-Content (Join-Path $bk 'started')).Trim()
+    Get-ChildItem (Join-Path (Split-Path $prefs) 'Crash') -ErrorAction SilentlyContinue | ? { $_.LastWriteTime -ge $since -or $_.CreationTime -ge $since } |
+      Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
+  if (Test-Path (Join-Path $bk 'Preferences.cfg')) { Copy-Item (Join-Path $bk 'Preferences.cfg') "$(Get-Content (Join-Path $bk 'prefs.path'))".Trim() -Force }
   if (Test-Path (Join-Path $bk 'MuseScore Link.amxd')) { Copy-Item (Join-Path $bk 'MuseScore Link.amxd') $dev -Force }
   if (Test-Path (Join-Path $bk 'AGM_info.sha256')) {
     $was = (Get-Content (Join-Path $bk 'AGM_info.sha256')).Trim(); $now = (Get-FileHash $agm).Hash

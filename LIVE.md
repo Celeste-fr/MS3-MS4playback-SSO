@@ -732,8 +732,8 @@ Only real Live can show (to check first):
 Written clips (the plain set, 2026-10-11; tested here only on the model of Max's objects and against MuseScore's own
 render, `plainWritten`, `test_patch.js`, `test_timing.js`), only real Live 12.4 can show (to check first, the VM's Live
 12.4.6 with a recorder track taking each technique track's output, as on 2026-10-07):
-- that a negative Track Delay on a MIDI track moves what it sends MIDI To the Kontakt earlier (the manual: "every
-  track"; untried), and that Live keeps a value with one decimal (−86.1 ms);
+- ~~that a negative Track Delay on a MIDI track moves what it sends MIDI To the Kontakt earlier, and that Live keeps a
+  value with one decimal~~ **confirmed 2026-10-22** (Checked in real Live above);
 - ~~the song position the device's patcher sees for a note Live sends early by the Track Delay~~ **confirmed
   2026-10-12** (Live 12.4.6 on the test VM, the plain set of Whence, 28 technique tracks, Track Delays 0 to −170.5 ms;
   the `tlog` probe): the note's own song position less one signal vector (−1.43 to −1.45 ms) for all 310 logged
@@ -755,6 +755,83 @@ render, `plainWritten`, `test_patch.js`, `test_timing.js`), only real Live 12.4 
 - that the device's `"Timing"` store comes back from the set (`[pattr Timing]`, as the `"Lanes"` stores do) and that
   `peek~ ---mslt 2`, `buffer~` with two channels and `[pipe 0 0 0]` with its delay in the right inlet behave as
   modelled.
+
+### Checked in real Live (2026-10-22, `tools/live/realcheck`)
+
+`tools/live/realcheck/realcheck.py run <score> …` (docs/TOOLS.md › 5) makes the plain set with a Windows build, has
+Ableton Live on the test VM open, export (*All Individual Tracks*, 32-bit WAV) and save it, and compares Live's files
+with MuseScore's own export of the score (`--verify-playback --verify-wav`, a route at a time), against the floor
+(MuseScore's second export: bit-identical on the Strings and lane scores, −70 … −100 dB on Whence's Performance patches
+with `[slurs] fixedTransitions`); it diffs the set Live saved against the written one and runs Update Live Set on it.
+Runs: the Strings test score (SSO Solo Violin 1 / Solo Cello, Recommended + fixedTransitions; #464 on Live 12.4.6, #467
+on 12.4.7), the lane score (`realcheck.py lanescore`, Mic 2 stepped every bar; #467, 12.4.7), Whence (Recommended +
+fixedTransitions + speedFromWritten; #464 on 12.4.6, #467 on 12.4.7: the same numbers) and Ample's techniques score
+(`tools/ample/check_scores.py`, Library default + strums, soft strums, pinch harmonics; #464, 12.4.7). **Live updated itself to 12.4.7 on the
+VM during these runs** (its automatic update, on by default: the exe replaced at 08:40 while a run's Live was open, the
+next start showing "There is an automatic update of Live currently in progress"); nothing here needed a Live after 12.4.
+
+Confirmed:
+- **The set opens, exports, saves and quits unattended**; Live opens it without a message (the trial notice only). Load:
+  Strings 15-30 s; Whence 160-560 s on 12.4.7 (1311 s on 12.4.6, while the update ran), Live 6-12 GB.
+- **What MuseScore writes survives Live's save**: written and updated sets (Strings, lanes, Whence) lost 0 values,
+  changed 0 (numbers within float32); Track Delays with one decimal (−195.0, −9.8, −172.6 ms) kept; Kontakt's state:
+  the read-back of the saved set identical to the written one (panel values after loading the state); the
+  fixedTransitions / speedFromWritten states (Whence) kept byte for byte (within the diff).
+- **Update Live Set on a set Live 12.4 saved itself**: with the unchanged score it writes nothing (the file's hash the
+  same, no backup); with a note changed it updates the clips (and the timing record), names the backup
+  `<name> [yyyy-MM-dd hhmmss].als` (e.g. `RCupd [2026-10-22 101238].als`), and Live opens the updated set without a
+  message, exports and saves it again (lost 0, changed 0). Its read-back imports 1 lane on Whence (the flat Vibrato) and
+  leaves the Controllers clips' pitch bends out ("a tuning copy's Controllers").
+- **Written clips play MuseScore's timing**: every note's onset within the measure's 1 ms (Strings: 65 + 56 notes, onset
+  0 ms; Whence's Violins 2: 50 notes, 0 ms), levels within 0.2 dB median (Strings 0.00 dB, max 0.54; Whence −0.20 …
+  −0.23 dB median); a negative Track Delay on a MIDI track moves what it sends MIDI To the Kontakt earlier. Strings'
+  Violin nulls at −36.7 dB outside the spans below; a passage of 21.5-32 s comes out one sample (0.02 ms) late (null
+  −12 … −18 dB, −26 … −64 dB at that lag): Live puts the delays on whole samples.
+- **plainShift as the Kontakt track's own Track Delay**: Whence's five part groups line up with MuseScore within 0.5 ms
+  (lags −110.98 … −111.45 ms: MuseScore's start lead), while each Kontakt track's own file is off by exactly its Track
+  Delay (−65.8, −66.0, −111.0, −59.1 ms): *All Individual Tracks* renders a track without its own Track Delay, the group
+  with it.
+- **The gain-stage Utility** ("MuseScore gain", +2.52 / +5.61 dB on Strings): Live's level matches MuseScore's within
+  0.2 dB (gain −0.19 / −0.06 dB).
+- **Tuning slots in a Kontakt multi** (Whence: 4 + 3 + 4 + 4 + 2 copies by MIDI channel): pitches within 2 cents of
+  MuseScore's on held notes (Violins 1, 0.25 s windows).
+- **Parameter-lane edges** (Mic 2 stepped every bar, lane score, Live 12.4.7): the six steps within −5.0 … 0.0 ms of
+  MuseScore's (Live never later); the 11-52 ms late edges of 2026-10 and the silent Solo Violin 1 route did not appear.
+
+Differs (open):
+- **A note at the song's start that MuseScore plays early is not played at all.** MuseScore starts everything later by
+  the start lead; the plain set plays such a note by its technique track's negative Track Delay, before song time 0,
+  and Live (12.4.6 and 12.4.7) drops the whole note: Strings' first Violin and Cello notes silent for their 2.5 s, the lane
+  score's held note silent for 19 s; with the Violin's Track Delay set to 0 by hand the note played (late by its onset).
+  A fix needs the set to start later (a lead-in bar) or such notes late by their onset in Live: the owner to decide
+  (OPEN_ITEMS).
+- **A key struck again at the note before's note-off**: MuseScore sends the off first at the same instant; the device's
+  `[pipe]` sent the new note-on 2 µs earlier (the delays' 0.01 ms rounding), so the old note-off ended it (Strings'
+  Cello C3 at 10.69 s: −8 … −12 dB for 0.75 s). With that note-off 0.16 ms earlier in the set (by hand) it played as in
+  MuseScore. **Fixed**: `LiveTiming::track` puts such a note-off `RETRIGGER_MARGIN_MS` (0.15 ms) before the note-on of
+  its key, any technique's on the Kontakt; build #467 on Live 12.4.7: the C3 at the level MuseScore plays it (0.0 dB).
+  A technique played as written has no lookahead to take the off earlier with: since 2026-10-22 (after #467, Linux only)
+  the lookahead makes room. On a Performance patch the same instant reads differently: Whence's Basses, a plain C2
+  re-struck accented (velocity 122) with no gap, is +8 dB louder in Live than in MuseScore, +14 dB with the off 0.15 ms
+  first (by hand): Kontakt takes MuseScore's same-sample off / on otherwise than any gap; the renderer's reattackGap
+  doesn't reach this note (OPEN_ITEMS).
+- **Whence's Celli - Performance is silent in Live** for the whole piece (#464 on 12.4.6 and #467 on 12.4.7; MuseScore's
+  export of the same routes plays). Not the start lead: with every Celli Track Delay set to 0 by hand still silent. Its
+  multi is the largest (four copies, two of them chord voices; state 17 MB). Cause not found.
+- Waveforms differ where Whence's quarter tones bend (Violins 1, Violas): levels within 0.3 dB, pitch within 2 cents on
+  held notes, but nulls of −4 … −13 dB over the bent passages and glides that differ by up to ±120 cents within a window
+  (Violins 1 at 11.25 s, 15.75 s); the rest of each track nulls at −23 … −30 dB.
+- **Ample's plain set** (AGM, Live 12.4.7): opens, exports and saves; per note Live plays MuseScore's level and time (113
+  notes: level median −0.07 dB, onsets 0 ms; the Pick patch's track nulls at −24.9 dB) but the Sustain track's waveform
+  doesn't null (correlation 0.32, where MuseScore against itself is bit-identical): AGM's own variation isn't reset by
+  Live's transport as by MuseScore's; some notes up to 14.6 dB apart. Live 12.4.7 fills empty panel slots of the AGM
+  device with parameters of its own (S-Strum Toggle, S-Chord Mode) and keeps the empty slot's value (0.1234567687), which
+  the read-back took for a knob turned in Live: Update Live Set then wrote "S-Chord Mode 0.1235" into the score and
+  the state of an unchanged set. **Fixed** (2026-10-22, Linux only): `LiveTracks::knobs` leaves that value out. The
+  state Live saved holds M-Master Vol at 0.435 / 0.44 (its last automated value) where MuseScore wrote 0.5: the
+  automation sets it again as the set plays.
+- Not measured: *Live plays the score*, the route set, timing overrides (no note was moved in Live), speedFromWritten's
+  and fixedTransitions' effect alone (both are in the states, not isolated), Ample's capo and state lanes.
 
 ### Open questions for the owner
 
@@ -833,8 +910,9 @@ parameters as Kontakt's): a constant lane written as Live's panel value with no 
 knob turned in the saved set read into the lane and kept; MuseScore's next value written into the panel and the set's
 own state; both changed without a dialog: Live's kept and asked again; a lane made constant losing its envelope; an
 unlisted parameter given a free slot (its id from the instance); an unautomated parameter back at the patch's own value,
-then turned in Live and read back. **Only real Live 12.4 can show** (to check first, with
-a Windows build): that Live opens an updated set it saved itself (12.4's format, the inserted tracks written in 12.2's
+then turned in Live and read back. **Confirmed in real Live 2026-10-22** (Checked in real Live above): Live opens a set
+Update Live Set updated after Live saved it, without a message; an unchanged score writes nothing; the backup is
+`<name> [yyyy-MM-dd hhmmss].als`. **Only real Live 12.4 can show** (still): that Live opens an updated set it saved itself (12.4's format, the inserted tracks written in 12.2's
 as Create Live Set writes them) without a message; that it keeps the inserted tracks' sends and the devices' saved data;
 that the clip envelopes' ControllerTargets ids taken from the file are still the ones Live 12.4 saved; how Live names
 its backups exactly (assumed `<name> [yyyy-MM-dd hhmmss].als`); that Live saves a knob turned in its panel as the
@@ -1141,7 +1219,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   there would play late by each route's lookahead until the owner set every track's Track Delay by hand (the owner to
   decide; HANDOFF.md › Written clips in the plain set). For the same reason their first note can't start before the clip:
   a note at the score's start whose onset MuseScore plays early by the start lead (`libraryDelayLead`, 2026-10-14;
-  Whence's first Celli note, 172 ms) starts at 0 there, late by its onset; the plain set plays it early (Track Delay).
+  Whence's first Celli note, 172 ms) starts at 0 there, late by its onset; the plain set plays it early (Track Delay), and
+  real Live doesn't play such a note at all (2026-10-22, Checked in real Live above).
   The plain set's Controllers clip can't start before 0 either: such a note's controllers (CC1 at the dynamic), which
   MuseScore sends with its early note-on, come at 0 in Live, up to the start lead after the note-on (Whence's first
   Celli note 172 ms, a `[slurs] plainTiming` attack at the score's start 20-39 ms; `tst_liveequivalence::plainTimingLive`).
@@ -1154,13 +1233,16 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   the written note); before the first, 0 (a patch just loaded). The Kontakt state Create Live Set embeds has the script's
   own writing off ($vfm12 0, `SoundLibraryHost::setupState` with the score). `tst_liveequivalence::speedFromWrittenLive`
   (Linux, test synth): the route clip's carriers and the device's MIDI (CC119 63 before each transition), the plain set's
-  envelope. A carrier's value 1 plays as 0 (as for every carrier). Untried in real Live.
+  envelope. A carrier's value 1 plays as 0 (as for every carrier). In real Live 12.4.7 (2026-10-22, Whence): the plain
+  set with it opens, plays (levels and onsets as above) and survives Live's save; its effect alone not isolated.
 
 - **`[slurs] fixedTransitions`** (2026-10-20, docs/PLAYBACK_SETTINGS.md › Fixed transitions): the random generator's
   modulators at 0 are in the Kontakt state Create Live Set embeds (`SoundLibraryHost::setupState` with the score;
   `tst_liveequivalence::randomSetupState`), so the plain set plays the same fixed take as MuseScore. Update Live Set
   rewrites a Kontakt's state only when its slots' tunings change, so a set made with the other value keeps its own (make
-  the set again); *Live plays the score* plays the owner's own Kontakt, as it is. Untried in real Live.
+  the set again); *Live plays the score* plays the owner's own Kontakt, as it is. In real Live (2026-10-22, Strings and
+  Whence): the state survives Live's save (read-back identical, the set's diff clean); Live renders the same take each
+  time (two runs, two builds: the same nulls to 0.01 dB).
 
 - **`[notes] transportReset`** (2026-10-21, docs/PLAYBACK_SETTINGS.md › Transport reset): "Reset on transport" at 1 is in
   the Kontakt state Create Live Set embeds, the same way (`tst_liveequivalence::transportResetState`); in Live the patch
@@ -1173,7 +1255,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   every note-on, note-off and the patch's CC1 where MuseScore plays them). *Live plays the score*'s clips and the route
   set (as every track delay there: no Track Delay through Live's API) play the patch's events at their written place,
   late by the shift (Violas - Performance 95.2 ms) against MuseScore's own playback, until the owner sets that track's
-  Track Delay by hand. Untried in real Live.
+  Track Delay by hand. The plain set's Track Delay confirmed in real Live 12.4.7 (2026-10-22, Whence: the five part
+  groups within 0.5 ms of MuseScore).
 
 - **A clicked or entered note** (2026-10-15, `libmscore/notepreview.h`): in MuseScore's own playback (hosted or MIDI
   out) it plays its playback events on its route (patch, switch, CC1 / CC11, bend: docs/PLAYBACK_SETTINGS.md › Clicked

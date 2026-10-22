@@ -204,8 +204,11 @@ Keep this file current: close an item by deleting it (the commit message says wh
   investigated.
 - **Src**: LIVE.md.
 - **Cause**: not found.
-- **Tool**: `tools/live/research/edges.py <wav> [bpm]`; missing: a real-Live check script (Missing tools #5).
-- **Untried**: real Live re-check of both.
+- **Tool**: `tools/live/research/edges.py <wav> [bpm]`; `tools/live/realcheck/realcheck.py run <lanescore> --lanes
+  mic-steps` (`realcheck.py lanescore`).
+- **Re-checked 2026-10-22** (real Live 12.4.7, build #467, Solo Violin 1, Mic 2 stepped every bar): the six edges within
+  −5.0 … 0.0 ms of MuseScore's export, the route not silent; the late edges did not appear. Not re-checked on Live
+  12.4.6 (the VM's Live updated itself) or with other parameters.
 
 ### 8. Chords on mono Performance patches: unconfirmed on Windows
 - **W**: chord-voices (da91f0b459) is meant to make Whence Celli bars 15-16 sound all three chord notes (two had
@@ -286,6 +289,36 @@ Keep this file current: close an item by deleting it (the commit message says wh
   every patch loaded later. Now checked as a patch loads (status bar, load times.log) and in every render's preflight.
   The VM's: nothing shared. **Own**: the owner's PC not checked (the preflight shows it on the next render there).
 
+### 11c. Live doesn't play a plain set's first note when it starts early (real Live, 2026-10-22)
+- **W**: a note at the song's start that MuseScore plays early (onset, smooth attack) is played by its technique track's
+  negative Track Delay, before song time 0; Live 12.4.6 and 12.4.7 drop the whole note in *Export* (Strings: the first
+  Violin and Cello notes silent for 2.5 s; the lane score's one held note silent for 19 s). With the Violin's Track
+  Delay set to 0 by hand the note played (late by its onset). Every plain set of a score whose first note starts early
+  (Recommended: most) loses it.
+- **Src**: `tools/live/realcheck` (Strings #464 / #467, lanes #464), LIVE.md › Checked in real Live.
+- **Fix**: the plain set starts one bar later (an empty lead-in bar: every clip, envelope, locator and the read-back
+  shifted), or such notes go late by their onset in Live (as *Live plays the score* does). Untested whether Live's Play
+  from 1.1.1 (not Export) behaves the same. **Own**: which.
+
+### 11d. Whence's Celli - Performance silent in real Live (2026-10-22)
+- **W**: the Celli - Performance Kontakt plays nothing in Live's export of Whence's plain set, the whole piece (#464 on
+  Live 12.4.6, #467 on 12.4.7); MuseScore's export of the same routes plays (−99 dB floor). Not the start lead: with
+  every Celli Track Delay set to 0 by hand still silent. The other four parts play (levels within 0.2 dB median).
+- **Src**: `tools/live/realcheck` runs `whence`, `w467`, the experiment exp2 (private `live-realcheck/`).
+- **Cause**: not found. Its multi is the largest: four copies (two chord voices: "(copy 3) (voice 2)", "(copy 4)
+  (voice 3)"), state 17 MB; Live at 6-12 GB on the 16 GB VM.
+- **Tool**: `realcheck.py run Whence.mscz --keep-wavs` and an edited set (LIVE.md › Checked in real Live); next: the
+  Celli part alone, the multi without its voice copies, Kontakt's window in Live.
+
+### 11e. A re-struck key on a Performance patch with no gap (real Live, 2026-10-22)
+- **W**: Whence's Basses, a plain C2 (bar 14) followed by the same C2 accented (velocity 122, plainAccents 2): MuseScore
+  sends the off and the on at one sample; Kontakt plays that quieter than any gap: in Live the accented note is +8 dB
+  louder (+14 dB with the off 0.15 ms first, the retrigger margin; by hand, before the lookahead fix). Live can't keep a
+  same-sample order across the device, so the two disagree whatever the plain set writes.
+- **Cause**: the renderer's reattackGap (a touching note re-attacked) doesn't reach a re-struck key on the plain
+  Performance path. **Fix**: give that note-off a real gap in MuseScore (then Live and MuseScore agree); **Own**: the gap
+  changes what MuseScore plays (the accent as Kontakt plays it after a gap: louder).
+
 ---
 
 ## Tier 2: audible in some passages, or on all notes but small
@@ -312,6 +345,12 @@ Keep this file current: close an item by deleting it (the commit message says wh
 - **Untried**: GUI (a GUI crash would take MuseScore down). AGM trial ends ~2026-10-25.
 
 ### 13. Ample capo, state lanes and other Ample limits
+- **Real Live (2026-10-22, Live 12.4.7, #464, `tools/live/realcheck`)**: Ample's plain set opens, exports and saves; per
+  note Live plays MuseScore's level and time (113 notes: median −0.07 dB, onsets 0 ms) but the Sustain track doesn't
+  null (correlation 0.32; MuseScore against itself bit-identical): AGM's own variation isn't reset by Live's transport,
+  some notes up to 14.6 dB apart. Live fills empty AGM panel slots (S-Strum Toggle, S-Chord Mode) keeping the empty
+  value, which Update Live Set took for a turned knob (fixed, Linux only: `LiveTracks::isEmptySlotValue`). The saved
+  state holds M-Master Vol at its last automated value (0.435 / 0.44 for 0.5).
 - **W**: playing from a later tick may keep the instance's last capo (HANDOFF › Phase 2 says not resent; MV.md says
   `Seq::updateSynthesizerState` replays ME_PARAMETER on seek: contradictory, untried in the GUI). Live's clips get the
   capo at 0 with the first note (no start lead); over MIDI out M-Capo is set by hand. State lanes: hosted and Live play
@@ -417,6 +456,8 @@ Keep this file current: close an item by deleting it (the commit message says wh
   written; Bank / Sub not re-sent on a locate while stopped; a CC32 envelope is dropped at load. Volume tops at +6 dB:
   headroom × a Mixer above 100 loses up to ~4 dB. Plug-in parameter lanes up to 1 ms late. Microtones: a bending copy
   beyond its bend range plays by varispeed in MuseScore, which Live can't; many tunings can exhaust 64 routes.
+- **Real Live (2026-10-22)**: a first note that starts early isn't played at all (11c); the Controllers clip's start
+  values are chased (Live sends a clip envelope's value at the start), so no part lost its CC1 / CC11.
 - **Src**: LIVE.md.
 
 ---
@@ -461,6 +502,12 @@ Keep this file current: close an item by deleting it (the commit message says wh
 ---
 
 ## Tier 4: tool defects (no sound, but they hide or invent problems)
+
+31a. **The VM's Live updated itself to 12.4.7** (2026-10-22, about 08:40, while a `realcheck` run's Live was open: Live's
+    automatic update, on by default): the VM no longer runs the owner's 12.4.6; its preferences moved to `Live 12.4.7\`
+    (`realcheck` backs up the newest). Nothing measured here needs a Live after 12.4. **Own**: reinstall 12.4.6 and turn
+    Live's automatic updates off on the VM, or keep 12.4.7. Also in Live's log: another session's control surface
+    ("Tester", looking up tracks such as '7-Timps') is active in the VM's Live.
 
 32. **Verify detector false positives on Performance legato** (private `bars9-12/SILENT.md`, build #454):
     - Offset alias: `bestOffset`'s onset-flux curve is flat for soft legato parts (V2 0.060 s within 0.6 % of the
@@ -523,6 +570,14 @@ review pages (22); RHYTHM borderline check; LIVE.md's open questions.
 
 ## Untried in real Live
 
+Checked 2026-10-22 by `tools/live/realcheck` (LIVE.md › Checked in real Live; Live 12.4.6 / 12.4.7, builds #464 /
+#467): the plain set opens, exports, saves and quits unattended; Live's save keeps every value MuseScore writes (Strings,
+lanes, Whence; Ample: Live fills empty panel slots, now ignored by the read-back); Update Live Set on a set Live saved
+(unchanged: writes nothing; edited: updated, reopened, exported, saved; the backup's name); the read-back of a saved set;
+written clips with Track Delay and the device's delays (onsets 0 ms, levels 0.2 dB median); plainShift's Track Delay;
+the gain-stage Utility; tuning slots in a multi; fixedTransitions' and speedFromWritten's states kept; parameter-lane
+edges. Found: 11c, 11d, 11e, the re-struck key (fixed, #467), Ample's empty slots (fixed, Linux only).
+Still untried:
 Update Live Set end to end (Manual values over the state, Configure slots, ControllerTargets, backups, inserted sends,
 derived-parameter and M-Master Vol read-back); hosted slot gain with Utility and panel values; timing overrides (hash
 stability, `get_all_notes_extended` cost); written clips (one-decimal Track Delay, Bank / Sub through the device,
@@ -603,7 +658,10 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
   - several instances in one process;
   - flat lanes read from a dump's `instances.txt`.
 
-### 5. Real-Live check script (VM, Live 12.4.6 trial, ends ~2026-11-01)
+### 5. Real-Live check script: BUILT (branch `live-realcheck`, 2026-10-22: `tools/live/realcheck`, docs/TOOLS.md › 5)
+- Built as `realcheck.py run <score>` (one VM job: set, Live's open / export / save, comparison with MuseScore's export
+  and its floor, the set's diff, read-back, Update Live Set twice, a feature table; resumable). Results: LIVE.md ›
+  Checked in real Live, items 7, 11c-11e. The original spec:
 - **Spec**: `tools/live/live_check/`: `run_vm.ps1 <set.als> <out> [--export-wav] [--bars a-b]` drives Live on the VM
   desktop (scheduled task + `tscon`, as the private lc1012 / ug drivers do): opens the set, waits for Kontakt states, runs
   Live's export of the arrangement (or records the master), saves, closes; `compare.py <live.wav> <musescore.wav>

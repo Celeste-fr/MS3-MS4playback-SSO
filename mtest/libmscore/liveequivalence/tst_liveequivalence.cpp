@@ -158,6 +158,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainWritten_data();
       void plainWritten();
       void retriggerOrder();
+      void emptySlotKnob();
       void plainPerformanceLive();
       void plainTimingLive();
       void plainAccentsLive_data();
@@ -2810,6 +2811,48 @@ void TestLiveEquivalence::retriggerOrder()
       std::multimap<int, int> keyOns { { 48, notes[0].playedStart }, { 48, notes[1].playedStart } };
       const LiveTiming::Track shared = LiveTiming::track(first, bpm, &keyOns);
       QVERIFY(b.first - LiveTiming::playedBy(shared, notes[0], bpm).second >= margin - 1e-6);
+
+      // a technique played as written (no early start: no lookahead of its own, real Live 12.4.7, Whence's Basses: a
+      // plain C2 re-struck accented): the lookahead makes room for the earlier off
+      std::vector<LiveClips::Note> plain {
+            note(36, 28 * beat, 2 * beat, 28 * beat, 30 * beat),
+            note(36, 30 * beat, beat / 3, 30 * beat, 30 * beat + beat / 3),
+            };
+      const LiveTiming::Track p = LiveTiming::track(plain, bpm);
+      QVERIFY(p.lookaheadMs > 0 && p.lookaheadMs <= 0.2 + 1e-9);
+      QCOMPARE(p.offsLate, 0);
+      const std::pair<double, double> p0 = LiveTiming::playedBy(p, plain[0], bpm);
+      const std::pair<double, double> p1 = LiveTiming::playedBy(p, plain[1], bpm);
+      QVERIFY2(p1.first - p0.second >= margin - 1e-6, qPrintable(QString("%1 %2").arg(p0.second).arg(p1.first)));
+      QVERIFY(std::fabs(p1.first - plain[1].playedStart) <= 0.5 && std::fabs(p0.first - plain[0].playedStart) <= 0.5);
+      QVERIFY(std::fabs(p1.second - plain[1].playedEnd) <= 0.5);
+      }
+
+//---------------------------------------------------------
+//   emptySlotKnob
+//    real Live 12.4.7 (2026-10-22, tools/live/realcheck, Ample's AGM): Live names an empty panel slot with a parameter
+//    of its own and keeps the empty slot's value (LiveSetWriter's 0.1234567687): not a knob turned in Live
+//---------------------------------------------------------
+
+void TestLiveEquivalence::emptySlotKnob()
+      {
+      LiveSet::Track t;
+      LiveSet::Parameter turned;
+      turned.name = "S-Strum Toggle";
+      turned.manual = 0.75;
+      LiveSet::Parameter filled;
+      filled.name = "S-Chord Mode";
+      filled.manual = 0.1234567687f;            // (as Live saves it: a float)
+      LiveSet::Parameter automated;
+      automated.name = "M-Master Vol";
+      automated.manual = 0.5;
+      automated.automated = true;
+      t.parameters = { turned, filled, automated };
+      const std::map<QString, double> k = LiveTracks::knobs(t);
+      QCOMPARE(int(k.size()), 1);
+      QCOMPARE(k.at("S-Strum Toggle"), 0.75);
+      QVERIFY(LiveTracks::isEmptySlotValue(0.1234567687));
+      QVERIFY(!LiveTracks::isEmptySlotValue(0.1235));
       }
 
 //---------------------------------------------------------

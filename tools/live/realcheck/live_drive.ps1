@@ -1,4 +1,4 @@
-# live_drive.ps1: drive Ableton Live 12.4.6 on the test VM's desktop, unattended (tools/live/realcheck; docs/TOOLS.md
+# live_drive.ps1: drive Ableton Live 12.4 (12.4.6, since 2026-10-22 12.4.7: Live updated itself) on the test VM's desktop, unattended (tools/live/realcheck; docs/TOOLS.md
 # section 5). Runs in the interactive session (scheduled task claude-rc-gui, started by vm_run.ps1), never over ssh.
 #
 #   live_drive.ps1 -job <job.json> -out <result.json>
@@ -8,7 +8,10 @@
 #             "settleS": 20 }
 # Steps: (1) refuse if a Live already runs (the owner's or another job's); (2) start Live with the set; (3) wait until
 # it has loaded: the main window titled with the set's name answers, the process' CPU stays under 0.6 of a core (Live
-# idles at about 0.3 on the VM) and its memory still (under 0.2 % a second) for settleS (Kontakt loads its samples after the set opens; an export before that renders silence);
+# idles at about 0.3 on the VM) and its memory still (under 0.2 % a second) for settleS, or the memory alone still for
+# 3 x settleS (a plug-in busy when idle) (Kontakt loads its samples after the set opens; an export before that renders
+# silence); a Windows dialog of Live's while it loads (e.g. "an automatic update of Live currently in progress") stops
+# the run with its text;
 # dialogs on the way are handled by their look (Dialogs below); (4) File > Export Audio/Video: Rendered Track = All
 # Individual Tracks, Render Start 1.1.1 (Live's own), Render Length = renderBars, the toggles checked by their colour
 # (Normalize, Convert to Mono, Render as Loop, Include Return and Main Effects, MP3 off; PCM on), Export, the file name
@@ -51,6 +54,11 @@ public class U {
         var c = new System.Text.StringBuilder(256); GetClassName(h, c, 256);
         res.Add(h.ToInt64() + "|" + r.L + "|" + r.T + "|" + r.R + "|" + r.B + "|" + p + "|" + c + "|" + t); }
       return true; }, IntPtr.Zero); return res; }
+  [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr p, EP f, IntPtr l);
+  // a dialog's text: its child windows' (a Windows message box: the Static holding the message)
+  public static string Texts(IntPtr h) { var res = new List<string>();
+    EnumChildWindows(h, (c, x) => { var t = new System.Text.StringBuilder(1024); GetWindowText(c, t, 1024);
+      if (t.Length > 0) res.Add(t.ToString()); return true; }, IntPtr.Zero); return string.Join(" | ", res); }
 }
 "@
 [U]::SetProcessDPIAware() | Out-Null
@@ -90,7 +98,11 @@ function WaitWin($p, [scriptblock]$test, [int]$secs) { for ($i = 0; $i -lt $secs
 $KNOWN = @(
   # "Saving and exporting were successfully activated. Time remaining: N days." [OK] [Purchase now]: OK (the window's
   # rect has a shadow: the OK button's centre at 0.375 of its width, 34 px over its bottom)
-  @{ name = 'trial-activated'; w = 424; h = 155; tol = 6; action = 'click'; x = 0.375; y = -34 },
+  # (told apart by the thumbnail too: Live's crash recovery question, "Live unexpectedly quit while you were working on
+  # the Live Set ... Would you like to recover your work?", is 430 x 155 and was answered as this one, 2026-10-22: Live
+  # then opened the recovered set of the run before; its thumbnail differs by 42 on average, two of this one's by 1)
+  @{ name = 'trial-activated'; w = 424; h = 155; tol = 6; action = 'click'; x = 0.375; y = -34
+     thumb = @(198,228,235,236,236,236,236,236,236,236,236,236,236,236,233,189,171,182,182,182,182,182,182,182,182,182,182,182,182,182,182,157,153,49,93,158,149,155,155,151,153,156,155,156,157,150,163,147,154,74,97,163,153,151,158,151,152,165,165,165,165,165,165,145,156,165,165,165,159,157,152,159,149,144,149,157,165,165,165,146,143,151,152,151,150,150,149,149,149,149,150,150,151,152,147,135) },
   # the splash ("12 Trial … Initializing the application") and its lower part, left behind while Live loads
   @{ name = 'splash'; w = 358; h = 358; tol = 4; action = 'ignore' },
   @{ name = 'splash-part'; w = 358; h = 175; tol = 4; action = 'ignore' }
@@ -103,18 +115,29 @@ function Thumb($d) { $bmp = New-Object System.Drawing.Bitmap $d.W, $d.Ht
       $c = $bmp.GetPixel($x, $y); $s += ($c.R + $c.G + $c.B) / 3; $n++ } }
     $cells += [int]($s / [Math]::Max($n, 1)) } }; $bmp.Dispose(); return ,$cells }
 function HandleDialogs($p) {
+  # a Windows dialog of Live's while it loads (not the export's / save's, which come later): read, kept, and the run
+  # stopped: e.g. "There is an automatic update of Live currently in progress" (2026-10-22: Live updated itself from
+  # 12.4.6 to 12.4.7 while an earlier run's Live was open; the next start showed this and opened nothing)
+  if (-not $script:exporting) {
+    foreach ($w in (Wins $p.Id | ? { $_.Class -eq '#32770' })) {
+      $txt = [U]::Texts($w.H)
+      $R.dialogs += [ordered]@{ at = (Get-Date -Format o); w = $w.W; h = $w.Ht; title = $w.Title; text = $txt; known = 'windows-dialog'; action = 'stop' }
+      Fail "Live shows a dialog: '$($w.Title)': $txt"; exit 1 } }
   $m = Main $p
   $ds = Wins $p.Id | ? { $_.Class -eq 'Ableton Live Window Class' -and $_.Title -eq '' -and $_.W -gt 250 -and $_.Ht -gt 100 -and $_.W -lt 800 -and $_.Ht -lt 500 }
   $handled = 0
   foreach ($d in $ds) {
     $k = $KNOWN | ? { [Math]::Abs($_.w - $d.W) -le $_.tol -and [Math]::Abs($_.h - $d.Ht) -le $_.tol } | Select -First 1
     if ($k -and $k.action -eq 'ignore') { continue }
+    $th = $null
+    if ($k -and $k.thumb) { $th = Thumb $d; $dist = 0; for ($i = 0; $i -lt 96; $i++) { $dist += [Math]::Abs($th[$i] - $k.thumb[$i]) }
+      if ($dist / 96 -gt 15) { $k = $null } }
     # one answer per window and 8 s (an answer takes a moment; a dialog that stays after three is a failure)
     $hk = [string]$d.H
     if ($seen.ContainsKey($hk) -and ((Get-Date) - $seen[$hk].t).TotalSeconds -lt 8) { continue }
     if ($seen.ContainsKey($hk) -and $seen[$hk].n -ge 3) { Fail "a dialog ($($d.W)x$($d.Ht), '$(if ($k) { $k.name } else { 'unknown' })') stays after 3 answers"; exit 1 }
     $seen[$hk] = @{ t = (Get-Date); n = $(if ($seen.ContainsKey($hk)) { $seen[$hk].n + 1 } else { 1 }) }
-    $th = Thumb $d
+    if (-not $th) { $th = Thumb $d }
     $entry = [ordered]@{ at = (Get-Date -Format o); w = $d.W; h = $d.Ht; thumb = ($th -join ','); known = $(if ($k) { $k.name } else { '' }) }
     if ($k -and $k.action -eq 'click') {
       Click ($d.L + [int]($d.W * $k.x)) ($d.B + $k.y); $entry.action = 'clicked'
@@ -131,6 +154,7 @@ function Fail($what) { $R.verdict = 'FAIL'; $R.failure = $what; $R.failShot = Sh
   if ($script:p -and -not $script:p.HasExited) { Stop-Process -Id $script:p.Id -Force -ErrorAction SilentlyContinue } }
 
 $p = $null
+$script:exporting = $false
 if ($J.shots -and (Test-Path $J.shots)) { Remove-Item -Recurse -Force $J.shots }   # (an earlier attempt's)
 try {
 # ---- 1: no Live of anyone else's
@@ -145,27 +169,34 @@ $R.livePid = $p.Id; Save
 $name = [IO.Path]::GetFileNameWithoutExtension($J.set)
 
 # ---- 3: loaded
-$quietSince = $null; $lastCpu = $null; $lastMem = $null; $loaded = $false
+$quietSince = $null; $memQuietSince = $null; $lastCpu = $null; $lastMem = $null; $loaded = $false; $rates = @()
 while ($sw.Elapsed.TotalSeconds -lt $J.loadTimeoutS) {
   Start-Sleep 1
   if ($p.HasExited) { Fail "Live exited while loading (code $($p.ExitCode))"; exit 1 }
   $null = HandleDialogs $p
   $m = Main $p
-  if (-not $m -or $m.Title -notlike "$name*") { $quietSince = $null; continue }
+  if ($m -and $m.Title -like "$name[*] - *") { Fail "Live opened a recovered set ('$($m.Title)'), not the set as written"; exit 1 }
+  if (-not $m -or $m.Title -notlike "$name - *") { $quietSince = $null; $memQuietSince = $null; continue }
   $p.Refresh(); $cpu = $p.TotalProcessorTime.TotalSeconds; $mem = $p.WorkingSet64
   $busy = Busy $m.H
   if ($lastCpu -ne $null) {
     $rate = $cpu - $lastCpu; $grow = [Math]::Abs($mem - $lastMem) / [Math]::Max($lastMem, 1)
     # (Live's own idle load on the VM is about 0.3 of a core: its UI drawn in software; Kontakt's sample loading shows
     # as memory growth and CPU above that)
+    $rates = @($rates + [Math]::Round($rate, 2) | Select -Last 30)
     if (-not $busy -and $rate -lt 0.6 -and $grow -lt 0.002) { if (-not $quietSince) { $quietSince = $sw.Elapsed.TotalSeconds } }
     else { $quietSince = $null }
+    # (or the memory alone still for three times as long: a plug-in that keeps a core busy when idle, as Ample's AGM
+    # on the VM, 2026-10-22: Live showed the set loaded while the CPU never fell under 0.6)
+    if (-not $busy -and $grow -lt 0.002) { if (-not $memQuietSince) { $memQuietSince = $sw.Elapsed.TotalSeconds } }
+    else { $memQuietSince = $null }
     if ($quietSince -and $sw.Elapsed.TotalSeconds - $quietSince -ge $J.settleS) { $loaded = $true; break }
+    if ($memQuietSince -and $sw.Elapsed.TotalSeconds - $memQuietSince -ge 3 * $J.settleS) { $R.loadedBy = 'memory'; $loaded = $true; break }
   }
   $lastCpu = $cpu; $lastMem = $mem
 }
-if (-not $loaded) { Fail "not loaded after $($J.loadTimeoutS) s"; exit 1 }
-$R.loadSeconds = [Math]::Round($sw.Elapsed.TotalSeconds - $J.settleS, 1); $R.liveMemoryMB = [int]($p.WorkingSet64 / 1MB)
+if (-not $loaded) { Fail "not loaded after $($J.loadTimeoutS) s (the last CPU rates, cores: $($rates -join ' '))"; exit 1 }
+$R.loadSeconds = [Math]::Round($sw.Elapsed.TotalSeconds - $(if ($R.loadedBy) { 3 * $J.settleS } else { $J.settleS }), 1); $R.liveMemoryMB = [int]($p.WorkingSet64 / 1MB)
 Step 'loaded' $true "title '$($m.Title)', $($R.loadSeconds) s, $($R.liveMemoryMB) MB"
 HideOthers; [U]::ShowWindow($m.H, 3) | Out-Null; Front $m.H; Start-Sleep 2
 $null = HandleDialogs $p
@@ -177,6 +208,7 @@ function Menu($p, [int]$dy) {
   Click ($mn.L + 90) ($mn.T + $dy); return $true }
 
 # ---- 4: export
+$script:exporting = $true   # (from here the Windows dialogs are ours: Save Audio File As, Save Live Set As)
 if ($J.exportDir) {
   New-Item -ItemType Directory -Force $J.exportDir | Out-Null
   $ok = Menu $p 357   # File > Export Audio/Video…

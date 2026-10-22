@@ -5,7 +5,7 @@ checked for what MuseScore wrote, Update Live Set and the read-back run on it (d
 
   realcheck.py run <score> --name <id> --out <dir> [--preset recommended] [--settings "k=v;…"]
                [--checks live,floor,readback,update] [--variant auto|none] [--lanes <json>|mic-steps]
-               [--build C:\\claude\\b464\\ms] [--library "Spitfire Symphony Orchestra"] [--resume] [--timeout s]
+               [--build C:\\claude\\b467\\ms] [--library "Spitfire Symphony Orchestra"] [--resume] [--timeout s]
       one VM job (tools/vm/vmjob.py: the VM lock C:\\claude\\quiet.lock for the whole run, a watchdog, the run folder
       C:\\claude\\rc\\lrc-<id>, kept until the run passed its steps so that --resume goes on where it stopped; the WAVs
       are deleted on the VM in any case). <score>: .mscz / .mscx, or MusicXML (converted by the build first). The
@@ -54,7 +54,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools", "playbackverify"))
 import alsset  # noqa: E402
 
 VM_FILES = ["vm_run.ps1", "live_drive.ps1", "desk_run.ps1", "gui.ps1", "tscon.cmd", "compare.py", "alsset.py"]
-DEFAULT_BUILD = r"C:\claude\b464\ms"
+DEFAULT_BUILD = r"C:\claude\b467\ms"
 LIBRARY = "Spitfire Symphony Orchestra"
 
 
@@ -381,6 +381,8 @@ def report(outdir):
     res = os.path.join(outdir, "fetched", "results")
     run = load_json(os.path.join(outdir, "run.json")) or {}
     R = {"score": run.get("score"), "build": run.get("build"), "checks": [], "features": []}
+    lv = os.path.join(res, "live-version.txt")
+    R["live"] = open(lv, encoding="utf-8-sig").read().strip() if os.path.exists(lv) else ""
 
     def check(name, ok, detail):
         R["checks"].append({"check": name, "verdict": "PASS" if ok is True else ("FAIL" if ok is False else ok), "detail": detail})
@@ -445,7 +447,7 @@ def report(outdir):
         R["startLead"] = {"lagsMs": lags, "note": "Live's export starts at song time 0; MuseScore's file is later by its start lead, so every track's lag is about minus the lead, and a note the lead moved before 0 is cut in Live"}
     bad = [c for c in R["checks"] if c["verdict"] == "FAIL"]
     R["verdict"] = "FAIL" if bad or not R["checks"] else "PASS"
-    L = ["# Real-Live check: %s" % R["verdict"], "", "Score: %s; build: %s; settings: %s" % (R["score"], R["build"], run.get("settings")), "",
+    L = ["# Real-Live check: %s" % R["verdict"], "", "Score: %s; build: %s; Live %s; settings: %s" % (R["score"], R["build"], R["live"] or "?", run.get("settings")), "",
          "| Check | Verdict | Detail |", "|---|---|---|"]
     for c in R["checks"]:
         L.append("| %s | %s | %s |" % (c["check"], c["verdict"], c["detail"].replace("|", "/")))
