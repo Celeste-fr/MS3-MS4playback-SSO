@@ -23,8 +23,8 @@ is ABBA over the whole plan: take 1 plays the cells in plan order, take 2 in rev
                 attack      A (pitch, --attack-velocity) after silence, B --transition-velocity at A's start + before-len,
                             A released --overlap ms after B's note-on (a legato transition after a fresh attack;
                             a long before-len is "after a held note")
-                transition  Z (= B's pitch) attacked, A by transition after before-len, B by transition after another
-                            before-len: B's transition after a transition (a run: Z A B)
+                transition  Z (pitch - interval) attacked, A by transition after before-len, B by transition after another
+                            before-len: B's transition after a transition, in one direction (a scale run: Z A B)
                 staccato    A short (before-len - --staccato-gap ms), then B after the gap: an attack after a staccato
               Measured on B: the f0 leave / mid / arrive times (YIN, as legato_glide/glide.py), its level, and A's.
 Controllers: CC1 / CC11 / the articulation's switch are sent --pre s before each cell, during the silence. The switch:
@@ -174,6 +174,13 @@ def key_of(c):
     return {k: v for k, v in c.items() if k not in ('take', 'id', 'file', 't', 'notes', 'span', 'label')}
 
 
+def public_command(argv):
+    """the command line as a result may record it: no home folder (the repo is public; CLAUDE.md)"""
+    home = os.path.expanduser('~')
+    out = [os.path.basename(argv[0])] + [x.replace(home, '~') for x in argv[1:]]
+    return ' '.join(shlex.quote(x) for x in out)
+
+
 def build_cells(a):
     what = set(a.what.split(','))
     pitches = parse_list(a.pitches, int)
@@ -224,7 +231,7 @@ def cell_notes(c, t, a):
     if c['before'] == 'attack':
         return [('A', p, av, t, t + L - e + ov), ('B', q, tv, t + L - e, t + L + ioi)]
     if c['before'] == 'transition':
-        return [('Z', q, av, t, t + L + ov), ('A', p, tv, t + L, t + 2 * L - e + ov),
+        return [('Z', p - c['interval'], av, t, t + L + ov), ('A', p, tv, t + L, t + 2 * L - e + ov),
                 ('B', q, tv, t + 2 * L - e, t + 2 * L + ioi)]
     gap = a.staccato_gap / 1000
     return [('A', p, av, t, t + max(0.02, L - gap)), ('B', q, av, t + L - e, t + L + ioi)]
@@ -326,7 +333,7 @@ def plan(a):
             'switch': sw, 'what': a.what, 'takes': a.takes, 'order': 'ABBA (take 1 forward, take 2 reversed, ...)',
             'gap': a.gap, 'pre': a.pre, 'overlap': a.overlap, 'staccatoGap': a.staccato_gap, 'warm': a.warm,
             'probePitch': probe, 'kthostOpts': a.kthost_opts, 'speedScript': speed_script, 'speedCC': speed_cc,
-            'files': files, 'cells': played, 'command': ' '.join(shlex.quote(x) for x in sys.argv)}
+            'files': files, 'cells': played, 'command': public_command(sys.argv)}
     with open(os.path.join(work, 'plan.json'), 'w') as f:
         json.dump(meta, f, indent=0)
     total = sum(fi['seconds'] for fi in files)
@@ -500,8 +507,10 @@ def analyze_file(work, name, wav, a, gain_db=0.0):
     res = {'file': name, 'gainDb': gain_db, 'sampleRate': sr, 'seconds': round(len(x) / sr, 3),
            'peakDbfs': round(20 * math.log10(max(1e-12, float(abs(x).max()))), 2), 'rows': rows}
     os.makedirs(os.path.join(work, 'res'), exist_ok=True)
-    with open(os.path.join(work, 'res', name + '.json'), 'w') as f:
+    tmp = os.path.join(work, 'res', name + '.json.tmp')
+    with open(tmp, 'w') as f:            # (written whole, then renamed: a full disk leaves no half result to skip)
         json.dump(res, f)
+    os.replace(tmp, os.path.join(work, 'res', name + '.json'))
     return res
 
 
@@ -692,7 +701,9 @@ def merge(a):
                 q = lambda f: v[min(len(v) - 1, int(f * (len(v) - 1) + 0.5))]
                 summ[g][n] = {'n': len(v), 'median': round(st.median(v), 1), 'p10': round(q(0.1), 1),
                               'p90': round(q(0.9), 1), 'takeSd': round(st.median(e['sd']), 2) if e['sd'] else None}
-        out['sections'][r['patch']] = {'method': r['method'], 'by': summ, 'cells': r['cells'] if a.cells else None}
+        method = dict(r['method'])
+        method['command'] = re.sub(r'\S*/(?=measure_patch\.py)', '', str(method.get('command', ''))).replace(os.path.expanduser('~'), '~')
+        out['sections'][r['patch']] = {'method': method, 'by': summ, 'cells': r['cells'] if a.cells else None}
     with open(a.o, 'w') as f:
         json.dump(out, f, indent=1, sort_keys=True)
     print('%d results -> %s' % (len(a.results), a.o))
@@ -765,8 +776,11 @@ class VM:
             print('%s VM busy (quiet.lock: %s), waiting' % (time.strftime('%H:%M:%S'), r.stdout.strip()[:60]), flush=True)
             time.sleep(poll)
         if os.path.isdir(os.path.dirname(PAUSE_FILE)):
-            with open(PAUSE_FILE, 'w') as f:
-                f.write('%s %s\n' % (self.tag, time.ctime()))
+            try:
+                with open(PAUSE_FILE, 'w') as f:
+                    f.write('%s %s\n' % (self.tag, time.ctime()))
+            except OSError as e:            # (a full disk: the VM's lock is what counts)
+                print('(VM_PAUSE not written: %s)' % e, flush=True)
         self.held = True
 
     def unlock(self):
@@ -807,6 +821,14 @@ if ($made) { net use \\VOLENS\VMShare /delete /y *> $null }
 '''
 
 
+def wav_dir(a):
+    """where fetched renders wait for their analysis: --wav-dir, else a folder on /tmp (RAM on the dev machine: the
+    disk is tight; a 4-minute render is ~87 MB), WORK/wav with --keep-wavs"""
+    if a.keep_wavs:
+        return os.path.join(a.work, 'wav')
+    return a.wav_dir or os.path.join(os.environ.get('TMPDIR', '/tmp'), 'measure_patch-' + os.path.basename(os.path.abspath(a.work)))
+
+
 def run_vm(a, meta, todo):
     vm = VM(a)
     run = a.vm_dir or (VM_ROOT + '\\' + os.path.basename(os.path.abspath(a.work)))
@@ -837,8 +859,9 @@ def run_vm(a, meta, todo):
                                                kthost=a.kthost or VM_KTHOST, timeout=a.timeout,
                                                retries=a.retries), timeout=a.timeout * (a.retries + 1) + 300)
                     code = (re.findall(r'RESULT (\S+)', r.stdout) or ['?'])[-1]
-                    local = os.path.join(a.work, 'wav', name + '.wav')
+                    local = os.path.join(wav_dir(a), name + '.wav')
                     os.makedirs(os.path.dirname(local), exist_ok=True)
+                    os.makedirs(os.path.join(a.work, 'wav'), exist_ok=True)
                     for ext in ('json', 'log'):
                         vm.scp_from(run + '\\wav\\%s.%s' % (name, ext), os.path.join(a.work, 'wav', name + '.' + ext))
                     if code != '0' or not vm.scp_from(run + '\\wav\\' + name + '.wav', local):
@@ -953,7 +976,8 @@ def add_run(p):
     p.add_argument('--retries', type=int, default=1)
     p.add_argument('--redo', action='store_true')
     p.add_argument('--only', help='file names, a,b')
-    p.add_argument('--keep-wavs', action='store_true')
+    p.add_argument('--keep-wavs', action='store_true', help='keep the renders in WORK/wav')
+    p.add_argument('--wav-dir', help='where renders wait for their analysis (default /tmp/measure_patch-<work>)')
 
 
 def add_analysis(p):

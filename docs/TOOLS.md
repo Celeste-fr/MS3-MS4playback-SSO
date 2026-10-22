@@ -13,6 +13,9 @@ Conventions:
   lines, the format of dumpEvents' `<route> museScore.txt`) and a `list.txt`; (2) renders on the VM:
   `C:\claude\kt\kthost.exe "<Common Files>\VST3\Kontakt 8.vst3" <setup>.vst3state <events>.txt <out>.wav [opts]`, the
   setups copied from MuseScore's setups folder; (3) `analyze` on Linux (or the VM's Python 3.12), then `report`/`summary`.
+  **New measurements: use `measure_patch.py`** (docs/MEASURING.md), which does the three steps for any patch; kthost now
+  has its source in the repo (`tools/soundlibraries/kthost/`, `C:\claude\ps\kt\kthost.exe` on the VM), and the old
+  scripts run with it by changing the exe's path.
 - **Wrappers**: Linux builds and tests run through a wrapper that bind-mounts the worktree over the build dir's
   configured path (CLAUDE.md › Building and testing). Current form: an overlay folder per branch,
   `~/MuseScore/ms3fork/ovl-<branch>/<xx>.sh '<command>'` (flock on `private/BUILD_LOCK`, overlayfs build.rel over
@@ -147,6 +150,12 @@ HC_RUN=<WRAP> HC_VM=user@<vm address> tools/playbackverify/heard_check.sh <score
 | `--extract-library <lib> --check-dynamics [--all-sounds]` (VM) | velocity / CC1 → perceived level per patch, every sound with `--all-sounds` | in-app (~1 min for Violas) | working `dynamics.json`; `dynamics_from_check.py <zip…> [-o sso_sound_dynamics.json]` | one note per point: round robins alternate (Celli's Long came out flat) |
 | `--even-levels <score> [--even-levels-out <dir>] [--even-levels-parts …] [--even-levels-bars a-b] [--even-levels-ticks a-b] [--even-levels-play] [--verify-library …]` (VM) | slurred Performance passages through the plug-in, per-note CC11 correction | env `MS_EVEN_LEVELS_WAV` keeps renders | `result.json`, `<name> even.mscz` | the GUI's background measurer does the same near edits (`libmscore/evenauto.h`) |
 
+### 3a′. Measuring any patch (one command)
+
+| Tool | Measures | Command | Outputs | Limits |
+|---|---|---|---|---|
+| **`tools/soundlibraries/measure_patch.py`** (docs/MEASURING.md) | any patch (SSO, any VST 3 / Kontakt patch with a state): note cells (pitch × velocity × CC1 × CC11 × length: perceived peak / mean, loud50, onset at −15 / −6 dB and `isolated_onset`, release 40 / 20 dB) and transition cells (pitch × interval × note before: attack / transition / staccato × its length × IOI after × CC119 speed played / written × early start: f0 leave / mid / arrive, **heardRef = leave + 23.5 ms, the perceptual reference**, levels, step); takes in ABBA order; per cell median, mean, SD, 95 % CI | `plan --patch P --out W [grid]`, `run W [--vm …\|--local]` (VM locks, watchdog, retry, resumable, WAVs deleted), `analyze W [-o json] [--reanalyze dir --at-level T --at-level-cells k=v]`, `report W [--png]`; `all` = the four | `result.json` (cells, byPitch), `report.txt`, PNGs | one kthost process per file (no several instances); transitions measured on B only; staccato-before B masked when A rings within 15 dB; heardRef's 23.5 ms is Polfreman 2013's, not measured on SSO; tests: `test_measure_patch.py` (synthetic; with `MS_KTHOST` + `MS_TESTSYNTH` the kthost chain) |
+
 ### 3b. Committed sweeps and data tools (tools/soundlibraries)
 
 | Tool | Measures / computes | Command | Feeds (map attribute) | Last | Limits |
@@ -264,6 +273,9 @@ There is no committed tool for timbre / noise of a patch.
 `realSteps`; `sso_mic_levels` → `micLevels`, `micDefault`, `<Mics>`; `technique_offsets` → `heldOffset`; `sso_crest` →
 `<Dynamics crest>`.
 
+**`sso_transition_context.json`** (2026-10-21): made by `measure_patch.py plan|run|analyze` + `merge` (its `method` per
+section records the plan command); no consumer yet (for the transition model, OPEN_ITEMS item 3).
+
 **jsons without a committed producer** (made by one-off scripts; most record their method in an "about" key):
 `sso_accent_attack`, `sso_bad_samples`, `sso_smooth_onset`, `sso_plain_performance_shift`, `sso_performance_layers`,
 `sso_percussion_levels`, `sso_rachm_cc1_sweep`, `sso_rachm_context_match`, `sso_slur_swell`, `spheres_k550_staccato`,
@@ -276,7 +288,8 @@ There is no committed tool for timbre / noise of a patch.
 | Tool | Answers | Command | Outputs | Limits |
 |---|---|---|---|---|
 | `--measure-load-times <lib> [scores…] [--extract-patches <f>] [--measure-probe <patch>] [--measure-threads 2,4] [--measure-no-probe]` (VM) | instance load times: alone, as at score open, on threads, reuse, script-value probe, a parameter on a multi | in-app, normal priority | `<lib> load times <date>.txt` | |
-| **kthost** (VM `C:\claude\kt\kthost.exe`; `kthost2.exe` in `C:\claude\kp`: real time, editor open) | a minimal VST 3 host: Kontakt 8 + a `.vst3state`, renders an event file to a WAV (offline by default) | `kthost <plugin> <state> <events> <out.wav> [--tail s] [--wait s] [--probe-pitch n] [--param …] [--offsets] [--warm] [--realtime] [--from] [--to] [--list-params] [--editor] …` | WAV | **no source anywhere** (only a restored binary, MD5 `ea7e692e…`, and a disassembly): OPEN_ITEMS › Missing tools. No tuning slots, gain stage, trim or lane parameters; fresh-process renders null at ≈ −93 dB |
+| **kthost** (`tools/soundlibraries/kthost/kthost.cpp`; VM `C:\claude\ps\kt\kthost.exe`, Windows CI artifact `bin/kthost.exe`; the restored old binary `C:\claude\kt\kthost.exe`, `kthost2.exe` in `C:\claude\kp`: real time, editor open) | an offline VST 3 host from MuseScore's own hosting code: a plug-in + a state, an event file to a WAV, as the export renders a route (settle, probe, transport restart, sample-exact events) | `kthost <plugin> <state\|-> <events> <out.wav> [--tail s] [--wait s] [--probe-pitch n] [--param id\|title=v] [--max-voices n] [--tune c] [--slots c0,c1…] [--random-sources v] [--script-value n=v] [--prepared dir] [--gain dB] [--repeat n] [--realtime] [--block n] [--list-params] [--save-state f] [--report f.json]`; events `seconds on\|off\|cc\|pb\|at\|param\|tr\|vs a b [channel]` | WAV, report JSON, exit codes | docs/MEASURING.md › kthost: differences from the restored binary (no `--offsets`, `--warm`, `--from/--to`, editor; transport restarted by default); one instance per process; Linux: works with the test synth |
+| `tools/soundlibraries/kthost/null_compare.py a.wav b.wav [--json]` | how alike two renders are: lag, residual, correlation, level | | text / json | |
 | `tools/soundlibraries/ktload/` (`ktload.cpp`) | Kontakt state load times and memory | VM, built with msvc-wine: `ktload <plugin> <out> [--pump s] [--save-after s] [--no-process] <state>[=<save>]…` | log | |
 | `private/sso-load-profile-work/ktprof.cpp`, `kttrace.cpp` (MinHook tracer), `launchw.cpp`, `plateau.py`, `ksp.py`, `mainprof.py`, `resolve.py`, `pc-kit.zip` (private) | load phase marks, ntdll / registry trace, thread sampler, owner-PC kit | VM / owner PC | | kttrace pulls in minhook |
 | `tools/lagprobe/` (`vm/setup.cmd`, `setup2.cmd`, `go.cmd <tag> [phases] [reps] [modes]`, `probe.cmd`, `monitor.ps1`, `stop.ps1`; `linux/mkenv.py`, `run-linux.sh`; `read_lag_log.py <log> [--limit-ms 100]`, `compare_blocks.py`) | UI response to edits with SSO loaded | env `MS_LAG_PROBE=<log>`, `_REPS`, `_GAP_MS`, `_PHASES`, `_MODES`, `_OPEN_S`, `_KEEP` | jsonl → reports | VM shares CPU with builds: interleave blocks only; a crashed probe leaves the playback mode at MS4 |
