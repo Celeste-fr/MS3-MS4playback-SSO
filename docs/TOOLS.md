@@ -236,7 +236,7 @@ There is no committed tool for timbre / noise of a patch.
 | Tool | Makes | Command | Inputs | Last | Limits |
 |---|---|---|---|---|---|
 | **`tools/soundlibraries/gen_spitfire_sso.py <reaticulate>/userbanks/Spitfire/Spitfire-Symphony_Orchestra.reabank "share/soundlibraries/Spitfire Symphony Orchestra.xml"`** | the SSO map (never hand-edit) | Linux | its tables (`I`, `T`, `SPITFIRE_ADD/DROP/RENAME`, `DRUMS`, `KEYSWITCHED`, `LENGTHS`, `EXPECT`, `MONO`, `KEY_SHIFT`, `ROLL_ON_HIGH_VELOCITY`, `RACHM_UNUSED`, corrections) and ≈ 30 `sso_*.json` (table below) | 10-21 | diff the XML after; needs a reaticulate clone |
-| **`tools/soundlibraries/gen_ample.py <amphost info dump> [out]`**, `test_gen_ample.py` | `Ample Guitar M.xml` | Linux; dump private: `private/ample-map/agm-info.txt` | tables `GUITAR`, `STRUM_LEVELS`, `GUITAR_FX`, `SAMPLE_SETS`, `KEYSWITCHES`, `state_settings`, `VELOCITY_LAYERS`, `CONTROL_DEFAULTS`, `INSTRUMENT_IDS` | 10-20 | AGM 4.1.0 only; ranges not seen in the GUI assumed; Master Tune left out |
+| **`tools/soundlibraries/gen_ample.py [--product <code>] [--state <s>] [--allow-todo] <amphost info dump> [out]`**, `test_gen_ample.py` | `Ample Guitar M.xml` (and the other products' maps) | Linux; dump private: `private/ample-map/agm-info.txt` | `ample_products.py` (facts, TODOs), `ample_<code>.json` (measured), tables `GUITAR`, `GUITAR_FX`, `KEYSWITCHES`, `state_settings` | 10-21 | AGM measured; the four others TODO until bought (docs/AMPLE_PIPELINE.md); ranges not seen in the GUI assumed; Master Tune left out |
 | `check_spitfire_expressionmaps.py <dir> [map]` | CC32 names against Spitfire's expression maps | Linux | Spitfire's files (not in repo) | 09-25 | prints only |
 | `--extract-library <lib> [--extract-patches all\|mapped\|<file>] [--extract-pitch-bend] [--extract-controllers] [--extract-plan <file>]` (VM) | plug-in data per patch: parameters, script values, controls, whether it sounds; supervised (`superviseExtract`, hang `MS_EXTRACT_HANG_MINUTES`), resumable | in-app; ≈ 1 h for 700 patches | check zip | | test knobs `MS_EXTRACT_TEST_CRASH/_HANG/_CRASH_STEP/_BROKEN` |
 | `read_plugin_data.py`, `controllers_from_extract.py`, `controller_defaults_from_extract.py <extract> <map> <out> [--source]`, `measurements_from_extract.py`, `links_plan.py` | readers of extracts | Linux | `sso_controller_defaults` → `patchDefault`; `sso_patch_measurements` → `bend` | 09-27 … 10-15 | |
@@ -285,7 +285,19 @@ There is no committed tool for timbre / noise of a patch.
 
 ---
 
-## 8. Ample guitars (private tools, not in repo unless marked)
+## 8. Ample guitars
+
+**In the repo (branch `ample-pipeline`, 2026-10-21; the procedure: docs/AMPLE_PIPELINE.md):**
+
+| Tool | What | Command / machine |
+|---|---|---|
+| **`tools/soundlibraries/amphost/`** (`amphost.cpp`, `build.sh`) | the VST 3 host (amphost4 + `load`, `--tempo`, `--stopped`): `info` dump, `render`, `load` | `build.sh` (msvc-wine) on Linux; runs on the VM |
+| **`tools/ample/measure_ample.py --product <code> --out <dir> <exp…>`** | dump, sets, keys, range, velocity, cc, strum, softroll, capo, bgload, stateclamp, demo15, demofine, crash; `merge` -> `ample_<code>.json` | Linux driving the VM (`AMPLE_VM`) |
+| **`tools/ample/check.py --product <code> --build <dir> --out <dir>`** | MuseScore's renders of the check scores through the real plug-in: determinism, routes, capo, state lanes, soft strums, volume lane, Live set update; retries load crashes; report.md | Linux driving the VM |
+| `tools/ample/check_scores.py`, `ample_state.py`, `amplevm.py`, `audio.py` | the check's scores; the state reader / editor (st.py's successor); VM access and the lock; audio measures | Linux |
+| `tools/soundlibraries/gen_ample.py --product`, `ample_products.py`, `ample_<code>.json` | the map per product; facts and TODOs; measured numbers | Linux |
+
+**Private (the one-offs the repo tools replace; kept for their reports):**
 
 | Tool | What | Command / machine |
 |---|---|---|

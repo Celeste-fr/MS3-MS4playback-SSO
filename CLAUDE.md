@@ -286,8 +286,12 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   sample groups they switch on (Kickstart's purge rule; test `kontaktKickstartUnpurge`). Script values may change
   length (`kontaktScriptValueLengths`). Mics on 3-mic patches are Close, Tree, Ambient.
 - **Ample guitars** (branch `ample-map`, 2026-10-18; HANDOFF.md › Ample guitars): `share/soundlibraries/Ample Guitar
-  M.xml` is generated, never hand-edited: `python3 tools/soundlibraries/gen_ample.py <amphost dump> [out]` (the dump stays
-  outside the repo: `~/MuseScore/ms3fork/private/ample-map/agm-info.txt`). Hosted `AGM.vst3`, not Kontakt (no `<Files>`:
+  M.xml` is generated, never hand-edited: `python3 tools/soundlibraries/gen_ample.py [--product <code>] <amphost dump>
+  [out]` (the dump stays outside the repo: `~/MuseScore/ms3fork/private/ample-map/agm-info.txt`). **A new Ample guitar**
+  (AGSJ, AG12, AGL, AGT, after purchase): **docs/AMPLE_PIPELINE.md** (branch `ample-pipeline`, 2026-10-21): amphost
+  (`tools/soundlibraries/amphost/`) -> `tools/ample/measure_ample.py` (VM) -> `ample_<code>.json` -> `gen_ample.py
+  --product` (`ample_products.py`: per-product facts, TODOs for what is unmeasured) -> `tools/ample/check.py` (VM, PASS /
+  FAIL). Hosted `AGM.vst3`, not Kontakt (no `<Files>`:
   no setups made, `makesSetups` false); the steel-string guitar ids; every plug-in parameter (124) a `param` controller by
   title with `steps` / `display` (the lane editor's text: `SoundLib::controllerText`), CC7 / CC1 / CC64, keyswitches 24-30
   (`<Articulation keyShift>`: a natural harmonic's key = sounding - 12), dynamics by velocity (`<Dynamics cc="-1">`),
@@ -402,8 +406,10 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   2026-10-20): Ample loads a state's sample set on its own thread after setState; an offline render's instances
   (`SoundLibraryExport::loadInstances` / `loadInstance`) each wait until the threads the instance started have ended or
   gone quiet and the memory stopped growing (load times.log; `MS_BACKGROUND_LOAD_WAIT`). Hosted playback
-  (`SoundLibraryHost::sync`) and even levels' background measurer don't wait yet (HANDOFF.md › Lane jumps and Ample's
-  background load).
+  (`SoundLibraryHost::sync`) waits the same since 2026-10-21 (branch `ample-pipeline`: `setStateWaiting`, on the load's
+  worker thread or the GUI thread, one background-loading instance at a time; load times.log "(hosted)"; test
+  `tst_liveequivalence::backgroundLoadHosted`; measured need: Pick / Strum 1.0 s, Finger 0.25 s). Even levels'
+  background measurer doesn't wait yet (SSO only; HANDOFF.md › Lane jumps and Ample's background load).
 - **Setups are made by MuseScore** from each patch's `.nki` (`audio/vst3/kontaktsetup.*`), then replaced by
   Kontakt's own state after the first load (`resave`). The states loaded (voice limit 512, the copies' Tune slots) are **prepared once**
   and kept, byte for byte, in memory and `<setups folder>/prepared` (`prepared` in soundlibraryhost.cpp; 2026-10-16, the

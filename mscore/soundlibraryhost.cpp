@@ -1867,6 +1867,32 @@ void SoundLibraryHost::preloadStep()
 
 #ifdef USE_VST3
 //---------------------------------------------------------
+//   logBackgroundLoad
+//    a background load's wait (audio/vst3/backgroundload.h) in load times.log, a warning when the limit came first
+//---------------------------------------------------------
+
+static void logBackgroundLoad(const SoundLib::Library& library, const BackgroundLoad::Result& r, const QString& patch,
+                              const char* where = "")
+      {
+      const QString line = QString("%1: its background load %2 in %3 s%8 (%4 new threads, the busiest's last %5 ms: %6; "
+                                   "memory %7 MB)")
+                           .arg(patch, r.quiet ? QString("done") : QString("NOT done (the limit)"))
+                           .arg(r.seconds, 0, 'f', 2).arg(r.threads).arg(BackgroundLoad::WINDOW_MS).arg(r.busiest, 0, 'g', 3)
+                           .arg(r.memoryMB, 0, 'f', 1).arg(QString::fromLatin1(where));
+      logTime(library, line);
+      if (!r.quiet)
+            qWarning("Sound library: %s", qPrintable(line));
+      }
+
+// one background-loading instance's setState and wait at a time (two AGM instances loading at once crashed AGM.vst3
+// once in seven amphost runs: backgroundload.h); Kontakt (no backgroundLoad) doesn't take it
+static std::mutex& backgroundLoadMutex()
+      {
+      static std::mutex m;
+      return m;
+      }
+
+//---------------------------------------------------------
 //   Pending
 //    one instance being loaded: made (or a spare reused) and its setup read on the GUI thread, the
 //    setup set on a worker thread when loadThreads() > 0, finished on the GUI thread (finishLoad)
@@ -1889,7 +1915,34 @@ struct SoundLibraryHost::Pending {
       std::vector<double> cents;          // their tunings, in its state (empty: plain)
       std::vector<double> tuneAfter;      // a made setup goes in plain first (resaved), then these tunings
       std::map<QString, QByteArray> values;     // the script values its score's playback settings set (scriptValuesFor)
+      BackgroundLoad::Result background;  // its own loading threads waited for (a map's <Plugin backgroundLoad>)
+      bool backgroundWaited { false };
       };
+
+//---------------------------------------------------------
+//   setStateWaiting
+//    hosted playback's setState: for a map with <Plugin backgroundLoad> (Ample) the instance's own loading threads are
+//    waited for as the offline renders wait (waitForBackgroundLoad), one such instance at a time, so that a play right
+//    after a load (or a sample-set lane's change) hears the set it asked for: measured 2026-10-21 on the VM (amphost,
+//    AGM 4.1.0, tools/ample/measure_ample.py bgload): a note 0.05-0.5 s after setState of the Pick or Strum set plays
+//    the wrong samples or none (-6 .. 0 dB null against a settled render), from 1.0 s the right ones; Finger (the
+//    instance's own first set) from 0.25 s
+//---------------------------------------------------------
+
+static bool setStateWaiting(Vst3Plugin* p, const QByteArray& state, double limit, BackgroundLoad::Result* background,
+                            bool* waited)
+      {
+      if (limit <= 0)
+            return p->setState(state);
+      std::lock_guard<std::mutex> serial(backgroundLoadMutex());
+      const BackgroundLoad since;
+      const bool ok = p->setState(state);
+      if (ok) {
+            *background = since.wait(limit);
+            *waited = true;
+            }
+      return ok;
+      }
 
 struct SoundLibraryHost::Batch {
       QString kind;                       // "At play", "At score open"
@@ -1993,12 +2046,15 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
             pl->setupMs = t.nsecsElapsed() / 1e6;
             if (!pl->state.isEmpty() && loadThreads() > 0) {
                   Vst3Plugin* p = pl->plugin.get();
+                  BackgroundLoad::Result* background = &pl->background;
+                  bool* waited = &pl->backgroundWaited;
                   const QByteArray state = pl->state;
+                  const double limit = library.backgroundLoad;
                   pl->clock.start();
-                  pl->done = std::async(std::launch::async, [p, state]() {
+                  pl->done = std::async(std::launch::async, [p, background, waited, state, limit]() {
                         LagProbe::nameThread("library load");
                         workerThread(true);
-                        const bool ok = p->setState(state);
+                        const bool ok = setStateWaiting(p, state, limit, background, waited);
                         workerThread(false);
                         return ok;
                         });
@@ -2023,9 +2079,12 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
                   loaded = pl->done.get();
             else {
                   pl->clock.start();
-                  loaded = pl->plugin->setState(pl->state);
+                  loaded = setStateWaiting(pl->plugin.get(), pl->state, library.backgroundLoad, &pl->background,
+                                           &pl->backgroundWaited);
                   }
             wall = pl->clock.nsecsElapsed() / 1e6;
+            if (pl->backgroundWaited)
+                  logBackgroundLoad(library, pl->background, pl->name, " (hosted)");
             if (!loaded) {
                   pl->error = tr("The setup of %1 could not be loaded into the plug-in.").arg(pl->name);
                   qWarning("Sound library: the setup of %s could not be loaded", qPrintable(pl->name));

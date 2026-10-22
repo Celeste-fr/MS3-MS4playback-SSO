@@ -151,6 +151,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSetReadBack();
       void laneJumpsLive();
       void backgroundLoadInstances();
+      void backgroundLoadHosted();
       void plainSetTrackDelays();
       void plainWritten_data();
       void plainWritten();
@@ -2123,6 +2124,70 @@ void TestLiveEquivalence::backgroundLoadInstances()
                   }
             vst.reset();
             delete score;
+            }
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   backgroundLoadHosted
+//    hosted playback (SoundLibraryHost::sync, the sequencer's Vst3Synth) waits for a backgroundLoad map's own loading
+//    threads too (setStateWaiting; the test synth's "samples" streaming after setState, MSTESTSYNTH_STREAM_MS): with
+//    and without load threads, a note right after sync sounds; without backgroundLoad it doesn't yet
+//---------------------------------------------------------
+
+void TestLiveEquivalence::backgroundLoadHosted()
+      {
+      struct Env { ~Env() { qunsetenv("MSTESTSYNTH_STREAM_MS"); qunsetenv("MSTESTSYNTH_STREAM_MB");
+                            qunsetenv("MS_SOUNDLIBRARY_LOAD_THREADS"); } } env;
+      for (const char* threads : { "0", "2" }) {
+            for (const bool wait : { true, false }) {
+                  qputenv("MS_SOUNDLIBRARY_LOAD_THREADS", threads);
+                  LiveHost host(this, "", { "Violin" },
+                     QString("<SoundLibrary name='LiveH%1%2'><Switch type='cc' number='32'/><Dynamics cc='1'/>").arg(wait ? 1 : 0)
+                     .arg(threads) + (wait ? "<Plugin files='x.vst3' backgroundLoad='10'/>" : "")
+                     + "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/>"
+                       "</Instrument></SoundLibrary>");
+                  QVERIFY(host.ok);
+                  MasterScore* score = readScore(DIR + "articulations.musicxml");
+                  QVERIFY(score);
+                  score->rebuildMidiMapping();
+                  qputenv("MSTESTSYNTH_STREAM_MS", "600");
+                  qputenv("MSTESTSYNTH_STREAM_MB", "48");
+                  MasterSynthesizer master;
+                  master.registerSynthesizer(new Vst3Synth);
+                  MasterSynthesizer* was = synti;
+                  synti = &master;
+                  SoundLibraryHost* h = SoundLibraryHost::instance();
+                  QElapsedTimer t;
+                  t.start();
+                  QString error;
+                  QVERIFY2(h->sync(score, &error), qPrintable(error));
+                  const qint64 ms = t.elapsed();
+                  Vst3Synth* s = h->synth();
+                  QVERIFY(s && s->plugin(0));
+                  s->beginExport(48000);
+                  s->play(PlayEvent(ME_CONTROLLER, 0, 1, 100));
+                  s->play(PlayEvent(ME_NOTEON, 0, 69, 100));
+                  std::vector<float> b(2 * 4800, 0.f);
+                  s->process(4800, b.data(), nullptr, nullptr);
+                  s->endExport();
+                  QFile f(SoundLibraryHost::setupsFolder(*host.lib) + "/load times.log");
+                  const QString log = f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+                  const QString what = QString("threads %1 wait %2: %3 ms").arg(threads).arg(wait).arg(ms);
+                  if (wait) {
+                        QVERIFY2(ms >= 550, qPrintable(what));
+                        QVERIFY2(log.contains("Violin: its background load done in") && log.contains("(hosted)"),
+                                 qPrintable(log));
+                        QVERIFY2(rms(b, 0) > 1e-4, qPrintable(what));
+                        }
+                  else {
+                        QVERIFY2(!log.contains("background load"), qPrintable(log));
+                        QVERIFY2(rms(b, 0) == 0.0, qPrintable(what));            // (still loading: nothing)
+                        }
+                  h->release();
+                  synti = was;
+                  delete score;
+                  }
             }
       SoundLib::setCurrent(nullptr);
       }
