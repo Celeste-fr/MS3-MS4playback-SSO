@@ -158,6 +158,43 @@ class Compare(unittest.TestCase):
         args = types.SimpleNamespace(null_pass=-30, level_pass=0.5, onset_pass=5)
         self.assertTrue(compare.judge(m, compare.note_metrics(a, b, SR, [0.0, 2.0]), args, sp).startswith("DIFFERS (Live much quieter"))
 
+    def test_span_level_over_the_span(self):
+        # (Whence's Celli, 2026-10-22: one silent 250 ms window in a span that differed throughout reported the whole
+        # track as "Live much quieter -224.7 dB" though Live played it as loud as MuseScore)
+        ms = tone(3, 440, 0.0, 3.0) + tone(3, 550, 0.0, 3.0)
+        live = -ms
+        live[: int(0.25 * SR)] = 0
+        m, a, b = compare.metrics(stereo(live), stereo(ms), SR, 0)
+        sp = compare.spans(a, b, SR)
+        self.assertEqual(len(sp), 1)
+        self.assertGreater(sp[0]["levelDb"], -1.0)
+        self.assertLess(sp[0]["quietestDb"], -60)
+        args = types.SimpleNamespace(null_pass=-30, level_pass=0.5, onset_pass=5)
+        self.assertFalse(compare.judge(m, [], args, sp).startswith("DIFFERS (Live much quieter"))
+
+    def test_realigned_at_the_set_lag(self):
+        # a repeating texture: different pitches, the same envelope every 0.4 s; Live 30 ms late. When the envelopes'
+        # best match is a figure off (Whence's Celli: +407 ms where the set's lag was -30.7), the lag near the set's
+        # (the other tracks' consensus less this track's Track Delay) is taken when it correlates better
+        rng = np.random.RandomState(3)
+        ms = sum(tone(4, float(rng.uniform(150, 600)), 0.4 * i, 0.3) for i in range(9))
+        d = int(0.030 * SR)
+        live = np.concatenate([np.zeros(d), ms])[: len(ms)]
+        real = compare.align
+        try:
+            compare.align = lambda *x, **k: int(0.430 * SR)
+            lag, note = compare.best_lag(stereo(live), stereo(ms), SR, 600, 30.0)
+            self.assertAlmostEqual(lag / SR * 1000, 30.0, delta=0.05)
+            self.assertIn("aligned at the set's lag", note)
+            compare.align = lambda *x, **k: d
+            self.assertEqual(compare.best_lag(stereo(live), stereo(ms), SR, 600, 31.0), (d, None))
+            self.assertEqual(compare.best_lag(stereo(live), stereo(ms), SR, 600, None), (d, None))
+        finally:
+            compare.align = real
+        rows = [{"lagMs": -45.4, "_td": -65.8, "corr": 0.85}, {"lagMs": 0.0, "_td": -111.0, "corr": 0.94},
+                {"lagMs": 407.3, "_td": -80.2, "corr": 0.05}, {"lagMs": -52.3, "_td": -59.1, "corr": 0.94}]
+        self.assertAlmostEqual(compare.consensus_ms(rows), -111.2, delta=0.01)
+
     def test_level_and_late_note(self):
         ms = tone(3, 440, 0.5, 1.0) + tone(3, 660, 1.6, 1.0)
         live = tone(3, 440, 0.5, 1.0) + tone(3, 660, 1.62, 1.0, amp=0.2 * 10 ** (3 / 20))

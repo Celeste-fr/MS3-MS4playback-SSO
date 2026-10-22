@@ -1257,7 +1257,11 @@ velocity picks). A note sent early (`transitionsEarly`, an onset) changes Δt an
   as the script writes none at a note-on it doesn't play legato (the value before stays). One value a transition, at the
   transition: the sounding interval sample has CC119 modulators, so a value sent earlier would reshape it.
 - **Live**: a carrier on key 113 (*Live plays the score*, the device's protocol 11); in the plain set the technique track's
-  clip envelope (LIVE.md › What still differs).
+  clip envelope (LIVE.md › What still differs). Live sends a clip envelope's value only where it changes, so each technique
+  track's first value is a step (from 0, or from 1 when that value is 0): an envelope holding 0 throughout, as the chord
+  voices' copies of Whence's Celli (every transition at speed 0), sent nothing, and the slots played their transitions at
+  another speed (+5 .. +8 dB for ~0.4 s at each chord change in real Live; branch `live-celli`, OPEN_ITEMS 11d;
+  `tst_liveequivalence::speedSentLive`).
 - **Null test** (plainPerformance 1, where written = played): see HANDOFF.md › Speed from written.
 
 ## Fixed transitions

@@ -685,13 +685,19 @@ static void speedEnvelope(const Kontakt& k, const Technique& tq, double lookahea
       if (points.empty())
             return;
       std::stable_sort(points.begin(), points.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) { return a.first < b.first; });
+      bool sent = false;                  // (a step written: Live has sent a value on this track)
       for (LiveSetWriter::Clip& c : *clips) {
             const int from = int(std::lround(c.start * LiveClips::UNITS_PER_BEAT));
             const int to = int(std::lround(c.end * LiveClips::UNITS_PER_BEAT));
             LiveSetWriter::Clip::Envelope e;
             e.controller = k.instrument->speedCC;
-            // (before the first: 0, the controller's value in a patch just loaded, as MuseScore plays it; the script itself
-            // sends 0 when it loads, with its own writing on)
+            // (before the first: 0, as MuseScore plays a patch just loaded. Live sends a clip envelope's value only where it
+            // changes: an envelope that starts at its first note's value sends nothing, and the slot plays the transitions at
+            // the speed it had (real Live 12.4.7, Kontakt 8 + SSO, 2026-10-22, branch live-celli: Whence's Celli chord voices,
+            // every transition at speed 0, so the copies' envelopes held 0 throughout, played +5.4 .. +7.6 dB louder for
+            // ~0.4 s at each chord change, the new pitch ~0.3 s after the note-on where MuseScore takes ~0.48 s; the same
+            // set with each copy's envelope stepping 1 -> 0 before its first note matched MuseScore: corr 0.895 -> 0.975,
+            // null -6.5 -> -13.1 dB). So the track's first value is always a step, from 0, or from 1 when it is 0
             int value = 0;
             bool any = false;
             for (const auto& p : points) {
@@ -701,6 +707,8 @@ static void speedEnvelope(const Kontakt& k, const Technique& tq, double lookahea
                         value = p.second;
                         continue;
                         }
+                  if (!sent && e.points.empty() && p.second == value)
+                        value = p.second == 0 ? 1 : 0;   // (a value nothing has sent yet: the step sends it)
                   any = true;
                   if (e.points.empty())
                         e.points.push_back({ 0.0, double(value) });
@@ -709,6 +717,7 @@ static void speedEnvelope(const Kontakt& k, const Technique& tq, double lookahea
                         e.points.push_back({ at, double(value) });
                         e.points.push_back({ at, double(p.second) });
                         value = p.second;
+                        sent = true;
                         }
                   }
             if (any)

@@ -815,9 +815,20 @@ Differs (open):
   re-struck accented (velocity 122) with no gap, is +8 dB louder in Live than in MuseScore, +14 dB with the off 0.15 ms
   first (by hand): Kontakt takes MuseScore's same-sample off / on otherwise than any gap; the renderer's reattackGap
   doesn't reach this note (OPEN_ITEMS).
-- **Whence's Celli - Performance is silent in Live** for the whole piece (#464 on 12.4.6 and #467 on 12.4.7; MuseScore's
-  export of the same routes plays). Not the start lead: with every Celli Track Delay set to 0 by hand still silent. Its
-  multi is the largest (four copies, two of them chord voices; state 17 MB). Cause not found.
+- **Whence's Celli - Performance is not silent in Live** (reported so on 2026-10-22, corrected the same day, branch
+  `live-celli`): Live plays it at MuseScore's level (rms +0.35 dB). The check's comparison had aligned it a figure off
+  (+407 ms; its repeating figure fooled the envelope match) and then showed the merged span's quietest window as the
+  track's level (-224.7 dB). `compare.py` now aligns a track far from the set's lag again near it (the other tracks'
+  consensus less its own Track Delay) when that correlates better, and gives a span's level over the whole span: the
+  Celli then compare like the other sections (corr 0.895, null -7.2 dB, -24.3 dB outside its spans).
+- **Chord voices' transition speed** (Whence's Celli, bars 9-16: the voice copies of a monophonic patch): at each chord
+  change Live was +5.4 .. +7.6 dB louder for ~0.4 s, its transitions faster (the new pitch ~0.3 s after the note-on,
+  MuseScore's ~0.48 s); between the changes the voices matched within 0.1 dB (the divisi level as in MuseScore). Live
+  sends a clip envelope's value only where it changes: each copy's `[slurs] speedFromWritten` envelope held CC119 0 (every
+  transition of half / whole notes), so its slot never got it. **Fixed** (branch `live-celli`): a technique track's first
+  CC119 value is always a step (`speedEnvelope`); by hand on the set, before the fix: corr 0.895 -> 0.975, null -6.5 ->
+  -13.1 dB, the bursts gone. Ruled out on the way (the same bursts): the MuseScore Link device, the CC11 steps' order, the
+  notes touching / apart / overlapping.
 - Waveforms differ where Whence's quarter tones bend (Violins 1, Violas): levels within 0.3 dB, pitch within 2 cents on
   held notes, but nulls of −4 … −13 dB over the bent passages and glides that differ by up to ±120 cents within a window
   (Violins 1 at 11.25 s, 15.75 s); the rest of each track nulls at −23 … −30 dB.

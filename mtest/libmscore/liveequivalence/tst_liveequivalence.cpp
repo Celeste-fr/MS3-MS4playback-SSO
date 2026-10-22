@@ -183,6 +183,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void microtoneBendsLive();
       void plainJoinsLive();
       void transitionLevelsLive();
+      void speedSentLive();
       void hostedSlotsGain();
       void exportInstancesOfParts();
       void verifyRoutesByPart();
@@ -8269,6 +8270,125 @@ void TestLiveEquivalence::plainJoinsLive()
       std::vector<std::pair<int, int>> sorted = museScore;
       std::sort(sorted.begin(), sorted.end());
       QCOMPARE(route, sorted);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   speedSentLive
+//    [slurs] speedFromWritten's CC119 reaches every slot of a Kontakt multi in real Live (branch live-celli, 2026-10-22;
+//    OPEN_ITEMS 11d): Live sends a clip envelope's value only where it changes, so a technique clip whose envelope stayed at
+//    its first value (0: every transition of Whence's Celli chord voices, half / whole notes) sent nothing and the copy's
+//    slot played its transitions at the speed it had (+5.4 .. +7.6 dB for ~0.4 s at each chord change, real Live 12.4.7 +
+//    Kontakt 8 + SSO). plain-touch.musicxml: two chord voices on a monophonic bending Performance patch (a copy each),
+//    touching half notes (speed 0), a quarter tone among them, then a touching quarter-note line (speed 63). For every
+//    technique track, with and without the MuseScore Link device, the value Live has sent (the envelope's steps) before each
+//    note-on is that note's speed, the one MuseScore sends with it
+//---------------------------------------------------------
+
+void TestLiveEquivalence::speedSentLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/speedFromWritten", "1" } });
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' bend='100' plainShift='0' mono='1' speedCC='119' speedScript='$vfm12'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-touch.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      auto render = [score](bool written) {
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setWrittenTiming(written);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      const EventMap played = render(false);
+      const EventMap written = render(true);
+      // MuseScore's own: CC119 before the transitions on each voice's route (0 for the half notes, 63 for the quarters)
+      std::map<std::pair<int, int>, std::set<int>> sentByRoute;
+      for (const auto& te : played) {
+            const NPlayEvent& e = te.second;
+            if (e.isExternal() && e.type() == ME_CONTROLLER && e.controller() == 119)
+                  sentByRoute[{ e.extPort(), e.extChannel() }].insert(e.value());
+            }
+      QCOMPARE(int(sentByRoute.size()), 2);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+      const int upb = LiveClips::UNITS_PER_BEAT;
+      for (bool link : { true, false }) {
+            const std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(l, link);
+            int techniques = 0, checked = 0, zeros = 0;
+            for (const PlainLiveSet::Section& s : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : s.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                              if (k.patch != "Violin - Performance")
+                                    continue;
+                              for (const PlainLiveSet::Technique& tq : k.techniques) {
+                                    std::vector<std::pair<int, int>> want;          // (pitch, written start units) of its notes
+                                    for (const LiveClips::Note& n : tq.notes)
+                                          if (!n.muted)
+                                                want.push_back({ n.pitch, n.start });
+                                    // its track: the technique track whose clips hold those notes
+                                    const LiveSetWriter::Track* track = nullptr;
+                                    for (const LiveSetWriter::Track& t : tracks) {
+                                          if (t.midiTo < 0 || t.group)
+                                                continue;
+                                          std::vector<std::pair<int, int>> got;
+                                          for (const LiveSetWriter::Clip& c : t.clips)
+                                                for (const LiveSetWriter::Clip::Note& n : c.notes)
+                                                      got.push_back({ n.pitch, int(std::lround((c.start + n.start) * upb)) });
+                                          std::sort(got.begin(), got.end(), [](const std::pair<int, int>& a, const std::pair<int, int>& b) { return a.second < b.second; });
+                                          if (got == want)
+                                                track = &t;
+                                          }
+                                    QVERIFY2(track, qPrintable(k.patch + " " + tq.name));
+                                    ++techniques;
+                                    // what Live has sent: an envelope's value where it changes (a step: two points at one time)
+                                    std::vector<std::pair<int, int>> steps;         // (units, value)
+                                    for (const LiveSetWriter::Clip& c : track->clips)
+                                          for (const LiveSetWriter::Clip::Envelope& e : c.envelopes) {
+                                                if (e.controller != 119)
+                                                      continue;
+                                                for (size_t i = 1; i < e.points.size(); ++i)
+                                                      if (e.points[i].first == e.points[i - 1].first && e.points[i].second != e.points[i - 1].second)
+                                                            steps.push_back({ int(std::lround((c.start + e.points[i].first) * upb)), int(e.points[i].second) });
+                                                }
+                                    const int look = link ? int(std::lround(LiveTiming::msToUnits(track->lookaheadMs, tl.bpm))) : 0;
+                                    for (const LiveClips::Note& n : tq.notes) {
+                                          if (n.speed < 0 || n.muted)
+                                                continue;
+                                          const int at = link ? (n.timed ? n.playedStart : n.start) + look : n.start;
+                                          int sent = -1;
+                                          for (const auto& st : steps)
+                                                if (st.first < at)
+                                                      sent = st.second;
+                                          QVERIFY2(sent == n.speed, qPrintable(QString("%1 key %2 at %3: Live has sent %4, MuseScore sends %5 (link %6)")
+                                                   .arg(tq.name).arg(n.pitch).arg(n.start).arg(sent).arg(n.speed).arg(link)));
+                                          ++checked;
+                                          zeros += n.speed == 0;
+                                          }
+                                    }
+                              }
+            QCOMPARE(techniques, 2);
+            QCOMPARE(checked, 8);         // (C5 -> D5 -> E5, E5 -> G5 -50 -> A5; the line E5 -> G4 -> A4 +50 -> B4 -> C5)
+            QCOMPARE(zeros, 5);           // (the half and whole notes: speed 0; the quarters 63)
+            }
       delete score;
       }
 
