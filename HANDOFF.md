@@ -57,6 +57,10 @@ A3 went on B3 bent down (key up, bend down), so the pitch first went a quarter t
 (`microtoneSpelling`) + `bendGlideFingered`, uncut past the next note-on; 2 the glide alone (docs/PLAYBACK_SETTINGS.md ›
 Microtone bends; OPEN_ITEMS.md 5). Tests: tst_soundlibrary::microtoneBends, tst_liveequivalence::microtoneBendsLive.
 Private: `~/MuseScore/ms3fork/private/fast-microtones/` (RESULT.md, the variant renders' tools gen3.py / ana.py).
+Follow-up (branch `microtone-next`, 2026-10-22, build #465): `microtoneBends` 3 = 1 + plain fingered transitions early by
+their glide's middle less plainShift (Violins 1 70 ms, Celli 61, Violas 0), for the owner to compare by ear against 1;
+and the audit's predicted.tsv cents from the key sent (the heard check had read respelled notes a semitone off).
+Private: `~/MuseScore/ms3fork/private/microtone-next/RESULT.md` (gen4.py / ana4.py: bend variants on kthost).
 
 - **Measured scans** (two takes each, quarter tones in tune within 30 c of their heard time): Violas bars 5-8 8-10 % as now,
   35-40 % with 1; the best leave scanned (90 ms, cut at the next note-on) 43-44 %; bowed (velocity 100) 30-35 %; detached

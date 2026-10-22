@@ -138,7 +138,11 @@ Keep this file current: close an item by deleting it (the commit message says wh
   heard time (kthost); in the export (run 462) Whence Violas bars 5-14 15 -> 27 %, the wrong-way hook of bar 7 40-44 % ->
   0 %; Violins 1 12 -> 28 %, Celli 5 -> 14 %, their 12-TET notes after a quarter tone 39 -> 30 % and 28 -> 20 %
   (docs/PLAYBACK_SETTINGS.md › Microtone bends). Still a glide
-  through each sixteenth: SSO's fingered transition is longer than the note. Left: another technique for fast
+  through each sixteenth: SSO's fingered transition is longer than the note. 2026-10-22 (branch `microtone-next`): #464's
+  12-TET notes between the quarter tones were late, not detuned: Violins 1's and the Celli's fingered transitions sound 60-70
+  ms later against plainShift than the Violas'; `microtoneBends` 3 sends them early by the glide's middle (export: Violins 1
+  12-TET 30 -> 52 %, quarter tones 23 -> 34 %; Celli 22 -> 56 %, 11 -> 24 %; Violas unchanged), by hand until the owner has
+  heard it (clips: integrate-1017/.mixedtech/next/clips). Left: another technique for fast
   quarter-tone runs (the bowed transition 30-35 %, detached tuned attacks 25 %: both measured, neither better).
 - **Own**: yes, how to play them.
 
