@@ -86,6 +86,9 @@ class Args:
     level_window = 400.0
     gain = 0.0
 
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
 
 class Synthetic(unittest.TestCase):
     @classmethod
@@ -189,6 +192,46 @@ class Synthetic(unittest.TestCase):
         lib = os.path.join(HERE, '..', '..', 'share', 'soundlibraries', 'Spitfire Symphony Orchestra.xml')
         self.assertEqual(mp.map_switch(lib, 'Violas', 'Spiccato'), {'type': 'cc', 'number': 32, 'value': 42})
         self.assertIsNone(mp.map_switch(lib, 'Violas - Performance', 'Legato'))
+
+
+class Microtones(unittest.TestCase):
+    """quarter tones as [slurs] microtoneBends 1 sends them; the note after; turns"""
+
+    def test_spelling(self):
+        # B3 -50 after A3 goes on B-flat3 +50 (the step and the bend the same way); G3 +50 after A3 on A-flat3 -50
+        n = lambda x: ('X', x, 64, 0.0, 1.0)
+        self.assertEqual(mp.spell([n(57), n(58.5)], [False, True]), [(57, 0.0), (58, 50.0)])
+        self.assertEqual(mp.spell([n(57), n(55.5)], [False, True]), [(57, 0.0), (56, -50.0)])
+        # never the key of the note before: 60 -> 60.5 goes on 61 -50
+        self.assertEqual(mp.spell([n(60), n(60.5)], [False, True])[1], (61, -50.0))
+
+    def test_bends(self):
+        bend = {'range': 100.0, 'tauMs': 70.0, 'glide': [(136.0, 65.0, 158.0), (300.0, 68.0, 186.0)]}
+        notes = [('A', 57, 64, 1.0, 1.160), ('B', 58.5, 64, 1.136, 1.5)]
+        keys = mp.spell(notes, [False, True])
+        ev = mp.bend_events(notes, keys, [False, True], [1.0, 1.136], bend)
+        t = [e[0] for e in ev]
+        v = [e[2] for e in ev]
+        self.assertEqual(v[0], 8192)                        # A: its own tuning at its note-on
+        self.assertAlmostEqual(t[-1], 1.136 + 0.158, 3)     # B: the tuning at its arrival (bendGlideFingered)
+        self.assertEqual(v[-1], 8192 + round(50 / 100 * 8191))
+        self.assertGreater(v[-2], v[-1])                    # the kick before it (Kontakt's smoothing compensated)
+        self.assertAlmostEqual(t[-2], 1.136 + 0.065, 3)     # from the leave
+
+    def test_after_and_turn(self):
+        a = Args(after='transition', after_len=300.0, staccato_gap=45.0, overlap=24.0)
+        c = {'kind': 'transition', 'pitch': 60, 'interval': 2, 'before': 'turn', 'beforeLenMs': 136, 'ioiMs': 136,
+             'attackVelocity': 64, 'transitionVelocity': 64, 'bEarlyMs': 50, 'after': 'transition'}
+        notes = mp.cell_notes(c, 1.0, a)
+        self.assertEqual([x[0] for x in notes], ['Z', 'A', 'B', 'C'])
+        self.assertEqual([x[1] for x in notes], [62, 60, 62, 60])          # B A B, then on alternating
+        self.assertAlmostEqual(notes[2][3], 1.0 + 0.272 - 0.05)            # B 50 ms early
+        self.assertAlmostEqual(notes[3][3], 1.0 + 0.272 + 0.136 - 0.05)    # C as early as B
+        self.assertGreater(notes[2][4], notes[3][3])                       # B held into C (a transition)
+        c['before'] = 'staccato-attack'
+        notes = mp.cell_notes(c, 1.0, a)
+        self.assertLess(notes[0][4], notes[1][3])                          # Z released before A: A is an attack
+        self.assertGreater(notes[1][4], notes[2][3])                       # B by transition
 
 
 @unittest.skipUnless(os.environ.get('MS_KTHOST') and os.environ.get('MS_TESTSYNTH'), 'MS_KTHOST / MS_TESTSYNTH not set')

@@ -183,7 +183,7 @@ HC_RUN=<WRAP> tools/playbackverify/heard_check.sh [--takes N] <score> [recommend
 
 | Tool | Measures | Command | Outputs | Limits |
 |---|---|---|---|---|
-| **`tools/soundlibraries/measure_patch.py`** (docs/MEASURING.md) | any patch (SSO, any VST 3 / Kontakt patch with a state): note cells (pitch × velocity × CC1 × CC11 × length: perceived peak / mean, loud50, onset at −15 / −6 dB and `isolated_onset`, release 40 / 20 dB) and transition cells (pitch × interval × note before: attack / transition / staccato × its length × IOI after × CC119 speed played / written × early start: f0 leave / mid / arrive, **heardRef = leave + 23.5 ms, the perceptual reference**, levels, step); takes in ABBA order; per cell median, mean, SD, 95 % CI | `plan --patch P --out W [grid]`, `run W [--vm …\|--local]` (VM locks, watchdog, retry, resumable, WAVs deleted), `analyze W [-o json] [--reanalyze dir --at-level T --at-level-cells k=v]`, `report W [--png]`; `all` = the four | `result.json` (cells, byPitch), `report.txt`, PNGs | one kthost process per file (no several instances); transitions measured on B only; staccato-before B masked when A rings within 15 dB; heardRef's 23.5 ms is Polfreman 2013's, not measured on SSO; tests: `test_measure_patch.py` (synthetic; with `MS_KTHOST` + `MS_TESTSYNTH` the kthost chain) |
+| **`tools/soundlibraries/measure_patch.py`** (docs/MEASURING.md) | any patch (SSO, any VST 3 / Kontakt patch with a state): note cells (pitch × velocity × CC1 × CC11 × length: perceived peak / mean, loud50, onset at −15 / −6 dB and `isolated_onset`, release 40 / 20 dB) and transition cells (pitch × interval × note before: attack / transition / staccato × its length × IOI after × CC119 speed played / written × early start: f0 leave / mid / arrive, **heardRef = leave + 23.5 ms, the perceptual reference**, levels, step); takes in ABBA order; per cell median, mean, SD, 95 % CI | `plan --patch P --out W [grid]`, `run W [--vm …\|--local]` (VM locks, watchdog, retry, resumable, WAVs deleted), `analyze W [-o json] [--reanalyze dir --at-level T --at-level-cells k=v]`, `report W [--png]`; `all` = the four | `result.json` (cells, byPitch), `report.txt`, PNGs | one kthost process per file (no several instances); transitions measured on B only (`--before turn` / `staccato-attack`, `--after transition`, quarter-tone `--intervals` sent as microtoneBends 1: 2026-10-22); staccato-before B masked when A rings within 15 dB; heardRef's 23.5 ms is Polfreman 2013's, not measured on SSO; tests: `test_measure_patch.py` (synthetic; with `MS_KTHOST` + `MS_TESTSYNTH` the kthost chain) |
 
 ### 3b. Committed sweeps and data tools (tools/soundlibraries)
 
@@ -304,6 +304,12 @@ There is no committed tool for timbre / noise of a patch.
 
 **`sso_transition_context.json`** (2026-10-21): made by `measure_patch.py plan|run|analyze` + `merge` (its `method` per
 section records the plan command); no consumer yet (for the transition model, OPEN_ITEMS item 3).
+
+**`sso_transition_midpoint.json`** (2026-10-22): four `measure_patch.py` grids per section (`method` records each plan
+command; g1 spacing × early × before × B's length, g2 after a staccato, g3 intervals and quarter tones, g4 turns, all
+`--after transition`) → `transition_midpoint.py table` → `calibrate` with `transition_midpoint.py predict` on a heard
+check's f0 midpoints (`heard_midpoints.py`). No consumer yet: the data for a proposed `[slurs] transitionsEarly` 4
+(OPEN_ITEMS item 2 › Midpoint table).
 
 **`sso_accent_attack`'s producer**: `tools/soundlibraries/accent_attack.py events <work>` → VM kthost
 (`tools/vm/kthost_batch.ps1` through `vmjob.py`) → `accent_attack.py analyse <wavs> <work> <out.json> --about-from
