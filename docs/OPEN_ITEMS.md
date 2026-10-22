@@ -103,10 +103,16 @@ Keep this file current: close an item by deleting it (the commit message says wh
   tune for less than half their length (mean 10-16 %); UNHEARD 126-142 on Whence.
 - **Src**: HANDOFF.md (legato bends, qt-bends), VERIFY.md heard check runs.
 - **Cause**: SSO's legato is slower than 136 ms notes; the bend retunes the note still sounding; Kontakt smooths a
-  bend over 71-80 ms.
-- **Tool**: heard check (UNHEARD), `legato_glide/`.
-- **Fix**: none on the fork's side known; branch `qt-bends` (67f90e1a06, 14 variants, not merged) unfinished. Options:
-  another technique for fast quarter-tone runs (All techniques shorts with tuning slots), owner's choice.
+  bend over 71-80 ms. Measured 2026-10-21 (branch `fast-microtones`): plain Performance plays the fingered transition
+  (velocity 64), which leaves 25-100 ms after its note-on and arrives 130-200 ms after it (`bendGlideFingered`), while the
+  bend followed the bowed one (`bendGlide`: from the note-on); and key and bend went opposite ways (B3 -50 after A3 sent
+  on B3 bent down): the pitch hooked a quarter tone the wrong way first (the owner's "weird" bar 7 of the Violas).
+- **Tool**: heard check (UNHEARD), `legato_glide/` (`gen.py --velocity=64`, `glide.py --summarise --moving`).
+- **Fix**: `[slurs] microtoneBends` (0 in both presets, to be heard): 1 the key on the side of the note before + the
+  fingered glide uncut, 2 the glide only. Whence Violas bars 5-8, quarter tones in tune 8-10 % -> 35-40 % of their
+  heard time; Violins 1 10 -> 31 %; Celli 6 -> 19 % (docs/PLAYBACK_SETTINGS.md › Microtone bends). Still a glide
+  through each sixteenth: SSO's fingered transition is longer than the note. Left: another technique for fast
+  quarter-tone runs (the bowed transition 30-35 %, detached tuned attacks 25 %: both measured, neither better).
 - **Own**: yes, how to play them.
 
 ### 6. *Live plays the score* and the route set lack most level and timing layers

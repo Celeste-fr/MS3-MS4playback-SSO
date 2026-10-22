@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <mutex>
 #include <set>
@@ -90,7 +91,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
 //               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
-//               [bendGlide="136:-8:100 300:70:230 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]
+//               [bendGlide="136:-8:100 300:70:230 …"] [bendGlideFingered="136:60:180 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]
 //               [accentedLevel="72/100:3.4 72/150:4.2 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
@@ -191,8 +192,9 @@ double Articulation::legatoDelayAt(int interval, int fromPitch) const
       return keyedMsAt(legatoDelays, legatoDelayMs, interval);
       }
 
-bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const
+bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs, bool fingered) const
       {
+      const std::vector<BendGlide>& bendGlides = fingered && !bendGlidesFingered.empty() ? bendGlidesFingered : this->bendGlides;
       if (bendGlides.empty())
             return false;
       const BendGlide* lo = &bendGlides.front();
@@ -554,18 +556,22 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             return false;
       if (a.hasAttribute("octaveUp") && !readKeyedMs(a.value("octaveUp").toString(), art.octaveUpMs, art.octaveUp))
             return false;
-      // bendGlide="lenBefore:leave:arrive …" (ms; leave may be negative: the f0 already on its way)
-      for (const QString& g : a.value("bendGlide").toString().split(' ', QString::SkipEmptyParts)) {
-            const QStringList f = g.split(':');
-            bool ok[3] = { false, false, false };
-            Articulation::BendGlide bg { f.value(0).toDouble(&ok[0]), f.value(1).toDouble(&ok[1]), f.value(2).toDouble(&ok[2]) };
-            if (f.size() != 3 || !ok[0] || !ok[1] || !ok[2] || bg.lenBeforeMs < 0 || bg.arriveMs < bg.leaveMs)
-                  return false;
-            art.bendGlides.push_back(bg);
+      // bendGlide="lenBefore:leave:arrive …" (ms; leave may be negative: the f0 already on its way); bendGlideFingered the
+      // fingered transition's
+      for (const char* attr : { "bendGlide", "bendGlideFingered" }) {
+            std::vector<Articulation::BendGlide>& glides = strcmp(attr, "bendGlide") ? art.bendGlidesFingered : art.bendGlides;
+            for (const QString& g : a.value(attr).toString().split(' ', QString::SkipEmptyParts)) {
+                  const QStringList f = g.split(':');
+                  bool ok[3] = { false, false, false };
+                  Articulation::BendGlide bg { f.value(0).toDouble(&ok[0]), f.value(1).toDouble(&ok[1]), f.value(2).toDouble(&ok[2]) };
+                  if (f.size() != 3 || !ok[0] || !ok[1] || !ok[2] || bg.lenBeforeMs < 0 || bg.arriveMs < bg.leaveMs)
+                        return false;
+                  glides.push_back(bg);
+                  }
+            std::sort(glides.begin(), glides.end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
+                  return x.lenBeforeMs < y.lenBeforeMs;
+                  });
             }
-      std::sort(art.bendGlides.begin(), art.bendGlides.end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
-            return x.lenBeforeMs < y.lenBeforeMs;
-            });
       // bendSmoothing="tau" (ms, the patch's one-pole smoothing of a bend; negative: malformed)
       if (a.hasAttribute("bendSmoothing")) {
             bool ok = false;

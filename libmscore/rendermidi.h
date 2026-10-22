@@ -141,11 +141,17 @@ class MidiRenderer {
       std::map<const Note*, const Note*> libGlideFrom;            // a legato transition's note before (its lane glides)
       // its bend's glide, ms after its note-on: from leave to arrive (the patch's own transition as measured:
       // Articulation::bendGlideAt; else both at its legato delay)
-      struct LibGlide { double leaveMs; double arriveMs; double smoothingMs { 0 }; };   // (smoothing: bendSmoothing)
+      // (smoothing: bendSmoothing; uncut, [slurs] microtoneBends 1 / 2 on a fingered transition: the glide runs to its arrival
+      // past the next note-on, up to the next transition's leave: libraryPitchBends)
+      struct LibGlide { double leaveMs; double arriveMs; double smoothingMs { 0 }; bool uncut { false }; };
       std::map<const Note*, LibGlide> libGlide;
       // [slurs] speedFromWritten (soundlibrary.h speedFromWritten): a legato note-on's speed controller value, from the written
       // spacing (SoundLib::speedValue); put right before the note-on on its route (librarySpeeds)
       std::map<const Note*, int> libSpeed;
+      // [slurs] microtoneBends 1 (microtoneSpelling): a microtonal note on a bending lane sent on another key than its
+      // written one, and the bend it then plays (cents from that key)
+      std::map<const Note*, int> libSpellKey;
+      std::map<const Note*, double> libSpellCents;
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
@@ -155,6 +161,7 @@ class MidiRenderer {
       // attack by the patch's plainAttack, a transition by its modelled arrival as transitionsEarly 1, or the mode set
       // there), instead of the patch's one plainShift
       bool libPlainTiming = false;
+      int libMicrotoneBends = 0;                                  // [slurs] microtoneBends 0-2 (this chunk)
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]
@@ -258,6 +265,8 @@ class MidiRenderer {
       // (and the note before it ends before it): SSO's Performance legato joins a note-on less than 40 ms after the note-off
       // before as a transition (the map's legatoGap, 39 ms, measured), so a spiccato attack needs 45 ms (abl.py's margin)
       static constexpr int PLAIN_VELOCITY = 64;
+      // [slurs] microtoneBends 1: a note this far from 12-TET (cents) is microtonal (microtoneSpelling may send it on another key)
+      static constexpr double MICROTONE_MIN_CENTS = 1.0;
       static constexpr double PLAIN_STACCATO_GAP_MS = 45.0;
       // [slurs] plainAccents 2 / 3: an accent or marcato on the accented attack plays this much louder than the spiccato
       // attack at PLAIN_VELOCITY, by CC11 against the map's measured accentedLevel (Articulation::accentedLevelAt):

@@ -97,6 +97,9 @@ attack, at real players' level, heard 2026-10-21 on Whence bars 7-9: "fine"; bel
 
 `slurs/plainTiming` is 0 in both presets (2026-10-21: plain notes early each by its own model instead of the patch's one shift; the owner heard each section alone with a click the same day: 0 better for Violins 1, Celli, Basses, no difference for Violins 2, Violas undecided: stays 0; below, Plain timing): set by hand to 1 it shows "(Custom)".
 
+`slurs/microtoneBends` is 0 in both presets (2026-10-21: quarter tones in fast slurs on the bending Performance
+patches, until the owner has heard it; below, Microtone bends).
+
 `slurs/speedFromWritten` is 0 in both presets (2026-10-17: the owner approved MuseScore taking over the Performance
 patches' CC119 and flips Recommended after the null test and listening; below, Speed from written): set by hand to 1 it
 shows "(Custom)".
@@ -1281,6 +1284,63 @@ one (`TRANSITION_MIN_GAP_MS` caps them); written notes closer than 15 ms do (64t
 Live: the velocity is in the clips; the plain set's written clips decide by the written spacing.
 `tst_playbackaudit::droppedFindings`: fast-legato.musicxml's three DROPPED gone, those notes at 65.
 
+## Microtone bends
+
+2026-10-21 (branch `fast-microtones`; measured with the real library, not yet heard by the owner). The owner heard Whence's
+Violas alone (build #458's export, Recommended): "the 3rd measure pitch bending sounds weird", bar 7: slurred or touching
+sixteenths at 110 bpm (136 ms), A3, B3 -50, A3, G3 +50, on Violas - Performance (plain, velocity 64: SSO's fingered
+transition). Measured (the Windows test VM, kthost + Kontakt 8 + SSO with MuseScore's setups, MuseScore's own events of
+the route, pYIN f0; a note "in tune" within 30 cents, its heard time its written place + 111 ms as the export plays
+it): the quarter-tone notes were in tune 8-10 % of their time, median error 85 cents, 11 of 27 reached at all. Two causes:
+
+- **The bend's timing** is `bendGlide`, measured on the bowed transition (velocity 93; the Violas 100): it leaves at the
+  note-on and arrives 130 ms later. Plain Performance (and `[slurs] transitions`' slurs) play the fingered one, which leaves
+  later and reaches the new key 130-200 ms after its note-on (velocity 64, slurred runs of steps at 136 ms, isolated:
+  Violas 65 / 158 ms, Violins 1 82 / 189, Violins 2 75 / 201, Celli 100 / 182, Basses 25 / 132). So the bend retuned the
+  note still sounding.
+- **Key and bend against each other**: B3 -50 after A3 is sent on B3 (a whole step up) bent down, G3 +50 on G3 bent up:
+  with the bend early the pitch first went a quarter tone the wrong way (B3 -50 heard near A-flat3 +45, G3 +50 near A3
+  +55 for ~100-150 ms), then slid through: the hook the owner heard. Without bends the fingered whole step down in this
+  figure often doesn't sound within 250 ms at all (SSO's own transition: Whence 12-TET plays it so too).
+
+`[slurs] microtoneBends` (0 by default and in both presets; per score):
+
+- **1**: a microtonal note on a patch that bends (`<Instrument bend>`), reached by a legato transition or going on by one,
+  is sent on the key on the side of the note before, so that the key's step and the bend move the same way: B3 -50 after
+  A3 on B-flat3 +50, G3 +50 after A3 on A-flat3 -50 (each candidate key, the written one and the two either side of the
+  sounding pitch, whose bend fits the range and whose step from the note before and to the note after isn't 0, scores a
+  point per transition where key and bend move the same way, the written key on a tie: `microtoneSpelling` in
+  rendermidi.cpp); and the fingered transition's bend glides by the map's `<Articulation bendGlideFingered>` (the format
+  of `bendGlide`; `tools/soundlibraries/sso_legato_glide_fingered.json`: `legato_glide/gen.py --velocity=64`,
+  `glide.py --summarise --moving`), uncut: it runs to its arrival past the next note-on, up to the next transition's leave
+  (the next note's own sound comes as late), the next note-on getting the bend in force there (`libraryPitchBends`).
+  The pitch sounding once a glide is done is the same as written.
+- **2**: the glide only (the written keys).
+- **0**: as before (`bendGlide`, cut at the next note-on).
+
+Measured on Whence in context (the same method, each variant two takes; quarter-tone notes with the next note-on within
+250 ms; share of their heard time in tune, median error; the 12-TET notes' share after the slash):
+
+| Route, bars | 0 (as now) | spelled only | glide only | 1 (spelled + fingered glide) |
+|---|---|---|---|---|
+| Violas - Performance, 5-8 | 8-10 %, 85 c / 46 % | 15-17 % | 17-21 % | 35-40 % / 49-52 % |
+| Violins 1 - Performance, 5-8 | 10-11 % / 17-19 % | | | 31-32 % / 30-31 % |
+| Celli - Performance, 1-8 | 5-7 % / 35-36 % | | | 19 % / 38-39 % |
+
+(1 from renders with the map's glide or the nearest scanned leave / arrival: Violas 70-90 / 180-200, Violins 1 90 / 200,
+Celli 100 / 200; the best leave found for the Violas, 90 ms, 43-44 %.)
+
+The pitch still glides through each sixteenth: SSO's fingered transition takes longer than the note, and no bend makes it
+settle within tens of ms. A real violist's quarter tone is a finger placed there, in tune from the note's start; SSO's
+bowed transition (velocity 85+) is faster (Violas mid-way 59 ms against 102; with today's bends 30-35 % in tune) but is a
+bow change, an articulation the owner chose against for slurs: not offered here. Detached attacks on tuned slots were
+measured too (every note an attack on its tuning's copy): 25 % (the attacks' latency and the release tails before them),
+and they lose the legato: not offered.
+
+Live: the keys and bends are the renderer's events, so the plain set's technique clips (written and played), its bend lane,
+the route set's clips and MIDI out carry them (`tst_liveequivalence::microtoneBendsLive`). Untried in real Live and with
+Kontakt in MuseScore's GUI.
+
 ## Plain accents
 
 2026-10-20 (branch `plain-accents`); **2 in Recommended and by default since 2026-10-21** (branch `accent-level`; the owner,
@@ -1527,6 +1587,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Speed from written, `[slurs] speedFromWritten` (the owner approved, 2026-10-17): on SSO's five string-section Performance patches CC119 (the transition's speed variant: RUNS / RUNS RT / FAST LEGATO) is MuseScore's: the patch's state has the script's own writing off (`$vfm12` 0, map `speedCC` / `speedScript`), each legato note-on gets 126 - floor(written ms from the note before x 127 / 1000) right before it, so early starts keep the written band; attacks none (above, Speed from written) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`speedFromWritten`, `speedValue`, `playbackScriptValues`), `rendermidi.cpp` (`libSpeed`, `librarySpeeds`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`, `Slot::values`), `liveclips.cpp` (`EXTRA_CARRIERS`), `plainliveset.cpp` (`speedEnvelope`); data: `sso_performance_layers.json` | `[slurs] speedFromWritten`; score: `playbackSettings` |
 | Fixed transitions, `[slurs] fixedTransitions` (2026-10-20, not yet heard by the owner): on SSO's five string sections' Performance patches the modulators from Kontakt's random generator (source type 10: the transitions' envelope level, the sustains' pitch) at intensity 0 in the state loaded, so every play of a passage sounds the same, an average take (above, Fixed transitions) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`fixedTransitions`, `playbackScriptValues`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`), `audio/vst3/kontaktsetup.cpp` (`randomSources`, `withRandomSources`) | `[slurs] fixedTransitions`; score: `playbackSettings` |
 | Fast transitions, `[slurs] fastTransitions` (2026-10-20, not yet heard by the owner): a legato note-on less than 15 ms after the note-on before on its route at velocity 20-64, which SSO ignores (the audit's DROPPED), sent at 65, the lowest that plays, the same transition family (above, Fast transitions) | 0 (Recommended 0, Library default 0) | `rendermidi.cpp` (`libraryFastTransitions`) | `[slurs] fastTransitions`; score: `playbackSettings` |
+| Microtone bends, `[slurs] microtoneBends` (2026-10-21, not yet heard by the owner): 1 a microtonal note on a bending patch joined by a legato transition on the key on the side of the note before (key and bend the same way) and a fingered transition's bend by `bendGlideFingered`, uncut past the next note-on; 2 the glide only (above, Microtone bends) | 0 (Recommended 0, Library default 0) | `rendermidi.cpp` (`microtoneSpelling`, `libraryPitchBends`), `soundlibrary.cpp` (`bendGlideAt`) | `[slurs] microtoneBends`; score: `playbackSettings` |
 | Plain accents, `[slurs] plainAccents` (2026-10-20; 2 since 2026-10-21, the owner's choice at real players' level): under plainPerformance an accent, marcato or soft accent plays 1 MS4.7.5's offset for its articulations (40 log10 share, strings +5.3 dB) by the dynamics CC along the patch's curve, slurred notes too; 2 an accent or marcato on an attack the Performance legato's accented attack (SSO 122) instead of 64, a touching note re-attacked (reattackGap), by CC11 at real players' +5.0 dB over the spiccato attack (the map's `accentedLevel` by pitch and length, `PLAIN_ACCENT_DB`); 3 both (above, Plain accents) | 2 (Recommended 2, Library default 0) | `rendermidi.cpp` (`performanceNote`'s `accentDb`, `marcatoLevel`'s `plainAccentDb`), map `accentedLevel` | `[slurs] plainAccents`; score: `playbackSettings` |
 | Level rule: a slur on a string section's Performance legato plays CC1 at the written dynamic and one gain per slur (by its dynamic, median spacing and pitch) by CC11 and the patches' gain stage, the rest of the part's patches at 0 dB (above, Level rule; the owner, 2026-10-10; the gain stage 2026-10-15); with `[slurs] plainPerformance` a plain note takes its kind's grid (slur / staccato + calibrated 2's D / single note; 2026-10-17) | 1 (on; Recommended 1, Library default 0) | `contextlevel.cpp` (`ContextLevel::gain`, `plainKind`, `volumes`), `rendermidi.cpp` `contextDb`, `TrackDelays::read` / `patchGain`; data: map `contextLevel`, `contextLevelPlain` / `Staccato` / `Single` from `level_rule.py` | `[levels] context`; score: `playbackSettings` |
 | Section balance: every patch of a section its map `sectionLevel2` (2, Clark & Luce) or `sectionLevel` (1, TU Berlin) louder by its volume, with the level rule each phrase at gain + its section's level, by the patches' gain stage less the score's master trim (above, Section balance, Gain stage and master trim; the owner, 2026-10-11: M, Weinzierl et al. 2018's sound power against SSO's measured `sso_cc1_curves.json`) | 2 (Clark & Luce; Recommended 2, Library default 0; 1 TU Berlin) | `contextlevel.cpp` (`ContextLevel::volumes`, `sectionBalanceMode`), `LibInstrument::sectionLevelFor`, `TrackDelays::patchGain`; data: map `sectionLevel2` / `sectionLevel` from `gen_spitfire_sso.py` `SECTION_LEVEL2` / `SECTION_FADERS` | `[levels] sectionBalance`; score: `playbackSettings` |

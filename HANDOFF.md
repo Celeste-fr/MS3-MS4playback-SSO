@@ -30,6 +30,27 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Microtone bends (branch `fast-microtones`, 2026-10-21, from integrate-1017 0d30c7e614; not merged)
+
+The owner, Whence's Violas alone (build #458, Recommended): "the 3rd measure pitch bending sounds weird" (bar 7: A3, B3 -50,
+A3, G3 +50 sixteenths at 110 bpm on Violas - Performance, velocity 64: the fingered transition). Found on the VM (kthost +
+SSO, MuseScore's own route events, pYIN): the bend followed `bendGlide`, the bowed transition's timing (from the note-on,
+arriving at 130 ms), while the fingered one leaves 25-100 ms after its note-on and arrives at 130-200 ms; and B3 -50 after
+A3 went on B3 bent down (key up, bend down), so the pitch first went a quarter tone the wrong way. Built:
+`[slurs] microtoneBends` (0 everywhere until the owner has heard it): 1 the key on the side of the note before
+(`microtoneSpelling`) + `bendGlideFingered`, uncut past the next note-on; 2 the glide alone (docs/PLAYBACK_SETTINGS.md ›
+Microtone bends; OPEN_ITEMS.md 5). Tests: tst_soundlibrary::microtoneBends, tst_liveequivalence::microtoneBendsLive.
+Private: `~/MuseScore/ms3fork/private/fast-microtones/` (RESULT.md, the variant renders' tools gen3.py / ana.py).
+
+- **Measured scans** (two takes each, quarter tones in tune within 30 c of their heard time): Violas bars 5-8 8-10 % as now,
+  35-40 % with 1; the best leave scanned (90 ms, cut at the next note-on) 43-44 %; bowed (velocity 100) 30-35 %; detached
+  tuned attacks 25 %; RUNS (CC119 120) and a bend at the note-on worse. Violins 1 10 -> 31 %, Celli 6 -> 19-22 %.
+- **Left**: SSO's fingered transition outlasts a 136 ms note, so the pitch still glides through each sixteenth; nothing in
+  MuseScore's bend makes it settle within tens of ms. The owner decides by ear (violas_bend_A / _B clips); the next
+  options are a technique choice (owner's), not a bend.
+- The fingered glide table was measured isolated (`legato_glide/gen.py --velocity=64`, `glide.py --summarise --moving`:
+  medians of the glides that move, a leave or arrival at the window's start is a clamp, not a time).
+
 ## Plain timing (branch `plain-timing`, 2026-10-21, from integrate-1017 15820b7b46; not merged)
 
 `[slurs] plainTiming` (0 by default and in both presets; the owner decides by ear): with plainPerformance each plain note

@@ -268,6 +268,7 @@ class TestSoundLibrary : public QObject, public MTest
       void tuningBendAtArrival();
       void bendGlideMeasured();
       void bendGlideSmoothed();
+      void microtoneBends();
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
@@ -1949,7 +1950,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
+                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1958,15 +1959,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -9847,6 +9848,198 @@ void TestSoundLibrary::bendGlideSmoothed()
             SoundLib::setCurrent(nullptr);
             }
       Playback::setIniValuesForTest({});
+      }
+
+//---------------------------------------------------------
+//   microtoneBends
+//    [slurs] microtoneBends (2026-10-21, branch fast-microtones): fast-microtones.musicxml, Whence's Violas bar 7 an octave
+//    up at 110: slurred sixteenths A4, B4 -50, A4, G4 +50, twice, every note on the Performance patch (plainPerformance,
+//    velocity 64: the fingered band). 0: as written (B4 -50 on key 71 bent -50, G4 +50 on 67 bent +50: key and bend move
+//    against each other), the bend's glide by bendGlide (leave -8 ms: at the note-on). 1: the microtonal notes on the key on
+//    the side of the note before (B4 -50 on B-flat4 70 at +50, G4 +50 on A-flat4 68 at -50): every transition's key step and
+//    bend change the same way, the pitch sounding the same; the glide by bendGlideFingered (leave 65 ms). 2: the glide only.
+//    The setting: 0 by default and in both presets
+//---------------------------------------------------------
+
+void TestSoundLibrary::microtoneBends()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      const Playback::Definition* d = Playback::definition("slurs/microtoneBends");
+      QVERIFY(d);
+      QCOMPARE(d->value, 0.0);
+      for (const Playback::Preset& p : Playback::presets()) {
+            bool listed = false;
+            for (const auto& kv : p.values)
+                  if (QString(kv.first) == "slurs/microtoneBends") {
+                        listed = true;
+                        QCOMPARE(kv.second, 0.0);
+                        }
+            QVERIFY2(listed, p.id);
+            }
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' bend='100' plainShift='0'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300'"
+         " bendGlide='136:-8:130 600:130:288' bendGlideFingered='136:65:180 600:150:320' bendSmoothing='73.1'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::Articulation& legato = lib->instruments[1].articulations[0];
+      double leave = 0, arrive = 0;
+      QVERIFY(legato.bendGlideAt(136, &leave, &arrive) && leave == -8 && arrive == 130);
+      QVERIFY(legato.bendGlideAt(136, &leave, &arrive, true) && leave == 65 && arrive == 180);
+      QVERIFY(lib->instruments[0].articulations[0].bendGlideAt(136, &leave, &arrive, true) == false);
+      // (no fingered glide measured: the bowed one)
+      auto lib2 = loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'><Articulation name='L' value='1' techniques='legato'"
+                          " bendGlide='136:-8:130'/></Instrument></SoundLibrary>");
+      QVERIFY(lib2 && lib2->instruments[0].articulations[0].bendGlideAt(136, &leave, &arrive, true) && leave == -8);
+      QVERIFY(!loadMap("<SoundLibrary name='t'><Instrument name='V' ids='violin'><Articulation name='L' value='1' techniques='legato'"
+                       " bendGlideFingered='136:100:50'/></Instrument></SoundLibrary>"));
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "fast-microtones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      struct On { int tick; int key; int channel; int velo; };
+      struct Played { std::vector<On> ons; std::vector<double> cents; std::vector<int> glideStart; std::vector<std::set<int>> values;
+                      std::vector<std::vector<std::pair<int, int>>> sent; };          // (ticks after the note-on, value)
+      auto cents = [](int v) { return (v - 8192) * 100.0 / (v < 8192 ? 8192.0 : 8191.0); };
+      auto render = [&](int mode, int plain) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", QString::number(plain) },
+                                            { "slurs/transitions", "1" }, { "slurs/transitionsEarly", "0" },
+                                            { "slurs/microtoneBends", QString::number(mode) } });
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            Played p;
+            std::map<int, std::vector<std::pair<int, int>>> bends;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal())
+                        continue;
+                  if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch())
+                        p.ons.push_back({ te.first, ev.pitch(), ev.extChannel(), ev.velo() });
+                  else if (ev.type() == ME_PITCHBEND)
+                        bends[ev.extChannel()].push_back({ te.first, ev.dataA() | (ev.dataB() << 7) });
+                  }
+            // a note's tuning: the bend each note-on gets for the note before (its tuning, held up to that note's glide),
+            // the last note's the last bend sent; its glide's start: the first bend after its note-on that differs
+            for (size_t i = 0; i < p.ons.size(); ++i) {
+                  const int next = i + 1 < p.ons.size() ? p.ons[i + 1].tick : INT_MAX;
+                  int v = -1, first = -1, before = -1;
+                  std::set<int> values;
+                  std::vector<std::pair<int, int>> sent;
+                  for (const auto& b : bends[p.ons[i].channel]) {
+                        if (b.first < p.ons[i].tick)
+                              before = b.second;
+                        else if (b.first < next) {
+                              v = b.second;
+                              if (first < 0 && before >= 0 && b.second != before)
+                                    first = b.first - p.ons[i].tick;
+                              }
+                        if (b.first >= p.ons[i].tick && b.first <= p.ons[i].tick + 170) {  // (to ~197 ms: the glide's arrival)
+                              values.insert(b.second);
+                              sent.push_back({ b.first - p.ons[i].tick, b.second });
+                              }
+                        }
+                  if (std::getenv("MS_TEST_VERBOSE")) {
+                        QString d;
+                        for (const auto& b : bends[p.ons[i].channel])
+                              if (b.first >= p.ons[i].tick && b.first <= p.ons[i].tick + 170)
+                                    d += QString(" %1:%2").arg(b.first).arg(b.second);
+                        qDebug("mode %d note %d at %d:%s", mode, int(i), p.ons[i].tick, qPrintable(d));
+                        }
+                  p.cents.push_back(v < 0 ? NAN : cents(v));
+                  p.glideStart.push_back(first);
+                  p.values.push_back(values);
+                  p.sent.push_back(sent);
+                  }
+            return p;
+            };
+      const std::vector<double> sounding { 69, 70.5, 69, 67.5, 69, 70.5, 69, 67.5 };
+      const int sixteenth = 120;
+      const int fingeredLeave = int(score->utime2utick(score->utick2utime(0) + 0.065));       // (65 ms in ticks at 110)
+      for (int plain : { 1, 0 }) {
+            for (int mode : { 0, 1, 2 }) {
+                  Played p = render(mode, plain);
+                  QCOMPARE(int(p.ons.size()), 8);
+                  const std::vector<int> keys = mode == 1 ? std::vector<int> { 69, 70, 69, 68, 69, 70, 69, 68 }
+                                                          : std::vector<int> { 69, 71, 69, 67, 69, 71, 69, 67 };
+                  for (size_t i = 0; i < 8; ++i) {
+                        QCOMPARE(p.ons[i].tick, int(i) * sixteenth);
+                        QCOMPARE(p.ons[i].channel, p.ons[0].channel);                 // (one lane: the bend plays the tuning)
+                        QVERIFY2(p.ons[i].key == keys[i], qPrintable(QString("plain %1 mode %2 note %3: key %4").arg(plain).arg(mode).arg(i).arg(p.ons[i].key)));
+                        // the pitch it reaches: the same whatever the key (its tuning from the key sent, held from its glide's
+                        // end, or by the next note-on where the glide runs to it)
+                        const double want = (sounding[i] - p.ons[i].key) * 100.0;
+                        const int unit = qBound(0, int(std::lround(8192.0 + want / 100.0 * (want < 0 ? 8192.0 : 8191.0))), 16383);
+                        QVERIFY2(p.values[i].count(unit) || (i == 7 && mode > 0),       // (the last note: its glide's end, past the window)
+                                 qPrintable(QString("plain %1 mode %2 note %3: key %4, %5 cents never sent").arg(plain).arg(mode).arg(i).arg(p.ons[i].key).arg(want)));
+                        p.cents[i] = want;
+                        if (plain)
+                              QCOMPARE(p.ons[i].velo, 64);
+                        }
+                  // key step and bend change the same way on every transition (1); as written against each other (0, 2)
+                  int sameWay = 0;
+                  for (size_t i = 1; i < 8; ++i) {
+                        const int dk = p.ons[i].key - p.ons[i - 1].key;
+                        const double dc = p.cents[i] - p.cents[i - 1];
+                        sameWay += std::fabs(dc) < 0.5 || (dk > 0) == (dc > 0);
+                        }
+                  QCOMPARE(sameWay, mode == 1 ? 7 : 0);
+                  // the glide of a transition into a microtonal note (and back): at the note-on by the bowed glide (0), 65 ms
+                  // after it by the fingered one (1, 2), the note before's tuning held until then
+                  // (1, 2: the glide uncut, the note before's arrival, 180 ms after its note-on, comes 44 ms into this note:
+                  // before this note's own leave only the note before's values)
+                  auto unitOf = [](double c) { return qBound(0, int(std::lround(8192.0 + c / 100.0 * (c < 0 ? 8192.0 : 8191.0))), 16383); };
+                  for (size_t i = 1; i < 8; ++i) {
+                        QVERIFY(p.glideStart[i] >= 0);
+                        if (mode == 0) {
+                              QVERIFY2(p.glideStart[i] <= 1, qPrintable(QString("plain %1 note %2: %3").arg(plain).arg(i).arg(p.glideStart[i])));
+                              continue;
+                              }
+                        const int before = unitOf(p.cents[i - 1]);
+                        int kick = -1;
+                        for (const auto& b : p.sent[i]) {
+                              if (b.first < fingeredLeave - 1)
+                                    QVERIFY2(b.second == before || b.first == 0,
+                                             qPrintable(QString("plain %1 mode %2 note %3: %4 at +%5 before its leave").arg(plain).arg(mode).arg(i).arg(b.second).arg(b.first)));
+                              else if (kick < 0 && b.second != before)
+                                    kick = b.first;
+                              }
+                        QVERIFY2(std::abs(kick - fingeredLeave) <= 1,
+                                 qPrintable(QString("plain %1 mode %2 note %3: its glide at +%4, want %5").arg(plain).arg(mode).arg(i).arg(kick).arg(fingeredLeave)));
+                        // the note before's arrival (a transition's: the first note is an attack): its tuning sent 180 ms
+                        // after its own note-on
+                        if (i < 2)
+                              continue;
+                        bool arrived = false;
+                        for (const auto& b : p.sent[i - 1])
+                              arrived |= b.second == before && std::abs(b.first - int(score->utime2utick(0.180))) <= 1;
+                        QVERIFY2(arrived, qPrintable(QString("plain %1 mode %2 note %3: no arrival at 180 ms").arg(plain).arg(mode).arg(i - 1)));
+                        }
+                  }
+            }
+      // the score's own value over playback.ini's
+      score->setMetaTag(Playback::metaTag, Playback::writeScoreValues({ { "slurs/microtoneBends", 1 } }));
+      {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/microtoneBends", "0" } });
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            std::vector<int> keys;
+            for (const auto& te : events)
+                  if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && !te.second.librarySwitch())
+                        keys.push_back(te.second.pitch());
+            QCOMPARE(keys, (std::vector<int> { 69, 70, 69, 68, 69, 70, 69, 68 }));
+      }
+      delete score;
       }
 
 //---------------------------------------------------------
