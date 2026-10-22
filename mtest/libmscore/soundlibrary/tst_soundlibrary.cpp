@@ -10095,7 +10095,8 @@ void TestSoundLibrary::bendGlideSmoothed()
 //    against each other), the bend's glide by bendGlide (leave -8 ms: at the note-on). 1: the microtonal notes on the key on
 //    the side of the note before (B4 -50 on B-flat4 70 at +50, G4 +50 on A-flat4 68 at -50): every transition's key step and
 //    bend change the same way, the pitch sounding the same; the glide by bendGlideFingered (leave 65 ms). 2: the glide only.
-//    The setting: 0 by default and in both presets
+//    3: as 1, the plain fingered transitions early by their glide's middle (branch microtone-next, 2026-10-22).
+//    The setting: 1 by default and in Recommended, 0 in Library default
 //---------------------------------------------------------
 
 void TestSoundLibrary::microtoneBends()
@@ -10261,6 +10262,29 @@ void TestSoundLibrary::microtoneBends()
                               arrived |= b.second == before && std::abs(b.first - int(score->utime2utick(0.180))) <= 1;
                         QVERIFY2(arrived, qPrintable(QString("plain %1 mode %2 note %3: no arrival at 180 ms").arg(plain).arg(mode).arg(i - 1)));
                         }
+                  }
+            }
+      // 3 (2026-10-22, branch microtone-next): as 1, and each plain fingered transition early by its glide's middle less the
+      // patch's plainShift (here 0): (65 + 180) / 2 = 122.5 ms; the first one capped so that the attack before keeps
+      // [legato] keepMs; not plain (plainPerformance 0): as 1
+      for (int plain : { 1, 0 }) {
+            Played p1 = render(1, plain);
+            Played p3 = render(3, plain);
+            QCOMPARE(int(p3.ons.size()), 8);
+            const int early = int(score->utime2utick(0.1225));
+            for (size_t i = 0; i < 8; ++i) {
+                  QCOMPARE(p3.ons[i].key, p1.ons[i].key);
+                  const int want = int(i) * sixteenth - (plain && i > 0 ? early : 0);
+                  if (plain && i == 1)
+                        QVERIFY2(p3.ons[i].tick > want && p3.ons[i].tick < int(i) * sixteenth,
+                                 qPrintable(QString("note 1 at %1 (uncapped %2)").arg(p3.ons[i].tick).arg(want)));
+                  else
+                        QVERIFY2(std::abs(p3.ons[i].tick - want) <= 1,
+                                 qPrintable(QString("plain %1 note %2 at %3, want %4").arg(plain).arg(i).arg(p3.ons[i].tick).arg(want)));
+                  // (the bends move with their note-ons: the tuning each note reaches is sent after it)
+                  const double want3 = (sounding[i] - p3.ons[i].key) * 100.0;
+                  const int unit3 = qBound(0, int(std::lround(8192.0 + want3 / 100.0 * (want3 < 0 ? 8192.0 : 8191.0))), 16383);
+                  QVERIFY2(p3.values[i].count(unit3) || i == 7, qPrintable(QString("plain %1 note %2: %3 cents never sent").arg(plain).arg(i).arg(want3)));
                   }
             }
       // the score's own value over playback.ini's

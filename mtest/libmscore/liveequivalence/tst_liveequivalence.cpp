@@ -7940,7 +7940,8 @@ void TestLiveEquivalence::chordVoicesLive()
 //    go on the key on the side of the note before (70 at +50, 68 at -50): the plain set's technique clip holds those keys,
 //    its pitch-bend lane MuseScore's bends (every value, at its time), the route set's clips the same keys; every note-on
 //    and note-off MuseScore plays comes out of the clips with the Track Delay and the device's delays (as plainWritten).
-//    With 0 the written keys (71, 67)
+//    With 0 the written keys (71, 67). With 3 (branch microtone-next) 1's keys and every plain transition sent earlier
+//    (its glide's middle on the beat): the written clips, Track Delay and the device's delays play those note-ons too
 //---------------------------------------------------------
 
 void TestLiveEquivalence::microtoneBendsLive()
@@ -7976,7 +7977,8 @@ void TestLiveEquivalence::microtoneBendsLive()
             r.renderScore(&events, ctx);
             return events;
             };
-      for (int mode : { 1, 0 }) {
+      std::vector<int> onsOf1;          // (mode 1's note-on ticks: 3 sends the transitions earlier)
+      for (int mode : { 1, 3, 0 }) {
             Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
                                             { "slurs/microtoneBends", QString::number(mode) } });
             score->setPlaylistDirty();
@@ -7984,10 +7986,11 @@ void TestLiveEquivalence::microtoneBendsLive()
             const EventMap written = render(true);
             const LiveClips::Timeline tl = LiveClips::timeline(score);
             const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
-            const std::vector<int> keys = mode == 1 ? std::vector<int> { 69, 70, 69, 68, 69, 70, 69, 68 }
+            const std::vector<int> keys = mode != 0 ? std::vector<int> { 69, 70, 69, 68, 69, 70, 69, 68 }
                                                     : std::vector<int> { 69, 71, 69, 67, 69, 71, 69, 67 };
             // MuseScore's own: the keys, the bends, every note-on / note-off (route, key, units)
             std::vector<int> museScore;
+            std::vector<int> ons;
             std::set<int> bends;
             std::multiset<std::tuple<int, int, int, bool>> want;
             for (const auto& te : played) {
@@ -7999,11 +8002,22 @@ void TestLiveEquivalence::microtoneBendsLive()
                   if (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF)
                         continue;
                   const bool on = e.type() == ME_NOTEON && e.velo() > 0;
-                  if (on)
+                  if (on) {
                         museScore.push_back(e.pitch());
+                        ons.push_back(te.first);
+                        }
                   want.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), on));
                   }
             QCOMPARE(museScore, keys);
+            if (mode == 1)
+                  onsOf1 = ons;
+            else if (mode == 3) {
+                  // (every transition earlier than 1's: the moved note-ons are what Live must play back)
+                  QCOMPARE(ons.size(), onsOf1.size());
+                  QCOMPARE(ons[0], onsOf1[0]);
+                  for (size_t i = 1; i < ons.size(); ++i)
+                        QVERIFY2(ons[i] < onsOf1[i] - 20, qPrintable(QString("note %1 at %2, 1's at %3").arg(i).arg(ons[i]).arg(onsOf1[i])));
+                  }
             // the plain set: the technique clip's keys, the bend lane's values, the notes as Live plays them
             std::vector<int> clip;
             std::set<int> lane;

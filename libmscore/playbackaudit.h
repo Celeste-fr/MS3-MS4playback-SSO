@@ -141,7 +141,7 @@ struct NoteRow {
       double written { 0 };         // s, score time
       double writtenEnd { 0 };      // s, the end of its tie chain
       int pitch { -1 };
-      double cents { 0 };           // its playback tuning (ScoreTuning)
+      double cents { 0 };           // its playback tuning (ScoreTuning), from the key it is sent on (pitch; [slurs] microtoneBends 1)
       int route { -1 };             // port * 16 + channel
       QString patch;
       QString articulation;
@@ -150,7 +150,7 @@ struct NoteRow {
       int performance { 0 };        // LibPerformance: 0 none, 1 attack, 2 transition
       bool transition { false };    // played as a legato transition (LibTrace::from)
       double fromWritten { -1 };    // the note it transitions from: its written start, s (-1: none)
-      int fromPitch { -1 };
+      int fromPitch { -1 };         // the key that note is sent on
       double sentMs { 0 };          // note-on - written, ms (the start lead taken off)
       double onsetMs { -1 };        // the onset the renderer took (-1: none)
       double glideArriveMs { -1 };  // LibTrace::glideArriveMs

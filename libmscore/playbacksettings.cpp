@@ -147,11 +147,15 @@ static const std::vector<Definition> DEFINITIONS = {
       // sounding, against the step: the pitch hooked a quarter tone away first (B3 -50 heard at G#3 +50); 0 in both presets
       // until the owner had heard it; 1 by default and in Recommended since 2026-10-22, the owner on Whence's Violas alone:
       // "B is so much better it actually sounds right now"; MidiRenderer's microtoneSpelling, libraryPitchBends)
-      { "slurs/microtoneBends", 1, 0, 2, "",
+      // 3 (2026-10-22, branch microtone-next; measured on the Windows test VM, not yet heard by the owner): as 1, and each plain
+      // fingered transition on such a patch early by its glide's middle less the patch's plainShift
+      { "slurs/microtoneBends", 1, 0, 3, "",
         "a microtonal note reached by a legato transition on a patch that bends (SSO's Performance patches): 1 goes on the key "
         "on the side of the note before (B3 -50 after A3 on B-flat3 +50), so the key's step and the bend move the same way, "
         "and its bend glides with the transition that plays (a fingered one by the map's bendGlideFingered, measured apart "
-        "from the bowed one); 2 the glide only; 0 as written, the bend timed by the bowed transition's bendGlide", true },
+        "from the bowed one); 2 the glide only; 0 as written, the bend timed by the bowed transition's bendGlide; 3 as 1, and "
+        "each plain fingered transition there sent early so that its glide's middle comes on the beat (by bendGlideFingered, "
+        "less the plainShift its patch already goes early: Violins 1 70 ms, Celli 61, Violas 0)", true },
       // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM, 0 in both presets until the owner has heard
       // it; SoundLib::fixedTransitions. Per score: the hosted instances of a score whose value differs are loaded again)
       { "slurs/fixedTransitions", 0, 0, 1, "on/off",
