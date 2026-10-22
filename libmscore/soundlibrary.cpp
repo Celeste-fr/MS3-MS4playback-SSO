@@ -2602,6 +2602,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
       if (maxLanes <= 0)                        // (no maximum: as many copies as the music needs; the owner, 2026-10-21)
             maxLanes = std::numeric_limits<int>::max();
       const bool waitForRelease = Playback::on("tuning/waitForRelease", score);   // (playback.ini [tuning])
+      const int plainAccents = int(std::lround(Playback::value("slurs/plainAccents", score)));
       Ms4::Dynamics dynamics;
       dynamics.build(sc, const_cast<Part*>(part));
       TextTechniques text;
@@ -2620,6 +2621,9 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             int voice { 0 };              // a monophonic patch's voice (0 the line)
             bool plain { false };         // [slurs] plainPerformance's (Choice::plain): touching the note before, a transition
             int chordNotes { 1 };         // its chord's notes on its patch (a monophonic patch's chord: > 1)
+            bool attacks { false };       // a plain note attacked afresh even right after a note of its patch (rendermidi's
+                                          // performanceNote: a staccato, an accented re-attack under [slurs] plainAccents 2 / 3,
+                                          // a join of its own wider than the map's legatoGap)
             };
       std::vector<Item> items;
       std::map<const Note*, const Note*> tiedTo;     // a tied note -> the note it continues
@@ -2658,6 +2662,21 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                                                             : std::max(tailSeconds, waitForRelease ? measured : 0.0);
                         items.push_back({ note, c ? c.patch : 0, on, off, ring,
                                           playbackTuning(note), slurred, track, graceOf, 0, c && c.plain });
+                        if (c && c.plain) {
+                              bool staccato = false;
+                              bool accent = false;
+                              for (const Ms4::ArtRef& a : arts) {
+                                    staccato |= a.art == Ms4::Art::Staccato || a.art == Ms4::Art::Staccatissimo;
+                                    accent |= a.art == Ms4::Art::Accent || a.art == Ms4::Art::Marcato;
+                                    }
+                              const int join = note->libraryJoin();
+                              const bool ownJoin = join != PerformanceTechnique::JOIN_AUTO;
+                              items.back().attacks = staccato
+                                    || (ownJoin && join < -std::max(0.0, c.articulation->legatoGapMs))
+                                    || (!ownJoin && accent && (plainAccents & 2) && note->libraryVelocity() <= 0
+                                        && note->performanceAttack() == PerformanceTechnique::Attack::AUTO
+                                        && note->performanceTransition() == PerformanceTechnique::Transition::AUTO);
+                              }
                         };
                   for (const Chord* g : chord->graceNotes())
                         for (const Note* n : g->notes())
@@ -2776,6 +2795,9 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             double lastEnd { -1 };
             int lastTrack { -1 };
             int lastChordNotes { 1 };
+            int lastPitch { -1 };
+            bool lastPlain { false };
+            bool lastAttacks { false };
             };
       // per patch, per voice: its lanes (a voice's lanes take only its own notes: the lanes by tuning, as ever)
       std::vector<std::vector<std::vector<Lane>>> byPool(patches.size(), std::vector<std::vector<Lane>>(size_t(voiceCount)));
@@ -2813,7 +2835,14 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             // plays a transition, which glides on the lane as a slur's does)
             const bool mono = patches[size_t(it.patch)]->mono;
             for (int l = 0; l < int(lanes.size()) && chosen < 0 && (it.slurred || mono); ++l) {     // legato: its lane, which glides
-                  const bool legato = it.slurred || (it.plain && (it.chordNotes > 1 || lanes[l].lastChordNotes > 1));
+                  // ([slurs] plainPerformance, a lone note right after a lone plain note of its patch at another pitch, neither
+                  // attacked afresh: SSO's transition, rendermidi's performanceNote joins them; on another copy, chosen by
+                  // tuning, the note was attacked after silence there while the note before released on its own copy:
+                  // Whence's Violas bars 12 / 16, F#4 into a quarter-sharp G4 half note, the owner 2026-10-22: "sounds
+                  // disjointed from the note before")
+                  const bool plainJoin = it.plain && lanes[l].lastPlain && !it.attacks && !lanes[l].lastAttacks
+                                         && lanes[l].lastPitch >= 0 && lanes[l].lastPitch != it.note->pitch();
+                  const bool legato = it.slurred || (it.plain && (it.chordNotes > 1 || lanes[l].lastChordNotes > 1)) || plainJoin;
                   if (legato && lanes[l].lastTrack == it.track && lanes[l].lastOn < it.on && std::fabs(lanes[l].lastEnd - it.on) <= 0.1)
                         chosen = l;
                   }
@@ -2844,6 +2873,9 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             lane.lastEnd = it.off;
             lane.lastTrack = it.track;
             lane.lastChordNotes = it.chordNotes;
+            lane.lastPitch = it.note->pitch();
+            lane.lastPlain = it.plain;
+            lane.lastAttacks = it.attacks;
             out.lane[it.note] = chosen;
             out.cents[it.note] = cents;
             }

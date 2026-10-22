@@ -273,6 +273,7 @@ class TestSoundLibrary : public QObject, public MTest
       void bendGlideMeasured();
       void bendGlideSmoothed();
       void microtoneBends();
+      void plainJoinLanes();
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
@@ -10274,6 +10275,104 @@ void TestSoundLibrary::microtoneBends()
                         keys.push_back(te.second.pitch());
             QCOMPARE(keys, (std::vector<int> { 69, 70, 69, 68, 69, 70, 69, 68 }));
       }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainJoinLanes
+//    [slurs] plainPerformance on a monophonic bending patch: a plain note right after a plain note of its patch at another
+//    pitch (touching, neither attacked afresh) stays on the note before's copy, where SSO plays a transition and the bend
+//    glides to its tuning, even when another copy already holds that tuning (branch slur-joins, 2026-10-22: Whence's Violas
+//    bars 12 / 16, a slur's last F#4 into a quarter-sharp G4 half note, went on the copy at +50 cents: attacked after
+//    silence there while the F#4 released on its own copy; the owner: "sounds disjointed from the note before").
+//    plain-joins.musicxml: G4 +50 (staccato), F#4 (staccato), E4, G4 +50 half; m2 the same with the half accented.
+//    m1: the half on E4's copy, E4 held to its note-on (touching), the bend at E4's tuning at the note-on, then gliding to
+//    +50. Attacks keep their copies by tuning as before: F#4 (staccato) on a copy of its own; m2's accented half (plainAccents
+//    2: a re-attack, the note before cut reattackGap early) on the copy at +50, not E4's; with plainAccents 0 it joins
+//---------------------------------------------------------
+
+void TestSoundLibrary::plainJoinLanes()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' bend='100' plainShift='0' mono='1'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300'"
+         " bendGlide='136:-8:130 600:130:288' bendGlideFingered='136:65:180 600:150:320' bendSmoothing='73.1'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-joins.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      struct On { int tick; int key; int channel; int velo; int off; };
+      auto render = [&](int accents) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
+                                            { "slurs/transitions", "1" }, { "slurs/transitionsEarly", "0" },
+                                            { "slurs/plainAccents", QString::number(accents) }, { "slurs/microtoneBends", "1" } });
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            std::vector<On> ons;
+            std::map<int, std::vector<std::pair<int, int>>> bends;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int ch = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                        ons.push_back({ te.first, ev.pitch(), ch, ev.velo(), -1 });
+                  else if (ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && ev.velo() == 0)) {
+                        for (On& o : ons)
+                              if (o.off < 0 && o.key == ev.pitch() && o.channel == ch)
+                                    o.off = te.first;
+                        }
+                  else if (ev.type() == ME_PITCHBEND)
+                        bends[ch].push_back({ te.first, ev.dataA() | (ev.dataB() << 7) });
+                  }
+            return std::make_pair(ons, bends);
+            };
+      auto bendAt = [](const std::vector<std::pair<int, int>>& b, int tick) {      // (the value in force at tick)
+            int v = 8192;
+            for (const auto& p : b)
+                  if (p.first <= tick)
+                        v = p.second;
+            return v;
+            };
+      const int plus50 = int(std::lround(8192.0 + 0.5 * 8191.0));
+      for (int accents : { 2, 0 }) {
+            const auto r = render(accents);
+            const std::vector<On>& o = r.first;
+            QCOMPARE(int(o.size()), 8);
+            QCOMPARE((std::vector<int> { o[0].key, o[1].key, o[2].key, o[3].key }), (std::vector<int> { 67, 66, 64, 67 }));
+            QVERIFY(o[1].channel != o[0].channel);              // (a staccato: attacked, a copy of its own as before)
+            // m1: the half on E4's copy, touching it, from E4's tuning to +50
+            QVERIFY2(o[3].channel == o[2].channel, qPrintable(QString("plainAccents %1: the half on channel %2, E4 on %3")
+                                                             .arg(accents).arg(o[3].channel).arg(o[2].channel)));
+            QVERIFY(o[2].off >= o[3].tick);
+            const auto& b = r.second.at(o[3].channel);
+            QCOMPARE(bendAt(b, o[3].tick), 8192);
+            QCOMPARE(bendAt(b, o[3].off - 1), plus50);
+            // m2: the accented half
+            if (accents == 2) {
+                  QCOMPARE(o[7].velo, 122);
+                  QVERIFY(o[7].channel != o[6].channel);          // (a re-attack: the copy at its tuning)
+                  QVERIFY(o[6].off < o[7].tick);
+                  QCOMPARE(bendAt(r.second.at(o[7].channel), o[7].tick), plus50);
+                  }
+            else {
+                  QCOMPARE(o[7].channel, o[6].channel);
+                  QVERIFY(o[6].off >= o[7].tick);
+                  }
+            }
       delete score;
       }
 

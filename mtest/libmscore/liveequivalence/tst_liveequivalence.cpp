@@ -179,6 +179,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void chordVoicesLive();
       void divisiLive();
       void microtoneBendsLive();
+      void plainJoinsLive();
       void hostedSlotsGain();
       void exportInstancesOfParts();
       void verifyRoutesByPart();
@@ -8041,6 +8042,117 @@ void TestLiveEquivalence::microtoneBendsLive()
                               route.push_back(n.pitch);
             QCOMPARE(route, keys);
             }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainJoinsLive
+//    plain Performance joins across tunings (branch slur-joins, tst_soundlibrary::plainJoinLanes) reach Live:
+//    plain-joins.musicxml on a monophonic bending Performance patch. m1's quarter-sharp G4 half note, right after E4, plays
+//    on E4's copy in MuseScore's routes, in the plain set (the same Kontakt / copy track: its technique clip holds E4 and the
+//    half, the copy's pitch-bend lane MuseScore's bends) and in the route set's clips; every note-on and note-off MuseScore
+//    plays comes out of the plain set's clips with the Track Delay and the device's delays (as plainWritten)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainJoinsLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' bend='100' plainShift='0' mono='1'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300'"
+         " bendGlide='136:-8:130 600:130:288' bendGlideFingered='136:65:180 600:150:320' bendSmoothing='73.1'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-joins.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto render = [score](bool written) {
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setWrittenTiming(written);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAccents", "2" },
+                                      { "slurs/microtoneBends", "1" } });
+      score->setPlaylistDirty();
+      const EventMap played = render(false);
+      const EventMap written = render(true);
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+      // MuseScore's own: each note-on's route (in order), the bends per route, every note-on / note-off
+      std::vector<std::pair<int, int>> museScore;                     // (route, key)
+      std::map<int, std::set<int>> bends;
+      std::multiset<std::tuple<int, int, int, bool>> want;
+      for (const auto& te : played) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch())
+                  continue;
+            const int route = e.extPort() * 16 + e.extChannel();
+            if (e.type() == ME_PITCHBEND)
+                  bends[route].insert(e.dataA() | (e.dataB() << 7));
+            if (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF)
+                  continue;
+            const bool on = e.type() == ME_NOTEON && e.velo() > 0;
+            if (on)
+                  museScore.push_back({ route, e.pitch() });
+            want.insert(std::make_tuple(route, e.pitch(), tl.units(te.first), on));
+            }
+      QCOMPARE(int(museScore.size()), 8);
+      QCOMPARE(museScore[3].first, museScore[2].first);               // (m1: the half on E4's copy)
+      QVERIFY(museScore[7].first != museScore[6].first);             // (m2: the accented half re-attacked on the +50 copy)
+      // the plain set: the copy holding m1's E4 holds the half too, its bend lane MuseScore's bends on that route
+      std::multiset<std::tuple<int, int, int, bool>> got;
+      int withHalf = -1;
+      for (const PlainLiveSet::Section& s : l.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                        const int route = k.port * 16 + k.channel;
+                        std::set<int> lane;
+                        for (const PlainLiveSet::Lane& ln : k.lanes)
+                              if (ln.cc == PlainLiveSet::PITCH_BEND)
+                                    for (const auto& pt : ln.points)
+                                          lane.insert(pt.second);
+                        bool any = false;
+                        for (const PlainLiveSet::Technique& t : k.techniques)
+                              for (const LiveClips::Note& n : t.notes) {
+                                    any = true;
+                                    const std::pair<double, double> at = LiveTiming::playedBy(t.timing, n, tl.bpm);
+                                    got.insert(std::make_tuple(route, n.pitch, int(std::lround(at.first)), true));
+                                    got.insert(std::make_tuple(route, n.pitch, int(std::lround(at.second)), false));
+                                    }
+                        if (any && route == museScore[3].first) {
+                              withHalf = route;
+                              QVERIFY2(lane == bends[route], qPrintable(QString("route %1: %2 bend values in the lane, %3 sent")
+                                                                        .arg(route).arg(lane.size()).arg(bends[route].size())));
+                              }
+                        }
+      QCOMPARE(withHalf, museScore[3].first);
+      QCOMPARE(got, want);
+      // the route set's clips: the same routes
+      std::vector<std::pair<int, int>> route;
+      for (const LiveClips::Track& c : LiveClips::tracks(score, *lib, played, { "MuseScore A" }, tl))
+            for (const LiveClips::Note& n : c.notes)
+                  if (n.source)
+                        route.push_back({ c.port * 16 + c.channel - 1, n.pitch });
+      std::sort(route.begin(), route.end());
+      std::vector<std::pair<int, int>> sorted = museScore;
+      std::sort(sorted.begin(), sorted.end());
+      QCOMPARE(route, sorted);
       delete score;
       }
 
