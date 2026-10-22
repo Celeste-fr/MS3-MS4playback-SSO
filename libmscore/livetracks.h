@@ -202,8 +202,9 @@ int markWrittenLanes(const std::vector<LiveSetWriter::Track>& tracks, const Live
 
 QString knobHash(double value);           // "knob:<value to 1e-4>"
 bool isKnobHash(const QString& liveHash);
-// a track's knobs: its listed, unautomated parameters' values by title
+// a track's knobs: its listed, unautomated parameters' values by title (not an empty slot's value Live kept)
 std::map<QString, double> knobs(const LiveSet::Track& track);
+bool isEmptySlotValue(double manual);
 
 // Create Live Set: each track's kept state (static values, mixer automation)
 void apply(const Data& data, std::vector<LiveSetWriter::Track>* tracks);

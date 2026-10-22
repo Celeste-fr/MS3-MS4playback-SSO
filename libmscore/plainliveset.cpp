@@ -391,10 +391,15 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
       for (auto& bi : builders) {
             Builder& b = bi.second;
             Kontakt& k = *b.kontakt;
+            // (every technique's note-ons on this Kontakt by key: a key struck again on another technique's track)
+            std::multimap<int, int> keyOns;
+            for (const Technique& t : k.techniques)
+                  for (const LiveClips::Note& n : t.notes)
+                        keyOns.insert({ n.pitch, n.timed ? n.playedStart : n.start });
             for (Technique& t : k.techniques) {
                   std::stable_sort(t.notes.begin(), t.notes.end());
                   if (written)
-                        t.timing = LiveTiming::track(t.notes, tl.bpm);
+                        t.timing = LiveTiming::track(t.notes, tl.bpm, &keyOns);
                   }
             for (auto& l : b.lanes)
                   if (l.first != PITCH_BEND)

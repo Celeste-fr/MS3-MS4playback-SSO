@@ -86,7 +86,7 @@ class FakeVM(vmlib.VM):
 
 def args(**kw):
     a = dict(name="t1", vmdir="vmjob", job=None, out=None, fetch=[], expect=[], retries=2, retry_code=[], timeout=10,
-             kill=[], env=[], keep=False, min_mem=0.0, max_wait=None, poll=1.0, command="x.exe {run}\\in")
+             kill=[], env=[], keep=False, resume=False, min_mem=0.0, max_wait=None, poll=1.0, command="x.exe {run}\\in")
     a.update(kw)
     return types.SimpleNamespace(**a)
 
@@ -282,6 +282,24 @@ class Job(unittest.TestCase):
         self.assertEqual(att, [])
         self.assertEqual(vm.files[r"C:\claude\vmjob\t1\old.txt"], "x")
         self.assertNotIn(r"C:\claude\quiet.lock", vm.files)
+
+    def test_resume_keeps_the_run_folder_and_its_files(self):
+        vm = FakeVM(self.pause, [(0, [])])
+        vm.files[r"C:\claude\vmjob\t1\.vmjob-run"] = "t1"
+        vm.files[r"C:\claude\vmjob\t1\in.txt"] = "changed by the run"
+        open(os.path.join(self.job, "new.txt"), "w").write("new")
+        st, att = self.run_job(vm, resume=True, keep=True)
+        self.assertEqual(st, 0)
+        self.assertEqual(vm.files[r"C:\claude\vmjob\t1\in.txt"], "changed by the run")   # not copied over
+        self.assertEqual(vm.files[r"C:\claude\vmjob\t1\new.txt"], "new")                 # missing: copied
+        self.assertIn("run.cmd", "".join(vm.files))
+        self.assertNotIn(r"C:\claude\quiet.lock", vm.files)
+
+    def test_resume_needs_the_marker(self):
+        vm = FakeVM(self.pause, [(0, [])])
+        vm.files[r"C:\claude\vmjob\t1\old.txt"] = "x"
+        st, att = self.run_job(vm, resume=True)
+        self.assertEqual(st, 2)
 
     def test_run_cmd_text(self):
         s = vmjob.run_cmd_text("a.exe b", [("MS_VERIFY_ROUTES", "1")])

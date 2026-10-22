@@ -105,9 +105,17 @@ struct Track {
 double unitsToMs(double units, double bpm);
 double msToUnits(double ms, double bpm);
 
+// a key struck again: MuseScore sends the note before's note-off at the new note-on's time, the off first. Live doesn't
+// keep that order for two notes the device's [pipe] sends at (nearly) the same time: the new note-on came first and the
+// old note-off ended it (real Live 12.4.6, 2026-10-22, tools/live/realcheck: a Cello's re-struck C3 lost for 0.75 s,
+// -8 .. -12 dB; with its note-off 0.16 ms earlier it played as in MuseScore). So such a note-off goes this much before the
+// note-on of its key (any technique's on the same Kontakt), never later than MuseScore plays it
+constexpr double RETRIGGER_MARGIN_MS = 0.15;
+
 // a track's timing from its notes (written, each with its playedStart / playedEnd; notes without are as written).
-// The lookahead is rounded up to a whole 0.1 ms (Live's Track Delay field), the delays to 0.01 ms
-Track track(const std::vector<LiveClips::Note>& notes, double bpm);
+// The lookahead is rounded up to a whole 0.1 ms (Live's Track Delay field), the delays to 0.01 ms. keyOns: the played
+// note-ons (units) by key of every note on the track's Kontakt (null: the track's own), for RETRIGGER_MARGIN_MS
+Track track(const std::vector<LiveClips::Note>& notes, double bpm, const std::multimap<int, int>* keyOns = nullptr);
 
 // where Live plays a note of the track (its Track Delay, and the device's delays: on / off, units)
 std::pair<double, double> playedBy(const Track& t, const LiveClips::Note& n, double bpm);

@@ -10,7 +10,9 @@ run there through a run.cmd (cwd = the run folder; "{run}" in it = the run folde
 then --kill <image>'s processes naming the run folder are killed); its %ERRORLEVEL% read back; a crash (0xC0000005, 0xC0000409, 0xC00000FD, 0xC000000D,
 0xC0000374, 0xC000001D or --retry-code), a timeout, or a missing --expect file is retried up to --retries times, each
 attempt logged; (5) the --fetch paths (relative to the run folder) copied back into --out; (6) the run folder deleted
-on the VM (unless --keep), WAVs with it; (7) the lock released (also on an error or Ctrl-C).
+on the VM (unless --keep), WAVs with it; (7) the lock released (also on an error or Ctrl-C). --resume (with --keep): a
+run folder of the same name left by an earlier attempt is used again (only missing items copied), for jobs that skip
+their finished steps (tools/live/realcheck).
 Exit status: the command's last exit code (0..255 truncated; a crash 128), 124 on timeout, 2 on a setup error.
 The log: <out>/vmjob.log (one line per step and attempt) and <out>/vmjob.json.
 
@@ -80,8 +82,11 @@ def run_job(vm, a, log, lock_factory=vmlib.Lock, sleep=time.sleep):
     status = 2
     try:
         vm.ssh('if not exist "%s\\%s" mkdir "%s\\%s"' % (root, vmdir, root, vmdir), check=True)
+        resumed = False
         if vm.exists(run):
-            raise vmlib.VMError("the run folder %s exists already (another run of this name?)" % run)
+            if not (getattr(a, "resume", False) and vm.exists(run + "\\" + MARKER)):
+                raise vmlib.VMError("the run folder %s exists already (another run of this name?)" % run)
+            resumed = True
         with tempfile.TemporaryDirectory() as t:
             stage = os.path.join(t, name)
             os.makedirs(stage)
@@ -89,10 +94,16 @@ def run_job(vm, a, log, lock_factory=vmlib.Lock, sleep=time.sleep):
             command = a.command.replace("{run}", run)
             open(os.path.join(stage, "run.cmd"), "w", newline="").write(run_cmd_text(command, a.env))
             items = [os.path.join(a.job, x) for x in sorted(os.listdir(a.job))] if a.job else []
-            vm.scp_to([stage], "%s\\%s\\" % (root, vmdir), recursive=True)
+            if resumed:
+                # (--resume: the run folder is this run's; its files may have been changed by the run itself, e.g. a
+                # score the job saved: only what is missing there is copied, and the run.cmd)
+                items = [x for x in items if not vm.exists(run + "\\" + os.path.basename(x))]
+                vm.scp_to([os.path.join(stage, "run.cmd")], run + "\\")
+            else:
+                vm.scp_to([stage], "%s\\%s\\" % (root, vmdir), recursive=True)
             if items:
                 vm.scp_to(items, run + "\\", recursive=True)
-        log("copied %d item(s) to %s" % (len(items), run))
+        log("%s %d item(s) to %s" % ("resumed: copied" if resumed else "copied", len(items), run))
         for i in range(a.retries + 1):
             vm.ssh('if exist "%s\\.vmjob.rc" del "%s\\.vmjob.rc"' % (run, run))
             t0 = time.time()
@@ -168,6 +179,8 @@ def parse(argv):
     ap.add_argument("--kill", action="append", default=[], help="image to kill after a timeout, e.g. MuseScore3Evo.exe")
     ap.add_argument("--env", action="append", default=[], help="K=V set for the command (repeatable)")
     ap.add_argument("--keep", action="store_true", help="leave the run folder on the VM")
+    ap.add_argument("--resume", action="store_true", help="go on in an existing run folder of this name (its marker "
+                    "file present): only missing items are copied; for jobs that skip their finished steps (with --keep)")
     ap.add_argument("--min-mem", type=float, default=1.0, help="local MemAvailable GB to wait for (default 1)")
     ap.add_argument("--max-wait", type=float, help="give up waiting for the lock after s")
     ap.add_argument("--poll", type=float, default=20.0)
