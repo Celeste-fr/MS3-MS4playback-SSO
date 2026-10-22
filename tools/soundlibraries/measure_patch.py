@@ -731,7 +731,9 @@ class VM:
     def unlock(self):
         if not self.held:
             return
-        self.ssh(r'findstr /c:%s C:\claude\quiet.lock >nul && del C:\claude\quiet.lock' % self.tag)
+        r = self.ssh(r'type C:\claude\quiet.lock')
+        if r.returncode == 0 and r.stdout.strip() == self.tag:        # (only our own)
+            self.ssh(r'del C:\claude\quiet.lock')
         try:
             if open(PAUSE_FILE).read().startswith(self.tag):
                 os.remove(PAUSE_FILE)
