@@ -21,6 +21,8 @@ set /p PW=<C:\claude\share.txt
 net use \\VOLENS\VMShare /user:VOLENS\vmshare %PW% >nul 2>&1
 set PW=
 set MS_VERIFY_ROUTES=1
+rem (the free memory for the copies pinned as in the dump: heard_check.sh writes its MEM here; builds before voice-determinism ignore it)
+set MS_FREE_MEMORY_MB=16384
 echo start %date% %time%>"%RUN%\run.out"
 for %%s in ("%RUN%\score*.mscz") do call :one "%%~ns"
 net use \\VOLENS\VMShare /delete /y >nul 2>&1

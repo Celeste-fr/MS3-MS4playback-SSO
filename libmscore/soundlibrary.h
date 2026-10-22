@@ -922,11 +922,19 @@ double laneRing(const LibInstrument& patch, const Articulation* articulation, co
 // memory ÷ the measured cost per copy"), a copy costing 245 MB (the owner measured Kontakt at 1031 MB with one copy
 // of a patch, 1276 with two: Kontakt shares no samples between copies, docs/HISTORY.md › tuning lanes), the free
 // memory shared by the score's parts (each may need copies): 1 + free / (245 MB × parts), at least 1. Free: the
-// system's available physical memory, read once per run (freeMemoryBytes)
+// system's available physical memory (with memory a VM can still be given: memoryForCopies), read once per run
+// (freeMemoryBytes)
 int memoryMaxLanes(const Score* score, double toleranceCents);
 int partsNeedingCopies(const Score* score, double toleranceCents);
 int memoryMaxLanes(qint64 freeBytes, int parts);
 qint64 freeMemoryBytes();
+// the free memory for the copies: available now plus installed memory not yet visible beyond a 2 GB allowance for
+// hardware reservations (a VM on dynamic memory gets more as programs ask: the Windows test VM, 4.9 of 16 GB visible
+// when idle); -1 unknown. freeMemoryBytes: Windows from GlobalMemoryStatusEx and GetPhysicallyInstalledSystemMemory,
+// Linux MemAvailable alone; MS_FREE_MEMORY_MB pins it (the tools)
+qint64 memoryForCopies(qint64 available, qint64 visible, qint64 installed);
+// (tests: freeMemoryBytes as memoryForCopies of these; available -2 back to the machine's)
+void setMemoryForTest(qint64 available, qint64 visible, qint64 installed);
 constexpr qint64 LANE_COPY_BYTES = qint64(1276 - 1031) * 1024 * 1024;
 LaneSettings libraryLaneSettings(const Library&);
 LaneSettings laneSettings(const Score*, const Library&);

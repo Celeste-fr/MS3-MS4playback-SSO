@@ -50,6 +50,12 @@ SCP="scp -q -o BatchMode=yes -i $KEY"
 VMRUN="C:\\claude\\$VMDIR\\$NAME"
 VMRUN_SCP="C:/claude/$VMDIR/$NAME"
 T0=$(date +%s)
+# the free memory both renders count for the tuning / voice copies (SoundLib::memoryMaxLanes; MS_FREE_MEMORY_MB, branch
+# voice-determinism 2026-10-21): pinned, so that the dump and the VM's export give the notes the same copies whatever
+# either machine has free (the test VM on dynamic memory: 1.9 GB free when idle, Violins 1's line on 1, 2 or 4 copies
+# between runs). 16384: the VM's installed memory, as on a machine with that much free
+MEM=${HC_FREE_MEMORY_MB:-16384}
+case "$MEM" in *[!0-9]*|"") echo "HC_FREE_MEMORY_MB must be a number of MB"; exit 2;; esac
 $SSH "if not exist C:\\claude\\$VMDIR mkdir C:\\claude\\$VMDIR" || exit 2
 
 if [ "$RENDER" = export ]; then
@@ -60,7 +66,7 @@ if [ "$RENDER" = export ]; then
       # (imported by the VM's MuseScore, so the dump and the export read the same score)
       $SSH "mkdir $VMRUN" || exit 2
       $SCP "$SCORE" "$VM:$VMRUN_SCP/in.musicxml" || exit 2
-      sed 's/$/\r/' "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
+      sed "s/^set MS_FREE_MEMORY_MB=16384/set MS_FREE_MEMORY_MB=$MEM/; s/\$/\r/" "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
       $SCP "$WORK/heard_export_vm.cmd" "$VM:$VMRUN_SCP/heard_export_vm.cmd" || exit 2
       $SSH "$VMRUN\\heard_export_vm.cmd $VMRUN $EXE convert" | tail -1
       $SCP "$VM:$VMRUN_SCP/conv.mscz" "$WORK/conv.mscz" || { echo "the VM's import failed"; exit 2; }
@@ -77,7 +83,7 @@ echo "== 1. dump ($PRESET) -> $WORK/dump"
 # (a script file: the wrappers pass their command through two levels of quoting)
 cat > "$WORK/dump.sh" <<EOF
 cd mtest/libmscore/playbackaudit || exit 2
-MS_AUDIT_SCORE='$DUMPSCORE' MS_AUDIT_SETTINGS='$PRESET' MS_AUDIT_DUMP='$WORK/dump' MS_AUDIT_OUT='$WORK/audit.txt' \\
+MS_FREE_MEMORY_MB=$MEM MS_AUDIT_SCORE='$DUMPSCORE' MS_AUDIT_SETTINGS='$PRESET' MS_AUDIT_DUMP='$WORK/dump' MS_AUDIT_OUT='$WORK/audit.txt' \\
   QT_QPA_PLATFORM=offscreen ./tst_playbackaudit auditScore > '$WORK/dump.log' 2>&1
 EOF
 if [ -n "${HC_RUN:-}" ]; then "$HC_RUN" "sh $WORK/dump.sh"; else (cd "${HC_BUILD:-$ROOT/build.dir}" && sh "$WORK/dump.sh"); fi
@@ -91,7 +97,7 @@ echo "$N routes"
 printf "== 3. render on the VM (%s, %s)\n" "$RENDER" "$VMRUN_SCP"
 if [ "$RENDER" = export ]; then
   $SSH "if not exist $VMRUN mkdir $VMRUN" || exit 2
-  sed 's/$/\r/' "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
+  sed "s/^set MS_FREE_MEMORY_MB=16384/set MS_FREE_MEMORY_MB=$MEM/; s/\$/\r/" "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
   if [ "$SPLIT" = parts ]; then
     # (one copy per library part; the parts asked for only)
     mkdir -p "$WORK/split"
