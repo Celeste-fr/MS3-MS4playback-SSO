@@ -10025,27 +10025,15 @@ void TestSoundLibrary::computedLaneSettings()
       QCOMPARE(ls.tolerance, ScoreTuning::smallestAccidentalGap() / 2);
       QVERIFY(std::fabs(ls.tolerance - (200.0 / 12.0 - 16.5) / 2) < 1e-9);
       QCOMPARE(ls.tail, -1.0);                    // each note's measured ring
-      QCOMPARE(ls.maxLanes, 0);                   // by the free memory
+      QCOMPARE(ls.maxLanes, 0);                   // no maximum: as many copies as the music needs (the owner, 2026-10-21)
       // the ring: twice the release to 30 dB under (ISO 3382-1's T30, extrapolated to 60 dB); an unmeasured
       // articulation: its patch's longest
       const SoundLib::LibInstrument& v = lib->instruments[0];
       QCOMPARE(SoundLib::laneRing(v, &v.articulations[0], { &v }), 2.4);
       QCOMPARE(SoundLib::laneRing(v, &v.articulations[1], { &v }), 2.4);
       QCOMPARE(SoundLib::laneRing(v, nullptr, { &v }), 2.4);
-      // copies: 1 + free memory / (245 MB a copy (1276 - 1031 MB, the owner's measurement) × the score's parts)
+      // the copies' memory warning: 245 MB a copy (1276 - 1031 MB, the owner's measurement)
       QCOMPARE(SoundLib::LANE_COPY_BYTES, qint64(245) * 1024 * 1024);
-      QCOMPARE(SoundLib::memoryMaxLanes(qint64(245) * 1024 * 1024 * 8, 2), 5);
-      QCOMPARE(SoundLib::memoryMaxLanes(qint64(100) * 1024 * 1024, 1), 1);
-      QCOMPARE(SoundLib::memoryMaxLanes(-1, 1), 1);                   // (unknown: no copies)
-      // the share: only parts whose notes play at more than one tuning (the owner, 2026-10-04); quartertones.musicxml's
-      // part does, legato-early.musicxml has none
-      for (const auto& f : { std::make_pair(QString("quartertones.musicxml"), 1), std::make_pair(QString("legato-early.musicxml"), 0) }) {
-            MasterScore* sc = readScore(DIR + f.first);
-            QVERIFY(sc);
-            const ScoreTuningScope scope(sc);
-            QCOMPARE(SoundLib::partsNeedingCopies(sc, ls.tolerance), f.second);
-            delete sc;
-            }
       QVERIFY(SoundLib::freeMemoryBytes() > 0);                       // (Linux: /proc/meminfo MemAvailable)
       // playback.ini over the computed ones
       Playback::setIniValuesForTest({ { "tuning/tail", "1.5" }, { "tuning/maxLanes", "4" }, { "tuning/tolerance", "3" } });
@@ -14520,16 +14508,19 @@ void TestSoundLibrary::chordVoices()
 //   voiceLanesMemory
 //    branch voice-determinism (2026-10-21): the copies' maximum by the free memory (memoryMaxLanes) read the memory
 //    visible now, and the Windows test VM runs on Hyper-V dynamic memory (16 GB installed, 4.9 GB visible, 1.9 GB free
-//    when idle): Whence's Violins 1 - Performance went on 1, 2 or 4 routes between runs of one score. memoryForCopies
-//    counts the installed memory not yet visible (past a 2 GB allowance for hardware reservations). chords.musicxml on a
-//    monophonic varispeed patch (no maxLanes in the map: by memory), and quartertones.musicxml on it (two
-//    tuning copies of the line, a second voice), rendered with the VM idle (200 MB free, 1 GB of 16 GB visible) and with plenty free: the same
-//    routes and the same channel for every note
+//    when idle): Whence's Violins 1 - Performance went on 1, 2 or 4 routes between runs of one score. Branch all-copies
+//    (the owner, 2026-10-21, "2": always load every copy the music needs and warn when memory is low): no maximum by
+//    memory at all. chords.musicxml on a monophonic varispeed patch (no maxLanes in the map), and quartertones.musicxml
+//    on it (two tuning copies of the line, a second voice), rendered with plenty free, with the VM idle (200 MB free,
+//    1 GB of 16 GB visible) and truly short (200 MB of 16 GB): the same routes and the same channel for every note each
+//    time; the warning (copiesMemory) raised when short only, MS_FREE_MEMORY_MB pinning its figure; an explicit maxLanes
+//    (playback.ini [tuning]) still a maximum
 //---------------------------------------------------------
 
 void TestSoundLibrary::voiceLanesMemory()
       {
-      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setMemoryForTest(-2, -1, -1); Playback::setIniValuesForTest({}); } } reset;
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setMemoryForTest(-2, -1, -1); Playback::setIniValuesForTest({});
+                                qunsetenv("MS_FREE_MEMORY_MB"); } } reset;
       Playback::setIniValuesForTest({});
       const qint64 MB = 1024 * 1024, GB = 1024 * MB;
       QCOMPARE(SoundLib::memoryForCopies(1900 * MB, 4900 * MB, 16 * GB), 1900 * MB + 16 * GB - 4900 * MB - 2 * GB);
@@ -14543,7 +14534,7 @@ void TestSoundLibrary::voiceLanesMemory()
          "<Articulation name='Legato' value='20' techniques='legato long'/>"
          "</Instrument></SoundLibrary>");
       QVERIFY(lib);
-      QCOMPARE(SoundLib::libraryLaneSettings(*lib).maxLanes, 0);                 // (by the free memory)
+      QCOMPARE(SoundLib::libraryLaneSettings(*lib).maxLanes, 0);                 // (no maximum)
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       // quartertones.musicxml: two tuning copies of the line (C5+ while C5 rings), a second voice (m5's chord);
@@ -14576,20 +14567,61 @@ void TestSoundLibrary::voiceLanesMemory()
                         v.push_back(channelOf.count(n) ? channelOf.at(n) : -1);
                   return v;
                   };
-            SoundLib::setMemoryForTest(14 * GB, 16 * GB, 16 * GB);              // (plenty free)
-            const std::vector<int> ample = channels();
-            QCOMPARE(int(SoundLib::routes(score, *lib).size()), f.second);
-            QVERIFY(std::find(ample.begin(), ample.end(), -1) == ample.end());
-            QCOMPARE(*std::max_element(ample.begin(), ample.end()), f.second - 1);
-            SoundLib::setMemoryForTest(200 * MB, 1 * GB, 16 * GB);              // (the VM idle)
-            QCOMPARE(int(SoundLib::routes(score, *lib).size()), f.second);
-            QVERIFY2(channels() == ample, qPrintable(f.first));
+            struct Memory { qint64 available, visible, installed; bool tooLittle; };
+            std::vector<int> ample;
+            int live = -1;
+            for (const Memory& m : { Memory { 14 * GB, 16 * GB, 16 * GB, false },          // (plenty free)
+                                     Memory { 200 * MB, 1 * GB, 16 * GB, false },          // (the VM idle: 13.2 GB can come)
+                                     Memory { 200 * MB, 16 * GB, 16 * GB, true } }) {      // (truly short)
+                  SoundLib::setMemoryForTest(m.available, m.visible, m.installed);
+                  const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *lib);
+                  QCOMPARE(int(routes.size()), f.second);
+                  const int liveRoutes = int(SoundLib::routes(score, *lib, true).size());   // (Live's: the same full set)
+                  QVERIFY(liveRoutes >= f.second);
+                  if (live < 0)
+                        live = liveRoutes;
+                  QCOMPARE(liveRoutes, live);
+                  const std::vector<int> ch = channels();
+                  if (ample.empty()) {
+                        ample = ch;
+                        QVERIFY(std::find(ample.begin(), ample.end(), -1) == ample.end());
+                        QCOMPARE(*std::max_element(ample.begin(), ample.end()), f.second - 1);
+                        }
+                  QVERIFY2(ch == ample, qPrintable(f.first));
+                  // the warning: the copies (routes beyond one per part and patch) at 245 MB each against the free memory
+                  const SoundLib::CopiesMemory w = SoundLib::copiesMemory(SoundLib::routeCopies(routes));
+                  QCOMPARE(w.copies, f.second - 1);
+                  QCOMPARE(w.toLoad, f.second - 1);
+                  QCOMPARE(w.needBytes, qint64(f.second - 1) * SoundLib::LANE_COPY_BYTES);
+                  QCOMPARE(w.availableBytes, SoundLib::memoryForCopies(m.available, m.visible, m.installed));
+                  QVERIFY2(w.tooLittle() == m.tooLittle, qPrintable(w.text()));
+                  }
             delete score;
             }
-      // (with the memory truly short, the maximum still holds: one copy of each voice, the line's C5+ retuning it)
+      // the warning's text; an edit adding copies to a loaded score: only the added ones (loaded)
+      SoundLib::setMemoryForTest(300 * MB, 16 * GB, 16 * GB);
+      const SoundLib::CopiesMemory two = SoundLib::copiesMemory(2);
+      QVERIFY(two.tooLittle());
+      QCOMPARE(two.text(), QString("2 tuning / voice copies need about 490 MB (245 MB a copy), 300 MB available"));
+      const SoundLib::CopiesMemory added = SoundLib::copiesMemory(3, 2);
+      QCOMPARE(added.toLoad, 1);
+      QVERIFY(!added.tooLittle());
+      QCOMPARE(added.text(), QString("3 tuning / voice copies, 1 more to load: about 245 MB (245 MB a copy), 300 MB available"));
+      QVERIFY(!SoundLib::copiesMemory(0).tooLittle());
+      SoundLib::setMemoryForTest(-1, -1, -1);                                       // (unknown: no warning)
+      QVERIFY(!SoundLib::copiesMemory(5).tooLittle());
+      // MS_FREE_MEMORY_MB pins the figure (the tools)
+      SoundLib::setMemoryForTest(-2, -1, -1);
+      qputenv("MS_FREE_MEMORY_MB", "400");
+      QCOMPARE(SoundLib::freeMemoryBytes(), 400 * MB);
+      QVERIFY(SoundLib::copiesMemory(2).tooLittle());
+      qputenv("MS_FREE_MEMORY_MB", "16384");
+      QVERIFY(!SoundLib::copiesMemory(2).tooLittle());
+      qunsetenv("MS_FREE_MEMORY_MB");
+      // an explicit maximum still caps: [tuning] maxLanes 1, one copy of each voice, the line's C5+ retuning it
       MasterScore* score = readScore(DIR + "quartertones.musicxml");
       QVERIFY(score);
-      SoundLib::setMemoryForTest(200 * MB, 16 * GB, 16 * GB);
+      Playback::setIniValuesForTest({ { "tuning/maxLanes", "1" } });
       QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
       delete score;
       }

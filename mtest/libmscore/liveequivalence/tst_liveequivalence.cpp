@@ -59,6 +59,7 @@
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
+#include "libmscore/renderpreflight.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/calibrationfile.h"
 #include "libmscore/spanner.h"
@@ -5097,6 +5098,31 @@ void TestLiveEquivalence::hostedSlots()
       QVERIFY2(vst, qPrintable(error));
       checkMulti(vst.get());
       QCOMPARE(int(patches.size()), 3);
+      // the copies' memory (branch all-copies, the owner 2026-10-21: every copy loaded, a warning when short): the render
+      // preflight's entry for the score, 2 copies at 245 MB; with 300 MB free a warning, and still all three routes
+      auto entry = []() {
+            for (const RenderPreflight::Copies& c : RenderPreflight::copies())
+                  if (c.score.startsWith("quartertones"))
+                        return c;
+            return RenderPreflight::Copies();
+            };
+      QCOMPARE(entry().copies, 2);
+      QCOMPARE(entry().needBytes, 2 * SoundLib::LANE_COPY_BYTES);
+      {
+            struct Reset { ~Reset() { SoundLib::setMemoryForTest(-2, -1, -1); } } reset;
+            SoundLib::setMemoryForTest(qint64(300) << 20, qint64(16) << 30, qint64(16) << 30);
+            std::shared_ptr<Vst3Synth> shortOf = SoundLibraryExport::loadInstances(score, 48000, &error);
+            QVERIFY2(shortOf, qPrintable(error));
+            checkMulti(shortOf.get());
+            QVERIFY(entry().tooLittle);
+            QCOMPARE(entry().availableBytes, qint64(300) << 20);
+            QVERIFY(RenderPreflight::warnings().join("\n").contains("memory short for the copies of quartertones"));
+            QVERIFY(RenderPreflight::lines("test").join("\n").contains("copies, quartertones"));
+            SoundLib::setMemoryForTest(qint64(14) << 30, qint64(16) << 30, qint64(16) << 30);
+            shortOf = SoundLibraryExport::loadInstances(score, 48000, &error);
+            QVERIFY(!entry().tooLittle);
+            QVERIFY(!RenderPreflight::warnings().join("\n").contains("memory short"));
+      }
       // a copy's note reaches the instance (on its channel) and sounds
       {
             vst->beginExport(48000);

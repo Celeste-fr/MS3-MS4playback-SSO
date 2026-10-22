@@ -30,6 +30,7 @@ static QString libraryName;
 static QStringList pluginChecked;
 static QStringList pluginWarnings;
 static QStringList libraryPatches;
+static std::vector<Copies> scoreCopies;
 
 static QByteArray readAll(const QString& path)
       {
@@ -232,6 +233,23 @@ void setLibrary(const QString& name, const QStringList& patches)
       libraryPatches = patches;
       }
 
+void setCopies(const Copies& c)
+      {
+      std::lock_guard<std::mutex> l(stateMutex);
+      for (Copies& e : scoreCopies)
+            if (e.score == c.score) {
+                  e = c;
+                  return;
+                  }
+      scoreCopies.push_back(c);
+      }
+
+std::vector<Copies> copies()
+      {
+      std::lock_guard<std::mutex> l(stateMutex);
+      return scoreCopies;
+      }
+
 //---------------------------------------------------------
 //   report
 //---------------------------------------------------------
@@ -278,6 +296,10 @@ QStringList warnings()
             for (const QString& x : pluginWarnings)
                   w << "WARNING: plug-in settings: " + x;
       }
+      for (const Copies& x : copies())
+            if (x.tooLittle)
+                  w << QString("WARNING: memory short for the copies of %1: %2 (all loaded; this computer may page or "
+                               "run out of memory)").arg(x.score, x.text);
       return w;
       }
 
@@ -334,6 +356,8 @@ QStringList lines(const QString& job)
       const FileId ini = fileId(Playback::iniPath());
       const QString preset = Playback::currentPreset();
       out << "  playback.ini: " + describe(ini) + "; preset: " + (preset.isEmpty() ? QString("custom (no preset's values)") : preset);
+      for (const Copies& x : copies())
+            out << QString("  copies, %1: %2").arg(x.score, x.text);
       for (const QString& w : warnings())
             out << "  " + w;
       return out;
@@ -375,6 +399,17 @@ QJsonObject json()
             std::lock_guard<std::mutex> l(stateMutex);
             o["pluginSettings"] = QJsonArray::fromStringList(pluginChecked);
       }
+      QJsonArray cp;
+      for (const Copies& x : copies()) {
+            QJsonObject e;
+            e["score"] = x.score;
+            e["copies"] = x.copies;
+            e["needMB"] = double(x.needBytes >> 20);
+            e["availableMB"] = x.availableBytes >= 0 ? double(x.availableBytes >> 20) : -1.0;
+            e["short"] = x.tooLittle;
+            cp.append(e);
+            }
+      o["copies"] = cp;
       o["warnings"] = QJsonArray::fromStringList(warnings());
       return o;
       }

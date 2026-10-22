@@ -15,6 +15,7 @@
 #include <QStringList>
 #include <QJsonObject>
 #include <map>
+#include <vector>
 
 namespace Ms {
 
@@ -86,6 +87,20 @@ void setLibrary(const QString& name, const QStringList& patches);   // the map's
 // Share__Settings.nka; SoundLibraryHost::checkPluginSettings): checked, a line per file; warnings, a value the map can't
 // play with (SSO: a shared articulation mode other than UACC, Reset on transport, transpose …)
 void setPluginSettings(const QStringList& checked, const QStringList& warnings);
+
+// the tuning / voice copies a render's scores load and the memory they need (SoundLib::copiesMemory; branch all-copies,
+// the owner 2026-10-21: every copy the music needs is loaded, a warning when the memory is short, never fewer copies):
+// set by SoundLibraryExport::loadInstances, one entry per score (the latest kept); a short one is a warning
+struct Copies {
+      QString score;                // its file name
+      int copies = 0;
+      qint64 needBytes = 0;
+      qint64 availableBytes = -1;   // -1 unknown
+      bool tooLittle = false;
+      QString text;                 // SoundLib::CopiesMemory::text
+      };
+void setCopies(const Copies& c);
+std::vector<Copies> copies();
 
 // the report: lines (job: "playback verification", "background extract" …), and as JSON
 QStringList lines(const QString& job);

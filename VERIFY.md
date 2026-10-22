@@ -250,7 +250,11 @@ deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores o
     memory's (`SoundLib::memoryMaxLanes`) and both machines run on dynamic memory, the VM 1.9 GB free when idle; branch
     `voice-determinism`). Both renders now count the same free memory, `MS_FREE_MEMORY_MB` (`HC_FREE_MEMORY_MB`, default
     16384, the VM's installed memory: as on a machine with that much free; builds before voice-determinism ignore it in
-    the export), and `SoundLib::memoryForCopies` counts a VM's installed memory not yet visible.
+    the export), and `SoundLib::memoryForCopies` counts a VM's installed memory not yet visible. **Since branch
+    `all-copies` (the owner, 2026-10-21: "always load every copy the music needs and warn when memory is low") the
+    memory no longer decides the copies**: `HC_FREE_MEMORY_MB` / `MS_FREE_MEMORY_MB` are unnecessary for builds with
+    it (they only set the memory warning's figure) and are kept for builds before it (the VM's current build ignores
+    the pin in the export until a new Windows build: the copies may still differ there).
     **Measured nothing from crash-fixes (7f51a91979, 2026-10-16) to verify-routes (2026-10-18)**: the route pass ran only
     with the instances loaded up front, which crash-fixes do for a single part only; the split copies keep every part, so
     each run wrote no route WAV and the report's zeros were 0 of 0 (builds 98572aa7e2 and e1386f9e57 included; build 443

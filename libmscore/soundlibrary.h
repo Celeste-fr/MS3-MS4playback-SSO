@@ -546,7 +546,7 @@ class Library {
       bool varispeed { false };
       double laneTolerance { -1 };        // cents; < 0: defaultLaneTolerance()
       double laneTail { -1 };             // seconds; < 0: measured (laneRing)
-      int maxLanes { 0 };                 // per patch, past it the lane quiet longest is retuned (its tail with it); 0: memoryMaxLanes
+      int maxLanes { 0 };                 // per patch, past it the lane quiet longest is retuned (its tail with it); 0: no maximum
       // a held note (not a legato transition) starts early by this share of its articulation's onset (<Onset
       // early>, percent; the score's own: onsetEarly())
       int onsetEarly { 0 };
@@ -912,7 +912,8 @@ struct Lanes {
 // divisi data. dB, <= 0 (n <= 1: 0)
 double divisiDb(int voices);
 // (tailSeconds: a lane is silent after its notes' end plus the longer of it and the note's articulation's
-// releaseMs ([tuning] waitForRelease); < 0: plus the note's laneRing. maxLanes <= 0: memoryMaxLanes)
+// releaseMs ([tuning] waitForRelease); < 0: plus the note's laneRing. maxLanes <= 0: no maximum, as many copies as the
+// music needs: the owner, 2026-10-21, "always load every copy the music needs and warn when memory is low", copiesMemory)
 // fixedTuning (Live: no varispeed there; the owner, 2026-10-10: "I will not accept losing microtones"): a patch that
 // doesn't bend ([tuning] pitchBend, its bendCents) gets a lane per tuning (within the tolerance), never retuned: a
 // note goes to the lane at its tuning, a slurred one too (an All techniques patch plays each note's own attack: no
@@ -930,7 +931,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
 struct LaneSettings {
       double tolerance { 0 };             // cents
       double tail { -1 };                 // seconds; < 0: each note's measured release to 60 dB under (laneRing)
-      int maxLanes { 0 };                 // 0: as the free memory allows (memoryMaxLanes)
+      int maxLanes { 0 };                 // 0: no maximum (as many copies as the music needs)
       bool operator==(const LaneSettings& o) const { return tolerance == o.tolerance && tail == o.tail && maxLanes == o.maxLanes; }
       };
 extern const char* laneSettingsMetaTag;
@@ -944,20 +945,32 @@ double defaultLaneTolerance();
 // range: <Articulation release>) extrapolated as ISO 3382-1 does from a 30 dB range (T30: twice the time of a 30 dB
 // decay); unmeasured: the longest of its patch's articulations, else of the part's patches; none: 0
 double laneRing(const LibInstrument& patch, const Articulation* articulation, const std::vector<const LibInstrument*>& patches);
-// copies per patch when the map gives no maximum: as many as the free memory holds (the owner, 2026-10-03: "free
-// memory ÷ the measured cost per copy"), a copy costing 245 MB (the owner measured Kontakt at 1031 MB with one copy
-// of a patch, 1276 with two: Kontakt shares no samples between copies, docs/HISTORY.md › tuning lanes), the free
-// memory shared by the score's parts (each may need copies): 1 + free / (245 MB × parts), at least 1. Free: the
-// system's available physical memory (with memory a VM can still be given: memoryForCopies), read once per run
-// (freeMemoryBytes)
-int memoryMaxLanes(const Score* score, double toleranceCents);
-int partsNeedingCopies(const Score* score, double toleranceCents);
-int memoryMaxLanes(qint64 freeBytes, int parts);
+// copies per patch when the map, playback.ini and the score give no maximum: as many as the music needs (the owner,
+// 2026-10-21: "2", always load every copy the music needs and warn when memory is low; this replaced his rule of
+// 2026-10-03, "free memory ÷ the measured cost per copy", which made a render depend on the machine's memory at the time:
+// Whence's Violins 1 - Performance on 1, 2 or 4 routes between runs on the Hyper-V VM, branch voice-determinism).
+// The warning: copiesMemory, the copies at 245 MB each (LANE_COPY_BYTES: the owner measured Kontakt at 1031 MB with one
+// copy of a patch, 1276 with two; Kontakt shares no samples between copies, docs/HISTORY.md › tuning lanes) against
+// freeMemoryBytes(). Never blocks or reduces anything: SoundLibraryHost (status bar + load times.log, once per score open
+// and per change of the copies), SoundLibraryExport::loadInstances (stderr, load times.log, RenderPreflight::setCopies)
+// the routes beyond one per part and patch: a patch's copies for other tunings and a monophonic patch's voice copies
+int routeCopies(const std::vector<Route>& routes);
+struct CopiesMemory {
+      int copies { 0 };                   // the copies (routeCopies)
+      int toLoad { 0 };                   // of them not loaded yet (copiesMemory's loaded)
+      qint64 needBytes { 0 };             // toLoad x LANE_COPY_BYTES
+      qint64 availableBytes { -1 };       // freeMemoryBytes(); -1 unknown
+      bool tooLittle() const { return toLoad > 0 && availableBytes >= 0 && needBytes > availableBytes; }
+      QString text() const;               // "5 tuning / voice copies need about 1225 MB (245 MB a copy), 800 MB available"
+      };
+// copies (routeCopies), loaded of them already in memory (an edit adding copies to a score whose others are loaded: only
+// the new ones are counted against what is free now)
+CopiesMemory copiesMemory(int copies, int loaded = 0);
 qint64 freeMemoryBytes();
 // the free memory for the copies: available now plus installed memory not yet visible beyond a 2 GB allowance for
 // hardware reservations (a VM on dynamic memory gets more as programs ask: the Windows test VM, 4.9 of 16 GB visible
 // when idle); -1 unknown. freeMemoryBytes: Windows from GlobalMemoryStatusEx and GetPhysicallyInstalledSystemMemory,
-// Linux MemAvailable alone; MS_FREE_MEMORY_MB pins it (the tools)
+// Linux MemAvailable alone, read at each call; MS_FREE_MEMORY_MB pins it (the tools, the tests of the warning)
 qint64 memoryForCopies(qint64 available, qint64 visible, qint64 installed);
 // (tests: freeMemoryBytes as memoryForCopies of these; available -2 back to the machine's)
 void setMemoryForTest(qint64 available, qint64 visible, qint64 installed);

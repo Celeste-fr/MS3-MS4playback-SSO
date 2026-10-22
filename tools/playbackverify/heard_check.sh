@@ -50,10 +50,12 @@ SCP="scp -q -o BatchMode=yes -i $KEY"
 VMRUN="C:\\claude\\$VMDIR\\$NAME"
 VMRUN_SCP="C:/claude/$VMDIR/$NAME"
 T0=$(date +%s)
-# the free memory both renders count for the tuning / voice copies (SoundLib::memoryMaxLanes; MS_FREE_MEMORY_MB, branch
-# voice-determinism 2026-10-21): pinned, so that the dump and the VM's export give the notes the same copies whatever
-# either machine has free (the test VM on dynamic memory: 1.9 GB free when idle, Violins 1's line on 1, 2 or 4 copies
-# between runs). 16384: the VM's installed memory, as on a machine with that much free
+# the free memory both renders count (MS_FREE_MEMORY_MB, branch voice-determinism 2026-10-21): pinned, so that the
+# dump and the VM's export gave the notes the same copies whatever either machine had free (the test VM on dynamic
+# memory: 1.9 GB free when idle, Violins 1's line on 1, 2 or 4 copies between runs). Since branch all-copies (the owner,
+# 2026-10-21: every copy the music needs, a warning when memory is short) the memory no longer decides the copies: the
+# pin only sets the memory warning's figure, and is needed only against builds before all-copies. 16384: the VM's
+# installed memory
 MEM=${HC_FREE_MEMORY_MB:-16384}
 case "$MEM" in *[!0-9]*|"") echo "HC_FREE_MEMORY_MB must be a number of MB"; exit 2;; esac
 $SSH "if not exist C:\\claude\\$VMDIR mkdir C:\\claude\\$VMDIR" || exit 2
