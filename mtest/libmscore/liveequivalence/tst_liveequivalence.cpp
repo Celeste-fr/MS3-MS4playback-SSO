@@ -8288,7 +8288,7 @@ void TestLiveEquivalence::plainJoinsLive()
 void TestLiveEquivalence::speedSentLive()
       {
       struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
-      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/speedFromWritten", "1" } });
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/speedFromWritten", "1" }, { "slurs/plainJoins", "1" } });
       auto lib = loadMap(
          "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
          "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
