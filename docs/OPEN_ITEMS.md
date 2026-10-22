@@ -197,11 +197,12 @@ Keep this file current: close an item by deleting it (the commit message says wh
   Ample's background load.
 - **Done (2026-10-21, branch `ample-pipeline`)**: hosted loads of a `backgroundLoad` map wait for the plug-in's loader
   (`setStateWaiting`, serialised; test backgroundLoadHosted); `tools/ample/check.py` retries crashed runs. Measured:
-  amphost single loads 0 / 30 with the network, 0 / 30 with amphost's outbound traffic blocked; MuseScore #458 2 of 15
-  render attempts (3 instances loading in parallel). So not one load's licence check alone.
+  amphost single loads 0 / 30 with the network, 0 / 30 with amphost's outbound traffic blocked; MuseScore (3 instances
+  loading in parallel) #458 2 of 15 render attempts, #463 1 of 14 with the network and **9 of 22 with MuseScore's outbound
+  traffic blocked** (`check.py --block-network`; two renders failed 3 times running): the network matters, so the licence /
+  demo check is the likely cause.
 - **Fix (left)**: let `Seq::start` wait as for even levels; retries in the heard check (as `superviseExtract` does).
-- **Miss**: whether an activated AGM crashes at all; MuseScore's crash rate with the network cut (`check.py
-  --block-network`).
+- **Miss**: whether an activated AGM crashes at all (the bought guitars: `check.py` twice, once with `--block-network`).
 - **Untried**: GUI (a GUI crash would take MuseScore down). AGM trial ends ~2026-10-25.
 
 ### 13. Ample capo, state lanes and other Ample limits

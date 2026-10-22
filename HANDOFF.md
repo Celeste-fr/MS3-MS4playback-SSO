@@ -59,10 +59,12 @@ step-by-step and checklist; AGM 4.1.0 (the VM's trial, ending ~2026-10-25) was t
   background measurer still doesn't wait (SSO only).
 - **Measured, not changed**: CC11 reaches Ample only through a MIDI-learn entry and then overwrites CC7 (fold per-note
   CC11 levels into M-Master Vol: OPEN_ITEMS 10); state ranges (`stateclamp`: two out-of-range values crash AGM);
-  load crashes 0 / 60 in amphost (network on / blocked), 2 / 15 in MuseScore #458 (parallel loads), so not the licence
-  check of one load (OPEN_ITEMS 12).
-- **Next**: a Windows build with strumLead, then `check.py` on it (strum bright must PASS; with `--block-network` for
-  MuseScore's crash rate without network) before the trial ends; the bought guitars by docs/AMPLE_PIPELINE.md.
+  load crashes 0 / 60 in amphost (network on / blocked); in MuseScore 1 / 14 (#463) and 2 / 15 (#458) with the network,
+  9 / 22 with MuseScore's outbound traffic blocked: network-dependent, the licence / demo check likely (OPEN_ITEMS 12).
+- **Windows build #463** (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39716570373), installed on the VM
+  in `C:\claude\b463\ms`: `check.py` 25 PASS / 0 FAIL, strum bright 1335 Hz (#458: 639), the renders without strums
+  bit-identical to #458's. **Next**: the owner hears the strums (`[guitar] strums` 1); the bought guitars by
+  docs/AMPLE_PIPELINE.md.
 
 ## Plain timing (branch `plain-timing`, 2026-10-21, from integrate-1017 15820b7b46; not merged)
 

@@ -96,7 +96,13 @@ class Lock:
         ps("if ((Test-Path '{0}') -and ((Get-Content '{0}' -Raw).Trim() -eq '{1}')) {{ Remove-Item '{0}' }}"
            .format(LOCK, LOCK_NAME), check=False)
         if PAUSE and os.path.exists(PAUSE):
-            os.unlink(PAUSE)
+            try:
+                with open(PAUSE) as f:
+                    mine = f.read().strip() == LOCK_NAME
+            except OSError:
+                mine = False
+            if mine:                           # (only our own: another session's stays)
+                os.unlink(PAUSE)
 
 
 def file_hash(remote):

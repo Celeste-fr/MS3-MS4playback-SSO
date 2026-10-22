@@ -340,6 +340,9 @@ class Check:
         self.row("plug-in settings file unchanged", h0 == h1, "%s… before and after" % h0[:12])
         if restored:
             self.row("parameter values.json", "RESTORED", restored)
+        for name in [n for n, runs in done.items() if not all(r["wavs"] for r in runs)]:
+            self.row("%s renders" % name, False, "no render after the retries (%s)" % done[name][-1]["state"])
+            del done[name]                     # (its rows left out)
         self.analyse(done)
         self.compare_ref(done)
         self.row("load crashes (retried)", "INFO", "%d" % self.results["crashes"])
