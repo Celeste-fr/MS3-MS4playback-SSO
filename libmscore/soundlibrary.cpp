@@ -2603,6 +2603,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             maxLanes = std::numeric_limits<int>::max();
       const bool waitForRelease = Playback::on("tuning/waitForRelease", score);   // (playback.ini [tuning])
       const int plainAccents = int(std::lround(Playback::value("slurs/plainAccents", score)));
+      const bool plainJoins = Playback::on("slurs/plainJoins", score);
       Ms4::Dynamics dynamics;
       dynamics.build(sc, const_cast<Part*>(part));
       TextTechniques text;
@@ -2840,7 +2841,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   // tuning, the note was attacked after silence there while the note before released on its own copy:
                   // Whence's Violas bars 12 / 16, F#4 into a quarter-sharp G4 half note, the owner 2026-10-22: "sounds
                   // disjointed from the note before")
-                  const bool plainJoin = it.plain && lanes[l].lastPlain && !it.attacks && !lanes[l].lastAttacks
+                  // ([slurs] plainJoins, 0 everywhere: the owner preferred the attack, 2026-10-22)
+                  const bool plainJoin = plainJoins && it.plain && lanes[l].lastPlain && !it.attacks && !lanes[l].lastAttacks
                                          && lanes[l].lastPitch >= 0 && lanes[l].lastPitch != it.note->pitch();
                   const bool legato = it.slurred || (it.plain && (it.chordNotes > 1 || lanes[l].lastChordNotes > 1)) || plainJoin;
                   if (legato && lanes[l].lastTrack == it.track && lanes[l].lastOn < it.on && std::fabs(lanes[l].lastEnd - it.on) <= 0.1)

@@ -164,6 +164,14 @@ static const std::vector<Definition> DEFINITIONS = {
         "random generator on their portamento and run transitions at 0 in the patch's state), so every play of a passage "
         "sounds the same, as loud as the library's takes on average; 0: as the library plays them, each play a little "
         "different", true },
+      // (2026-10-22, branch slur-joins: a plain note touching a plain note of its patch at another pitch kept on that note's
+      // copy, so SSO plays a transition, not an attack on another tuning copy; the owner heard Whence's Violas bars 12 / 16
+      // both ways the same day: "violas A better for both", A the attack on its own copy: an unslurred note takes a new bow;
+      // 0 everywhere, SoundLib::lanes' plainJoin)
+      { "slurs/plainJoins", 0, 0, 1, "on/off",
+        "1: an unslurred plain Performance note touching the note before at another tuning stays on that note's copy and "
+        "plays as a transition from it; 0: it goes on the copy at its own tuning and starts with its own attack, as a new "
+        "bow stroke", true },
       // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM, 0 in both presets until the owner has heard
       // it; MidiRenderer::libraryFastTransitions)
       { "slurs/fastTransitions", 0, 0, 1, "on/off",

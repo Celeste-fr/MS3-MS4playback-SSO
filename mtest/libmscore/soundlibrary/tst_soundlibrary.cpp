@@ -10342,7 +10342,7 @@ void TestSoundLibrary::plainJoinLanes()
       auto render = [&](int accents) {
             Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
                                             { "slurs/transitions", "1" }, { "slurs/transitionsEarly", "0" },
-                                            { "slurs/plainAccents", QString::number(accents) }, { "slurs/microtoneBends", "1" } });
+                                            { "slurs/plainAccents", QString::number(accents) }, { "slurs/microtoneBends", "1" }, { "slurs/plainJoins", "1" } });
             score->setPlaylistDirty();
             EventMap events;
             score->renderMidi(&events, false, true, SynthesizerState());

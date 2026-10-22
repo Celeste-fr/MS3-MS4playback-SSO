@@ -8203,7 +8203,7 @@ void TestLiveEquivalence::plainJoinsLive()
             r.renderScore(&events, ctx);
             return events;
             };
-      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAccents", "2" },
+      Playback::setIniValuesForTest({ { "slurs/plainJoins", "1" }, { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAccents", "2" },
                                       { "slurs/microtoneBends", "1" } });
       score->setPlaylistDirty();
       const EventMap played = render(false);

@@ -57,7 +57,10 @@ that only bars 12 / 16 have is **the slur's last F#4 into the G4+50 half note**:
 (pitch arrival; leave 162 ms before) while the F#4 kept sounding on its own copy for ~200 ms (two pitches a 3/4 tone
 apart). VM, #464's export, Violas alone; private `~/MuseScore/ms3fork/private/slur-joins/RESULT.md`.
 
-- **Fix, the default** (a bug: the plain rule says a touching note is SSO's transition): such a note stays on the note
+- **The owner's verdict, 2026-10-22** (the clips of #464 against #466, Violas alone with a click): "violas A better for
+  both": the attack, as before. The half note is unslurred, so a new bow stroke; #466's transition also lands its G late
+  and fades the F#. So the fix became **`[slurs] plainJoins`, 0 everywhere** (not in either preset); Whence plays as #464.
+- **Fix, now `[slurs] plainJoins` 1** (first made a bug fix on by default): such a note stays on the note
   before's copy (docs/PLAYBACK_SETTINGS.md › Plain Performance › Joins across tunings). Whence: 7 split joins -> 0 (also
   Violins 1 bar 16, Basses bars 10, 11, 14, 15); every note's time / key / velocity unchanged. Windows build #466
   (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39774787367), installed on the VM in `C:\claude\b466\ms`:
