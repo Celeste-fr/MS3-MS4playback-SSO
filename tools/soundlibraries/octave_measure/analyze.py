@@ -1,13 +1,26 @@
-import json, glob, statistics as S, sys, collections
-REPO = '/home/volensia/MuseScore/ms3fork/wt-5u4n0j/tools/soundlibraries/sso_legato_grid_pitches.json'
-old = json.load(open(REPO))
+#!/usr/bin/env python3
+"""analyze.py <results root> [-o octave_measure.json] [--grid sso_legato_grid_pitches.json]: pool the octave (+-12 slur)
+timing of the variants' check results (<results root>/<variant>/results.json, as job-oct.cmd leaves them in
+C:\\claude\\oct\\results, fetched) with the rest check's legato grid by pitch into octave_measure.json (README.txt).
+Defaults: -o next to this script, --grid ../sso_legato_grid_pitches.json."""
+import argparse, json, glob, os, statistics as S, sys, collections
+HERE = os.path.dirname(os.path.abspath(__file__))
+ap = argparse.ArgumentParser(description=__doc__.split("\n")[0], epilog=__doc__)
+ap.add_argument("results")
+ap.add_argument("-o", "--out", default=os.path.join(HERE, "octave_measure.json"))
+ap.add_argument("--grid", default=os.path.join(HERE, "..", "sso_legato_grid_pitches.json"))
+A = ap.parse_args()
+old = json.load(open(A.grid))
 runs = collections.OrderedDict()          # folder -> patch -> rows
-for f in sorted(glob.glob('/tmp/oct/res/*/results.json')):
+files = sorted(glob.glob(os.path.join(A.results, '*', 'results.json')))
+if not files:
+    sys.exit("no <variant>/results.json under %s" % A.results)
+for f in files:
     j = json.load(open(f))
     for p in j['patches']:
         for s in p.get('rest', []):
             for l in s.get('legatoPitches', []):
-                runs.setdefault(f.split('/')[-2], {}).setdefault(p['patch'], []).append(l)
+                runs.setdefault(os.path.basename(os.path.dirname(f)), {}).setdefault(p['patch'], []).append(l)
 
 def q(a, p):
     a = sorted(a); k = (len(a) - 1) * p; i = int(k); r = k - i
@@ -65,7 +78,7 @@ for patch in old:
         res[str(d)] = e
     out[patch] = res
 print('repeat diffs (same start/interval across runs): n=%d, max |d|=%s' % (len(rep), max(map(abs, rep)) if rep else None))
-json.dump(out, open('/tmp/oct/octave_measure.json', 'w'), indent=1)
+json.dump(out, open(A.out, 'w'), indent=1)
 for p, r in out.items():
     print('%-40s range %s nonoct %s' % (p, r['range'], r['nonOctaveMidMedian']))
     for d in ('-12', '12'):

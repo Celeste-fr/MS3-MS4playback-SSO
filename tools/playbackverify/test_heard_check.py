@@ -89,6 +89,21 @@ class Measures(unittest.TestCase):
         self.assertIsNotNone(got)
         self.assertLess(abs(got - arrive), 0.020, (got, arrive))
 
+    def test_transition_leave(self):
+        # a 250 ms fifth down from 1.0 s: leaves A3 by 30 cents at 1.0 + 0.25 x 30 / 700 s; the arrival as before
+        x, arrive = self.glide(-700, 0.250)
+        got, leave, why = H.transition_times(*H.track(x, SR, 47, 60), 1.0, 57, 50)
+        self.assertIsNone(why)
+        self.assertLess(abs(got - arrive), 0.020, (got, arrive))
+        self.assertLess(abs(leave - (1.0 + 0.25 * 30 / 700)), 0.015, leave)
+        self.assertLess(leave, got)
+        # a glide that stops short of its target: no arrival, a leave all the same
+        y, _ = self.glide(-150, 0.100)
+        got, leave, why = H.transition_times(*H.track(y, SR, 47, 60), 1.0, 57, 50)
+        self.assertIsNone(got)
+        self.assertEqual(why, "pitch not reached")
+        self.assertLess(abs(leave - (1.0 + 0.1 * 30 / 150)), 0.015, leave)
+
     def test_transition_quarter_tones(self):
         # A3 to B3 a quarter-flat (150 cents) over 200 ms: arrives within 30 cents of 58.5 at 1.16 s
         x, arrive = self.glide(150, 0.200)
@@ -187,6 +202,20 @@ class EndToEnd(unittest.TestCase):
         self.assertTrue(d[("Violas - Performance", "transition after attack")]["drifting"])
         self.assertFalse(d[("Violas - Performance", "transition after transition")]["drifting"])
         self.assertIn("RHYTHM", H.report_text(res))
+        # every transition reports its leave and arrival; --transition-rule leave judges at leave + 23.5 ms
+        tr = [x for x in res["notes"] if x["transition"]]
+        for x in tr:
+            self.assertEqual(x["arriveMs"], x["heardMs"])
+            self.assertLess(x["leaveMs"], x["arriveMs"])
+        res2 = H.analyse(tmp, tmp, load=lambda r: audio.get(r), transition_rule="leave")
+        self.assertEqual(res2["transitionRule"], "leave")
+        n2 = {x["pitch"]: x for x in res2["notes"]}
+        for x in tr:
+            y = n2[x["pitch"]]
+            self.assertAlmostEqual(y["heardMs"], y["leaveMs"] + H.LEAVE_HEARD_MS, places=0)
+            self.assertEqual(y["arriveMs"], x["arriveMs"])
+            self.assertEqual(y["how"], "pitch leave")
+        self.assertEqual(n2[57]["heardMs"], heard[57])          # attacks unchanged
 
     def test_export_pairing(self):
         """the export renderer: sample 0 = score time 0, and the note-on as the export sent it (its events.tsv, 10 ms

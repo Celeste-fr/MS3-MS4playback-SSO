@@ -26,15 +26,19 @@ Keep this file current: close an item by deleting it (the commit message says wh
 - **Src**: VM, 2026-10-21, private (not in repo): `private/solo-clicks/` (runs `wv0`, `wv0a/b/c`, `wv1`).
   A related earlier sign: once in 13 Linux dumps Violas - Performance got 2 lanes instead of 3 (commit 94d8f845ef,
   never investigated).
-- **Cause**: suspected nondeterministic voice-lane assignment from branch `chord-voices` (`Lanes::voice`,
-  `libmscore/soundlibrary*`): a pointer-ordered container (`std::map`/`QMap`/`std::set` keyed by pointer, or a
-  `QHash` iteration) or uninitialised state, possibly Windows-only (MSVC allocator order).
-- **Tool**: dumpEvents `routemap.txt` + `notes.txt` repeated N times (Linux, also under ASan / valgrind); on the VM
-  N repeated `--verify-playback --verify-wav` with `MS_VERIFY_ROUTES=1`, counting note-ons per slot from
-  `events.tsv`. Missing: a repeat-determinism tool (Missing tools #3).
-- **Fix**: audit `Lanes::voice` and `SoundLib::lanes` for pointer-keyed ordering and uninitialised members; key by
-  (tick, pitch, track); add an mtest rendering one score 10× in fresh `Score` objects comparing routemaps.
-- **Untried**: whether Linux reproduces at all (5 runs per check so far).
+- **Cause** (found on branch voice-determinism, afd801287d, merged c3ef2da874): not the chord voices but the number of
+  tuning copies, `SoundLib::memoryMaxLanes` from the free memory read once a run; the VM's Hyper-V dynamic memory shows
+  little free after an idle spell (a first run 1-2 copies, later ones 4). Fixed by counting installed memory not yet
+  visible; `MS_FREE_MEMORY_MB` / `HC_FREE_MEMORY_MB` pin it.
+- **Tool**: `tools/playbackverify/repeat_check.py` (2026-10-21, kb-tools). Linux, 5 audit dumps of Whence (Recommended,
+  integrate-1017's build): all identical (Violins 1 lanes 63/18/10/1 every time). VM, build #458, Whence with only
+  Violins 1 on the library, 3 exports in one job (`repeat_check.py vm --part "Violins 1" --n 3`): **run 1 79/13/0/0
+  note-ons on slots 1-4, runs 2 and 3 63/18/10/1** (the dump's), every route's WAV hash different. As in the solo-clicks
+  runs, the first render of a batch is the odd one (the free memory after an idle spell: the cause above). Re-run with
+  a build carrying afd801287d: `repeat_check.py vm … --n 4` (without `--free-memory-mb`, to check the fix itself).
+- **Fix**: afd801287d (memory not yet visible counted; tst_soundlibrary::voiceLanesMemory). Linux reproduces it only with
+  `MS_FREE_MEMORY_MB` (1200 / 2500 / 16384 → 1 / 3 / 4 routes); 5 + 5 unpinned Linux runs never differed.
+- **Untried**: a Windows build with the fix through `repeat_check.py vm` (close this item when its runs match).
 
 ### 2. Plain Performance timing (default `[slurs] plainPerformance` 1 with one `plainShift` per patch)
 - **W** (Mixed techniques, build 457, export, −15 dB rule): Performance fresh attacks early (V1 −46, V2 −37, Va −74,
@@ -45,7 +49,8 @@ Keep this file current: close an item by deleting it (the commit message says wh
 - **Src**: HANDOFF.md › Mixed techniques; commit 83857c4a45; private `mixed-techniques/RESULT.md`.
 - **Cause**: one constant per patch (65.8 / 66.0 / 111.0 / 80.2 / 59.1 ms, the all-notes median) can't place both
   attacks and transitions.
-- **Tool**: heard check (export), private `spread.py` / `tdrift.py`.
+- **Tool**: heard check (export; `--takes N`, `HC_TRANSITION_RULE=leave`), `heard_summary.py` (spread, drift, both
+  readings), `clips.py` (per-section click clips for the owner, `measure` for what he heard).
 - **Fix**: `[slurs] plainTiming` 1 (7e6f20f5fd): attacks by `plainAttack`, transitions by their modelled arrival.
   Mixed: attacks −7 … +3, transitions V1 +1, V2 −17, Va +4, Vc +42, Cb −42 ms; within ±30 ms of the beat 58 → 67 %.
   Whence: attacks −4 … +27 (V2's +27 masked readings), transitions −52 … +18; ARRIVAL 35/26 → 36/19, RHYTHM slurs
@@ -56,8 +61,24 @@ Keep this file current: close an item by deleting it (the commit message says wh
   by its readings (attacks −15 dB, transitions at pitch arrival) B was closer to the beat for Celli and Basses, and A's
   transitions are +130 … +200 ms "late", yet A sounds on time. The ear places a Performance transition near where the
   pitch LEAVES the note before (Polfreman 2013's leave + 23.5 ms, `transitionsEarly` 2's rule), not at its arrival.
-  Next: re-judge the heard check's transitions by leave time and re-check against these answers before any timing model
-  is changed (item 3; private `plain-timing/OWNER_EARS.txt`).
+  **Re-judged by leave (2026-10-21, kb-tools)**: `clips.py measure` read every transition in the very clips he heard
+  (aligned on their clicks; the clip's arrivals agree with the reports' within 0.2-4.4 ms median). Median heard −
+  written, attacks (−15 dB) + transitions, A / B, and which is nearer the beat (median |d|):
+  | section | owner | by arrival | by leave + 23.5 |
+  |---|---|---|---|
+  | Violins 1 | A | +26 / −3 → B | +2 / −20 → B |
+  | Violins 2 | no difference | 3 attacks only, no transitions (−50 / −15) | same |
+  | Violas | maybe B | −12 / −18 → same | −89 / −54 → B |
+  | Celli | A (B early, A late?) | −48 / −36 → B (transitions alone: A, on 9-10 arrivals) | −106 / −154 → A |
+  | Basses | A (B way too early) | +182 / +16 → B | +63 / −178 → A |
+  The leave reading agrees with his choice for Violas, Celli and Basses, and with "B way too early" (Basses B −178);
+  the arrival reading agrees with none of his clear choices (most transitions never arrive within 30 cents: Celli 10-12
+  of 56). Neither explains Violins 1 (A preferred, both readings say B), nor "A late" for Celli (leave says A early).
+  One owner, one take, one passage: evidence, not proof. `heard_check.py --transition-rule leave`
+  (`HC_TRANSITION_RULE=leave`) now judges by it; report.json carries both readings (`leaveMs`, `arriveMs`) and
+  `heard_summary.py` shows both. Next: a second passage heard by him (clips.py), and the transition model (item 3)
+  fitted to leave times rather than arrivals. Private: `kb-tools/owner-ears/` (ears.json, measured.json),
+  `plain-timing/OWNER_EARS.txt`.
 - **Real players (2026-10-21, Spheres K. 550 mvt 1, 175 slurred changes, `tools/soundlibraries/spheres_legato_transitions.json`,
   CC BY-SA 4.0; private `legato-spheres/RESULT.md`; readings page https://claude.ai/artifact/LFYgh6JWiy5Xn4q2fD8KTN, not
   yet checked by the owner)**: a real section puts the **midpoint** of a slurred change on its own beat (leave −19, mid −3,
@@ -391,19 +412,21 @@ Keep this file current: close an item by deleting it (the commit message says wh
       (`playbackTuning` under a `ScoreTuningScope`) into `PV::Note` and use fractional bins.
     - `--verify-playback` thresholds were tuned on one piano piece; misses wrong articulation / sample, re-strikes under
       the pedal, masked chord notes.
-33. **Heard-check limits**: one take; masked re-attacked Longs unreliable (Celli bar 11 +539 ms); kthost reads
+33. **Heard-check limits**: one take (`--takes N` runs several, `heard_summary.py` gives their spread); masked re-attacked Longs unreliable (Celli bar 11 +539 ms); kthost reads
     Performance attacks 30-60 ms later than export; Violins 1 tuned-copy Longs swell in export (+67 / +225, suspected
     the vibrato 0 flat lane); chords on one route not pitch-tracked; a whole-passages run crashed 0xC0000409 after 24/34
-    routes (avoid with `HC_SPLIT=parts`); `HC_VM`'s default address is stale; builds 98572aa7e2 / e1386f9e57 measured
-    nothing (results void); RHYTHM borderline slurs (~7 / ~12 %) still to check by ear.
+    routes (avoid with `HC_SPLIT=parts`); builds 98572aa7e2 / e1386f9e57 measured nothing (results void); RHYTHM
+    borderline slurs (~7 / ~12 %) still to check by ear; the arrival rule disagrees with the owner's ears where the leave
+    rule mostly agrees (item 2): which rule judges by default is open.
 34. **Audit**: checks only its own model (reported 0 fails while the Violas played a triplet); with plainPerformance on
     the strings' audit is nearly vacuous; LEVEL STEP 0.69 dB still "proposed".
 35. **Onset detectors**: harmonics SD 56 ms on SSO unexplained (synthetic ≤ 17); loudness reads only near-isolated
     notes (2-30 of 120-207).
-36. **Tools that can't be re-run as they stand**: `octave_measure/analyze.py` / `fam.py` (hard-coded paths);
-    `qt_bends/abl.py` (not in this tree); `ab/` (stale install paths, incl. `roundtrip2.py`, CLAUDE.md's round-trip
-    test); `compare_renders.py` ZeroDivisionError on a silent note; 14 jsons feeding the map have no committed producer
-    (TOOLS.md › 6); `run_fork_tests.sh` skips `test_timing.js` / `test_load.js`; kthost has no source (Missing tools #4).
+36. **Tools that can't be re-run as they stand**: `qt_bends/abl.py` (not in this tree); `ab/`'s MS4 A/B and trace tools
+    (stale install paths; the round-trip test moved to `tools/roundtrip/roundtrip2.py`, which runs); 13 jsons feeding the
+    map have no committed producer (TOOLS.md › 6; `sso_accent_attack` has one since 2026-10-21); kthost has no source
+    (Missing tools #4). (Fixed 2026-10-21: octave_measure's paths, compare_renders.py's silent-note crash,
+    run_fork_tests.sh's missing Node tests, the heard check's stale VM address.)
 37. **Docs drift**: CLAUDE.md says `[slurs] plainAccents` 0 everywhere (2 by default and in Recommended since
     4cec902067); its `sectionLevel2` numbers differ from PLAYBACK_SETTINGS.md (V1 −0.13 vs −0.03, V2 +1.02 vs +1.12,
     Va −7.03 vs −7.08, Vc +2.69 vs +2.56, Cb +3.45 vs +3.43, Trumpets a6 +19.67 vs +20.45); PLAYBACK_SETTINGS.md gives the
@@ -480,26 +503,14 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
 - **Unlocks**: 3 (first data: the transitions after an attack / a transition by length, private `patch-sweep/RESULT.md`),
   4, 9 (the accented attack's onset per section: the cells exist), 15, 19, 25, any new library.
 
-### 2. `heard_summary.py`: whole-score heard-check summary, regression and drift report
-- **Spec**: `tools/playbackverify/heard_summary.py <report.json>… [--baseline <report.json>…] [--by section,kind,
-  tempo,bar] -o <dir>` → for each run and against a baseline: ARRIVAL / RHYTHM / LEVEL / UNHEARD counts with deltas,
-  beat spread (median, p90, max) across sections (from private `spread.py`), heard − written medians per section × kind
-  (attack, transition after attack / held / transition, staccato, quick technique), **model drift = heard − predicted
-  per patch × situation** (from `tdrift.py`) with n, median, p10-p90 and a flag when |median| > 20 ms or the sign
-  differs between scores; take-to-take spread when several runs of one setting are given; a "worst 20 notes" list with
-  bar / beat; markdown and JSON. Plus `heard_check.sh --takes N` to run N takes in one go.
-- **Effort**: 1-1.5 days (folds `spread.py`, `tdrift.py`, `mixed2.py`, `cmp.py`).
-- **Unlocks**: 2, 3, 11, 15, 16, 17 (evidence on every timing change, before/after per build), Tier 4 #33.
+### 2. `heard_summary.py` (built 2026-10-21, branch kb-tools)
+- `tools/playbackverify/heard_summary.py` and `heard_check.sh --takes N` (TOOLS.md › 2a). Also new: every transition
+  read by leave as well as arrival, `--transition-rule leave`. Left: the per-tempo drift needs bar tempi from the notes
+  (no tempo map in report.json); groups (RHYTHM windows) have no part, so they are counted, not split.
 
-### 3. Repeat-determinism checker (Linux and VM)
-- **Spec**: `tools/playbackverify/repeat_check.sh <score> [settings] [--n 10] [--vm]`: Linux: dumpEvents N times in
-  fresh processes (and once under ASan), diff `routemap.txt`, `notes.txt` lanes, every `museScore.txt`; VM: N
-  `--verify-playback --verify-wav` with `MS_VERIFY_ROUTES=1`, comparing `events.tsv` note-ons per slot / route and WAV
-  hashes (with fixedTransitions 1 so audio can null). Report: first differing event, which route, per-run slot counts.
-  Plus an mtest that renders a chord-voice score 10× and compares routemaps.
-- **Effort**: 0.5-1 day.
-- **Unlocks**: 1 (rank 1), 8, 11's residual randomness, item "2 vs 3 lanes once in 13 dumps"; guards every later
-  A/B.
+### 3. Repeat-determinism checker (built 2026-10-21, branch kb-tools)
+- `tools/playbackverify/repeat_check.py linux|vm|compare` and `dump_compare.py --slots` (TOOLS.md › 1). Left: an ASan /
+  valgrind build to run it under; the mtest rendering a chord-voice score 10× (with the fix on branch voice-determinism).
 
 ### 4. kthost source in the repo: BUILT (branch `patch-sweep`, 2026-10-21)
 - **Built**: `tools/soundlibraries/kthost/kthost.cpp`, compiled from `vst3plugin.cpp` / `kontaktsetup.cpp`.
@@ -543,15 +554,10 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
 - **Effort**: 3-4 days for the pipeline with AGM as the regression case; then ~0.5-1 day + VM per guitar.
 - **Unlocks**: 10, 12, 13, 14 (needs the owner's decision on one library vs several), the post-purchase list.
 
-### 7. Listening-clip maker (per section, with click)
-- **Spec**: `tools/playbackverify/clips.py <heard-check work dir | verify folder> --score-bars a-b [--parts …]
-  [--solo] [--click beats|written] [--count-in 1] [--variants A=<dir> B=<dir>] [--shared-gain] [--pre 0.3] -o <dir>` →
-  MP3 clips with one gain per comparison, a click on every written beat from `bars.txt`, a notes JSON (each note's
-  written and heard second), and a ready review page skeleton (HTML) for an artifact. Folds `soloclips.py`,
-  `mixroutes.py` and the four private `clips.py`. Optionally a "tap" page: the owner taps where he hears each
-  onset, giving the data for the onset rule.
-- **Effort**: 1 day (+0.5 for the tap page).
-- **Unlocks**: every "Own: hear it" decision (2, 3, 10, 11, 20, 26), 16 (onset rule, with the tap page).
+### 7. Listening-clip maker (built 2026-10-21, branch kb-tools)
+- `tools/playbackverify/clips.py make` (long rests cut, clicks, A/B at one gain, splits at 20 s, JSON with the cuts)
+  and `clips.py measure` (what the clip itself plays: leave and arrival per transition) (TOOLS.md › 2a). Left: the
+  "tap" page (the owner taps where he hears each onset: data for the onset rule, item 16).
 
 ### 8. Verify-detector fixes as a tested tool
 - **Spec**: in `audio/vst3/playbackverify.*`: offset margin + "offset ambiguous", expected-onset alignment ±60 ms,
@@ -561,30 +567,22 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
 - **Effort**: 1-1.5 days (code change: owner rule "sound-identical" doesn't apply, it is a checker).
 - **Unlocks**: 32; makes `--verify-playback` usable on Performance parts and quarter tones.
 
-### 9. Dump compare and audit wrapper
-- **Spec**: `tools/playbackverify/dump_compare.py <dumpA> <dumpB> [--route-by part,patch,lane] [--only notes|cc|pb]`
-  (from private `cmpdump.py`, `cmpacc.py`, `cmp.py`): per route the first differing event, counts of changed note-ons /
-  CCs, velocity and timing deltas per note; `dump_and_audit.sh <score> <settings> <out>` running dumpEvents (chunked,
-  with calibration) and the audit through a given wrapper.
-- **Effort**: 0.5 day.
-- **Unlocks**: the "sound-identical or dropped" proofs (CLAUDE.md › Edit lag), 1, every refactor.
+### 9. Dump compare and audit wrapper (built 2026-10-21, branch kb-tools)
+- `tools/playbackverify/dump_compare.py`, `dump_and_audit.sh` (TOOLS.md › 1).
 
-### 10. VM job runner with locks and retry
-- **Spec**: `tools/vm/vmjob.sh <job dir> <cmd>`: checks MemAvailable locally, takes `C:\claude\quiet.lock` and
-  `private/VM_PAUSE`, scp in, runs under a watchdog, retries a crash (exit 0xC0000005 / 0xC0000409) up to N times
-  logging each, fetches, deletes the VM folder by a guarded literal path, releases locks; VM address and key from one
-  config file outside the repo. Used by heard_check, measure_patch, live_check, the Ample harness.
-- **Effort**: 0.5-1 day.
-- **Unlocks**: 12 (AGM crash retries), fewer stuck VM locks; prerequisite polish for 1, 5, 6.
+### 10. VM job runner with locks and retry (built 2026-10-21, branch kb-tools)
+- `tools/vm/vmlib.py` (the address, key and lock protocol in one place; `vm.sh` for sh), `vmjob.py` (watchdog, crash
+  retries, fetch, guarded delete), `kthost_batch.ps1` (TOOLS.md › 10). `heard_check.sh` and `repeat_check.py` use it.
+  Left: the private batch scripts and the Ample harness still have their own ssh lines (move them when next used).
 
-### 11. Re-runnable producers for the 14 jsons without one; fixed stale tools
-- **Spec**: commit sanitized producers (or a `method` key pointing at measure_patch.py's equivalent cells) for
-  `sso_accent_attack`, `sso_bad_samples`, `sso_smooth_onset`, `sso_plain_performance_shift`, `sso_performance_layers`,
-  `sso_percussion_levels`, `sso_rachm_cc1_sweep`, `sso_rachm_context_match`, `sso_slur_swell`, `spheres_k550_staccato`
-  (Spheres stem fetcher `rzip.py` too); fix `octave_measure/analyze.py` paths, `compare_renders.py`'s ZeroDivisionError,
-  `run_fork_tests.sh`'s missing Node tests, `ab/` paths (or move `roundtrip2.py` into the repo).
-- **Effort**: 1-2 days.
-- **Unlocks**: re-measuring after an SSO update; 36; the round-trip rule.
+### 11. Re-runnable producers for the jsons without one; fixed stale tools (partly built 2026-10-21, branch kb-tools)
+- Fixed: `octave_measure/analyze.py` / `fam.py` (paths from the command line), `compare_renders.py` (silent note),
+  `run_fork_tests.sh` (every Node test, the new Python tests), the round trip (`tools/roundtrip/roundtrip2.py` +
+  `portable_fork.sh`), the heard check's VM address (`tools/vm/vmlib.py`'s config). Producer: `accent_attack.py`
+  (`sso_accent_attack`). Left: the other 13 (their recipes are in their own "about" keys; the private sources of
+  `sso_bad_samples`, `sso_smooth_onset`, `sso_plain_performance_shift` (qt-bends' `abl.py`), `sso_performance_layers`,
+  `sso_percussion_levels`, `sso_rachm_cc1_sweep`, `sso_rachm_context_match`, `sso_slur_swell` were not found on the dev
+  machine), best rebuilt as `measure_patch.py` (#1) cells; Spheres' stem fetcher `rzip.py` (private accent-spheres).
 
 ### 12. Patch tone / noise analyzer
 - **Spec**: `tools/soundlibraries/tone_check.py <wav> <notes.txt>`: per note spectral centroid, tilt, noise floor,

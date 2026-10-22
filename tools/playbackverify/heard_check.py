@@ -46,6 +46,10 @@ Measures (b):
                of 3 (before the next note-on on the route)
                frames in a row within 30 cents of the new pitch (its playback tuning's cents: quarter tones included).
                A chord on the route (two notes at once): not measured (pYIN is monophonic)
+               Its leave is read too (leaveMs: the first frame after the note before was heard at its pitch that is
+               more than 30 cents off it), also where the arrival is not. --transition-rule leave judges a transition at
+               leave + 23.5 ms (Polfreman 2013) instead of its arrival: the owner's ears, 2026-10-21, agreed with the
+               leave reading on 3 of 4 sections he chose between, with the arrival on none (OPEN_ITEMS.md item 2)
 Report (c): per note heard - written; per slur and per run of notes (a line's chords joined without a rest) the heard
   inter-onset intervals against the written ones.
 Flags (d):
@@ -103,6 +107,12 @@ ARRIVAL_WARN_MS, ARRIVAL_FAIL_MS = 30.0, 50.0       # Rasch 1979
 RHYTHM_WARN, RHYTHM_FAIL = 0.05, 0.10               # approved by the owner 2026-10-16, see above
 LEVEL_DL_DB = 0.69                                  # the audit's proposed (Jesteadt, Wier & Green 1977)
 DRIFT_MS = 20.0
+LEAVE_HEARD_MS = 23.5       # --transition-rule leave: a transition heard 23.5 ms after its pitch leaves the note before
+                            # (Polfreman 2013, as [slurs] transitionsEarly 2 uses it). The owner's ears, 2026-10-21 (Whence
+                            # bars 5-14 alone with a click: plainTiming 0 preferred for Violins 1 / Celli / Basses, whose
+                            # transitions read +130 .. +200 ms late by arrival): the ear may place a transition near the
+                            # leave, not the f0 arrival. Both are reported (leaveMs, arriveMs); only the rule judges
+TRANSITION_RULES = ("arrival", "leave")
 SHORT_BASES = {"spiccato", "staccatissimo", "staccato", "short", "tenuto", "pizzicato", "bartok", "collegno"}
 SITUATIONS = ("first after silence", "attack joined", "staccato", "transition after attack", "transition after transition")
 
@@ -360,33 +370,43 @@ def track(x, sr, lo, hi):
 
 
 def transition_time(f0, fh, on_s, from_pitch, target_pitch, after_s=None, until_s=None):
-    """heard s (render time) of a legato transition with note-on at on_s from from_pitch to target_pitch (fractional
+    """(arrival s, why): transition_times without the leave"""
+    t, _, why = transition_times(f0, fh, on_s, from_pitch, target_pitch, after_s, until_s)
+    return t, why
+
+
+def transition_times(f0, fh, on_s, from_pitch, target_pitch, after_s=None, until_s=None):
+    """(arrival s, leave s, why). Arrival: heard s (render time) of a legato transition with note-on at on_s from from_pitch to target_pitch (fractional
     MIDI) on a route's f0 track (track()): f0 at the note before's pitch (within 30 cents) from after_s (the note
     before's heard time; else 300 ms before the note-on) on, then leaving it, then the first of 3 frames in a row within
     30 cents of the target, looked for until TRANSITION_SEARCH_S after the note-on or until_s (the next note-on on the
-    route: a pitch reached after it may be that note's). (None, why): not found"""
+    route: a pitch reached after it may be that note's). (None, leave, why): not found. Leave: the first frame after the
+    note before was heard at its pitch that is more than 30 cents off it (or unvoiced), not before 50 ms ahead of the
+    note-on; None when the note before was never heard at its pitch, the pitch never left it, or the two pitches are one"""
     n = len(f0)
     tol = CENTS_TOL / 100
     end_s = on_s + TRANSITION_SEARCH_S if until_s is None else min(on_s + TRANSITION_SEARCH_S, until_s)
     i1 = min(n, int(round(end_s / fh)))
     i0 = max(0, int(round((on_s - 0.05) / fh)))
+    leave = None
     if abs(from_pitch - target_pitch) > tol:
         ia = max(0, int(round(((after_s if after_s is not None else on_s - 0.3)) / fh)))
         at = next((i for i in range(ia, i1) if not np.isnan(f0[i]) and abs(f0[i] - from_pitch) <= tol), None)
         if at is None:
-            return None, "the note before not heard at its pitch"
+            return None, None, "the note before not heard at its pitch"
         i0 = max(i0, at)
         for i in range(i0, i1):
             if np.isnan(f0[i]) or abs(f0[i] - from_pitch) > tol:
                 i0 = i
+                leave = i * fh
                 break
         else:
-            return None, "pitch not reached"
+            return None, None, "pitch not reached"
     for i in range(i0, i1 - ARRIVE_FRAMES + 1):
         w = f0[i:i + ARRIVE_FRAMES]
         if not np.isnan(w).any() and (np.abs(w - target_pitch) < tol).all():
-            return i * fh, None
-    return None, "pitch not reached"
+            return i * fh, leave, None
+    return None, leave, "pitch not reached"
 
 
 def proportions(iois):
@@ -419,10 +439,14 @@ def pct(v, q):
 
 # ------------------------------------------------------------------------------------------------------------- analysis
 
-def analyse(dump, wavs, parts=None, load=None, export=False):
+def analyse(dump, wavs, parts=None, load=None, export=False, transition_rule="arrival"):
     """the measurements and findings (a dict, the JSON's content). load(route) -> (x, sr) or None (default: the wav).
     export: wavs is MuseScore's --verify-playback folder (MS_VERIFY_ROUTES: "<score> route <code>.wav", sample 0 = score
-    time 0 + EXPORT_OFFSET_S) and each note's note-on is the export's own (its events.tsv, paired with the dump's)"""
+    time 0 + EXPORT_OFFSET_S) and each note's note-on is the export's own (its events.tsv, paired with the dump's).
+    transition_rule: "arrival" (default) judges a transition (ARRIVAL, RHYTHM, drift) at its f0 arrival, "leave" at its
+    leave + LEAVE_HEARD_MS; each transition's leaveMs and arriveMs are reported either way"""
+    if transition_rule not in TRANSITION_RULES:
+        raise ValueError("transition_rule must be one of %s" % (TRANSITION_RULES,))
     import soundfile as sf
     from loudness import perceived_envelope
     lead = read_lead_ms(dump)
@@ -577,15 +601,30 @@ def analyse(dump, wavs, parts=None, load=None, export=False):
                 tp = r["pitch"] + r["cents"] / 100
                 before = [q for q in rr if q["onMs"] < on - 0.5 and q.get("heardRender") is not None]
                 after = before[-1]["heardRender"] / 1000 if before else None
-                t, why = transition_time(f0, fh, on / 1000, fp, tp, after, nxt[0] / 1000 if nxt else None)
+                t, lv, why = transition_times(f0, fh, on / 1000, fp, tp, after, nxt[0] / 1000 if nxt else None)
+                base = (r["written"] + offset) * 1000 + r.get("leadMs", lead)
+                r["leave"] = lv * 1000 - base if lv is not None else None
+                r["arrive"] = t * 1000 - base if t is not None else None
+                r["arriveWhy"] = why
                 if t is None:
-                    r["heard"], r["how"] = None, why
                     # (how near the sound came: the f0 closest to the target between its note-on and the next one)
                     i0, i1 = int(round(on / 1000 / fh)), int(round((nxt[0] if nxt else on + 700) / 1000 / fh))
                     w = f0[max(0, i0):max(i0 + 1, i1)]
                     w = w[~np.isnan(w)]
                     if len(w):
                         r["closestCents"] = float(100 * (w[np.argmin(np.abs(w - tp))] - tp))
+                if transition_rule == "leave":
+                    # (judged at leave + 23.5 ms; the chain to the next transition and the level spans stay on the
+                    # arrival, so the two rules measure the same things)
+                    if t is not None:
+                        r["heardRender"] = t * 1000
+                    if lv is not None:
+                        r["heard"], r["how"] = r["leave"] + LEAVE_HEARD_MS, "pitch leave"
+                    else:
+                        r["heard"], r["how"] = None, why or "no leave"
+                    continue
+                if t is None:
+                    r["heard"], r["how"] = None, why
                 else:
                     r["heardRender"] = t * 1000
                     r["how"] = "pitch"
@@ -599,7 +638,7 @@ def analyse(dump, wavs, parts=None, load=None, export=False):
                 else:
                     r["heardRender"] = t
                     r["how"] = "envelope (masked)" if masked else "envelope"
-            if "heardRender" in r:
+            if "heardRender" in r and not (r["transition"] and transition_rule == "leave"):
                 r["heard"] = r["heardRender"] - (r["written"] + offset) * 1000 - r.get("leadMs", lead)
         # each note's loudest level over its heard span (to the next heard note on the route)
         heard_on = sorted((r["heardRender"], r["id"]) for r in rr if r.get("heardRender") is not None)
@@ -618,7 +657,7 @@ def analyse(dump, wavs, parts=None, load=None, export=False):
 
     # (d0) a transition whose pitch is never reached before the next note-on on its route (skipped, or not tracked)
     for r in rows:
-        if r["transition"] and r.get("how") == "pitch not reached" and not r["grace"] and not r["sub"]:
+        if r["transition"] and r.get("arriveWhy") == "pitch not reached" and not r["grace"] and not r["sub"]:
             findings.append(dict(kind="UNHEARD", severity="WARN", value=0.0, seconds=r["written"],
                                  text="its pitch (%+.0f cents) not reached within 30 cents before the next note-on on its route "
                                       "(%s; closest %s)" % (r["cents"], r["route"], "%+.0f cents" % r["closestCents"]
@@ -768,6 +807,8 @@ def analyse(dump, wavs, parts=None, load=None, export=False):
                               predictedMs=round(r["arrivalMs"], 1) if r["hasArrival"] else None,
                               heardMs=round(r["heard"], 1) if r.get("heard") is not None else None, how=r.get("how"),
                               heardAltMs=round(r["heardAlt"], 1) if r.get("heardAlt") is not None else None,
+                              leaveMs=round(r["leave"], 1) if r.get("leave") is not None else None,
+                              arriveMs=round(r["arrive"], 1) if r.get("arrive") is not None else None,
                               closestCents=round(r["closestCents"], 1) if r.get("closestCents") is not None else None,
                               transition=bool(r["transition"]), situation=r.get("situation"),
                               levelDb=round(r["levelDb"], 2) if r.get("levelDb") is not None else None))
@@ -776,7 +817,8 @@ def analyse(dump, wavs, parts=None, load=None, export=False):
     silent = sorted(r for r in by_route if not export and os.path.exists(os.path.join(wavs, r + ".log"))
                     and "probe SILENT" in _read(os.path.join(wavs, r + ".log")))
     alt = [d for d in alt if d is not None]
-    return dict(lead=lead, renderer="export" if export else "kthost", pairing=pairing, missingRenders=missing,
+    return dict(lead=lead, renderer="export" if export else "kthost", transitionRule=transition_rule,
+                leaveHeardMs=LEAVE_HEARD_MS if transition_rule == "leave" else None, pairing=pairing, missingRenders=missing,
                 probeSilent=silent,
                 slursAlt6=dict(measured=len(alt), fail=sum(1 for d in alt if d > RHYTHM_FAIL),
                                warn=sum(1 for d in alt if RHYTHM_WARN < d <= RHYTHM_FAIL)), notes=notes_out, groups=groups_out, findings=findings, drift=drift_out,
@@ -871,6 +913,8 @@ def main(argv=None):
     a.add_argument("--parts")
     a.add_argument("--title", default="")
     a.add_argument("--export", action="store_true", help="wavs: MuseScore's --verify-playback folder (MS_VERIFY_ROUTES)")
+    a.add_argument("--transition-rule", choices=TRANSITION_RULES, default="arrival",
+                   help="judge transitions at their f0 arrival (default) or at leave + %.1f ms" % LEAVE_HEARD_MS)
     m = sub.add_parser("score")
     m.add_argument("src")
     m.add_argument("out")
@@ -895,7 +939,7 @@ def main(argv=None):
         for ln in make_events(args.dump, args.out, parts):
             print(ln)
         return 0
-    res = analyse(args.dump, args.wavs, parts, export=args.export)
+    res = analyse(args.dump, args.wavs, parts, export=args.export, transition_rule=args.transition_rule)
     text = report_text(res, args.title)
     sys.stdout.write(text)
     if args.report:

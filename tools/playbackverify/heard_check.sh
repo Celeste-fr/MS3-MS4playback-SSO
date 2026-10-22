@@ -1,6 +1,8 @@
 #!/bin/sh
 # The heard check end to end from Linux (VERIFY.md › Heard check):
-#   tools/playbackverify/heard_check.sh <score> [preset or playbackSettings metaTag] [parts a,b,...]
+#   tools/playbackverify/heard_check.sh [--takes N] <score> [preset or playbackSettings metaTag] [parts a,b,...]
+# --takes N: N whole runs one after another (each its own dump, render and analysis, in <HC_WORK>/take-<i>), then
+#    heard_summary.py over them: <HC_WORK>/summary/summary.md, summary.json (take-to-take spread per patch x situation)
 # 1. the events as playback renders them and the audit's predictions (tst_playbackaudit auditScore, MS_AUDIT_DUMP)
 # 2. HC_RENDER=kthost: one kthost event file per route (heard_check.py events); HC_RENDER=export: a copy of the score with
 #    the dump's settings as its playbackSettings metaTag (heard_check.py score; a MusicXML score imported by the VM's
@@ -19,14 +21,40 @@
 #   HC_EXE    (export) the VM's MuseScore3Evo.exe, build 443 or later (default C:\claude\heardcheck2\b443\bin\MuseScore3Evo.exe)
 #   HC_RUN    a wrapper that runs a command string in the build dir (e.g. ~/MuseScore/ms3fork/run-<name>.sh); else
 #   HC_BUILD  the build dir itself (default: build.dir next to this repo's tools)
-#   HC_VM     ssh target (default user@192.168.1.45), HC_KEY its key (default ~/.ssh/id_ed25519_winvm)
+#   HC_VM     ssh target, HC_KEY its key (default: tools/vm/vmlib.py's configuration, MS_VM / ~/.config/ms3fork/vm.conf)
+#   HC_TRANSITION_RULE arrival (default) or leave: transitions judged at their f0 arrival or at leave + 23.5 ms (heard_check.py
+#             --transition-rule; both readings are in report.json either way)
+#   HC_LOCK   1 (default): the VM lock (tools/vm/vmlib.py: C:\claude\quiet.lock + the local VM_PAUSE) held around the VM
+#             steps only (the import, the render and its deletion), released for the dump and the analysis; under the
+#             name MS_VM_JOB if set (a caller holding the lock under that name: nested, nothing taken); 0: no lock
 #   HC_VMDIR  the VM's folder under C:\claude (default heardcheck)
 #   HC_WORK   local work folder (default ~/.cache/heardcheck/<run>); HC_KEEP=1 keeps the renders
 # The VM side writes only C:\claude\<HC_VMDIR>\<run>. Never commit a report of the owner's score.
 set -u
-[ $# -ge 1 ] || { sed -n '2,26p' "$0"; exit 2; }
+TAKES=1
+if [ "${1:-}" = --takes ]; then TAKES=${2:?--takes N}; shift 2; fi
+[ $# -ge 1 ] || { sed -n '2,32p' "$0"; exit 2; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
+case "$TAKES" in *[!0-9]*|"") echo "--takes needs a number"; exit 2;; esac
+if [ "$TAKES" -gt 1 ]; then
+  BASE=${HC_WORK:-$HOME/.cache/heardcheck/hc-takes-$(date +%Y%m%d-%H%M%S)-$$}
+  mkdir -p "$BASE"
+  RC=0; REPORTS=""
+  for i in $(seq 1 "$TAKES"); do
+    echo "=== take $i of $TAKES -> $BASE/take-$i"
+    HC_WORK=$BASE/take-$i "$0" "$@"
+    r=$?; [ $r -gt $RC ] && RC=$r
+    if [ -f "$BASE/take-$i/report.json" ]; then REPORTS="$REPORTS take-$i=$BASE/take-$i/report.json"
+    elif [ $r -eq 2 ]; then echo "take $i: no report (setup error): the other takes not run"; break; fi
+  done
+  # shellcheck disable=SC2086
+  [ -n "$REPORTS" ] && python3 "$HERE/heard_summary.py" $REPORTS -o "$BASE/summary" > /dev/null && \
+    sed -n '1,60p' "$BASE/summary/summary.md"
+  echo "(takes: $BASE/take-*; summary: $BASE/summary/summary.md, summary.json)"
+  exit $RC
+fi
+. "$ROOT/tools/vm/vm.sh"
 SCORE=$(readlink -f "$1")
 PRESET=${2:-recommended}
 PARTS=${3:-}
@@ -36,8 +64,9 @@ case "$RENDER" in export|kthost) ;; *) echo "HC_RENDER must be export or kthost"
 SPLIT=${HC_SPLIT:-parts}
 case "$SPLIT" in parts|whole) ;; *) echo "HC_SPLIT must be parts or whole"; exit 2;; esac
 EXE=${HC_EXE:-C:\\claude\\heardcheck2\\b443\\bin\\MuseScore3Evo.exe}
-VM=${HC_VM:-user@192.168.1.45}
-KEY=${HC_KEY:-$HOME/.ssh/id_ed25519_winvm}
+VM=${HC_VM:-$MS_VM}
+KEY=${HC_KEY:-$MS_VM_KEY}
+[ -n "$VM" ] || { echo "no VM address: set HC_VM or MS_VM, or write ~/.config/ms3fork/vm.conf (tools/vm/vm.conf.example)"; exit 2; }
 VMDIR=${HC_VMDIR:-heardcheck}
 case "$VMDIR" in *[!A-Za-z0-9_-]*|"") echo "bad HC_VMDIR '$VMDIR'"; exit 2;; esac
 NAME=hc-$(date +%Y%m%d-%H%M%S)-$$
@@ -58,6 +87,10 @@ T0=$(date +%s)
 # installed memory
 MEM=${HC_FREE_MEMORY_MB:-16384}
 case "$MEM" in *[!0-9]*|"") echo "HC_FREE_MEMORY_MB must be a number of MB"; exit 2;; esac
+JOB=${MS_VM_JOB:-$NAME}
+lock() { [ "${HC_LOCK:-1}" = 1 ] || return 0; vm_lock "$JOB" || { echo "VM lock not taken"; exit 2; }; }
+trap 'vm_unlock' EXIT
+trap 'vm_unlock; exit 130' INT TERM
 $SSH "if not exist C:\\claude\\$VMDIR mkdir C:\\claude\\$VMDIR" || exit 2
 
 if [ "$RENDER" = export ]; then
@@ -67,11 +100,13 @@ if [ "$RENDER" = export ]; then
     *.musicxml|*.xml|*.mxl)
       # (imported by the VM's MuseScore, so the dump and the export read the same score)
       $SSH "mkdir $VMRUN" || exit 2
+      lock
       $SCP "$SCORE" "$VM:$VMRUN_SCP/in.musicxml" || exit 2
       sed "s/^set MS_FREE_MEMORY_MB=16384/set MS_FREE_MEMORY_MB=$MEM/; s/\$/\r/" "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
       $SCP "$WORK/heard_export_vm.cmd" "$VM:$VMRUN_SCP/heard_export_vm.cmd" || exit 2
       $SSH "$VMRUN\\heard_export_vm.cmd $VMRUN $EXE convert" | tail -1
       $SCP "$VM:$VMRUN_SCP/conv.mscz" "$WORK/conv.mscz" || { echo "the VM's import failed"; exit 2; }
+      vm_unlock
       SRC=$WORK/conv.mscz;;
   esac
   python3 "$HERE/heard_check.py" score "$SRC" "$WORK/score.mscz" "$PRESET" > "$WORK/settings.txt" || exit 2
@@ -97,6 +132,7 @@ N=$(grep -c . "$WORK/ev/list.txt")
 echo "$N routes"
 
 printf "== 3. render on the VM (%s, %s)\n" "$RENDER" "$VMRUN_SCP"
+lock
 if [ "$RENDER" = export ]; then
   $SSH "if not exist $VMRUN mkdir $VMRUN" || exit 2
   sed "s/^set MS_FREE_MEMORY_MB=16384/set MS_FREE_MEMORY_MB=$MEM/; s/\$/\r/" "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
@@ -147,10 +183,11 @@ fi
 echo "== 4. delete the VM's renders"
 # (a literal path: the run name checked above, never empty; only a folder holding this run's own input file)
 $SSH "$DEL"
+vm_unlock
 
 echo "== 5. analyse"
 EXP=""; [ "$RENDER" = export ] && EXP=--export
-python3 "$HERE/heard_check.py" analyse "$WORK/dump" "$WAVS" $EXP --report "$WORK/report.txt" --json "$WORK/report.json" \
+python3 "$HERE/heard_check.py" analyse "$WORK/dump" "$WAVS" $EXP --transition-rule "${HC_TRANSITION_RULE:-arrival}" --report "$WORK/report.txt" --json "$WORK/report.json" \
   ${PARTS:+--parts "$PARTS"} --title "Heard check of $(basename "$SCORE") ($PRESET; $RENDER; $N routes; VM render $((T2 - T1)) s)" > /dev/null
 RC=$?
 sed -n '1,40p' "$WORK/report.txt"

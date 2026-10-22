@@ -224,7 +224,11 @@ The preset is `recommended` (the default), `library`, or a `playbackSettings` me
 parts a comma list (default all). `HC_RUN`: a wrapper running a command in the build dir (else `HC_BUILD`, the build
 dir). It writes the dump, the renders and `report.txt` / `report.json` to `~/.cache/heardcheck/<run>/` (`HC_WORK`; the
 renders deleted after the analysis unless `HC_KEEP=1`), uses `C:\claude\<HC_VMDIR, default heardcheck>\<run>` on the VM (one share login,
-deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores out of the repository.
+deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores out of the repository. The VM's address and
+key come from `tools/vm/vmlib.py`'s configuration (`MS_VM` / `~/.config/ms3fork/vm.conf`; `HC_VM` / `HC_KEY` override);
+the VM lock (`C:\claude\quiet.lock` + the local `VM_PAUSE`) is held around the VM steps only (`HC_LOCK=0`: none).
+`--takes N` (first argument) runs N takes and summarises them with `heard_summary.py`; `HC_TRANSITION_RULE=leave` judges
+transitions at their f0 leave + 23.5 ms instead of the arrival (both readings are always in report.json).
 
 - **Render**, two renderers, each route alone (the analysis needs one route's sound):
   - `HC_RENDER=export` (**the default**, 2026-10-16): MuseScore's own export, `--verify-playback --verify-wav` with

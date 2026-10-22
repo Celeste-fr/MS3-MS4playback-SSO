@@ -3,14 +3,15 @@
 #   - the twelve mtests (soundlibrary, liveequivalence, liveintegration, keysig, tuning, phrasemark, marcatolevel,
 #     performancetechnique, tempochange, playability, timesig, midi), built first with ninja unless --no-build, each run offscreen from its
 #     folder <build dir>/mtest/libmscore/<name>; the result is QtTest's "Totals:" line (a missing binary: not built)
-#   - the Node tests (tools/live/test/test_*.js) and the Python tests, run from the repository root
+#   - the Node tests (every tools/live/test/test_*.js) and the Python tests, run from the repository root
 # Exit status 1 when anything failed. On the dev VM call it through the ninja-<name>.sh / run-<name>.sh wrappers.
 BUILD=$(cd "${1:?usage: run_fork_tests.sh <build dir> [--no-build]}" && pwd) || exit 1
 NOBUILD=$2
 cd "$(dirname "$0")/.." || exit 1
 ROOT=$(pwd)
 MTESTS="soundlibrary liveequivalence liveintegration keysig tuning phrasemark marcatolevel performancetechnique tempochange playability timesig midi"
-NODE="clipedit cliptab cliptempo device envparams params patch velocity"
+# (every test_*.js: a fixed list left out test_timing.js and test_load.js until 2026-10-21)
+NODE=$(cd "$ROOT/tools/live/test" && ls test_*.js | sed 's/^test_//; s/\.js$//')
 FAIL=0
 OUT=$(mktemp)
 if [ "$NOBUILD" != "--no-build" ]; then
@@ -33,13 +34,18 @@ for n in $NODE; do
   if node "$ROOT/tools/live/test/test_$n.js" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
   printf '%-28s %s\n' "node test_$n" "$r" >> "$OUT"
 done
-for p in tools/live/test/test_envelopes.py tools/soundlibraries/test_make_setups.py tools/soundlibraries/test_extract_library_files.py tools/soundlibraries/test_gen_ample.py; do
+for p in tools/live/test/test_envelopes.py tools/soundlibraries/test_make_setups.py tools/soundlibraries/test_extract_library_files.py tools/soundlibraries/test_gen_ample.py \
+         tools/vm/test_vmlib.py tools/playbackverify/test_heard_summary.py tools/playbackverify/test_dump_compare.py \
+         tools/playbackverify/test_repeat_check.py tools/soundlibraries/octave_measure/test_analyze.py \
+         tools/soundlibraries/test_accent_attack.py tools/roundtrip/test_roundtrip2.py; do
   if python3 -I "$ROOT/$p" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
   printf '%-28s %s\n' "python $(basename "$p")" "$r" >> "$OUT"
 done
-# (not -I: it needs librosa, a user install here)
-if python3 "$ROOT/tools/playbackverify/test_heard_check.py" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
-printf '%-28s %s\n' "python test_heard_check.py" "$r" >> "$OUT"
+# (not -I: they need librosa, a user install here)
+for p in test_heard_check.py test_clips.py test_compare_renders.py; do
+  if python3 "$ROOT/tools/playbackverify/$p" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
+  printf '%-28s %s\n' "python $p" "$r" >> "$OUT"
+done
 echo; cat "$OUT"; rm -f "$OUT"
 [ $FAIL -eq 0 ] && echo "all passed" || echo "SOME FAILED"
 exit $FAIL
