@@ -322,8 +322,10 @@ Keep this file current: close an item by deleting it (the commit message says wh
   set with each copy's envelope stepping 1 -> 0 before its first note: the bursts gone (-0.0 .. +0.2 dB, one +1.8),
   corr 0.895 -> 0.975, null -6.5 -> -13.1 dB. **Fixed** (`PlainLiveSet` `speedEnvelope`, branch `live-celli`): a
   technique track's first CC119 value is always a step (from 0, or from 1 when it is 0);
-  `tst_liveequivalence::speedSentLive` (what Live has sent before each note-on is MuseScore's value). Real Live with the
-  fix: see `private/live-celli/RESULT.md`.
+  `tst_liveequivalence::speedSentLive` (what Live has sent before each note-on is MuseScore's value). **Confirmed in
+  real Live** (#469, 12.4.7, realcheck on Whence with fixedTransitions / speedFromWritten 1): Celli corr 0.895 -> 0.975,
+  null -7.2 -> -14.0 dB, the chord changes +0.0 .. +0.2 dB (one +1.8); the Basses gained too (0.882 -> 0.921, notes' level
+  median +1.7 -> -0.1 dB). Left: the Celli's first second +3 dB (the start lead), a Basses note at 16.4 s +16.6 dB (11e).
 - **Src**: private `live-celli/` (exp E1-E3, F1-F2, G0-G11, w1, a468, b468), `live-realcheck/` (w467, exp2).
 
 ### 11e. A re-struck key on a Performance patch with no gap (real Live, 2026-10-22)
