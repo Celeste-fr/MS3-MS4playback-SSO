@@ -8,6 +8,7 @@ up as a JSON the generators can read. docs/MEASURING.md is the guide; this heade
                                                                           WAVs deleted
     measure_patch.py analyze WORK [-o out.json] [--at-level …]            the cells' medians, SD, 95 % CI
     measure_patch.py report  WORK|out.json                                 a short text report (and PNGs with --png)
+    measure_patch.py merge   result.json... --by k1,k2 -o out.json        several patches' results grouped (pooled takes)
     measure_patch.py all     --patch NAME --out WORK [grid] [run options] [-o out.json]   the four in one go
 
 PLAN (what is played). A cell is one measured note in a stated context; every cell is played --takes times. The order
@@ -658,6 +659,46 @@ def report(a):
     return text
 
 
+def merge(a):
+    """several result.json (one per patch) -> one file: {"_about", "method" per patch, "sections": {patch: {"cells",
+    "by": {group: {measure: {n, median, p10, p90, takeSd}}}}}}; group = the --by keys' values joined by '/', every take of
+    every cell in the group pooled (so n counts takes); takeSd: the median over the group's cells of their take SD"""
+    by = a.by.split(',')
+    out = {'_about': a.about or ('measure_patch.py merge of %d results, grouped by %s; measures as in each method '
+                                 '(docs/MEASURING.md). heardRef (f0 leave + 23.5 ms) is a transition\'s perceptual '
+                                 'reference, arrive is not.' % (len(a.results), ','.join(by))),
+           'by': by, 'sections': {}}
+    for path in a.results:
+        r = json.load(open(path))
+        groups = {}
+        for c in r['cells']:
+            k = c['key']
+            if a.kind and k['kind'] != a.kind:
+                continue
+            g = '/'.join(str(k.get(b)) for b in by)
+            for n, m in c['measures'].items():
+                e = groups.setdefault(g, {}).setdefault(n, {'v': [], 'sd': []})
+                e['v'] += [x for x in m.get('takes', []) if x is not None]
+                if m.get('sd') is not None:
+                    e['sd'].append(m['sd'])
+        summ = {}
+        for g, ms in sorted(groups.items()):
+            summ[g] = {}
+            for n, e in ms.items():
+                v = sorted(e['v'])
+                if not v:
+                    summ[g][n] = {'n': 0}
+                    continue
+                q = lambda f: v[min(len(v) - 1, int(f * (len(v) - 1) + 0.5))]
+                summ[g][n] = {'n': len(v), 'median': round(st.median(v), 1), 'p10': round(q(0.1), 1),
+                              'p90': round(q(0.9), 1), 'takeSd': round(st.median(e['sd']), 2) if e['sd'] else None}
+        out['sections'][r['patch']] = {'method': r['method'], 'by': summ, 'cells': r['cells'] if a.cells else None}
+    with open(a.o, 'w') as f:
+        json.dump(out, f, indent=1, sort_keys=True)
+    print('%d results -> %s' % (len(a.results), a.o))
+    return out
+
+
 def plot(r, outdir):
     try:
         import matplotlib
@@ -941,6 +982,13 @@ def main(argv=None):
     p = sub.add_parser('report')
     p.add_argument('what_path', metavar='WORK|result.json')
     p.add_argument('--png', action='store_true')
+    p = sub.add_parser('merge')
+    p.add_argument('results', nargs='+')
+    p.add_argument('--by', required=True, help='cell keys to group by, e.g. before,beforeLenMs,ioiMs,speed')
+    p.add_argument('--kind', help='only note or transition cells')
+    p.add_argument('--cells', action='store_true', help='also keep every cell')
+    p.add_argument('--about')
+    p.add_argument('-o', required=True)
     p = sub.add_parser('all')
     add_grid(p)
     add_run(p)
@@ -965,6 +1013,8 @@ def main(argv=None):
         analyze(a)
     elif a.cmd == 'report':
         report(a)
+    elif a.cmd == 'merge':
+        merge(a)
     else:
         plan(a)
         a.work = a.out

@@ -174,6 +174,14 @@ class Synthetic(unittest.TestCase):
         self.assertIn('perceptual reference', text)
         self.assertIn('arrive', text)
 
+    def test_merge(self):
+        out = os.path.join(self.work, 'merged.json')
+        mp.main(['merge', os.path.join(self.work, 'result.json'), '--by', 'before,beforeLenMs', '--kind', 'transition',
+                 '-o', out])
+        g = json.load(open(out))['sections']['Synth']['by']['attack/600']
+        self.assertEqual(g['leave']['n'], 3 * 2 * 2)          # 3 pitches x 2 intervals x 2 takes, pooled
+        self.assertAlmostEqual(g['leave']['median'], GLIDE[0] + 0.1 * (GLIDE[1] - GLIDE[0]), delta=10)
+
     def test_parse(self):
         self.assertEqual(mp.parse_list('48:54:3', int), [48, 51, 54])
         self.assertEqual(mp.parse_list('-2,2', int), [-2, 2])
