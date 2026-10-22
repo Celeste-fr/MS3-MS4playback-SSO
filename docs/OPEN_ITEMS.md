@@ -58,6 +58,14 @@ Keep this file current: close an item by deleting it (the commit message says wh
   pitch LEAVES the note before (Polfreman 2013's leave + 23.5 ms, `transitionsEarly` 2's rule), not at its arrival.
   Next: re-judge the heard check's transitions by leave time and re-check against these answers before any timing model
   is changed (item 3; private `plain-timing/OWNER_EARS.txt`).
+- **Real players (2026-10-21, Spheres K. 550 mvt 1, 175 slurred changes, `tools/soundlibraries/spheres_legato_transitions.json`,
+  CC BY-SA 4.0; private `legato-spheres/RESULT.md`; readings page https://claude.ai/artifact/LFYgh6JWiy5Xn4q2fD8KTN, not
+  yet checked by the owner)**: a real section puts the **midpoint** of a slurred change on its own beat (leave −19, mid −3,
+  arrive +10 ms against its bowed attacks, upper strings n 161; Vc/Cb mid +19, n 14); real changes take 3-43 ms, SSO's
+  57-110 ms. The midpoint (or leave) rule predicts the owner's five verdicts; the arrival rule doesn't (it picks B for
+  the Basses). Supported rule: send each Performance transition early by SSO's own in-context note-on-to-midpoint delay
+  (`transitionsEarly` 3 is the nearest mechanism; its model misses in-context midpoints by up to ±70 ms: measure them).
+  Prediction to test by ear: Mixed techniques' slow bars (IOI 500-1000 ms) should sound better with plainTiming 1.
 - **Untried**: *Live plays the score* and the route set don't apply the shift at all (Violas 95.2 ms late there); the
   plain set's Track Delay untried in real Live.
 - See also items 3, 9, 15.
