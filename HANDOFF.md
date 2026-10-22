@@ -46,6 +46,15 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Build for the owner: #470 (2026-10-22)
+
+Windows build #470 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39864721077, integrate-1017 @ b119baa144):
+microtoneBends 3, plainJoins 0, live-realcheck and live-celli (Live sets only). Checked on the VM as #464 was (private
+`~/MuseScore/ms3fork/private/check470/RESULT.md`): MuseScore's export of Whence identical in events to #465's B; quarter
+tones in tune Violins 1 23 -> 33 %, Celli 12 -> 26 %; 12-TET notes next to them Violins 1 30 -> 51 %, Celli 21 -> 57 %;
+Ample identical to #464; repeat check pass. Violas a little lower in tune (33 % against 35-37 %) with events identical to
+#464's: take-to-take variation. Installed on the VM at `C:\claude\b470\ms`.
+
 ## Slur joins (branch `slur-joins`, 2026-10-22, from integrate-1017 6d0eaddb57; not merged)
 
 The owner, Whence's Violas alone in build #464, Recommended: "viola bar 12 and 16 slur first note sounds disjointed from the
