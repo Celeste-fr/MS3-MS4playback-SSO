@@ -3890,6 +3890,78 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   }
             return false;
             };
+      // [levels] transitionLevels (branch slur-joins, 2026-10-22): a legato transition (libGlide: its glide measured or
+      // modelled, leave / arrive ms after its note-on) whose level differs from the note before's on its route: the note
+      // before keeps its own level to the glide's leave, then CC11 moves to the new note's linear in dB, a value every
+      // EvenLevels::STEP_MS, reaching it at the arrival (at the latest by the route's next note-on). At the note-on, as
+      // before, the note before's last sound (SSO's transition leaves it 25-140 ms after the note-on) took the new
+      // level: Whence's Violas bars 12 / 16, a slur's F#4 (the level rule's slur gain, CC11 110) into the G4 half note
+      // (a single note's, 47) dropped 6-7 dB over its last 100 ms. CC11 levels only (a level on another controller, a
+      // marcato's CC1, switches at the note-on as before); a CC11 the score writes between note-on and arrival is mapped
+      // by the new level
+      const bool transitionLevels = volume && score && Playback::on("levels/transitionLevels", score);
+      auto cc11Only = [&](const LibLevel* l) {
+            if (!l)
+                  return true;
+            for (int c : controllersOf(*l))
+                  if (c != CTRL_EXPRESSION)
+                        return false;
+            return true;
+            };
+      // the CC11 value the route plays at it (as sent, a level's too; else the library's expression value)
+      auto sentAt = [&](EventMap::iterator it, int route) {
+            while (it != events->begin()) {
+                  --it;
+                  const NPlayEvent& e = it->second;
+                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && e.controller() == CTRL_EXPRESSION
+                      && routeOf(e) == route)
+                        return e.value();
+                  }
+            return library ? qBound(0, library->expressionValue, 127) : 127;
+            };
+      auto transitionSwitch = [&](EventMap::iterator i, int route, const LibLevel* level, const NPlayEvent& ev) {
+            auto g = ev.note() ? libGlide.find(ev.note()) : libGlide.end();
+            if (g == libGlide.end())
+                  return false;
+            auto a = active.find(route);
+            if (!cc11Only(level) || (a != active.end() && !cc11Only(a->second.level)))
+                  return false;
+            const double tOn = score->utick2utime(i->first);
+            double tArrive = tOn + std::max(g->second.leaveMs, g->second.arriveMs) / 1000.0;
+            for (auto j = std::next(i); j != events->end() && j->first < score->utime2utick(tArrive) + 1; ++j) {
+                  const NPlayEvent& e = j->second;
+                  if (j->first > i->first && e.isExternal() && !e.librarySwitch() && routeOf(e) == route && e.type() == ME_NOTEON && e.velo() > 0) {
+                        tArrive = std::min(tArrive, score->utick2utime(j->first));
+                        break;
+                        }
+                  }
+            const double tLeave = std::min(tArrive, tOn + std::max(0.0, g->second.leaveMs) / 1000.0);
+            const int uArrive = score->utime2utick(tArrive);
+            if (uArrive <= i->first)
+                  return false;
+            const int from = sentAt(i, route);
+            auto at = events->lower_bound(uArrive);
+            const int to = level ? mapOf(*level, CTRL_EXPRESSION, valueAt(at, route, CTRL_EXPRESSION, fallbackOf(*level, CTRL_EXPRESSION)),
+                                         dynAt(at, route))
+                                 : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, library->expressionValue, 127) : 127);
+            if (from == to)
+                  return false;
+            // the ramp between leave and arrival (the values in between; the arrival's own by switchTo)
+            int last = from;
+            const double span = tArrive - tLeave;
+            for (double t = tLeave; span > 0 && t < tArrive - 1e-9; t += EvenLevels::STEP_MS / 1000.0) {
+                  const double f = (t - tLeave) / span;
+                  const int v = from > 0 && to > 0 ? int(std::lround(from * std::pow(double(to) / from, f)))
+                                                   : int(std::lround(from + (to - from) * f));
+                  if (v == last)
+                        continue;
+                  last = v;
+                  const int u = std::max(i->first + 1, score->utime2utick(t));
+                  events->insert(events->lower_bound(u), std::make_pair(u, levelEvent(ev, CTRL_EXPRESSION, qBound(0, v, 127))));
+                  }
+            switchTo(events->lower_bound(uArrive), uArrive, route, level, i->first, ev);
+            return true;
+            };
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
             NPlayEvent& ev = i->second;
             if (!ev.isExternal() || ev.librarySwitch() || ev.libraryLevel())
@@ -3924,12 +3996,12 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             if (a != active.end() && i->first == a->second.tick)
                   continue;                               // (a chord's note: the first one's level)
             auto l = ev.note() ? libLevels.find(ev.note()) : libLevels.end();
-            if (l == libLevels.end()) {
-                  if (active.count(route))
-                        switchTo(i, i->first, route, nullptr, i->first, ev);
+            const LibLevel* level = l == libLevels.end() ? nullptr : &l->second;
+            if (!level && !active.count(route))
                   continue;
-                  }
-            switchTo(i, i->first, route, &l->second, i->first, ev);
+            if (transitionLevels && transitionSwitch(i, route, level, ev))
+                  continue;
+            switchTo(i, i->first, route, level, i->first, ev);
             }
       // the chunk's end: the values in force again; a real range's CC11 keeps the note's (a note held over the chunk's
       // end keeps its level; flagged, so the next chunk takes the value as written from before it)

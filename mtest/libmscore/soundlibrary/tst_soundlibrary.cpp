@@ -273,6 +273,8 @@ class TestSoundLibrary : public QObject, public MTest
       void bendGlideMeasured();
       void bendGlideSmoothed();
       void microtoneBends();
+      void plainJoinLanes();
+      void transitionLevels();
       void externalPlugin();
       void playbackVerify();
       void playbackVerifyDrift();
@@ -1954,7 +1956,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nmicrotoneBends=%10\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=0\n";
+                                + "\n[levels]\ntransitionLevels=0\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nmicrotoneBends=%10\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=0\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1963,15 +1965,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=1\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
+               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=1\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=1\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=1\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -10274,6 +10276,215 @@ void TestSoundLibrary::microtoneBends()
                         keys.push_back(te.second.pitch());
             QCOMPARE(keys, (std::vector<int> { 69, 70, 69, 68, 69, 70, 69, 68 }));
       }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainJoinLanes
+//    [slurs] plainPerformance on a monophonic bending patch: a plain note right after a plain note of its patch at another
+//    pitch (touching, neither attacked afresh) stays on the note before's copy, where SSO plays a transition and the bend
+//    glides to its tuning, even when another copy already holds that tuning (branch slur-joins, 2026-10-22: Whence's Violas
+//    bars 12 / 16, a slur's last F#4 into a quarter-sharp G4 half note, went on the copy at +50 cents: attacked after
+//    silence there while the F#4 released on its own copy; the owner: "sounds disjointed from the note before").
+//    plain-joins.musicxml: G4 +50 (staccato), F#4 (staccato), E4, G4 +50 half; m2 the same with the half accented.
+//    m1: the half on E4's copy, E4 held to its note-on (touching), the bend at E4's tuning at the note-on, then gliding to
+//    +50. Attacks keep their copies by tuning as before: F#4 (staccato) on a copy of its own; m2's accented half (plainAccents
+//    2: a re-attack, the note before cut reattackGap early) on the copy at +50, not E4's; with plainAccents 0 it joins
+//---------------------------------------------------------
+
+void TestSoundLibrary::plainJoinLanes()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' bend='100' plainShift='0' mono='1'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300'"
+         " bendGlide='136:-8:130 600:130:288' bendGlideFingered='136:65:180 600:150:320' bendSmoothing='73.1'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-joins.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      struct On { int tick; int key; int channel; int velo; int off; };
+      auto render = [&](int accents) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
+                                            { "slurs/transitions", "1" }, { "slurs/transitionsEarly", "0" },
+                                            { "slurs/plainAccents", QString::number(accents) }, { "slurs/microtoneBends", "1" } });
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            std::vector<On> ons;
+            std::map<int, std::vector<std::pair<int, int>>> bends;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int ch = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                        ons.push_back({ te.first, ev.pitch(), ch, ev.velo(), -1 });
+                  else if (ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && ev.velo() == 0)) {
+                        for (On& o : ons)
+                              if (o.off < 0 && o.key == ev.pitch() && o.channel == ch)
+                                    o.off = te.first;
+                        }
+                  else if (ev.type() == ME_PITCHBEND)
+                        bends[ch].push_back({ te.first, ev.dataA() | (ev.dataB() << 7) });
+                  }
+            return std::make_pair(ons, bends);
+            };
+      auto bendAt = [](const std::vector<std::pair<int, int>>& b, int tick) {      // (the value in force at tick)
+            int v = 8192;
+            for (const auto& p : b)
+                  if (p.first <= tick)
+                        v = p.second;
+            return v;
+            };
+      const int plus50 = int(std::lround(8192.0 + 0.5 * 8191.0));
+      for (int accents : { 2, 0 }) {
+            const auto r = render(accents);
+            const std::vector<On>& o = r.first;
+            QCOMPARE(int(o.size()), 8);
+            QCOMPARE((std::vector<int> { o[0].key, o[1].key, o[2].key, o[3].key }), (std::vector<int> { 67, 66, 64, 67 }));
+            QVERIFY(o[1].channel != o[0].channel);              // (a staccato: attacked, a copy of its own as before)
+            // m1: the half on E4's copy, touching it, from E4's tuning to +50
+            QVERIFY2(o[3].channel == o[2].channel, qPrintable(QString("plainAccents %1: the half on channel %2, E4 on %3")
+                                                             .arg(accents).arg(o[3].channel).arg(o[2].channel)));
+            QVERIFY(o[2].off >= o[3].tick);
+            const auto& b = r.second.at(o[3].channel);
+            QCOMPARE(bendAt(b, o[3].tick), 8192);
+            QCOMPARE(bendAt(b, o[3].off - 1), plus50);
+            // m2: the accented half
+            if (accents == 2) {
+                  QCOMPARE(o[7].velo, 122);
+                  QVERIFY(o[7].channel != o[6].channel);          // (a re-attack: the copy at its tuning)
+                  QVERIFY(o[6].off < o[7].tick);
+                  QCOMPARE(bendAt(r.second.at(o[7].channel), o[7].tick), plus50);
+                  }
+            else {
+                  QCOMPARE(o[7].channel, o[6].channel);
+                  QVERIFY(o[6].off >= o[7].tick);
+                  }
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   transitionLevels
+//    [levels] transitionLevels (branch slur-joins, 2026-10-22): slur-join-levels.musicxml, slurred sixteenths E4 F#4 G4 A4
+//    (the level rule's slur grid, +20 dB) touching an unslurred B4 half note (a single note: the slurs' grid, +10 dB), all
+//    plain Performance at 110. 0: the half's lower CC11 goes with its note-on. 1: the A4's CC11 stays to the glide's leave
+//    (bendGlide 136:65:158: 65 ms after the half's note-on), then falls monotonically, linear in dB, to the half's value
+//    at the arrival (158 ms); the notes and the values before and after the same as with 0. The setting: 0 by default and
+//    in both presets
+//---------------------------------------------------------
+
+void TestSoundLibrary::transitionLevels()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      const Playback::Definition* d = Playback::definition("levels/transitionLevels");
+      QVERIFY(d && d->value == 0.0 && d->perScore);
+      for (const Playback::Preset& p : Playback::presets()) {
+            bool listed = false;
+            for (const auto& kv : p.values)
+                  if (QString(kv.first) == "levels/transitionLevels") {
+                        listed = true;
+                        QCOMPARE(kv.second, 0.0);
+                        }
+            QVERIFY2(listed, p.id);
+            }
+      auto grid = [](double db) {
+            QString g;
+            for (int cc : { 32, 96 })
+                  for (int ms : { 100, 1000 })
+                        for (int p : { 60, 84 })
+                              g += QString("%1/%2/%3:%4 ").arg(cc).arg(ms).arg(p).arg(db);
+            return g.trimmed();
+            };
+      auto lib = loadMap(QString(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='0'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' bendGlide='136:65:158'"
+         " contextLevel='%1' contextLevelPlain='%2'/>"
+         "</Instrument></SoundLibrary>").arg(grid(10), grid(20)).toUtf8().constData());
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "slur-join-levels.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      struct Played { std::vector<std::pair<int, int>> ons, offs; std::vector<std::pair<int, int>> cc11; };
+      auto render = [&](int on) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "levels/context", "1" },
+                                            { "levels/transitionLevels", QString::number(on) } });
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            Played p;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                        p.ons.push_back({ te.first, ev.pitch() });
+                  else if (ev.type() == ME_NOTEOFF || ev.type() == ME_NOTEON)
+                        p.offs.push_back({ te.first, ev.pitch() });
+                  else if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION)
+                        p.cc11.push_back({ te.first, ev.value() });
+                  }
+            return p;
+            };
+      auto at = [](const std::vector<std::pair<int, int>>& cc, int tick) {      // (the value in force at tick, after its events)
+            int v = -1;
+            for (const auto& c : cc)
+                  if (c.first <= tick)
+                        v = c.second;
+            return v;
+            };
+      const Played off = render(0);
+      const Played on = render(1);
+      QCOMPARE(int(off.ons.size()), 5);
+      QCOMPARE(on.ons, off.ons);
+      QCOMPARE(on.offs, off.offs);
+      const int half = off.ons[4].first;
+      const int slur = at(off.cc11, half - 1);                 // (the A4's)
+      const int single = at(off.cc11, half);                   // (the half's, with its note-on)
+      QVERIFY2(single < slur, qPrintable(QString("slur %1, single %2").arg(slur).arg(single)));
+      auto tickAfter = [&](double ms) { return score->utime2utick(score->utick2utime(half) + ms / 1000.0); };
+      const int leave = tickAfter(65);
+      const int arrive = tickAfter(158);
+      QCOMPARE(at(on.cc11, half), slur);                       // (1: no change at the note-on)
+      QCOMPARE(at(on.cc11, leave - 1), slur);
+      QCOMPARE(at(on.cc11, arrive), single);
+      QCOMPARE(at(on.cc11, off.ons[4].first + 960), at(off.cc11, off.ons[4].first + 960));
+      int last = slur, steps = 0;
+      for (const auto& c : on.cc11) {
+            if (c.first <= half || c.first > arrive)
+                  continue;
+            QVERIFY2(c.first >= leave - 1, qPrintable(QString("CC11 %1 at %2, before the leave %3").arg(c.second).arg(c.first).arg(leave)));
+            QVERIFY(c.second <= last && c.second >= single);
+            last = c.second;
+            ++steps;
+            }
+      QVERIFY2(steps >= 5, qPrintable(QString("%1 steps").arg(steps)));      // (a ramp, not a step)
+      // before the half: the same values
+      for (const auto& c : off.cc11)
+            if (c.first < half)
+                  QCOMPARE(at(on.cc11, c.first), at(off.cc11, c.first));
       delete score;
       }
 
