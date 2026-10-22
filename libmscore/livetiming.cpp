@@ -96,9 +96,16 @@ double mostCommon(const std::vector<double>& v)
       }
 }
 
-Track track(const std::vector<LiveClips::Note>& notes, double bpm)
+Track track(const std::vector<LiveClips::Note>& notes, double bpm, const std::multimap<int, int>* keyOns)
       {
       Track t;
+      std::multimap<int, int> ownOns;
+      if (!keyOns) {
+            for (const LiveClips::Note& n : notes)
+                  ownOns.insert({ n.pitch, n.timed ? n.playedStart : n.start });
+            keyOns = &ownOns;
+            }
+      const double margin = msToUnits(RETRIGGER_MARGIN_MS, bpm);
       double early = 0;                         // the latest early start or end (units)
       for (const LiveClips::Note& n : notes)
             if (n.timed)
@@ -115,12 +122,23 @@ Track track(const std::vector<LiveClips::Note>& notes, double bpm)
       for (const LiveClips::Note& n : notes) {
             const double on = n.timed ? n.playedStart + l - n.start : l;
             double off = n.timed ? n.playedEnd + l - (n.start + n.length) : l;
+            // a note-on of its key at its note-off (or just after): the off RETRIGGER_MARGIN_MS before it
+            const int playedOff = n.timed ? n.playedEnd : n.start + n.length;
+            const int playedOn = n.timed ? n.playedStart : n.start;
+            bool retrigger = false;
+            const auto keys = keyOns->equal_range(n.pitch);
+            for (auto k = keys.first; k != keys.second; ++k)
+                  if (k->second > playedOn && k->second >= playedOff && k->second - playedOff < margin) {
+                        off = std::min(off, k->second - margin + l - (n.start + n.length));
+                        retrigger = true;
+                        }
             if (off < 0) {
                   ++t.offsLate;
                   off = 0;
                   }
             ons.push_back(hundredths(unitsToMs(std::max(0.0, on), bpm)));
-            offs.push_back(hundredths(unitsToMs(off, bpm)));
+            // (rounded down: the margin kept)
+            offs.push_back(retrigger ? std::floor(unitsToMs(off, bpm) * 100.0 + 1e-9) / 100.0 : hundredths(unitsToMs(off, bpm)));
             }
       t.onMs = ons.empty() ? 0.0 : mostCommon(ons);
       t.offMs = offs.empty() ? t.lookaheadMs : mostCommon(offs);

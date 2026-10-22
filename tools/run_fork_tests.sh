@@ -37,7 +37,8 @@ done
 for p in tools/live/test/test_envelopes.py tools/soundlibraries/test_make_setups.py tools/soundlibraries/test_extract_library_files.py tools/soundlibraries/test_gen_ample.py \
          tools/vm/test_vmlib.py tools/playbackverify/test_heard_summary.py tools/playbackverify/test_dump_compare.py \
          tools/playbackverify/test_repeat_check.py tools/soundlibraries/octave_measure/test_analyze.py \
-         tools/soundlibraries/test_accent_attack.py tools/roundtrip/test_roundtrip2.py tools/ample/test_ample_tools.py; do
+         tools/soundlibraries/test_accent_attack.py tools/roundtrip/test_roundtrip2.py tools/ample/test_ample_tools.py \
+         tools/live/realcheck/test_realcheck.py; do
   if python3 -I "$ROOT/$p" >/dev/null 2>&1; then r=pass; else r=FAIL; FAIL=1; fi
   printf '%-28s %s\n' "python $(basename "$p")" "$r" >> "$OUT"
 done

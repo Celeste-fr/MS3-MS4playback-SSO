@@ -157,6 +157,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSetTrackDelays();
       void plainWritten_data();
       void plainWritten();
+      void retriggerOrder();
       void plainPerformanceLive();
       void plainTimingLive();
       void plainAccentsLive_data();
@@ -2623,6 +2624,7 @@ void TestLiveEquivalence::plainWritten()
       // the device's delays (LiveTiming::playedBy)
       std::multiset<std::tuple<int, int, int, bool>> got;
       int notes = 0, early = 0, exceptions = 0, onGrid = 0;
+      const double retrigger = LiveTiming::msToUnits(LiveTiming::RETRIGGER_MARGIN_MS, tl.bpm);
       double maxLook = 0;
       for (const PlainLiveSet::Section& s : l.sections)
             for (const PlainLiveSet::PartTracks& p : s.parts)
@@ -2638,7 +2640,10 @@ void TestLiveEquivalence::plainWritten()
                                     const std::pair<double, double> at = LiveTiming::playedBy(t.timing, n, tl.bpm);
                                     got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.first)), true));
                                     got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.second)), false));
-                                    QVERIFY2(std::fabs(at.first - n.playedStart) <= 0.5 && std::fabs(at.second - n.playedEnd) <= 0.5,
+                                    // (a note-off at a note-on of its key: RETRIGGER_MARGIN_MS before it)
+                                    const double offEarly = n.playedEnd - at.second;
+                                    QVERIFY2(std::fabs(at.first - n.playedStart) <= 0.5
+                                             && (std::fabs(offEarly) <= 0.5 || (offEarly > 0 && offEarly <= retrigger + 0.5)),
                                              qPrintable(QString("%1 at %2: %3 / %4 against %5 / %6").arg(t.name).arg(n.start)
                                                         .arg(at.first).arg(at.second).arg(n.playedStart).arg(n.playedEnd)));
                                     }
@@ -2709,7 +2714,8 @@ void TestLiveEquivalence::plainWritten()
       for (auto w = want.begin(); w != want.end(); ++w, ++g) {
             QCOMPARE(std::get<0>(*g), std::get<0>(*w));
             QCOMPARE(std::get<1>(*g), std::get<1>(*w));
-            QVERIFY2(std::abs(std::get<2>(*g) - std::get<2>(*w)) <= 1, qPrintable(QString("key %1: %2 against %3")
+            QVERIFY2(std::abs(std::get<2>(*g) - std::get<2>(*w)) <= 1 + (std::get<3>(*w) ? 0 : int(std::ceil(retrigger))),
+                     qPrintable(QString("key %1: %2 against %3")
                      .arg(std::get<1>(*w)).arg(std::get<2>(*g)).arg(std::get<2>(*w))));
             }
 
@@ -2752,6 +2758,58 @@ void TestLiveEquivalence::plainWritten()
       LiveTracks::Import im = LiveTracks::import(score, set, parts, "a.als", QDateTime(), again);
       QCOMPARE(LiveTracks::delaysTag(score, im), TrackDelays::write(score, TrackDelays::read(score)));
       delete score;
+      }
+
+//---------------------------------------------------------
+//   retriggerOrder
+//    a key struck again (real Live 12.4.6, 2026-10-22, tools/live/realcheck): the note before's note-off, which
+//    MuseScore sends at the new note-on (off first), plays RETRIGGER_MARGIN_MS before it in Live, also when the new
+//    note is another technique's (keyOns); a note-off not at a note-on of its key keeps its time
+//---------------------------------------------------------
+
+void TestLiveEquivalence::retriggerOrder()
+      {
+      const double bpm = 90;
+      const int beat = LiveClips::UNITS_PER_BEAT;
+      const int early = int(std::lround(LiveTiming::msToUnits(172.6, bpm)));
+      auto note = [&](int pitch, int start, int length, int playedStart, int playedEnd) {
+            LiveClips::Note n;
+            n.pitch = pitch;
+            n.start = start;
+            n.length = length;
+            n.timed = true;
+            n.playedStart = playedStart;
+            n.playedEnd = playedEnd;
+            return n;
+            };
+      // the Cello's C3s: written 12 - 15.958 and 16 - 17 beats, both early by 172.6 ms, the first ending at the second's
+      // early start; an E3 after them ending as written
+      const int s2 = 16 * beat;
+      std::vector<LiveClips::Note> notes {
+            note(48, 12 * beat, s2 - 12 * beat - beat / 24, 12 * beat - early, s2 - early),
+            note(48, s2, beat - 40, s2 - early, s2 + beat - 40),
+            note(52, 18 * beat, beat, 18 * beat - early, 19 * beat),
+            };
+      const LiveTiming::Track t = LiveTiming::track(notes, bpm);
+      const double margin = LiveTiming::msToUnits(LiveTiming::RETRIGGER_MARGIN_MS, bpm);
+      const std::pair<double, double> a = LiveTiming::playedBy(t, notes[0], bpm);
+      const std::pair<double, double> b = LiveTiming::playedBy(t, notes[1], bpm);
+      QVERIFY2(b.first - a.second >= margin - 1e-6, qPrintable(QString("%1 %2").arg(a.second).arg(b.first)));
+      QVERIFY(b.first - a.second <= margin + LiveTiming::msToUnits(0.011, bpm));
+      QVERIFY(std::fabs(b.first - notes[1].playedStart) <= 0.5);
+      // the others as MuseScore plays them
+      const std::pair<double, double> c = LiveTiming::playedBy(t, notes[2], bpm);
+      QVERIFY(std::fabs(c.first - notes[2].playedStart) <= 0.5 && std::fabs(c.second - notes[2].playedEnd) <= 0.5);
+      QVERIFY(std::fabs(a.first - notes[0].playedStart) <= 0.5);
+      QCOMPARE(t.offsLate, 0);
+
+      // the new note on another technique's track: only the Kontakt's keyOns know it
+      std::vector<LiveClips::Note> first { notes[0] };
+      const LiveTiming::Track alone = LiveTiming::track(first, bpm);
+      QVERIFY(std::fabs(LiveTiming::playedBy(alone, notes[0], bpm).second - notes[0].playedEnd) <= 0.5);
+      std::multimap<int, int> keyOns { { 48, notes[0].playedStart }, { 48, notes[1].playedStart } };
+      const LiveTiming::Track shared = LiveTiming::track(first, bpm, &keyOns);
+      QVERIFY(b.first - LiveTiming::playedBy(shared, notes[0], bpm).second >= margin - 1e-6);
       }
 
 //---------------------------------------------------------
