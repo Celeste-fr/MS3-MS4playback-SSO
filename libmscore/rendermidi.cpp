@@ -2189,7 +2189,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const PerformanceNote perf = offset == 0 ? performanceNote(note, libChoice, r) : PerformanceNote();
                               accentAttack = perf.on && perf.accentAttack;
                               const Note* from = perf.on ? perf.from : legatoTransition(note, libChoice, &interval, &lenBefore);
-                              if (libMicrotoneBends == 1)
+                              if (libMicrotoneBends == 1 || libMicrotoneBends == 3)     // (3: as 1, the fingered transitions early)
                                     microtoneSpelling(note, libChoice, from, noteChannel, &libNote.key);
                               else if (!libSpellKey.empty()) {
                                     libSpellKey.erase(note);
@@ -2305,12 +2305,32 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // puts it back at playback
                                     // ([slurs] plainPerformance: none, its patch's events go early together, TrackDelays; with
                                     // [slurs] plainTiming each plain transition by this model, mode 1 where transitionsEarly is 0)
-                                    const int transitionsMode = libChoice.plain ? (libPlainTiming ? std::max(1, libTransitionsEarly) : 0)
-                                                                                : libTransitionsEarly;
+                                    // ([slurs] microtoneBends 3, 2026-10-22, branch microtone-next: a plain fingered transition
+                                    // on a patch that bends, by its glide's middle less the plainShift its patch already goes
+                                    // early, so that the glide's middle comes on the beat, as the Violas' already did: SSO's
+                                    // fingered transitions in Whence's sixteenths reached their pitch 100-110 ms after the
+                                    // written start on Violins 1 / Celli, 40 ms on the Violas (kthost + Kontakt 8 + SSO, pYIN);
+                                    // with 1's full bends the 12-TET notes between the quarter tones were heard late, in tune
+                                    // 24 % / 19 % of their time (Violas 50 %); this early 49 % / 53 %, the quarter tones 17 -> 22 %
+                                    // / 11 -> 24 %: microtone-next's RESULT.md)
+                                    const SoundLib::LibInstrument* tpi = libPatches[libChoice.patch];
+                                    const bool midEarly = libChoice.plain && !libPlainTiming && libMicrotoneBends == 3 && glideFingered
+                                                          && glideMeasured && !libChoice.articulation->bendGlidesFingered.empty()
+                                                          && std::isfinite(tpi->plainShiftMs);
+                                    const int transitionsMode = midEarly ? 3 : libChoice.plain ? (libPlainTiming ? std::max(1, libTransitionsEarly) : 0)
+                                                                                           : libTransitionsEarly;
                                     if (transitionsMode > 0 && perf.on && perf.from && offset == 0 && g.arriveMs > 0) {
                                           double shiftMs = g.arriveMs;
                                           const bool fallback = transitionsMode >= 2 && !glideMeasured;
-                                          if (transitionsMode == 2 && glideMeasured)
+                                          if (midEarly) {
+                                                // (at most the middle after the shortest measured note, Whence's sixteenths: the
+                                                // slower glides' middles weren't checked against the sound, and one shift keeps
+                                                // a part's transitions evenly spaced where its notes change speed)
+                                                double l0 = 0, a0 = 0;
+                                                libChoice.articulation->bendGlideAt(0.0, &l0, &a0, true);
+                                                shiftMs = std::max(0.0, std::min(g.leaveMs + g.arriveMs, l0 + a0) / 2.0 - tpi->plainShiftMs);
+                                                }
+                                          else if (transitionsMode == 2 && glideMeasured)
                                                 shiftMs = g.leaveMs + HEARD_AFTER_LEAVE_MS;
                                           else if (transitionsMode == 3 && glideMeasured)
                                                 shiftMs = (g.leaveMs + g.arriveMs) / 2.0;

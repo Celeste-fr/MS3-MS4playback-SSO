@@ -836,6 +836,18 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                         }
                   }
             }
+      // a row's pitch is the key it is sent on and its cents are from that key: [slurs] microtoneBends 1 may send a
+      // microtonal note on the key a semitone beside its own (B3 -50 on B-flat3 +50, microtoneSpelling in rendermidi.cpp);
+      // before 2026-10-22 the cents stayed the note's own, so pitch + cents was a semitone off for those notes (the heard
+      // check's and hcana's targets with them). A key shift (an octave: the Timpani) keeps the note's own cents
+      std::map<const Note*, int> sentKey;
+      for (const auto& up : played)
+            if (up->note && !sentKey.count(up->note))
+                  sentKey[up->note] = up->pitch;
+      auto keyCents = [&](const Note* n, int key) {
+            const int d = n->ppitch() - key;
+            return tuning.cents(n) + (std::abs(d) == 1 ? 100.0 * d : 0.0);
+            };
       for (const auto& up : played) {
             const Played* p = up.get();
             if (!p->trace || !p->note || !p->trace->choice || p->written < 0)
@@ -852,7 +864,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const Note* last = n->lastTiedNote();
             r.writtenEnd = ms(p->written + (last->chord()->tick() + last->chord()->actualTicks() - n->chord()->tick()).ticks()) / 1000;
             r.pitch = p->pitch;
-            r.cents = tuning.cents(n);
+            r.cents = keyCents(n, p->pitch);
             r.route = p->route;
             r.patch = p->trace->patch->name;
             r.articulation = p->trace->choice.articulation->name;
@@ -861,7 +873,8 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             r.performance = int(p->trace->performance);
             if (p->trace->from) {
                   r.transition = true;
-                  r.fromPitch = p->trace->from->ppitch();
+                  auto fk = sentKey.find(p->trace->from);
+                  r.fromPitch = fk != sentKey.end() && std::abs(p->trace->from->ppitch() - fk->second) == 1 ? fk->second : p->trace->from->ppitch();
                   r.fromWritten = score->utick2utime(p->trace->from->chord()->tick().ticks());
                   }
             r.sentMs = sent(p) - ms(p->written);
