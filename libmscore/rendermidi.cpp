@@ -1379,7 +1379,6 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // plain note's base "long" is no velocity technique, so without this it plays none (private/bars9-12/ACCENT.md).
                   // Its own level on top below: louder by the dynamics CC along the patch's own curve, slurred notes too
                   const int plainAccents = li ? int(std::lround(Playback::value("slurs/plainAccents", score))) : 0;
-                  const bool plainOverlap = li && Playback::on("slurs/plainOverlap", score);     // ([slurs] plainOverlap: performanceNote)
                   auto accentLike = [](const Ms4::NoteResult& r) {
                         for (Ms4::Art art : r.arts)
                               if (art == Ms4::Art::Accent || art == Ms4::Art::Marcato || art == Ms4::Art::SoftAccent)
@@ -1983,18 +1982,6 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     p.from = joinable;
                                     p.interval = interval;
                                     p.lenBefore = lenBefore;
-                                    // [slurs] plainOverlap (2026-10-22, branch live-celli; 0 in both presets until the owner has
-                                    // heard it): the note before ends the map's overlap after this note-on, as a slur's
-                                    // transition does, instead of at the same instant. Measured (real Live 12.4.7 + Kontakt 8 +
-                                    // SSO, the test VM, tools/live/realcheck): MuseScore's same-instant note-off / note-on is a
-                                    // slow, soft transition in the hosted Kontakt (Whence's Celli chord voices: the new pitch
-                                    // ~480 ms after the note-on) that no Live set reproduces (touching, 1 ms apart, 1 or 27 ms
-                                    // overlapping: the same faster transition, +5 .. +7.6 dB for ~0.4 s at each chord change);
-                                    // with an overlap both play that transition (as the slurred line, which nulls at -24 dB)
-                                    if (plainOverlap && !explicitTechnique && a->overlapMs > 0) {
-                                          p.before = joinable;
-                                          p.endMs = a->overlapMs;
-                                          }
                                     }
                               return p;
                               }

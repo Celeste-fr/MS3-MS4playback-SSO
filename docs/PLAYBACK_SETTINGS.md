@@ -1253,7 +1253,11 @@ velocity picks). A note sent early (`transitionsEarly`, an onset) changes Δt an
   as the script writes none at a note-on it doesn't play legato (the value before stays). One value a transition, at the
   transition: the sounding interval sample has CC119 modulators, so a value sent earlier would reshape it.
 - **Live**: a carrier on key 113 (*Live plays the score*, the device's protocol 11); in the plain set the technique track's
-  clip envelope (LIVE.md › What still differs).
+  clip envelope (LIVE.md › What still differs). Live sends a clip envelope's value only where it changes, so each technique
+  track's first value is a step (from 0, or from 1 when that value is 0): an envelope holding 0 throughout, as the chord
+  voices' copies of Whence's Celli (every transition at speed 0), sent nothing, and the slots played their transitions at
+  another speed (+5 .. +8 dB for ~0.4 s at each chord change in real Live; branch `live-celli`, OPEN_ITEMS 11d;
+  `tst_liveequivalence::speedSentLive`).
 - **Null test** (plainPerformance 1, where written = played): see HANDOFF.md › Speed from written.
 
 ## Fixed transitions
@@ -1705,25 +1709,6 @@ note-on (the realRange steps of 1-4 values at bar lines, Celli bar 13 54 -> 42, 
 route set's carrier notes and the plain set's CC11 lane carry it (`tst_liveequivalence::transitionLevelsLive`). Tests
 `tst_soundlibrary::transitionLevels`.
 
-## Plain overlap
-
-`[slurs] plainOverlap` (branch `live-celli`, 2026-10-22; 0 by default and in both presets until the owner has heard it;
-per score). Under `[slurs] plainPerformance` a plain note touching the note before on its patch (and copy), unslurred,
-is SSO's transition from it (Plain Performance above), but gets no join: the note before ends at the note-on's instant.
-With 1 it ends the map's `overlap` after the note-on (`performanceNote`'s join, `libJoins`), as a slurred note's
-transition; a note with a technique of its own chosen in the Inspector, a staccato, an accented re-attack and a key
-struck again stay as before.
-
-Why: real Live 12.4.7 against MuseScore's export (Kontakt 8 + SSO on the test VM, `tools/live/realcheck`, OPEN_ITEMS
-11d): Whence's Celli chord voices (bars 9-16, the voice copies) play each chord change +5.4 .. +7.6 dB louder for ~0.4 s
-in Live, the new pitch ~0.3 s after the note-on where MuseScore's hosted Kontakt takes ~0.48 s; between the changes they
-match within 0.1 dB. The same-instant note-off / note-on can't be sent so to Kontakt by a Live set: touching, 1.1 ms
-apart, 1.1 or 27 ms overlapping, without the MuseScore Link device, the CC11 steps 2 ms earlier: the same transition
-within 0.6 dB each time. A slur's transitions (overlapping) null at -24 dB. With 1 both send the overlap, so both play
-the transition Live plays now: it changes what MuseScore plays. Live: the plain set's written clips, Track Delays and
-the device's delays play the joins as for slurs (`tst_liveequivalence::plainOverlapLive`, also with 0: the touching
-pairs it finds).
-
 ## Clicked and entered notes
 
 The owner (2026-10-15): "send a clicked note on a library part to its SSO patch, with its technique and the same patch
@@ -1799,7 +1784,6 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |
 | Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' nodes (halfway from each note-on to the next, since 2026-10-14), every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
 | Divisi level, `[levels] divisi` (the owner, 2026-10-20): while n voices of a monophonic patch's part (voice lanes) sound together, each note plays 10 log10(n) dB softer by CC11 (2: -3.0, 3: -4.8 dB), the line's too, so the chord adds up to one section; a note keeps its start's level; an assumption from player counts, no divisi data (above, Divisi level) | 1 (Recommended, the default; 0 in Library default) | `soundlibrary.cpp` (`lanes`: `Lanes::sounding`, `divisiDb`), `rendermidi.cpp` (`divisiLevel`, `libDivisi`, `libraryNoteLevels`) | `[levels] divisi`; score: `playbackSettings` |
-| Plain overlap, `[slurs] plainOverlap` (branch live-celli, 2026-10-22, not yet heard by the owner): a plain Performance note touching the note before on its patch and copy, unslurred, makes the note before end the map's overlap after its note-on (as a slur's transition), instead of at the same instant, which the hosted Kontakt plays as a slower, softer transition than Live does (above, Plain overlap) | 0 (Recommended 0, Library default 0) | `rendermidi.cpp` (`performanceNote`: `plainOverlap`) | `[slurs] plainOverlap`; score: `playbackSettings` |
 | Transition levels, `[levels] transitionLevels` (branch slur-joins, 2026-10-22, not yet heard by the owner): a legato transition whose CC11 level differs from the note before's on its copy keeps the note before's level to the glide's leave, then moves linear in dB to the new one by the glide's arrival (bendGlide), instead of with the note-on while SSO still plays the note before (above, Transition levels) | 0 (Recommended 0, Library default 0; proposed 1 in Recommended) | `rendermidi.cpp` (`libraryNoteLevels`: `transitionSwitch`, `libGlide`) | `[levels] transitionLevels`; score: `playbackSettings` |
 | Mic compensation: a part whose mic controllers (Mic 1-5, Mic Mix Distance; values or lanes) give another mix than the default plays as loud as the default mix, by its patches' volumes (lanes: the largest by the volume, each note's own at its start by CC11); measured mic levels and laws, mics as powers (above, Mic compensation; the owner, 2026-10-15) | 1 (Recommended, the default; 0 in Library default) | `contextlevel.cpp` (`micLevelDb`, `micValues`, `micTops`, `volumes`), `rendermidi.cpp` `trackLevel`, `TrackDelays::patchGain`; data: map `<Mics>`, `micLevels` / `micDefault` from `mic_levels.py` | `[levels] micCompensation`; score: `playbackSettings` |
 | Real range: each note of the five string sections and the main woodwind / brass patches as loud as a real player at its written dynamic (the Meyer rule, 2026-10-14: TU Berlin's single-note pp / ff are ppp / fff, written pp / ff at Meyer's in-play levels, p .. f equal steps between, from mp; rule D, 7 equal steps, where Meyer has no figures), less what SSO's Long already changes with CC1, by CC11 (following CC1 through hairpins) and the patches' volumes; a capped short's rest by CC11 (above, Real range; the owner, 2026-10-12, stage A) | 2, Clark & Luce spans (Recommended, the default since 2026-10-14; 1 the Meyer rule; 0 in Library default; the owner, 2026-10-13 / 14) | `contextlevel.cpp` (`realRangeDb`, `clarkLuceSpans`, `realRangeTops`, `volumes`), `rendermidi.cpp` `realRangeLevel` / `libraryNoteLevels`, `TrackDelays::patchGain`; data: map `realSpan` / `longLevel` / `realPlay` / `realSteps` from `real_range.py` | `[levels] realRange`; score: `playbackSettings` |

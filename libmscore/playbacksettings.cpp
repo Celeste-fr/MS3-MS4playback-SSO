@@ -175,13 +175,6 @@ static const std::vector<Definition> DEFINITIONS = {
       // the owner on hearing 0-3: "ig 2 is preferable, but is accented normally that loud? if yes then I'm fine with it"):
       // 2's accented attack at real players' level, +5.0 dB over the plain note (rendermidi.h PLAIN_ACCENT_DB, the map's
       // measured accentedLevel)
-      // (2026-10-22, branch live-celli: real Live against MuseScore on Whence's Celli chord voices, 0 in both presets until the
-      // owner has heard it; performanceNote)
-      { "slurs/plainOverlap", 0, 0, 1, "on/off",
-        "1: a [slurs] plainPerformance note touching the note before on its patch (SSO's transition, not a slur's) makes the "
-        "note before end the map's overlap after its note-on, as a slur's transition does; MuseScore and Live then play the "
-        "same transition. 0: the note before ends at the same instant (in MuseScore a slower, softer transition than Live "
-        "plays from the same notes)", true },
       { "slurs/plainAccents", 2, 0, 3, "",
         "[slurs] plainPerformance's notes with an accent, marcato or soft accent: 1 MuseScore 4's offset for its articulations "
         "(40 log10 of its velocity over a plain note's, as [levels] calibrated gives a technique on velocity: strings' accent "
@@ -566,7 +559,7 @@ QString iniTemplate()
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
 //    2026-10-20: the owner approved the rule); levels/transitionLevels (0 in both since 2026-10-22, branch slur-joins, until the
-//    owner has heard it); slurs/plainOverlap (0 in both since 2026-10-22, branch live-celli, until the owner has heard it). The other settings are not in the table because: legato/keepMs acts
+//    owner has heard it). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -588,10 +581,10 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 1 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainOverlap", 0 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 1 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainOverlap", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
