@@ -60,8 +60,13 @@ def notes(path, part):
 def rms_db(x):
     return 10 * math.log10(max(np.mean(x * x), 1e-20))
 
-def main():
-    da, db, part, ntxt = sys.argv[1:5]
+def main(argv=None):
+    argv = sys.argv if argv is None else argv
+    if len(argv) < 5 or argv[1] in ("-h", "--help"):
+        print(__doc__)
+        return 0 if len(argv) > 1 and argv[1] in ("-h", "--help") else 2
+    da, db, part, ntxt = argv[1:5]
+    sys.argv = argv
     out = sys.argv[sys.argv.index("--json") + 1] if "--json" in sys.argv else None
     a, sr, onsA = load(da, part)
     b, srb, onsB = load(db, part)
@@ -73,7 +78,7 @@ def main():
     best = None
     for lag in range(-int(0.005 * sr), int(0.005 * sr) + 1, 4):
         bb = np.roll(b, lag)
-        r = 10 * math.log10(np.sum((bb - a) ** 2) / np.sum(a * a))
+        r = 10 * math.log10(max(np.sum((bb - a) ** 2), 1e-30) / max(np.sum(a * a), 1e-30))
         if best is None or r < best[0]:
             best = (r, lag)
     null = {"residualDb": best[0], "lagMs": 1000 * best[1] / sr, "levelA": rms_db(a), "levelB": rms_db(b)}
@@ -121,7 +126,9 @@ def main():
         bb = row.pop("_bandsB")
         ok = (ba > -40) | (bb > -40)            # (the bands that carry the note)
         row["specDiffDb"] = float(np.sqrt(np.mean((bb[ok] - ba[ok]) ** 2))) if np.any(ok) else None
-        row["centroidCents"] = 1200 * math.log2(row["centroidB"] / row["centroidA"])
+        # (a silent note in either render has no centroid: None, not a ZeroDivisionError)
+        ca, cb = row.get("centroidA") or 0.0, row.get("centroidB") or 0.0
+        row["centroidCents"] = 1200 * math.log2(cb / ca) if ca > 0 and cb > 0 else None
         s0, s1 = int((ta + 0.0) * sr), int((ta + dur) * sr)
         sa_, sb_ = a[s0:s1], b[s0:s1]
         row["nullDb"] = 10 * math.log10(max(np.sum((sb_ - sa_) ** 2), 1e-30) / max(np.sum(sa_ * sa_), 1e-30))
@@ -147,5 +154,8 @@ def main():
     print(json.dumps({"part": part, "null": null, "summary": res["summary"], "tuned": res["summary_tuned"], "untuned": res["summary_untuned"], "notes": len(written), "events": [len(onsA), len(onsB)]}, indent=1))
     if out:
         json.dump(res, open(out, "w"), indent=1)
+    return res
 
-main()
+
+if __name__ == "__main__":
+    main()

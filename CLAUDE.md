@@ -18,7 +18,8 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
 ## Rules
 
 - **Files survive a round trip to MuseScore 3.6** (the owner): fork → 3.6.2 → fork unchanged. Test:
-  `ab/roundtrip2.py [--mtest N] [--list file] [scores…]` (XML, PNG pages, MIDI). Where 3.7 reads or writes
+  `tools/roundtrip/roundtrip2.py --fork <mscore> [--mtest N] [--list file] [scores…]` (a build dir's mscore through
+  `tools/roundtrip/portable_fork.sh`) (XML, PNG pages, MIDI). Where 3.7 reads or writes
   differently, follow 3.6 (legacy style defaults, `MStyle::isDefault` within 1e-6, `MStyle::notInMuseScore36`,
   tuplet `<Number>`, `updateInstrumentId`). New per-score state goes in **metaTags** (3.6 keeps them), left out
   when default. Known leftover: some MuseScore 1/2 imports' XML changes once (pages, MIDI identical). (MIDI

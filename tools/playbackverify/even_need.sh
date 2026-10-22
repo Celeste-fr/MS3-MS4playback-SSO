@@ -15,8 +15,11 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 SCORE=$(readlink -f "$1")
 TAKES=$2
 PARTS=${3:-}
-VM=${HC_VM:-user@192.168.1.45}
-KEY=${HC_KEY:-$HOME/.ssh/id_ed25519_winvm}
+ROOT=$(cd "$HERE/../.." && pwd)
+. "$ROOT/tools/vm/vm.sh"
+VM=${HC_VM:-$MS_VM}
+KEY=${HC_KEY:-$MS_VM_KEY}
+[ -n "$VM" ] || { echo "no VM address: set HC_VM or MS_VM, or write ~/.config/ms3fork/vm.conf (tools/vm/vm.conf.example)"; exit 2; }
 REC=${EN_SETTINGS:-heldNotes/early=100;heldNotes/byPitch=0;levels/calibrated=2;slurs/quick=2;slurs/quickLevel=1;slurs/performance=1;slurs/transitions=1;slurs/smoothStart=1;slurs/transitionsEarly=1;levels/context=1;levels/sectionBalance=2;levels/realRange=2;levels/micCompensation=1}
 NAME=en-$(date +%Y%m%d-%H%M%S)-$$
 case "$NAME" in en-[0-9]*-[0-9]*-[0-9]*) ;; *) echo "bad run name '$NAME'"; exit 2;; esac

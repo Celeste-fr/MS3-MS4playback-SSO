@@ -1,0 +1,7 @@
+# The Windows test VM, for tools/vm/vmlib.py and every tool using it (heard_check.sh, vmjob.py, repeat_check.py).
+# Copy to ~/.config/ms3fork/vm.conf (outside the repository) and fill in; the environment (MS_VM, MS_VM_KEY, ...) wins.
+host  = user@<vm address>
+key   = ~/.ssh/id_ed25519_winvm
+lock  = C:\claude\quiet.lock
+root  = C:\claude
+pause = ~/MuseScore/ms3fork/private/VM_PAUSE
