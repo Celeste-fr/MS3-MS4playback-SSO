@@ -487,7 +487,8 @@ Keep this file current: close an item by deleting it (the commit message says wh
     `heard_check.py` takes its target pitch from it (pitch + cents), so #464's leave / arrival readings of respelled
     notes (most of Whence's quarter tones) aim at the wrong pitch: likely the Celli "−129 ms" bound leaves (private
     `check464/RESULT.md`). Fix: write the sent cents (or the written key) in the trace. Workaround:
-    `heard_midpoints.py`'s pitch dump.
+    `heard_midpoints.py`'s pitch dump. **Fixed** by branch microtone-next (merged 2026-10-22, c27eebc1cb: the audit's
+    respelled cents); the heard check of #464 and the sweeps before it read those notes at the wrong pitch.
 34. **Audit**: checks only its own model (reported 0 fails while the Violas played a triplet); with plainPerformance on
     the strings' audit is nearly vacuous; LEVEL STEP 0.69 dB still "proposed".
 35. **Onset detectors**: harmonics SD 56 ms on SSO unexplained (synthetic ≤ 17); loudness reads only near-isolated
