@@ -59,6 +59,17 @@ ears), never commit Spitfire / NI files or the owner's scores, and hold the VM l
     "after a held note".
   - `transition`: Z (pitch − interval), then A by transition, then B by transition: a run in one direction.
   - `staccato`: A short, then B attacked after `--staccato-gap` ms.
+  - `turn`: as `transition` with Z on B's pitch, so B turns back (B A B). In Whence's alternating quarter-tone figures
+    the f0 often hasn't reached A when B starts.
+  - `staccato-attack`: Z a staccato, A attacked `--staccato-gap` ms after it, then B by transition: a slur's first
+    transition after a staccato.
+- **The note after** (`--after transition`): a note C follows B by transition at B's written end, sent as early as B
+  (a run: B + 2 the same way; a turn: back to A's pitch). Without it B ends at `--ioi` and its glide runs into a release;
+  in music the next note's transition takes it over. `--after-len` is C's length.
+- **Quarter tones.** `--intervals` may be fractional (`1.5` = three quarter tones). They are sent as `[slurs]
+  microtoneBends` 1 sends them (rendermidi.cpp): the key on the side of the note before, and the pitch bend of the uncut
+  fingered glide (the map's `bend=`, `bendGlideFingered=`, `bendSmoothing=`). `--microtone-bends 0` puts them on the lower
+  key instead. A Python copy of the renderer's rule, not MuseScore's own events: check a new case against a dump.
 - **Speed.** SSO's Performance legato writes CC119 from the spacing since the line's previous note-on as played
   (docs/SSO_SCRIPT_KNOWLEDGE.md). CC119 moves the transition layers' sample starts by 10-208 ms. So the spacing is a
   dimension of its own:
@@ -70,7 +81,9 @@ ears), never commit Spitfire / NI files or the owner's scores, and hold the VM l
     `played`, CC119 then follows the shortened spacing; under `written` it doesn't. Each cell records the CC119 that
     reaches its B (`cc119`).
 
-  Cells of the two speed modes go into different files, because each mode needs its own kthost options.
+  Cells of the two speed modes go into different files, because each mode needs its own kthost options. `--b-early`
+  values that would put B closer than `--min-spacing` ms (36) to A are skipped. Each cell records the played spacing
+  (`spacingMs`).
 - **Order: ABBA over the whole plan.** Take 1 plays the cells in plan order, take 2 in reverse, take 3 forward again.
   A slow drift (a cache warming up, a round-robin cycle) therefore falls evenly on every cell.
 - **Round robins.** SSO's string Performance patches don't reset their round robins on a transport start. They reset

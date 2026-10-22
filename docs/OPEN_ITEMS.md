@@ -75,6 +75,48 @@ Keep this file current: close an item by deleting it (the commit message says wh
   the Basses). Supported rule: send each Performance transition early by SSO's own in-context note-on-to-midpoint delay
   (`transitionsEarly` 3 is the nearest mechanism; its model misses in-context midpoints by up to ±70 ms: measure them).
   Prediction to test by ear: Mixed techniques' slow bars (IOI 500-1000 ms) should sound better with plainTiming 1.
+- **Midpoint table (2026-10-22, branch `transition-midpoint`; data and a proposal only, no playback change)**:
+  `tools/soundlibraries/sso_transition_midpoint.json` (`transition_midpoint.py table`; its `_about` is the method),
+  measured by `measure_patch.py` on the Windows VM (kthost + Kontakt 8 + SSO, plain velocity 64, CC119 written by the
+  script from the played spacing, random modulators on, 2 takes ABBA, 1.6 s silences): SSO's note-on → f0 midpoint
+  delay for the five sections' Performance legato, by the note before (attack / transition in a run / turn back /
+  attack after a staccato), its length (136-2182 ms), how much earlier the note is sent than the one before (0-200
+  ms), its own length (a note follows by transition) and the interval (±2 main; ±0.5 … 7 semitones, quarter tones sent
+  as microtoneBends 1 sends them). Take SD 1.8-4.4 ms (median); pitch to pitch p10-p90 ±30-80 ms.
+  - **The delay follows the played spacing**: a note sent r ms early after an L ms note behaves as one after an L − r
+    ms note (median difference −5 … +5 ms; p10-p90 ±10-25, Basses ±35). So an early send changes its own delay.
+  - **At short spacings sending earlier slows SSO down**: after a 136 ms attack, sending the transition 50-100 ms
+    early makes the midpoint 15-50 ms later (Violas 131 → 170-180 ms), so V1, V2 and Violas have no early send that
+    puts the first transition after a 136 ms attack on its target (`fixedPoint`, `found` false).
+  - Delay in a run (r = 0, ±2), after 136 / 273 / 500 / 1000 / 2182 ms: V1 158 / 158 / 189 / 235 / 233, V2 155 / 166 /
+    184 / 186 / 183, Va 139 / 118 / 180 / 193 / 198, Vc 185 / 188 / 210 / 195 / 159, Cb 138 / 160 / 155 / 160 / 173
+    ms. Now (every note plainShift early) that is +92, +89, +28, +105, +78 ms after the beat at 136 ms and +69 … +170
+    ms in slow notes. A semitone up is 36-78 ms quicker than ±2, a semitone down 9-70 ms slower; ±1.5 −21 … +33 ms.
+  - **Turns** (Whence's alternating figures): at 136 ms 41-158 ms; 24-33 % of the turn readings show no change at all
+    (the f0 never reached the note before: `unreached`).
+  - **Validation** (`transition_midpoint.py predict`, every transition as the dump sends it): Mixed techniques' slow
+    bars, the owner's clips (#458): predicted − measured midpoint V1 +8 / +4 (A / B), V2 −1 / +19, Va −9 / −62, Vc −57
+    / −67, Cb +11 / −15 ms. Whence (fast quarter-tone figures) against #464's export (f0 midpoints,
+    `heard_midpoints.py`): the isolated figures are late by V1 +18, Va +23, Vc +75 ms (the same in odd and even bars;
+    per-note r 0.53 / 0.27 / 0.79): in a whole passage SSO's fast transitions come sooner. Stored as `inContext`
+    (after notes ≤ 300 ms).
+  - **The owner's verdicts**: the table does not reproduce the clips he judged (#458, microtoneBends 0): it puts V1,
+    Vc and Cb's A late and predicts B for them (he chose A), A for Violas (he: maybe B). The clips' own measured
+    midpoints do predict him (above). On the same notes `[slurs] microtoneBends` 1 (#464) moved the measured midpoints
+    later: V1 +17 → +48, Va −20 → 0, Vc −51 → +69 ms (V1 / Va on the clips' notes, Vc on all; one reader, #458 →
+    #464). **The Violins 1 case** is the midpoint itself: in his clips A's −7 ms against B's −34 (target −3); neither
+    model nor leave reading gets it. Under today's microtoneBends 1 V1's and Celli's A midpoints are ~+50 / +70 ms
+    late again.
+  - **Proposal: `[slurs] transitionsEarly` 4, "midpoint from the measured table"** (needs the owner's ear first, then
+    code): under plainPerformance, attacks by plainAttack (as plainTiming 1); each transition sent early by e solving
+    e = delay(L, e − e_before) − target (−3 ms upper strings, +19 Celli / Basses), chained through a slur, scanned 0 …
+    e_before + L − 15 ms (DROPPED), the bend glide moving with it; the map carries the table (a `midpointDelay` per
+    Articulation by kind × L × r × interval class, plus `inContext`). Whence, against now: V1 72 ms earlier (56-80),
+    Violas +2 (−5 … +28; only the first transitions after a staccato +30-47), Celli +36 (3-79; whole-note transitions
+    bars 10-16 +130-155), Basses +163 (84-229, no in-context reading: the Basses' rising thirds after whole notes
+    leave +62-85 and arrive +274-596 ms after the beat in #464). Risks: the Basses move the way of B, which he called
+    "way too early"; Celli turns read bimodal in context (+88 runs, −89 turns). Private:
+    `transition-midpoint/RESULT.md`.
 - **Untried**: *Live plays the score* and the route set don't apply the shift at all (Violas 95.2 ms late there); the
   plain set's Track Delay untried in real Live.
 - See also items 3, 9, 15.
@@ -100,8 +142,9 @@ Keep this file current: close an item by deleting it (the commit message says wh
   - Celli's heardRef is flat at ~165-185 ms, the Basses' 67-112 ms.
   - Take SD 1-5 ms.
   - Docs: MEASURING.md › Proof.
-- **Miss**: the same with early starts (`--b-early`: the played spacing, so CC119, shortened); intervals beyond ±2;
-  velocities other than 64.
+- **Miss**: velocities other than 64; long passages with the round robins cycling (the isolated figures run 18-75 ms
+  later than Whence's: item 2 › Midpoint table, `inContext`). Early starts, intervals and turns: measured 2026-10-22
+  (`sso_transition_midpoint.json`, item 2).
 - **Own**: the Violas bars 9/13 passage is behind his "C" choice: needs his ear.
 
 ### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing
@@ -438,6 +481,13 @@ Keep this file current: close an item by deleting it (the commit message says wh
     routes (avoid with `HC_SPLIT=parts`); builds 98572aa7e2 / e1386f9e57 measured nothing (results void); RHYTHM
     borderline slurs (~7 / ~12 %) still to check by ear; the arrival rule disagrees with the owner's ears where the leave
     rule mostly agrees (item 2): which rule judges by default is open.
+33a. **The trace's pitch under `[slurs] microtoneBends` 1** (found 2026-10-22, branch transition-midpoint): a
+    respelled quarter tone's row in `predicted.tsv` (dumpEvents, `PlaybackAudit`) has the key it is sent on with its
+    WRITTEN cents (Whence Violas bar 4 beat 1.75: written 52 +50, sent 53 −50, listed 53 +50: a semitone off).
+    `heard_check.py` takes its target pitch from it (pitch + cents), so #464's leave / arrival readings of respelled
+    notes (most of Whence's quarter tones) aim at the wrong pitch: likely the Celli "−129 ms" bound leaves (private
+    `check464/RESULT.md`). Fix: write the sent cents (or the written key) in the trace. Workaround:
+    `heard_midpoints.py`'s pitch dump.
 34. **Audit**: checks only its own model (reported 0 fails while the Violas played a triplet); with plainPerformance on
     the strings' audit is nearly vacuous; LEVEL STEP 0.69 dB still "proposed".
 35. **Onset detectors**: harmonics SD 56 ms on SSO unexplained (synthetic ≤ 17); loudness reads only near-isolated

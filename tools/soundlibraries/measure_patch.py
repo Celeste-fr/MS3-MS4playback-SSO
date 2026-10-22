@@ -25,7 +25,13 @@ is ABBA over the whole plan: take 1 plays the cells in plan order, take 2 in rev
                             a long before-len is "after a held note")
                 transition  Z (pitch - interval) attacked, A by transition after before-len, B by transition after another
                             before-len: B's transition after a transition, in one direction (a scale run: Z A B)
+                turn        the same with Z on B's pitch: B turns back (an alternating figure, Z A B = B A B)
+                staccato-attack  Z a staccato (before-len - --staccato-gap ms), A attacked after it, B by transition
                 staccato    A short (before-len - --staccato-gap ms), then B after the gap: an attack after a staccato
+              --after transition: a note C after B by transition at B's written end (sent as early as B; a run: B + 2
+              the same way, a turn: back to A's pitch), so that B glides into the next note as in music. --intervals may
+              be quarter tones (1.5): spelled and bent as [slurs] microtoneBends 1 sends them (the map's bend=,
+              bendGlideFingered=, bendSmoothing=: rendermidi.cpp's microtoneSpelling and the uncut fingered glide).
               Measured on B: the f0 leave / mid / arrive times (YIN, as legato_glide/glide.py), its level, and A's.
 Controllers: CC1 / CC11 / the articulation's switch are sent --pre s before each cell, during the silence. The switch:
 --articulation NAME with --library MAP.xml (the map's <Switch>, the Articulation's value), or --switch cc:N:V /
@@ -165,9 +171,10 @@ def map_switch(library, patch, articulation):
 def cell_label(c):
     if c['kind'] == 'note':
         return 'v%d cc1=%d cc11=%d %dms' % (c['velocity'], c['cc1'], c['cc11'], c['lengthMs'])
-    return '%s %dms %+d ioi%d v%d/%d cc1=%d %s early%d' % (c['before'], c['beforeLenMs'], c['interval'], c['ioiMs'],
-                                                         c['attackVelocity'], c['transitionVelocity'], c['cc1'],
-                                                         c.get('speed', 'played'), c.get('bEarlyMs', 0))
+    return '%s %dms %+g ioi%d v%d/%d cc1=%d %s early%d%s' % (c['before'], c['beforeLenMs'], c['interval'], c['ioiMs'],
+                                                           c['attackVelocity'], c['transitionVelocity'], c['cc1'],
+                                                           c.get('speed', 'played'), c.get('bEarlyMs', 0),
+                                                           ' after-' + c['after'] if c.get('after', 'none') != 'none' else '')
 
 
 def key_of(c):
@@ -199,10 +206,11 @@ def build_cells(a):
                                           'lengthMs': ln})
     if 'transition' in what:
         for p in pitches:
-            for i in parse_list(a.intervals, int) or [2]:
+            for i in parse_list(a.intervals, float) or [2]:
+                i = int(i) if float(i).is_integer() else i       # (quarter tones: 1.5 = three quarter tones)
                 for b in a.before.split(','):
-                    if b not in ('attack', 'transition', 'staccato'):
-                        raise SystemExit('--before: attack, transition, staccato (not %r)' % b)
+                    if b not in ('attack', 'transition', 'turn', 'staccato', 'staccato-attack'):
+                        raise SystemExit('--before: attack, transition, turn, staccato, staccato-attack (not %r)' % b)
                     for bl in parse_list(a.before_len, int) or [300]:
                         for ioi in parse_list(a.ioi, int) or [300]:
                             for c1 in cc1s:
@@ -210,36 +218,207 @@ def build_cells(a):
                                     if sp not in ('played', 'written'):
                                         raise SystemExit('--speed: played, written (not %r)' % sp)
                                     for early in parse_list(a.b_early, int) or [0]:
+                                        if early and early > bl - a.min_spacing:
+                                            continue      # (B can't go before A plus SSO's 15 ms: DROPPED)
                                         cells.append({'kind': 'transition', 'pitch': p, 'interval': i, 'before': b,
                                                       'beforeLenMs': bl, 'ioiMs': ioi, 'cc1': c1, 'cc11': cc11s[0],
                                                       'attackVelocity': a.attack_velocity,
                                                       'transitionVelocity': a.transition_velocity,
-                                                      'speed': sp, 'bEarlyMs': early})
+                                                      'speed': sp, 'bEarlyMs': early, 'after': a.after})
     for c in cells:
         c['label'] = cell_label(c)
     return cells
 
 
 def cell_notes(c, t, a):
-    """the cell's notes from t (s): [(name, pitch, velocity, on, off)], the measured note last"""
+    """the cell's notes from t (s): [(name, pitch, velocity, on, off)] (pitch: sounding, in semitones, a quarter tone
+    x.5), the measured note B; with after = 'transition' a note C after it (B's pitch + 2 semitones the same way, by
+    transition at B's written end, sent as early as B: B's own spacing as written), so that B's glide runs into the next
+    note as in a run of the music, not into a release"""
     if c['kind'] == 'note':
         return [('N', c['pitch'], c['velocity'], t, t + c['lengthMs'] / 1000)]
     L, ioi, ov = c['beforeLenMs'] / 1000, c['ioiMs'] / 1000, a.overlap / 1000
     e = c.get('bEarlyMs', 0) / 1000          # (B's note-on this much before its written time, as MuseScore starts a
     p, q = c['pitch'], c['pitch'] + c['interval']   # transition early; its written time stays)
     av, tv = c['attackVelocity'], c['transitionVelocity']
+    after = c.get('after', 'none') == 'transition'
+    turn = c['before'] == 'turn'
+    cpitch = p if turn else q + (2 if c['interval'] > 0 else -2)      # (a turn goes on alternating, as a trill figure)
+    def tail(bon, bwritten):
+        if not after:
+            return [('B', q, tv, bon, bwritten + ioi)]
+        con = bwritten + ioi - e
+        return [('B', q, tv, bon, con + ov), ('C', cpitch, tv, con, con + a.after_len / 1000)]
     if c['before'] == 'attack':
-        return [('A', p, av, t, t + L - e + ov), ('B', q, tv, t + L - e, t + L + ioi)]
-    if c['before'] == 'transition':
-        return [('Z', p - c['interval'], av, t, t + L + ov), ('A', p, tv, t + L, t + 2 * L - e + ov),
-                ('B', q, tv, t + 2 * L - e, t + 2 * L + ioi)]
+        return [('A', p, av, t, t + L - e + ov)] + tail(t + L - e, t + L)
+    if c['before'] in ('transition', 'turn'):
+        # transition: Z A B in one direction (a run); turn: Z on B's pitch, A, then B back (the f0 may not have reached
+        # A yet when B starts: Whence's alternating quarter-tone figures)
+        z = q if turn else p - c['interval']
+        return [('Z', z, av, t, t + L + ov), ('A', p, tv, t + L, t + 2 * L - e + ov)] + tail(t + 2 * L - e, t + 2 * L)
     gap = a.staccato_gap / 1000
+    if c['before'] == 'staccato-attack':
+        # Z a staccato (plain Performance: a spiccato attack --staccato-gap ms clear of the next note), A attacked after
+        # it, B by transition from A: a slur's first transition after a staccato
+        return [('Z', p - c['interval'], av, t, t + max(0.02, L - gap)), ('A', p, av, t + L, t + 2 * L - e + ov)] + \
+            tail(t + 2 * L - e, t + 2 * L)
     return [('A', p, av, t, t + max(0.02, L - gap)), ('B', q, av, t + L - e, t + L + ioi)]
+
+
+def written_ons(c, notes):
+    """each note's written start (s): the measured note B (and C after it) as written, bEarlyMs later than sent"""
+    e = c.get('bEarlyMs', 0) / 1000 if c['kind'] == 'transition' else 0
+    return [n[3] + (e if n[0] in ('B', 'C') else 0) for n in notes]
+
+
+def spell(notes, legato):
+    """[(key, cents)] for sounding pitches as [slurs] microtoneBends 1 sends them (rendermidi.cpp microtoneSpelling): a
+    microtonal note reached by or going on by a legato transition on the key on the side of the note before, so that
+    the key's step and the bend move the same way; candidates the written key (here the lower one: a quarter-sharp
+    spelling), floor and ceil; never the key of the note before or after (SSO plays no same-key transition); a point for
+    each of the step in and out moving with the bend; the written key on a tie"""
+    out = []
+    for i, n in enumerate(notes):
+        x = float(n[1])
+        k0 = int(math.floor(x + 1e-9))
+        cents = (x - k0) * 100
+        if abs(cents) < 1.0:
+            out.append((int(round(x)), 0.0))
+            continue
+        has_in = i > 0 and legato[i]
+        has_out = i + 1 < len(notes) and legato[i + 1]
+        if not (has_in or has_out):
+            out.append((k0, round(cents, 3)))
+            continue
+        fk, fc = out[i - 1] if has_in else (-1, 0.0)
+        if has_out:
+            nx = float(notes[i + 1][1])
+            nk = int(math.floor(nx + 1e-9))
+            nc = (nx - nk) * 100 if abs(nx - round(nx)) > 0.01 else 0.0
+            if nc == 0.0:
+                nk = int(round(nx))
+        else:
+            nk, nc = -1, 0.0
+        same = lambda dk, dc: abs(dc) < 0.5 or (dk > 0) == (dc > 0)
+        best, bs = k0, -1
+        for k in (k0, int(math.floor(x)), int(math.ceil(x))):
+            c = (x - k) * 100
+            if abs(c) > 100 or k == fk or k == nk:
+                continue
+            sc = int(fk >= 0 and same(k - fk, c - fc)) + int(nk >= 0 and same(nk - k, nc - c))
+            if sc > bs:
+                bs, best = sc, k
+        out.append((best, round((x - best) * 100, 3)))
+    return out
+
+
+def glide_at(table, len_ms):
+    """bendGlideFingered "len:leave:arrive …" at a note before this long (Articulation::bendGlideAt: linear, clamped)"""
+    if not table:
+        return None
+    if len_ms <= table[0][0]:
+        return table[0][1], table[0][2]
+    if len_ms >= table[-1][0]:
+        return table[-1][1], table[-1][2]
+    for (l0, a0, b0), (l1, a1, b1) in zip(table, table[1:]):
+        if l0 <= len_ms <= l1:
+            f = (len_ms - l0) / (l1 - l0)
+            return a0 + (a1 - a0) * f, b0 + (b1 - b0) * f
+
+
+def bend_events(notes, keys, legato, wons, bend):
+    """the pitch bends [slurs] microtoneBends 1 sends for these notes (rendermidi.cpp libraryPitchBends, the uncut
+    fingered glide): at each note-on the bend in force; an attack its own tuning there; a transition from the bend in force
+    until t0 = note-on + bendGlideFingered's leave (by the note before's written length), then one value u until t1 = its
+    arrival such that the bend as heard (Kontakt's one-pole smoothing, bendSmoothing ms) reaches the tuning at t1, then
+    the tuning; t1 no later than the next transition's t0 (no glide at all when t0 is past it)"""
+    rng, tau, table = bend['range'], bend['tauMs'] / 1000, bend['glide']
+    unit = lambda c: max(0, min(16383, int(round(8192 + c / rng * (8192 if c < 0 else 8191)))))
+    cents_of = lambda v: (v - 8192) * rng / (8192.0 if v < 8192 else 8191.0)
+    ev = []
+    state = {'sent': 0.0, 'heard': 0.0, 't': 0.0}
+    def hear(t):
+        if t > state['t']:
+            state['heard'] = state['sent'] + (state['heard'] - state['sent']) * math.exp(-(t - state['t']) / tau)
+            state['t'] = t
+    def send(t, c):
+        hear(t)
+        v = unit(c)
+        ev.append((round(t, 6), 'pb', v, 0))
+        state['sent'] = cents_of(v)
+    glides = []
+    for i, n in enumerate(notes):
+        on, c = n[3], keys[i][1]
+        if not legato[i]:
+            glides.append(None)
+            continue
+        g = glide_at(table, (wons[i] - wons[i - 1]) * 1000)
+        glides.append((on + g[0] / 1000, on + g[1] / 1000) if g else (on, on))
+    at = 0.0
+    pend = []
+    for i, n in enumerate(notes):
+        on, c = n[3], keys[i][1]
+        for tt, cc in pend:
+            if tt <= on:
+                send(tt, cc)
+                at = cc
+        rest = [(tt, cc) for tt, cc in pend if tt > on]
+        if glides[i] is None:
+            send(on, c)
+            at = c
+            pend = []
+            continue
+        send(on, at)
+        for tt, cc in rest:
+            send(max(on, tt), cc)
+            at = cc
+        pend = []
+        t0, t1 = glides[i]
+        limit = glides[i + 1][0] if i + 1 < len(notes) and glides[i + 1] else (notes[i + 1][3] if i + 1 < len(notes) else 1e9)
+        if t0 >= limit:
+            continue
+        t1 = min(limit, max(t0 + 0.001, t1))
+        hear(t0)
+        e = math.exp(-(t1 - t0) / tau)
+        u = max(-rng, min(rng, (c - state['heard'] * e) / (1 - e)))
+        nxt = notes[i + 1][3] if i + 1 < len(notes) else 1e9
+        if t0 >= nxt:
+            pend = [(t0, u), (t1, c)]
+            continue
+        send(t0, u)
+        at = u
+        if t1 >= nxt:
+            pend = [(t1, c)]
+        else:
+            send(t1, c)
+            at = c
+    for tt, cc in pend:
+        send(tt, cc)
+    return ev
 
 
 def written_on(c, notes):
     """the measured note's written start (s): its note-on + bEarlyMs"""
-    return notes[-1][3] + (c.get('bEarlyMs', 0) / 1000 if c['kind'] == 'transition' else 0)
+    b = next((n for n in notes if n[0] == 'B'), notes[-1])
+    return b[3] + (c.get('bEarlyMs', 0) / 1000 if c['kind'] == 'transition' else 0)
+
+
+def patch_bend(library, patch):
+    """the patch's bend range, its fingered transition's glide and Kontakt's bend smoothing, from the map (bend=,
+    bendGlideFingered=, bendSmoothing=): None for a patch that doesn't bend"""
+    if not library:
+        return None
+    inst = next((x for x in ET.parse(library).getroot().iter('Instrument') if x.get('name') == patch), None)
+    if inst is None or not inst.get('bend'):
+        return None
+    art = next((x for x in inst.iter('Articulation') if x.get('bendGlideFingered')), None)
+    table = []
+    if art is not None:
+        for part in art.get('bendGlideFingered').split():
+            l, lv, ar = part.split(':')
+            table.append((float(l), float(lv), float(ar)))
+    return {'range': float(inst.get('bend')), 'glide': table,
+            'tauMs': float(art.get('bendSmoothing', 70)) if art is not None else 70.0}
 
 
 def speed_value(ms):
@@ -284,7 +463,8 @@ def plan(a):
             groups.append((mode, g))
     files, played = [], []
     nfile = 0
-    rank = {'cc': 0, 'off': 1, 'on': 2}
+    rank = {'cc': 0, 'pb': 0, 'off': 1, 'on': 2}
+    bend = patch_bend(a.library, a.patch)
     for mode, seq in groups:
         extra = ('--script-value %s=0' % speed_script) if mode == 'written' else ''
         i = 0
@@ -303,22 +483,33 @@ def plan(a):
                 ev += [(round(t - a.pre, 6), 'cc', 1, c['cc1']), (round(t - a.pre, 6), 'cc', 11, c['cc11'])]
                 ev += switch_events(sw, round(t - a.pre, 6))
                 notes = cell_notes(c, t, a)
+                legato = [k > 0 and notes[k - 1][4] > notes[k][3] for k in range(len(notes))]
+                wons = written_ons(c, notes)
+                micro = any(abs(float(n[1]) - round(float(n[1]))) > 0.01 for n in notes)
+                keys = spell(notes, legato) if micro and a.microtone_bends else \
+                    [(int(round(float(n[1]))), round((float(n[1]) - round(float(n[1]))) * 100, 3)) for n in notes]
+                if micro and bend:
+                    ev += bend_events(notes, keys, legato, wons, bend)
+                elif micro:
+                    raise SystemExit('quarter tones need a patch that bends (--library with bend=): %s' % a.patch)
                 cc119 = None
-                for k, (_, p, v, on, off) in enumerate(notes):
-                    legato = k > 0 and notes[k - 1][4] > on
-                    if legato:
-                        wthis = written_on(c, notes) if k == len(notes) - 1 else on
-                        ms = (wthis if mode == 'written' else on) - notes[k - 1][3]
+                for k, (nm, _, v, on, off) in enumerate(notes):
+                    key = keys[k][0]
+                    if legato[k]:
+                        ms = (wons[k] - wons[k - 1]) if mode == 'written' else (on - notes[k - 1][3])
                         val = speed_value(ms * 1000)
                         if mode == 'written':
                             ev.append((round(on, 6), 'cc', speed_cc, val))
-                        if k == len(notes) - 1:
+                        if nm == 'B':
                             cc119 = val
-                    ev += [(round(on, 6), 'on', p, v), (round(off, 6), 'off', p, 0)]
+                    ev += [(round(on, 6), 'on', key, v), (round(off, 6), 'off', key, 0)]
                 end = max(n[4] for n in notes)
+                bi = next(k for k, n in enumerate(notes) if n[0] in ('B', 'N'))
                 played.append(dict(c, take=take, file=name, t=round(t, 6), id=len(played), cc119=cc119,
-                                   rrNote=len(notes) - 1,
-                                   notes=[[n[0], n[1], n[2], round(n[3], 6), round(n[4], 6)] for n in notes],
+                                   rrNote=bi,
+                                   spacingMs=round((notes[bi][3] - notes[bi - 1][3]) * 1000, 3) if bi > 0 else None,
+                                   notes=[[n[0], keys[k][0], n[2], round(n[3], 6), round(n[4], 6), float(n[1]), keys[k][1]]
+                                          for k, n in enumerate(notes)],
                                    span=[round(t, 6), round(end + a.gap, 6)]))
                 t = end + a.gap
                 i += 1
@@ -333,6 +524,7 @@ def plan(a):
             'switch': sw, 'what': a.what, 'takes': a.takes, 'order': 'ABBA (take 1 forward, take 2 reversed, ...)',
             'gap': a.gap, 'pre': a.pre, 'overlap': a.overlap, 'staccatoGap': a.staccato_gap, 'warm': a.warm,
             'probePitch': probe, 'kthostOpts': a.kthost_opts, 'speedScript': speed_script, 'speedCC': speed_cc,
+            'after': a.after, 'afterLen': a.after_len, 'microtoneBends': a.microtone_bends, 'bend': bend,
             'files': files, 'cells': played, 'command': public_command(sys.argv)}
     with open(os.path.join(work, 'plan.json'), 'w') as f:
         json.dump(meta, f, indent=0)
@@ -411,14 +603,15 @@ def release_ms(power, sr, t_off, t_end, level, drop):
     return round((above[-1] + 1) * w * 1000, 1)
 
 
-def glide_times(mono, sr, prev_pitch, pitch, on, end):
-    """ms after on where the f0 has gone 0.1 / 0.5 / 0.9 of the way from prev_pitch to pitch (glide.py's rule)"""
+def glide_times(mono, sr, prev_pitch, pitch, on, end, extra=()):
+    """ms after on where the f0 has gone 0.1 / 0.5 / 0.9 of the way from prev_pitch to pitch (glide.py's rule); extra:
+    other pitches the f0 may reach in the window (the note after), for the tracker's range"""
     import numpy as np
     from scipy.signal import medfilt
     from f0 import yin_track, hz
     if prev_pitch == pitch:
         return {}
-    lo, hi = min(pitch, prev_pitch) - 2, max(pitch, prev_pitch) + 2
+    lo, hi = min([pitch, prev_pitch] + list(extra)) - 2, max([pitch, prev_pitch] + list(extra)) + 2
     t, f = yin_track(mono, sr, on - 0.03, end, hz(lo), hz(hi), step=0.0025, win=0.030)
     with np.errstate(invalid='ignore', divide='ignore'):
         c = 1200 * np.log2(f / hz(pitch))
@@ -444,7 +637,7 @@ def measure_cell(c, x, sr, envs, a):
     notes = {n[0]: n for n in c['notes']}
     span_end = c['span'][1]
     if c['kind'] == 'note':
-        _, p, v, on, off = notes['N']
+        _, p, v, on, off = notes['N'][:5]
         lw = a.level_window / 1000
         out['peak'] = peak_in(env, first, hop, on * 1000, (on + lw) * 1000)
         mid0 = on + min(0.15, (off - on) / 2)
@@ -467,9 +660,12 @@ def measure_cell(c, x, sr, envs, a):
             out['release20'] = release_ms(power, sr, off, span_end, out['loud50'], 20)
     else:
         mono = x.mean(axis=1) if x.ndim == 2 else x
-        _, pb, vb, onb, offb = notes['B']
-        _, pa, va, ona, offa = notes['A']
-        g = glide_times(mono, sr, pa, pb, onb, min(offb + 0.15, onb + 1.2))
+        sounding = lambda n: float(n[5]) if len(n) > 5 else float(n[1])
+        _, _, vb, onb, offb = notes['B'][:5]
+        _, _, va, ona, offa = notes['A'][:5]
+        pa, pb = sounding(notes['A']), sounding(notes['B'])
+        extra = [sounding(notes['C'])] if 'C' in notes else []
+        g = glide_times(mono, sr, pa, pb, onb, min(offb + 0.15, onb + 1.2), extra)
         for k in ('leave', 'mid', 'arrive'):
             out[k] = g.get(k)
         out['heardRef'] = None if out['leave'] is None else round(out['leave'] + POLFREMAN_MS, 1)
@@ -952,6 +1148,14 @@ def add_grid(p):
     p.add_argument('--transition-velocity', type=int, default=64)
     p.add_argument('--overlap', type=float, default=24.0, help='legato: the note before ends this many ms after the next note-on')
     p.add_argument('--staccato-gap', type=float, default=45.0, help='before staccato: the silence before B, ms')
+    p.add_argument('--after', default='none', choices=('none', 'transition'), help='transition cells: a note C after B '
+                   '(B + 2 semitones the same way, by transition at B\'s written end, as early as B), so that B glides into '
+                   'the next note as in a run, not into a release')
+    p.add_argument('--after-len', type=float, default=300.0, help='C\'s length, ms')
+    p.add_argument('--min-spacing', type=float, default=36.0, help='--b-early values leaving B closer than this to A '
+                   '(ms) are skipped')
+    p.add_argument('--microtone-bends', type=int, default=1, choices=(0, 1), help='quarter tones (--intervals 1.5): 1 '
+                   'spelled and bent as [slurs] microtoneBends 1 sends them (the default, Recommended), 0 on the lower key')
     p.add_argument('--takes', type=int, default=2)
     p.add_argument('--gap', type=float, default=1.6, help='silence after each cell, s (>= 1.5: SSO Performance round robins reset)')
     p.add_argument('--pre', type=float, default=0.5, help='controllers this long before each cell, s')
