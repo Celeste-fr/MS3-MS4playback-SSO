@@ -30,6 +30,24 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Copies by the free memory, deterministic (branch `voice-determinism`, 2026-10-21, from integrate-1017 0ab003951f; not merged)
+
+Symptom (private/solo-clicks, build 458): the heard check's export of one Whence copy, byte-identical input, put Violins 1
+- Performance's 92 notes on 1, 2 or 4 routes between runs (events.tsv: 92 | 79/13 | 63/18/10/1, the Linux dump
+63/18/10/1). Not the voices (Violins 1 has no chords there: its four copies are tuning copies of the line) and not the
+renderer's order: the copies' maximum, `SoundLib::memoryMaxLanes` = 1 + free memory / (245 MB x the parts needing copies,
+5 in Whence), read once a run, and the Windows VM runs on **Hyper-V dynamic memory**: 16 GB installed
+(GetPhysicallyInstalledSystemMemory), 4.9 GB visible and 1.9 GB free when idle (2026-10-21) -> max 2 copies; a first run
+after an idle spell 1 (w0, 92 on one route), later ones, after Kontakt had made Windows grow, 4. The Linux dev machine
+is on dynamic memory too (the once-in-13 Violas dump of VERIFY.md › Heard check). Fix: `SoundLib::memoryForCopies` counts
+the installed memory not yet visible beyond a 2 GB allowance for hardware reservations (Windows; Linux has no installed
+size for an unprivileged process: MemAvailable as before), so the VM counts ~11 GB, as the owner's rule meant ("free
+memory ÷ the measured cost per copy": what the copies can have); `MS_FREE_MEMORY_MB` pins it, and the heard check pins
+both its dump and its export at 16384 (`HC_FREE_MEMORY_MB`). Test `tst_soundlibrary::voiceLanesMemory` (the VM idle
+against plenty free: the same routes and channels; fails before: 1 route and every note on it). On a machine truly short of
+memory the copies still drop (the rule), so a render still depends on it there: the owner may prefer copies as the music
+needs, with a warning instead (not done: his rule of 2026-10-03). Linux only (test synth); Windows needs a build.
+
 ## Plain timing (branch `plain-timing`, 2026-10-21, from integrate-1017 15820b7b46; not merged)
 
 `[slurs] plainTiming` (0 by default and in both presets; the owner decides by ear): with plainPerformance each plain note

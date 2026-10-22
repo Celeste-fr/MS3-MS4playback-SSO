@@ -2333,16 +2333,51 @@ double laneRing(const LibInstrument& patch, const Articulation* articulation, co
       return ms > 0 ? 2 * ms / 1000.0 : 0.0;          // (T30 extrapolated to 60 dB)
       }
 
+// the memory the copies may take: what is free now plus what the system can still be given (installed beyond what is
+// visible, past a 2 GB allowance for hardware reservations). Branch voice-determinism, 2026-10-21: the Windows test VM
+// runs on Hyper-V dynamic memory (16 GB installed, 4.9 GB visible and 1.9 GB free when idle, more added as programs ask
+// for it), so the free memory alone gave each run its own copies: Whence's Violins 1 - Performance on 1, 2 or 4 routes
+// between runs of one score (1 + 1.9 GB / (245 MB x 5 parts) = 2)
+qint64 memoryForCopies(qint64 available, qint64 visible, qint64 installed)
+      {
+      if (available < 0)
+            return -1;
+      const qint64 reserve = qint64(2) * 1024 * 1024 * 1024;
+      const qint64 more = visible > 0 && installed > visible + reserve ? installed - visible - reserve : 0;
+      return available + more;
+      }
+
+static qint64 testAvailable = -2, testVisible = -1, testInstalled = -1;
+
+void setMemoryForTest(qint64 available, qint64 visible, qint64 installed)
+      {
+      testAvailable = available;
+      testVisible = visible;
+      testInstalled = installed;
+      }
+
 qint64 freeMemoryBytes()
       {
+      if (testAvailable > -2)
+            return memoryForCopies(testAvailable, testVisible, testInstalled);
       static const qint64 bytes = [] {
+            // MS_FREE_MEMORY_MB: the tools' pin (the heard check's dump and export, dumps), so that the copies don't depend
+            // on the machine's state
+            bool ok = false;
+            const qint64 pinned = qEnvironmentVariable("MS_FREE_MEMORY_MB").toLongLong(&ok);
+            if (ok && pinned >= 0)
+                  return pinned * 1024 * 1024;
 #if defined(Q_OS_WIN)
             MEMORYSTATUSEX m;
             m.dwLength = sizeof(m);
-            return GlobalMemoryStatusEx(&m) ? qint64(m.ullAvailPhys) : qint64(-1);
+            if (!GlobalMemoryStatusEx(&m))
+                  return qint64(-1);
+            ULONGLONG installedKb = 0;
+            const qint64 installed = GetPhysicallyInstalledSystemMemory(&installedKb) ? qint64(installedKb) * 1024 : qint64(-1);
+            return memoryForCopies(qint64(m.ullAvailPhys), qint64(m.ullTotalPhys), installed);
 #elif defined(Q_OS_LINUX)
             QFile f("/proc/meminfo");                 // MemAvailable: the kernel's estimate of memory available to start applications
-            if (f.open(QIODevice::ReadOnly))
+            if (f.open(QIODevice::ReadOnly))          // (no installed size for an unprivileged process: as visible)
                   for (const QByteArray& line : f.readAll().split('\n'))
                         if (line.startsWith("MemAvailable:"))
                               return line.mid(13).trimmed().split(' ').value(0).toLongLong() * 1024;

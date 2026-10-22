@@ -232,8 +232,12 @@ deleted after) and exits 1 on any FAIL. Keep the reports of the owner's scores o
     analysis takes each note's note-on from the export's own `events.tsv`, paired with the dump's by key and time
     (`analyse --export`; reported: Whence 454 / 454 within 0.05 ms, the passages 600 / 600): a part run has its own
     start lead (the passages' parts 133-216 ms less than the score's), taken out per run; a note the dump put on another
-    lane is re-routed (once in 13 dumps of Whence the dump gave Violas - Performance 2 lanes, the export 3: the renderer
-    isn't always deterministic there; not investigated).
+    lane is re-routed (once in 13 dumps of Whence the dump gave Violas - Performance 2 lanes, the export 3; 2026-10-21
+    Violins 1 - Performance's line on 1, 2 or 4 copies between export runs of one score: the copies' maximum is the free
+    memory's (`SoundLib::memoryMaxLanes`) and both machines run on dynamic memory, the VM 1.9 GB free when idle; branch
+    `voice-determinism`). Both renders now count the same free memory, `MS_FREE_MEMORY_MB` (`HC_FREE_MEMORY_MB`, default
+    16384, the VM's installed memory: as on a machine with that much free; builds before voice-determinism ignore it in
+    the export), and `SoundLib::memoryForCopies` counts a VM's installed memory not yet visible.
     **Measured nothing from crash-fixes (7f51a91979, 2026-10-16) to verify-routes (2026-10-18)**: the route pass ran only
     with the instances loaded up front, which crash-fixes do for a single part only; the split copies keep every part, so
     each run wrote no route WAV and the report's zeros were 0 of 0 (builds 98572aa7e2 and e1386f9e57 included; build 443

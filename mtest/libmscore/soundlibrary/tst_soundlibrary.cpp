@@ -224,6 +224,7 @@ class TestSoundLibrary : public QObject, public MTest
       void controllerPatchDefaults();
       void partMix();
       void chordVoices();
+      void voiceLanesMemory();
       void divisiLevel();
 #ifdef TESTSYNTH
       void evenAutoTestSynth();
@@ -14362,6 +14363,84 @@ void TestSoundLibrary::chordVoices()
       // not monophonic: one route, the chords on it as before
       SoundLib::setCurrent(map(false, false));
       QCOMPARE(int(SoundLib::routes(score, *SoundLib::current()).size()), 1);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   voiceLanesMemory
+//    branch voice-determinism (2026-10-21): the copies' maximum by the free memory (memoryMaxLanes) read the memory
+//    visible now, and the Windows test VM runs on Hyper-V dynamic memory (16 GB installed, 4.9 GB visible, 1.9 GB free
+//    when idle): Whence's Violins 1 - Performance went on 1, 2 or 4 routes between runs of one score. memoryForCopies
+//    counts the installed memory not yet visible (past a 2 GB allowance for hardware reservations). chords.musicxml on a
+//    monophonic varispeed patch (no maxLanes in the map: by memory), and quartertones.musicxml on it (two
+//    tuning copies of the line, a second voice), rendered with the VM idle (200 MB free, 1 GB of 16 GB visible) and with plenty free: the same
+//    routes and the same channel for every note
+//---------------------------------------------------------
+
+void TestSoundLibrary::voiceLanesMemory()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setMemoryForTest(-2, -1, -1); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({});
+      const qint64 MB = 1024 * 1024, GB = 1024 * MB;
+      QCOMPARE(SoundLib::memoryForCopies(1900 * MB, 4900 * MB, 16 * GB), 1900 * MB + 16 * GB - 4900 * MB - 2 * GB);
+      QCOMPARE(SoundLib::memoryForCopies(3 * GB, 15 * GB, 16 * GB), 3 * GB);      // (a hardware reservation: not counted)
+      QCOMPARE(SoundLib::memoryForCopies(3 * GB, 16 * GB, -1), 3 * GB);           // (installed unknown: Linux)
+      QCOMPARE(SoundLib::memoryForCopies(-1, 4 * GB, 16 * GB), qint64(-1));
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin' mono='1'>"
+         "<Articulation name='Legato' value='20' techniques='legato long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(SoundLib::libraryLaneSettings(*lib).maxLanes, 0);                 // (by the free memory)
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      // quartertones.musicxml: two tuning copies of the line (C5+ while C5 rings), a second voice (m5's chord);
+      // chords.musicxml: three voices
+      for (const auto& f : { std::make_pair(QString("quartertones.musicxml"), 3), std::make_pair(QString("chords.musicxml"), 3) }) {
+            MasterScore* score = readScore(DIR + f.first);
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            std::vector<const Note*> notes;
+            for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+                  if (s->element(0) && s->element(0)->isChord())
+                        for (const Note* n : toChord(s->element(0))->notes())
+                              notes.push_back(n);
+            auto channels = [&]() {
+                  score->setPlaylistDirty();
+                  EventMap events;
+                  MidiRenderer r(score);
+                  SynthesizerState ss;
+                  MidiRenderer::Context ctx(ss);
+                  ctx.metronome = false;
+                  r.renderScore(&events, ctx);
+                  std::map<const Note*, int> channelOf;
+                  for (const auto& te : events) {
+                        const NPlayEvent& ev = te.second;
+                        if (ev.isExternal() && !ev.librarySwitch() && ev.type() == ME_NOTEON && ev.velo() > 0)
+                              channelOf[ev.note()] = ev.extPort() * 16 + ev.extChannel();
+                        }
+                  std::vector<int> v;
+                  for (const Note* n : notes)
+                        v.push_back(channelOf.count(n) ? channelOf.at(n) : -1);
+                  return v;
+                  };
+            SoundLib::setMemoryForTest(14 * GB, 16 * GB, 16 * GB);              // (plenty free)
+            const std::vector<int> ample = channels();
+            QCOMPARE(int(SoundLib::routes(score, *lib).size()), f.second);
+            QVERIFY(std::find(ample.begin(), ample.end(), -1) == ample.end());
+            QCOMPARE(*std::max_element(ample.begin(), ample.end()), f.second - 1);
+            SoundLib::setMemoryForTest(200 * MB, 1 * GB, 16 * GB);              // (the VM idle)
+            QCOMPARE(int(SoundLib::routes(score, *lib).size()), f.second);
+            QVERIFY2(channels() == ample, qPrintable(f.first));
+            delete score;
+            }
+      // (with the memory truly short, the maximum still holds: one copy of each voice, the line's C5+ retuning it)
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      SoundLib::setMemoryForTest(200 * MB, 16 * GB, 16 * GB);
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
       delete score;
       }
 
