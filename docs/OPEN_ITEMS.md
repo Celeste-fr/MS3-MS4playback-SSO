@@ -177,15 +177,27 @@ Keep this file current: close an item by deleting it (the commit message says wh
   Juliet's strings, Spheres, not aligned); a short-note CC1 curve (for value 1, which overshoots to +10 dB on V1 / Va).
 
 ### 10. Quiet or dark Ample sounds and Ample-specific gaps
-- **W**: strums starting at multiples of 15 s of render time are quiet and dark (30 s −31.9 dB / 348 Hz vs −18 dB /
-  557 Hz; 45, 60 s decaying): probably the demo, needs the activated copy. CC11 does nothing on Ample, so every
-  per-note CC11 level (divisi, track levels, marcato / Inspector levels, even levels) never reaches it: untracked
-  until now. Strums ≈ 2.7 dB quieter than the same chord as a 60 ms roll; pp renders at velocity 32-33, above
-  `softStrum` 30, so only ppp gets the soft forms; strum route level −13.0 dB from #455 vs #453's −9.4 (not cross-checked);
-  a 6-note chord leaves B3 22 dB under its register; scapo clips at +0.7 dBFS.
-- **Src**: private `ample-check453/455/456/457/RESULT.md`, `ample-wincheck/`, `mv/`.
-- **Tool**: the private Ample check harness; amphost.
-- **Fix**: route Ample's per-note levels by velocity or M-Master Vol (CC7) instead of CC11.
+- **Found (2026-10-21, branch `ample-pipeline`)**: the quiet / dark strums are **not the demo**: AGM's strummer reads its
+  set-up (strum mode, Detect, the chord keys) only from an earlier process block than the strum key. In the same block
+  every strum plays dark and partial (centroid ~350-600 Hz against ~1200, 2-6 dB quieter) and, at exact multiples of
+  7.5 s of render time (to ~1 ms, independent of tempo, transport, pacing, pre-roll), quiet; plain chords never. Least
+  lead: block 16 1 ms, 64 2 ms, 512 6 ms, 2048 about one block (amphost, `measure_ample.py strumtiming / strumlead /
+  demo15 / demofine`). MuseScore #458 plays them dark too (`check.py` strum bright: 639 Hz). **Fix**: map `strumLead`
+  50 (`Guitar::strumLeadMs`, guitarplayback.cpp: the set-up 50 ms before the strum key, a previous strum's release moved
+  there; at the score's start the set-up stays at 0 and the start lead plays the rest later). StrumLevel re-measured
+  with the lead for all three sets (Pick measured, no longer Finger's). **Left**: a strum on a later chunk's first tick
+  (every 10 bars) still gets its set-up in the strum key's block (the chunk before may release a strum there); Live's
+  clips have no start lead (a strum at 0 in the plain set: dark).
+- **W CC11**: CC11 does nothing on Ample by default, so every per-note CC11 level (divisi, track levels, marcato /
+  Inspector levels, even levels) never reaches it. Measured 2026-10-21 (`measure_ample.py cc`): with a MIDI-learn entry
+  Control ID 16 → M-Master Vol, CC11 acts exactly as CC7 (linear, 64 unity), but the two then overwrite each other (last
+  writer wins), so a map entry alone can't make them multiply. Fix: fold the per-note CC11 levels into the M-Master Vol
+  value in `libraryHostedParameters` / the guitar pass (the strum level already multiplies the volume lane there).
+- Strums ≈ 2.7 dB quieter than the same chord as a 60 ms roll (before strumLead; with it +2.4 dB); pp renders at velocity
+  32-33, above `softStrum` 30, so only ppp gets the soft forms; a 6-note chord leaves B3 22 dB under its register; scapo
+  clips at +0.7 dBFS.
+- **Src**: private `ample-check453/455/456/457/RESULT.md`, `ample-wincheck/`, `mv/`, `ample-pipeline/RESULT.md`.
+- **Tool**: `tools/ample/` (measure_ample.py, check.py), `tools/soundlibraries/amphost/` (docs/AMPLE_PIPELINE.md).
 - **Own**: `[guitar] strums`, `softStrums` 0/1/2 (ppp: 0 −32.5, 1 −26.5, 2 −28.2 dB), `pinchHarmonics` (Ample has no
   pinch sound): all 0, unheard.
 
@@ -234,9 +246,14 @@ Keep this file current: close an item by deleting it (the commit message says wh
   reboot and address change). Rerun is enough; every rerun matched.
 - **Src**: private `ample-check457/RESULT.md` (Finding 3), `ample-check455/FIX4.md`; HANDOFF.md › Lane jumps and
   Ample's background load.
-- **Fix**: wait per instance in `sync` (`waitForBackgroundLoad`), serialise Ample loads, let `Seq::start` wait as for
-  even levels; retry crashed runs automatically in VM batch scripts and the heard check (as `superviseExtract` does).
-- **Miss**: whether an activated AGM crashes at all; a crash-rate run with the VM's network cut.
+- **Done (2026-10-21, branch `ample-pipeline`)**: hosted loads of a `backgroundLoad` map wait for the plug-in's loader
+  (`setStateWaiting`, serialised; test backgroundLoadHosted); `tools/ample/check.py` retries crashed runs. Measured:
+  amphost single loads 0 / 30 with the network, 0 / 30 with amphost's outbound traffic blocked; MuseScore (3 instances
+  loading in parallel) #458 2 of 15 render attempts, #463 1 of 14 with the network and **9 of 22 with MuseScore's outbound
+  traffic blocked** (`check.py --block-network`; two renders failed 3 times running): the network matters, so the licence /
+  demo check is the likely cause.
+- **Fix (left)**: let `Seq::start` wait as for even levels; retries in the heard check (as `superviseExtract` does).
+- **Miss**: whether an activated AGM crashes at all (the bought guitars: `check.py` twice, once with `--block-network`).
 - **Untried**: GUI (a GUI crash would take MuseScore down). AGM trial ends ~2026-10-25.
 
 ### 13. Ample capo, state lanes and other Ample limits
@@ -246,8 +263,11 @@ Keep this file current: close an item by deleting it (the commit message says wh
   the lane's first value only; Update Live Set doesn't rewrite the state. M-Master Vol in Live may act up to one buffer
   (≤ 11.6 ms) early. Max Voices 1: which string survives changes between VM sessions (−14.3 vs −21.6 dB).
 - **Not measured / assumed**: Auto Legato values (which is Off), Pop (no rule), slide speed by velocity (510 / 330 / 170 /
-  40 ms at 20 / 60 / 100 / 127, on the Lite; not modelled), softRoll's linear spacing between 20:10 and 40:15 ms,
-  StrumLevel for Pick = Finger's, hammer-on evidence weak; 204 state settings with menus / ranges partly assumed (EQ
+  40 ms at 20 / 60 / 100 / 127, on the Lite; not modelled), softRoll's linear spacing between 20:10 and 40:15 ms
+  (v20's 10 ms: level can't choose, 5-25 ms within 0.7 dB), hammer-on evidence weak; 204 state settings with menus / ranges
+  partly assumed (2026-10-21 `stateclamp`: every one at its assumed ends loads and is kept; ~70 toggles clamp to 0 / 1 or
+  -1 / 1; S-Pattern Index -1 / 8 and FX-Reverb-IRType -1 crash AGM, so 0-7 / >= 0 confirmed; numbers are echoed as
+  written, so a range end isn't proven by it: EQ
   type 0-4, chord type 0-23, delay grid 0-8, reverb size 0-200, ±12 tone, …; Capo Logic / Open String / S-TempoMode
   meaning unknown); Master Tune ignored by setState.
 - **Src**: private `ample-state/CTL.md`, `ample-check453-457/`; HANDOFF.md › Ample guitars.
@@ -530,6 +550,8 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
 - **Unlocks**: 6, 7, 23, the whole "Untried in real Live" list; Ample in Live (13).
 
 ### 6. Ample per-guitar map pipeline (for the four guitars bought later)
+- **Built (2026-10-21, branch `ample-pipeline`)**: docs/AMPLE_PIPELINE.md; `tools/ample/`, `tools/soundlibraries/amphost/`,
+  `ample_products.py`, `ample_AGM.json`, `gen_ample.py --product`. Left: the C++ tests still count AGM's map (`ampleMap`).
 - **Spec**: `tools/soundlibraries/amphost/` (sanitized amphost `info` / `render` / multi-instance, msvc-wine) and
   `ample_state.py` (st.py: read / diff / set a state); `gen_ample.py --product <code> <dump> [out]` with a per-product
   table (vst3 file, library / instrument names and ids: steel / nylon / 12-string, sample-set DBName codes, keyswitch and

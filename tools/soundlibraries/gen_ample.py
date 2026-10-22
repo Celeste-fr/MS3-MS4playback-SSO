@@ -1,7 +1,16 @@
 #!/usr/bin/env python3
-"""Generate share/soundlibraries/Ample Guitar M.xml from a parameter dump of the plug-in.
+"""Generate an Ample guitar's map (share/soundlibraries/<name>.xml) from a parameter dump of the plug-in.
 
-    python3 tools/soundlibraries/gen_ample.py <agm-info.txt> ["share/soundlibraries/Ample Guitar M.xml"]
+    python3 tools/soundlibraries/gen_ample.py [--product AGM|AGSJ|AG12|AGL|AGT] [--state <default.state>]
+                                              [--allow-todo] <info dump> [out]
+    python3 tools/soundlibraries/gen_ample.py <agm-info.txt> ["share/soundlibraries/Ample Guitar M.xml"]   (AGM)
+
+--product (default AGM) picks the product's facts (ample_products.py: name, plug-in file, instrument ids, body, slide
+guitar key) and measured numbers (ample_<code>.json, written by tools/ample/measure_ample.py merge: sample sets, strum
+levels, soft roll, capo lead, background load, MIDI-learn map, velocity layers, maxVelocity). A number not measured for
+the product is a TODO: the generator stops and names the experiment, unless --allow-todo, which takes AGM's value and
+marks the map ("assumed from AGM"). --state checks the state settings against the product's default state (a setting
+the product lacks is left out; one only it has is reported). The whole pipeline: docs/AMPLE_PIPELINE.md.
 
 The dump is amphost's `info` output for Ample Guitar M (AGM 4.1.0): one line per VST 3 parameter
 (index, id=, title, units=, steps=, default=, now=, flags=) and, for some, a `values:` line with the plug-in's own text
@@ -25,9 +34,13 @@ What the map gets:
   plays it by accident; phase 2 plays it from the notation.
 """
 
+import os
 import re
 import sys
 from xml.sax.saxutils import quoteattr
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ample_products  # noqa: E402
 
 KEYSWITCHES = [
     # name, key, techniques, modifiers, keyShift
@@ -69,9 +82,9 @@ SAMPLE_SETS = [("Finger", "AGMFg"), ("Pick", "AGMPk"), ("Strum", "AGMSt")]
 # - the strummer: strum mode C#6 (velocity >= 64 on, <= 63 off), Detect D5 at 127, the chord's notes in C1-B2 with the
 #   root in C1-B1, strum keys C4 down open, E4 up open, G4 down muted, B4 up muted; velocity 96-126 plays all six
 #   strings (110: inside the band; the band's level moves only 1-2 dB, its timbre not at all);
-# - STRUM_LEVELS: the CC7 at which the recorded Full strum (v110) is as loud as a six-string roll at that velocity
-#   (meas3 item 1, "CC7 for equal level"; CC7 is a clean gain, 64 = unity). The Pick set was not measured: Finger's
-#   numbers (an assumption: its in-band velocity range is Finger's, meas2 A);
+# - strumLevels (ample_<code>.json): the CC7 at which the recorded Full strum (v110) is as loud as a six-string roll at
+#   that velocity (CC7 is a clean gain, 64 = unity); measured per set 2026-10-21 with the set-up strumLead before the
+#   strum key (measure_ample.py strum; meas3's of 2026-10-20 were of the dark, partial same-block strums, Pick = Finger's);
 # - softStrum 30: rolls are darker than a CC7-lowered strum only at v <= 30 (meas3); rollGap 15 ms (10-25 ms all lie
 #   inside the recorded strums' spread);
 # - rollKeys / softRoll ([guitar] softStrums 2): the single-string keys D3-B3 (strings 6..1) in strum mode play the held
@@ -89,13 +102,13 @@ SAMPLE_SETS = [("Finger", "AGMFg"), ("Pick", "AGMPk"), ("Strum", "AGMSt")]
 #   blocks of 64-2048 frames: a note-on in the same block as the change plays at the old capo wherever it lies in the
 #   block, one in a later block at the new; a ringing note keeps its pitch). MuseScore's hosting splits its blocks at
 #   events, so any lead works there; 50 ms covers a host's fixed blocks up to 2048 frames at 44.1 kHz (Live's buffer);
+# - strumLead 50 ms: the strummer reads its set-up (strum mode, Detect, the chord keys) only from an earlier process
+#   block than the strum key; in the same block it plays dark and partial (centroid ~350-600 Hz against ~1200, 2-6 dB
+#   quieter) and, on multiples of 7.5 s of render time, quiet (2026-10-21, tools/ample/measure_ample.py strumtiming /
+#   strumlead / demo15: blocks 16-2048; a 25 ms lead at block 512 removed every quiet strum): 50 ms covers 2048-frame
+#   blocks as capoLead does; a previous strum's release moves to the set-up (its last 25 ms 0.6 dB lower, measured);
 # - overlap 20 ms (a legato slide / hammer-on needs the two notes to overlap; any overlap measured works: the fork's
 #   choice), slideOut 200 ms (the slide out falls within 160 ms, meas), FX keys F5-C6, F6-G6 (all 11 sound, meas).
-STRUM_LEVELS = [
-    ("AGMSt", "20:8 40:16 60:20 80:32 100:64 120:69"),
-    ("AGMFg", "20:6 40:11 60:13 80:27 100:39 120:50"),
-    ("AGMPk", "20:6 40:11 60:13 80:27 100:39 120:50"),
-]
 GUITAR_FX = [
     ("scratch", 89), ("slap", 90), ("muting", 91), ("strum mute", 92), ("down ?noise( 1)?", 93), ("up ?noise( 1)?", 94),
     ("down ?noise 2", 95), ("up ?noise 2", 96), ("hit top( open)?", 101), ("hit top mute(d)?", 102), ("hit rim", 103),
@@ -106,15 +119,72 @@ GUITAR = [
     ("strumMode", "97"), ("strumOn", "100"), ("strumOff", "1"), ("detect", "86"), ("detectVelocity", "127"),
     ("chordLow", "36"), ("strumKeys", "72 76 79 83"), ("strumVelocity", "110"), ("softStrum", "30"), ("rollGap", "15"),
     ("rollKeys", "62 64 65 67 69 71"), ("softRoll", "20:10 40:15"),
-    ("sampleSet", "sample-set"), ("capo", "m-capo"), ("capoMax", "11"), ("capoLead", "50"), ("artificial", "3:31 4:28 5:24 7:19 12:12"),
+    ("sampleSet", "sample-set"), ("capo", "m-capo"), ("capoMax", "11"), ("capoLead", "50"), ("strumLead", "50"), ("artificial", "3:31 4:28 5:24 7:19 12:12"),
     ("pinch", "19 60 2 45"), ("overlap", "20"), ("slideOut", "200"), ("fxLength", "500"),
 ]
 
 
-def guitar_xml():
-    out = ["    <!-- guitar notation's keys and rules (libmscore/guitarplayback.cpp; measured, gen_ample.py GUITAR) -->",
-           "    <Guitar %s>" % " ".join("%s=%s" % (k, quoteattr(v)) for k, v in GUITAR)]
-    for sample_set, levels in STRUM_LEVELS:
+# GUITAR's entries that are measured per product (ample_<code>.json key, how it is written)
+GUITAR_MEASURED = {"strumVelocity": "strumVelocity", "softStrum": "softStrum", "rollGap": "rollGap",
+                   "softRoll": "softRoll", "capoMax": "capoMax", "capoLead": "capoLead", "strumLead": "strumLead",
+                   "pinch": "pinch"}
+
+
+def resolve(product, allow_todo=False):
+    """the values the map is written from: the product's facts and measured numbers; a TODO stops (or, allowed, takes
+    AGM's value and is listed as assumed)"""
+    agm = ample_products.get("AGM")
+    assumed = []
+
+    def val(key):
+        v = product[key]
+        if isinstance(v, ample_products.TODO):
+            if not allow_todo:
+                raise SystemExit("%s: %s not measured yet: run tools/ample/measure_ample.py --product %s %s (or "
+                                 "--allow-todo: AGM's value, marked assumed)" % (product["code"], key, product["code"],
+                                                                                 v.measure))
+            assumed.append(key)
+            return agm[key]
+        return v
+
+    code = product["code"]
+    if isinstance(product["sampleSets"], ample_products.TODO) and allow_todo:
+        assumed.append("sampleSets")      # (AGM's naming, the product's code: AGLFg …, a guess to check)
+        sets = [tuple(x) for x in product["sampleSetsGuess"]]
+    else:
+        sets = [tuple(x) for x in val("sampleSets")]
+    levels = val("strumLevels")
+    if "strumLevels" in assumed:          # (AGM's levels under this product's set codes, by set name)
+        name_of = dict((db, n) for n, db in agm["sampleSets"])
+        mine = dict(sets)
+        levels = [(mine[name_of[db]], lv) for db, lv in levels if name_of[db] in mine]
+    guitar = []
+    for k, v in GUITAR:
+        if k in GUITAR_MEASURED:
+            v = str(val(GUITAR_MEASURED[k]))
+        guitar.append((k, v))
+    assumed_guitar = [k for k in assumed if k in GUITAR_MEASURED.values() or k == "strumLevels"]
+    keys = [k for k in KEYSWITCHES if product["slideGuitar"] or k[1] != 30]
+    r = {"code": code, "name": product["name"], "vst3": product["vst3"], "ids": product["ids"],
+         "body": product["body"], "sampleSets": sets, "strumLevels": [tuple(x) for x in levels], "guitar": guitar,
+         "maxVelocity": val("maxVelocity"), "backgroundLoad": val("backgroundLoad"),
+         "controlDefaults": [tuple(x) for x in val("controlDefaults")],
+         "velocityLayers": [tuple(x) for x in val("velocityLayers")], "keyswitches": keys,
+         "settingsFile": product["settingsFile"]}
+    v = product["version"]
+    r["version"] = v if not isinstance(v, ample_products.TODO) else "(version not measured)"
+    r["assumed"] = assumed
+    r["assumedGuitar"] = assumed_guitar
+    return r
+
+
+def guitar_xml(r=None):
+    r = r or resolve(ample_products.get("AGM"))
+    out = ["    <!-- guitar notation's keys and rules (libmscore/guitarplayback.cpp; measured, gen_ample.py GUITAR) -->"]
+    out += ["    <!-- assumed from AGM, not measured for %s: %s -->" % (r["code"], ", ".join(r["assumedGuitar"]))] \
+        if r["assumedGuitar"] else []
+    out.append("    <Guitar %s>" % " ".join("%s=%s" % (k, quoteattr(v)) for k, v in r["guitar"]))
+    for sample_set, levels in r["strumLevels"]:
         out.append("      <StrumLevel set=%s levels=%s/>" % (quoteattr(sample_set), quoteattr(levels)))
     for text, key in GUITAR_FX:
         out.append("      <Fx text=%s key=\"%d\"/>" % (quoteattr(text), key))
@@ -266,6 +336,9 @@ def state_settings():
     ]
     return rows
 
+
+# the state-only names left out on purpose (state_settings' comment): not reported as unknown
+STATE_LEFT_OUT = {"Master Tune", "Num Host Params", "S-SEQ Play Tog", "T-Play Toggle"}
 
 # the velocity layer thresholds (Settings › MIDI, three points: <Layer ID="1..3" Value="96 / 64 / 32"/>, measured s16 /
 # s19; proof h09 heard): state names Layer[ID=n] (pluginstate.h); 1-127 assumed
@@ -447,7 +520,12 @@ def controller_xml(p):
     return "  <Controller %s/>   <!-- VST 3 id %d -->" % (a, p["id"])
 
 
-def generate(params):
+def generate(params, product=None, allow_todo=False, state_names=None):
+    """the map's text and the number of parameters. product: ample_products.get(code) (default AGM); state_names: the
+    product's default state's names (ample_state.items), to drop state settings it lacks"""
+    r = resolve(product or ample_products.get("AGM"), allow_todo)
+    name = r["name"]
+    sample_sets = r["sampleSets"]
     real = real_parameters(params)
     ids = [slug(p["title"]) for p in real]
     if len(set(ids)) != len(ids):
@@ -455,9 +533,11 @@ def generate(params):
     out = []
     w = out.append
     w('<?xml version="1.0" encoding="UTF-8"?>')
-    w("<!-- Generated by tools/soundlibraries/gen_ample.py from a parameter dump of Ample Guitar M 4.1.0 (the dump is")
+    w("<!-- Generated by tools/soundlibraries/gen_ample.py from a parameter dump of %s %s (the dump is" % (name, r["version"]))
     w("     not in the repository). Do not edit by hand: change the generator and run it again. -->")
-    w('<SoundLibrary name="Ample Guitar M">')
+    if r["assumed"]:
+        w("<!-- NOT MEASURED for %s, assumed from AGM (gen_ample.py with allow-todo): %s -->" % (r["code"], ", ".join(r["assumed"])))
+    w('<SoundLibrary name="%s">' % name)
     w('  <Switch type="keyswitch"/>')
     w("  <!-- dynamics by velocity only: CC1 is Ample's vibrato -->")
     w('  <Dynamics cc="-1"/>')
@@ -465,7 +545,7 @@ def generate(params):
     # (FIX4 of the Ample check of build 455, 2026-10-20: offline renders that started at once differed run to run); an
     # offline render's instances wait for it, at most 60 s (audio/vst3/backgroundload.h)
     w("  <!-- the sample set loads on Ample's own thread after setState: offline renders wait for it (at most 60 s) -->")
-    w('  <Plugin files="AGM.vst3" backgroundLoad="60"/>')
+    w('  <Plugin files="%s" backgroundLoad="%s"/>' % (r["vst3"], r["backgroundLoad"]))
     w("  <!-- MIDI controllers measured to act (CC7 and M-Master Vol are one gain: 64 = 1.0 = unity, 127 = +6 dB; use")
     w("       one of the two. CC11 and CC12 do nothing measurable). Pitch bend: the M-Pitch Bend parameter, heard")
     w("       only with Poly Bender Tog on. CC7 hosted and in Live as M-Master Vol, value cc / 127 (bit-identical to CC7,")
@@ -478,43 +558,46 @@ def generate(params):
     w('  <Controller id="hold-pedal" name="Hold Pedal (CC64)" cc="64"/>')
     w("  <!-- the sample set, kept only in the plug-in's state: written into the part's state as it loads -->")
     w('  <Controller id="sample-set" name="Sample set" state="DBName" values=%s patchDefault="0" steps="%d" display=%s/>'
-      % (quoteattr(" ".join(db for _, db in SAMPLE_SETS)), len(SAMPLE_SETS) - 1,
-         quoteattr(" ".join("%s:%s" % (fmt(i / (len(SAMPLE_SETS) - 1)), n) for i, (n, _) in enumerate(SAMPLE_SETS)))))
+      % (quoteattr(" ".join(db for _, db in sample_sets)), max(1, len(sample_sets) - 1),
+         quoteattr(" ".join("%s:%s" % (fmt(i / max(1, len(sample_sets) - 1)), n) for i, (n, _) in enumerate(sample_sets)))))
     w("  <!-- every parameter of the plug-in (%d; the MIDI CC proxies left out) -->" % len(real))
     for p in real:
         w(controller_xml(p))
     titles = set(p["title"] for p in real)
     rows = state_settings()
-    for r in rows:
-        if r[0] in titles:
-            raise SystemExit("%s is a VST 3 parameter: a parameter lane, not a state controller" % r[0])
-    if len(set(r[1] for r in rows) | set(ids)) != len(rows) + len(ids):
+    if state_names is not None:
+        rows = [row for row in rows if "Parameter:" + row[0] in state_names]
+    for row in rows:
+        if row[0] in titles:
+            raise SystemExit("%s is a VST 3 parameter: a parameter lane, not a state controller" % row[0])
+    if len(set(row[1] for row in rows) | set(ids)) != len(rows) + len(ids):
         raise SystemExit("two controllers with the same id")
     w("  <!-- the settings kept only in the plug-in's state (%d; gen_ample.py state_settings; written, as the plug-in shows" % len(rows))
     w("       them, into the part's state as it loads when the part has a lane: a change loads the part again) -->")
-    for r in rows:
-        w(state_controller_xml(r))
+    for row in rows:
+        w(state_controller_xml(row))
     w("  <!-- the velocity layer thresholds (Settings › MIDI): <Layer ID=\"n\" Value=\"…\"/> in the state -->")
-    for n, default in VELOCITY_LAYERS:
+    for n, default in r["velocityLayers"]:
         w(layer_controller_xml(n, default))
     w("  <!-- written into every instance's state: Ample's MIDI-learn defaults (CC7 = M-Master Vol: the volume lane and the")
     w("       strum levels rely on it through MIDI out). Master Tune is not a state controller: setState stores it but the")
     w("       sound ignores it -->")
-    for cid, param in CONTROL_DEFAULTS:
+    for cid, param in r["controlDefaults"]:
         w('  <State name="Control[ID=%d]@Parameter" value=%s/>' % (cid, quoteattr(param)))
-    f, name, bad, text = MIDI_GUITAR_WARNING
+    _, sname, bad, text = MIDI_GUITAR_WARNING
     w("  <!-- a global Ample setting that silences parts (every instance reads it): warned about as a part loads -->")
-    w("  <PluginSettings file=%s name=%s bad=%s text=%s/>" % (quoteattr(f), quoteattr(name), quoteattr(bad), quoteattr(text)))
-    w('  <Instrument name="Ample Guitar M" ids="%s" maxVelocity="126">' % INSTRUMENT_IDS)
+    w("  <PluginSettings file=%s name=%s bad=%s text=%s/>" % (quoteattr(r["settingsFile"]), quoteattr(sname), quoteattr(bad),
+                                                           quoteattr(text)))
+    w('  <Instrument name="%s" ids="%s" maxVelocity="%s">' % (name, r["ids"], r["maxVelocity"]))
     w("    <!-- keyswitches (Ample's C0 = MIDI 24); velocity 127 on Sustain is Pop, so a dynamic stops at 126 -->")
-    for name, key, techniques, modifiers, shift in KEYSWITCHES:
-        a = [("name", name), ("value", str(key)), ("techniques", techniques)]
+    for kname, key, techniques, modifiers, shift in r["keyswitches"]:
+        a = [("name", kname), ("value", str(key)), ("techniques", techniques)]
         if modifiers:
             a.append(("modifiers", modifiers))
         if shift:
             a.append(("keyShift", str(shift)))
         w("    <Articulation %s/>" % " ".join("%s=%s" % (k, quoteattr(v)) for k, v in a))
-    out.extend(guitar_xml())
+    out.extend(guitar_xml(r))
     w("    <!-- Ample's other keys, for reference (MIDI numbers):")
     for what, keys in OTHER_KEYS:
         w("         %s: %s" % (keys, what.replace("--", "-")))
@@ -523,18 +606,18 @@ def generate(params):
     # a second (third) instance when a part's staff text asks for another sample set ("pick", "strum"; "finger" back):
     # an extra patch per set, its articulations with the set's modifier (chosen over the main patch's), its own state
     # controller picking its DBName (the part's Sample set lane sets the main patch only). Loaded only where used.
-    for i, (set_name, db) in enumerate(SAMPLE_SETS):
+    for i, (set_name, db) in enumerate(sample_sets):
         if i == 0:
             continue
         mod = set_name.lower()
-        w('  <Instrument name="Ample Guitar M (%s)" with="Ample Guitar M" maxVelocity="126">' % set_name)
+        w('  <Instrument name="%s (%s)" with="%s" maxVelocity="%s">' % (name, set_name, name, r["maxVelocity"]))
         w('    <Controller id="sample-set-%s" name="Sample set (%s instance)" state="DBName" values=%s default="%d" patchDefault="%s"/>'
-          % (mod, set_name, quoteattr(" ".join(d for _, d in SAMPLE_SETS)), round(127 * i / (len(SAMPLE_SETS) - 1)),
-             fmt(i / (len(SAMPLE_SETS) - 1))))
-        for name, key, techniques, modifiers, shift in KEYSWITCHES:
+          % (mod, set_name, quoteattr(" ".join(d for _, d in sample_sets)), round(127 * i / (len(sample_sets) - 1)),
+             fmt(i / (len(sample_sets) - 1))))
+        for kname, key, techniques, modifiers, shift in r["keyswitches"]:
             if not techniques:
                 continue
-            a = [("name", name), ("value", str(key)), ("techniques", techniques),
+            a = [("name", kname), ("value", str(key)), ("techniques", techniques),
                  ("modifiers", (modifiers + " " + mod).strip())]
             if shift:
                 a.append(("keyShift", str(shift)))
@@ -545,11 +628,47 @@ def generate(params):
 
 
 def main(argv):
-    if len(argv) < 2:
+    args = argv[1:]
+    code, allow, state = "AGM", False, None
+    rest = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--product":
+            code = args[i + 1].upper()
+            i += 1
+        elif a == "--allow-todo":
+            allow = True
+        elif a == "--state":
+            state = args[i + 1]
+            i += 1
+        elif a in ("-h", "--help"):
+            print(__doc__)
+            return 0
+        else:
+            rest.append(a)
+        i += 1
+    if not rest:
         print(__doc__)
         return 2
-    out_path = argv[2] if len(argv) > 2 else "share/soundlibraries/Ample Guitar M.xml"
-    text, n = generate(read_dump(argv[1]))
+    product = ample_products.get(code)
+    out_path = rest[1] if len(rest) > 1 else "share/soundlibraries/%s.xml" % product["name"]
+    names = None
+    if state:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ample"))
+        import ample_state
+        names = ample_state.items(ample_state.load(state)[1])
+        missing = [row[0] for row in state_settings() if "Parameter:" + row[0] not in names]
+        known = set(row[0] for row in state_settings())
+        titles = set(p["title"] for p in read_dump(rest[0]))
+        extra = sorted(k[10:] for k in names if k.startswith("Parameter:") and k[10:] not in known
+                       and k[10:] not in titles and k[10:] not in STATE_LEFT_OUT)
+        if missing:
+            print("left out (not in %s's state): %s" % (code, ", ".join(missing)))
+        if extra:
+            print("TODO: state-only settings gen_ample.py doesn't know (add rows to state_settings after measuring "
+                  "them): %s" % ", ".join(extra))
+    text, n = generate(read_dump(rest[0]), product, allow, names)
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(text)
     print("%s: %d parameters" % (out_path, n))

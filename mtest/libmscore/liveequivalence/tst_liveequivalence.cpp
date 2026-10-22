@@ -153,6 +153,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainSetReadBack();
       void laneJumpsLive();
       void backgroundLoadInstances();
+      void backgroundLoadHosted();
       void plainSetTrackDelays();
       void plainWritten_data();
       void plainWritten();
@@ -2127,6 +2128,70 @@ void TestLiveEquivalence::backgroundLoadInstances()
                   }
             vst.reset();
             delete score;
+            }
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   backgroundLoadHosted
+//    hosted playback (SoundLibraryHost::sync, the sequencer's Vst3Synth) waits for a backgroundLoad map's own loading
+//    threads too (setStateWaiting; the test synth's "samples" streaming after setState, MSTESTSYNTH_STREAM_MS): with
+//    and without load threads, a note right after sync sounds; without backgroundLoad it doesn't yet
+//---------------------------------------------------------
+
+void TestLiveEquivalence::backgroundLoadHosted()
+      {
+      struct Env { ~Env() { qunsetenv("MSTESTSYNTH_STREAM_MS"); qunsetenv("MSTESTSYNTH_STREAM_MB");
+                            qunsetenv("MS_SOUNDLIBRARY_LOAD_THREADS"); } } env;
+      for (const char* threads : { "0", "2" }) {
+            for (const bool wait : { true, false }) {
+                  qputenv("MS_SOUNDLIBRARY_LOAD_THREADS", threads);
+                  LiveHost host(this, "", { "Violin" },
+                     QString("<SoundLibrary name='LiveH%1%2'><Switch type='cc' number='32'/><Dynamics cc='1'/>").arg(wait ? 1 : 0)
+                     .arg(threads) + (wait ? "<Plugin files='x.vst3' backgroundLoad='10'/>" : "")
+                     + "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/>"
+                       "</Instrument></SoundLibrary>");
+                  QVERIFY(host.ok);
+                  MasterScore* score = readScore(DIR + "articulations.musicxml");
+                  QVERIFY(score);
+                  score->rebuildMidiMapping();
+                  qputenv("MSTESTSYNTH_STREAM_MS", "600");
+                  qputenv("MSTESTSYNTH_STREAM_MB", "48");
+                  MasterSynthesizer master;
+                  master.registerSynthesizer(new Vst3Synth);
+                  MasterSynthesizer* was = synti;
+                  synti = &master;
+                  SoundLibraryHost* h = SoundLibraryHost::instance();
+                  QElapsedTimer t;
+                  t.start();
+                  QString error;
+                  QVERIFY2(h->sync(score, &error), qPrintable(error));
+                  const qint64 ms = t.elapsed();
+                  Vst3Synth* s = h->synth();
+                  QVERIFY(s && s->plugin(0));
+                  s->beginExport(48000);
+                  s->play(PlayEvent(ME_CONTROLLER, 0, 1, 100));
+                  s->play(PlayEvent(ME_NOTEON, 0, 69, 100));
+                  std::vector<float> b(2 * 4800, 0.f);
+                  s->process(4800, b.data(), nullptr, nullptr);
+                  s->endExport();
+                  QFile f(SoundLibraryHost::setupsFolder(*host.lib) + "/load times.log");
+                  const QString log = f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()) : QString();
+                  const QString what = QString("threads %1 wait %2: %3 ms").arg(threads).arg(wait).arg(ms);
+                  if (wait) {
+                        QVERIFY2(ms >= 550, qPrintable(what));
+                        QVERIFY2(log.contains("Violin: its background load done in") && log.contains("(hosted)"),
+                                 qPrintable(log));
+                        QVERIFY2(rms(b, 0) > 1e-4, qPrintable(what));
+                        }
+                  else {
+                        QVERIFY2(!log.contains("background load"), qPrintable(log));
+                        QVERIFY2(rms(b, 0) == 0.0, qPrintable(what));            // (still loading: nothing)
+                        }
+                  h->release();
+                  synti = was;
+                  delete score;
+                  }
             }
       SoundLib::setCurrent(nullptr);
       }
@@ -6543,6 +6608,11 @@ void TestLiveEquivalence::liveGuitarSoftRoll()
       auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       const SoundLib::Guitar& g = *ample->instruments.front().guitar;
+      // (strumLead 0 here: MuseScore's start lead, which Live's clips don't have, would shift every event; the lead itself
+      // is checked at the end)
+      for (const auto& in : ample->instruments)
+            if (in.guitar)
+                  const_cast<SoundLib::Guitar&>(*in.guitar).strumLeadMs = 0.0;
       SoundLib::setCurrent(ample);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       MasterScore* score = readScore(DIR + "guitar-techniques.musicxml");
@@ -6642,6 +6712,40 @@ void TestLiveEquivalence::liveGuitarSoftRoll()
       QVERIFY2(liveLevels == msLevels, qPrintable(QString("%1 clip points, %2 MuseScore's").arg(liveLevels.size()).arg(msLevels.size())));
       QCOMPARE(LiveClips::carrierPitch(CTRL_VOLUME), -1);
       QVERIFY(!PlainLiveSet::laneController(CTRL_VOLUME, &ample->instruments.front()));
+
+      // strumLead (the shipped map's 50 ms): the clips' second strum (beat 2, Ample's up: E4 76) has its set-up (Detect) the
+      // lead before its strum key, as MuseScore's (whose events the start lead moves: the first strum is at 0)
+      for (const auto& in : ample->instruments)
+            if (in.guitar)
+                  const_cast<SoundLib::Guitar&>(*in.guitar).strumLeadMs = 50.0;
+      EventMap msLead;
+      const std::vector<LiveClips::Track> clipsLead = liveTracks(&msLead);
+      const int lead = int(std::lround(50.0 / 1000.0 * 2.0 * DIVISION));     // (120 bpm)
+      int liveDetect = -1, liveKey = -1;
+      for (const LiveClips::Track& c : clipsLead)
+            if (c.key == "0:1")
+                  for (const LiveClips::Note& n : c.notes) {
+                        if (n.pitch == g.detect && n.start > 0 && n.start < tl.units(DIVISION))
+                              liveDetect = n.start;
+                        if (n.pitch == g.strumUp && n.velocity == g.strumVelocity && liveKey < 0)
+                              liveKey = n.start;
+                        }
+      QCOMPARE(liveKey, tl.units(DIVISION));
+      QCOMPARE(liveDetect, tl.units(DIVISION - lead));
+      int msKey = -1, msDetect = -1;
+      for (const auto& te : msLead) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.type() != ME_NOTEON || e.velo() == 0 || e.librarySwitch())
+                  continue;
+            if (e.pitch() == g.strumUp && e.velo() == g.strumVelocity && msKey < 0)
+                  msKey = te.first;
+            }
+      for (const auto& te : msLead)
+            if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.pitch() == g.detect && te.second.velo() > 0
+                && te.first > 0 && te.first < msKey)
+                  msDetect = te.first;
+      QVERIFY(msKey > DIVISION);                                    // (the start lead)
+      QCOMPARE(msKey - msDetect, lead);
       delete score;
       }
 
@@ -6659,6 +6763,10 @@ void TestLiveEquivalence::liveMasterVol()
       QString error;
       auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
+      // (strumLead 0 here: MuseScore's start lead, which Live's clips don't have, would shift every event; the lead: liveGuitarSoftRoll)
+      for (const auto& in : ample->instruments)
+            if (in.guitar)
+                  const_cast<SoundLib::Guitar&>(*in.guitar).strumLeadMs = 0.0;
       SoundLib::setCurrent(ample);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       MasterScore* score = readScore(DIR + "guitar-techniques.musicxml");

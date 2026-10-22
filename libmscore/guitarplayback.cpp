@@ -26,7 +26,10 @@
 //     their velocity: Guitar::strumLevel by the part's sample set, on the CC7 in force), Detect mode, strum mode on, the
 //     chord's notes as chord keys (the lowest note's pitch class from chordLow, the others above it), the strum key
 //     (arpeggio up = low to high = Ample's down strum; muted keys when every note has a cross notehead) at strumVelocity;
-//     at its end the keys off and strum mode off, before anything else at that tick; the CC7 in force again right
+//     at its end the keys off and strum mode off, before anything else at that tick (the set-up, strum mode, Detect
+//     and the chord keys, strumLead before the strum key: AGM's strummer reads them only from an earlier process
+//     block, else a dark, partial strum, measured 2026-10-21; not before the route's previous note-on or the chunk; a
+//     previous strum still held then releases there); the CC7 in force again right
 //     before the route's next note that is not a strum (channel gain: a strum's level also changes what still rings).
 //     The part's own CC7 until then (its volume lane: a ramp under the strum) plays x the strum's level / 64: the gains
 //     multiply (hosted and in Live both are M-Master Vol, linear: libraryHostedParameters, the exact product in the
@@ -127,7 +130,8 @@ static bool staffHasCapo(const Score* score, const Staff* staff)
 //    the capo in force at the score's start goes out at tick 0 (the instance may still hold another one); a guitar
 //    note within capoLead of the start would share Ample's process block with it and play at the old capo, so the
 //    score plays later by the rest of capoLead (the start lead, libraryDelayLead: everything else moves, the capo
-//    parameter at 0 stays). Not for Live's clips (no start lead there)
+//    parameter at 0 stays). The same for a strum on the part's first chord within strumLead of the start (its set-up
+//    goes strumLead before it). Not for Live's clips (no start lead there)
 //---------------------------------------------------------
 
 double MidiRenderer::guitarStartLeadMs() const
@@ -135,11 +139,37 @@ double MidiRenderer::guitarStartLeadMs() const
       if (forLiveClips || libParts.empty())
             return 0.0;
       double lead = 0.0;
+      // the part's first chord within ms of the start: the score later by the rest (strum: only a strummed chord, a
+      // straight arpeggio)
+      auto leadFor = [&](const Part* part, double ms, bool strum) {
+            for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+                  const Chord* chord = nullptr;
+                  for (int t = part->startTrack(); t < part->endTrack() && !chord; ++t)
+                        if (seg->element(t) && seg->element(t)->isChord())
+                              chord = toChord(seg->element(t));
+                  if (!chord)
+                        continue;
+                  if (strum) {
+                        Arpeggio* a = const_cast<Chord*>(chord)->arpeggio();
+                        if (chord->notes().size() < 2 || !a || !a->playArpeggio() || a->Stretch() > 1.0 + 1e-9
+                            || (a->arpeggioType() != ArpeggioType::UP_STRAIGHT && a->arpeggioType() != ArpeggioType::DOWN_STRAIGHT))
+                              return;
+                        }
+                  lead = std::max(lead, ms - score->utick2utime(seg->tick().ticks()) * 1000.0);
+                  return;
+                  }
+            };
       std::map<const Part*, Automation::PartLanes> lanes;
       bool lanesRead = false;
+      const bool strums = Playback::on("guitar/strums", score);
       for (const auto& pl : libParts) {
             const SoundLib::LibInstrument* li = pl.second.route.instrument;
-            if (!li || !li->guitar || li->guitar->capoLeadMs <= 0.0 || pl.first->staves()->empty())
+            if (!li || !li->guitar || pl.first->staves()->empty())
+                  continue;
+            // a strum's set-up goes strumLead before its strum key (Guitar::strumLeadMs)
+            if (strums && li->guitar->strumLeadMs > 0.0)
+                  leadFor(pl.first, li->guitar->strumLeadMs, true);
+            if (li->guitar->capoLeadMs <= 0.0)
                   continue;
             if (!lanesRead) {
                   lanes = Automation::read(score->masterScore());
@@ -148,16 +178,7 @@ double MidiRenderer::guitarStartLeadMs() const
             const Staff* staff = pl.first->staves()->front();
             if (capoParamIndex(pl.first, li, lanes, forLiveClips) < 0 || !staffHasCapo(score, staff))
                   continue;
-            // the part's first chord
-            for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
-                  bool found = false;
-                  for (int t = pl.first->startTrack(); t < pl.first->endTrack() && !found; ++t)
-                        found = seg->element(t) && seg->element(t)->isChord();
-                  if (found) {
-                        lead = std::max(lead, li->guitar->capoLeadMs - score->utick2utime(seg->tick().ticks()) * 1000.0);
-                        break;
-                        }
-                  }
+            leadFor(pl.first, li->guitar->capoLeadMs, false);
             }
       return std::max(0.0, lead);
       }
@@ -233,9 +254,12 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
             return ev;
             };
       // at the end of the events at tick (after what is there), or right before hint
+      bool keepAtStart = false;                    // (a strum's set-up at the score's start: stays at 0, setupTick)
       auto add = [&](int tick, const NPlayEvent& ev) {
             auto i = events->insert(events->upper_bound(tick), std::make_pair(tick, ev));
             mine.insert(&i->second);
+            if (keepAtStart)
+                  i->second.setLibraryDelayed(true);     // (the start lead moves the rest: guitarStartLeadMs)
             return i;
             };
       // (hint: the event it goes right before at that event's tick, or the first event after tick / end())
@@ -421,6 +445,47 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
       std::vector<Strum> strumList;
       std::set<const NPlayEvent*> rollStarts;       // softStrums 2: each key roll's first event (the CC7 in force before it)
       std::set<const Chord*> strumChords;
+      // the set-up lead (Guitar::strumLeadMs): a strum's mode / Detect / chord keys go strumLead before its strum key
+      // (not before the route's previous note-on, nor before the chunk: its events are sent already); a previous strum of
+      // the route still held there releases its keys and strum mode at the set-up instead, so that they don't end the new
+      // one (measured: a 25 ms earlier release lowers the first strum's last 25 ms by 0.6 dB)
+      struct HeldStrum { int end; std::vector<EventMap::iterator> offs; };
+      std::map<std::pair<int, int>, HeldStrum> heldStrums;    // by route: the last strum's release events
+      auto routeKey = [](const NPlayEvent& e) { return std::make_pair(int(e.extPort()), int(e.extChannel())); };
+      auto setupTick = [&](const SoundLib::Guitar& g, const NPlayEvent& like, int t0) {
+            if (g.strumLeadMs <= 0.0)
+                  return t0;
+            const int want = t0 - msTicks(t0, g.strumLeadMs);
+            int ts = std::max(utick1, want);
+            // at the score's start the set-up stays at 0 and the start lead plays the rest later (guitarStartLeadMs);
+            // at a later chunk's start it can't go before the chunk (the chunk before may release a strum there): a
+            // strum on a chunk's first tick plays its set-up in the strum key's block (a known limit)
+            for (auto i = events->lower_bound(t0); i != events->begin();) {
+                  --i;
+                  if (i->first < ts)
+                        break;
+                  const NPlayEvent& e = i->second;
+                  if (e.type() == ME_NOTEON && e.velo() > 0 && sameRoute(e, like) && !mine.count(&e) && !dropped.count(&e)) {
+                        ts = std::min(t0, i->first + 1);
+                        break;
+                        }
+                  }
+            keepAtStart = utick1 == 0 && want < 0 && ts == 0;     // (nothing on the route before it)
+            // a previous strum held past the set-up: its release moves there
+            auto h = heldStrums.find(routeKey(like));
+            if (h != heldStrums.end() && h->second.end > ts && h->second.end <= t0) {
+                  std::vector<NPlayEvent> offs;
+                  for (EventMap::iterator o : h->second.offs) {
+                        offs.push_back(o->second);
+                        mine.erase(&o->second);
+                        events->erase(o);
+                        }
+                  for (const NPlayEvent& e : offs)
+                        add(ts, e);
+                  heldStrums.erase(h);
+                  }
+            return ts;
+            };
       for (const Chord* chord : chords) {
             if (!strums || chord->notes().size() < 2)
                   continue;
@@ -484,22 +549,27 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                         drop(o->on);
                         drop(o->off);
                         }
-                  auto first = add(t0, make(like, ME_NOTEON, g.detect, g.detectVelocity));
-                  add(t0, make(like, ME_NOTEON, g.detect, 0));
-                  tapAt(t0, like, g.strumMode, g.strumOn, false);
+                  const int ts = setupTick(g, like, t0);
+                  auto first = add(ts, make(like, ME_NOTEON, g.detect, g.detectVelocity));
+                  add(ts, make(like, ME_NOTEON, g.detect, 0));
+                  tapAt(ts, like, g.strumMode, g.strumOn, false);
                   for (int k : keys)
-                        add(t0, make(like, ME_NOTEON, k, 100));
+                        add(ts, make(like, ME_NOTEON, k, 100));
+                  keepAtStart = false;
                   std::vector<int> order(g.rollKeys.begin(), g.rollKeys.end());
                   if (!down)
                         std::reverse(order.begin(), order.end());
                   for (int k = 0; k < int(order.size()); ++k)
                         add(t0 + k * gap, make(like, ME_NOTEON, order[size_t(k)], rv));
                   auto at = events->lower_bound(end);
+                  HeldStrum held { end, {} };
                   for (int k : keys)
-                        addBefore(at, make(like, ME_NOTEON, k, 0), end);
+                        held.offs.push_back(addBefore(at, make(like, ME_NOTEON, k, 0), end));
                   for (int k : order)
-                        addBefore(at, make(like, ME_NOTEON, k, 0), end);
-                  tapBefore(at, like, g.strumMode, g.strumOff, false, end);
+                        held.offs.push_back(addBefore(at, make(like, ME_NOTEON, k, 0), end));
+                  held.offs.push_back(addBefore(at, make(like, ME_NOTEON, g.strumMode, g.strumOff), end));
+                  held.offs.push_back(addBefore(at, make(like, ME_NOTEON, g.strumMode, 0), end));
+                  heldStrums[routeKey(like)] = held;
                   rollStarts.insert(&first->second);
                   strumChords.insert(chord);
                   continue;
@@ -522,19 +592,31 @@ void MidiRenderer::libraryGuitar(const Chunk& chunk, EventMap* events)
                   drop(o->on);
                   drop(o->off);
                   }
-            auto first = add(t0, make(like, ME_CONTROLLER, CTRL_VOLUME, cc));
-            first->second.setTuning(float(exact / 127.0));      // (the exact value 0-1: libraryHostedParameters)
-            tapAt(t0, like, g.detect, g.detectVelocity, false);
-            tapAt(t0, like, g.strumMode, g.strumOn, false);
+            const int ts = setupTick(g, like, t0);
+            EventMap::iterator first = events->end();
+            if (ts == t0) {                                     // (no lead: the CC7 first, as before strumLead)
+                  first = add(t0, make(like, ME_CONTROLLER, CTRL_VOLUME, cc));
+                  first->second.setTuning(float(exact / 127.0));
+                  }
+            tapAt(ts, like, g.detect, g.detectVelocity, false);
+            tapAt(ts, like, g.strumMode, g.strumOn, false);
             for (int k : keys)
-                  add(t0, make(like, ME_NOTEON, k, 100));
+                  add(ts, make(like, ME_NOTEON, k, 100));
+            keepAtStart = false;
+            if (ts != t0) {                                     // (the level at the strum: what still rings keeps its own)
+                  first = add(t0, make(like, ME_CONTROLLER, CTRL_VOLUME, cc));
+                  first->second.setTuning(float(exact / 127.0));      // (the exact value 0-1: libraryHostedParameters)
+                  }
             add(t0, make(like, ME_NOTEON, key, g.strumVelocity));
             // at its end, before the notes there
             auto at = events->lower_bound(end);
+            HeldStrum held { end, {} };
             for (int k : keys)
-                  addBefore(at, make(like, ME_NOTEON, k, 0), end);
-            addBefore(at, make(like, ME_NOTEON, key, 0), end);
-            tapBefore(at, like, g.strumMode, g.strumOff, false, end);
+                  held.offs.push_back(addBefore(at, make(like, ME_NOTEON, k, 0), end));
+            held.offs.push_back(addBefore(at, make(like, ME_NOTEON, key, 0), end));
+            held.offs.push_back(addBefore(at, make(like, ME_NOTEON, g.strumMode, g.strumOff), end));
+            held.offs.push_back(addBefore(at, make(like, ME_NOTEON, g.strumMode, 0), end));
+            heldStrums[routeKey(like)] = held;
             strumList.push_back({ &first->second, t0, end, base, cc, level });
             strumChords.insert(chord);
             }

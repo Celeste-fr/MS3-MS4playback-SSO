@@ -9,6 +9,7 @@ import xml.dom.minidom
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import gen_ample  # noqa: E402
+import ample_products  # noqa: E402
 
 
 def values(texts):
@@ -142,6 +143,65 @@ class GenAmpleTest(unittest.TestCase):
             f.write(dump)
         with self.assertRaises(SystemExit):
             gen_ample.generate(gen_ample.read_dump(self.path))
+
+    def test_products(self):
+        # AGM by default and by --product: the same map
+        params = gen_ample.read_dump(self.path)
+        agm, _ = gen_ample.generate(params)
+        self.assertEqual(agm, gen_ample.generate(params, ample_products.get("AGM"))[0])
+        self.assertNotIn("NOT MEASURED", agm)
+        # a product nobody has measured: refused, naming the experiment; allowed, AGM's numbers marked assumed
+        for code in ("AGSJ", "AG12", "AGL", "AGT"):
+            with self.assertRaises(SystemExit) as e:
+                gen_ample.generate(params, ample_products.get(code))
+            self.assertIn("measure_ample.py --product %s" % code, str(e.exception))
+        text, _ = gen_ample.generate(params, ample_products.get("AGL"), allow_todo=True)
+        doc = xml.dom.minidom.parseString(text)
+        self.assertIn("NOT MEASURED for AGL", text)
+        self.assertEqual(doc.documentElement.getAttribute("name"), "Ample Guitar L")
+        self.assertEqual(doc.getElementsByTagName("Plugin")[0].getAttribute("files"), "AGL.vst3")
+        inst = doc.getElementsByTagName("Instrument")
+        self.assertEqual(inst[0].getAttribute("ids").split()[0], "guitar-nylon")
+        self.assertEqual([i.getAttribute("name") for i in inst[1:]], ["Ample Guitar L (Pick)", "Ample Guitar L (Strum)"])
+        # (no slide guitar key on AGL: MP 2.2.8 lists it for AGT and AGM only)
+        self.assertNotIn("Slide Guitar", [a.getAttribute("name") for a in inst[0].getElementsByTagName("Articulation")])
+        ctrls = {c.getAttribute("id"): c for c in doc.getElementsByTagName("Controller")}
+        self.assertEqual(ctrls["sample-set"].getAttribute("values"), "AGLFg AGLPk AGLSt")
+        self.assertEqual([e.getAttribute("set") for e in doc.getElementsByTagName("StrumLevel")], ["AGLSt", "AGLFg", "AGLPk"])
+        self.assertEqual(doc.getElementsByTagName("PluginSettings")[0].getAttribute("file"), "Ample Sound/AGL/Configs/AGL_info.xml")
+        twelve, _ = gen_ample.generate(params, ample_products.get("AG12"), allow_todo=True)
+        self.assertIn('ids="12-string-guitar"', twelve)
+        self.assertIn('name="Slide Guitar"', gen_ample.generate(params, ample_products.get("AGT"), allow_todo=True)[0])
+
+    def test_product_measured(self):
+        # a product with its own measured file: no TODO, its numbers in the map
+        m = dict(ample_products.measured("AGM"))
+        m.update({"sampleSets": [["Finger", "AGSJFg"], ["Strum", "AGSJSt"]], "maxVelocity": 125, "capoLead": 40,
+                  "strumLevels": [["AGSJSt", "20:9 120:70"], ["AGSJFg", "20:5 120:51"]], "version": "4.2.0"})
+        old = ample_products.measured
+        ample_products.measured = lambda code: m
+        try:
+            p = ample_products.get("AGSJ")
+        finally:
+            ample_products.measured = old
+        self.assertEqual(ample_products.todos(p), {})
+        text, _ = gen_ample.generate(gen_ample.read_dump(self.path), p)
+        self.assertNotIn("NOT MEASURED", text)
+        self.assertNotIn("assumed from AGM", text)
+        doc = xml.dom.minidom.parseString(text)
+        inst = doc.getElementsByTagName("Instrument")
+        self.assertEqual(inst[0].getAttribute("maxVelocity"), "125")
+        self.assertEqual([i.getAttribute("name") for i in inst[1:]], ["Ample Guitar SJ (Strum)"])
+        self.assertEqual(doc.getElementsByTagName("Guitar")[0].getAttribute("capoLead"), "40")
+        self.assertIn("Ample Guitar SJ 4.2.0", text)
+
+    def test_state_filter(self):
+        # settings the product's state lacks are left out
+        params = gen_ample.read_dump(self.path)
+        names = {"Parameter:" + r[0] for r in gen_ample.state_settings() if r[0] != "Cycle Plus Tog"}
+        text, _ = gen_ample.generate(params, None, False, names)
+        self.assertNotIn("Parameter:Cycle Plus Tog", text)
+        self.assertIn("Parameter:Cycle Mode Switch", text)
 
     def test_slug(self):
         self.assertEqual(gen_ample.slug("M-Mic 1 Vol"), "m-mic-1-vol")
