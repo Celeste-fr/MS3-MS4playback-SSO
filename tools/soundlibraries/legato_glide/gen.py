@@ -10,9 +10,13 @@
 # - probe_<sec>: one held note; the bend stepped 0 -> +50 -> 0 -> -50 -> 0 cents 1.5 s apart, then six full-range
 #   moves (full range until a one pole of 71.35 ms, the 2026-10-10 measurement, would reach the target, then the
 #   target), for the patch's bend smoothing (fit.py).
+# --velocity N (2026-10-21, fast-microtones): every transition at velocity N instead of the section's (64: the fingered
+# transition [slurs] plainPerformance plays; the map's bendGlideFingered, glide.py <work> ../sso_legato_glide_fingered.json)
 import json, math, os, sys
 
-W = sys.argv[1] if len(sys.argv) > 1 else '.'
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--velocity=')]
+VELOCITY = next((int(a.split('=')[1]) for a in sys.argv[1:] if a.startswith('--velocity=')), 0)
+W = ARGS[0] if ARGS else '.'
 SEC = {'vn1': ('Violins 1 - Performance', 93, (57, 76, 88), 69, 99.1),
        'vn2': ('Violins 2 - Performance', 93, (57, 74, 86), 69, 99.7),
        'va': ('Violas - Performance', 100, (50, 67, 79), 57, 99.6),
@@ -30,6 +34,7 @@ def bend(c, R=PROBE_RANGE):
 
 idx = {}
 for s, (patch, tv, regs, probePitch, rng) in SEC.items():
+    tv = VELOCITY or tv
     t = 0.5; ev = [(0, '0.000000 cc 1 64'), (0, '0.000000 cc 11 127')]; notes = []
     for ioi in IOIS:
         for r in regs:

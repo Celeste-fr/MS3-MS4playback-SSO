@@ -1320,6 +1320,11 @@ PLAIN_SHIFT = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.p
                if not k.startswith('_')}
 LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
                               encoding='utf-8'))
+# bendGlideFingered= (2026-10-21, branch fast-microtones): the same for the fingered transition, velocity 64 as [slurs]
+# plainPerformance plays it (bendGlide's runs were bowed, 93 / the Violas' 100), read with [slurs] microtoneBends:
+# legato_glide/gen.py --velocity=64, glide.py --summarise --moving (sso_legato_glide_fingered.json)
+LEGATO_GLIDE_FINGERED = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         'sso_legato_glide_fingered.json'), encoding='utf-8')).items() if not k.startswith('_')}
 BEND_SMOOTHING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_bend_smoothing.json'),
                                 encoding='utf-8'))
 # - onset= (ms): a sustained articulation's attack, by pitch: when it is heard, its level 15 dB under the note's peak
@@ -1821,6 +1826,8 @@ for i, line in enumerate(out):
             octaveCount += 1
         if current in LEGATO_GLIDE:
             extra += ' bendGlide="%s"' % ' '.join(f'{g[0]}:{g[1]}:{g[2]}' for g in LEGATO_GLIDE[current]['glide'])
+            if current in LEGATO_GLIDE_FINGERED:
+                extra += ' bendGlideFingered="%s"' % ' '.join(f'{g[0]}:{g[1]}:{g[2]}' for g in LEGATO_GLIDE_FINGERED[current]['glide'])
             if current in BEND_SMOOTHING:
                 extra += f' bendSmoothing="{BEND_SMOOTHING[current]["tau_ms"]}"'
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()

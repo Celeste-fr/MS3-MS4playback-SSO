@@ -144,9 +144,13 @@ struct Articulation {
       // with the patch's own transition (the renderer, libraryPitchBends). Empty: at the legato delay
       struct BendGlide { double lenBeforeMs; double leaveMs; double arriveMs; };
       std::vector<BendGlide> bendGlides;  // sorted by lenBeforeMs
+      // the same for the fingered transition (<Articulation bendGlideFingered>: measured at velocity 64, the fingered band
+      // [slurs] plainPerformance plays; bendGlide was measured on the bowed one, legatoVelocity / 93): read with [slurs]
+      // microtoneBends (2026-10-21, branch fast-microtones; sso_legato_glide_fingered.json)
+      std::vector<BendGlide> bendGlidesFingered;
       // the leave and arrival (ms after the note-on) after a note lenBeforeMs long: linear between the measured
-      // lengths, the nearest one's outside them; false: none measured
-      bool bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const;
+      // lengths, the nearest one's outside them; fingered: bendGlideFingered where measured; false: none measured
+      bool bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs, bool fingered = false) const;
       // how the patch smooths a pitch bend (<Articulation bendSmoothing="73.1">: a one-pole low-pass's time constant,
       // ms, fitted to the f0 of a held note under bend steps, Kontakt 8 + SSO, tools/soundlibraries/
       // sso_bend_smoothing.json): with a bendGlide, the renderer sends the bend so that the bend as heard reaches the

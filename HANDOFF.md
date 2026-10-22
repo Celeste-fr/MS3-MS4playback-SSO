@@ -46,6 +46,31 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Microtone bends (branch `fast-microtones`, 2026-10-21, from integrate-1017 0d30c7e614; not merged)
+
+The owner, Whence's Violas alone (build #458, Recommended): "the 3rd measure pitch bending sounds weird" (bar 7: A3, B3 -50,
+A3, G3 +50 sixteenths at 110 bpm on Violas - Performance, velocity 64: the fingered transition). Found on the VM (kthost +
+SSO, MuseScore's own route events, pYIN): the bend followed `bendGlide`, the bowed transition's timing (from the note-on,
+arriving at 130 ms), while the fingered one leaves 25-100 ms after its note-on and arrives at 130-200 ms; and B3 -50 after
+A3 went on B3 bent down (key up, bend down), so the pitch first went a quarter tone the wrong way. Built:
+`[slurs] microtoneBends` (0 everywhere until the owner has heard it): 1 the key on the side of the note before
+(`microtoneSpelling`) + `bendGlideFingered`, uncut past the next note-on; 2 the glide alone (docs/PLAYBACK_SETTINGS.md ›
+Microtone bends; OPEN_ITEMS.md 5). Tests: tst_soundlibrary::microtoneBends, tst_liveequivalence::microtoneBendsLive.
+Private: `~/MuseScore/ms3fork/private/fast-microtones/` (RESULT.md, the variant renders' tools gen3.py / ana.py).
+
+- **Measured scans** (two takes each, quarter tones in tune within 30 c of their heard time): Violas bars 5-8 8-10 % as now,
+  35-40 % with 1; the best leave scanned (90 ms, cut at the next note-on) 43-44 %; bowed (velocity 100) 30-35 %; detached
+  tuned attacks 25 %; RUNS (CC119 120) and a bend at the note-on worse. Violins 1 10 -> 31 %, Celli 6 -> 19-22 %.
+- **Export check** (run 462 on the VM against #458, heard check renders, two takes): Violas bars 5-14 quarter tones in
+  tune 15-16 -> 27 %, bar 7's wrong-way hook 40-44 % -> 0 % of the first 136 ms (2 alone: 49 %); Violins 1 11-13 -> 28-29 %,
+  Celli 5-6 -> 14 %, but their 12-TET notes after a quarter tone 39-40 -> 29-30 % / 28-29 -> 19-21 % (the quarter tone's
+  glide runs on into them; 2 the same): a next step would be the glide back to 12-TET cut at the next note-on.
+- **Left**: SSO's fingered transition outlasts a 136 ms note, so the pitch still glides through each sixteenth; nothing in
+  MuseScore's bend makes it settle within tens of ms. The owner decides by ear (violas_bend_A / _B clips); the next
+  options are a technique choice (owner's), not a bend.
+- The fingered glide table was measured isolated (`legato_glide/gen.py --velocity=64`, `glide.py --summarise --moving`:
+  medians of the glides that move, a leave or arrival at the window's start is a clamp, not a time).
+
 ## Ample pipeline (branch `ample-pipeline`, 2026-10-21, from integrate-1017 95335ed024; not merged)
 
 For the four Ample guitars the owner buys later (AGSJ, AG12, AGL, AGT: no trials): **docs/AMPLE_PIPELINE.md** is the

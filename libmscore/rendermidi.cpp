@@ -1747,6 +1747,97 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return false;
                         };
 
+                  // a note's key and tuning as sent ([slurs] microtoneBends 1 may move a microtonal note to another key,
+                  // microtoneSpelling): the key without a key shift, the tuning its lane's (cents from that key)
+                  auto playedKey = [&](const Note* n) {
+                        auto k = libSpellKey.find(n);
+                        return k == libSpellKey.end() ? n->ppitch() : k->second;
+                        };
+                  auto playedCents = [&](const Note* n) {
+                        auto k = libSpellCents.find(n);
+                        if (k != libSpellCents.end())
+                              return k->second;
+                        auto c = libLaneCents.find(n);
+                        return c == libLaneCents.end() ? 0.0 : c->second;
+                        };
+                  // the note a legato transition goes on to from this one: the chord just after its tie chain on its
+                  // track, touching it, its note nearest in pitch, on the same patch and lane, an articulation that plays
+                  // transitions (a slur or a plain note touching it: as legatoTransition's joinable). nullptr: none
+                  auto nextLegato = [&](const Note* note, const SoundLib::Choice& c) -> const Note* {
+                        const Note* last = note->lastTiedNote();
+                        Chord* ch = last->chord();
+                        ChordRest* ncr = nextChordRest(ch, true);
+                        if (!ncr || !ncr->isChord() || ncr->track() != ch->track() || ch->tick() + ch->actualTicks() != ncr->tick())
+                              return nullptr;
+                        const Chord* nch = toChord(ncr);
+                        if (!nch->graceNotesBefore().empty())
+                              return nullptr;
+                        std::vector<const Note*> after(nch->notes().begin(), nch->notes().end());
+                        std::stable_sort(after.begin(), after.end(), [note](const Note* a, const Note* b) {
+                              return std::abs(a->ppitch() - note->ppitch()) < std::abs(b->ppitch() - note->ppitch());
+                              });
+                        for (const Note* nn : after) {
+                              if (!nn->play() || nn->pitch() == note->pitch())
+                                    continue;
+                              const std::vector<Ms4::ArtRef> nArts = Ms4::noteArticulations(nn, Ms4::chordArticulations(nch, ctx.dynamics, tickOffset));
+                              const SoundLib::Choice nc = libraryChoice(*lp, *li, nn, nArts, nch->tick().ticks(), nch->actualTicks().ticks());
+                              if (!nc || nc.patch != c.patch || !nc.articulation->playsTransitions() || otherLane(nn, note, c.patch))
+                                    continue;
+                              return nn;
+                              }
+                        return nullptr;
+                        };
+                  // [slurs] microtoneBends 1 (2026-10-21, branch fast-microtones; the owner on Whence's Violas bar 7, A3 / B3 -50 /
+                  // A3 / G3 +50 sixteenths on SSO's Violas - Performance: "the pitch bending sounds weird"): a microtonal note
+                  // on a lane that bends, reached by a legato transition or going on by one, is sent on the key on the side of
+                  // the note before, so that the key's step (SSO's own transition) and the bend move the same way: B3 -50 after
+                  // A3 goes on B-flat3 +50 (a semitone up, the bend up), G3 +50 after A3 on A-flat3 -50. As written, the bend
+                  // (sent with the transition, the patch's smoothing compensated) retuned the note still sounding against the
+                  // step: a quarter tone the wrong way for ~100 ms, then a glide through (pYIN on kthost + Kontakt 8 + SSO
+                  // renders, the test VM: B3 -50 heard first near A-flat3 +45). Each candidate key (the written one, the keys
+                  // either side of the sounding pitch) whose bend fits the range and whose step from the note before and to the
+                  // note after isn't 0 (SSO plays no same-key transition) scores a point per transition (in, out) where key and
+                  // bend move the same way (or the bend not at all); the best wins, the written key on a tie. The note after is
+                  // judged as written (it decides its own key in turn)
+                  auto microtoneSpelling = [&](const Note* note, const SoundLib::Choice& c, const Note* from, int channel, int* key) {
+                        libSpellKey.erase(note);
+                        libSpellCents.erase(note);
+                        auto b = libBend.find(channel);
+                        if (!c || c.patch < 0 || b == libBend.end() || size_t(c.patch) >= b->second.size() || b->second[size_t(c.patch)] <= 0)
+                              return;
+                        const double range = b->second[size_t(c.patch)];
+                        auto lc = libLaneCents.find(note);
+                        if (lc == libLaneCents.end() || std::fabs(lc->second) < MICROTONE_MIN_CENTS || SoundLib::bendValue(lc->second, range) < 0)
+                              return;
+                        const int written = *key >= 0 ? *key : note->ppitch();
+                        const double x = written + lc->second / 100.0;           // (the sounding pitch, semitones)
+                        const int fk = from ? playedKey(from) : -1;
+                        const double fc = from ? playedCents(from) : 0.0;
+                        const Note* next = nextLegato(note, c);
+                        const int nk = next ? next->ppitch() : -1;
+                        const double nc = next ? playedCents(next) : 0.0;
+                        if (fk < 0 && nk < 0)
+                              return;
+                        auto sameWay = [](int dk, double dc) { return std::fabs(dc) < 0.5 || (dk > 0) == (dc > 0); };
+                        int best = written;
+                        int bestScore = -1;
+                        for (int k : { written, int(std::floor(x)), int(std::ceil(x)) }) {
+                              const double cents = (x - k) * 100.0;
+                              if (SoundLib::bendValue(cents, range) < 0 || k == fk || k == nk || k < 0 || k > 127)
+                                    continue;
+                              const int score = int(fk >= 0 && sameWay(k - fk, cents - fc)) + int(nk >= 0 && sameWay(nk - k, nc - cents));
+                              if (score > bestScore) {
+                                    bestScore = score;
+                                    best = k;
+                                    }
+                              }
+                        if (bestScore < 0 || best == written)
+                              return;
+                        *key = best;
+                        libSpellKey[note] = best;
+                        libSpellCents[note] = (x - best) * 100.0;
+                        };
+
                   struct PerformanceNote { bool on = false; const Note* from = nullptr; int interval = 0; double lenBefore = 0;
                                            int velocity = -1; const Note* before = nullptr; double endMs = 0;
                                            const SoundLib::Articulation::Technique* timedAttack = nullptr;
@@ -2098,13 +2189,19 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const PerformanceNote perf = offset == 0 ? performanceNote(note, libChoice, r) : PerformanceNote();
                               accentAttack = perf.on && perf.accentAttack;
                               const Note* from = perf.on ? perf.from : legatoTransition(note, libChoice, &interval, &lenBefore);
+                              if (libMicrotoneBends == 1)
+                                    microtoneSpelling(note, libChoice, from, noteChannel, &libNote.key);
+                              else if (!libSpellKey.empty()) {
+                                    libSpellKey.erase(note);
+                                    libSpellCents.erase(note);
+                                    }
                               if (perf.on) {
                                     interval = perf.interval;
                                     lenBefore = perf.lenBefore;
                                     if (perf.velocity > 0)
                                           libNote.velocity = perf.velocity;
                                     if (perf.before && !writtenTiming)      // (written timing: the note before as written)
-                                          libJoins.push_back({ noteChannel, libChoice.patch, perf.before->ppitch(), note,
+                                          libJoins.push_back({ noteChannel, libChoice.patch, playedKey(perf.before), note,
                                                                note->chord()->tick().ticks() + tickOffset, perf.endMs, perf.shortenOnly });
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
                                           LibTrace& t = libTrace->back();
@@ -2163,9 +2260,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // octaveDown; playback.ini [legato.delay] by patch: an offset or its own table); after
                                     // a short note SSO's transition is quicker ([legato] fastShare, fastFullMs)
                                     LibGlide g;
-                                    const bool glideMeasured = libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs);
-                                    if (glideMeasured)
+                                    // ([slurs] microtoneBends 1 / 2: a fingered transition, as plainPerformance's 64 and [slurs]
+                                    // transitions' slurs play, by its own measured glide, bendGlideFingered)
+                                    const SoundLib::Articulation::Technique* fingered = libMicrotoneBends > 0 ? libChoice.articulation->transition("fingered") : nullptr;
+                                    const bool glideFingered = fingered && libNote.velocity >= fingered->low && libNote.velocity <= fingered->high;
+                                    const bool glideMeasured = libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs, glideFingered);
+                                    if (glideMeasured) {
                                           g.smoothingMs = libChoice.articulation->bendSmoothingMs;
+                                          g.uncut = glideFingered && !libChoice.articulation->bendGlidesFingered.empty();
+                                          }
                                     else {
                                           g.arriveMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
                                                                                      libChoice.articulation->name, interval,
@@ -3964,7 +4067,8 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                   c.patch = patch->name;
                   c.pitch = o.pitch;
                   auto lc = libLaneCents.find(o.note);
-                  c.cents = lc == libLaneCents.end() ? 0.0 : lc->second;
+                  auto sc = libSpellCents.find(o.note);           // ([slurs] microtoneBends 1: from the key it is sent on)
+                  c.cents = sc != libSpellCents.end() ? sc->second : lc == libLaneCents.end() ? 0.0 : lc->second;
                   c.velocity = o.velocity;
                   c.joined = o.joined;
                   c.lengthMs = o.off >= 0 ? (o.off - o.on) * 1000.0 : -1.0;
@@ -4198,7 +4302,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
       const bool atArrival = Playback::on("tuning/bendAtArrival", score);      // (playback settings [tuning])
       // a note-on's path to target: a glide from t0 to t1 (seconds); oneCent: a cent a tick from t1
       // tau: the patch's smoothing of a bend (seconds, bendSmoothing; 0: unknown: the glide is sent as the path)
-      struct Start { int tick; double from; double target; double t0; double t1; bool glide; bool oneCent; double range; double tau; };
+      struct Start { int tick; double from; double target; double t0; double t1; bool glide; bool oneCent; double range; double tau; bool uncut; };
       std::map<std::pair<int, int>, std::vector<Start>> starts;                // (port, channel) -> note-ons' paths
       std::map<std::pair<int, int>, std::pair<int, int>> source;               // (port, channel) -> its notes' channel and staff
       std::map<std::pair<int, int>, int> patchOf;                              // (port, channel) -> its patch
@@ -4206,6 +4310,9 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             return SoundLib::bendValue(cents, range) < 0 ? 0.0 : cents;
             };
       auto centsOf = [&](const Note* n) {
+            auto s = libSpellCents.find(n);           // ([slurs] microtoneBends 1: sent on another key, microtoneSpelling)
+            if (s != libSpellCents.end())
+                  return s->second;
             auto c = libLaneCents.find(n);
             return c == libLaneCents.end() ? 0.0 : c->second;
             };
@@ -4232,7 +4339,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             source[route] = { ev.channel(), ev.getOriginatingStaff() };
             patchOf[route] = ev.libraryPatch();
             const double on = score->utick2utime(i->first);
-            Start st { i->first, target, target, on, on, false, false, range, 0.0 };
+            Start st { i->first, target, target, on, on, false, false, range, 0.0, false };
             auto g = libGlideFrom.find(ev.note());
             auto gl = libGlide.find(ev.note());
             if (g != libGlideFrom.end() && gl != libGlide.end() && laneOf(g->second) == laneOf(ev.note())) {
@@ -4245,6 +4352,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                   st.t0 = on + std::max(0.0, leave) / 1000.0;
                   st.t1 = on + std::max(0.0, arrive) / 1000.0;
                   st.tau = atArrival ? gl->second.smoothingMs / 1000.0 : 0.0;
+                  st.uncut = atArrival && gl->second.uncut;
                   }
             std::vector<Start>& rs = starts[route];
             if (!rs.empty() && rs.back().tick == i->first) {
@@ -4289,9 +4397,55 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                         }
                   sent = v;
                   };
+            // an uncut glide's arrival still to send when the next note-on comes (tick, cents): after that note-on's bend
+            std::vector<std::pair<int, double>> pending;
             for (size_t k = 0; k < sts.size(); ++k) {
                   const Start& st = sts[k];
                   const int nextTick = k + 1 < sts.size() ? sts[k + 1].tick : -1;
+                  if (!pending.empty()) {
+                        // (the glide before still runs at this note-on: the bend in force there, then the rest of it)
+                        send(st.tick, unitOf(at, st.range), st.range, true);
+                        for (const auto& pd : pending) {
+                              send(std::max(st.tick, pd.first), unitOf(pd.second, st.range), st.range, false);
+                              at = pd.second;
+                              }
+                        pending.clear();
+                        }
+                  if (st.glide && !st.oneCent && st.tau > 0 && st.uncut) {
+                        // [slurs] microtoneBends 1 / 2, a fingered transition (bendGlideFingered: SSO's fingered transitions
+                        // reach the new pitch 130-200 ms after their note-on, after the next note-on in sixteenths at 110):
+                        // as below, but the glide runs to its arrival past the next note-on, up to the next transition's
+                        // leave (the next note's own sound comes as late), the next note-on getting the bend in force there
+                        tau = st.tau;
+                        const int t0Tick = std::max(st.tick, score->utime2utick(st.t0));
+                        int limit = INT_MAX;
+                        if (k + 1 < sts.size()) {
+                              const Start& nx = sts[k + 1];
+                              limit = (nx.glide && !nx.oneCent && nx.tau > 0 && nx.uncut) ? std::max(nx.tick, score->utime2utick(nx.t0)) : nx.tick;
+                              }
+                        if (t0Tick > st.tick && (bends.empty() || bends.back().first != st.tick))
+                              send(st.tick, unitOf(at, st.range), st.range, true);    // (the bend in force, absolute)
+                        if (t0Tick >= limit)
+                              continue;               // (no time to glide before the next one leaves: held)
+                        const int t1Tick = std::min(limit, std::max(t0Tick + 1, score->utime2utick(st.t1)));
+                        hear(score->utick2utime(t0Tick));
+                        const double e = std::exp(-(score->utick2utime(t1Tick) - score->utick2utime(t0Tick)) / st.tau);
+                        const double u = qBound(-st.range, (st.target - heard * e) / (1.0 - e), st.range);
+                        if (nextTick >= 0 && t0Tick >= nextTick) {
+                              // (leaving after the next note-on: the kick and the arrival sent after its bend, in order)
+                              pending = { { t0Tick, u }, { t1Tick, st.target } };
+                              continue;
+                              }
+                        send(t0Tick, unitOf(u, st.range), st.range, t0Tick == st.tick);
+                        at = u;
+                        if (nextTick >= 0 && t1Tick >= nextTick)
+                              pending = { { t1Tick, st.target } };
+                        else {
+                              send(t1Tick, unitOf(st.target, st.range), st.range, false);
+                              at = st.target;
+                              }
+                        continue;
+                        }
                   if (st.glide && !st.oneCent && st.tau > 0) {
                         // a measured glide on a patch whose smoothing is measured: the note before's tuning until the
                         // transition leaves it (t0), then one value until the arrival (t1) such that the bend as heard
@@ -4347,6 +4501,8 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                               break;            // (played: held to the next note-on)
                         }
                   }
+            for (const auto& pd : pending)                  // (the lane's last glide, uncut)
+                  send(pd.first, unitOf(pd.second, sts.back().range), sts.back().range, false);
             for (const auto& bend : bends) {
                   NPlayEvent ev(ME_PITCHBEND, source[rst.first].first, bend.second & 0x7f, (bend.second >> 7) & 0x7f);
                   ev.setOriginatingStaff(source[rst.first].second);
@@ -6051,6 +6207,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libTransitionsEarly = library && !writtenTiming ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;
       libPlainTiming = library && !writtenTiming && Playback::on("slurs/plainPerformance", score) && Playback::on("slurs/plainTiming", score);
+      libMicrotoneBends = library ? int(std::lround(Playback::value("slurs/microtoneBends", score))) : 0;
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();
@@ -6249,6 +6406,8 @@ void MidiRenderer::updateState()
             libGlideFrom.clear();
             libGlide.clear();
             libSpeed.clear();
+            libSpellKey.clear();
+            libSpellCents.clear();
             library = SoundLib::current();
             libGeneration = SoundLib::routesGeneration();
             if (library) {

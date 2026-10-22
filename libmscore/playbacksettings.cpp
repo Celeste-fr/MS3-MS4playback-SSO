@@ -140,6 +140,17 @@ static const std::vector<Definition> DEFINITIONS = {
         "note-on spacing (SSO's string sections: CC119), that controller is MuseScore's: the script's own writing is off in "
         "the patch's state and each legato note-on gets the value from the WRITTEN spacing, so notes started early keep their "
         "band; 0: the script writes it from the spacing as played", true },
+      // (2026-10-21, branch fast-microtones: the owner heard Whence's Violas bar 7, sixteenths of A3 / B3 -50 / A3 / G3 +50 on
+      // Violas - Performance, "the pitch bending sounds weird". Measured (kthost + Kontakt 8 + SSO on the test VM, pYIN): the
+      // bend glided as bendGlide says, measured on the bowed transition (arrival 130 ms), while plainPerformance plays the
+      // fingered one (64), which reaches a step ~180 ms after its note-on, so each quarter tone's bend detuned the note still
+      // sounding, against the step: the pitch hooked a quarter tone away first (B3 -50 heard at G#3 +50); 0 in both presets
+      // until the owner has heard it; MidiRenderer's microtoneSpelling, libraryPitchBends)
+      { "slurs/microtoneBends", 0, 0, 2, "",
+        "a microtonal note reached by a legato transition on a patch that bends (SSO's Performance patches): 1 goes on the key "
+        "on the side of the note before (B3 -50 after A3 on B-flat3 +50), so the key's step and the bend move the same way, "
+        "and its bend glides with the transition that plays (a fingered one by the map's bendGlideFingered, measured apart "
+        "from the bowed one); 2 the glide only; 0 as written, the bend timed by the bowed transition's bendGlide", true },
       // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM, 0 in both presets until the owner has heard
       // it; SoundLib::fixedTransitions. Per score: the hosted instances of a score whose value differs are loaded again)
       { "slurs/fixedTransitions", 0, 0, 1, "on/off",
@@ -531,7 +542,7 @@ QString iniTemplate()
 //    until the owner has heard it); slurs/speedFromWritten (0 in both since
 //    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions and slurs/fastTransitions (0 in
 //    both since 2026-10-20, until the owner has heard them); notes/transportReset and levels/hallGuard (0 in both since 2026-10-21
-//    until the owner decides); slurs/plainAccents (0 in both from 2026-10-20 until the owner
+//    until the owner decides); slurs/microtoneBends (0 in both since 2026-10-21, until the owner has heard it); slurs/plainAccents (0 in both from 2026-10-20 until the owner
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
 //    2026-10-20: the owner approved the rule). The other settings are not in the table because: legato/keepMs acts
@@ -556,10 +567,10 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
