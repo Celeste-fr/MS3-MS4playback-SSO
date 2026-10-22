@@ -7896,7 +7896,7 @@ void TestLiveEquivalence::dumpEvents()
                               Element* e = s->element(track);
                               if (!e || !e->isChord())
                                     continue;
-                              const Chord* c = toChord(e);
+                              const Ms::Chord* c = toChord(e);
                               const int tick = c->tick().ticks();
                               int slur = -1;
                               for (size_t i = 0; i < slurs.size(); ++i)
