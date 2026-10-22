@@ -84,7 +84,15 @@ Keep this file current: close an item by deleting it (the commit message says wh
   a transition sweep by interval × IOI × preceding length × preceding kind (Missing tools #1).
 - **Fix**: a transition-after-attack / after-held model by preceding length, fitted on a dedicated sweep (Heard
   passages, plain), with ≥ 2 takes per cell.
-- **Miss**: transitions by preceding note kind and length, per section; take-to-take spread per cell.
+- **Data (2026-10-21, patch-sweep)**: `tools/soundlibraries/sso_transition_context.json`, measured by
+  `measure_patch.py` (VM, kthost + SSO, plain velocities 64).
+  - Transitions by the note before: attack / transition × 136-1000 ms × the IOI after, CC119 played / written.
+  - Leave grows with the note before's length (136 ms: 44-146 ms after the note-on; `bendGlide` says −8).
+  - Celli's heardRef is flat at ~165-185 ms, the Basses' 67-112 ms.
+  - Take SD 1-5 ms.
+  - Docs: MEASURING.md › Proof.
+- **Miss**: the same with early starts (`--b-early`: the played spacing, so CC119, shortened); intervals beyond ±2;
+  velocities other than 64.
 - **Own**: the Violas bars 9/13 passage is behind his "C" choice: needs his ear.
 
 ### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing
@@ -451,21 +459,26 @@ Ranked by how many Tier 1-2 items each unlocks per day of work. Effort is for on
 VM time. Every tool: in the repo (no Spitfire / NI / Ample files, no owner scores, no personal paths), a `--help`, a
 test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text report, VM locks honoured.
 
-### 1. `measure_patch.py`: one-command "measure any patch" sweep
-- **Spec**: `tools/soundlibraries/measure_patch.py plan --library <map.xml> --patch "<patch>" [--articulation a]
-  [--what level,onset,transition,release] [--pitches lo:hi:step] [--cc1 16:127:8] [--velocity …] [--takes 3]
-  [--intervals -12..12] [--ioi 80,120,180,270,400,600] [--before attack,held,transition,staccato]
-  [--before-len 100,250,500,1000] --out <work>` → kthost event files + `list.txt` + `plan.json` (cells, ABBA order,
-  gaps from `even_gap_check`); `run_vm.sh <work>` (scp, VM locks, kthost per file with a watchdog and automatic retry,
-  fetch, clean); `analyze <work> -o <patch>.json` → per cell: perceived level (`loudness.py`), onset at −15 and −6 dB,
-  transition leave / arrive (pYIN / YIN from `legato_glide/f0.py`), release; medians, take SD, CI; `report` → text +
-  one PNG per quantity. Generalises `sso_cc1_sweep`, `string_dynamics_sweep`, `legato_glide`, `legato_pair_scan`, the
-  accent grids and `crest_sweep`; output schema documented so `gen_spitfire_sso.py` (or a future library's generator)
-  can read it.
-- **Effort**: 2-3 days (the parts exist; the work is one plan format, one analysis, retries). VM: ~1-3 h per patch for
-  a full transition grid.
-- **Unlocks**: 3 (transition model by preceding kind / length), 4 (CC1 technique levels and slow-attack onsets), 9
-  (accented attack onset, Basses' C2), 15 (multi-take plainAttack), 19, 25, any new library.
+### 1. `measure_patch.py`: one-command "measure any patch" sweep: BUILT (branch `patch-sweep`, 2026-10-21)
+- **Built**: `tools/soundlibraries/measure_patch.py` `plan` / `run` / `analyze` / `report` / `merge` / `all`. docs/MEASURING.md
+  is the guide.
+  - Note cells and transition cells. The transition grid: before attack / transition / staccato × its length × IOI ×
+    CC119 speed played / written × early start.
+  - ABBA takes, VM locks, watchdog and retry, resumable, WAVs deleted.
+  - Per cell: perceived peak / mean, loud50, onset at −15 / −6 dB, `isolated_onset`, release, f0 leave / mid / arrive,
+    and **heardRef = leave + 23.5 ms as a transition's perceptual reference**.
+  - Tests: `test_measure_patch.py`.
+- **Proof** (VM, Kontakt 8 + SSO, through the new kthost): the accent study re-measured, Violas - Performance, 11 pitches
+  × 100 / 211 / 450 ms. The 122 − 64 perceived difference agrees with `sso_accent_attack.json`: mean |diff| 0.04 dB,
+  max 0.12, r 1.000, 33 cells.
+- **Still missing**:
+  - B's onset after a staccato when A's release masks it (no tail extrapolation);
+  - several instances in one render;
+  - generalising `string_dynamics_sweep` / `crest_sweep` outputs into the generators' exact old schemas: `merge`
+    gives a common schema, and the generators still read the old files;
+  - a tap test for heardRef's 23.5 ms.
+- **Unlocks**: 3 (first data: the transitions after an attack / a transition by length, private `patch-sweep/RESULT.md`),
+  4, 9 (the accented attack's onset per section: the cells exist), 15, 19, 25, any new library.
 
 ### 2. `heard_summary.py`: whole-score heard-check summary, regression and drift report
 - **Spec**: `tools/playbackverify/heard_summary.py <report.json>… [--baseline <report.json>…] [--by section,kind,
@@ -488,16 +501,25 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
 - **Unlocks**: 1 (rank 1), 8, 11's residual randomness, item "2 vs 3 lanes once in 13 dumps"; guards every later
   A/B.
 
-### 4. kthost source in the repo
-- **Spec**: `tools/soundlibraries/kthost/kthost.cpp` + `CMakeLists.txt` (msvc-wine like `ktload`), re-implementing the
-  restored binary's options (`--tail --wait --probe-pitch --param --param-late --param-first-block --offsets --warm
-  --warm-block --realtime --rtfast --from --to --list-params --editor --block --offline --repeat --report`) on the fork's
-  `thirdparty/vst3sdk` and the dumpEvents event format; add what it lacks: several states as slots in one instance (tuning
-  slots), a gain per slot (gain stage / trim), flat-lane parameters from a dump's `instances.txt`, and an exit code per
-  failure; a null test against the restored binary on 5 routes.
-- **Effort**: 1.5-2 days (ktload and amphost5 are close templates).
-- **Unlocks**: every kthost measurement surviving a lost VM folder (it happened on 2026-10-10); kthost renders matching
-  MuseScore's export (heard-check limit #33); tool #1.
+### 4. kthost source in the repo: BUILT (branch `patch-sweep`, 2026-10-21)
+- **Built**: `tools/soundlibraries/kthost/kthost.cpp`, compiled from `vst3plugin.cpp` / `kontaktsetup.cpp`.
+  - Built with MuseScore under `BUILD_VST3`, installed into Windows `bin/`; or on its own with msvc-wine.
+  - The VM copy: `C:\claude\ps\kt\kthost.exe` + `Qt5Core.dll`.
+  - The restored binary's arguments and main options, plus state preparation (`--max-voices`, `--tune`, `--slots`,
+    `--random-sources`, `--script-value`, `--prepared`), `--gain`, `--repeat`, `--report`, exit codes and
+    `param` / `tr` / `vs` events.
+  - Differences: docs/MEASURING.md › kthost.
+- **Null test** against the restored binary (VM, SSO Violas All techniques Long, 7 notes, 20 s):
+  - each binary against itself: −144 / −141 dB;
+  - new against old: lag 0, level +0.003 dB, correlation 0.99999, residual −47.5 dB;
+  - note-ons sample-identical; the differences start after note-offs (releases).
+- **Still missing**:
+  - Windows CI: run 459 compiled it but the install found no `kthost.exe`; fixed (`add_dependencies(mscore kthost)`),
+    not re-run;
+  - kthost2's realtime editor mode;
+  - `--offsets` / `--warm` / `--from` / `--to`;
+  - several instances in one process;
+  - flat lanes read from a dump's `instances.txt`.
 
 ### 5. Real-Live check script (VM, Live 12.4.6 trial, ends ~2026-11-01)
 - **Spec**: `tools/live/live_check/`: `run_vm.ps1 <set.als> <out> [--export-wav] [--bars a-b]` drives Live on the VM

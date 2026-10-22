@@ -76,6 +76,14 @@ jobs:
         SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;C:\Program Files (x86)\Jack;%PATH%"
         CALL msvc_build.bat relwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
         CALL msvc_build.bat installrelwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
+    # (kthost, the measurement host: tools/soundlibraries/kthost, docs/MEASURING.md; installed into bin/ with MuseScore,
+    # so the artifact carries it; it must start and print its usage)
+    - name: Check kthost is installed
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%CD%\msvc.install_x64\bin;%PATH%"
+        IF NOT EXIST msvc.install_x64\bin\kthost.exe (ECHO kthost.exe is not in the install & exit /b 1)
+        msvc.install_x64\bin\kthost.exe --help || exit /b 1
     # (on MSVC mtest/ is a project of its own, not in MuseScore's solution: its vcxproj is
     # built with MSBuild, which builds the projects it references too)
     - name: Build the sound library tests

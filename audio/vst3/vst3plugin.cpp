@@ -9,7 +9,9 @@
 //=============================================================================
 
 #include "vst3plugin.h"
+#ifndef VST3PLUGIN_NO_SETTINGS     // (kthost: built without libmscore, tools/soundlibraries/kthost)
 #include "libmscore/playbacksettings.h"
+#endif
 
 #include <QRegularExpression>
 
@@ -1080,7 +1082,11 @@ bool Vst3Plugin::setState(const QByteArray& state)
 void Vst3Plugin::settle(double seconds)
       {
       if (seconds < 0)
+#ifndef VST3PLUGIN_NO_SETTINGS
             seconds = Playback::value("hosting/settleSeconds");
+#else
+            seconds = SETTLE_SECONDS;
+#endif
       if (!d->active || d->sampleRate <= 0)
             return;
       const long long target = (long long)(seconds * d->sampleRate);

@@ -434,6 +434,11 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Each logs a **render preflight** (`libmscore/renderpreflight.h`: calibration files' path + SHA-256 and each
   patch's source, setups folder / copy, playback.ini + preset; in the verify report, VERIFY.md › Preflight); the
   copy is synced at start (`syncJobCopy`: verify mirrors the main calibration, measuring jobs keep their own and warn).
+- **Measuring a patch** (docs/MEASURING.md): `tools/soundlibraries/measure_patch.py plan|run|analyze|report` sweeps any
+  patch on the VM (VM locks, resumable, ABBA takes, CC119 speed played / written) through **kthost**
+  (`tools/soundlibraries/kthost/`: an offline host built from `vst3plugin.cpp` / `kontaktsetup.cpp`, `VST3PLUGIN_NO_SETTINGS`;
+  in the Windows CI artifact's `bin/`); a transition's perceptual reference is f0 leave + 23.5 ms, not arrival (the owner,
+  2026-10-21).
 - Measurement runs (supervised: `superviseExtract`, a hang or crash retried then left out; resumable: a start
   skips what earlier runs of the same version did): `--extract-library … --extract-controllers
   --extract-pitch-bend`, `--check-timing`, `--check-rest [--rest-parts range,repeats,controls,legato,onset,shorts,
