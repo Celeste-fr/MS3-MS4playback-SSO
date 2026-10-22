@@ -230,11 +230,12 @@ void PlaybackSettingsWidget::refresh()
             box->setValue(v);
             if (*d.unit && QString(d.unit) != "on/off")
                   box->setSuffix(QString(" ") + d.unit);
-            // (computed when the map gives none: tuning tail per note, copies by the free memory)
-            if (map < 0 && src != Playback::Source::SCORE && src != Playback::Source::INI
+            // (computed when the map gives none: tuning tail per note; copies: no maximum, as the music needs; the map's
+            // maxLanes is 0 when it gives none)
+            if ((id == "tuning/tail" ? map < 0 : map <= 0) && src != Playback::Source::SCORE && src != Playback::Source::INI
                 && (id == "tuning/tail" || id == "tuning/maxLanes")) {
                   box->setMinimum(d.min - 1);
-                  box->setSpecialValueText(id == "tuning/tail" ? tr("measured release") : tr("by free memory"));
+                  box->setSpecialValueText(id == "tuning/tail" ? tr("measured release") : tr("as the music needs"));
                   box->setValue(d.min - 1);
                   }
             box->setKeyboardTracking(false);

@@ -273,7 +273,7 @@ static const std::vector<Definition> DEFINITIONS = {
       { "tuning/tail", MAP, 0, 10, "s", "a copy rings this long after its last note before it is retuned (default: the map's, else each "
         "note's measured release to 60 dB under: twice its release to 30 dB, as ISO 3382-1 extrapolates T30)", true },
       { "tuning/maxLanes", MAP, 1, 16, "copies", "at most this many copies of a patch for other tunings (default: the map's, else "
-        "as many as the free memory holds at 245 MB a copy, shared by the score's library parts)", true },
+        "no maximum: as many as the music needs, with a warning when they need more memory than is free, 245 MB a copy)", true },
       { "tuning/waitForRelease", 1, 0, 1, "on/off",
         "1: a copy also waits for its notes' measured release (<Articulation release>) before it is retuned", true },
       { "tuning/pitchBend", 1, 0, 1, "on/off",

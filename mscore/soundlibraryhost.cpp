@@ -493,6 +493,94 @@ void SoundLibraryHost::logLoadTime(const SoundLib::Library& library, const QStri
       logTime(library, line);
       }
 
+//---------------------------------------------------------
+//   checkCopiesMemory
+//    the owner, 2026-10-21 ("2": always load every copy the music needs and warn when memory is low; it replaced his
+//    rule of 2026-10-03 that the free memory caps the copies): the score's tuning / voice copies (SoundLib::routeCopies)
+//    at 245 MB each against the memory free now (SoundLib::copiesMemory). Short: a warning, never fewer copies, never a
+//    wait. Once per score open and per change of its copies (an edit adding copies: only the added ones against what is
+//    free then, the others being loaded). gui (SoundLibraryHost::syncSome): a non-modal message box (one, brought up to
+//    date) and a line in load times.log; else (SoundLibraryExport::loadInstances: the command-line renders, audio
+//    export) the render preflight's entry for the score (RenderPreflight::setCopies, always), and when short a line on
+//    stderr (the jobs' log) and in load times.log
+//---------------------------------------------------------
+
+#ifdef USE_VST3
+static void checkCopiesMemory(const SoundLib::Library& library, MasterScore* score, const std::vector<SoundLib::Route>& routes,
+                              bool gui)
+      {
+      if (!score)
+            return;
+      const int copies = SoundLib::routeCopies(routes);
+      const QString name = score->fileInfo()->fileName().isEmpty() ? score->title() : score->fileInfo()->fileName();
+      if (gui) {
+            struct Checked {
+                  QPointer<MasterScore> score;
+                  int copies;
+                  };
+            static std::vector<Checked> checked;            // (GUI thread)
+            checked.erase(std::remove_if(checked.begin(), checked.end(), [](const Checked& c) { return !c.score; }), checked.end());
+            int loaded = 0;
+            bool found = false;
+            for (Checked& c : checked)
+                  if (c.score == score) {
+                        found = true;
+                        if (c.copies == copies)
+                              return;                       // (said already: no change)
+                        loaded = std::min(c.copies, copies);
+                        c.copies = copies;
+                        }
+            if (!found)
+                  checked.push_back({ score, copies });
+            const SoundLib::CopiesMemory m = SoundLib::copiesMemory(copies, loaded);
+            if (!m.tooLittle())
+                  return;
+            logTime(library, QString("Memory short for the copies of %1: %2; all loaded").arg(name, m.text()));
+            if (!mscore || MScore::noGui)
+                  return;
+            static QPointer<QMessageBox> box;
+            const QString text = QObject::tr("%1 needs %n tuning or voice copies of its patches, about %2 MB more than "
+                                             "this computer has free (%3 MB free, %4 MB a copy). All of them are loaded, "
+                                             "so that every note plays at its tuning; MuseScore and %5 may slow down or run "
+                                             "out of memory. Closing other programs frees memory.", "", m.toLoad)
+                                 .arg(name).arg((m.needBytes - m.availableBytes) >> 20).arg(m.availableBytes >> 20)
+                                 .arg(SoundLib::LANE_COPY_BYTES >> 20).arg(library.name);
+            if (!box) {
+                  box = new QMessageBox(QMessageBox::Warning, QObject::tr("Memory short for the sound library"), text,
+                                        QMessageBox::Ok, mscore);
+                  box->setAttribute(Qt::WA_DeleteOnClose);
+                  box->setWindowModality(Qt::NonModal);
+                  }
+            box->setText(text);
+            box->show();
+            return;
+            }
+      // (the command-line renders: per score and copies, once a process; loadInstances runs once per part there)
+      static std::mutex mutex;
+      static std::set<std::pair<QString, int>> said;
+      const SoundLib::CopiesMemory m = SoundLib::copiesMemory(copies);
+      RenderPreflight::Copies c;
+      c.score = name;
+      c.copies = copies;
+      c.needBytes = m.needBytes;
+      c.availableBytes = m.availableBytes;
+      c.tooLittle = m.tooLittle();
+      c.text = m.text();
+      RenderPreflight::setCopies(c);
+      if (!m.tooLittle())
+            return;
+      {
+            std::lock_guard<std::mutex> l(mutex);
+            if (!said.insert({ score->fileInfo()->absoluteFilePath() + "|" + name, copies }).second)
+                  return;
+      }
+      const QString line = QString("WARNING: memory short for the copies of %1: %2; all loaded (this computer may page or "
+                                   "run out of memory)").arg(name, m.text());
+      fprintf(stderr, "%s\n", qPrintable(line));
+      logTime(library, line);
+      }
+#endif
+
 int SoundLibraryHost::loadThreads()
       {
       bool ok = false;
@@ -2351,6 +2439,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       syncClock.start();
       double routesMs = 0;
       const std::vector<SoundLib::Route> routes = routesFor(score->masterScore(), library, &routesMs);
+      checkCopiesMemory(*library, score->masterScore(), routes, true);      // (short of memory: a warning, all loaded)
       _slotParts.fill(nullptr);
       _slotPatches.fill(QString());
       _slotScore = score->masterScore();
@@ -2800,6 +2889,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
       own->setVarispeed(library->varispeed);
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       const std::map<const Part*, Automation::PartLanes> lanes = Automation::read(score->masterScore());
+      checkCopiesMemory(*library, score->masterScore(), routes, false);     // (short of memory: a warning, all loaded)
       auto routeAt = [&routes](int slot) -> const SoundLib::Route* {
             for (const SoundLib::Route& r : routes)
                   if (r.port * 16 + r.channel == slot)

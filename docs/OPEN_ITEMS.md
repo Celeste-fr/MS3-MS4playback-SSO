@@ -328,7 +328,13 @@ Keep this file current: close an item by deleting it (the commit message says wh
     it); `kontakt-procs` (parallel host processes, the one real lever: 3 patches 4-7 s vs 8-14 s) never compiled with
     MSVC, no VM null test. Kontakt's own background sample loading isn't waited for either. A 0xC0000005 after a Kontakt
     "VirtualUnlock failed" while playing (lag-probe phase e) left the playback mode at MS4. Clicked notes: the first
-    click on a route whose patch isn't loaded is silent. `LANE_COPY_BYTES` (245 MB) stale against 425-1017 MB measured.
+    click on a route whose patch isn't loaded is silent. `LANE_COPY_BYTES` (245 MB) stale against 425-1017 MB measured
+    (an instance; a tuning slot ~222 MB, `kontaktsetup.h`): since `all-copies` (the owner, 2026-10-21: every copy the
+    music needs, a warning when memory is short) it no longer caps anything, it only sizes the memory warning
+    (`SoundLib::copiesMemory`), which may come late on a machine where a copy costs more. No per-patch load size is kept
+    (`SoundLibraryHost`'s `memory(slot)` is measured in the session only): keeping it per patch would make the estimate
+    the patch's own. The warning is untried in the GUI with Kontakt / SSO; Create Live Set gives none (Live loads the
+    copies).
 29. **Update Live Set after a rewrite saves the score once more** (`liveSet.setTime` recorded before the rewrite;
     harmless). The command-line Create → Update fix (2ef9dd9dfb) is not yet re-run on the VM with AGM.
 30. **MS4 / built-in**: `ab/trace/regress.sh` not run since edb5eec (and its paths are stale); MIDI export's

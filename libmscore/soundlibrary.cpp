@@ -2333,11 +2333,12 @@ double laneRing(const LibInstrument& patch, const Articulation* articulation, co
       return ms > 0 ? 2 * ms / 1000.0 : 0.0;          // (T30 extrapolated to 60 dB)
       }
 
-// the memory the copies may take: what is free now plus what the system can still be given (installed beyond what is
-// visible, past a 2 GB allowance for hardware reservations). Branch voice-determinism, 2026-10-21: the Windows test VM
-// runs on Hyper-V dynamic memory (16 GB installed, 4.9 GB visible and 1.9 GB free when idle, more added as programs ask
-// for it), so the free memory alone gave each run its own copies: Whence's Violins 1 - Performance on 1, 2 or 4 routes
-// between runs of one score (1 + 1.9 GB / (245 MB x 5 parts) = 2)
+// the memory the copies may take (the copies' warning, copiesMemory): what is free now plus what the system can still be
+// given (installed beyond what is visible, past a 2 GB allowance for hardware reservations). Branch voice-determinism,
+// 2026-10-21: the Windows test VM runs on Hyper-V dynamic memory (16 GB installed, 4.9 GB visible and 1.9 GB free when
+// idle, more added as programs ask for it); when the free memory still capped the copies, it alone gave each run its own
+// copies (Whence's Violins 1 - Performance on 1, 2 or 4 routes between runs of one score). Since branch all-copies the
+// copies are as the music needs, and this figure only decides the warning
 qint64 memoryForCopies(qint64 available, qint64 visible, qint64 installed)
       {
       if (available < 0)
@@ -2360,90 +2361,59 @@ qint64 freeMemoryBytes()
       {
       if (testAvailable > -2)
             return memoryForCopies(testAvailable, testVisible, testInstalled);
-      static const qint64 bytes = [] {
-            // MS_FREE_MEMORY_MB: the tools' pin (the heard check's dump and export, dumps), so that the copies don't depend
-            // on the machine's state
-            bool ok = false;
-            const qint64 pinned = qEnvironmentVariable("MS_FREE_MEMORY_MB").toLongLong(&ok);
-            if (ok && pinned >= 0)
-                  return pinned * 1024 * 1024;
+      // MS_FREE_MEMORY_MB: the tools' pin (the warning's figure in tests and dumps). Read each time: it decides nothing a
+      // render plays any more (branch all-copies, 2026-10-21), only whether the copies' memory warning is given
+      bool ok = false;
+      const qint64 pinned = qEnvironmentVariable("MS_FREE_MEMORY_MB").toLongLong(&ok);
+      if (ok && pinned >= 0)
+            return pinned * 1024 * 1024;
 #if defined(Q_OS_WIN)
-            MEMORYSTATUSEX m;
-            m.dwLength = sizeof(m);
-            if (!GlobalMemoryStatusEx(&m))
-                  return qint64(-1);
-            ULONGLONG installedKb = 0;
-            const qint64 installed = GetPhysicallyInstalledSystemMemory(&installedKb) ? qint64(installedKb) * 1024 : qint64(-1);
-            return memoryForCopies(qint64(m.ullAvailPhys), qint64(m.ullTotalPhys), installed);
+      MEMORYSTATUSEX m;
+      m.dwLength = sizeof(m);
+      if (!GlobalMemoryStatusEx(&m))
+            return qint64(-1);
+      ULONGLONG installedKb = 0;
+      const qint64 installed = GetPhysicallyInstalledSystemMemory(&installedKb) ? qint64(installedKb) * 1024 : qint64(-1);
+      return memoryForCopies(qint64(m.ullAvailPhys), qint64(m.ullTotalPhys), installed);
 #elif defined(Q_OS_LINUX)
-            QFile f("/proc/meminfo");                 // MemAvailable: the kernel's estimate of memory available to start applications
-            if (f.open(QIODevice::ReadOnly))          // (no installed size for an unprivileged process: as visible)
-                  for (const QByteArray& line : f.readAll().split('\n'))
-                        if (line.startsWith("MemAvailable:"))
-                              return line.mid(13).trimmed().split(' ').value(0).toLongLong() * 1024;
-            return qint64(-1);
+      QFile f("/proc/meminfo");                 // MemAvailable: the kernel's estimate of memory available to start applications
+      if (f.open(QIODevice::ReadOnly))          // (no installed size for an unprivileged process: as visible)
+            for (const QByteArray& line : f.readAll().split('\n'))
+                  if (line.startsWith("MemAvailable:"))
+                        return line.mid(13).trimmed().split(' ').value(0).toLongLong() * 1024;
+      return qint64(-1);
 #else
-            return qint64(-1);
+      return qint64(-1);
 #endif
-            }();
-      return bytes;
       }
 
-int memoryMaxLanes(qint64 freeBytes, int parts)
+int routeCopies(const std::vector<Route>& routes)
       {
-      if (freeBytes < 0)
-            return 1;                                 // (unknown: no copies beyond the patch itself)
-      return 1 + int(freeBytes / (LANE_COPY_BYTES * std::max(1, parts)));
+      std::set<std::pair<const Part*, const LibInstrument*>> patches;
+      for (const Route& r : routes)
+            patches.insert({ r.part, r.instrument });
+      return int(routes.size()) - int(patches.size());
       }
 
-// the parts whose notes play at more than one tuning (beyond the tolerance, cents): only they need copies (a part's
-// first copy takes any tuning). Needs a ScoreTuningScope (playbackTuning). A part MuseScore's own sounds play counts
-// too when it has microtones (an overcount: its share of the memory goes unused)
-int partsNeedingCopies(const Score* score, double toleranceCents)
+CopiesMemory copiesMemory(int copies, int loaded)
       {
-      if (!score)
-            return 0;
-      const Score* ms = score->masterScore();
-      int count = 0;
-      for (const Part* part : ms->parts()) {
-            bool first = true;
-            double cents0 = 0;
-            bool needs = false;
-            for (const Segment* s = ms->firstSegment(SegmentType::ChordRest); s && !needs; s = s->next1(SegmentType::ChordRest)) {
-                  for (int t = part->startTrack(); t < part->endTrack() && !needs; ++t) {
-                        const Element* e = s->element(t);
-                        if (!e || !e->isChord())
-                              continue;
-                        const Chord* ch = toChord(e);
-                        std::vector<const Chord*> chords { ch };
-                        for (const Chord* g : ch->graceNotes())
-                              chords.push_back(g);
-                        for (const Chord* c : chords) {
-                              for (const Note* n : c->notes()) {
-                                    if (!n->play())
-                                          continue;
-                                    const double cents = playbackTuning(n);
-                                    if (first) {
-                                          cents0 = cents;
-                                          first = false;
-                                          }
-                                    else if (std::fabs(cents - cents0) > toleranceCents)
-                                          needs = true;
-                                    }
-                              }
-                        }
-                  }
-            if (needs)
-                  ++count;
-            }
-      return count;
+      CopiesMemory m;
+      m.copies = std::max(0, copies);
+      m.toLoad = std::max(0, m.copies - std::max(0, loaded));
+      m.needBytes = qint64(m.toLoad) * LANE_COPY_BYTES;
+      m.availableBytes = freeMemoryBytes();
+      return m;
       }
 
-// the free memory split evenly between the parts that need copies (the owner, 2026-10-04: not between all the score's
-// parts; a part with one tuning needs none), at least one share
-int memoryMaxLanes(const Score* score, double toleranceCents)
+QString CopiesMemory::text() const
       {
-      return memoryMaxLanes(freeMemoryBytes(), std::max(1, partsNeedingCopies(score, toleranceCents)));
+      const QString avail = availableBytes >= 0 ? QString("%1 MB available").arg(availableBytes >> 20)
+                                                : QString("the available memory unknown");
+      if (toLoad == copies)
+            return QString("%1 tuning / voice copies need about %2 MB (%3 MB a copy), %4")
+                   .arg(copies).arg(needBytes >> 20).arg(LANE_COPY_BYTES >> 20).arg(avail);
+      return QString("%1 tuning / voice copies, %2 more to load: about %3 MB (%4 MB a copy), %5")
+             .arg(copies).arg(toLoad).arg(needBytes >> 20).arg(LANE_COPY_BYTES >> 20).arg(avail);
       }
 
 LaneSettings libraryLaneSettings(const Library& library)
@@ -2575,8 +2545,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             return out;
       Score* sc = const_cast<Score*>(score);
       const ScoreTuningScope tuningScope(sc);
-      if (maxLanes <= 0)
-            maxLanes = memoryMaxLanes(score, toleranceCents);
+      if (maxLanes <= 0)                        // (no maximum: as many copies as the music needs; the owner, 2026-10-21)
+            maxLanes = std::numeric_limits<int>::max();
       const bool waitForRelease = Playback::on("tuning/waitForRelease", score);   // (playback.ini [tuning])
       Ms4::Dynamics dynamics;
       dynamics.build(sc, const_cast<Part*>(part));

@@ -61,8 +61,25 @@ size for an unprivileged process: MemAvailable as before), so the VM counts ~11 
 memory ÷ the measured cost per copy": what the copies can have); `MS_FREE_MEMORY_MB` pins it, and the heard check pins
 both its dump and its export at 16384 (`HC_FREE_MEMORY_MB`). Test `tst_soundlibrary::voiceLanesMemory` (the VM idle
 against plenty free: the same routes and channels; fails before: 1 route and every note on it). On a machine truly short of
-memory the copies still drop (the rule), so a render still depends on it there: the owner may prefer copies as the music
-needs, with a warning instead (not done: his rule of 2026-10-03). Linux only (test synth); Windows needs a build.
+memory the copies still dropped (the rule then); since `all-copies` (above) they never do. Linux only (test synth);
+Windows needs a build.
+
+## Every copy the music needs (branch `all-copies`, 2026-10-21, from integrate-1017 c3ef2da874; not merged)
+
+The owner's decision (2026-10-21, "2": always load every copy the music needs and warn when memory is low) replaces his
+2026-10-03 rule that the free memory caps the tuning copies. `SoundLib::lanes` has no maximum unless `maxLanes` is set
+(map `<Tuning maxLanes>`, `[tuning] maxLanes`, the score's `soundLibraryLanes` `max=`); `memoryMaxLanes` and
+`partsNeedingCopies` are gone. The memory only decides a warning: `SoundLib::copiesMemory(routeCopies(routes), loaded)`,
+245 MB a copy (`LANE_COPY_BYTES`; the fork keeps no per-patch load size, OPEN_ITEMS 28) against `freeMemoryBytes()`
+(now read at each check; `memoryForCopies` on Windows, MemAvailable on Linux, `MS_FREE_MEMORY_MB` pins it). Hosted
+(`SoundLibraryHost::syncSome`): a non-modal message box plus a line in load times.log, once per score open and per change
+of its copies (an edit adding copies: the added ones against what is free then). Command-line renders and audio export
+(`SoundLibraryExport::loadInstances`): the render preflight's `copies` entry per score (lines, JSON, a WARNING when short:
+the verify report's preflight) and a WARNING line on stderr and in load times.log. Never fewer copies, never a wait.
+Mixer › Playback adjustments shows an unset `tuning/maxLanes` as "as the music needs" (before, the computed 0 showed as 1).
+Live / MIDI out unchanged: their fixed copies never took the cap; a bending patch's lanes there took it, and are the same
+on a machine with plenty free. The heard check's `HC_FREE_MEMORY_MB` pin is unnecessary for builds with this (kept for
+older builds). Linux only (test synth); Windows needs a build; the GUI box untried with Kontakt / SSO.
 
 ## Plain timing (branch `plain-timing`, 2026-10-21, from integrate-1017 15820b7b46; not merged)
 
