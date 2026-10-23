@@ -178,7 +178,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   better", Whence's Violas bars 11-13 with even levels) an attack whose route still rings the note before (within that
   note's `release`) takes its CC11 level, even levels' glide start too, not with the note-on but 1 at its note-on + its
   measured onset (`plainAttack`, else the articulation's), 2 at its written time (the early start undone, plain
-  Performance's `plainShift` too: `libAttackShiftMs`) (`attackSwitch`, `libAttackOnset`, `libAttackLevelAt`;
+  Performance's `plainShift` too: `libAttackShiftMs`; rises only, a drop with the note-on: check471, an accent's level on the next attack) (`attackSwitch`, `libAttackOnset`, `libAttackLevelAt`;
   docs/PLAYBACK_SETTINGS.md › Attack levels).
 - **Even levels** (`libmscore/evenlevels.h`, `mscore/evenlevelsjob.h`; the owner, 2026-10-12, the blind test's Glide;
   **`[levels] evenLevels` 1 in Recommended and by default, 0 in Library default** (the owner, 2026-10-13)): SSO's Performance

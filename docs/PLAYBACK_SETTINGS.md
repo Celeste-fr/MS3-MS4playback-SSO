@@ -1734,7 +1734,11 @@ before. With 1 or 2:
     `plainShift` (`libAttackShiftMs`: the track delay that moves the patch's events early after this pass; not with
     `[slurs] plainTiming`, whose notes start early each by their own model). The Violas: 111 ms after the note-on. The
     attack's first part (SSO's Violas sound from 37 ms after the note-on, 74 ms before the beat) then plays at the note
-    before's level, growing into its own at the beat;
+    before's level, growing into its own at the beat; **rises only**: a drop goes with the note-on, as 0 plays it
+    (check471, 2026-10-23, build #471 on the VM, MuseScore's export: held to the beat after an accent at velocity 122, a
+    drop let the new attack's start play at the accent's level, Whence's Violas bar 8 beat 4.5 +4.7 dB and Celli bar 9 beat
+    1 +5.9 dB over #470 in the 100 ms before the beat; the owner had heard #470 there: "everything else in Whence sounds
+    perfect");
 - only if that moment stays before the route's next note-on / note-off and before any CC11 or dynamics CC the score writes on
   the route (those are mapped by the level in force), inside the render chunk; CC11 levels only (a level on another
   controller, a marcato's CC1, switches at the note-on). A note-off from an earlier render chunk isn't looked for when the
@@ -1753,7 +1757,7 @@ of the rise before the beat is the attack itself, which SSO sounds from its onse
 The level at the written time (2; measured as a map copy with plainAttack 111 before 2 existed) moved it:
 bar 12 +1.2 / +1.7 (even levels +1.3 / +4.4), bar 16 -1.6 / +7.4, the other slur starts' rise before the beat 1.8-2.4 dB
 smaller and their attack's 1.7-2.2 larger. The owner heard 0 against it (the clips' A / C, even levels on, shown to him as A / B):
-"B better" (2026-10-23). Whence, Recommended, 0 against 2 (the Linux dump): 35 attacks' CC11 levels move, each by its
+"B better" (2026-10-23). Whence, Recommended, 0 against 2 before rises only (the Linux dump): 35 attacks' CC11 levels move, each by its
 patch's plainShift (no other early start there): Violas 18 (+111.4 ms; bars 8-16, every slur start and the staccato runs'
 first notes), Violins 2 8 (+65.9; bars 7, 8, 13-16), Violins 1 5 (+65.9; bars 13-16), Celli 2 (+80.7; bars 9, 16), Basses
 2 (+59.1; bars 8, 9); nothing else changes (notes, switches, bends; a value equal to the one in force isn't sent again).
@@ -1761,7 +1765,11 @@ The audit (it reads each note's level at its note-on) then lists 12 LEVEL STEP i
 and Violins 1 bars 13-16, read against the first note's level still the note before's. Live: the moved level is
 CC11 events like any level, so the route set's carrier notes and the plain set's CC11 lane carry it
 (`tst_liveequivalence::attackLevelsLive`: 1 and 2; the plain set's lane at written times, the Kontakt's Track Delay playing
-plainShift). Tests `tst_soundlibrary::attackLevels` (0 / 1 / 2), `playbackPresets`; `Playback::setIniValuesForTest` leaves it
+plainShift). Build #471 (2 moving drops too; VM, private `check471/RESULT.md`): bar 12's rise before the beat +3.4 -> +1.1 dB (even
+levels +6.6 -> +1.1), the step's size unchanged, Violins 1 bars 13-16 3.0-3.8 dB less before the beat, the two drops above
+worse, timing and tuning identical. Rises only (Linux dumps, Whence, Recommended, 0 against 2): 19 CC11 levels move (Violas
+11, bars 9-16; Violins 1 4, bars 13-16; Violins 2 2, bars 7 and 16; Celli bar 16; Basses bar 9), the drops at Violas bar 8
+and Celli bar 9 as with 0; the audit the same (LEVEL STEP 12 info). Tests `tst_soundlibrary::attackLevels` (0 / 1 / 2, 2's drop with its note-on), `playbackPresets`; `Playback::setIniValuesForTest` leaves it
 0 unless a test sets it, so the older tests keep their expectations.
 
 ## Clicked and entered notes

@@ -10523,7 +10523,7 @@ void TestSoundLibrary::transitionLevels()
 //    an eighth rest, a G4 half (single, +12 dB), all plain Performance on one route (plainAttack 37 ms, plainShift 60). 0:
 //    each new CC11 level with its note-on. 1: the slur's first note and the half (attacks within the note before's
 //    release, 2620 ms) keep the note before's CC11 to their note-on + 37 ms (the onset), then their own; 2: to their
-//    note-on + 60 ms (the written time: plainShift); the transitions inside the slur as with 0; the notes and every value
+//    note-on + 60 ms (the written time: plainShift), rises only: the half's drop (+20 -> +12 dB) with its note-on, as 0; the transitions inside the slur as with 0; the notes and every value
 //    outside that span the same. With the note before's release under the gaps (release 100 ms against the 136 / 273 ms
 //    rests): as 0. The setting: 2 by default and in Recommended, 0 in Library default
 //---------------------------------------------------------
@@ -10619,8 +10619,8 @@ void TestSoundLibrary::attackLevels()
                   const int own = at(off.cc11, t);
                   QVERIFY2(own != before, qPrintable(QString("note %1: CC11 %2 -> %3").arg(k).arg(before).arg(own)));
                   const int onset = tickAfter(t, mode == 1 ? 37 : 60);
-                  if (release == 100) {
-                        QCOMPARE(at(on.cc11, t), own);                  // (the note before's release is over: with its note-on)
+                  if (release == 100 || (mode == 2 && own < before)) {
+                        QCOMPARE(at(on.cc11, t), own);                  // (the note before's release is over, or 2's drop: with its note-on)
                         continue;
                         }
                   QCOMPARE(at(on.cc11, t), before);                       // (1: no change at the note-on)

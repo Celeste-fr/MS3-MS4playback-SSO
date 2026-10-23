@@ -72,7 +72,10 @@ sent its level-rule CC11 step with its note-on, 111 ms before the beat (plainShi
 - Whence, Recommended, 0 -> 2: 35 attacks' levels move (Violas 18, Violins 2 8, Violins 1 5, Celli 2, Basses 2; each by its
   plainShift). Audit: LEVEL STEP 0 -> 12 info (the audit reads a note's level at its note-on: each Violas / Violins 1 slur's
   second note against the first's, still the note before's), everything else the same.
-- Not yet in a Windows build; untried in real Live (the plain set's CC11 lane carries it: `attackLevelsLive`).
+- Build #471 (VM, private `check471/RESULT.md`): bar 12's rise before the beat +3.4 -> +1.1 dB (even levels +6.6 -> +1.1),
+  timing / tuning identical, but two drops after an accent (Violas bar 8 beat 4.5, Celli bar 9 beat 1) +4.7 / +5.9 dB louder
+  before the beat. So 2 moves **rises only** since 2026-10-23 (a drop with the note-on, as #470, which the owner called
+  perfect there). Untried in real Live (the plain set's CC11 lane carries it: `attackLevelsLive`).
 
 ## Slur joins (branch `slur-joins`, 2026-10-22, from integrate-1017 6d0eaddb57; not merged)
 

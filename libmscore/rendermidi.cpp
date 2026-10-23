@@ -4023,7 +4023,9 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
       // (onset early: written - played) plus, for a plain Performance note, its patch's plainShift (libAttackShiftMs: the
       // track delay that moves its events early after this pass); the same conditions. The attack's first part (SSO's
       // Violas sound from 37 ms after the note-on, 74 ms before the beat) plays at the note before's level, growing into
-      // its own at the beat
+      // its own at the beat. Rises only (check471, 2026-10-23: a drop held to the beat after an accent at 122 played the
+      // new attack's start at the accent's level, Whence's Violas bar 8 beat 4.5 +4.7 dB and Celli bar 9 beat 1 +5.9 dB
+      // before the beat over #470's; a drop goes with the note-on, as 0 plays it and as the owner heard it, "perfect")
       const int attackLevels = volume && score ? int(Playback::value("levels/attackLevels", score)) : 0;
       // the written start of the note whose note-on is at utick (its chord's tick in the pass it plays in: the nearest
       // at or after the note-on; -1 none)
@@ -4105,7 +4107,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             const int to = level ? mapOf(*level, CTRL_EXPRESSION, valueAt(at, route, CTRL_EXPRESSION, fallbackOf(*level, CTRL_EXPRESSION)),
                                          dynAt(at, route))
                                  : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, library->expressionValue, 127) : 127);
-            if (from == to)
+            if (from == to || (attackLevels == 2 && to < from))
                   return false;
             switchTo(events->lower_bound(uAt), uAt, route, level, i->first, ev);
             libAttackLevelAt[{ note, i->first }] = uAt;
