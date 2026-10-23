@@ -46,6 +46,31 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## SSO load: the allocator (branch `sso-load`, 2026-10-23, from integrate-1017 7a6e1e9f0c; not merged)
+
+The owner, 2026-10-23: "is there any way for sso to load faster, taking the ableton optimization repo as example".
+Details, every number and the raw data: `~/MuseScore/ms3fork/private/sso-load/RESULT.md` (outside the repo).
+- The ableton-optimization approach (cache repeated file / registry / shell lookups) has nothing to cache here: on the
+  owner's PC (2026-10-18 kit) setState's file and registry calls are 0.04 s of 1.3-2.6 s, the background preload's .nkx
+  reopens 0.33 s; on the VM they cost more only because the samples come over SMB (`ZwCreateFile` ~3 % of setState).
+- Where setState's CPU goes (VM, sampled; the owner's PC alike): Kontakt's own code ~65 % (KSP compile about half of
+  it), **the C runtime's heap 16-21 %** (`RtlpLowFragHeapAllocFromContext`, `RtlpSubSegmentInitialize`,
+  `RtlAllocateHeap`: PC 20.7 %), memset / memcpy 3-4 %, syscalls the rest. Violins 1 - Performance's setState makes
+  **18.9 million malloc calls** from Kontakt (2.2 GB; 1.5 million freed during it).
+- `tools/soundlibraries/kheap`: mimalloc answers the CRT's malloc family (MinHook on ucrtbase; foreign blocks to the
+  CRT). Time inside the allocator for that setState 2.73 s -> 1.31 s; page faults -23 %; setState 7 of 8 alternating
+  pairs faster, median -12 % (VM, Violins 1 + Celli - Performance); Whence's ten states -12 % median over 9 + 11 runs
+  (VM noise ±30 %: the host is the owner's PC); **memory +17 %** (Whence 11.3 -> 13.3 GB). Segment heap (IFEO): less
+  memory (10.1 GB), no clear speed change.
+- **Null test** (VM, Kontakt 8 + SSO, build 472, Whence `--verify-playback --verify-wav`, kheap injected with launchw,
+  plain / mi / mi / plain, `compare_renders.py -`): every part's plain - mi at the floor of two identical passes
+  (Violins 2 -85.6 / -85.1 dB against -86.1 / -85.3; Basses -24.1 / -22.7 against -22.8 / -24.2; Violins 1, Violas,
+  Celli at their Performance floors -5 .. -10 dB; per-note maxima inside the floors').
+- Not in MuseScore yet: shipping it means MuseScore loading the allocator before Kontakt (kheap's hooks, or mimalloc's
+  own redirect DLL linked first) for the whole process. Waits for the owner's PC numbers: kit
+  `~/MuseScore/ms3fork/private/sso-load/pc-kit/sso-load-kit.zip` (ten loads of the last-used prepared states, plain /
+  mimalloc alternating; not sent).
+
 ## Build for the owner: #472 (2026-10-23)
 
 Windows build #472 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39962541862, integrate-1017 @ 4055da9f06):
