@@ -55,6 +55,25 @@ tones in tune Violins 1 23 -> 33 %, Celli 12 -> 26 %; 12-TET notes next to them 
 Ample identical to #464; repeat check pass. Violas a little lower in tune (33 % against 35-37 %) with events identical to
 #464's: take-to-take variation. Installed on the VM at `C:\claude\b470\ms`.
 
+## Attack levels (branch `attack-levels`, 2026-10-22/23, from integrate-1017 8a827c2026; not merged)
+
+The owner, Whence's Violas alone in #470: "when the slur starts. the volume just like jumps in a disjointed way" (bar 12
+most). Cause (private `violas-slurstart/RESULT.md`): the slur's first note, an attack after a staccato on the same key,
+sent its level-rule CC11 step with its note-on, 111 ms before the beat (plainShift).
+
+- `[levels] attackLevels` (docs/PLAYBACK_SETTINGS.md › Attack levels): an attack whose route still rings the note before
+  (within the map's `release`) takes its CC11 level 1 at note-on + its measured onset (plainAttack, 37 ms), 2 at its
+  written time (plainShift / its early start undone). **2 by default and in Recommended, 0 in Library default**: the
+  owner, 2026-10-23, "B better" (Whence's Violas bars 11-13 alone with a click, even levels on, kthost renders of #470's
+  kthost + Kontakt 8 + SSO; A = 0, B = 2 as a map copy with plainAttack 111).
+- Measured (kthost, private `attack-levels/RESULT.md`): 1 changes almost nothing (bar 12's rise before the beat +3.7 ->
+  +3.6 dB): SSO's attack itself sounds from 74 ms before the beat; 2 moves the step after the beat (+1.2 before / +1.7
+  after; even levels +1.3 / +4.4).
+- Whence, Recommended, 0 -> 2: 35 attacks' levels move (Violas 18, Violins 2 8, Violins 1 5, Celli 2, Basses 2; each by its
+  plainShift). Audit: LEVEL STEP 0 -> 12 info (the audit reads a note's level at its note-on: each Violas / Violins 1 slur's
+  second note against the first's, still the note before's), everything else the same.
+- Not yet in a Windows build; untried in real Live (the plain set's CC11 lane carries it: `attackLevelsLive`).
+
 ## Slur joins (branch `slur-joins`, 2026-10-22, from integrate-1017 6d0eaddb57; not merged)
 
 The owner, Whence's Violas alone in build #464, Recommended: "viola bar 12 and 16 slur first note sounds disjointed from the

@@ -150,6 +150,8 @@ class MidiRenderer {
       // every library note's release (its articulation's release= to 30 dB under, else its patch's longest: laneRing / 2)
       std::map<const Note*, double> libAttackOnset;
       std::map<const Note*, double> libReleaseMs;
+      // (2: a plain Performance attack's patch shift, ms: its plainShift, its events' track delay; 0 otherwise)
+      std::map<const Note*, double> libAttackShiftMs;
       // (note, its note-on's utick) -> the utick its level went at instead (libraryNoteLevels; libraryEvenLevels starts and
       // ends its glide there)
       std::map<std::pair<const Note*, int>, int> libAttackLevelAt;

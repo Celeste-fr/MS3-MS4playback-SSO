@@ -2251,9 +2251,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               // onset, the chord's latest, as its early start takes it), and every note's release
                               libAttackOnset.erase(note);
                               libReleaseMs.erase(note);
+                              libAttackShiftMs.erase(note);
                               if (libChoice && libChoice.articulation) {
                                     const SoundLib::LibInstrument* ap = libPatches[libChoice.patch];
                                     libReleaseMs[note] = SoundLib::laneRing(*ap, libChoice.articulation, {}) * 1000.0 / 2.0;
+                                    // (2: the patch's events go early by its plainShift, a track delay after the levels:
+                                    // TrackDelays, not with [slurs] plainTiming)
+                                    if (!from && !note->tieBack() && libChoice.plain && std::isfinite(ap->plainShiftMs) && ap->plainShiftMs > 0
+                                        && !Playback::on("slurs/plainTiming", score))
+                                          libAttackShiftMs[note] = ap->plainShiftMs;
                                     if (!from && !note->tieBack()) {
                                           double onsetMs = libChoice.plain && std::isfinite(ap->plainAttackMs) ? ap->plainAttackMs : 0.0;
                                           if (!libChoice.plain || perf.timedAttack)
@@ -4012,13 +4018,45 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
       // note-off and before any CC11 or dynamics CC the score writes there (those map by the level in force), inside the
       // chunk; CC11 levels only (a marcato's CC1 switches at the note-on, as transitionLevels). Even levels' glide starts
       // there too (libAttackLevelAt)
-      const bool attackLevels = volume && score && Playback::on("levels/attackLevels", score);
+      // 2 (the owner, 2026-10-23, "B better": Whence's Violas bars 11-13 alone with a click, even levels on, kthost renders,
+      // against 0): at the note's WRITTEN time instead, where its attack is meant to be heard: the note-on's early start
+      // (onset early: written - played) plus, for a plain Performance note, its patch's plainShift (libAttackShiftMs: the
+      // track delay that moves its events early after this pass); the same conditions. The attack's first part (SSO's
+      // Violas sound from 37 ms after the note-on, 74 ms before the beat) plays at the note before's level, growing into
+      // its own at the beat
+      const int attackLevels = volume && score ? int(Playback::value("levels/attackLevels", score)) : 0;
+      // the written start of the note whose note-on is at utick (its chord's tick in the pass it plays in: the nearest
+      // at or after the note-on; -1 none)
+      auto writtenUtick = [&](const Note* note, int utick) {
+            const int t = note->chord()->tick().ticks();
+            int best = -1;
+            for (const RepeatSegment* rs : score->repeatList()) {
+                  if (t < rs->tick || t >= rs->tick + rs->len())
+                        continue;
+                  const int u = t + rs->utick - rs->tick;
+                  if (u >= utick && (best < 0 || u < best))
+                        best = u;
+                  }
+            return best;
+            };
       auto attackSwitch = [&](EventMap::iterator i, int route, const LibLevel* level, const NPlayEvent& ev) {
             const Note* note = ev.note();
             if (!note || libGlideFrom.count(note))
                   return false;
-            auto o = libAttackOnset.find(note);
-            if (o == libAttackOnset.end() || !(o->second > 0))
+            double delayMs = 0;
+            if (attackLevels == 1) {
+                  auto o = libAttackOnset.find(note);
+                  delayMs = o == libAttackOnset.end() ? 0.0 : o->second;
+                  }
+            else {
+                  const int w = writtenUtick(note, i->first);
+                  if (w >= 0)
+                        delayMs = (score->utick2utime(w) - score->utick2utime(i->first)) * 1000.0;
+                  auto sh = libAttackShiftMs.find(note);
+                  if (sh != libAttackShiftMs.end())
+                        delayMs += sh->second;
+                  }
+            if (!(delayMs > 0))
                   return false;
             auto a = active.find(route);
             if (!cc11Only(level) || (a != active.end() && !cc11Only(a->second.level)))
@@ -4050,7 +4088,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             auto rel = libReleaseMs.find(before);
             if (rel == libReleaseMs.end() || (tOn - offT) * 1000.0 >= rel->second)
                   return false;
-            const int uAt = score->utime2utick(tOn + o->second / 1000.0);
+            const int uAt = score->utime2utick(tOn + delayMs / 1000.0);
             if (uAt <= i->first || uAt >= utick2)
                   return false;
             for (auto j = std::next(i); j != events->end() && j->first <= uAt; ++j) {
@@ -4114,7 +4152,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   continue;
             if (transitionLevels && transitionSwitch(i, route, level, ev))
                   continue;
-            if (attackLevels && attackSwitch(i, route, level, ev))
+            if (attackLevels > 0 && attackSwitch(i, route, level, ev))
                   continue;
             switchTo(i, i->first, route, level, i->first, ev);
             }
@@ -6601,6 +6639,7 @@ void MidiRenderer::updateState()
             libGlide.clear();
             libAttackOnset.clear();
             libReleaseMs.clear();
+            libAttackShiftMs.clear();
             libAttackLevelAt.clear();
             libSpeed.clear();
             libSpellKey.clear();

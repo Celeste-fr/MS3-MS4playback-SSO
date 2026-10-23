@@ -8507,9 +8507,11 @@ void TestLiveEquivalence::transitionLevelsLive()
 //---------------------------------------------------------
 //   attackLevelsLive
 //    [levels] attackLevels 1 (tst_soundlibrary::attackLevels) reaches Live: attack-levels.musicxml, a single note, a rest,
-//    then a slur starting with an attack on its key, plain Performance (plainAttack 37 ms): MuseScore's CC11 (the slur's
-//    level 37 ms after its note-on) is the route set's CC11 carrier notes at those times, and the plain set's CC11 lane has
-//    the single note's value at the slur's note-on and the slur's at its note-on + 37 ms (with 0: at the note-on)
+//    then a slur starting with an attack on its key, plain Performance (plainAttack 37 ms, plainShift 60 ms): MuseScore's
+//    CC11 (the slur's level 37 ms after its note-on with 1, 60 ms with 2: its written time) is the route set's CC11 carrier
+//    notes at those times, and the plain set's CC11 lane (at written times: the Kontakt's Track Delay plays plainShift; here
+//    MuseScore's events are at written times too, the start lead undoing the shift) has the single note's value at the
+//    slur's note-on and the slur's that much after it (with 0: at the note-on)
 //---------------------------------------------------------
 
 void TestLiveEquivalence::attackLevelsLive()
@@ -8528,7 +8530,7 @@ void TestLiveEquivalence::attackLevelsLive()
          "<Instrument name='Violin' ids='violin'>"
          "<Articulation name='Long' value='1' techniques='long legato'/>"
          "</Instrument>"
-         "<Instrument name='Violin - Performance' with='Violin' plainShift='0' plainAttack='37'>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='60' plainAttack='37'>"
          "<Switch type='none'/>"
          "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' release='2620'"
          " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
@@ -8542,7 +8544,7 @@ void TestLiveEquivalence::attackLevelsLive()
       QVERIFY(score);
       score->rebuildMidiMapping();
       const LiveClips::Timeline tl = LiveClips::timeline(score);
-      for (int on : { 0, 1 }) {
+      for (int on : { 0, 1, 2 }) {
             Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "levels/context", "1" },
                                             { "levels/attackLevels", QString::number(on) } });
             score->setPlaylistDirty();
@@ -8573,7 +8575,8 @@ void TestLiveEquivalence::attackLevelsLive()
                         route = o.first;
             QVERIFY2(!route.isEmpty(), "no route with the five notes");
             const int slur = ons[route][1];
-            const int onset = score->utime2utick(score->utick2utime(slur) + 0.037);
+            const double delay = on == 2 ? 0.060 : 0.037;
+            const int onset = score->utime2utick(score->utick2utime(slur) + delay);
             auto at = [](const std::vector<std::pair<int, int>>& c, int u) {
                   int v = -1;
                   for (const auto& p : c)
@@ -8623,6 +8626,10 @@ void TestLiveEquivalence::attackLevelsLive()
                   utick = c.utick2();
                   }
             const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, chunked, tl);
+            // (the plain set at written times, plainShift its Kontakt's Track Delay; MuseScore's events here at written times
+            // too: the start lead puts the patch's -60 ms back, everything later by it)
+            const int slurW = slur;
+            const int onsetW = onset;
             int lanes = 0;
             for (const PlainLiveSet::Section& s : l.sections)
                   for (const PlainLiveSet::PartTracks& p : s.parts)
@@ -8630,9 +8637,9 @@ void TestLiveEquivalence::attackLevelsLive()
                               for (const PlainLiveSet::Lane& ln : k.lanes)
                                     if (ln.cc == CTRL_EXPRESSION && k.patch == "Violin - Performance") {
                                           ++lanes;
-                                          QCOMPARE(at(ln.points, tl.units(slur)), on ? stac : own);
-                                          QCOMPARE(at(ln.points, tl.units(onset) - 1), on ? stac : own);
-                                          QCOMPARE(at(ln.points, tl.units(onset)), own);
+                                          QCOMPARE(at(ln.points, tl.units(slurW)), on ? stac : own);
+                                          QCOMPARE(at(ln.points, tl.units(onsetW) - 1), on ? stac : own);
+                                          QCOMPARE(at(ln.points, tl.units(onsetW)), own);
                                           }
             QCOMPARE(lanes, 1);
             }

@@ -50,11 +50,12 @@ class TestMarcatoLevel : public QObject, public MTest
             return lib;
             }
       // the level settings that came after these tests (section balance, real range, mic compensation, context level, even
-      // levels, calibrated levels) off: with them a part has its own CC11 at every note, which the marcato's CC11 would
-      // replace instead of add to
+      // levels, calibrated levels, attack levels) off: with them a part has its own CC11 at every note, which the marcato's
+      // CC11 would replace instead of add to (attack levels: the level back at the next note's written time, not right
+      // before its note-on)
       static QString noLevelSettings()
             {
-            return "levels/sectionBalance=0;levels/realRange=0;levels/micCompensation=0;levels/context=0;levels/evenLevels=0;levels/calibrated=0";
+            return "levels/sectionBalance=0;levels/realRange=0;levels/micCompensation=0;levels/context=0;levels/evenLevels=0;levels/calibrated=0;levels/attackLevels=0";
             }
       MasterScore* score()
             {

@@ -262,13 +262,15 @@ static const std::vector<Definition> DEFINITIONS = {
         "0: the new level with the note-on, while SSO still plays the note before", true },
       // (branch attack-levels, 2026-10-22: Whence's Violas bar 12, the slur's first note, an attack after a staccato on the same
       // key, raised the staccato's release +3.4 dB before the beat with its level-rule CC11 sent with the note-on, 111 ms
-      // early by plainShift; 0 in both presets until the owner has heard it)
-      { "levels/attackLevels", 0, 0, 1, "on/off",
-        "1: an attack (no legato transition) whose route still rings the note before (within that note's release) takes "
-        "its CC11 level (level rule, real range, track and note levels, even levels) at its note-on + its measured onset "
-        "(plain Performance: the patch's plainAttack, else the articulation's attack onset), when that stays before the "
-        "route's next note or written CC11 / dynamics; 0: the new level with the note-on, lifting the note before's "
-        "release before the attack is heard", true },
+      // early by plainShift; 2026-10-23, the owner, "B better": Whence's Violas bars 11-13 alone with a click, even levels on,
+      // kthost renders, 2 against 0: 2 by default and in Recommended, 0 in Library default)
+      { "levels/attackLevels", 2, 0, 2, "",
+        "an attack (no legato transition) whose route still rings the note before (within that note's release) takes "
+        "its CC11 level (level rule, real range, track and note levels, even levels) 1: at its note-on + its measured "
+        "onset (plain Performance: the patch's plainAttack, else the articulation's attack onset); 2: at its written time "
+        "(its early start undone, plain Performance's plainShift too), where its attack is meant to be heard; either only "
+        "while that stays before the route's next note or written CC11 / dynamics; 0: the new level with the note-on, "
+        "lifting the note before's release before the attack is heard", true },
       { "levels/divisi", 1, 0, 1, "on/off",
         "1: while n notes of a monophonic patch's part sound together (a chord on SSO's Performance patches, each note its "
         "own voice copy), each plays 10 log10(n) dB softer by CC11 (2: -3.0 dB, 3: -4.8 dB), the line's note too, as a "
@@ -577,7 +579,8 @@ QString iniTemplate()
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
 //    2026-10-20: the owner approved the rule); levels/transitionLevels (0 in both since 2026-10-22, branch slur-joins, until the
-//    owner has heard it); levels/attackLevels (0 in both since 2026-10-22, branch attack-levels, until the owner has heard it). The other settings are not in the table because: legato/keepMs acts
+//    owner has heard it); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
+//    default, since 2026-10-23: the owner heard it, "B better"). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -600,7 +603,7 @@ const std::vector<Preset>& presets()
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 0 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 2 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
@@ -790,6 +793,9 @@ void setIniValuesForTest(const std::map<QString, QString>& values)
       // (slurs/microtoneBends likewise, 1 by default since 2026-10-22)
       if (!values.count("slurs/microtoneBends"))
             take(*i, "slurs", "microtoneBends", "0");
+      // (levels/attackLevels likewise, 2 by default since 2026-10-23)
+      if (!values.count("levels/attackLevels"))
+            take(*i, "levels", "attackLevels", "0");
       install(i);
       }
 
