@@ -2246,6 +2246,24 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libGlideFrom.erase(note);
                                     libGlide.erase(note);
                                     }
+                              // [levels] attackLevels (libraryNoteLevels): an attack's measured onset (a plain Performance note by
+                              // its patch's plainAttack, an attack with its own onset, smooth, by that one; else the articulation's
+                              // onset, the chord's latest, as its early start takes it), and every note's release
+                              libAttackOnset.erase(note);
+                              libReleaseMs.erase(note);
+                              if (libChoice && libChoice.articulation) {
+                                    const SoundLib::LibInstrument* ap = libPatches[libChoice.patch];
+                                    libReleaseMs[note] = SoundLib::laneRing(*ap, libChoice.articulation, {}) * 1000.0 / 2.0;
+                                    if (!from && !note->tieBack()) {
+                                          double onsetMs = libChoice.plain && std::isfinite(ap->plainAttackMs) ? ap->plainAttackMs : 0.0;
+                                          if (!libChoice.plain || perf.timedAttack)
+                                                for (const Note* n : note->chord()->notes())
+                                                      if (n->play())
+                                                            onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(perf.timedAttack, n->ppitch(), libOnsetByPitch));
+                                          if (onsetMs > 0)
+                                                libAttackOnset[note] = onsetMs;
+                                          }
+                                    }
                               if (from) {
                                     libGlideFrom[note] = from;
                                     // its velocity (the map's legatoVelocity, else the note's own): Spitfire's Performance
@@ -3982,6 +4000,79 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             switchTo(events->lower_bound(uArrive), uArrive, route, level, i->first, ev);
             return true;
             };
+      // [levels] attackLevels (branch attack-levels, 2026-10-22): an attack (a note-on that is no legato transition,
+      // libGlideFrom) with a measured onset (libAttackOnset: a plain Performance note's plainAttack, else its articulation's)
+      // whose route still rings the note before (that note's note-off less than its release ago, libReleaseMs: the map's
+      // release= to 30 dB under, else its patch's longest; or not ended yet) takes its CC11 level at its note-on + that
+      // onset, not with the note-on: before the attack is heard, the new level only lifts (or drops) what still sounds of
+      // the note before. Whence's Violas bar 12: the slur's first note (an attack after a staccato G4+50 on the same key,
+      // 116 ms gap) went from CC11 86 to 110 (the level rule's slur gain) with its note-on, 111 ms before the beat
+      // (plainShift), and raised the staccato's release +3.4 dB (+6.6 with even levels) before the beat: a level rise with
+      // no note under it (violas-slurstart's RESULT.md). Only when the moved level stays before the route's next note-on /
+      // note-off and before any CC11 or dynamics CC the score writes there (those map by the level in force), inside the
+      // chunk; CC11 levels only (a marcato's CC1 switches at the note-on, as transitionLevels). Even levels' glide starts
+      // there too (libAttackLevelAt)
+      const bool attackLevels = volume && score && Playback::on("levels/attackLevels", score);
+      auto attackSwitch = [&](EventMap::iterator i, int route, const LibLevel* level, const NPlayEvent& ev) {
+            const Note* note = ev.note();
+            if (!note || libGlideFrom.count(note))
+                  return false;
+            auto o = libAttackOnset.find(note);
+            if (o == libAttackOnset.end() || !(o->second > 0))
+                  return false;
+            auto a = active.find(route);
+            if (!cc11Only(level) || (a != active.end() && !cc11Only(a->second.level)))
+                  return false;
+            const double tOn = score->utick2utime(i->first);
+            // the note before on the route: its note-off (or still sounding: a note-on first)
+            const Note* before = nullptr;
+            double offT = -1;
+            for (auto j = i; j != events->begin();) {
+                  --j;
+                  if (tOn - score->utick2utime(j->first) > 30.0)
+                        break;
+                  const NPlayEvent& e = j->second;
+                  if (!e.isExternal() || e.librarySwitch() || routeOf(e) != route || e.type() != ME_NOTEON)
+                        continue;
+                  if (e.velo() == 0) {
+                        before = e.note();
+                        offT = score->utick2utime(j->first);
+                        break;
+                        }
+                  if (j->first < i->first) {             // (a note-on before it without its note-off: still sounding)
+                        before = e.note();
+                        offT = tOn;
+                        break;
+                        }
+                  }
+            if (!before)
+                  return false;
+            auto rel = libReleaseMs.find(before);
+            if (rel == libReleaseMs.end() || (tOn - offT) * 1000.0 >= rel->second)
+                  return false;
+            const int uAt = score->utime2utick(tOn + o->second / 1000.0);
+            if (uAt <= i->first || uAt >= utick2)
+                  return false;
+            for (auto j = std::next(i); j != events->end() && j->first <= uAt; ++j) {
+                  const NPlayEvent& e = j->second;
+                  if (j->first == i->first || !e.isExternal() || e.librarySwitch() || routeOf(e) != route)
+                        continue;
+                  if (e.type() == ME_NOTEON || e.type() == ME_NOTEOFF)
+                        return false;
+                  if (e.type() == ME_CONTROLLER && (e.controller() == CTRL_EXPRESSION || (dynamicsCC >= 0 && e.controller() == dynamicsCC)))
+                        return false;
+                  }
+            const int from = sentAt(i, route);
+            auto at = events->lower_bound(uAt);
+            const int to = level ? mapOf(*level, CTRL_EXPRESSION, valueAt(at, route, CTRL_EXPRESSION, fallbackOf(*level, CTRL_EXPRESSION)),
+                                         dynAt(at, route))
+                                 : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, library->expressionValue, 127) : 127);
+            if (from == to)
+                  return false;
+            switchTo(events->lower_bound(uAt), uAt, route, level, i->first, ev);
+            libAttackLevelAt[{ note, i->first }] = uAt;
+            return true;
+            };
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
             NPlayEvent& ev = i->second;
             if (!ev.isExternal() || ev.librarySwitch() || ev.libraryLevel())
@@ -4012,6 +4103,8 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   }
             if (ev.type() != ME_NOTEON || ev.velo() == 0)
                   continue;
+            if (!libAttackLevelAt.empty() && ev.note())
+                  libAttackLevelAt.erase({ ev.note(), i->first });
             auto a = active.find(route);
             if (a != active.end() && i->first == a->second.tick)
                   continue;                               // (a chord's note: the first one's level)
@@ -4020,6 +4113,8 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             if (!level && !active.count(route))
                   continue;
             if (transitionLevels && transitionSwitch(i, route, level, ev))
+                  continue;
+            if (attackLevels && attackSwitch(i, route, level, ev))
                   continue;
             switchTo(i, i->first, route, level, i->first, ev);
             }
@@ -4251,8 +4346,15 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                                                                k + 1 < ns.size() && ns[k + 1].joined ? ns[k + 1].on : -1.0));
                         dbs.push_back(ns[k].note->evenLevel());
                         }
-                  const int startTick = ns[s].tick;
-                  const int endTick = e + 1 < ns.size() ? ns[e + 1].tick : utick2;
+                  // ([levels] attackLevels: a note whose level went at its onset, libAttackLevelAt: the glide starts there, and
+                  // the run before ends there)
+                  auto levelTick = [&](const On& n) {
+                        auto at = libAttackLevelAt.find({ n.note, n.tick });
+                        return at == libAttackLevelAt.end() ? n.tick : at->second;
+                        };
+                  const int startTick = levelTick(ns[s]);
+                  const double tStart = startTick == ns[s].tick ? ns[s].on : score->utick2utime(startTick);
+                  const int endTick = e + 1 < ns.size() ? levelTick(ns[e + 1]) : utick2;
                   const NPlayEvent like = ns[s].it->second;
                   // the CC11s the route gets in the span (the per-note levels' schedule), and the value before it
                   std::vector<EventMap::iterator> existing;
@@ -4272,7 +4374,7 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                   double lastT = -1;
                   size_t x = 0;
                   for (int step = 0;; ++step) {
-                        const double t = ns[s].on + step * EvenLevels::STEP_MS / 1000.0;
+                        const double t = tStart + step * EvenLevels::STEP_MS / 1000.0;
                         const int tick = t < tEnd ? std::max(startTick, score->utime2utick(t)) : endTick;
                         // the span's own CC11s up to here: the base, mapped by the glide at their time
                         while (x < existing.size() && existing[x]->first <= tick && existing[x]->first < endTick) {
@@ -6497,6 +6599,9 @@ void MidiRenderer::updateState()
             libBend.clear();
             libGlideFrom.clear();
             libGlide.clear();
+            libAttackOnset.clear();
+            libReleaseMs.clear();
+            libAttackLevelAt.clear();
             libSpeed.clear();
             libSpellKey.clear();
             libSpellCents.clear();

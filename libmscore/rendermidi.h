@@ -145,6 +145,14 @@ class MidiRenderer {
       // past the next note-on, up to the next transition's leave: libraryPitchBends)
       struct LibGlide { double leaveMs; double arriveMs; double smoothingMs { 0 }; bool uncut { false }; };
       std::map<const Note*, LibGlide> libGlide;
+      // [levels] attackLevels (libraryNoteLevels): a library attack's (no legato transition) measured onset, ms after its
+      // note-on (a plain Performance note: its patch's plainAttack; else its articulation's attack onset, startOnset), and
+      // every library note's release (its articulation's release= to 30 dB under, else its patch's longest: laneRing / 2)
+      std::map<const Note*, double> libAttackOnset;
+      std::map<const Note*, double> libReleaseMs;
+      // (note, its note-on's utick) -> the utick its level went at instead (libraryNoteLevels; libraryEvenLevels starts and
+      // ends its glide there)
+      std::map<std::pair<const Note*, int>, int> libAttackLevelAt;
       // [slurs] speedFromWritten (soundlibrary.h speedFromWritten): a legato note-on's speed controller value, from the written
       // spacing (SoundLib::speedValue); put right before the note-on on its route (librarySpeeds)
       std::map<const Note*, int> libSpeed;
