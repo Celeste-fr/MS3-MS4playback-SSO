@@ -53,7 +53,8 @@ Windows build #472 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/ru
 the VM (private `check472/RESULT.md`): every export event but CC11 identical to #470; CC11 differs only at the 19 moved
 rises; Violas bar 12's rise before the slur's beat +3.4 -> +1.1 dB (even levels +6.6 -> +1.1); #471's two regressions
 (drops moved) back to #470's within 0.1 dB; Ample identical; repeat check pass. Installed on the VM at `C:\claude\b472\ms`.
-(#471 moved drops too: skipped.)
+(#471 moved drops too: skipped.) The owner, on #472: "hell yeah whence finally sounds good now" (2026-10-23): the
+Recommended preset at 4055da9f06 is his reference for Whence; a later sound change on it needs his ear again.
 
 ## Attack levels (branch `attack-levels`, 2026-10-22/23, from integrate-1017 8a827c2026; not merged)
 
