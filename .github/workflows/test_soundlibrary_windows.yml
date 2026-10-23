@@ -84,6 +84,12 @@ jobs:
         SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%CD%\msvc.install_x64\bin;%PATH%"
         IF NOT EXIST msvc.install_x64\bin\kthost.exe (ECHO kthost.exe is not in the install & exit /b 1)
         msvc.install_x64\bin\kthost.exe --help || exit /b 1
+    # (kheap.dll, MuseScore's allocator: tools/soundlibraries/kheap, audio/vst3/processallocator.h; next to
+    # MuseScore3Evo.exe, which loads it first thing in main())
+    - name: Check kheap is installed
+      shell: cmd
+      run: |
+        IF NOT EXIST msvc.install_x64\bin\kheap.dll (ECHO kheap.dll is not in the install & exit /b 1)
     # (on MSVC mtest/ is a project of its own, not in MuseScore's solution: its vcxproj is
     # built with MSBuild, which builds the projects it references too)
     - name: Build the sound library tests

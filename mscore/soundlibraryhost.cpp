@@ -20,6 +20,9 @@
 #include "libmscore/calibrationfile.h"
 #include "libmscore/renderpreflight.h"
 #include "soundlibrarycheck.h"
+#ifdef USE_VST3
+#include "audio/vst3/processallocator.h"
+#endif
 
 #include <algorithm>
 #include <chrono>
@@ -488,8 +491,27 @@ static bool writeFile(const QString& path, const QByteArray& data)
 static void logTime(const SoundLib::Library& library, const QString& line)
       {
       QFile f(setupFolder(library) + "/load times.log");
-      if (f.open(QIODevice::Append | QIODevice::Text))
-            f.write((QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss ") + line + "\n").toUtf8());
+      if (f.open(QIODevice::Append | QIODevice::Text)) {
+            const QString now = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss ");
+            // once per process and log: which allocator this process loads with (processallocator.h)
+            static QSet<QString> told;
+            static std::mutex toldMutex;
+            bool tell = false;
+            {
+                  std::lock_guard<std::mutex> lock(toldMutex);
+                  if (!told.contains(f.fileName())) {
+                        told.insert(f.fileName());
+                        tell = true;
+                        }
+            }
+#ifdef USE_VST3
+            if (tell)
+                  f.write((now + "allocator: " + QString::fromUtf8(ProcessAllocator::description()) + "\n").toUtf8());
+#else
+            Q_UNUSED(tell);
+#endif
+            f.write((now + line + "\n").toUtf8());
+            }
       }
 
 void SoundLibraryHost::logLoadTime(const SoundLib::Library& library, const QString& line)

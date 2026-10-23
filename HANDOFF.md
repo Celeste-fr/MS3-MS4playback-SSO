@@ -49,27 +49,31 @@ per slot); MuseScore's own work is about 4 % of a score open.
 ## SSO load: the allocator (branch `sso-load`, 2026-10-23, from integrate-1017 7a6e1e9f0c; not merged)
 
 The owner, 2026-10-23: "is there any way for sso to load faster, taking the ableton optimization repo as example".
-Details, every number and the raw data: `~/MuseScore/ms3fork/private/sso-load/RESULT.md` (outside the repo).
+Then (the coordinator, after the owner's PC run): ship it, always on. Details and raw data:
+`~/MuseScore/ms3fork/private/sso-load/RESULT.md` (outside the repo).
 - The ableton-optimization approach (cache repeated file / registry / shell lookups) has nothing to cache here: on the
-  owner's PC (2026-10-18 kit) setState's file and registry calls are 0.04 s of 1.3-2.6 s, the background preload's .nkx
-  reopens 0.33 s; on the VM they cost more only because the samples come over SMB (`ZwCreateFile` ~3 % of setState).
-- Where setState's CPU goes (VM, sampled; the owner's PC alike): Kontakt's own code ~65 % (KSP compile about half of
-  it), **the C runtime's heap 16-21 %** (`RtlpLowFragHeapAllocFromContext`, `RtlpSubSegmentInitialize`,
-  `RtlAllocateHeap`: PC 20.7 %), memset / memcpy 3-4 %, syscalls the rest. Violins 1 - Performance's setState makes
-  **18.9 million malloc calls** from Kontakt (2.2 GB; 1.5 million freed during it).
-- `tools/soundlibraries/kheap`: mimalloc answers the CRT's malloc family (MinHook on ucrtbase; foreign blocks to the
-  CRT). Time inside the allocator for that setState 2.73 s -> 1.31 s; page faults -23 %; setState 7 of 8 alternating
-  pairs faster, median -12 % (VM, Violins 1 + Celli - Performance); Whence's ten states -12 % median over 9 + 11 runs
-  (VM noise ±30 %: the host is the owner's PC); **memory +17 %** (Whence 11.3 -> 13.3 GB). Segment heap (IFEO): less
-  memory (10.1 GB), no clear speed change.
-- **Null test** (VM, Kontakt 8 + SSO, build 472, Whence `--verify-playback --verify-wav`, kheap injected with launchw,
-  plain / mi / mi / plain, `compare_renders.py -`): every part's plain - mi at the floor of two identical passes
-  (Violins 2 -85.6 / -85.1 dB against -86.1 / -85.3; Basses -24.1 / -22.7 against -22.8 / -24.2; Violins 1, Violas,
-  Celli at their Performance floors -5 .. -10 dB; per-note maxima inside the floors').
-- Not in MuseScore yet: shipping it means MuseScore loading the allocator before Kontakt (kheap's hooks, or mimalloc's
-  own redirect DLL linked first) for the whole process. Waits for the owner's PC numbers: kit
-  `~/MuseScore/ms3fork/private/sso-load/pc-kit/sso-load-kit.zip` (ten loads of the last-used prepared states, plain /
-  mimalloc alternating; not sent).
+  owner's PC setState's file and registry calls are 0.04 s of 1.3-2.6 s.
+- Where setState's CPU goes (sampled, VM and PC alike): Kontakt's code ~65 % (KSP compile about half), **the C
+  runtime's heap 16-21 %** (PC 20.7 %), memset / memcpy 3-4 %. Violins 1 - Performance's setState makes 18.9 million
+  malloc calls from Kontakt (2.2 GB).
+- mimalloc in its place (`tools/soundlibraries/kheap`): time inside the allocator 2.73 -> 1.31 s for that setState.
+  **Owner's PC** (Ryzen 5 5600X, 48 GB, Kontakt 8.13.1, his 15 last-used prepared states, 5 + 5 alternating, the kit
+  private/sso-load/pc-kit): setState in all plain 54.3 / 50.5 / 56.7 / 73.1 / 126.9 s (median 56.7), mimalloc 42.2 /
+  42.7 / 48.2 / 49.3 / 91.4 s (median 48.2): **-15 %**; CPU medians 59.9 -> 49.5 s; memory 14.5 -> 16.9 GB (+17 %).
+  VM (paired runs): -12 %. Segment heap: less memory, no clear speed change.
+- Null test of the injected DLL (VM, build 472, Whence `--verify-playback --verify-wav`, plain / mi / mi / plain): every
+  part at the floor of two identical passes (Violins 2 -85.6 / -85.1 dB against -86.1 / -85.3; Basses -24.1 / -22.7
+  against -22.8 / -24.2; the Performance parts at their floors).
+- **Shipped (this branch):** `main()` calls `ProcessAllocator::start()` first (`audio/vst3/processallocator.*`):
+  kheap.dll from MuseScore's folder, pinned, `kheap_start("mi")`. All 26 hooks are made, then enabled at once, or
+  none (system allocator). A block mimalloc doesn't own always goes back to the CRT (also the reallocs: moved into
+  mimalloc or left the CRT's); the whole `_aligned` family is answered (the CRT's returns pointers inside malloc
+  blocks that mi_free can't take); ntdll's HeapFree / HeapSize / HeapReAlloc give mimalloc blocks to mimalloc;
+  nothing is undone at exit (mimalloc's destroy_on_exit off, `MI_SKIP_COLLECT_ON_EXIT`), so Qt's and the CRT's
+  teardown and `Vst3Plugin::unloadModules`' ExitDll free safely. `MS_KHEAP_OFF=1`: the system allocator; no kheap.dll:
+  the system allocator. load times.log: "allocator: mimalloc (kheap.dll: mimalloc 2.1.7, 23 hooks)" / "system (…)".
+  Stress test (VM and wine): blocks across the switch, every function, 8 threads: 0 failures. Linux: all fork tests pass.
+- The VM checks of the shipped build: see below (the build's numbers).
 
 ## Build for the owner: #472 (2026-10-23)
 

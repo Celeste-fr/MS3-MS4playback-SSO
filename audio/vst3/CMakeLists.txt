@@ -25,6 +25,8 @@ add_library(vst3host STATIC
       playbackverify.h
       pluginstate.cpp
       pluginstate.h
+      processallocator.cpp
+      processallocator.h
       vst3plugin.cpp
       vst3plugin.h
       vst3synth.cpp
