@@ -47,6 +47,7 @@
 #include "libmscore/mscore.h"
 #include "libmscore/note.h"
 #include "libmscore/part.h"
+#include "libmscore/playbackaudit.h"
 #include "libmscore/score.h"
 #include "libmscore/sig.h"
 #include "libmscore/soundlibrary.h"
@@ -110,6 +111,8 @@ struct NoteRec {
       int key { -1 };               // where it plays: 1000 + the library slot, else the MIDI channel
       QString articulation;         // the library's articulation it plays (its last switch on the slot)
       bool sustained { true };      // that articulation is held (long, legato, tremolo, trill)
+      double cents { 0 };           // its tuning against the key it is sent on (the playback audit's row)
+      double expected { -1 };       // s after its note-on its sound is expected (the audit's predicted arrival - sent); -1: none
       };
 
 // a library articulation held for the note's length, not a short or plucked sample
@@ -187,6 +190,64 @@ static std::vector<NoteRec> renderedNotes(MasterScore* score, const EventMap& ev
                   }
             }
       return notes;
+      }
+
+//---------------------------------------------------------
+//   expectedOnsets
+//    each library note's tuning and expected latency, from the playback audit's rows (PlaybackAudit::render + audit:
+//    the renderer's own model, the map's onsets, plainShift, a transition's modelled arrival; VERIFY.md › Playback
+//    audit), matched by track, key and sent time. (The audit renders in chunks as playback does, the verification
+//    the score at once: their leads may differ by a constant, taken as the median difference.) Returns the notes
+//    matched
+//---------------------------------------------------------
+
+static int expectedOnsets(MasterScore* score, std::vector<NoteRec>* notes)
+      {
+      EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;
+      PlaybackAudit::render(score, &events, &trace);
+      score->setPlaylistDirty();
+      const PlaybackAudit::Report report = PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+      std::map<std::pair<int, int>, std::vector<const PlaybackAudit::NoteRow*>> rows;     // (track, key) -> rows
+      for (const PlaybackAudit::NoteRow& r : report.rows)
+            rows[{ r.track, r.pitch }].push_back(&r);
+      auto sentOf = [](const PlaybackAudit::NoteRow* r) { return r->written + r->sentMs / 1000.0; };
+      auto candidates = [&](const NoteRec& n) -> const std::vector<const PlaybackAudit::NoteRow*>* {
+            if (!n.note || n.key < 1000)
+                  return nullptr;
+            const auto i = rows.find({ n.note->track(), n.pitch });
+            return i == rows.end() ? nullptr : &i->second;
+            };
+      // the lead between the two renders: the median of each note's nearest row's difference
+      std::vector<double> d;
+      for (const NoteRec& n : *notes)
+            if (const auto* c = candidates(n)) {
+                  double best = 1e9;
+                  for (const PlaybackAudit::NoteRow* r : *c)
+                        if (std::fabs(n.on - sentOf(r)) < std::fabs(best))
+                              best = n.on - sentOf(r);
+                  if (std::fabs(best) < 0.5)
+                        d.push_back(best);
+                  }
+      if (d.empty())
+            return 0;
+      std::nth_element(d.begin(), d.begin() + long(d.size() / 2), d.end());
+      const double lead = d[d.size() / 2];
+      int matched = 0;
+      for (NoteRec& n : *notes)
+            if (const auto* c = candidates(n)) {
+                  const PlaybackAudit::NoteRow* best = nullptr;
+                  for (const PlaybackAudit::NoteRow* r : *c)
+                        if (!best || std::fabs(n.on - lead - sentOf(r)) < std::fabs(n.on - lead - sentOf(best)))
+                              best = r;
+                  if (!best || std::fabs(n.on - lead - sentOf(best)) > 0.005)
+                        continue;
+                  ++matched;
+                  n.cents = best->cents;
+                  if (best->hasArrival)
+                        n.expected = std::max(0.0, (best->arrivalMs - best->sentMs) / 1000.0);
+                  }
+      return matched;
       }
 
 //---------------------------------------------------------
@@ -769,6 +830,8 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
             n.sustained = all[size_t(i)].sustained;
             n.group = all[size_t(i)].key;
             n.legato = all[size_t(i)].articulation.contains("legato", Qt::CaseInsensitive);
+            n.cents = all[size_t(i)].cents;
+            n.expected = all[size_t(i)].expected;
             n.id = i;
             notes.push_back(n);
             }
@@ -779,6 +842,7 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
             PV::Settings rs = settings;
             rs.offsetFrom = -0.05;
             rs.offsetTo = 0.5;
+            rs.expectedOnsets = false;          // (the built-in synth plays on time)
             refResult = PV::analyse(*refSpec, notes, rs);
             }
       PV::Spectrogram spec(lib, rate);
@@ -834,7 +898,7 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
       QFile ntsv(QFileInfo(clipDir).absolutePath() + "/" + clipPrefix + " notes.tsv");
       if (!shareable && !r.noteChecks.empty() && ntsv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
             ntsv.write("time\tlength\tpitch\tslot\tarticulation\tlegato\tsustained\triseDb\trefRiseDb\tafterDb\trefAfterDb\tdeficitDb"
-                       "\tcutBins\tdropDb\trefDropDb\tflagged\n");
+                       "\tcutBins\tdropDb\trefDropDb\tflagged\tcents\texpectedMs\tunclear\n");
             for (size_t i = 0; i < notes.size() && i < r.noteChecks.size(); ++i) {
                   const PV::NoteCheck& c = r.noteChecks[i];
                   const NoteRec& nr = all[size_t(notes[i].id)];
@@ -845,7 +909,8 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
                                   QString::number(c.rise, 'f', 1), QString::number(c.refRise, 'f', 1), QString::number(c.after, 'f', 1),
                                   QString::number(c.refAfter, 'f', 1), QString::number(c.deficit, 'f', 1), QString::number(c.cutBins),
                                   QString::number(std::max(c.drop, -200.0), 'f', 1), QString::number(std::max(c.refDrop, -200.0), 'f', 1),
-                                  QString::number(int(flaggedNotes.count(int(i)))) };
+                                  QString::number(int(flaggedNotes.count(int(i)))), QString::number(nr.cents, 'f', 2),
+                                  QString::number(nr.expected >= 0 ? nr.expected * 1000 : -1.0, 'f', 1), QString::number(int(c.unclear)) };
                   ntsv.write((f.join("\t") + "\n").toUtf8());
                   }
             }
@@ -936,6 +1001,16 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
       part->insert("notes", int(notes.size()));
       part->insert("strikes", r.strikes);
       part->insert("offset", std::round(r.offset * 10000) / 10000);
+      part->insert("offsetFrom", r.expectedOffset ? "expected onsets" : "search");
+      if (r.expectedOffset) {
+            part->insert("expectedLatency", std::round(r.expectedLatency * 10000) / 10000);
+            part->insert("offsetAtEdge", r.offsetAtEdge);
+            }
+      part->insert("searchOffset", std::round(r.searchOffset * 10000) / 10000);
+      part->insert("offsetRival", std::round(r.offsetRival * 10000) / 10000);
+      part->insert("offsetMargin", std::round(std::min(r.offsetMargin, 99.0) * 10000) / 10000);
+      part->insert("offsetAmbiguous", r.offsetAmbiguous);
+      part->insert("offsetUnclear", r.offsetUnclear);
       part->insert("referenceOffset", std::round(refResult.offset * 10000) / 10000);
       part->insert("peakDb", std::round(r.peakDb * 10) / 10);
       part->insert("weakStrikes", r.weakStrikes);
@@ -962,6 +1037,16 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
       part->insert("findings", findings);
       QString head = QString(" %1 (%2): %3 notes, %4 strikes, offset %5 ms")
                      .arg(a.name, a.patches).arg(notes.size()).arg(r.strikes).arg(r.offset * 1000, 0, 'f', 0);
+      if (r.expectedOffset)
+            head += QString(" (by the expected onsets, median %1 ms, +-%2 ms%3; the flux alone: %4 ms, margin %5 %)")
+                    .arg(r.expectedLatency * 1000, 0, 'f', 0).arg(settings.expectedWindow * 1000, 0, 'f', 0)
+                    .arg(r.offsetAtEdge ? ", AT THE EDGE: the model may be off" : "").arg(r.searchOffset * 1000, 0, 'f', 0)
+                    .arg(std::min(r.offsetMargin, 99.0) * 100, 0, 'f', 1);
+      else
+            head += QString(" (margin %1 % over %2 ms%3)").arg(std::min(r.offsetMargin, 99.0) * 100, 0, 'f', 1)
+                    .arg(r.offsetRival * 1000, 0, 'f', 0)
+                    .arg(r.offsetAmbiguous ? QString(": OFFSET AMBIGUOUS, %1 legato missing note(s) unclear, not flagged").arg(r.offsetUnclear)
+                                           : QString());
       if (!r.windows.empty())
             head += QString(" (per 30 s window %1 … %2 ms)").arg(lo * 1000, 0, 'f', 0).arg(hi * 1000, 0, 'f', 0);
       head += QString("; weak attacks %1 (not flagged: %2 also weak in the built-in synth, %3 with their notes at their level); "
@@ -1038,7 +1123,17 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
       score->setPlaylistDirty();
       if (libEvents.empty())
             return fail("no events (an empty score?)");
-      const std::vector<NoteRec> notes = renderedNotes(score.get(), libEvents);
+      std::vector<NoteRec> notes = renderedNotes(score.get(), libEvents);
+      // each library note's tuning and expected latency (the detector's partials and offset: OPEN_ITEMS.md item 32)
+      if (library && !notes.empty()) {
+            const int matched = expectedOnsets(score.get(), &notes);
+            int expected = 0;
+            for (const NoteRec& n : notes)
+                  expected += n.expected >= 0;
+            js["notesWithExpectedOnset"] = expected;
+            log(QString("%1: %2 library notes matched to the playback audit's rows, %3 with an expected onset")
+                .arg(name).arg(matched).arg(expected));
+            }
       // the library's events as rendered (what the plug-ins get), for looking into a finding
       {
             QFile ev(report->folder + "/" + safeName(QFileInfo(path).completeBaseName()) + " events.tsv");

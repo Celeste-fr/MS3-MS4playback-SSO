@@ -527,7 +527,13 @@ Keep this file current: close an item by deleting it (the commit message says wh
     Live's automatic updates off on the VM, or keep 12.4.7. Also in Live's log: another session's control surface
     ("Tester", looking up tracks such as '7-Timps') is active in the VM's Live.
 
-32. **Verify detector false positives on Performance legato** (private `bars9-12/SILENT.md`, build #454):
+32. **Verify detector false positives on Performance legato** (private `bars9-12/SILENT.md`, build #454). **Fixed
+    (the first three) 2026-10-23, branch `verify-detector`** (Missing tools #8; VERIFY.md › Detector regression): the
+    offset by each note's expected latency (the audit's model) with a ±60 ms residual, else the margin and "offset
+    ambiguous"; a short legato note's peak window; fractional bins; and, found on the regression, the held level as the
+    mean power from 40 to 70 % (two points read the kept Celli F#3 at 32.76 s 21 dB under at a dip). Whence #454: false
+    positives 2 → 0, dropped Celli notes found 2 → 3 of 4 (bar 13's Eb3 still missed). Left: the fourth point below, and
+    no Windows run of the new detector yet (the next build's verify run on Whence will show it). Was:
     - Offset alias: `bestOffset`'s onset-flux curve is flat for soft legato parts (V2 0.060 s within 0.6 % of the
       chosen 0.335 s; Celli 1.2 %; Violas 0.1 %), so a part is read one note late: V2 C6 "24 dB under" is a false
       positive (−9.5 dB at the real offset). Fix: report the curve's margin and mark "offset ambiguous" (< ~3 % above
@@ -708,8 +714,14 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
   and `clips.py measure` (what the clip itself plays: leave and arrival per transition) (TOOLS.md › 2a). Left: the
   "tap" page (the owner taps where he hears each onset: data for the onset rule, item 16).
 
-### 8. Verify-detector fixes as a tested tool
-- **Spec**: in `audio/vst3/playbackverify.*`: offset margin + "offset ambiguous", expected-onset alignment ±60 ms,
+### 8. Verify-detector fixes as a tested tool: BUILT (branch `verify-detector`, 2026-10-23)
+- **Built**: `audio/vst3/playbackverify.*` (`Note::cents` / `expected`, `offsetCurve`, `Settings::expectedOnsets` /
+  `offsetMargin` / `heldMean` / `shortPeak` / `tunedBins`, `Result::offset*`), `mscore/playbackverify.cpp`
+  (`expectedOnsets`: cents and latencies from the playback audit's rows; report.json / notes.tsv fields),
+  `tools/playbackverify/verify_detector.py` (the replica) + `test_verify_detector.py`, `regression/whence_expect.json` +
+  `whence_features.json`, `tst_soundlibrary::playbackVerifyOffset` / `ShortLegato` / `QuarterTones` / `Regression`
+  (private renders). Before / after on Whence #454: false positives 2 → 0, dropped notes found 2 → 3 of 4 (item 32).
+- **Spec** (as asked): in `audio/vst3/playbackverify.*`: offset margin + "offset ambiguous", expected-onset alignment ±60 ms,
   short-legato peak window, fractional (cents) bins; a Python replica (`offset_curve.py`, `legato_level.py` moved into
   `tools/playbackverify/`) and a regression set from Whence bar 8's known false positives and the Celli chord notes
   (true positives).
