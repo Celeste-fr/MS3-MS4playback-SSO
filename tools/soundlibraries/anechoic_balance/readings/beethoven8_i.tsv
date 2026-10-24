@@ -1,0 +1,703 @@
+# piece: Beethoven, Symphony No. 8 in F major, Op. 93, I. Allegro vivace e con brio, bars 1-110
+# edition: Breitkopf & Haertel, Beethovens Werke Serie 1 No. 8 (IMSLP #61814), pdf <work>/dl/scores/b8.pdf
+# page 3: bars 1-11
+# page 4: bars 12-23 (two systems: 12-17, 18-23)
+# page 5: bars 24-41 (24-29, 30-41)
+# page 6: bars 42-62 (42-51, 52-62)
+# page 7: bars 63-85 (63-74, 75-85)
+# page 8: bars 86-101 (86-94, 95-101)
+# page 9: bars 102-112 in system 1 (102, 103 = 1st ending, 104 = 2nd ending, 105-112); system 2 is bars 113ff (not transcribed)
+# time signature 3/4 throughout; beat unit = quarter note (3 beats per bar)
+# bar numbering: counted from the movement start; the 1st ending (repeat back to bar 1) is bar 103, the 2nd ending bar 104, so the development begins 105
+# staves: Flauti, Oboi, Clarinetti in B, Fagotti, Corni in F, Trombe in F (two players per staff), Timpani in F.C., Violino I, II, Viola, Violoncello, Basso (cello and bass on separate staves throughout)
+# shared staves: a player was taken to rest where a whole-bar rest is printed under/over the other voice; one notehead with stems up and down = both play (no a2 text in this edition)
+# a dynamic printed once on a shared staff is given to each player who plays
+# notes end = end of the last note before a rest of a whole bar or longer
+# not transcribed as rows (no level change): tempo words ritard. (bars 43, 51, 53, 62) / a tempo (44, 52, 54), staccato dots, written-out tremolo slashes (vl2 52-62, vl2/vla 63-66 etc.)
+# doubts: pp at 55:1 and 59:1 read as timp's (sits between timp and vl1); cl2 at 84:3; both bassoons in bar 91; hn2 at 62:1 (single notehead, given to both)
+# columns: part	type	start	end	value	comment
+fl1	notes	1:1	4:2		
+fl1	dyn	1:1		f	
+fl1	notes	8:2	9:1		
+fl1	dyn	8:2		p	
+fl1	notes	10:1	32:1.5		
+fl1	dyn	10:1		f	
+fl1	accent	28:3		sf	
+fl1	accent	29:3		sf	
+fl1	accent	30:3		sf	
+fl1	accent	31:3		sf	
+fl1	notes	45:3	82:2		
+fl1	dyn	45:3		p	printed p dolce
+fl1	text	45:3		dolce	
+fl1	dyn	52:1		pp	
+fl1	dyn	56:1		pp	
+fl1	cresc	58:1	62:1	text	cresc. from 58; next marking sf at 62
+fl1	accent	62:1		sf	bar 62 ritard.
+fl1	accent	63:1		sf	
+fl1	accent	64:1		sf	
+fl1	accent	65:1		sf	
+fl1	dyn	66:1		ff	
+fl1	dyn	72:3		p	printed p dolce
+fl1	text	72:3		dolce	
+fl1	dyn	80:1		ff	
+fl1	notes	85:3	105:2		
+fl1	dyn	85:3		p	printed p dol.
+fl1	text	85:3		dolce	printed dol.
+fl1	cresc	91:1	92:1	text	bsn: uncertain whether both bassoons play bar 91
+fl1	dyn	92:1		f	
+fl1	accent	92:2		sf	
+fl1	accent	93:1		sf	
+fl1	accent	94:1		sf	
+fl1	accent	95:1		sf	
+fl1	dyn	96:1		ff	
+fl1	accent	100:1		sf	
+fl1	accent	101:1		sf	
+fl1	accent	102:1		sf	
+fl1	accent	103:1		sf	1st ending
+fl1	accent	104:1		sf	2nd ending
+fl2	notes	1:1	4:2		
+fl2	dyn	1:1		f	
+fl2	notes	10:1	32:1.5		bars 24-32 unison: stems up and down, double ties
+fl2	dyn	10:1		f	
+fl2	accent	28:3		sf	
+fl2	accent	29:3		sf	
+fl2	accent	30:3		sf	
+fl2	accent	31:3		sf	
+fl2	notes	51:3	55:1		
+fl2	dyn	51:3		p	
+fl2	dyn	52:1		pp	
+fl2	notes	56:1	82:2		
+fl2	dyn	56:1		pp	
+fl2	cresc	58:1	62:1	text	cresc. from 58; next marking sf at 62
+fl2	accent	62:1		sf	bar 62 ritard.
+fl2	accent	63:1		sf	
+fl2	accent	64:1		sf	
+fl2	accent	65:1		sf	
+fl2	dyn	66:1		ff	
+fl2	dyn	77:3		p	
+fl2	dyn	80:1		ff	
+fl2	notes	87:3	90:2		bar 91 fl2 whole rest
+fl2	dyn	87:3		p	
+fl2	notes	92:1	105:2		
+fl2	dyn	92:1		f	
+fl2	accent	92:2		sf	
+fl2	accent	93:1		sf	
+fl2	accent	94:1		sf	
+fl2	accent	95:1		sf	
+fl2	dyn	96:1		ff	
+fl2	accent	100:1		sf	
+fl2	accent	101:1		sf	
+fl2	accent	102:1		sf	
+fl2	accent	103:1		sf	1st ending
+fl2	accent	104:1		sf	2nd ending
+ob1	notes	1:1	4:2		
+ob1	dyn	1:1		f	
+ob1	notes	6:1	9:1		
+ob1	dyn	6:1		p	printed p dolce
+ob1	text	6:1		dolce	
+ob1	notes	10:1	32:1.5		
+ob1	dyn	10:1		f	
+ob1	accent	28:3		sf	
+ob1	accent	29:3		sf	
+ob1	accent	30:3		sf	
+ob1	accent	31:3		sf	
+ob1	notes	45:3	82:2		
+ob1	dyn	45:3		p	printed p dolce
+ob1	text	45:3		dolce	
+ob1	dyn	52:1		pp	
+ob1	dyn	56:1		pp	
+ob1	cresc	58:1	62:1	text	cresc. from 58; next marking sf at 62
+ob1	accent	62:1		sf	bar 62 ritard.
+ob1	accent	63:1		sf	
+ob1	accent	64:1		sf	
+ob1	accent	65:1		sf	
+ob1	dyn	66:1		ff	
+ob1	dyn	72:3		p	printed p dolce
+ob1	text	72:3		dolce	
+ob1	dyn	80:1		ff	
+ob1	notes	85:3	105:2		
+ob1	dyn	85:3		p	printed p dol.
+ob1	text	85:3		dolce	printed dol.
+ob1	cresc	91:1	92:1	text	bsn: uncertain whether both bassoons play bar 91
+ob1	dyn	92:1		f	
+ob1	accent	92:2		sf	
+ob1	accent	93:1		sf	
+ob1	accent	94:1		sf	
+ob1	accent	95:1		sf	
+ob1	dyn	96:1		ff	
+ob1	accent	100:1		sf	
+ob1	accent	101:1		sf	
+ob1	accent	102:1		sf	
+ob1	accent	103:1		sf	1st ending
+ob1	accent	104:1		sf	2nd ending
+ob1	notes	110:1	110:4		continues past bar 110
+ob1	dyn	110:1		p	printed p dolce
+ob1	text	110:1		dolce	
+ob2	notes	1:1	4:2		
+ob2	dyn	1:1		f	
+ob2	notes	7:2	9:1		
+ob2	dyn	7:2		p	
+ob2	notes	10:1	32:1.5		
+ob2	dyn	10:1		f	
+ob2	accent	28:3		sf	
+ob2	accent	29:3		sf	
+ob2	accent	30:3		sf	
+ob2	accent	31:3		sf	
+ob2	notes	51:3	55:1		
+ob2	dyn	51:3		p	
+ob2	dyn	52:1		pp	
+ob2	notes	56:1	72:3		
+ob2	dyn	56:1		pp	
+ob2	cresc	58:1	62:1	text	cresc. from 58; next marking sf at 62
+ob2	accent	62:1		sf	bar 62 ritard.
+ob2	accent	63:1		sf	
+ob2	accent	64:1		sf	
+ob2	accent	65:1		sf	
+ob2	dyn	66:1		ff	
+ob2	notes	80:1	82:2		
+ob2	dyn	80:1		ff	
+ob2	notes	92:1	105:2		
+ob2	dyn	92:1		f	
+ob2	accent	92:2		sf	
+ob2	accent	93:1		sf	
+ob2	accent	94:1		sf	
+ob2	accent	95:1		sf	
+ob2	dyn	96:1		ff	
+ob2	accent	100:1		sf	
+ob2	accent	101:1		sf	
+ob2	accent	102:1		sf	
+ob2	accent	103:1		sf	1st ending
+ob2	accent	104:1		sf	2nd ending
+cl1	notes	1:1	4:2		
+cl1	dyn	1:1		f	
+cl1	notes	5:1	9:1		
+cl1	dyn	5:1		p	printed p dolce
+cl1	text	5:1		dolce	
+cl1	notes	10:1	32:1.5		
+cl1	dyn	10:1		f	
+cl1	accent	28:3		sf	
+cl1	accent	29:3		sf	
+cl1	accent	30:3		sf	
+cl1	accent	31:3		sf	
+cl1	notes	62:1	72:3		
+cl1	accent	62:1		sf	bar 62 ritard.
+cl1	accent	63:1		sf	
+cl1	accent	64:1		sf	
+cl1	accent	65:1		sf	
+cl1	dyn	66:1		ff	
+cl1	notes	75:3	82:2		
+cl1	dyn	75:3		p	
+cl1	dyn	80:1		ff	
+cl1	notes	84:3	105:2		
+cl1	dyn	84:3		p	printed p dolce
+cl1	text	84:3		dolce	
+cl1	cresc	91:1	92:1	text	bsn: uncertain whether both bassoons play bar 91
+cl1	dyn	92:1		f	
+cl1	accent	92:2		sf	
+cl1	accent	93:1		sf	
+cl1	accent	94:1		sf	
+cl1	accent	95:1		sf	
+cl1	dyn	96:1		ff	
+cl1	accent	100:1		sf	
+cl1	accent	101:1		sf	
+cl1	accent	102:1		sf	
+cl1	accent	103:1		sf	1st ending
+cl1	accent	104:1		sf	2nd ending
+cl1	notes	109:1	110:2		
+cl1	dyn	109:1		p	printed p dolce
+cl1	text	109:1		dolce	
+cl2	notes	1:1	4:2		
+cl2	dyn	1:1		f	
+cl2	notes	5:1	9:1		
+cl2	dyn	5:1		p	printed p dolce
+cl2	text	5:1		dolce	
+cl2	notes	10:1	32:1.5		
+cl2	dyn	10:1		f	
+cl2	accent	28:3		sf	
+cl2	accent	29:3		sf	
+cl2	accent	30:3		sf	
+cl2	accent	31:3		sf	
+cl2	notes	62:1	72:3		
+cl2	accent	62:1		sf	bar 62 ritard.
+cl2	accent	63:1		sf	
+cl2	accent	64:1		sf	
+cl2	accent	65:1		sf	
+cl2	dyn	66:1		ff	
+cl2	notes	75:3	82:2		
+cl2	dyn	75:3		p	
+cl2	dyn	80:1		ff	
+cl2	notes	84:3	105:2		uncertain: 84:3 may be cl1 alone (two voices clear from bar 85)
+cl2	dyn	84:3		p	printed p dolce
+cl2	text	84:3		dolce	
+cl2	cresc	91:1	92:1	text	bsn: uncertain whether both bassoons play bar 91
+cl2	dyn	92:1		f	
+cl2	accent	92:2		sf	
+cl2	accent	93:1		sf	
+cl2	accent	94:1		sf	
+cl2	accent	95:1		sf	
+cl2	dyn	96:1		ff	
+cl2	accent	100:1		sf	
+cl2	accent	101:1		sf	
+cl2	accent	102:1		sf	
+cl2	accent	103:1		sf	1st ending
+cl2	accent	104:1		sf	2nd ending
+bsn1	notes	1:1	4:2		
+bsn1	dyn	1:1		f	
+bsn1	notes	5:1	9:1		
+bsn1	dyn	5:1		p	printed p dolce
+bsn1	text	5:1		dolce	
+bsn1	notes	10:1	32:1.5		
+bsn1	dyn	10:1		f	
+bsn1	accent	28:3		sf	
+bsn1	accent	29:3		sf	
+bsn1	accent	30:3		sf	
+bsn1	accent	31:3		sf	
+bsn1	notes	36:1	44:2		bars 36-44 bsn1 alone (whole rests below)
+bsn1	dyn	36:1		p	
+bsn1	notes	45:3	72:3		
+bsn1	dyn	45:3		p	printed p dolce
+bsn1	text	45:3		dolce	
+bsn1	dyn	52:1		pp	
+bsn1	cresc	58:1	62:1	text	cresc. from 58; next marking sf at 62
+bsn1	accent	62:1		sf	bar 62 ritard.
+bsn1	accent	63:1		sf	
+bsn1	accent	64:1		sf	
+bsn1	accent	65:1		sf	
+bsn1	dyn	66:1		ff	
+bsn1	notes	74:3	105:2		
+bsn1	dyn	74:3		p	
+bsn1	dyn	80:1		ff	
+bsn1	dyn	82:3		p	printed p dolce
+bsn1	text	82:3		dolce	
+bsn1	cresc	91:1	92:1	text	bsn: uncertain whether both bassoons play bar 91
+bsn1	dyn	92:1		f	
+bsn1	accent	92:2		sf	
+bsn1	accent	93:1		sf	
+bsn1	accent	94:1		sf	
+bsn1	accent	95:1		sf	
+bsn1	dyn	96:1		ff	
+bsn1	accent	100:1		sf	
+bsn1	accent	101:1		sf	
+bsn1	accent	102:1		sf	
+bsn1	accent	103:1		sf	1st ending
+bsn1	accent	104:1		sf	2nd ending
+bsn1	notes	108:1	109:2		
+bsn1	dyn	108:1		p	printed p dolce
+bsn1	text	108:1		dolce	
+bsn2	notes	1:1	4:2		
+bsn2	dyn	1:1		f	
+bsn2	notes	5:1	9:1		
+bsn2	dyn	5:1		p	printed p dolce
+bsn2	text	5:1		dolce	
+bsn2	notes	10:1	32:1.5		
+bsn2	dyn	10:1		f	
+bsn2	accent	28:3		sf	
+bsn2	accent	29:3		sf	
+bsn2	accent	30:3		sf	
+bsn2	accent	31:3		sf	
+bsn2	notes	51:3	72:3		
+bsn2	dyn	51:3		p	
+bsn2	dyn	52:1		pp	
+bsn2	cresc	58:1	62:1	text	cresc. from 58; next marking sf at 62
+bsn2	accent	62:1		sf	bar 62 ritard.
+bsn2	accent	63:1		sf	
+bsn2	accent	64:1		sf	
+bsn2	accent	65:1		sf	
+bsn2	dyn	66:1		ff	
+bsn2	notes	73:3	82:2		
+bsn2	dyn	73:3		p	
+bsn2	dyn	80:1		ff	
+bsn2	notes	83:3	105:2		
+bsn2	dyn	83:3		p	
+bsn2	cresc	91:1	92:1	text	bsn: uncertain whether both bassoons play bar 91
+bsn2	dyn	92:1		f	
+bsn2	accent	92:2		sf	
+bsn2	accent	93:1		sf	
+bsn2	accent	94:1		sf	
+bsn2	accent	95:1		sf	
+bsn2	dyn	96:1		ff	
+bsn2	accent	100:1		sf	
+bsn2	accent	101:1		sf	
+bsn2	accent	102:1		sf	
+bsn2	accent	103:1		sf	1st ending
+bsn2	accent	104:1		sf	2nd ending
+hn1	notes	1:1	4:2		
+hn1	dyn	1:1		f	
+hn1	notes	6:1	9:1		
+hn1	dyn	6:1		p	printed p dolce
+hn1	text	6:1		dolce	
+hn1	notes	10:1	32:1.5		
+hn1	dyn	10:1		f	
+hn1	accent	28:3		sf	
+hn1	accent	29:3		sf	
+hn1	accent	30:3		sf	
+hn1	accent	31:3		sf	
+hn1	notes	51:2	59:4		
+hn1	dyn	51:2		p	
+hn1	dyn	52:1		pp	
+hn1	cresc	58:1	62:1	text	cresc. from 58; next marking sf at 62
+hn1	notes	62:1	72:3		
+hn1	accent	62:1		sf	bar 62 ritard.
+hn1	accent	63:1		sf	
+hn1	accent	64:1		sf	
+hn1	accent	65:1		sf	
+hn1	dyn	66:1		ff	
+hn1	notes	75:3	78:2		unison D, stems up and down
+hn1	dyn	75:3		p	
+hn1	notes	80:1	82:2		
+hn1	dyn	80:1		ff	
+hn1	notes	83:3	88:2		
+hn1	dyn	83:3		p	
+hn1	notes	92:1	105:2		
+hn1	dyn	92:1		f	
+hn1	accent	92:2		sf	
+hn1	accent	93:1		sf	
+hn1	accent	94:1		sf	
+hn1	accent	95:1		sf	
+hn1	dyn	96:1		ff	
+hn1	accent	100:1		sf	
+hn1	accent	101:1		sf	
+hn1	accent	102:1		sf	
+hn1	accent	103:1		sf	1st ending
+hn1	accent	104:1		sf	2nd ending
+hn2	notes	1:1	4:2		
+hn2	dyn	1:1		f	
+hn2	notes	6:1	9:1		
+hn2	dyn	6:1		p	printed p dolce
+hn2	text	6:1		dolce	
+hn2	notes	10:1	32:1.5		
+hn2	dyn	10:1		f	
+hn2	accent	28:3		sf	
+hn2	accent	29:3		sf	
+hn2	accent	30:3		sf	
+hn2	accent	31:3		sf	
+hn2	notes	51:2	59:4		
+hn2	dyn	51:2		p	
+hn2	dyn	52:1		pp	
+hn2	cresc	58:1	62:1	text	cresc. from 58; next marking sf at 62
+hn2	notes	62:1	72:3		
+hn2	accent	62:1		sf	bar 62 ritard.
+hn2	accent	63:1		sf	
+hn2	accent	64:1		sf	
+hn2	accent	65:1		sf	
+hn2	dyn	66:1		ff	
+hn2	notes	75:3	78:2		unison D, stems up and down
+hn2	dyn	75:3		p	
+hn2	notes	80:1	82:2		
+hn2	dyn	80:1		ff	
+hn2	notes	83:3	88:2		
+hn2	dyn	83:3		p	
+hn2	notes	92:1	105:2		
+hn2	dyn	92:1		f	
+hn2	accent	92:2		sf	
+hn2	accent	93:1		sf	
+hn2	accent	94:1		sf	
+hn2	accent	95:1		sf	
+hn2	dyn	96:1		ff	
+hn2	accent	100:1		sf	
+hn2	accent	101:1		sf	
+hn2	accent	102:1		sf	
+hn2	accent	103:1		sf	1st ending
+hn2	accent	104:1		sf	2nd ending
+tr1	notes	1:1	4:2		
+tr1	dyn	1:1		f	
+tr1	notes	10:1	32:1.5		
+tr1	dyn	10:1		f	
+tr1	accent	28:3		sf	
+tr1	accent	29:3		sf	
+tr1	accent	30:3		sf	
+tr1	accent	31:3		sf	
+tr1	notes	55:1	56:2		
+tr1	dyn	55:1		pp	
+tr1	notes	59:1	60:1		
+tr1	dyn	59:1		pp	
+tr1	notes	64:1	72:3		
+tr1	accent	64:1		sf	
+tr1	accent	65:1		sf	
+tr1	dyn	66:1		ff	
+tr1	notes	80:1	82:2		
+tr1	dyn	80:1		ff	
+tr1	notes	92:1	105:2		
+tr1	dyn	92:1		f	
+tr1	accent	92:2		sf	
+tr1	accent	93:1		sf	
+tr1	accent	94:1		sf	
+tr1	accent	95:1		sf	
+tr1	dyn	96:1		ff	
+tr1	accent	100:1		sf	
+tr1	accent	101:1		sf	
+tr1	accent	102:1		sf	
+tr1	accent	103:1		sf	1st ending
+tr1	accent	104:1		sf	2nd ending
+tr2	notes	1:1	4:2		
+tr2	dyn	1:1		f	
+tr2	notes	10:1	32:1.5		
+tr2	dyn	10:1		f	
+tr2	accent	28:3		sf	
+tr2	accent	29:3		sf	
+tr2	accent	30:3		sf	
+tr2	accent	31:3		sf	
+tr2	notes	55:1	56:2		
+tr2	dyn	55:1		pp	
+tr2	notes	59:1	60:1		
+tr2	dyn	59:1		pp	
+tr2	notes	64:1	72:3		
+tr2	accent	64:1		sf	
+tr2	accent	65:1		sf	
+tr2	dyn	66:1		ff	
+tr2	notes	80:1	82:2		
+tr2	dyn	80:1		ff	
+tr2	notes	92:1	105:2		
+tr2	dyn	92:1		f	
+tr2	accent	92:2		sf	
+tr2	accent	93:1		sf	
+tr2	accent	94:1		sf	
+tr2	accent	95:1		sf	
+tr2	dyn	96:1		ff	
+tr2	accent	100:1		sf	
+tr2	accent	101:1		sf	
+tr2	accent	102:1		sf	
+tr2	accent	103:1		sf	1st ending
+tr2	accent	104:1		sf	2nd ending
+timp	notes	1:1	4:2		
+timp	dyn	1:1		f	
+timp	notes	10:1	32:1.5		
+timp	dyn	10:1		f	
+timp	text	20:1		tr	trill on the dotted half
+timp	text	22:1		tr	trill on the dotted half
+timp	text	24:1		tr	trill on the dotted half
+timp	text	26:1		tr	trill on the dotted half
+timp	text	28:1		tr	trill on the dotted half
+timp	accent	28:3		sf	
+timp	text	29:1		tr	trill on the dotted half
+timp	accent	29:3		sf	
+timp	accent	30:3		sf	
+timp	accent	31:3		sf	
+timp	notes	55:1	56:2		
+timp	dyn	55:1		pp	uncertain: pp printed between timp and vl1 staves, read as timp's (vl1 also starts a note here)
+timp	notes	59:1	60:1		
+timp	dyn	59:1		pp	uncertain: as at 55, pp between timp and vl1 staves, read as timp's
+timp	notes	64:1	72:3		
+timp	accent	64:1		sf	
+timp	accent	65:1		sf	
+timp	dyn	66:1		ff	
+timp	notes	80:1	82:2		
+timp	dyn	80:1		ff	
+timp	notes	92:1	92:2		
+timp	dyn	92:1		f	
+timp	notes	94:1	94:2		
+timp	accent	94:1		sf	
+timp	notes	96:1	105:2		
+timp	dyn	96:1		ff	
+timp	text	96:1	100:1	tr	trill with wavy line bars 96-99
+timp	accent	100:1		sf	
+timp	accent	101:1		sf	
+timp	accent	102:1		sf	
+timp	accent	103:1		sf	1st ending
+timp	accent	104:1		sf	2nd ending
+vl1	notes	1:1	4:2		
+vl1	dyn	1:1		f	
+vl1	notes	9:1	32:1.5		
+vl1	dyn	9:1		f	
+vl1	accent	10:1		sf	
+vl1	accent	28:3		sf	
+vl1	accent	29:3		sf	
+vl1	accent	30:3		sf	
+vl1	accent	31:3		sf	
+vl1	notes	34:1	36:2		
+vl1	dyn	34:1		p	
+vl1	notes	37:3	51:4		
+vl1	dyn	37:3		sempre p	
+vl1	text	46:1		pizz.	
+vl1	notes	53:1	55:2		
+vl1	text	53:1		arco	
+vl1	dyn	53:1		pp	
+vl1	notes	57:1	72:3		
+vl1	cresc	58:1	60:1	text	next marking sf at 60
+vl1	accent	60:1		sf	
+vl1	accent	62:1		sf	bar 62 ritard.
+vl1	accent	63:1		sf	
+vl1	accent	64:1		sf	
+vl1	accent	65:1		sf	
+vl1	dyn	66:1		ff	
+vl1	notes	74:1.5	82:2		
+vl1	dyn	74:1.5		p	
+vl1	dyn	80:1		ff	
+vl1	notes	84:1.5	105:2		
+vl1	dyn	84:1.5		p	
+vl1	cresc	90:2	92:1	text	
+vl1	dyn	92:1		f	
+vl1	accent	92:2		sf	
+vl1	accent	93:1		sf	
+vl1	accent	94:1		sf	
+vl1	accent	95:1		sf	
+vl1	dyn	96:1		ff	
+vl1	accent	100:1		sf	
+vl1	accent	101:1		sf	
+vl1	accent	102:1		sf	
+vl1	accent	103:1		sf	1st ending
+vl1	accent	104:1		sf	2nd ending
+vl1	notes	106:1	110:4		bars 108-110 double stops (two notes per stem), no div. printed
+vl1	dyn	106:1		p	
+vl2	notes	1:1	4:2		
+vl2	dyn	1:1		f	
+vl2	notes	9:1	32:1.5		
+vl2	dyn	9:1		f	
+vl2	accent	10:1		sf	
+vl2	accent	28:3		sf	
+vl2	accent	29:3		sf	
+vl2	accent	30:3		sf	
+vl2	accent	31:3		sf	
+vl2	notes	34:1	36:2		
+vl2	dyn	34:1		p	
+vl2	notes	37:3	72:3		
+vl2	dyn	37:3		sempre p	
+vl2	text	46:1		pizz.	
+vl2	text	52:1		arco	
+vl2	dyn	52:1		pp	
+vl2	cresc	58:1	60:1	text	next marking sf at 60
+vl2	accent	60:1		sf	
+vl2	accent	62:1		sf	bar 62 ritard.
+vl2	accent	63:1		sf	
+vl2	accent	64:1		sf	
+vl2	accent	65:1		sf	
+vl2	dyn	66:1		ff	
+vl2	notes	73:3	82:2		
+vl2	dyn	73:3		p	
+vl2	dyn	80:1		ff	
+vl2	notes	83:3	105:2		
+vl2	dyn	83:3		p	
+vl2	cresc	90:2	92:1	text	
+vl2	dyn	92:1		f	
+vl2	accent	92:2		sf	
+vl2	accent	93:1		sf	
+vl2	accent	94:1		sf	
+vl2	accent	95:1		sf	
+vl2	dyn	96:1		ff	
+vl2	accent	100:1		sf	
+vl2	accent	101:1		sf	
+vl2	accent	102:1		sf	
+vl2	accent	103:1		sf	1st ending
+vl2	accent	104:1		sf	2nd ending
+vl2	notes	106:1	110:4		
+vl2	dyn	106:1		p	
+vla	notes	1:1	4:2		
+vla	dyn	1:1		f	
+vla	notes	9:1	32:1.5		
+vla	dyn	9:1		f	
+vla	accent	28:3		sf	
+vla	accent	29:3		sf	
+vla	accent	30:3		sf	
+vla	accent	31:3		sf	
+vla	notes	34:1	36:2		
+vla	dyn	34:1		p	
+vla	notes	37:3	44:2		
+vla	text	37:3		pizz.	
+vla	notes	46:1	51:4		
+vla	notes	53:1	55:2		
+vla	text	53:1		arco	
+vla	dyn	53:1		pp	
+vla	notes	57:1	72:3		
+vla	cresc	58:1	60:1	text	next marking sf at 60
+vla	accent	60:1		sf	
+vla	accent	62:1		sf	bar 62 ritard.
+vla	accent	63:1		sf	
+vla	accent	64:1		sf	
+vla	accent	65:1		sf	
+vla	dyn	66:1		ff	
+vla	notes	80:1	110:4		
+vla	dyn	80:1		ff	
+vla	dyn	82:3		p	printed p dolce
+vla	text	82:3		dolce	
+vla	cresc	90:1	92:1	text	
+vla	dyn	92:1		f	
+vla	accent	92:2		sf	
+vla	accent	93:1		sf	
+vla	accent	94:1		sf	
+vla	accent	95:1		sf	
+vla	dyn	96:1		ff	
+vla	accent	100:1		sf	
+vla	accent	101:1		sf	
+vla	accent	102:1		sf	
+vla	accent	103:1		sf	1st ending
+vla	accent	104:1		sf	2nd ending
+vla	dyn	105:2.5		p	
+vc	notes	1:1	4:2		
+vc	dyn	1:1		f	
+vc	notes	9:1	32:1.5		
+vc	dyn	9:1		f	
+vc	accent	28:3		sf	
+vc	accent	29:3		sf	
+vc	accent	30:3		sf	
+vc	accent	31:3		sf	
+vc	notes	37:3	44:2		
+vc	text	37:3		pizz.	
+vc	dyn	37:3		p	
+vc	notes	46:1	51:4		
+vc	notes	52:1	53:2		
+vc	text	52:1		arco	
+vc	dyn	52:1		pp	
+vc	notes	55:1	57:2		
+vc	notes	59:1	72:3		
+vc	cresc	59:1	61:1	text	next marking sf at 61
+vc	accent	61:1		sf	
+vc	accent	62:1		sf	bar 62 ritard.
+vc	accent	63:1		sf	
+vc	accent	64:1		sf	
+vc	accent	65:1		sf	
+vc	dyn	66:1		ff	
+vc	notes	80:1	105:2		
+vc	dyn	80:1		ff	
+vc	dyn	82:3		p	printed p dolce
+vc	text	82:3		dolce	
+vc	cresc	90:1	92:1	text	
+vc	dyn	92:1		f	
+vc	accent	92:2		sf	
+vc	accent	93:1		sf	
+vc	accent	94:1		sf	
+vc	accent	95:1		sf	
+vc	dyn	96:1		ff	
+vc	accent	100:1		sf	
+vc	accent	101:1		sf	
+vc	accent	102:1		sf	
+vc	accent	103:1		sf	1st ending
+vc	accent	104:1		sf	2nd ending
+kb	notes	1:1	4:2		
+kb	dyn	1:1		f	
+kb	notes	9:1	32:1.5		
+kb	dyn	9:1		f	
+kb	accent	28:3		sf	
+kb	accent	29:3		sf	
+kb	accent	30:3		sf	
+kb	accent	31:3		sf	
+kb	notes	37:3	44:2		
+kb	text	37:3		pizz.	
+kb	dyn	37:3		p	
+kb	notes	46:1	51:4		
+kb	notes	52:1	53:2		
+kb	text	52:1		arco	
+kb	dyn	52:1		pp	
+kb	notes	55:1	57:2		
+kb	notes	59:1	72:3		
+kb	cresc	59:1	61:1	text	next marking sf at 61
+kb	accent	61:1		sf	
+kb	accent	62:1		sf	bar 62 ritard.
+kb	accent	63:1		sf	
+kb	accent	64:1		sf	
+kb	accent	65:1		sf	
+kb	dyn	66:1		ff	
+kb	notes	80:1	82:2		
+kb	dyn	80:1		ff	
+kb	notes	90:1	105:2		
+kb	cresc	90:1	92:1	text	
+kb	dyn	92:1		f	
+kb	accent	92:2		sf	
+kb	accent	93:1		sf	
+kb	accent	94:1		sf	
+kb	accent	95:1		sf	
+kb	dyn	96:1		ff	
+kb	accent	100:1		sf	
+kb	accent	101:1		sf	
+kb	accent	102:1		sf	
+kb	accent	103:1		sf	1st ending
+kb	accent	104:1		sf	2nd ending

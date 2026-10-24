@@ -1,0 +1,2483 @@
+# piece: Gustav Mahler, Symphony No. 1 in D major, movement IV "Stürmisch bewegt", bars 1-85 (+ bar 86 for context)
+# edition: Universal Edition full score (plate U.E. 2931), IMSLP #17070; pdf: <work>/dl/scores/mahler1.pdf
+# pages (pdf page -> printed page: bars):
+# page 93 (p.95): bars 1-7
+# page 94 (p.96): bars 8-14 (rehearsal 2 = bar 13)
+# page 95 (p.97): bars 15-20 (rehearsal 3 = bar 19)
+# page 96 (p.98): bars 21-28
+# page 97 (p.99): bars 29-36 (rehearsal 4 = bar 30)
+# page 98 (p.100): bars 37-43 (rehearsal 5 = bar 37)
+# page 99 (p.101): bars 44-51
+# page 100 (p.102): bars 52-59 (rehearsal 6 "Energisch" = bar 55)
+# page 101 (p.103): bars 60-67 (rehearsal 7 = bar 67)
+# page 102 (p.104): bars 68-75
+# page 103 (p.105): bars 76-83
+# page 104 (p.106): bars 84-89 (rehearsal 8 = bar 86); only 84-86 transcribed
+# time signature: alla breve (cut time) throughout bars 1-86, tempo "Stürmisch bewegt (half = 92)"; bar 1 is a full bar (quarter rest + dotted half).
+# beat unit: QUARTER NOTE, 4 beats per bar (12:2.5 = the eighth after beat 2 of bar 12).
+# notes rows: start = first note; end = bar:beat where the LAST note before a rest of >= 1 bar STARTS (its duration is not added).
+#   Spans separated by less than about one bar of rest were merged. Spans running past bar 86 end at 86:4.
+# part ids:
+#   picc1/picc2 = the "1.2. Piccolo (3.4. Flöte)" staff. The score says these players are FLUTES 3 AND 4: "nehmen gr. Flöten" at bar 31,
+#     they play flute (fl3/fl4 here) on the "1.2.3.4. Fl." staff bars 37-51, "3.u.4. Flöte nehmen 1.u.2. Piccolo" at bar 51, piccolo again from 73:4.
+#   fl1/fl2 = the "1.2. Flöte" staff. NOTE: the task suggested the opposite (picc players = fl1/fl2, flute staff = fl3/fl4); this file follows the
+#     score's own numbering. If the recording follows the task's scheme, swap fl1<->fl3 and fl2<->fl4.
+#   Staff groupings change from page to page (oboes 1.2.3 / 4, then 1.4 / 2.3, 1.2.3.4, 1.2 / 3.4, 1 / 2.3 / 4; clarinets 1.2.3 / 4, 1.2 / 3 / 4,
+#     1 / 2.3 / 4; bassoons 1.2.3, 1.2 / 3, 1 / 2.3; horns 1-4 / 5-7, 1.3.5 / 2.4.6.7, 1.3 / 2.4 / 5.6.7, 1.3 / 2.4 / 5.7 / 6, 1.2 / 3.4 / 5.6 / 7,
+#     1.3.5 / 2.6 / 4.7; trumpets 1.2 / 3.4; trombones 1.2 / "3. Pos. Tuba"). A dynamic printed once for a staff is given to every player who plays
+#     ("zu 2" etc.); where only one voice of a shared staff plays, rows name that player (e.g. tr1 bars 54-58, trb1 bars 73-77, hn5 bars 44-45).
+#   tuba plays on the "3. Pos. Tuba" staff only where the staff has two notes/voices (first at 12:3).
+#   timp1/timp2 = "1. Pauker"/"2. Pauker"; perc1 = Becken (cymbals; "mit Paukenschlägel (Holz)" bar 1, "mit Tellern" bar 8); perc2 = Grosse Trommel,
+#     and the separate "Triangel" staff (one note, 84:1, ff) is put on perc2 too - reassign if the recording has the triangle elsewhere.
+#   divisi: vl2 "geth." 25 and 45:3-50:2 (vl2a/vl2b rows for 45:3-50:2), vc "geth." 59 (vca/vcb), vl1 "geth." 82:2-83 (vl1a/vl1b); "nicht geth." = not divided.
+# accents: ^ (marcato) and > as printed; fp is an accent row. Strings bars 30-51 have ^ on the first note of many groups: summarised in comment rows.
+# doubts (all also marked "uncertain" in their rows):
+#   bar 10 trumpets 1.2: a held upper voice ending p and a lower voice "mit Dämpfer" ff triplet - assumed tr1 holds, tr2 plays the triplet.
+#   bar 9-10 trombones 1.2: upper voice tied to a p quarter at 10:1, lower voice ending 9:3 - assumed trb1 upper.
+#   hairpin directions read as < or > where the lines are thin: Becken 26-28 (<), trombones 1.2 bar 35-36 (>), 3 Pos./Tuba 37-38 (>).
+#   bar 67 horn staff "1.3.5." label read "III:" (taken as horns 1 and 3, horn 5 resting); bar 54:4 horns 3.4 "offen" note (one or both players).
+#   page 102 trombone staff labelled "1. Pos." (bars 73-77 assigned to trb1 only); page 104 lower trumpet staff labelled "4." with "zu 2" (read as 3.4).
+#   bar 73 a "p" printed near the horn 5.6 staff may belong to horns 3.4; bar 83 winds' ff printed between the 83:3 and 83:4 eighths (given to 83:4).
+#   bar 30: no ff printed for oboes 2.3, clarinets (C 1.2, 3, Eb) - only the < hairpin; bar 73 bassoons: < hairpin with no target dynamic.
+part	type	start	end	value	comment
+picc1	notes	1:2	4:4		
+picc1	text	1:2		zu 2	staff "1. 2. Piccolo (3. 4. Flöte)"
+picc1	dyn	1:2		ff	
+picc1	accent	1:2		^	
+picc1	accent	3:3		^	
+picc1	notes	8:3	9:1		triplet figure 8:3, tied eighth 9:1
+picc1	text	8:3		zu 2	
+picc1	text	8:3		sehr gestossen	
+picc1	dyn	8:3		fff	
+picc1	notes	18:2	19:1		run, eighth 19:1
+picc1	text	18:2		zu 2	
+picc1	dyn	18:2		ff	
+picc1	notes	21:3	30:1		whole tied, then tenuto quarters/halves
+picc1	text	21:3		zu 2	
+picc1	dyn	21:3		ff	
+picc1	dyn	23:1		ff	
+picc1	text	25:1		zu 2	
+picc1	dyn	25:1		ff	
+picc1	dim	26:1	26:4	hairpin	
+picc1	dyn	27:1		mf	
+picc1	cresc	29:2	30:1	hairpin	
+picc1	dyn	30:1		ff	
+picc1	text	31:1		nehmen gr. Flöten	piccolo players change to flute (next entry on flute)
+picc1	notes	73:4	83:1		82:1 eighth, 83:1 eighth
+picc1	text	73:4		zu 2.	piccolos (= flute 3 and 4 players)
+picc1	text	73:4		Piccolo 1 (= flute 3 player)	back on piccolo after "3.u.4. Flöte nehmen 1.u.2. Piccolo" (bar 51)
+picc1	dyn	73:4		ff	
+picc1	text	76:1		zu 2. (8va)	
+picc1	notes	84:2	85:3		
+picc1	text	84:2		zu 2 (8va)	
+picc2	notes	1:2	4:4		
+picc2	text	1:2		zu 2	staff "1. 2. Piccolo (3. 4. Flöte)"
+picc2	dyn	1:2		ff	
+picc2	accent	1:2		^	
+picc2	accent	3:3		^	
+picc2	notes	8:3	9:1		triplet figure 8:3, tied eighth 9:1
+picc2	text	8:3		zu 2	
+picc2	text	8:3		sehr gestossen	
+picc2	dyn	8:3		fff	
+picc2	notes	18:2	19:1		run, eighth 19:1
+picc2	text	18:2		zu 2	
+picc2	dyn	18:2		ff	
+picc2	notes	21:3	30:1		whole tied, then tenuto quarters/halves
+picc2	text	21:3		zu 2	
+picc2	dyn	21:3		ff	
+picc2	dyn	23:1		ff	
+picc2	text	25:1		zu 2	
+picc2	dyn	25:1		ff	
+picc2	dim	26:1	26:4	hairpin	
+picc2	dyn	27:1		mf	
+picc2	cresc	29:2	30:1	hairpin	
+picc2	dyn	30:1		ff	
+picc2	text	31:1		nehmen gr. Flöten	piccolo players change to flute (next entry on flute)
+picc2	notes	73:4	83:1		82:1 eighth, 83:1 eighth
+picc2	text	73:4		zu 2.	piccolos (= flute 3 and 4 players)
+picc2	text	73:4		Piccolo 2 (= flute 4 player)	back on piccolo after "3.u.4. Flöte nehmen 1.u.2. Piccolo" (bar 51)
+picc2	dyn	73:4		ff	
+picc2	text	76:1		zu 2. (8va)	
+picc2	notes	84:2	85:3		
+picc2	text	84:2		zu 2 (8va)	
+fl1	notes	1:2	6:1		eighth at 6:1
+fl1	text	1:2		zu 2	staff "1. 2. Flöte"
+fl1	dyn	1:2		ff	
+fl1	accent	1:2		^	
+fl1	accent	3:3		^	
+fl1	dim	4:1	5:1	text	
+fl1	dim	5:1	6:1	hairpin	"dim." + hairpin
+fl1	dyn	6:1		p	
+fl1	notes	8:3	9:1		
+fl1	text	8:3		zu 2	
+fl1	text	8:3		sehr gestossen	
+fl1	dyn	8:3		fff	
+fl1	notes	18:2	19:1		
+fl1	text	18:2		zu 2 (8va)	
+fl1	dyn	18:2		ff	
+fl1	notes	21:3	30:1		
+fl1	text	21:3		zu 2	
+fl1	dyn	21:3		ff	
+fl1	dyn	23:1		ff	
+fl1	text	25:1		zu 2	
+fl1	dyn	25:1		ff	
+fl1	dim	26:1	26:4	hairpin	
+fl1	dyn	27:1		mf	
+fl1	cresc	29:2	30:1	hairpin	
+fl1	dyn	30:1		ff	
+fl1	notes	37:3	45:4		half ^ tied through 40 to eighth 41:1; whole ^ tied
+fl1	text	37:3		zu 4	staff "1.2.3.4. Fl."; flutes 3-4 (fl3/fl4) = the piccolo players (picc1/picc2) after "nehmen gr. Flöten"
+fl1	dyn	37:3		ff	
+fl1	dyn	39:3		fff	
+fl1	accent	39:3		^	
+fl1	accent	42:1		^	no new dynamic
+fl1	text	44:1		zu 4	
+fl1	accent	44:1		^	no new dynamic (fff from 39:3)
+fl1	notes	47:1	47:4		
+fl1	accent	47:1		^	
+fl1	accent	47:1		fp	
+fl1	notes	49:1	50:1		
+fl1	accent	49:1		fp	
+fl1	notes	73:4	85:3		continuous to 83:4 and on
+fl1	text	73:4		zu 2.	
+fl1	dyn	73:4		ff	
+fl1	text	76:1		zu 2. (8va)	
+fl1	dyn	83:4		ff	printed between the 83:3 and 83:4 eighths
+fl1	text	84:1		zu 2	
+fl2	notes	1:2	6:1		eighth at 6:1
+fl2	text	1:2		zu 2	staff "1. 2. Flöte"
+fl2	dyn	1:2		ff	
+fl2	accent	1:2		^	
+fl2	accent	3:3		^	
+fl2	dim	4:1	5:1	text	
+fl2	dim	5:1	6:1	hairpin	"dim." + hairpin
+fl2	dyn	6:1		p	
+fl2	notes	8:3	9:1		
+fl2	text	8:3		zu 2	
+fl2	text	8:3		sehr gestossen	
+fl2	dyn	8:3		fff	
+fl2	notes	18:2	19:1		
+fl2	text	18:2		zu 2 (8va)	
+fl2	dyn	18:2		ff	
+fl2	notes	21:3	30:1		
+fl2	text	21:3		zu 2	
+fl2	dyn	21:3		ff	
+fl2	dyn	23:1		ff	
+fl2	text	25:1		zu 2	
+fl2	dyn	25:1		ff	
+fl2	dim	26:1	26:4	hairpin	
+fl2	dyn	27:1		mf	
+fl2	cresc	29:2	30:1	hairpin	
+fl2	dyn	30:1		ff	
+fl2	notes	37:3	45:4		half ^ tied through 40 to eighth 41:1; whole ^ tied
+fl2	text	37:3		zu 4	staff "1.2.3.4. Fl."; flutes 3-4 (fl3/fl4) = the piccolo players (picc1/picc2) after "nehmen gr. Flöten"
+fl2	dyn	37:3		ff	
+fl2	dyn	39:3		fff	
+fl2	accent	39:3		^	
+fl2	accent	42:1		^	no new dynamic
+fl2	text	44:1		zu 4	
+fl2	accent	44:1		^	no new dynamic (fff from 39:3)
+fl2	notes	47:1	47:4		
+fl2	accent	47:1		^	
+fl2	accent	47:1		fp	
+fl2	notes	49:1	50:1		
+fl2	accent	49:1		fp	
+fl2	notes	73:4	85:3		continuous to 83:4 and on
+fl2	text	73:4		zu 2.	
+fl2	dyn	73:4		ff	
+fl2	text	76:1		zu 2. (8va)	
+fl2	dyn	83:4		ff	printed between the 83:3 and 83:4 eighths
+fl2	text	84:1		zu 2	
+fl3	notes	37:3	45:4		half ^ tied through 40 to eighth 41:1; whole ^ tied
+fl3	text	37:3		zu 4	staff "1.2.3.4. Fl."; flutes 3-4 (fl3/fl4) = the piccolo players (picc1/picc2) after "nehmen gr. Flöten"
+fl3	text	37:3		Fl. 3 (= piccolo 1 player on flute)	on "1.2.3.4. Fl." zu 4 after "nehmen gr. Flöten" (bar 31)
+fl3	dyn	37:3		ff	
+fl3	dyn	39:3		fff	
+fl3	accent	39:3		^	
+fl3	accent	42:1		^	no new dynamic
+fl3	text	44:1		zu 4	
+fl3	accent	44:1		^	no new dynamic (fff from 39:3)
+fl3	notes	47:1	47:4		
+fl3	accent	47:1		^	
+fl3	accent	47:1		fp	
+fl3	notes	49:1	50:1		
+fl3	accent	49:1		fp	
+fl3	text	51:1		3.u.4. Flöte nehmen 1.u.2. Piccolo	flutes 3 and 4 change to piccolos 1 and 2
+fl4	notes	37:3	45:4		half ^ tied through 40 to eighth 41:1; whole ^ tied
+fl4	text	37:3		zu 4	staff "1.2.3.4. Fl."; flutes 3-4 (fl3/fl4) = the piccolo players (picc1/picc2) after "nehmen gr. Flöten"
+fl4	text	37:3		Fl. 4 (= piccolo 2 player on flute)	on "1.2.3.4. Fl." zu 4 after "nehmen gr. Flöten" (bar 31)
+fl4	dyn	37:3		ff	
+fl4	dyn	39:3		fff	
+fl4	accent	39:3		^	
+fl4	accent	42:1		^	no new dynamic
+fl4	text	44:1		zu 4	
+fl4	accent	44:1		^	no new dynamic (fff from 39:3)
+fl4	notes	47:1	47:4		
+fl4	accent	47:1		^	
+fl4	accent	47:1		fp	
+fl4	notes	49:1	50:1		
+fl4	accent	49:1		fp	
+fl4	text	51:1		3.u.4. Flöte nehmen 1.u.2. Piccolo	flutes 3 and 4 change to piccolos 1 and 2
+ob1	notes	1:2	6:1		
+ob1	text	1:2		zu 3	
+ob1	dyn	1:2		ff	
+ob1	accent	1:2		^	
+ob1	accent	3:3		^	
+ob1	dim	4:1	5:1	text	
+ob1	dim	5:1	6:1	hairpin	"dim." + hairpin
+ob1	dyn	6:1		p	
+ob1	notes	8:3	10:3		triplet + half
+ob1	text	8:3		zu 3	
+ob1	text	8:3		sehr gestossen	
+ob1	dyn	8:3		fff	
+ob1	text	10:1		zu 3	
+ob1	dyn	10:1		ff	
+ob1	notes	17:3	18:3		triplet + dotted half
+ob1	text	17:3		zu 2	staff "1.4. Ob."
+ob1	dyn	17:3		ff	
+ob1	notes	21:3	30:1		two voices (1. upper, 4. lower)
+ob1	text	21:3		zu 2	
+ob1	dyn	21:3		ff	
+ob1	dyn	23:1		ff	
+ob1	dyn	25:1		ff	
+ob1	dim	26:1	26:4	hairpin	
+ob1	dyn	27:1		mf	
+ob1	cresc	29:2	30:1	hairpin	
+ob1	dyn	30:1		ff	
+ob1	notes	32:3	33:4		
+ob1	text	32:3		zu 2	
+ob1	dyn	32:3		ff	
+ob1	dim	33:1	33:3	hairpin	
+ob1	notes	37:3	45:4		
+ob1	text	37:3		zu 2	
+ob1	dyn	37:3		ff	
+ob1	dyn	39:3		fff	
+ob1	accent	39:3		^	
+ob1	accent	42:1		^	
+ob1	text	44:1		zu 4	staff "1.2.3.4. Ob."
+ob1	accent	44:1		^	
+ob1	notes	47:1	47:4		
+ob1	accent	47:1		^	
+ob1	accent	47:1		fp	
+ob1	notes	49:1	50:1		
+ob1	accent	49:1		fp	
+ob1	notes	54:4	86:4		upbeat eighth, then melody 55-59; continuous 55-67 and on; melody continuing from page 101; upper voice only in bar 86 (ob4 rests: uncertain)
+ob1	text	54:4		zu 4	
+ob1	dyn	54:4		ff	
+ob1	dyn	55:1		f	
+ob1	accent	55:1		^	
+ob1	accent	55:3		^	
+ob1	text	60:1		zu 2	
+ob1	accent	63:1		^	
+ob1	accent	64:1		^	
+ob1	dyn	67:1		ff	
+ob1	accent	67:1		^	
+ob1	accent	67:3		^	
+ob1	accent	68:1		^	
+ob1	dyn	73:4		ff	
+ob1	dyn	83:4		ff	printed between 83:3 and 83:4
+ob1	text	84:1		zu 2	
+ob1	accent	86:1		fp	
+ob2	notes	1:2	6:1		
+ob2	text	1:2		zu 3	
+ob2	dyn	1:2		ff	
+ob2	accent	1:2		^	
+ob2	accent	3:3		^	
+ob2	dim	4:1	5:1	text	
+ob2	dim	5:1	6:1	hairpin	"dim." + hairpin
+ob2	dyn	6:1		p	
+ob2	notes	8:3	10:3		triplet + half
+ob2	text	8:3		zu 3	
+ob2	text	8:3		sehr gestossen	
+ob2	dyn	8:3		fff	
+ob2	text	10:1		zu 3	
+ob2	dyn	10:1		ff	
+ob2	notes	17:3	18:3		
+ob2	text	17:3		zu 2	staff "2.3. Ob."
+ob2	dyn	17:3		ff	
+ob2	notes	21:3	30:1		two-note chord, tied whole notes
+ob2	text	21:3		zu 2	
+ob2	dyn	21:3		ff	
+ob2	dyn	23:1		ff	
+ob2	dyn	25:1		ff	
+ob2	dim	26:1	26:4	hairpin	
+ob2	dyn	27:1		mf	
+ob2	cresc	29:2	30:1	hairpin	no dynamic printed at 30:1
+ob2	notes	32:3	33:4		
+ob2	text	32:3		zu 2	
+ob2	dyn	32:3		ff	
+ob2	dim	33:1	33:3	hairpin	
+ob2	notes	35:1	45:4		
+ob2	text	35:1		zu 2	
+ob2	dyn	35:1		ff	
+ob2	dim	36:1	36:3	hairpin	
+ob2	text	37:3		zu 2	
+ob2	dyn	37:3		ff	
+ob2	dyn	39:3		fff	
+ob2	accent	39:3		^	
+ob2	accent	42:1		^	
+ob2	text	44:1		zu 4	staff "1.2.3.4. Ob."
+ob2	accent	44:1		^	
+ob2	notes	47:1	47:4		
+ob2	accent	47:1		^	
+ob2	accent	47:1		fp	
+ob2	notes	49:1	50:1		
+ob2	accent	49:1		fp	
+ob2	notes	54:4	85:4		upbeat eighth, then melody 55-59; continuous 55-67 and on; continuous; half tied to 73:3, then 73:4
+ob2	text	54:4		zu 4	
+ob2	dyn	54:4		ff	
+ob2	dyn	55:1		f	
+ob2	accent	55:1		^	
+ob2	accent	55:3		^	
+ob2	text	60:1		zu 2	
+ob2	accent	63:1		^	
+ob2	accent	64:1		^	
+ob2	dyn	67:1		ff	
+ob2	accent	67:1		^	
+ob2	accent	67:3		^	
+ob2	text	68:1		zu 2.	
+ob2	accent	68:1		^	
+ob2	cresc	73:1	73:3	hairpin	
+ob2	text	73:4		zu 2.	
+ob2	dyn	73:4		ff	
+ob2	text	76:1		zu 2.	
+ob2	dyn	83:4		ff	printed between 83:3 and 83:4
+ob2	text	84:1		zu 2	
+ob3	notes	1:2	6:1		
+ob3	text	1:2		zu 3	
+ob3	dyn	1:2		ff	
+ob3	accent	1:2		^	
+ob3	accent	3:3		^	
+ob3	dim	4:1	5:1	text	
+ob3	dim	5:1	6:1	hairpin	"dim." + hairpin
+ob3	dyn	6:1		p	
+ob3	notes	8:3	10:3		triplet + half
+ob3	text	8:3		zu 3	
+ob3	text	8:3		sehr gestossen	
+ob3	dyn	8:3		fff	
+ob3	text	10:1		zu 3	
+ob3	dyn	10:1		ff	
+ob3	notes	17:3	18:3		
+ob3	text	17:3		zu 2	staff "2.3. Ob."
+ob3	dyn	17:3		ff	
+ob3	notes	21:3	30:1		two-note chord, tied whole notes
+ob3	text	21:3		zu 2	
+ob3	dyn	21:3		ff	
+ob3	dyn	23:1		ff	
+ob3	dyn	25:1		ff	
+ob3	dim	26:1	26:4	hairpin	
+ob3	dyn	27:1		mf	
+ob3	cresc	29:2	30:1	hairpin	no dynamic printed at 30:1
+ob3	notes	32:3	33:4		
+ob3	text	32:3		zu 2	
+ob3	dyn	32:3		ff	
+ob3	dim	33:1	33:3	hairpin	
+ob3	notes	35:1	45:4		
+ob3	text	35:1		zu 2	
+ob3	dyn	35:1		ff	
+ob3	dim	36:1	36:3	hairpin	
+ob3	text	37:3		zu 2	
+ob3	dyn	37:3		ff	
+ob3	dyn	39:3		fff	
+ob3	accent	39:3		^	
+ob3	accent	42:1		^	
+ob3	text	44:1		zu 4	staff "1.2.3.4. Ob."
+ob3	accent	44:1		^	
+ob3	notes	47:1	47:4		
+ob3	accent	47:1		^	
+ob3	accent	47:1		fp	
+ob3	notes	49:1	50:1		
+ob3	accent	49:1		fp	
+ob3	notes	54:4	85:4		upbeat eighth, then melody 55-59; continuous; half tied to 73:3, then 73:4
+ob3	text	54:4		zu 4	
+ob3	dyn	54:4		ff	
+ob3	dyn	55:1		f	
+ob3	accent	55:1		^	
+ob3	accent	55:3		^	
+ob3	text	60:1		zu 2	
+ob3	accent	63:1		^	
+ob3	accent	64:1		^	
+ob3	dyn	67:1		ff	
+ob3	accent	67:1		^	
+ob3	accent	67:3		^	
+ob3	text	68:1		zu 2.	
+ob3	accent	68:1		^	
+ob3	cresc	73:1	73:3	hairpin	
+ob3	text	73:4		zu 2.	
+ob3	dyn	73:4		ff	
+ob3	text	76:1		zu 2.	
+ob3	dyn	83:4		ff	printed between 83:3 and 83:4
+ob3	text	84:1		zu 2	
+ob4	notes	1:2	5:1		quarter at 5:1
+ob4	dyn	1:2		ff	
+ob4	accent	1:2		^	
+ob4	accent	3:3		^	
+ob4	dim	4:1	5:1	text	
+ob4	notes	8:3	10:3		
+ob4	text	8:3		sehr gestossen	
+ob4	dyn	8:3		fff	
+ob4	dyn	10:1		ff	
+ob4	notes	17:3	18:3		triplet + dotted half
+ob4	text	17:3		zu 2	staff "1.4. Ob."
+ob4	dyn	17:3		ff	
+ob4	notes	21:3	30:1		two voices (1. upper, 4. lower)
+ob4	text	21:3		zu 2	
+ob4	dyn	21:3		ff	
+ob4	dyn	23:1		ff	
+ob4	dyn	25:1		ff	
+ob4	dim	26:1	26:4	hairpin	
+ob4	dyn	27:1		mf	
+ob4	cresc	29:2	30:1	hairpin	
+ob4	dyn	30:1		ff	
+ob4	notes	32:3	33:4		
+ob4	text	32:3		zu 2	
+ob4	dyn	32:3		ff	
+ob4	dim	33:1	33:3	hairpin	
+ob4	notes	37:3	45:4		
+ob4	text	37:3		zu 2	
+ob4	dyn	37:3		ff	
+ob4	dyn	39:3		fff	
+ob4	accent	39:3		^	
+ob4	accent	42:1		^	
+ob4	text	44:1		zu 4	staff "1.2.3.4. Ob."
+ob4	accent	44:1		^	
+ob4	notes	47:1	47:4		
+ob4	accent	47:1		^	
+ob4	accent	47:1		fp	
+ob4	notes	49:1	50:1		
+ob4	accent	49:1		fp	
+ob4	notes	54:4	85:4		upbeat eighth, then melody 55-59
+ob4	text	54:4		zu 4	
+ob4	dyn	54:4		ff	
+ob4	dyn	55:1		f	
+ob4	accent	55:1		^	
+ob4	accent	55:3		^	
+ob4	text	60:1		zu 2	
+ob4	accent	63:1		^	
+ob4	accent	64:1		^	
+ob4	dyn	67:1		ff	
+ob4	accent	67:1		^	
+ob4	accent	67:3		^	
+ob4	accent	68:1		^	
+ob4	cresc	73:1	73:3	hairpin	
+ob4	dyn	73:4		ff	
+ob4	dyn	83:4		ff	printed between 83:3 and 83:4
+ob4	text	84:1		zu 2	
+cl1	notes	1:2	6:1		
+cl1	text	1:2		zu 3	
+cl1	dyn	1:2		ff	
+cl1	accent	1:2		^	
+cl1	accent	3:3		^	
+cl1	dim	4:1	5:1	text	
+cl1	dim	5:1	6:1	hairpin	"dim." + hairpin
+cl1	dyn	6:1		p	
+cl1	notes	8:3	9:1		
+cl1	text	8:3		zu 3	
+cl1	text	8:3		sehr gestossen	
+cl1	dyn	8:3		fff	
+cl1	notes	17:3	18:3		
+cl1	text	17:3		zu 3	
+cl1	dyn	17:3		ff	
+cl1	notes	21:3	30:1		two voices bar 21; two-note chord, tied whole notes
+cl1	dyn	21:3		ff	
+cl1	text	23:1		zu 2	
+cl1	dyn	23:1		ff	
+cl1	dyn	25:1		ff	
+cl1	dim	26:1	26:4	hairpin	
+cl1	dyn	27:1		mf	
+cl1	cresc	29:2	30:1	hairpin	no dynamic printed at 30:1
+cl1	notes	32:3	33:4		
+cl1	text	32:3		zu 2	
+cl1	dyn	32:3		ff	
+cl1	dim	33:1	33:3	hairpin	
+cl1	notes	35:1	45:4		
+cl1	text	35:1		zu 2	
+cl1	dyn	35:1		ff	
+cl1	dim	36:1	36:3	hairpin	
+cl1	text	37:3		zu 3	staff "1.2.3. in C"
+cl1	dyn	37:3		ff	
+cl1	dyn	39:3		fff	
+cl1	accent	39:3		^	
+cl1	accent	42:1		^	
+cl1	text	44:1		zu 3	
+cl1	accent	44:1		^	
+cl1	notes	47:1	47:3		chord: half tied to eighth
+cl1	dyn	47:1		ff	
+cl1	notes	49:1	49:3		
+cl1	dyn	49:1		ff	
+cl1	notes	51:1	51:3		
+cl1	dyn	51:1		ff	
+cl1	notes	53:1	53:3		chord, half tied to eighth
+cl1	dyn	53:1		ff	
+cl1	notes	54:4	85:4		staff "1. in C"
+cl1	text	54:4		zu 3	
+cl1	dyn	54:4		ff	
+cl1	dyn	55:1		f	
+cl1	accent	55:1		^	
+cl1	accent	55:3		^	
+cl1	accent	63:1		^	
+cl1	accent	64:1		^	
+cl1	dyn	67:1		ff	
+cl1	accent	67:1		^	
+cl1	accent	67:3		^	
+cl1	accent	68:1		^	
+cl1	dyn	73:4		ff	
+cl1	dyn	83:4		ff	printed between 83:3 and 83:4
+cl2	notes	1:2	6:1		
+cl2	text	1:2		zu 3	
+cl2	dyn	1:2		ff	
+cl2	accent	1:2		^	
+cl2	accent	3:3		^	
+cl2	dim	4:1	5:1	text	
+cl2	dim	5:1	6:1	hairpin	"dim." + hairpin
+cl2	dyn	6:1		p	
+cl2	notes	8:3	9:1		
+cl2	text	8:3		zu 3	
+cl2	text	8:3		sehr gestossen	
+cl2	dyn	8:3		fff	
+cl2	notes	17:3	18:3		
+cl2	text	17:3		zu 3	
+cl2	dyn	17:3		ff	
+cl2	notes	21:3	30:1		two voices bar 21; two-note chord, tied whole notes
+cl2	dyn	21:3		ff	
+cl2	text	23:1		zu 2	
+cl2	dyn	23:1		ff	
+cl2	dyn	25:1		ff	
+cl2	dim	26:1	26:4	hairpin	
+cl2	dyn	27:1		mf	
+cl2	cresc	29:2	30:1	hairpin	no dynamic printed at 30:1
+cl2	notes	32:3	33:4		
+cl2	text	32:3		zu 2	
+cl2	dyn	32:3		ff	
+cl2	dim	33:1	33:3	hairpin	
+cl2	notes	35:1	45:4		
+cl2	text	35:1		zu 2	
+cl2	dyn	35:1		ff	
+cl2	dim	36:1	36:3	hairpin	
+cl2	text	37:3		zu 3	staff "1.2.3. in C"
+cl2	dyn	37:3		ff	
+cl2	dyn	39:3		fff	
+cl2	accent	39:3		^	
+cl2	accent	42:1		^	
+cl2	text	44:1		zu 3	
+cl2	accent	44:1		^	
+cl2	notes	47:1	47:3		chord: half tied to eighth
+cl2	dyn	47:1		ff	
+cl2	notes	49:1	49:3		
+cl2	dyn	49:1		ff	
+cl2	notes	51:1	51:3		
+cl2	dyn	51:1		ff	
+cl2	notes	53:1	53:3		chord, half tied to eighth
+cl2	dyn	53:1		ff	
+cl2	notes	54:4	86:4		continues into bar 86
+cl2	text	54:4		zu 3	
+cl2	dyn	54:4		ff	
+cl2	dyn	55:1		f	
+cl2	accent	55:1		^	
+cl2	accent	55:3		^	
+cl2	accent	63:1		^	
+cl2	accent	64:1		^	
+cl2	dyn	67:1		ff	
+cl2	accent	67:1		^	
+cl2	accent	67:3		^	
+cl2	text	68:1		zu 2.	staff "2.3."
+cl2	accent	68:1		^	
+cl2	cresc	73:1	73:3	hairpin	
+cl2	dyn	73:4		ff	
+cl2	text	76:1		zu 2.	
+cl2	dyn	83:4		ff	printed between 83:3 and 83:4
+cl2	text	84:1		zu 2	
+cl2	accent	86:1		fp	
+cl3	notes	1:2	6:1		
+cl3	text	1:2		zu 3	
+cl3	dyn	1:2		ff	
+cl3	accent	1:2		^	
+cl3	accent	3:3		^	
+cl3	dim	4:1	5:1	text	
+cl3	dim	5:1	6:1	hairpin	"dim." + hairpin
+cl3	dyn	6:1		p	
+cl3	notes	8:3	9:1		
+cl3	text	8:3		zu 3	
+cl3	text	8:3		sehr gestossen	
+cl3	dyn	8:3		fff	
+cl3	notes	17:3	18:3		
+cl3	text	17:3		zu 3	
+cl3	dyn	17:3		ff	
+cl3	notes	21:3	30:1		staff "3. in C"
+cl3	dyn	21:3		ff	
+cl3	dyn	23:1		ff	
+cl3	dyn	25:1		ff	
+cl3	dim	26:1	26:4	hairpin	
+cl3	dyn	27:1		mf	
+cl3	cresc	29:2	30:1	hairpin	no dynamic printed at 30:1
+cl3	notes	32:3	33:4		
+cl3	dyn	32:3		ff	
+cl3	dim	33:1	33:3	hairpin	
+cl3	notes	35:1	45:4		
+cl3	dyn	35:1		ff	
+cl3	dim	36:1	36:3	hairpin	
+cl3	text	37:3		zu 3	staff "1.2.3. in C"
+cl3	dyn	37:3		ff	
+cl3	dyn	39:3		fff	
+cl3	accent	39:3		^	
+cl3	accent	42:1		^	
+cl3	text	44:1		zu 3	
+cl3	accent	44:1		^	
+cl3	notes	47:1	47:3		chord: half tied to eighth
+cl3	dyn	47:1		ff	
+cl3	notes	49:1	49:3		
+cl3	dyn	49:1		ff	
+cl3	notes	51:1	51:3		
+cl3	dyn	51:1		ff	
+cl3	notes	53:1	53:3		chord, half tied to eighth
+cl3	dyn	53:1		ff	
+cl3	notes	54:4	86:4		continues into bar 86
+cl3	text	54:4		zu 3	
+cl3	dyn	54:4		ff	
+cl3	dyn	55:1		f	
+cl3	accent	55:1		^	
+cl3	accent	55:3		^	
+cl3	accent	63:1		^	
+cl3	accent	64:1		^	
+cl3	dyn	67:1		ff	
+cl3	accent	67:1		^	
+cl3	accent	67:3		^	
+cl3	text	68:1		zu 2.	staff "2.3."
+cl3	accent	68:1		^	
+cl3	cresc	73:1	73:3	hairpin	
+cl3	dyn	73:4		ff	
+cl3	text	76:1		zu 2.	
+cl3	dyn	83:4		ff	printed between 83:3 and 83:4
+cl3	text	84:1		zu 2	
+cl3	accent	86:1		fp	
+cl4	notes	1:2	5:1		
+cl4	text	1:2		mindestens doppelt besetzt	staff label
+cl4	dyn	1:2		ff	
+cl4	accent	1:2		^	
+cl4	accent	3:3		^	
+cl4	dim	4:1	5:1	text	
+cl4	notes	8:3	9:1		
+cl4	text	8:3		sehr gestossen	
+cl4	dyn	8:3		fff	
+cl4	notes	21:3	30:1		
+cl4	dyn	21:3		ff	
+cl4	dyn	23:1		ff	
+cl4	dyn	25:1		ff	
+cl4	dim	26:1	26:4	hairpin	
+cl4	dyn	27:1		mf	
+cl4	cresc	29:2	30:1	hairpin	no dynamic printed at 30:1
+cl4	notes	37:3	45:4		
+cl4	dyn	37:3		ff	
+cl4	dyn	39:3		fff	
+cl4	accent	39:3		^	
+cl4	accent	42:1		^	
+cl4	accent	44:1		^	
+cl4	notes	47:1	47:4		
+cl4	accent	47:1		^	
+cl4	accent	47:1		fp	
+cl4	notes	49:1	50:1		
+cl4	accent	49:1		fp	
+cl4	notes	54:4	85:3		82:3 eighth, rest, 83:1 tied to 83:3, 83:4
+cl4	dyn	54:4		ff	
+cl4	dyn	55:1		f	
+cl4	accent	55:1		^	
+cl4	accent	55:3		^	
+cl4	accent	63:1		^	
+cl4	accent	64:1		^	
+cl4	dyn	67:1		ff	
+cl4	accent	67:1		^	
+cl4	accent	67:3		^	
+cl4	accent	68:1		^	
+cl4	cresc	73:1	73:3	hairpin	
+cl4	dyn	73:4		ff	
+cl4	dyn	83:4		ff	printed between 83:3 and 83:4
+bsn1	notes	1:2	5:1		
+bsn1	text	1:2		zu 3	
+bsn1	dyn	1:2		ff	
+bsn1	accent	1:2		^	
+bsn1	accent	3:3		^	
+bsn1	dim	4:1	5:1	text	
+bsn1	notes	10:1	12:3		triplet + dotted half tied to 12:3
+bsn1	text	10:1		zu 3	
+bsn1	text	10:1		sehr gestossen	
+bsn1	dyn	10:1		fff	
+bsn1	notes	14:1	14:1		eighth
+bsn1	dyn	14:1		ff	
+bsn1	notes	15:3	15:3		eighth chord, no new dynamic
+bsn1	notes	17:3	18:3		
+bsn1	text	17:3		zu 3	
+bsn1	dyn	17:3		ff	
+bsn1	notes	21:3	37:1		chord 30:1 tied through bars 30-36 and on; tied chord from bar 30 ends 37:1
+bsn1	text	21:3		zu 3	
+bsn1	dyn	21:3		ff	
+bsn1	dyn	23:1		ff	
+bsn1	text	25:1		zu 3	
+bsn1	dyn	25:1		ff	
+bsn1	dim	26:1	26:4	hairpin	
+bsn1	dyn	27:1		mf	
+bsn1	text	29:1		zu 3	
+bsn1	cresc	29:2	30:1	hairpin	
+bsn1	dyn	30:1		ff	
+bsn1	dim	31:1	31:4	hairpin	
+bsn1	dyn	32:1		p	
+bsn1	notes	38:3	45:4		
+bsn1	text	38:3		zu 3	
+bsn1	dyn	38:3		ff	
+bsn1	dyn	39:3		fff	
+bsn1	accent	39:3		^	
+bsn1	accent	42:1		^	
+bsn1	text	44:1		zu 3	
+bsn1	accent	44:1		^	
+bsn1	notes	47:1	47:3		chord
+bsn1	dyn	47:1		ff	
+bsn1	notes	49:1	49:3		
+bsn1	dyn	49:1		ff	
+bsn1	notes	51:1	51:3		
+bsn1	dyn	51:1		ff	
+bsn1	notes	53:1	53:3		chord
+bsn1	dyn	53:1		ff	
+bsn1	notes	56:1	56:2		half
+bsn1	text	56:1		zu 3	
+bsn1	dyn	56:1		ff	
+bsn1	notes	58:1	73:3		half 58:1, chord quarter 59:1; chords, half-bar rests between; half notes; half tied to eighth 73:3
+bsn1	dyn	67:1		mf	
+bsn1	cresc	73:1	73:3	hairpin	no dynamic printed at the end
+bsn1	notes	79:1	81:4.5		eighths
+bsn1	dyn	79:1		ff	
+bsn1	notes	83:4	85:3		eighth (tenor clef); eighth (tenor clef); half tied to dotted half
+bsn1	dyn	83:4		ff	
+bsn1	text	84:3		zu 3	
+bsn1	dyn	84:3		fff	
+bsn1	accent	84:3		^	
+bsn2	notes	1:2	5:1		
+bsn2	text	1:2		zu 3	
+bsn2	dyn	1:2		ff	
+bsn2	accent	1:2		^	
+bsn2	accent	3:3		^	
+bsn2	dim	4:1	5:1	text	
+bsn2	notes	10:1	12:3		triplet + dotted half tied to 12:3
+bsn2	text	10:1		zu 3	
+bsn2	text	10:1		sehr gestossen	
+bsn2	dyn	10:1		fff	
+bsn2	notes	14:1	14:1		eighth
+bsn2	dyn	14:1		ff	
+bsn2	notes	15:3	15:3		eighth chord, no new dynamic
+bsn2	notes	17:3	18:3		
+bsn2	text	17:3		zu 3	
+bsn2	dyn	17:3		ff	
+bsn2	notes	21:3	37:1		chord 30:1 tied through bars 30-36 and on; tied chord from bar 30 ends 37:1
+bsn2	text	21:3		zu 3	
+bsn2	dyn	21:3		ff	
+bsn2	dyn	23:1		ff	
+bsn2	text	25:1		zu 3	
+bsn2	dyn	25:1		ff	
+bsn2	dim	26:1	26:4	hairpin	
+bsn2	dyn	27:1		mf	
+bsn2	text	29:1		zu 3	
+bsn2	cresc	29:2	30:1	hairpin	
+bsn2	dyn	30:1		ff	
+bsn2	dim	31:1	31:4	hairpin	
+bsn2	dyn	32:1		p	
+bsn2	notes	38:3	45:4		
+bsn2	text	38:3		zu 3	
+bsn2	dyn	38:3		ff	
+bsn2	dyn	39:3		fff	
+bsn2	accent	39:3		^	
+bsn2	accent	42:1		^	
+bsn2	text	44:1		zu 3	
+bsn2	accent	44:1		^	
+bsn2	notes	47:1	47:3		chord
+bsn2	dyn	47:1		ff	
+bsn2	notes	49:1	49:3		
+bsn2	dyn	49:1		ff	
+bsn2	notes	51:1	51:3		
+bsn2	dyn	51:1		ff	
+bsn2	notes	53:1	53:3		chord
+bsn2	dyn	53:1		ff	
+bsn2	notes	56:1	56:2		half
+bsn2	text	56:1		zu 3	
+bsn2	dyn	56:1		ff	
+bsn2	notes	58:1	73:3		half 58:1, chord quarter 59:1; chords, half-bar rests between
+bsn2	dyn	67:1		mf	
+bsn2	cresc	73:1	73:3	hairpin	no dynamic printed at the end
+bsn2	notes	79:1	81:4.5		
+bsn2	text	79:1		zu 2.	
+bsn2	dyn	79:1		ff	
+bsn2	notes	83:4	85:3		eighth (tenor clef); half tied to dotted half
+bsn2	dyn	83:4		ff	
+bsn2	text	84:3		zu 3	
+bsn2	dyn	84:3		fff	
+bsn2	accent	84:3		^	
+bsn3	notes	1:2	5:1		
+bsn3	text	1:2		zu 3	
+bsn3	dyn	1:2		ff	
+bsn3	accent	1:2		^	
+bsn3	accent	3:3		^	
+bsn3	dim	4:1	5:1	text	
+bsn3	notes	10:1	12:3		triplet + dotted half tied to 12:3
+bsn3	text	10:1		zu 3	
+bsn3	text	10:1		sehr gestossen	
+bsn3	dyn	10:1		fff	
+bsn3	notes	14:1	14:1		eighth
+bsn3	dyn	14:1		ff	
+bsn3	notes	15:3	15:3		eighth chord, no new dynamic
+bsn3	notes	17:3	18:3		
+bsn3	text	17:3		zu 3	
+bsn3	dyn	17:3		ff	
+bsn3	notes	21:3	37:1		chord 30:1 tied through bars 30-36 and on; tied chord from bar 30 ends 37:1
+bsn3	text	21:3		zu 3	
+bsn3	dyn	21:3		ff	
+bsn3	dyn	23:1		ff	
+bsn3	text	25:1		zu 3	
+bsn3	dyn	25:1		ff	
+bsn3	dim	26:1	26:4	hairpin	
+bsn3	dyn	27:1		mf	
+bsn3	text	29:1		zu 3	
+bsn3	cresc	29:2	30:1	hairpin	
+bsn3	dyn	30:1		ff	
+bsn3	dim	31:1	31:4	hairpin	
+bsn3	dyn	32:1		p	
+bsn3	notes	38:3	45:4		
+bsn3	text	38:3		zu 3	
+bsn3	dyn	38:3		ff	
+bsn3	dyn	39:3		fff	
+bsn3	accent	39:3		^	
+bsn3	accent	42:1		^	
+bsn3	text	44:1		zu 3	
+bsn3	accent	44:1		^	
+bsn3	notes	47:1	47:3		chord
+bsn3	dyn	47:1		ff	
+bsn3	notes	49:1	49:3		
+bsn3	dyn	49:1		ff	
+bsn3	notes	51:1	51:3		
+bsn3	dyn	51:1		ff	
+bsn3	notes	53:1	53:3		chord
+bsn3	dyn	53:1		ff	
+bsn3	notes	56:1	56:2		half
+bsn3	text	56:1		zu 3	
+bsn3	dyn	56:1		ff	
+bsn3	notes	58:1	73:3		half 58:1, chord quarter 59:1
+bsn3	dyn	67:1		mf	
+bsn3	cresc	73:1	73:3	hairpin	no dynamic printed at the end
+bsn3	notes	79:1	81:4.5		
+bsn3	text	79:1		zu 2.	
+bsn3	dyn	79:1		ff	
+bsn3	notes	83:4	85:3		eighth (tenor clef); half tied to dotted half
+bsn3	dyn	83:4		ff	
+bsn3	text	84:3		zu 3	
+bsn3	dyn	84:3		fff	
+bsn3	accent	84:3		^	
+hn1	notes	1:2	5:4		
+hn1	text	1:2		zu 4	
+hn1	text	1:2		gestopft	
+hn1	dyn	1:2		ff	
+hn1	accent	1:2		^	
+hn1	accent	3:3		^	
+hn1	dim	4:1	5:1	text	
+hn1	dim	5:1	5:4	hairpin	
+hn1	dyn	5:4		p	end of bar 5
+hn1	notes	10:1	12:3		
+hn1	text	10:1		zu 4	
+hn1	text	10:1		gest.	
+hn1	text	10:1		sehr gestossen	
+hn1	dyn	10:1		fff	
+hn1	notes	14:1	14:1		
+hn1	text	14:1		offen	
+hn1	dyn	14:1		ff	
+hn1	notes	15:3	15:3		eighth chord, no new dynamic
+hn1	notes	17:3	18:3		
+hn1	text	17:3		gest.	
+hn1	text	17:3		zu 4	
+hn1	dyn	17:3		ff	
+hn1	notes	21:3	31:1		
+hn1	text	21:3		zu 3	staff "1.3.5."
+hn1	text	21:3		offen	
+hn1	dyn	21:3		ff	
+hn1	dyn	23:1		ff	
+hn1	text	25:1		zu 3	
+hn1	dyn	25:1		ff	
+hn1	dim	26:1	26:4	hairpin	
+hn1	dyn	27:1		mf	
+hn1	text	29:1		zu 2	staff "1.3."
+hn1	cresc	29:2	30:1	hairpin	
+hn1	dyn	30:1		ff	
+hn1	accent	30:1		^	
+hn1	notes	32:3	33:3		
+hn1	text	32:3		gest.	
+hn1	text	32:3		zu 2	
+hn1	dyn	32:3		ff	
+hn1	notes	35:1	36:4		
+hn1	text	35:1		zu 2 gest.	
+hn1	dyn	35:1		ff	
+hn1	notes	38:3	45:4		chord (both); chord
+hn1	text	38:3		gest. zu 2	
+hn1	dyn	38:3		ff	
+hn1	text	39:3		gest.	
+hn1	dyn	39:3		ff	
+hn1	accent	39:3		^	
+hn1	accent	42:1		^	
+hn1	text	44:1		gest.	staff "1.2."
+hn1	accent	44:1		^	
+hn1	text	46:4		gest.	
+hn1	notes	47:1	47:4		
+hn1	dyn	47:1		ff	
+hn1	text	48:4		gest.	
+hn1	notes	49:1	59:4		chord tied from bar 51; upper voice, plays on through 59
+hn1	dyn	49:1		ff	
+hn1	text	50:4		gest.	
+hn1	dyn	51:1		ff	
+hn1	text	53:1		gest.	
+hn1	dyn	53:1		f	
+hn1	cresc	53:1	54:1	hairpin	
+hn1	dyn	54:1		ff	
+hn1	text	54:4		1. offen	
+hn1	dyn	54:4		ff	
+hn1	accent	55:1		^	
+hn1	accent	55:3		^	
+hn1	notes	61:1	64:3		chords eighths (horn 5 = hn5 continues from page 100)
+hn1	dyn	61:1		ff	
+hn1	text	63:1		zu 3	
+hn1	dyn	63:1		ff	
+hn1	accent	63:1		^	
+hn1	accent	64:1		^	
+hn1	notes	66:1	73:3		chords 68-72; "zu 2." at 70:4
+hn1	dyn	66:1		ff	
+hn1	accent	66:1		^	
+hn1	text	67:1		I. III. (read "III:")	two-note chord on staff 1.3.5; horn 5 rests (uncertain reading of the label)
+hn1	dyn	67:1		mf	
+hn1	text	70:4		zu 2.	
+hn1	cresc	73:1	73:3	hairpin	
+hn1	dyn	73:3		ff	
+hn1	notes	78:1	83:1		chords; last eighth 83:1
+hn1	dyn	78:1		ff	
+hn1	accent	78:1		^	
+hn1	dyn	79:4		ff	
+hn1	notes	84:2.5	86:1		upper voice from 84:2.5, lower voice from 84:4.5; eighth chord
+hn1	dyn	84:2.5		ff	upper voice
+hn1	accent	84:3		^	
+hn1	dyn	84:4.5		ff	lower voice
+hn1	dyn	86:1		f	
+hn2	notes	1:2	5:4		
+hn2	text	1:2		zu 4	
+hn2	text	1:2		gestopft	
+hn2	dyn	1:2		ff	
+hn2	accent	1:2		^	
+hn2	accent	3:3		^	
+hn2	dim	4:1	5:1	text	
+hn2	dim	5:1	5:4	hairpin	
+hn2	dyn	5:4		p	end of bar 5
+hn2	notes	10:1	12:3		
+hn2	text	10:1		zu 4	
+hn2	text	10:1		gest.	
+hn2	text	10:1		sehr gestossen	
+hn2	dyn	10:1		fff	
+hn2	notes	14:1	14:1		
+hn2	text	14:1		offen	
+hn2	dyn	14:1		ff	
+hn2	notes	15:3	15:3		eighth chord, no new dynamic
+hn2	notes	17:3	18:3		
+hn2	text	17:3		gest.	
+hn2	text	17:3		zu 4	
+hn2	dyn	17:3		ff	
+hn2	notes	21:3	33:2		
+hn2	text	21:3		zu 4	staff "2.4.6.7."
+hn2	text	21:3		offen	
+hn2	dyn	21:3		ff	
+hn2	dyn	23:1		ff	
+hn2	text	25:1		zu 4	
+hn2	dyn	25:1		ff	
+hn2	dim	26:1	26:4	hairpin	
+hn2	dyn	27:1		mf	
+hn2	text	29:1		zu 2	staff "2.4."
+hn2	cresc	29:2	30:1	hairpin	
+hn2	dyn	30:1		ff	
+hn2	accent	30:1		^	
+hn2	text	32:3		gest.	
+hn2	text	32:3		zu 2	
+hn2	dyn	32:3		ff	
+hn2	notes	35:1	36:1		
+hn2	text	35:1		zu 2 gest.	
+hn2	dyn	35:1		ff	
+hn2	notes	38:3	45:4		chord
+hn2	text	38:3		gest. zu 2	
+hn2	dyn	38:3		ff	
+hn2	text	39:3		gest.	
+hn2	dyn	39:3		ff	
+hn2	accent	39:3		^	
+hn2	accent	42:1		^	
+hn2	text	44:1		gest.	staff "1.2."
+hn2	accent	44:1		^	
+hn2	text	46:4		gest.	
+hn2	notes	47:1	47:4		
+hn2	dyn	47:1		ff	
+hn2	text	48:4		gest.	
+hn2	notes	49:1	73:3		chord tied from bar 51; through 59 ("2." at 58:4); half-note chords; chords 68-72; "zu 2." at 70:4
+hn2	dyn	49:1		ff	
+hn2	text	50:4		gest.	
+hn2	dyn	51:1		ff	
+hn2	text	53:1		gest.	
+hn2	dyn	53:1		f	
+hn2	cresc	53:1	54:1	hairpin	
+hn2	dyn	54:1		ff	
+hn2	text	55:1		offen	lower voice
+hn2	dyn	55:1		ff	
+hn2	text	60:1		zu 2	staff "2.6."
+hn2	accent	61:1		^	
+hn2	accent	61:3		^	
+hn2	text	67:1		II.	horn 6 rests
+hn2	dyn	67:1		mf	
+hn2	text	70:4		zu 2.	
+hn2	cresc	73:1	73:3	hairpin	
+hn2	dyn	73:3		ff	
+hn2	notes	78:1	83:1		chords; last eighth 83:1
+hn2	dyn	78:1		ff	
+hn2	accent	78:1		^	
+hn2	dyn	79:4		ff	
+hn2	notes	84:2.5	86:1		upper voice from 84:2.5, lower voice from 84:4.5; eighth chord
+hn2	dyn	84:2.5		ff	upper voice
+hn2	accent	84:3		^	
+hn2	dyn	84:4.5		ff	lower voice
+hn2	dyn	86:1		f	
+hn3	notes	1:2	5:4		
+hn3	text	1:2		zu 4	
+hn3	text	1:2		gestopft	
+hn3	dyn	1:2		ff	
+hn3	accent	1:2		^	
+hn3	accent	3:3		^	
+hn3	dim	4:1	5:1	text	
+hn3	dim	5:1	5:4	hairpin	
+hn3	dyn	5:4		p	end of bar 5
+hn3	notes	10:1	12:3		
+hn3	text	10:1		zu 4	
+hn3	text	10:1		gest.	
+hn3	text	10:1		sehr gestossen	
+hn3	dyn	10:1		fff	
+hn3	notes	14:1	14:1		
+hn3	text	14:1		offen	
+hn3	dyn	14:1		ff	
+hn3	notes	15:3	15:3		eighth chord, no new dynamic
+hn3	notes	17:3	18:3		
+hn3	text	17:3		gest.	
+hn3	text	17:3		zu 4	
+hn3	dyn	17:3		ff	
+hn3	notes	21:3	31:1		
+hn3	text	21:3		zu 3	staff "1.3.5."
+hn3	text	21:3		offen	
+hn3	dyn	21:3		ff	
+hn3	dyn	23:1		ff	
+hn3	text	25:1		zu 3	
+hn3	dyn	25:1		ff	
+hn3	dim	26:1	26:4	hairpin	
+hn3	dyn	27:1		mf	
+hn3	text	29:1		zu 2	staff "1.3."
+hn3	cresc	29:2	30:1	hairpin	
+hn3	dyn	30:1		ff	
+hn3	accent	30:1		^	
+hn3	notes	32:3	33:3		
+hn3	text	32:3		gest.	
+hn3	text	32:3		zu 2	
+hn3	dyn	32:3		ff	
+hn3	notes	35:1	36:4		
+hn3	text	35:1		zu 2 gest.	
+hn3	dyn	35:1		ff	
+hn3	notes	38:3	45:4		chord (both)
+hn3	text	38:3		gest. zu 2	
+hn3	dyn	38:3		ff	
+hn3	text	39:3		gest.	
+hn3	dyn	39:3		ff	
+hn3	accent	39:3		^	
+hn3	accent	42:1		^	
+hn3	text	44:1		gest.	staff "3.4."
+hn3	accent	44:1		^	
+hn3	text	46:4		gest.	
+hn3	notes	47:1	47:4		
+hn3	dyn	47:1		ff	
+hn3	text	48:4		gest.	
+hn3	notes	49:1	58:2		two voices 55-58
+hn3	dyn	49:1		ff	
+hn3	text	50:4		gest.	
+hn3	dyn	51:1		ff	
+hn3	text	53:1		gest.	
+hn3	dyn	53:1		f	
+hn3	cresc	53:1	54:1	hairpin	
+hn3	dyn	54:1		ff	
+hn3	text	54:4		offen	one note, no player number (uncertain: both or 3. only)
+hn3	dyn	54:4		ff	
+hn3	accent	55:1		^	
+hn3	accent	55:3		^	
+hn3	notes	61:1	64:3		chords eighths (horn 5 = hn5 continues from page 100)
+hn3	dyn	61:1		ff	
+hn3	text	63:1		zu 3	
+hn3	dyn	63:1		ff	
+hn3	accent	63:1		^	
+hn3	accent	64:1		^	
+hn3	notes	66:1	73:3		
+hn3	dyn	66:1		ff	
+hn3	accent	66:1		^	
+hn3	text	67:1		I. III. (read "III:")	two-note chord on staff 1.3.5; horn 5 rests (uncertain reading of the label)
+hn3	dyn	67:1		mf	
+hn3	accent	71:1		^	
+hn3	accent	71:3		^	
+hn3	cresc	73:1	73:3	hairpin	a "p" printed near 73:1 above the 5.6. staff may belong here (uncertain)
+hn3	dyn	73:3		ff	
+hn3	notes	78:1	83:1		
+hn3	dyn	78:1		ff	
+hn3	accent	78:1		^	
+hn3	dyn	79:4		ff	
+hn3	notes	84:2.5	86:1		
+hn3	dyn	84:2.5		ff	upper voice
+hn3	accent	84:3		^	
+hn3	dyn	84:4.5		ff	lower voice
+hn3	dyn	86:1		f	
+hn4	notes	1:2	5:4		
+hn4	text	1:2		zu 4	
+hn4	text	1:2		gestopft	
+hn4	dyn	1:2		ff	
+hn4	accent	1:2		^	
+hn4	accent	3:3		^	
+hn4	dim	4:1	5:1	text	
+hn4	dim	5:1	5:4	hairpin	
+hn4	dyn	5:4		p	end of bar 5
+hn4	notes	10:1	12:3		
+hn4	text	10:1		zu 4	
+hn4	text	10:1		gest.	
+hn4	text	10:1		sehr gestossen	
+hn4	dyn	10:1		fff	
+hn4	notes	14:1	14:1		
+hn4	text	14:1		offen	
+hn4	dyn	14:1		ff	
+hn4	notes	15:3	15:3		eighth chord, no new dynamic
+hn4	notes	17:3	18:3		
+hn4	text	17:3		gest.	
+hn4	text	17:3		zu 4	
+hn4	dyn	17:3		ff	
+hn4	notes	21:3	33:2		
+hn4	text	21:3		zu 4	staff "2.4.6.7."
+hn4	text	21:3		offen	
+hn4	dyn	21:3		ff	
+hn4	dyn	23:1		ff	
+hn4	text	25:1		zu 4	
+hn4	dyn	25:1		ff	
+hn4	dim	26:1	26:4	hairpin	
+hn4	dyn	27:1		mf	
+hn4	text	29:1		zu 2	staff "2.4."
+hn4	cresc	29:2	30:1	hairpin	
+hn4	dyn	30:1		ff	
+hn4	accent	30:1		^	
+hn4	text	32:3		gest.	
+hn4	text	32:3		zu 2	
+hn4	dyn	32:3		ff	
+hn4	notes	35:1	36:1		
+hn4	text	35:1		zu 2 gest.	
+hn4	dyn	35:1		ff	
+hn4	notes	38:3	45:4		
+hn4	text	38:3		gest. zu 2	
+hn4	dyn	38:3		ff	
+hn4	text	39:3		gest.	
+hn4	dyn	39:3		ff	
+hn4	accent	39:3		^	
+hn4	accent	42:1		^	
+hn4	text	44:1		gest.	staff "3.4."
+hn4	accent	44:1		^	
+hn4	text	46:4		gest.	
+hn4	notes	47:1	47:4		
+hn4	dyn	47:1		ff	
+hn4	text	48:4		gest.	
+hn4	notes	49:1	73:3		two voices 55-58; "4." whole note (horn 3 rests); staff "4.7."
+hn4	dyn	49:1		ff	
+hn4	text	50:4		gest.	
+hn4	dyn	51:1		ff	
+hn4	text	53:1		gest.	
+hn4	dyn	53:1		f	
+hn4	cresc	53:1	54:1	hairpin	
+hn4	dyn	54:1		ff	
+hn4	text	54:4		offen	one note, no player number (uncertain: both or 3. only)
+hn4	dyn	54:4		ff	
+hn4	accent	55:1		^	
+hn4	accent	55:3		^	
+hn4	accent	61:1		^	
+hn4	accent	61:3		^	
+hn4	text	67:1		IV.	horn 7 rests
+hn4	dyn	67:1		mf	
+hn4	accent	71:1		^	
+hn4	accent	71:3		^	
+hn4	cresc	73:1	73:3	hairpin	a "p" printed near 73:1 above the 5.6. staff may belong here (uncertain)
+hn4	dyn	73:3		ff	
+hn4	notes	78:1	83:1		
+hn4	dyn	78:1		ff	
+hn4	accent	78:1		^	
+hn4	dyn	79:4		ff	
+hn4	notes	84:2.5	86:1		
+hn4	dyn	84:2.5		ff	upper voice
+hn4	accent	84:3		^	
+hn4	dyn	84:4.5		ff	lower voice
+hn4	dyn	86:1		f	
+hn5	notes	1:2	5:1		
+hn5	text	1:2		zu 3	
+hn5	text	1:2		gestopft	
+hn5	dyn	1:2		ff	
+hn5	accent	1:2		^	
+hn5	accent	3:3		^	
+hn5	dim	4:1	5:1	text	
+hn5	notes	10:1	12:3		
+hn5	text	10:1		zu 3	staff label "6.7." on this page, zu 3: taken as horns 5-7
+hn5	text	10:1		gest.	
+hn5	dyn	10:1		fff	
+hn5	notes	14:1	14:1		
+hn5	text	14:1		offen	
+hn5	dyn	14:1		ff	
+hn5	notes	15:3	15:3		
+hn5	notes	17:3	18:3		
+hn5	text	17:3		gest.	
+hn5	text	17:3		zu 3	
+hn5	dyn	17:3		ff	
+hn5	notes	21:3	30:1		
+hn5	text	21:3		zu 3	staff "1.3.5."
+hn5	text	21:3		offen	
+hn5	dyn	21:3		ff	
+hn5	dyn	23:1		ff	
+hn5	text	25:1		zu 3	
+hn5	dyn	25:1		ff	
+hn5	dim	26:1	26:4	hairpin	
+hn5	dyn	27:1		mf	
+hn5	text	29:1		zu 3	
+hn5	cresc	29:2	30:1	hairpin	
+hn5	dyn	30:1		ff	
+hn5	notes	32:3	33:1		
+hn5	text	32:3		gest. zu 3	
+hn5	dyn	32:3		ff	
+hn5	notes	35:1	35:4		
+hn5	text	35:1		zu 3 gest.	
+hn5	dyn	35:1		ff	
+hn5	notes	38:3	45:4		chord; chord
+hn5	text	38:3		zu 2 gest.	staff "5.7."
+hn5	dyn	38:3		ff	
+hn5	text	39:3		gest.	
+hn5	dyn	39:3		ff	
+hn5	accent	39:3		^	
+hn5	accent	42:1		^	
+hn5	text	44:1		gest. 5.	staff "5.6.": only horn 5 bars 44-45
+hn5	accent	44:1		^	
+hn5	text	46:4		gest.	
+hn5	notes	47:1	47:4		both
+hn5	dyn	47:1		ff	
+hn5	text	48:4		gest.	
+hn5	notes	49:1	59:4		upper voice through 59
+hn5	dyn	49:1		ff	
+hn5	text	50:4		gest.	
+hn5	dyn	51:1		ff	
+hn5	text	53:1		gest.	
+hn5	dyn	53:1		f	
+hn5	cresc	53:1	54:1	hairpin	
+hn5	dyn	54:1		ff	
+hn5	text	54:4		offen 5.	
+hn5	dyn	54:4		ff	
+hn5	accent	55:1		^	
+hn5	notes	61:1	64:3		chords eighths (horn 5 = hn5 continues from page 100)
+hn5	dyn	61:1		ff	
+hn5	text	63:1		zu 3	
+hn5	dyn	63:1		ff	
+hn5	accent	63:1		^	
+hn5	accent	64:1		^	
+hn5	notes	66:1	66:3		
+hn5	dyn	66:1		ff	
+hn5	accent	66:1		^	
+hn5	notes	72:4	73:3		
+hn5	dyn	72:4		f	
+hn5	dyn	73:1		p	
+hn5	cresc	73:1	73:3	hairpin	
+hn5	dyn	73:3		ff	
+hn5	notes	79:1	83:1		
+hn5	dyn	79:1		ff	
+hn5	notes	84:2.5	85:4		
+hn5	text	84:2.5		zu 2	
+hn5	dyn	84:2.5		ff	
+hn5	accent	84:3		^	
+hn5	accent	85:3		^	
+hn6	notes	1:2	5:1		
+hn6	text	1:2		zu 3	
+hn6	text	1:2		gestopft	
+hn6	dyn	1:2		ff	
+hn6	accent	1:2		^	
+hn6	accent	3:3		^	
+hn6	dim	4:1	5:1	text	
+hn6	notes	10:1	12:3		
+hn6	text	10:1		zu 3	staff label "6.7." on this page, zu 3: taken as horns 5-7
+hn6	text	10:1		gest.	
+hn6	dyn	10:1		fff	
+hn6	notes	14:1	14:1		
+hn6	text	14:1		offen	
+hn6	dyn	14:1		ff	
+hn6	notes	15:3	15:3		
+hn6	notes	17:3	18:3		
+hn6	text	17:3		gest.	
+hn6	text	17:3		zu 3	
+hn6	dyn	17:3		ff	
+hn6	notes	21:3	30:1		
+hn6	text	21:3		zu 4	staff "2.4.6.7."
+hn6	text	21:3		offen	
+hn6	dyn	21:3		ff	
+hn6	dyn	23:1		ff	
+hn6	text	25:1		zu 4	
+hn6	dyn	25:1		ff	
+hn6	dim	26:1	26:4	hairpin	
+hn6	dyn	27:1		mf	
+hn6	text	29:1		zu 3	
+hn6	cresc	29:2	30:1	hairpin	
+hn6	dyn	30:1		ff	
+hn6	notes	32:3	33:1		
+hn6	text	32:3		gest. zu 3	
+hn6	dyn	32:3		ff	
+hn6	notes	35:1	35:4		
+hn6	text	35:1		zu 3 gest.	
+hn6	dyn	35:1		ff	
+hn6	notes	38:3	43:1		chord; chord; eighth; eighth
+hn6	text	38:3		zu 2 gest.	staff "5.7."
+hn6	text	38:3		gest.	staff "6"
+hn6	dyn	38:3		ff	
+hn6	text	39:3		gest.	
+hn6	dyn	39:3		ff	
+hn6	accent	39:3		^	
+hn6	text	40:4		gest.	
+hn6	dyn	41:1		ff	
+hn6	accent	42:1		^	
+hn6	text	46:4		gest.	
+hn6	notes	47:1	47:4		both
+hn6	dyn	47:1		ff	
+hn6	text	48:4		gest.	
+hn6	notes	49:1	66:2		lower voice tied whole from 55; "6." at 58:4; half-note chords
+hn6	dyn	49:1		ff	
+hn6	text	50:4		gest.	
+hn6	dyn	51:1		ff	
+hn6	text	53:1		gest.	
+hn6	dyn	53:1		f	
+hn6	cresc	53:1	54:1	hairpin	
+hn6	dyn	54:1		ff	
+hn6	dyn	55:1		ff	
+hn6	text	60:1		zu 2	staff "2.6."
+hn6	accent	61:1		^	
+hn6	accent	61:3		^	
+hn6	notes	72:4	73:3		
+hn6	dyn	72:4		f	
+hn6	dyn	73:1		p	
+hn6	cresc	73:1	73:3	hairpin	
+hn6	dyn	73:3		ff	
+hn6	notes	79:1	83:1		
+hn6	dyn	79:1		ff	
+hn6	notes	84:2.5	85:4		
+hn6	text	84:2.5		zu 2	
+hn6	dyn	84:2.5		ff	
+hn6	accent	84:3		^	
+hn6	accent	85:3		^	
+hn7	notes	1:2	5:1		
+hn7	text	1:2		zu 3	
+hn7	text	1:2		gestopft	
+hn7	dyn	1:2		ff	
+hn7	accent	1:2		^	
+hn7	accent	3:3		^	
+hn7	dim	4:1	5:1	text	
+hn7	notes	10:1	12:3		
+hn7	text	10:1		zu 3	staff label "6.7." on this page, zu 3: taken as horns 5-7
+hn7	text	10:1		gest.	
+hn7	dyn	10:1		fff	
+hn7	notes	14:1	14:1		
+hn7	text	14:1		offen	
+hn7	dyn	14:1		ff	
+hn7	notes	15:3	15:3		
+hn7	notes	17:3	18:3		
+hn7	text	17:3		gest.	
+hn7	text	17:3		zu 3	
+hn7	dyn	17:3		ff	
+hn7	notes	21:3	30:1		
+hn7	text	21:3		zu 4	staff "2.4.6.7."
+hn7	text	21:3		offen	
+hn7	dyn	21:3		ff	
+hn7	dyn	23:1		ff	
+hn7	text	25:1		zu 4	
+hn7	dyn	25:1		ff	
+hn7	dim	26:1	26:4	hairpin	
+hn7	dyn	27:1		mf	
+hn7	text	29:1		zu 3	
+hn7	cresc	29:2	30:1	hairpin	
+hn7	dyn	30:1		ff	
+hn7	notes	32:3	33:1		
+hn7	text	32:3		gest. zu 3	
+hn7	dyn	32:3		ff	
+hn7	notes	35:1	35:4		
+hn7	text	35:1		zu 3 gest.	
+hn7	dyn	35:1		ff	
+hn7	notes	38:3	45:4		chord; chord
+hn7	text	38:3		zu 2 gest.	staff "5.7."
+hn7	dyn	38:3		ff	
+hn7	text	39:3		gest.	
+hn7	dyn	39:3		ff	
+hn7	accent	39:3		^	
+hn7	accent	42:1		^	
+hn7	text	44:1		gest.	staff "7."
+hn7	accent	44:1		^	
+hn7	text	46:4		gest.	
+hn7	notes	47:1	47:4		
+hn7	dyn	47:1		ff	
+hn7	text	48:4		gest.	
+hn7	notes	49:1	66:2		staff "4.7."
+hn7	dyn	49:1		ff	
+hn7	text	50:4		gest.	
+hn7	dyn	51:1		ff	
+hn7	text	53:1		gest.	
+hn7	dyn	53:1		f	
+hn7	cresc	53:1	54:1	hairpin	
+hn7	dyn	54:1		ff	
+hn7	text	54:4		offen	
+hn7	dyn	54:4		ff	
+hn7	accent	55:1		^	
+hn7	accent	55:3		^	
+hn7	accent	56:1		^	
+hn7	accent	61:1		^	
+hn7	accent	61:3		^	
+hn7	notes	73:1	73:3		
+hn7	dyn	73:1		p	
+hn7	cresc	73:1	73:3	hairpin	
+hn7	dyn	73:3		ff	
+hn7	notes	79:1	83:1		
+hn7	dyn	79:1		ff	
+hn7	notes	84:4.5	85:2		
+hn7	dyn	84:4.5		ff	
+hn7	accent	85:1		^	
+tr1	notes	1:2	10:1		two-note chord bar 8 (^), unison bar 9, upper voice ends 10:1
+tr1	text	1:2		zu 2	"(1. Trompete im ff doppelt besetzt)" in staff label
+tr1	text	1:2		mit Dämpfer	
+tr1	dyn	1:2		ff	
+tr1	accent	1:2		^	
+tr1	dim	4:1	5:1	text	
+tr1	dim	5:1	5:4	hairpin	"dim." + hairpin
+tr1	dyn	5:4		p	end of bar 5
+tr1	text	6:4.5		zu 2 offen	
+tr1	dyn	6:4.5		f	
+tr1	accent	7:1		^	
+tr1	accent	7:3		^	
+tr1	accent	8:1		^	
+tr1	dim	8:1	9:1	text	
+tr1	dim	9:1	10:1	hairpin	
+tr1	dyn	10:1		p	upper voice's end note; uncertain which player
+tr1	text	11:1		Dämpfer ab	
+tr1	notes	12:3	12:3		eighth chord, both players
+tr1	dyn	12:3		ff	
+tr1	notes	14:1	14:1		
+tr1	dyn	14:1		ff	
+tr1	notes	15:3	15:3		no new dynamic
+tr1	notes	17:3	18:1		
+tr1	text	17:3		zu 2	
+tr1	text	17:3		mit Dämpfer	
+tr1	dyn	17:3		ff	
+tr1	text	18:3		Dämpfer ab	
+tr1	notes	19:4	26:1		bar 20 continues into a tied whole 21-22, whole 23 tied to dotted half 24
+tr1	text	19:4		zu 2	
+tr1	dyn	19:4		f	
+tr1	text	21:1		zu 2	
+tr1	dim	21:1	22:4	hairpin	
+tr1	dyn	22:4		p	
+tr1	dyn	23:1		f	
+tr1	dim	23:1	24:1	hairpin	
+tr1	text	24:1		Dämpfer auf	
+tr1	dyn	24:1		p	
+tr1	text	25:1		zu 2	
+tr1	dyn	25:1		ff	
+tr1	dim	25:1	26:1	hairpin	
+tr1	dyn	26:1		p	
+tr1	notes	32:3	33:3		
+tr1	text	32:3		zu 2	muted since bar 24 (Dämpfer auf)
+tr1	dyn	32:3		ff	
+tr1	notes	35:1	35:4		
+tr1	text	35:1		zu 2	
+tr1	dyn	35:1		ff	
+tr1	text	36:1		Dämpfer ab	
+tr1	notes	39:4.5	58:4		eighth, halves ^ ^, whole tied to 42:1; continuous from 42:4.5 to 50:1 (rests shorter than a bar)
+tr1	text	39:4.5		zu 2 offen	
+tr1	dyn	39:4.5		ff	
+tr1	accent	40:1		^	
+tr1	accent	40:3		^	
+tr1	accent	41:1		fp	
+tr1	text	42:4.5		zu 2	
+tr1	dyn	42:4.5		ff	
+tr1	accent	43:1		^	
+tr1	accent	43:3		^	
+tr1	text	44:1		zu 2	
+tr1	accent	44:1		fp	
+tr1	dyn	45:4.5		ff	
+tr1	accent	46:1		^	
+tr1	accent	46:3		^	
+tr1	accent	47:1		fp	
+tr1	dyn	47:4.5		ff	
+tr1	accent	48:1		^	
+tr1	accent	48:3		^	
+tr1	accent	49:1		fp	
+tr1	dyn	50:4		f	
+tr1	accent	51:1		fp	
+tr1	text	52:1		zu 2	
+tr1	dyn	52:4		f	
+tr1	accent	53:1		fp	
+tr1	cresc	53:1	54:1	hairpin	
+tr1	dyn	54:1		ff	
+tr1	text	54:4		1.	trumpet 1 alone 54:4-58:4
+tr1	dyn	54:4		f	
+tr1	accent	55:1		>	
+tr1	accent	55:3		>	
+tr1	text	66:1		mit Dämpfer	
+tr1	notes	67:1	72:3		
+tr1	text	67:1		zu 2	
+tr1	dyn	67:1		f	
+tr1	accent	67:1		^	
+tr1	accent	67:3		^	
+tr1	text	68:1		zu 2	still muted from 66
+tr1	accent	68:1		^	
+tr1	text	72:3		Dämpfer ab!	
+tr1	notes	73:4	77:3		
+tr1	text	73:4		offen zu 2	
+tr1	dyn	73:4		ff	
+tr1	accent	74:1		^	
+tr1	accent	74:3		^	
+tr1	accent	75:1		^	
+tr1	text	76:1		zu 2.	
+tr1	accent	77:1		^	
+tr1	notes	82:1	83:1		eighths 82:1 and 83:1
+tr1	text	82:1		zu 2.	
+tr1	dyn	82:1		ff	
+tr1	notes	84:2.5	85:4		
+tr1	text	84:2.5		zu 2	
+tr1	dyn	84:2.5		ff	
+tr1	accent	84:3		^	
+tr1	text	85:2.5		zu 2	
+tr1	accent	85:3		^	
+tr2	notes	1:2	10:4		two-note chord bar 8 (^), unison bar 9, upper voice ends 10:1
+tr2	text	1:2		zu 2	"(1. Trompete im ff doppelt besetzt)" in staff label
+tr2	text	1:2		mit Dämpfer	
+tr2	dyn	1:2		ff	
+tr2	accent	1:2		^	
+tr2	dim	4:1	5:1	text	
+tr2	dim	5:1	5:4	hairpin	"dim." + hairpin
+tr2	dyn	5:4		p	end of bar 5
+tr2	text	6:4.5		zu 2 offen	
+tr2	dyn	6:4.5		f	
+tr2	accent	7:1		^	
+tr2	accent	7:3		^	
+tr2	accent	8:1		^	
+tr2	dim	8:1	9:1	text	
+tr2	dim	9:1	10:1	hairpin	
+tr2	text	10:1		mit Dämpfer	lower voice triplet + dotted half; uncertain: assumed 2nd trumpet
+tr2	dyn	10:1		ff	
+tr2	text	11:1		Dämpfer ab	
+tr2	notes	12:3	12:3		eighth chord, both players
+tr2	dyn	12:3		ff	
+tr2	notes	14:1	14:1		
+tr2	dyn	14:1		ff	
+tr2	notes	15:3	15:3		no new dynamic
+tr2	notes	17:3	18:1		
+tr2	text	17:3		zu 2	
+tr2	text	17:3		mit Dämpfer	
+tr2	dyn	17:3		ff	
+tr2	text	18:3		Dämpfer ab	
+tr2	notes	19:4	26:1		bar 20 continues into a tied whole 21-22, whole 23 tied to dotted half 24
+tr2	text	19:4		zu 2	
+tr2	dyn	19:4		f	
+tr2	text	21:1		zu 2	
+tr2	dim	21:1	22:4	hairpin	
+tr2	dyn	22:4		p	
+tr2	dyn	23:1		f	
+tr2	dim	23:1	24:1	hairpin	
+tr2	text	24:1		Dämpfer auf	
+tr2	dyn	24:1		p	
+tr2	text	25:1		zu 2	
+tr2	dyn	25:1		ff	
+tr2	dim	25:1	26:1	hairpin	
+tr2	dyn	26:1		p	
+tr2	notes	32:3	33:3		
+tr2	text	32:3		zu 2	muted since bar 24 (Dämpfer auf)
+tr2	dyn	32:3		ff	
+tr2	notes	35:1	35:4		
+tr2	text	35:1		zu 2	
+tr2	dyn	35:1		ff	
+tr2	text	36:1		Dämpfer ab	
+tr2	notes	39:4.5	54:1		eighth, halves ^ ^, whole tied to 42:1; continuous from 42:4.5 to 50:1 (rests shorter than a bar)
+tr2	text	39:4.5		zu 2 offen	
+tr2	dyn	39:4.5		ff	
+tr2	accent	40:1		^	
+tr2	accent	40:3		^	
+tr2	accent	41:1		fp	
+tr2	text	42:4.5		zu 2	
+tr2	dyn	42:4.5		ff	
+tr2	accent	43:1		^	
+tr2	accent	43:3		^	
+tr2	text	44:1		zu 2	
+tr2	accent	44:1		fp	
+tr2	dyn	45:4.5		ff	
+tr2	accent	46:1		^	
+tr2	accent	46:3		^	
+tr2	accent	47:1		fp	
+tr2	dyn	47:4.5		ff	
+tr2	accent	48:1		^	
+tr2	accent	48:3		^	
+tr2	accent	49:1		fp	
+tr2	dyn	50:4		f	
+tr2	accent	51:1		fp	
+tr2	text	52:1		zu 2	
+tr2	dyn	52:4		f	
+tr2	accent	53:1		fp	
+tr2	cresc	53:1	54:1	hairpin	
+tr2	dyn	54:1		ff	
+tr2	text	66:1		mit Dämpfer	
+tr2	notes	67:1	72:3		
+tr2	text	67:1		zu 2	
+tr2	dyn	67:1		f	
+tr2	accent	67:1		^	
+tr2	accent	67:3		^	
+tr2	text	68:1		zu 2	still muted from 66
+tr2	accent	68:1		^	
+tr2	text	72:3		Dämpfer ab!	
+tr2	notes	73:4	77:3		
+tr2	text	73:4		offen zu 2	
+tr2	dyn	73:4		ff	
+tr2	accent	74:1		^	
+tr2	accent	74:3		^	
+tr2	accent	75:1		^	
+tr2	text	76:1		zu 2.	
+tr2	accent	77:1		^	
+tr2	notes	82:1	83:1		eighths 82:1 and 83:1
+tr2	text	82:1		zu 2.	
+tr2	dyn	82:1		ff	
+tr2	notes	84:2.5	85:4		
+tr2	text	84:2.5		zu 2	
+tr2	dyn	84:2.5		ff	
+tr2	accent	84:3		^	
+tr2	text	85:2.5		zu 2	
+tr2	accent	85:3		^	
+tr3	notes	1:2	8:3		half ^ tied to eighth 8:3
+tr3	text	1:2		zu 2	
+tr3	text	1:2		mit Dämpfer	
+tr3	dyn	1:2		ff	
+tr3	accent	1:2		^	
+tr3	dim	4:1	5:1	text	
+tr3	dim	5:1	5:4	hairpin	"dim." + hairpin
+tr3	dyn	5:4		p	end of bar 5
+tr3	text	6:4.5		zu 2 offen	
+tr3	dyn	6:4.5		f	
+tr3	accent	7:1		^	
+tr3	accent	7:3		^	
+tr3	accent	8:1		^	
+tr3	notes	10:1	10:4		
+tr3	text	10:1		zu 2	
+tr3	text	10:1		mit Dämpfer	
+tr3	dyn	10:1		ff	
+tr3	text	11:1		Dämpfer ab	
+tr3	notes	12:3	12:3		
+tr3	dyn	12:3		ff	
+tr3	notes	14:1	14:1		
+tr3	dyn	14:1		ff	
+tr3	notes	15:3	15:3		
+tr3	notes	17:3	18:1		
+tr3	text	17:3		zu 2	
+tr3	text	17:3		mit Dämpfer	
+tr3	dyn	17:3		ff	
+tr3	text	18:3		Dämpfer ab	
+tr3	notes	19:4	21:4		whole note 21
+tr3	text	19:4		zu 2	
+tr3	dyn	19:4		f	
+tr3	text	21:1		zu 2	
+tr3	dim	21:1	21:3	hairpin	
+tr3	notes	23:1	23:4		
+tr3	text	23:1		zu 2	
+tr3	dyn	23:1		f	
+tr3	dim	23:1	24:1	hairpin	
+tr3	text	24:1		Dämpfer auf	
+tr3	notes	25:1	26:1		
+tr3	text	25:1		zu 2	
+tr3	dyn	25:1		ff	
+tr3	dim	25:1	26:1	hairpin	
+tr3	dyn	26:1		p	
+tr3	notes	32:3	33:3		
+tr3	text	32:3		zu 2	muted
+tr3	dyn	32:3		ff	
+tr3	notes	35:1	36:3		
+tr3	text	35:1		zu 2	
+tr3	dyn	35:1		ff	
+tr3	notes	38:3	39:1		
+tr3	text	38:3		zu 2	still muted (Dämpfer auf bar 24)
+tr3	dyn	38:3		ff	
+tr3	text	39:3		3.4. Dämpfer ab	
+tr3	notes	82:3	85:2		dotted quarters 82:3 and 83:3
+tr3	text	82:3		zu 2.	
+tr3	accent	82:3		fp	
+tr3	accent	82:3		^	
+tr3	accent	83:3		fp	
+tr3	accent	83:3		^	
+tr3	text	84:4.5		zu 2	staff label "4." (uncertain: read as 3.4.)
+tr3	dyn	84:4.5		ff	
+tr3	accent	85:1		^	
+tr4	notes	1:2	8:3		half ^ tied to eighth 8:3
+tr4	text	1:2		zu 2	
+tr4	text	1:2		mit Dämpfer	
+tr4	dyn	1:2		ff	
+tr4	accent	1:2		^	
+tr4	dim	4:1	5:1	text	
+tr4	dim	5:1	5:4	hairpin	"dim." + hairpin
+tr4	dyn	5:4		p	end of bar 5
+tr4	text	6:4.5		zu 2 offen	
+tr4	dyn	6:4.5		f	
+tr4	accent	7:1		^	
+tr4	accent	7:3		^	
+tr4	accent	8:1		^	
+tr4	notes	10:1	10:4		
+tr4	text	10:1		zu 2	
+tr4	text	10:1		mit Dämpfer	
+tr4	dyn	10:1		ff	
+tr4	text	11:1		Dämpfer ab	
+tr4	notes	12:3	12:3		
+tr4	dyn	12:3		ff	
+tr4	notes	14:1	14:1		
+tr4	dyn	14:1		ff	
+tr4	notes	15:3	15:3		
+tr4	notes	17:3	18:1		
+tr4	text	17:3		zu 2	
+tr4	text	17:3		mit Dämpfer	
+tr4	dyn	17:3		ff	
+tr4	text	18:3		Dämpfer ab	
+tr4	notes	19:4	21:4		whole note 21
+tr4	text	19:4		zu 2	
+tr4	dyn	19:4		f	
+tr4	text	21:1		zu 2	
+tr4	dim	21:1	21:3	hairpin	
+tr4	notes	23:1	23:4		
+tr4	text	23:1		zu 2	
+tr4	dyn	23:1		f	
+tr4	dim	23:1	24:1	hairpin	
+tr4	text	24:1		Dämpfer auf	
+tr4	notes	25:1	26:1		
+tr4	text	25:1		zu 2	
+tr4	dyn	25:1		ff	
+tr4	dim	25:1	26:1	hairpin	
+tr4	dyn	26:1		p	
+tr4	notes	32:3	33:3		
+tr4	text	32:3		zu 2	muted
+tr4	dyn	32:3		ff	
+tr4	notes	35:1	36:3		
+tr4	text	35:1		zu 2	
+tr4	dyn	35:1		ff	
+tr4	notes	38:3	39:1		
+tr4	text	38:3		zu 2	still muted (Dämpfer auf bar 24)
+tr4	dyn	38:3		ff	
+tr4	text	39:3		3.4. Dämpfer ab	
+tr4	notes	82:3	85:2		dotted quarters 82:3 and 83:3
+tr4	text	82:3		zu 2.	
+tr4	accent	82:3		fp	
+tr4	accent	82:3		^	
+tr4	accent	83:3		fp	
+tr4	accent	83:3		^	
+tr4	text	84:4.5		zu 2	staff label "4." (uncertain: read as 3.4.)
+tr4	dyn	84:4.5		ff	
+tr4	accent	85:1		^	
+trb1	notes	6:4.5	10:1		eighth staccato; two-note chord ^ bar 8; upper voice tied on to a quarter at 10:1; uncertain which player
+trb1	text	6:4.5		zu 2	
+trb1	dyn	6:4.5		f	
+trb1	accent	7:1		^	
+trb1	accent	7:3		^	
+trb1	accent	8:1		^	
+trb1	dim	8:1	9:1	text	
+trb1	dim	9:1	10:1	hairpin	
+trb1	dyn	10:1		p	
+trb1	notes	12:3	12:3		eighth chord
+trb1	dyn	12:3		ff	
+trb1	notes	14:1	14:1		
+trb1	dyn	14:1		ff	
+trb1	notes	15:3	15:3		
+trb1	notes	17:3	18:1		
+trb1	text	17:3		zu 2	
+trb1	dyn	17:3		ff	
+trb1	notes	19:4	26:1		two-note chord tied 21-22; chord whole, then 24:1 note; chord
+trb1	text	19:4		zu 2	
+trb1	dyn	19:4		f	
+trb1	dim	21:1	22:4	hairpin	
+trb1	dyn	22:4		p	
+trb1	dyn	23:1		f	
+trb1	dim	23:1	24:1	hairpin	
+trb1	dyn	24:1		p	
+trb1	dyn	25:1		ff	
+trb1	dim	25:1	26:1	hairpin	
+trb1	dyn	26:1		mf	
+trb1	notes	30:1	37:1		chord tied through 36 and on; tied chord from bar 30 ends with quarter 37:1
+trb1	dyn	30:1		ff	
+trb1	accent	30:1		^	
+trb1	dim	31:1	31:4	hairpin	
+trb1	dyn	32:1		mf	
+trb1	dim	35:2	36:4	hairpin	uncertain direction (read as >)
+trb1	dyn	37:1		p	
+trb1	notes	39:4.5	54:3		
+trb1	text	39:4.5		zu 2	
+trb1	dyn	39:4.5		ff	
+trb1	accent	40:1		^	
+trb1	accent	40:3		^	
+trb1	accent	41:1		fp	
+trb1	text	42:4.5		zu 2	
+trb1	dyn	42:4.5		ff	
+trb1	accent	43:1		^	
+trb1	accent	43:3		^	
+trb1	text	44:1		zu 2	
+trb1	accent	44:1		fp	
+trb1	dyn	45:4.5		ff	
+trb1	accent	46:1		^	
+trb1	accent	46:3		^	
+trb1	accent	47:1		fp	
+trb1	dyn	47:4.5		ff	
+trb1	accent	48:1		^	
+trb1	accent	48:3		^	
+trb1	accent	49:1		fp	
+trb1	dyn	50:4		f	
+trb1	accent	51:1		fp	
+trb1	text	52:1		zu 2	
+trb1	dyn	52:4		f	
+trb1	accent	53:1		fp	
+trb1	cresc	53:1	54:1	hairpin	
+trb1	dyn	54:1		ff	
+trb1	dyn	54:3		ff	
+trb1	notes	73:4	78:2		chord
+trb1	text	73:4		staff label "1. Pos."	uncertain whether trombone 2 also plays
+trb1	dyn	73:4		ff	
+trb1	accent	74:1		^	
+trb1	accent	74:3		^	
+trb1	accent	75:1		^	
+trb1	text	76:1		I.	
+trb1	accent	77:1		^	
+trb1	dyn	78:1		ff	
+trb1	accent	78:1		^	
+trb1	notes	80:1	80:2		chord
+trb1	dyn	80:1		ff	
+trb1	accent	80:1		^	
+trb1	notes	82:3	84:3		dotted quarters 82:3, 83:3; chord eighth
+trb1	accent	82:3		fp	
+trb1	accent	82:3		^	
+trb1	accent	83:3		fp	
+trb1	accent	83:3		^	
+trb1	dyn	84:3		ff	
+trb2	notes	6:4.5	9:3		eighth staccato; two-note chord ^ bar 8
+trb2	text	6:4.5		zu 2	
+trb2	dyn	6:4.5		f	
+trb2	accent	7:1		^	
+trb2	accent	7:3		^	
+trb2	accent	8:1		^	
+trb2	dim	8:1	9:1	text	
+trb2	dim	9:1	10:1	hairpin	
+trb2	text	9:3		lower voice ends with eighth at 9:3	uncertain which player
+trb2	notes	12:3	12:3		eighth chord
+trb2	dyn	12:3		ff	
+trb2	notes	14:1	14:1		
+trb2	dyn	14:1		ff	
+trb2	notes	15:3	15:3		
+trb2	notes	17:3	18:1		
+trb2	text	17:3		zu 2	
+trb2	dyn	17:3		ff	
+trb2	notes	19:4	26:1		two-note chord tied 21-22; chord whole, then 24:1 note; chord
+trb2	text	19:4		zu 2	
+trb2	dyn	19:4		f	
+trb2	dim	21:1	22:4	hairpin	
+trb2	dyn	22:4		p	
+trb2	dyn	23:1		f	
+trb2	dim	23:1	24:1	hairpin	
+trb2	dyn	24:1		p	
+trb2	dyn	25:1		ff	
+trb2	dim	25:1	26:1	hairpin	
+trb2	dyn	26:1		mf	
+trb2	notes	30:1	37:1		chord tied through 36 and on; tied chord from bar 30 ends with quarter 37:1
+trb2	dyn	30:1		ff	
+trb2	accent	30:1		^	
+trb2	dim	31:1	31:4	hairpin	
+trb2	dyn	32:1		mf	
+trb2	dim	35:2	36:4	hairpin	uncertain direction (read as >)
+trb2	dyn	37:1		p	
+trb2	notes	39:4.5	54:3		
+trb2	text	39:4.5		zu 2	
+trb2	dyn	39:4.5		ff	
+trb2	accent	40:1		^	
+trb2	accent	40:3		^	
+trb2	accent	41:1		fp	
+trb2	text	42:4.5		zu 2	
+trb2	dyn	42:4.5		ff	
+trb2	accent	43:1		^	
+trb2	accent	43:3		^	
+trb2	text	44:1		zu 2	
+trb2	accent	44:1		fp	
+trb2	dyn	45:4.5		ff	
+trb2	accent	46:1		^	
+trb2	accent	46:3		^	
+trb2	accent	47:1		fp	
+trb2	dyn	47:4.5		ff	
+trb2	accent	48:1		^	
+trb2	accent	48:3		^	
+trb2	accent	49:1		fp	
+trb2	dyn	50:4		f	
+trb2	accent	51:1		fp	
+trb2	text	52:1		zu 2	
+trb2	dyn	52:4		f	
+trb2	accent	53:1		fp	
+trb2	cresc	53:1	54:1	hairpin	
+trb2	dyn	54:1		ff	
+trb2	dyn	54:3		ff	
+trb2	notes	78:1	78:2		chord
+trb2	dyn	78:1		ff	
+trb2	accent	78:1		^	
+trb2	notes	80:1	80:2		chord
+trb2	dyn	80:1		ff	
+trb2	accent	80:1		^	
+trb2	notes	82:3	84:3		dotted quarters 82:3, 83:3; chord eighth
+trb2	accent	82:3		fp	
+trb2	accent	82:3		^	
+trb2	accent	83:3		fp	
+trb2	accent	83:3		^	
+trb2	dyn	84:3		ff	
+trb3	notes	6:4.5	8:4		whole note
+trb3	dyn	6:4.5		f	
+trb3	accent	7:1		^	
+trb3	accent	7:3		^	
+trb3	text	8:1		3. Pos.	on staff "3 Pos. Tuba"
+trb3	accent	8:1		^	
+trb3	dim	8:1	8:4	text	
+trb3	notes	12:3	12:3		
+trb3	dyn	12:3		ff	
+trb3	notes	14:1	14:1		
+trb3	dyn	14:1		ff	
+trb3	notes	15:3	15:3		
+trb3	notes	17:3	18:1		
+trb3	text	17:3		3 Pos.	
+trb3	dyn	17:3		ff	
+trb3	notes	19:4	21:4		whole note (upper voice of "3. Pos. Tuba" staff)
+trb3	text	19:4		3 Pos.	
+trb3	dyn	19:4		f	
+trb3	dim	21:1	21:2	hairpin	short
+trb3	notes	23:1	23:4		
+trb3	text	23:1		3. Pos.	
+trb3	dyn	23:1		f	
+trb3	dim	23:1	23:4	hairpin	
+trb3	notes	25:1	26:1		
+trb3	dyn	25:1		ff	
+trb3	dim	25:1	26:1	hairpin	
+trb3	dyn	26:1		mf	
+trb3	notes	30:1	39:1		tied whole notes; tied whole notes to eighth 39:1
+trb3	dyn	30:1		ff	
+trb3	accent	30:1		^	
+trb3	dim	31:1	31:4	hairpin	
+trb3	dyn	32:1		mf	
+trb3	dim	37:1	38:4	hairpin	uncertain direction
+trb3	dyn	39:1		p	
+trb3	notes	41:1	42:1		
+trb3	accent	41:1		fp	
+trb3	notes	44:1	45:1		
+trb3	accent	44:1		fp	
+trb3	notes	47:1	47:3		
+trb3	accent	47:1		fp	
+trb3	notes	49:1	54:3		
+trb3	accent	49:1		fp	
+trb3	accent	51:1		fp	
+trb3	accent	53:1		fp	
+trb3	cresc	53:1	54:1	hairpin	
+trb3	dyn	54:1		ff	
+trb3	dyn	54:3		ff	
+trb3	notes	73:3	74:3		staff "3. Pos. und Tuba"; eighth 73:3, chord 74:1
+trb3	dyn	73:3		ff	
+trb3	accent	74:1		^	
+trb3	notes	76:1	76:3		chord ^ (dotted half)
+trb3	accent	76:1		^	
+trb3	notes	82:3	84:3		
+trb3	accent	82:3		fp	
+trb3	accent	82:3		^	
+trb3	accent	83:3		fp	
+trb3	accent	83:3		^	
+trb3	dyn	84:3		ff	
+tuba	notes	12:3	12:3		first tuba entry (two-note chord on "3 Pos. Tuba" staff)
+tuba	dyn	12:3		ff	
+tuba	notes	14:1	14:1		
+tuba	dyn	14:1		ff	
+tuba	notes	15:3	15:3		chord on "3. Pos. Tuba" staff
+tuba	notes	25:1	26:1		lower voice
+tuba	dyn	25:1		ff	
+tuba	dim	25:1	26:1	hairpin	
+tuba	dyn	26:1		mf	
+tuba	notes	30:1	39:1		tied whole notes
+tuba	dyn	30:1		ff	
+tuba	dim	31:1	31:4	hairpin	
+tuba	dyn	32:1		mf	
+tuba	dim	37:1	38:4	hairpin	uncertain direction
+tuba	dyn	39:1		p	
+tuba	notes	41:1	42:1		
+tuba	accent	41:1		fp	
+tuba	notes	44:1	45:1		
+tuba	accent	44:1		fp	
+tuba	notes	47:1	47:3		
+tuba	accent	47:1		fp	
+tuba	notes	49:1	54:3		
+tuba	accent	49:1		fp	
+tuba	accent	51:1		fp	
+tuba	accent	53:1		fp	
+tuba	cresc	53:1	54:1	hairpin	
+tuba	dyn	54:1		ff	
+tuba	dyn	54:3		ff	
+tuba	notes	73:3	74:3		
+tuba	dyn	73:3		ff	
+tuba	accent	74:1		^	
+tuba	notes	76:1	76:3		
+tuba	accent	76:1		^	
+tuba	notes	82:3	84:3		
+tuba	accent	82:3		fp	
+tuba	accent	82:3		^	
+tuba	accent	83:3		fp	
+tuba	accent	83:3		^	
+tuba	dyn	84:3		ff	
+timp1	notes	1:3	6:1		tr. roll 1:3 to 5:4, eighth at 6:1
+timp1	text	1:3		tr	
+timp1	dyn	1:3		ff	
+timp1	dim	5:1	6:1	hairpin	
+timp1	dyn	6:1		p	
+timp1	notes	8:1	12:3		roll continues; half + eighth in bar 12
+timp1	dyn	8:1		ff	
+timp1	dyn	10:1		sempre ff	
+timp1	dim	11:1	12:1	hairpin	
+timp1	dyn	12:1		mf	
+timp1	notes	14:1	15:3		tr.; tr. half + eighth
+timp1	dyn	14:1		ff	
+timp1	dim	14:1	14:4	hairpin	
+timp1	dim	15:1	15:3	hairpin	
+timp1	dyn	15:3		mf	
+timp1	notes	21:1	25:1		tr. whole notes 21-24, eighth 25:1
+timp1	dyn	21:1		ff	
+timp1	dyn	23:1		f	
+timp1	dim	23:1	23:4	hairpin	
+timp1	dyn	24:1		mf	
+timp1	cresc	24:1	25:1	hairpin	
+timp1	notes	30:1	41:1		tr. whole notes; tr. whole notes to eighth 41:1
+timp1	dyn	30:1		ff	
+timp1	dim	31:1	31:4	hairpin	
+timp1	dyn	32:1		mf	
+timp1	notes	44:1	47:1		tr.
+timp1	dyn	44:1		f	
+timp1	dim	44:1	44:3	hairpin	
+timp1	notes	49:1	51:1		tr.
+timp1	dyn	49:1		f	
+timp1	dim	49:1	49:3	hairpin	
+timp1	notes	53:1	54:3		tr. whole, eighths 54:1, 54:3
+timp1	accent	53:1		fp	
+timp1	cresc	53:1	54:1	hairpin	
+timp1	dyn	54:1		f	
+timp1	dyn	54:3		f	
+timp1	notes	73:3	73:3		
+timp1	text	73:3		unis.	staff "1.2. Pauker"
+timp1	dyn	73:3		ff	
+timp1	notes	82:3	84:3		tr. half, eighth 83:1, tr. half 83:3; eighth 84:1, quarter 84:3
+timp1	dyn	82:3		f	
+timp1	dim	82:3	83:1	hairpin	
+timp1	dyn	83:1		p	
+timp1	dyn	83:3		f	
+timp1	dim	83:3	83:4	hairpin	
+timp1	dyn	84:1		p	
+timp1	dyn	84:3		ff	
+timp2	notes	1:3	3:2		tr. roll
+timp2	text	1:3		tr	
+timp2	dyn	1:3		ff	
+timp2	dim	1:3	3:1	hairpin	
+timp2	dyn	3:1		p	
+timp2	notes	8:1	9:4		tr.
+timp2	dyn	8:1		ff	
+timp2	dim	9:1	9:4	hairpin	
+timp2	notes	12:3	14:1		tr. half, whole, eighth 14:1
+timp2	dyn	12:3		ff	
+timp2	dim	12:3	14:1	hairpin	
+timp2	dyn	14:1		mf	
+timp2	notes	15:3	19:1		tr.
+timp2	dyn	15:3		ff	
+timp2	dim	17:1	19:1	hairpin	
+timp2	dyn	19:1		p	
+timp2	notes	21:1	22:4		tr.
+timp2	dyn	21:1		ff	
+timp2	dim	21:1	22:4	hairpin	
+timp2	dyn	22:4		p	
+timp2	notes	25:1	30:1		tr.; tr. from bar 25, eighth 30:1
+timp2	dyn	25:1		ff	
+timp2	dim	25:1	26:1	hairpin	
+timp2	dyn	26:1		mf	
+timp2	cresc	29:1	29:4	hairpin	
+timp2	dyn	30:1		ff	
+timp2	notes	41:1	44:1		tr.; tr. from bar 41 to eighth 44:1
+timp2	dyn	41:1		f	
+timp2	dim	41:1	41:4	hairpin	
+timp2	notes	47:1	49:1		tr.
+timp2	dyn	47:1		f	
+timp2	dim	47:1	48:1	hairpin	
+timp2	notes	51:1	54:3		tr.; tr. bar 52 to eighth 53:1
+timp2	dyn	51:1		f	
+timp2	dim	51:3	51:4	hairpin	
+timp2	dim	52:1	52:4	hairpin	
+timp2	dyn	54:1		f	
+timp2	dyn	54:3		f	
+timp2	notes	73:3	73:3		
+timp2	text	73:3		unis.	staff "1.2. Pauker"
+timp2	dyn	73:3		ff	
+timp2	notes	82:3	85:4		quarter; tr.
+timp2	dyn	82:3		ff	
+timp2	dyn	83:3		ff	
+timp2	dyn	84:3		ff	
+timp2	dim	85:1	86:1	hairpin	
+timp2	dyn	86:1		p	end of the hairpin (no note at 86)
+perc1	notes	1:1	1:1		
+perc1	text	1:1		Becken (cymbal), mit Paukenschlägel (Holz)	
+perc1	text	1:1		Becken (cymbals)	perc1 = the "Becken" staff throughout
+perc1	dyn	1:1		fff	
+perc1	notes	8:1	8:1		
+perc1	text	8:1		Becken mit Tellern (pair of cymbals)	
+perc1	dyn	8:1		f	
+perc1	notes	21:1	21:1		Becken
+perc1	dyn	21:1		ff	
+perc1	notes	25:1	30:1		roll to quarter 30:1
+perc1	text	25:1		tr. (cymbal roll)	
+perc1	dyn	25:1		mf	
+perc1	cresc	26:1	28:4	hairpin	direction read as < (uncertain)
+perc1	dyn	30:1		fff	
+perc1	notes	54:3	54:3		Becken
+perc1	dyn	54:3		ff	
+perc1	notes	73:3	73:3		Becken
+perc1	dyn	73:3		ff	
+perc1	notes	84:3	84:3		Becken
+perc1	text	84:3		(klingen lassen)	
+perc1	dyn	84:3		ff	
+perc2	notes	1:3	1:3		
+perc2	text	1:3		Grosse Trommel (bass drum)	
+perc2	text	1:3		Grosse Trommel (bass drum)	perc2 = the "Gr. Tr." staff; also the "Triangel" staff at bar 84
+perc2	dyn	1:3		ff	
+perc2	notes	12:3	12:3		Gr. Tr. eighth
+perc2	dyn	12:3		ff	
+perc2	notes	14:1	14:1		no new dynamic
+perc2	notes	15:3	15:3		Gr. Tr.
+perc2	notes	25:1	25:1		Gr. Tr. quarter
+perc2	dyn	25:1		ff	
+perc2	notes	54:1	54:1		Gr. Tr.
+perc2	dyn	54:1		ff	
+perc2	notes	74:1	74:1		Gr. Tr.
+perc2	dyn	74:1		ff	
+perc2	notes	84:1	84:1		triangle quarter
+perc2	text	84:1		Triangel (triangle)	separate "Triangel" staff; assigned to perc2 here - reassign if the recording has it elsewhere
+perc2	dyn	84:1		ff	
+vl1	notes	3:1.5	7:4		trem. bar 7 (page 93)
+vl1	text	3:1.5		(den ersten Ton scharf herausgehoben)	
+vl1	dyn	3:1.5		ff	
+vl1	accent	3:1.5		^	first note
+vl1	accent	5:2		^	
+vl1	cresc	5:2	6:1	hairpin	
+vl1	text	6:1		trem.	
+vl1	dyn	6:1		fff	trem.
+vl1	notes	9:3	11:1		triplet + tied whole; eighth
+vl1	dyn	9:3		fff	
+vl1	dim	10:1	10:4	hairpin	
+vl1	dyn	11:1		ff	
+vl1	notes	12:3.5	20:4		run; running figures bars 15-18, trem. 19-20
+vl1	text	12:3.5		wild	
+vl1	dyn	12:3.5		fff	
+vl1	cresc	18:2	19:1	hairpin	
+vl1	dyn	19:1		fff	trem.
+vl1	notes	23:3.5	41:4		run, then trem.; trem. chords 29, 30; eighths 31-36
+vl1	dyn	23:3.5		ff	
+vl1	dyn	25:1		ff	trem.
+vl1	dim	26:1	26:4	hairpin	
+vl1	dyn	27:1		f	
+vl1	cresc	29:2	30:1	hairpin	
+vl1	dyn	30:1		fff	
+vl1	accent	30:1		^	accents (^) on the first note of many groups bars 30-36
+vl1	dyn	32:1		sempre ff	
+vl1	dyn	37:1		ff	
+vl1	accent	37:1		^	
+vl1	dim	37:1	37:2	hairpin	
+vl1	dyn	38:1		ff	
+vl1	accent	38:1		^	
+vl1	dim	38:1	38:2	hairpin	
+vl1	dyn	39:1		ff sempre	
+vl1	accent	39:1		^	
+vl1	accent	41:1		^	
+vl1	notes	43:1	53:3		eighths throughout bars 44-51
+vl1	dyn	43:1		ff	
+vl1	accent	45:3		^	accents (^) on single notes in most bars 45-49
+vl1	notes	54:4	67:1		upbeat, continuous 55-59; eighths, ends with eighth 67:1
+vl1	dyn	54:4		ff	
+vl1	text	55:1		Energisch	
+vl1	cresc	62:1	63:1	hairpin	
+vl1	dyn	63:1		ff	
+vl1	notes	73:4	86:4		eighths 76-81 (8va), div. chords 82:2-83
+vl1	dyn	73:4		ff	
+vl1	accent	73:4		^	
+vl1	text	82:2		geth.	div.
+vl1	dyn	82:2		fff	
+vl1	text	84:2		unis.	(end of the bar-82 divisi)
+vl1	dyn	84:2		fff	
+vl1	dyn	85:4		ff	
+vl1	accent	85:4		^	
+vl1	dyn	86:1		ff	
+vl1	accent	86:1		^	
+vl1a	notes	82:2	83:4		div. upper
+vl1b	notes	82:2	83:4		div. lower
+vl2	notes	3:1.5	7:4		trem. bar 7 (page 93)
+vl2	text	3:1.5		(den ersten Ton scharf herausgehoben)	
+vl2	dyn	3:1.5		ff	
+vl2	accent	3:1.5		^	first note
+vl2	accent	5:2		^	
+vl2	cresc	5:2	6:1	hairpin	
+vl2	text	6:1		trem.	
+vl2	dyn	6:1		fff	trem.
+vl2	notes	9:3	20:4		triplet + tied whole; trem. whole 11, trem half 12:1, run from 12:3; running figures bars 15-18, trem. 19-20
+vl2	dyn	9:3		fff	
+vl2	dim	10:1	10:4	hairpin	
+vl2	dyn	11:1		p	
+vl2	cresc	11:1	12:1	text	"molto cresc." + hairpin
+vl2	dyn	12:1		fff	
+vl2	cresc	18:2	19:1	hairpin	
+vl2	dyn	19:1		fff	trem.
+vl2	notes	23:3.5	39:4		run, then trem.; trem. chords 29, 30; eighths 31-36
+vl2	dyn	23:3.5		ff	
+vl2	text	25:1		geth.	div. (double-stop chord written, "geth.")
+vl2	dyn	25:1		ff	trem.
+vl2	dim	26:1	26:4	hairpin	
+vl2	dyn	27:1		f	
+vl2	cresc	29:2	30:1	hairpin	
+vl2	dyn	30:1		ff	
+vl2	accent	30:1		^	accents (^) on the first note of many groups bars 30-36
+vl2	dyn	32:1		sempre ff	
+vl2	dyn	37:1		ff	
+vl2	accent	37:1		^	
+vl2	dim	37:1	37:2	hairpin	
+vl2	dyn	38:1		ff	
+vl2	accent	38:1		^	
+vl2	dim	38:1	38:2	hairpin	
+vl2	dyn	39:1		ff sempre	
+vl2	accent	39:1		^	
+vl2	notes	41:1	54:2		eighths throughout bars 44-51
+vl2	accent	41:1		^	
+vl2	dyn	43:1		ff	
+vl2	text	45:3		geth.	div. (double stops) to 50:2
+vl2	accent	45:3		^	accents (^) on single notes in most bars 45-49
+vl2	text	50:3		unis	
+vl2	cresc	53:3	54:3	hairpin	
+vl2	dyn	54:3		fff	printed at the end of the figure (54:2-54:3)
+vl2	notes	58:4	73:3		melody with eighth rests; run
+vl2	dyn	58:4		ff	
+vl2	dyn	63:1		ff	
+vl2	accent	63:1		^	
+vl2	dyn	67:1		f	
+vl2	dyn	71:1		f	
+vl2	cresc	72:1	72:4	hairpin	
+vl2	cresc	73:1	73:3	text	"cresc."
+vl2	dyn	73:3		ff	
+vl2	notes	78:1	86:4		pizz. eighth 84:1, then arco
+vl2	dyn	78:1		ff	
+vl2	dyn	82:1		fff	
+vl2	text	83:4		pizz.	
+vl2	dyn	83:4		fff	
+vl2	text	84:3		arco	
+vl2	dyn	84:3		fff	
+vl2	accent	84:3		^	
+vl2	text	86:1		G-Saite	
+vl2	accent	86:1		fp	
+vl2a	notes	45:3	50:2		div. upper
+vl2b	notes	45:3	50:2		div. lower
+vla	notes	1:3	1:3		
+vla	text	1:3		pizz.	
+vla	text	1:3		nicht geth.	
+vla	dyn	1:3		fff	
+vla	notes	4:1	7:4		
+vla	text	4:1		arco	
+vla	dyn	4:1		ff	
+vla	text	6:1		trem.	
+vla	dyn	6:1		fff	
+vla	notes	9:3	12:3		trem. whole, trem. half (Doppelgriff) + eighth 12:3
+vla	dyn	9:3		fff	
+vla	dim	10:1	10:4	hairpin	
+vla	dyn	11:1		p	
+vla	cresc	11:1	12:3	text	"molto cresc." + hairpin
+vla	text	12:1		Doppelgriff	
+vla	dyn	12:3		ff	
+vla	text	13:4		scharf abgerissen	caesura before bar 14 (lower strings + brass/bassoons bracket)
+vla	notes	14:1	14:1		
+vla	dyn	14:1		ff	
+vla	notes	15:3	19:1		
+vla	dyn	15:3		ff	
+vla	dyn	18:2		ff	
+vla	notes	24:1	39:1		trem.
+vla	dyn	24:1		ff	
+vla	dyn	25:1		ff	
+vla	dim	26:1	26:4	hairpin	
+vla	dyn	27:1		f	
+vla	cresc	29:2	30:1	hairpin	
+vla	dyn	30:1		ff	
+vla	accent	30:1		^	accents (^) on the first note of many groups bars 30-36
+vla	dyn	32:1		sempre ff	
+vla	dyn	37:3		ff	
+vla	dim	37:3	38:1	hairpin	
+vla	dyn	38:1		p	
+vla	dyn	38:3		ff	
+vla	dim	38:3	39:1	hairpin	
+vla	dyn	39:1		p	
+vla	notes	40:3	44:1		double stop
+vla	dyn	40:3		ff	
+vla	accent	41:1		^	
+vla	dim	41:1	41:3	hairpin	
+vla	dyn	41:3		p	
+vla	dyn	42:3		ff	
+vla	dyn	44:1		ff	
+vla	notes	45:3	51:1		
+vla	dyn	45:3		ff	
+vla	accent	45:3		^	accents (^) on single notes bars 45-48
+vla	dyn	51:1		ff	
+vla	notes	53:4	66:4		
+vla	dyn	53:4		ff	
+vla	cresc	53:4	54:3	hairpin	
+vla	dyn	54:3		fff	
+vla	dyn	55:1		ff	
+vla	accent	55:1		^	
+vla	accent	55:3		^	
+vla	dyn	56:1		ff	
+vla	accent	56:1		^	
+vla	dyn	58:1		ff	
+vla	cresc	59:1	59:4	hairpin	
+vla	cresc	60:1	60:2	hairpin	small, uncertain
+vla	dyn	63:1		ff	
+vla	accent	63:1		^	
+vla	accent	64:1		^	
+vla	notes	73:4	77:4		
+vla	dyn	73:4		ff	
+vla	accent	73:4		^	
+vla	notes	82:1	85:4		pizz. eighth 84:1, then arco
+vla	dyn	82:1		fff	
+vla	text	83:4		pizz.	
+vla	dyn	83:4		fff	
+vla	text	84:2.5		arco	
+vla	dyn	84:2.5		fff	
+vla	accent	85:1		^	
+vc	notes	1:3	1:3		
+vc	text	1:3		pizz.	
+vc	text	1:3		nicht geth.	
+vc	dyn	1:3		fff	
+vc	notes	6:1	7:4		
+vc	text	6:1		arco	
+vc	text	6:1		trem.	
+vc	dyn	6:1		fff	
+vc	notes	9:3	12:3		eighth; trem. quarter, trem. half, eighth
+vc	dyn	9:3		fff	
+vc	dim	10:1	10:4	hairpin	
+vc	dyn	11:1		ff	
+vc	dyn	11:4		pp	
+vc	cresc	11:4	12:1	text	"molto cresc." + hairpin
+vc	dyn	12:1		ff	
+vc	notes	14:1	14:1		
+vc	dyn	14:1		ff	
+vc	notes	15:3	15:3		
+vc	notes	25:1	30:1		trem.; trem. 29, quarter 30:1
+vc	dyn	25:1		ff	
+vc	dim	26:1	26:4	hairpin	
+vc	dyn	27:1		f	
+vc	cresc	29:2	30:1	hairpin	
+vc	dyn	30:1		fff	
+vc	notes	41:1	41:1		eighth
+vc	dyn	41:1		fff	
+vc	notes	44:1	44:1		
+vc	dyn	44:1		ff	
+vc	notes	47:1	47:1		
+vc	dyn	47:1		ff	
+vc	notes	49:1	49:1		
+vc	dyn	49:1		ff	
+vc	notes	51:1	51:1		
+vc	dyn	51:1		ff	
+vc	notes	53:1	77:3		halves, quarters 66; halves; whole 74 tied to half + eighth 75:3; whole ^ tied to half + eighth
+vc	accent	53:1		fp	
+vc	cresc	53:1	54:1	hairpin	
+vc	dyn	54:1		fff	
+vc	dyn	54:3		fff	
+vc	dyn	55:1		ff	
+vc	accent	55:1		^	
+vc	accent	55:3		^	
+vc	dyn	56:1		ff	
+vc	accent	56:1		^	
+vc	accent	58:1		^	
+vc	text	59:1		geth.	div.
+vc	dyn	59:1		f	
+vc	cresc	59:1	59:4	hairpin	
+vc	cresc	60:1	60:2	hairpin	small, uncertain
+vc	dyn	61:1		ff	
+vc	text	62:1		Doppelgriff	
+vc	dyn	63:1		ff	
+vc	accent	63:1		^	
+vc	accent	64:1		^	
+vc	accent	65:1		^	
+vc	dyn	67:1		mf	
+vc	accent	67:1		^	
+vc	accent	67:3		^	
+vc	accent	68:1		^	
+vc	cresc	73:1	73:3	hairpin	
+vc	dyn	74:1		ff	
+vc	accent	74:1		^	
+vc	accent	76:1		^	
+vc	notes	79:1	86:1		eighths 81, eighth 82:3, eighth 83:3; pizz. eighth 84:1, then arco triplets
+vc	dyn	79:1		ff	
+vc	text	83:4		pizz.	
+vc	dyn	83:4		fff	
+vc	text	84:3		arco	
+vc	dyn	84:3		ff	
+vc	accent	84:3		^	
+vc	dyn	86:1		f	
+vca	notes	59:1	59:4		div. upper
+vcb	notes	59:1	59:4		div. lower
+kb	notes	1:3	1:3		
+kb	text	1:3		pizz.	
+kb	dyn	1:3		fff	
+kb	notes	12:3	12:3		
+kb	text	12:3		arco	
+kb	dyn	12:3		ff	
+kb	notes	14:1	14:1		
+kb	dyn	14:1		ff	
+kb	notes	15:3	15:3		
+kb	notes	25:1	30:1		trem.
+kb	dyn	25:1		ff	
+kb	dim	26:1	26:4	hairpin	
+kb	dyn	27:1		f	
+kb	cresc	29:2	30:1	hairpin	
+kb	dyn	30:1		fff	
+kb	notes	41:1	41:1		
+kb	dyn	41:1		fff	
+kb	notes	44:1	44:1		
+kb	dyn	44:1		ff	
+kb	notes	47:1	47:1		
+kb	dyn	47:1		ff	
+kb	notes	49:1	49:1		
+kb	dyn	49:1		ff	
+kb	notes	51:1	51:1		
+kb	dyn	51:1		ff	
+kb	notes	53:1	54:3		
+kb	accent	53:1		fp	
+kb	cresc	53:1	54:1	hairpin	
+kb	dyn	54:1		fff	
+kb	dyn	54:3		fff	
+kb	notes	56:1	56:2		
+kb	dyn	56:1		ff	
+kb	accent	56:1		^	
+kb	notes	58:1	58:2		
+kb	accent	58:1		^	
+kb	notes	60:1	77:3		
+kb	dyn	60:1		f	
+kb	cresc	60:1	60:3	hairpin	
+kb	dyn	61:1		ff	
+kb	dyn	63:1		ff	
+kb	accent	63:1		^	
+kb	accent	64:1		^	
+kb	accent	65:1		^	
+kb	dyn	67:1		mf	
+kb	accent	67:1		^	
+kb	accent	67:3		^	
+kb	accent	68:1		^	
+kb	cresc	73:1	73:3	hairpin	
+kb	dyn	74:1		ff	
+kb	accent	74:1		^	
+kb	accent	76:1		^	
+kb	notes	79:1	86:1		
+kb	dyn	79:1		ff	
+kb	dyn	84:3		ff	
+kb	accent	84:3		^	
+kb	dyn	86:1		f	

@@ -43,6 +43,7 @@ uncertainty stated; timing too where possible; anything without data is marked a
    - 1.3 Divisi and section size
    - 1.4 Dynamic ranges per instrument (after Clark & Luce)
    - 1.5 Winds, brass, percussion, harp, piano, celesta balance
+   - 1.5a In-context check of the winds / brass against the strings (anechoic orchestra recordings, 2026-10-23)
    - 1.6 Directivity
    - 1.7 Tone against dynamic (Stage B)
 2. Timing
@@ -437,15 +438,192 @@ Open:
 
 **Missing.**
 - Percussion levels by marking (needs real instruments: not an agent's experiment).
-- An in-context check of winds / brass against the strings. The Aalto recordings (one gain for every part, §4) and
-  TU's Beethoven 8 (if its documentation gives the gains) can give **relative levels of every part at its written
-  dynamic, in context**, after TU's directivity correction for the single front microphone. That is the first
-  cross-check of `sectionLevel2` with the whole orchestra from one source in context. The Spheres dataset's own
-  balance is unusable (one chamber orchestra, gains unknown; BALANCE_LOG.md).
+- An in-context check of winds / brass against the strings: **done 2026-10-23, §1.5a** (Aalto and TU's Beethoven 8:
+  horns and trumpets play softer, flutes louder than the map implies). Still open: trombones and tuba (too little
+  data), and a modern-orchestra dataset with more than one player per instrument. The Spheres dataset's own balance is
+  unusable (one chamber orchestra, gains unknown; BALANCE_LOG.md).
 
 **Value: medium–high.** The winds / brass balance has never been confirmed. **Effort: medium.** Aalto needs the
 licence question settled first: its terms say "academic research", so commit derived numbers only, and preferably ask
 Pätynen / Lokki.
+
+### 1.5a In-context check of the winds / brass against the strings (anechoic orchestra recordings, 2026-10-23)
+
+Branch `research-balance` (from integrate-1017 fd909bc9a3). Research only: nothing in the map, the generator or MuseScore
+changed. Numbers: `tools/soundlibraries/anechoic_balance.json`; tools and the score readings:
+`tools/soundlibraries/anechoic_balance/` (the audio stays outside the repo and was deleted after measuring).
+
+**Question.** Does each wind and brass instrument play, against the strings at the same written marking in real music,
+as loud as the map implies? The map's real side (`sectionLevel2` + realRange 2) says one player plays
+Lw(m) = Lw_mp + markingSteps(m) × realSteps / 5, Lw_mp being Clark & Luce's one-player mp
+(`sso_cl_section_balance.json`, `lw.mp`), markingSteps pp −2, p −1, mp 0, mf 1, f 2, ff 3, fff 4 (`ContextLevel`).
+Until now nothing had checked this with an orchestra playing music.
+
+**Data** (all [read]; licences checked)
+- **Aalto anechoic symphony recordings.** Pätynen, Pulkki & Lokki 2008, *Acta Acust. u. Acust.* 94(6), 856–865;
+  Lokki, Pätynen & Pulkki 2008, "Recording of anechoic symphony music", Acoustics 08 Paris, Table 1 (microphone
+  positions).
+  - The download page states: "The recordings are all made with exactly the same gain settings … if you just add all
+    tracks together the balance should be correct". The unknown absolute gain is one constant for every part of every
+    piece. The strings' reference came out the same in all three pieces (−120.4, −120.5, −120.2 dB on the arbitrary
+    scale), which supports this.
+  - One professional player per instrument (Finnish National Opera and Helsinki orchestras) played every part one after
+    another, watching a conductor video and hearing a piano reduction.
+  - MP3 at 192 kb/s. Front microphone 6 (azimuth 0°, elevation 10.8°, 2.30 m from the player's head). The horns also have
+    mic 8 (azimuth 144°, 1.92 m); the bassoons and tuba also have mic 5 (azimuth 288°, elevation 52.6°, 2.49 m).
+  - Used: Beethoven 7 / I bars 1–53, Bruckner 8 / II bars 1–61, Mahler 1 / IV bars 1–85. Mozart (a soprano aria with a
+    small wind section) was left out.
+  - Licence: "free for academic research", no formal licence. Only derived numbers are committed.
+  - Bar timing: the PHENICX-Anechoic hand-aligned note annotations (Miron et al. 2016, Zenodo 840025, **CC BY 4.0**; §4
+    said CC BY-NC-SA 3.0, which was wrong). Each family's score-MIDI times (`*_o.txt`) are paired note by note with the
+    aligned times.
+- **TU Berlin anechoic Beethoven 8.** Böhm, Ackermann & Weinzierl 2020, *JAES* 68(12), 977–984,
+  doi:10.17743/jaes.2020.0056; data doi:10.14279/depositonce-6729.2, **CC BY 4.0**.
+  - The open excerpts: movement I bars 1–74, II bars 1–23, IV bars 0–90.
+  - Orchester Wiener Akademie on period instruments, recorded groupwise, two players per wind, violin and viola part,
+    one cello, one bass.
+  - **Calibrated.** Every track is normalised to 1 m and 10.1 mV/Pa. Table 3 gives each track's mic gain G and
+    artistic gain A, so SPL at 1 m in the mic direction = dBFS + 94 + 49.8 − G − A (the paper's worked example: Flute 1,
+    40 / −17 dB, −26.8 dBFS = 94 dB).
+  - The sound engineer's artistic gains (−2 … −18 dB) are reversed. Left in, they shift the winds by −5 … −8 dB against
+    the strings: a mix, not the players' balance (kept in the json as a check).
+  - Bar timing: dynamic time warping of the score activity (the readings' notes spans, every part) against the audio
+    activity (every track). On Beethoven 7 it reproduced PHENICX's bar positions within 0.15 bar (median), 0.7 (90 %).
+- **Directivity.** TU Berlin directivity database 1a (ff single tones; CC BY-NC-SA, derived numbers only). DI toward
+  each microphone, p² interpolated over the 32 receivers, mean over the notes. Modern instruments for Aalto; for TU B8
+  the classical-era ones (Violin / Viola / Cello / Double bass historical, keyed flute, classic oboe and bassoon,
+  historical clarinet, natural horn and trumpet).
+  - Aalto's azimuth runs clockwise. Checked by the second microphones: the tuba's mic 5 − mic 6 is +5.5 / +6.4 dB
+    measured against +4.1 predicted; the opposite convention predicts 0.
+  - The same check shows the DI's error toward one microphone is about ±2 dB. For the horns it is ±2.5: mic 8 gives Lw
+    4.6–5.1 dB under mic 6's. The horns' value is the dB mean of the two microphones' estimates; mic 6 alone moves them
+    +2.4 dB. The bassoon and tuba take the dB mean of mics 5 and 6.
+
+**Readings of the scores.** Agents transcribed every part's notes spans, dynamics, hairpins, cresc. / dim., point
+accents and technique texts from public-domain scores into `anechoic_balance/readings/*.tsv` (format in
+`FORMAT.txt`; about 5,300 rows, each doubtful one marked "uncertain"):
+- Beethoven 7: B&H Werke, IMSLP #312601
+- Bruckner 8: Eulenburg, IMSLP #30702, probably the 1892 text
+- Mahler 1: UE, IMSLP #17070
+- Beethoven 8: B&H Werke, IMSLP #61814
+
+**These readings have not been reviewed by the owner.** By the readings rule, a review page with crops is needed before
+any of this changes the map. Dropping the "uncertain" segments changes no instrument by more than 0.4 dB except
+trombone / tuba (see Sensitivity).
+
+**Method** (`anechoic_balance/`: envelope.py, tu_envelope.py, dir_at.py, balance.py, align_dtw.py, compare.py,
+summarize.py, make_json.py)
+1. **Envelope and activity.** A 50 ms mean-square envelope after a 40 Hz high pass. A frame counts as active when it is
+   over the track's noise (its 5th percentile) + 10 dB and within 30 dB of its 99th percentile.
+2. **Steady segments.** A segment is where the part plays at one written marking. Excluded:
+   - 0.25 bar at each end (0.4 bar for TU and Mahler, timed less exactly)
+   - hairpins and cresc. / dim. spans, ±0.25 bar
+   - 0.05 bar before to 0.25 bar after a point accent (sf, fp, …)
+   - stopped horn, mutes and pizz.
+
+   The segment's level is the power mean of its active frames less the noise power. A player's repeated passes (TU's
+   string voices, Aalto's doubled string tracks) are power-averaged.
+3. **Sound power.** Lw = level + 20 log10 r + 11 − DI(mic), plus the dataset's constant (unknown for Aalto, the
+   calibration for TU). The map's per-player value is r = Lw − Lw_map(instrument, marking), taken as each part × marking's
+   frame-weighted energy mean.
+4. **Against the strings.** rel = r − the strings' mean r at the same marking in the same piece (at least two string
+   parts and 10 s). This cancels Aalto's unknown gain, the dynamic that a marking means in a given passage, and any
+   compression of the strings' span. **rel < 0 means the instrument plays softer against the strings in context than the
+   map plays it.**
+5. **Summary.** Per instrument and dataset, the median over its part × marking values, with a bootstrap 90 % interval.
+   "Pooled" is the mean of the two datasets' medians: different players, instruments and recordings.
+
+**Results.** rel in dB, per player, against the strings at the same marking. n = part × marking values; the seconds
+measured are in the json.
+
+| instrument | Aalto (1 player, modern) | TU B8 (2 players, period) | pooled | map now (sectionLevel2, solo patch) | in context, against the map |
+|---|---|---|---|---|---|
+| flute | +3.2 [+1.4, +6.6] n 11 | +4.8 [+3.9, +7.0] n 14 | **+4.0** | −2.04 | louder: **+4 ± 3** |
+| oboe | −2.0 [−2.8, −0.6] n 17 | −6.4 [−7.1, −3.7] n 20 | **−4.2** | −6.67 | softer: **−4 ± 3** (datasets 4.4 apart) |
+| clarinet | +2.7 [+0.7, +4.1] n 17 | −0.8 [−1.6, +0.1] n 19 | +1.0 | −2.79 | **agrees** (±3) |
+| bassoon | +2.7 [+2.3, +3.9] n 21 | +0.7 [−0.7, +1.4] n 21 | +1.7 | −15.00 | about agrees (+1.7 ± 2.5) |
+| horn | −7.6 [−8.0, −6.7] n 36 | −9.0 [−12.1, −6.7] n 17 | **−8.3** | +0.57 | softer: **−8 ± 3** |
+| trumpet | −4.1 [−5.4, −0.6] n 11 | −5.1 [−6.5, −4.3] n 7 | **−4.6** | +9.04 | softer: **−4.5 ± 2.5** |
+| trombone | −1.0 [−3.4, +2.7] n 11 | – | (−1.0) | −0.35 | **no conclusion** (Bruckner +2.9, Mahler −3.3; spread 9 dB) |
+| tuba | −1.6 [−10.7, +5.2] n 4 | – | (−1.6) | −1.12 | **no conclusion** (4 values) |
+| *violin* | −2.5 | +0.4 | −1.0 | | the strings against each other: |
+| *viola* | +3.9 | −2.1 | +0.9 | | the datasets disagree by 3–6 dB |
+| *cello* | −0.2 | −0.7 | −0.5 | | (one or two players each); no |
+| *double bass* | +2.9 | +0.7 | +1.8 | | consistent difference from the map |
+
+The "±" combines:
+- the statistical interval;
+- the DI toward one microphone (±2 dB, horns ±2.5);
+- half the datasets' difference, standing for the players: Aalto has one player per instrument, TU two.
+
+**Corroboration**
+- **TU's absolute levels.** TU Beethoven 8 is calibrated, so its absolute residuals (Lw − the map's per-player Lw at the
+  marking) say the same without the strings as reference:
+
+  | | violin | viola | cello | bass | flute | oboe | clarinet | bassoon | horn | trumpet |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | median (dB) | +3.0 | −1.1 | +0.6 | +0.7 | +6.7 | −4.5 | +0.7 | +2.6 | **−8.6** | **−5.5** |
+
+  These players' strings sit within ±3 dB of Clark & Luce's absolute per-player levels. Their horns and trumpets sit
+  8.6 / 5.5 dB under them.
+- **The same horn and trumpet offset by marking.** rel by marking is about the same from p to ff:
+  - horn: Aalto p −10.0, mf −7.6, f −6.9, ff −7.7; TU pp −10.3, p −9.1, f −10.6, ff −7.9
+  - trumpet: f −3.0 / −4.2, ff −5.3 / −5.5
+
+  So it is an offset of the balance, not a different span.
+- **The horn's history.** Iteration 1 (BALANCE_LOG.md) replaced Fig. 2's horn (player 2, 13.4 dB lower at mp) with
+  Clark & Luce's player 1. In context the horns land 8 dB under player 1 and about 5 dB over Fig. 2: between the two
+  players, nearer player 2. Iteration 1's other sources put horn − trumpet at 0 … −7 dB. The pooled in-context values
+  give horn − trumpet (one player each, mp) = (94.76 − 8.3) − (96.59 − 4.6) = −5.5 dB, inside that range.
+
+**Sensitivity** (pooled dB; the json has every variant)
+
+| variant | flute | oboe | clarinet | bassoon | horn | trumpet |
+|---|---|---|---|---|---|---|
+| as above | +4.0 | −4.2 | +1.0 | +1.7 | −8.3 | −4.6 |
+| mean of dB instead of power mean | +3.8 | −3.8 | +1.4 | +2.7 | −8.2 | −4.9 |
+| without the "uncertain" readings | +4.1 | −4.1 | +1.4 | +1.6 | −8.4 | −4.5 |
+| without Mahler | +4.0 | −3.7 | +0.4 | +1.7 | −7.9 | −4.0 |
+| Aalto front mic 6 only | +4.0 | −4.2 | +1.0 | +2.2 | −7.1 | −4.6 |
+
+**What it implies for the map** (a proposal only; the owner decides, and the readings need his review first)
+- Change the woodwind and brass families' `sectionLevel2` by the pooled in-context difference, the strings staying the
+  centre. Each change is about ±3 dB uncertain. Every patch of a family moves together, the same per-player offset:
+  - **horns −8 dB**: Horn Solo +0.57 → about −7.7; Horns a2, a6 and Motif Horns a4 the same −8
+  - **trumpets −4.5 dB**: Trumpets a6 +20.45 → about +16; the Motif trumpets too
+  - **flutes +4 dB**: piccolo, alto and bass flute only by the family assumption
+  - **oboes −4 dB**: the cor anglais only by the family assumption
+- Leave the clarinet and bassoon as they are: the data agree within the uncertainty, and the two datasets straddle 0.
+  Leave the trombones, tuba and the low brass gap patches too: not enough data.
+- It would be the first change of the balance from one whole-orchestra source in context. It ranks above Clark & Luce's
+  out-of-context scales for this question: real music, one gain (Aalto) or a documented calibration (TU), two
+  independent orchestras that agree within 1.5 dB on horns, trumpets and flutes. It ranks below them in players: one or
+  two per instrument against Clark & Luce's two, period instruments in TU.
+- A conservative half-step (−4 horns, −2 trumpets, +2 flutes, −2 oboes) would be within both sources' intervals. That is
+  for the owner to decide.
+
+**Side finding for §1.4 (not part of the balance).** In context the strings' level moves less between markings than
+Clark & Luce's spans:
+- TU: the strings' residual is +6 … +9 dB at pp and −1 … −5 dB at ff, so their pp → ff in context is about 4–6 dB against
+  the map's 13.8–15.9.
+- Aalto: 3 dB less than the map's span.
+
+This is consistent with the anechoic, headphone situation and with passages written pp lying in other registers. It
+needs its own study before it touches realSteps.
+
+**Still unknown**
+- **Trombones and tuba**: 11 and 4 values, Aalto only, 9 dB apart between Bruckner and Mahler.
+- **Percussion, harp, keyboards**: not measured here (Aalto's timpani track exists; TU's timpani DI toward its
+  overhead mic is unreliable).
+- **The players**: one Aalto player per instrument and two TU players. Clark & Luce's players differed by 0–4 dB (horn:
+  14–22). No dataset with several orchestras' players per instrument in context is known.
+- **The recording situation**: players recorded alone or in groups with headphones and a pilot track. Their effort
+  against a real orchestra's (Lombard effect, §1.3's Rossing 1986) is unknown. It acts on strings and winds alike, so
+  rel is more robust than the absolute levels.
+- **Directivity**: TU's database players are not these players. The horns' two Aalto microphones disagree with TU's
+  pattern by about 4 dB.
+- **Bar timing in TU B8** (DTW): about ±0.2–0.7 bar, handled by the 0.4-bar trims.
+- **The owner's review of the readings.**
 
 ### 1.6 Directivity
 
@@ -906,8 +1084,8 @@ gain is known**: normalised samples can't give levels.
 |---|---|---|---|---|
 | 1 | **OrchideaSOL** (Cella, Ghisi, Lostanlen, Lévy, Fineberg & Maresz 2020, "OrchideaSOL: a dataset of extended instrumental techniques for computer-aided orchestration", ICMC 2020, arXiv:2007.00763; Zenodo 10.5281/zenodo.3686252 / 3740399) | technique against ordinario per string instrument (§1.1), sforzato (§1.2), pp/mf/ff spans, mf tone (§1.7) | un-normalised, gains reverted where reported, inferred per family otherwise; close mic only; levels trustworthy within one instrument and session, uncertain across sessions | metadata CC BY 4.0; audio Ircam Forum licence (free, non-commercial, account needed). TinySOL (ordinario only) CC BY 4.0 |
 | 2 | **Spheres** (Garcia-Martinez, Diaz-Guerra, Anderson, Falcon-Perez, Cabañas-Molero, Virtanen, Carabias-Orti & Vera-Candeas, arXiv:2511.21247, IEEE TASLP; Zenodo 10.5281/zenodo.17347681; 46.6 GB) | sections in context: accents, staccato, legato transitions, vibrato; section scales (legato / pizz / staccato, quiet and loud) against the leader's solo scales (§1.3) | not documented; parts recorded separately in sessions; ask the authors for gain sheets | CC BY-SA 4.0 |
-| 3 | **TU Berlin anechoic Beethoven 8** (Böhm, Ackermann & Weinzierl 2020, "A multi-channel anechoic orchestra recording of Beethoven's Symphony No. 8 op. 93", *JAES*, doi:10.17743/jaes.2020.0056; dataset doi:10.14279/depositonce-6729.2; mvts 1, 2, 4, ~1.9 GB) | a professional (period-instrument) orchestra recorded **groupwise**: timing within a group (§2.2), accents, legato, balance if gains are documented | unknown: read its 3 MB Documentation.pdf first | **CC BY 4.0** |
-| 4 | **Aalto anechoic symphony recordings** (Pätynen, Pulkki & Lokki 2008, "Anechoic recording system for symphony orchestra", *Acta Acustica u. Acustica* 94(6), 856–865; https://users.aalto.fi/~ktlokki/Sinfrec/sinfrec.html) and **PHENICX-Anechoic** (Miron, Carabias-Orti, Bosch, Gómez & Janer 2016, *J. Electr. Comput. Eng.*; Zenodo 840025) | Mozart aria, Beethoven 7 / I (b. 1–53), Bruckner 8 / II (b. 1–61), Mahler 1 / IV (b. 1–85); one player per part, divisi strings; **relative levels of every part at its written dynamic** (§1.5), accents (§1.2), techniques in Mahler (§1.1) | the page states one gain setting for all recordings, kept for the natural balance (dataset survey [read]; the technique survey didn't find it stated: confirm). MP3 front mic; PCM on request | "free for academic research" (no formal licence); PHENICX annotations CC BY-NC-SA 3.0. Public repo: derived numbers only, ask the authors |
+| 3 | **TU Berlin anechoic Beethoven 8** (Böhm, Ackermann & Weinzierl 2020, "A multi-channel anechoic orchestra recording of Beethoven's Symphony No. 8 op. 93", *JAES*, doi:10.17743/jaes.2020.0056; dataset doi:10.14279/depositonce-6729.2; mvts 1, 2, 4, ~1.9 GB) | a professional (period-instrument) orchestra recorded **groupwise**: timing within a group (§2.2), accents, legato, balance if gains are documented | **calibrated**: SPL at 1 m in the mic direction from Table 3's mic and artistic gains (the JAES paper; used in §1.5a) | **CC BY 4.0** |
+| 4 | **Aalto anechoic symphony recordings** (Pätynen, Pulkki & Lokki 2008, "Anechoic recording system for symphony orchestra", *Acta Acustica u. Acustica* 94(6), 856–865; https://users.aalto.fi/~ktlokki/Sinfrec/sinfrec.html) and **PHENICX-Anechoic** (Miron, Carabias-Orti, Bosch, Gómez & Janer 2016, *J. Electr. Comput. Eng.*; Zenodo 840025) | Mozart aria, Beethoven 7 / I (b. 1–53), Bruckner 8 / II (b. 1–61), Mahler 1 / IV (b. 1–85); one player per part, divisi strings; **relative levels of every part at its written dynamic** (§1.5), accents (§1.2), techniques in Mahler (§1.1) | one gain setting for every recording: confirmed on the download page ("exactly the same gain settings"; §1.5a). MP3 front mic (+ mic 8 horns, mic 5 bassoons / tuba); PCM on request | "free for academic research" (no formal licence); PHENICX annotations **CC BY 4.0** (Zenodo 840025). Public repo: derived numbers only |
 | 5 | **TU Berlin anechoic instrument DB** (Weinzierl, Vorländer et al., doi:10.14279/depositonce-19858, v3 2024) + **directivity DB** (Ackermann, Brinkmann & Weinzierl 2023, arXiv:2307.02110) | calibrated sound power pp/ff, spectral features (§1.4, §1.7), directivity (§1.6) | calibrated (ISO 3745) | DB: "In Copyright" + item licence.txt (read it before committing per-note tables); directivity DB CC BY-SA 4.0; the 2018 paper CC BY 4.0 |
 | 6 | **QUARTET / EEP** (MTG; Marchini et al. 2014; Papiotis et al. 2016; Maestre et al., *IEEE MultiMedia* 2017) | real simultaneous quartet timing (§2.2), bowing parameters, vibrato | contact mics, relative | not found; ask MTG |
 | 7 | **University of Iowa MIS** (https://theremin.music.uiowa.edu/mis.html) | pp/mf/ff single notes, arco / pizz, vibrato / non-vibrato | fixed within a session | "without restriction" |
@@ -1000,8 +1178,8 @@ setting.
      written dynamic.
 7. **In-context balance of the whole orchestra.**
    - *Fixes:* the unconfirmed winds / brass against strings (§1.5).
-   - *Source:* the Aalto anechoic recordings (one gain for all parts: confirm); TU Beethoven 8 if its Documentation.pdf
-     gives the gains.
+   - **Done 2026-10-23 (§1.5a)** for flutes, oboes, clarinets, bassoons, horns, trumpets; trombones / tuba still open.
+   - *Source:* the Aalto anechoic recordings (one gain for all parts: confirmed); TU Beethoven 8 (calibrated).
    - *Method:* each part's loudness at its written dynamics, corrected by TU's directivity for the front mic (Ackermann
      2023, CC BY-SA), against `sectionLevel2`'s prediction for the same parts. Settle the licence (Aalto: derived
      numbers only; ask the authors).

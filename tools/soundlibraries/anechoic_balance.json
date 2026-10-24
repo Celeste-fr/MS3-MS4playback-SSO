@@ -1,0 +1,6004 @@
+{
+ "what": "In-context sound power of each orchestral part at its written dynamic, against the map's implied per-player level (sectionLevel2's Clark & Luce real side + realRange 2's steps): research only, not read by any generator or by MuseScore. docs/RESEARCH.md > 1.5a.",
+ "sources": {
+  "aalto": "Paetynen, Pulkki & Lokki 2008, \"Anechoic recording system for symphony orchestra\", Acta Acustica u. Acustica 94(6) 856-865; Lokki, Paetynen & Pulkki 2008, \"Recording of anechoic symphony music\", Acoustics 08 Paris (mic positions, Table 1). research.cs.aalto.fi/acoustics/virtual-acoustics/research/acoustic-measurement-and-analysis/85-anechoic-recordings.html: \"The recordings are all made with exactly the same gain settings\". MP3 192 kb/s, front mic 6 (az 0, el 10.8, 2.30 m from the player's head), horns also mic 8 (az 144, 1.92 m), bassoons / tuba also mic 5 (az 288, el 52.6, 2.49 m). One professional player per instrument (Finnish orchestras) played every part. Licence: \"free for academic research\"; derived numbers only.",
+  "phenicx": "Miron, Carabias-Orti, Bosch, Gomez & Janer 2016, PHENICX-Anechoic note annotations (Zenodo 840025, CC BY 4.0): bar timing only.",
+  "tub8": "Boehm, Ackermann & Weinzierl 2020, \"A Multi-channel Anechoic Orchestra Recording of Beethoven's Symphony No. 8 op. 93\", J. Audio Eng. Soc. 68(12) 977-984, doi:10.17743/jaes.2020.0056; data doi:10.14279/depositonce-6729.2 (CC BY 4.0), the open excerpts of movements 1, 2, 4. Orchester Wiener Akademie (period instruments), recorded groupwise; 2 players per wind / violin / viola part, 1 cello, 1 bass. Every track normalised to 1 m and 10.1 mV/Pa: SPL at 1 m in the mic direction = dBFS + 94 + 49.8 - mic gain - artistic gain (Table 3; the paper's worked example), the engineer's artistic gain reversed.",
+  "directivity": "TU Berlin directivity database (Ackermann, Boehm, Brinkmann & Weinzierl 2024, doi:10.14279/depositonce-19858 v3, CC BY-NC-SA 4.0: derived numbers only), 1a single tones (ff): DI toward each mic, p^2 interpolated over the 32 receivers (inverse squared angle, 4 nearest), mean over notes; modern instruments for Aalto, the classical-era ones for TU B8 (Violin/Viola/Cello/Double_bass_historical, Keyed_flute, Classic_oboe, Clarinet_historical, Classic_bassoon, Natural_horn, Natural_trumpet)."
+ },
+ "method": [
+  "Score readings (bar:beat dynamics, hairpins, cresc./dim., accents, technique texts, notes spans per player) by agents from public-domain scores: anechoic_balance/readings/*.tsv. NOT YET REVIEWED BY THE OWNER (readings rule).",
+  "Envelope: 50 ms mean square after a 40 Hz high pass; a frame is active when over the track noise (5th percentile) + 10 dB and within 30 dB of its 99th percentile.",
+  "Steady segment: where the part plays, one written marking, more than 0.25 bar (TU / Mahler 0.4) inside the segment's ends, outside hairpins / cresc. / dim. (+-0.25 bar) and 0.05 bar before .. 0.25 bar after a point accent (sf, fp, ...), outside stopped horn / mutes / pizz. Level = power mean of its active frames less the noise power; repeated passes of one player power-averaged.",
+  "Lw = level + 20 log10(r) + 11 - DI(mic) (+ the dataset constant: unknown for Aalto, the calibration for TU B8); Aalto horns, bassoons, tuba: the dB mean of the two microphones' estimates.",
+  "Map's per-player Lw at a marking = Lw_mp (sso_cl_section_balance.json, one player) + markingSteps x realSteps / 5 (ContextLevel: pp -2, p -1, mp 0, mf 1, f 2, ff 3, fff 4).",
+  "r = Lw - map Lw per part x marking (frame-weighted energy mean of its segments); rel = r - the strings' mean r at the same marking in the same piece (at least two string parts, 10 s). rel < 0: the part plays softer against the strings in context than the map plays it.",
+  "Per instrument and dataset: median over part x marking values, bootstrap 90 % interval; pooled = the mean of the two datasets' medians (different players)."
+ ],
+ "mapPerPlayer": {
+  "violin": {
+   "lwMp": 77.93,
+   "realSteps": 13.8
+  },
+  "viola": {
+   "lwMp": 75.27,
+   "realSteps": 15.9
+  },
+  "cello": {
+   "lwMp": 82.72,
+   "realSteps": 14.1
+  },
+  "bass": {
+   "lwMp": 81.84,
+   "realSteps": 14.1
+  },
+  "flute": {
+   "lwMp": 81.9,
+   "realSteps": 7.5
+  },
+  "oboe": {
+   "lwMp": 85.23,
+   "realSteps": 7.4
+  },
+  "clarinet": {
+   "lwMp": 82.05,
+   "realSteps": 8.3
+  },
+  "bassoon": {
+   "lwMp": 81.16,
+   "realSteps": 10.2
+  },
+  "horn": {
+   "lwMp": 94.76,
+   "realSteps": 17.7
+  },
+  "trumpet": {
+   "lwMp": 96.59,
+   "realSteps": 8.8
+  },
+  "trombone": {
+   "lwMp": 89.76,
+   "realSteps": 17.0
+  },
+  "tuba": {
+   "lwMp": 95.12,
+   "realSteps": 12.5
+  }
+ },
+ "directivityUsed": {
+  "aalto": {
+   "Transverse_flute_modern": {
+    "aalto mic 6 front": 1.28,
+    "aalto mic 8 (az 144 clockwise)": -0.88,
+    "aalto mic 5 (az 288 clockwise)": 0.55
+   },
+   "Oboe_modern": {
+    "aalto mic 6 front": 2.14,
+    "aalto mic 8 (az 144 clockwise)": -3.38,
+    "aalto mic 5 (az 288 clockwise)": -1.33
+   },
+   "Clarinet_modern": {
+    "aalto mic 6 front": 3.06,
+    "aalto mic 8 (az 144 clockwise)": -2.9,
+    "aalto mic 5 (az 288 clockwise)": -1.06
+   },
+   "Bassoon_modern": {
+    "aalto mic 6 front": 1.17,
+    "aalto mic 8 (az 144 clockwise)": 0.11,
+    "aalto mic 5 (az 288 clockwise)": -0.89
+   },
+   "French_horn_modern": {
+    "aalto mic 6 front": -1.82,
+    "aalto mic 8 (az 144 clockwise)": 2.33,
+    "aalto mic 5 (az 288 clockwise)": -4.27
+   },
+   "Trumpet_modern": {
+    "aalto mic 6 front": 4.31,
+    "aalto mic 8 (az 144 clockwise)": -3.09,
+    "aalto mic 5 (az 288 clockwise)": -1.68
+   },
+   "Tenor_trombone_modern": {
+    "aalto mic 6 front": 4.34,
+    "aalto mic 8 (az 144 clockwise)": -3.82,
+    "aalto mic 5 (az 288 clockwise)": -1.14
+   },
+   "Tuba_modern": {
+    "aalto mic 6 front": 0.42,
+    "aalto mic 8 (az 144 clockwise)": -3.05,
+    "aalto mic 5 (az 288 clockwise)": 5.18
+   },
+   "Violin_modern": {
+    "aalto mic 6 front": 1.54,
+    "aalto mic 8 (az 144 clockwise)": -1.51,
+    "aalto mic 5 (az 288 clockwise)": 0.88
+   },
+   "Viola_modern": {
+    "aalto mic 6 front": 0.73,
+    "aalto mic 8 (az 144 clockwise)": -2.11,
+    "aalto mic 5 (az 288 clockwise)": 0.76
+   },
+   "Cello_modern": {
+    "aalto mic 6 front": 1.47,
+    "aalto mic 8 (az 144 clockwise)": -3.48,
+    "aalto mic 5 (az 288 clockwise)": -0.53
+   },
+   "Double_bass_modern": {
+    "aalto mic 6 front": 0.58,
+    "aalto mic 8 (az 144 clockwise)": -2.98,
+    "aalto mic 5 (az 288 clockwise)": -1.57
+   },
+   "Timpani": {
+    "aalto mic 6 front": -0.03,
+    "aalto mic 8 (az 144 clockwise)": 0.41,
+    "aalto mic 5 (az 288 clockwise)": -5.32
+   },
+   "Pedal_timpani": {
+    "aalto mic 6 front": -0.62,
+    "aalto mic 8 (az 144 clockwise)": 0.58,
+    "aalto mic 5 (az 288 clockwise)": -5.84
+   }
+  },
+  "tub8": {
+   "Vl_1_1": {
+    "instrument": "Violin_historical",
+    "di": 0.61,
+    "sdOverNotes": 1.08
+   },
+   "Vl_1_2": {
+    "instrument": "Violin_historical",
+    "di": 0.07,
+    "sdOverNotes": 1.4
+   },
+   "Vl_2_1": {
+    "instrument": "Violin_historical",
+    "di": 0.77,
+    "sdOverNotes": 0.84
+   },
+   "Vl_2_2": {
+    "instrument": "Violin_historical",
+    "di": 0.73,
+    "sdOverNotes": 1.28
+   },
+   "Vla_1": {
+    "instrument": "Viola_historical",
+    "di": 0.44,
+    "sdOverNotes": 1.1
+   },
+   "Vla_2": {
+    "instrument": "Viola_historical",
+    "di": -0.02,
+    "sdOverNotes": 1.35
+   },
+   "Vc": {
+    "instrument": "Cello_historical",
+    "di": 2.32,
+    "sdOverNotes": 1.38
+   },
+   "Db": {
+    "instrument": "Double_bass_historical",
+    "di": 2.58,
+    "sdOverNotes": 0.73
+   },
+   "Bn_1": {
+    "instrument": "Classic_bassoon_historical",
+    "di": 3.06,
+    "sdOverNotes": 1.17
+   },
+   "Bn_2": {
+    "instrument": "Classic_bassoon_historical",
+    "di": 0.28,
+    "sdOverNotes": 1.05
+   },
+   "Fl_1": {
+    "instrument": "Keyed_flute_historical",
+    "di": 1.77,
+    "sdOverNotes": 2.99
+   },
+   "Fl_2": {
+    "instrument": "Keyed_flute_historical",
+    "di": 1.15,
+    "sdOverNotes": 2.05
+   },
+   "Cl_1": {
+    "instrument": "Clarinet_historical",
+    "di": 1.73,
+    "sdOverNotes": 1.32
+   },
+   "Cl_2": {
+    "instrument": "Clarinet_historical",
+    "di": 0.98,
+    "sdOverNotes": 1.41
+   },
+   "Ob_1": {
+    "instrument": "Classic_oboe_historical",
+    "di": 1.78,
+    "sdOverNotes": 1.96
+   },
+   "Ob_2": {
+    "instrument": "Classic_oboe_historical",
+    "di": -0.05,
+    "sdOverNotes": 1.25
+   },
+   "Trp_1": {
+    "instrument": "Natural_trumpet_historical",
+    "di": 2.21,
+    "sdOverNotes": 0.51
+   },
+   "Trp_2": {
+    "instrument": "Natural_trumpet_historical",
+    "di": 1.14,
+    "sdOverNotes": 0.38
+   },
+   "Hrn_1": {
+    "instrument": "Natural_horn_historical",
+    "di": -0.34,
+    "sdOverNotes": 0.25
+   },
+   "Hrn_2": {
+    "instrument": "Natural_horn_historical",
+    "di": -2.57,
+    "sdOverNotes": 0.51
+   },
+   "Tp": {
+    "instrument": "Timpani",
+    "di": -8.94,
+    "sdOverNotes": 2.1
+   }
+  }
+ },
+ "pieces": {
+  "beethoven7_i": {
+   "dataset": "aalto",
+   "work": "Beethoven, Symphony No. 7, I, bars 1-53",
+   "score": "Breitkopf & Haertel Werke (IMSLP #312601)",
+   "timing": "PHENICX-Anechoic hand-aligned note times (score MIDI 4/4 at quarter = 100: bar b at 2.4 b s) mapped to audio",
+   "stringsRef": -120.4,
+   "stringPartMarkings": 17,
+   "stringsSd": 3.19,
+   "stringsRefByMarking": {
+    "pp": -119.28,
+    "p": -118.12,
+    "ff": -122.26
+   }
+  },
+  "bruckner8_ii": {
+   "dataset": "aalto",
+   "work": "Bruckner, Symphony No. 8, II, bars 1-61",
+   "score": "Eulenburg miniature score (IMSLP #30702)",
+   "timing": "PHENICX-Anechoic (score MIDI 3/4 at quarter = 100: bar b at 1.8 (b - 1) s)",
+   "stringsRef": -120.5,
+   "stringPartMarkings": 21,
+   "stringsSd": 3.77,
+   "stringsRefByMarking": {
+    "pp": -118.74,
+    "p": -119.39,
+    "f": -119.94,
+    "ff": -122.25
+   }
+  },
+  "mahler1_iv": {
+   "dataset": "aalto",
+   "work": "Mahler, Symphony No. 1, IV, bars 1-85",
+   "score": "Universal Edition (IMSLP #17070)",
+   "timing": "PHENICX-Anechoic (score MIDI at quarter = 183; bar 1 at 1.47 s, 1.3114 s a bar, fitted to the readings; DTW agrees within 0.2 bar to bar 84); flutes / piccolos and the E-flat clarinet left out (the two flute tracks cannot be matched to the score players)",
+   "stringsRef": -120.23,
+   "stringPartMarkings": 16,
+   "stringsSd": 4.08,
+   "stringsRefByMarking": {
+    "mf": -114.16,
+    "f": -121.9,
+    "ff": -119.59,
+    "fff": -124.38
+   }
+  },
+  "beethoven8_i": {
+   "dataset": "tub8",
+   "work": "Beethoven, Symphony No. 8, I, the open excerpt (74 s, bars 1-74)",
+   "score": "Breitkopf & Haertel Werke (IMSLP #61814)",
+   "timing": "DTW of score activity (readings) against audio activity, 0.75 s a bar chosen",
+   "stringsRef": 1.89,
+   "stringPartMarkings": 30,
+   "stringsSd": 6.29,
+   "stringsRefByMarking": {
+    "pp": 9.41,
+    "p": 3.83,
+    "f": -0.18,
+    "ff": -0.63
+   }
+  },
+  "beethoven8_ii": {
+   "dataset": "tub8",
+   "work": "Beethoven, Symphony No. 8, II, the open excerpt (69.5 s, bars 1-23)",
+   "score": "Breitkopf & Haertel Werke (IMSLP #61814)",
+   "timing": "DTW, 2.2 s a bar chosen",
+   "stringsRef": 0.36,
+   "stringPartMarkings": 28,
+   "stringsSd": 4.54,
+   "stringsRefByMarking": {
+    "pp": 6.2,
+    "p": 0.03,
+    "f": -1.0
+   }
+  },
+  "beethoven8_iv": {
+   "dataset": "tub8",
+   "work": "Beethoven, Symphony No. 8, IV, the open excerpt (79.5 s, bars 0-90)",
+   "score": "Breitkopf & Haertel Werke (IMSLP #61814)",
+   "timing": "DTW, 0.55 s a bar chosen",
+   "stringsRef": 1.94,
+   "stringPartMarkings": 34,
+   "stringsSd": 5.19,
+   "stringsRefByMarking": {
+    "pp": 7.02,
+    "p": 4.11,
+    "f": 1.22,
+    "ff": -2.05
+   }
+  }
+ },
+ "instruments": {
+  "violin": {
+   "aalto": {
+    "median": -2.5,
+    "mean": -2.24,
+    "ci90": [
+     -3.45,
+     -1.03
+    ],
+    "partMarkings": 20,
+    "seconds": 304.7,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": 0.29,
+     "p": -3.54,
+     "f": -3.65,
+     "ff": -2.91,
+     "fff": -0.5
+    }
+   },
+   "tub8": {
+    "median": 0.44,
+    "mean": 0.82,
+    "ci90": [
+     -0.63,
+     2.12
+    ],
+    "partMarkings": 42,
+    "seconds": 437.3,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": 0.48,
+     "p": 0.69,
+     "f": 0.39,
+     "ff": 1.0
+    }
+   },
+   "pooled": {
+    "db": -1.03,
+    "datasets": 2,
+    "datasetDifference": 2.94
+   }
+  },
+  "viola": {
+   "aalto": {
+    "median": 3.91,
+    "mean": 3.81,
+    "ci90": [
+     2.31,
+     4.7
+    ],
+    "partMarkings": 9,
+    "seconds": 145.3,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": 1.52,
+     "p": 4.05,
+     "f": 5.38,
+     "ff": 2.31,
+     "fff": 6.1
+    }
+   },
+   "tub8": {
+    "median": -2.1,
+    "mean": -1.9,
+    "ci90": [
+     -3.11,
+     0.09
+    ],
+    "partMarkings": 20,
+    "seconds": 202.3,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -0.62,
+     "p": -2.83,
+     "f": -2.1,
+     "ff": -1.89
+    }
+   },
+   "pooled": {
+    "db": 0.91,
+    "datasets": 2,
+    "datasetDifference": 6.01
+   }
+  },
+  "cello": {
+   "aalto": {
+    "median": -0.18,
+    "mean": -0.8,
+    "ci90": [
+     -1.4,
+     0.44
+    ],
+    "partMarkings": 11,
+    "seconds": 102.3,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": -1.35,
+     "p": -1.46,
+     "mf": -4.71,
+     "f": 1.18,
+     "ff": 0.28,
+     "fff": -1.4
+    }
+   },
+   "tub8": {
+    "median": -0.73,
+    "mean": -0.59,
+    "ci90": [
+     -1.66,
+     2.5
+    ],
+    "partMarkings": 9,
+    "seconds": 88.0,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -2.87,
+     "p": -2.2,
+     "f": 0.13,
+     "ff": 0.77
+    }
+   },
+   "pooled": {
+    "db": -0.45,
+    "datasets": 2,
+    "datasetDifference": 0.55
+   }
+  },
+  "bass": {
+   "aalto": {
+    "median": 2.94,
+    "mean": 2.07,
+    "ci90": [
+     0.32,
+     4.02
+    ],
+    "partMarkings": 10,
+    "seconds": 109.7,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": 0.02,
+     "p": 2.25,
+     "mf": 4.02,
+     "f": 1.87,
+     "ff": 3.89
+    }
+   },
+   "tub8": {
+    "median": 0.69,
+    "mean": 0.44,
+    "ci90": [
+     -0.44,
+     1.62
+    ],
+    "partMarkings": 9,
+    "seconds": 88.0,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -1.02,
+     "p": 2.83,
+     "f": -0.02,
+     "ff": 0.12
+    }
+   },
+   "pooled": {
+    "db": 1.81,
+    "datasets": 2,
+    "datasetDifference": 2.25
+   }
+  },
+  "flute": {
+   "aalto": {
+    "median": 3.16,
+    "mean": 3.28,
+    "ci90": [
+     1.36,
+     6.59
+    ],
+    "partMarkings": 11,
+    "seconds": 102.1,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii"
+    ],
+    "byMarking": {
+     "pp": 10.61,
+     "p": -4.03,
+     "f": 2.6,
+     "ff": 4.37
+    }
+   },
+   "tub8": {
+    "median": 4.76,
+    "mean": 4.84,
+    "ci90": [
+     3.89,
+     6.95
+    ],
+    "partMarkings": 14,
+    "seconds": 92.9,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -0.11,
+     "p": 3.69,
+     "f": 5.95,
+     "ff": 7.57
+    }
+   },
+   "pooled": {
+    "db": 3.96,
+    "datasets": 2,
+    "datasetDifference": 1.6
+   }
+  },
+  "oboe": {
+   "aalto": {
+    "median": -1.97,
+    "mean": -1.64,
+    "ci90": [
+     -2.81,
+     -0.56
+    ],
+    "partMarkings": 17,
+    "seconds": 158.7,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": -6.43,
+     "p": 2.27,
+     "f": -1.94,
+     "ff": -2.27
+    }
+   },
+   "tub8": {
+    "median": -6.37,
+    "mean": -6.0,
+    "ci90": [
+     -7.12,
+     -3.67
+    ],
+    "partMarkings": 20,
+    "seconds": 145.8,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -10.96,
+     "p": -4.42,
+     "f": -4.45,
+     "ff": -4.38
+    }
+   },
+   "pooled": {
+    "db": -4.17,
+    "datasets": 2,
+    "datasetDifference": 4.4
+   }
+  },
+  "clarinet": {
+   "aalto": {
+    "median": 2.72,
+    "mean": 2.45,
+    "ci90": [
+     0.73,
+     4.13
+    ],
+    "partMarkings": 17,
+    "seconds": 182.3,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": 0.58,
+     "p": -0.55,
+     "f": 4.08,
+     "ff": 4.52
+    }
+   },
+   "tub8": {
+    "median": -0.8,
+    "mean": -0.76,
+    "ci90": [
+     -1.58,
+     0.14
+    ],
+    "partMarkings": 19,
+    "seconds": 130.5,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -5.6,
+     "p": -1.01,
+     "f": -0.37,
+     "ff": 2.54
+    }
+   },
+   "pooled": {
+    "db": 0.96,
+    "datasets": 2,
+    "datasetDifference": 3.52
+   }
+  },
+  "bassoon": {
+   "aalto": {
+    "median": 2.73,
+    "mean": 2.75,
+    "ci90": [
+     2.33,
+     3.94
+    ],
+    "partMarkings": 21,
+    "seconds": 207.7,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": 7.04,
+     "p": -1.2,
+     "f": 2.64,
+     "ff": 3.26
+    }
+   },
+   "tub8": {
+    "median": 0.67,
+    "mean": 0.2,
+    "ci90": [
+     -0.65,
+     1.37
+    ],
+    "partMarkings": 21,
+    "seconds": 148.8,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -2.01,
+     "p": 1.21,
+     "f": 1.42,
+     "ff": 0.25
+    }
+   },
+   "pooled": {
+    "db": 1.7,
+    "datasets": 2,
+    "datasetDifference": 2.06
+   }
+  },
+  "horn": {
+   "aalto": {
+    "median": -7.56,
+    "mean": -6.86,
+    "ci90": [
+     -8.04,
+     -6.7
+    ],
+    "partMarkings": 36,
+    "seconds": 273.0,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": 2.29,
+     "p": -9.96,
+     "mf": -7.63,
+     "f": -6.91,
+     "ff": -7.68
+    }
+   },
+   "tub8": {
+    "median": -9.03,
+    "mean": -9.23,
+    "ci90": [
+     -12.07,
+     -6.71
+    ],
+    "partMarkings": 17,
+    "seconds": 129.0,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_ii",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -10.25,
+     "p": -9.14,
+     "f": -10.64,
+     "ff": -7.91
+    }
+   },
+   "pooled": {
+    "db": -8.29,
+    "datasets": 2,
+    "datasetDifference": 1.47
+   }
+  },
+  "trumpet": {
+   "aalto": {
+    "median": -4.13,
+    "mean": -3.21,
+    "ci90": [
+     -5.39,
+     -0.55
+    ],
+    "partMarkings": 11,
+    "seconds": 98.7,
+    "pieces": [
+     "beethoven7_i",
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "f": -2.98,
+     "ff": -5.29
+    }
+   },
+   "tub8": {
+    "median": -5.06,
+    "mean": -5.7,
+    "ci90": [
+     -6.53,
+     -4.33
+    ],
+    "partMarkings": 7,
+    "seconds": 66.4,
+    "pieces": [
+     "beethoven8_i",
+     "beethoven8_iv"
+    ],
+    "byMarking": {
+     "pp": -9.73,
+     "f": -4.16,
+     "ff": -5.48
+    }
+   },
+   "pooled": {
+    "db": -4.59,
+    "datasets": 2,
+    "datasetDifference": 0.93
+   }
+  },
+  "trombone": {
+   "aalto": {
+    "median": -1.0,
+    "mean": -4.31,
+    "ci90": [
+     -3.39,
+     2.68
+    ],
+    "partMarkings": 11,
+    "seconds": 66.5,
+    "pieces": [
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "mf": -17.15,
+     "f": 2.68,
+     "ff": -3.27
+    }
+   },
+   "pooled": {
+    "db": -1.0,
+    "datasets": 1,
+    "datasetDifference": null
+   }
+  },
+  "tuba": {
+   "aalto": {
+    "median": -1.65,
+    "mean": -2.76,
+    "ci90": [
+     -10.7,
+     5.17
+    ],
+    "partMarkings": 4,
+    "seconds": 16.0,
+    "pieces": [
+     "bruckner8_ii",
+     "mahler1_iv"
+    ],
+    "byMarking": {
+     "pp": 9.51,
+     "mf": -17.27,
+     "f": 0.83,
+     "ff": -4.12
+    }
+   },
+   "pooled": {
+    "db": -1.65,
+    "datasets": 1,
+    "datasetDifference": null
+   }
+  }
+ },
+ "sensitivity": {
+  "meanOfDb": {
+   "violin": {
+    "aalto": {
+     "median": -2.1,
+     "mean": -1.9,
+     "ci90": [
+      -2.81,
+      -1.31
+     ],
+     "partMarkings": 20,
+     "seconds": 304.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": -0.42,
+      "p": -2.67,
+      "f": -3.05,
+      "ff": -2.28,
+      "fff": -0.58
+     }
+    },
+    "tub8": {
+     "median": -0.01,
+     "mean": 0.38,
+     "ci90": [
+      -0.76,
+      1.6
+     ],
+     "partMarkings": 42,
+     "seconds": 437.3,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -0.45,
+      "p": 0.35,
+      "f": -0.35,
+      "ff": 1.69
+     }
+    },
+    "pooled": {
+     "db": -1.05,
+     "datasets": 2,
+     "datasetDifference": 2.09
+    }
+   },
+   "viola": {
+    "aalto": {
+     "median": 3.26,
+     "mean": 3.8,
+     "ci90": [
+      2.34,
+      5.05
+     ],
+     "partMarkings": 9,
+     "seconds": 145.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 1.37,
+      "p": 3.42,
+      "f": 5.89,
+      "ff": 2.94,
+      "fff": 6.49
+     }
+    },
+    "tub8": {
+     "median": -2.05,
+     "mean": -1.28,
+     "ci90": [
+      -2.99,
+      0.91
+     ],
+     "partMarkings": 20,
+     "seconds": 202.3,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": 0.01,
+      "p": -2.85,
+      "f": -2.05,
+      "ff": -1.06
+     }
+    },
+    "pooled": {
+     "db": 0.6,
+     "datasets": 2,
+     "datasetDifference": 5.31
+    }
+   },
+   "cello": {
+    "aalto": {
+     "median": -0.58,
+     "mean": -1.12,
+     "ci90": [
+      -2.05,
+      -0.44
+     ],
+     "partMarkings": 11,
+     "seconds": 102.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": -1.32,
+      "p": -1.49,
+      "mf": -4.15,
+      "f": 0.91,
+      "ff": -1.43,
+      "fff": -0.5
+     }
+    },
+    "tub8": {
+     "median": -0.69,
+     "mean": -0.44,
+     "ci90": [
+      -1.68,
+      2.47
+     ],
+     "partMarkings": 9,
+     "seconds": 88.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -2.27,
+      "p": -1.99,
+      "f": 0.75,
+      "ff": 0.4
+     }
+    },
+    "pooled": {
+     "db": -0.64,
+     "datasets": 2,
+     "datasetDifference": 0.11
+    }
+   },
+   "bass": {
+    "aalto": {
+     "median": 2.51,
+     "mean": 1.85,
+     "ci90": [
+      0.41,
+      3.41
+     ],
+     "partMarkings": 10,
+     "seconds": 109.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 0.82,
+      "p": 1.46,
+      "mf": 3.54,
+      "f": 2.33,
+      "ff": 1.81
+     }
+    },
+    "tub8": {
+     "median": 0.98,
+     "mean": 0.63,
+     "ci90": [
+      -0.67,
+      1.5
+     ],
+     "partMarkings": 9,
+     "seconds": 88.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -1.06,
+      "p": 2.95,
+      "f": 0.27,
+      "ff": 0.49
+     }
+    },
+    "pooled": {
+     "db": 1.74,
+     "datasets": 2,
+     "datasetDifference": 1.53
+    }
+   },
+   "flute": {
+    "aalto": {
+     "median": 3.18,
+     "mean": 3.36,
+     "ci90": [
+      0.42,
+      6.02
+     ],
+     "partMarkings": 11,
+     "seconds": 102.1,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 9.98,
+      "p": -3.88,
+      "f": 2.31,
+      "ff": 4.6
+     }
+    },
+    "tub8": {
+     "median": 4.49,
+     "mean": 4.67,
+     "ci90": [
+      3.97,
+      6.71
+     ],
+     "partMarkings": 14,
+     "seconds": 92.9,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": 2.26,
+      "p": 4.64,
+      "f": 5.7,
+      "ff": 6.96
+     }
+    },
+    "pooled": {
+     "db": 3.83,
+     "datasets": 2,
+     "datasetDifference": 1.31
+    }
+   },
+   "oboe": {
+    "aalto": {
+     "median": -1.49,
+     "mean": -1.19,
+     "ci90": [
+      -1.69,
+      -0.34
+     ],
+     "partMarkings": 17,
+     "seconds": 158.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": -5.99,
+      "p": 2.03,
+      "f": -1.63,
+      "ff": -1.49
+     }
+    },
+    "tub8": {
+     "median": -6.04,
+     "mean": -5.63,
+     "ci90": [
+      -6.54,
+      -3.72
+     ],
+     "partMarkings": 20,
+     "seconds": 145.8,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -11.08,
+      "p": -5.18,
+      "f": -3.17,
+      "ff": -4.47
+     }
+    },
+    "pooled": {
+     "db": -3.77,
+     "datasets": 2,
+     "datasetDifference": 4.55
+    }
+   },
+   "clarinet": {
+    "aalto": {
+     "median": 3.43,
+     "mean": 3.73,
+     "ci90": [
+      2.11,
+      4.7
+     ],
+     "partMarkings": 17,
+     "seconds": 182.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 1.81,
+      "p": 0.84,
+      "f": 4.29,
+      "ff": 6.1
+     }
+    },
+    "tub8": {
+     "median": -0.57,
+     "mean": -0.79,
+     "ci90": [
+      -1.54,
+      0.36
+     ],
+     "partMarkings": 19,
+     "seconds": 130.5,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -6.8,
+      "p": -0.71,
+      "f": -0.53,
+      "ff": 2.29
+     }
+    },
+    "pooled": {
+     "db": 1.43,
+     "datasets": 2,
+     "datasetDifference": 4.0
+    }
+   },
+   "bassoon": {
+    "aalto": {
+     "median": 4.61,
+     "mean": 3.79,
+     "ci90": [
+      3.47,
+      5.0
+     ],
+     "partMarkings": 21,
+     "seconds": 207.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 5.0,
+      "p": 0.65,
+      "f": 3.6,
+      "ff": 5.02
+     }
+    },
+    "tub8": {
+     "median": 0.69,
+     "mean": 0.22,
+     "ci90": [
+      -0.38,
+      1.04
+     ],
+     "partMarkings": 21,
+     "seconds": 148.8,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -2.59,
+      "p": 2.17,
+      "f": 0.82,
+      "ff": 0.23
+     }
+    },
+    "pooled": {
+     "db": 2.65,
+     "datasets": 2,
+     "datasetDifference": 3.92
+    }
+   },
+   "horn": {
+    "aalto": {
+     "median": -6.96,
+     "mean": -6.92,
+     "ci90": [
+      -7.99,
+      -6.47
+     ],
+     "partMarkings": 36,
+     "seconds": 273.0,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": -1.62,
+      "p": -8.81,
+      "mf": -6.15,
+      "f": -6.75,
+      "ff": -7.85
+     }
+    },
+    "tub8": {
+     "median": -9.43,
+     "mean": -9.08,
+     "ci90": [
+      -11.77,
+      -6.06
+     ],
+     "partMarkings": 17,
+     "seconds": 129.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -9.67,
+      "p": -8.47,
+      "f": -10.6,
+      "ff": -8.81
+     }
+    },
+    "pooled": {
+     "db": -8.2,
+     "datasets": 2,
+     "datasetDifference": 2.47
+    }
+   },
+   "trumpet": {
+    "aalto": {
+     "median": -4.52,
+     "mean": -3.45,
+     "ci90": [
+      -6.52,
+      -0.36
+     ],
+     "partMarkings": 11,
+     "seconds": 98.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "f": -4.52,
+      "ff": -5.0
+     }
+    },
+    "tub8": {
+     "median": -5.33,
+     "mean": -5.47,
+     "ci90": [
+      -6.62,
+      -4.26
+     ],
+     "partMarkings": 7,
+     "seconds": 66.4,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -7.49,
+      "f": -4.05,
+      "ff": -5.91
+     }
+    },
+    "pooled": {
+     "db": -4.92,
+     "datasets": 2,
+     "datasetDifference": 0.81
+    }
+   },
+   "trombone": {
+    "aalto": {
+     "median": -1.57,
+     "mean": -3.76,
+     "ci90": [
+      -3.83,
+      1.48
+     ],
+     "partMarkings": 11,
+     "seconds": 66.5,
+     "pieces": [
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "mf": -13.62,
+      "f": 1.48,
+      "ff": -3.64
+     }
+    },
+    "pooled": {
+     "db": -1.57,
+     "datasets": 1,
+     "datasetDifference": null
+    }
+   },
+   "tuba": {
+    "aalto": {
+     "median": -2.88,
+     "mean": -3.18,
+     "ci90": [
+      -8.23,
+      1.88
+     ],
+     "partMarkings": 4,
+     "seconds": 16.0,
+     "pieces": [
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 6.29,
+      "mf": -13.22,
+      "f": -2.53,
+      "ff": -3.24
+     }
+    },
+    "pooled": {
+     "db": -2.88,
+     "datasets": 1,
+     "datasetDifference": null
+    }
+   }
+  },
+  "withoutUncertainReadings": {
+   "violin": {
+    "aalto": {
+     "median": -2.5,
+     "mean": -2.22,
+     "ci90": [
+      -3.39,
+      -0.99
+     ],
+     "partMarkings": 20,
+     "seconds": 304.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 0.29,
+      "p": -3.54,
+      "f": -3.67,
+      "ff": -2.91,
+      "fff": -0.5
+     }
+    },
+    "tub8": {
+     "median": 0.44,
+     "mean": 0.73,
+     "ci90": [
+      -1.2,
+      2.13
+     ],
+     "partMarkings": 38,
+     "seconds": 423.1,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": 0.48,
+      "p": 0.69,
+      "f": 0.39,
+      "ff": 1.0
+     }
+    },
+    "pooled": {
+     "db": -1.03,
+     "datasets": 2,
+     "datasetDifference": 2.94
+    }
+   },
+   "viola": {
+    "aalto": {
+     "median": 4.05,
+     "mean": 3.81,
+     "ci90": [
+      2.31,
+      4.66
+     ],
+     "partMarkings": 9,
+     "seconds": 143.0,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 1.52,
+      "p": 4.05,
+      "f": 5.37,
+      "ff": 2.31,
+      "fff": 6.1
+     }
+    },
+    "tub8": {
+     "median": -2.25,
+     "mean": -2.04,
+     "ci90": [
+      -3.49,
+      -0.13
+     ],
+     "partMarkings": 18,
+     "seconds": 194.1,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -0.62,
+      "p": -2.83,
+      "f": -3.35,
+      "ff": -1.89
+     }
+    },
+    "pooled": {
+     "db": 0.9,
+     "datasets": 2,
+     "datasetDifference": 6.3
+    }
+   },
+   "cello": {
+    "aalto": {
+     "median": -0.13,
+     "mean": -0.76,
+     "ci90": [
+      -1.4,
+      0.71
+     ],
+     "partMarkings": 11,
+     "seconds": 98.8,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": -1.35,
+      "p": -1.46,
+      "mf": -4.71,
+      "f": 1.26,
+      "ff": 0.28,
+      "fff": -1.4
+     }
+    },
+    "tub8": {
+     "median": -0.08,
+     "mean": -0.42,
+     "ci90": [
+      -0.97,
+      2.5
+     ],
+     "partMarkings": 9,
+     "seconds": 88.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -2.87,
+      "p": -2.2,
+      "f": 0.13,
+      "ff": 0.77
+     }
+    },
+    "pooled": {
+     "db": -0.11,
+     "datasets": 2,
+     "datasetDifference": 0.05
+    }
+   },
+   "bass": {
+    "aalto": {
+     "median": 3.06,
+     "mean": 2.15,
+     "ci90": [
+      0.32,
+      4.02
+     ],
+     "partMarkings": 10,
+     "seconds": 106.0,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 0.02,
+      "p": 2.25,
+      "mf": 4.02,
+      "f": 1.99,
+      "ff": 3.93
+     }
+    },
+    "tub8": {
+     "median": 0.69,
+     "mean": 0.62,
+     "ci90": [
+      -0.02,
+      1.62
+     ],
+     "partMarkings": 9,
+     "seconds": 88.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -1.02,
+      "p": 2.83,
+      "f": 0.07,
+      "ff": 0.12
+     }
+    },
+    "pooled": {
+     "db": 1.88,
+     "datasets": 2,
+     "datasetDifference": 2.37
+    }
+   },
+   "flute": {
+    "aalto": {
+     "median": 3.3,
+     "mean": 4.45,
+     "ci90": [
+      1.36,
+      9.83
+     ],
+     "partMarkings": 9,
+     "seconds": 78.0,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 10.61,
+      "p": 1.36,
+      "f": 2.56,
+      "ff": 3.3
+     }
+    },
+    "tub8": {
+     "median": 4.82,
+     "mean": 4.85,
+     "ci90": [
+      3.69,
+      7.06
+     ],
+     "partMarkings": 13,
+     "seconds": 88.8,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -0.11,
+      "p": 3.06,
+      "f": 5.95,
+      "ff": 7.57
+     }
+    },
+    "pooled": {
+     "db": 4.06,
+     "datasets": 2,
+     "datasetDifference": 1.52
+    }
+   },
+   "oboe": {
+    "aalto": {
+     "median": -1.98,
+     "mean": -1.62,
+     "ci90": [
+      -2.76,
+      -0.57
+     ],
+     "partMarkings": 17,
+     "seconds": 158.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": -6.43,
+      "p": 2.27,
+      "f": -1.98,
+      "ff": -2.22
+     }
+    },
+    "tub8": {
+     "median": -6.14,
+     "mean": -5.84,
+     "ci90": [
+      -7.15,
+      -3.67
+     ],
+     "partMarkings": 20,
+     "seconds": 145.8,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -10.96,
+      "p": -4.42,
+      "f": -3.44,
+      "ff": -4.38
+     }
+    },
+    "pooled": {
+     "db": -4.06,
+     "datasets": 2,
+     "datasetDifference": 4.16
+    }
+   },
+   "clarinet": {
+    "aalto": {
+     "median": 3.3,
+     "mean": 2.71,
+     "ci90": [
+      0.99,
+      4.53
+     ],
+     "partMarkings": 15,
+     "seconds": 138.6,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 0.44,
+      "p": -0.55,
+      "f": 4.04,
+      "ff": 4.6
+     }
+    },
+    "tub8": {
+     "median": -0.55,
+     "mean": -0.52,
+     "ci90": [
+      -1.65,
+      1.46
+     ],
+     "partMarkings": 16,
+     "seconds": 117.3,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -8.71,
+      "p": -1.25,
+      "f": -0.26,
+      "ff": 2.54
+     }
+    },
+    "pooled": {
+     "db": 1.38,
+     "datasets": 2,
+     "datasetDifference": 3.85
+    }
+   },
+   "bassoon": {
+    "aalto": {
+     "median": 2.57,
+     "mean": 2.03,
+     "ci90": [
+      1.9,
+      2.94
+     ],
+     "partMarkings": 18,
+     "seconds": 205.6,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 2.81,
+      "p": -1.2,
+      "f": 2.6,
+      "ff": 3.33
+     }
+    },
+    "tub8": {
+     "median": 0.57,
+     "mean": 0.2,
+     "ci90": [
+      -0.17,
+      1.04
+     ],
+     "partMarkings": 19,
+     "seconds": 136.3,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -2.01,
+      "p": 0.91,
+      "f": 1.42,
+      "ff": 0.25
+     }
+    },
+    "pooled": {
+     "db": 1.57,
+     "datasets": 2,
+     "datasetDifference": 2.0
+    }
+   },
+   "horn": {
+    "aalto": {
+     "median": -7.73,
+     "mean": -7.02,
+     "ci90": [
+      -8.3,
+      -6.92
+     ],
+     "partMarkings": 36,
+     "seconds": 247.8,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 2.29,
+      "p": -9.96,
+      "mf": -8.25,
+      "f": -6.95,
+      "ff": -7.55
+     }
+    },
+    "tub8": {
+     "median": -9.03,
+     "mean": -9.04,
+     "ci90": [
+      -10.67,
+      -6.71
+     ],
+     "partMarkings": 17,
+     "seconds": 129.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -10.25,
+      "p": -9.14,
+      "f": -9.85,
+      "ff": -7.91
+     }
+    },
+    "pooled": {
+     "db": -8.38,
+     "datasets": 2,
+     "datasetDifference": 1.3
+    }
+   },
+   "trumpet": {
+    "aalto": {
+     "median": -4.03,
+     "mean": -3.2,
+     "ci90": [
+      -5.39,
+      -1.4
+     ],
+     "partMarkings": 11,
+     "seconds": 97.5,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "f": -3.02,
+      "ff": -5.26
+     }
+    },
+    "tub8": {
+     "median": -5.06,
+     "mean": -5.7,
+     "ci90": [
+      -6.53,
+      -4.33
+     ],
+     "partMarkings": 7,
+     "seconds": 66.4,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -9.73,
+      "f": -4.16,
+      "ff": -5.48
+     }
+    },
+    "pooled": {
+     "db": -4.54,
+     "datasets": 2,
+     "datasetDifference": 1.03
+    }
+   },
+   "trombone": {
+    "aalto": {
+     "median": 1.13,
+     "mean": 0.51,
+     "ci90": [
+      -2.08,
+      2.81
+     ],
+     "partMarkings": 8,
+     "seconds": 47.9,
+     "pieces": [
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "f": 2.74,
+      "ff": -3.22
+     }
+    },
+    "pooled": {
+     "db": 1.13,
+     "datasets": 1,
+     "datasetDifference": null
+    }
+   },
+   "tuba": {
+    "aalto": {
+     "median": 0.79,
+     "mean": 2.08,
+     "ci90": [
+      -4.07,
+      9.51
+     ],
+     "partMarkings": 3,
+     "seconds": 10.8,
+     "pieces": [
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 9.51,
+      "f": 0.79,
+      "ff": -4.07
+     }
+    },
+    "pooled": {
+     "db": 0.79,
+     "datasets": 1,
+     "datasetDifference": null
+    }
+   }
+  },
+  "withoutMahler": {
+   "violin": {
+    "aalto": {
+     "median": -2.91,
+     "mean": -2.62,
+     "ci90": [
+      -4.11,
+      -2.47
+     ],
+     "partMarkings": 14,
+     "seconds": 188.0,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 0.29,
+      "p": -3.54,
+      "f": -4.11,
+      "ff": -3.3
+     }
+    },
+    "tub8": {
+     "median": 0.44,
+     "mean": 0.82,
+     "ci90": [
+      -0.64,
+      2.13
+     ],
+     "partMarkings": 42,
+     "seconds": 437.3,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": 0.48,
+      "p": 0.69,
+      "f": 0.39,
+      "ff": 1.0
+     }
+    },
+    "pooled": {
+     "db": -1.24,
+     "datasets": 2,
+     "datasetDifference": 3.35
+    }
+   },
+   "viola": {
+    "aalto": {
+     "median": 3.75,
+     "mean": 3.43,
+     "ci90": [
+      2.31,
+      4.53
+     ],
+     "partMarkings": 6,
+     "seconds": 114.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 1.52,
+      "p": 4.05,
+      "f": 4.7,
+      "ff": 3.11
+     }
+    },
+    "tub8": {
+     "median": -2.1,
+     "mean": -1.9,
+     "ci90": [
+      -3.11,
+      0.09
+     ],
+     "partMarkings": 20,
+     "seconds": 202.3,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -0.62,
+      "p": -2.83,
+      "f": -2.1,
+      "ff": -1.89
+     }
+    },
+    "pooled": {
+     "db": 0.82,
+     "datasets": 2,
+     "datasetDifference": 5.85
+    }
+   },
+   "cello": {
+    "aalto": {
+     "median": 0.28,
+     "mean": -0.59,
+     "ci90": [
+      -2.48,
+      0.76
+     ],
+     "partMarkings": 7,
+     "seconds": 82.6,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": -1.35,
+      "p": -1.46,
+      "f": 0.76,
+      "ff": 0.36
+     }
+    },
+    "tub8": {
+     "median": -0.73,
+     "mean": -0.59,
+     "ci90": [
+      -1.66,
+      2.5
+     ],
+     "partMarkings": 9,
+     "seconds": 88.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -2.87,
+      "p": -2.2,
+      "f": 0.13,
+      "ff": 0.77
+     }
+    },
+    "pooled": {
+     "db": -0.22,
+     "datasets": 2,
+     "datasetDifference": 1.01
+    }
+   },
+   "bass": {
+    "aalto": {
+     "median": 2.47,
+     "mean": 1.78,
+     "ci90": [
+      -1.26,
+      4.21
+     ],
+     "partMarkings": 7,
+     "seconds": 90.9,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 0.02,
+      "p": 2.25,
+      "f": 3.41,
+      "ff": 2.27
+     }
+    },
+    "tub8": {
+     "median": 0.69,
+     "mean": 0.44,
+     "ci90": [
+      -0.44,
+      1.62
+     ],
+     "partMarkings": 9,
+     "seconds": 88.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -1.02,
+      "p": 2.83,
+      "f": -0.02,
+      "ff": 0.12
+     }
+    },
+    "pooled": {
+     "db": 1.58,
+     "datasets": 2,
+     "datasetDifference": 1.78
+    }
+   },
+   "flute": {
+    "aalto": {
+     "median": 3.16,
+     "mean": 3.28,
+     "ci90": [
+      -1.39,
+      9.83
+     ],
+     "partMarkings": 11,
+     "seconds": 102.1,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 10.61,
+      "p": -4.03,
+      "f": 2.6,
+      "ff": 4.37
+     }
+    },
+    "tub8": {
+     "median": 4.76,
+     "mean": 4.84,
+     "ci90": [
+      3.89,
+      6.84
+     ],
+     "partMarkings": 14,
+     "seconds": 92.9,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -0.11,
+      "p": 3.69,
+      "f": 5.95,
+      "ff": 7.57
+     }
+    },
+    "pooled": {
+     "db": 3.96,
+     "datasets": 2,
+     "datasetDifference": 1.6
+    }
+   },
+   "oboe": {
+    "aalto": {
+     "median": -1.02,
+     "mean": -1.21,
+     "ci90": [
+      -2.65,
+      0.44
+     ],
+     "partMarkings": 13,
+     "seconds": 147.5,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": -6.43,
+      "p": 2.27,
+      "f": -1.94,
+      "ff": -1.02
+     }
+    },
+    "tub8": {
+     "median": -6.37,
+     "mean": -6.0,
+     "ci90": [
+      -7.15,
+      -3.67
+     ],
+     "partMarkings": 20,
+     "seconds": 145.8,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -10.96,
+      "p": -4.42,
+      "f": -4.45,
+      "ff": -4.38
+     }
+    },
+    "pooled": {
+     "db": -3.7,
+     "datasets": 2,
+     "datasetDifference": 5.35
+    }
+   },
+   "clarinet": {
+    "aalto": {
+     "median": 1.68,
+     "mean": 1.88,
+     "ci90": [
+      0.41,
+      3.43
+     ],
+     "partMarkings": 14,
+     "seconds": 173.9,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 0.58,
+      "p": -0.55,
+      "f": 4.08,
+      "ff": 3.17
+     }
+    },
+    "tub8": {
+     "median": -0.8,
+     "mean": -0.76,
+     "ci90": [
+      -1.58,
+      -0.23
+     ],
+     "partMarkings": 19,
+     "seconds": 130.5,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -5.6,
+      "p": -1.01,
+      "f": -0.37,
+      "ff": 2.54
+     }
+    },
+    "pooled": {
+     "db": 0.44,
+     "datasets": 2,
+     "datasetDifference": 2.48
+    }
+   },
+   "bassoon": {
+    "aalto": {
+     "median": 2.74,
+     "mean": 2.68,
+     "ci90": [
+      1.88,
+      3.94
+     ],
+     "partMarkings": 18,
+     "seconds": 199.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 7.04,
+      "p": -1.2,
+      "f": 2.64,
+      "ff": 3.58
+     }
+    },
+    "tub8": {
+     "median": 0.67,
+     "mean": 0.2,
+     "ci90": [
+      -0.65,
+      1.37
+     ],
+     "partMarkings": 21,
+     "seconds": 148.8,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -2.01,
+      "p": 1.21,
+      "f": 1.42,
+      "ff": 0.25
+     }
+    },
+    "pooled": {
+     "db": 1.71,
+     "datasets": 2,
+     "datasetDifference": 2.07
+    }
+   },
+   "horn": {
+    "aalto": {
+     "median": -6.7,
+     "mean": -5.97,
+     "ci90": [
+      -7.84,
+      -5.74
+     ],
+     "partMarkings": 22,
+     "seconds": 168.2,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 2.29,
+      "p": -9.96,
+      "f": -6.91,
+      "ff": -6.7
+     }
+    },
+    "tub8": {
+     "median": -9.03,
+     "mean": -9.23,
+     "ci90": [
+      -12.07,
+      -6.71
+     ],
+     "partMarkings": 17,
+     "seconds": 129.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -10.25,
+      "p": -9.14,
+      "f": -10.64,
+      "ff": -7.91
+     }
+    },
+    "pooled": {
+     "db": -7.87,
+     "datasets": 2,
+     "datasetDifference": 2.33
+    }
+   },
+   "trumpet": {
+    "aalto": {
+     "median": -2.98,
+     "mean": -2.51,
+     "ci90": [
+      -5.39,
+      1.36
+     ],
+     "partMarkings": 5,
+     "seconds": 74.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "f": -2.98,
+      "ff": -3.39
+     }
+    },
+    "tub8": {
+     "median": -5.06,
+     "mean": -5.7,
+     "ci90": [
+      -6.53,
+      -4.33
+     ],
+     "partMarkings": 7,
+     "seconds": 66.4,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -9.73,
+      "f": -4.16,
+      "ff": -5.48
+     }
+    },
+    "pooled": {
+     "db": -4.02,
+     "datasets": 2,
+     "datasetDifference": 2.08
+    }
+   },
+   "trombone": {
+    "aalto": {
+     "median": 2.87,
+     "mean": 3.33,
+     "ci90": [
+      2.68,
+      4.43
+     ],
+     "partMarkings": 3,
+     "seconds": 34.4,
+     "pieces": [
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "f": 2.87
+     }
+    },
+    "pooled": {
+     "db": 2.87,
+     "datasets": 1,
+     "datasetDifference": null
+    }
+   },
+   "tuba": {
+    "aalto": {
+     "median": 5.17,
+     "mean": 5.17,
+     "ci90": [
+      0.83,
+      9.51
+     ],
+     "partMarkings": 2,
+     "seconds": 10.2,
+     "pieces": [
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 9.51,
+      "f": 0.83
+     }
+    },
+    "pooled": {
+     "db": 5.17,
+     "datasets": 1,
+     "datasetDifference": null
+    }
+   }
+  },
+  "aaltoFrontMicOnly": {
+   "violin": {
+    "aalto": {
+     "median": -2.5,
+     "mean": -2.24,
+     "ci90": [
+      -3.45,
+      -1.03
+     ],
+     "partMarkings": 20,
+     "seconds": 304.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 0.29,
+      "p": -3.54,
+      "f": -3.65,
+      "ff": -2.91,
+      "fff": -0.5
+     }
+    },
+    "tub8": {
+     "median": 0.44,
+     "mean": 0.82,
+     "ci90": [
+      -0.63,
+      2.12
+     ],
+     "partMarkings": 42,
+     "seconds": 437.3,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": 0.48,
+      "p": 0.69,
+      "f": 0.39,
+      "ff": 1.0
+     }
+    },
+    "pooled": {
+     "db": -1.03,
+     "datasets": 2,
+     "datasetDifference": 2.94
+    }
+   },
+   "viola": {
+    "aalto": {
+     "median": 3.91,
+     "mean": 3.81,
+     "ci90": [
+      2.31,
+      4.7
+     ],
+     "partMarkings": 9,
+     "seconds": 145.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 1.52,
+      "p": 4.05,
+      "f": 5.38,
+      "ff": 2.31,
+      "fff": 6.1
+     }
+    },
+    "tub8": {
+     "median": -2.1,
+     "mean": -1.9,
+     "ci90": [
+      -3.11,
+      0.09
+     ],
+     "partMarkings": 20,
+     "seconds": 202.3,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -0.62,
+      "p": -2.83,
+      "f": -2.1,
+      "ff": -1.89
+     }
+    },
+    "pooled": {
+     "db": 0.91,
+     "datasets": 2,
+     "datasetDifference": 6.01
+    }
+   },
+   "cello": {
+    "aalto": {
+     "median": -0.18,
+     "mean": -0.8,
+     "ci90": [
+      -1.4,
+      0.44
+     ],
+     "partMarkings": 11,
+     "seconds": 102.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": -1.35,
+      "p": -1.46,
+      "mf": -4.71,
+      "f": 1.18,
+      "ff": 0.28,
+      "fff": -1.4
+     }
+    },
+    "tub8": {
+     "median": -0.73,
+     "mean": -0.59,
+     "ci90": [
+      -1.66,
+      2.5
+     ],
+     "partMarkings": 9,
+     "seconds": 88.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -2.87,
+      "p": -2.2,
+      "f": 0.13,
+      "ff": 0.77
+     }
+    },
+    "pooled": {
+     "db": -0.45,
+     "datasets": 2,
+     "datasetDifference": 0.55
+    }
+   },
+   "bass": {
+    "aalto": {
+     "median": 2.94,
+     "mean": 2.07,
+     "ci90": [
+      0.32,
+      4.02
+     ],
+     "partMarkings": 10,
+     "seconds": 109.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 0.02,
+      "p": 2.25,
+      "mf": 4.02,
+      "f": 1.87,
+      "ff": 3.89
+     }
+    },
+    "tub8": {
+     "median": 0.69,
+     "mean": 0.44,
+     "ci90": [
+      -0.44,
+      1.62
+     ],
+     "partMarkings": 9,
+     "seconds": 88.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -1.02,
+      "p": 2.83,
+      "f": -0.02,
+      "ff": 0.12
+     }
+    },
+    "pooled": {
+     "db": 1.81,
+     "datasets": 2,
+     "datasetDifference": 2.25
+    }
+   },
+   "flute": {
+    "aalto": {
+     "median": 3.16,
+     "mean": 3.28,
+     "ci90": [
+      1.36,
+      6.59
+     ],
+     "partMarkings": 11,
+     "seconds": 102.1,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii"
+     ],
+     "byMarking": {
+      "pp": 10.61,
+      "p": -4.03,
+      "f": 2.6,
+      "ff": 4.37
+     }
+    },
+    "tub8": {
+     "median": 4.76,
+     "mean": 4.84,
+     "ci90": [
+      3.89,
+      6.95
+     ],
+     "partMarkings": 14,
+     "seconds": 92.9,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -0.11,
+      "p": 3.69,
+      "f": 5.95,
+      "ff": 7.57
+     }
+    },
+    "pooled": {
+     "db": 3.96,
+     "datasets": 2,
+     "datasetDifference": 1.6
+    }
+   },
+   "oboe": {
+    "aalto": {
+     "median": -1.97,
+     "mean": -1.64,
+     "ci90": [
+      -2.81,
+      -0.56
+     ],
+     "partMarkings": 17,
+     "seconds": 158.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": -6.43,
+      "p": 2.27,
+      "f": -1.94,
+      "ff": -2.27
+     }
+    },
+    "tub8": {
+     "median": -6.37,
+     "mean": -6.0,
+     "ci90": [
+      -7.12,
+      -3.67
+     ],
+     "partMarkings": 20,
+     "seconds": 145.8,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -10.96,
+      "p": -4.42,
+      "f": -4.45,
+      "ff": -4.38
+     }
+    },
+    "pooled": {
+     "db": -4.17,
+     "datasets": 2,
+     "datasetDifference": 4.4
+    }
+   },
+   "clarinet": {
+    "aalto": {
+     "median": 2.72,
+     "mean": 2.45,
+     "ci90": [
+      0.73,
+      4.13
+     ],
+     "partMarkings": 17,
+     "seconds": 182.3,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 0.58,
+      "p": -0.55,
+      "f": 4.08,
+      "ff": 4.52
+     }
+    },
+    "tub8": {
+     "median": -0.8,
+     "mean": -0.76,
+     "ci90": [
+      -1.58,
+      0.14
+     ],
+     "partMarkings": 19,
+     "seconds": 130.5,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -5.6,
+      "p": -1.01,
+      "f": -0.37,
+      "ff": 2.54
+     }
+    },
+    "pooled": {
+     "db": 0.96,
+     "datasets": 2,
+     "datasetDifference": 3.52
+    }
+   },
+   "bassoon": {
+    "aalto": {
+     "median": 3.67,
+     "mean": 3.82,
+     "ci90": [
+      2.39,
+      5.01
+     ],
+     "partMarkings": 21,
+     "seconds": 207.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 6.0,
+      "p": 1.71,
+      "f": 4.65,
+      "ff": 3.51
+     }
+    },
+    "tub8": {
+     "median": 0.67,
+     "mean": 0.2,
+     "ci90": [
+      -0.65,
+      1.37
+     ],
+     "partMarkings": 21,
+     "seconds": 148.8,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -2.01,
+      "p": 1.21,
+      "f": 1.42,
+      "ff": 0.25
+     }
+    },
+    "pooled": {
+     "db": 2.17,
+     "datasets": 2,
+     "datasetDifference": 3.0
+    }
+   },
+   "horn": {
+    "aalto": {
+     "median": -5.22,
+     "mean": -4.73,
+     "ci90": [
+      -6.03,
+      -4.51
+     ],
+     "partMarkings": 36,
+     "seconds": 273.0,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 4.33,
+      "p": -7.46,
+      "mf": -6.03,
+      "f": -4.57,
+      "ff": -5.49
+     }
+    },
+    "tub8": {
+     "median": -9.03,
+     "mean": -9.23,
+     "ci90": [
+      -12.07,
+      -6.71
+     ],
+     "partMarkings": 17,
+     "seconds": 129.0,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_ii",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -10.25,
+      "p": -9.14,
+      "f": -10.64,
+      "ff": -7.91
+     }
+    },
+    "pooled": {
+     "db": -7.12,
+     "datasets": 2,
+     "datasetDifference": 3.81
+    }
+   },
+   "trumpet": {
+    "aalto": {
+     "median": -4.13,
+     "mean": -3.21,
+     "ci90": [
+      -5.39,
+      -0.55
+     ],
+     "partMarkings": 11,
+     "seconds": 98.7,
+     "pieces": [
+      "beethoven7_i",
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "f": -2.98,
+      "ff": -5.29
+     }
+    },
+    "tub8": {
+     "median": -5.06,
+     "mean": -5.7,
+     "ci90": [
+      -6.53,
+      -4.33
+     ],
+     "partMarkings": 7,
+     "seconds": 66.4,
+     "pieces": [
+      "beethoven8_i",
+      "beethoven8_iv"
+     ],
+     "byMarking": {
+      "pp": -9.73,
+      "f": -4.16,
+      "ff": -5.48
+     }
+    },
+    "pooled": {
+     "db": -4.59,
+     "datasets": 2,
+     "datasetDifference": 0.93
+    }
+   },
+   "trombone": {
+    "aalto": {
+     "median": -1.0,
+     "mean": -4.31,
+     "ci90": [
+      -3.39,
+      2.68
+     ],
+     "partMarkings": 11,
+     "seconds": 66.5,
+     "pieces": [
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "mf": -17.15,
+      "f": 2.68,
+      "ff": -3.27
+     }
+    },
+    "pooled": {
+     "db": -1.0,
+     "datasets": 1,
+     "datasetDifference": null
+    }
+   },
+   "tuba": {
+    "aalto": {
+     "median": -2.46,
+     "mean": -3.24,
+     "ci90": [
+      -11.0,
+      4.52
+     ],
+     "partMarkings": 4,
+     "seconds": 16.0,
+     "pieces": [
+      "bruckner8_ii",
+      "mahler1_iv"
+     ],
+     "byMarking": {
+      "pp": 9.01,
+      "mf": -17.06,
+      "f": 0.04,
+      "ff": -4.95
+     }
+    },
+    "pooled": {
+     "db": -2.46,
+     "datasets": 1,
+     "datasetDifference": null
+    }
+   }
+  }
+ },
+ "partMarkings": {
+  "violin": [
+   {
+    "piece": "beethoven7_i",
+    "part": "vl1",
+    "marking": "p",
+    "relDb": -2.54,
+    "segments": 3,
+    "seconds": 15.5
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vl1",
+    "marking": "pp",
+    "relDb": 1.66,
+    "segments": 3,
+    "seconds": 16.4
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vl1",
+    "marking": "ff",
+    "relDb": -3.08,
+    "segments": 7,
+    "seconds": 15.9
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vl2",
+    "marking": "p",
+    "relDb": -2.47,
+    "segments": 6,
+    "seconds": 20.9
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vl2",
+    "marking": "pp",
+    "relDb": 1.28,
+    "segments": 3,
+    "seconds": 17.1
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vl2",
+    "marking": "ff",
+    "relDb": -2.74,
+    "segments": 6,
+    "seconds": 22.1
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vl1",
+    "marking": "pp",
+    "relDb": -2.47,
+    "segments": 1,
+    "seconds": 3.5
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vl1",
+    "marking": "p",
+    "relDb": -4.59,
+    "segments": 3,
+    "seconds": 13.5
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vl1",
+    "marking": "f",
+    "relDb": -4.4,
+    "segments": 4,
+    "seconds": 12.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vl1",
+    "marking": "ff",
+    "relDb": -4.68,
+    "segments": 4,
+    "seconds": 14.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vl2",
+    "marking": "pp",
+    "relDb": -0.71,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vl2",
+    "marking": "p",
+    "relDb": -4.54,
+    "segments": 2,
+    "seconds": 8.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vl2",
+    "marking": "f",
+    "relDb": -3.81,
+    "segments": 4,
+    "seconds": 10.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vl2",
+    "marking": "ff",
+    "relDb": -3.52,
+    "segments": 3,
+    "seconds": 12.7
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vl1",
+    "marking": "ff",
+    "relDb": -0.94,
+    "segments": 8,
+    "seconds": 41.5
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vl1",
+    "marking": "fff",
+    "relDb": -0.42,
+    "segments": 8,
+    "seconds": 14.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vl1",
+    "marking": "f",
+    "relDb": -3.48,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vl2",
+    "marking": "ff",
+    "relDb": -1.03,
+    "segments": 12,
+    "seconds": 41.7
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vl2",
+    "marking": "fff",
+    "relDb": -0.58,
+    "segments": 4,
+    "seconds": 11.5
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vl2",
+    "marking": "f",
+    "relDb": -1.67,
+    "segments": 2,
+    "seconds": 5.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl1.1",
+    "marking": "f",
+    "relDb": 6.93,
+    "segments": 2,
+    "seconds": 20.6
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl1.1",
+    "marking": "p",
+    "relDb": 7.78,
+    "segments": 2,
+    "seconds": 8.3
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl1.1",
+    "marking": "pp",
+    "relDb": 8.87,
+    "segments": 2,
+    "seconds": 3.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl1.1",
+    "marking": "ff",
+    "relDb": 5.52,
+    "segments": 1,
+    "seconds": 3.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl1.2",
+    "marking": "f",
+    "relDb": 0.9,
+    "segments": 2,
+    "seconds": 21.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl1.2",
+    "marking": "p",
+    "relDb": -0.11,
+    "segments": 2,
+    "seconds": 8.3
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl1.2",
+    "marking": "pp",
+    "relDb": 1.04,
+    "segments": 2,
+    "seconds": 4.1
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl1.2",
+    "marking": "ff",
+    "relDb": -2.29,
+    "segments": 1,
+    "seconds": 3.6
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl2.1",
+    "marking": "f",
+    "relDb": -0.13,
+    "segments": 2,
+    "seconds": 22.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl2.1",
+    "marking": "p",
+    "relDb": 1.62,
+    "segments": 3,
+    "seconds": 9.3
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl2.1",
+    "marking": "pp",
+    "relDb": -0.9,
+    "segments": 1,
+    "seconds": 10.0
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl2.1",
+    "marking": "ff",
+    "relDb": 2.03,
+    "segments": 1,
+    "seconds": 3.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl2.2",
+    "marking": "f",
+    "relDb": -5.31,
+    "segments": 2,
+    "seconds": 22.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl2.2",
+    "marking": "p",
+    "relDb": -6.94,
+    "segments": 3,
+    "seconds": 9.0
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl2.2",
+    "marking": "pp",
+    "relDb": -6.08,
+    "segments": 1,
+    "seconds": 10.1
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vl2.2",
+    "marking": "ff",
+    "relDb": -4.79,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl1.1",
+    "marking": "pp",
+    "relDb": 5.24,
+    "segments": 3,
+    "seconds": 5.4
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl1.1",
+    "marking": "p",
+    "relDb": 3.89,
+    "segments": 2,
+    "seconds": 5.6
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl1.1",
+    "marking": "f",
+    "relDb": 5.87,
+    "segments": 1,
+    "seconds": 3.1
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl1.2",
+    "marking": "pp",
+    "relDb": -0.09,
+    "segments": 2,
+    "seconds": 4.5
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl1.2",
+    "marking": "p",
+    "relDb": 2.78,
+    "segments": 2,
+    "seconds": 6.2
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl1.2",
+    "marking": "f",
+    "relDb": 2.22,
+    "segments": 1,
+    "seconds": 3.5
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl2.1",
+    "marking": "p",
+    "relDb": -2.33,
+    "segments": 2,
+    "seconds": 6.2
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl2.1",
+    "marking": "f",
+    "relDb": -0.28,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl2.2",
+    "marking": "p",
+    "relDb": -1.7,
+    "segments": 2,
+    "seconds": 5.7
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vl2.2",
+    "marking": "f",
+    "relDb": -1.15,
+    "segments": 1,
+    "seconds": 3.6
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl1.1",
+    "marking": "pp",
+    "relDb": 4.87,
+    "segments": 3,
+    "seconds": 16.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl1.1",
+    "marking": "ff",
+    "relDb": 6.16,
+    "segments": 2,
+    "seconds": 18.7
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl1.1",
+    "marking": "p",
+    "relDb": 5.09,
+    "segments": 2,
+    "seconds": 11.7
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl1.1",
+    "marking": "f",
+    "relDb": 5.33,
+    "segments": 1,
+    "seconds": 8.4
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl1.2",
+    "marking": "pp",
+    "relDb": 2.23,
+    "segments": 3,
+    "seconds": 15.7
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl1.2",
+    "marking": "ff",
+    "relDb": 5.17,
+    "segments": 2,
+    "seconds": 19.3
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl1.2",
+    "marking": "p",
+    "relDb": 1.5,
+    "segments": 2,
+    "seconds": 11.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl1.2",
+    "marking": "f",
+    "relDb": 3.08,
+    "segments": 1,
+    "seconds": 8.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl2.1",
+    "marking": "pp",
+    "relDb": -1.49,
+    "segments": 3,
+    "seconds": 17.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl2.1",
+    "marking": "ff",
+    "relDb": -0.02,
+    "segments": 2,
+    "seconds": 20.4
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl2.1",
+    "marking": "p",
+    "relDb": -1.76,
+    "segments": 2,
+    "seconds": 12.1
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl2.1",
+    "marking": "f",
+    "relDb": -1.51,
+    "segments": 1,
+    "seconds": 8.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl2.2",
+    "marking": "pp",
+    "relDb": -3.03,
+    "segments": 3,
+    "seconds": 16.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl2.2",
+    "marking": "ff",
+    "relDb": -3.34,
+    "segments": 2,
+    "seconds": 19.7
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl2.2",
+    "marking": "p",
+    "relDb": -5.68,
+    "segments": 2,
+    "seconds": 11.9
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vl2.2",
+    "marking": "f",
+    "relDb": -4.65,
+    "segments": 1,
+    "seconds": 8.3
+   }
+  ],
+  "viola": [
+   {
+    "piece": "beethoven7_i",
+    "part": "vla",
+    "marking": "p",
+    "relDb": 3.58,
+    "segments": 6,
+    "seconds": 29.1
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vla",
+    "marking": "pp",
+    "relDb": 1.52,
+    "segments": 3,
+    "seconds": 14.2
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vla",
+    "marking": "ff",
+    "relDb": 2.31,
+    "segments": 5,
+    "seconds": 39.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vla",
+    "marking": "f",
+    "relDb": 4.7,
+    "segments": 5,
+    "seconds": 10.1
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vla",
+    "marking": "p",
+    "relDb": 4.53,
+    "segments": 3,
+    "seconds": 8.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vla",
+    "marking": "ff",
+    "relDb": 3.91,
+    "segments": 3,
+    "seconds": 12.4
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vla",
+    "marking": "ff",
+    "relDb": 1.54,
+    "segments": 12,
+    "seconds": 26.5
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vla",
+    "marking": "fff",
+    "relDb": 6.1,
+    "segments": 2,
+    "seconds": 2.4
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vla",
+    "marking": "f",
+    "relDb": 6.07,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vla.1",
+    "marking": "f",
+    "relDb": -4.74,
+    "segments": 2,
+    "seconds": 22.4
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vla.1",
+    "marking": "p",
+    "relDb": -7.18,
+    "segments": 1,
+    "seconds": 1.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vla.1",
+    "marking": "pp",
+    "relDb": -1.61,
+    "segments": 2,
+    "seconds": 6.0
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vla.1",
+    "marking": "ff",
+    "relDb": -3.86,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vla.2",
+    "marking": "f",
+    "relDb": -1.95,
+    "segments": 2,
+    "seconds": 22.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vla.2",
+    "marking": "p",
+    "relDb": -6.76,
+    "segments": 1,
+    "seconds": 1.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vla.2",
+    "marking": "pp",
+    "relDb": 3.33,
+    "segments": 2,
+    "seconds": 6.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vla.2",
+    "marking": "ff",
+    "relDb": 1.94,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vla.1",
+    "marking": "p",
+    "relDb": -3.11,
+    "segments": 2,
+    "seconds": 5.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vla.1",
+    "marking": "f",
+    "relDb": -2.25,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vla.2",
+    "marking": "p",
+    "relDb": -0.35,
+    "segments": 2,
+    "seconds": 4.9
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vla.2",
+    "marking": "f",
+    "relDb": 1.05,
+    "segments": 1,
+    "seconds": 4.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vla.1",
+    "marking": "pp",
+    "relDb": -2.74,
+    "segments": 3,
+    "seconds": 15.7
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vla.1",
+    "marking": "ff",
+    "relDb": -6.64,
+    "segments": 2,
+    "seconds": 21.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vla.1",
+    "marking": "p",
+    "relDb": -2.55,
+    "segments": 2,
+    "seconds": 12.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vla.1",
+    "marking": "f",
+    "relDb": -5.05,
+    "segments": 1,
+    "seconds": 8.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vla.2",
+    "marking": "pp",
+    "relDb": 0.37,
+    "segments": 3,
+    "seconds": 15.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vla.2",
+    "marking": "ff",
+    "relDb": 0.09,
+    "segments": 2,
+    "seconds": 22.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vla.2",
+    "marking": "p",
+    "relDb": 2.93,
+    "segments": 2,
+    "seconds": 12.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vla.2",
+    "marking": "f",
+    "relDb": 1.14,
+    "segments": 1,
+    "seconds": 8.6
+   }
+  ],
+  "cello": [
+   {
+    "piece": "beethoven7_i",
+    "part": "vc",
+    "marking": "p",
+    "relDb": -3.8,
+    "segments": 1,
+    "seconds": 2.4
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vc",
+    "marking": "pp",
+    "relDb": -2.48,
+    "segments": 3,
+    "seconds": 12.7
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "vc",
+    "marking": "ff",
+    "relDb": 0.28,
+    "segments": 5,
+    "seconds": 27.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vc",
+    "marking": "f",
+    "relDb": 0.76,
+    "segments": 5,
+    "seconds": 12.2
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vc",
+    "marking": "pp",
+    "relDb": -0.22,
+    "segments": 1,
+    "seconds": 4.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vc",
+    "marking": "p",
+    "relDb": 0.88,
+    "segments": 2,
+    "seconds": 8.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "vc",
+    "marking": "ff",
+    "relDb": 0.44,
+    "segments": 3,
+    "seconds": 13.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vc",
+    "marking": "fff",
+    "relDb": -1.4,
+    "segments": 1,
+    "seconds": 1.4
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vc",
+    "marking": "f",
+    "relDb": 1.59,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vc",
+    "marking": "ff",
+    "relDb": -0.18,
+    "segments": 7,
+    "seconds": 11.5
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "vc",
+    "marking": "mf",
+    "relDb": -4.71,
+    "segments": 1,
+    "seconds": 4.7
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vc",
+    "marking": "f",
+    "relDb": 4.8,
+    "segments": 2,
+    "seconds": 22.9
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vc",
+    "marking": "pp",
+    "relDb": 3.45,
+    "segments": 2,
+    "seconds": 4.7
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "vc",
+    "marking": "ff",
+    "relDb": 2.5,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vc",
+    "marking": "pp",
+    "relDb": -9.19,
+    "segments": 2,
+    "seconds": 1.9
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vc",
+    "marking": "p",
+    "relDb": -0.73,
+    "segments": 1,
+    "seconds": 6.7
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "vc",
+    "marking": "f",
+    "relDb": -1.66,
+    "segments": 1,
+    "seconds": 4.6
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vc",
+    "marking": "ff",
+    "relDb": -0.97,
+    "segments": 2,
+    "seconds": 23.1
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vc",
+    "marking": "p",
+    "relDb": -3.67,
+    "segments": 2,
+    "seconds": 11.6
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "vc",
+    "marking": "f",
+    "relDb": 0.13,
+    "segments": 1,
+    "seconds": 8.5
+   }
+  ],
+  "bass": [
+   {
+    "piece": "beethoven7_i",
+    "part": "kb",
+    "marking": "p",
+    "relDb": -1.26,
+    "segments": 1,
+    "seconds": 3.5
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "kb",
+    "marking": "pp",
+    "relDb": -2.44,
+    "segments": 3,
+    "seconds": 16.2
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "kb",
+    "marking": "ff",
+    "relDb": 0.32,
+    "segments": 5,
+    "seconds": 31.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "kb",
+    "marking": "pp",
+    "relDb": 2.47,
+    "segments": 1,
+    "seconds": 5.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "kb",
+    "marking": "p",
+    "relDb": 5.76,
+    "segments": 2,
+    "seconds": 9.5
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "kb",
+    "marking": "f",
+    "relDb": 3.41,
+    "segments": 4,
+    "seconds": 10.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "kb",
+    "marking": "ff",
+    "relDb": 4.21,
+    "segments": 3,
+    "seconds": 14.2
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "kb",
+    "marking": "f",
+    "relDb": 0.33,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "kb",
+    "marking": "ff",
+    "relDb": 3.89,
+    "segments": 5,
+    "seconds": 11.2
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "kb",
+    "marking": "mf",
+    "relDb": 4.02,
+    "segments": 1,
+    "seconds": 5.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "kb",
+    "marking": "f",
+    "relDb": -0.02,
+    "segments": 2,
+    "seconds": 22.4
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "kb",
+    "marking": "pp",
+    "relDb": 1.63,
+    "segments": 2,
+    "seconds": 5.0
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "kb",
+    "marking": "ff",
+    "relDb": -0.44,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "kb",
+    "marking": "pp",
+    "relDb": -3.66,
+    "segments": 2,
+    "seconds": 2.9
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "kb",
+    "marking": "p",
+    "relDb": 0.87,
+    "segments": 1,
+    "seconds": 8.7
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "kb",
+    "marking": "f",
+    "relDb": -1.5,
+    "segments": 1,
+    "seconds": 5.7
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "kb",
+    "marking": "ff",
+    "relDb": 0.69,
+    "segments": 2,
+    "seconds": 20.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "kb",
+    "marking": "p",
+    "relDb": 4.79,
+    "segments": 2,
+    "seconds": 10.4
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "kb",
+    "marking": "f",
+    "relDb": 1.62,
+    "segments": 1,
+    "seconds": 8.1
+   }
+  ],
+  "flute": [
+   {
+    "piece": "beethoven7_i",
+    "part": "fl1",
+    "marking": "p",
+    "relDb": 1.36,
+    "segments": 2,
+    "seconds": 21.7
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "fl1",
+    "marking": "ff",
+    "relDb": 9.83,
+    "segments": 2,
+    "seconds": 22.2
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "fl1",
+    "marking": "pp",
+    "relDb": -3.32,
+    "segments": 1,
+    "seconds": 1.4
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "fl2",
+    "marking": "ff",
+    "relDb": 5.58,
+    "segments": 2,
+    "seconds": 22.2
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "fl1",
+    "marking": "f",
+    "relDb": 6.59,
+    "segments": 2,
+    "seconds": 4.3
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "fl1",
+    "marking": "ff",
+    "relDb": 1.92,
+    "segments": 3,
+    "seconds": 12.2
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "fl1",
+    "marking": "p",
+    "relDb": -9.42,
+    "segments": 1,
+    "seconds": 1.3
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "fl1",
+    "marking": "pp",
+    "relDb": 10.61,
+    "segments": 1,
+    "seconds": 1.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "fl3",
+    "marking": "f",
+    "relDb": -1.39,
+    "segments": 1,
+    "seconds": 1.6
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "fl3",
+    "marking": "ff",
+    "relDb": 3.16,
+    "segments": 2,
+    "seconds": 11.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "fl3",
+    "marking": "pp",
+    "relDb": 11.14,
+    "segments": 1,
+    "seconds": 1.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "fl1",
+    "marking": "f",
+    "relDb": 6.84,
+    "segments": 2,
+    "seconds": 13.6
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "fl1",
+    "marking": "p",
+    "relDb": 3.69,
+    "segments": 2,
+    "seconds": 6.9
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "fl1",
+    "marking": "pp",
+    "relDb": -0.11,
+    "segments": 2,
+    "seconds": 4.7
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "fl1",
+    "marking": "ff",
+    "relDb": 4.82,
+    "segments": 1,
+    "seconds": 1.9
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "fl2",
+    "marking": "f",
+    "relDb": 8.28,
+    "segments": 2,
+    "seconds": 13.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "fl2",
+    "marking": "pp",
+    "relDb": 4.1,
+    "segments": 2,
+    "seconds": 4.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "fl2",
+    "marking": "ff",
+    "relDb": 8.08,
+    "segments": 1,
+    "seconds": 2.7
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "fl1",
+    "marking": "p",
+    "relDb": 2.43,
+    "segments": 1,
+    "seconds": 0.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "fl1",
+    "marking": "ff",
+    "relDb": 7.06,
+    "segments": 2,
+    "seconds": 12.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "fl1",
+    "marking": "p",
+    "relDb": 4.69,
+    "segments": 1,
+    "seconds": 4.1
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "fl1",
+    "marking": "pp",
+    "relDb": -0.19,
+    "segments": 2,
+    "seconds": 3.9
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "fl1",
+    "marking": "f",
+    "relDb": 5.05,
+    "segments": 1,
+    "seconds": 5.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "fl2",
+    "marking": "ff",
+    "relDb": 8.52,
+    "segments": 2,
+    "seconds": 12.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "fl2",
+    "marking": "f",
+    "relDb": 4.5,
+    "segments": 1,
+    "seconds": 5.5
+   }
+  ],
+  "oboe": [
+   {
+    "piece": "beethoven7_i",
+    "part": "ob1",
+    "marking": "ff",
+    "relDb": -3.16,
+    "segments": 2,
+    "seconds": 20.4
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "ob1",
+    "marking": "p",
+    "relDb": 0.44,
+    "segments": 2,
+    "seconds": 31.1
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "ob1",
+    "marking": "pp",
+    "relDb": -6.43,
+    "segments": 2,
+    "seconds": 7.8
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "ob2",
+    "marking": "ff",
+    "relDb": -1.02,
+    "segments": 2,
+    "seconds": 22.4
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "ob2",
+    "marking": "p",
+    "relDb": -7.17,
+    "segments": 2,
+    "seconds": 27.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "ob1",
+    "marking": "f",
+    "relDb": -1.94,
+    "segments": 3,
+    "seconds": 4.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "ob1",
+    "marking": "ff",
+    "relDb": -1.97,
+    "segments": 3,
+    "seconds": 5.2
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "ob1",
+    "marking": "p",
+    "relDb": 4.09,
+    "segments": 1,
+    "seconds": 2.6
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "ob2",
+    "marking": "f",
+    "relDb": -0.53,
+    "segments": 3,
+    "seconds": 4.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "ob2",
+    "marking": "ff",
+    "relDb": -0.56,
+    "segments": 3,
+    "seconds": 5.4
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "ob2",
+    "marking": "p",
+    "relDb": 4.13,
+    "segments": 1,
+    "seconds": 2.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "ob3",
+    "marking": "f",
+    "relDb": -2.65,
+    "segments": 2,
+    "seconds": 4.5
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "ob3",
+    "marking": "ff",
+    "relDb": 1.03,
+    "segments": 4,
+    "seconds": 7.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "ob1",
+    "marking": "ff",
+    "relDb": -2.27,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "ob2",
+    "marking": "ff",
+    "relDb": -3.32,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "ob3",
+    "marking": "ff",
+    "relDb": -2.81,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "ob4",
+    "marking": "ff",
+    "relDb": -3.82,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "ob1",
+    "marking": "f",
+    "relDb": 0.65,
+    "segments": 2,
+    "seconds": 15.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "ob1",
+    "marking": "p",
+    "relDb": -3.67,
+    "segments": 3,
+    "seconds": 9.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "ob1",
+    "marking": "pp",
+    "relDb": -6.86,
+    "segments": 2,
+    "seconds": 5.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "ob1",
+    "marking": "ff",
+    "relDb": -2.59,
+    "segments": 1,
+    "seconds": 2.4
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "ob2",
+    "marking": "f",
+    "relDb": -6.57,
+    "segments": 2,
+    "seconds": 15.0
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "ob2",
+    "marking": "p",
+    "relDb": -8.91,
+    "segments": 1,
+    "seconds": 0.7
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "ob2",
+    "marking": "pp",
+    "relDb": -14.07,
+    "segments": 2,
+    "seconds": 4.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "ob2",
+    "marking": "ff",
+    "relDb": -7.15,
+    "segments": 1,
+    "seconds": 2.2
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "ob1",
+    "marking": "pp",
+    "relDb": -10.96,
+    "segments": 1,
+    "seconds": 9.7
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "ob1",
+    "marking": "p",
+    "relDb": -4.42,
+    "segments": 1,
+    "seconds": 4.9
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "ob1",
+    "marking": "f",
+    "relDb": -2.33,
+    "segments": 1,
+    "seconds": 3.4
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "ob2",
+    "marking": "pp",
+    "relDb": -12.5,
+    "segments": 1,
+    "seconds": 10.1
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "ob2",
+    "marking": "p",
+    "relDb": -10.69,
+    "segments": 1,
+    "seconds": 4.9
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "ob2",
+    "marking": "f",
+    "relDb": -6.83,
+    "segments": 1,
+    "seconds": 3.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "ob1",
+    "marking": "ff",
+    "relDb": -0.87,
+    "segments": 2,
+    "seconds": 15.1
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "ob1",
+    "marking": "p",
+    "relDb": -0.86,
+    "segments": 1,
+    "seconds": 5.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "ob1",
+    "marking": "pp",
+    "relDb": -6.12,
+    "segments": 2,
+    "seconds": 4.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "ob1",
+    "marking": "f",
+    "relDb": -1.62,
+    "segments": 1,
+    "seconds": 6.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "ob2",
+    "marking": "ff",
+    "relDb": -6.17,
+    "segments": 2,
+    "seconds": 16.0
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "ob2",
+    "marking": "f",
+    "relDb": -7.38,
+    "segments": 1,
+    "seconds": 6.4
+   }
+  ],
+  "clarinet": [
+   {
+    "piece": "beethoven7_i",
+    "part": "cl1",
+    "marking": "pp",
+    "relDb": 0.44,
+    "segments": 1,
+    "seconds": 7.5
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "cl1",
+    "marking": "ff",
+    "relDb": 4.82,
+    "segments": 2,
+    "seconds": 25.1
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "cl1",
+    "marking": "p",
+    "relDb": -3.94,
+    "segments": 2,
+    "seconds": 30.8
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "cl2",
+    "marking": "pp",
+    "relDb": 0.73,
+    "segments": 1,
+    "seconds": 8.2
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "cl2",
+    "marking": "ff",
+    "relDb": 0.23,
+    "segments": 2,
+    "seconds": 24.5
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "cl2",
+    "marking": "p",
+    "relDb": -2.08,
+    "segments": 2,
+    "seconds": 32.1
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "cl1",
+    "marking": "p",
+    "relDb": 2.37,
+    "segments": 2,
+    "seconds": 6.4
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "cl1",
+    "marking": "f",
+    "relDb": 4.08,
+    "segments": 3,
+    "seconds": 4.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "cl1",
+    "marking": "ff",
+    "relDb": 8.29,
+    "segments": 3,
+    "seconds": 6.4
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "cl2",
+    "marking": "p",
+    "relDb": 0.99,
+    "segments": 1,
+    "seconds": 3.6
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "cl2",
+    "marking": "f",
+    "relDb": 4.13,
+    "segments": 3,
+    "seconds": 5.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "cl2",
+    "marking": "ff",
+    "relDb": 3.17,
+    "segments": 3,
+    "seconds": 7.2
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "cl3",
+    "marking": "f",
+    "relDb": 0.37,
+    "segments": 3,
+    "seconds": 5.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "cl3",
+    "marking": "ff",
+    "relDb": 2.72,
+    "segments": 3,
+    "seconds": 7.3
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "cl1",
+    "marking": "ff",
+    "relDb": 4.48,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "cl2",
+    "marking": "ff",
+    "relDb": 4.55,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "cl3",
+    "marking": "ff",
+    "relDb": 6.38,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "cl1",
+    "marking": "f",
+    "relDb": 5.67,
+    "segments": 3,
+    "seconds": 15.0
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "cl1",
+    "marking": "p",
+    "relDb": 1.78,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "cl1",
+    "marking": "ff",
+    "relDb": 2.31,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "cl2",
+    "marking": "f",
+    "relDb": -0.23,
+    "segments": 3,
+    "seconds": 15.9
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "cl2",
+    "marking": "p",
+    "relDb": -1.71,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "cl2",
+    "marking": "ff",
+    "relDb": -1.58,
+    "segments": 1,
+    "seconds": 2.5
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "cl1",
+    "marking": "pp",
+    "relDb": -11.82,
+    "segments": 1,
+    "seconds": 8.8
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "cl1",
+    "marking": "p",
+    "relDb": -3.68,
+    "segments": 1,
+    "seconds": 4.5
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "cl1",
+    "marking": "f",
+    "relDb": -3.82,
+    "segments": 1,
+    "seconds": 3.4
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "cl2",
+    "marking": "pp",
+    "relDb": -5.6,
+    "segments": 1,
+    "seconds": 9.4
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "cl2",
+    "marking": "p",
+    "relDb": -0.8,
+    "segments": 1,
+    "seconds": 5.6
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "cl2",
+    "marking": "f",
+    "relDb": -0.45,
+    "segments": 1,
+    "seconds": 3.9
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "cl1",
+    "marking": "ff",
+    "relDb": 7.12,
+    "segments": 2,
+    "seconds": 13.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "cl1",
+    "marking": "p",
+    "relDb": 0.14,
+    "segments": 1,
+    "seconds": 5.0
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "cl1",
+    "marking": "pp",
+    "relDb": -1.87,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "cl1",
+    "marking": "f",
+    "relDb": -1.15,
+    "segments": 1,
+    "seconds": 6.1
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "cl2",
+    "marking": "ff",
+    "relDb": 2.78,
+    "segments": 2,
+    "seconds": 14.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "cl2",
+    "marking": "p",
+    "relDb": -1.22,
+    "segments": 1,
+    "seconds": 6.1
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "cl2",
+    "marking": "f",
+    "relDb": -0.29,
+    "segments": 1,
+    "seconds": 6.2
+   }
+  ],
+  "bassoon": [
+   {
+    "piece": "beethoven7_i",
+    "part": "bsn1",
+    "marking": "pp",
+    "relDb": 1.69,
+    "segments": 3,
+    "seconds": 16.9
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "bsn1",
+    "marking": "ff",
+    "relDb": 2.94,
+    "segments": 2,
+    "seconds": 24.1
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "bsn1",
+    "marking": "p",
+    "relDb": -0.23,
+    "segments": 2,
+    "seconds": 29.7
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "bsn2",
+    "marking": "pp",
+    "relDb": 3.94,
+    "segments": 1,
+    "seconds": 7.4
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "bsn2",
+    "marking": "ff",
+    "relDb": 2.33,
+    "segments": 2,
+    "seconds": 24.4
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "bsn2",
+    "marking": "p",
+    "relDb": -3.25,
+    "segments": 2,
+    "seconds": 28.4
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn1",
+    "marking": "p",
+    "relDb": 1.46,
+    "segments": 2,
+    "seconds": 7.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn1",
+    "marking": "f",
+    "relDb": 2.58,
+    "segments": 2,
+    "seconds": 14.4
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn1",
+    "marking": "ff",
+    "relDb": 4.52,
+    "segments": 1,
+    "seconds": 2.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn1",
+    "marking": "pp",
+    "relDb": 7.52,
+    "segments": 1,
+    "seconds": 0.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn2",
+    "marking": "p",
+    "relDb": -1.2,
+    "segments": 1,
+    "seconds": 4.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn2",
+    "marking": "f",
+    "relDb": 2.84,
+    "segments": 2,
+    "seconds": 14.3
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn2",
+    "marking": "ff",
+    "relDb": 3.58,
+    "segments": 1,
+    "seconds": 2.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn2",
+    "marking": "pp",
+    "relDb": 7.12,
+    "segments": 1,
+    "seconds": 0.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn3",
+    "marking": "p",
+    "relDb": -2.36,
+    "segments": 1,
+    "seconds": 4.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn3",
+    "marking": "f",
+    "relDb": 2.64,
+    "segments": 2,
+    "seconds": 14.1
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn3",
+    "marking": "ff",
+    "relDb": 5.09,
+    "segments": 1,
+    "seconds": 2.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "bsn3",
+    "marking": "pp",
+    "relDb": 7.04,
+    "segments": 1,
+    "seconds": 0.7
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "bsn1",
+    "marking": "ff",
+    "relDb": 4.37,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "bsn2",
+    "marking": "ff",
+    "relDb": 2.73,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "bsn3",
+    "marking": "ff",
+    "relDb": 2.45,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "bsn1",
+    "marking": "f",
+    "relDb": 1.62,
+    "segments": 2,
+    "seconds": 15.1
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "bsn1",
+    "marking": "p",
+    "relDb": 0.77,
+    "segments": 3,
+    "seconds": 11.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "bsn1",
+    "marking": "pp",
+    "relDb": -1.78,
+    "segments": 1,
+    "seconds": 5.4
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "bsn1",
+    "marking": "ff",
+    "relDb": -0.65,
+    "segments": 1,
+    "seconds": 2.6
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "bsn2",
+    "marking": "f",
+    "relDb": 1.26,
+    "segments": 2,
+    "seconds": 13.5
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "bsn2",
+    "marking": "p",
+    "relDb": -0.15,
+    "segments": 2,
+    "seconds": 3.4
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "bsn2",
+    "marking": "pp",
+    "relDb": -2.43,
+    "segments": 1,
+    "seconds": 5.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "bsn2",
+    "marking": "ff",
+    "relDb": -0.17,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "bsn1",
+    "marking": "pp",
+    "relDb": -2.61,
+    "segments": 1,
+    "seconds": 8.7
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "bsn1",
+    "marking": "p",
+    "relDb": 2.59,
+    "segments": 1,
+    "seconds": 5.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "bsn1",
+    "marking": "f",
+    "relDb": 1.79,
+    "segments": 1,
+    "seconds": 3.2
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "bsn2",
+    "marking": "pp",
+    "relDb": -2.01,
+    "segments": 1,
+    "seconds": 8.8
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "bsn2",
+    "marking": "p",
+    "relDb": 1.04,
+    "segments": 1,
+    "seconds": 5.4
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "bsn2",
+    "marking": "f",
+    "relDb": -1.74,
+    "segments": 1,
+    "seconds": 2.8
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "bsn1",
+    "marking": "ff",
+    "relDb": 0.67,
+    "segments": 2,
+    "seconds": 14.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "bsn1",
+    "marking": "p",
+    "relDb": 1.37,
+    "segments": 1,
+    "seconds": 6.3
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "bsn1",
+    "marking": "pp",
+    "relDb": -1.69,
+    "segments": 2,
+    "seconds": 4.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "bsn1",
+    "marking": "f",
+    "relDb": 0.57,
+    "segments": 1,
+    "seconds": 6.3
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "bsn2",
+    "marking": "ff",
+    "relDb": 2.04,
+    "segments": 2,
+    "seconds": 13.0
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "bsn2",
+    "marking": "p",
+    "relDb": 2.14,
+    "segments": 1,
+    "seconds": 6.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "bsn2",
+    "marking": "f",
+    "relDb": 1.57,
+    "segments": 1,
+    "seconds": 6.2
+   }
+  ],
+  "horn": [
+   {
+    "piece": "beethoven7_i",
+    "part": "hn1",
+    "marking": "ff",
+    "relDb": -3.54,
+    "segments": 2,
+    "seconds": 23.8
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "hn2",
+    "marking": "ff",
+    "relDb": -7.84,
+    "segments": 2,
+    "seconds": 22.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn1",
+    "marking": "f",
+    "relDb": -7.95,
+    "segments": 2,
+    "seconds": 1.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn1",
+    "marking": "ff",
+    "relDb": -5.41,
+    "segments": 3,
+    "seconds": 9.6
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn2",
+    "marking": "f",
+    "relDb": -9.02,
+    "segments": 2,
+    "seconds": 2.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn2",
+    "marking": "ff",
+    "relDb": -5.74,
+    "segments": 3,
+    "seconds": 10.1
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn3",
+    "marking": "f",
+    "relDb": -2.58,
+    "segments": 4,
+    "seconds": 7.5
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn3",
+    "marking": "ff",
+    "relDb": -6.61,
+    "segments": 2,
+    "seconds": 9.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn4",
+    "marking": "f",
+    "relDb": -1.28,
+    "segments": 4,
+    "seconds": 7.6
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn4",
+    "marking": "ff",
+    "relDb": -7.68,
+    "segments": 2,
+    "seconds": 4.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn5",
+    "marking": "f",
+    "relDb": -7.49,
+    "segments": 2,
+    "seconds": 2.4
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn5",
+    "marking": "ff",
+    "relDb": -6.22,
+    "segments": 2,
+    "seconds": 9.1
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn6",
+    "marking": "f",
+    "relDb": -8.32,
+    "segments": 2,
+    "seconds": 2.6
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn6",
+    "marking": "ff",
+    "relDb": -6.78,
+    "segments": 2,
+    "seconds": 9.3
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn7",
+    "marking": "p",
+    "relDb": -8.24,
+    "segments": 1,
+    "seconds": 4.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn7",
+    "marking": "f",
+    "relDb": -5.01,
+    "segments": 2,
+    "seconds": 6.4
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn7",
+    "marking": "ff",
+    "relDb": -8.91,
+    "segments": 2,
+    "seconds": 11.0
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn7",
+    "marking": "pp",
+    "relDb": 2.03,
+    "segments": 1,
+    "seconds": 0.7
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn8",
+    "marking": "p",
+    "relDb": -11.69,
+    "segments": 1,
+    "seconds": 4.9
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn8",
+    "marking": "f",
+    "relDb": -6.33,
+    "segments": 2,
+    "seconds": 6.5
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn8",
+    "marking": "ff",
+    "relDb": -9.31,
+    "segments": 2,
+    "seconds": 10.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "hn8",
+    "marking": "pp",
+    "relDb": 2.55,
+    "segments": 1,
+    "seconds": 0.6
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn1",
+    "marking": "ff",
+    "relDb": -7.0,
+    "segments": 8,
+    "seconds": 9.7
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn1",
+    "marking": "mf",
+    "relDb": -6.78,
+    "segments": 2,
+    "seconds": 6.7
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn2",
+    "marking": "ff",
+    "relDb": -8.74,
+    "segments": 6,
+    "seconds": 14.7
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn2",
+    "marking": "mf",
+    "relDb": -5.86,
+    "segments": 2,
+    "seconds": 7.0
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn3",
+    "marking": "ff",
+    "relDb": -8.04,
+    "segments": 8,
+    "seconds": 8.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn3",
+    "marking": "mf",
+    "relDb": -5.96,
+    "segments": 2,
+    "seconds": 6.5
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn4",
+    "marking": "ff",
+    "relDb": -11.25,
+    "segments": 6,
+    "seconds": 14.9
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn4",
+    "marking": "mf",
+    "relDb": -9.46,
+    "segments": 2,
+    "seconds": 7.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn5",
+    "marking": "ff",
+    "relDb": -7.23,
+    "segments": 6,
+    "seconds": 8.6
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn5",
+    "marking": "mf",
+    "relDb": -8.25,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn6",
+    "marking": "ff",
+    "relDb": -9.82,
+    "segments": 2,
+    "seconds": 2.3
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn6",
+    "marking": "mf",
+    "relDb": -7.63,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn7",
+    "marking": "ff",
+    "relDb": -11.5,
+    "segments": 4,
+    "seconds": 12.2
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "hn7",
+    "marking": "mf",
+    "relDb": -8.2,
+    "segments": 1,
+    "seconds": 2.1
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "hn1",
+    "marking": "f",
+    "relDb": -9.03,
+    "segments": 2,
+    "seconds": 13.7
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "hn1",
+    "marking": "p",
+    "relDb": -5.72,
+    "segments": 1,
+    "seconds": 1.9
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "hn1",
+    "marking": "pp",
+    "relDb": -5.91,
+    "segments": 2,
+    "seconds": 5.4
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "hn1",
+    "marking": "ff",
+    "relDb": -10.5,
+    "segments": 1,
+    "seconds": 2.4
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "hn2",
+    "marking": "f",
+    "relDb": -6.71,
+    "segments": 2,
+    "seconds": 14.6
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "hn2",
+    "marking": "p",
+    "relDb": -1.19,
+    "segments": 1,
+    "seconds": 1.7
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "hn2",
+    "marking": "pp",
+    "relDb": -1.87,
+    "segments": 2,
+    "seconds": 5.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "hn2",
+    "marking": "ff",
+    "relDb": -7.97,
+    "segments": 1,
+    "seconds": 2.4
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "hn1",
+    "marking": "pp",
+    "relDb": -14.58,
+    "segments": 1,
+    "seconds": 12.2
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "hn1",
+    "marking": "p",
+    "relDb": -12.07,
+    "segments": 2,
+    "seconds": 7.2
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "hn1",
+    "marking": "f",
+    "relDb": -18.29,
+    "segments": 1,
+    "seconds": 4.0
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "hn2",
+    "marking": "pp",
+    "relDb": -17.95,
+    "segments": 1,
+    "seconds": 11.6
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "hn2",
+    "marking": "p",
+    "relDb": -12.42,
+    "segments": 2,
+    "seconds": 7.5
+   },
+   {
+    "piece": "beethoven8_ii",
+    "part": "hn2",
+    "marking": "f",
+    "relDb": -12.25,
+    "segments": 1,
+    "seconds": 4.5
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "hn1",
+    "marking": "ff",
+    "relDb": -7.85,
+    "segments": 2,
+    "seconds": 13.9
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "hn1",
+    "marking": "p",
+    "relDb": -9.14,
+    "segments": 1,
+    "seconds": 5.6
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "hn2",
+    "marking": "ff",
+    "relDb": -3.38,
+    "segments": 2,
+    "seconds": 15.2
+   }
+  ],
+  "trumpet": [
+   {
+    "piece": "beethoven7_i",
+    "part": "tr1",
+    "marking": "ff",
+    "relDb": -1.4,
+    "segments": 2,
+    "seconds": 23.4
+   },
+   {
+    "piece": "beethoven7_i",
+    "part": "tr2",
+    "marking": "ff",
+    "relDb": -5.39,
+    "segments": 2,
+    "seconds": 23.6
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "tr1",
+    "marking": "f",
+    "relDb": 1.36,
+    "segments": 4,
+    "seconds": 11.2
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "tr2",
+    "marking": "f",
+    "relDb": -2.98,
+    "segments": 4,
+    "seconds": 8.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "tr3",
+    "marking": "f",
+    "relDb": -4.13,
+    "segments": 3,
+    "seconds": 7.3
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "tr1",
+    "marking": "f",
+    "relDb": -4.94,
+    "segments": 2,
+    "seconds": 1.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "tr1",
+    "marking": "ff",
+    "relDb": -5.74,
+    "segments": 6,
+    "seconds": 9.7
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "tr2",
+    "marking": "ff",
+    "relDb": -5.18,
+    "segments": 6,
+    "seconds": 9.2
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "tr2",
+    "marking": "f",
+    "relDb": -6.59,
+    "segments": 1,
+    "seconds": 1.2
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "tr3",
+    "marking": "f",
+    "relDb": 0.28,
+    "segments": 1,
+    "seconds": 1.3
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "tr4",
+    "marking": "f",
+    "relDb": -0.55,
+    "segments": 1,
+    "seconds": 1.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "tr1",
+    "marking": "f",
+    "relDb": -3.26,
+    "segments": 2,
+    "seconds": 14.3
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "tr1",
+    "marking": "ff",
+    "relDb": -4.91,
+    "segments": 1,
+    "seconds": 2.2
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "tr2",
+    "marking": "f",
+    "relDb": -5.06,
+    "segments": 2,
+    "seconds": 15.0
+   },
+   {
+    "piece": "beethoven8_i",
+    "part": "tr2",
+    "marking": "ff",
+    "relDb": -6.53,
+    "segments": 1,
+    "seconds": 2.4
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "tr1",
+    "marking": "ff",
+    "relDb": -4.33,
+    "segments": 2,
+    "seconds": 13.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "tr1",
+    "marking": "pp",
+    "relDb": -9.73,
+    "segments": 1,
+    "seconds": 5.2
+   },
+   {
+    "piece": "beethoven8_iv",
+    "part": "tr2",
+    "marking": "ff",
+    "relDb": -6.05,
+    "segments": 2,
+    "seconds": 14.1
+   }
+  ],
+  "trombone": [
+   {
+    "piece": "bruckner8_ii",
+    "part": "trb1",
+    "marking": "f",
+    "relDb": 4.43,
+    "segments": 2,
+    "seconds": 11.8
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "trb2",
+    "marking": "f",
+    "relDb": 2.68,
+    "segments": 2,
+    "seconds": 11.6
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "trb3",
+    "marking": "f",
+    "relDb": 2.87,
+    "segments": 2,
+    "seconds": 11.0
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "trb1",
+    "marking": "ff",
+    "relDb": -3.39,
+    "segments": 6,
+    "seconds": 9.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "trb1",
+    "marking": "f",
+    "relDb": 0.08,
+    "segments": 2,
+    "seconds": 1.7
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "trb1",
+    "marking": "mf",
+    "relDb": -14.94,
+    "segments": 1,
+    "seconds": 3.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "trb2",
+    "marking": "ff",
+    "relDb": -3.27,
+    "segments": 5,
+    "seconds": 6.5
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "trb2",
+    "marking": "f",
+    "relDb": 2.18,
+    "segments": 2,
+    "seconds": 1.6
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "trb2",
+    "marking": "mf",
+    "relDb": -17.15,
+    "segments": 1,
+    "seconds": 3.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "trb3",
+    "marking": "ff",
+    "relDb": -1.0,
+    "segments": 2,
+    "seconds": 1.1
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "trb3",
+    "marking": "mf",
+    "relDb": -19.85,
+    "segments": 1,
+    "seconds": 5.2
+   }
+  ],
+  "tuba": [
+   {
+    "piece": "bruckner8_ii",
+    "part": "tuba",
+    "marking": "f",
+    "relDb": 0.83,
+    "segments": 2,
+    "seconds": 9.4
+   },
+   {
+    "piece": "bruckner8_ii",
+    "part": "tuba",
+    "marking": "pp",
+    "relDb": 9.51,
+    "segments": 1,
+    "seconds": 0.8
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "tuba",
+    "marking": "mf",
+    "relDb": -17.27,
+    "segments": 1,
+    "seconds": 5.2
+   },
+   {
+    "piece": "mahler1_iv",
+    "part": "tuba",
+    "marking": "ff",
+    "relDb": -4.12,
+    "segments": 1,
+    "seconds": 0.6
+   }
+  ]
+ },
+ "tub8Absolute": {
+  "flute": {
+   "medianDb": 6.75,
+   "iqr": [
+    5.86,
+    7.96
+   ],
+   "partMarkings": 14
+  },
+  "oboe": {
+   "medianDb": -4.53,
+   "iqr": [
+    -6.41,
+    -0.26
+   ],
+   "partMarkings": 20
+  },
+  "clarinet": {
+   "medianDb": 0.72,
+   "iqr": [
+    -1.11,
+    3.57
+   ],
+   "partMarkings": 19
+  },
+  "bassoon": {
+   "medianDb": 2.62,
+   "iqr": [
+    0.79,
+    4.6
+   ],
+   "partMarkings": 21
+  },
+  "horn": {
+   "medianDb": -8.6,
+   "iqr": [
+    -11.75,
+    -5.03
+   ],
+   "partMarkings": 17
+  },
+  "trumpet": {
+   "medianDb": -5.54,
+   "iqr": [
+    -6.77,
+    -4.34
+   ],
+   "partMarkings": 7
+  },
+  "violin": {
+   "medianDb": 2.96,
+   "iqr": [
+    -1.86,
+    5.74
+   ],
+   "partMarkings": 48
+  },
+  "viola": {
+   "medianDb": -1.14,
+   "iqr": [
+    -3.47,
+    3.22
+   ],
+   "partMarkings": 24
+  },
+  "cello": {
+   "medianDb": 0.61,
+   "iqr": [
+    -2.17,
+    1.74
+   ],
+   "partMarkings": 10
+  },
+  "bass": {
+   "medianDb": 0.71,
+   "iqr": [
+    -0.86,
+    2.77
+   ],
+   "partMarkings": 10
+  }
+ }
+}
