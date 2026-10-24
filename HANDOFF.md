@@ -101,6 +101,17 @@ Then (the coordinator, after the owner's PC run): ship it, always on. Details an
   - `--create-live-set` (Whence.als, 30 s) and `--even-levels` (303 s, round 2 envelope off its slurs' medians
     0.55 dB) run as before with kheap.
 
+## Build for the owner: #474 (2026-10-23)
+
+Windows build #474 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40057511007, integrate-1017 @ 24913b6ad4):
+#472 plus kheap (mimalloc, SSO load), the verify-detector fixes, tone_check.py, the anechoic balance research. Checked on
+the VM (private `check474/RESULT.md`): MuseScore's export of Whence byte-identical to #472's (events, CC11 included),
+levels within take spread; score open 21 % faster (memory +25 %); Ample identical; repeat check pass; tone_check re-finds
+sso_bad_samples' fault on real SSO and leads at keys 45, 46, 50 (not heard, not in the map: an avoid entry changes the
+sound, the owner's call); verify detector: one false positive left (Celli bar 13's quarter-flat Ab3 on a voice copy,
+branch verify-detector2). One 0xC0000005 in an Ample load with MS_KHEAP_OFF=1 (the system allocator; AGM's known load
+crash, OPEN_ITEMS 12), none in 5 with mimalloc.
+
 ## Build for the owner: #472 (2026-10-23)
 
 Windows build #472 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39962541862, integrate-1017 @ 4055da9f06):
