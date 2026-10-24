@@ -116,6 +116,14 @@ Then (the coordinator, after the owner's PC run): ship it, always on. Details an
   - `--create-live-set` (Whence.als, 30 s) and `--even-levels` (303 s, round 2 envelope off its slurs' medians
     0.55 dB) run as before with kheap.
 
+## Build for the owner: #475 (2026-10-24)
+
+Windows build #475 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40096814080, integrate-1017 @ d001c96cc3):
+#474 plus the anechoic wind / brass balance (BALANCE_LOG Iteration 15, the owner's "Full", 2026-10-24), verify-detector2,
+the staccato research. Checked on the VM (private `check475/RESULT.md`): Whence's events byte-identical to #474's; a winds
+test score's routes moved by exactly the shifts (Flute +3.96, Oboe -4.17, Horn -8.29, Trumpet -4.59, the rest 0.000 dB);
+the detector 0 findings on Whence; mimalloc in every run.
+
 ## Build for the owner: #474 (2026-10-23)
 
 Windows build #474 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40057511007, integrate-1017 @ 24913b6ad4):
