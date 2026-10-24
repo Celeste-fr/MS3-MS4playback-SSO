@@ -13,7 +13,13 @@
 //  Signals: a spectrogram (1024-point Hann window, 2048 above 50 kHz; 10 ms hop; log(1 + G |X|)
 //  of the audio normalised to its peak, 1024 samples of silence before it) and, per note, single
 //  spectra four times as fine (4096 points at 44.1 kHz: 10.8 Hz a bin, 93 ms). The audio's offset
-//  against the notes: the one (in a range) that puts the most spectral flux on the onsets.
+//  against the notes: the one (in a range) that puts the most spectral flux on the onsets; with the notes' expected
+//  latencies (Note::expected: the map's onset or plainShift, a transition's modelled arrival) each strike is put at
+//  its note-on + its latency and only a residual of +-60 ms is searched. Without them the wide search's margin (its best
+//  sum against the best one 50 ms or more away) is reported, and under 3 % the part's offset is "ambiguous": its
+//  legato missing notes are "unclear", not flagged (OPEN_ITEMS.md item 32: SSO's Performance legato has soft onsets,
+//  the flux curve is flat, Whence's Violins 2 were read one note late, 335 ms instead of ~60, and a held C6 "24 dB
+//  under"). Partials are at each note's tuning (Note::cents: a quarter tone on its own bins, not the 12-TET key's).
 //
 //  Checks (with a reference: the same notes rendered with MuseScore's built-in synth, analysed
 //  first; a finding needs the reference to show what the audio lacks, so what neither shows (a
@@ -30,8 +36,10 @@
 //      quieter), and not rising at the onset (under 6 dB, or 10 dB less than the reference) where
 //      the reference rises 10 dB; or 30 dB under whatever the rises. A legato note (joined to the
 //      one before: SSO's Performance legato builds up over ~200 ms, no attack) is judged on its
-//      level held at 40 and 70 % of its length, against its own patch's legato notes, no rise
-//      needed (the owner's first Kontakt run, 2026-09-29: 9 legato notes flagged, heard present);
+//      level held from 40 to 70 % of its length (the mean power, every 20 ms: two points read a vibrato's dip as
+//      a missing note), against its own patch's legato notes, no rise needed (the owner's first Kontakt run,
+//      2026-09-29: 9 legato notes flagged, heard present); a legato note shorter than 0.25 s on its peak over
+//      [onset + 0.05, end + 0.25] (SSO's transition lands ~130-210 ms after its note-on, after a short note's end);
 //    - cut short (held notes: a long, legato, tremolo or trill articulation, 0.3 s and more): the
 //      partials it shares with no other note, at 70 % of its length, 30 dB under its attack and
 //      24 dB under what the reference keeps (a candidate whose attack was already missing there
@@ -70,6 +78,9 @@ struct Note {
       bool sustained { true };      // held for its length (a long, legato, tremolo, trill); false: a
                                     // short or plucked sample that dies away by itself (not checked
                                     // for being cut short or for silence)
+      double cents { 0 };           // its tuning against pitch (the key it is sent on): its partials' bins
+      double expected { -1 };       // s after `on` its sound is expected (the renderer's model: the playback
+                                    // audit's predicted arrival - sent); -1: unknown
       };
 
 //---------------------------------------------------------
@@ -79,6 +90,26 @@ struct Note {
 struct Settings {
       double offsetFrom { -0.05 };        // the offset search (s): the audio's time = the note's + offset
       double offsetTo { 0.5 };
+      // the offset by the notes' expected latencies (Note::expected), when at least half the strikes have one: each
+      // strike at its note-on + its latency, a residual searched within +-expectedWindow of their median. (The caller
+      // turns it off for the reference: the built-in synth plays on time)
+      bool expectedOnsets { true };
+      double expectedWindow { 0.06 };
+      // the wide search's margin: its best sum / the best one at least rivalDistance away - 1; under ambiguousMargin
+      // (and no expected latencies) the offset is ambiguous: legato missing notes are unclear, not flagged
+      bool offsetMargin { true };
+      double ambiguousMargin { 0.03 };
+      double rivalDistance { 0.05 };
+      // a legato note's held level: the mean power from 40 to 70 % of it every heldStep s (false: the two points)
+      bool heldMean { true };
+      double heldStep { 0.02 };
+      // a legato note shorter than legatoShort: its peak over [onset + shortFrom, end + shortAfter], every 10 ms
+      bool shortPeak { true };
+      double legatoShort { 0.25 };
+      double shortFrom { 0.05 };
+      double shortAfter { 0.25 };
+      // partials at the note's cents (false: the 12-TET key's)
+      bool tunedBins { true };
       double attackBefore { 0.030 };      // an attack is looked for in onset - before … onset + after
       double attackAfter { 0.050 };
       double chordTolerance { 0.005 };    // notes starting this close are one strike
@@ -143,13 +174,14 @@ class Spectrogram {
       const float* frame(int f) const { return _log.data() + size_t(f) * size_t(_bins); }
       const std::vector<float>& flux() const { return _flux; }
       const std::vector<float>& rms() const  { return _rms; }
-      std::vector<int> partialBins(const std::vector<int>& pitches, int harmonics = 6, int spread = 1) const;
+      // (pitches fractional: a key + its cents / 100)
+      std::vector<int> partialBins(const std::vector<double>& pitches, int harmonics = 6, int spread = 1) const;
       std::vector<float> pitchFlux(const std::vector<int>& bins, int from, int to) const;   // frames from … to-1
       double power(const std::vector<int>& bins, int from, int to, bool maximum) const;    // mean or max over frames
       // a note on its own: one spectrum four times as fine (4096 points at 44.1 kHz: 10.8 Hz a bin,
       // 93 ms) centred at a time, for the partials of one note apart from its neighbours'
       int fineSize() const          { return _size * 4; }
-      std::vector<int> finePartialBins(const std::vector<int>& pitches, int harmonics, int spread) const;
+      std::vector<int> finePartialBins(const std::vector<double>& pitches, int harmonics, int spread) const;
       double finePower(const std::vector<int>& bins, double seconds) const;
       };
 
@@ -162,6 +194,8 @@ struct Strike {
       double time { 0 };                  // the notes' onset (without the offset)
       std::vector<int> notes;             // indices into the notes given
       std::vector<int> pitches;
+      std::vector<double> tuned;          // the pitches with their cents (Settings::tunedBins), for the partials
+      double expected { -1 };             // its notes' earliest expected latency (s; -1: none has one)
       double broad { 0 };                 // attack's broad flux / the median strike's
       double local { 0 };                 // attack's broad flux / the median flux around it
       double pitchLocal { 0 };            // its partials' attack / their median flux around it
@@ -200,7 +234,8 @@ struct NoteCheck {
       double deficit { 0 };               // after - refAfter, against the median of the notes within 3 semitones
                                           // of the same group (patch), legato or not, on the same harmonics
       bool legato { false };              // judged as legato: its level held over its length (after = the
-                                          // mean at 40 and 70 % of it), no attack or rise needed
+                                          // mean from 40 to 70 % of it; a short one: its peak), no attack or rise
+      bool unclear { false };             // missing by its level, but legato on an ambiguous offset: not flagged
       int cutBins { 0 };                  // its own bins up to 70 % of it (cut short; 0: not checked)
       double drop { 0 };                  // dB from the attack to 70 % of it
       double refDrop { 0 };
@@ -212,6 +247,14 @@ struct NoteCheck {
 
 struct Result {
       double offset { 0 };
+      bool expectedOffset { false };      // found by the notes' expected latencies (else the wide search)
+      double expectedLatency { -1 };      // their median (s)
+      bool offsetAtEdge { false };        // the residual at the edge of +-expectedWindow: the model may be off
+      double searchOffset { 0 };          // the wide search's best
+      double offsetRival { 0 };           // the wide search's best at least rivalDistance from it
+      double offsetMargin { 0 };          // best sum / rival's - 1
+      bool offsetAmbiguous { false };     // the offset is the wide search's and its margin under ambiguousMargin
+      int offsetUnclear { 0 };            // legato notes missing by their level, not flagged: the offset is ambiguous
       double peakDb { -200 };             // of the audio as given
       int strikes { 0 };
       int weakStrikes { 0 };              // under both thresholds (flagged or not)
@@ -225,10 +268,23 @@ struct Result {
       };
 
 // the notes grouped into strikes (sorted by time)
-std::vector<Strike> strikes(const std::vector<Note>& notes, double tolerance = 0.005);
+// (tuned: Strike::tuned with the notes' cents, else their keys)
+std::vector<Strike> strikes(const std::vector<Note>& notes, double tolerance = 0.005, bool tuned = true);
 
 // the offset (audio time - note time) that puts the most flux on the strikes' onsets
 double bestOffset(const Spectrogram& s, const std::vector<Strike>& strikes, double from, double to, double step = 0.005);
+
+// the flux sum against the offset, and how clearly its best wins
+struct OffsetCurve {
+      std::vector<std::pair<double, double>> sums;    // (offset, flux sum)
+      double best { 0 };
+      double bestSum { 0 };
+      double rival { 0 };                 // the best at least `distance` from best (sums empty or none: best)
+      double rivalSum { 0 };
+      double margin { 0 };                // bestSum / rivalSum - 1 (no rival: a large number)
+      };
+OffsetCurve offsetCurve(const Spectrogram& s, const std::vector<Strike>& strikes, double from, double to, double step = 0.005,
+                        double distance = 0.05);
 
 // the analysis. reference: the same notes rendered by the built-in synth (analysed first,
 // with no reference), or null

@@ -53,7 +53,7 @@ Per library part (a score with several parts: each part rendered alone too, so a
 | Finding | Meaning |
 |---|---|
 | `missing-attack` | a chord (the notes starting together) has no attack where the built-in synth has one, and one of its notes is under its usual level (SSO's Grand Piano dropping chords at pedal changes) |
-| `missing-note` | one note didn't sound although the other notes of its chord did (the staccato octaves of bars 59-62); a note the library played with a legato articulation (SSO's Performance "Legato": no attack, slow build-up) is judged on its level held at 40 and 70 % of it, against that patch's other legato notes |
+| `missing-note` | one note didn't sound although the other notes of its chord did (the staccato octaves of bars 59-62); a note the library played with a legato articulation (SSO's Performance "Legato": no attack, slow build-up) is judged on its level held from 40 to 70 % of it (the mean power every 20 ms), a legato note under 0.25 s on its peak over [onset + 50 ms, end + 250 ms] (SSO's transition lands after a short note's end), against that patch's other legato notes; partials at the note's cents (a quarter tone on its own bins) |
 | `cut-short` | a held note (long, legato, tremolo, trill articulation) fell silent before 70 % of its length where the built-in synth still sounds |
 | `silence` | nothing (under -70 dB) for 0.25 s or more while held notes should sound |
 | `clipping` | samples over full scale in the mixed rendering |
@@ -73,7 +73,22 @@ whose partials another note of its chord fills (C6 over C5) is often not found; 
 checks may still flag the moment. Levels are compared per patch (a part's Performance legato patch
 is 15-20 dB quieter against the built-in synth than its solo patch: the first Kontakt run, 2026-09-29,
 flagged 9 legato notes the owner heard). The thresholds were set on one score, the owner's piano piece (four
-exports, known bugs); strings, winds and brass through Kontakt are untried.
+exports, known bugs); strings, winds and brass through Kontakt are untried, except Whence's strings on Performance
+legato (below).
+
+**The audio's offset** (since 2026-10-23, branch `verify-detector`; OPEN_ITEMS.md item 32): every level check reads
+the audio at the note's time + the part's offset. Each library note carries its expected latency (the playback audit's
+model, `PlaybackAudit::audit`'s rows: the map's onset or `plainShift`, a transition's modelled arrival) and its cents;
+when at least half the strikes have one, each strike is placed at its note-on + its latency and only a residual of
+±60 ms is searched (`offsetFrom` `expected onsets` in report.json, `AT THE EDGE` in the part's line when the residual
+hits ±60: the model may be off). Without them (another library, no onsets) the wide search (−50 … 500 ms) is used and
+its **margin** is reported (its best flux sum against the best one ≥ 50 ms away); under 3 % the offset is **ambiguous**
+and a legato note missing by its level is counted `offsetUnclear`, not flagged. Why: SSO's Performance legato has soft
+onsets, the flux curve is flat (Whence's Violins 2: 0.5 %, Celli 0.4 %), and build #454's run read the Violins 2 one
+note late (335 ms instead of ~60), a held C6 "24 dB under". report.json per part: `offset`, `offsetFrom`,
+`expectedLatency`, `offsetAtEdge`, `searchOffset`, `offsetRival`, `offsetMargin`, `offsetAmbiguous`, `offsetUnclear`;
+notes.tsv gains `cents`, `expectedMs`, `unclear`. Each switch is a `PlaybackVerify::Settings` field (`expectedOnsets`,
+`offsetMargin`, `heldMean`, `shortPeak`, `tunedBins`): all off is the detector before.
 
 ## For agents: reading a report
 
@@ -362,7 +377,36 @@ its own start lead and master trim (levels are compared within a route only, tim
   what reaches the plug-in, `Vst3Synth`), then `check_faults.py` compares each run's injected faults
   (`MS_VERIFY_FAULT_LOG`) with its report. Expected: clean passes; every detectable fault found;
   nothing else flagged.
-- `tst_soundlibrary playbackVerify playbackVerifyDrift`: the analysis on synthetic audio.
+- `tst_soundlibrary playbackVerify playbackVerifyDrift playbackVerifyLegato playbackVerifyOffset
+  playbackVerifyShortLegato playbackVerifyQuarterTones`: the analysis on synthetic audio (each 2026-10-23 fix on its own,
+  before and after).
+
+### Detector regression (2026-10-23)
+
+The detector's known cases on real renders: Whence's build #454 verify run (private `bars9-12/SILENT.md`, run 2), notes
+whose truth is known from the audio, listed in `tools/playbackverify/regression/whence_expect.json`: bar 8's Violins 2 C6
+(the offset alias) and Violins 1 D6 (a 91 ms slur end peaking 225 ms after its note-on), bar 13's Violins 1 Eb5 (the same),
+must not be flagged; the Celli chord notes SSO dropped (two on one Performance slot, since fixed by chord voices) must be.
+
+| | false positives | dropped notes found (of 4) |
+|---|---|---|
+| before (every fix off; = build #454's report) | 2 (V1 Eb5 bar 13, V2 C6 bar 8) | 2 (F#3 bar 15, A3 bar 16) |
+| now (the defaults) | 0 | 3 (+ A3 bar 14); Eb3 bar 13 still missed (reads ~11 dB under) |
+
+The Violas and Basses: no finding before or now. Without expected latencies (the margin rule alone) every Whence string
+part is ambiguous (margins 0.4-2.1 %; Basses 9.6 %): nothing flagged, the Celli's 3 dropped notes `unclear`.
+
+- `tools/playbackverify/test_verify_detector.py` (in `run_fork_tests.sh`): the Python replica `verify_detector.py`
+  judges the committed features `regression/whence_features.json` (each listed note's deficit and rises at every offset
+  under each level rule, and the parts' offset curves: no audio, no note list of the score) against the expectations,
+  plus the four fixes on synthetic audio.
+- `MS_VERIFY_REGRESSION=<folder> tst_soundlibrary playbackVerifyRegression`: the C++ detector on the renders themselves
+  (private: `~/MuseScore/ms3fork/private/verify-detector/reg/`, the run's `<score> <part> library.wav` / `built-in.wav` /
+  `notes.tsv` linked, plus `<part> extra.tsv`: time, key, cents, expectedMs, made by that folder's `mkextra.py` from the
+  run's dump); prints before / now per part. The C++ and the replica agree (offsets, deficits within 0.5 dB).
+- A new known case: add its renders to a private folder, its notes to the expectations, and its features with
+  `verify_detector.py features <folder> <part> --extra <tsv> --notes <time:key,…> --out regression/whence_features.json`
+  (one file per score is fine). `verify_detector.py analyse|levels|curve` try a rule change on a verify folder first.
 
 ## Optional: a GitHub runner on your PC
 

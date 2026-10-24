@@ -280,6 +280,10 @@ class TestSoundLibrary : public QObject, public MTest
       void playbackVerify();
       void playbackVerifyDrift();
       void playbackVerifyLegato();
+      void playbackVerifyOffset();
+      void playbackVerifyShortLegato();
+      void playbackVerifyQuarterTones();
+      void playbackVerifyRegression();
 #endif
       };
 
@@ -14563,7 +14567,7 @@ void TestSoundLibrary::ampleParameters()
 
 namespace {
 
-struct SynthNote { double on, off; int pitch; double amp; };
+struct SynthNote { double on, off; int pitch; double amp; double cents = 0; };
 
 // harmonic tones: decaying (piano-like) or held, harmonics 1-6 at 1/k^tilt, 3 ms attack, 30 ms release
 static void synthesize(std::vector<float>& x, double rate, const std::vector<SynthNote>& notes, double tilt, double decay,
@@ -14571,7 +14575,7 @@ static void synthesize(std::vector<float>& x, double rate, const std::vector<Syn
       {
       for (const SynthNote& n : notes) {
             const double on = n.on * stretch + latency, off = n.off * stretch + latency;
-            const double f0 = 440.0 * std::pow(2.0, (n.pitch - 69) / 12.0);
+            const double f0 = 440.0 * std::pow(2.0, (n.pitch + n.cents / 100.0 - 69) / 12.0);
             const long a = long(on * rate), b = std::min(long(x.size()), long((off + 0.03) * rate));
             for (long i = std::max(0L, a); i < b; ++i) {
                   const double t = i / rate - on;
@@ -14912,6 +14916,400 @@ void TestSoundLibrary::playbackVerifyLegato()
             }), qPrintable(found));
       for (const PV::Finding& f : r.findings)
             QVERIFY2(std::fabs(f.time - 8.0) < 0.7, qPrintable(found));
+      }
+
+//---------------------------------------------------------
+//   playbackVerifyOffset
+//    the audio's offset (OPEN_ITEMS.md item 32): a soft legato line of repeated notes at an even period (Whence's
+//    Violins 2: SSO's Performance legato) gives the flux sum nothing to lock onto, its best barely beats one a period
+//    away: "offset ambiguous" (margin under 3 %), and a legato note missing by its level is unclear, not flagged. With
+//    the notes' expected latencies (Note::expected: the renderer's model) the offset is the residual search's around
+//    them (+-60 ms), right, and the dropped note is found
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackVerifyOffset()
+      {
+      namespace PV = PlaybackVerify;
+      const double rate = 44100;
+      const double period = 0.273, latency = 0.06;
+      std::vector<SynthNote> line;
+      std::vector<PV::Note> pv;
+      const int pitches[] = { 72, 75, 72, 75, 72, 75, 72, 75 };    // (the neighbours on other partials)
+      for (int k = 0; k < 48; ++k) {
+            const SynthNote n { 1.0 + period * k, 1.0 + period * k + 0.29, pitches[k % 8], 0.8 };
+            line.push_back(n);
+            PV::Note p;
+            p.on = n.on;
+            p.off = n.off;
+            p.pitch = n.pitch;
+            p.legato = true;
+            p.id = int(pv.size());
+            pv.push_back(p);
+            }
+      const size_t frames = size_t((2.0 + period * 48) * rate);
+      std::vector<float> ref(frames, 0.f), lib(frames, 0.f);
+      synthesize(ref, rate, line, 1.0, 0, 0);
+      const int drop = 21;                      // (an Eb5 between C5s)
+      std::vector<SynthNote> played;
+      for (int k = 0; k < int(line.size()); ++k)
+            if (k != drop)
+                  played.push_back(line[size_t(k)]);
+      synthesize(lib, rate, played, 0.8, 0, latency, 1.0, 0.18);       // soft: 180 ms attacks
+      PV::Spectrogram refSpec(ref, rate), libSpec(lib, rate);
+      PV::Settings settings;
+      PV::Settings rs = settings;
+      rs.expectedOnsets = false;
+      const PV::Result refResult = PV::analyse(refSpec, pv, rs);
+      auto findings = [](const PV::Result& r) {
+            QString found = QString("offset %1 (search %2, rival %3, margin %4)\n").arg(r.offset).arg(r.searchOffset)
+                            .arg(r.offsetRival).arg(r.offsetMargin);
+            for (const PV::Finding& f : r.findings)
+                  found += QString("%1 at %2: %3\n").arg(PV::kindName(f.kind)).arg(f.time).arg(QString::fromStdString(f.text));
+            return found;
+            };
+      auto missingAt = [&](const PV::Result& r, double t) {
+            return std::any_of(r.findings.begin(), r.findings.end(), [&](const PV::Finding& f) {
+                  return (f.kind == PV::Finding::Kind::MissingNote || f.kind == PV::Finding::Kind::MissingAttack)
+                         && std::fabs(f.time - t) < 0.01; });
+            };
+      // no expected latencies: the wide search, ambiguous
+      const PV::Result a = PV::analyse(libSpec, pv, settings, &refResult, &refSpec);
+      QVERIFY2(!a.expectedOffset, qPrintable(findings(a)));
+      QVERIFY2(a.offsetMargin < settings.ambiguousMargin && a.offsetAmbiguous, qPrintable(findings(a)));
+      for (const PV::Finding& f : a.findings)
+            QVERIFY2(f.kind != PV::Finding::Kind::MissingNote, qPrintable(findings(a)));
+      // the margin rule off (the detector before): whatever offset it read, it may flag; with it, nothing legato is
+      // flagged on that offset, and what would have been is counted
+      PV::Settings noMargin = settings;
+      noMargin.offsetMargin = false;
+      const PV::Result b = PV::analyse(libSpec, pv, noMargin, &refResult, &refSpec);
+      QVERIFY(!b.offsetAmbiguous);
+      int missingB = 0;
+      for (const PV::Finding& f : b.findings)
+            missingB += f.kind == PV::Finding::Kind::MissingNote;
+      QCOMPARE(a.offsetUnclear, missingB);
+      // with the expected latencies: the residual search around them, the right offset, the dropped note found
+      std::vector<PV::Note> withExpected = pv;
+      for (PV::Note& n : withExpected)
+            n.expected = latency + 0.03;        // (the model 30 ms off: within the residual search)
+      const PV::Result c = PV::analyse(libSpec, withExpected, settings, &refResult, &refSpec);
+      QVERIFY2(c.expectedOffset && !c.offsetAmbiguous && !c.offsetAtEdge, qPrintable(findings(c)));
+      QVERIFY2(std::fabs(c.expectedLatency - (latency + 0.03)) < 1e-9, qPrintable(findings(c)));
+      QVERIFY2(std::fabs(c.offset - latency) < 0.06, qPrintable(findings(c)));        // (a 180 ms attack: its flux peaks late)
+      QVERIFY2(missingAt(c, line[size_t(drop)].on), qPrintable(findings(c)));
+      for (const PV::Finding& f : c.findings)
+            QVERIFY2(std::fabs(f.time - line[size_t(drop)].on) < 0.01, qPrintable(findings(c)));
+      // the expected latencies off (Settings::expectedOnsets): the wide search again
+      PV::Settings off = settings;
+      off.expectedOnsets = false;
+      QVERIFY(!PV::analyse(libSpec, withExpected, off, &refResult, &refSpec).expectedOffset);
+      // the model at the edge of the window: said so
+      for (PV::Note& n : withExpected)
+            n.expected = latency + 0.2;
+      const PV::Result e = PV::analyse(libSpec, withExpected, settings, &refResult, &refSpec);
+      QVERIFY2(e.expectedOffset && e.offsetAtEdge, qPrintable(findings(e)));
+      }
+
+//---------------------------------------------------------
+//   playbackVerifyShortLegato
+//    a legato note shorter than 0.25 s whose sound arrives after its own end (SSO's Performance transition lands
+//    ~130-210 ms after its note-on: Whence bar 8's Violins 1 D6, 91 ms, peaked 225 ms after it): judged on its peak over
+//    [onset + 0.05, end + 0.25], not on its level at its end (Settings::shortPeak; off: flagged, as before)
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackVerifyShortLegato()
+      {
+      namespace PV = PlaybackVerify;
+      const double rate = 44100;
+      std::vector<SynthNote> written, heard;
+      std::vector<PV::Note> pv;
+      const int scale[] = { 67, 69, 71, 72, 71, 69, 67, 69 };
+      std::vector<double> shortOns;
+      for (int k = 0; k < 32; ++k) {                          // (1 s apart: one register group, no note sounds with another)
+            const double on = 1.0 + 1.0 * k;
+            const bool isShort = k % 4 == 3;
+            const SynthNote n { on, on + (isShort ? 0.09 : 0.5), scale[k % 8], 0.8 };
+            written.push_back(n);
+            // the library: a long note on time, a short one 150 ms late and held 200 ms
+            heard.push_back(isShort ? SynthNote { on + 0.15, on + 0.35, n.pitch, 0.8 } : n);
+            if (isShort)
+                  shortOns.push_back(on);
+            PV::Note p;
+            p.on = n.on;
+            p.off = n.off;
+            p.pitch = n.pitch;
+            p.legato = true;
+            p.id = int(pv.size());
+            pv.push_back(p);
+            }
+      const size_t frames = size_t(34.5 * rate);
+      std::vector<float> ref(frames, 0.f), lib(frames, 0.f);
+      synthesize(ref, rate, written, 1.0, 0, 0);
+      synthesize(lib, rate, heard, 0.8, 0, 0.01, 1.0, 0.05);
+      PV::Spectrogram refSpec(ref, rate), libSpec(lib, rate);
+      PV::Settings settings;
+      settings.offsetMargin = false;            // (only the window under test)
+      PV::Settings rs = settings;
+      rs.expectedOnsets = false;
+      const PV::Result refResult = PV::analyse(refSpec, pv, rs);
+      auto count = [&](const PV::Result& r) {
+            int n = 0;
+            for (const PV::Finding& f : r.findings)
+                  for (double t : shortOns)
+                        n += (f.kind == PV::Finding::Kind::MissingNote || f.kind == PV::Finding::Kind::MissingAttack)
+                             && std::fabs(f.time - t) < 0.01;
+            return n;
+            };
+      auto text = [](const PV::Result& r) {
+            QString found = QString("offset %1\n").arg(r.offset);
+            for (const PV::Finding& f : r.findings)
+                  found += QString("%1 at %2: %3\n").arg(PV::kindName(f.kind)).arg(f.time).arg(QString::fromStdString(f.text));
+            return found;
+            };
+      PV::Settings old = settings;
+      old.shortPeak = false;
+      const PV::Result before = PV::analyse(libSpec, pv, old, &refResult, &refSpec);
+      QVERIFY2(count(before) == 8, qPrintable(text(before)));            // (8 short notes)
+      const PV::Result now = PV::analyse(libSpec, pv, settings, &refResult, &refSpec);
+      QVERIFY2(now.findings.empty(), qPrintable(text(now)));
+      // a short legato note that isn't there at all is still found
+      std::vector<SynthNote> dropped;
+      for (const SynthNote& n : heard)
+            if (std::fabs(n.on - (shortOns[3] + 0.15)) > 1e-6)
+                  dropped.push_back(n);
+      std::vector<float> bad(frames, 0.f);
+      synthesize(bad, rate, dropped, 0.8, 0, 0.01, 1.0, 0.05);
+      PV::Spectrogram badSpec(bad, rate);
+      const PV::Result r = PV::analyse(badSpec, pv, settings, &refResult, &refSpec);
+      QVERIFY2(count(r) == 1 && r.findings.size() == 1 && std::fabs(r.findings.front().time - shortOns[3]) < 0.01, qPrintable(text(r)));
+      }
+
+//---------------------------------------------------------
+//   playbackVerifyQuarterTones
+//    a note's partials at its tuning (Note::cents): a quarter-tone C7 (+50 cents, 2154 Hz) missing under a held 12-TET
+//    C7 (2093 Hz) is found on its own bins; on the key's bins (Settings::tunedBins off: before) it read the C7 and passed
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackVerifyQuarterTones()
+      {
+      namespace PV = PlaybackVerify;
+      const double rate = 44100;
+      std::vector<SynthNote> notes;
+      for (int k = 0; k < 16; ++k)              // its register: detached notes around it
+            notes.push_back({ 1.0 + 0.5 * k, 1.0 + 0.5 * k + 0.4, 92 + (k * 5) % 9, 0.8 });
+      notes.push_back({ 10.0, 13.0, 96, 0.8 });                 // C7, held
+      notes.push_back({ 10.5, 12.0, 96, 0.8, 50.0 });           // C7 +50 cents, under it
+      const size_t quarter = notes.size() - 1;
+      std::vector<PV::Note> pv;
+      for (const SynthNote& n : notes) {
+            PV::Note p;
+            p.on = n.on;
+            p.off = n.off;
+            p.pitch = n.pitch;
+            p.cents = n.cents;
+            p.id = int(pv.size());
+            pv.push_back(p);
+            }
+      const size_t frames = size_t(14.0 * rate);
+      std::vector<float> ref(frames, 0.f), lib(frames, 0.f);
+      synthesize(ref, rate, notes, 1.0, 0, 0);
+      std::vector<SynthNote> played = notes;
+      played.erase(played.begin() + long(quarter));
+      synthesize(lib, rate, played, 0.8, 0, 0.01);
+      PV::Spectrogram refSpec(ref, rate), libSpec(lib, rate);
+      // the bins: at the quarter tone's frequency (2154 Hz: fine bin 200 at 44.1 kHz), not the key's (2093 Hz: 194)
+      QCOMPARE(libSpec.finePartialBins({ 96.5 }, 1, 0), std::vector<int>({ 200 }));
+      QCOMPARE(libSpec.finePartialBins({ 96.0 }, 1, 0), std::vector<int>({ 194 }));
+      auto text = [](const PV::Result& r) {
+            QString found = QString("offset %1\n").arg(r.offset);
+            for (const PV::Finding& f : r.findings)
+                  found += QString("%1 at %2: %3\n").arg(PV::kindName(f.kind)).arg(f.time).arg(QString::fromStdString(f.text));
+            return found;
+            };
+      auto found = [&](const PV::Result& r) {
+            return std::any_of(r.findings.begin(), r.findings.end(), [&](const PV::Finding& f) {
+                  return (f.kind == PV::Finding::Kind::MissingNote || f.kind == PV::Finding::Kind::MissingAttack)
+                         && std::fabs(f.time - 10.5) < 0.01; });
+            };
+      for (bool tuned : { false, true }) {
+            PV::Settings settings;
+            settings.tunedBins = tuned;
+            PV::Settings rs = settings;
+            rs.expectedOnsets = false;
+            const PV::Result refResult = PV::analyse(refSpec, pv, rs);
+            const PV::Result r = PV::analyse(libSpec, pv, settings, &refResult, &refSpec);
+            QVERIFY2(found(r) == tuned, qPrintable(QString(tuned ? "tuned: " : "12-TET: ") + text(r)));
+            for (const PV::Finding& f : r.findings)
+                  QVERIFY2(std::fabs(f.time - 10.5) < 0.01, qPrintable(text(r)));
+            }
+      }
+
+//---------------------------------------------------------
+//   playbackVerifyRegression
+//    the detector on real renders (a verify folder's "<score> <part> library.wav", "… built-in.wav", "… notes.tsv",
+//    and "<part> extra.tsv": each note's cents and expected latency), against the committed expectations
+//    tools/playbackverify/regression/whence_expect.json: Whence bar 8's known false positives (and bar 13's) must
+//    not be flagged, the Celli chord notes SSO dropped (build #454: two on one slot) must be. MS_VERIFY_REGRESSION=<the
+//    folder> (the owner's renders stay private: VERIFY.md › Detector regression); MS_VERIFY_REGRESSION_EXPECT another
+//    expectations file. Prints the detector before (every fix off) and now
+//---------------------------------------------------------
+
+static bool readWavMono(const QString& path, std::vector<float>* mono, double* rate)
+      {
+      QFile f(path);
+      if (!f.open(QIODevice::ReadOnly))
+            return false;
+      const QByteArray d = f.readAll();
+      if (d.size() < 44 || d.left(4) != "RIFF" || d.mid(8, 4) != "WAVE")
+            return false;
+      int channels = 0, bits = 0, format = 0;
+      long pos = 12;
+      auto u16 = [&](long p) { return int(uchar(d[int(p)]) | (uchar(d[int(p + 1)]) << 8)); };
+      auto u32 = [&](long p) { return quint32(u16(p)) | (quint32(u16(p + 2)) << 16); };
+      while (pos + 8 <= d.size()) {
+            const QByteArray id = d.mid(int(pos), 4);
+            const long size = long(u32(pos + 4));
+            if (id == "fmt ") {
+                  format = u16(pos + 8);
+                  channels = u16(pos + 10);
+                  *rate = double(u32(pos + 12));
+                  bits = u16(pos + 22);
+                  if (format == 0xFFFE && size >= 26)
+                        format = u16(pos + 32);       // (WAVE_FORMAT_EXTENSIBLE: the sub-format's first two bytes)
+                  }
+            else if (id == "data" && channels > 0) {
+                  const long n = std::min(size, long(d.size()) - pos - 8) / (bits / 8) / channels;
+                  mono->assign(size_t(n), 0.f);
+                  const char* p = d.constData() + pos + 8;
+                  for (long i = 0; i < n; ++i) {
+                        float sum = 0;
+                        for (int c = 0; c < channels; ++c) {
+                              const long k = i * channels + c;
+                              if (format == 3 && bits == 32) {
+                                    float v;
+                                    memcpy(&v, p + k * 4, 4);
+                                    sum += v;
+                                    }
+                              else if (format == 1 && bits == 16)
+                                    sum += float(qint16(uchar(p[k * 2]) | (uchar(p[k * 2 + 1]) << 8))) / 32768.f;
+                              else
+                                    return false;
+                              }
+                        (*mono)[size_t(i)] = sum / float(channels);
+                        }
+                  return true;
+                  }
+            pos += 8 + size + (size & 1);
+            }
+      return false;
+      }
+
+void TestSoundLibrary::playbackVerifyRegression()
+      {
+      namespace PV = PlaybackVerify;
+      const QString folder = qEnvironmentVariable("MS_VERIFY_REGRESSION");
+      if (folder.isEmpty())
+            QSKIP("MS_VERIFY_REGRESSION not set (a verify folder with the renders: VERIFY.md › Detector regression)");
+      QString expectPath = qEnvironmentVariable("MS_VERIFY_REGRESSION_EXPECT");
+      if (expectPath.isEmpty())
+            expectPath = QFileInfo(QString(__FILE__)).absolutePath() + "/../../../tools/playbackverify/regression/whence_expect.json";
+      QFile ef(expectPath);
+      QVERIFY2(ef.open(QIODevice::ReadOnly), qPrintable(expectPath));
+      const QJsonObject expect = QJsonDocument::fromJson(ef.readAll()).object();
+      const QStringList entries = QDir(folder).entryList({ "* library.wav" }, QDir::Files);
+      QString failures;
+      int counts[2][2] = { { 0, 0 }, { 0, 0 } };      // [before, now][false positives, true positives found]
+      const QJsonObject parts = expect.value("parts").toObject();
+      for (const QString& partName : parts.keys()) {
+            QString base;
+            for (const QString& e : entries)
+                  if (e.endsWith(" " + partName + " library.wav"))
+                        base = folder + "/" + e.left(e.size() - int(QString(" library.wav").size()));
+            QVERIFY2(!base.isEmpty(), qPrintable("no library render of " + partName + " in " + folder));
+            std::vector<float> lib, ref;
+            double rate = 44100, rate2 = 44100;
+            QVERIFY2(readWavMono(base + " library.wav", &lib, &rate), qPrintable(base));
+            QVERIFY2(readWavMono(base + " built-in.wav", &ref, &rate2), qPrintable(base));
+            // the notes as the verification had them, with their cents and expected latencies
+            std::vector<PV::Note> notes;
+            QFile nf(base + " notes.tsv");
+            QVERIFY(nf.open(QIODevice::ReadOnly | QIODevice::Text));
+            const QStringList head = QString::fromUtf8(nf.readLine()).trimmed().split('\t');
+            static const QMap<QChar, int> steps { { 'C', 0 }, { 'D', 2 }, { 'E', 4 }, { 'F', 5 }, { 'G', 7 }, { 'A', 9 }, { 'B', 11 } };
+            while (!nf.atEnd()) {
+                  const QStringList c = QString::fromUtf8(nf.readLine()).trimmed().split('\t');
+                  if (c.size() < head.size())
+                        continue;
+                  PV::Note n;
+                  n.on = c[head.indexOf("time")].toDouble();
+                  n.off = n.on + c[head.indexOf("length")].toDouble();
+                  const QString name = c[head.indexOf("pitch")];
+                  int key = steps.value(name[0]), i = 1;
+                  for (; i < name.size() && (name[i] == '#' || name[i] == 'b'); ++i)
+                        key += name[i] == '#' ? 1 : -1;
+                  n.pitch = key + 12 * (name.mid(i).toInt() + 1);
+                  n.group = 1000 + c[head.indexOf("slot")].toInt();
+                  n.legato = c[head.indexOf("legato")] == "1";
+                  n.sustained = c[head.indexOf("sustained")] == "1";
+                  n.id = int(notes.size());
+                  notes.push_back(n);
+                  }
+            QFile xf(folder + "/" + partName + " extra.tsv");
+            QVERIFY2(xf.open(QIODevice::ReadOnly | QIODevice::Text), qPrintable(xf.fileName()));
+            xf.readLine();
+            while (!xf.atEnd()) {
+                  const QStringList c = QString::fromUtf8(xf.readLine()).trimmed().split('\t');
+                  if (c.size() < 4)
+                        continue;
+                  for (PV::Note& n : notes)
+                        if (std::fabs(n.on - c[0].toDouble()) < 0.002 && n.pitch == c[1].toInt()) {
+                              n.cents = c[2].toDouble();
+                              n.expected = c[3].toDouble() >= 0 ? c[3].toDouble() / 1000 : -1;
+                              }
+                  }
+            PV::Spectrogram libSpec(lib, rate), refSpec(ref, rate2);
+            for (int now = 0; now < 2; ++now) {
+                  PV::Settings settings;
+                  if (!now) {
+                        settings.expectedOnsets = settings.offsetMargin = settings.heldMean = settings.shortPeak = settings.tunedBins = false;
+                        }
+                  PV::Settings rs = settings;
+                  rs.expectedOnsets = false;
+                  const PV::Result refResult = PV::analyse(refSpec, notes, rs);
+                  const PV::Result r = PV::analyse(libSpec, notes, settings, &refResult, &refSpec);
+                  qDebug("%s, %s: offset %.3f (%s, search %.3f margin %.1f %%%s), %d finding(s), %d unclear", qPrintable(partName),
+                         now ? "now" : "before", r.offset, r.expectedOffset ? "expected onsets" : "search", r.searchOffset,
+                         r.offsetMargin * 100, r.offsetAmbiguous ? ", ambiguous" : "", int(r.findings.size()), r.offsetUnclear);
+                  std::set<int> flagged;
+                  for (const PV::Finding& f : r.findings) {
+                        qDebug("   %s at %.3f: %s", PV::kindName(f.kind), f.time, f.text.c_str());
+                        if (f.kind == PV::Finding::Kind::MissingNote || f.kind == PV::Finding::Kind::MissingAttack)
+                              flagged.insert(f.notes.begin(), f.notes.end());
+                        }
+                  for (const QJsonValue& v : parts.value(partName).toArray()) {
+                        const QJsonObject o = v.toObject();
+                        const double t = o.value("time").toDouble();
+                        const int key = o.value("key").toInt();
+                        int idx = -1;
+                        for (const PV::Note& n : notes)
+                              if (std::fabs(n.on - t) < 0.002 && n.pitch == key)
+                                    idx = n.id;
+                        QVERIFY2(idx >= 0, qPrintable(QString("%1: no note %2 at %3").arg(partName).arg(key).arg(t)));
+                        const bool isFlagged = flagged.count(idx);
+                        const QString want = o.value(now ? "now" : "before").toString();     // "missing", "clear", "any"
+                        if (o.value("truth").toString() == "present")
+                              counts[now][0] += isFlagged;
+                        else if (o.value("truth").toString() == "dropped")
+                              counts[now][1] += isFlagged;
+                        if ((want == "missing" && !isFlagged) || (want == "clear" && isFlagged))
+                              failures += QString("%1 %2 %3 at %4 (%5): %6, expected %7\n").arg(now ? "now" : "before", partName)
+                                          .arg(key).arg(t).arg(o.value("note").toString()).arg(isFlagged ? "flagged" : "not flagged", want);
+                        }
+                  }
+            }
+      qDebug("regression: false positives %d before, %d now; dropped notes found %d before, %d now", counts[0][0], counts[1][0],
+             counts[0][1], counts[1][1]);
+      QVERIFY2(failures.isEmpty(), qPrintable(failures));
       }
 
 #ifdef TESTSYNTH
