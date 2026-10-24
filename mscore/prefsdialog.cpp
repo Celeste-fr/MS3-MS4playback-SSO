@@ -1657,7 +1657,12 @@ void PreferenceDialog::apply()
 #ifdef USE_PORTAUDIO
             if (portAudioIsUsed && !noSeq) {
                   Portaudio* audio = static_cast<Portaudio*>(seq->driver());
-                  preferences.setPreference(PREF_IO_PORTAUDIO_DEVICE, audio->deviceIndex(portaudioApi->currentIndex(), portaudioDevice->currentIndex()));
+                  // only a device the user chose: while the saved device is absent (Voicemeeter not running) the
+                  // boxes show the default, and OK must not replace the saved device with it
+                  const int api = portaudioApi->currentIndex();
+                  const int device = portaudioDevice->currentIndex();
+                  if (api != audio->currentApi() || device != audio->currentDevice())
+                        audio->saveDevice(api, device);
                   }
 #endif
 

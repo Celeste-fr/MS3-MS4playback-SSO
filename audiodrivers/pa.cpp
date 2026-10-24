@@ -86,6 +86,44 @@ Portaudio::~Portaudio()
       }
 
 //---------------------------------------------------------
+//   deviceName
+//    "<host API>\t<device>", how the chosen device is found again
+//---------------------------------------------------------
+
+static QString deviceName(PaDeviceIndex idx)
+      {
+      const PaDeviceInfo* di = Pa_GetDeviceInfo(idx);
+      const PaHostApiInfo* api = di ? Pa_GetHostApiInfo(di->hostApi) : nullptr;
+      if (!di || !api)
+            return QString();
+      return QString::fromLocal8Bit(api->name) + '\t' + QString::fromLocal8Bit(di->name);
+      }
+
+//---------------------------------------------------------
+//   savedDevice
+//    the device chosen in Preferences, found by its name: PortAudio numbers the devices in the order the
+//    system lists them, which changes as devices come and go (Steam's, Voicemeeter's, USB), so a saved
+//    number alone ends up on another device. The number alone only for a preference saved before the
+//    name was; -1 (the default device) while the named device is absent.
+//---------------------------------------------------------
+
+static PaDeviceIndex savedDevice()
+      {
+      const PaDeviceIndex idx = preferences.getInt(PREF_IO_PORTAUDIO_DEVICE);
+      const QString name = preferences.getString(PREF_IO_PORTAUDIO_DEVICENAME);
+      if (name.isEmpty())
+            return idx;
+      if (idx >= 0 && idx < Pa_GetDeviceCount() && deviceName(idx) == name)
+            return idx;
+      for (PaDeviceIndex i = 0; i < Pa_GetDeviceCount(); ++i) {
+            if (deviceName(i) == name)
+                  return i;
+            }
+      qDebug("Portaudio: device \"%s\" not found, using the default device", qPrintable(name));
+      return -1;
+      }
+
+//---------------------------------------------------------
 //   init
 //    return false on error
 //---------------------------------------------------------
@@ -101,7 +139,7 @@ bool Portaudio::init(bool)
       if (MScore::debugMode)
             qDebug("using PortAudio Version: %s", Pa_GetVersionText());
 
-      PaDeviceIndex idx = preferences.getInt(PREF_IO_PORTAUDIO_DEVICE);
+      PaDeviceIndex idx = savedDevice();
       if (idx < 0) {
             idx = Pa_GetDefaultOutputDevice();
             qDebug("No device selected.  PortAudio detected %d devices.  Will use the default device (index %d).", Pa_GetDeviceCount(), idx);
@@ -110,8 +148,10 @@ bool Portaudio::init(bool)
       const PaDeviceInfo* di = Pa_GetDeviceInfo(idx);
 
       //select default output device if no device or device without output channels have been selected
-      if (di == nullptr || di->maxOutputChannels < 1)
-            di = Pa_GetDeviceInfo(Pa_GetDefaultOutputDevice());
+      if (di == nullptr || di->maxOutputChannels < 1) {
+            idx = Pa_GetDefaultOutputDevice();
+            di = Pa_GetDeviceInfo(idx);
+            }
 
       if (!di)
             return false;    // Portaudio is not properly initialized; disable audio
@@ -202,6 +242,18 @@ QStringList Portaudio::deviceList(int apiIdx)
 int Portaudio::deviceIndex(int apiIdx, int apiDevIdx)
       {
       return Pa_HostApiDeviceIndexToDeviceIndex(apiIdx, apiDevIdx);
+      }
+
+//---------------------------------------------------------
+//   saveDevice
+//    the number and the name (savedDevice)
+//---------------------------------------------------------
+
+void Portaudio::saveDevice(int apiIdx, int apiDevIdx)
+      {
+      const PaDeviceIndex idx = Pa_HostApiDeviceIndexToDeviceIndex(apiIdx, apiDevIdx);
+      preferences.setPreference(PREF_IO_PORTAUDIO_DEVICE, int(idx));
+      preferences.setPreference(PREF_IO_PORTAUDIO_DEVICENAME, idx >= 0 ? deviceName(idx) : QString());
       }
 
 //---------------------------------------------------------
@@ -403,7 +455,7 @@ void Portaudio::putSync(int status, int value, unsigned framePos)
 
 int Portaudio::currentApi() const
       {
-      PaDeviceIndex idx = preferences.getInt(PREF_IO_PORTAUDIO_DEVICE);
+      PaDeviceIndex idx = savedDevice();
       if (idx < 0)
             idx = Pa_GetDefaultOutputDevice();
 
@@ -427,7 +479,7 @@ int Portaudio::currentApi() const
 
 int Portaudio::currentDevice() const
       {
-      PaDeviceIndex idx = preferences.getInt(PREF_IO_PORTAUDIO_DEVICE);
+      PaDeviceIndex idx = savedDevice();
       if (idx < 0)
             idx = Pa_GetDefaultOutputDevice();
 

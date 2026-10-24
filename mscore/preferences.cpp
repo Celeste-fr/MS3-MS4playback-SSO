@@ -229,6 +229,7 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_IO_LIVE_CLIPSPORT,                               new IntPreference(9001)},
       #ifdef USE_PORTAUDIO
             {PREF_IO_PORTAUDIO_DEVICE,                             new IntPreference(-1, false)},
+            {PREF_IO_PORTAUDIO_DEVICENAME,                         new StringPreference("", false)},
             {PREF_IO_PORTAUDIO_USEPORTAUDIO,                       new BoolPreference(defaultUsePortAudio, false)},
       #endif
       #ifdef USE_PORTMIDI

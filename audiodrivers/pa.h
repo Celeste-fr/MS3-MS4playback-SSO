@@ -72,6 +72,7 @@ class Portaudio : public Driver {
       QStringList apiList() const;
       QStringList deviceList(int apiIdx);
       int deviceIndex(int apiIdx, int apiDevIdx);
+      void saveDevice(int apiIdx, int apiDevIdx);
       int currentApi() const;
       int currentDevice() const;
       MidiDriver* mididriver() { return midiDriver; }
