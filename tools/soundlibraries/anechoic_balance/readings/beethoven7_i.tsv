@@ -1,0 +1,623 @@
+# piece: Beethoven, Symphony No. 7 in A major, Op. 92, movement I, Poco sostenuto (introduction), bars 1-53 (+ bar 54 context)
+# edition: Breitkopf & Haertel, Ludwig van Beethovens Werke, Serie 1 No. 7 (IMSLP #312601), <work>/dl/scores/b7.pdf
+# pages: pdf page 3: bars 1-9 | page 4: bars 10-19 (systems 10-15, 16-19) | page 5: bars 20-31 (20-24, 25-31) | page 6: bars 32-40 (32-36, 37-40) | page 7: bars 41-52 (41-46, 47-52) | page 8: bars 53-60
+# time signature: C (4/4) throughout bars 1-54; beat unit = quarter (Poco sostenuto, metronome mark = 69)
+# notes end = the time the last note ends (bar:beat), e.g. a quarter on beat 1 ends at x:2
+# staves: Flauti, Oboi, Clarinetti in A, Fagotti, Corni in A, Trombe in D (one staff each pair), Timpani in A.E., Violino I, II, Viola, Violoncello, Basso (separate staves)
+# no "a2" / "1." / "solo" markings printed in bars 1-54; player assignment from voices (stems, rests); single noteheads in a pair's staff after chords assumed unison (marked uncertain)
+# bars 34-40: every wind and brass half note marked sf (first one ff); timpani quarters without sf
+# doubts: see rows marked "uncertain"
+part	type	start	end	value	comment
+fl1	notes	1:1	1:2		
+fl1	dyn	1:1		f	
+fl1	notes	3:1	3:2		
+fl1	dyn	3:1		f	
+fl1	notes	5:1	5:2		
+fl1	dyn	5:1		f	
+fl1	notes	6:1	10:2		bars 6-10 fl1 alone (fl2 whole rests)
+fl1	dyn	6:1		p	
+fl1	accent	7:1		fp	on fl1's held note
+fl1	dim	9:1	10:1	text	dimin.
+fl1	dyn	10:1		pp	
+fl1	notes	14:1	23:2		
+fl1	cresc	14:1	15:1	text	cresc. (one text for the staff)
+fl1	dyn	15:1		ff	
+fl1	dim	22:1	23:2	text	dimin. on fl1's scale; flutes then rest to bar 31
+fl1	notes	32:1	53:1.5		
+fl1	dyn	32:1		pp	fl1 enters bar 32 pp, fl2 rests 32-33
+fl1	cresc	32:3	34:1	text	cresc.
+fl1	dyn	34:1		ff	
+fl1	accent	34:3		sf	
+fl1	accent	35:1		sf	
+fl1	accent	35:3		sf	
+fl1	accent	36:1		sf	
+fl1	accent	36:3		sf	
+fl1	accent	37:1		sf	
+fl1	accent	37:3		sf	
+fl1	accent	38:1		sf	
+fl1	accent	38:3		sf	
+fl1	accent	39:1		sf	
+fl1	accent	39:3		sf	
+fl1	accent	40:1		sf	
+fl1	accent	40:3		sf	
+fl1	dim	41:1	42:1	text	dimin.
+fl1	dyn	42:1		p	
+fl1	text	42:1		dolce	fl1 alone bars 42-48
+fl1	dyn	48:1		pp	
+fl1	cresc	49:1	53:1	text	cresc. - - - dashes to bar 53
+fl1	dyn	53:1		ff	
+fl1	notes	54:1			context: bar 54 fl1 plays (end not transcribed)
+fl1	dyn	54:1		p	context bar 54
+fl2	notes	1:1	1:2		
+fl2	dyn	1:1		f	
+fl2	notes	3:1	3:2		
+fl2	dyn	3:1		f	
+fl2	notes	5:1	5:2		
+fl2	dyn	5:1		f	
+fl2	notes	7:1	7:2		staccato quarter of the tutti chord
+fl2	dyn	7:1		f	printed under the staff for the staccato quarter
+fl2	notes	14:4	22:2		fl2 joins on beat 4 of bar 14 (lower voice rests before); uncertain beat
+fl2	cresc	14:4	15:1	text	cresc. (one text for the staff)
+fl2	dyn	15:1		ff	
+fl2	dim	22:1	22:2	text	dimin. printed once for the staff; fl2 has only the quarter on beat 1
+fl2	notes	34:1	41:2		bars 35-40 single noteheads after a two-note chord at 34:1: assumed unison a2 (no a2 printed); uncertain
+fl2	dyn	34:1		ff	
+fl2	accent	34:3		sf	
+fl2	accent	35:1		sf	
+fl2	accent	35:3		sf	
+fl2	accent	36:1		sf	
+fl2	accent	36:3		sf	
+fl2	accent	37:1		sf	
+fl2	accent	37:3		sf	
+fl2	accent	38:1		sf	
+fl2	accent	38:3		sf	
+fl2	accent	39:1		sf	
+fl2	accent	39:3		sf	
+fl2	accent	40:1		sf	
+fl2	accent	40:3		sf	
+fl2	dim	41:1	42:1	text	dimin.
+fl2	notes	49:1	53:1.5		two noteheads from bar 49; no dynamic printed at fl2's entry
+fl2	cresc	49:1	53:1	text	cresc. - - - dashes to bar 53
+fl2	dyn	53:1		ff	
+ob1	notes	1:1	10:2		solo line bars 1-6 (ob1)
+ob1	accent	1:1		fp	
+ob1	accent	3:1		fp	ob2 rests bars 2-6
+ob1	accent	5:1		fp	
+ob1	accent	7:1		fp	printed once under the staff, both voices play
+ob1	dim	9:1	10:1	text	dimin.
+ob1	dyn	10:1		pp	uncertain for ob2
+ob1	notes	14:4	53:1.5		
+ob1	cresc	14:4	15:1	text	cresc.
+ob1	dyn	15:1		ff	
+ob1	dim	22:4	23:1	text	dimin. under ob1's sixteenths on beat 4; ob2 has the quarter on 22:1 only
+ob1	dyn	23:1		p	
+ob1	text	23:1		dolce	
+ob1	dyn	29:1		pp	ob1 alone bars 29-33 (ob2 whole rests)
+ob1	cresc	32:2	34:1	text	cresc.
+ob1	dyn	34:1		ff	
+ob1	accent	34:3		sf	
+ob1	accent	35:1		sf	
+ob1	accent	35:3		sf	
+ob1	accent	36:1		sf	
+ob1	accent	36:3		sf	
+ob1	accent	37:1		sf	
+ob1	accent	37:3		sf	
+ob1	accent	38:1		sf	
+ob1	accent	38:3		sf	
+ob1	accent	39:1		sf	
+ob1	accent	39:3		sf	
+ob1	accent	40:1		sf	
+ob1	accent	40:3		sf	
+ob1	dim	41:1	42:1	text	dimin.
+ob1	dyn	42:1		p	
+ob1	text	42:1		dolce	
+ob1	dyn	48:1		pp	ob1 alone in bar 48
+ob1	cresc	49:1	53:1	text	cresc.
+ob1	dyn	53:1		ff	
+ob1	notes	54:3			context bar 54
+ob1	dyn	54:3		p	context bar 54
+ob2	notes	1:1	1:2		staccato quarter of the tutti chord
+ob2	dyn	1:1		f	
+ob2	notes	7:1	10:2		bar 10: one notehead with two stems? both assumed; uncertain
+ob2	accent	7:1		fp	printed once under the staff, both voices play
+ob2	dim	9:1	10:1	text	dimin.
+ob2	dyn	10:1		pp	uncertain for ob2
+ob2	notes	14:4	28:4		
+ob2	cresc	14:4	15:1	text	cresc.
+ob2	dyn	15:1		ff	
+ob2	dyn	23:1		p	
+ob2	text	23:1		dolce	
+ob2	notes	33:4	47:4		
+ob2	cresc	33:4	34:1	text	cresc. printed at ob2's entry
+ob2	dyn	34:1		ff	
+ob2	accent	34:3		sf	
+ob2	accent	35:1		sf	
+ob2	accent	35:3		sf	
+ob2	accent	36:1		sf	
+ob2	accent	36:3		sf	
+ob2	accent	37:1		sf	
+ob2	accent	37:3		sf	
+ob2	accent	38:1		sf	
+ob2	accent	38:3		sf	
+ob2	accent	39:1		sf	
+ob2	accent	39:3		sf	
+ob2	accent	40:1		sf	
+ob2	accent	40:3		sf	
+ob2	dim	41:1	42:1	text	dimin.
+ob2	dyn	42:1		p	
+ob2	text	42:1		dolce	
+ob2	notes	49:1	53:1.5		two noteheads from bar 49; no dynamic at entry
+ob2	cresc	49:1	53:1	text	cresc.
+ob2	dyn	53:1		ff	
+cl1	notes	1:1	1:2		
+cl1	dyn	1:1		f	
+cl1	notes	3:1	28:4		bars 3-4 one line of half notes, read as cl1 (cl2 possibly unison: uncertain)
+cl1	accent	3:1		fp	
+cl1	accent	5:1		fp	on cl1's whole note
+cl1	accent	7:1		fp	
+cl1	dim	9:1	10:1	text	dimin.
+cl1	dyn	10:1		pp	
+cl1	text	11:1		dolce	bars 11-13, two voices
+cl1	cresc	14:1	15:1	text	cresc. (cl1 scale from beat 1)
+cl1	dyn	15:1		ff	
+cl1	dyn	23:1		p	
+cl1	text	23:1		dolce	
+cl1	notes	33:4	47:4		clarinets rest 29-33:3
+cl1	cresc	33:4	34:1	text	cresc.
+cl1	dyn	34:1		ff	
+cl1	accent	34:3		sf	
+cl1	accent	35:1		sf	
+cl1	accent	35:3		sf	
+cl1	accent	36:1		sf	
+cl1	accent	36:3		sf	
+cl1	accent	37:1		sf	
+cl1	accent	37:3		sf	
+cl1	accent	38:1		sf	
+cl1	accent	38:3		sf	
+cl1	accent	39:1		sf	
+cl1	accent	39:3		sf	
+cl1	accent	40:1		sf	
+cl1	accent	40:3		sf	
+cl1	dyn	41:1		p	printed p under the cl quarter in bar 41 (other winds: dimin.); single notehead, cl2 uncertain
+cl1	dyn	42:1		p	
+cl1	text	42:1		dolce	
+cl1	notes	52:2	53:1.5		clarinets rest 48-52:1
+cl1	cresc	52:2	53:1	text	cresc.
+cl1	dyn	53:1		ff	
+cl1	notes	54:1			context bar 54: half note p
+cl1	dyn	54:1		p	context
+cl2	notes	1:1	1:2		
+cl2	dyn	1:1		f	
+cl2	notes	5:1	28:4		5:1 staccato quarter; bar 6 lower-voice quarters on beats 3-4 (uncertain)
+cl2	dyn	5:1		f	under the staccato quarter
+cl2	accent	7:1		fp	
+cl2	dim	9:1	10:1	text	dimin.
+cl2	dyn	10:1		pp	
+cl2	text	11:1		dolce	bars 11-13, two voices
+cl2	cresc	14:3	15:1	text	cresc.; cl2 joins the repeated chords at beat 3 (uncertain)
+cl2	dyn	15:1		ff	
+cl2	dyn	23:1		p	
+cl2	text	23:1		dolce	
+cl2	notes	33:4	47:4		clarinets rest 29-33:3
+cl2	cresc	33:4	34:1	text	cresc.
+cl2	dyn	34:1		ff	
+cl2	accent	34:3		sf	
+cl2	accent	35:1		sf	
+cl2	accent	35:3		sf	
+cl2	accent	36:1		sf	
+cl2	accent	36:3		sf	
+cl2	accent	37:1		sf	
+cl2	accent	37:3		sf	
+cl2	accent	38:1		sf	
+cl2	accent	38:3		sf	
+cl2	accent	39:1		sf	
+cl2	accent	39:3		sf	
+cl2	accent	40:1		sf	
+cl2	accent	40:3		sf	
+cl2	dyn	41:1		p	uncertain: one notehead, may be cl1 only
+cl2	dyn	42:1		p	
+cl2	text	42:1		dolce	
+cl2	notes	52:2	53:1.5		clarinets rest 48-52:1
+cl2	cresc	52:2	53:1	text	cresc.
+cl2	dyn	53:1		ff	
+cl2	notes	54:3			context bar 54, uncertain voice assignment
+cl2	dyn	54:3		p	context, uncertain
+bsn1	notes	1:1	1:2		
+bsn1	dyn	1:1		f	
+bsn1	notes	3:1	3:2		
+bsn1	dyn	3:1		f	
+bsn1	notes	5:1	5:2		
+bsn1	dyn	5:1		f	
+bsn1	notes	7:1	53:1.5		
+bsn1	accent	7:1		fp	
+bsn1	dim	9:1	10:1	text	dimin.
+bsn1	dyn	10:1		pp	
+bsn1	text	11:1		dolce	
+bsn1	cresc	14:1	15:1	text	cresc.
+bsn1	dyn	15:1		ff	
+bsn1	dim	22:1	23:1	text	dimin. on bsn1's scale
+bsn1	dyn	23:1		p	
+bsn1	text	23:1		dolce	
+bsn1	dyn	29:1		pp	bsn1 alone 29-33:3 (after a sixteenth pickup at 28:4.75)
+bsn1	cresc	32:3	34:1	text	cresc.
+bsn1	dyn	34:1		ff	
+bsn1	accent	34:3		sf	
+bsn1	accent	35:1		sf	
+bsn1	accent	35:3		sf	
+bsn1	accent	36:1		sf	
+bsn1	accent	36:3		sf	
+bsn1	accent	37:1		sf	
+bsn1	accent	37:3		sf	
+bsn1	accent	38:1		sf	
+bsn1	accent	38:3		sf	
+bsn1	accent	39:1		sf	
+bsn1	accent	39:3		sf	
+bsn1	accent	40:1		sf	
+bsn1	accent	40:3		sf	
+bsn1	dim	41:1	42:1	text	dimin. (bsn1 scale)
+bsn1	dyn	42:1		p	
+bsn1	text	42:1		dolce	
+bsn1	dyn	48:1		pp	bsn1 alone in bar 48
+bsn1	cresc	49:1	53:1	text	cresc.
+bsn1	dyn	53:1		ff	
+bsn1	notes	54:1			context bar 54, uncertain which bassoon
+bsn1	dyn	54:1		p	context, uncertain
+bsn2	notes	1:1	1:2		
+bsn2	dyn	1:1		f	
+bsn2	notes	3:1	3:2		
+bsn2	dyn	3:1		f	
+bsn2	notes	5:1	5:2		
+bsn2	dyn	5:1		f	
+bsn2	notes	7:1	28:4		
+bsn2	accent	7:1		fp	
+bsn2	dim	9:1	10:1	text	dimin.
+bsn2	dyn	10:1		pp	
+bsn2	text	11:1		dolce	
+bsn2	cresc	14:1	15:1	text	cresc.
+bsn2	dyn	15:1		ff	
+bsn2	dim	22:1	22:2	text	dimin. printed once; bsn2 has the quarter on beat 1
+bsn2	dyn	23:1		p	
+bsn2	text	23:1		dolce	
+bsn2	notes	33:4	47:4		
+bsn2	cresc	33:4	34:1	text	cresc. at bsn2's entry
+bsn2	dyn	34:1		ff	
+bsn2	accent	34:3		sf	
+bsn2	accent	35:1		sf	
+bsn2	accent	35:3		sf	
+bsn2	accent	36:1		sf	
+bsn2	accent	36:3		sf	
+bsn2	accent	37:1		sf	
+bsn2	accent	37:3		sf	
+bsn2	accent	38:1		sf	
+bsn2	accent	38:3		sf	
+bsn2	accent	39:1		sf	
+bsn2	accent	39:3		sf	
+bsn2	accent	40:1		sf	
+bsn2	accent	40:3		sf	
+bsn2	dim	41:1	41:2	text	dimin. printed once; bsn2 quarter on beat 1
+bsn2	dyn	42:1		p	
+bsn2	text	42:1		dolce	
+bsn2	notes	49:1	53:1.5		
+bsn2	cresc	49:1	53:1	text	cresc.
+bsn2	dyn	53:1		ff	
+hn1	notes	1:1	1:2		
+hn1	dyn	1:1		f	
+hn1	notes	3:1	3:2		
+hn1	dyn	3:1		f	
+hn1	notes	5:1	10:2		bars 5-6 arpeggio in single noteheads: both horns assumed (unison), uncertain
+hn1	accent	5:1		fp	uncertain for hn2
+hn1	accent	7:1		fp	
+hn1	dim	9:1	10:1	text	dimin.
+hn1	dyn	10:1		pp	
+hn1	notes	14:3	22:2		
+hn1	dyn	14:3		p	p cresc.
+hn1	cresc	14:3	15:1	text	cresc.
+hn1	dyn	15:1		ff	
+hn1	dyn	22:1		p	on the quarter after the tied whole notes
+hn1	notes	34:1	42:2		
+hn1	dyn	34:1		ff	
+hn1	accent	34:3		sf	
+hn1	accent	35:1		sf	
+hn1	accent	35:3		sf	
+hn1	accent	36:1		sf	
+hn1	accent	36:3		sf	
+hn1	accent	37:1		sf	
+hn1	accent	37:3		sf	
+hn1	accent	38:1		sf	
+hn1	accent	38:3		sf	
+hn1	accent	39:1		sf	
+hn1	accent	39:3		sf	
+hn1	accent	40:1		sf	
+hn1	accent	40:3		sf	
+hn1	dim	41:1	42:1	text	dimin.
+hn1	dyn	42:1		p	
+hn1	notes	52:4	53:1.5		
+hn1	cresc	52:4	53:1	text	cresc.
+hn1	dyn	53:1		ff	
+hn2	notes	1:1	1:2		
+hn2	dyn	1:1		f	
+hn2	notes	3:1	3:2		
+hn2	dyn	3:1		f	
+hn2	notes	5:1	10:2		bars 5-6 arpeggio in single noteheads: both horns assumed (unison), uncertain
+hn2	accent	5:1		fp	uncertain for hn2
+hn2	accent	7:1		fp	
+hn2	dim	9:1	10:1	text	dimin.
+hn2	dyn	10:1		pp	
+hn2	notes	14:3	22:2		
+hn2	dyn	14:3		p	p cresc.
+hn2	cresc	14:3	15:1	text	cresc.
+hn2	dyn	15:1		ff	
+hn2	dyn	22:1		p	on the quarter after the tied whole notes
+hn2	notes	34:1	42:2		
+hn2	dyn	34:1		ff	
+hn2	accent	34:3		sf	
+hn2	accent	35:1		sf	
+hn2	accent	35:3		sf	
+hn2	accent	36:1		sf	
+hn2	accent	36:3		sf	
+hn2	accent	37:1		sf	
+hn2	accent	37:3		sf	
+hn2	accent	38:1		sf	
+hn2	accent	38:3		sf	
+hn2	accent	39:1		sf	
+hn2	accent	39:3		sf	
+hn2	accent	40:1		sf	
+hn2	accent	40:3		sf	
+hn2	dim	41:1	42:1	text	dimin.
+hn2	dyn	42:1		p	
+hn2	notes	52:4	53:1.5		
+hn2	cresc	52:4	53:1	text	cresc.
+hn2	dyn	53:1		ff	
+tr1	notes	1:1	1:2		
+tr1	dyn	1:1		f	
+tr1	notes	3:1	3:2		
+tr1	dyn	3:1		f	
+tr1	notes	5:1	5:2		
+tr1	dyn	5:1		f	
+tr1	notes	7:1	7:2		
+tr1	dyn	7:1		f	
+tr1	notes	15:1	22:2		
+tr1	dyn	15:1		ff	
+tr1	dyn	22:1		p	
+tr1	notes	34:1	41:4		bar 41 single notehead (unison assumed)
+tr1	dyn	34:1		ff	
+tr1	accent	34:3		sf	
+tr1	accent	35:1		sf	
+tr1	accent	35:3		sf	
+tr1	accent	36:1		sf	
+tr1	accent	36:3		sf	
+tr1	accent	37:1		sf	
+tr1	accent	37:3		sf	
+tr1	accent	38:1		sf	
+tr1	accent	38:3		sf	
+tr1	accent	39:1		sf	
+tr1	accent	39:3		sf	
+tr1	accent	40:1		sf	
+tr1	accent	40:3		sf	
+tr1	dim	41:1	41:4	text	dimin.; trumpets rest from bar 42
+tr1	notes	53:1	53:1.5		
+tr1	dyn	53:1		ff	
+tr2	notes	1:1	1:2		
+tr2	dyn	1:1		f	
+tr2	notes	3:1	3:2		
+tr2	dyn	3:1		f	
+tr2	notes	5:1	5:2		
+tr2	dyn	5:1		f	
+tr2	notes	7:1	7:2		
+tr2	dyn	7:1		f	
+tr2	notes	15:1	22:2		
+tr2	dyn	15:1		ff	
+tr2	dyn	22:1		p	
+tr2	notes	34:1	41:4		bar 41 single notehead (unison assumed)
+tr2	dyn	34:1		ff	
+tr2	accent	34:3		sf	
+tr2	accent	35:1		sf	
+tr2	accent	35:3		sf	
+tr2	accent	36:1		sf	
+tr2	accent	36:3		sf	
+tr2	accent	37:1		sf	
+tr2	accent	37:3		sf	
+tr2	accent	38:1		sf	
+tr2	accent	38:3		sf	
+tr2	accent	39:1		sf	
+tr2	accent	39:3		sf	
+tr2	accent	40:1		sf	
+tr2	accent	40:3		sf	
+tr2	dim	41:1	41:4	text	dimin.; trumpets rest from bar 42
+tr2	notes	53:1	53:1.5		
+tr2	dyn	53:1		ff	
+timp	notes	1:1	1:2		
+timp	dyn	1:1		f	
+timp	notes	3:1	3:2		
+timp	dyn	3:1		f	
+timp	notes	5:1	5:2		
+timp	dyn	5:1		f	
+timp	notes	7:1	7:2		
+timp	dyn	7:1		f	
+timp	notes	15:1	20:2		a quarter on beat 1 of each bar 15-20
+timp	dyn	15:1		ff	
+timp	notes	22:1	22:2		
+timp	dyn	22:1		p	
+timp	notes	34:1	41:4		quarters on beats 1 and 3; no sf printed for timpani
+timp	dyn	34:1		ff	
+timp	dim	41:1	41:4	text	dimin.
+timp	notes	53:1	53:1.5		
+timp	dyn	53:1		ff	
+vl1	notes	1:1	1:2		
+vl1	dyn	1:1		f	
+vl1	notes	3:1	3:2		
+vl1	dyn	3:1		f	
+vl1	notes	5:1	5:2		
+vl1	dyn	5:1		f	
+vl1	notes	7:1	23:2		
+vl1	dyn	7:1		f	
+vl1	dyn	7:2		p	
+vl1	dim	9:1	10:1	text	dimin.
+vl1	dyn	10:1		pp	
+vl1	cresc	14:1	15:1	text	cresc.
+vl1	dyn	15:1		ff	
+vl1	dyn	17:1		ff	
+vl1	accent	17:3		sf	
+vl1	accent	18:1		sf	
+vl1	accent	18:3		sf	
+vl1	dyn	21:1		ff	
+vl1	accent	21:3		sf	
+vl1	dim	22:1	23:1	text	dimin.
+vl1	dyn	23:1		p	
+vl1	notes	25:1	42:2		
+vl1	dyn	25:1		p	
+vl1	dyn	29:1		pp	
+vl1	cresc	32:2	34:1	text	cresc.
+vl1	dyn	34:1		ff	
+vl1	accent	34:3		sf	
+vl1	accent	35:1		sf	
+vl1	accent	35:3		sf	
+vl1	dyn	36:1		ff	
+vl1	accent	36:3		sf	
+vl1	accent	37:1		sf	
+vl1	accent	37:3		sf	
+vl1	dyn	38:1		ff	
+vl1	accent	38:3		sf	
+vl1	accent	39:1		sf	
+vl1	accent	39:3		sf	
+vl1	dyn	40:1		ff	
+vl1	accent	40:3		sf	
+vl1	dim	41:1	42:1	text	dimin.
+vl1	dyn	42:1		p	
+vl1	notes	44:1	54:1.5		ends on an eighth at 54:1 (context)
+vl1	dyn	44:1		p	
+vl1	dyn	48:1		pp	
+vl1	cresc	49:1	53:1	text	cresc.
+vl1	dyn	53:1		ff	
+vl1	accent	53:3		fp	
+vl2	notes	1:1	23:2		chords 1/3/5/7 and whole notes p in bars 2, 4, 6
+vl2	dyn	1:1		f	
+vl2	dyn	2:1		p	
+vl2	dyn	3:1		f	
+vl2	dyn	4:1		p	
+vl2	dyn	5:1		f	
+vl2	dyn	6:1		p	
+vl2	dyn	7:1		f	
+vl2	dyn	7:2		p	
+vl2	dim	9:1	10:1	text	dimin.
+vl2	dyn	10:1		pp	
+vl2	cresc	14:1	15:1	text	cresc.
+vl2	dyn	15:1		ff	
+vl2	accent	15:3		sf	
+vl2	accent	16:1		sf	
+vl2	accent	16:3		sf	
+vl2	dyn	19:1		ff	
+vl2	accent	19:3		sf	
+vl2	accent	20:1		sf	
+vl2	accent	20:3		sf	
+vl2	dim	22:1	23:1	text	dimin.
+vl2	dyn	23:1		p	
+vl2	notes	25:1	42:2		
+vl2	dyn	25:1		p	
+vl2	dyn	29:1		pp	
+vl2	cresc	32:2	34:1	text	cresc.
+vl2	dyn	34:1		ff	
+vl2	accent	34:3		sf	
+vl2	dyn	36:1		ff	
+vl2	accent	36:3		sf	
+vl2	dyn	38:1		ff	
+vl2	accent	38:3		sf	
+vl2	dyn	40:1		ff	
+vl2	accent	40:3		sf	
+vl2	dim	41:1	42:1	text	dimin.
+vl2	dyn	42:1		p	
+vl2	notes	44:1	54:1.5		
+vl2	dyn	44:1		p	
+vl2	dyn	48:1		pp	
+vl2	cresc	49:1	53:1	text	cresc.
+vl2	dyn	53:1		ff	
+vl2	accent	53:3		fp	
+vla	notes	1:1	27:2		chords 1/3/5/7, whole notes p in 2/4/6; bar 25 and 27 a quarter each
+vla	dyn	1:1		f	
+vla	dyn	2:1		p	
+vla	dyn	3:1		f	
+vla	dyn	4:1		p	
+vla	dyn	5:1		f	
+vla	dyn	6:1		p	
+vla	dyn	7:1		f	
+vla	dyn	7:2		p	
+vla	dim	9:1	10:1	text	dimin.
+vla	dyn	10:1		pp	
+vla	cresc	14:1	15:1	text	cresc.
+vla	dyn	15:1		ff	
+vla	dim	22:1	23:1	text	dimin.
+vla	dyn	23:1		p	
+vla	notes	29:1	53:1.5		bar 29 and 31 whole notes (ledger line)
+vla	dyn	29:1		pp	
+vla	cresc	32:2	34:1	text	cresc.
+vla	dyn	34:1		ff	
+vla	dyn	36:1		ff	
+vla	dyn	38:1		ff	
+vla	dyn	40:1		ff	
+vla	dim	41:1	42:1	text	dimin.
+vla	dyn	42:1		p	whole-note chord
+vla	dyn	48:1		pp	
+vla	cresc	49:1	53:1	text	cresc.
+vla	dyn	53:1		ff	
+vla	notes	54:3			context bar 54
+vla	dyn	54:3		p	context
+vc	notes	1:1	1:2		
+vc	dyn	1:1		f	
+vc	notes	3:1	3:2		
+vc	dyn	3:1		f	
+vc	notes	5:1	5:2		
+vc	dyn	5:1		f	
+vc	notes	7:1	23:2		
+vc	dyn	7:1		f	
+vc	dyn	7:2		p	
+vc	dim	9:1	10:1	text	dimin.
+vc	dyn	10:1		pp	
+vc	cresc	14:1	15:1	text	cresc.
+vc	dyn	15:1		ff	
+vc	dim	22:1	23:1	text	dimin.
+vc	dyn	23:1		p	
+vc	notes	29:1	53:3.5		tremolo half + eighth in 29-32; bar 53 sixteenths then an eighth on beat 3
+vc	dyn	29:1		pp	
+vc	cresc	32:2	34:1	text	cresc.
+vc	dyn	34:1		ff	
+vc	dyn	36:1		ff	
+vc	dyn	38:1		ff	
+vc	dyn	40:1		ff	
+vc	dim	41:1	42:1	text	dimin.
+vc	dyn	42:1		p	arco quarter
+vc	text	43:1		pizz.	
+vc	text	48:1		arco	
+vc	dyn	48:1		pp	
+vc	cresc	49:1	53:1	text	cresc.
+vc	accent	53:1		ffp	printed ffp at the sixteenths (ff then p)
+vc	notes	54:3			context bar 54 (kb rests)
+vc	dyn	54:3		p	context
+kb	notes	1:1	1:2		
+kb	dyn	1:1		f	
+kb	notes	3:1	3:2		
+kb	dyn	3:1		f	
+kb	notes	5:1	5:2		
+kb	dyn	5:1		f	
+kb	notes	7:1	23:2		
+kb	dyn	7:1		f	
+kb	dyn	7:2		p	
+kb	dim	9:1	10:1	text	dimin.
+kb	dyn	10:1		pp	
+kb	cresc	14:1	15:1	text	cresc.
+kb	dyn	15:1		ff	
+kb	dim	22:1	23:1	text	dimin.
+kb	dyn	23:1		p	
+kb	notes	29:1	53:3.5		tremolo half + eighth in 29-32; bar 53 sixteenths then an eighth on beat 3
+kb	dyn	29:1		pp	
+kb	cresc	32:2	34:1	text	cresc.
+kb	dyn	34:1		ff	
+kb	dyn	36:1		ff	
+kb	dyn	38:1		ff	
+kb	dyn	40:1		ff	
+kb	dim	41:1	42:1	text	dimin.
+kb	dyn	42:1		p	arco quarter
+kb	text	43:1		pizz.	
+kb	text	48:1		arco	
+kb	dyn	48:1		pp	
+kb	cresc	49:1	53:1	text	cresc.
+kb	accent	53:1		ffp	printed ffp at the sixteenths (ff then p)

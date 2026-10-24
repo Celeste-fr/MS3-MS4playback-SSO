@@ -1,0 +1,652 @@
+# piece: Anton Bruckner, Symphony No. 8 in C minor, II. Scherzo, Allegro moderato, bars 1-61 (+ bar 62 for context)
+# edition: Eulenburg kleine Orchester-Partitur-Ausgabe, Symphonien No. 66 (IMSLP #30702), <work>/dl/scores/br8.pdf. No editor named (no Haas / Nowak); an early Eulenburg miniature, presumably the 1892 first-edition text (inference, not printed). Instruments: 3 Fl, 3 Ob, 3 Kl, 3 Fg (Kontrafagott listed with Fg. III in mvt I; not marked here), 8 Hörner (I-VI in F, VII VIII in tief B), 3 Tr in F, Alt-/Tenor-Posaune (Pos. I II) + "Pos. u. Kb. Tb." staff (Pos. III and Kontrabaßtuba), Pauken, strings. No harp in bars 1-62. Horns V-VIII play horn here (no Wagner tubas in this passage).
+# pages: pdf page = printed page - 1
+# page 52 (printed 53): bars 1-4
+# page 53 (printed 54): bars 5-9 (top system), 10-15 (bottom system; A = bar 11)
+# page 54 (printed 55): bars 16-20 (B = bar 19)
+# page 55 (printed 56): bars 21-25 (C = bar 25)
+# page 56 (printed 57): bars 26-30
+# page 57 (printed 58): bars 31-35 (D = bar 33)
+# page 58 (printed 59): bars 36-40
+# page 59 (printed 60): bars 41-45 (E = bar 41)
+# page 60 (printed 61): bars 46-50
+# page 61 (printed 62): bars 51-55 (F = bar 53)
+# page 62 (printed 63): bars 56-61
+# page 63 (printed 64): bar 62 (first bar; G = bar 64)
+# time signature: 3/4 throughout; beat unit = quarter; bars counted from the Scherzo's first bar (no pickup)
+# doubts: parts that share a staff get the staff's marking; "zu 2"/"zu 3"/"I"/"III" labels decide who plays, a chord means both players. Vl. I is on two staves bars 15/16-30 (vl1a upper, vl1b lower); elsewhere its divisi chords are on one staff and stay vl1. Trombone III vs. Kb. tuba on the shared bottom staff bars 36-40 is unclear (both given). Notes spans run to the last note before a rest of a whole bar or more; staccato dots and slurs not transcribed. Readings marked "uncertain" in the comment.
+# columns: part	type	start	end	value	comment
+fl1	notes	15:1	35:3		Fl. I II zu 2 bars 15-18 and 21-35; bars 25-32 one held note
+fl2	notes	15:1	35:3		Fl. I II zu 2 bars 15-18 and 21-35; bars 25-32 one held note
+fl3	notes	19:1	20:3		"zu 3" at B (bar 19); staff back to "zu 2" at bar 21
+fl1	notes	37:3.5	40:1.5		zu 3
+fl2	notes	37:3.5	40:1.5		zu 3
+fl3	notes	37:3.5	40:1.5		zu 3
+fl1	notes	45:1.5	48:3		zu 3
+fl2	notes	45:1.5	48:3		zu 3
+fl3	notes	45:1.5	48:3		zu 3
+fl1	notes	53:1	61:1		zu 3, held note tied bars 53-60, staccato quarter 61:1
+fl2	notes	53:1	61:1		zu 3, held note tied bars 53-60, staccato quarter 61:1
+fl3	notes	53:1	61:1		zu 3, held note tied bars 53-60, staccato quarter 61:1
+fl1	dyn	15:1		mf	"mf poco a poco"
+fl2	dyn	15:1		mf	"mf poco a poco"
+fl1	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+fl2	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+fl1	dyn	19:1		f	
+fl2	dyn	19:1		f	
+fl3	dyn	19:1		f	
+fl1	cresc	21:1	23:1	text	
+fl2	cresc	21:1	23:1	text	
+fl1	dyn	23:1		ff	
+fl2	dyn	23:1		ff	
+fl1	dim	24:1	25:1	text	
+fl2	dim	24:1	25:1	text	
+fl1	dyn	25:1		p	held Db (bars 25-32); zu 2 assumed to continue, uncertain
+fl2	dyn	25:1		p	held Db (bars 25-32); zu 2 assumed to continue, uncertain
+fl1	cresc	29:1	33:1	text	
+fl2	cresc	29:1	33:1	text	
+fl1	dyn	33:1.5		f	
+fl2	dyn	33:1.5		f	
+fl1	dyn	37:3.5		ff	
+fl2	dyn	37:3.5		ff	
+fl3	dyn	37:3.5		ff	
+fl1	dim	39:3.5	40:1.5	text	
+fl2	dim	39:3.5	40:1.5	text	
+fl3	dim	39:3.5	40:1.5	text	
+fl1	dyn	45:1.5		pp	
+fl2	dyn	45:1.5		pp	
+fl3	dyn	45:1.5		pp	
+fl1	cresc	47:1	49:1	text	winds rest from bar 49
+fl2	cresc	47:1	49:1	text	winds rest from bar 49
+fl3	cresc	47:1	49:1	text	winds rest from bar 49
+fl1	dyn	53:1		ff	
+fl2	dyn	53:1		ff	
+fl3	dyn	53:1		ff	
+ob1	notes	8:3	8:4		one chord, Ob. I II
+ob2	notes	8:3	8:4		one chord, Ob. I II
+ob1	notes	10:3	10:4		one chord, Ob. I II
+ob2	notes	10:3	10:4		one chord, Ob. I II
+ob1	dyn	8:3		p	
+ob2	dyn	8:3		p	
+ob1	accent	8:3		>	
+ob2	accent	8:3		>	
+ob1	accent	10:3		>	no dynamic printed in bar 10
+ob2	accent	10:3		>	no dynamic printed in bar 10
+ob1	notes	15:1	24:3		bar 15 one held note on the I II staff (unison assumed, uncertain); bars 21-24 "zu 3" on one staff
+ob2	notes	15:1	24:3		bar 15 one held note on the I II staff (unison assumed, uncertain); bars 21-24 "zu 3" on one staff
+ob3	notes	15:1	24:3		Ob. III own staff bars 15-20, zu 3 bars 21-24
+ob1	dyn	15:1		p	"p poco a poco"
+ob2	dyn	15:1		p	"p poco a poco"
+ob3	dyn	15:1		p	"p poco a poco"
+ob1	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+ob2	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+ob3	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+ob1	dyn	19:1		f	Ob. I II zu 2, Ob. III own f
+ob2	dyn	19:1		f	Ob. I II zu 2, Ob. III own f
+ob3	dyn	19:1		f	Ob. I II zu 2, Ob. III own f
+ob1	cresc	21:1	23:1	text	
+ob2	cresc	21:1	23:1	text	
+ob3	cresc	21:1	23:1	text	
+ob1	dyn	23:1		ff	
+ob2	dyn	23:1		ff	
+ob3	dyn	23:1		ff	
+ob1	dim	24:1	25:1	text	oboes rest bar 25
+ob2	dim	24:1	25:1	text	oboes rest bar 25
+ob3	dim	24:1	25:1	text	oboes rest bar 25
+ob1	notes	26:1	32:3		"Ob. I II zu 2"
+ob2	notes	26:1	32:3		"Ob. I II zu 2"
+ob1	dyn	26:1		p	
+ob2	dyn	26:1		p	
+ob1	cresc	29:1	33:1	text	
+ob2	cresc	29:1	33:1	text	
+ob1	notes	33:1.5	35:3		
+ob2	notes	33:1.5	35:3		
+ob3	notes	33:1.5	35:3		
+ob1	dyn	33:1.5		f	
+ob2	dyn	33:1.5		f	
+ob3	dyn	33:1.5		f	
+ob1	notes	37:3.5	40:1.5		
+ob2	notes	37:3.5	40:1.5		
+ob3	notes	37:3.5	40:1.5		
+ob1	dyn	37:3.5		ff	
+ob2	dyn	37:3.5		ff	
+ob3	dyn	37:3.5		ff	
+ob1	dim	39:3.5	40:1.5	text	
+ob2	dim	39:3.5	40:1.5	text	
+ob3	dim	39:3.5	40:1.5	text	
+ob1	notes	41:1.5	48:3		
+ob2	notes	41:1.5	48:3		
+ob1	dyn	41:1.5		f	
+ob2	dyn	41:1.5		f	
+ob1	dim	42:1	47:1	text	dim. with dashes through bar 46
+ob2	dim	42:1	47:1	text	dim. with dashes through bar 46
+ob3	notes	45:1.5	48:3		no dynamic printed at entry (within the dim. of the others)
+ob1	cresc	47:1	49:1	text	bar 48 Ob. I II "zu 2"
+ob2	cresc	47:1	49:1	text	bar 48 Ob. I II "zu 2"
+ob3	cresc	47:1	49:1	text	bar 48 Ob. I II "zu 2"
+ob1	notes	53:1.5	61:1		
+ob2	notes	53:1.5	61:1		
+ob3	notes	53:1.5	61:1		
+ob1	dyn	53:1.5		ff	Ob. I II zu 2 and III
+ob2	dyn	53:1.5		ff	Ob. I II zu 2 and III
+ob3	dyn	53:1.5		ff	Ob. I II zu 2 and III
+cl1	notes	11:1	14:2.5		Kl. I II zu 2
+cl2	notes	11:1	14:2.5		Kl. I II zu 2
+cl1	dyn	11:1		p	
+cl2	dyn	11:1		p	
+cl1	notes	15:1	24:3		bars 21-22 two voices, zu 2 from 23:3
+cl2	notes	15:1	24:3		bars 21-22 two voices, zu 2 from 23:3
+cl3	notes	15:1	24:3		
+cl1	dyn	15:1		p	"p poco a poco"
+cl2	dyn	15:1		p	"p poco a poco"
+cl3	dyn	15:1		p	"p poco a poco"
+cl1	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+cl2	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+cl3	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+cl1	dyn	19:1		f	
+cl2	dyn	19:1		f	
+cl3	dyn	19:1		f	
+cl1	cresc	21:1	23:1	text	
+cl2	cresc	21:1	23:1	text	
+cl3	cresc	21:1	23:1	text	
+cl1	dyn	23:1		ff	
+cl2	dyn	23:1		ff	
+cl3	dyn	23:1		ff	
+cl1	dim	24:1	25:1	text	
+cl2	dim	24:1	25:1	text	
+cl3	dim	24:1	25:1	text	
+cl1	notes	26:1	32:2.5		"Kl. I" bars 26-30; bars 31-32 one line on the I II staff without zu 2: given to cl1, cl2 uncertain
+cl1	dyn	26:1		p	
+cl1	cresc	29:1	33:1	text	
+cl1	notes	33:1.5	35:3		
+cl2	notes	33:1.5	35:3		
+cl3	notes	33:1.5	35:3		
+cl1	dyn	33:1.5		f	
+cl2	dyn	33:1.5		f	
+cl3	dyn	33:1.5		f	
+cl1	notes	37:1.5	39:3		
+cl2	notes	37:1.5	39:3		
+cl3	notes	37:1.5	39:3		
+cl1	dyn	37:1.5		ff	
+cl2	dyn	37:1.5		ff	
+cl3	dyn	37:1.5		ff	
+cl1	dim	39:1	39:3	hairpin	
+cl2	dim	39:1	39:3	hairpin	
+cl3	dim	39:1	39:3	hairpin	
+cl1	notes	41:1.5	48:3		
+cl2	notes	41:1.5	48:3		
+cl3	notes	41:1.5	48:3		
+cl1	dyn	41:1.5		f	
+cl2	dyn	41:1.5		f	
+cl3	dyn	41:1.5		f	
+cl1	dim	42:1	47:1	text	dashes through bar 46
+cl2	dim	42:1	47:1	text	dashes through bar 46
+cl3	dim	42:1	47:1	text	dashes through bar 46
+cl1	cresc	47:1	49:1	text	
+cl2	cresc	47:1	49:1	text	
+cl3	cresc	47:1	49:1	text	
+cl1	notes	53:1.5	61:1		"Kl." chords of three notes: all three assumed
+cl2	notes	53:1.5	61:1		"Kl." chords of three notes: all three assumed
+cl3	notes	53:1.5	61:1		"Kl." chords of three notes: all three assumed
+cl1	dyn	53:1.5		ff	
+cl2	dyn	53:1.5		ff	
+cl3	dyn	53:1.5		ff	
+bsn1	notes	11:1	14:1		"Fg. I"
+bsn1	dyn	11:1		p	
+bsn1	notes	25:1	36:1		held chords (3 notes) bars 25-32; zu 3 bars 33-36
+bsn2	notes	25:1	36:1		held chords (3 notes) bars 25-32; zu 3 bars 33-36
+bsn3	notes	25:1	36:1		held chords (3 notes) bars 25-32; zu 3 bars 33-36
+bsn1	dyn	25:1		p	
+bsn2	dyn	25:1		p	
+bsn3	dyn	25:1		p	
+bsn1	cresc	29:1	33:1	text	
+bsn2	cresc	29:1	33:1	text	
+bsn3	cresc	29:1	33:1	text	
+bsn1	dyn	33:1		f	zu 3
+bsn2	dyn	33:1		f	zu 3
+bsn3	dyn	33:1		f	zu 3
+bsn1	dim	35:1	36:1.5	hairpin	continues across the page turn to the 36:1 note
+bsn2	dim	35:1	36:1.5	hairpin	continues across the page turn to the 36:1 note
+bsn3	dim	35:1	36:1.5	hairpin	continues across the page turn to the 36:1 note
+bsn1	notes	37:1	40:1		zu 3
+bsn2	notes	37:1	40:1		zu 3
+bsn3	notes	37:1	40:1		zu 3
+bsn1	dyn	37:1		ff	
+bsn2	dyn	37:1		ff	
+bsn3	dyn	37:1		ff	
+bsn1	dim	39:1	39:3	hairpin	
+bsn2	dim	39:1	39:3	hairpin	
+bsn3	dim	39:1	39:3	hairpin	
+bsn1	notes	45:1	61:1		45:1 and 46:1 one eighth each (I II zu 2 + III); 47-48 two lines; 49-52 zu 3; 53-61 I II zu 2 + III
+bsn2	notes	45:1	61:1		45:1 and 46:1 one eighth each (I II zu 2 + III); 47-48 two lines; 49-52 zu 3; 53-61 I II zu 2 + III
+bsn3	notes	45:1	61:1		45:1 and 46:1 one eighth each (I II zu 2 + III); 47-48 two lines; 49-52 zu 3; 53-61 I II zu 2 + III
+bsn1	dyn	45:1		pp	printed under III; assumed for I II too, uncertain
+bsn2	dyn	45:1		pp	printed under III; assumed for I II too, uncertain
+bsn3	dyn	45:1		pp	printed under III; assumed for I II too, uncertain
+bsn1	cresc	47:1	49:1	text	
+bsn2	cresc	47:1	49:1	text	
+bsn3	cresc	47:1	49:1	text	
+bsn1	dyn	49:1		f	zu 3; no new dynamic at 53
+bsn2	dyn	49:1		f	zu 3; no new dynamic at 53
+bsn3	dyn	49:1		f	zu 3; no new dynamic at 53
+hn1	notes	1:1	2:2		Hr. I alone (upper voice, rest in lower voice); grace note + half note, bars 1 and 2
+hn1	dyn	1:1		mf	
+hn1	accent	1:1		>	sign above each grace-note figure bars 1-2, uncertain: may be an accent or part of the grace
+hn1	accent	2:1		>	uncertain, as bar 1
+hn1	notes	15:1	25:1		held chords bars 15-18, slurred chords bars 19-23, zu 2 bar 24, 25:1 one quarter
+hn2	notes	15:1	25:1		held chords bars 15-18, slurred chords bars 19-23, zu 2 bar 24, 25:1 one quarter
+hn3	notes	15:1	24:3		
+hn4	notes	15:1	24:3		
+hn1	dyn	15:1		p	"p poco a poco"
+hn2	dyn	15:1		p	"p poco a poco"
+hn3	dyn	15:1		p	"p poco a poco"
+hn4	dyn	15:1		p	"p poco a poco"
+hn1	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+hn2	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+hn3	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+hn4	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+hn1	dyn	19:1		f	
+hn2	dyn	19:1		f	
+hn3	dyn	19:2.5		f	
+hn4	dyn	19:2.5		f	
+hn5	notes	19:1	23:1.5		zu 2, grace note + dotted quarter each bar 19-23
+hn6	notes	19:1	23:1.5		zu 2, grace note + dotted quarter each bar 19-23
+hn5	accent	19:1		>	accent on the dotted quarter of bars 19, 20, 21, 22, 23 (21-23 sign smudged, uncertain); no dynamic printed for Hr. V VI at bar 19
+hn6	accent	19:1		>	accent on the dotted quarter of bars 19, 20, 21, 22, 23 (21-23 sign smudged, uncertain); no dynamic printed for Hr. V VI at bar 19
+hn1	cresc	21:1	23:1	text	
+hn2	cresc	21:1	23:1	text	
+hn3	cresc	21:1	23:1	text	
+hn4	cresc	21:1	23:1	text	
+hn5	cresc	21:1	23:1	text	
+hn6	cresc	21:1	23:1	text	
+hn1	dyn	23:1		ff	Hr. III IV ff at 23:2.5
+hn2	dyn	23:1		ff	Hr. III IV ff at 23:2.5
+hn3	dyn	23:1		ff	Hr. III IV ff at 23:2.5
+hn4	dyn	23:1		ff	Hr. III IV ff at 23:2.5
+hn5	dyn	23:1		ff	Hr. III IV ff at 23:2.5
+hn6	dyn	23:1		ff	Hr. III IV ff at 23:2.5
+hn1	dim	24:1	25:1	text	
+hn2	dim	24:1	25:1	text	
+hn3	dim	24:1	25:1	text	
+hn4	dim	24:1	25:1	text	
+hn1	dyn	25:1		p	
+hn2	dyn	25:1		p	
+hn5	notes	25:1	36:1		bar 25 figure on the V VI staff, zu 2 from 26; uncertain whether bar 25 is both players
+hn6	notes	25:1	36:1		bar 25 figure on the V VI staff, zu 2 from 26; uncertain whether bar 25 is both players
+hn5	dyn	25:1		mf	
+hn6	dyn	25:1		mf	
+hn7	notes	25:1	40:1		held chords bars 25-35, 36:1, zu 2 bars 37-40:1
+hn8	notes	25:1	40:1		held chords bars 25-35, 36:1, zu 2 bars 37-40:1
+hn7	dyn	25:1		p	
+hn8	dyn	25:1		p	
+hn5	cresc	29:1	33:1	text	
+hn6	cresc	29:1	33:1	text	
+hn7	cresc	29:1	33:1	text	
+hn8	cresc	29:1	33:1	text	
+hn1	notes	31:1	36:1		bar 31 one held note, chord from 32:3: hn2 at 31 uncertain
+hn2	notes	31:1	36:1		bar 31 one held note, chord from 32:3: hn2 at 31 uncertain
+hn1	dyn	31:1		mf	no new dynamic at 33 for Hr. I II
+hn2	dyn	31:1		mf	no new dynamic at 33 for Hr. I II
+hn3	notes	33:1	36:1		zu 2
+hn4	notes	33:1	36:1		zu 2
+hn3	dyn	33:1		f	"f marc."
+hn4	dyn	33:1		f	"f marc."
+hn3	text	33:1		marc.	
+hn4	text	33:1		marc.	
+hn5	dyn	33:1		f	
+hn6	dyn	33:1		f	
+hn7	dyn	33:1		f	
+hn8	dyn	33:1		f	
+hn3	dim	35:1	35:3	hairpin	
+hn4	dim	35:1	35:3	hairpin	
+hn7	dim	35:1	35:3	hairpin	
+hn8	dim	35:1	35:3	hairpin	
+hn1	dyn	36:1		p	one note / chord at 36:1; Hr. III IV zu 2
+hn2	dyn	36:1		p	one note / chord at 36:1; Hr. III IV zu 2
+hn3	dyn	36:1		p	one note / chord at 36:1; Hr. III IV zu 2
+hn4	dyn	36:1		p	one note / chord at 36:1; Hr. III IV zu 2
+hn5	dyn	36:1		p	one note / chord at 36:1; Hr. III IV zu 2
+hn6	dyn	36:1		p	one note / chord at 36:1; Hr. III IV zu 2
+hn7	dyn	36:1		p	one note / chord at 36:1; Hr. III IV zu 2
+hn8	dyn	36:1		p	one note / chord at 36:1; Hr. III IV zu 2
+hn1	notes	37:1.5	39:3		
+hn2	notes	37:1.5	39:3		
+hn3	notes	37:1.5	39:3		
+hn4	notes	37:1.5	39:3		
+hn5	notes	37:1.5	39:3		
+hn6	notes	37:1.5	39:3		
+hn1	dyn	37:1		ff	Hr. I-VI at 37:1.5; Hr. VII VIII zu 2 at 37:1
+hn2	dyn	37:1		ff	Hr. I-VI at 37:1.5; Hr. VII VIII zu 2 at 37:1
+hn3	dyn	37:1		ff	Hr. I-VI at 37:1.5; Hr. VII VIII zu 2 at 37:1
+hn4	dyn	37:1		ff	Hr. I-VI at 37:1.5; Hr. VII VIII zu 2 at 37:1
+hn5	dyn	37:1		ff	Hr. I-VI at 37:1.5; Hr. VII VIII zu 2 at 37:1
+hn6	dyn	37:1		ff	Hr. I-VI at 37:1.5; Hr. VII VIII zu 2 at 37:1
+hn7	dyn	37:1		ff	Hr. I-VI at 37:1.5; Hr. VII VIII zu 2 at 37:1
+hn8	dyn	37:1		ff	Hr. I-VI at 37:1.5; Hr. VII VIII zu 2 at 37:1
+hn1	dim	39:1	39:3	hairpin	
+hn2	dim	39:1	39:3	hairpin	
+hn3	dim	39:1	39:3	hairpin	
+hn4	dim	39:1	39:3	hairpin	
+hn5	dim	39:1	39:3	hairpin	
+hn6	dim	39:1	39:3	hairpin	
+hn7	dim	39:1	39:3	hairpin	
+hn8	dim	39:1	39:3	hairpin	
+hn1	notes	41:1.5	48:3		
+hn2	notes	41:1.5	48:3		
+hn3	notes	41:1.5	48:3		
+hn4	notes	41:1.5	48:3		
+hn5	notes	41:1.5	48:3		
+hn6	notes	41:1.5	48:3		
+hn1	dyn	41:1.5		f	
+hn2	dyn	41:1.5		f	
+hn3	dyn	41:1.5		f	
+hn4	dyn	41:1.5		f	
+hn5	dyn	41:1.5		f	
+hn6	dyn	41:1.5		f	
+hn1	dim	42:1	47:1	text	dashes through bar 46
+hn2	dim	42:1	47:1	text	dashes through bar 46
+hn3	dim	42:1	47:1	text	dashes through bar 46
+hn4	dim	42:1	47:1	text	dashes through bar 46
+hn5	dim	42:1	47:1	text	dashes through bar 46
+hn6	dim	42:1	47:1	text	dashes through bar 46
+hn7	notes	45:1	61:1		45:1 and 46:1 one eighth each, zu 2; 47-61 continuous
+hn8	notes	45:1	61:1		45:1 and 46:1 one eighth each, zu 2; 47-61 continuous
+hn7	dyn	45:1		pp	
+hn8	dyn	45:1		pp	
+hn1	cresc	47:1	49:1	text	
+hn2	cresc	47:1	49:1	text	
+hn3	cresc	47:1	49:1	text	
+hn4	cresc	47:1	49:1	text	
+hn5	cresc	47:1	49:1	text	
+hn6	cresc	47:1	49:1	text	
+hn7	cresc	47:1	49:1	text	
+hn8	cresc	47:1	49:1	text	
+hn3	notes	49:1	52:3		continues into 53
+hn4	notes	49:1	52:3		continues into 53
+hn3	dyn	49:1		f	
+hn4	dyn	49:1		f	
+hn3	accent	49:1		^	
+hn4	accent	49:1		^	
+hn7	dyn	49:1		f	
+hn8	dyn	49:1		f	
+hn3	accent	52:3		>	
+hn4	accent	52:3		>	
+hn7	accent	52:3		>	
+hn8	accent	52:3		>	
+hn1	notes	53:1	61:1		zu 2
+hn2	notes	53:1	61:1		zu 2
+hn5	notes	53:1	61:1		zu 2
+hn6	notes	53:1	61:1		zu 2
+hn3	notes	53:1	61:1		
+hn4	notes	53:1	61:1		
+hn1	dyn	53:1		ff	"ff marc. sempre"
+hn2	dyn	53:1		ff	"ff marc. sempre"
+hn3	dyn	53:1		ff	"ff marc. sempre"
+hn4	dyn	53:1		ff	"ff marc. sempre"
+hn1	text	53:1		marc. sempre	
+hn2	text	53:1		marc. sempre	
+hn3	text	53:1		marc. sempre	
+hn4	text	53:1		marc. sempre	
+hn1	accent	53:1		>	
+hn2	accent	53:1		>	
+hn3	accent	53:1		>	
+hn4	accent	53:1		>	
+hn5	dyn	53:1		ff	
+hn6	dyn	53:1		ff	
+hn7	dyn	53:1		ff	
+hn8	dyn	53:1		ff	
+hn1	accent	58:1		>	also on beat 1 of bars 59, 60, 61
+hn2	accent	58:1		>	also on beat 1 of bars 59, 60, 61
+hn3	accent	58:1		>	also on beat 1 of bars 59, 60, 61
+hn4	accent	58:1		>	also on beat 1 of bars 59, 60, 61
+hn5	accent	58:1		>	also on beat 1 of bars 59, 60, 61
+hn6	accent	58:1		>	also on beat 1 of bars 59, 60, 61
+tr1	notes	19:1	23:2.5		Tr. I II zu 2
+tr2	notes	19:1	23:2.5		Tr. I II zu 2
+tr1	dyn	19:1		f	
+tr2	dyn	19:1		f	
+tr1	cresc	21:1	23:1	text	
+tr2	cresc	21:1	23:1	text	
+tr1	dyn	23:1		ff	
+tr2	dyn	23:1		ff	
+tr1	notes	33:1	36:1		I II zu 2
+tr2	notes	33:1	36:1		I II zu 2
+tr3	notes	33:1	36:1		"III" own voice; 36:1 a chord on the Tr. staff given to all three, uncertain
+tr1	dyn	33:1		f	
+tr2	dyn	33:1		f	
+tr3	dyn	33:1		f	
+tr1	dim	35:1	35:3	hairpin	
+tr2	dim	35:1	35:3	hairpin	
+tr3	dim	35:1	35:3	hairpin	
+tr1	dyn	36:1		p	
+tr2	dyn	36:1		p	
+tr3	dyn	36:1		p	
+tr1	notes	41:1.5	47:3		zu 2; rest bar 48
+tr2	notes	41:1.5	47:3		zu 2; rest bar 48
+tr1	dyn	41:1.5		mf	
+tr2	dyn	41:1.5		mf	
+tr1	dim	42:1	47:1	text	dashes through bar 46
+tr2	dim	42:1	47:1	text	dashes through bar 46
+tr3	notes	47:1.5	47:3		Tr. III enters, rests bar 48
+tr3	dyn	47:1.5		p	"p cresc."
+tr1	cresc	47:1	49:1	text	
+tr2	cresc	47:1	49:1	text	
+tr3	cresc	47:1	49:1	text	
+tr1	notes	49:1	61:1		
+tr2	notes	49:1	61:1		
+tr3	notes	49:1	61:1		
+tr1	dyn	49:1		f	printed once at Tr. I; II III zu 2 share the staff
+tr2	dyn	49:1		f	printed once at Tr. I; II III zu 2 share the staff
+tr3	dyn	49:1		f	printed once at Tr. I; II III zu 2 share the staff
+tr1	accent	49:1		^	
+tr2	text	49:1	52:3	accents on every note	> on each eighth bars 49-52
+tr3	text	49:1	52:3	accents on every note	> on each eighth bars 49-52
+tr1	dyn	53:1		f	f (not ff) printed for Tr. I II and III at F
+tr2	dyn	53:1		f	f (not ff) printed for Tr. I II and III at F
+tr3	dyn	53:1		f	f (not ff) printed for Tr. I II and III at F
+trb1	notes	33:1	36:1		one quarter at beat 1 each bar 33-36
+trb2	notes	33:1	36:1		one quarter at beat 1 each bar 33-36
+trb3	notes	33:1	36:1		one quarter at beat 1 each bar 33-36
+trb1	dyn	33:1		f	"III" on the lower staff = bass trombone
+trb2	dyn	33:1		f	"III" on the lower staff = bass trombone
+trb3	dyn	33:1		f	"III" on the lower staff = bass trombone
+trb1	dyn	36:1		p	lower staff labelled "Pos. u. Kb. Tb." from bar 36; tuba at 36 uncertain
+trb2	dyn	36:1		p	lower staff labelled "Pos. u. Kb. Tb." from bar 36; tuba at 36 uncertain
+trb3	dyn	36:1		p	lower staff labelled "Pos. u. Kb. Tb." from bar 36; tuba at 36 uncertain
+tuba	dyn	36:1		p	lower staff labelled "Pos. u. Kb. Tb." from bar 36; tuba at 36 uncertain
+tuba	notes	36:1	40:1		one voice on the "Pos. u. Kb. Tb." staff, bars 36-40: given to trb3 and tuba, uncertain which plays
+trb3	notes	37:1	40:1		see tuba row: shared staff, uncertain
+trb3	dyn	37:1		f	f, not ff
+tuba	dyn	37:1		f	f, not ff
+trb3	dim	39:1	39:3	hairpin	
+tuba	dim	39:1	39:3	hairpin	
+trb1	notes	41:3.5	61:1		
+trb2	notes	41:3.5	61:1		
+trb3	notes	41:3.5	61:1		
+trb1	dyn	41:3.5		p	
+trb2	dyn	41:3.5		p	
+trb3	dyn	41:3.5		p	
+trb1	dim	42:1	47:1	text	dashes through bar 46
+trb2	dim	42:1	47:1	text	dashes through bar 46
+trb3	dim	42:1	47:1	text	dashes through bar 46
+tuba	notes	44:3.5	61:1		lower voice on the Pos. u. Kb. Tb. staff (rests bars 41-44:3)
+tuba	dyn	44:3.5		pp	printed under the lower voice
+trb1	cresc	47:1	49:1	text	Pos. I II "zu 2"
+trb2	cresc	47:1	49:1	text	Pos. I II "zu 2"
+trb3	cresc	47:1	49:1	text	Pos. I II "zu 2"
+tuba	cresc	47:1	49:1	text	Pos. I II "zu 2"
+trb1	dyn	49:1		f	no new dynamic at 53
+trb2	dyn	49:1		f	no new dynamic at 53
+trb3	dyn	49:1		f	no new dynamic at 53
+tuba	dyn	49:1		f	no new dynamic at 53
+trb1	accent	49:1		^	
+trb2	accent	49:1		^	
+trb3	accent	49:1		^	
+tuba	accent	49:1		^	
+trb1	accent	52:3		>	
+trb2	accent	52:3		>	
+trb3	accent	52:3		>	
+tuba	accent	52:3		>	
+timp	notes	49:1	62:3		eighths 49-56, rolls (trem. strokes) bars 57-62
+timp	dyn	49:1		f	no new dynamic at 53
+timp	text	57:1		trem.	roll strokes on dotted halves
+timp	dim	61:1	63:1	text	"dim. sempre"; pp at 64 (beyond range)
+vl1	notes	1:1.5	14:3		
+vl2	notes	1:1.5	61:1		divisi chords on one staff throughout; "div." again at 33 and 41
+vl1	text	1:1.5		divisi	printed between Vl. I and Vl. II, assumed for both; chords
+vl2	text	1:1.5		divisi	printed between Vl. I and Vl. II, assumed for both; chords
+vl1	dyn	1:1.5		pp	
+vl2	dyn	1:1.5		pp	
+vl1	text	1:1.5	61:1	trem.	tremolo / repeated-note strokes on most notes bars 1-14 and 31-61 (approximate)
+vl2	text	1:1.5	61:1	trem.	tremolo / repeated-note strokes on most notes (approximate)
+vl1a	text	15:1	30:3	trem.	tremolo strokes on most notes (approximate)
+vl1b	text	15:1	30:3	trem.	tremolo strokes on most notes (approximate)
+vla	notes	3:1	6:1		
+vc	notes	3:1	62:1		treble clef bars 3-6
+vla	dyn	3:1		mf	
+vc	dyn	3:1		mf	
+vl1	dyn	5:1.5		p	"p cresc."
+vl2	dyn	5:1.5		p	"p cresc."
+vl1	cresc	5:1.5	6:1	text	
+vl2	cresc	5:1.5	6:1	text	
+vla	dyn	5:1		f	
+vc	dyn	5:1		f	
+vl1	dim	6:1	6:3	hairpin	
+vl2	dim	6:1	6:3	hairpin	
+vl1	dyn	7:1		pp	
+vl2	dyn	7:1		pp	
+vla	dyn	7:1		pp	
+vc	dyn	7:1		pp	
+kb	dyn	7:1		pp	
+vla	notes	7:1	61:1		
+vla	text	7:1	52:3	trem.	tremolo strokes on most notes (approximate)
+kb	notes	7:1	62:1		
+vl1	cresc	7:2	8:2	hairpin	
+vl2	cresc	7:2	8:2	hairpin	
+vla	cresc	7:2	8:2	hairpin	
+vl1	dim	8:2	8:3	hairpin	
+vl2	dim	8:2	8:3	hairpin	
+vla	dim	8:2	8:3	hairpin	
+vl1	cresc	9:2	10:2	hairpin	crosses the system break
+vl2	cresc	9:2	10:2	hairpin	crosses the system break
+vla	cresc	9:2	10:2	hairpin	crosses the system break
+vl1	dim	10:2	10:3	hairpin	
+vl2	dim	10:2	10:3	hairpin	
+vla	dim	10:2	10:3	hairpin	
+vc	text	10:1		zu 2	Vc. u. Kb. on one staff
+kb	text	10:1		zu 2	Vc. u. Kb. on one staff
+vl1	dyn	11:1		p	
+vl2	dyn	11:1		p	
+vla	dyn	11:1		p	
+vc	dyn	11:1		p	
+kb	dyn	11:1		p	
+vl1a	text	15:1		div.	Vl. I in two voices from bar 15, two staves "Viol. I divisi" bars 16-30
+vl1b	text	15:1		div.	Vl. I in two voices from bar 15, two staves "Viol. I divisi" bars 16-30
+vl1a	notes	15:1	30:3		
+vl1b	notes	15:1	30:3		
+vl1a	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+vl1b	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+vl2	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+vla	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+vc	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+kb	cresc	15:1	19:1	text	"poco a poco" bar 15, "cresc." bar 16
+vl1a	dyn	19:1		f	
+vl1b	dyn	19:1		f	
+vl2	dyn	19:1		f	
+vla	dyn	19:1		f	
+vc	dyn	19:1		f	
+kb	dyn	19:1		f	
+vl1a	cresc	21:1	23:1	text	Vc. and Kb. on separate staves bars 21-35
+vl1b	cresc	21:1	23:1	text	Vc. and Kb. on separate staves bars 21-35
+vl2	cresc	21:1	23:1	text	Vc. and Kb. on separate staves bars 21-35
+vla	cresc	21:1	23:1	text	Vc. and Kb. on separate staves bars 21-35
+vc	cresc	21:1	23:1	text	Vc. and Kb. on separate staves bars 21-35
+kb	cresc	21:1	23:1	text	Vc. and Kb. on separate staves bars 21-35
+vl1a	dyn	23:1		ff	
+vl1b	dyn	23:1		ff	
+vl2	dyn	23:1		ff	
+vla	dyn	23:1		ff	
+vc	dyn	23:1		ff	
+kb	dyn	23:1		ff	
+vl1a	dim	24:1	25:1	text	
+vl1b	dim	24:1	25:1	text	
+vl2	dim	24:1	25:1	text	
+vla	dim	24:1	25:1	text	
+vc	dim	24:1	25:1	text	
+kb	dim	24:1	25:1	text	
+vl1a	dyn	25:1		p	
+vl1b	dyn	25:1		p	
+vl2	dyn	25:1		p	
+vla	dyn	25:1		p	
+vc	dyn	25:1		p	
+kb	dyn	25:1		p	
+vc	text	25:1		div.	held tremolo chords bars 25-35
+kb	text	25:1	35:3	trem.	tremolo strokes on held notes
+vla	dyn	26:1		p	repeated p
+vl1a	cresc	29:1	33:1	text	
+vl1b	cresc	29:1	33:1	text	
+vl2	cresc	29:1	33:1	text	
+vla	cresc	29:1	33:1	text	
+vc	cresc	29:1	33:1	text	
+kb	cresc	29:1	33:1	text	
+vl1	notes	31:1	61:1		Vl. I back on one staff, "div." chords
+vl1	text	31:1		div.	
+vl1	dyn	33:1		f	Vl. I and II at 33:1.5
+vl2	dyn	33:1		f	Vl. I and II at 33:1.5
+vla	dyn	33:1		f	Vl. I and II at 33:1.5
+vc	dyn	33:1		f	Vl. I and II at 33:1.5
+kb	dyn	33:1		f	Vl. I and II at 33:1.5
+vl2	text	33:1.5		div.	
+kb	text	33:1		div.	
+vla	dim	35:1	35:3	hairpin	Vc./Kb. hairpin continues to 36:1
+vc	dim	35:1	35:3	hairpin	Vc./Kb. hairpin continues to 36:1
+kb	dim	35:1	35:3	hairpin	Vc./Kb. hairpin continues to 36:1
+vl1	dyn	36:1.5		p	"divisi" Vl. I, Br. "div."
+vl2	dyn	36:1.5		p	"divisi" Vl. I, Br. "div."
+vla	dyn	36:1.5		p	"divisi" Vl. I, Br. "div."
+vl1	cresc	36:1.5	36:3	hairpin	
+vl2	cresc	36:1.5	36:3	hairpin	
+vla	cresc	36:1.5	36:3	hairpin	
+vc	text	36:1		zu 2	
+kb	text	36:1		zu 2	
+vl1	dyn	37:1		ff	Vc. u. Kb. "ff marc."
+vl2	dyn	37:1		ff	Vc. u. Kb. "ff marc."
+vla	dyn	37:1		ff	Vc. u. Kb. "ff marc."
+vc	dyn	37:1		ff	Vc. u. Kb. "ff marc."
+kb	dyn	37:1		ff	Vc. u. Kb. "ff marc."
+vc	text	37:1		marc.	
+kb	text	37:1		marc.	
+vc	dim	39:1	39:3	hairpin	
+kb	dim	39:1	39:3	hairpin	
+vl1	dim	40:1	41:1	text	
+vl2	dim	40:1	41:1	text	
+vla	dim	40:1	41:1	text	
+vl1	dyn	41:1		p	held chord
+vl2	dyn	41:1.5		f	Vl. II "div."
+vla	dyn	41:1.5		f	Vl. II "div."
+vc	dyn	41:1		f	no dynamic printed for Vc. u. Kb.; the nearest f sits under the Br. staff and belongs to it: uncertain, maybe none
+kb	dyn	41:1		f	no dynamic printed for Vc. u. Kb.; the nearest f sits under the Br. staff and belongs to it: uncertain, maybe none
+vl1	dim	42:1	47:1	text	dashes through bar 46
+vl2	dim	42:1	47:1	text	dashes through bar 46
+vla	dim	42:1	47:1	text	dashes through bar 46
+vc	dim	42:1	47:1	text	dashes through bar 46
+kb	dim	42:1	47:1	text	dashes through bar 46
+vl1	cresc	47:1	49:1	text	
+vl2	cresc	47:1	49:1	text	
+vla	cresc	47:1	49:1	text	
+vc	cresc	47:1	49:1	text	
+kb	cresc	47:1	49:1	text	
+vl1	dyn	49:1		f	
+vl2	dyn	49:1		f	
+vla	dyn	49:1		f	
+vc	dyn	49:1		f	
+kb	dyn	49:1		f	
+vl1	dyn	53:1		ff	Vl. II "div."; Br. "ff marc. sempre"
+vl2	dyn	53:1		ff	Vl. II "div."; Br. "ff marc. sempre"
+vla	dyn	53:1		ff	Vl. II "div."; Br. "ff marc. sempre"
+vc	dyn	53:1		ff	Vl. II "div."; Br. "ff marc. sempre"
+kb	dyn	53:1		ff	Vl. II "div."; Br. "ff marc. sempre"
+vla	text	53:1		marc. sempre	
+vla	accent	53:1		>	also beat 1 of bars 54, 55, 56
+vc	dyn	62:1		p	one quarter, context bar; pp at 63
+kb	dyn	62:1		p	one quarter, context bar; pp at 63
