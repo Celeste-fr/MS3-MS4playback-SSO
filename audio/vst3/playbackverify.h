@@ -78,6 +78,8 @@ struct Note {
       bool sustained { true };      // held for its length (a long, legato, tremolo, trill); false: a
                                     // short or plucked sample that dies away by itself (not checked
                                     // for being cut short or for silence)
+      int patch { -1 };             // its patch (the caller's id; the slots of one patch, its voice and tuning copies,
+                                    // share it): a small group's level is its patch's; -1: unknown
       double cents { 0 };           // its tuning against pitch (the key it is sent on): its partials' bins
       double expected { -1 };       // s after `on` its sound is expected (the renderer's model: the playback
                                     // audit's predicted arrival - sent); -1: unknown
@@ -110,6 +112,14 @@ struct Settings {
       double shortAfter { 0.25 };
       // partials at the note's cents (false: the 12-TET key's)
       bool tunedBins { true };
+      // a note's register level among the notes measured the same way (NoteCheck::method: a short legato note's peak
+      // apart from held notes), a small group's from its patch's (Note::patch) before all groups' (false: legato or not,
+      // its group, then all)
+      bool levelGroups { true };
+      // with levelGroups, a held legato note is missing this far under its held peers (set on Whence, builds #454 and
+      // #474, 2026-10-24: 48 held notes heard present at worst 7.2 dB under, the 4 SSO dropped 10.8-20.0 dB under; 12
+      // finds 3 of them, an assumption to check on other scores)
+      double heldMissingDb { 12.0 };
       double attackBefore { 0.030 };      // an attack is looked for in onset - before … onset + after
       double attackAfter { 0.050 };
       double chordTolerance { 0.005 };    // notes starting this close are one strike
@@ -227,6 +237,10 @@ const char* kindName(Finding::Kind kind);
 //---------------------------------------------------------
 
 struct NoteCheck {
+      enum class Method : char { Attack, Held, Peak };    // its level: after its attack, held (40-70 %), a short legato note's peak
+      Method method { Method::Attack };
+      double base { 0 };                  // its register's level against the reference (deficit = after - refAfter - base)
+      int baseLevel { 0 };                // where base came from: 0 its group, 1 its patch, 2 all groups
       double rise { 0 };                  // its fundamental and 2nd harmonic: dB from before its onset to after
       double refRise { 0 };               // the reference's
       double after { 0 };                 // their level after the onset (dB, the audio at 0 dB peak)

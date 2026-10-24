@@ -15,6 +15,7 @@
 #include <complex>
 #include <iterator>
 #include <map>
+#include <tuple>
 #include <cstdio>
 #include <numeric>
 #include <set>
@@ -588,6 +589,9 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                         return db(after) - db(before);
                         };
                   NoteCheck& c = r.noteChecks[i];
+                  c.method = !legato ? NoteCheck::Method::Attack
+                             : settings.shortPeak && n.off - n.on < settings.legatoShort ? NoteCheck::Method::Peak
+                             : NoteCheck::Method::Held;
                   c.rise = std::max(-99.0, std::min(99.0, rise(s, r.offset, &la)));
                   c.refRise = std::max(-99.0, std::min(99.0, rise(*ref, reference->offset, &ra)));
                   c.after = std::max(-120.0, la);       // (-120: nothing at all)
@@ -600,20 +604,32 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             // harmonic differs too; at least 12 notes: the window widens where the register has fewer)
             // (per group and legato or not: a patch has its own level, SSO's Performance legato is
             // 15-20 dB under the solo patch's shorts against the built-in synth; a group with fewer
-            // than 6 such notes takes all groups')
-            auto key = [&](size_t i, bool pooled) {
-                  return ((pooled ? 0 : notes[i].group + 1) * 2 + (r.noteChecks[i].legato ? 1 : 0)) * 4 + kind[i];
+            // than 6 such notes takes its patch's (Note::patch: a voice or tuning copy's slot plays its patch),
+            // then all groups'. With levelGroups the level's method too: a short legato note's peak and a held
+            // note's mean are different measures, 12-18 dB apart on SSO's Performance legato against the built-in
+            // synth; until 2026-10-24 a voice copy's chord note (Whence's Celli bar 13 Ab3, build #474, its copy with
+            // 4 notes) was held against the main slot's short notes' peaks, "21 dB under", heard the loudest)
+            // key: (level 0 group / 1 patch / 2 all, its id, the method or legato, kind)
+            using Key = std::tuple<int, int, int, int>;
+            auto key = [&](size_t i, int level) {
+                  const int id = level == 0 ? notes[i].group : level == 1 ? notes[i].patch : 0;
+                  const int how = settings.levelGroups ? int(r.noteChecks[i].method) : int(r.noteChecks[i].legato);
+                  return Key(level, id, how, kind[i]);
                   };
-            std::map<int, std::map<int, std::vector<double>>> byPitch;    // key -> pitch -> diffs
-            for (size_t i = 0; i < notes.size(); ++i) {
-                  byPitch[key(i, false)][notes[i].pitch].push_back(diff[i]);
-                  byPitch[key(i, true)][notes[i].pitch].push_back(diff[i]);
-                  }
-            std::map<int, size_t> count;
+            const int levels = settings.levelGroups ? 3 : 2;      // (before: the group, then all)
+            auto levelOf = [&](int k) { return settings.levelGroups ? k : (k == 0 ? 0 : 2); };
+            std::map<Key, std::map<int, std::vector<double>>> byPitch;    // key -> pitch -> diffs
+            for (size_t i = 0; i < notes.size(); ++i)
+                  for (int k = 0; k < levels; ++k) {
+                        if (levelOf(k) == 1 && notes[i].patch < 0)
+                              continue;
+                        byPitch[key(i, levelOf(k))][notes[i].pitch].push_back(diff[i]);
+                        }
+            std::map<Key, size_t> count;
             for (const auto& bk : byPitch)
                   for (const auto& bp : bk.second)
                         count[bk.first] += bp.second.size();
-            std::map<int, std::map<int, double>> base;
+            std::map<Key, std::map<int, double>> base;
             for (auto& bk : byPitch) {
                   for (const auto& bp : bk.second) {
                         std::vector<double> nearby;
@@ -630,8 +646,19 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   }
             for (size_t i = 0; i < notes.size(); ++i) {
                   NoteCheck& c = r.noteChecks[i];
-                  const int k = count[key(i, false)] >= 6 ? key(i, false) : key(i, true);
-                  c.deficit = diff[i] - base[k][notes[i].pitch];
+                  Key k = key(i, 2);            // (the finest level with 6 such notes: its group, its patch, all)
+                  for (int l = 0; l < levels - 1; ++l) {
+                        const int level = levelOf(l);
+                        if (level == 1 && notes[i].patch < 0)
+                              continue;
+                        if (count[key(i, level)] >= 6) {
+                              k = key(i, level);
+                              break;
+                              }
+                        }
+                  c.base = base[k][notes[i].pitch];
+                  c.baseLevel = std::get<0>(k);
+                  c.deficit = diff[i] - c.base;
                   // (nothing at all where the reference sounds: missing, whatever its register does,
                   // e.g. when most notes like it are missing too)
                   if (c.after <= -100 && c.refAfter > -60)
@@ -653,7 +680,10 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   // note ringing on under its pedal)
                   const bool absent = c.deficit <= -settings.absentDb;
                   // (a legato note has no attack of its own to rise: its held level decides)
-                  const bool under = c.deficit <= -settings.missingNoteDb
+                  // (a held legato note, against held notes only (levelGroups): heldMissingDb)
+                  const double limit = settings.levelGroups && c.method == NoteCheck::Method::Held ? settings.heldMissingDb
+                                                                                                  : settings.missingNoteDb;
+                  const bool under = c.deficit <= -limit
                                      && (c.legato || (noRise && c.refRise >= settings.refRiseMin));
                   if ((under || absent) && c.legato && r.offsetAmbiguous) {
                         // (on an ambiguous offset a legato note's held level may be read a note late: not flagged)

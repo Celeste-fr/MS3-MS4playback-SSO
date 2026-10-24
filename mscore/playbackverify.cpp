@@ -111,6 +111,7 @@ struct NoteRec {
       int key { -1 };               // where it plays: 1000 + the library slot, else the MIDI channel
       QString articulation;         // the library's articulation it plays (its last switch on the slot)
       bool sustained { true };      // that articulation is held (long, legato, tremolo, trill)
+      const SoundLib::LibInstrument* instrument { nullptr };    // the patch on its slot (its voice / tuning copies share it)
       double cents { 0 };           // its tuning against the key it is sent on (the playback audit's row)
       double expected { -1 };       // s after its note-on its sound is expected (the audit's predicted arrival - sent); -1: none
       };
@@ -170,6 +171,7 @@ static std::vector<NoteRec> renderedNotes(MasterScore* score, const EventMap& ev
                   r.key = key;
                   if (e.isExternal()) {
                         const int slot = e.extPort() * 16 + e.extChannel();
+                        r.instrument = patchOf.count(slot) ? patchOf[slot] : nullptr;
                         const SoundLib::Articulation* a = current.count(slot) ? current[slot] : nullptr;
                         if (!a && patchOf.count(slot) && patchOf[slot] && patchOf[slot]->articulations.size() == 1)
                               a = &patchOf[slot]->articulations.front();
@@ -821,8 +823,11 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
                         std::map<QString, int>* totals)
       {
       std::vector<PV::Note> notes;
+      std::map<const SoundLib::LibInstrument*, int> patchIds;     // (Note::patch: one id per patch)
       for (int i : a.noteIndex) {
             PV::Note n;
+            if (const SoundLib::LibInstrument* inst = all[size_t(i)].instrument)
+                  n.patch = patchIds.emplace(inst, int(patchIds.size())).first->second;
             n.on = all[size_t(i)].on;
             n.off = all[size_t(i)].off;
             n.pitch = all[size_t(i)].pitch;
@@ -898,7 +903,7 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
       QFile ntsv(QFileInfo(clipDir).absolutePath() + "/" + clipPrefix + " notes.tsv");
       if (!shareable && !r.noteChecks.empty() && ntsv.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
             ntsv.write("time\tlength\tpitch\tslot\tarticulation\tlegato\tsustained\triseDb\trefRiseDb\tafterDb\trefAfterDb\tdeficitDb"
-                       "\tcutBins\tdropDb\trefDropDb\tflagged\tcents\texpectedMs\tunclear\n");
+                       "\tcutBins\tdropDb\trefDropDb\tflagged\tcents\texpectedMs\tunclear\tpatch\tmethod\tbaseDb\tbaseFrom\n");
             for (size_t i = 0; i < notes.size() && i < r.noteChecks.size(); ++i) {
                   const PV::NoteCheck& c = r.noteChecks[i];
                   const NoteRec& nr = all[size_t(notes[i].id)];
@@ -910,7 +915,11 @@ static void analysePart(MasterScore* score, const EventMap& events, const std::v
                                   QString::number(c.refAfter, 'f', 1), QString::number(c.deficit, 'f', 1), QString::number(c.cutBins),
                                   QString::number(std::max(c.drop, -200.0), 'f', 1), QString::number(std::max(c.refDrop, -200.0), 'f', 1),
                                   QString::number(int(flaggedNotes.count(int(i)))), QString::number(nr.cents, 'f', 2),
-                                  QString::number(nr.expected >= 0 ? nr.expected * 1000 : -1.0, 'f', 1), QString::number(int(c.unclear)) };
+                                  QString::number(nr.expected >= 0 ? nr.expected * 1000 : -1.0, 'f', 1), QString::number(int(c.unclear)),
+                                  QString::number(notes[i].patch),
+                                  c.method == PV::NoteCheck::Method::Held ? "held" : c.method == PV::NoteCheck::Method::Peak ? "peak" : "attack",
+                                  QString::number(c.base, 'f', 1),
+                                  c.baseLevel == 0 ? "slot" : c.baseLevel == 1 ? "patch" : "all" };
                   ntsv.write((f.join("\t") + "\n").toUtf8());
                   }
             }
@@ -1222,7 +1231,12 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
       // MS_VERIFY_ROUTES=1 with --verify-wav (the heard check's export renderer, VERIFY.md › Heard check): each library
       // route (slot) rendered alone as the export renders it (its instance, tuning slots, the export mix with the gain
       // stage, the plug-in parameters), "<score> route <port>-<channel + 1>.wav" (the playback audit's route codes), and
-      // nothing else: no mix, no per-part analysis, no built-in renders. A route's events, plus the plug-in parameters
+      // no mix. Since 2026-10-24 (branch verify-detector2) each library part is also checked as below, its library audio the
+      // sum of its routes' renders (a route alone on its instance: the part's render is their sum), its built-in render made
+      // for it: the part's findings in summary.txt / report.json, notes.tsv, strikes.tsv (MS_VERIFY_ROUTES_DETECT=0: not;
+      // MS_VERIFY_ROUTES_PARTWAV=1: "<score> <part> library.wav" / "built-in.wav" written too, to keep a run's renders for
+      // the detector's regression set, VERIFY.md › Detector regression). Until then this pass rendered only: a run with
+      // MS_VERIFY_ROUTES=1 "passed" with 0 findings (check474). A route's events, plus the plug-in parameters
       // sent to any slot of its instance (a multi's parameters are the instance's). Sample 0 is score time 0, as in
       // events.tsv. The instances: the single library part's, loaded above; with more parts (the heard check's split copies
       // keep every part, the others on MS4's sounds) one library part's at a time, released before the next, as the
@@ -1232,6 +1246,13 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
       // has nothing to measure (and PlaybackVerifier::run fails)
       if (fileAudio.empty() && options.wav && !shareable && qEnvironmentVariableIntValue("MS_VERIFY_ROUTES") == 1) {
             QJsonArray routesJs;
+            const bool detect = !qEnvironmentVariableIsSet("MS_VERIFY_ROUTES_DETECT") || qEnvironmentVariableIntValue("MS_VERIFY_ROUTES_DETECT") != 0;
+            const bool partWav = qEnvironmentVariableIntValue("MS_VERIFY_ROUTES_PARTWAV") == 1;
+            PV::Settings settings;
+            QJsonArray partsJs;
+            QStringList partLines;
+            int routeFindings = 0;
+            std::vector<float> partSum;           // the part's routes added up (mono)
             // the routes among slots that have a loaded patch, each with its instance's parameters
             auto renderRoutes = [&](const std::set<int>& slotSet) {
                   for (int slot : slotSet) {
@@ -1250,6 +1271,12 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
                                                       },
                                                 report->folder + "/" + prefix + " route " + code + ".wav");
                         log(QString("%1: route %2 (%3) rendered alone in %4 s").arg(name, code, patch).arg(r.seconds, 0, 'f', 1));
+                        if (detect) {
+                              if (partSum.size() < r.mono.size())
+                                    partSum.resize(r.mono.size(), 0.f);
+                              for (size_t i = 0; i < r.mono.size(); ++i)
+                                    partSum[i] += r.mono[i];
+                              }
                         // MS_VERIFY_ROUTE_PASSES=n (n >= 2; a measurement aid, branch sso-script-fixes2): the route rendered
                         // n times more in a row on the same instance, each pass a playback (the transport restarted:
                         // PlaybackVerifier::renderPasses), MS_VERIFY_ROUTE_GAP s (default 0.5) after the last event before
@@ -1284,11 +1311,47 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
                                                       { "seconds", double(r.mono.size()) / rate } });
                         }
                   };
+            // a library part's check on its routes' sum (as the per-part analysis below)
+            auto checkPart = [&](const Part* p) {
+                  if (!detect || partSum.empty())
+                        return;
+                  std::set<int> channels;
+                  for (int c = 0; c < int(score->midiMapping().size()); ++c)
+                        if (score->midiMapping(c)->part() == p)
+                              channels.insert(c);
+                  Analysis a;
+                  a.name = p->partName();
+                  a.patches = patchesOf(p);
+                  a.noteIndex = byPart[p];
+                  const QString partPrefix = prefix + " " + safeName(a.name);
+                  if (partWav) {
+                        WavWriter w(report->folder + "/" + partPrefix + " library.wav", 1, rate, true);
+                        w.write(partSum.data(), qint64(partSum.size()));
+                        }
+                  const Render ref = render(score.get(), refEvents, rate, state, nullptr,
+                                            [&channels](const NPlayEvent& e) { return !e.isChannelEvent() || channels.count(e.channel()); },
+                                            partWav ? report->folder + "/" + partPrefix + " built-in.wav" : QString());
+                  QJsonObject part;
+                  std::map<QString, int> totals;
+                  analysePart(score.get(), libEvents, notes, a, partSum, ref.mono, rate, settings, clipDir, partPrefix, &clipsLeft,
+                              &part, &partLines, &totals);
+                  for (const auto& t : totals)
+                        report->totals[t.first] += t.second;
+                  routeFindings += part.value("findings").toArray().size();
+                  partsJs.append(part);
+                  partSum.clear();
+                  partSum.shrink_to_fit();
+                  };
             if (vst) {
                   std::set<int> all;
                   for (const auto& sp : patches)
                         all.insert(sp.first);
                   renderRoutes(all);
+                  for (const auto& bp : byPart)
+                        if (!slotsOf[bp.first].empty()) {
+                              checkPart(bp.first);
+                              break;            // (vst: the single library part's instances)
+                              }
                   }
             else {
                   for (const auto& bp : byPart) {
@@ -1303,6 +1366,7 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
                               }
                         renderRoutes(slotsOf[p]);
                         vst.reset();
+                        checkPart(p);
                         }
                   }
             vst.reset();
@@ -1311,9 +1375,15 @@ static void verifyScore(const QString& path, const PlaybackVerifier::Options& op
                               "nothing for the heard check to measure");
             js["routes"] = routesJs;
             js["seconds"] = clock_.elapsed() / 1000.0;
-            js["findingCount"] = 0;
-            lines << QString(" %1 routes rendered alone (MS_VERIFY_ROUTES); %2 s").arg(routesJs.size())
+            js["findingCount"] = routeFindings;
+            js["parts"] = partsJs;
+            js["routesDetector"] = detect;
+            report->findings += routeFindings;
+            lines << QString(" %1 routes rendered alone (MS_VERIFY_ROUTES); %2; %3 s").arg(routesJs.size())
+                     .arg(detect ? QString("each library part checked on its routes' sum: %1 finding(s)").arg(routeFindings)
+                                 : QString("not checked (MS_VERIFY_ROUTES_DETECT=0)"))
                      .arg(clock_.elapsed() / 1000.0, 0, 'f', 0);
+            lines << partLines;
             report->scores.append(js);
             report->summary << lines;
             return;

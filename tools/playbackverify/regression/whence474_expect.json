@@ -1,0 +1,13 @@
+{
+ "about": "Build #474's verify run of Whence (2026-10-23, VM, Recommended, --verify-playback --verify-wav with MS_VERIFY_ROUTES=0; private check474/RESULT.md item 4), the first with the 2026-10-23 detector: the Celli chord notes now play on their own voice copies. Its renders weren't kept, so whence474_levels.json holds the listed notes' levels as that run measured them (notes.tsv: afterDb, refAfterDb, riseDb, refRiseDb) and their register base under each level variant, computed from the part's notes.tsv (verify_detector.py relevel --features); the offset as the run had it (by the expected onsets, 90 ms). truth: present (the heard check hears it). nogroups: the detector of build #474; now: the defaults.",
+ "parts": {
+  "Violoncellos": [
+   {"time": 26.212, "key": 56, "note": "bar 13 beat 1, A-flat quarter-flat 3 on its voice copy (4 notes on its slot): flagged '21 dB under' by #474; the heard check: 51.4 dB, the chord's loudest", "truth": "present", "nogroups": "missing", "now": "clear"},
+   {"time": 28.333, "key": 57, "note": "bar 14, A3 on the same copy (#474: -18.2)", "truth": "present", "nogroups": "clear", "now": "clear"},
+   {"time": 30.515, "key": 59, "note": "bar 15, B quarter-flat 3 on the same copy (#474: -13.0)", "truth": "present", "nogroups": "clear", "now": "clear"},
+   {"time": 32.758, "key": 54, "note": "bar 16, F#3 on another copy (#474: -17.7)", "truth": "present", "nogroups": "clear", "now": "clear"},
+   {"time": 23.969, "key": 54, "note": "bar 12, F#3 on another copy (#474: -12.2)", "truth": "present", "nogroups": "clear", "now": "clear"},
+   {"time": 26.151, "key": 48, "note": "bar 13, C3, the chord's bass (#474: -18.2)", "truth": "present", "nogroups": "clear", "now": "clear"}
+  ]
+ }
+}

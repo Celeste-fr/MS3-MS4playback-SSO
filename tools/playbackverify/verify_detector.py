@@ -31,12 +31,18 @@ Commands
                                                 notes, each level variant's deficit and rises at every offset
                                                 (no audio, no note list of the score)
   judge <features.json> [--rules …]             the decision from the features alone (what the regression test runs)
+  relevel <notes.tsv> [--extra <tsv>] [--patch n] [--rules …]
+                                                the register step alone on a verify notes.tsv's measured levels (no
+                                                audio: a run whose renders weren't kept)
 
 Rules (--rules new = all five, as the C++'s defaults; old = none, the detector before 2026-10-23): margin (offset margin +
 ambiguous: a legato missing note on an ambiguous offset is "unclear", not flagged), expected (expected-onset alignment
 +-60 ms where the notes carry an expected latency), shortpeak (a short legato note's peak window), cents (fractional
 bins), heldmean (a legato note's held level the mean power from 40 to 70 % of it every 20 ms, not two points: found
-on the regression set, Whence's Celli F#3 at 32.758 s read 21 dB under at one vibrato dip).
+on the regression set, Whence's Celli F#3 at 32.758 s read 21 dB under at one vibrato dip), groups (a note's register
+level among the notes measured the same way, a short legato note's peak apart from held ones, and a small group's from
+its patch's before all groups': build #474's Celli bar 13 Ab3 on its voice copy, 4 notes, was held against the main
+slot's short notes' peaks, "21 dB under", heard the loudest of its chord).
 
 Needs numpy and soundfile.
 """
@@ -49,10 +55,10 @@ import sys
 import numpy as np
 
 GAIN = 6.0
-RULES = ("margin", "expected", "shortpeak", "cents", "heldmean")
+RULES = ("margin", "expected", "shortpeak", "cents", "heldmean", "groups")
 SETTINGS = dict(offset_from=-0.05, offset_to=0.5, step=0.005, ambiguous_margin=0.03, rival_distance=0.05,
                 expected_window=0.06, legato_short=0.25, short_from=0.05, short_after=0.25, short_step=0.01, held_step=0.02,
-                missing_note_db=20.0, rise_min=6.0, rise_margin=10.0, ref_rise_min=10.0, absent_db=30.0)
+                missing_note_db=20.0, held_missing_db=12.0, rise_min=6.0, rise_margin=10.0, ref_rise_min=10.0, absent_db=30.0)
 
 
 def lround(x):
@@ -141,9 +147,12 @@ def read_notes(path):
         if len(r) < len(head):
             continue
         on = float(r[col["time"]])
-        notes.append(dict(on=on, off=on + float(r[col["length"]]), key=midi(r[col["pitch"]]), cents=0.0, expected=-1.0,
-                          group=1000 + int(r[col["slot"]]), legato=r[col["legato"]] == "1",
-                          reported=float(r[col["deficitDb"]]), flagged=r[col["flagged"]] == "1"))
+        num = lambda name, d: float(r[col[name]]) if name in col and r[col[name]] != "" else d
+        notes.append(dict(on=on, off=on + float(r[col["length"]]), key=midi(r[col["pitch"]]), cents=num("cents", 0.0),
+                          expected=num("expectedMs", -1.0) / 1000 if num("expectedMs", -1.0) >= 0 else -1.0,
+                          group=1000 + int(r[col["slot"]]), patch=int(num("patch", -1)), legato=r[col["legato"]] == "1",
+                          after=num("afterDb", 0.0), refAfter=num("refAfterDb", 0.0), rise=num("riseDb", 0.0),
+                          refRise=num("refRiseDb", 0.0), reported=float(r[col["deficitDb"]]), flagged=r[col["flagged"]] == "1"))
     return notes
 
 
@@ -162,17 +171,19 @@ def read_extra(path, notes):
     head, rows = rows[0], rows[1:]
     col = {h: i for i, h in enumerate(head)}
     extra = [(float(r[col["time"]]), int(r[col["key"]]) if "key" in col else None, float(r[col["cents"]]),
-              float(r[col["expectedMs"]])) for r in rows]
+              float(r[col["expectedMs"]]), int(r[col["patch"]]) if "patch" in col else None) for r in rows]
     for n in notes:
         best = None
-        for t, k, c, e in extra:
+        for t, k, c, e, p in extra:
             if k is not None and k != n["key"]:
                 continue
             d = abs(t - n["on"])
             if d < 0.002 and (best is None or d < best[0]):
-                best = (d, c, e)
+                best = (d, c, e, p)
         if best:
             n["cents"], n["expected"] = best[1], best[2] / 1000 if best[2] >= 0 else -1.0
+            if best[3] is not None:
+                n["patch"] = best[3]
     return notes
 
 
@@ -305,24 +316,44 @@ def note_diffs(lib, ref, notes, lib_offset, ref_offset, rules, bins_kind=None):
     return out
 
 
-def group_key(notes, c, i, pooled):
-    return ((0 if pooled else notes[i]["group"] + 1) * 2 + (1 if notes[i]["legato"] else 0)) * 4 + c[i]["kind"]
+def method_of(n, rules, S=SETTINGS):
+    """how its level is read (NoteCheck::Method): attack, held, or a short legato note's peak"""
+    if not n["legato"]:
+        return 0
+    length = n["length"] if "length" in n else n["off"] - n["on"]
+    return 2 if "shortpeak" in rules and length < S["legato_short"] else 1
 
 
-def register_bases(notes, c):
+def group_key(notes, c, i, level, rules):
+    """(level 0 group / 1 patch / 2 all, its id, the method with "groups" (else legato or not), kind)"""
+    n = notes[i]
+    ident = n["group"] if level == 0 else n.get("patch", -1) if level == 1 else 0
+    how = method_of(n, rules) if "groups" in rules else (1 if n["legato"] else 0)
+    return (level, ident, how, c[i]["kind"])
+
+
+def register_bases(notes, c, rules=()):
     """each note's register base (the median diff of the notes within 3 … 96 semitones of its key, at least 12) and
-    the key it is taken in (its group's, or all groups' when its group has fewer than 6)"""
+    the key it is taken in: its group's; with "groups" its patch's when its group has fewer than 6 (Note::patch), then
+    all groups'; with "groups" among the notes measured the same way (a short legato note's peak apart from held ones)"""
     diff = [x["after"] - x["refAfter"] for x in c]
+    levels = (0, 1, 2) if "groups" in rules else (0, 2)
     by = {}
     for i, n in enumerate(notes):
-        for pooled in (False, True):
-            by.setdefault(group_key(notes, c, i, pooled), {}).setdefault(n["key"], []).append(diff[i])
+        for level in levels:
+            if level == 1 and n.get("patch", -1) < 0:
+                continue
+            by.setdefault(group_key(notes, c, i, level, rules), {}).setdefault(n["key"], []).append(diff[i])
     count = {k: sum(len(v) for v in d.values()) for k, d in by.items()}
     base = []
     for i, n in enumerate(notes):
-        k = group_key(notes, c, i, False)
-        if count.get(k, 0) < 6:
-            k = group_key(notes, c, i, True)
+        k = group_key(notes, c, i, 2, rules)
+        for level in levels[:-1]:
+            if level == 1 and n.get("patch", -1) < 0:
+                continue
+            if count.get(group_key(notes, c, i, level, rules), 0) >= 6:
+                k = group_key(notes, c, i, level, rules)
+                break
         d = by[k]
         w = 3
         while True:
@@ -334,11 +365,13 @@ def register_bases(notes, c):
     return diff, base
 
 
-def judge_note(n, c, deficit, ambiguous, S=SETTINGS):
+def judge_note(n, c, deficit, ambiguous, rules=(), S=SETTINGS):
     """"missing", "unclear" (missing, but on an ambiguous offset: a legato note), or "" """
     no_rise = c["rise"] < S["rise_min"] or c["rise"] < c["refRise"] - S["rise_margin"]
     absent = deficit <= -S["absent_db"]
-    under = deficit <= -S["missing_note_db"] and (n["legato"] or (no_rise and c["refRise"] >= S["ref_rise_min"]))
+    # (with "groups" a held legato note, against held notes only, by heldMissingDb)
+    limit = S["held_missing_db"] if "groups" in rules and method_of(n, rules) == 1 else S["missing_note_db"]
+    under = deficit <= -limit and (n["legato"] or (no_rise and c["refRise"] >= S["ref_rise_min"]))
     if not (under or absent):
         return ""
     return "unclear" if ambiguous and n["legato"] else "missing"
@@ -350,15 +383,65 @@ def analyse(lib, ref, notes, rules, S=SETTINGS):
     rb = margin_of(offset_curve(ref, ref_ks, S["offset_from"], S["offset_to"], S["step"]), S["rival_distance"])
     ref_offset = rb[0]
     c = note_diffs(lib, ref, notes, off["offset"], ref_offset, rules)
-    diff, base = register_bases(notes, c)
+    diff, base = register_bases(notes, c, rules)
     out = []
     for i, n in enumerate(notes):
         d = diff[i] - base[i]
         if c[i]["after"] <= -100 and c[i]["refAfter"] > -60:
             d = -99.0
         out.append(dict(time=n["on"], key=n["key"], cents=n["cents"], length=round(n["off"] - n["on"], 3), legato=n["legato"],
-                        deficit=round(d, 1), verdict=judge_note(n, c[i], d, off["ambiguous"])))
+                        deficit=round(d, 1), verdict=judge_note(n, c[i], d, off["ambiguous"], rules)))
     return off, ref_offset, out
+
+
+def relevel(notes, rules, S=SETTINGS):
+    """each note's deficit and verdict from its measured levels (a notes.tsv's afterDb / refAfterDb / riseDb / refRiseDb)
+    by the register step alone (kinds from the notes' partials; the offset rules don't apply)"""
+    spec = Spectrogram(np.zeros(8192), 44100)
+    c = []
+    for i, n in enumerate(notes):
+        _, kind = note_bins(spec, notes, i, rules)
+        c.append(dict(after=n["after"], refAfter=n["refAfter"], rise=n["rise"], refRise=n["refRise"], kind=kind))
+    diff, base = register_bases(notes, c, rules)
+    out = []
+    for i, n in enumerate(notes):
+        d = diff[i] - base[i]
+        if c[i]["after"] <= -100 and c[i]["refAfter"] > -60:
+            d = -99.0
+        out.append(dict(time=n["on"], key=n["key"], deficit=round(d, 1), verdict=judge_note(n, c[i], d, False, rules)))
+    return out
+
+
+def level_features(notes, picks):
+    """for a run whose renders weren't kept: the picked notes' measured levels and, under each level variant, their
+    register base (from every note of the part, as relevel; no other note's data is kept)"""
+    spec = Spectrogram(np.zeros(8192), 44100)
+    out = {}
+    idx = [min((i for i in range(len(notes)) if notes[i]["key"] == k), key=lambda i: abs(notes[i]["on"] - t)) for t, k in picks]
+    for name, rules in VARIANTS:
+        c = []
+        for i, n in enumerate(notes):
+            _, kind = note_bins(spec, notes, i, rules)
+            c.append(dict(after=n["after"], refAfter=n["refAfter"], rise=n["rise"], refRise=n["refRise"], kind=kind))
+        _, base = register_bases(notes, c, rules)
+        for i in idx:
+            n = notes[i]
+            e = out.setdefault(i, dict(time=round(n["on"], 3), key=n["key"], length=round(n["off"] - n["on"], 3), legato=n["legato"],
+                                       after=n["after"], refAfter=n["refAfter"], rise=n["rise"], refRise=n["refRise"], base={}))
+            e["base"][name] = round(base[i], 2)
+    return [out[i] for i in idx]
+
+
+def judge_levels(rows, rules):
+    """each note's deficit and verdict from level_features' rows (the offset as the run had it)"""
+    variant = variant_of(rules)
+    res = []
+    for n in rows:
+        d = n["after"] - n["refAfter"] - n["base"][variant]
+        if n["after"] <= -100 and n["refAfter"] > -60:
+            d = -99.0
+        res.append(dict(time=n["time"], key=n["key"], deficit=round(d, 1), verdict=judge_note(n, n, d, False, rules)))
+    return res
 
 
 # ---------------------------------------------------------------- regression features and the judge
@@ -368,9 +451,9 @@ def offsets_grid(S=SETTINGS):
     return [round(S["offset_from"] + k * S["step"], 3) for k in range(n + 1)]
 
 
-LEVEL_RULES = ("cents", "heldmean", "shortpeak")
+LEVEL_RULES = ("cents", "groups", "heldmean", "shortpeak")
 VARIANTS = [("old", ()), ("cents", ("cents",)), ("heldmean", ("heldmean",)), ("shortpeak", ("shortpeak",)),
-            ("new", LEVEL_RULES)]
+            ("nogroups", ("cents", "heldmean", "shortpeak")), ("new", LEVEL_RULES)]
 
 
 def variant_of(rules):
@@ -408,7 +491,7 @@ def features(lib, ref, notes, picks, S=SETTINGS):
         rows = {i: dict(deficit=[], rise=[], refRise=[]) for i in idx}
         for o in grid:
             c = note_diffs(lib, ref, notes, o, ref_offset, rules, bins_kind)
-            diff, base = register_bases(notes, c)
+            diff, base = register_bases(notes, c, rules)
             for i in idx:
                 r = rows[i]
                 d = diff[i] - base[i]
@@ -446,7 +529,7 @@ def judge(part, rules, S=SETTINGS):
         v = n["variants"][variant]
         c = dict(rise=v["rise"][k], refRise=v["refRise"][k])
         d = v["deficit"][k]
-        verdicts.append(dict(time=n["time"], key=n["key"], deficit=d, verdict=judge_note(n, c, d, res["ambiguous"])))
+        verdicts.append(dict(time=n["time"], key=n["key"], deficit=d, verdict=judge_note(n, c, d, res["ambiguous"], rules)))
     res["notes"] = verdicts
     return res
 
@@ -498,6 +581,15 @@ def main(argv=None):
         if name == "features":
             p.add_argument("--notes", required=True, help="note-on times (s), comma-separated, each optionally :key")
             p.add_argument("--out", required=True)
+    rl = sub.add_parser("relevel")
+    rl.add_argument("notes")
+    rl.add_argument("--extra")
+    rl.add_argument("--rules", default="new")
+    rl.add_argument("--patch", type=int, help="every note's patch (a notes.tsv before the patch column: one patch per part)")
+    rl.add_argument("--features", help="write the listed notes' (--picks) register features to this JSON (adds a part)")
+    rl.add_argument("--picks", help="time:key,… for --features")
+    rl.add_argument("--part", help="the part's name in --features")
+    rl.add_argument("--run", help="the run's name in --features (e.g. #474)")
     j = sub.add_parser("judge")
     j.add_argument("features")
     j.add_argument("--rules", default="new")
@@ -513,6 +605,31 @@ def main(argv=None):
               % (len(strikes(notes)), b, rv, 100 * m, " (offset ambiguous)" if m < SETTINGS["ambiguous_margin"] else ""))
         for o, s in curve[::2]:
             print("%6.3f %8.1f %s" % (o, s, "#" * int(60 * s / bs)))
+        return 0
+    if a.cmd == "relevel":
+        # the register step alone, from a verify notes.tsv's levels (afterDb, refAfterDb as measured): no audio
+        notes = read_notes(a.notes)
+        if a.extra:
+            read_extra(a.extra, notes)
+        if a.patch is not None:
+            for n in notes:
+                n["patch"] = a.patch
+        rules = parse_rules(a.rules)
+        if a.features:
+            f = level_features(notes, [(float(t.split(":")[0]), int(t.split(":")[1])) for t in a.picks.split(",") if t])
+            data = json.load(open(a.features, encoding="utf-8")) if os.path.exists(a.features) else {}
+            data.setdefault("runs", {}).setdefault(a.run or "run", {})[a.part or os.path.basename(a.notes)] = f
+            with open(a.features, "w", encoding="utf-8") as fh:
+                json.dump(data, fh, indent=1)
+            print("%s: %d notes' register features into %s" % (a.part, len(f), a.features))
+            return 0
+        out = relevel(notes, rules)
+        for n, o in zip(notes, out):
+            if o["verdict"] or n["flagged"]:
+                print("%7.3f  key %3d %+4.0f c  %.3f s  slot %d  reported %6.1f  now %6.1f  %s"
+                      % (n["on"], n["key"], n["cents"], n["off"] - n["on"], n["group"] - 1000, n["reported"], o["deficit"],
+                         o["verdict"] or "-"))
+        print("missing %d" % sum(o["verdict"] == "missing" for o in out))
         return 0
     if a.cmd == "judge":
         data = json.load(open(a.features, encoding="utf-8"))

@@ -283,6 +283,7 @@ class TestSoundLibrary : public QObject, public MTest
       void playbackVerifyOffset();
       void playbackVerifyShortLegato();
       void playbackVerifyQuarterTones();
+      void playbackVerifyLevelGroups();
       void playbackVerifyRegression();
 #endif
       };
@@ -15145,6 +15146,90 @@ void TestSoundLibrary::playbackVerifyQuarterTones()
       }
 
 //---------------------------------------------------------
+//   playbackVerifyLevelGroups
+//    a note's register level among the notes measured the same way, a small slot's from its patch's (Settings::levelGroups,
+//    Note::patch): a patch's main slot plays short legato notes (judged on their peak, here 22 dB over the reference),
+//    two more slots of it (voice copies) held chord notes at the reference's level. Before, the 4 held notes of one copy
+//    (under 6) were held against every slot's notes, the shorts' peaks: "22 dB under" (build #474's Celli bar 13 Ab3).
+//    Now against the patch's held notes: present; and a held note 15 dB under its held peers is missing (heldMissingDb 12)
+//---------------------------------------------------------
+
+void TestSoundLibrary::playbackVerifyLevelGroups()
+      {
+      namespace PV = PlaybackVerify;
+      const double rate = 44100;
+      std::vector<SynthNote> written, heard;
+      std::vector<PV::Note> pv;
+      auto add = [&](const SynthNote& w, double gain, int group) {
+            written.push_back(w);
+            SynthNote h = w;
+            h.amp *= gain;
+            if (gain > 0)
+                  heard.push_back(h);
+            PV::Note p;
+            p.on = w.on;
+            p.off = w.off;
+            p.pitch = w.pitch;
+            p.legato = true;
+            p.group = group;
+            p.patch = 0;
+            p.id = int(pv.size());
+            pv.push_back(p);
+            };
+      const int line[] = { 60, 62, 64, 62 };
+      for (int k = 0; k < 40; ++k)                // the main slot: short legato notes, loud (peak-judged)
+            add({ 1.0 + 0.5 * k, 1.0 + 0.5 * k + 0.15, line[k % 4], 0.8 }, 12.0, 1);
+      for (int k = 0; k < 4; ++k)                 // a voice copy: 4 held notes, the reference's level
+            add({ 22.0 + 2.5 * k, 22.0 + 2.5 * k + 2.0, 63 + (k % 2), 0.8 }, 1.0, 2);
+      const int dropped = 5;
+      for (int k = 0; k < 8; ++k)                 // another: 8 held notes, one 15 dB under
+            add({ 33.0 + 2.5 * k, 33.0 + 2.5 * k + 2.0, 61 + (k % 3), 0.8 }, k == dropped ? 0.18 : 1.0, 3);
+      const double droppedAt = 33.0 + 2.5 * dropped;
+      const size_t frames = size_t(55.0 * rate);
+      std::vector<float> ref(frames, 0.f), lib(frames, 0.f);
+      synthesize(ref, rate, written, 1.0, 0, 0);
+      synthesize(lib, rate, heard, 1.0, 0, 0.01, 1.0, 0.05);
+      PV::Spectrogram refSpec(ref, rate), libSpec(lib, rate);
+      auto text = [&](const PV::Result& r) {
+            QString found = QString("offset %1\n").arg(r.offset);
+            for (const PV::Finding& f : r.findings)
+                  found += QString("%1 at %2: %3\n").arg(PV::kindName(f.kind)).arg(f.time).arg(QString::fromStdString(f.text));
+            for (size_t i = 0; i < r.noteChecks.size(); ++i)
+                  if (pv[i].group != 1)
+                        found += QString("  %1: deficit %2 base %3 (%4)\n").arg(pv[i].on).arg(r.noteChecks[i].deficit, 0, 'f', 1)
+                                 .arg(r.noteChecks[i].base, 0, 'f', 1).arg(r.noteChecks[i].baseLevel);
+            return found;
+            };
+      auto missing = [&](const PV::Result& r, double t0, double t1) {
+            int n = 0;
+            for (const PV::Finding& f : r.findings)
+                  n += (f.kind == PV::Finding::Kind::MissingNote || f.kind == PV::Finding::Kind::MissingAttack) && f.time >= t0 && f.time < t1;
+            return n;
+            };
+      for (bool groups : { false, true }) {
+            PV::Settings settings;
+            settings.offsetMargin = false;
+            settings.levelGroups = groups;
+            PV::Settings rs = settings;
+            rs.expectedOnsets = false;
+            const PV::Result refResult = PV::analyse(refSpec, pv, rs);
+            const PV::Result r = PV::analyse(libSpec, pv, settings, &refResult, &refSpec);
+            const QString t = QString(groups ? "now: " : "before: ") + text(r);
+            QVERIFY2(missing(r, 0, 21) == 0, qPrintable(t));                         // (the shorts: there)
+            if (!groups) {
+                  QVERIFY2(missing(r, 21, 32) == 4, qPrintable(t));                 // the copy's held notes, against the shorts
+                  QVERIFY2(missing(r, droppedAt - 0.01, droppedAt + 0.01) == 0, qPrintable(t));  // 15 dB: under 20
+                  }
+            else {
+                  QVERIFY2(missing(r, 21, 60) == 1 && missing(r, droppedAt - 0.01, droppedAt + 0.01) == 1, qPrintable(t));
+                  for (size_t i = 0; i < pv.size(); ++i)
+                        if (pv[i].group == 2)
+                              QVERIFY2(r.noteChecks[i].baseLevel == 1 && r.noteChecks[i].method == PV::NoteCheck::Method::Held, qPrintable(t));
+                  }
+            }
+      }
+
+//---------------------------------------------------------
 //   playbackVerifyRegression
 //    the detector on real renders (a verify folder's "<score> <part> library.wav", "… built-in.wav", "… notes.tsv",
 //    and "<part> extra.tsv": each note's cents and expected latency), against the committed expectations
@@ -15271,7 +15356,7 @@ void TestSoundLibrary::playbackVerifyRegression()
             for (int now = 0; now < 2; ++now) {
                   PV::Settings settings;
                   if (!now) {
-                        settings.expectedOnsets = settings.offsetMargin = settings.heldMean = settings.shortPeak = settings.tunedBins = false;
+                        settings.expectedOnsets = settings.offsetMargin = settings.heldMean = settings.shortPeak = settings.tunedBins = settings.levelGroups = false;
                         }
                   PV::Settings rs = settings;
                   rs.expectedOnsets = false;

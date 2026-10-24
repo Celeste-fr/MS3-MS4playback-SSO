@@ -533,7 +533,13 @@ Keep this file current: close an item by deleting it (the commit message says wh
     ambiguous"; a short legato note's peak window; fractional bins; and, found on the regression, the held level as the
     mean power from 40 to 70 % (two points read the kept Celli F#3 at 32.76 s 21 dB under at a dip). Whence #454: false
     positives 2 → 0, dropped Celli notes found 2 → 3 of 4 (bar 13's Eb3 still missed). Left: the fourth point below, and
-    no Windows run of the new detector yet (the next build's verify run on Whence will show it). Was:
+    no Windows run of the new detector yet (the next build's verify run on Whence will show it). **Build #474's run**
+    (check474 item 4): the offsets right, 1 false positive (Celli bar 13's quarter-flat Ab3 on its voice copy): its
+    register level, not its bins: a 4-note copy held against the main slot's short notes' peaks. Fixed 2026-10-24, branch
+    `verify-detector2`: levels among notes measured the same way, a small slot's from its patch's, a held note missing at
+    12 dB under held peers (set on #454 / #474: present held at worst 7.2, dropped 10.8-20.0; an assumption for other
+    scores). #474: 0 findings; #454: 0 false positives, 3 of 4 dropped found. MS_VERIFY_ROUTES=1 (the heard check's
+    export) now runs the detector too. Was:
     - Offset alias: `bestOffset`'s onset-flux curve is flat for soft legato parts (V2 0.060 s within 0.6 % of the
       chosen 0.335 s; Celli 1.2 %; Violas 0.1 %), so a part is read one note late: V2 C6 "24 dB under" is a false
       positive (−9.5 dB at the real offset). Fix: report the curve's margin and mark "offset ambiguous" (< ~3 % above

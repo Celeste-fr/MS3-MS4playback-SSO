@@ -53,7 +53,7 @@ Per library part (a score with several parts: each part rendered alone too, so a
 | Finding | Meaning |
 |---|---|
 | `missing-attack` | a chord (the notes starting together) has no attack where the built-in synth has one, and one of its notes is under its usual level (SSO's Grand Piano dropping chords at pedal changes) |
-| `missing-note` | one note didn't sound although the other notes of its chord did (the staccato octaves of bars 59-62); a note the library played with a legato articulation (SSO's Performance "Legato": no attack, slow build-up) is judged on its level held from 40 to 70 % of it (the mean power every 20 ms), a legato note under 0.25 s on its peak over [onset + 50 ms, end + 250 ms] (SSO's transition lands after a short note's end), against that patch's other legato notes; partials at the note's cents (a quarter tone on its own bins) |
+| `missing-note` | one note didn't sound although the other notes of its chord did (the staccato octaves of bars 59-62); a note the library played with a legato articulation (SSO's Performance "Legato": no attack, slow build-up) is judged on its level held from 40 to 70 % of it (the mean power every 20 ms), a legato note under 0.25 s on its peak over [onset + 50 ms, end + 250 ms] (SSO's transition lands after a short note's end), against that patch's other legato notes measured the same way (a held note 12 dB under its held peers is missing, other notes 20 dB; a slot with fewer than 6 such notes against its patch's, e.g. a chord's voice copy); partials at the note's cents (a quarter tone on its own bins) |
 | `cut-short` | a held note (long, legato, tremolo, trill articulation) fell silent before 70 % of its length where the built-in synth still sounds |
 | `silence` | nothing (under -70 dB) for 0.25 s or more while held notes should sound |
 | `clipping` | samples over full scale in the mixed rendering |
@@ -248,7 +248,9 @@ transitions at their f0 leave + 23.5 ms instead of the arrival (both readings ar
 - **Render**, two renderers, each route alone (the analysis needs one route's sound):
   - `HC_RENDER=export` (**the default**, 2026-10-16): MuseScore's own export, `--verify-playback --verify-wav` with
     `MS_VERIFY_ROUTES=1` (build 443 on, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/38997724166;
-    `HC_EXE` the VM's MuseScore3Evo.exe): every library route rendered alone as File › Export audio renders it, so with
+    `HC_EXE` the VM's MuseScore3Evo.exe; since 2026-10-24 that run also checks each library part with the detector on its
+    routes' sum: findings in the export folder's summary.txt / report.json, not in the heard check's report;
+    `MS_VERIFY_ROUTES_DETECT=0` skips it; before, `MS_VERIFY_ROUTES=1` rendered only and "passed" with 0 findings): every library route rendered alone as File › Export audio renders it, so with
     what the owner hears: the tuning slots (Kontakt's Tune: quarter tones on the non-bending patches too), the gain stage
     and master trim, the export mix, the flat lanes' plug-in parameters (Whence's Violins 1 vibrato 0), the transport
     restart. Its copy of the score carries the dump's settings as its playbackSettings metaTag (`heard_check.py score`: the
@@ -391,7 +393,21 @@ must not be flagged; the Celli chord notes SSO dropped (two on one Performance s
 | | false positives | dropped notes found (of 4) |
 |---|---|---|
 | before (every fix off; = build #454's report) | 2 (V1 Eb5 bar 13, V2 C6 bar 8) | 2 (F#3 bar 15, A3 bar 16) |
-| now (the defaults) | 0 | 3 (+ A3 bar 14); Eb3 bar 13 still missed (reads ~11 dB under) |
+| 2026-10-23 (branch `verify-detector`) | 0 | 3 (+ A3 bar 14) |
+| now (2026-10-24, + `levelGroups` / `heldMissingDb`) | 0 | 3 (A3 bar 14 at 12.9 dB under, F#3 14.7, A3 20.0); Eb3 bar 13 still missed (10.8 dB under) |
+
+**Build #474** (private `check474/RESULT.md` item 4; its renders weren't kept): the 2026-10-23 detector flagged one note,
+Celli bar 13 beat 1, the quarter-flat Ab3 on its own voice copy, "21 dB under", heard the chord's loudest (51.4 dB). Not
+its bins (notes.tsv: cents −50 passed; its level on its tuned bins 43.4 dB, the reference's 49.4): its **register level**.
+Its copy had 4 notes (under 6), so it was held against every slot of the part, and those are mostly the main slot's short
+legato notes, judged on their **peak**, 12-18 dB higher against the built-in synth than a held note's mean. Fix
+(`Settings::levelGroups`, branch `verify-detector2`): a note's register level only among notes measured the same way
+(`NoteCheck::Method`: attack, held, peak), a small slot's from its **patch**'s (`Note::patch`: its voice and tuning copies)
+before all slots'. Against held peers only, SSO's dropped chord notes of #454 read 10.8-20.0 dB under, every present held
+note of #454 and #474 (48) at worst 7.2: a held legato note is missing at **12 dB** (`heldMissingDb`; set on these two runs,
+an assumption to check on other scores; the 20 dB stays for attacks and short notes). #474 now: 0 findings
+(`regression/whence474_*.json`: the run's own levels from its notes.tsv and each note's register base, `verify_detector.py
+relevel --features`). notes.tsv gains `patch`, `method`, `baseDb`, `baseFrom` (slot / patch / all).
 
 The Violas and Basses: no finding before or now. Without expected latencies (the margin rule alone) every Whence string
 part is ambiguous (margins 0.4-2.1 %; Basses 9.6 %): nothing flagged, the Celli's 3 dropped notes `unclear`.
@@ -399,7 +415,12 @@ part is ambiguous (margins 0.4-2.1 %; Basses 9.6 %): nothing flagged, the Celli'
 - `tools/playbackverify/test_verify_detector.py` (in `run_fork_tests.sh`): the Python replica `verify_detector.py`
   judges the committed features `regression/whence_features.json` (each listed note's deficit and rises at every offset
   under each level rule, and the parts' offset curves: no audio, no note list of the score) against the expectations,
-  plus the four fixes on synthetic audio.
+  plus each fix on synthetic audio; and `regression/whence474_levels.json` (a run whose renders weren't kept) against
+  `whence474_expect.json`.
+- **Keep a run's renders for the set**: `MS_VERIFY_ROUTES=0` with `--verify-wav` writes each part's `library.wav` /
+  `built-in.wav`; with `MS_VERIFY_ROUTES=1` add `MS_VERIFY_ROUTES_PARTWAV=1`. Then `mkextra.py` (private) for the cents /
+  latency / patch file, `verify_detector.py features`. Without renders, `verify_detector.py relevel <notes.tsv> --features`
+  keeps what the register step needs.
 - `MS_VERIFY_REGRESSION=<folder> tst_soundlibrary playbackVerifyRegression`: the C++ detector on the renders themselves
   (private: `~/MuseScore/ms3fork/private/verify-detector/reg/`, the run's `<score> <part> library.wav` / `built-in.wav` /
   `notes.tsv` linked, plus `<part> extra.tsv`: time, key, cents, expectedMs, made by that folder's `mkextra.py` from the

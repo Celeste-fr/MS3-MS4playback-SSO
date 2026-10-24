@@ -5469,7 +5469,32 @@ void TestLiveEquivalence::verifyRoutesByPart()
       QVERIFY(j.open(QIODevice::ReadOnly));
       const QJsonObject top = QJsonDocument::fromJson(j.readAll()).object();
       QCOMPARE(top.value("verdict").toString(), QString("pass"));
-      QCOMPARE(top.value("scores").toArray().at(0).toObject().value("routes").toArray().size(), int(codes.size()));
+      const QJsonObject sc = top.value("scores").toArray().at(0).toObject();
+      QCOMPARE(sc.value("routes").toArray().size(), int(codes.size()));
+      // each library part checked by the detector on its routes' sum (since 2026-10-24: before, routes only), its notes.tsv
+      // written; no part WAVs unless MS_VERIFY_ROUTES_PARTWAV=1
+      QVERIFY(sc.value("routesDetector").toBool());
+      const QJsonArray partsJs = sc.value("parts").toArray();
+      QCOMPARE(partsJs.size(), 2);
+      for (const QJsonValue& v : partsJs) {
+            QVERIFY2(v.toObject().value("notes").toInt() > 0, qPrintable(QJsonDocument(v.toObject()).toJson()));
+            QVERIFY(v.toObject().contains("offset"));
+            QVERIFY(QFileInfo::exists(folder + "/twoparts " + v.toObject().value("name").toString() + " notes.tsv"));
+            }
+      QVERIFY(QDir(folder).entryList({ "twoparts * library.wav", "twoparts * built-in.wav" }, QDir::Files).isEmpty());
+      {
+            qputenv("MS_VERIFY_ROUTES_DETECT", "0");
+            struct UnsetDetect { ~UnsetDetect() { qunsetenv("MS_VERIFY_ROUTES_DETECT"); } } unsetDetect;
+            PlaybackVerifier::Options o2 = o;
+            o2.out = tmp.path() + "/out2";
+            const QString f2 = PlaybackVerifier::run(o2, [&logLines](const QString& l) { logLines << l; });
+            QVERIFY2(!f2.isEmpty(), qPrintable(logLines.join("\n")));
+            QFile j2(f2 + "/report.json");
+            QVERIFY(j2.open(QIODevice::ReadOnly));
+            const QJsonObject sc2 = QJsonDocument::fromJson(j2.readAll()).object().value("scores").toArray().at(0).toObject();
+            QVERIFY(!sc2.value("routesDetector").toBool());
+            QVERIFY(sc2.value("parts").toArray().isEmpty());
+      }
 
       // no library: nothing rendered, an error and run() fails
       SoundLib::setCurrent(nullptr);

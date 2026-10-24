@@ -81,7 +81,7 @@ class Regression(unittest.TestCase):
         self.assertEqual(self.run_rules((), "before"), (2, 2))          # V1 Eb5, V2 C6; Celli F#3, A3
 
     def test_now(self):
-        self.assertEqual(self.run_rules(V.RULES, "now"), (0, 3))        # Celli A3 (bar 14) found too
+        self.assertEqual(self.run_rules(V.RULES, "now"), (0, 3))        # Celli A3 (bar 14) found too (-12.9: held peers)
 
     def test_offsets(self):
         p = self.features["parts"]
@@ -96,6 +96,34 @@ class Regression(unittest.TestCase):
         self.assertTrue(r["ambiguous"])
         self.assertTrue(all(n["verdict"] != "missing" for n in r["notes"]))
         self.assertGreaterEqual(sum(n["verdict"] == "unclear" for n in r["notes"]), 2)
+
+
+class Regression474(unittest.TestCase):
+    """build #474 (renders not kept): the register step on the run's own levels"""
+    def setUp(self):
+        self.levels = json.load(open(os.path.join(HERE, "regression", "whence474_levels.json"), encoding="utf-8"))
+        self.expect = json.load(open(os.path.join(HERE, "regression", "whence474_expect.json"), encoding="utf-8"))
+
+    def run_rules(self, rules, which):
+        fp = 0
+        for part, rows in self.expect["parts"].items():
+            got = V.judge_levels(self.levels["runs"]["#474"][part], rules)
+            for e in rows:
+                g = [n for n in got if abs(n["time"] - e["time"]) < 0.002 and n["key"] == e["key"]]
+                self.assertEqual(len(g), 1, (part, e))
+                flagged = g[0]["verdict"] == "missing"
+                fp += flagged and e["truth"] == "present"
+                if e[which] == "missing":
+                    self.assertTrue(flagged, (which, e, g[0]))
+                elif e[which] == "clear":
+                    self.assertFalse(flagged, (which, e, g[0]))
+        return fp
+
+    def test_474_detector(self):        # #474's own detector: its one false positive, the voice copy's Ab3
+        self.assertEqual(self.run_rules(tuple(r for r in V.RULES if r != "groups"), "nogroups"), 1)
+
+    def test_474_now(self):
+        self.assertEqual(self.run_rules(V.RULES, "now"), 0)
 
 
 class Synthetic(unittest.TestCase):
@@ -173,6 +201,40 @@ class Synthetic(unittest.TestCase):
         _, now = verdicts(lib, ref, notes, ("cents",))
         self.assertEqual([o["time"] for o in before if o["verdict"]], [])
         self.assertEqual([o["time"] for o in now if o["verdict"]], [10.5])
+
+    def test_level_groups(self):
+        # a patch's main slot: loud short legato notes (peak-judged, 22 dB over the reference); a voice copy: 4 held notes
+        # at the reference's level; another copy: 8 held notes, one 15 dB under (tst_soundlibrary::playbackVerifyLevelGroups)
+        length = int(55.0 * SR)
+        ref, lib = np.zeros(length), np.zeros(length)
+        notes = []
+        line = [60, 62, 64, 62]
+        for k in range(40):
+            on = 1.0 + 0.5 * k
+            notes.append(note(on, on + 0.15, line[k % 4], legato=True, group=1))
+            notes[-1]["patch"] = 0
+            tone(ref, on, on + 0.15, line[k % 4])
+            tone(lib, on, on + 0.15, line[k % 4], amp=0.8 * 12, tilt=1.0, attack=0.05, latency=0.01)
+        for k in range(4):
+            on = 22.0 + 2.5 * k
+            notes.append(note(on, on + 2.0, 63 + k % 2, legato=True, group=2))
+            notes[-1]["patch"] = 0
+            tone(ref, on, on + 2.0, 63 + k % 2)
+            tone(lib, on, on + 2.0, 63 + k % 2, tilt=1.0, attack=0.05, latency=0.01)
+        dropped = 33.0 + 2.5 * 5
+        for k in range(8):
+            on = 33.0 + 2.5 * k
+            notes.append(note(on, on + 2.0, 61 + k % 3, legato=True, group=3))
+            notes[-1]["patch"] = 0
+            tone(ref, on, on + 2.0, 61 + k % 3)
+            tone(lib, on, on + 2.0, 61 + k % 3, amp=0.8 * (0.18 if k == 5 else 1.0), tilt=1.0, attack=0.05, latency=0.01)
+        noise(ref), noise(lib)
+        base_rules = ("cents", "heldmean", "shortpeak")
+        _, before = verdicts(lib, ref, notes, base_rules)
+        _, now = verdicts(lib, ref, notes, base_rules + ("groups",))
+        self.assertEqual([o["time"] for o in before if o["verdict"] and o["time"] < 21], [])
+        self.assertEqual(len([o for o in before if o["verdict"] and 21 < o["time"] < 32]), 4)
+        self.assertEqual([round(o["time"], 3) for o in now if o["verdict"]], [round(dropped, 3)])
 
     def test_held_mean(self):
         length = int(30.0 * SR)
