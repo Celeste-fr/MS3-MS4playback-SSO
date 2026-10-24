@@ -73,7 +73,33 @@ Then (the coordinator, after the owner's PC run): ship it, always on. Details an
   teardown and `Vst3Plugin::unloadModules`' ExitDll free safely. `MS_KHEAP_OFF=1`: the system allocator; no kheap.dll:
   the system allocator. load times.log: "allocator: mimalloc (kheap.dll: mimalloc 2.1.7, 23 hooks)" / "system (…)".
   Stress test (VM and wine): blocks across the switch, every function, 8 threads: 0 failures. Linux: all fork tests pass.
-- The VM checks of the shipped build: see below (the build's numbers).
+- **Windows build #473** (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40031224805, sso-load @
+  8b4f87c82f; kheap.dll in the artifact's bin/, the workflow checks it). Checked on the VM (`C:\claude\b473\ms`, private
+  `sso-load/vm473/`):
+  - load times.log: "allocator: mimalloc (kheap.dll: mimalloc 2.1.7, 23 hooks)" in every run, "system (MS_KHEAP_OFF=1)"
+    with the variable.
+  - Null test, MuseScore's own allocator start against `MS_KHEAP_OFF=1`, Whence `--verify-playback --verify-wav`,
+    order off / on / on / off (`compare_renders.py`, residual dB):
+
+    | part | floor off-off | floor on-on | off-on (n0-n1) | off-on (n3-n2) |
+    |---|---|---|---|---|
+    | Violins 2 | -85.5 | -85.5 | -85.2 | -85.6 |
+    | Contrabasses | -23.9 | -22.0 | -23.6 | -19.6 |
+    | Violins 1 | -7.0 | -6.3 | -7.8 | -8.4 |
+    | Violas | -9.9 | -9.9 | -10.0 | -10.1 |
+    | Violoncellos | -7.5 | -7.4 | -7.1 | -6.5 |
+
+    Violins 2 (the part that renders deterministically) nulls at -85 dB every way, all per-note differences 0. The four
+    Performance parts differ between identical passes (round robins), and the cross pairs sit in the floors' range. The
+    Contrabasses' n3-n2 is 2.4 dB above both floors, so the other cross pairs were checked too: n0-n2 -20.1, n3-n1
+    -20.4. The pairs in time order (n0-n1 -23.6, n1-n2 -22.0, n2-n3 -19.6) and the notes over 0.5 dB apart (floors 17 / 22,
+    cross 14 / 23 / 22 / 25 of 444) show drift between passes, not a side: the same as the injected test on build 472.
+  - `--measure-load-times` Whence, off / on / on / off: score open (phase 2, 10 instances one after the other) 44.3 / 39.1 /
+    38.4 / 43.3 s (**-11 %**), setState in it 38.0 / 37.2 / 36.6 / 41.5 s; each patch alone (phase 1), setState summed 15.5 /
+    14.5 / 16.4 / 20.4 s; memory after the score open +15.5 / +18.8 / +17.6 / +15.3 GB (the samples over SMB, still
+    growing at 5 minutes). Whole runs 843 / 646 / 674 / 831 s.
+  - `--create-live-set` (Whence.als, 30 s) and `--even-levels` (303 s, round 2 envelope off its slurs' medians
+    0.55 dB) run as before with kheap.
 
 ## Build for the owner: #472 (2026-10-23)
 
