@@ -507,8 +507,11 @@ accents and technique texts from public-domain scores into `anechoic_balance/rea
 - Mahler 1: UE, IMSLP #17070
 - Beethoven 8: B&H Werke, IMSLP #61814
 
-**These readings have not been reviewed by the owner.** By the readings rule, a review page with crops is needed before
-any of this changes the map. Dropping the "uncertain" segments changes no instrument by more than 0.4 dB except
+**Reviewed by the owner, 2026-10-24**: a spot-check page of 40 readings drawn at random (stratified: horns 9, trumpets 7,
+flutes 7, oboes 7, the rest strings, clarinets, bassoons), each next to a crop of the score; all 40 right. If the share
+marked wrong had been 5 % across all 5,300 readings, the horn's, trumpet's, flute's and oboe's results could have moved
+by up to 0.8 / 0.9 / 1.1 / 0.6 dB (90th percentile, a marking taken from another stretch). (Before the review: by the
+readings rule, a review page with crops is needed before any of this changes the map.) Dropping the "uncertain" segments changes no instrument by more than 0.4 dB except
 trombone / tuba (see Sensitivity).
 
 **Method** (`anechoic_balance/`: envelope.py, tu_envelope.py, dir_at.py, balance.py, align_dtw.py, compare.py,
@@ -586,7 +589,12 @@ The "±" combines:
 | without Mahler | +4.0 | −3.7 | +0.4 | +1.7 | −7.9 | −4.0 |
 | Aalto front mic 6 only | +4.0 | −4.2 | +1.0 | +2.2 | −7.1 | −4.6 |
 
-**What it implies for the map** (a proposal only; the owner decides, and the readings need his review first)
+**Applied 2026-10-24** (the owner: "apply the full measured balance"; docs/BALANCE_LOG.md › Iteration 15): the pooled
+values unrounded, flutes +3.96, oboes -4.17, horns -8.29, trumpets -4.59 dB on `sectionLevel2`, by `anechoic_shift.py`
+(applied where both datasets measured the instrument, agree in sign and each 90 % interval excludes 0). The proposal
+as written before:
+
+**What it implies for the map** (a proposal at the time; the owner decided as above)
 - Change the woodwind and brass families' `sectionLevel2` by the pooled in-context difference, the strings staying the
   centre. Each change is about ±3 dB uncertain. Every patch of a family moves together, the same per-player offset:
   - **horns −8 dB**: Horn Solo +0.57 → about −7.7; Horns a2, a6 and Motif Horns a4 the same −8
@@ -623,7 +631,7 @@ needs its own study before it touches realSteps.
 - **Directivity**: TU's database players are not these players. The horns' two Aalto microphones disagree with TU's
   pattern by about 4 dB.
 - **Bar timing in TU B8** (DTW): about ±0.2–0.7 bar, handled by the 0.4-bar trims.
-- **The owner's review of the readings.**
+- ~~The owner's review of the readings.~~ Done 2026-10-24 (spot check, 40 of 40 right).
 
 ### 1.6 Directivity
 
@@ -1178,7 +1186,8 @@ setting.
      written dynamic.
 7. **In-context balance of the whole orchestra.**
    - *Fixes:* the unconfirmed winds / brass against strings (§1.5).
-   - **Done 2026-10-23 (§1.5a)** for flutes, oboes, clarinets, bassoons, horns, trumpets; trombones / tuba still open.
+   - **Done 2026-10-23 (§1.5a)** for flutes, oboes, clarinets, bassoons, horns, trumpets; trombones / tuba still open. Applied to the map 2026-10-24
+     (flutes, oboes, horns, trumpets; BALANCE_LOG.md › Iteration 15).
    - *Source:* the Aalto anechoic recordings (one gain for all parts: confirmed); TU Beethoven 8 (calibrated).
    - *Method:* each part's loudness at its written dynamics, corrected by TU's directivity for the front mic (Ackermann
      2023, CC BY-SA), against `sectionLevel2`'s prediction for the same parts. Settle the licence (Aalto: derived

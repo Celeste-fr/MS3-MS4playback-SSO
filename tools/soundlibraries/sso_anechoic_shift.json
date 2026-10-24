@@ -1,0 +1,171 @@
+{
+ "method": "    python3 -I anechoic_shift.py <anechoic_balance.json> <sso_cl_section_balance.json> <out sso_anechoic_shift.json>\n\nanechoic_balance.json (docs/RESEARCH.md › 1.5a) holds, per instrument, how loud one player plays against the strings at\nthe same written marking in two anechoic orchestra recordings (Aalto: Beethoven 7, Bruckner 8, Mahler 1; TU Berlin:\nBeethoven 8), less what the map's real side (Clark & Luce's one-player mp + realRange 2's steps) implies: rel < 0, the\ninstrument plays softer against the strings in context than the map plays it. An instrument is applied when both\ndatasets measured it, their medians agree in sign and each one's bootstrap 90 % interval excludes 0 (flute, oboe, horn,\ntrumpet; the clarinet's and bassoon's TU intervals include 0, the trombone and tuba have Aalto only). Its shift is the\npooled value (the mean of the two datasets' medians), unrounded: the measurement as it stands; rounding to the proposal's\n-8 / -4.5 / +4 / -4 would move it by at most 0.3 dB, a tenth of its +-3 dB uncertainty.\n\nEvery patch of the instrument takes the shift (one per-player offset, so ensembles a2 / a3 / a4 / a6 and the Motif\nensembles of the same instrument too: their real side is the same Clark & Luce instrument x players). Family members\nwithout data of their own take their family's shift, as their Clark & Luce level is already their family's or their\nown instrument's unchecked in context: an assumption (\"plays like its family\", BALANCE_LOG's sibling convention),\nmarked \"assumption\" in the output. The strings stay the centre (their own rel is not applied: the datasets disagree by\n1-6 dB between the sections, no consistent difference); everything else is unchanged.\ngen_spitfire_sso.py adds \"shiftDb\" to sso_cl_section_balance.json's M2 for the map's sectionLevel2.",
+ "instruments": {
+  "flute": {
+   "applied": true,
+   "why": "both datasets, the same sign, both 90 % intervals exclude 0",
+   "pooledDb": 3.96,
+   "aalto": 3.16,
+   "tub8": 4.76,
+   "uncertaintyDb": "about +-3 (docs/RESEARCH.md › 1.5a)"
+  },
+  "oboe": {
+   "applied": true,
+   "why": "both datasets, the same sign, both 90 % intervals exclude 0",
+   "pooledDb": -4.17,
+   "aalto": -1.97,
+   "tub8": -6.37,
+   "uncertaintyDb": "about +-3 (docs/RESEARCH.md › 1.5a)"
+  },
+  "clarinet": {
+   "applied": false,
+   "why": "the datasets disagree in sign (+2.72 / -0.80)",
+   "pooledDb": 0.96,
+   "aalto": 2.72,
+   "tub8": -0.8,
+   "uncertaintyDb": null
+  },
+  "bassoon": {
+   "applied": false,
+   "why": "TU B8's 90 % interval [-0.65, +1.37] includes 0",
+   "pooledDb": 1.7,
+   "aalto": 2.73,
+   "tub8": 0.67,
+   "uncertaintyDb": null
+  },
+  "horn": {
+   "applied": true,
+   "why": "both datasets, the same sign, both 90 % intervals exclude 0",
+   "pooledDb": -8.29,
+   "aalto": -7.56,
+   "tub8": -9.03,
+   "uncertaintyDb": "about +-3 (docs/RESEARCH.md › 1.5a)"
+  },
+  "trumpet": {
+   "applied": true,
+   "why": "both datasets, the same sign, both 90 % intervals exclude 0",
+   "pooledDb": -4.59,
+   "aalto": -4.13,
+   "tub8": -5.06,
+   "uncertaintyDb": "about +-3 (docs/RESEARCH.md › 1.5a)"
+  },
+  "trombone": {
+   "applied": false,
+   "why": "one dataset only",
+   "pooledDb": -1.0,
+   "aalto": -1.0,
+   "tub8": null,
+   "uncertaintyDb": null
+  },
+  "tuba": {
+   "applied": false,
+   "why": "one dataset only",
+   "pooledDb": -1.65,
+   "aalto": -1.65,
+   "tub8": null,
+   "uncertaintyDb": null
+  }
+ },
+ "patches": {
+  "Flute Solo": {
+   "instrument": "flute",
+   "shiftDb": 3.96,
+   "M2": -2.04,
+   "sectionLevel2": 1.92
+  },
+  "Flutes a2": {
+   "instrument": "flute",
+   "shiftDb": 3.96,
+   "M2": -3.87,
+   "sectionLevel2": 0.09
+  },
+  "Piccolo": {
+   "instrument": "flute",
+   "shiftDb": 3.96,
+   "M2": -4.26,
+   "sectionLevel2": -0.3,
+   "assumption": "the flute's shift: no piccolo in either recording (Mahler 1's flutes and piccolo were left out)"
+  },
+  "Alto Flute": {
+   "instrument": "flute",
+   "shiftDb": 3.96,
+   "M2": 1.93,
+   "sectionLevel2": 5.89,
+   "assumption": "the flute's shift: no alto flute in either recording"
+  },
+  "Bass Flute": {
+   "instrument": "flute",
+   "shiftDb": 3.96,
+   "M2": -2.9,
+   "sectionLevel2": 1.06,
+   "assumption": "the flute's shift: no bass flute in either recording"
+  },
+  "Oboe Solo": {
+   "instrument": "oboe",
+   "shiftDb": -4.17,
+   "M2": -6.67,
+   "sectionLevel2": -10.84
+  },
+  "Oboes a2": {
+   "instrument": "oboe",
+   "shiftDb": -4.17,
+   "M2": -9.03,
+   "sectionLevel2": -13.2
+  },
+  "Cor Anglais": {
+   "instrument": "oboe",
+   "shiftDb": -4.17,
+   "M2": -3.86,
+   "sectionLevel2": -8.03,
+   "assumption": "the oboe's shift: no cor anglais in either recording (its Clark & Luce level is its own instrument's, unchecked in context)"
+  },
+  "Horn Solo": {
+   "instrument": "horn",
+   "shiftDb": -8.29,
+   "M2": 0.57,
+   "sectionLevel2": -7.72
+  },
+  "Horns a2": {
+   "instrument": "horn",
+   "shiftDb": -8.29,
+   "M2": 7.17,
+   "sectionLevel2": -1.12
+  },
+  "Horns a6": {
+   "instrument": "horn",
+   "shiftDb": -8.29,
+   "M2": 10.95,
+   "sectionLevel2": 2.66
+  },
+  "Motif Horns a4": {
+   "instrument": "horn",
+   "shiftDb": -8.29,
+   "M2": 12.82,
+   "sectionLevel2": 4.53
+  },
+  "Trumpet Solo": {
+   "instrument": "trumpet",
+   "shiftDb": -4.59,
+   "M2": 9.04,
+   "sectionLevel2": 4.45
+  },
+  "Trumpets a2": {
+   "instrument": "trumpet",
+   "shiftDb": -4.59,
+   "M2": 14.26,
+   "sectionLevel2": 9.67
+  },
+  "Trumpets a6": {
+   "instrument": "trumpet",
+   "shiftDb": -4.59,
+   "M2": 20.45,
+   "sectionLevel2": 15.86
+  },
+  "Motif Trumpets a3": {
+   "instrument": "trumpet",
+   "shiftDb": -4.59,
+   "M2": 13.57,
+   "sectionLevel2": 8.98
+  }
+ }
+}

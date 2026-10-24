@@ -46,6 +46,21 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Balance in context (branch `anechoic-balance`, 2026-10-24, from integrate-1017 329e1fa54a; not merged)
+
+The owner checked the score readings' spot-check page (40 of 40 right) and chose "apply the full measured balance"
+(docs/RESEARCH.md › 1.5a). `sectionLevel2` (`[levels] sectionBalance` 2, Recommended and the default): flutes +3.96,
+oboes -4.17, horns -8.29, trumpets -4.59 dB on every patch of the instrument, piccolo / alto / bass flute and cor anglais
+by their family (an assumption); new step `tools/soundlibraries/anechoic_shift.py` -> `sso_anechoic_shift.json`, read by
+`gen_spitfire_sso.py` (`ANECHOIC_SHIFT`); the map's diff is those 16 attributes. Per-patch table, the master trim and the
+tests: docs/BALANCE_LOG.md › Iteration 15. Open:
+- The owner hasn't heard it; no Windows build yet (a map-only change needs one, or the XML copied into the installed
+  `share/soundlibraries/`).
+- The harp's offset to the Clark & Luce scale comes from the solo winds' M2 (Iteration 6); with the shifted winds it would
+  move -3.4 dB. Left as it was: an owner question.
+- Trombones and tuba: Aalto only, no conclusion; clarinets and bassoons inside their uncertainty. A third dataset with
+  several players per instrument would settle them (RESEARCH.md › 1.5a › Still unknown).
+
 ## SSO load: the allocator (branch `sso-load`, 2026-10-23, from integrate-1017 7a6e1e9f0c; not merged)
 
 The owner, 2026-10-23: "is there any way for sso to load faster, taking the ableton optimization repo as example".

@@ -412,6 +412,106 @@ strokes may be softer than the eighth).
 about 0.9 dB softer than iteration 10 (-6.92 + 8.75 - 2.6 against -5.09 + 7.84 - 2.6), still inside Skaalevik's range for the
 percussion group; p about 11.5 dB softer than SSO's own (was 9), f about 7 dB louder (unchanged), ff about 14 (was 13).
 
+## Iteration 15 (2026-10-24): the flutes, oboes, horns and trumpets in context
+
+**Weakest link.** Every wind and brass level rested on Clark & Luce's scales played alone, out of context: nothing had
+checked them against the strings in an orchestra playing music. The horn's level especially: one player's (Iteration 1),
+the two Clark & Luce horn players 13 dB apart at mp.
+
+**Evidence.** docs/RESEARCH.md › 1.5a (branch `research-balance`, merged into integrate-1017): two anechoic orchestra
+recordings, every part recorded separately, each part's level at its written marking against the strings at the same
+marking in the same piece, less what the map implies (Clark & Luce's one-player mp + realRange 2's steps):
+- Aalto (Pätynen, Pulkki & Lokki 2008): Beethoven 7 / I, Bruckner 8 / II, Mahler 1 / IV; one modern player per part;
+  one gain for every track (the download page); bar timing from PHENICX-Anechoic (CC BY 4.0).
+- TU Berlin's Beethoven 8 (Böhm, Ackermann & Weinzierl 2020; CC BY 4.0): Orchester Wiener Akademie, period instruments,
+  two players per wind part; calibrated (Table 3's gains).
+- Sound power by TU Berlin's directivity toward each microphone; the median per instrument and dataset with a bootstrap
+  90 % interval; pooled = the mean of the two datasets' medians.
+- The score readings (about 5,300 rows, agents' readings of public-domain scores) checked by the owner on a spot-check
+  page (40 drawn at random, stratified to the instruments that move: horns 9, trumpets 7, flutes 7, oboes 7, strings 6,
+  clarinets 2, bassoons 2), 2026-10-24: all 40 right (r29's stray "ff" in the correction box: he confirmed "p is right").
+  Sensitivity (90th percentile of the pooled value's change, 1,000 draws): at 5 % wrong (a marking from another stretch)
+  horn 0.8, trumpet 0.9, flute 1.1, oboe 0.6 dB; a marking off by one step moves none by more than 0.7 dB even at 20 %.
+
+| instrument | Aalto | TU B8 | pooled (dB) | applied |
+|---|---|---|---|---|
+| flute | +3.16 [+1.36, +6.59] | +4.76 [+3.89, +6.95] | +3.96 | yes |
+| oboe | -1.97 [-2.81, -0.56] | -6.37 [-7.12, -3.67] | -4.17 | yes |
+| clarinet | +2.72 [+0.73, +4.13] | -0.80 [-1.58, +0.14] | +0.96 | no: the datasets differ in sign |
+| bassoon | +2.73 [+2.33, +3.94] | +0.67 [-0.65, +1.37] | +1.70 | no: TU's interval includes 0 |
+| horn | -7.56 [-8.04, -6.70] | -9.03 [-12.07, -6.71] | -8.29 | yes |
+| trumpet | -4.13 [-5.39, -0.55] | -5.06 [-6.53, -4.33] | -4.59 | yes |
+| trombone | -1.00 [-3.39, +2.68] | - | (-1.00) | no: one dataset, Bruckner and Mahler 6 dB apart |
+| tuba | -1.65 [-10.70, +5.17] | - | (-1.65) | no: one dataset, 4 values |
+
+Corroboration (RESEARCH.md › 1.5a): TU's absolute levels without the strings as reference (horn -8.6, trumpet -5.5, the
+strings within ±3 dB); the horn's and trumpet's offset about the same from p to ff (an offset, not a span); the in-context
+horn - trumpet, -5.5 dB, inside Iteration 1's other sources' 0 .. -7.
+
+**Decision** (the owner, 2026-10-24: "apply the full measured balance", not the half step). `anechoic_shift.py`
+(`anechoic_balance.json` -> `sso_anechoic_shift.json`, read by `gen_spitfire_sso.py` as `ANECHOIC_SHIFT`, added to
+`sso_cl_section_balance.json`'s M2; that file and `section_balance_cl.py` unchanged):
+- Applied where both datasets measured the instrument, their medians agree in sign and each 90 % interval excludes 0. The
+  rule selects exactly the owner's four (flute, oboe, horn, trumpet); the script stops if a re-measurement changes that.
+- The pooled values, unrounded (+3.96 / -4.17 / -8.29 / -4.59), not the proposal's rounded +4 / -4 / -8 / -4.5: the map
+  takes the measurement as it stands, and rounding moves it by at most 0.3 dB, a tenth of the ±3 dB uncertainty.
+- Every patch of the instrument: one per-player offset, so solo, a2, a6 and SSO's Motif Horns a4 / Motif Trumpets a3
+  (their real side is the same Clark & Luce instrument x players) move together.
+- **Assumptions** (no data of their own in either recording; BALANCE_LOG's sibling convention, "plays like its family"):
+  Piccolo, Alto Flute, Bass Flute take the flute's +3.96 (their Clark & Luce level is already the flute's); Cor Anglais
+  the oboe's -4.17 (its Clark & Luce level is its own instrument's, unchecked in context).
+- Unchanged: the strings (the centre; their own in-context values differ 1-6 dB between the datasets, no consistent
+  difference), clarinets, bass / contrabass clarinet, bassoons, contrabassoon, trombones, bass trombones, Motif
+  Trombones, contrabass trombone, cimbassi, tubas, harp, timpani, Grand Piano, Strings Ensemble.
+- Not followed through (stated, not applied): the harp's level reaches Clark & Luce's scale by the median of (M2 + TU's D)
+  over the nine solo winds (Iteration 6); with the four shifted that median moves -3.39 dB, so the harp would play 3.4 dB
+  softer. It is left as it is: the harp has no in-context data, the move is inside its ±4 dB, and whether TU's single
+  notes should be read against the in-context or the out-of-context wind scale is open. The Grand Piano's Meyer -> Clark &
+  Luce offset (Iteration 11) would move -0.10 dB: negligible.
+
+**Before -> after** (`sectionLevel2`, dB; map diff: these 16 attributes, nothing else):
+
+| patch | before | after |
+|---|---|---|
+| Flute Solo | -2.04 | +1.92 |
+| Flutes a2 | -3.87 | +0.09 |
+| Piccolo (assumption) | -4.26 | -0.30 |
+| Alto Flute (assumption) | +1.93 | +5.89 |
+| Bass Flute (assumption) | -2.90 | +1.06 |
+| Oboe Solo | -6.67 | -10.84 |
+| Oboes a2 | -9.03 | -13.20 |
+| Cor Anglais (assumption) | -3.86 | -8.03 |
+| Horn Solo | +0.57 | -7.72 |
+| Horns a2 | +7.17 | -1.12 |
+| Horns a6 | +10.95 | +2.66 |
+| Motif Horns a4 | +12.82 | +4.53 |
+| Trumpet Solo | +9.04 | +4.45 |
+| Trumpets a2 | +14.26 | +9.67 |
+| Trumpets a6 | +20.45 | +15.86 |
+| Motif Trumpets a3 | +13.57 | +8.98 |
+
+Uncertainty: about ±3 dB each (the statistical interval, the DI toward one microphone ±2 dB, the two datasets' players);
+one or two players per instrument; players recorded alone or in groups with headphones (their effort against a real
+orchestra unknown, but it acts on strings and winds alike). The loudest patch is now Trombones a6 (+16.00), not
+Trumpets a6.
+
+**Master trim** (`ContextLevel::masterTrim`: the power sum of the sounding library notes' levels + crest, trim =
+max(0, peak); `tst_liveequivalence::dumpEvents` gains.txt, the shipped calibration, the test synth's map only, no sound):
+- Whence (strings only): every dump file identical before and after (trim 0.00 dB, peak -5.71 dBFS): unchanged.
+- Three made-up 13-part scores (flutes, oboes, clarinets, bassoons a2, Horns a6, Trumpets a2, Tenor Trombones a2, tuba,
+  strings; two bars of whole notes; not in the repo): everyone ff: trim 7.81 -> 2.81 dB; the brass ff over the rest pp:
+  7.63 -> 2.24; the flutes ff over the rest pp: trim 0 both, peak -7.46 -> -9.59 dBFS (the softer horns and trumpets
+  at pp outweigh the louder flutes).
+- So nothing can clip more: the trim follows each score's loudest moment, and with the horns and trumpets lower that
+  moment is usually lower; a passage led by flutes over a quiet orchestra peaks up to 3.96 dB higher, and the trim takes
+  it if it reaches 0 dBFS. What changes is the reverse: in a score where the brass set the trim, every other patch plays
+  that much louder (about +5 dB above), as the balance means.
+
+**Tests** (Linux, the overlay over the integrate builds; the test synth, no Kontakt / SSO): `tst_soundlibrary` 147 passed,
+5 skipped (`levelSectionBalance`: the 16 new values, and with the flute and Trumpets a6 under 2 S' = 15.86 - 6 = 9.86, the
+flute at 1.92 - 9.86 = -7.94); `tst_liveequivalence` 80 passed, 3 skipped; `tools/run_fork_tests.sh` all passed (Node and
+Python too); `check_windows_names` none. Unheard: the owner has not listened to it; nothing ran on the VM.
+
 ## Mic levels for the added patches (2026-10-15)
 
 The mic-compensation work (`[levels] micCompensation`) measured each mic alone for the 28 patches that had a section

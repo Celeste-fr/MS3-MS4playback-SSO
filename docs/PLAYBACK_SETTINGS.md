@@ -525,6 +525,19 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   pp / ff extremes (18 .. 39 dB, spread 4 .. 10 dB by pitch), not markings: they play SSO's own level and span.
 - The percussion section (Iteration 7): SSO's six-player group at mf against the string family lies within
   Skålevik 2019's -8 .. -2 dB by energy (-3.6 / -2.0, peak +1.8): no offset.
+- **In context** (since 2026-10-24, docs/BALANCE_LOG.md › Iteration 15; the owner, after checking 40 of the score
+  readings on the spot-check page, all right: "apply the full measured balance"): the flutes **+3.96**, oboes **-4.17**,
+  horns **-8.29** and trumpets **-4.59 dB** on top of the Clark & Luce level, every patch of the instrument (solo, a2, a6,
+  the Motif horns a4 and trumpets a3). The shift is how much louder (+) or softer (-) one player plays against the strings
+  at the same written marking in real music than the map implies, the pooled value of two anechoic orchestra recordings:
+  Aalto's (Beethoven 7, Bruckner 8, Mahler 1; one gain for every part) and TU Berlin's Beethoven 8 (calibrated; period
+  instruments) (docs/RESEARCH.md › 1.5a; `anechoic_balance.json` -> `anechoic_shift.py` -> `sso_anechoic_shift.json` ->
+  `gen_spitfire_sso.py` `ANECHOIC_SHIFT`). About ±3 dB each. Applied where both recordings measured the instrument, agree
+  in sign and each 90 % interval excludes 0; the clarinets (the datasets +2.7 / -0.8), bassoons (TU's interval includes 0),
+  trombones and tuba (Aalto only) and the strings (the centre) keep their Clark & Luce level. Piccolo, Alto Flute, Bass
+  Flute take the flute's shift and Cor Anglais the oboe's: **an assumption** ("plays like its family"; neither recording
+  has them). The harp's and the Grand Piano's offsets to this scale were left as they are (the harp's median over the
+  solo winds would move -3.4 dB with the shifted winds, the piano's -0.1: BALANCE_LOG.md › Iteration 15).
 - Corroboration (one player against a string player, woodwind / brass, dB): Clark & Luce + directivity +2.6 .. +4.0 /
   +11.3 .. +11.9 (pp .. mf; at ff -1.9 / +8.3); the Spheres dataset's whole sections +1.4 / +14.3 (its claps showed no
   gain change between sessions: +2.1 / +1.9 / +3.0 dB L / R / C, SD ~3.8, so the sessions stand as measured); Skålevik
@@ -541,23 +554,23 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Violas | -7.08 | -3.08 | 86.1 |
 | Celli | +2.56 | +1.89 | 92.7 |
 | Basses | +3.43 | +5.24 | 90.9 |
-| Flute Solo | -2.04 | +7.35 | 81.9 |
-| Flutes a2 | -3.87 | +5.52 | 84.9 |
-| Oboe Solo | -6.67 | -0.37 | 85.2 |
-| Oboes a2 | -9.03 | -2.73 | 88.2 |
-| Cor Anglais | -3.86 | +4.39 | 81.4 |
+| Flute Solo | +1.92 (was -2.04; in context +3.96) | +7.35 | 81.9 |
+| Flutes a2 | +0.09 (was -3.87; in context +3.96) | +5.52 | 84.9 |
+| Oboe Solo | -10.84 (was -6.67; in context -4.17) | -0.37 | 85.2 |
+| Oboes a2 | -13.20 (was -9.03; in context -4.17) | -2.73 | 88.2 |
+| Cor Anglais | -8.03 (was -3.86; in context -4.17, an assumption) | +4.39 | 81.4 |
 | Clarinet Solo | -2.79 | +3.43 | 82.0 |
 | Clarinets a2 | -4.73 | +1.49 | 85.1 |
 | Bass Clarinet (median of 4 sources) | -4.85 | +1.20 | 86.9 |
 | Bassoon Solo | -15.00 | -2.76 | 81.2 |
 | Bassoons a2 | -2.52 | +9.72 | 84.2 |
 | Contrabassoon (TU ratio) | -14.56 | -3.14 | 76.7 |
-| Horn Solo | +0.57 | +3.97 | 94.8 |
-| Horns a2 | +7.17 | +10.57 | 97.8 |
-| Horns a6 | +10.95 | +14.35 | 102.5 |
-| Trumpet Solo | +9.04 | +8.82 | 96.6 |
-| Trumpets a2 | +14.26 | +14.04 | 99.6 |
-| Trumpets a6 | +20.45 | +19.66 | 104.4 |
+| Horn Solo | -7.72 (was +0.57; in context -8.29) | +3.97 | 94.8 |
+| Horns a2 | -1.12 (was +7.17; in context -8.29) | +10.57 | 97.8 |
+| Horns a6 | +2.66 (was +10.95; in context -8.29) | +14.35 | 102.5 |
+| Trumpet Solo | +4.45 (was +9.04; in context -4.59) | +8.82 | 96.6 |
+| Trumpets a2 | +9.67 (was +14.26; in context -4.59) | +14.04 | 99.6 |
+| Trumpets a6 | +15.86 (was +20.45; in context -4.59) | +19.66 | 104.4 |
 | Tenor Trombone Solo | -0.35 | +4.67 | 89.8 |
 | Tenor Trombones a2 | +6.31 | +11.33 | 92.8 |
 | Trombones a6 | +16.00 | +20.07 | 97.5 |
@@ -568,12 +581,12 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
 | Solo Violin 2 | -0.23 | - | 77.9 |
 | Solo Viola | -3.69 | - | 75.3 |
 | Solo Cello | +3.58 | - | 82.7 |
-| Motif Horns a4 | +12.82 | - | 100.8 |
-| Motif Trumpets a3 | +13.57 | - | 101.4 |
+| Motif Horns a4 | +4.53 (was +12.82; in context -8.29) | - | 100.8 |
+| Motif Trumpets a3 | +8.98 (was +13.57; in context -4.59) | - | 101.4 |
 | Motif Trombones a5 | +8.28 | - | 96.8 |
-| Piccolo (flute) | -4.26 | - | 81.9 |
-| Alto Flute (flute) | +1.93 | - | 81.9 |
-| Bass Flute (flute) | -2.90 | - | 81.9 |
+| Piccolo (flute) | -0.30 (was -4.26; in context +3.96, an assumption) | - | 81.9 |
+| Alto Flute (flute) | +5.89 (was +1.93; in context +3.96, an assumption) | - | 81.9 |
+| Bass Flute (flute) | +1.06 (was -2.90; in context +3.96, an assumption) | - | 81.9 |
 | Contrabass Clarinet (clarinet) | -0.77 | - | 82.0 |
 | Contrabass Trombone (trombone) | -1.88 | - | 89.8 |
 | Cimbasso Solo (trombone) | +4.74 | - | 89.8 |

@@ -1627,7 +1627,13 @@ def sectionLevel(name):
 #   Strings Ensemble (2026-10-15, docs/BALANCE_LOG.md › Iteration 9): from the sections it mixes at each key
 #   (strings_ensemble.py -> sso_strings_ensemble.json, section_balance_cl.py's last argument); no real range (its sections'
 #   spans differ)
-SECTION_LEVEL2 = {n: v['M2'] for n, v in loadFit('sso_cl_section_balance.json').get('patches', {}).items()}
+#   In context (2026-10-24, docs/BALANCE_LOG.md › Iteration 15; the owner: "apply the full measured balance"): the flutes,
+#   oboes, horns and trumpets (every patch of the instrument, its family members without data as an assumption) shifted by
+#   how much softer / louder one player plays against the strings at the same marking in two anechoic orchestra recordings
+#   than the map implies (docs/RESEARCH.md › 1.5a): anechoic_balance.json -> anechoic_shift.py -> sso_anechoic_shift.json
+ANECHOIC_SHIFT = {n: v['shiftDb'] for n, v in loadFit('sso_anechoic_shift.json').get('patches', {}).items()}
+SECTION_LEVEL2 = {n: v['M2'] + ANECHOIC_SHIFT.get(n, 0.0)
+                  for n, v in loadFit('sso_cl_section_balance.json').get('patches', {}).items()}
 def sectionLevelAttributes(name):
     out = f' sectionLevel="{sectionLevel(name):g}"'
     if name in SECTION_LEVEL2:
