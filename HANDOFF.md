@@ -46,6 +46,61 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## SSO load: the allocator (branch `sso-load`, 2026-10-23, from integrate-1017 7a6e1e9f0c; not merged)
+
+The owner, 2026-10-23: "is there any way for sso to load faster, taking the ableton optimization repo as example".
+Then (the coordinator, after the owner's PC run): ship it, always on. Details and raw data:
+`~/MuseScore/ms3fork/private/sso-load/RESULT.md` (outside the repo).
+- The ableton-optimization approach (cache repeated file / registry / shell lookups) has nothing to cache here: on the
+  owner's PC setState's file and registry calls are 0.04 s of 1.3-2.6 s.
+- Where setState's CPU goes (sampled, VM and PC alike): Kontakt's code ~65 % (KSP compile about half), **the C
+  runtime's heap 16-21 %** (PC 20.7 %), memset / memcpy 3-4 %. Violins 1 - Performance's setState makes 18.9 million
+  malloc calls from Kontakt (2.2 GB).
+- mimalloc in its place (`tools/soundlibraries/kheap`): time inside the allocator 2.73 -> 1.31 s for that setState.
+  **Owner's PC** (Ryzen 5 5600X, 48 GB, Kontakt 8.13.1, his 15 last-used prepared states, 5 + 5 alternating, the kit
+  private/sso-load/pc-kit): setState in all plain 54.3 / 50.5 / 56.7 / 73.1 / 126.9 s (median 56.7), mimalloc 42.2 /
+  42.7 / 48.2 / 49.3 / 91.4 s (median 48.2): **-15 %**; CPU medians 59.9 -> 49.5 s; memory 14.5 -> 16.9 GB (+17 %).
+  VM (paired runs): -12 %. Segment heap: less memory, no clear speed change.
+- Null test of the injected DLL (VM, build 472, Whence `--verify-playback --verify-wav`, plain / mi / mi / plain): every
+  part at the floor of two identical passes (Violins 2 -85.6 / -85.1 dB against -86.1 / -85.3; Basses -24.1 / -22.7
+  against -22.8 / -24.2; the Performance parts at their floors).
+- **Shipped (this branch):** `main()` calls `ProcessAllocator::start()` first (`audio/vst3/processallocator.*`):
+  kheap.dll from MuseScore's folder, pinned, `kheap_start("mi")`. All 26 hooks are made, then enabled at once, or
+  none (system allocator). A block mimalloc doesn't own always goes back to the CRT (also the reallocs: moved into
+  mimalloc or left the CRT's); the whole `_aligned` family is answered (the CRT's returns pointers inside malloc
+  blocks that mi_free can't take); ntdll's HeapFree / HeapSize / HeapReAlloc give mimalloc blocks to mimalloc;
+  nothing is undone at exit (mimalloc's destroy_on_exit off, `MI_SKIP_COLLECT_ON_EXIT`), so Qt's and the CRT's
+  teardown and `Vst3Plugin::unloadModules`' ExitDll free safely. `MS_KHEAP_OFF=1`: the system allocator; no kheap.dll:
+  the system allocator. load times.log: "allocator: mimalloc (kheap.dll: mimalloc 2.1.7, 23 hooks)" / "system (…)".
+  Stress test (VM and wine): blocks across the switch, every function, 8 threads: 0 failures. Linux: all fork tests pass.
+- **Windows build #473** (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40031224805, sso-load @
+  8b4f87c82f; kheap.dll in the artifact's bin/, the workflow checks it). Checked on the VM (`C:\claude\b473\ms`, private
+  `sso-load/vm473/`):
+  - load times.log: "allocator: mimalloc (kheap.dll: mimalloc 2.1.7, 23 hooks)" in every run, "system (MS_KHEAP_OFF=1)"
+    with the variable.
+  - Null test, MuseScore's own allocator start against `MS_KHEAP_OFF=1`, Whence `--verify-playback --verify-wav`,
+    order off / on / on / off (`compare_renders.py`, residual dB):
+
+    | part | floor off-off | floor on-on | off-on (n0-n1) | off-on (n3-n2) |
+    |---|---|---|---|---|
+    | Violins 2 | -85.5 | -85.5 | -85.2 | -85.6 |
+    | Contrabasses | -23.9 | -22.0 | -23.6 | -19.6 |
+    | Violins 1 | -7.0 | -6.3 | -7.8 | -8.4 |
+    | Violas | -9.9 | -9.9 | -10.0 | -10.1 |
+    | Violoncellos | -7.5 | -7.4 | -7.1 | -6.5 |
+
+    Violins 2 (the part that renders deterministically) nulls at -85 dB every way, all per-note differences 0. The four
+    Performance parts differ between identical passes (round robins), and the cross pairs sit in the floors' range. The
+    Contrabasses' n3-n2 is 2.4 dB above both floors, so the other cross pairs were checked too: n0-n2 -20.1, n3-n1
+    -20.4. The pairs in time order (n0-n1 -23.6, n1-n2 -22.0, n2-n3 -19.6) and the notes over 0.5 dB apart (floors 17 / 22,
+    cross 14 / 23 / 22 / 25 of 444) show drift between passes, not a side: the same as the injected test on build 472.
+  - `--measure-load-times` Whence, off / on / on / off: score open (phase 2, 10 instances one after the other) 44.3 / 39.1 /
+    38.4 / 43.3 s (**-11 %**), setState in it 38.0 / 37.2 / 36.6 / 41.5 s; each patch alone (phase 1), setState summed 15.5 /
+    14.5 / 16.4 / 20.4 s; memory after the score open +15.5 / +18.8 / +17.6 / +15.3 GB (the samples over SMB, still
+    growing at 5 minutes). Whole runs 843 / 646 / 674 / 831 s.
+  - `--create-live-set` (Whence.als, 30 s) and `--even-levels` (303 s, round 2 envelope off its slurs' medians
+    0.55 dB) run as before with kheap.
+
 ## Build for the owner: #472 (2026-10-23)
 
 Windows build #472 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/39962541862, integrate-1017 @ 4055da9f06):

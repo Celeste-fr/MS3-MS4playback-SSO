@@ -5,13 +5,21 @@
 // tools/soundlibraries/ktload && ninja -C build ktload. The states: MuseScore's setups as SoundLibraryHost loads them
 // (voice limit, tunings), never committed (Spitfire's patches).
 //
-//   ktload <plugin.vst3> <out.txt> [--pump <s>] [--save-after <s>] <state.vst3state>[=<save.vst3state>] ...
+//   ktload <plugin.vst3> <out.txt> [--pump <s>] [--save-after <s>] [--no-process] [--offline] [--inactive]
+//          [--dll <x.dll>] [--trace <x.dll> <dump.txt>] <state.vst3state>[=<save.vst3state>] | @<state.vst3state> ...
 //
 // Each state goes into an instance of its own, one after the other on this thread (as MuseScore loads them),
 // timed: instance created, setState (component), then 47 ms of processing (MuseScore's settle). All instances are
 // kept and processed in real time (silence in, output dropped; --no-process: not processed) for --pump seconds while the
 // process's private memory and CPU time are logged each second (Kontakt loads the samples after setState). A state given "=<file>" is saved
-// (component + controller, MuseScore's MSV3 form) --save-after seconds after its load.
+// (component + controller, MuseScore's MSV3 form) --save-after seconds after its load. "@<state>": setState into the
+// previous instance (no new one). Each setState's line also gives its user / kernel CPU time, page faults and private
+// memory growth.
+//
+// sso-load (2026-10-23): --dll loads a DLL before Kontakt's module (tools/soundlibraries/kheap: the allocator
+// experiment); --trace also calls its exported ktmark(phase) at each step and ktdump(file) at the end (kheap's counts,
+// or the sampling tracer of private/sso-load-profile-work). --offline: kOffline (MuseScore's renders) instead of
+// kRealtime; --inactive: setState before setActive / setProcessing (measured: no difference, 2026-10-23).
 
 #include <windows.h>
 #include <psapi.h>
@@ -115,6 +123,23 @@ struct Instance {
       };
 
 static const int RATE = 44100, BLOCK = 512;
+typedef void (*mark_t)(const char*);
+static std::vector<mark_t> g_marks, g_dumps;
+static std::vector<std::string> g_dumpPaths;
+static void mark(const std::string& m) { for (auto f : g_marks) f(m.c_str()); }
+static void cpuSplit(double& user, double& kernel)
+      {
+      FILETIME c, e, k, u;
+      GetProcessTimes(GetCurrentProcess(), &c, &e, &k, &u);
+      auto s = [](FILETIME f) { return ((unsigned long long)f.dwHighDateTime << 32 | f.dwLowDateTime) / 1e7; };
+      user = s(u); kernel = s(k);
+      }
+static double pageFaults()
+      {
+      PROCESS_MEMORY_COUNTERS_EX pmc {};
+      GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof(pmc));
+      return pmc.PageFaultCount;
+      }
 
 int main(int argc, char** argv)
       {
@@ -122,13 +147,28 @@ int main(int argc, char** argv)
       std::string pluginPath = argv[1];
       FILE* out = fopen(argv[2], "w");
       double pump = 60, saveAfter = 20;
-      bool noProcess = false;          // --no-process: the instances not processed while waiting (MuseScore before a play)
+      bool noProcess = false;
+      bool offline = false, inactive = false;   // --offline: kOffline (MuseScore's renders); --inactive: setState before setActive          // --no-process: the instances not processed while waiting (MuseScore before a play)
       std::vector<std::pair<std::string, std::string>> states;
       for (int i = 3; i < argc; ++i) {
             std::string a = argv[i];
+            if ((a == "--trace" || a == "--dll") && i + 1 < argc) {      // --trace <dll> <dump file>; --dll <dll> (loaded first, no dump)
+                  const char* dll = argv[++i];
+                  HMODULE h = LoadLibraryA(dll);
+                  if (h) {
+                        if (auto m = (mark_t)GetProcAddress(h, "ktmark")) g_marks.push_back(m);
+                        if (a == "--trace" && i + 1 < argc)
+                              if (auto d = (mark_t)GetProcAddress(h, "ktdump")) { g_dumps.push_back(d); g_dumpPaths.push_back(argv[i + 1]); }
+                        }
+                  if (a == "--trace") ++i;
+                  fprintf(stderr, "%s %s %s\n", a.c_str(), dll, h ? "loaded" : "NOT loaded");
+                  continue;
+                  }
             if (a == "--pump" && i + 1 < argc) pump = atof(argv[++i]);
             else if (a == "--save-after" && i + 1 < argc) saveAfter = atof(argv[++i]);
             else if (a == "--no-process") noProcess = true;
+            else if (a == "--offline") offline = true;
+            else if (a == "--inactive") inactive = true;
             else {
                   const size_t eq = a.find('=');
                   states.push_back({ a.substr(0, eq), eq == std::string::npos ? std::string() : a.substr(eq + 1) });
@@ -143,6 +183,7 @@ int main(int argc, char** argv)
       static IPtr<HostApplication> host = owned(new HostApplication);
       PluginContextFactory::instance().setPluginContext(host);
       std::string err;
+      mark("module load");
       auto module = VST3::Hosting::Module::create(pluginPath, err);
       if (!module) { log("module: %s", err.c_str()); return 1; }
       VST3::Hosting::ClassInfo chosen;
@@ -158,7 +199,7 @@ int main(int argc, char** argv)
       auto process = [&](Instance& in, int n) {
             ctx.state = ProcessContext::kPlaying | ProcessContext::kTempoValid;
             ctx.sampleRate = RATE; ctx.tempo = 120;
-            in.data.processMode = kRealtime;
+            in.data.processMode = offline ? kOffline : kRealtime;
             in.data.numSamples = n;
             in.data.inputEvents = &events;
             in.data.inputParameterChanges = &changes;
@@ -167,11 +208,38 @@ int main(int argc, char** argv)
             in.processor->process(in.data);
             changes.clearQueue(); outChanges.clearQueue();
             };
-      for (auto& s : states) {
+      int idx = 0;
+      for (auto& s0 : states) {
+            auto s = s0;
+            const bool reuse = !s.first.empty() && s.first[0] == '@';       // "@state": setState into the previous instance
+            if (reuse) s.first = s.first.substr(1);
             std::string comp, ctrl;
             if (!readState(s.first, comp, ctrl)) { log("bad state %s", s.first.c_str()); continue; }
+            const std::string tag = std::to_string(++idx) + " " + s.first + (reuse ? " (reuse)" : "");
             double c0 = cpuSeconds();
+            double u0, k0; cpuSplit(u0, k0);
+            const double pf0 = pageFaults(), pm0 = privateMb();
             double a = now();
+            mark("create " + tag);
+            if (reuse && !ins.empty()) {
+                  Instance* in = ins.back().get();
+                  a = now();
+                  mark("setState " + tag);
+                  IPtr<MemoryStream> st = owned(new MemoryStream((void*)comp.data(), (TSize)comp.size()));
+                  tresult r = in->component->setState(st);
+                  const double setState = now() - a;
+                  a = now();
+                  mark("controller " + tag);
+                  if (in->controller) { st->seek(0, IBStream::kIBSeekSet, nullptr); in->controller->setComponentState(st); }
+                  const double ctl = now() - a;
+                  a = now();
+                  mark("settle " + tag);
+                  for (int f = 0; f < 2074; f += BLOCK) process(*in, std::min(BLOCK, 2074 - f));
+                  log("%s | REUSE | setState %d %.3f s | controller %.3f s | settle %.3f s | cpu %.2f s | private %.0f MB",
+                      s.first.c_str(), int(r), setState, ctl, now() - a, cpuSeconds() - c0, privateMb());
+                  in->loadedAt = now();
+                  continue;
+                  }
             std::unique_ptr<Instance> in(new Instance);
             in->provider = owned(new PlugProvider(module->getFactory(), chosen, true));
             if (!in->provider->initialize()) { log("init failed"); return 1; }
@@ -189,20 +257,28 @@ int main(int argc, char** argv)
             for (int i = 0; i < outs; ++i) component->activateBus(kAudio, kOutput, i, i == 0);
             std::vector<SpeakerArrangement> arr(outs, SpeakerArr::kStereo);
             in->processor->setBusArrangements(nullptr, 0, arr.data(), int32(arr.size()));
-            ProcessSetup ps { kRealtime, kSample32, 4096, double(RATE) };
+            ProcessSetup ps { offline ? kOffline : kRealtime, kSample32, 4096, double(RATE) };
             in->processor->setupProcessing(ps);
             in->data.prepare(*component, 4096, kSample32);
-            component->setActive(true);
-            in->processor->setProcessing(true);
+            if (!inactive) { component->setActive(true); in->processor->setProcessing(true); }
             const double created = now() - a;
             a = now();
+            mark("setState " + tag);
             IPtr<MemoryStream> st = owned(new MemoryStream((void*)comp.data(), (TSize)comp.size()));
             tresult r = component->setState(st);
             const double setState = now() - a;
+            double u1, k1; cpuSplit(u1, k1);
+            const double pf1 = pageFaults(), pm1 = privateMb();
             a = now();
+            mark("controller " + tag);
             if (in->controller) { st->seek(0, IBStream::kIBSeekSet, nullptr); in->controller->setComponentState(st); }
             const double ctl = now() - a;
             a = now();
+            if (inactive) { component->setActive(true); in->processor->setProcessing(true); }
+            const double activate = now() - a;
+            if (inactive) log("activated after setState in %.3f s", activate);
+            a = now();
+            mark("settle " + tag);
             for (int f = 0; f < 2074; f += BLOCK) process(*in, std::min(BLOCK, 2074 - f));     // (47 ms: MuseScore's settle)
             const double settle = now() - a;
             a = now();
@@ -212,13 +288,17 @@ int main(int argc, char** argv)
                   for (int k = 0; k < params; ++k) { ParameterInfo info {}; in->controller->getParameterInfo(k, info); }
                   }
             const double titles = now() - a;
-            log("%s | %zu KB | created %.3f s | setState %d %.3f s | controller %.3f s | settle %.3f s | %d parameters' info %.3f s | cpu %.2f s | private %.0f MB",
-                s.first.c_str(), comp.size() / 1024, created, int(r), setState, ctl, settle, params, titles, cpuSeconds() - c0, privateMb());
+            log("%s | %zu KB | created %.3f s | setState %d %.3f s | controller %.3f s | settle %.3f s | %d parameters' info %.3f s | cpu %.2f s | private %.0f MB"
+                " | in setState: user %.3f s kernel %.3f s page faults %.0f private +%.0f MB",
+                s.first.c_str(), comp.size() / 1024, created, int(r), setState, ctl, settle, params, titles, cpuSeconds() - c0, privateMb(),
+                u1 - u0, k1 - k0, pf1 - pf0, pm1 - pm0);
             in->save = s.second;
             in->loadedAt = now();
+            mark("idle " + tag);
             ins.push_back(std::move(in));
             }
-      log("all %zu loaded | private %.0f MB | cpu %.1f s", ins.size(), privateMb(), cpuSeconds());
+      log("all %zu loaded | private %.0f MB | cpu %.1f s | since start %.3f s", ins.size(), privateMb(), cpuSeconds(), now());
+      mark("pump");
       auto start = std::chrono::steady_clock::now();
       long long frames = 0;
       double nextLog = now() + 1;
@@ -241,6 +321,7 @@ int main(int argc, char** argv)
             Sleep(5);
             }
       log("done | private %.0f MB", privateMb());
+      for (size_t k = 0; k < g_dumps.size(); ++k) g_dumps[k](g_dumpPaths[k].c_str());
       fclose(out);
       _exit(0);       // (Kontakt's teardown: not measured)
       }
