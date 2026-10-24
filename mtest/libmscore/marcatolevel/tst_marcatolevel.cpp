@@ -224,7 +224,8 @@ void TestMarcatoLevel::defaultUnchanged()
       // the reference's held notes start early by their pitch's onset (heldNotes/byPitch 1, the default until 2026-10-08)
       // and the level settings that came later (section balance, real range, mic compensation, context, even levels) off: this is
       // the score without levels, as it was rendered then
-      s->setMetaTag(Playback::metaTag, "heldNotes/byPitch=1;" + noLevelSettings());
+      // (shorts/staccatoLength, 1 by default since 2026-10-24, pinned off: the reference is the staccatos at MS4.7.5's length)
+      s->setMetaTag(Playback::metaTag, "heldNotes/byPitch=1;shorts/staccatoLength=0;" + noLevelSettings());
       QStringList all;
       all << "# built-in" << events(s, nullptr) << "# SSO" << events(s, lib);
       const QString text = all.join('\n') + '\n';

@@ -67,9 +67,11 @@ static const std::vector<Definition> DEFINITIONS = {
       { "shorts/staccatissimo", 25, 1, 100, "%", "the same for staccatissimo", true },
       { "shorts/tenuto", 99, 1, 100, "%", "the same for tenuto", true },
       { "shorts/portato", 74.5, 1, 100, "%", "the same for portato (staccato and tenuto)", true },
-      // (the owner, 2026-10-24: "why not", to try by ear; 0 everywhere until he has heard it. Real players' staccato lasts about a
-      // fixed time, not a share: RESEARCH.md 2.5a, staccato_lengths.json; the readings it leans on await his review)
-      { "shorts/staccatoLength", 0, 0, 1, "on/off",
+      // (the owner, 2026-10-24: "why not", to try by ear; 1 by default and in Recommended since he heard the A/B clips the same
+      // day: Violins 1 "B for the first set, same for the next set", Celli "B", Oboe "same"; the bassoon not heard. Real
+      // players' staccato lasts about a fixed time, not a share: RESEARCH.md 2.5a, staccato_lengths.json, from his reviewed
+      // readings)
+      { "shorts/staccatoLength", 1, 0, 1, "on/off",
         "1: a library staccato (staccatissimo) note is meant to sound, and is held, no longer than real players sound one: "
         "the map's <Instrument staccatoLength> (staccatissimoLength) seconds, measured (TU Berlin Beethoven 8, Spheres K. 550: "
         "to -20 dB under the note's peak; winds ~0.095-0.16 s, strings ~0.19-0.22 s, staccatissimo 0.16 s from the literature); "
@@ -588,8 +590,8 @@ QString iniTemplate()
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
 //    2026-10-20: the owner approved the rule); levels/transitionLevels (0 in both since 2026-10-22, branch slur-joins, until the
 //    owner has heard it); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
-//    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both since 2026-10-24, branch
-//    staccato-length, until the owner has heard it and reviewed the readings). The other settings are not in the table because: legato/keepMs acts
+//    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both on 2026-10-24, branch
+//    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B"). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -612,7 +614,7 @@ const std::vector<Preset>& presets()
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 2 }, { "shorts/staccatoLength", 0 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 2 }, { "shorts/staccatoLength", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
@@ -805,6 +807,9 @@ void setIniValuesForTest(const std::map<QString, QString>& values)
       // (levels/attackLevels likewise, 2 by default since 2026-10-23)
       if (!values.count("levels/attackLevels"))
             take(*i, "levels", "attackLevels", "0");
+      // (shorts/staccatoLength likewise, 1 by default since 2026-10-24)
+      if (!values.count("shorts/staccatoLength"))
+            take(*i, "shorts", "staccatoLength", "0");
       install(i);
       }
 

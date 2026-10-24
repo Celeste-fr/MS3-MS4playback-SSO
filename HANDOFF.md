@@ -46,6 +46,24 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Staccato length (branch `staccato-length`, 2026-10-24, from integrate-1017 e951ee4a69; not merged)
+
+`[shorts] staccatoLength` (docs/PLAYBACK_SETTINGS.md › Staccato length): a library staccato (staccatissimo) is meant to
+sound, and is held, no longer than real players sound one (the map's `<Instrument staccatoLength staccatissimoLength>`,
+generated from `tools/soundlibraries/staccato_lengths.json`, RESEARCH.md 2.5a, the owner's reviewed readings only:
+https://claude.ai/artifact/GNwFDt1PcNHJ1UWoWugvDc). **1 by default and in Recommended, 0 in Library default**: the owner
+heard the A/B clips (https://claude.ai/artifact/DvMdsMtTigjhLzztAjnTSz; Windows build #476,
+https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40126286353, MuseScore's export of real SSO on the VM,
+`share/verifyplayback/Staccato lengths.musicxml`): Violins 1 "B for the first set, same for the next set", Celli "B",
+Oboe "same", Bassoon "same" (B = 1). So it is heard to matter on slow string staccatos; the winds' SSO staccato samples
+are already short (their clips differed 22-30 dB under the signal). Whence (Recommended, 1 against 0): 7 notes change,
+all bar 8's staccato eighths (Violins 1 beat 3, Violins 2 beats 1-3, Violas beat 3), held 0.20-0.21 -> 0.19 s; the audit
+identical (OVERLAP 0, UNMEASURED 0, CAPPED 0, ARRIVAL 12 fail, LEVEL STEP 12 info, the rest 0). Open:
+- No Windows build with the new default yet (#476 has it at 0; a score or playback.ini with `[shorts] staccatoLength=1`
+  plays it there).
+- The heard length stays well above the players' because of SSO's hall on the Tree mic; RESEARCH.md 2.5a proposal c
+  (measure SSO's shorts on the Close mic) and b (shorter notes before a rest) are not done.
+
 ## Balance in context (branch `anechoic-balance`, 2026-10-24, from integrate-1017 329e1fa54a; not merged)
 
 The owner checked the score readings' spot-check page (40 of 40 right) and chose "apply the full measured balance"
