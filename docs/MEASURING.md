@@ -128,6 +128,52 @@ Rules below are the same ones the heard check and the map's onsets use, so new n
   level. The perceived envelope depends on level, so every render is scaled by one gain that puts those cells' median
   peak at T units first. The accent study measured at the real players' 59.3 units this way. Run with `--keep-wavs`.
 
+## Tone: faulty round robins, clicks, noise (`tone_check.py`)
+
+`tools/soundlibraries/tone_check.py` (its header is the reference) measures every note's tone and noise and compares it
+with the patch's own median. It is measure_patch's analysis step for tone (`--what …,tone`) and also reads any render
+with its notes (a kthost event file, a `plan.json`, a verify `events.tsv`).
+
+- **Play the round robins.** A faulty round robin shows only when the render plays every round robin: the same note
+  repeated closer than the patch's round-robin reset (SSO's Performance patches reset after 1.5 s without a note-on;
+  measure_patch's default `--gap` 1.6 s resets them on purpose, so every take plays round robin 1). For tone:
+
+  ```
+  python3 tools/soundlibraries/measure_patch.py all --patch "Celli - Performance" \
+      --library "share/soundlibraries/Spitfire Symphony Orchestra.xml" --what level,tone \
+      --pitches 45:51 --velocity 64,90,99,100,106,116 --lengths 500 --repeats 12 --repeat-gap 0.4 --takes 2 \
+      --out ~/MuseScore/ms3fork/private/<study>/work
+  ```
+
+  This is sso_bad_samples.json's protocol (12 attacks, 0.5 s on, 0.4 s apart) as cells: the measures above on each
+  cell's first note, tone on all twelve.
+- **What it reports** (per note, against its group: the same key, cents, velocity, cell; over takes and repeats):
+  - `narrow tone`: one harmonic (or, on an inharmonic sound, one 1/12-octave band) standing out from the group's median
+    by ≥ 6 dB beyond its neighbours. A darker or louder recording is a step or an offset, not a peak, and doesn't count;
+    neither does energy that was already ringing before the note-on (a reverb tail);
+  - `dark` / `bright` (centroid ≥ 150 cents or tilt ≥ 2 dB/oct), `noisy` (the noise between the harmonics ≥ 6 dB up),
+    `quiet` / `loud` (≥ 3 dB), `noisy floor` (a flat floor before the note ≥ 10 dB up);
+  - `click at note-on` / `pop at note-off`: a linear-prediction model of the note's sustain leaves a residual spike
+    (≥ 15 dB, and 6 dB over the group). SSO's isolated string attacks: −17 … +3 dB at the note-on, 1 … 10 dB at the
+    note-off; a waveform cut at its crest: +24 dB;
+  - the round robin: a fault at attacks 5 and 11 of 12 is "round robin 5 of 6";
+  - key outliers: a key whose medians differ from the keys within ±2 semitones (level 4 dB, centroid 300 cents, tilt
+    3 dB/oct, noise 8 dB): one recording for every round robin, or a sample-set seam.
+- **Feeding the map.** `tone.json`'s `avoid` is a proposal in sso_bad_samples.json's schema: per key, neighbouring
+  measured velocities whose attacks have a tone flag, played at the nearest clean velocity (below first); neighbouring
+  keys merged. A person checks it before it goes into sso_bad_samples.json (gen_spitfire_sso.py reads it): the accented
+  attack's velocities (117-127) may be another technique, as sso_bad_samples.json says.
+- **In a passage of music** (a verify render's `events.tsv` with `--slot`), notes are grouped by key, velocity, joined
+  (a legato transition) and the key they come from. Groups then mix lengths and contexts, so take the flags as leads
+  and measure them again as isolated repeats. Example (Whence's Celli, verify render of 2026-10-20, slot 10): the C3
+  transitions from D3 carry harmonic 9 (1177 Hz) +6.5 dB over its neighbours in all 11, those from B2 −3 dB in all 12:
+  a property of that transition, not a round robin; the same frequency as sso_bad_samples.json's fault (1184 Hz), not
+  checked by ear.
+- **Checked on**: synthetic faults (`test_tone_check.py`: the narrow round robin of sso_bad_samples.json rebuilt, with
+  its `avoid` re-found exactly; dark, noisy, click, pop; a dark key) and 120 clean SSO attacks (kthost, five string
+  Performance patches, v64 / 122, private plain-accents renders; none flagged). There is no kept render of the
+  original fault (its renders and script are lost): re-finding it in real SSO needs a VM run of the command above.
+
 ## kthost
 
 `kthost <plugin.vst3> <state|-> <events.txt> <out.wav> [options]` (`--help` lists them all). The source is

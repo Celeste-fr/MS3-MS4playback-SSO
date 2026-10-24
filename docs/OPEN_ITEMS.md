@@ -733,7 +733,12 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
   `sso_percussion_levels`, `sso_rachm_cc1_sweep`, `sso_rachm_context_match`, `sso_slur_swell` were not found on the dev
   machine), best rebuilt as `measure_patch.py` (#1) cells; Spheres' stem fetcher `rzip.py` (private accent-spheres).
 
-### 12. Patch tone / noise analyzer
+### 12. Patch tone / noise analyzer: BUILT (branch `tone-check`, 2026-10-23)
+- **Built**: `tools/soundlibraries/tone_check.py` (docs/MEASURING.md › Tone, TOOLS.md › 4) and measure_patch.py
+  `--what …,tone --repeats N --repeat-gap s`; tests `test_tone_check.py` (synthetic faults; `MS_TONE_REAL` a real render
+  that must flag nothing: 120 SSO attacks, none flagged). Left: re-find sso_bad_samples.json's Celli C3 round robin in a
+  real render (no render of it is kept: one VM run of the MEASURING.md command); Ample's quiet / dark strum (10) through
+  it; Stage B's tone measures by dynamic.
 - **Spec**: `tools/soundlibraries/tone_check.py <wav> <notes.txt>`: per note spectral centroid, tilt, noise floor,
   click / pop detection at note-on / off, round-robin outliers (the method behind `sso_bad_samples.json`), against the
   patch's own median; feeds `avoid` and flags faulty samples automatically.

@@ -15,8 +15,9 @@ PLAN (what is played). A cell is one measured note in a stated context; every ce
 is ABBA over the whole plan: take 1 plays the cells in plan order, take 2 in reverse, take 3 forward …, so a slow drift
 (a warming cache, a round robin cycle) falls equally on every cell. Two kinds of cells:
 
-  note        (--what includes level, onset or release) a note after silence: every --pitches x --velocity x --cc1 x
-              --cc11 x --lengths (ms). Measured: level, onset, release.
+  note        (--what includes level, onset, release or tone) a note after silence: every --pitches x --velocity x --cc1
+              x --cc11 x --lengths (ms). Measured: level, onset, release. --repeats N plays it N times in a row,
+              --repeat-gap s apart (the measures above on the first; tone on every one: a patch's round robins in turn).
   transition  (--what includes transition) a figure ending on a target note B at pitch + interval, each
               --pitches x --intervals x --before x --before-len (ms, the note before's IOI) x --ioi (ms, B's own
               length, the IOI after it). --before:
@@ -70,6 +71,10 @@ units, about dB) and power_envelope (dBFS, 5 ms).
   levelB / levelA  transition cells: perceived peak of B over [B on, B on + min(ioi, 400)], of A over its own span
   bOnset15    transition cells whose B is an attack (before staccato): B's onset15; bMasked 1 when A's release stays
               within 15 dB of B's peak (no reading, as the heard check's "masked"; its tail extrapolation isn't done here)
+  tone        (--what includes tone) every note of every cell through tone_check.py (spectral centroid, tilt,
+              harmonics-to-noise, noise floor, clicks at note-on / off, 1/12-octave bands), kept in res/*.json's rows;
+              analyze compares each note with its group (cell and note, over takes and repeats) and writes WORK/tone.json
+              and result.json's "tone" (flags, key outliers, the proposed `avoid`). tone_check.py WORK does the same.
 Over the takes: n, median, mean, SD, 95 % CI of the mean (Student's t), and every take. analyze --reanalyze WAVDIR
 --at-level T --at-level-cells "velocity=64,lengthMs=211" (renders kept by run --keep-wavs): every render scaled by one gain
 so that those cells' median peak is T loudness units before measuring, as the accent study did (the perceived envelope
@@ -170,7 +175,8 @@ def map_switch(library, patch, articulation):
 
 def cell_label(c):
     if c['kind'] == 'note':
-        return 'v%d cc1=%d cc11=%d %dms' % (c['velocity'], c['cc1'], c['cc11'], c['lengthMs'])
+        return 'v%d cc1=%d cc11=%d %dms%s' % (c['velocity'], c['cc1'], c['cc11'], c['lengthMs'],
+                                              ' x%d' % c['repeats'] if c.get('repeats', 1) > 1 else '')
     return '%s %dms %+g ioi%d v%d/%d cc1=%d %s early%d%s' % (c['before'], c['beforeLenMs'], c['interval'], c['ioiMs'],
                                                            c['attackVelocity'], c['transitionVelocity'], c['cc1'],
                                                            c.get('speed', 'played'), c.get('bEarlyMs', 0),
@@ -196,7 +202,7 @@ def build_cells(a):
     cc1s = parse_list(a.cc1, int) or [64]
     cc11s = parse_list(a.cc11, int) or [127]
     cells = []
-    if what & {'level', 'onset', 'release'}:
+    if what & {'level', 'onset', 'release', 'tone'}:
         for p in pitches:
             for v in parse_list(a.velocity, int) or [64]:
                 for c1 in cc1s:
@@ -204,6 +210,8 @@ def build_cells(a):
                         for ln in parse_list(a.lengths, int) or [1000]:
                             cells.append({'kind': 'note', 'pitch': p, 'velocity': v, 'cc1': c1, 'cc11': c11,
                                           'lengthMs': ln})
+                            if a.repeats > 1:
+                                cells[-1]['repeats'] = a.repeats
     if 'transition' in what:
         for p in pitches:
             for i in parse_list(a.intervals, float) or [2]:
@@ -236,7 +244,11 @@ def cell_notes(c, t, a):
     transition at B's written end, sent as early as B: B's own spacing as written), so that B's glide runs into the next
     note as in a run of the music, not into a release"""
     if c['kind'] == 'note':
-        return [('N', c['pitch'], c['velocity'], t, t + c['lengthMs'] / 1000)]
+        # (--repeats: the note again and again, --repeat-gap s apart: R2, R3 ... after N, so that a patch's round robins
+        # play in turn, for tone_check.py)
+        L, step = c['lengthMs'] / 1000, c['lengthMs'] / 1000 + getattr(a, 'repeat_gap', 0.4)
+        return [('N' if i == 0 else 'R%d' % (i + 1), c['pitch'], c['velocity'], t + i * step, t + i * step + L)
+                for i in range(c.get('repeats', 1))]
     L, ioi, ov = c['beforeLenMs'] / 1000, c['ioiMs'] / 1000, a.overlap / 1000
     e = c.get('bEarlyMs', 0) / 1000          # (B's note-on this much before its written time, as MuseScore starts a
     p, q = c['pitch'], c['pitch'] + c['interval']   # transition early; its written time stays)
@@ -524,7 +536,8 @@ def plan(a):
             'switch': sw, 'what': a.what, 'takes': a.takes, 'order': 'ABBA (take 1 forward, take 2 reversed, ...)',
             'gap': a.gap, 'pre': a.pre, 'overlap': a.overlap, 'staccatoGap': a.staccato_gap, 'warm': a.warm,
             'probePitch': probe, 'kthostOpts': a.kthost_opts, 'speedScript': speed_script, 'speedCC': speed_cc,
-            'after': a.after, 'afterLen': a.after_len, 'microtoneBends': a.microtone_bends, 'bend': bend,
+            'after': a.after, 'afterLen': a.after_len, 'repeats': a.repeats, 'repeatGap': a.repeat_gap,
+            'microtoneBends': a.microtone_bends, 'bend': bend,
             'files': files, 'cells': played, 'command': public_command(sys.argv)}
     with open(os.path.join(work, 'plan.json'), 'w') as f:
         json.dump(meta, f, indent=0)
@@ -696,10 +709,21 @@ def analyze_file(work, name, wav, a, gain_db=0.0):
         x = x * 10 ** (gain_db / 20)
     envs = _env(x, sr)
     rows = []
+    tone = 'tone' in meta['what'].split(',')
+    if tone:
+        import tone_check
+        tnotes = {}
+        for n in tone_check.read_plan(os.path.join(work, 'plan.json'), name):
+            tnotes.setdefault(n['cellId'], []).append(n)
+        trows = {}
+        for n in tone_check.measure(x, sr, [n for v in tnotes.values() for n in v]):
+            trows.setdefault(n['cellId'], []).append(n)
     for c in meta['cells']:
         if c['file'] != name:
             continue
         rows.append({'id': c['id'], 'take': c['take'], 'm': measure_cell(c, x, sr, envs, a)})
+        if tone:
+            rows[-1]['tone'] = trows.get(c['id'], [])
     res = {'file': name, 'gainDb': gain_db, 'sampleRate': sr, 'seconds': round(len(x) / sr, 3),
            'peakDbfs': round(20 * math.log10(max(1e-12, float(abs(x).max()))), 2), 'rows': rows}
     os.makedirs(os.path.join(work, 'res'), exist_ok=True)
@@ -811,6 +835,14 @@ def analyze(a):
         if os.path.exists(p):
             r = json.load(open(p))
             result.setdefault('renders', []).append({k: r[k] for k in ('file', 'gainDb', 'seconds', 'peakDbfs')})
+    if 'tone' in meta['what'].split(','):
+        import tone_check
+        tr = tone_check.check_work(work)
+        with open(os.path.join(work, 'tone.json'), 'w') as f:
+            json.dump(tr, f, indent=1)
+        result['tone'] = {k: tr[k] for k in ('flags', 'keys', 'avoid')}
+        result['tone']['detail'] = 'tone.json (tone_check.py)'
+        print('tone: %d flags -> %s' % (len(tr['flags']), os.path.join(work, 'tone.json')))
     for c in cells:
         result['byPitch'].setdefault(str(c['key']['pitch']), {})[c['label']] = \
             {n: m['median'] for n, m in c['measures'].items() if not n.startswith('_')}
@@ -1129,7 +1161,12 @@ def add_grid(p):
     p.add_argument('--library-name', default='Spitfire Symphony Orchestra', help='the setups folder on the VM')
     p.add_argument('--articulation', help='the articulation to switch to (from --library)')
     p.add_argument('--switch', default='none', help='cc:N:V, key:K[:V] or none (default) when no --articulation')
-    p.add_argument('--what', default='level,onset', help='level,onset,release,transition')
+    p.add_argument('--what', default='level,onset', help='level,onset,release,transition,tone (tone: every note\'s '
+                   'tone_check.py measures, kept in res/*.json; analyze adds the tone flags and WORK/tone.json)')
+    p.add_argument('--repeats', type=int, default=1, help='note cells: the note this many times in a row (round robins '
+                   'in turn, for tone; sso_bad_samples.json: 12)')
+    p.add_argument('--repeat-gap', type=float, default=0.4, help='--repeats: silence between them, s (shorter than the '
+                   'patch\'s round-robin reset: SSO Performance 1.5 s)')
     p.add_argument('--pitches', help='lo:hi[:step] or a,b,c')
     p.add_argument('--velocity', default='64')
     p.add_argument('--cc1', default='64')

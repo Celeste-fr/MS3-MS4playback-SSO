@@ -458,7 +458,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   patch on the VM (VM locks, resumable, ABBA takes, CC119 speed played / written) through **kthost**
   (`tools/soundlibraries/kthost/`: an offline host built from `vst3plugin.cpp` / `kontaktsetup.cpp`, `VST3PLUGIN_NO_SETTINGS`;
   in the Windows CI artifact's `bin/`); a transition's perceptual reference is f0 leave + 23.5 ms, not arrival (the owner,
-  2026-10-21).
+  2026-10-21). Tone: `tools/soundlibraries/tone_check.py` (faulty round robins, clicks, noise against the patch's own
+  median; `measure_patch.py --what …,tone --repeats N`; its `avoid` proposal goes into `sso_bad_samples.json` only after a
+  person checked it; docs/MEASURING.md › Tone).
 - Measurement runs (supervised: `superviseExtract`, a hang or crash retried then left out; resumable: a start
   skips what earlier runs of the same version did): `--extract-library … --extract-controllers
   --extract-pitch-bend`, `--check-timing`, `--check-rest [--rest-parts range,repeats,controls,legato,onset,shorts,
