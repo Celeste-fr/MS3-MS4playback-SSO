@@ -1,0 +1,20 @@
+# Articulation readings used by the staccato-length study (docs/RESEARCH.md 2.5a). Format as anechoic_balance/readings/FORMAT.txt,
+# type "artic" (value: staccato = dot, unmarked = no dot / wedge / slur / accent, text = printed instruction).
+# status: "owner-confirmed 2026-10-15" (the K. 550 readings of technique_offsets.py) or
+#         "AGENT READING, NOT REVIEWED": read by Claude from the page renders on 2026-10-24; by the readings rule they need a review
+#         page (crops beside the reading) before any of this changes the map or code. Crops: private research-staccato/review/.
+# Beethoven 8: B&H Werke Serie 1 No. 8 (IMSLP #61814), pdf research-balance/dl/scores/b8.pdf.
+# Mozart K. 550: Breitkopf & Härtel, IMSLP #492601 (as technique_offsets.py / spheres_k550_staccato.json).
+piece	part	type	start	end	value	status	comment
+b8_ii	ob1,ob2,cl1,cl2,bsn1,bsn2,hn1,hn2	text	1:1		pp sempre staccato	AGENT READING, NOT REVIEWED	p. 25 system 1, under each wind staff
+b8_ii	ob1,ob2,cl1,cl2,bsn1,bsn2,hn1,hn2	artic	1:1	10:3	staccato	AGENT READING, NOT REVIEWED	repeated sixteenth chords; dots printed in some bars (clearly in 1-2), others undotted under "sempre staccato"; bar 9 has a tied ff/sf note (excluded by the IOI filter)
+b8_ii	ob1,ob2,cl1,cl2,bsn1,bsn2,hn1,hn2	artic	18:1	22:3	staccato	AGENT READING, NOT REVIEWED	p. 26 system 2: sixteenths dotted in bar 18 (cresc.), undotted 19-22 (f from bar 20) under "sempre staccato"; uncertain whether the instruction still holds after the f / sf bars 13-17
+b8_ii	ob1,ob2,cl1,cl2,bsn1,bsn2,hn1,hn2	artic	14:2	17:3	unmarked	AGENT READING, NOT REVIEWED	p. 26 system 1: eighths followed by a 16th or 8th rest, no dot (bars 14, 16, 17; f / sf then dimin.); "sempre staccato" of bar 1 may still apply: classed "sempre staccato in force"
+b8_ii	vc,cb	artic	14:2	17:3	unmarked	AGENT READING, NOT REVIEWED	p. 26 system 1: eighths followed by a 16th or 8th rest, no dot (bars 14, 16, 17)
+b8_iv	vl1	artic	6:3	8:5	staccato	AGENT READING, NOT REVIEWED	p. 37 system 2: bar 6 two slurred quarters then two dotted quarters; bars 7-8 four dotted quarters each; pp from bar 0, no other dynamic printed
+b8_iv	vl1	artic	9:1	9:5	unmarked	AGENT READING, NOT REVIEWED	bar 9: four quarters without dots (wide leaps)
+b8_iv	vl1	artic	10:1	10:2	unmarked	AGENT READING, NOT REVIEWED	bar 10: a quarter without dot, a quarter rest, then six eighths
+b8_iv	-	text	0:1		Allegro vivace, whole = 84	AGENT READING, NOT REVIEWED	tempo mark read as "o = 84" (whole note); the recording plays a bar in ~0.8 s
+k550_i	vl1	artic	30:1	33:5	staccato	owner-confirmed 2026-10-15	"A stacc": the dotted quarters of bars 30-33 (eighths without dots left out); bar 29 dotted half held
+k550_i	vc,cb	artic	191:1	197:5	staccato	owner-confirmed 2026-10-15	"C stacc8": all staccato eighths (bar 191 note 2's missing dot a typo); bar 198 whole note
+k550_i	vc,cb	artic	1:1	9:5	unmarked	owner-confirmed 2026-10-15	"B quarter": one quarter per bar followed by rests, p; bars 10-15 whole notes
