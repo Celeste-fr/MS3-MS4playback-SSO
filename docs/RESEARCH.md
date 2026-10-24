@@ -1064,14 +1064,86 @@ occupied 1.9–2.0 s.
 SSO's Tree / Ambient mics carry Lyndhurst's tail, so adding MS4's 2.2 s on top stacks two rooms. LIVE.md already
 notes: no return tracks, "since SSO brings its own room".
 
-**Missing.** Lyndhurst's T as SSO's mics hear it. Experiment on the VM: SSO shorts (Spiccato, staccato mf, Tree mic
-only) through Kontakt, then Schroeder backward integration for EDT / T20 / T30 in octave bands. Then:
-- MS3 / MS4 parts could be matched to the same room (ReverbTimeMs, TimeHigh) when they share a score with library
-  parts;
-- the master trim's crest (14.5 dB) can be checked against the room's build-up.
+**Measured: Lyndhurst as SSO's mics carry it** (2026-10-24, branch `research-reverb`; Windows test VM, kthost of build
+#474, Kontakt 8 + SSO, offline 44.1 kHz; `tools/soundlibraries/sso_room.py` → `sso_room.json`; no audio kept).
+- **What was rendered.** 55 renders, one per patch × mic configuration: the five string sections (All techniques) and
+  Flute, Oboe, Horn, Trumpet and Tenor Trombone Solo, each mic alone at 1.0 (the others 0, as `mic_levels.py` did), plus
+  the Tree with the Release control at 1.0. In each: the shortest articulation (strings Spiccato, winds / brass staccato)
+  at velocity 100, CC1 100, on 3 pitches. The shorts were played released after 0.15 s (3 takes; as MuseScore plays a
+  staccato) and held 5.5 s (2 takes; the sample's own tail). The strings also played pizzicato both ways, and every
+  patch played a 2.5 s Long and its release (2 takes).
+- **Analysis.** Octave bands by a 4th-order Butterworth filter. Lundeby's floor and crossing point, Schroeder
+  integration, EDT / T20 / T30 (ISO 3382-1). The analysis stops 0.35 s before the sample's end. Each mic's relative
+  impulse response against the Close mic comes from regularised deconvolution over the held notes. Close is not dry,
+  so this is an approximation.
+- **A property of SSO's samples.** Every sample ends in digital silence about 2.2–2.5 s (shorts) or 2.7–3.1 s (Long
+  releases) after it starts, with a fade over its last ~0.3 s. Held shorts reach that end at −45 to −50 dB broadband
+  and −65 to −80 dB at 1 kHz. Below 125 Hz a recording floor (hall rumble) sits ~45 dB under the peak, so the 125 Hz
+  values are unreliable. 8 kHz is unreliable too, because a short note has little energy there.
 
-**Value: low–medium.** It matters only for mixed built-in + library scores. **Effort: low** (one VM render and a
-script).
+**The room by mic: medians over patches, T30 in s (500 Hz / 1 kHz / 2 kHz / 4 kHz)**
+
+| mic | strings, held short | winds / brass, held short | as played (short released at 0.15 s), strings | Long's release, strings | EDT 1 kHz, held | level 0.5 s after the peak (strings / winds) | lag after Close | DRR / C80 of h (strings) |
+|---|---|---|---|---|---|---|---|---|
+| Close | 1.92 / 1.93 / 1.87 / 1.68 | 2.01 / 1.76 / 1.58 / 1.42 | 1.48 / 1.52 / 1.45 / 1.34 | 1.54 / 1.31 / 1.23 / 1.14 | 0.60 (strings) / 0.29 | −26 / −38 dB | 0 | (reference) |
+| Tree (the default mix) | 2.05 / 2.02 / 1.92 / 1.71 | 2.09 / 2.11 / 1.92 / 2.04 | 1.60 / 1.54 / 1.49 / 1.36 | 1.59 / 1.54 / 1.43 / 1.33 | 1.84 / 1.63 | −19 / −21 dB | +6.8 ms (winds +16.6) | −7.7 dB / +2.8 dB |
+| Ambient | 2.10 / 2.02 / 1.97 / 1.79 | 2.18 / 2.14 / 2.04 / 1.95 | 1.67 / 1.56 / 1.55 / 1.44 | 1.69 / 1.53 / 1.47 / 1.38 | 2.17 / 2.19 | −17 / −16 dB | +21.7 ms (winds +32.0) | −11.8 dB / −0.3 dB |
+| Outrigger | 2.08 / 1.94 / 1.87 / 1.71 | 2.18 / 2.13 / 1.91 / 2.74 | 1.59 / 1.53 / 1.48 / 1.38 | 1.49 / 1.45 / 1.43 / 1.34 | 1.86 / 1.84 | −17 / −21 dB | +10.2 ms (winds +17.3) | −9.3 dB / +2.9 dB |
+| Leader (strings only) | 2.03 / 1.92 / 1.88 / 1.66 | — | 1.54 / 1.49 / 1.46 / 1.35 | 1.53 / 1.35 / 1.34 / 1.13 | 1.03 | −27 dB | −0.1 ms | −3.4 dB / +8.8 dB |
+
+What the measurements show:
+- **One room, about 2.0 s at mid frequencies, on every mic.** The Tree's held-short T30 at 1 kHz lies between 1.98 and
+  2.12 s for nine of the ten patches; Tenor Trombone Solo gives 1.63 s. The tail falls towards the highs: about
+  1.7–1.8 s at 4 kHz, a ratio of 0.85 to the mid value. That is a concert hall's decay, near Beranek's best halls
+  occupied (1.9–2.0 s, table above), and shorter than the "just under three seconds" quoted for the empty hall with the
+  canopy. An orchestra in the room absorbs, and the canopy setting is unknown.
+- **The mics differ in direct sound, not in decay time.** Close's EDT is 0.6 s (strings) or 0.3 s (winds) against its
+  T30 of 1.9 s: a strong direct sound over the same tail. Its tail 0.5 s after the peak is 7–17 dB lower than the
+  Tree's. The Tree and Outrigger give C80 ≈ +3 dB and Ambient ≈ 0 dB (the deconvolved h against Close; a hall seat's
+  C80 is −1 to +1, Beranek's table). So the Tree sounds a little closer than a good seat, and Ambient like one. Leader
+  is a second close mic (C80 +9 dB, no lag).
+- **Pre-delay.** The mics keep their natural delays: Tree +7 ms after Close for the strings and +17 ms for the winds,
+  who sit further back. Ambient +22 / +32 ms, Outrigger +10 / +17 ms. The first reflection can't be resolved by this
+  method, because the notes' own 2–20 ms structure fills those bins.
+- **The release shortens what is heard.** As MuseScore plays a staccato (the key released after 0.15 s), Kontakt's
+  release envelope cuts the tail. T30 drops from ~2.0 to ~1.5 s on every mic and the decay ends sooner. The Long's
+  release also measures ~1.5 s. With Release at 1.0 instead of the patch default 0.4961, the Long's release starts
+  louder: +6 dB at 0.2 s (strings −0.4 against −6.6 dB; winds −5.5 against −8.2). Its T30 hardly changes (1.51 / 1.53
+  s against 1.59 / 1.54 at 500 Hz / 1 kHz on the Tree). A held short's decay is the same at either Release.
+
+**MuseScore 4's reverb, measured the same way** (`tools/soundlibraries/room/musereverb_ir.cpp`: the fork's
+`effects/musereverb` on a unit impulse, default parameters):
+- T30 by band: 2.22 s (125 Hz), 2.23 (250), 2.24 (500), 2.20 (1 k), 2.03 (2 k), 1.53 (4 k), 0.96 (8 k).
+- First energy at 25 ms, peak at 30 ms: the 10 ms PreDelay plus the early reflections.
+- With MuseReverb's send 0.3, the wet energy lies 13.4 dB under the dry signal, so DRR ≈ +13 dB. That is much drier
+  than any SSO room mic: the Tree's h gives −7.7 dB.
+- The decay is 0.2 s longer than SSO's mid, and 0.25 s shorter than SSO's at 4 kHz (1.53 against ~1.75 s).
+
+**What MuseScore does with it now.** `Vst3Synth` is a dry guest synthesizer (`dry()` true, `MasterSynthesizer::process`
+adds guests after the effects), so **no MuseScore reverb reaches library parts**. MS3 / MS4 parts get MuseReverb. The
+plain Live set has no return tracks (LIVE.md).
+
+**Implication (a proposal, not applied; the owner decides what is heard):**
+- **Library parts:** add no reverb. SSO's mics already carry a ~2.0 s hall at a seat-like clarity, and a second ~2 s
+  room on top would double the tail (two FDNs in series lengthen the EDT). If the owner wants more room, the right lever
+  is SSO's own: Ambient or Outrigger in place of the Tree (same T, more late energy: −17 against −19 dB at 0.5 s, C80
+  ≈ 0 against +3 dB). Mic compensation keeps the balance, so the change is "tone and sense of space" only. Close or
+  Leader alone gives a drier, nearer sound with the same tail behind it, not a dry signal: its T30 is still ~1.9 s, 7–17
+  dB lower.
+- **Staccato tails:** a staccato's tail is cut to T ~1.5 s by the key-up, which a real hall wouldn't do. If the owner
+  hears shorts as too dry, a measured fix would hold the key of a short (or a note-off after the sample's end) instead
+  of adding reverb. This would be a new setting, measured first.
+- **Mixed scores (built-in + library parts):** to put MS3 / MS4 parts in SSO's room, MuseReverb could be set to
+  ReverbTimeMs ≈ 2000, TimeHigh ≈ 85 % (SSO's 4 k / mid ratio) and PreDelay ≈ 15–20 ms (the Tree's lag behind Close
+  plus a few ms), with a send giving DRR near the Tree's (−8 dB, i.e. far more wet than 0.3 gives). These are untried
+  numbers to offer, not defaults: MS4's own sound is the MS4 path's goal (§5).
+- **The crest check:** the master trim's 14.5 dB crest was measured on rendered SSO notes with their room, so it already
+  includes the room's build-up. Nothing changes.
+
+**Uncertainty.** The spread between patches is ±0.1 s at mid frequencies (one outlier, the tenor trombone). The 125 Hz
+and 8 kHz values are unreliable (floor, little energy). The deconvolved DRR / C80 rest on Close being near-dry: they
+are relative numbers, comparable between mics, not absolute ISO values. Only the patch defaults were measured (Release
+0.4961 and Tightness as set up, velocity 100 / CC1 100: forte). One sample set per articulation, each mic heard alone.
 
 ---
 
@@ -1199,11 +1271,12 @@ setting.
       dynamic); Dagstuhl ChoirSet as corroboration.
     - *Method:* loudness of section against solo, compared with 10 log10 N (N from the session notes); unison mix
       against the power sum of the singers.
-11. **Lyndhurst's reverberation through SSO's mics.**
+11. **Lyndhurst's reverberation through SSO's mics.** *Done 2026-10-24 (§3.5 › Measured): ~2.0 s mid on every mic,
+    no extra reverb for library parts proposed.*
     - *Fixes:* the room for mixed built-in and library scores; the crest check (§3.5).
     - *Source:* SSO renders on the VM; Beranek 2004 for the targets.
-    - *Method:* staccato shorts on the Tree mic, Schroeder integration, EDT / T20 / T30 per octave. Compare with MS4's
-      ReverbTimeMs 2200 / TimeHigh 60 %.
+    - *Method:* `sso_room.py`: shorts held and released, pizzicato, Long releases, each mic alone; Schroeder
+      integration, EDT / T20 / T30 per octave; MuseReverb's own impulse response.
 12. **Mute attenuation per instrument.**
     - *Fixes:* con sord. levels for violas, celli, basses (§1.1).
     - *Source:* da Silva Evangelista 2019 (UFMG, six violins; hdl 1843/32235) and 2025 (*Acta Acustica*, CC BY);
