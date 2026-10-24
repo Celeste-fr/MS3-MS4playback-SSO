@@ -52,6 +52,7 @@ uncertainty stated; timing too where possible; anything without data is marked a
    - 2.3 Legato transitions in real string playing
    - 2.4 Vibrato onset
    - 2.5 Articulation durations (staccato, spiccato, legato overlap)
+   - 2.5a How long real players sound short notes (measured, 2026-10-24)
    - 2.6 Rubato, phrase-final lengthening, tempo changes
 3. Tone and expression
    - 3.1 Vibrato rate and width
@@ -896,13 +897,170 @@ keeps MS4's note-off for a staccato, the 45 ms clearance of plainPerformance's s
 - **Repp, B. H. (1997).** "Acoustics, perception, and production of legato articulation on a computer-controlled grand
   piano." *JASA* 102(3), 1878–1890. [abstract] Overlap is longer for high notes, consonant intervals and slow tempi;
   there are large individual differences.
-- **No string-specific staccato or spiccato length data were found.**
+- **No string-specific staccato or spiccato length data were found** (in this first search; measured since: §2.5a).
 
 **Missing.** Sounding lengths of string staccato / spiccato against IOI and tempo, from the Spheres dataset's K. 550
 staccato passages (already aligned for the −3.4 dB study) or URMP.
 
 **Value: low–medium.** SSO's shorts have their own sampled length. This matters for the release of a held note before a
 rest, or for the clearance between spiccato notes. **Effort: low** on the K. 550 alignment that exists.
+
+### 2.5a How long real players sound short notes (measured, 2026-10-24)
+
+Branch `research-staccato` (from integrate-1017 329e1fa54a). This is research only: nothing in the map, the generator
+or MuseScore changed. The numbers are in `tools/soundlibraries/staccato_lengths.json`. The tools and the articulation
+readings are in `tools/soundlibraries/staccato_lengths/`. The audio stays outside the repo and was deleted after
+measuring. Linux only, no VM.
+
+**Question.** How long do orchestral players actually sound staccato, staccatissimo, spiccato-type and unmarked short
+notes, as a share of the written value and in ms, by tempo, note value and family? How does that compare with what
+MuseScore plays?
+
+**Data**
+- **TU Berlin anechoic Beethoven 8** (§1.5a; CC BY 4.0). Orchester Wiener Akademie on period instruments. Every track
+  is one player, and the strings have 5–7 passes per player, all anechoic. Three passages:
+  - **II bars 1–8 and 18–22.** Oboes, clarinets, bassoons and horns (two players each) play repeated sixteenth chords
+    marked "pp sempre staccato" (eighth = 88). The played sixteenth is 355 ms. Notes are kept inside runs: the IOI
+    before and after is 0.28–0.45 s.
+  - **II bars 13–17.** Eighths followed by a rest: winds, cello (6 passes), bass (6 passes).
+  - **IV bars 6–10.** Violin I (two players × 7 passes; 9 tracks located). Staccato quarters in bars 6–8, unmarked
+    quarters in bar 9, and an unmarked quarter before a rest in bar 10, all pp. The played quarter is about 200 ms.
+- **Spheres, Mozart K. 550 / I** (CC BY-SA 4.0). Each section's own close stem, so a section, and its sounding length
+  includes the spread between its players. The onsets come from `spheres_k550_staccato.json`, with the readings the
+  owner confirmed on 2026-10-15:
+  - Violins 1, staccato quarters at f (IOI 305 ms);
+  - Celli and Basses, staccato eighths at f (IOI 150 ms);
+  - Celli and Basses, unmarked quarters at p followed by rests.
+- **Not used:** Aalto (no articulation readings yet) and URMP.
+
+**Readings.** `staccato_lengths/readings_articulation.tsv`.
+- The Beethoven 8 marks were read by Claude from page renders. **They have not been reviewed by the owner**; the crops
+  are in the private `research-staccato/review/`.
+  - Two points are uncertain: whether "sempre staccato" still holds after II's f / sf bars 13–17, and the undotted
+    sixteenths in bars 3, 5 and 19–22.
+  - By the readings rule, these readings need a review page before any of this changes the map.
+- The K. 550 readings are the owner-confirmed ones.
+
+**Method** (`notes.py`; the windows are ArticulationCheck's, `tools/playbackverify/loudness.py`)
+- **Envelopes.**
+  - Power in 5 ms windows after a 40 Hz high pass.
+  - The perceived envelope (ERB filters, 22 / 50 ms), the measure used for SSO's `p10` and `from=`.
+- **Note span.** A note runs from its onset to the next onset in the part, minus 15 ms.
+- **Length at X dB.** From the first window of the rise that carries the peak to the end of the last window within
+  X dB of the peak.
+  - **e20** is the requested −20 dB under the peak.
+  - **e10** and **p10** are the same at −10 dB on power and on the perceived envelope.
+- **Joined notes.** A note still within X dB at the next onset is "joined". Its length is then only a lower bound,
+  and no median is given once half the notes are joined.
+- **dip.** How far the envelope falls between two notes.
+- **Spread between players.** The per-track medians.
+
+**Results** (median ms, and the share of the written value at the played tempo)
+
+| passage | notes / tracks | written | e20 | e10 | p10 | note |
+|---|---|---|---|---|---|---|
+| B8/II winds, staccato 16ths, all | 690 / 8 | 355 | **125 (0.35)**; players 90–195 | 90 (0.25) | 115 (0.32) | the envelope falls to silence between notes |
+| oboe pp / cresc.–f | 90 / 65 | 355 | 125 / 135 | 85 / 110 | 115 / 140 | |
+| clarinet pp / cresc.–f | 124 / 68 | 355 | 110 / 143 | 75 / 105 | 100 / 125 | |
+| bassoon pp / cresc.–f | 107 / 61 | 355 | 95 / 105 | 70 / 75 | 100 / 110 | |
+| horn pp / cresc.–f | 109 / 66 | 355 | 165 / 172 | 110 / 125 | 125 / 140 | |
+| B8/II winds, eighth before a rest ("sempre staccato" in force?) | 20 / 8 | 710 | **410 (0.58)** | 320 (0.45) | 305 (0.43) | |
+| B8/II cello, unmarked eighth before a rest | 12 / 6 | 710 | 622 (0.88) | **280 (0.39)** | 282 (0.40) | the free string rings after the bow stops |
+| B8/II bass, unmarked eighth before a rest | 6 / 6 | 710 | ≥ 555 (half joined) | **178 (0.25)** | 162 (0.23) | ringing |
+| B8/IV violin I, staccato quarters pp | 90 / 9 | 200 | ≥ 155 (0.77; 40 % joined) | **88 (0.44)** | 118 (0.59) | players 138–178 (e20) |
+| B8/IV violin I, unmarked quarters in a line | 36 / 9 | 200 | ≥ 145 (0.72; 44 % joined) | 82 (0.41) | 125 (0.62) | played like the staccatos |
+| B8/IV violin I, unmarked quarter before a rest | 9 / 9 | 200 | 170 (0.85) | 105 (0.52) | 140 (0.70) | |
+| K550 violins 1 (section), staccato quarters f | 26 / 1 | 305 | 220 (0.72; 23 % joined) | **110 (0.36)** | 160 (0.52) | dip 29 dB |
+| K550 celli / basses (sections), staccato eighths f | 55 / 51 | 145 / 155 | joined | joined (67–73 %) | joined | **dip only 11–12 dB**: the notes never part by 20 dB |
+| K550 celli / basses, unmarked quarters p before rests | 18 / 18 | 300 | 995 / 1148 | 495 / 768 | 415 / 525 | low strings ring; held 1.4–1.75 × the written quarter (p10) |
+
+**Literature** (an agent's search, 2026-10-24; PDFs in the private `research-staccato/lit/dl1/`)
+
+Measured:
+- **Hähnel & Berndt 2010** (NIME, pp. 277–282). 10 professionals on 14 string, wind and brass instruments, note end at
+  the 66 % loudness drop. [read]
+  - Staccato 0.57 of the IOI, 173 ms (IQR 160–225).
+  - Staccatissimo 0.52, 161 ms (143–189).
+  - Unmarked 0.77, tenuto 0.89.
+  - Staccato is better described in ms than as a share; no difference between families.
+- **Pàmies-Vilà, Hofmann & Chatziioannou 2018** (*Front. Psychol.* 9:617; 10 clarinettists, mouthpiece pressure at
+  5 %). [read]
+  - Staccato at IOI 500 ms sounds about 198 ms when the tongue stops it (0.40) and about 304 ms when the breath does
+    (0.61).
+  - At IOI 250 ms it sounds about 166 ms (0.66).
+- **Hofmann & Goebl 2014** (*Front. Psychol.* 5:690; 18 saxophonists, tongue–reed contact at IOI 144–250 ms).
+  [read via summary]
+  - The staccato gap is 0.25–0.29 of the IOI, so about 0.71–0.75 sounds.
+- **Piano: Bresin 2000** (thesis), **Bresin & Battel 2000**, **Bresin & Widmer 2000** (KDR), and **Hu et al. 2026**
+  (*TISMIR* 9(1)). The key is down for about 0.40 of the IOI (0.20 in Menuetto to 0.39 in Adagio), independent of IOI
+  within a piece. This is key-down time, not sound. [read; Hu et al.'s values are read off Fig. 4]
+- **Demoucron 2010** (sautillé, IOI ≈ 167 ms). Bow contact is about 75 ms (0.45), and the string sounds longer.
+  [values read off a figure]
+- **De Poli et al. 1998.** One violinist, unmarked notes 0.79–0.95 of the IOI by style. [read]
+
+Not measured:
+- No measured staccato length was found for brass.
+- The historical rule (C.P.E. Bach, Quantz) is "less than half the value", a convention.
+
+**What it says**
+1. **Staccato length is closer to a fixed time than to a fixed share.**
+   - Winds at IOI 355 ms sound 95–170 ms to −20 dB (0.26–0.48); strings at 200–305 ms sound 150–220 ms.
+   - This agrees with Hähnel & Berndt's 173 ms and the clarinettists' 166–304 ms.
+   - As a share it runs from about 0.3 (slow) to "joined" (fast): at 150 ms IOI a section's staccato eighths dip only
+     ~11 dB between notes.
+2. **Family.**
+   - Horns are the longest winds (165–172 ms) and bassoons the shortest (95–105 ms).
+   - Low strings ring after the bow stops (cello and bass e20 two or more times e10). The bowed part is better read at
+     −10 dB.
+   - Louder (cresc. to f) is a little longer: +10–30 ms.
+3. **Unmarked short notes.**
+   - A note before a rest is shortened: a wind eighth sounds about 0.45–0.58 of its value, about 300–400 ms of 710.
+   - In a fast line of quarters (IOI 200 ms) unmarked notes are played like the staccatos around them.
+   - Isolated low-string quarters at p ring past their written value.
+4. **Staccatissimo:** no data in these recordings. The literature's 161 ms is barely shorter than staccato.
+
+**Against MuseScore**
+
+| | real (this study) | MuseScore now |
+|---|---|---|
+| staccato | about 100–220 ms to −20 dB; 0.25–0.45 of the value at IOI 355 ms, 0.4–0.8 at 200–300 ms, joined at 150 ms | MS4.7.5: note-off at **0.50** of the written value at every tempo. The library chooses a short by meant length = 0.50 × written (`shorts/staccato`, `from=`) |
+| staccatissimo | 161 ms, 0.52 (literature only) | 0.25 |
+| unmarked before a rest | winds about 0.45–0.58 of the value; strings 0.25–0.40 bowed, plus the ring | 0.99 |
+| SSO's shorts (VM rest check, Tree mic, so the hall is included), p10 | real p10: winds 100–140, violins 118–160 | Spiccato: Violins 1 273, Violas 281, Celli 316, Basses 433. Wind staccato: oboe 223, flute 296, clarinet 298, bassoon 323, horn 341, trumpet 293. Short 0.5 about 530–550 |
+
+SSO's shorts sound about twice as long as the real notes at −10 dB perceived. Part of that is the hall (the Tree mic).
+SSO's dry length (Close mic) was not measured.
+
+**Proposal (for the owner; nothing changed)**
+- **a) Meant length of a staccato.** Replace the fixed 50 % with "the shorter of 50 % of the written value and a
+  measured absolute":
+  - about 0.13 s for winds and 0.16–0.22 s for strings (e20);
+  - the same for staccatissimo, about 0.16 s.
+
+  The library would then never pick Short 0.5 for a staccato on a slow note (today: a Violins 1 staccato from 0.86 s
+  written). The built-in sounds would play slow staccatos shorter and fast ones barely cut. This is offered as "try
+  both, decide by ear".
+- **b) A note before a rest.** A note followed by a rest could be meant to sound about 0.5–0.6 of its value (winds).
+  For the strings the bowed part is about 0.4, with the ring left to the sample.
+  - The data are thin: 20 wind notes and 18 string notes, one passage, and a reading that is not reviewed.
+- **c) Measure SSO's shorts on the Close mic (VM).** This separates the hall from the sample before comparing lengths.
+- **d) For `[slurs] plainPerformance`'s 45 ms spiccato clearance:** real section staccatos at IOI 150 ms don't part
+  (11 dB dips). The clearance suits slower staccatos only.
+
+**Uncertainty**
+- **One performance per passage.** TU is one period orchestra (two players per wind part, one or two string players);
+  Spheres is one ensemble; there are no modern-instrument anechoic data.
+- **Spread between players** is ±30–50 ms (the e20 per-track medians). The −20 dB point of strings includes the free
+  ring, and Spheres' close mic some hall.
+- **Readings.** The TU readings are not reviewed. The "sempre staccato" reach and the B8/IV positions are located from
+  onsets: 9 of 14 tracks were placed and the rest skipped.
+- **Tempo and note value can't be separated** with these passages: winds were measured only at IOI 355 ms, strings
+  at 145–305 ms.
+- **No brass** other than horns, no staccatissimo, and no flute in these passages.
+
+**Value: medium** (it decides which SSO short a staccato plays, and how long the built-in sounds hold it).
+**Effort for more:** the Aalto passages with PHENICX onsets plus articulation readings (low); K. 550's other movements
+and winds (readings needed; low–medium).
 
 ### 2.6 Rubato, phrase-final lengthening, tempo changes
 
@@ -1219,7 +1377,7 @@ setting.
       OrchideaSOL's Sordina folders.
     - *Method:* read the two texts' tables; OrchideaSOL sordina against ordinario per pitch and dynamic, after the
       session-gain check.
-13. **String staccato / spiccato sounding lengths.**
+13. **String staccato / spiccato sounding lengths.** Done 2026-10-24 for K. 550 and TU Beethoven 8: §2.5a.
     - *Fixes:* the plain spiccato clearance, short lengths (§2.5).
     - *Source:* the Spheres K. 550 staccato passages already aligned for the −3.4 dB study; URMP.
     - *Method:* the sounding length (onset to −20 dB) against IOI and tempo.

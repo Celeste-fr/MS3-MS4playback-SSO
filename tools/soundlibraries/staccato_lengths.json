@@ -1,0 +1,1497 @@
+{
+ "about": "How long real orchestral players sound short notes (docs/RESEARCH.md 2.5a). Written by staccato_lengths/summarize.py from the per-note measurements of tub8_ii.py, tub8_ii_rests.py, tub8_iv.py, spheres_k550.py (audio deleted after measuring). Times in ms from the start of the rise that carries the note's peak to the end of the last 5 ms window within X dB of the peak before the next onset. e20 / e10 / e6: power; p10: perceived (ArticulationCheck's perceivedEnvelope, the measure of SSO's p10). ofWritten: median / written value at the played tempo. joined: share of notes still within X dB at the next onset (a lower bound; no median when >= 0.5). Readings of the articulation marks: staccato_lengths/readings_articulation.tsv; the TU ones are an agent's, NOT reviewed by the owner (the K. 550 ones are the owner-confirmed readings of 2026-10-15). Research only: nothing in the map uses it.",
+ "groups": {
+  "B8/II oboe staccato 16ths pp": {
+   "notes": 90,
+   "tracks": 2,
+   "ioiMs": 355,
+   "writtenMs": 355,
+   "dipDbMedian": 55.1,
+   "e20": {
+    "medianMs": 125,
+    "iqrMs": [
+     115,
+     134
+    ],
+    "ofWritten": 0.35,
+    "joined": 0.01,
+    "trackMediansMs": [
+     125,
+     128
+    ]
+   },
+   "e10": {
+    "medianMs": 85,
+    "iqrMs": [
+     80,
+     99
+    ],
+    "ofWritten": 0.24,
+    "joined": 0.0,
+    "trackMediansMs": [
+     85,
+     85
+    ]
+   },
+   "e6": {
+    "medianMs": 65,
+    "iqrMs": [
+     60,
+     75
+    ],
+    "ofWritten": 0.18,
+    "joined": 0.0,
+    "trackMediansMs": [
+     65,
+     65
+    ]
+   },
+   "p10": {
+    "medianMs": 115,
+    "iqrMs": [
+     110,
+     125
+    ],
+    "ofWritten": 0.32,
+    "joined": 0.0,
+    "trackMediansMs": [
+     115,
+     115
+    ]
+   },
+   "source": "TU B8 II b1-8 / 18-22",
+   "family": "winds",
+   "articulation": "staccato (sempre staccato, dots)"
+  },
+  "B8/II oboe staccato 16ths cresc. to f": {
+   "notes": 65,
+   "tracks": 2,
+   "ioiMs": 360,
+   "writtenMs": 360,
+   "dipDbMedian": 56.9,
+   "e20": {
+    "medianMs": 135,
+    "iqrMs": [
+     130,
+     145
+    ],
+    "ofWritten": 0.38,
+    "joined": 0.0,
+    "trackMediansMs": [
+     135,
+     145
+    ]
+   },
+   "e10": {
+    "medianMs": 110,
+    "iqrMs": [
+     100,
+     115
+    ],
+    "ofWritten": 0.31,
+    "joined": 0.0,
+    "trackMediansMs": [
+     105,
+     115
+    ]
+   },
+   "e6": {
+    "medianMs": 85,
+    "iqrMs": [
+     80,
+     95
+    ],
+    "ofWritten": 0.24,
+    "joined": 0.0,
+    "trackMediansMs": [
+     85,
+     90
+    ]
+   },
+   "p10": {
+    "medianMs": 140,
+    "iqrMs": [
+     130,
+     145
+    ],
+    "ofWritten": 0.39,
+    "joined": 0.0,
+    "trackMediansMs": [
+     140,
+     143
+    ]
+   },
+   "source": "TU B8 II b1-8 / 18-22",
+   "family": "winds",
+   "articulation": "staccato (sempre staccato, dots)"
+  },
+  "B8/II clarinet staccato 16ths pp": {
+   "notes": 124,
+   "tracks": 2,
+   "ioiMs": 355,
+   "writtenMs": 355,
+   "dipDbMedian": 54.2,
+   "e20": {
+    "medianMs": 110,
+    "iqrMs": [
+     100,
+     120
+    ],
+    "ofWritten": 0.31,
+    "joined": 0.01,
+    "trackMediansMs": [
+     110,
+     110
+    ]
+   },
+   "e10": {
+    "medianMs": 75,
+    "iqrMs": [
+     65,
+     85
+    ],
+    "ofWritten": 0.21,
+    "joined": 0.01,
+    "trackMediansMs": [
+     65,
+     85
+    ]
+   },
+   "e6": {
+    "medianMs": 62,
+    "iqrMs": [
+     45,
+     75
+    ],
+    "ofWritten": 0.18,
+    "joined": 0.0,
+    "trackMediansMs": [
+     45,
+     75
+    ]
+   },
+   "p10": {
+    "medianMs": 100,
+    "iqrMs": [
+     95,
+     110
+    ],
+    "ofWritten": 0.28,
+    "joined": 0.0,
+    "trackMediansMs": [
+     95,
+     105
+    ]
+   },
+   "source": "TU B8 II b1-8 / 18-22",
+   "family": "winds",
+   "articulation": "staccato (sempre staccato, dots)"
+  },
+  "B8/II clarinet staccato 16ths cresc. to f": {
+   "notes": 68,
+   "tracks": 2,
+   "ioiMs": 360,
+   "writtenMs": 360,
+   "dipDbMedian": 56.3,
+   "e20": {
+    "medianMs": 143,
+    "iqrMs": [
+     129,
+     151
+    ],
+    "ofWritten": 0.4,
+    "joined": 0.0,
+    "trackMediansMs": [
+     130,
+     150
+    ]
+   },
+   "e10": {
+    "medianMs": 105,
+    "iqrMs": [
+     85,
+     121
+    ],
+    "ofWritten": 0.29,
+    "joined": 0.0,
+    "trackMediansMs": [
+     85,
+     120
+    ]
+   },
+   "e6": {
+    "medianMs": 88,
+    "iqrMs": [
+     65,
+     105
+    ],
+    "ofWritten": 0.24,
+    "joined": 0.0,
+    "trackMediansMs": [
+     65,
+     105
+    ]
+   },
+   "p10": {
+    "medianMs": 125,
+    "iqrMs": [
+     115,
+     140
+    ],
+    "ofWritten": 0.35,
+    "joined": 0.0,
+    "trackMediansMs": [
+     115,
+     140
+    ]
+   },
+   "source": "TU B8 II b1-8 / 18-22",
+   "family": "winds",
+   "articulation": "staccato (sempre staccato, dots)"
+  },
+  "B8/II bassoon staccato 16ths pp": {
+   "notes": 107,
+   "tracks": 2,
+   "ioiMs": 360,
+   "writtenMs": 360,
+   "dipDbMedian": 57.3,
+   "e20": {
+    "medianMs": 95,
+    "iqrMs": [
+     85,
+     100
+    ],
+    "ofWritten": 0.26,
+    "joined": 0.01,
+    "trackMediansMs": [
+     85,
+     100
+    ]
+   },
+   "e10": {
+    "medianMs": 70,
+    "iqrMs": [
+     60,
+     75
+    ],
+    "ofWritten": 0.19,
+    "joined": 0.0,
+    "trackMediansMs": [
+     60,
+     75
+    ]
+   },
+   "e6": {
+    "medianMs": 55,
+    "iqrMs": [
+     50,
+     65
+    ],
+    "ofWritten": 0.15,
+    "joined": 0.0,
+    "trackMediansMs": [
+     50,
+     65
+    ]
+   },
+   "p10": {
+    "medianMs": 100,
+    "iqrMs": [
+     95,
+     110
+    ],
+    "ofWritten": 0.28,
+    "joined": 0.0,
+    "trackMediansMs": [
+     92,
+     110
+    ]
+   },
+   "source": "TU B8 II b1-8 / 18-22",
+   "family": "winds",
+   "articulation": "staccato (sempre staccato, dots)"
+  },
+  "B8/II bassoon staccato 16ths cresc. to f": {
+   "notes": 61,
+   "tracks": 2,
+   "ioiMs": 355,
+   "writtenMs": 355,
+   "dipDbMedian": 57.0,
+   "e20": {
+    "medianMs": 105,
+    "iqrMs": [
+     90,
+     125
+    ],
+    "ofWritten": 0.3,
+    "joined": 0.0,
+    "trackMediansMs": [
+     95,
+     125
+    ]
+   },
+   "e10": {
+    "medianMs": 75,
+    "iqrMs": [
+     65,
+     100
+    ],
+    "ofWritten": 0.21,
+    "joined": 0.0,
+    "trackMediansMs": [
+     65,
+     103
+    ]
+   },
+   "e6": {
+    "medianMs": 50,
+    "iqrMs": [
+     45,
+     85
+    ],
+    "ofWritten": 0.14,
+    "joined": 0.0,
+    "trackMediansMs": [
+     50,
+     85
+    ]
+   },
+   "p10": {
+    "medianMs": 110,
+    "iqrMs": [
+     105,
+     125
+    ],
+    "ofWritten": 0.31,
+    "joined": 0.0,
+    "trackMediansMs": [
+     105,
+     128
+    ]
+   },
+   "source": "TU B8 II b1-8 / 18-22",
+   "family": "winds",
+   "articulation": "staccato (sempre staccato, dots)"
+  },
+  "B8/II horn staccato 16ths pp": {
+   "notes": 109,
+   "tracks": 2,
+   "ioiMs": 355,
+   "writtenMs": 355,
+   "dipDbMedian": 52.5,
+   "e20": {
+    "medianMs": 165,
+    "iqrMs": [
+     145,
+     195
+    ],
+    "ofWritten": 0.46,
+    "joined": 0.0,
+    "trackMediansMs": [
+     145,
+     195
+    ]
+   },
+   "e10": {
+    "medianMs": 110,
+    "iqrMs": [
+     100,
+     120
+    ],
+    "ofWritten": 0.31,
+    "joined": 0.0,
+    "trackMediansMs": [
+     110,
+     110
+    ]
+   },
+   "e6": {
+    "medianMs": 80,
+    "iqrMs": [
+     70,
+     95
+    ],
+    "ofWritten": 0.23,
+    "joined": 0.0,
+    "trackMediansMs": [
+     75,
+     85
+    ]
+   },
+   "p10": {
+    "medianMs": 125,
+    "iqrMs": [
+     120,
+     135
+    ],
+    "ofWritten": 0.35,
+    "joined": 0.0,
+    "trackMediansMs": [
+     120,
+     130
+    ]
+   },
+   "source": "TU B8 II b1-8 / 18-22",
+   "family": "winds",
+   "articulation": "staccato (sempre staccato, dots)"
+  },
+  "B8/II horn staccato 16ths cresc. to f": {
+   "notes": 66,
+   "tracks": 2,
+   "ioiMs": 360,
+   "writtenMs": 360,
+   "dipDbMedian": 54.4,
+   "e20": {
+    "medianMs": 172,
+    "iqrMs": [
+     155,
+     195
+    ],
+    "ofWritten": 0.48,
+    "joined": 0.0,
+    "trackMediansMs": [
+     155,
+     195
+    ]
+   },
+   "e10": {
+    "medianMs": 125,
+    "iqrMs": [
+     110,
+     145
+    ],
+    "ofWritten": 0.35,
+    "joined": 0.0,
+    "trackMediansMs": [
+     110,
+     145
+    ]
+   },
+   "e6": {
+    "medianMs": 90,
+    "iqrMs": [
+     81,
+     100
+    ],
+    "ofWritten": 0.25,
+    "joined": 0.0,
+    "trackMediansMs": [
+     85,
+     100
+    ]
+   },
+   "p10": {
+    "medianMs": 140,
+    "iqrMs": [
+     130,
+     155
+    ],
+    "ofWritten": 0.39,
+    "joined": 0.0,
+    "trackMediansMs": [
+     130,
+     155
+    ]
+   },
+   "source": "TU B8 II b1-8 / 18-22",
+   "family": "winds",
+   "articulation": "staccato (sempre staccato, dots)"
+  },
+  "B8/II winds staccato 16ths, all": {
+   "notes": 690,
+   "tracks": 8,
+   "ioiMs": 355,
+   "writtenMs": 355,
+   "dipDbMedian": 55.5,
+   "e20": {
+    "medianMs": 125,
+    "iqrMs": [
+     105,
+     150
+    ],
+    "ofWritten": 0.35,
+    "joined": 0.0,
+    "trackMediansMs": [
+     90,
+     195
+    ]
+   },
+   "e10": {
+    "medianMs": 90,
+    "iqrMs": [
+     75,
+     110
+    ],
+    "ofWritten": 0.25,
+    "joined": 0.0,
+    "trackMediansMs": [
+     60,
+     125
+    ]
+   },
+   "e6": {
+    "medianMs": 70,
+    "iqrMs": [
+     55,
+     85
+    ],
+    "ofWritten": 0.2,
+    "joined": 0.0,
+    "trackMediansMs": [
+     50,
+     85
+    ]
+   },
+   "p10": {
+    "medianMs": 115,
+    "iqrMs": [
+     105,
+     130
+    ],
+    "ofWritten": 0.32,
+    "joined": 0.0,
+    "trackMediansMs": [
+     95,
+     135
+    ]
+   },
+   "source": "TU B8 II",
+   "family": "winds",
+   "articulation": "staccato"
+  },
+  "B8/II winds eighths before a rest": {
+   "notes": 20,
+   "tracks": 8,
+   "ioiMs": 1088,
+   "writtenMs": 710,
+   "dipDbMedian": 149.4,
+   "e20": {
+    "medianMs": 410,
+    "iqrMs": [
+     374,
+     485
+    ],
+    "ofWritten": 0.58,
+    "joined": 0.0,
+    "trackMediansMs": [
+     235,
+     485
+    ]
+   },
+   "e10": {
+    "medianMs": 320,
+    "iqrMs": [
+     276,
+     371
+    ],
+    "ofWritten": 0.45,
+    "joined": 0.0,
+    "trackMediansMs": [
+     165,
+     430
+    ]
+   },
+   "e6": {
+    "medianMs": 240,
+    "iqrMs": [
+     184,
+     284
+    ],
+    "ofWritten": 0.34,
+    "joined": 0.0,
+    "trackMediansMs": [
+     120,
+     345
+    ]
+   },
+   "p10": {
+    "medianMs": 305,
+    "iqrMs": [
+     281,
+     346
+    ],
+    "ofWritten": 0.43,
+    "joined": 0.0,
+    "trackMediansMs": [
+     170,
+     415
+    ]
+   },
+   "source": "TU B8 II b13-17",
+   "family": "winds",
+   "articulation": "no mark, sempre staccato in force"
+  },
+  "B8/II cello eighths before a rest": {
+   "notes": 12,
+   "tracks": 6,
+   "ioiMs": 1112,
+   "writtenMs": 710,
+   "dipDbMedian": 44.8,
+   "e20": {
+    "medianMs": 622,
+    "iqrMs": [
+     580,
+     684
+    ],
+    "ofWritten": 0.88,
+    "joined": 0.0,
+    "trackMediansMs": [
+     535,
+     762
+    ]
+   },
+   "e10": {
+    "medianMs": 280,
+    "iqrMs": [
+     270,
+     291
+    ],
+    "ofWritten": 0.39,
+    "joined": 0.0,
+    "trackMediansMs": [
+     272,
+     295
+    ]
+   },
+   "e6": {
+    "medianMs": 192,
+    "iqrMs": [
+     179,
+     210
+    ],
+    "ofWritten": 0.27,
+    "joined": 0.0,
+    "trackMediansMs": [
+     180,
+     220
+    ]
+   },
+   "p10": {
+    "medianMs": 282,
+    "iqrMs": [
+     270,
+     298
+    ],
+    "ofWritten": 0.4,
+    "joined": 0.0,
+    "trackMediansMs": [
+     275,
+     300
+    ]
+   },
+   "source": "TU B8 II b13-17",
+   "family": "strings",
+   "articulation": "unmarked, before a rest"
+  },
+  "B8/II double bass eighths before a rest": {
+   "notes": 6,
+   "tracks": 6,
+   "ioiMs": 1075,
+   "writtenMs": 710,
+   "dipDbMedian": 70.0,
+   "e20": {
+    "medianMs": null,
+    "iqrMs": [
+     976,
+     1014
+    ],
+    "ofWritten": null,
+    "joined": 0.5,
+    "trackMediansMs": [
+     555,
+     1325
+    ]
+   },
+   "e10": {
+    "medianMs": 178,
+    "iqrMs": [
+     151,
+     192
+    ],
+    "ofWritten": 0.25,
+    "joined": 0.0,
+    "trackMediansMs": [
+     130,
+     265
+    ]
+   },
+   "e6": {
+    "medianMs": 103,
+    "iqrMs": [
+     91,
+     110
+    ],
+    "ofWritten": 0.14,
+    "joined": 0.0,
+    "trackMediansMs": [
+     80,
+     145
+    ]
+   },
+   "p10": {
+    "medianMs": 162,
+    "iqrMs": [
+     160,
+     172
+    ],
+    "ofWritten": 0.23,
+    "joined": 0.0,
+    "trackMediansMs": [
+     150,
+     195
+    ]
+   },
+   "source": "TU B8 II b13-17",
+   "family": "strings",
+   "articulation": "unmarked, before a rest"
+  },
+  "B8/IV violin 1 quarters, staccato (dots)": {
+   "notes": 90,
+   "tracks": 9,
+   "ioiMs": 200,
+   "writtenMs": 200,
+   "e20": {
+    "medianMs": 155,
+    "iqrMs": [
+     140,
+     179
+    ],
+    "ofWritten": 0.77,
+    "joined": 0.4,
+    "trackMediansMs": [
+     138,
+     178
+    ]
+   },
+   "e10": {
+    "medianMs": 88,
+    "iqrMs": [
+     75,
+     105
+    ],
+    "ofWritten": 0.44,
+    "joined": 0.02,
+    "trackMediansMs": [
+     82,
+     98
+    ]
+   },
+   "e6": {
+    "medianMs": 60,
+    "iqrMs": [
+     50,
+     69
+    ],
+    "ofWritten": 0.3,
+    "joined": 0.0,
+    "trackMediansMs": [
+     55,
+     65
+    ]
+   },
+   "p10": {
+    "medianMs": 118,
+    "iqrMs": [
+     110,
+     125
+    ],
+    "ofWritten": 0.59,
+    "joined": 0.09,
+    "trackMediansMs": [
+     115,
+     125
+    ]
+   },
+   "source": "TU B8 IV b6-10",
+   "family": "strings",
+   "articulation": "staccato (dots)"
+  },
+  "B8/IV violin 1 quarters, unmarked, in a line of quarters": {
+   "notes": 36,
+   "tracks": 9,
+   "ioiMs": 200,
+   "writtenMs": 200,
+   "e20": {
+    "medianMs": 145,
+    "iqrMs": [
+     122,
+     165
+    ],
+    "ofWritten": 0.72,
+    "joined": 0.44,
+    "trackMediansMs": [
+     125,
+     188
+    ]
+   },
+   "e10": {
+    "medianMs": 82,
+    "iqrMs": [
+     65,
+     100
+    ],
+    "ofWritten": 0.41,
+    "joined": 0.03,
+    "trackMediansMs": [
+     73,
+     132
+    ]
+   },
+   "e6": {
+    "medianMs": 55,
+    "iqrMs": [
+     45,
+     65
+    ],
+    "ofWritten": 0.27,
+    "joined": 0.0,
+    "trackMediansMs": [
+     45,
+     70
+    ]
+   },
+   "p10": {
+    "medianMs": 125,
+    "iqrMs": [
+     110,
+     140
+    ],
+    "ofWritten": 0.62,
+    "joined": 0.22,
+    "trackMediansMs": [
+     118,
+     143
+    ]
+   },
+   "source": "TU B8 IV b6-10",
+   "family": "strings",
+   "articulation": "unmarked, in a line of quarters"
+  },
+  "B8/IV violin 1 quarters, unmarked, before a rest": {
+   "notes": 9,
+   "tracks": 9,
+   "ioiMs": 440,
+   "writtenMs": 200,
+   "e20": {
+    "medianMs": 170,
+    "iqrMs": [
+     155,
+     185
+    ],
+    "ofWritten": 0.85,
+    "joined": 0.0,
+    "trackMediansMs": [
+     140,
+     320
+    ]
+   },
+   "e10": {
+    "medianMs": 105,
+    "iqrMs": [
+     90,
+     110
+    ],
+    "ofWritten": 0.52,
+    "joined": 0.0,
+    "trackMediansMs": [
+     85,
+     140
+    ]
+   },
+   "e6": {
+    "medianMs": 70,
+    "iqrMs": [
+     60,
+     85
+    ],
+    "ofWritten": 0.35,
+    "joined": 0.0,
+    "trackMediansMs": [
+     55,
+     120
+    ]
+   },
+   "p10": {
+    "medianMs": 140,
+    "iqrMs": [
+     130,
+     140
+    ],
+    "ofWritten": 0.7,
+    "joined": 0.0,
+    "trackMediansMs": [
+     125,
+     170
+    ]
+   },
+   "source": "TU B8 IV b6-10",
+   "family": "strings",
+   "articulation": "unmarked, before a rest"
+  },
+  "K550/I violins 1 staccato (quarter)": {
+   "notes": 26,
+   "tracks": 1,
+   "ioiMs": 305,
+   "writtenMs": 305,
+   "dipDbMedian": 28.8,
+   "e20": {
+    "medianMs": 220,
+    "iqrMs": [
+     191,
+     269
+    ],
+    "ofWritten": 0.72,
+    "joined": 0.23,
+    "trackMediansMs": [
+     220,
+     220
+    ]
+   },
+   "e10": {
+    "medianMs": 110,
+    "iqrMs": [
+     91,
+     148
+    ],
+    "ofWritten": 0.36,
+    "joined": 0.0,
+    "trackMediansMs": [
+     110,
+     110
+    ]
+   },
+   "e6": {
+    "medianMs": 73,
+    "iqrMs": [
+     65,
+     100
+    ],
+    "ofWritten": 0.24,
+    "joined": 0.0,
+    "trackMediansMs": [
+     73,
+     73
+    ]
+   },
+   "p10": {
+    "medianMs": 160,
+    "iqrMs": [
+     141,
+     180
+    ],
+    "ofWritten": 0.52,
+    "joined": 0.04,
+    "trackMediansMs": [
+     160,
+     160
+    ]
+   },
+   "source": "Spheres K550 I",
+   "family": "strings (section)",
+   "articulation": "staccato"
+  },
+  "K550/I violins 1 held (dotted half)": {
+   "notes": 2,
+   "tracks": 1,
+   "ioiMs": 1102,
+   "writtenMs": 1102,
+   "dipDbMedian": 43.0,
+   "e20": {
+    "medianMs": 852,
+    "iqrMs": [
+     841,
+     864
+    ],
+    "ofWritten": 0.77,
+    "joined": 0.0,
+    "trackMediansMs": [
+     852,
+     852
+    ]
+   },
+   "e10": {
+    "medianMs": 732,
+    "iqrMs": [
+     726,
+     739
+    ],
+    "ofWritten": 0.66,
+    "joined": 0.0,
+    "trackMediansMs": [
+     732,
+     732
+    ]
+   },
+   "e6": {
+    "medianMs": 568,
+    "iqrMs": [
+     526,
+     609
+    ],
+    "ofWritten": 0.51,
+    "joined": 0.0,
+    "trackMediansMs": [
+     568,
+     568
+    ]
+   },
+   "p10": {
+    "medianMs": 750,
+    "iqrMs": [
+     745,
+     755
+    ],
+    "ofWritten": 0.68,
+    "joined": 0.0,
+    "trackMediansMs": [
+     750,
+     750
+    ]
+   },
+   "source": "Spheres K550 I",
+   "family": "strings (section)",
+   "articulation": "held"
+  },
+  "K550/I celli staccato (eighth)": {
+   "notes": 55,
+   "tracks": 1,
+   "ioiMs": 145,
+   "writtenMs": 145,
+   "dipDbMedian": 11.5,
+   "e20": {
+    "medianMs": null,
+    "iqrMs": [
+     160,
+     215
+    ],
+    "ofWritten": null,
+    "joined": 1.0,
+    "trackMediansMs": [
+     185,
+     185
+    ]
+   },
+   "e10": {
+    "medianMs": null,
+    "iqrMs": [
+     100,
+     165
+    ],
+    "ofWritten": null,
+    "joined": 0.67,
+    "trackMediansMs": [
+     130,
+     130
+    ]
+   },
+   "e6": {
+    "medianMs": 100,
+    "iqrMs": [
+     68,
+     145
+    ],
+    "ofWritten": 0.69,
+    "joined": 0.0,
+    "trackMediansMs": [
+     100,
+     100
+    ]
+   },
+   "p10": {
+    "medianMs": null,
+    "iqrMs": [
+     160,
+     215
+    ],
+    "ofWritten": null,
+    "joined": 1.0,
+    "trackMediansMs": [
+     185,
+     185
+    ]
+   },
+   "source": "Spheres K550 I",
+   "family": "strings (section)",
+   "articulation": "staccato"
+  },
+  "K550/I celli unmarked before rests (quarter)": {
+   "notes": 18,
+   "tracks": 1,
+   "ioiMs": 1200,
+   "writtenMs": 300,
+   "dipDbMedian": 32.1,
+   "e20": {
+    "medianMs": 995,
+    "iqrMs": [
+     871,
+     1125
+    ],
+    "ofWritten": 3.32,
+    "joined": 0.22,
+    "trackMediansMs": [
+     995,
+     995
+    ]
+   },
+   "e10": {
+    "medianMs": 495,
+    "iqrMs": [
+     430,
+     670
+    ],
+    "ofWritten": 1.65,
+    "joined": 0.0,
+    "trackMediansMs": [
+     495,
+     495
+    ]
+   },
+   "e6": {
+    "medianMs": 318,
+    "iqrMs": [
+     283,
+     405
+    ],
+    "ofWritten": 1.06,
+    "joined": 0.0,
+    "trackMediansMs": [
+     318,
+     318
+    ]
+   },
+   "p10": {
+    "medianMs": 415,
+    "iqrMs": [
+     371,
+     465
+    ],
+    "ofWritten": 1.38,
+    "joined": 0.0,
+    "trackMediansMs": [
+     415,
+     415
+    ]
+   },
+   "source": "Spheres K550 I",
+   "family": "strings (section)",
+   "articulation": "unmarked before rests"
+  },
+  "K550/I celli held (whole)": {
+   "notes": 13,
+   "tracks": 2,
+   "ioiMs": 1200,
+   "writtenMs": 1200,
+   "dipDbMedian": 7.2,
+   "e20": {
+    "medianMs": null,
+    "iqrMs": [
+     1240,
+     1250
+    ],
+    "ofWritten": null,
+    "joined": 1.0,
+    "trackMediansMs": [
+     1240,
+     1250
+    ]
+   },
+   "e10": {
+    "medianMs": null,
+    "iqrMs": [
+     685,
+     1235
+    ],
+    "ofWritten": null,
+    "joined": 0.77,
+    "trackMediansMs": [
+     685,
+     1020
+    ]
+   },
+   "e6": {
+    "medianMs": 470,
+    "iqrMs": [
+     235,
+     1040
+    ],
+    "ofWritten": 0.39,
+    "joined": 0.0,
+    "trackMediansMs": [
+     355,
+     500
+    ]
+   },
+   "p10": {
+    "medianMs": null,
+    "iqrMs": [
+     1240,
+     1240
+    ],
+    "ofWritten": null,
+    "joined": 1.0,
+    "trackMediansMs": [
+     1240,
+     1250
+    ]
+   },
+   "source": "Spheres K550 I",
+   "family": "strings (section)",
+   "articulation": "held"
+  },
+  "K550/I basses staccato (eighth)": {
+   "notes": 51,
+   "tracks": 1,
+   "ioiMs": 155,
+   "writtenMs": 155,
+   "dipDbMedian": 11.7,
+   "e20": {
+    "medianMs": null,
+    "iqrMs": [
+     165,
+     205
+    ],
+    "ofWritten": null,
+    "joined": 1.0,
+    "trackMediansMs": [
+     190,
+     190
+    ]
+   },
+   "e10": {
+    "medianMs": null,
+    "iqrMs": [
+     108,
+     162
+    ],
+    "ofWritten": null,
+    "joined": 0.73,
+    "trackMediansMs": [
+     135,
+     135
+    ]
+   },
+   "e6": {
+    "medianMs": 95,
+    "iqrMs": [
+     62,
+     130
+    ],
+    "ofWritten": 0.61,
+    "joined": 0.0,
+    "trackMediansMs": [
+     95,
+     95
+    ]
+   },
+   "p10": {
+    "medianMs": null,
+    "iqrMs": [
+     165,
+     205
+    ],
+    "ofWritten": null,
+    "joined": 1.0,
+    "trackMediansMs": [
+     190,
+     190
+    ]
+   },
+   "source": "Spheres K550 I",
+   "family": "strings (section)",
+   "articulation": "staccato"
+  },
+  "K550/I basses unmarked before rests (quarter)": {
+   "notes": 18,
+   "tracks": 1,
+   "ioiMs": 1200,
+   "writtenMs": 300,
+   "dipDbMedian": 33.6,
+   "e20": {
+    "medianMs": 1148,
+    "iqrMs": [
+     876,
+     1190
+    ],
+    "ofWritten": 3.82,
+    "joined": 0.44,
+    "trackMediansMs": [
+     1148,
+     1148
+    ]
+   },
+   "e10": {
+    "medianMs": 768,
+    "iqrMs": [
+     485,
+     1052
+    ],
+    "ofWritten": 2.56,
+    "joined": 0.11,
+    "trackMediansMs": [
+     768,
+     768
+    ]
+   },
+   "e6": {
+    "medianMs": 355,
+    "iqrMs": [
+     251,
+     633
+    ],
+    "ofWritten": 1.18,
+    "joined": 0.0,
+    "trackMediansMs": [
+     355,
+     355
+    ]
+   },
+   "p10": {
+    "medianMs": 525,
+    "iqrMs": [
+     380,
+     641
+    ],
+    "ofWritten": 1.75,
+    "joined": 0.0,
+    "trackMediansMs": [
+     525,
+     525
+    ]
+   },
+   "source": "Spheres K550 I",
+   "family": "strings (section)",
+   "articulation": "unmarked before rests"
+  },
+  "K550/I basses held (whole)": {
+   "notes": 13,
+   "tracks": 2,
+   "ioiMs": 1200,
+   "writtenMs": 1200,
+   "dipDbMedian": 8.8,
+   "e20": {
+    "medianMs": null,
+    "iqrMs": [
+     1240,
+     1265
+    ],
+    "ofWritten": null,
+    "joined": 0.92,
+    "trackMediansMs": [
+     1115,
+     1240
+    ]
+   },
+   "e10": {
+    "medianMs": null,
+    "iqrMs": [
+     780,
+     1240
+    ],
+    "ofWritten": null,
+    "joined": 0.85,
+    "trackMediansMs": [
+     895,
+     1178
+    ]
+   },
+   "e6": {
+    "medianMs": 225,
+    "iqrMs": [
+     170,
+     815
+    ],
+    "ofWritten": 0.19,
+    "joined": 0.0,
+    "trackMediansMs": [
+     222,
+     815
+    ]
+   },
+   "p10": {
+    "medianMs": null,
+    "iqrMs": [
+     1205,
+     1240
+    ],
+    "ofWritten": null,
+    "joined": 0.92,
+    "trackMediansMs": [
+     990,
+     1240
+    ]
+   },
+   "source": "Spheres K550 I",
+   "family": "strings (section)",
+   "articulation": "held"
+  }
+ },
+ "sso": {
+  "about": "SSO shorts held 100 / 250 ms at mf (sso_short_lengths.json, the VM rest check, Tree mic: the hall is in it), median over the three pitches: p10 and e20 in ms",
+  "patches": {
+   "Violins 1 / Spiccato": {
+    "p10Ms": 273,
+    "e20Ms": 575
+   },
+   "Violins 1 / Short 0.5": {
+    "p10Ms": 531,
+    "e20Ms": 845
+   },
+   "Violas / Spiccato": {
+    "p10Ms": 281,
+    "e20Ms": 565
+   },
+   "Violas / Short 0.5": {
+    "p10Ms": 538,
+    "e20Ms": 998
+   },
+   "Celli / Spiccato": {
+    "p10Ms": 316,
+    "e20Ms": 635
+   },
+   "Celli / Short 0.5": {
+    "p10Ms": 541,
+    "e20Ms": 1148
+   },
+   "Basses / Spiccato": {
+    "p10Ms": 433,
+    "e20Ms": 755
+   },
+   "Basses / Short 0.5": {
+    "p10Ms": 546,
+    "e20Ms": 982
+   },
+   "Flute Solo / staccato": {
+    "p10Ms": 296,
+    "e20Ms": 648
+   },
+   "Oboe Solo / staccato": {
+    "p10Ms": 223,
+    "e20Ms": 458
+   },
+   "Clarinet Solo / staccato": {
+    "p10Ms": 298,
+    "e20Ms": 632
+   },
+   "Bassoon Solo / staccato": {
+    "p10Ms": 323,
+    "e20Ms": 465
+   },
+   "Horn Solo / staccato": {
+    "p10Ms": 341,
+    "e20Ms": 590
+   },
+   "Trumpet Solo / staccato": {
+    "p10Ms": 293,
+    "e20Ms": 720
+   }
+  }
+ },
+ "ms4": {
+  "about": "MS4.7.5 note-off as a share of the written value (ms4tables.h PROFILE, every family): what MuseScore plays on the built-in sounds and uses as the meant length when choosing an SSO short (shorts/staccato etc.)",
+  "staccato": 0.5,
+  "staccatissimo": 0.25,
+  "portato": 0.745,
+  "tenuto": 0.99,
+  "unmarked": 0.99
+ }
+}
