@@ -289,6 +289,11 @@ switch value of each articulation. For example:
     generator's `KEY_SHIFT`): a written D2 (38) goes on key 50. Only the key sent shifts (note-on and note-off, so
     Live's clips and the plain set too); the keyswitches, pitch tables, tunings and bends stay by the written pitch.
     A correctness fix of the map, not a playback adjustment.
+  - `staccatoLength` / `staccatissimoLength` on an `Instrument` (seconds; left out: none): with `[shorts] staccatoLength`
+    (0 by default) a staccato (staccatissimo) note on the patch is meant to sound, and is held, no longer than this: the
+    shorter of it and the written length times MS4's factor decides the short (`from`) and the note-off (from the note's
+    written start). SSO: real players' staccato to -20 dB under the note's peak by family (`staccato_lengths.json`,
+    RESEARCH.md 2.5a; `gen_spitfire_sso.py` STACCATO_RULES), staccatissimo 0.16 s (literature), no longer than the staccato.
   - `plainShift` on an `Instrument` (ms, 0 .. 1000, left out: not measured): with `[slurs] plainPerformance` a part
     played plain on this Performance patch has every event of the patch sent this much early (the median heard -
     written latency of plain notes, measured in context: `tools/soundlibraries/sso_plain_performance_shift.json`;

@@ -409,6 +409,15 @@ struct LibInstrument {
       // tools/soundlibraries/sso_plain_performance_shift.json -> gen_spitfire_sso.py). NaN: not measured (sent as written,
       // the playback audit lists it)
       double plainShiftMs { NAN };
+      // [shorts] staccatoLength (branch staccato-length, 2026-10-24; 0 until the owner has heard it): a staccato (staccatissimo)
+      // note on this patch is meant to sound, and is held, no longer than this many seconds (<Instrument staccatoLength
+      // staccatissimoLength>: real players' staccato to -20 dB under the note's peak, RESEARCH.md 2.5a, staccato_lengths.json
+      // -> gen_spitfire_sso.py STACCATO_LENGTH). -1: not set (as MuseScore 4)
+      double staccatoSeconds { -1 };
+      double staccatissimoSeconds { -1 };
+      // the cap for a note of that kind (1 staccato, 2 staccatissimo; -1: none)
+      double staccatoCap(int kind) const { return kind == 2 ? (staccatissimoSeconds > 0 ? staccatissimoSeconds : staccatoSeconds)
+                                                : kind == 1 ? staccatoSeconds : -1; }
       // [slurs] plainTiming (branch plain-timing, 2026-10-21): with it a plain note that is no transition (an attack after
       // silence, a staccato's spiccato attack) starts this many ms early instead of the patch's plainShift (<Instrument
       // plainAttack>, ms: the median heard - sent of the plain attacks at velocity 64, measured in context, 15 dB under the
@@ -504,6 +513,10 @@ struct Want {
       double soundSeconds { -1 };         // how long it is meant to sound: seconds times MS4's duration factor for its
                                           // articulations (strings: staccato 50 %, staccatissimo 25 %, tenuto 99 %,
                                           // portato their average 74.5 %); <Articulation from> is compared with this
+      // [shorts] staccatoLength: 1 staccato, 2 staccatissimo (not a portato), 0 neither; with staccatoLength on, soundSeconds
+      // is capped at the patch's staccatoCap(staccatoKind) where <Articulation from> is compared (chooseBases)
+      int staccatoKind { 0 };
+      bool staccatoLength { false };
       // a slurred note shorter than its held articulation's peak (playback setting slurs/quick): 0 the held one,
       // 1 a "tenuto" short (SSO's Short 1.0), 2 the "espressivo" long (SSO's Long (Rachm.)); choose()
       int slurQuick { 0 };
@@ -1051,6 +1064,8 @@ std::map<int, int> controllerTexts(Score* score, const Part* part, const Control
 //    for a trill, the interval to the upper note in semitones
 //---------------------------------------------------------
 
+// [shorts] staccatoLength: 1 a staccato, 2 a staccatissimo, 0 neither (a portato is none)
+int staccatoKind(const std::vector<Ms4::ArtRef>& arts);
 Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double seconds, int trillSemitones,
           const Score* score = nullptr);   // (score: its playback settings, Playback::value)
 int trillSemitones(const Note* note);

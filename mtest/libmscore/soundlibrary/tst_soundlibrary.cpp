@@ -182,6 +182,7 @@ class TestSoundLibrary : public QObject, public MTest
       void levelContext();
       void levelContextPlain();
       void plainAccents();
+      void staccatoLength();
       void levelSectionBalance();
       void levelTechniqueBalance();
       void levelMicCompensation();
@@ -1961,7 +1962,7 @@ void TestSoundLibrary::playbackPresets()
       QString out = Playback::applyPresetToText(text, *rec);
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
-      const QString withPitch = QString(text).replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
+      const QString withPitch = QString(text).replace("[shorts]\n", "[shorts]\nstaccatoLength=0\n").replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
                                 + "\n[levels]\nattackLevels=%7\ntransitionLevels=0\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAccents=%9\nmicrotoneBends=%10\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=0\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2).arg(3));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
@@ -1971,15 +1972,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccato=44\n\n[levels]\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
+               QString("[shorts]\nstaccatoLength=0\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n\n[shorts]\nstaccatoLength=0\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -3418,6 +3419,139 @@ void TestSoundLibrary::levelContextPlain()
       Playback::setIniValuesForTest({});
       SoundLib::setCurrent(nullptr);
       SoundLib::setOutput(SoundLib::Output::MIDI);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   staccatoLength
+//    [shorts] staccatoLength (branch staccato-length, 2026-10-24; 0 by default and in both presets until the owner has
+//    heard it): a staccato (staccatissimo) on a patch with <Instrument staccatoLength> (staccatissimoLength) is meant to
+//    sound and held no longer than that: a slow staccato no longer chooses Short 0.5 (from=), its note-off at the cap; a
+//    portato, an unmarked note and a staccato already shorter unchanged; the shipped SSO map's values (staccato_lengths.json)
+//---------------------------------------------------------
+
+void TestSoundLibrary::staccatoLength()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      QCOMPARE(Playback::definition("shorts/staccatoLength")->value, 0.0);
+      for (const Playback::Preset& p : Playback::presets()) {
+            bool listed = false;
+            for (const auto& kv : p.values)
+                  if (QString(kv.first) == "shorts/staccatoLength") {
+                        listed = true;
+                        QCOMPARE(kv.second, 0.0);
+                        }
+            QVERIFY2(listed, p.id);
+            }
+      // the kinds: a portato is no staccato
+      using A = Ms4::Art;
+      QCOMPARE(SoundLib::staccatoKind({ { A::Staccato, false } }), 1);
+      QCOMPARE(SoundLib::staccatoKind({ { A::Staccatissimo, false } }), 2);
+      QCOMPARE(SoundLib::staccatoKind({ { A::Staccato, false }, { A::Tenuto, false } }), 0);
+      QCOMPARE(SoundLib::staccatoKind({ { A::Accent, false }, { A::Staccato, false } }), 1);
+      QCOMPARE(SoundLib::staccatoKind({}), 0);
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo'/>"
+         "<Instrument name='Violin' ids='violin' staccatoLength='0.19' staccatissimoLength='0.16'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Short 0.5' value='50' techniques='short' length='0.5' from='0.43'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo short'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      QCOMPARE(lib->instruments.front().staccatoSeconds, 0.19);
+      QCOMPARE(lib->instruments.front().staccatoCap(2), 0.16);
+      QCOMPARE(lib->instruments.front().staccatoCap(0), -1.0);
+      // the shipped map: every bowed and wind family, nothing on the percussion
+      {
+            QString err;
+            auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &err);
+            QVERIFY2(sso, qPrintable(err));
+            std::map<QString, double> want { { "Violins 1", 0.19 }, { "Violas", 0.19 }, { "Celli", 0.22 }, { "Basses", 0.22 },
+                                             { "Oboe Solo", 0.115 }, { "Clarinet Solo", 0.105 }, { "Bassoon Solo", 0.095 },
+                                             { "Horn Solo", 0.16 }, { "Flute Solo", 0.115 }, { "Trumpet Solo", 0.16 },
+                                             { "Violins 1 - Performance", 0.19 } };
+            int found = 0;
+            for (const SoundLib::LibInstrument& li : sso->instruments) {
+                  if (want.count(li.name)) {
+                        ++found;
+                        QVERIFY2(qAbs(li.staccatoSeconds - want[li.name]) < 1e-9, qPrintable(li.name));
+                        QVERIFY2(li.staccatissimoSeconds > 0 && li.staccatissimoSeconds <= 0.16 + 1e-9
+                                 && li.staccatissimoSeconds <= li.staccatoSeconds + 1e-9, qPrintable(li.name));
+                        }
+                  if (li.name == "Timpani" || li.name == "Harp" || li.name.startsWith("Percussion"))
+                        QVERIFY2(li.staccatoSeconds < 0, qPrintable(li.name));
+                  }
+            QCOMPARE(found, int(want.size()));
+      }
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "staccato-length.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      struct N { double on = -1; double off = -1; QString art; };
+      std::vector<MidiRenderer::LibTrace> trace;
+      auto render = [&](int setting) {
+            Playback::setIniValuesForTest({ { "heldNotes/early", "0" }, { "levels/calibrated", "0" },
+                                            { "shorts/staccatoLength", QString::number(setting) } });
+            score->setPlaylistDirty();
+            EventMap events;
+            trace.clear();
+            MidiRenderer midi(score);
+            midi.setLibraryTrace(&trace);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            midi.renderScore(&events, ctx);
+            std::map<int, N> notes;                       // written tick -> its note
+            std::map<int, int> sounding;                  // key -> tick
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch())
+                        continue;
+                  const double t = score->utick2utime(te.first);
+                  if (e.type() == ME_NOTEON && e.velo() > 0 && e.note()) {
+                        notes[e.note()->chord()->tick().ticks()].on = t;
+                        sounding[e.pitch()] = e.note()->chord()->tick().ticks();
+                        }
+                  else if ((e.type() == ME_NOTEOFF || (e.type() == ME_NOTEON && e.velo() == 0)) && sounding.count(e.pitch())) {
+                        notes[sounding[e.pitch()]].off = t;
+                        sounding.erase(e.pitch());
+                        }
+                  }
+            for (const MidiRenderer::LibTrace& t : trace)
+                  if (t.note && notes.count(t.utick) && t.choice)
+                        notes[t.utick].art = t.choice.articulation->name;
+            return notes;
+            };
+      // tick -> (articulation, seconds held) without and with the setting
+      struct E { int tick; const char* art0; double len0; const char* art1; double len1; };
+      const std::vector<E> expect = {
+            { 0, "Short 0.5", 0.5, "Spiccato", 0.19 },          // staccato quarter: meant 0.5 s, from 0.43 -> capped
+            { 480, "Spiccato", 0.25, "Spiccato", 0.19 },        // staccato eighth
+            { 960, "Spiccato", 0.25, "Spiccato", 0.16 },        // staccatissimo quarter (MS4 25 %)
+            { 1440, "Short 0.5", 0.745, "Short 0.5", 0.745 },   // portato: no staccato
+            { 1920, "Long", 0.99, "Long", 0.99 },               // unmarked
+            { 2400, "Spiccato", 0.125, "Spiccato", 0.125 },     // staccato sixteenth: already shorter
+            };
+      for (int setting : { 0, 1 }) {
+            const std::map<int, N> n = render(setting);
+            for (const E& e : expect) {
+                  const QString at = QString("setting %1, tick %2").arg(setting).arg(e.tick);
+                  QVERIFY2(n.count(e.tick), qPrintable(at));
+                  const N& x = n.at(e.tick);
+                  QCOMPARE(x.art, QString(setting ? e.art1 : e.art0));
+                  QVERIFY2(qAbs((x.off - x.on) - (setting ? e.len1 : e.len0)) < 0.004,
+                           qPrintable(at + QString(": held %1 s").arg(x.off - x.on)));
+                  }
+            }
+      // the score's own value turns it on as any setting
+      Playback::setIniValuesForTest({ { "heldNotes/early", "0" }, { "levels/calibrated", "0" } });
+      score->setMetaTag(Playback::metaTag, "shorts/staccatoLength=1");
+      std::vector<Ms4::ArtRef> stacc { { A::Staccato, false } };
+      QVERIFY(SoundLib::want(stacc, SoundLib::TextState(), 1.0, 0, score).staccatoLength);
+      QCOMPARE(SoundLib::want(stacc, SoundLib::TextState(), 1.0, 0, score).staccatoKind, 1);
+      score->setMetaTag(Playback::metaTag, "");
+      QVERIFY(!SoundLib::want(stacc, SoundLib::TextState(), 1.0, 0, score).staccatoLength);
       delete score;
       }
 

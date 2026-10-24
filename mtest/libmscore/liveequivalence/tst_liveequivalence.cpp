@@ -184,6 +184,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainJoinsLive();
       void transitionLevelsLive();
       void attackLevelsLive();
+      void staccatoLengthLive();
       void speedSentLive();
       void hostedSlotsGain();
       void exportInstancesOfParts();
@@ -8874,6 +8875,99 @@ void TestLiveEquivalence::chordVoicesHosted()
       delete score;
       }
 
+//---------------------------------------------------------
+//   staccatoLengthLive
+//    [shorts] staccatoLength (branch staccato-length): the plain set's technique clips (written, their played times put
+//    back by LiveTiming) hold every note-on / note-off where MuseScore plays them, a capped staccato's shorter note-off too
+//---------------------------------------------------------
+
+void TestLiveEquivalence::staccatoLengthLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo'/>"
+         "<Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin' staccatoLength='0.19' staccatissimoLength='0.16'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "<Articulation name='Short 0.5' value='50' techniques='short' length='0.5' from='0.43' onset='20'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo short' onset='8'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "staccato-length.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      for (int setting : { 0, 1 }) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "shorts/staccatoLength", QString::number(setting) } });
+            score->setPlaylistDirty();
+            EventMap playback;
+            score->renderMidi(&playback, false, true, SynthesizerState());
+            const double leadUnits = LiveTiming::msToUnits(playback.delayLeadMs + playback.startLeadMs, tl.bpm);
+            const int tickUnits = tl.units(1) - tl.units(0);
+            std::vector<std::tuple<int, int, bool>> want;          // (key, units, on)
+            std::map<int, std::pair<double, double>> held;         // key -> (on, off) s
+            for (const auto& te : playback) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF))
+                        continue;
+                  const bool on = e.type() == ME_NOTEON && e.velo() > 0;
+                  want.push_back(std::make_tuple(e.pitch(), int(std::lround(tl.units(te.first) - leadUnits)), on));
+                  (on ? held[e.pitch()].first : held[e.pitch()].second) = score->utick2utime(te.first);
+                  }
+            // the staccato quarter C5 (72): 0.5 s on Short 0.5 (started its onset, 20 ms, early: the note-off stays), capped
+            // 0.19 s on Spiccato (8 ms early)
+            QVERIFY(held.count(72));
+            QVERIFY2(qAbs(held[72].second - held[72].first - (setting ? 0.198 : 0.52)) < 0.003,
+                     qPrintable(QString("setting %1: %2 s").arg(setting).arg(held[72].second - held[72].first)));
+            auto render = [score](bool written) {
+                  EventMap events;
+                  MidiRenderer r(score);
+                  r.setForLiveClips(true);
+                  r.setWrittenTiming(written);
+                  SynthesizerState ss;
+                  MidiRenderer::Context ctx(ss);
+                  ctx.metronome = false;
+                  r.renderScore(&events, ctx);
+                  return events;
+                  };
+            const EventMap played = render(false);
+            const EventMap written = render(true);
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+            LiveSetWriter::Spec spec;
+            spec.tracks = PlainLiveSet::tracks(l, true);
+            double groupDelay = 0.0, kontaktDelay = 0.0;
+            for (const LiveSetWriter::Track& t : spec.tracks) {
+                  if (t.group && t.partRef)
+                        groupDelay = t.delayMs;
+                  if (!t.group && t.midiTo < 0)
+                        kontaktDelay = t.delayMs;
+                  }
+            const double extra = LiveTiming::msToUnits(kontaktDelay + groupDelay, tl.bpm);
+            std::vector<std::tuple<int, int, bool>> got;
+            for (const PlainLiveSet::Section& sec : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : sec.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                              for (const PlainLiveSet::Technique& t : k.techniques)
+                                    for (const LiveClips::Note& n : t.notes) {
+                                          const std::pair<double, double> at = LiveTiming::playedBy(t.timing, n, tl.bpm);
+                                          got.push_back(std::make_tuple(n.pitch, int(std::lround(at.first + extra)), true));
+                                          got.push_back(std::make_tuple(n.pitch, int(std::lround(at.second + extra)), false));
+                                          }
+            std::sort(want.begin(), want.end());
+            std::sort(got.begin(), got.end());
+            QCOMPARE(got.size(), want.size());
+            for (size_t i = 0; i < want.size(); ++i) {
+                  QCOMPARE(std::get<0>(got[i]), std::get<0>(want[i]));
+                  QCOMPARE(std::get<2>(got[i]), std::get<2>(want[i]));
+                  QVERIFY2(std::abs(std::get<1>(got[i]) - std::get<1>(want[i])) <= tickUnits,
+                           qPrintable(QString("setting %1, key %2: %3 against %4").arg(setting).arg(std::get<0>(want[i]))
+                                      .arg(std::get<1>(got[i])).arg(std::get<1>(want[i]))));
+                  }
+            }
+      }
+
 QTEST_MAIN(TestLiveEquivalence)
 //---------------------------------------------------------
 //   playbackSettingsWidget
@@ -9187,4 +9281,3 @@ void TestLiveEquivalence::editLagIdentical()
       }
 
 #include "tst_liveequivalence.moc"
-

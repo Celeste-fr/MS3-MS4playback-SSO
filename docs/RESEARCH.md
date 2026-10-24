@@ -934,8 +934,8 @@ MuseScore plays?
 - **Not used:** Aalto (no articulation readings yet) and URMP.
 
 **Readings.** `staccato_lengths/readings_articulation.tsv`.
-- The Beethoven 8 marks were read by Claude from page renders. **They have not been reviewed by the owner**; the crops
-  are in the private `research-staccato/review/`.
+- The Beethoven 8 marks were read by Claude from page renders and **reviewed by the owner on 2026-10-24** (below); the
+  crops are in the private `research-staccato/review/`.
   - Two points are uncertain: whether "sempre staccato" still holds after II's f / sf bars 13–17, and the undotted
     sixteenths in bars 3, 5 and 19–22.
   - By the readings rule, these readings need a review page before any of this changes the map.
@@ -973,6 +973,29 @@ MuseScore plays?
 | K550 violins 1 (section), staccato quarters f | 26 / 1 | 305 | 220 (0.72; 23 % joined) | **110 (0.36)** | 160 (0.52) | dip 29 dB |
 | K550 celli / basses (sections), staccato eighths f | 55 / 51 | 145 / 155 | joined | joined (67–73 %) | joined | **dip only 11–12 dB**: the notes never part by 20 dB |
 | K550 celli / basses, unmarked quarters p before rests | 18 / 18 | 300 | 995 / 1148 | 495 / 768 | 415 / 525 | low strings ring; held 1.4–1.75 × the written quarter (p10) |
+
+**The owner's review of the Beethoven 8 readings (2026-10-24, https://claude.ai/artifact/GNwFDt1PcNHJ1UWoWugvDc).**
+- Right: R01–R05 (the tempo mark; II bars 1–2, every wind staff dotted, "pp sempre staccato"), R12–R17 (the eighths before a
+  rest, winds and cello / bass), R19–R24 (IV: tempo, pp, Violin I bars 6–10).
+- Can't tell: R06–R07 (II bars 3–8), R08–R11 (II bars 18–22, cresc. to f) and R18 (whether "sempre staccato" holds after
+  bars 13–17). No row wrong.
+- So the winds' staccato is recomputed from **bars 1–2 alone** (re-measured from the re-fetched audio, deleted again):
+  bars 3–8 and 18–22 stay in the json, `readingsConfirmed: false`, and set nothing. The winds' eighths before a rest are
+  confirmed as written (no mark), but whether bar 1's "sempre staccato" still applies to them is not (R18).
+
+| winds' staccato sixteenths, II bars 1–2, pp (confirmed) | notes / players | e20 ms (90 % interval) | e10 | p10 |
+|---|---|---|---|---|
+| oboe | 15 / 1 (oboe 2's track: onsets unreliable, bleed) | **115** [115, 125] | 80 | 110 |
+| clarinet | 30 / 2 | **103** [90, 110] | 65 | 95 |
+| bassoon | 18 / 2 | **95** [80, 105] | 65 | 100 |
+| horn | 26 / 2 | **158** [155, 160] | 115 | 115 |
+| all four | 89 / 7 | **115** [100, 155] | 80 | 110 |
+
+The unconfirmed bars agree within their spread (bars 3–8 at pp: 95–175 ms; 18–22 at cresc.–f: 105–172, 10–30 ms longer than
+pp), so the confirmed numbers are not an outlier, but they rest on fewer notes (89 against 690) and on pp only. Brass other
+than horns and the flutes have no measurement: the horn's and the pooled value are assumptions. Hähnel & Berndt's 173 ms
+(their note end at a 66 % loudness drop, earlier than −20 dB) is a cross-check only, not used. 90 % intervals:
+a two-level bootstrap over players then notes (summarize.py).
 
 **Literature** (an agent's search, 2026-10-24; PDFs in the private `research-staccato/lit/dl1/`)
 
@@ -1034,7 +1057,8 @@ SSO's dry length (Close mic) was not measured.
 **Proposal (for the owner; nothing changed)**
 - **a) Meant length of a staccato.** Replace the fixed 50 % with "the shorter of 50 % of the written value and a
   measured absolute":
-  - about 0.13 s for winds and 0.16–0.22 s for strings (e20);
+  - about 0.13 s for winds and 0.16–0.22 s for strings (e20); after the review, from confirmed readings only: winds
+    0.095–0.16 s by instrument (built as `[shorts] staccatoLength`, branch `staccato-length`);
   - the same for staccatissimo, about 0.16 s.
 
   The library would then never pick Short 0.5 for a staccato on a slow note (today: a Violins 1 staccato from 0.86 s

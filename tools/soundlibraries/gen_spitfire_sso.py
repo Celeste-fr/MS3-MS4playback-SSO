@@ -372,6 +372,47 @@ def performanceTechniques(patch):
     return (' attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122"'
             f' transitions="portamento:1-19:{portamentoVelocity(patch)} fingered:20-84:69 bowed:85-127:93"'
             ' reattack="106" reattackGap="54" overlap="24" legatoGap="39"')
+# [shorts] staccatoLength (branch staccato-length, 2026-10-24; the setting 0 until the owner has heard it): a staccato is held,
+# and chosen (from=), no longer than real players sound one: staccatoLength= / staccatissimoLength= (s) on the <Instrument>s
+# of each family, from staccato_lengths.json (RESEARCH.md 2.5a: per note, onset to -20 dB under its peak; the Beethoven 8
+# readings it leans on reviewed by the owner, https://claude.ai/artifact/GNwFDt1PcNHJ1UWoWugvDc):
+# - oboe, clarinet, bassoon, horn: TU Berlin Beethoven 8 / II's staccato sixteenths (IOI 355 ms) of bars 1-2 at pp, the
+#   bars whose readings the owner confirmed (2026-10-24, R02-R05; bars 3-8 and 18-22 "can't tell": measured, not used):
+#   89 notes, 7 players (one oboist: 15 notes); cor anglais the oboe's, bass / contrabass clarinet the clarinet's,
+#   contrabassoon the bassoon's. Measured at pp only (f was 10-30 ms longer in the unconfirmed bars)
+# - flutes: the four winds' pooled median (no flute in the passage: an assumption)
+# - trumpets, trombones, cimbassi, tubas: the horn's (no other brass measured: an assumption)
+# - violins (and violas, the strings ensemble: an assumption): the mean of TU Beethoven 8 / IV's Violin I staccato quarters
+#   and Spheres K. 550's Violins 1 staccato quarters (both partly joined at -20 dB: lower bounds)
+# - celli, basses: no length measurable (their K. 550 staccato eighths at IOI 150 ms never part by 20 dB); the larger
+#   of the two violin values (low strings ring longer after the bow: an assumption)
+# - staccatissimo: 0.16 s, Hähnel & Berndt 2010 (NIME, 10 players on strings, winds and brass: 161 ms), no longer than the
+#   family's staccato (no staccatissimo in the recordings)
+STACCATO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'staccato_lengths.json')
+STACCATISSIMO_S = 0.16
+def staccatoFamilies():
+    g = json.load(open(STACCATO_FILE))['groups'] if os.path.exists(STACCATO_FILE) else {}
+    if not g:
+        return {}
+    e20 = lambda k: g[k]['e20']['medianMs'] / 1000.0
+    # (only groups whose readings the owner confirmed, 2026-10-24: Beethoven 8 / II bars 1-2 at pp)
+    assert all(g[k].get('readingsConfirmed', True) for k in g if k.endswith('b1-2 pp') or k.endswith('b1-2 pp, all'))
+    wind = lambda w: e20(f'B8/II {w} staccato 16ths b1-2 pp')
+    violins = (e20('B8/IV violin 1 quarters, staccato (dots)') + e20('K550/I violins 1 staccato (quarter)')) / 2
+    low = max(e20('B8/IV violin 1 quarters, staccato (dots)'), e20('K550/I violins 1 staccato (quarter)'))
+    fam = {'oboe': wind('oboe'), 'clarinet': wind('clarinet'), 'bassoon': wind('bassoon'), 'horn': wind('horn'),
+           'flute': e20('B8/II winds staccato 16ths b1-2 pp, all'), 'brass': wind('horn'), 'violins': violins, 'low': low}
+    return {k: round(v / 0.005) * 0.005 for k, v in fam.items()}
+STACCATO_FAMILIES = staccatoFamilies()
+STACCATO_RULES = [(r'Strings Ensemble|Violin|Viola', 'violins'), (r'Cell|^Basses', 'low'), (r'Piccolo|Flute', 'flute'),
+                  (r'Oboe|Cor Anglais', 'oboe'), (r'Clarinet', 'clarinet'), (r'Bassoon', 'bassoon'), (r'Horn', 'horn'),
+                  (r'Trumpet|Trombone|Cimbass|Tuba', 'brass')]
+def staccatoAttributes(patch):
+    for rx, fam in STACCATO_RULES:
+        if re.search(rx, patch) and fam in STACCATO_FAMILIES:
+            v = STACCATO_FAMILIES[fam]
+            return f' staccatoLength="{v:g}" staccatissimoLength="{min(v, STACCATISSIMO_S):g}"'
+    return ''
 # [slurs] speedFromWritten (the owner approved, 2026-10-17): the controller the patch's script writes at each legato
 # note-on (Leg. Speed CC) and the script value that turns that off (set to 0 with the setting on), from the same file
 def speedAttributes(patch):
@@ -1755,6 +1796,9 @@ for i, line in enumerate(out):
                 out[i] = out[i][:-len(end)] + f' plainShift="{PLAIN_SHIFT[current]["shiftMs"]:g}"' + end
                 if 'attackMs' in PLAIN_SHIFT[current]:
                     out[i] = out[i][:-len(end)] + f' plainAttack="{PLAIN_SHIFT[current]["attackMs"]:g}"' + end
+            if staccatoAttributes(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + staccatoAttributes(current) + end
             if speedAttributes(current):
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + speedAttributes(current) + end

@@ -1785,6 +1785,56 @@ worse, timing and tuning identical. Rises only (Linux dumps, Whence, Recommended
 and Celli bar 9 as with 0; the audit the same (LEVEL STEP 12 info). Tests `tst_soundlibrary::attackLevels` (0 / 1 / 2, 2's drop with its note-on), `playbackPresets`; `Playback::setIniValuesForTest` leaves it
 0 unless a test sets it, so the older tests keep their expectations.
 
+## Staccato length
+
+`[shorts] staccatoLength` (branch `staccato-length`, 2026-10-24; the owner: "why not", to try by ear; **0 by default and
+in both presets until he has heard it**; the readings it leans on: his review of 2026-10-24,
+https://claude.ai/artifact/GNwFDt1PcNHJ1UWoWugvDc, R01-R05, R12-R17, R19-R24 right, R06-R11 and R18 "can't tell": only the
+measurements resting on confirmed readings set the values).
+
+**Why.** MuseScore 4 holds a staccato for 50 % of its written length (staccatissimo 25 %) at every tempo, and the library
+chooses a short by that meant length (`[shorts] byMeantLength`, `from`). Real players sound a staccato for about a fixed time
+instead (RESEARCH.md 2.5a, `tools/soundlibraries/staccato_lengths.json`): winds about 0.10-0.16 s, strings about 0.15-0.22 s
+to -20 dB under the note's peak, whether the note is written 0.2 or 0.36 s long. So a slow staccato plays much longer in
+MuseScore than with players: a Violins 1 staccato quarter at 60 bpm is meant to sound 0.5 s and chooses Short 0.5.
+
+**1.** A library note with a staccato (staccatissimo; not a portato) on a patch with `<Instrument staccatoLength>`
+(`staccatissimoLength`):
+- is **meant** to sound the shorter of the written length times the factor and that time: the short technique is chosen
+  against `from` by it (a slow staccato on Spiccato, not Short 0.5);
+- is **held** no longer than that time from its written start (the note-off: `config.ms4Dur` capped; an early start by the
+  onset leaves the note-off where it is, so it sounds about that long; a plain Performance staccato's spiccato attack
+  alike, plainShift moving the whole patch).
+A note already shorter (a fast staccato) is unchanged. Both of MuseScore's renders take it, so Live's clips and the plain set
+hold the same note-off (`tst_liveequivalence::staccatoLengthLive`).
+
+**Values** (map, generated: `gen_spitfire_sso.py` `STACCATO_RULES` from `staccato_lengths.json`, seconds):
+
+| family | staccato | staccatissimo | source |
+|---|---|---|---|
+| Violins 1 / 2, solo violins, Strings Ensemble | 0.19 | 0.16 | mean of TU Beethoven 8 / IV Violin I (≥ 0.155) and Spheres K. 550 Violins 1 (0.22) |
+| Violas, Solo Viola | 0.19 | 0.16 | the violins' (assumption: not measured) |
+| Celli, Basses, Solo Cello | 0.22 | 0.16 | the larger violin value (assumption: their staccato eighths never part by 20 dB; low strings ring longer) |
+| Oboe, cor anglais | 0.115 | 0.115 | TU Beethoven 8 / II staccato sixteenths, bars 1-2 at pp (confirmed readings): one oboist, 15 notes, 90 % [0.115, 0.125] |
+| Clarinets (bass, contrabass) | 0.105 | 0.105 | the same: 2 players, 30 notes, [0.090, 0.110] |
+| Bassoons, contrabassoon | 0.095 | 0.095 | the same: 2 players, 18 notes, [0.080, 0.105] |
+| Horns | 0.16 | 0.16 | the same: 2 players, 26 notes, [0.155, 0.160] |
+| Flutes, piccolo | 0.115 | 0.115 | the four winds pooled, 89 notes, [0.100, 0.155] (assumption: no flute measured) |
+| Trumpets, trombones, cimbassi, tubas | 0.16 | 0.16 | the horn's (assumption: no other brass measured) |
+
+Staccatissimo: 0.16 s (Hähnel & Berndt 2010, 161 ms over strings, winds and brass; no staccatissimo in the recordings: the one
+value from the literature, an assumption), never longer than the staccato. The winds' values are measured at pp only (in the
+unconfirmed bars 18-22, cresc. to f, 10-30 ms longer); Hähnel & Berndt's staccato, 173 ms (to a 66 % loudness drop), is a
+cross-check only. Percussion, harp, keyboards: none (as MuseScore 4).
+
+**Uncertainty.** One performance per passage, players ±30-50 ms; the strings' -20 dB includes the free string's ring; SSO's
+own shorts sound about twice as long as real notes at -10 dB perceived (with the hall; the Close mic not measured), so the
+note-off caps what MuseScore sends, not what the sample rings. Not done: a note before a rest (proposal b), the 45 ms spiccato
+clearance (d).
+
+Tests: `tst_soundlibrary::staccatoLength` (the map attributes and the shipped values, choice and note-off with 0 and 1, a
+portato / unmarked / short staccato unchanged, presets 0), `tst_liveequivalence::staccatoLengthLive`.
+
 ## Clicked and entered notes
 
 The owner (2026-10-15): "send a clicked note on a library part to its SSO patch, with its technique and the same patch
@@ -1839,6 +1889,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Shorts chosen by meant sounding length | on | `SoundLib::want`, `choose` | `[shorts] byMeantLength` |
 | Meant length factors | staccato 50, staccatissimo 25, tenuto 99, portato 74.5 % (MS4's) | `want` (`Want::soundSeconds`) | `[shorts] staccato` … `portato` |
 | Measured short thresholds | map `from` | `choose` | `[shorts.from]` table |
+| Staccato length, `[shorts] staccatoLength` (branch staccato-length, 2026-10-24, not yet heard by the owner): a library staccato (staccatissimo) is meant to sound and held no longer than real players sound one, the map's `staccatoLength` / `staccatissimoLength` by family (above, Staccato length) | 0 (Recommended 0, Library default 0) | `SoundLib::want` (`staccatoKind`), `chooseBases`, `rendermidi.cpp` (`config.ms4Dur`) | `[shorts] staccatoLength`; score: `playbackSettings` |
 | (In Recommended only under staff text "non performance": `[slurs] performance` takes the strings' slurs; a Whence dump, 2026-10-12, has no Long (Rachm.).) Slurred notes shorter than their held technique's measured peak (map `peak`, the median over its semitones of the onset check's mf perceived peak: SSO violins' Long ~1.06 s, violas' 0.77 s) play a quicker technique of the same patch with the note's modifiers: 1 the tenuto short (Short 1.0, its `from` not applied: the slur's note-off ends it), 2 the espressivo long (Long (Rachm.)); none fits: the held one; early by the swapped technique's own onset, by `[heldNotes] byPitch` as every note (`Choice::swapped`; until 2026-10-09 always at each pitch: the owner then heard Whence's first bars uneven, its Violas / Celli per-pitch in-context fit spreading the sent times 86-109 ms; byPitch 1 keeps that: Long (Rachm.)'s per-pitch fit, `sso_rachm_onset_fit.json`, Windows VM 2026-10-08: on Whence's violin passage arrivals SD 10.8 / 11.4 ms for Violins 1 / 2 against 22.0 / 22.6 on its median and 21.6 / 26.5 on Long's; the owner, 2026-10-08: "the timing is still not as good as plain long"). The owner, 2026-10-08: slurred violins had no attack (Whence's slurred notes 136-273 ms); 2026-10-08, after comparing by ear: "let's make slurs quick = 2 the recommended preset" | 2 (Recommended; Library default 0) | `SoundLib::choose` (`chooseSlurred`), `want` (`Want::slurQuick`) | `[slurs] quick`; score: `playbackSettings` |
 | A note `[slurs] quick` swaps plays as loud as its held technique would: Long less Long (Rachm.) at the note's pitch and written length (map `quickLevel` on the swapped articulation: `sso_rachm_levels.json`, re-measured on the Windows VM 2026-10-08 in the passage itself, standard test score's slurred groups, perceived loudness per group against plain Long: the dB that, through the shipped dynamics curve at the note's pitch (per-pitch curves, above), raises the passage's CC1 64 to the CC1 at which Rachm. matches Long, per register: `sso_rachm_context_match.json` → `rachm_quick_levels.py`; match CC1 Violins 1 75 / 82 / 69 (pitches to 75, to 81, above), Violins 2 76 / 67 / 64, Violas 72 / 89 (to 58, above) and Celli 91 / 105 / 98 / 92 (to 49, 52, 56, above) measured 2026-10-09 but not used: the owner, 2026-10-09, the in-context Violas / Celli fits (these levels and their in-context onsets in `sso_rachm_onset_fit.json`) made Whence bars 1-2 Celli ~8 dB louder and pulsing, so their Long (Rachm.) is back to 25a3dcbbeb's (the timing check's onsets, no quickLevel: `RACHM_UNUSED` in `gen_spitfire_sso.py`; the data stay in the files); the same at every length; log-linear in length, linear in pitch, the nearest end's beyond. Not modelled: length. In the standard test score the violas' upper register at CC1 89 reads +1.2 dB on 16ths and -1.3 on 8ths against Long; the held-out check (branch rachm-holdout, `sso_rachm_holdout.json`) -3.7 for 59-90, about -6 at 4-8 32nds), added to the note's level (CC11 down along the held expression curve, CC1 up along the articulation's dynamics curve, as the Inspector's levels: so in Live's clips and the plain set too). The owner, 2026-10-08: Long (Rachm.) "sounds quieter than plain long"; measured, Violins 1 about 6 dB under Long at 100-136 ms, Violins 2 about 3; at 1 the owner, 2026-10-08: "not the correct volume. violin 1 in bar 5 now sounds really loud relative to the viola and cello" ; that file held isolated notes' differences (5-11 dB), which the shallow dynamics curve turned into CC1 105-127, about 5 dB over Long in the passage (VM). Values replaced by the in-context ones; the owner, 2026-10-09, on build 37882502550: "1 is the right balance, make it the recommended preset" | 1 (on; Recommended 1) | `rendermidi.cpp` (`quickDb`, `marcatoLevel`), `Articulation::quickLevelAt` | `[slurs] quickLevel`; score: `playbackSettings` |
 | Slurred notes of the five string sections play on their Performance legato (as under staff text "performance"; "non performance" opts out), not `[slurs] quick`'s swap; with `[levels] calibrated` as loud as Long (above, Performance legato in Recommended; the owner, 2026-10-10) | 1 (on; Recommended 1, Library default 0) | `want` (`Want::slurPerformance`), `choose` (`choosePerformance`); `rendermidi.cpp` `performanceLevel` | `[slurs] performance`; score: `playbackSettings` |

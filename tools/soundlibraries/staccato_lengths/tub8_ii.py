@@ -7,7 +7,8 @@ oboes, clarinets, bassoons and horns play repeated sixteenth chords marked "pp s
 (Allegretto scherzando, eighth = 88); bars 18-19 cresc., 20-22 f, still dotted. One track per player (two per section).
 
 Notes kept: inside a run of the repeated sixteenths, i.e. the IOI before and after within 0.28-0.45 s (the played
-sixteenth is ~0.355 s), in bars 1-8 (pp) and 18-22 (cresc. -> f). Bar positions from the played tempo: bar 1 at the first
+sixteenth is ~0.355 s), in bars 1-2 (pp; the owner confirmed the readings), 3-8 (pp) and 18-22 (cresc. -> f; both
+unconfirmed: "can't tell" in the review). A note's next onset may be bar 3's first. Bar positions from the played tempo: bar 1 at the first
 wind onset, bar 9's tied ff note at ~25.4 s and bar 22's last eighth at ~66.3 s anchor the two windows.
 """
 import json, os, sys
@@ -18,7 +19,11 @@ import notes
 TRACKS = {'03_Ob_1': 'oboe', '04_Ob_2': 'oboe', '05_Cl_1': 'clarinet', '06_Cl_2': 'clarinet',
           '07_Bn_1': 'bassoon', '08_Bn_2': 'bassoon', '09_Hrn_1': 'horn', '10_Hrn_2': 'horn'}
 # (label, t0, t1, dynamic): bar 1 starts ~1.50 s, a bar ~2.84 s; bar 9's tied ff note ~25.4 s; bars 18-22 ~53.6-66.3 s
-WINDOWS = [('b1-8 pp', 1.3, 24.0, 'pp'), ('b18-19 cresc', 53.4, 59.0, 'cresc'), ('b20-22 f', 59.0, 66.2, 'f')]
+# The owner's review (2026-10-24, https://claude.ai/artifact/GNwFDt1PcNHJ1UWoWugvDc): bars 1-2 confirmed (R02-R05: the dots and
+# "pp sempre staccato" on every wind staff); bars 3-8 (R06-R07) and 18-22 (R08-R11) "can't tell", as is whether "sempre
+# staccato" holds after bars 13-17 (R18): those windows are measured but marked unconfirmed, and not used for the values.
+WINDOWS = [('b1-2 pp', 1.3, 7.15, 'pp', True), ('b3-8 pp', 7.15, 24.0, 'pp', False),
+           ('b18-19 cresc', 53.4, 59.0, 'cresc', False), ('b20-22 f', 59.0, 66.2, 'f', False)]
 IOI = (0.28, 0.45)
 
 
@@ -39,7 +44,7 @@ def main(folder, out):
             p = notes.measure(pe, pf, on[k], on[k + 1], levels=(10,))
             if not m or not p:
                 continue
-            rows.append({'track': tr, 'instrument': inst, 'window': w[0][0], 'dynamic': w[0][3], 't': round(on[k], 3),
+            rows.append({'track': tr, 'instrument': inst, 'window': w[0][0], 'dynamic': w[0][3], 'confirmed': w[0][4], 't': round(on[k], 3),
                          'ioi': round(b, 3), 'peakDb': round(m['peak'], 1), 'dipDb': round(m['dip'], 1),
                          'e6': round(m[6]['end'] - m[6]['start'], 3), 'e10': round(m[10]['end'] - m[10]['start'], 3),
                          'e20': round(m[20]['end'] - m[20]['start'], 3),

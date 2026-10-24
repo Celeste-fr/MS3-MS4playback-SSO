@@ -1123,6 +1123,14 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         if (ok && std::isfinite(v))
                               li.plainShiftMs = std::max(0.0, std::min(1000.0, v));   // (TrackDelays' range)
                         }
+                  for (const char* key : { "staccatoLength", "staccatissimoLength" }) {
+                        if (!a.hasAttribute(key))
+                              continue;
+                        bool ok = false;
+                        const double v = a.value(key).toDouble(&ok);
+                        if (ok && std::isfinite(v) && v > 0)
+                              (QString(key) == "staccatoLength" ? li.staccatoSeconds : li.staccatissimoSeconds) = std::min(10.0, v);
+                        }
                   if (a.hasAttribute("plainAttack")) {
                         bool ok = false;
                         const double v = a.value("plainAttack").toDouble(&ok);
@@ -1438,7 +1446,15 @@ static Choice chooseBases(const std::vector<const LibInstrument*>& patches, cons
                         // (playback.ini [shorts.from] by patch|articulation: an offset or its own number)
                         const double from = a.fromSeconds > 0
                               ? Playback::adjust("shorts.from", patches[p]->name, a.name, 0, a.fromSeconds) : -1;
-                        const double meant = want.byMeantLength ? want.soundSeconds : want.seconds;
+                        double meant = want.byMeantLength ? want.soundSeconds : want.seconds;
+                        // ([shorts] staccatoLength: a staccato meant no longer than real players sound one, the patch's own
+                        // cap, else the main patch's)
+                        if (want.staccatoLength && want.staccatoKind && meant > 0) {
+                              const double cap = patches[p]->staccatoCap(want.staccatoKind) > 0 ? patches[p]->staccatoCap(want.staccatoKind)
+                                                 : patches[0]->staccatoCap(want.staccatoKind);
+                              if (cap > 0)
+                                    meant = std::min(meant, cap);
+                              }
                         if (from > 0 && meant > 0 && meant < from)
                               continue;
                         bool fits = true;
@@ -3103,6 +3119,23 @@ std::map<int, int> controllerTexts(Score* score, const Part* part, const Control
       }
 
 //---------------------------------------------------------
+//   staccatoKind
+//    [shorts] staccatoLength: 1 a staccato, 2 a staccatissimo, 0 neither (a portato, staccato and tenuto, is no staccato)
+//---------------------------------------------------------
+
+int staccatoKind(const std::vector<Ms4::ArtRef>& arts)
+      {
+      bool stacc = false, stacciss = false;
+      for (const Ms4::ArtRef& r : arts) {
+            if (r.art == Ms4::Art::Tenuto)
+                  return 0;
+            stacc |= r.art == Ms4::Art::Staccato;
+            stacciss |= r.art == Ms4::Art::Staccatissimo;
+            }
+      return stacciss ? 2 : stacc ? 1 : 0;
+      }
+
+//---------------------------------------------------------
 //   want
 //---------------------------------------------------------
 
@@ -3130,6 +3163,8 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
                   factor = Playback::value(id, score) / 100.0;
             w.soundSeconds = seconds * factor;
             }
+      w.staccatoKind = staccatoKind(arts);
+      w.staccatoLength = Playback::on("shorts/staccatoLength", score);
       w.modifiers = text.modifiers;
       w.plainPerformance = !text.performanceOff && Playback::on("slurs/plainPerformance", score);
       w.plainTiming = w.plainPerformance && Playback::on("slurs/plainTiming", score);

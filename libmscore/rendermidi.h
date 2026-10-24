@@ -171,6 +171,7 @@ class MidiRenderer {
       // attack by the patch's plainAttack, a transition by its modelled arrival as transitionsEarly 1, or the mode set
       // there), instead of the patch's one plainShift
       bool libPlainTiming = false;
+      bool libStaccatoLength = false;                             // [shorts] staccatoLength (this chunk; written timing too)
       int libMicrotoneBends = 0;                                  // [slurs] microtoneBends 0-2 (this chunk)
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds

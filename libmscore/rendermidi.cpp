@@ -2454,6 +2454,22 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           config.ms4Dur = r.dur + int(qint64(extra) * Ms4::HUNDRED / ticks);
                                     }
                               }
+                        // [shorts] staccatoLength: a staccato (staccatissimo) held no longer than real players sound one, the
+                        // patch's staccatoLength (staccatissimoLength) seconds from its written start (the shorter of that and
+                        // the length just set; an early start by its onset leaves the note-off where it is, so it sounds about
+                        // that long; plain Performance's plainShift moves the whole patch alike). Live's clips and the plain set
+                        // take the same note-off (both renders)
+                        if (libStaccatoLength && li && !libNote.builtIn && libChoice && offset == 0) {
+                              const int kind = SoundLib::staccatoKind(noteArts);
+                              const SoundLib::LibInstrument* cp = libPatches[libChoice.patch];
+                              const double cap = cp->staccatoCap(kind) > 0 ? cp->staccatoCap(kind) : li->staccatoCap(kind);
+                              const double written = SoundLib::noteSeconds(note);
+                              if (kind && cap > 0 && written > 0) {
+                                    const int dur = int(cap / written * Ms4::HUNDRED);
+                                    if (dur < config.ms4Dur)
+                                          config.ms4Dur = std::max(1, dur);
+                                    }
+                              }
                         // [slurs] plainAccents 2 / 3 (performanceNote's accentAttack) at real players' level: PLAIN_ACCENT_DB over
                         // the spiccato attack it replaces, which SSO's accented attack plays the map's accentedLevel over at the
                         // note's pitch and length as played (written x the length factor just set; a join to the next note
@@ -6441,6 +6457,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libTransitionsEarly = library && !writtenTiming ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;
       libPlainTiming = library && !writtenTiming && Playback::on("slurs/plainPerformance", score) && Playback::on("slurs/plainTiming", score);
+      libStaccatoLength = library && Playback::on("shorts/staccatoLength", score);
       libMicrotoneBends = library ? int(std::lround(Playback::value("slurs/microtoneBends", score))) : 0;
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;

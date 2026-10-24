@@ -1,36 +1,107 @@
 {
- "about": "How long real orchestral players sound short notes (docs/RESEARCH.md 2.5a). Written by staccato_lengths/summarize.py from the per-note measurements of tub8_ii.py, tub8_ii_rests.py, tub8_iv.py, spheres_k550.py (audio deleted after measuring). Times in ms from the start of the rise that carries the note's peak to the end of the last 5 ms window within X dB of the peak before the next onset. e20 / e10 / e6: power; p10: perceived (ArticulationCheck's perceivedEnvelope, the measure of SSO's p10). ofWritten: median / written value at the played tempo. joined: share of notes still within X dB at the next onset (a lower bound; no median when >= 0.5). Readings of the articulation marks: staccato_lengths/readings_articulation.tsv; the TU ones are an agent's, NOT reviewed by the owner (the K. 550 ones are the owner-confirmed readings of 2026-10-15). Research only: nothing in the map uses it.",
+ "about": "How long real orchestral players sound short notes (docs/RESEARCH.md 2.5a). Written by staccato_lengths/summarize.py from the per-note measurements of tub8_ii.py, tub8_ii_rests.py, tub8_iv.py, spheres_k550.py (audio deleted after measuring). Times in ms from the start of the rise that carries the note's peak to the end of the last 5 ms window within X dB of the peak before the next onset. e20 / e10 / e6: power; p10: perceived (ArticulationCheck's perceivedEnvelope, the measure of SSO's p10). ofWritten: median / written value at the played tempo. joined: share of notes still within X dB at the next onset (a lower bound; no median when >= 0.5). Readings of the articulation marks: staccato_lengths/readings_articulation.tsv; the TU ones are an agent's, NOT reviewed by the owner (the K. 550 ones are the owner-confirmed readings of 2026-10-15); the Beethoven 8 ones reviewed by the owner 2026-10-24 (https://claude.ai/artifact/GNwFDt1PcNHJ1UWoWugvDc): R01-R05, R12-R17, R19-R24 right, R06-R11 and R18 \"can not tell\": groups with readingsConfirmed false rest on those and are not used for the map (staccatoLength=, gen_spitfire_sso.py).",
  "groups": {
-  "B8/II oboe staccato 16ths pp": {
-   "notes": 90,
+  "B8/II oboe staccato 16ths b1-2 pp": {
+   "notes": 15,
+   "tracks": 1,
+   "ioiMs": 350,
+   "writtenMs": 350,
+   "e20Interval90Ms": [
+    115,
+    125
+   ],
+   "dipDbMedian": 81.6,
+   "e20": {
+    "medianMs": 115,
+    "iqrMs": [
+     115,
+     128
+    ],
+    "ofWritten": 0.33,
+    "joined": 0.07,
+    "trackMediansMs": [
+     115,
+     115
+    ]
+   },
+   "e10": {
+    "medianMs": 80,
+    "iqrMs": [
+     80,
+     85
+    ],
+    "ofWritten": 0.23,
+    "joined": 0.0,
+    "trackMediansMs": [
+     80,
+     80
+    ]
+   },
+   "e6": {
+    "medianMs": 65,
+    "iqrMs": [
+     57,
+     65
+    ],
+    "ofWritten": 0.19,
+    "joined": 0.0,
+    "trackMediansMs": [
+     65,
+     65
+    ]
+   },
+   "p10": {
+    "medianMs": 110,
+    "iqrMs": [
+     105,
+     115
+    ],
+    "ofWritten": 0.31,
+    "joined": 0.0,
+    "trackMediansMs": [
+     110,
+     110
+    ]
+   },
+   "source": "TU B8 II b1-2",
+   "family": "winds",
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": true
+  },
+  "B8/II oboe staccato 16ths b3-8 pp": {
+   "notes": 75,
    "tracks": 2,
    "ioiMs": 355,
    "writtenMs": 355,
-   "dipDbMedian": 55.1,
+   "e20Interval90Ms": [
+    120,
+    130
+   ],
+   "dipDbMedian": 54.6,
    "e20": {
     "medianMs": 125,
     "iqrMs": [
      115,
-     134
+     135
     ],
     "ofWritten": 0.35,
-    "joined": 0.01,
+    "joined": 0.0,
     "trackMediansMs": [
      125,
      128
     ]
    },
    "e10": {
-    "medianMs": 85,
+    "medianMs": 90,
     "iqrMs": [
      80,
-     99
+     100
     ],
-    "ofWritten": 0.24,
+    "ofWritten": 0.25,
     "joined": 0.0,
     "trackMediansMs": [
      85,
-     85
+     90
     ]
    },
    "e6": {
@@ -43,7 +114,7 @@
     "joined": 0.0,
     "trackMediansMs": [
      65,
-     65
+     70
     ]
    },
    "p10": {
@@ -59,15 +130,20 @@
      115
     ]
    },
-   "source": "TU B8 II b1-8 / 18-22",
+   "source": "TU B8 II b3-8",
    "family": "winds",
-   "articulation": "staccato (sempre staccato, dots)"
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": false
   },
-  "B8/II oboe staccato 16ths cresc. to f": {
+  "B8/II oboe staccato 16ths b18-22 cresc. to f": {
    "notes": 65,
    "tracks": 2,
    "ioiMs": 360,
    "writtenMs": 360,
+   "e20Interval90Ms": [
+    130,
+    145
+   ],
    "dipDbMedian": 56.9,
    "e20": {
     "medianMs": 135,
@@ -121,36 +197,108 @@
      143
     ]
    },
-   "source": "TU B8 II b1-8 / 18-22",
+   "source": "TU B8 II b18-22",
    "family": "winds",
-   "articulation": "staccato (sempre staccato, dots)"
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": false
   },
-  "B8/II clarinet staccato 16ths pp": {
-   "notes": 124,
+  "B8/II clarinet staccato 16ths b1-2 pp": {
+   "notes": 30,
    "tracks": 2,
    "ioiMs": 355,
    "writtenMs": 355,
-   "dipDbMedian": 54.2,
+   "e20Interval90Ms": [
+    90,
+    110
+   ],
+   "dipDbMedian": 58.7,
+   "e20": {
+    "medianMs": 103,
+    "iqrMs": [
+     90,
+     110
+    ],
+    "ofWritten": 0.29,
+    "joined": 0.0,
+    "trackMediansMs": [
+     90,
+     110
+    ]
+   },
+   "e10": {
+    "medianMs": 65,
+    "iqrMs": [
+     51,
+     85
+    ],
+    "ofWritten": 0.18,
+    "joined": 0.0,
+    "trackMediansMs": [
+     50,
+     85
+    ]
+   },
+   "e6": {
+    "medianMs": 53,
+    "iqrMs": [
+     35,
+     75
+    ],
+    "ofWritten": 0.15,
+    "joined": 0.0,
+    "trackMediansMs": [
+     35,
+     75
+    ]
+   },
+   "p10": {
+    "medianMs": 95,
+    "iqrMs": [
+     85,
+     110
+    ],
+    "ofWritten": 0.27,
+    "joined": 0.0,
+    "trackMediansMs": [
+     85,
+     110
+    ]
+   },
+   "source": "TU B8 II b1-2",
+   "family": "winds",
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": true
+  },
+  "B8/II clarinet staccato 16ths b3-8 pp": {
+   "notes": 94,
+   "tracks": 2,
+   "ioiMs": 355,
+   "writtenMs": 355,
+   "e20Interval90Ms": [
+    105,
+    120
+   ],
+   "dipDbMedian": 53.4,
    "e20": {
     "medianMs": 110,
     "iqrMs": [
-     100,
+     105,
      120
     ],
     "ofWritten": 0.31,
     "joined": 0.01,
     "trackMediansMs": [
      110,
-     110
+     115
     ]
    },
    "e10": {
-    "medianMs": 75,
+    "medianMs": 78,
     "iqrMs": [
      65,
      85
     ],
-    "ofWritten": 0.21,
+    "ofWritten": 0.22,
     "joined": 0.01,
     "trackMediansMs": [
      65,
@@ -160,14 +308,14 @@
    "e6": {
     "medianMs": 62,
     "iqrMs": [
-     45,
-     75
+     50,
+     70
     ],
     "ofWritten": 0.18,
     "joined": 0.0,
     "trackMediansMs": [
-     45,
-     75
+     50,
+     70
     ]
    },
    "p10": {
@@ -179,19 +327,24 @@
     "ofWritten": 0.28,
     "joined": 0.0,
     "trackMediansMs": [
-     95,
+     100,
      105
     ]
    },
-   "source": "TU B8 II b1-8 / 18-22",
+   "source": "TU B8 II b3-8",
    "family": "winds",
-   "articulation": "staccato (sempre staccato, dots)"
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": false
   },
-  "B8/II clarinet staccato 16ths cresc. to f": {
+  "B8/II clarinet staccato 16ths b18-22 cresc. to f": {
    "notes": 68,
    "tracks": 2,
    "ioiMs": 360,
    "writtenMs": 360,
+   "e20Interval90Ms": [
+    125,
+    155
+   ],
    "dipDbMedian": 56.3,
    "e20": {
     "medianMs": 143,
@@ -245,27 +398,99 @@
      140
     ]
    },
-   "source": "TU B8 II b1-8 / 18-22",
+   "source": "TU B8 II b18-22",
    "family": "winds",
-   "articulation": "staccato (sempre staccato, dots)"
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": false
   },
-  "B8/II bassoon staccato 16ths pp": {
-   "notes": 107,
+  "B8/II bassoon staccato 16ths b1-2 pp": {
+   "notes": 18,
    "tracks": 2,
-   "ioiMs": 360,
-   "writtenMs": 360,
-   "dipDbMedian": 57.3,
+   "ioiMs": 365,
+   "writtenMs": 365,
+   "e20Interval90Ms": [
+    80,
+    105
+   ],
+   "dipDbMedian": 59.6,
+   "e20": {
+    "medianMs": 95,
+    "iqrMs": [
+     81,
+     104
+    ],
+    "ofWritten": 0.26,
+    "joined": 0.0,
+    "trackMediansMs": [
+     80,
+     105
+    ]
+   },
+   "e10": {
+    "medianMs": 65,
+    "iqrMs": [
+     55,
+     75
+    ],
+    "ofWritten": 0.18,
+    "joined": 0.0,
+    "trackMediansMs": [
+     55,
+     75
+    ]
+   },
+   "e6": {
+    "medianMs": 50,
+    "iqrMs": [
+     40,
+     59
+    ],
+    "ofWritten": 0.14,
+    "joined": 0.0,
+    "trackMediansMs": [
+     40,
+     60
+    ]
+   },
+   "p10": {
+    "medianMs": 100,
+    "iqrMs": [
+     90,
+     110
+    ],
+    "ofWritten": 0.27,
+    "joined": 0.0,
+    "trackMediansMs": [
+     90,
+     110
+    ]
+   },
+   "source": "TU B8 II b1-2",
+   "family": "winds",
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": true
+  },
+  "B8/II bassoon staccato 16ths b3-8 pp": {
+   "notes": 89,
+   "tracks": 2,
+   "ioiMs": 355,
+   "writtenMs": 355,
+   "e20Interval90Ms": [
+    85,
+    100
+   ],
+   "dipDbMedian": 56.8,
    "e20": {
     "medianMs": 95,
     "iqrMs": [
      85,
      100
     ],
-    "ofWritten": 0.26,
+    "ofWritten": 0.27,
     "joined": 0.01,
     "trackMediansMs": [
      85,
-     100
+     98
     ]
    },
    "e10": {
@@ -274,7 +499,7 @@
      60,
      75
     ],
-    "ofWritten": 0.19,
+    "ofWritten": 0.2,
     "joined": 0.0,
     "trackMediansMs": [
      60,
@@ -303,19 +528,24 @@
     "ofWritten": 0.28,
     "joined": 0.0,
     "trackMediansMs": [
-     92,
-     110
+     95,
+     108
     ]
    },
-   "source": "TU B8 II b1-8 / 18-22",
+   "source": "TU B8 II b3-8",
    "family": "winds",
-   "articulation": "staccato (sempre staccato, dots)"
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": false
   },
-  "B8/II bassoon staccato 16ths cresc. to f": {
+  "B8/II bassoon staccato 16ths b18-22 cresc. to f": {
    "notes": 61,
    "tracks": 2,
    "ioiMs": 355,
    "writtenMs": 355,
+   "e20Interval90Ms": [
+    92,
+    130
+   ],
    "dipDbMedian": 57.0,
    "e20": {
     "medianMs": 105,
@@ -369,23 +599,95 @@
      128
     ]
    },
-   "source": "TU B8 II b1-8 / 18-22",
+   "source": "TU B8 II b18-22",
    "family": "winds",
-   "articulation": "staccato (sempre staccato, dots)"
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": false
   },
-  "B8/II horn staccato 16ths pp": {
-   "notes": 109,
+  "B8/II horn staccato 16ths b1-2 pp": {
+   "notes": 26,
    "tracks": 2,
    "ioiMs": 355,
    "writtenMs": 355,
-   "dipDbMedian": 52.5,
+   "e20Interval90Ms": [
+    155,
+    160
+   ],
+   "dipDbMedian": 51.0,
    "e20": {
-    "medianMs": 165,
+    "medianMs": 158,
+    "iqrMs": [
+     155,
+     164
+    ],
+    "ofWritten": 0.44,
+    "joined": 0.0,
+    "trackMediansMs": [
+     155,
+     160
+    ]
+   },
+   "e10": {
+    "medianMs": 115,
+    "iqrMs": [
+     105,
+     115
+    ],
+    "ofWritten": 0.32,
+    "joined": 0.0,
+    "trackMediansMs": [
+     105,
+     115
+    ]
+   },
+   "e6": {
+    "medianMs": 75,
+    "iqrMs": [
+     70,
+     95
+    ],
+    "ofWritten": 0.21,
+    "joined": 0.0,
+    "trackMediansMs": [
+     70,
+     100
+    ]
+   },
+   "p10": {
+    "medianMs": 115,
+    "iqrMs": [
+     110,
+     130
+    ],
+    "ofWritten": 0.32,
+    "joined": 0.0,
+    "trackMediansMs": [
+     110,
+     130
+    ]
+   },
+   "source": "TU B8 II b1-2",
+   "family": "winds",
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": true
+  },
+  "B8/II horn staccato 16ths b3-8 pp": {
+   "notes": 83,
+   "tracks": 2,
+   "ioiMs": 355,
+   "writtenMs": 355,
+   "e20Interval90Ms": [
+    145,
+    200
+   ],
+   "dipDbMedian": 53.0,
+   "e20": {
+    "medianMs": 175,
     "iqrMs": [
      145,
-     195
+     200
     ],
-    "ofWritten": 0.46,
+    "ofWritten": 0.49,
     "joined": 0.0,
     "trackMediansMs": [
      145,
@@ -409,13 +711,13 @@
     "medianMs": 80,
     "iqrMs": [
      70,
-     95
+     90
     ],
     "ofWritten": 0.23,
     "joined": 0.0,
     "trackMediansMs": [
-     75,
-     85
+     80,
+     80
     ]
    },
    "p10": {
@@ -427,19 +729,24 @@
     "ofWritten": 0.35,
     "joined": 0.0,
     "trackMediansMs": [
-     120,
+     125,
      130
     ]
    },
-   "source": "TU B8 II b1-8 / 18-22",
+   "source": "TU B8 II b3-8",
    "family": "winds",
-   "articulation": "staccato (sempre staccato, dots)"
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": false
   },
-  "B8/II horn staccato 16ths cresc. to f": {
+  "B8/II horn staccato 16ths b18-22 cresc. to f": {
    "notes": 66,
    "tracks": 2,
    "ioiMs": 360,
    "writtenMs": 360,
+   "e20Interval90Ms": [
+    152,
+    195
+   ],
    "dipDbMedian": 54.4,
    "e20": {
     "medianMs": 172,
@@ -493,77 +800,87 @@
      155
     ]
    },
-   "source": "TU B8 II b1-8 / 18-22",
+   "source": "TU B8 II b18-22",
    "family": "winds",
-   "articulation": "staccato (sempre staccato, dots)"
+   "articulation": "staccato (dots, pp sempre staccato)",
+   "readingsConfirmed": false
   },
-  "B8/II winds staccato 16ths, all": {
-   "notes": 690,
-   "tracks": 8,
+  "B8/II winds staccato 16ths b1-2 pp, all": {
+   "notes": 89,
+   "tracks": 7,
    "ioiMs": 355,
    "writtenMs": 355,
-   "dipDbMedian": 55.5,
+   "e20Interval90Ms": [
+    100,
+    155
+   ],
+   "dipDbMedian": 57.8,
    "e20": {
-    "medianMs": 125,
+    "medianMs": 115,
     "iqrMs": [
-     105,
-     150
+     100,
+     155
     ],
-    "ofWritten": 0.35,
-    "joined": 0.0,
+    "ofWritten": 0.32,
+    "joined": 0.01,
     "trackMediansMs": [
-     90,
-     195
+     80,
+     160
     ]
    },
    "e10": {
-    "medianMs": 90,
+    "medianMs": 80,
     "iqrMs": [
-     75,
-     110
-    ],
-    "ofWritten": 0.25,
-    "joined": 0.0,
-    "trackMediansMs": [
      60,
-     125
-    ]
-   },
-   "e6": {
-    "medianMs": 70,
-    "iqrMs": [
-     55,
-     85
+     100
     ],
-    "ofWritten": 0.2,
+    "ofWritten": 0.23,
     "joined": 0.0,
     "trackMediansMs": [
      50,
-     85
+     115
+    ]
+   },
+   "e6": {
+    "medianMs": 65,
+    "iqrMs": [
+     40,
+     75
+    ],
+    "ofWritten": 0.18,
+    "joined": 0.0,
+    "trackMediansMs": [
+     35,
+     100
     ]
    },
    "p10": {
-    "medianMs": 115,
+    "medianMs": 110,
     "iqrMs": [
-     105,
-     130
+     95,
+     115
     ],
-    "ofWritten": 0.32,
+    "ofWritten": 0.31,
     "joined": 0.0,
     "trackMediansMs": [
-     95,
-     135
+     85,
+     130
     ]
    },
-   "source": "TU B8 II",
+   "source": "TU B8 II b1-2",
    "family": "winds",
-   "articulation": "staccato"
+   "articulation": "staccato",
+   "readingsConfirmed": true
   },
   "B8/II winds eighths before a rest": {
    "notes": 20,
    "tracks": 8,
    "ioiMs": 1088,
    "writtenMs": 710,
+   "e20Interval90Ms": [
+    380,
+    485
+   ],
    "dipDbMedian": 149.4,
    "e20": {
     "medianMs": 410,
@@ -618,14 +935,19 @@
     ]
    },
    "source": "TU B8 II b13-17",
+   "readingsConfirmed": true,
    "family": "winds",
-   "articulation": "no mark, sempre staccato in force"
+   "articulation": "no mark printed (whether bar 1's sempre staccato still holds: unconfirmed)"
   },
   "B8/II cello eighths before a rest": {
    "notes": 12,
    "tracks": 6,
    "ioiMs": 1112,
    "writtenMs": 710,
+   "e20Interval90Ms": [
+    575,
+    695
+   ],
    "dipDbMedian": 44.8,
    "e20": {
     "medianMs": 622,
@@ -680,6 +1002,7 @@
     ]
    },
    "source": "TU B8 II b13-17",
+   "readingsConfirmed": true,
    "family": "strings",
    "articulation": "unmarked, before a rest"
   },
@@ -688,6 +1011,10 @@
    "tracks": 6,
    "ioiMs": 1075,
    "writtenMs": 710,
+   "e20Interval90Ms": [
+    782,
+    1168
+   ],
    "dipDbMedian": 70.0,
    "e20": {
     "medianMs": null,
@@ -742,6 +1069,7 @@
     ]
    },
    "source": "TU B8 II b13-17",
+   "readingsConfirmed": true,
    "family": "strings",
    "articulation": "unmarked, before a rest"
   },
@@ -750,6 +1078,10 @@
    "tracks": 9,
    "ioiMs": 200,
    "writtenMs": 200,
+   "e20Interval90Ms": [
+    145,
+    160
+   ],
    "e20": {
     "medianMs": 155,
     "iqrMs": [
@@ -804,6 +1136,7 @@
    },
    "source": "TU B8 IV b6-10",
    "family": "strings",
+   "readingsConfirmed": true,
    "articulation": "staccato (dots)"
   },
   "B8/IV violin 1 quarters, unmarked, in a line of quarters": {
@@ -811,6 +1144,10 @@
    "tracks": 9,
    "ioiMs": 200,
    "writtenMs": 200,
+   "e20Interval90Ms": [
+    130,
+    160
+   ],
    "e20": {
     "medianMs": 145,
     "iqrMs": [
@@ -865,6 +1202,7 @@
    },
    "source": "TU B8 IV b6-10",
    "family": "strings",
+   "readingsConfirmed": true,
    "articulation": "unmarked, in a line of quarters"
   },
   "B8/IV violin 1 quarters, unmarked, before a rest": {
@@ -872,6 +1210,10 @@
    "tracks": 9,
    "ioiMs": 440,
    "writtenMs": 200,
+   "e20Interval90Ms": [
+    155,
+    185
+   ],
    "e20": {
     "medianMs": 170,
     "iqrMs": [
@@ -926,6 +1268,7 @@
    },
    "source": "TU B8 IV b6-10",
    "family": "strings",
+   "readingsConfirmed": true,
    "articulation": "unmarked, before a rest"
   },
   "K550/I violins 1 staccato (quarter)": {
@@ -933,6 +1276,10 @@
    "tracks": 1,
    "ioiMs": 305,
    "writtenMs": 305,
+   "e20Interval90Ms": [
+    205,
+    258
+   ],
    "dipDbMedian": 28.8,
    "e20": {
     "medianMs": 220,
@@ -987,6 +1334,7 @@
     ]
    },
    "source": "Spheres K550 I",
+   "readingsConfirmed": true,
    "family": "strings (section)",
    "articulation": "staccato"
   },
@@ -995,6 +1343,10 @@
    "tracks": 1,
    "ioiMs": 1102,
    "writtenMs": 1102,
+   "e20Interval90Ms": [
+    830,
+    875
+   ],
    "dipDbMedian": 43.0,
    "e20": {
     "medianMs": 852,
@@ -1049,6 +1401,7 @@
     ]
    },
    "source": "Spheres K550 I",
+   "readingsConfirmed": true,
    "family": "strings (section)",
    "articulation": "held"
   },
@@ -1057,6 +1410,10 @@
    "tracks": 1,
    "ioiMs": 145,
    "writtenMs": 145,
+   "e20Interval90Ms": [
+    175,
+    190
+   ],
    "dipDbMedian": 11.5,
    "e20": {
     "medianMs": null,
@@ -1111,6 +1468,7 @@
     ]
    },
    "source": "Spheres K550 I",
+   "readingsConfirmed": true,
    "family": "strings (section)",
    "articulation": "staccato"
   },
@@ -1119,6 +1477,10 @@
    "tracks": 1,
    "ioiMs": 1200,
    "writtenMs": 300,
+   "e20Interval90Ms": [
+    885,
+    1110
+   ],
    "dipDbMedian": 32.1,
    "e20": {
     "medianMs": 995,
@@ -1173,6 +1535,7 @@
     ]
    },
    "source": "Spheres K550 I",
+   "readingsConfirmed": true,
    "family": "strings (section)",
    "articulation": "unmarked before rests"
   },
@@ -1181,6 +1544,10 @@
    "tracks": 2,
    "ioiMs": 1200,
    "writtenMs": 1200,
+   "e20Interval90Ms": [
+    1240,
+    1250
+   ],
    "dipDbMedian": 7.2,
    "e20": {
     "medianMs": null,
@@ -1235,6 +1602,7 @@
     ]
    },
    "source": "Spheres K550 I",
+   "readingsConfirmed": true,
    "family": "strings (section)",
    "articulation": "held"
   },
@@ -1243,6 +1611,10 @@
    "tracks": 1,
    "ioiMs": 155,
    "writtenMs": 155,
+   "e20Interval90Ms": [
+    175,
+    200
+   ],
    "dipDbMedian": 11.7,
    "e20": {
     "medianMs": null,
@@ -1297,6 +1669,7 @@
     ]
    },
    "source": "Spheres K550 I",
+   "readingsConfirmed": true,
    "family": "strings (section)",
    "articulation": "staccato"
   },
@@ -1305,6 +1678,10 @@
    "tracks": 1,
    "ioiMs": 1200,
    "writtenMs": 300,
+   "e20Interval90Ms": [
+    910,
+    1185
+   ],
    "dipDbMedian": 33.6,
    "e20": {
     "medianMs": 1148,
@@ -1359,6 +1736,7 @@
     ]
    },
    "source": "Spheres K550 I",
+   "readingsConfirmed": true,
    "family": "strings (section)",
    "articulation": "unmarked before rests"
   },
@@ -1367,6 +1745,10 @@
    "tracks": 2,
    "ioiMs": 1200,
    "writtenMs": 1200,
+   "e20Interval90Ms": [
+    1115,
+    1252
+   ],
    "dipDbMedian": 8.8,
    "e20": {
     "medianMs": null,
@@ -1421,6 +1803,7 @@
     ]
    },
    "source": "Spheres K550 I",
+   "readingsConfirmed": true,
    "family": "strings (section)",
    "articulation": "held"
   }
