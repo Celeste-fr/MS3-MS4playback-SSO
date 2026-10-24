@@ -134,6 +134,16 @@ Then (the coordinator, after the owner's PC run): ship it, always on. Details an
   - `--create-live-set` (Whence.als, 30 s) and `--even-levels` (303 s, round 2 envelope off its slurs' medians
     0.55 dB) run as before with kheap.
 
+## Build for the owner: #477 (2026-10-24)
+
+Windows build #477 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40132296643, integrate-1017 @ b38f02ee4a):
+#475 plus `[shorts] staccatoLength` 1 by default and in Recommended (the owner's A/B: Violins 1 and Celli "B", Oboe and
+Bassoon "same"). Checked on the VM (private `check477/RESULT.md`): Whence's export changes only the 7 bar-8 staccato
+eighths' note-offs (0.202-0.211 -> 0.190 s) and the Violins 1 beat 3 accented attack's CC11 (68 -> 66: its level is looked
+up by played length); Celli and Basses byte-identical to #475; the staccato score held min(old length, map value) to the
+tick, tenuto-staccato unchanged, string tails 3-12 dB lower where capped, winds -0.8 to -1.5 dB; detector 0 findings;
+mimalloc in every run. research-reverb (docs only) merged after the build.
+
 ## Build for the owner: #475 (2026-10-24)
 
 Windows build #475 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40096814080, integrate-1017 @ d001c96cc3):
