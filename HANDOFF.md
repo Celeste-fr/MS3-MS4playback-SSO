@@ -243,7 +243,7 @@ device, exports null; `MS_KHEAP_OFF=1` cures it. Rule: an optimization never cha
 
 ## Build for the owner: #480 (2026-10-25)
 
-Windows build #480 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40165471973, integrate-1017 @ 7e4ad8e):
+Windows build #480 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40165471973, integrate-1017 @ 796eb9b0ae):
 #477 plus pa-device-name, pa-buffer (Preferences › I/O › Audio buffer), async-load, kheap-realtime (mimalloc only inside
 setState, per thread). Why: the owner's live playback crackled on #477 on every device and stopped with MS_KHEAP_OFF=1
 (2026-10-24); he asked for loading without locking up the window. Checked on the VM (private `check480/RESULT.md`, real
