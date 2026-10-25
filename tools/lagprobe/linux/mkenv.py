@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Linux lag-probe environment: isolated HOME with the test synth as the library's plug-in.
 # usage: mkenv.py <repo> <home> <build.rel>
-import os, re, sys
+import os, re, struct, sys
 repo, home, build = sys.argv[1:4]
 src = os.path.join(repo, "share/soundlibraries/Spitfire Symphony Orchestra.xml")
 name = "Lag Test SSO"
@@ -20,8 +20,15 @@ setups = os.path.join(home, ".local/share/MuseScore/MuseScore3Evo/soundlibraries
 os.makedirs(setups, exist_ok=True)
 for inst in set(re.findall(r'<(?:Instrument|Patch) name="([^"]+)"', xml)):
     fn = re.sub(r'[\\/:*?"<>|]', "_", inst)
+    # a state the test synth takes (MuseScore's container: "MSV3", version 1, the plug-in's name, the component's
+    # state: articulation and level as doubles; no controller state), so that every patch loads as a setup does
+    # (MSTESTSYNTH_SETSTATE_MS then times its setState; a text here was refused at once: "could not be loaded")
+    name16 = "MS Test Synth".encode("utf-16-be")
+    component = struct.pack("<dd", 0.0, 1.0)
+    state = b"MSV3" + struct.pack(">I", 1) + struct.pack(">I", len(name16)) + name16 \
+            + struct.pack(">I", len(component)) + component + struct.pack(">I", 0)
     with open(os.path.join(setups, fn + ".vst3state"), "wb") as f:
-        f.write(b"lag probe test state " + inst.encode())
+        f.write(state)
 vst = os.path.join(home, ".vst3")
 os.makedirs(vst, exist_ok=True)
 link = os.path.join(vst, "mstestsynth.vst3")

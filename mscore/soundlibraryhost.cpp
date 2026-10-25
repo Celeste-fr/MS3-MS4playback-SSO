@@ -83,6 +83,7 @@
 #include "libmscore/trackdelays.h"
 #include "libmscore/undo.h"
 #include "seq.h"
+#include "shortcut.h"
 
 #ifdef USE_VST3
 #include "audio/vst3/backgroundload.h"
@@ -102,6 +103,18 @@ extern QString dataPath;
 //---------------------------------------------------------
 //   SoundLibraryHost
 //---------------------------------------------------------
+
+// an edit's check for patches it needs (scoreEdited): this long after the last edit, so that a run of edits (typing
+// notes) works the routes out once, after it (they cost what Play's work them out: 0.3-0.5 s on a 21-part score)
+static const int EDIT_CHECK_MS = 1000;
+
+namespace {
+struct Stepping {
+      int& n;
+      Stepping(int& x) : n(x) { ++n; }
+      ~Stepping() { --n; }
+      };
+}
 
 SoundLibraryHost::SoundLibraryHost()
       {
@@ -129,6 +142,9 @@ SoundLibraryHost::SoundLibraryHost()
             });
       _settleTimer.setInterval(250);
       connect(&_settleTimer, &QTimer::timeout, this, &SoundLibraryHost::settleStep);
+      _editCheck.setSingleShot(true);
+      _editCheck.setInterval(EDIT_CHECK_MS);
+      connect(&_editCheck, &QTimer::timeout, this, &SoundLibraryHost::editCheck);
 #endif
       }
 
@@ -1889,13 +1905,197 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
       {
       LagProbe::Scope probe("SoundLibraryHost::sync");
       _preloadTimer.stop();
+      _keepUnused = false;
       _resync = false;
       bool ok = syncSome(score, error, -1, nullptr);
       if (ok && _resync) {                // (a patch's setup could not be tuned: its copies an instance each now)
             _resync = false;
             ok = syncSome(score, error, -1, nullptr);
             }
+      noteLoading();
       return ok;
+      }
+
+//---------------------------------------------------------
+//   readyToPlay
+//    Play: every instance the score needs loaded (set up for play as sync does it), or its loading started in the
+//    background and false at once. Nothing here waits for a plug-in
+//---------------------------------------------------------
+
+bool SoundLibraryHost::readyToPlay(Score* score, QString* error)
+      {
+      bool ready;
+      {
+            const Stepping stepping(_stepping);
+            ready = readyToPlayInner(score, error);
+      }
+      noteLoading();
+      return ready;
+      }
+
+bool SoundLibraryHost::readyToPlayInner(Score* score, QString* error)
+      {
+      LagProbe::Scope probe("SoundLibraryHost::readyToPlay");
+#ifdef USE_VST3
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!library || SoundLib::output() != SoundLib::Output::PLUGIN || !synth() || !score)
+            return syncSome(score, error, -1, nullptr) || true;     // (no plug-in: what sync did, releasing; never waits)
+      if (_syncing || _releasing)
+            return false;
+      harvest(*library, -1);
+      MasterScore* ms = score->masterScore();
+      if (!_pending.empty() || (_preloadTimer.isActive() && _preloadScore == ms)) {
+            if (!_preloadTimer.isActive() || _preloadScore != ms)
+                  preloadSoon(score);
+            _preloadKeep = false;                   // (Play: what the score no longer needs goes once all are loaded)
+            noteLoading();
+            return false;
+            }
+      _resync = false;
+      int remaining = 0;
+      const bool ok = syncSome(score, error, 0, &remaining);
+      if (!ok)
+            return true;                            // (as before: *error shown, the library's parts silent)
+      if (remaining > 0) {
+            preloadSoon(score);
+            _preloadKind = "At play";
+            noteLoading();
+            return false;
+            }
+      noteLoading();
+      return true;
+#else
+      return sync(score, error) || true;
+#endif
+      }
+
+//---------------------------------------------------------
+//   scoreEdited / editCheck
+//    an edit that needs new patches (a technique, a part's playback, the copies' settings …) loads them in the
+//    background a second after the last edit, so that Play is grayed only while they load. While loading, the preload's
+//    next step sees the edit itself (its routes are worked out again: the undo stack's state changed)
+//---------------------------------------------------------
+
+void SoundLibraryHost::scoreEdited(Score* score)
+      {
+#ifdef USE_VST3
+      if (!score || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth() || _releasing)
+            return;
+      MasterScore* ms = score->masterScore();
+      if (_slotScore != ms && _preloadScore != ms)
+            return;                                 // (never loaded for it: its preload at opening does it)
+      _editScore = ms;
+      _editCheck.start();
+#else
+      Q_UNUSED(score);
+#endif
+      }
+
+void SoundLibraryHost::editCheck()
+      {
+#ifdef USE_VST3
+      MasterScore* ms = _editScore;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (!ms || shownScore(ms) != ms || !library || _releasing)
+            return;
+      if (_syncing || (seq && seq->isPlaying())) {
+            if (!(seq && seq->isPlaying()))
+                  _editCheck.start();
+            return;                                 // (playing: the next Play's readyToPlay sees it)
+            }
+      if (preloading())
+            return;                                 // (its next step sees the edit)
+      LagProbe::Scope probe("SoundLibraryHost::editCheck");
+      _resync = false;
+      _keepUnused = true;                           // (not about to play: nothing released, no parameters set)
+      int remaining = 0;
+      QString error;
+      syncSome(ms, &error, 0, &remaining);
+      _keepUnused = false;
+      if (remaining > 0) {
+            preloadSoon(ms, true);
+            _preloadKind = "At an edit";
+            }
+      noteLoading();
+#endif
+      }
+
+//---------------------------------------------------------
+//   loading / whenLoaded / noteLoading
+//---------------------------------------------------------
+
+const MasterScore* SoundLibraryHost::shownScore(const MasterScore* fallback)
+      {
+      if (!mscore)
+            return fallback;                        // (no window: the tests, the command line)
+      Score* c = mscore->currentScore();
+      return c ? c->masterScore() : nullptr;
+      }
+
+bool SoundLibraryHost::loading(const Score* score) const
+      {
+#ifdef USE_VST3
+      if (_stepping > 0 && !_releasing)
+            return true;
+      if (!_pending.empty())
+            return true;                            // (a load on a worker thread: for this score or the one before)
+      if (!_preloadTimer.isActive())
+            return false;
+      return !score || !_preloadScore || score->masterScore() == _preloadScore;
+#else
+      Q_UNUSED(score);
+      return false;
+#endif
+      }
+
+void SoundLibraryHost::updatePlayAction()
+      {
+      if (!mscore)
+            return;
+      QAction* play = getAction("play");
+      const Shortcut* sc = Shortcut::getShortcut("play");
+      if (!play || !sc)
+            return;
+      const ScoreState st = mscore->state();
+      const bool allowed = st != STATE_DISABLED && st != STATE_LOCK && (sc->state() & st);
+      const bool stopped = !play->isChecked() && !(seq && seq->isPlaying());
+      const bool loading = stopped && instance()->loading(mscore->currentScore());
+      play->setEnabled(allowed && !loading);
+      }
+
+void SoundLibraryHost::whenLoaded(Score* score, std::function<void()> fn)
+      {
+      _whenLoaded = fn;
+      _whenLoadedScore = score ? score->masterScore() : nullptr;
+      if (!loading(score))
+            noteLoading();
+      }
+
+void SoundLibraryHost::noteLoading()
+      {
+      const bool now = loading();
+      if (now && mscore && _progressTotal > 0)
+            mscore->showMessage(tr("Loading sounds: %1 of %2…").arg(_progressLoaded).arg(_progressTotal), 0);
+      if (!now && _wasLoading && mscore && !_releasing) {
+            std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+            mscore->showMessage(library ? tr("%1 is loaded.").arg(library->name) : QString(), 3000);
+            }
+      _wasLoading = now;
+      emit loadingChanged();
+      if (!now && _whenLoaded && !_whenLoadedPosted) {
+            _whenLoadedPosted = true;
+            QTimer::singleShot(0, this, [this]() {
+                  _whenLoadedPosted = false;
+                  if (!_whenLoaded || loading())
+                        return;                     // (loading again: at its end)
+                  std::function<void()> fn = _whenLoaded;
+                  QPointer<MasterScore> s = _whenLoadedScore;
+                  _whenLoaded = nullptr;
+                  _whenLoadedScore = nullptr;
+                  if (s && shownScore(s) == s)
+                        fn();
+                  });
+            }
       }
 
 //---------------------------------------------------------
@@ -1907,22 +2107,38 @@ bool SoundLibraryHost::sync(Score* score, QString* error)
 //    loads the rest (sync)
 //---------------------------------------------------------
 
-void SoundLibraryHost::preloadSoon(Score* score)
+void SoundLibraryHost::preloadSoon(Score* score, bool keep)
       {
 #ifdef USE_VST3
-      _preloadScore = score ? score->masterScore() : nullptr;
+      if (_releasing)
+            return;
+      MasterScore* ms = score ? score->masterScore() : nullptr;
+      // (an edit's preload while the score's own goes on: the score's own, which releases what it doesn't need at its end)
+      _preloadKeep = _preloadTimer.isActive() && _preloadScore == ms ? (_preloadKeep && keep) : keep;
+      if (!_preloadTimer.isActive() || _preloadScore != ms)
+            _preloadKind = "At score open";
+      if (_whenLoadedScore != ms) {
+            _whenLoaded = nullptr;                  // (another score's play: not now)
+            _whenLoadedScore = nullptr;
+            }
+      _preloadScore = ms;
       _preloadTimer.stop();
       _preloadFrom = _loads;
       _preloadLogged = false;
       if (!_pending.empty()) {
             _preloadTimer.start(20);                        // (loads still set on worker threads: preloadStep takes them)
+            noteLoading();
             return;
             }
-      if (!_preloadScore || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth())
+      if (!_preloadScore || !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN || !synth()) {
+            noteLoading();
             return;
+            }
       _preloadTimer.start(0);
+      noteLoading();
 #else
       Q_UNUSED(score);
+      Q_UNUSED(keep);
 #endif
       }
 
@@ -1958,21 +2174,34 @@ bool SoundLibraryHost::eventFilter(QObject* o, QEvent* e)
 
 void SoundLibraryHost::preloadStep()
       {
+      {
+            const Stepping stepping(_stepping);
+            preloadStepInner();
+      }
+      noteLoading();                // (loading() true while it ran: Play doesn't flicker between two loads)
+      }
+
+void SoundLibraryHost::preloadStepInner()
+      {
       LagProbe::Scope probe("SoundLibraryHost::preloadStep");
 #ifdef USE_VST3
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (_syncing)
             return;
+      if (_releasing)
+            return;
       if (library)
             harvest(*library, -1);                          // (loads done on worker threads: into their slots)
-      if (!_preloadScore || !mscore || !mscore->currentScore() || mscore->currentScore()->masterScore() != _preloadScore
-          || !library) {
+      if (!_preloadScore || shownScore(_preloadScore) != _preloadScore || !library) {
             if (!_pending.empty())
                   _preloadTimer.start(20);
+            noteLoading();
             return;                                         // (another score is shown now)
             }
-      if (seq && seq->isPlaying())
-            return;                                         // (play has loaded what it needs)
+      if (seq && seq->isPlaying()) {
+            _preloadTimer.start(250);                       // (not while playing: an instance loaded then plays what
+            return;                                         // was sent to its slot before it; once stopped)
+            }
       // an instance blocks MuseScore while it loads (0.2-0.8 s for SSO, the first time of a patch
       // 2-40 s; VST 3 wants it on the UI thread): not while the user is doing something (the
       // owner, 2026-09-27: a full orchestra's loading locked the window for seconds)
@@ -1980,27 +2209,32 @@ void SoundLibraryHost::preloadStep()
             _preloadTimer.start(INPUT_PAUSE_MS - int(_lastInput.elapsed()) + 50);
             return;
             }
-      const int threads = loadThreads();
-      const int maxLoads = threads > 0 ? threads - int(_pending.size()) : 1;
+      // one at a time (parallelLoads): the next instance is made once the one before is in its slot, as before, when
+      // setState ran here; its setState on a worker thread meanwhile, the window free
+      const int maxLoads = parallelLoads() - int(_pending.size());
       if (maxLoads <= 0) {
             _preloadTimer.start(20);
             return;
             }
       int remaining = 0;
       QString error;
-      if (!syncSome(_preloadScore, &error, maxLoads, &remaining)) {
+      _resync = false;                                // (a patch found untunable: its needs are worked out again here)
+      _keepUnused = _preloadKeep;
+      const bool ok = syncSome(_preloadScore, &error, maxLoads, &remaining);
+      _keepUnused = false;
+      if (!ok) {
             if (!error.isEmpty() && mscore)
                   mscore->showMessage(error, 10000);
             logTime(*library, QString("Loading at score open stopped: %1").arg(error));
             if (!_pending.empty())
                   _preloadTimer.start(20);
+            noteLoading();
             return;
             }
       qDebug("Sound library: preloaded, %d to go", remaining);
       if (remaining > 0)
             _preloadTimer.start(_pending.empty() ? PRELOAD_GAP_MS : 20);   // (the event loop runs in between)
-      else if (mscore && _loads > _preloadFrom)       // (an edit that needed nothing new says nothing)
-            mscore->showMessage(tr("%1 is loaded.").arg(library->name), 3000);
+      noteLoading();                                  // (the status bar: "Loading sounds: n of m", then "… is loaded")
 #endif
       }
 
@@ -2056,6 +2290,12 @@ struct SoundLibraryHost::Pending {
       std::map<QString, QByteArray> values;     // the script values its score's playback settings set (scriptValuesFor)
       BackgroundLoad::Result background;  // its own loading threads waited for (a map's <Plugin backgroundLoad>)
       bool backgroundWaited { false };
+      // 1: a made setup's first load done (resaved, settled), its copies' tunings being set on a worker thread
+      // (tuneAfter); finishLoad then puts it in its slot with what stage 0 measured
+      int stage { 0 };
+      bool loaded { false };
+      double wall { 0 }, loggedMs { 0 }, settleMs { 0 }, valuesMs { 0 }, finishMs { 0 };
+      Vst3Plugin::Times times;
       };
 
 //---------------------------------------------------------
@@ -2183,23 +2423,32 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
                         }
                   }
             pl->setupMs = t.nsecsElapsed() / 1e6;
-            if (!pl->state.isEmpty() && loadThreads() > 0) {
-                  Vst3Plugin* p = pl->plugin.get();
-                  BackgroundLoad::Result* background = &pl->background;
-                  bool* waited = &pl->backgroundWaited;
-                  const QByteArray state = pl->state;
-                  const double limit = library.backgroundLoad;
-                  pl->clock.start();
-                  pl->done = std::async(std::launch::async, [p, background, waited, state, limit]() {
-                        LagProbe::nameThread("library load");
-                        workerThread(true);
-                        const bool ok = setStateWaiting(p, state, limit, background, waited);
-                        workerThread(false);
-                        return ok;
-                        });
-                  }
+            if (!pl->state.isEmpty())
+                  startSetState(pl.get(), pl->state, library.backgroundLoad);
             }
       return pl;
+      }
+
+//---------------------------------------------------------
+//   startSetState
+//    the setup set on a worker thread (Kontakt's instrument load: seconds; Kontakt takes it there: --measure-load-times
+//    2026-10-03 / 10-15, and the even levels' measurer since 2026-10-17), the window going on meanwhile; harvest takes
+//    the result on the GUI thread. backgroundLimit: setStateWaiting's (0: setState alone)
+//---------------------------------------------------------
+
+void SoundLibraryHost::startSetState(Pending* pl, const QByteArray& state, double backgroundLimit)
+      {
+      Vst3Plugin* p = pl->plugin.get();
+      BackgroundLoad::Result* background = &pl->background;
+      bool* waited = &pl->backgroundWaited;
+      pl->clock.start();
+      pl->done = std::async(std::launch::async, [p, background, waited, state, backgroundLimit]() {
+            LagProbe::nameThread("library load");
+            workerThread(true);
+            const bool ok = setStateWaiting(p, state, backgroundLimit, background, waited);
+            workerThread(false);
+            return ok;
+            });
       }
 
 //---------------------------------------------------------
@@ -2210,17 +2459,32 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
 
 void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::Library& library)
       {
+      LagProbe::Scope probe("SoundLibraryHost::finishLoad");
+      const bool threaded = true;               // (every setState on a worker thread since 2026-10-24: startSetState)
+      if (pl->stage == 1) {
+            // (a made setup's copies' tunings, set on a worker thread after its first load: as before, here)
+            QElapsedTimer st;
+            st.start();
+            const double tuneWall = pl->clock.nsecsElapsed() / 1e6;
+            if (pl->done.valid() && pl->done.get()) {
+                  pl->plugin->settle();
+                  pl->cents = pl->tuneAfter;
+                  logTime(library, QString("%1: its %2 tuning(s) set after its first load, in %3 ms")
+                          .arg(pl->name).arg(pl->cents.size()).arg(ms(tuneWall)));
+                  }
+            else {
+                  untunable().insert(pl->name);
+                  _resync = true;
+                  logTime(library, QString("%1: its copies can't be tuned in the setup (not taken): plain, an instance each, "
+                                           "by varispeed").arg(pl->name));
+                  }
+            pl->finishMs += st.nsecsElapsed() / 1e6;
+            }
+      else {
       bool loaded = false;
-      const bool threaded = pl->done.valid();
       double wall = 0;
       if (pl->setup && !pl->state.isEmpty()) {
-            if (threaded)
-                  loaded = pl->done.get();
-            else {
-                  pl->clock.start();
-                  loaded = setStateWaiting(pl->plugin.get(), pl->state, library.backgroundLoad, &pl->background,
-                                           &pl->backgroundWaited);
-                  }
+            loaded = pl->done.valid() && pl->done.get();
             wall = pl->clock.nsecsElapsed() / 1e6;
             if (pl->backgroundWaited)
                   logBackgroundLoad(library, pl->background, pl->name, " (hosted)");
@@ -2251,27 +2515,45 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
             valuesMs = st.nsecsElapsed() / 1e6;
             if (threaded)
                   logTime(library, QString("%1: set on a worker thread, %2 ms from its start to done").arg(pl->name, ms(wall)));
-            // (a made setup, resaved now: the copies' tunings on Kontakt's own state, here)
+            // (a made setup, resaved now: the copies' tunings on Kontakt's own state, set on a worker thread; finished in
+            // stage 1)
             if (!pl->tuneAfter.empty()) {
                   QString err;
                   const QByteArray plain = setupStateWith(library, pl->name, pl->plugin->path(), pl->values, &err);
                   const QByteArray tuned = plain.isEmpty() ? QByteArray() : tunedState(plain, pl->tuneAfter, &err, &library);
-                  QElapsedTimer tt;
-                  tt.start();
-                  if (!tuned.isEmpty() && pl->plugin->setState(tuned)) {
-                        pl->plugin->settle();
-                        pl->cents = pl->tuneAfter;
-                        logTime(library, QString("%1: its %2 tuning(s) set after its first load, in %3 ms")
-                                .arg(pl->name).arg(pl->cents.size()).arg(ms(tt.nsecsElapsed() / 1e6)));
+                  if (!tuned.isEmpty()) {
+                        pl->stage = 1;
+                        pl->loaded = loaded;
+                        pl->wall = wall;
+                        pl->loggedMs = loggedMs;
+                        pl->settleMs = settleMs;
+                        pl->valuesMs = valuesMs;
+                        pl->times = tm;
+                        pl->finishMs = t.nsecsElapsed() / 1e6;
+                        startSetState(pl.get(), tuned, 0);  // (setState alone, as before: no background wait)
+                        _pending.push_back(std::move(pl));
+                        return;
                         }
-                  else {
-                        untunable().insert(pl->name);
-                        _resync = true;
-                        logTime(library, QString("%1: its copies can't be tuned in the setup (%2): plain, an instance each, by "
-                                                 "varispeed").arg(pl->name, err.isEmpty() ? QString("not taken") : err));
-                        }
+                  untunable().insert(pl->name);
+                  _resync = true;
+                  logTime(library, QString("%1: its copies can't be tuned in the setup (%2): plain, an instance each, by "
+                                           "varispeed").arg(pl->name, err.isEmpty() ? QString("not taken") : err));
                   }
             }
+      pl->loaded = loaded;
+      pl->wall = wall;
+      pl->loggedMs = loggedMs;
+      pl->settleMs = settleMs;
+      pl->valuesMs = valuesMs;
+      pl->times = tm;
+      pl->finishMs = t.nsecsElapsed() / 1e6 - loggedMs - settleMs - valuesMs;
+      }
+      // into its slot
+      QElapsedTimer t;
+      t.start();
+      const bool loaded = pl->loaded;
+      const double wall = pl->wall;
+      const Vst3Plugin::Times tm = pl->times;
       const bool failed = pl->setup && !loaded;
       if (failed) {
             logTime(library, QString("%1: %2").arg(pl->name, pl->error));
@@ -2317,8 +2599,8 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
                                "| logged and resaved %8 ms | settle %9 ms | setup values %10 ms | into its slot %11 ms%12")
               .arg(pl->name, threaded ? QString(" (setState on a worker thread)") : QString())
               .arg(ms(std::max(0.0, pl->createMs)), ms(pl->setupMs), ms(pl->tuneMs)).arg(std::max<size_t>(1, pl->cents.size()))
-              .arg(ms(wall), ms(loggedMs), ms(settleMs), ms(valuesMs))
-              .arg(ms(t.nsecsElapsed() / 1e6 - loggedMs - settleMs - valuesMs))
+              .arg(ms(wall), ms(pl->loggedMs), ms(pl->settleMs), ms(pl->valuesMs))
+              .arg(ms(pl->finishMs + t.nsecsElapsed() / 1e6))
               .arg(_batch ? QString(" | at %1 s").arg(_batch->clock.nsecsElapsed() / 1e9, 0, 'f', 2) : QString()));
       if (_batch) {
             Batch& b = *_batch;
@@ -2335,8 +2617,8 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
                   b.mappingMs += tm.mapping;
                   b.setStateWallMs += wall;
                   }
-            b.threads = std::max(b.threads, threaded ? loadThreads() : 0);
-            b.finishMs += t.nsecsElapsed() / 1e6;
+            b.threads = std::max(b.threads, threaded ? parallelLoads() : 0);
+            b.finishMs += pl->loggedMs + pl->settleMs + pl->valuesMs + pl->finishMs + t.nsecsElapsed() / 1e6;
             }
       }
 
@@ -2348,6 +2630,7 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
 
 bool SoundLibraryHost::harvest(const SoundLib::Library& library, int keep)
       {
+      LagProbe::Scope probe(keep >= 0 ? "SoundLibraryHost::harvest (waits, user input held back)" : "SoundLibraryHost::harvest");
       bool any = false;
       while (!_pending.empty()) {
             auto i = std::find_if(_pending.begin(), _pending.end(), [](const std::unique_ptr<Pending>& p) {
@@ -2365,8 +2648,10 @@ bool SoundLibraryHost::harvest(const SoundLib::Library& library, int keep)
             finishLoad(std::move(pl), library);
             any = true;
             }
-      if (any)
+      if (any) {
             emit changed();
+            noteLoading();
+            }
       return any;
       }
 
@@ -2627,12 +2912,12 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
 
       // which loads happen when (the owner, 2026-09-28: the Performance patches loaded at every play):
       // at play (all at once) or at score open (one at a time, the first of them logged)
-      if (!toLoad.empty() && (maxLoads < 0 || !_preloadLogged)) {
+      if (!toLoad.empty() && maxLoads != 0 && (maxLoads < 0 || !_preloadLogged)) {
             QStringList names;
             for (const Need* n : toLoad)
                   names << n->name;
             logTime(*library, QString("%1: %2 of %3 instances to load: %4")
-                    .arg(maxLoads < 0 ? "At play" : "At score open").arg(toLoad.size()).arg(needs.size()).arg(names.join(", ")));
+                    .arg(maxLoads < 0 ? QString("At play") : _preloadKind).arg(toLoad.size()).arg(needs.size()).arg(names.join(", ")));
             if (maxLoads >= 0)
                   _preloadLogged = true;
             }
@@ -2640,11 +2925,21 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       bool ok = true;
       bool waiting = false;
       int loads = 0;
-      const int threads = loadThreads();
+      const int threads = parallelLoads();
       if (!toLoad.empty() && (maxLoads < 0 || loads < maxLoads)) {
-            batchStart(maxLoads < 0 ? "At play" : "At score open");
+            batchStart(maxLoads < 0 ? QString("At play") : _preloadKind);
             _batch->routesMs += routesMs;
             }
+      // the loading's progress: the score's instances loaded (the status bar's "Loading sounds: n of m", Play's gray)
+      auto progress = [&]() {
+            int have = 0;
+            for (const Need& n : needs)
+                  have += fits(vst->plugin(n.slot), _slots[size_t(n.slot)], n) ? 1 : 0;
+            _progressScore = score->masterScore();
+            _progressTotal = int(needs.size());
+            _progressLoaded = have;
+            };
+      progress();
       for (const Need* n : toLoad) {
             if (maxLoads >= 0 && loads >= maxLoads) {       // (later: preloadStep)
                   if (remaining)
@@ -2659,7 +2954,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   }
             if (mscore)
                   mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(library->name, n->name)
-                                                   : tr("Loading %1 in the background: %2…").arg(library->name, n->name), 8000);
+                                                   : tr("Loading sounds: %1 of %2…").arg(_progressLoaded).arg(_progressTotal), 0);
             std::unique_ptr<Pending> pl = beginLoad(n->slot, n->name, n->setup, n->cents, n->routes, *library, path, error, n->values);
             if (!pl) {
                   ok = false;
@@ -2680,6 +2975,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       for (const Need& n : needs)                 // (an instance kept or moved in: the slots it plays now)
             if (vst->plugin(n.slot))
                   _slots[size_t(n.slot)].routes = n.routes;
+      progress();
       applyLinks();
       applyMixer(score);                      // (instances still loading in the background: at their finish, and the idle timer)
       // the idle timer from the first sync on, a background preload's too: the Mixer's mute and solo
@@ -2690,6 +2986,12 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       if (remaining && *remaining > 0) {                  // (not all loaded yet: nothing released)
             if (waiting)
                   QApplication::restoreOverrideCursor();
+            emit changed();
+            return ok;
+            }
+      if (_keepUnused && maxLoads >= 0) {                 // (after an edit, not about to play: nothing released, the
+            if (_batch && !_batch->ended)                 // parameters set at the next play; an undo may need the
+                  batchEnd(*library);                     // instances the edit left without a part again)
             emit changed();
             return ok;
             }
@@ -2770,12 +3072,26 @@ void SoundLibraryHost::applyLinks()
 void SoundLibraryHost::release()
       {
 #ifdef USE_VST3
-      // (an instance still loading on a worker thread goes once it is done)
+      if (_releasing)
+            return;
+      _releasing = true;
+      _preloadTimer.stop();
+      _editCheck.stop();
+      _whenLoaded = nullptr;
+      _whenLoadedScore = nullptr;
+      // (an instance still loading on a worker thread goes once it is done: setState can't be stopped. The event loop runs
+      // meanwhile, user input held back, for a plug-in that needs the GUI thread while it loads on another; at most
+      // parallelLoads() are in flight, one by default)
       while (!_pending.empty()) {
-            if (_pending.front()->done.valid())
-                  _pending.front()->done.wait();
+            if (_pending.front()->done.valid()) {
+                  LagProbe::Scope probe("SoundLibraryHost::release (waits for a load)");
+                  while (_pending.front()->done.wait_for(std::chrono::milliseconds(5)) != std::future_status::ready)
+                        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 5);
+                  }
             _pending.erase(_pending.begin());
             }
+      _preloadTimer.stop();
+      _editCheck.stop();
       Vst3Synth* vst = synth();
       for (int k = 0; k < 64; ++k) {
             if (_slots[k].editor)
@@ -2791,7 +3107,11 @@ void SoundLibraryHost::release()
       _slotScore = nullptr;
       _spares.clear();
       _idle.stop();
+      _progressTotal = _progressLoaded = 0;
+      _progressScore = nullptr;
       emit changed();
+      noteLoading();
+      _releasing = false;
 #endif
       }
 
@@ -3492,8 +3812,11 @@ void SoundLibraryDialog::rebuild()
                   MasterScore* ms = score->masterScore();
                   connect(show, &QPushButton::clicked, this, [this, host, slot, ms]() {
                         QString error;
-                        if (!host->loaded(slot) && !host->sync(ms, &error)) {
-                              QMessageBox::warning(this, windowTitle(), error);
+                        if (!host->loaded(slot)) {
+                              // (not loaded yet: loaded in the background, the window free; Show again once it is)
+                              host->preloadSoon(ms);
+                              QMessageBox::information(this, windowTitle(), tr("This patch is still loading (the status bar "
+                                                       "shows how far). Press Show again once it is loaded."));
                               return;
                               }
                         if (!host->showEditor(slot, &error))

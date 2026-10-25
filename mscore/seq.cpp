@@ -29,6 +29,8 @@
 #include "playpanel.h"
 #include "preferences.h"
 #include "scoreview.h"
+#include <functional>
+#include <memory>
 #include "seq.h"
 #include "libmscore/lagprobe.h"
 #include "libmscore/partplayback.h"
@@ -440,10 +442,27 @@ void Seq::start()
 
       mscore->moveControlCursor();
 
-      // the sound library's plug-ins for this score (loaded once, then kept)
+      // the sound library's plug-ins for this score (loaded once, then kept): every one loaded, else their loading goes
+      // on in the background and Play is grayed until it is done (soundlibraryhost.h: the window never waits for them;
+      // the owner, 2026-10-24). At a loop's restart (playing) only set up again, as before
       QString libraryError;
-      if (!SoundLibraryHost::instance()->sync(cs, &libraryError))
+      const bool libraryReady = SoundLibraryHost::instance()->readyToPlay(cs, &libraryError);
+      if (!libraryError.isEmpty())
             mscore->showMessage(libraryError, 10000);
+      if (!libraryReady && state != Transport::PLAY) {
+            // (the view went to PLAY to get here: back, once out of its changeState)
+            QTimer::singleShot(0, this, [this]() {
+                  if (state != Transport::STOP)
+                        return;
+                  QAction* play = getAction("play");
+                  if (play && play->isChecked())
+                        play->setChecked(false);
+                  if (cv && cv->mscoreState() == STATE_PLAY)
+                        cv->changeState(ViewState::NORMAL);
+                  SoundLibraryHost::updatePlayAction();
+                  });
+            return;
+            }
       // the Mixer's values on the library parts' MIDI routes, all of them again (a DAW or synth
       // may have been reset since)
       _libOutsStale = true;
@@ -585,6 +604,7 @@ void MuseScore::seqStarted()
 void MuseScore::seqStopped()
       {
       cv->setCursorOn(false);
+      SoundLibraryHost::updatePlayAction();     // (stopped while the score's patches still load: Play grayed now)
       }
 
 //---------------------------------------------------------
@@ -1714,13 +1734,26 @@ void Seq::startAfterChange(int tick)
       *connection = connect(this, &Seq::stopped, this, [this, tick, connection]() {
             disconnect(*connection);
             QTimer::singleShot(0, this, [this, tick]() {
-                  if (!cs || state != Transport::STOP)
-                        return;
-                  cs->setPlayPos(Fraction::fromTicks(tick));
-                  playlistChanged = true; // (the change marks the score's playlist dirty after its endCmd: no signal)
-                  QAction* play = getAction("play");
-                  if (!play->isChecked())
-                        play->trigger();
+                  // (the change may need patches not loaded: they load in the background, Play grayed, and playback goes
+                  // on once they are, as it went on after the change's wait before)
+                  auto go = std::make_shared<std::function<void()>>();
+                  const std::weak_ptr<std::function<void()>> weak = go;     // (no cycle: whenLoaded keeps it alive)
+                  *go = [this, tick, weak]() {
+                        if (!cs || state != Transport::STOP)
+                              return;
+                        QString libraryError;
+                        if (!SoundLibraryHost::instance()->readyToPlay(cs, &libraryError)) {
+                              if (const std::shared_ptr<std::function<void()>> self = weak.lock())
+                                    SoundLibraryHost::instance()->whenLoaded(cs, [self]() { (*self)(); });
+                              return;
+                              }
+                        cs->setPlayPos(Fraction::fromTicks(tick));
+                        playlistChanged = true; // (the change marks the score's playlist dirty after its endCmd: no signal)
+                        QAction* play = getAction("play");
+                        if (!play->isChecked())
+                              play->trigger();
+                        };
+                  (*go)();
                   });
             });
       QTimer::singleShot(1000, this, [connection]() { disconnect(*connection); });

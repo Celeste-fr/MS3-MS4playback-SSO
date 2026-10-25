@@ -46,6 +46,46 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Async load (branch `async-load`, 2026-10-24, from integrate-1017 426a759d88; not merged)
+
+The owner: "is it possible for SSO to load without locking up the rest of MuseScore? just have the playback button grayed
+out during it". Done as a fix (no setting); design in soundlibraryhost.h's header, CLAUDE.md › Hosting.
+- **Where it blocked** (measured, Linux, test synth standing in for Kontakt with `MSTESTSYNTH_SETSTATE_MS=1000`, Whence
+  = 22 instances by varispeed; lag probe, new phases `l` (every instance released and loaded again, then scroll / select
+  / pitch-up / undo / Play while loading) and `r` (Violins 1 to MS4 and back, Play right after); window-system input
+  from `tools/lagprobe/linux/input.py`, xdotool wheel steps every ~200 ms): score open's preload, one `preloadStep` per
+  instance holding the main thread for its whole setState (20 x ~1.0 s, 20.2 s of 25 s; event loop max 1117 ms late);
+  Play while loading: `Seq::start` -> `sync` waited for every remaining instance, 17.1 s, user input held back
+  (`harvest`'s `ExcludeUserInputEvents`; wheel input stalled 17.4 s); Play after a part's change 5.0 s the same way;
+  the Sound Library window's Show (`sync`). On the VM with Kontakt + SSO the same stalls were measured before (lag
+  probe build 442: "at opening the preload's setState 7-9.6 s stalls"; load profile: setState 1.9-19.5 s per instance).
+  Stays on the GUI thread (VST 3 / Kontakt): a new instance (0.2-0.6 s on the VM; on a worker it hung Kontakt,
+  load-small), `settle` (3-80 ms), resave of a setup made from its .nki (first load only), the parameter reads.
+- **After** (same runs): score open no main-thread stall from loading (max lateness 60 ms; preloadStep p50 0.0 / max
+  17 ms, finishLoad max 1.4 ms); while loading, Play is grayed ("play enabled 0" in the probe's notes; pressing it 0.1 s,
+  the rewind's render), edits respond as when nothing loads (select 150, pitch-up 230 ms: the edit's own renders), input
+  stalls at most 0.5 s (an edit); Play after the part's change 46 ms (grayed: the edit check had started the load);
+  the edit check 2-11 ms on Whence (routes cached by the undo state; a 21-part score's routes cost 0.3-0.5 s, once a
+  second after the last edit). Total load time unchanged (25-26 s for 22 x 1 s). Phase `g` (Violins 1 to MS4 and back
+  while playing): playback stops, its 5 instances load in 5.1 s ("the window free meanwhile" in load times.log), then
+  it plays on; input never held > 0.43 s. Quit (Ctrl+Q) during loading, setState 5 s (`tools/lagprobe/linux/
+  close-test.sh`, even levels off so that the score isn't modified): exit 0 after 1.9 / 4.0 / 5.1 s (the setState in
+  flight); with 2 s, Discard at the save prompt: exit 0 after 2.0 s. A screenshot showed Play grayed and "Loading
+  sounds: 4 of 22…" while the save prompt was up.
+- **Sound-identical**: the same calls in the same order on the same bytes; only setState's thread changed (Kontakt took
+  setState on worker threads in --measure-load-times 2026-10-03 / 10-15 and in the even levels' measurer since
+  2026-10-17). `tst_liveequivalence::asyncLoadHosted`: the states loaded, their order and each instance's getState
+  byte-identical to the blocking sync, the rendered note sample-identical; the event loop never > 150 ms late with 300 ms
+  setStates; an edit queued during loading; whenLoaded once; release() during a setState; a second score meanwhile.
+- **Untried on Windows with Kontakt / SSO** (needs a Windows build; the VM's quiet.lock was held by another session):
+  check on the next build: open Whence, scroll / edit while it loads, Play grayed with "Loading sounds: n of m", Play
+  once loaded, close MuseScore during loading (waits for the one setState in flight, then exits), a load times.log with
+  "set on a worker thread" lines; the lag probe's phases `l,r` (`MS_LAG_PROBE_PHASES=l,r`, tools/lagprobe/vm/go.cmd).
+  Open: whether Kontakt needs anything from the GUI thread during a worker setState while the user works (the event
+  loop runs, so a posted / sent message is served; not seen in the measurer's loads).
+- Not changed: an audio export still waits (`SoundLibraryExport` -> `sync`, modal); the GUI-thread steps above; Play
+  doesn't start by itself once loaded, except after a change that stopped playback (GoOnPlaying) as before.
+
 ## Staccato length (branch `staccato-length`, 2026-10-24, from integrate-1017 e951ee4a69; not merged)
 
 `[shorts] staccatoLength` (docs/PLAYBACK_SETTINGS.md › Staccato length): a library staccato (staccatissimo) is meant to

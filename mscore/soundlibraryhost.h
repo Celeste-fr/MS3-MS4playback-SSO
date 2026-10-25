@@ -21,6 +21,18 @@
 //              there lasts until the patch loads again
 //    export    SoundLibraryExport lends the instances to an audio export
 //
+//  Loading never holds the window (the owner, 2026-10-24: "is it possible for SSO to load without locking up the rest
+//  of MuseScore? just have the playback button grayed out during it"): a new instance is made and its setup read on
+//  the GUI thread (Kontakt's component: VST 3 wants it there; made on a worker thread it hung Kontakt, branch
+//  load-small), its setState (Kontakt's instrument load: seconds) on a worker thread, one at a time (or
+//  io/soundLibraryLoadThreads at once), then settled, resaved and put in its slot on the GUI thread: the same calls
+//  in the same order on the same bytes as before, only setState on another thread, while the event loop runs as
+//  usual (user input included). While the score's patches load (loading()), Play is grayed (MuseScore::
+//  updatePlayAction) and the status bar says "Loading sounds: n of m"; Play pressed when the score needs a patch
+//  not loaded (readyToPlay) starts its load instead of playing; an edit that needs new patches loads them in the
+//  background (scoreEdited, a second after it); a change that stopped playback (GoOnPlaying) plays on once they are
+//  loaded (whenLoaded). Only sync() still waits (an audio export, the tests): user input held back meanwhile
+//
 //  GUI thread only.
 //
 //  This program is free software; you can redistribute it and/or modify
@@ -32,6 +44,7 @@
 
 #include "config.h"
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <map>
@@ -115,6 +128,7 @@ class SoundLibraryHost : public QObject {
       void applyLinks();
       bool _resync { false };             // a patch's tuned instance fell back to plain: its copies need instances of their own
       void finishLoad(std::unique_ptr<Pending> pl, const SoundLib::Library& library);
+      void startSetState(Pending* pl, const QByteArray& state, double backgroundLimit);   // on a worker thread
       bool harvest(const SoundLib::Library& library, int keep);   // finished pending loads (keep >= 0: waits till no more are left)
       bool pendingOn(int slot) const;
       // a batch of loads (at play, at score open) for load times.log: what each step took, then how
@@ -133,12 +147,35 @@ class SoundLibraryHost : public QObject {
       int _preloadFrom { 0 };             // _loads when the preload started
       bool _preloadLogged { false };      // its list of what to load is in load times.log
       bool _syncing { false };            // in syncSome (the event loop runs while it waits for a worker thread)
+      bool _preloadKeep { false };        // the preload after an edit: an instance the score no longer needs stays (an
+                                          // undo may need it again), released at the next play
+      bool _keepUnused { false };         // (syncSome: nothing released, no parameters set: the score isn't about to play)
+      // the loading's progress for the status bar and Play (loading()): the score's instances, how many are loaded
+      QPointer<MasterScore> _progressScore;
+      int _progressTotal { 0 };
+      int _progressLoaded { 0 };
+      bool _wasLoading { false };         // (loadingChanged: when loading() turns)
+      int _stepping { 0 };                // in preloadStep / readyToPlay: loading() is true meanwhile (no flicker between a
+                                          // load harvested and the next begun)
+      bool _releasing { false };          // in release(): nothing starts loading
+      bool _whenLoadedPosted { false };
+      QTimer _editCheck;                  // an edit's check for patches it needs (scoreEdited)
+      QPointer<MasterScore> _editScore;
+      // played once the score's patches are loaded (whenLoaded), for this score
+      std::function<void()> _whenLoaded;
+      QPointer<MasterScore> _whenLoadedScore;
+      QString _preloadKind { "At score open" };   // load times.log's batch: "At score open", "At play", "At an edit"
+      void noteLoading();                 // loadingChanged when loading() turned, the status bar's progress
+      void editCheck();
+      static const MasterScore* shownScore(const MasterScore* fallback);
       QElapsedTimer _lastInput;           // since the user's last key, click or wheel
       static constexpr int INPUT_PAUSE_MS = 0;     // a background load waits for this long a pause (the owner, 2026-09-27: 0, no wait)
       // the pause between two loads at score open, for the window to repaint and take input: 0 (a
       // zero timer runs once the events waiting are done; it was 100 ms, 2.5 s of a full orchestra's 11)
       static constexpr int PRELOAD_GAP_MS = 0;
       void preloadStep();
+      void preloadStepInner();
+      bool readyToPlayInner(Score* score, QString* error);
       bool syncSome(Score* score, QString* error, int maxLoads, int* remaining);
 
       SoundLibraryHost();
@@ -279,21 +316,49 @@ class SoundLibraryHost : public QObject {
       // .nki replaced by Kontakt's own state (resave). setupMs: reading or making the setup
       static void setupLoaded(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QByteArray& state,
                               double setupMs);
-      // worker threads that set the setups (Vst3Plugin::setState) while MuseScore goes on: 0 (default)
-      // on the GUI thread, one at a time, as VST 3 asks; n: up to n at once. Advanced preference
-      // io/soundLibraryLoadThreads, or MS_SOUNDLIBRARY_LOAD_THREADS in the environment. Untried with
-      // Kontakt: the load times measurement (--measure-load-times) tries it
+      // how many setups are set (Vst3Plugin::setState) on worker threads at once while MuseScore goes on: 0 (default)
+      // and 1 one at a time (2026-10-24: always on a worker thread, the window free; before, 0 set it on the GUI thread,
+      // holding the window for each instance's seconds); n: up to n at once (measured 2026-10-15 with Kontakt: no
+      // faster, HANDOFF.md › Kontakt slots). Advanced preference io/soundLibraryLoadThreads, or
+      // MS_SOUNDLIBRARY_LOAD_THREADS in the environment
       static int loadThreads();
+      static int parallelLoads()          { return std::max(1, loadThreads()); }
       static void workerThread(bool start);       // on a worker thread before and after (COM on Windows)
       static void logLoadTime(const SoundLib::Library& library, const QString& line);   // load times.log
 
       Vst3Synth* synth() const;
-      bool sync(Score* score, QString* error = nullptr);    // the score's routes' instances
-      void preloadSoon(Score* score);     // load them all when the score is opened or shown
+      // the score's routes' instances, loaded before it returns (user input held back while it waits): an audio export,
+      // the tests. Playback doesn't wait: readyToPlay
+      bool sync(Score* score, QString* error = nullptr);
+      // Play: true when every instance the score needs is loaded (then set up for play as sync does it: the parts'
+      // parameters, the instances it no longer needs released); else false at once, its loading started in the
+      // background (preloadSoon), Play grayed until it is done. True also when the library doesn't play through its
+      // plug-in, or on an error (*error: shown; the library's parts play nothing, as before)
+      bool readyToPlay(Score* score, QString* error = nullptr);
+      // load them all when the score is opened or shown, in the background (also: Play, a clicked note, an edit);
+      // keep: an instance the score no longer needs stays (scoreEdited)
+      void preloadSoon(Score* score, bool keep = false);
+      // an edit (MuseScore::endCmd): a second after the last one, while stopped, the score's needs worked out (the
+      // routes: what Play works out anyway) and new patches loaded in the background, so that Play is grayed only
+      // while they load
+      void scoreEdited(Score* score);
+      // instances still loading (or to load) for the score shown (null: any): Play is grayed meanwhile
+      bool loading(const Score* score = nullptr) const;
+      int loadingTotal() const            { return _progressTotal; }
+      int loadingLoaded() const           { return _progressLoaded; }
+      // fn once the score's loading is done (now, from the event loop, when nothing loads); one at a time: another
+      // replaces it; dropped when another score's patches load or the instances are released
+      void whenLoaded(Score* score, std::function<void()> fn);
+      // the Play action as MuseScore::changeState enables it (its shortcut's states), grayed while the shown score's
+      // patches load and playback is stopped (a playing Play stops). The toolbar, the Play Panel, the shortcut and a MIDI
+      // remote all trigger that action
+      static void updatePlayAction();
       // that loading still going on (more instances to load, or setups being set on worker threads): the even levels'
       // own instances wait for it (mscore/evenautomeasurer.h), so the playback's load first
       bool preloading() const;
-      void release();                     // no instances
+      // no instances (a load on a worker thread is waited for: it can't be stopped; the event loop runs meanwhile, user
+      // input held back, for a plug-in that needs the GUI thread while it loads); nothing loads after it
+      void release();
       bool loaded(int slot) const;
       qint64 memory(int slot) const       { return slot >= 0 && slot < int(_slots.size()) ? _slots[size_t(slot)].memory : -1; }
       static qint64 processMemory();      // the process's own memory (Task Manager's "Memory"), bytes; -1: unknown
@@ -318,6 +383,7 @@ class SoundLibraryHost : public QObject {
 
    signals:
       void changed();
+      void loadingChanged();              // loading() turned, or its progress moved
       };
 
 //---------------------------------------------------------

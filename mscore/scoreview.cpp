@@ -26,6 +26,7 @@
 #include "scoreaccessibility.h"
 #include "scoretab.h"
 #include "scoreview.h"
+#include "soundlibraryhost.h"
 #include "libmscore/lagprobe.h"
 #include "seq.h"
 #include "splitstaff.h"
@@ -2364,6 +2365,14 @@ void ScoreView::cmd(const char* s)
                   // ??
                   }},
             {{"play"}, [](ScoreView* cv, const QByteArray&) {
+                  // (the score's sound library patches still loading: Play is grayed, SoundLibraryHost::updatePlayAction; a
+                  // trigger from elsewhere doesn't start either)
+                  if ((cv->state == ViewState::NORMAL || cv->state == ViewState::NOTE_ENTRY)
+                      && SoundLibraryHost::instance()->loading(cv->score())) {
+                        getAction("play")->setChecked(false);
+                        SoundLibraryHost::updatePlayAction();
+                        return;
+                        }
                   if (seq && seq->canStart()) {
                         if (cv->state == ViewState::NORMAL || cv->state == ViewState::NOTE_ENTRY)
                               cv->changeState(ViewState::PLAY);

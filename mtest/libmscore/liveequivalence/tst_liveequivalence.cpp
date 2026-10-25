@@ -59,6 +59,7 @@
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
+#include "libmscore/partplayback.h"
 #include "libmscore/renderpreflight.h"
 #include "libmscore/soundlibrary.h"
 #include "libmscore/calibrationfile.h"
@@ -154,6 +155,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void laneJumpsLive();
       void backgroundLoadInstances();
       void backgroundLoadHosted();
+      void asyncLoadHosted();
       void plainSetTrackDelays();
       void plainWritten_data();
       void plainWritten();
@@ -2137,6 +2139,196 @@ void TestLiveEquivalence::backgroundLoadInstances()
             vst.reset();
             delete score;
             }
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
+//   asyncLoadHosted
+//    hosted loading never holds the window (soundlibraryhost.h, the owner 2026-10-24: "load without locking up the rest
+//    of MuseScore … the playback button grayed out during it"): with setState taking 300 ms (MSTESTSYNTH_SETSTATE_MS)
+//      - preloadSoon returns at once; the event loop goes on while the instances load (no 10 ms timer later than 150
+//        ms); loading() holds (Play grayed: MuseScore::updatePlayEnabled) until both are in their slots
+//      - readyToPlay during it is false at once (Play doesn't start, doesn't wait); true once loaded
+//      - a part turned to the library while loading (an edit) is loaded by the same preload (queued)
+//      - the states loaded, in order, and what each instance holds then (its getState) are byte for byte those of the
+//        blocking sync (the old Play), and a note sounds the same (rendered, compared sample for sample)
+//      - whenLoaded's function runs once, when done
+//      - an edit that needs a patch again, after the loading: scoreEdited loads it in the background
+//      - release() while a setState is running on its worker thread waits for it and returns, nothing left; a second
+//        score shown while the first loads gets its own instances
+//---------------------------------------------------------
+
+void TestLiveEquivalence::asyncLoadHosted()
+      {
+      struct Env { ~Env() { qunsetenv("MSTESTSYNTH_SETSTATE_MS"); SoundLibraryHost::loadedStateObserver() = nullptr; } } env;
+      LiveHost host(this, "", { "Violin", "Viola" },
+                    "<SoundLibrary name='AsyncT'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "</SoundLibrary>");
+      QVERIFY(host.ok);
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(int(score->parts().size()), 2);
+      qputenv("MSTESTSYNTH_SETSTATE_MS", "300");
+      MasterSynthesizer master;
+      master.registerSynthesizer(new Vst3Synth);
+      MasterSynthesizer* was = synti;
+      synti = &master;
+      struct Back { MasterSynthesizer* was; ~Back() { SoundLibraryHost::instance()->release(); synti = was; } } back { was };
+      SoundLibraryHost* h = SoundLibraryHost::instance();
+      std::vector<std::pair<QString, QByteArray>> loaded;
+      SoundLibraryHost::loadedStateObserver() = [&loaded](const QString& patch, const QByteArray& state) {
+            loaded.push_back({ patch, state });
+            };
+      // what each slot's instance holds, and a note of each part as it sounds
+      auto held = [h]() {
+            std::map<int, QByteArray> m;
+            for (int k = 0; k < 64; ++k)
+                  if (Vst3Plugin* p = h->synth()->plugin(k))
+                        m[k] = p->state();
+            return m;
+            };
+      auto sound = [h]() {
+            Vst3Synth* s = h->synth();
+            s->beginExport(48000);
+            for (int ch : { 0, 1 }) {
+                  s->play(PlayEvent(ME_CONTROLLER, ch, 1, 100));
+                  s->play(PlayEvent(ME_NOTEON, ch, 62 + 7 * ch, 100));
+                  }
+            std::vector<float> b(2 * 4800, 0.f);
+            s->process(4800, b.data(), nullptr, nullptr);
+            s->endExport();
+            return b;
+            };
+      const QString violaMS4 = PartPlaybackModes::write(score, { { score->parts()[1], PartPlayback::MS4 } });
+      QVERIFY(!violaMS4.isEmpty());
+
+      // the reference: the blocking sync (Play before 2026-10-24)
+      QString error;
+      QVERIFY2(h->sync(score, &error), qPrintable(error));
+      const std::vector<std::pair<QString, QByteArray>> refLoaded = loaded;
+      const std::map<int, QByteArray> refHeld = held();
+      QCOMPARE(int(refLoaded.size()), 2);
+      QCOMPARE(int(refHeld.size()), 2);
+      const std::vector<float> refSound = sound();
+      QVERIFY(rms(refSound, 0) > 1e-4);
+      h->release();
+      QVERIFY(held().empty());
+
+      // in the background: the viola part on MS4 at first, turned to the library while the violin loads
+      loaded.clear();
+      score->setMetaTag(PartPlaybackModes::metaTag, violaMS4);
+      double latest = 0;
+      QElapsedTimer last;
+      last.start();
+      QTimer tick;
+      tick.setTimerType(Qt::PreciseTimer);
+      tick.setInterval(10);
+      QObject::connect(&tick, &QTimer::timeout, [&]() { latest = std::max(latest, double(last.elapsed()) - 10); last.restart(); });
+      int doneCalls = 0;
+      QElapsedTimer t;
+      t.start();
+      h->preloadSoon(score);
+      QVERIFY(h->loading(score));
+      h->whenLoaded(score, [&doneCalls]() { ++doneCalls; });
+      QVERIFY2(!h->readyToPlay(score, &error), qPrintable(error));
+      QVERIFY2(t.elapsed() < 100, qPrintable(QString::number(t.elapsed())));     // (nothing waited for)
+      tick.start();
+      last.restart();
+      bool edited = false;
+      while (h->loading(score) && t.elapsed() < 20000) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+            if (!edited && t.elapsed() > 100) {                   // (the violin's setState under way)
+                  score->setMetaTag(PartPlaybackModes::metaTag, QString());
+                  edited = true;
+                  QVERIFY(!h->readyToPlay(score, &error));
+                  }
+            }
+      tick.stop();
+      QVERIFY(!h->loading(score));
+      QVERIFY2(t.elapsed() >= 550, qPrintable(QString::number(t.elapsed())));    // (two setStates, one after the other)
+      QVERIFY2(latest < 150, qPrintable(QString("the event loop held %1 ms").arg(latest)));
+      QCOMPARE(h->loadingTotal(), 2);
+      QCOMPARE(h->loadingLoaded(), 2);
+      QVERIFY2(h->readyToPlay(score, &error), qPrintable(error));
+      QTest::qWait(20);
+      QCOMPARE(doneCalls, 1);
+      // the same bytes loaded, in the same order, and held the same; sounding the same
+      QCOMPARE(int(loaded.size()), int(refLoaded.size()));
+      for (size_t i = 0; i < loaded.size(); ++i) {
+            QCOMPARE(loaded[i].first, refLoaded[i].first);
+            QVERIFY(loaded[i].second == refLoaded[i].second);
+            }
+      QVERIFY(held() == refHeld);
+      QVERIFY(sound() == refSound);
+
+      // an edit that leaves the viola without its patch, then one that needs it again: kept (a spare) while not playing
+      loaded.clear();
+      score->setMetaTag(PartPlaybackModes::metaTag, violaMS4);
+      h->scoreEdited(score);
+      QTest::qWait(1300);
+      QVERIFY(!h->loading(score));
+      score->setMetaTag(PartPlaybackModes::metaTag, QString());
+      h->scoreEdited(score);
+      QTest::qWait(1300);
+      QVERIFY(!h->loading(score));
+      QVERIFY(loaded.empty());                                   // (the spare moved back in: nothing loaded)
+      QVERIFY2(h->readyToPlay(score, &error), qPrintable(error));
+      // Play with the viola on MS4 releases its instance; an edit needing it again loads it in the background
+      score->setMetaTag(PartPlaybackModes::metaTag, violaMS4);
+      QVERIFY2(h->readyToPlay(score, &error), qPrintable(error));
+      QCOMPARE(int(held().size()), 1);
+      score->setMetaTag(PartPlaybackModes::metaTag, QString());
+      h->scoreEdited(score);
+      t.restart();
+      bool sawLoading = false;
+      while (t.elapsed() < 5000 && (t.elapsed() < 1100 || h->loading(score))) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+            sawLoading = sawLoading || h->loading(score);
+            }
+      QVERIFY(sawLoading);
+      QCOMPARE(int(loaded.size()), 1);
+      QCOMPARE(loaded[0].first, QString("Viola"));
+      QVERIFY2(h->readyToPlay(score, &error), qPrintable(error));
+      QCOMPARE(int(held().size()), 2);
+      QVERIFY(held()[1] == refHeld.at(1));                        // (the violin's has played notes since)
+
+      // closing during a load: release() waits for the setState on its worker thread, then nothing is left
+      h->release();
+      h->preloadSoon(score);
+      t.restart();
+      while (t.elapsed() < 100)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+      QVERIFY(h->loading(score));
+      h->release();
+      QVERIFY(!h->loading(score));
+      QVERIFY(held().empty());
+      QTest::qWait(100);
+      QVERIFY(held().empty());                                   // (nothing loads after it)
+
+      // a second score shown while the first loads: its own instances (the first's in flight set aside or released)
+      MasterScore* other = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(other);
+      other->rebuildMidiMapping();
+      other->setMetaTag(PartPlaybackModes::metaTag, PartPlaybackModes::write(other, { { other->parts()[0], PartPlayback::MS4 } }));
+      h->preloadSoon(score);
+      t.restart();
+      while (t.elapsed() < 100)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+      h->preloadSoon(other);
+      while (h->loading(other) && t.elapsed() < 20000)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+      QVERIFY2(h->readyToPlay(other, &error), qPrintable(error));
+      const std::vector<int> violaSlots = h->slotsOf(other->parts()[1]);
+      QCOMPARE(int(violaSlots.size()), 1);
+      QVERIFY(h->loaded(violaSlots[0]));
+      QVERIFY(h->slotsOf(other->parts()[0]).empty());            // (the violin plays MS4 in it)
+      QCOMPARE(int(held().size()), 1);                           // (the first score's violin: released at play)
+      h->release();
+      delete other;
+      delete score;
       SoundLib::setCurrent(nullptr);
       }
 

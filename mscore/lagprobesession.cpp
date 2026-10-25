@@ -13,6 +13,7 @@
 #include "lagprobesession.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <deque>
 #include <functional>
@@ -50,6 +51,8 @@
 #include "libmscore/recentresults.h"
 #include "libmscore/note.h"
 #include "libmscore/part.h"
+#include "libmscore/partplayback.h"
+#include "libmscore/undo.h"
 #include "libmscore/playbacksettings.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
@@ -277,6 +280,7 @@ class Probe : public QObject {
       bool _inspectorWasVisible { false };
       qint64 _stableSince { -1 };
       int _lanePoint { -1 };             // the tick of the point the lane action added (-1: none)
+      bool _logInput { false };          // phases l / r: the window system's input logged (eventFilter)
 
       void write(const QJsonObject& o)
             {
@@ -488,6 +492,103 @@ class Probe : public QObject {
             return l.target;
             }
 
+      // phases l / r: the window system's input (a wheel, key or click from outside: tools/lagprobe/linux/input.py
+      // sends them with xdotool, logging its own send times) logged as it reaches the application, on the steady clock
+      // (CLOCK_MONOTONIC on Linux, as Python's time.monotonic_ns): its delay = receipt - send. An input the event loop
+      // leaves waiting (QEventLoop::ExcludeUserInputEvents) arrives late
+      bool eventFilter(QObject* o, QEvent* e) override
+            {
+            if (_logInput && e->spontaneous() && o->isWidgetType()
+                && (e->type() == QEvent::Wheel || e->type() == QEvent::KeyPress || e->type() == QEvent::MouseButtonPress)) {
+                  QJsonObject j;
+                  j["k"] = "input";
+                  j["type"] = int(e->type());
+                  j["mono_ns"] = double(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                          std::chrono::steady_clock::now().time_since_epoch()).count());
+                  j["phase"] = _phase ? _phase->name : QString();
+                  write(j);
+                  }
+            return QObject::eventFilter(o, e);
+            }
+      // phase l: every instance released, then loaded again as at score open (the host's preload)
+      void reload()
+            {
+            SoundLibraryHost* host = SoundLibraryHost::instance();
+            host->release();
+            host->preloadSoon(cs());
+            }
+      // the first part's own playback mode (as the Mixer sets it: one undo step, GoOnPlaying)
+      QString partMode(PartPlayback mode)
+            {
+            Score* s = cs();
+            if (!s || s->parts().empty())
+                  return "skipped";
+            MasterScore* ms = s->masterScore();
+            std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
+            const Part* part = ms->parts().front();
+            modes[part] = mode;
+            QMap<QString, QString> tags = ms->metaTags();
+            const QString value = PartPlaybackModes::write(ms, modes);
+            if (value.isEmpty())
+                  tags.remove(PartPlaybackModes::metaTag);
+            else
+                  tags.insert(PartPlaybackModes::metaTag, value);
+            if (tags == ms->metaTags())
+                  return "unchanged";
+            {
+            const GoOnPlaying goOn;
+            s->startCmd();
+            s->undo(new ChangeMetaTags(ms, tags));
+            s->endCmd();
+            ms->setPlaylistDirty();
+            }
+            return part->partName();
+            }
+      // Play pressed as the user presses it (the action): what it did, and whether Play could be pressed
+      QString pressPlay()
+            {
+            QAction* a = getAction("play");
+            if (!a)
+                  return "skipped";
+            const bool enabled = a->isEnabled();
+            if (QAction* r = getAction("rewind"))
+                  r->trigger();
+            a->trigger();
+            return QString("play enabled %1, playing %2").arg(enabled ? 1 : 0).arg(seq && seq->isPlaying() ? 1 : 0);
+            }
+      QString pressStop()
+            {
+            QAction* a = getAction("play");
+            const bool playing = seq && seq->isPlaying();
+            if (a && a->isChecked())
+                  a->trigger();
+            return QString("was playing %1").arg(playing ? 1 : 0);
+            }
+      void addLoadingRounds(const QString& phase)
+            {
+            // while the score's patches load: what the window does with the user's edits, scrolling and Play
+            for (int rep = 0; rep < _reps; ++rep) {
+                  const std::vector<std::pair<QString, std::function<QString()>>> actions = {
+                        { "scroll", [this, rep]() { return scroll(rep); } },
+                        { "select note", [this, rep]() { return selectNote(rep); } },
+                        { "pitch-up", [this]() { return trigger("pitch-up"); } },
+                        { "undo", [this]() { return trigger("undo"); } },
+                        { "play press", [this]() { return pressPlay(); } },
+                        { "stop", [this]() { return pressStop(); } },
+                        };
+                  for (const auto& a : actions) {
+                        const QString name = a.first;
+                        const std::function<QString()> fn = a.second;
+                        add(name, [this, name, rep, fn]() { if (SoundLibraryHost::instance()->preloading()) measured(name, rep, fn); },
+                            _gapMs);
+                        }
+                  }
+            add("loaded " + phase, nullptr, 0, []() { return !SoundLibraryHost::instance()->preloading(); }, 600000);
+            add("play when loaded " + phase, [this]() { measured("play press (loaded)", 0, [this]() { return pressPlay(); }); }, 3000);
+            add("stop when loaded " + phase, [this]() { measured("stop (loaded)", 0, [this]() { return pressStop(); }); }, 2000,
+                []() { return seq && !seq->isPlaying(); }, 20000);
+            }
+
       void collectNotes()
             {
             _notes.clear();
@@ -687,6 +788,47 @@ class Probe : public QObject {
                   else if (p == "a") {
                         add("setup a", [this]() { EvenAutoMeasurer::instance()->setProbePaused(false); setEvenLevels(false); }, 3000);
                         addPhase(name, modes);
+                        }
+                  else if (p == "l" || p == "r") {
+                        // l: every patch loaded again as at score open; r: the first part to MS4 and back to the library (as
+                        // the Mixer does), so that its patches load again; then, while they load, the rounds of
+                        // addLoadingRounds, and Play once all are loaded. The window system's input is logged throughout
+                        add("setup " + name, [this]() { _logInput = true; qApp->installEventFilter(this); }, 2000,
+                            [this]() { return quiet(); }, openTimeout);
+                        add("begin " + name, [this, name]() { beginPhase(name, "loading"); }, 500);
+                        if (p == "l")
+                              add("reload " + name, [this]() { measured("reload", 0, [this]() { reload(); return QString(); }); }, 300);
+                        else {
+                              add("part to MS4 " + name, [this]() { measured("part to MS4", 0, [this]() { return partMode(PartPlayback::MS4); }); }, 1500);
+                              add("play " + name, [this]() { measured("play press (part MS4)", 0, [this]() { return pressPlay(); }); }, 1500);
+                              add("stop " + name, [this]() { measured("stop", 0, [this]() { return pressStop(); }); }, 1500);
+                              add("part to library " + name, [this]() { measured("part to library", 0, [this]() { return partMode(PartPlayback::DEFAULT); }); }, 1500);
+                              add("play right after " + name, [this]() { measured("play press (part library)", 0, [this]() { return pressPlay(); }); }, 300);
+                              }
+                        addLoadingRounds(name);
+                        add("end " + name, [this]() { endPhase(); }, 1000);
+                        }
+                  else if (p == "g") {
+                        // g: a change while playing that needs patches not loaded (the first part to MS4, then back to the
+                        // library: GoOnPlaying stops playback; its patches load in the background) plays on once loaded
+                        add("setup g", [this]() { _logInput = true; qApp->installEventFilter(this); }, 2000,
+                            [this]() { return quiet(); }, openTimeout);
+                        add("begin g", [this]() { beginPhase("g", "change"); }, 500);
+                        add("play g", [this]() { measured("play press", 0, [this]() { return pressPlay(); }); }, 1500,
+                            []() { return seq && seq->isPlaying(); }, 60000);
+                        add("part to MS4 g", [this]() { measured("part to MS4 (playing)", 0, [this]() { return partMode(PartPlayback::MS4); }); }, 2000,
+                            []() { return seq && seq->isPlaying(); }, 60000);
+                        add("part to library g", [this]() { measured("part to library (playing)", 0, [this]() { return partMode(PartPlayback::DEFAULT); }); }, 300);
+                        add("loading g", [this]() { measured("loading after the change", 0, []() {
+                              return QString("loading %1, playing %2").arg(SoundLibraryHost::instance()->loading() ? 1 : 0)
+                                     .arg(seq && seq->isPlaying() ? 1 : 0); }); }, 0,
+                            []() { return seq && seq->isPlaying(); }, 120000);
+                        add("resumed g", [this]() { measured("playing again", 0, []() {
+                              return QString("loading %1, playing %2").arg(SoundLibraryHost::instance()->loading() ? 1 : 0)
+                                     .arg(seq && seq->isPlaying() ? 1 : 0); }); }, 1000);
+                        add("stop g", [this]() { measured("stop", 0, [this]() { return pressStop(); }); }, 2000,
+                            []() { return seq && !seq->isPlaying(); }, 20000);
+                        add("end g", [this]() { endPhase(); }, 1000);
                         }
                   else if (p == "e") {
                         add("setup e", [this]() { EvenAutoMeasurer::instance()->setProbePaused(false); setEvenLevels(true);

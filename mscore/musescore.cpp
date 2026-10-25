@@ -2698,6 +2698,8 @@ MuseScore::MuseScore()
             connect(seq, &Seq::started, EvenAutoMeasurer::instance(), []() { EvenAutoMeasurer::instance()->playing(true); });
             connect(seq, &Seq::stopped, EvenAutoMeasurer::instance(), []() { EvenAutoMeasurer::instance()->playing(false); });
             }
+      // Play grayed while the score's sound library patches load (soundlibraryhost.h)
+      connect(SoundLibraryHost::instance(), &SoundLibraryHost::loadingChanged, this, []() { SoundLibraryHost::updatePlayAction(); });
       loadScoreList();
 
       QClipboard* cb = QApplication::clipboard();
@@ -6164,6 +6166,7 @@ void MuseScore::changeState(ScoreState val)
       bool noteEntry = val & STATE_NOTE_ENTRY;
       a->setChecked(noteEntry);
       _sstate = val;
+      SoundLibraryHost::updatePlayAction();     // (grayed while the score's sound library patches load)
 
       emit scoreStateChanged(_sstate);
 
@@ -7789,6 +7792,7 @@ void MuseScore::endCmd(bool undoRedo)
             {
                   LagProbe::Scope evenProbe("EvenAutoMeasurer::edited");
                   EvenAutoMeasurer::instance()->edited(cs);    // (an edit: even levels near it measured in the background)
+                  SoundLibraryHost::instance()->scoreEdited(cs);  // (new patches it needs: loaded in the background)
                   EditWarmup::instance()->edited(cs);          // (its renders for the next sound, between events: editwarmup.h)
             }
             setPos(cs->inputState().tick());

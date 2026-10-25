@@ -24,6 +24,15 @@
 //                  d  c with every part's automation lanes open
 //                  a  evenLevels 0 (the score's own playback setting, in memory)
 //                  e  MS4 mode (no library), the baseline
+//                  l  loading: every instance released and loaded again as at score open; while it loads, rounds of
+//                     scroll, select, pitch-up, undo, Play pressed (the action, as the user presses it: "play enabled",
+//                     "playing" in its note), stop; then Play once all are loaded
+//                  r  reloading after a part's change: the first part to MS4 (Play, stop) and back to the library (as
+//                     the Mixer does it), Play right after, then l's rounds while its patches load
+//                  g  a change while playing that needs patches not loaded (the first part to MS4 and back): playback
+//                     stops, the patches load in the background, playback goes on once they are (GoOnPlaying)
+//                In l / r / g the window system's input reaching MuseScore is logged ("input"): tools/lagprobe/linux/input.py
+//                sends wheel steps with xdotool and gives each one's delay
 //    each action its synchronous time (the command, layout, endCmd and what it calls), its response (to the event loop's
 //                next idle: the paint included) and its window (to the next action: the largest event-loop lateness
 //                and the scopes run in it, the debounced even levels' detect among them)
