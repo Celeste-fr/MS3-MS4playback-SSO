@@ -241,6 +241,23 @@ device, exports null; `MS_KHEAP_OFF=1` cures it. Rule: an optimization never cha
   the test kit runs it. Live has no setState hook to scope: don't install it; if wanted, a mode with mimalloc only on
   Live's main thread would need its own realtime test in Live first.
 
+## Build for the owner: #480 (2026-10-25)
+
+Windows build #480 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40165471973, integrate-1017 @ 7e4ad8e):
+#477 plus pa-device-name, pa-buffer (Preferences › I/O › Audio buffer), async-load, kheap-realtime (mimalloc only inside
+setState, per thread). Why: the owner's live playback crackled on #477 on every device and stopped with MS_KHEAP_OFF=1
+(2026-10-24); he asked for loading without locking up the window. Checked on the VM (private `check480/RESULT.md`, real
+Kontakt + SSO, nobody listened): Whence's export identical to #477's (5 parts, 0 events differ); no crash or hang; Play
+grayed while loading, then plays; the device found by name; Audio buffer sets the callback budget; live callbacks over
+budget scoped vs off within noise (the VM can't reproduce the owner's crackling). **Two findings:**
+- **Async load doesn't help with Kontakt on Windows**: Kontakt runs its setState work on the GUI thread even when called
+  from the worker (GUI thread 64 % CPU, workers 0.6 %), so the window still freezes 8-18 s per big patch ("Not
+  responding"); a close / Ctrl+Q sent during that freeze takes effect after the load or is lost. Only hosting Kontakt in
+  another process would free the window (not started; the owner to decide).
+- **Scoped kheap loses the load speed-up**: Kontakt's load allocations are on the GUI thread, outside the worker's scope
+  (memory and load time as with MS_KHEAP_OFF=1). A scope on the GUI thread while a load is in flight would bring it back;
+  untried, and only after the owner confirms #480 doesn't crackle.
+
 ## Build for the owner: #477 (2026-10-24)
 
 Windows build #477 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40132296643, integrate-1017 @ b38f02ee4a):

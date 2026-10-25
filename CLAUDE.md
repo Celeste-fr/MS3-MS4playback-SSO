@@ -462,7 +462,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Play after a part's change 5.2 s -> 0.05 s, window-system input held up to 17.4 s -> 0.5 s (`tools/lagprobe/linux/
   input.py`, `run-input.sh`); a change while playing plays on once loaded (phase g); quitting during a load exits 0
   after the setState in flight (`close-test.sh`); loaded states and instances byte-identical
-  (`tst_liveequivalence::asyncLoadHosted`). Untried on Windows with Kontakt (HANDOFF.md › Async load).
+  (`tst_liveequivalence::asyncLoadHosted`). **With Kontakt on Windows the window still freezes** (build #480, VM: Kontakt runs its setState work on the GUI thread even when called from the worker; HANDOFF.md › Build for the owner: #480); Play's gray-out and the rest work.
 - **mimalloc for setState only on Windows** (branch `sso-load`, 2026-10-23; scoped by `kheap-realtime`, 2026-10-24):
   `main()` first calls `ProcessAllocator::start()` (`audio/vst3/processallocator.*`), which loads `kheap.dll` from
   MuseScore's folder (`tools/soundlibraries/kheap`, MinHook + mimalloc in `thirdparty/`, built and installed into bin/
