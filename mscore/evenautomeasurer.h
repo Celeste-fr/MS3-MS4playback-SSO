@@ -79,6 +79,9 @@ class EvenAutoMeasurer : public QObject {
       EvenLevels::Cache _cache;
       QString _cacheLibrary;
       std::map<QString, std::unique_ptr<Instance>> _instances;
+      std::map<QString, int> _lost;                         // instances whose helper ended, how often (lost())
+      static constexpr int MAX_LOST = 3;
+      void lost(const QString& key, const std::vector<EvenAuto::Job>& jobs);
       std::set<QString> _failed;                      // instances that could not load (this score)
       std::vector<EvenAuto::Job> _toLoad;             // waiting for their instance
       // the instance loading in steps (its setState on a worker: SoundLibraryExport::beginInstance) and the job it is for
@@ -134,6 +137,7 @@ class EvenAutoMeasurer : public QObject {
       // edits not looked at, Play doesn't wait, the workers idle (the probe's "measurement paused" phases); refresh: the
       // session made or dropped for the setting as it is now
       bool probeBusy() const;
+      QString probeState() const;         // (the lag probe's note while it waits: what is still busy)
       void setProbePaused(bool on);
       void probeRefresh(Score* cs);
       void shutdown();                    // MuseScore quits: workers stopped, instances released, cache saved

@@ -28,6 +28,7 @@
 
 #ifdef USE_VST3
 #include "audio/vst3/evenmeasure.h"
+#include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #endif
 
@@ -251,7 +252,10 @@ void EvenAutoMeasurer::dispatch(const EvenAuto::Job& job)
 void EvenAutoMeasurer::loadStep()
       {
 #ifdef USE_VST3
-      if (_toLoad.empty() || !_score)
+      // (a load in steps still to finish counts too: its job left _toLoad when it began. Returning here then left it
+      // pending for ever, the measurer busy and its notes unmeasured, whenever no other job was waiting to load; seen
+      // with helpers, the lag probe stuck after phase l, 2 of 5 runs)
+      if ((_toLoad.empty() && !_pendingLoad) || !_score)
             return;
       // the playback's own instances first (the load profile, 2026-10-16: at score open both loaded on the main thread,
       // one each in turn, so the last of the score's instances came in a measurer's load later each time). What is
@@ -428,6 +432,24 @@ void EvenAutoMeasurer::worker(Instance* in)
                   });
             if (in->stop)
                   break;
+            // a helper that ended meanwhile (vst3remote.h) rendered silence: not a measurement. The job goes back and the
+            // instance is loaded again (lost() on the main thread: this worker ends, its queue with it)
+            bool dead = false;
+            for (int k = 0; k < in->vst->slotCount(); ++k)
+                  if (in->vst->plugin(k) && !in->vst->plugin(k)->alive())
+                        dead = true;
+            if (dead) {
+                  std::vector<EvenAuto::Job> jobs;
+                  {
+                        std::lock_guard<std::mutex> lock(in->mutex);
+                        jobs.swap(in->queue);
+                        in->stop = true;
+                  }
+                  jobs.insert(jobs.begin(), job);
+                  const QString key = in->key;
+                  QMetaObject::invokeMethod(this, [this, key, jobs]() { lost(key, jobs); }, Qt::QueuedConnection);
+                  break;
+                  }
             QMetaObject::invokeMethod(this, [this, r]() { onResult(r); }, Qt::QueuedConnection);
             }
       in->vst->endExport();
@@ -435,6 +457,29 @@ void EvenAutoMeasurer::worker(Instance* in)
 #else
       Q_UNUSED(in);
 #endif
+      }
+
+//---------------------------------------------------------
+//   lost
+//    an instance whose helper ended: dropped (its worker has stopped), its jobs loaded for again, at most
+//    MAX_LOST times a session per instance (a patch that crashes its helper each time is marked failed)
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::lost(const QString& key, const std::vector<EvenAuto::Job>& jobs)
+      {
+      auto i = _instances.find(key);
+      if (i != _instances.end()) {
+            if (i->second->thread.joinable())
+                  i->second->thread.join();
+            _instances.erase(i);
+            }
+      const int n = ++_lost[key];
+      logLine(QString("even levels: %1's helper ended (%2 time(s)), %3 job(s) loaded for again").arg(key).arg(n).arg(jobs.size()));
+      if (n > MAX_LOST)
+            _failed.insert(key);
+      for (const EvenAuto::Job& job : jobs)
+            dispatch(job);
+      updateLive();
       }
 
 //---------------------------------------------------------
@@ -472,6 +517,22 @@ void EvenAutoMeasurer::onResult(const EvenAuto::Result& r)
 bool EvenAutoMeasurer::probeBusy() const
       {
       return _session && (_session->busy() || !_toLoad.empty() || _pendingLoad);
+      }
+
+QString EvenAutoMeasurer::probeState() const
+      {
+      int queued = 0;
+      int dead = 0;
+      for (const auto& i : _instances) {
+            queued += int(i.second->queue.size());
+#ifdef USE_VST3
+            if (i.second->stop)
+                  ++dead;
+#endif
+            }
+      return QString("session %1 (%2), to load %3, pending load %4, instances %5 (stopped %6), queued %7, failed %8")
+             .arg(_session ? 1 : 0).arg(_session ? _session->pendingText().join("; ") : QString())
+             .arg(_toLoad.size()).arg(_pendingLoad ? 1 : 0).arg(_instances.size()).arg(dead).arg(queued).arg(_failed.size());
       }
 
 void EvenAutoMeasurer::setProbePaused(bool on)

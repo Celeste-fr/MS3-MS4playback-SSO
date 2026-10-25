@@ -683,14 +683,28 @@ class Probe : public QObject {
                         add("stop " + phase, [this]() { play(false); }, 2000, []() { return seq && !seq->isPlaying(); }, 20000);
                   }
             }
+      qint64 _busySince { -1 };
       bool quiet()
             {
             // the library's preload and the even levels' measurement done, for 5 s in a row
             const bool busy = !cs() || SoundLibraryHost::instance()->preloading() || EvenAutoMeasurer::instance()->probeBusy();
             if (busy) {
                   _stableSince = -1;
+                  // (what keeps it busy, every 30 s of waiting: a wait that doesn't end says why)
+                  if (_busySince < 0)
+                        _busySince = now();
+                  else if (ms(now() - _busySince) > 30000) {
+                        _busySince = now();
+                        QJsonObject o;
+                        o["k"] = "waiting";
+                        o["preloading"] = SoundLibraryHost::instance()->preloading();
+                        o["loading"] = SoundLibraryHost::instance()->loading();
+                        o["even"] = EvenAutoMeasurer::instance()->probeState();
+                        write(o);
+                        }
                   return false;
                   }
+            _busySince = -1;
             if (_stableSince < 0)
                   _stableSince = now();
             return ms(now() - _stableSince) > 5000;

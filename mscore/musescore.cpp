@@ -589,6 +589,9 @@ void MuseScore::closeEvent(QCloseEvent* ev)
       // the hosted plug-ins' instances go now (the sequencer stopped in writeSettings), so main unloads their modules
       // with ExitDll before the process ends (Vst3Plugin::unloadModules: left to the loader, Kontakt 8's teardown ended
       // MuseScore with 0xC000000D)
+      // (instances in helpers, vst3remote.h: the helpers end now; nothing they hold is kept, so neither a load in flight nor
+      // Kontakt's teardown is waited for)
+      Vst3Plugin::shutdownHosts(true);
       SoundLibraryHost::instance()->release();
 #endif
 
@@ -9968,6 +9971,7 @@ int runApplication(int& argc, char** av)
 #ifdef USE_VST3
             // the background jobs' instances are gone: their modules unloaded as the SDK unloads them (ExitDll), not by
             // the loader at exit (Vst3Plugin::unloadModules: Kontakt's teardown then crashed every job, 0xC000000D)
+            Vst3Plugin::shutdownHosts();      // (host processes: their instances and modules, in each)
             Vst3Plugin::unloadModules();
 #endif
             return ok ? EXIT_SUCCESS : EXIT_FAILURE;
@@ -9977,6 +9981,7 @@ int runApplication(int& argc, char** av)
 
       const int rc = qApp->exec();
 #ifdef USE_VST3
+      Vst3Plugin::shutdownHosts();        // (host processes: their instances and modules, in each)
       Vst3Plugin::unloadModules();        // (the modules no instance holds any more)
 #endif
       return rc;

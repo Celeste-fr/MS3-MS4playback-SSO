@@ -21,6 +21,64 @@ The owner's goal for October 2026: everything a later AI needs to make playback 
 - **How he judges timing:** one section alone with a metronome click, long rests cut out, about 20 s a clip, one
   question per page.
 
+## Out-of-process host (branch `oop-host`, 2026-10-25, from integrate-1017 6dd53a9e97 + kontakt-procs; not merged)
+
+The owner approved ("seems good") hosting the library's plug-ins in helper processes: build 480 showed Kontakt doing its
+setState work on its process's GUI thread even when called from a worker, so MuseScore's window froze 8-18 s per big patch;
+oop-load showed setState is one CPU-bound thread per process (VM: 37 s in 1 process, 21 s in 2, 19 s in 3). Design in
+`audio/vst3/vst3remote.h`'s header; CLAUDE.md › Hosting › Plug-ins in helper processes.
+- **What it is:** `MuseScoreLibraryHost[.exe]` next to MuseScore3Evo.exe; `[soundlibrary] hostProcesses` -1 (auto, new
+  default: physical cores - 1, at least 2 on 2 cores / 4 threads), 0 in-process as before, `MS_VST3_HOST_PROCESSES` wins.
+  The same Vst3Plugin calls replayed in the helper on the same kind of thread; same-block audio over shared memory.
+- **Sound-identical (Linux, test synth):** `tst_soundlibrary::remoteNull`: 900 random steps (tuned notes on 3 slots incl. a
+  linked one, varispeed glides, blocks of 1-4096 frames, CC1, parameters, Mixer, transport restarts, all notes off, settle)
+  bit-identical in-process / 1 helper / 2 helpers, states identical. The full suites pass both ways
+  (`MS_VST3_HOST_PROCESSES=0` and the default): tst_soundlibrary, tst_liveequivalence (verify, live equivalence, even
+  levels, hosted slots, Ample state, background loads all run through helpers by default).
+- **Round trip per block (remoteTiming, 4 instances in 2 helpers, paced like a callback, dev PC):** overhead (round trip less
+  the helpers' own process time) median 41-53 us at 64 frames (p99 67-172), 54-65 at 128, 84-99 at 256, 144-163 at 512 (p99
+  237-357); a 64-frame block lasts 1333 us. No added latency (same block).
+- **Linux GUI, Whence with the test synth at 1 s a setState (22 instances by varispeed), lag probe o,l,r,g:** score open
+  22.3-22.5 s in-process -> 5.1-5.3 s with 5 helpers (3 runs); an edit's / Play's 5 instances 5.1 -> 1.0 s; event loop max
+  lateness at opening 211 -> 28-86 ms; audio callback mean 0.5-0.7 -> 0.6-1.0 ms of 21.6, overruns the same. (With the
+  first rule, a patch's copies all to the helper holding the patch, the open took 10.1-10.3 s: the 4-5 copies of a patch
+  waited for each other; now that helper is used only when it isn't loading.)
+- **Crash / hang:** a helper killed: its instances silent at once, nothing waits; `SoundLibraryHost::checkHostProcesses`
+  reloads them in a new helper and the part sounds sample for sample as before (`tst_liveequivalence::hostCrashRecovery`);
+  a patch whose helper ended 3 times isn't reloaded. A helper that doesn't answer a block for 15 s is ended (`remoteHung`,
+  SIGSTOP). The even levels' measurer drops a dead instance's result and reloads it.
+- **Fixed on the way:** setParameter's processor side now goes with the next block (it raced the helper's main thread:
+  vst3Settle); the GUI thread's parameter reads of a busy helper come from the cache (kept across a setState; 1.15 s -> 0);
+  `EvenAutoMeasurer::loadStep` returned before finishing a load in steps when no other job waited (the measurer then stayed
+  busy for ever: the probe stuck after phase l in 2 of 5 runs; a latent bug in-process too); kthost links vst3remote.cpp
+  but hosts in-process.
+- **Offline renders** use helpers too (they go through load()); nulled on Linux by the suites; on the VM: the heard check.
+- **Windows builds:** build 482 failed (std::max under windows.h in the helper, no PCH:
+  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40223936264), build 483 at 9a8edc7e0a good
+  (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40224978823; the CI runner: tst_soundlibrary 150 passed / 8
+  skipped, remoteNull bit-identical, remoteTiming 38.5 us median at 64 frames .. 95 us at 512, p99 77-382 us).
+- **VM, build 483, Kontakt 8 + SSO, Whence (quarter tones), Recommended** (`C:\claude\b483\ms`, scripts in private/checkoop):
+  - Probe o (score open), helpers / in-process (same build, `MS_VST3_HOST_PROCESSES=0`): every instance loaded in 15.0 /
+    15.3 s against 29.2 / 32.1 s (first cold helper run 30.8 s, in-process 29.7); event loop max lateness 182-189 ms against
+    6.6 s; Windows' "Not responding" 0 against 1-2 times. The window stays free with Kontakt now (it didn't with build 480's
+    async load).
+  - Probe l,r,g with helpers against build 480: an edit's reload 15 ms (58.9 s), pitch-up during loading 0.42-0.50 s
+    (5.6-9.7 s), r's play press 0.23 s (5.3 s); g plays on after the change; no "Not responding".
+  - MS_AUDIO_TIMING, 60 s of Whence playing, ABBA, budget 23.22 ms, ~2300 callbacks: helpers 3 / 4 over budget (p99 8.2 / 7.6
+    ms, max 167 / 93), in-process 5 / 1 (p99 6.4 / 6.5, max 389 / 382). Round trip overhead on the VM median 380-440 us, p99
+    ~2.5 ms. No crackle measure worse than in-process; nobody listened.
+  - Open: while loading (stopped) the audio callback stalled once per helper start, ~2.6 s (mean 2.2 ms; in-process max 0.9).
+    Not in the helpers' round-trip maxima (<= 166 ms); cause unknown; nothing plays then.
+  - Kill test: the helper holding 8.2 GB killed while playing: noticed the same second, MuseScore stayed up, 5 instances
+    reloaded in 7.6 s (one in a new helper), playback went on; ~7 s silent in the recording.
+  - Heard check (export, per route) with helpers against check480's t1: 0 differing events in all five parts, detector 0
+    findings; report ARRIVAL 36 fail / 16 warn, UNHEARD 194; in-process control on build 483 (t1i): 35 / 16, 190; check480:
+    32 / 18, 190; RHYTHM, LEVEL the same: take spread.
+- **Untried:** Ample in a helper (the AGM trial ends 2026-10-25); the editor window in a helper (a top-level window of the
+  helper's, `AllowSetForegroundWindow`); closing MuseScore during a load with helpers on Windows; MMCSS in the helper; the
+  owner's PC (6 cores: more helpers), a cold local disk.
+- Files outside the repo: `~/MuseScore/ms3fork/ovl-oophost/` (overlay build, lp/ probe logs), `private/checkoop/` (VM).
+
 ## Paused 2026-10-18: where to pick up
 
 The owner paused the project. This branch (`integrate-1017`) holds everything merged; all fork tests pass on Linux.

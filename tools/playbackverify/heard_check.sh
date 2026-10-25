@@ -28,6 +28,8 @@
 #             steps only (the import, the render and its deletion), released for the dump and the analysis; under the
 #             name MS_VM_JOB if set (a caller holding the lock under that name: nested, nothing taken); 0: no lock
 #   HC_VMDIR  the VM's folder under C:\claude (default heardcheck)
+#   HC_VM_ENV (export) NAME=value pairs, space-separated, set for the VM's MuseScore runs (e.g. MS_VST3_HOST_PROCESSES=0:
+#             the plug-ins in MuseScore's process instead of helpers, vst3remote.h)
 #   HC_WORK   local work folder (default ~/.cache/heardcheck/<run>); HC_KEEP=1 keeps the renders
 # The VM side writes only C:\claude\<HC_VMDIR>\<run>. Never commit a report of the owner's score.
 set -u
@@ -103,6 +105,7 @@ if [ "$RENDER" = export ]; then
       lock
       $SCP "$SCORE" "$VM:$VMRUN_SCP/in.musicxml" || exit 2
       sed "s/^set MS_FREE_MEMORY_MB=16384/set MS_FREE_MEMORY_MB=$MEM/; s/\$/\r/" "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
+      for E in ${HC_VM_ENV:-}; do sed -i "s/^setlocal\r\$/setlocal\r\nset \"$E\"\r/" "$WORK/heard_export_vm.cmd"; done
       $SCP "$WORK/heard_export_vm.cmd" "$VM:$VMRUN_SCP/heard_export_vm.cmd" || exit 2
       $SSH "$VMRUN\\heard_export_vm.cmd $VMRUN $EXE convert" | tail -1
       $SCP "$VM:$VMRUN_SCP/conv.mscz" "$WORK/conv.mscz" || { echo "the VM's import failed"; exit 2; }
@@ -136,6 +139,7 @@ lock
 if [ "$RENDER" = export ]; then
   $SSH "if not exist $VMRUN mkdir $VMRUN" || exit 2
   sed "s/^set MS_FREE_MEMORY_MB=16384/set MS_FREE_MEMORY_MB=$MEM/; s/\$/\r/" "$HERE/heard_export_vm.cmd" > "$WORK/heard_export_vm.cmd"
+  for E in ${HC_VM_ENV:-}; do sed -i "s/^setlocal\r\$/setlocal\r\nset \"$E\"\r/" "$WORK/heard_export_vm.cmd"; done
   if [ "$SPLIT" = parts ]; then
     # (one copy per library part; the parts asked for only)
     mkdir -p "$WORK/split"

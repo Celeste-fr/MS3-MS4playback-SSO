@@ -90,6 +90,12 @@ jobs:
       shell: cmd
       run: |
         IF NOT EXIST msvc.install_x64\bin\kheap.dll (ECHO kheap.dll is not in the install & exit /b 1)
+    # (MuseScoreLibraryHost.exe, the helper that hosts the library's plug-ins outside MuseScore's process: audio/vst3/vst3remote.h;
+    # next to MuseScore3Evo.exe, which starts it)
+    - name: Check the library host is installed
+      shell: cmd
+      run: |
+        IF NOT EXIST msvc.install_x64\bin\MuseScoreLibraryHost.exe (ECHO MuseScoreLibraryHost.exe is not in the install & exit /b 1)
     # (on MSVC mtest/ is a project of its own, not in MuseScore's solution: its vcxproj is
     # built with MSBuild, which builds the projects it references too)
     - name: Build the sound library tests

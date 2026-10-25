@@ -65,6 +65,8 @@ struct CallbackTiming {
       QElapsedTimer clock;
       };
 static CallbackTiming* timing = nullptr;
+// (what else the line says: the helpers' audio round trips, Vst3Remote::timingSummary; set by SoundLibraryHost)
+QString (*paTimingExtra)() = nullptr;
 
 //---------------------------------------------------------
 //   paCallback
@@ -126,7 +128,8 @@ static void writeTiming()
                                       qEnvironmentVariable("MS_KHEAP_OFF") == "1" ? "system (MS_KHEAP_OFF=1)" : "default").arg(n).arg(budget, 0, 'f', 2)
                                  .arg(q(0.5), 0, 'f', 3).arg(q(0.99), 0, 'f', 3).arg(q(0.999), 0, 'f', 3).arg(double(ms.back()), 0, 'f', 3)
                                  .arg(over).arg(overHalf).arg(underflows);
-            f.write(line.toUtf8());
+            const QString extra = paTimingExtra ? paTimingExtra() : QString();
+            f.write((extra.isEmpty() ? line : line.trimmed() + " | " + extra + "\n").toUtf8());
             }
       t->n.store(0, std::memory_order_release);
       }

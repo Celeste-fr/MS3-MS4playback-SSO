@@ -32,6 +32,8 @@
 #include <QJsonObject>
 #include <QString>
 
+#include "backgroundload.h"
+
 namespace Steinberg {
 class IPlugView;
 namespace Vst {
@@ -57,7 +59,9 @@ class Vst3Plugin {
 
       // the first instrument (else audio module) class of the plug-in at path (a .vst3 bundle
       // or file), set up for a sample rate and up to maxBlock frames per process()
-      static std::unique_ptr<Vst3Plugin> load(const QString& path, double sampleRate, int maxBlock, QString* error = nullptr);
+      // patch (optional): what it will load; a remote instance goes to the helper that hosts the same patch (vst3remote.h)
+      static std::unique_ptr<Vst3Plugin> load(const QString& path, double sampleRate, int maxBlock, QString* error = nullptr,
+                                              const QString& patch = QString());
 
       QString name() const;
       QString path() const;
@@ -76,12 +80,32 @@ class Vst3Plugin {
       // ntdll's TppRaiseInvalidParameter (2026-10-16, kthost on the VM: returning with the module loaded crashed so,
       // with ExitDll + FreeLibrary first it exited 0). How many modules were unloaded
       static int unloadModules();
+      // host processes (vst3remote.h, [soundlibrary] hostProcesses): load() makes a remote instance when the setting
+      // asks for them; prepareHosts starts the processes a load batch of instances will use (each loading the
+      // module meanwhile), shutdownHosts ends them (MuseScore's exit, before unloadModules)
+      static void prepareHosts(const QString& path, int instances);
+      static void shutdownHosts(bool quick = false);    // quick: a helper loading ends at once (MuseScore closes)
+      bool remote() const;                // in a helper (MuseScoreLibraryHost)
+      bool alive() const;                 // false: its helper ended (it plays nothing)
+      int hostProcess() const;            // which (-1: MuseScore's own)
+      qint64 hostPid() const;             // its process id (-1: MuseScore's own)
+      bool busy() const;                  // its helper runs a long call (a load) now: GUI-thread reads come from the cache
+      // (remote) every parameter and its value read now, for the reads while its helper is busy later (a load's last step,
+      // on its worker thread); local: nothing
+      void prefetchParameters();
+      // BackgroundLoad (backgroundload.h) of this instance's process: the threads noted when it was made (markBackground:
+      // now), then waited for. For a remote instance its helper's threads (Ample's sample set loads there)
+      void markBackground();
+      BackgroundLoad::Result waitBackground(double limitSeconds);
 
       // audio thread
       // MuseScore's event types (ME_NOTEON …); a note-on's tuning in cents from equal temperament
       // (the score's tuning: tuning.h) goes in VST 3's NoteOnEvent::tuning, for the plug-ins that honour it
       void midi(int type, int channel, int a, int b, float tuning = 0.f);
       void process(int frames, float* interleavedStereo);   // adds its output
+      // a remote instance starts rendering the block now (so that several processes render at once: Vst3Synth posts
+      // every slot's block, then collects them with process(), the same frames); a local one does nothing
+      void beginProcess(int frames);
       // varispeed: the plug-in played faster or slower, so everything it plays is higher or lower
       // by cents (and its time runs 2^(cents/1200) times as fast: 3 % for a quarter tone), for a
       // plug-in that ignores a note's tuning (Kontakt). The plug-in renders into a buffer read back
@@ -141,7 +165,10 @@ class Vst3Plugin {
             };
       const Times& times() const;
       bool singleComponent() const;       // its component is its controller too (one object)
-      Steinberg::IPlugView* createEditor();     // nullptr: no editor; the caller releases it
+      Steinberg::IPlugView* createEditor();     // nullptr: no editor (or remote); the caller releases it
+      // a remote instance's editor, a window of its helper; *later: its helper is loading, the window opens once it's done
+      bool showRemoteEditor(const QString& title, bool* later = nullptr);
+      void closeRemoteEditor();
       // what the plug-in says its keys play, as DAWs show it (drum maps, keyswitch lanes): the
       // program's pitch names (IUnitInfo) and the keyswitches (IKeyswitchController, "KS "
       // prefix). source: which of the two answered, or why none did
@@ -171,8 +198,10 @@ class Vst3Plugin {
       std::vector<Parameter> parameters() const;
       double parameter(unsigned id) const;                        // normalized, the controller's
       QString parameterText(unsigned id, double normalized) const;
-      void setParameter(unsigned id, double normalized);          // processor (next process()) and controller;
-                                                                  // GUI thread, also while the audio thread plays
+      // processor (next process()) and controller; GUI thread, also while the audio thread plays. sides: both, or one
+      // (a helper replays a remote instance's: its processor side comes with the next block, vst3remote.h)
+      enum { EDIT_PROCESSOR = 1, EDIT_CONTROLLER = 2, EDIT_BOTH = 3 };
+      void setParameter(unsigned id, double normalized, int sides = EDIT_BOTH);
       // the processor only, at the next process(): from the audio thread (automation, Vst3Synth), which
       // mustn't touch the controller (GUI thread)
       void queueParameter(unsigned id, double normalized);
