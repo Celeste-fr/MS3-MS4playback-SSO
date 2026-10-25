@@ -589,6 +589,9 @@ void MuseScore::closeEvent(QCloseEvent* ev)
       // the hosted plug-ins' instances go now (the sequencer stopped in writeSettings), so main unloads their modules
       // with ExitDll before the process ends (Vst3Plugin::unloadModules: left to the loader, Kontakt 8's teardown ended
       // MuseScore with 0xC000000D)
+      // (instances in helpers, vst3remote.h: the helpers end now; nothing they hold is kept, so neither a load in flight nor
+      // Kontakt's teardown is waited for)
+      Vst3Plugin::shutdownHosts(true);
       SoundLibraryHost::instance()->release();
 #endif
 

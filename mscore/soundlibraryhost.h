@@ -103,7 +103,11 @@ class SoundLibraryHost : public QObject {
                                           // (scriptValuesFor, as text); another score's: loaded again
             };
       std::array<Slot, 64> _slots;
-      std::set<int> _lostSlots;           // slots whose instance's host process ended, said (checkHostProcesses)
+      // helpers (vst3remote.h): an instance whose helper ended is said, taken out and loaded again (checkHostProcesses, on
+      // the idle timer); a patch whose helper ended MAX_HELPER_ENDS times this session isn't loaded again
+      static constexpr int MAX_HELPER_ENDS = 3;
+      std::map<QString, int> _crashes;
+      std::set<QString> _crashedPatches;
       void checkHostProcesses();
       // the part each slot plays (its patch, an extra, a copy for another tuning) and the score, from
       // the last sync: the Mixer's values go to the slots (applyMixer). Only compared with the score's
@@ -316,8 +320,11 @@ class SoundLibraryHost : public QObject {
                                              QString* error = nullptr);
       // after a setup was set on p (loadSetup does both): load times.log, and a setup made from the
       // .nki replaced by Kontakt's own state (resave). setupMs: reading or making the setup
+      // fetched: the plug-in's state as read right after its setState (a remote instance's load: its worker read it)
       static void setupLoaded(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QByteArray& state,
-                              double setupMs);
+                              double setupMs, const QByteArray* fetched = nullptr);
+      // the plug-in's state is to be read after its setState for setupLoaded's resave (a setup made, not yet resaved)
+      static bool needsResave(const SoundLib::Library& library, const QString& patch);
       // how many setups are set (Vst3Plugin::setState) on worker threads at once while MuseScore goes on: 0 (default)
       // and 1 one at a time (2026-10-24: always on a worker thread, the window free; before, 0 set it on the GUI thread,
       // holding the window for each instance's seconds); n: up to n at once (measured 2026-10-15 with Kontakt: no

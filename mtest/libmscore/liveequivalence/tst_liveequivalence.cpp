@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <set>
 #include <tuple>
 #include <QtTest/QtTest>
@@ -33,7 +34,11 @@
 #include "audio/vst3/kontaktsetup.h"
 #include "audio/vst3/pluginstate.h"
 #include "audio/vst3/vst3plugin.h"
+#include "audio/vst3/vst3remote.h"
 #include "audio/vst3/vst3synth.h"
+#ifndef _WIN32
+#include <signal.h>
+#endif
 #include "audio/midi/msynthesizer.h"
 #include "libmscore/arpeggio.h"
 #include "libmscore/articulation.h"
@@ -156,6 +161,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void backgroundLoadInstances();
       void backgroundLoadHosted();
       void asyncLoadHosted();
+      void hostCrashRecovery();
       void plainSetTrackDelays();
       void plainWritten_data();
       void plainWritten();
@@ -2158,6 +2164,102 @@ void TestLiveEquivalence::backgroundLoadInstances()
 //        score shown while the first loads gets its own instances
 //---------------------------------------------------------
 
+//---------------------------------------------------------
+//   hostCrashRecovery
+//    a helper (vst3remote.h) killed while the score's instances are loaded: SoundLibraryHost notices it on its idle
+//    timer (checkHostProcesses), takes the dead instance out of its slot, loads it again in the background (loading()
+//    meanwhile: Play grayed) and the part then sounds sample for sample as it did; the other part's instance untouched.
+//    MAX_HELPER_ENDS ends of one patch: it isn't loaded again
+//---------------------------------------------------------
+
+void TestLiveEquivalence::hostCrashRecovery()
+      {
+#ifdef _WIN32
+      QSKIP("killing a helper: the Linux test (the Windows one on the VM)");
+#else
+      struct Env {
+            QByteArray was = qgetenv("MS_VST3_HOST_PROCESSES");
+            bool had = qEnvironmentVariableIsSet("MS_VST3_HOST_PROCESSES");
+            ~Env() { Vst3Remote::shutdown(); if (had) qputenv("MS_VST3_HOST_PROCESSES", was); else qunsetenv("MS_VST3_HOST_PROCESSES"); }
+            } env;
+      Vst3Remote::shutdown();
+      qputenv("MS_VST3_HOST_PROCESSES", "2");
+      LiveHost host(this, "", { "Violin", "Viola" },
+                    "<SoundLibrary name='CrashT'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+                    "</SoundLibrary>");
+      QVERIFY(host.ok);
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      MasterSynthesizer master;
+      master.registerSynthesizer(new Vst3Synth);
+      MasterSynthesizer* was = synti;
+      synti = &master;
+      struct Back { MasterSynthesizer* was; ~Back() { SoundLibraryHost::instance()->release(); synti = was; } } back { was };
+      SoundLibraryHost* h = SoundLibraryHost::instance();
+      auto sound = [h](int ch) {
+            Vst3Synth* s = h->synth();
+            s->beginExport(48000);
+            s->play(PlayEvent(ME_CONTROLLER, ch, 1, 100));
+            s->play(PlayEvent(ME_NOTEON, ch, 62 + 7 * ch, 100));
+            std::vector<float> b(2 * 4800, 0.f);
+            s->process(4800, b.data(), nullptr, nullptr);
+            s->play(PlayEvent(ME_NOTEON, ch, 62 + 7 * ch, 0));
+            std::vector<float> rest(2 * 48000, 0.f);
+            s->process(48000, rest.data(), nullptr, nullptr);
+            s->endExport();
+            return b;
+            };
+      QString error;
+      QVERIFY2(h->sync(score, &error), qPrintable(error));
+      Vst3Synth* vst = h->synth();
+      QVERIFY(vst->plugin(0) && vst->plugin(1));
+      QVERIFY(vst->plugin(0)->hostPid() > 0 && vst->plugin(1)->hostPid() > 0);
+      const std::vector<float> ref0 = sound(0);
+      QVERIFY(rms(ref0, 0) > 1e-4);
+
+      // (the reloaded violin may go to the viola's helper: its patch is in no helper any more. Killing that one then takes
+      // the viola too, which is loaded again as well)
+      for (int round = 1; round <= 3; ++round) {
+            const qint64 pid = vst->plugin(0)->hostPid();
+            const bool shared = vst->plugin(1)->hostPid() == pid;
+            const Vst3Plugin* other = vst->plugin(1);
+            QVERIFY(pid > 0);
+            QCOMPARE(::kill(pid_t(pid), SIGKILL), 0);
+            QElapsedTimer t;
+            t.start();
+            // noticed: the slot emptied (the idle timer) …
+            while (vst->plugin(0) && vst->plugin(0)->hostPid() == pid && t.elapsed() < 5000)
+                  QTest::qWait(10);
+            // … and loaded again in the background (the third end of the violin: not)
+            while ((h->loading(score) || (round < 3 && !vst->plugin(0)) || !vst->plugin(1) || !vst->plugin(1)->alive())
+                   && t.elapsed() < 10000)
+                  QTest::qWait(10);
+            QVERIFY(!h->loading(score));
+            QVERIFY2(vst->plugin(1) && vst->plugin(1)->alive(), qPrintable(QString("round %1").arg(round)));
+            if (!shared)
+                  QCOMPARE(vst->plugin(1), other);          // (the viola's instance kept)
+            if (round < 3) {
+                  QVERIFY2(vst->plugin(0) && vst->plugin(0)->alive(), qPrintable(QString("round %1").arg(round)));
+                  QVERIFY(vst->plugin(0)->hostPid() != pid);
+                  QVERIFY(h->readyToPlay(score, &error));
+                  const std::vector<float> again = sound(0);
+                  QCOMPARE(again.size(), ref0.size());
+                  QVERIFY2(std::memcmp(again.data(), ref0.data(), ref0.size() * sizeof(float)) == 0,
+                           qPrintable(QString("round %1: not the same samples").arg(round)));
+                  }
+            else {
+                  QTest::qWait(300);
+                  QVERIFY(!h->loading(score));
+                  QVERIFY(!vst->plugin(0));
+                  }
+            }
+      delete score;
+#endif
+      }
+
 void TestLiveEquivalence::asyncLoadHosted()
       {
       struct Env { ~Env() { qunsetenv("MSTESTSYNTH_SETSTATE_MS"); SoundLibraryHost::loadedStateObserver() = nullptr; } } env;
@@ -2248,7 +2350,11 @@ void TestLiveEquivalence::asyncLoadHosted()
             }
       tick.stop();
       QVERIFY(!h->loading(score));
-      QVERIFY2(t.elapsed() >= 550, qPrintable(QString::number(t.elapsed())));    // (two setStates, one after the other)
+      // (two setStates: one after the other in MuseScore's process; in 2 or more helpers at the same time, vst3remote.h)
+      if (Vst3Remote::processes() >= 2)
+            QVERIFY2(t.elapsed() >= 280 && t.elapsed() < 550, qPrintable(QString::number(t.elapsed())));
+      else
+            QVERIFY2(t.elapsed() >= 550, qPrintable(QString::number(t.elapsed())));
       QVERIFY2(latest < 150, qPrintable(QString("the event loop held %1 ms").arg(latest)));
       QCOMPARE(h->loadingTotal(), 2);
       QCOMPARE(h->loadingLoaded(), 2);

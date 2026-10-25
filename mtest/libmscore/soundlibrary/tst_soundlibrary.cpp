@@ -9,7 +9,9 @@
 #include <set>
 #include <chrono>
 #include <future>
+#include <random>
 #include <thread>
+#include <QRegularExpression>
 #include <atomic>
 
 #include <cmath>
@@ -70,8 +72,12 @@
 #include "audio/vst3/pluginstate.h"
 #include "audio/vst3/playbackverify.h"
 #include "audio/vst3/vst3plugin.h"
+#include "audio/vst3/vst3remote.h"
 #include "audio/vst3/vst3synth.h"
 #include "audio/vst3/wavwriter.h"
+#ifndef _WIN32
+#include <signal.h>
+#endif
 #include "libmscore/segment.h"
 #include "libmscore/slur.h"
 #include "libmscore/measure.h"
@@ -232,6 +238,11 @@ class TestSoundLibrary : public QObject, public MTest
       void evenAutoTestSynth();
       void mixerSlot();
       void transportRestart();
+      void remoteNull();
+      void remoteTiming();
+      void remoteParallelLoad();
+      void remoteKilled();
+      void remoteHung();
       void mixerScore();
       void liveSetTestSynth();
       void liveParameters();
@@ -9339,11 +9350,11 @@ void TestSoundLibrary::backgroundLoad()
             const QByteArray state = p->state();
             qputenv("MSTESTSYNTH_STREAM_MS", "600");
             qputenv("MSTESTSYNTH_STREAM_MB", "48");
-            const BackgroundLoad since;
             std::unique_ptr<Vst3Plugin> q = Vst3Plugin::load(TESTSYNTH, 48000, 512, &error);
             QVERIFY2(q, qPrintable(error));
             QVERIFY(q->setState(state));
-            const BackgroundLoad::Result r = since.wait(10);
+            // (the threads of the instance's process since it was made: a remote one's helper's, vst3remote.h)
+            const BackgroundLoad::Result r = q->waitBackground(10);
             qunsetenv("MSTESTSYNTH_STREAM_MS");
             qunsetenv("MSTESTSYNTH_STREAM_MB");
             QVERIFY2(r.quiet && r.seconds >= 0.5, qPrintable(QString("%1 s, %2 MB").arg(r.seconds).arg(r.memoryMB)));
@@ -9796,6 +9807,372 @@ void TestSoundLibrary::tuningLanes()
 
 static double rms(const std::vector<float>& b, int side);
 static double dB(double a, double b);
+
+//---------------------------------------------------------
+//   remote tests (vst3remote.h: instances in helper processes)
+//    HostProcesses sets MS_VST3_HOST_PROCESSES for a scope (it wins over the setting) and ends the helpers after
+//---------------------------------------------------------
+
+struct HostProcesses {
+      QByteArray was;
+      bool had;
+      explicit HostProcesses(int k)
+            {
+            had = qEnvironmentVariableIsSet("MS_VST3_HOST_PROCESSES");
+            was = qgetenv("MS_VST3_HOST_PROCESSES");
+            Vst3Remote::shutdown();
+            qputenv("MS_VST3_HOST_PROCESSES", QByteArray::number(k));
+            }
+      ~HostProcesses()
+            {
+            Vst3Remote::shutdown();
+            if (had)
+                  qputenv("MS_VST3_HOST_PROCESSES", was);
+            else
+                  qunsetenv("MS_VST3_HOST_PROCESSES");
+            }
+      };
+
+//---------------------------------------------------------
+//   remoteNull
+//    the same calls give the same samples, bit for bit, in MuseScore's process and in 1 or 2 helpers: three slots (two
+//    instances, one linked to the first on its channel 1), varispeed on with tuned notes and legato glides, blocks of 1
+//    to 4096 frames, CC1, a parameter set between blocks (its processor side in the next block: vst3Settle), the Mixer
+//    changed, a transport restart, all notes off, settle, then the instances' states
+//---------------------------------------------------------
+
+void TestSoundLibrary::remoteNull()
+      {
+      const int rate = 48000;
+      auto render = [&](int processes, QByteArray* states, int* remote) {
+            HostProcesses hp(processes);
+            Vst3Synth vst;
+            vst.init(rate);
+            QString error;
+            for (int k : { 0, 1 }) {
+                  std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error);
+                  if (!p)
+                        return std::vector<float>();
+                  if (p->hostPid() > 0)
+                        ++*remote;
+                  vst.setPlugin(k, std::move(p));
+                  }
+            vst.setLink(2, 0, 1, false);
+            vst.setVarispeed(true);
+            const long tone = vst.plugin(1)->parameterId("Tone");
+            std::mt19937 rng(20261025);
+            const int sizes[] = { 1, 7, 64, 333, 512, 4096, 128, 2 };
+            std::vector<float> out;
+            int sounding[3] = { -1, -1, -1 };
+            for (int step = 0; step < 900; ++step) {
+                  const int slot = int(rng() % 3);
+                  switch (rng() % 9) {
+                        case 0: case 1: case 2: {
+                              const int pitch = 55 + int(rng() % 24);
+                              PlayEvent on(ME_NOTEON, slot, pitch, 40 + int(rng() % 80));
+                              on.setTuning(float(int(rng() % 5) * 25 - 50));
+                              vst.play(on);
+                              if (sounding[slot] >= 0 && rng() % 2)
+                                    vst.play(PlayEvent(ME_NOTEON, slot, sounding[slot], 0));
+                              sounding[slot] = pitch;
+                              break;
+                              }
+                        case 3:
+                              if (sounding[slot] >= 0)
+                                    vst.play(PlayEvent(ME_NOTEON, slot, sounding[slot], 0));
+                              sounding[slot] = -1;
+                              break;
+                        case 4:
+                              vst.play(PlayEvent(ME_CONTROLLER, slot, 1, int(rng() % 128)));
+                              break;
+                        case 5:
+                              if (tone >= 0)
+                                    vst.plugin(1)->setParameter(unsigned(tone), double(rng() % 1000) / 1000.0);
+                              break;
+                        case 6:
+                              vst.setMix(int(rng() % 2), 60 + int(rng() % 60), int(rng() % 128), rng() % 13 == 0,
+                                         0.5f + float(rng() % 100) / 100.f);
+                              break;
+                        case 7:
+                              if (rng() % 20 == 0)
+                                    vst.restartTransport();
+                              else if (rng() % 15 == 0)
+                                    vst.allNotesOff(int(rng() % 2));
+                              break;
+                        default:
+                              break;
+                        }
+                  const int n = sizes[rng() % 8];
+                  const size_t at = out.size();
+                  out.resize(at + 2 * size_t(n), 0.f);
+                  vst.process(unsigned(n), out.data() + at, nullptr, nullptr);
+                  }
+            vst.plugin(0)->settle(0.2);
+            std::vector<float> tail(2 * 4096, 0.f);
+            vst.process(4096, tail.data(), nullptr, nullptr);
+            out.insert(out.end(), tail.begin(), tail.end());
+            *states = vst.plugin(0)->state() + vst.plugin(1)->state();
+            return out;
+            };
+      QByteArray s0, s1, s2;
+      int r0 = 0, r1 = 0, r2 = 0;
+      const std::vector<float> local = render(0, &s0, &r0);
+      const std::vector<float> one = render(1, &s1, &r1);
+      const std::vector<float> two = render(2, &s2, &r2);
+      QCOMPARE(r0, 0);
+      QCOMPARE(r1, 2);
+      QCOMPARE(r2, 2);
+      QVERIFY(local.size() > 200000);
+      QVERIFY(peak(local) > 0.02f);
+      for (const std::vector<float>* b : { &one, &two }) {
+            QCOMPARE(b->size(), local.size());
+            size_t first = b->size();
+            for (size_t i = 0; i < b->size(); ++i)
+                  if (std::memcmp(&(*b)[i], &local[i], sizeof(float))) {
+                        first = i;
+                        break;
+                        }
+            QVERIFY2(first == b->size(), qPrintable(QString("differs from frame %1").arg(first / 2)));
+            }
+      QCOMPARE(s1, s0);
+      QCOMPARE(s2, s0);
+      }
+
+//---------------------------------------------------------
+//   remoteTiming
+//    the audio round trip's cost per block (Vst3Remote::timingSummary): 4 instances in 2 helpers, blocks of 64 / 128 /
+//    256 / 512 frames played as a realtime callback would (the block's own time apart): the caller's wait less the
+//    helpers' process() time. Printed for the record; the median under 1 ms (a loaded dev machine: not a deadline test)
+//---------------------------------------------------------
+
+void TestSoundLibrary::remoteTiming()
+      {
+      HostProcesses hp(2);
+      const int rate = 48000;
+      Vst3Synth vst;
+      vst.init(rate);
+      QString error;
+      for (int k = 0; k < 4; ++k) {
+            vst.setPlugin(k, Vst3Plugin::load(TESTSYNTH, rate, 4096, &error));
+            QVERIFY2(vst.plugin(k), qPrintable(error));
+            QVERIFY(vst.plugin(k)->hostPid() > 0);
+            }
+      for (int k = 0; k < 4; ++k) {
+            vst.play(PlayEvent(ME_CONTROLLER, k, 1, 100));
+            vst.play(PlayEvent(ME_NOTEON, k, 60 + 4 * k, 100));
+            }
+      for (int frames : { 64, 128, 256, 512 }) {
+            Vst3Remote::timingSummary(true);
+            std::vector<float> b(2 * size_t(frames));
+            const int blocks = std::max(200, 48000 / frames);
+            const auto period = std::chrono::nanoseconds(qint64(1e9 * frames / rate));
+            auto next = std::chrono::steady_clock::now();
+            for (int i = 0; i < blocks; ++i) {
+                  std::fill(b.begin(), b.end(), 0.f);
+                  vst.process(unsigned(frames), b.data(), nullptr, nullptr);
+                  next += period;
+                  std::this_thread::sleep_until(next);
+                  }
+            const QString line = Vst3Remote::timingSummary(false);
+            qInfo("remote round trip, %d frames: %s", frames, qPrintable(line));
+            QRegularExpressionMatch m = QRegularExpression("overhead median (\\d+)").match(line);
+            QVERIFY2(m.hasMatch(), qPrintable(line));
+            QVERIFY2(m.captured(1).toInt() < 1000, qPrintable(line));
+            }
+      }
+
+//---------------------------------------------------------
+//   remoteParallelLoad
+//    setStates of 300 ms each (MSTESTSYNTH_SETSTATE_MS, which the test synth spends on its process's thread, as Kontakt
+//    spends its on its GUI thread) on 4 instances, from 4 worker threads: in 1 helper one after another (>= 1.2 s), in 2
+//    helpers two at a time (about 0.6 s); and meanwhile the calling (GUI) thread's parameter reads of a busy instance
+//    come from the cache without waiting
+//---------------------------------------------------------
+
+void TestSoundLibrary::remoteParallelLoad()
+      {
+      struct Env { ~Env() { qunsetenv("MSTESTSYNTH_SETSTATE_MS"); } } env;
+      const int rate = 48000;
+      QByteArray state;
+      {
+            HostProcesses hp(0);
+            QString error;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 512, &error);
+            QVERIFY2(p, qPrintable(error));
+            state = p->state();
+      }
+      qputenv("MSTESTSYNTH_SETSTATE_MS", "300");
+      auto run = [&](int processes, double* guiMaxMs) {
+            HostProcesses hp(processes);
+            Vst3Remote::prepare(TESTSYNTH, 4);
+            std::vector<std::unique_ptr<Vst3Plugin>> ps;
+            QString error;
+            for (int k = 0; k < 4; ++k) {
+                  ps.push_back(Vst3Plugin::load(TESTSYNTH, rate, 512, &error, QString("patch %1").arg(k)));
+                  if (!ps.back())
+                        return -1.0;
+                  }
+            for (auto& p : ps)
+                  p->prefetchParameters();  // (the cache filled, as SoundLibraryHost's loads fill it on their worker)
+            QElapsedTimer t;
+            t.start();
+            std::vector<std::thread> threads;
+            std::atomic<int> ok { 0 };
+            for (auto& p : ps)
+                  threads.emplace_back([&ok, &p, &state]() { ok += p->setState(state) ? 1 : 0; });
+            *guiMaxMs = 0;
+            QThread::msleep(50);
+            while (ok < 4 && t.elapsed() < 10000) {
+                  for (auto& p : ps) {
+                        QElapsedTimer g;
+                        g.start();
+                        const std::vector<Vst3Plugin::Parameter> list = p->parameters();
+                        for (const Vst3Plugin::Parameter& x : list)
+                              p->parameter(x.id);
+                        p->parameter(0x7fffffff);     // (none such)
+                        p->idle();
+                        *guiMaxMs = std::max(*guiMaxMs, g.nsecsElapsed() / 1e6);
+                        }
+                  QThread::msleep(5);
+                  }
+            for (std::thread& th : threads)
+                  th.join();
+            const double seconds = t.elapsed() / 1000.0;
+            return ok == 4 ? seconds : -1.0;
+            };
+      double gui1 = 0, gui2 = 0;
+      const double one = run(1, &gui1);
+      const double two = run(2, &gui2);
+      qInfo("4 setStates of 300 ms: 1 helper %.2f s, 2 helpers %.2f s; the GUI thread's longest parameter read %.1f / %.1f ms",
+            one, two, gui1, gui2);
+      QVERIFY(one > 0 && two > 0);
+      QVERIFY2(one >= 1.15, qPrintable(QString::number(one)));
+      QVERIFY2(two < 0.8 * one, qPrintable(QString("%1 / %2").arg(two).arg(one)));
+      QVERIFY2(gui1 < 50 && gui2 < 50, qPrintable(QString("%1 / %2 ms").arg(gui1).arg(gui2)));
+      }
+
+//---------------------------------------------------------
+//   remoteKilled
+//    a helper killed while its instance plays: process() goes on without waiting (that slot silent, the other helper's
+//    still sounding), the instance says !alive(), Vst3Remote::takeEnded names the helper once, calls to it return at
+//    once, and a new instance loads (in a new helper) and plays the same as the first did
+//---------------------------------------------------------
+
+void TestSoundLibrary::remoteKilled()
+      {
+#ifdef _WIN32
+      QSKIP("killing a helper: the Linux test (the Windows one on the VM)");
+#else
+      HostProcesses hp(2);
+      const int rate = 48000;
+      Vst3Synth vst;
+      vst.init(rate);
+      QString error;
+      Vst3Remote::prepare(TESTSYNTH, 2);
+      for (int k = 0; k < 2; ++k) {
+            vst.setPlugin(k, Vst3Plugin::load(TESTSYNTH, rate, 512, &error, QString("patch %1").arg(k)));
+            QVERIFY2(vst.plugin(k), qPrintable(error));
+            QVERIFY(vst.plugin(k)->hostPid() > 0);
+            }
+      QVERIFY(vst.plugin(0)->hostPid() != vst.plugin(1)->hostPid());
+      Vst3Remote::takeEnded();
+      auto block = [&](int slot) {
+            std::vector<float> b(2 * 512, 0.f);
+            vst.play(PlayEvent(ME_CONTROLLER, slot, 1, 100));
+            vst.play(PlayEvent(ME_NOTEON, slot, 64, 100));
+            std::vector<float> all;
+            for (int i = 0; i < 40; ++i) {
+                  std::fill(b.begin(), b.end(), 0.f);
+                  vst.process(512, b.data(), nullptr, nullptr);
+                  all.insert(all.end(), b.begin(), b.end());
+                  }
+            vst.play(PlayEvent(ME_NOTEON, slot, 64, 0));
+            std::fill(b.begin(), b.end(), 0.f);
+            for (int i = 0; i < 20; ++i)
+                  vst.process(512, b.data(), nullptr, nullptr);
+            return all;
+            };
+      const std::vector<float> before1 = block(1);
+      QVERIFY(peak(before1) > 0.02f);
+      const std::vector<float> before0 = block(0);
+      // killed while a note sounds on it
+      vst.play(PlayEvent(ME_NOTEON, 0, 67, 100));
+      std::vector<float> b(2 * 512, 0.f);
+      vst.process(512, b.data(), nullptr, nullptr);
+      const qint64 pid = vst.plugin(0)->hostPid();
+      QVERIFY(pid > 0);
+      QCOMPARE(::kill(pid_t(pid), SIGKILL), 0);
+      QElapsedTimer t;
+      t.start();
+      while (vst.plugin(0)->alive() && t.elapsed() < 5000) {
+            std::fill(b.begin(), b.end(), 0.f);
+            vst.process(512, b.data(), nullptr, nullptr);
+            }
+      QVERIFY(!vst.plugin(0)->alive());
+      QVERIFY(vst.plugin(1)->alive());
+      // playing goes on: slot 0 silent, without waiting; slot 1 as before
+      QElapsedTimer w;
+      w.start();
+      const std::vector<float> dead0 = block(0);
+      QVERIFY2(w.elapsed() < 2000, qPrintable(QString::number(w.elapsed())));
+      QCOMPARE(peak(dead0), 0.f);
+      QVERIFY(peak(block(1)) > 0.02f);
+      // calls return at once
+      w.restart();
+      QVERIFY(vst.plugin(0)->state().isEmpty());
+      vst.plugin(0)->parameters();
+      QVERIFY(w.elapsed() < 500);
+      const std::vector<int> ended = Vst3Remote::takeEnded();
+      QCOMPARE(int(ended.size()), 1);
+      QVERIFY(Vst3Remote::takeEnded().empty());
+      // a new instance in its place (as SoundLibraryHost::checkHostProcesses loads it): plays the same as before
+      vst.setPlugin(0, Vst3Plugin::load(TESTSYNTH, rate, 512, &error, "patch 0"));
+      QVERIFY2(vst.plugin(0) && vst.plugin(0)->alive(), qPrintable(error));
+      QVERIFY(vst.plugin(0)->hostPid() != pid);
+      QVERIFY(block(0) == before0);
+#endif
+      }
+
+//---------------------------------------------------------
+//   remoteHung
+//    a helper that stops answering (SIGSTOP: stuck in a plug-in) while its instance plays: after HUNG_MS (15 s) the
+//    block's wait ends it, the instance says !alive() and the next blocks don't wait; takeEnded names it
+//---------------------------------------------------------
+
+void TestSoundLibrary::remoteHung()
+      {
+#ifdef _WIN32
+      QSKIP("stopping a helper: Linux");
+#else
+      HostProcesses hp(1);
+      Vst3Synth vst;
+      vst.init(48000);
+      QString error;
+      vst.setPlugin(0, Vst3Plugin::load(TESTSYNTH, 48000, 512, &error));
+      QVERIFY2(vst.plugin(0) && vst.plugin(0)->hostPid() > 0, qPrintable(error));
+      Vst3Remote::takeEnded();
+      std::vector<float> b(2 * 512, 0.f);
+      vst.play(PlayEvent(ME_NOTEON, 0, 64, 100));
+      vst.process(512, b.data(), nullptr, nullptr);
+      QCOMPARE(::kill(pid_t(vst.plugin(0)->hostPid()), SIGSTOP), 0);
+      QElapsedTimer t;
+      t.start();
+      vst.process(512, b.data(), nullptr, nullptr);
+      const qint64 waited = t.elapsed();
+      QVERIFY2(waited >= 14000 && waited < 25000, qPrintable(QString::number(waited)));
+      while (vst.plugin(0)->alive() && t.elapsed() < 30000)
+            QThread::msleep(10);
+      QVERIFY(!vst.plugin(0)->alive());
+      t.restart();
+      vst.process(512, b.data(), nullptr, nullptr);
+      QVERIFY(t.elapsed() < 100);
+      // (its end recorded by the helper's watcher, right after the pipe closed)
+      std::vector<int> ended;
+      for (t.restart(); ended.empty() && t.elapsed() < 5000; QThread::msleep(10))
+            ended = Vst3Remote::takeEnded();
+      QCOMPARE(int(ended.size()), 1);
+#endif
+      }
 
 void TestSoundLibrary::vst3Settle()
       {
@@ -13681,7 +14058,8 @@ void TestSoundLibrary::settingsReadIdentical()
                         QVERIFY(src != Playback::Source::SCORE || own);
                         }
                   QCOMPARE(Playback::on(d.id, score), Playback::value(d.id, score) >= 0.5);
-                  QCOMPARE(Playback::value(d.id, nullptr, 0.5) >= 0, true);
+                  // (every value 0 or more, but [soundlibrary] hostProcesses' -1: automatic, vst3remote.h)
+                  QCOMPARE(Playback::value(d.id, nullptr, 0.5) >= 0 || QString(d.id) == "soundlibrary/hostProcesses", true);
                   }
             QVERIFY(Playback::definition("no/such") == nullptr);
             QVERIFY(Playback::definition(QString()) == nullptr);

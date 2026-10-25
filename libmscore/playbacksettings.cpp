@@ -372,12 +372,16 @@ static const std::vector<Definition> DEFINITIONS = {
       // offered, rounded up to 1 ms: Vst3Plugin::SETTLE_SECONDS, docs/PLAYBACK_SETTINGS.md › Measured by sweeps)
       { "hosting/settleSeconds", 0.047, 0, 10, "s",
         "a patch just loaded runs this long before its controllers are set (its script initialises)", false },
-      // [soundlibrary] (global). hostProcesses: Kontakt's setState is one CPU-bound thread per process (sso-load-profile.md:
-      // KSP compiled once per tuning slot), so instances load at the same time only in separate processes (Vst3Remote). 0
-      // keeps them in MuseScore's process (as before); -1: one per physical core (QThread::idealThreadCount() / 2)
-      { "soundlibrary/hostProcesses", 0, -1, 64, "processes",
-        "hosted plug-in instances in up to this many separate host processes, so that they load in parallel (0: in "
-        "MuseScore's own process; -1: one per CPU core). Read when instances load", false },
+      // [soundlibrary] (global). hostProcesses: the plug-in's instances in helper processes (MuseScoreLibraryHost, Vst3Remote,
+      // audio/vst3/vst3remote.h; the owner approved 2026-10-25): Kontakt does its setState work on its process's GUI thread
+      // (check480: MuseScore's window froze 8-18 s per patch) and one CPU-bound thread per process (oop-load: 2-3 processes
+      // 1.75-1.9x faster on the VM). 0 keeps them in MuseScore's process (as before); K up to K helpers; -1 (default)
+      // automatic: a helper per physical core but one (at least 2 on 2+ cores with 4+ logical processors). Not a sound
+      // setting: the helper plays the same calls in the same order (null-tested)
+      { "soundlibrary/hostProcesses", -1, -1, 64, "processes",
+        "hosted plug-in instances in up to this many helper processes, so that MuseScore's window stays free while they "
+        "load, several load at once and a plug-in crash doesn't end MuseScore (0: in MuseScore's own process; -1: "
+        "automatic, a helper per CPU core but one). Read when instances load", false },
       };
 
 const std::vector<Definition>& definitions()

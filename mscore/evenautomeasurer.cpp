@@ -28,6 +28,7 @@
 
 #ifdef USE_VST3
 #include "audio/vst3/evenmeasure.h"
+#include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #endif
 
@@ -428,6 +429,24 @@ void EvenAutoMeasurer::worker(Instance* in)
                   });
             if (in->stop)
                   break;
+            // a helper that ended meanwhile (vst3remote.h) rendered silence: not a measurement. The job goes back and the
+            // instance is loaded again (lost() on the main thread: this worker ends, its queue with it)
+            bool dead = false;
+            for (int k = 0; k < in->vst->slotCount(); ++k)
+                  if (in->vst->plugin(k) && !in->vst->plugin(k)->alive())
+                        dead = true;
+            if (dead) {
+                  std::vector<EvenAuto::Job> jobs;
+                  {
+                        std::lock_guard<std::mutex> lock(in->mutex);
+                        jobs.swap(in->queue);
+                        in->stop = true;
+                  }
+                  jobs.insert(jobs.begin(), job);
+                  const QString key = in->key;
+                  QMetaObject::invokeMethod(this, [this, key, jobs]() { lost(key, jobs); }, Qt::QueuedConnection);
+                  break;
+                  }
             QMetaObject::invokeMethod(this, [this, r]() { onResult(r); }, Qt::QueuedConnection);
             }
       in->vst->endExport();
@@ -435,6 +454,29 @@ void EvenAutoMeasurer::worker(Instance* in)
 #else
       Q_UNUSED(in);
 #endif
+      }
+
+//---------------------------------------------------------
+//   lost
+//    an instance whose helper ended: dropped (its worker has stopped), its jobs loaded for again, at most
+//    MAX_LOST times a session per instance (a patch that crashes its helper each time is marked failed)
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::lost(const QString& key, const std::vector<EvenAuto::Job>& jobs)
+      {
+      auto i = _instances.find(key);
+      if (i != _instances.end()) {
+            if (i->second->thread.joinable())
+                  i->second->thread.join();
+            _instances.erase(i);
+            }
+      const int n = ++_lost[key];
+      logLine(QString("even levels: %1's helper ended (%2 time(s)), %3 job(s) loaded for again").arg(key).arg(n).arg(jobs.size()));
+      if (n > MAX_LOST)
+            _failed.insert(key);
+      for (const EvenAuto::Job& job : jobs)
+            dispatch(job);
+      updateLive();
       }
 
 //---------------------------------------------------------

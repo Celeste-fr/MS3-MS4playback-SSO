@@ -100,6 +100,9 @@ namespace Ms {
 
 extern MasterSynthesizer* synti;
 extern QString dataPath;
+#ifdef USE_PORTAUDIO
+extern QString (*paTimingExtra)();        // (audiodrivers/pa.cpp: MS_AUDIO_TIMING's line)
+#endif
 
 //---------------------------------------------------------
 //   SoundLibraryHost
@@ -124,6 +127,22 @@ SoundLibraryHost::SoundLibraryHost()
             const std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
             return library ? setupParameterValue(*library, patch, param) : -1.0;
             });
+#ifdef USE_VST3
+#ifdef USE_PORTAUDIO
+      // (MS_AUDIO_TIMING's line: the helpers' audio round trips of the play, or that the instances are in MuseScore's process)
+      paTimingExtra = []() {
+            const int k = Vst3Remote::processes();
+            const QString rt = Vst3Remote::timingSummary(true);
+            return k > 0 ? QString("helpers: %1 (up to %2)%3").arg(Vst3Remote::running()).arg(k).arg(rt.isEmpty() ? QString() : "; " + rt)
+                         : QString("instances in MuseScore's process");
+            };
+#endif
+      // (the helpers' starts, allocators, ends and the fall-back to MuseScore's process: in load times.log, any thread)
+      Vst3Remote::setLog([](const QString& line) {
+            if (const std::shared_ptr<const SoundLib::Library> library = SoundLib::current())
+                  logLoadTime(*library, "Helpers: " + line);
+            });
+#endif
 #ifdef USE_VST3
       _preloadTimer.setSingleShot(true);
       connect(&_preloadTimer, &QTimer::timeout, this, &SoundLibraryHost::preloadStep);
@@ -1246,11 +1265,13 @@ QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, c
 //    sample again. Kept only when it is Kontakt's state with the same program loaded
 //---------------------------------------------------------
 
-static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundLib::LibInstrument& li, const QByteArray& made)
+static void resave(Vst3Plugin* p, const SoundLib::Library& library, const SoundLib::LibInstrument& li, const QByteArray& made,
+                   const QByteArray* fetched = nullptr)
       {
       QElapsedTimer t;
       t.start();
-      const QByteArray state = p->state();
+      // (a remote instance's state was read on its load's worker thread right after its setState, where this read it)
+      const QByteArray state = fetched ? *fetched : p->state();
       QString name, madeName;
       QByteArray component, controller, madeComponent, madeController;
       if (!readState(state, &name, &component, &controller) || !readState(made, &madeName, &madeComponent, &madeController)) {
@@ -1594,7 +1615,7 @@ static QString ms(double v)
       }
 
 void SoundLibraryHost::setupLoaded(Vst3Plugin* p, const SoundLib::Library& library, const QString& patch, const QByteArray& state,
-                                   double setupMs)
+                                   double setupMs, const QByteArray* fetched)
       {
       const SoundLib::LibInstrument* li = findPatch(library, patch);
       if (loadedStateObserver())
@@ -1608,7 +1629,7 @@ void SoundLibraryHost::setupLoaded(Vst3Plugin* p, const SoundLib::Library& libra
               .arg(state.size() / 1024).arg(ms(setupMs)).arg(ms(tm.component)).arg(ms(tm.controllerComponent))
               .arg(tm.controller > 0 ? " + " + ms(tm.controller) : QString()).arg(ms(tm.mapping)));
       if (makesSetups(library) && li && !li->nki.isEmpty() && !resaved)
-            resave(p, library, *li, state);
+            resave(p, library, *li, state, fetched);
       }
 #else
 std::set<QString>& SoundLibraryHost::untunable()
@@ -1985,23 +2006,58 @@ void SoundLibraryHost::checkHostProcesses()
       {
 #ifdef USE_VST3
       Vst3Synth* vst = synth();
+      const std::vector<int> ended = Vst3Remote::takeEnded();
       if (!vst)
             return;
       QStringList lost;
+      std::vector<int> lostSlots;
       for (int k = 0; k < vst->slotCount(); ++k) {
             const Vst3Plugin* p = vst->plugin(k);
-            if (p && !p->alive() && !_lostSlots.count(k)) {
-                  _lostSlots.insert(k);
+            if (p && !p->alive()) {
+                  lostSlots.push_back(k);
                   lost << _slots[size_t(k)].instrument;
                   }
-            else if (p && p->alive())
-                  _lostSlots.erase(k);
             }
-      if (lost.isEmpty())
+      // (spares in a helper that ended: nothing to keep)
+      _spares.erase(std::remove_if(_spares.begin(), _spares.end(), [](const Spare& sp) { return !sp.plugin || !sp.plugin->alive(); }),
+                    _spares.end());
+      if (lostSlots.empty())
             return;
-      qWarning("Sound library: a plug-in host process ended: %s", qPrintable(lost.join(", ")));
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      // (a patch whose helper ended three times this session isn't loaded again: it would only end it again)
+      // (by library and patch: another library's patch of that name is another patch)
+      QStringList given;
+      for (const QString& name : lost) {
+            const QString key = (library ? library->name : QString()) + "|" + name;
+            if (++_crashes[key] >= MAX_HELPER_ENDS) {
+                  _crashedPatches.insert(key);
+                  given << name;
+                  }
+            }
+      const QString line = QString("A helper ended (%1): %2 silent; %3").arg(ended.empty() ? QString("its instances") : QString("helper %1")
+                                                                                .arg(ended.front()))
+                           .arg(lost.join(", "))
+                           .arg(given.isEmpty() ? QString("loading them again in a new one")
+                                                : QString("not loaded again (it ended %1 times): %2").arg(MAX_HELPER_ENDS).arg(given.join(", ")));
+      qWarning("Sound library: %s", qPrintable(line));
+      if (library)
+            logTime(*library, line);
       if (mscore)
-            mscore->showMessage(tr("A plug-in host process ended (%1): loading again…").arg(lost.join(", ")), 10000);
+            mscore->showMessage(given.isEmpty() ? tr("The sound library's helper process ended (%1): loading again…").arg(lost.join(", "))
+                                                : tr("The sound library's helper process ended again: %1 not loaded").arg(given.join(", ")), 15000);
+      // (a playback stops, its instances load again in the background, and it plays on from where it was: as after a change
+      // that needs patches, GoOnPlaying)
+      const GoOnPlaying goOn;
+      for (int k : lostSlots) {
+            if (_slots[size_t(k)].editor)
+                  _slots[size_t(k)].editor->close();
+            vst->setPlugin(k, nullptr);
+            const QString part = _slots[size_t(k)].part;
+            _slots[size_t(k)] = Slot();
+            _slots[size_t(k)].part = part;
+            }
+      applyLinks();
+      emit changed();
       if (_slotScore)
             preloadSoon(const_cast<MasterScore*>(_slotScore));
 #endif
@@ -2334,6 +2390,15 @@ struct SoundLibraryHost::Pending {
       bool loaded { false };
       double wall { 0 }, loggedMs { 0 }, settleMs { 0 }, valuesMs { 0 }, finishMs { 0 };
       Vst3Plugin::Times times;
+      // in a helper (Vst3Remote::processes(): vst3remote.h): every step that touches the plug-in on the worker thread, so that
+      // the GUI thread never waits on a helper: the instance made there (create: plugin is null until then), its state read
+      // for the resave (fetchState: a made setup not yet resaved; fetched), settled and its parameters read (settled)
+      bool remote { false };
+      bool create { false };
+      QString path;
+      bool fetchState { false };
+      QByteArray fetched;
+      bool settled { false };
       };
 
 //---------------------------------------------------------
@@ -2352,13 +2417,19 @@ static bool setStateWaiting(Vst3Plugin* p, const QByteArray& state, double limit
       if (limit <= 0)
             return p->setState(state);
       std::lock_guard<std::mutex> serial(backgroundLoadMutex());
-      const BackgroundLoad since;
+      p->markBackground();                // (the instance's process's threads: a remote one's, its helper's)
       const bool ok = p->setState(state);
       if (ok) {
-            *background = since.wait(limit);
+            *background = p->waitBackground(limit);
             *waited = true;
             }
       return ok;
+      }
+
+bool SoundLibraryHost::needsResave(const SoundLib::Library& library, const QString& patch)
+      {
+      const SoundLib::LibInstrument* li = findPatch(library, patch);
+      return makesSetups(library) && li && !li->nki.isEmpty() && !readMade(library).value(patch).toObject().value("resaved").toBool();
       }
 
 struct SoundLibraryHost::Batch {
@@ -2408,11 +2479,14 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
       // its memory: what the process grew by, as it loaded and 3 s later (Kontakt goes on
       // loading samples) when no other load started meanwhile
       pl->memoryBefore = processMemory();
+      pl->remote = Vst3Remote::processes() > 0;
+      pl->path = path;
       QElapsedTimer t;
       t.start();
       if (setup) {
+            // (a spare in a helper busy with another load would wait for it: a new instance in a free one instead)
             auto i = std::find_if(_spares.begin(), _spares.end(), [&path](const Spare& sp) {
-                  return sp.plugin && sp.plugin->path() == path;
+                  return sp.plugin && sp.plugin->path() == path && sp.plugin->alive() && !sp.plugin->busy();
                   });
             if (i != _spares.end()) {
                   qDebug("Sound library: the instance of %s loads %s", qPrintable(i->slot.instrument), qPrintable(name));
@@ -2420,7 +2494,9 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
                   _spares.erase(i);
                   }
             }
-      if (!pl->plugin) {
+      if (!pl->plugin && pl->remote)
+            pl->create = true;            // (made by its worker in a helper: startSetState)
+      else if (!pl->plugin) {
             QString err;
             pl->plugin = Vst3Plugin::load(path, MScore::sampleRate, 4096, &err);
             if (!pl->plugin) {
@@ -2461,9 +2537,12 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
                         }
                   }
             pl->setupMs = t.nsecsElapsed() / 1e6;
+            pl->fetchState = pl->remote && needsResave(library, name);
             if (!pl->state.isEmpty())
                   startSetState(pl.get(), pl->state, library.backgroundLoad);
             }
+      if (pl->create && !pl->done.valid())
+            startSetState(pl.get(), QByteArray(), 0);       // (no setup: the instance alone, made on the worker)
       return pl;
       }
 
@@ -2476,10 +2555,43 @@ std::unique_ptr<SoundLibraryHost::Pending> SoundLibraryHost::beginLoad(int slot,
 
 void SoundLibraryHost::startSetState(Pending* pl, const QByteArray& state, double backgroundLimit)
       {
+      pl->clock.start();
+      if (pl->remote) {
+            // (in a helper: the instance made here when it is new, then setState, the state read for its resave, settled and
+            // its parameters read, every step on this worker: the GUI thread never waits on a helper busy with a load. The
+            // same calls in the same order on the instance as below and in finishLoad. The Pending stays in _pending,
+            // untouched by the GUI thread, until done)
+            const double rate = MScore::sampleRate;
+            pl->done = std::async(std::launch::async, [pl, state, backgroundLimit, rate]() {
+                  LagProbe::nameThread("library load");
+                  workerThread(true);
+                  bool ok = true;
+                  if (!pl->plugin) {
+                        QElapsedTimer t;
+                        t.start();
+                        pl->plugin = Vst3Plugin::load(pl->path, rate, 4096, &pl->error, pl->name);
+                        pl->createMs = t.nsecsElapsed() / 1e6;
+                        ok = pl->plugin != nullptr;
+                        pl->clock.start();      // (its setState's time from here)
+                        }
+                  if (ok && !state.isEmpty()) {
+                        ok = setStateWaiting(pl->plugin.get(), state, backgroundLimit, &pl->background, &pl->backgroundWaited);
+                        if (ok) {
+                              if (pl->fetchState)
+                                    pl->fetched = pl->plugin->state();
+                              pl->plugin->settle();
+                              pl->plugin->prefetchParameters();
+                              pl->settled = true;
+                              }
+                        }
+                  workerThread(false);
+                  return ok;
+                  });
+            return;
+            }
       Vst3Plugin* p = pl->plugin.get();
       BackgroundLoad::Result* background = &pl->background;
       bool* waited = &pl->backgroundWaited;
-      pl->clock.start();
       pl->done = std::async(std::launch::async, [p, background, waited, state, backgroundLimit]() {
             LagProbe::nameThread("library load");
             workerThread(true);
@@ -2499,13 +2611,33 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
       {
       LagProbe::Scope probe("SoundLibraryHost::finishLoad");
       const bool threaded = true;               // (every setState on a worker thread since 2026-10-24: startSetState)
+      // (in a helper, made by its worker: none when that failed)
+      if (pl->create && pl->stage == 0) {
+            const bool hasSetState = pl->setup && !pl->state.isEmpty();
+            if (!hasSetState && pl->done.valid())
+                  pl->done.get();
+            if (!pl->plugin) {
+                  if (hasSetState && pl->done.valid())
+                        pl->done.get();
+                  const QString message = tr("The plug-in could not be loaded for %1: %2").arg(pl->name, pl->error);
+                  logTime(library, message);
+                  if (mscore)
+                        mscore->showMessage(message, 10000);
+                  return;
+                  }
+            const Vst3Plugin::Times& tm = pl->plugin->times();
+            logTime(library, QString("%1: a new instance of the plug-in in %2 ms in helper %3 (module %4, create %5, buses %6, activate %7 ms%8)")
+                    .arg(pl->name, ms(pl->createMs)).arg(pl->plugin->hostProcess()).arg(ms(tm.module), ms(tm.create), ms(tm.buses), ms(tm.activate))
+                    .arg(pl->plugin->singleComponent() ? "; component and controller one object" : ""));
+            }
       if (pl->stage == 1) {
             // (a made setup's copies' tunings, set on a worker thread after its first load: as before, here)
             QElapsedTimer st;
             st.start();
             const double tuneWall = pl->clock.nsecsElapsed() / 1e6;
             if (pl->done.valid() && pl->done.get()) {
-                  pl->plugin->settle();
+                  if (!pl->settled)
+                        pl->plugin->settle();
                   pl->cents = pl->tuneAfter;
                   logTime(library, QString("%1: its %2 tuning(s) set after its first load, in %3 ms")
                           .arg(pl->name).arg(pl->cents.size()).arg(ms(tuneWall)));
@@ -2538,15 +2670,16 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
       if (loaded) {
             QElapsedTimer st;
             st.start();
-            setupLoaded(pl->plugin.get(), library, pl->name, pl->state, pl->setupMs);
+            setupLoaded(pl->plugin.get(), library, pl->name, pl->state, pl->setupMs, pl->settled && pl->fetchState ? &pl->fetched : nullptr);
             loggedMs = st.nsecsElapsed() / 1e6;
             st.restart();
             // its own script initialised before it goes into its slot and the part's controllers are set
             // (Vst3Plugin::settle: Kontakt's engine runs only once the plug-in processes, and a live
             // instance processes only from its first note on; until then SSO's patches were "NOT
             // INITIALISED", and the controllers set at score open were lost when they initialised: a
-            // score's mic positions were heard only from the second play or export on)
-            pl->plugin->settle();
+            // score's mic positions were heard only from the second play or export on). In a helper: done on its worker
+            if (!pl->settled)
+                  pl->plugin->settle();
             settleMs = st.nsecsElapsed() / 1e6;
             st.restart();
             recordSetupValues(pl->plugin.get(), library, pl->name);
@@ -2568,6 +2701,8 @@ void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::L
                         pl->valuesMs = valuesMs;
                         pl->times = tm;
                         pl->finishMs = t.nsecsElapsed() / 1e6;
+                        pl->settled = false;
+                        pl->fetchState = false;
                         startSetState(pl.get(), tuned, 0);  // (setState alone, as before: no background wait)
                         _pending.push_back(std::move(pl));
                         return;
@@ -2888,6 +3023,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       // an instance per route, or (hosted slots) a patch's copies in one, each slot tuned by Kontakt's Tune
       // (SoundLib::instances); a patch whose setup can't be tuned: an instance per copy, plain
       for (const SoundLib::Instance& in : SoundLib::instances(score->masterScore(), *library, routes)) {
+            if (_crashedPatches.count(library->name + "|" + in.instrument->name))
+                  continue;             // (its helper ended again and again: checkHostProcesses)
             const bool setup = hasSetup(*library, in.instrument->name);
             if (in.tuned() && untunable().count(in.instrument->name)) {
                   for (int k : in.routes)
@@ -2946,6 +3083,16 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             vst->setPlugin(n.slot, std::move(i->plugin));
             _spares.erase(i);
             qDebug("Sound library: %s kept (slot %d)", qPrintable(n.name), n.slot);
+            }
+
+      // in helpers, several load at once (one each): the biggest first, so that they spread over the helpers and the last to
+      // finish is a small one (longest processing time first; a setup's size stands for its load time: the string
+      // Performance patches' states are the biggest, 10-14 MB, and the slowest, oop-load)
+      if (Vst3Remote::processes() > 1 && toLoad.size() > 1) {
+            auto weight = [&library](const Need* n) {
+                  return QFileInfo(setupFile(*library, n->name)).size() * qint64(std::max<size_t>(1, n->cents.size()));
+                  };
+            std::stable_sort(toLoad.begin(), toLoad.end(), [&weight](const Need* a, const Need* b) { return weight(a) > weight(b); });
             }
 
       // which loads happen when (the owner, 2026-09-28: the Performance patches loaded at every play):
@@ -3294,12 +3441,15 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
             }
       Slot& s = _slots[slot];
       if (p->remote()) {
-            // (in a host process: its window, that process's)
-            if (!p->showRemoteEditor(QString("%1 – %2 (%3)").arg(s.instrument, p->name(), s.part))) {
+            // (in a helper: its window, that helper's; while the helper loads, it opens once that is done)
+            bool later = false;
+            if (!p->showRemoteEditor(QString("%1 – %2 (%3)").arg(s.instrument, p->name(), s.part), &later)) {
                   if (error)
                         *error = tr("%1 has no editor.").arg(p->name());
                   return false;
                   }
+            if (later && mscore)
+                  mscore->showMessage(tr("The window of %1 opens once its helper process has loaded what it is loading.").arg(s.instrument), 5000);
             return true;
             }
       if (s.editor) {
@@ -3337,11 +3487,12 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
 //    instance is made and before an offline render plays it (audio/vst3/backgroundload.h); logged in load times.log
 //---------------------------------------------------------
 
-static void waitForBackgroundLoad(const SoundLib::Library& library, const BackgroundLoad& since, const QString& patch)
+static void waitForBackgroundLoad(const SoundLib::Library& library, Vst3Plugin* p, const QString& patch)
       {
-      if (library.backgroundLoad <= 0)
+      if (library.backgroundLoad <= 0 || !p)
             return;
-      const BackgroundLoad::Result r = since.wait(library.backgroundLoad);
+      // (since the instance was made: its process's threads, a remote instance's its helper's)
+      const BackgroundLoad::Result r = p->waitBackground(library.backgroundLoad);
       const QString line = QString("%1: its background load %2 in %3 s (%4 new threads, the busiest's last %5 ms: %6; "
                                    "memory %7 MB)")
                            .arg(patch, r.quiet ? QString("done") : QString("NOT done (the limit)"))
@@ -3384,8 +3535,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             const SoundLib::Route* r = routeAt(in.slot);
             if (!r || (parts && !parts->count(r->part)))
                   continue;
-            const BackgroundLoad since;
-            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error, in.instrument->name);
             if (!p)
                   return nullptr;
             QString e;
@@ -3394,7 +3544,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
                 && !SoundLibraryHost::loadInstanceSetup(p.get(), *library, in.instrument->name, in.cents, path, &e, &tuned, score,
                                                          r->part))   // (its state settings: stateValuesFor)
                   qWarning("Sound library: %s", qPrintable(e));
-            waitForBackgroundLoad(*library, since, in.instrument->name);
+            waitForBackgroundLoad(*library, p.get(), in.instrument->name);
             if (in.tuned() && !tuned && in.multi()) {
                   // (its setup isn't Kontakt's: the other copies an instance each, plain)
                   for (size_t i = 1; i < in.routes.size(); ++i) {
@@ -3433,15 +3583,14 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const 
       std::shared_ptr<Vst3Synth> own(new Vst3Synth);
       own->init(sampleRate);
       own->setVarispeed(library->varispeed);
-      const BackgroundLoad since;
-      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error);
+      std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error, r.instrument->name);
       if (!p)
             return nullptr;
       QString e;
       if (SoundLibraryHost::hasSetup(*library, r.instrument->name)
           && !SoundLibraryHost::loadSetup(p.get(), *library, r.instrument->name, path, &e, score, r.part))
             qWarning("Sound library: %s", qPrintable(e));
-      waitForBackgroundLoad(*library, since, r.instrument->name);
+      waitForBackgroundLoad(*library, p.get(), r.instrument->name);
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       LibraryControllers::applyParameters(p.get(), r, Automation::read(score->masterScore()), nullptr);
       own->setParameterIds(0, parameterIds(p.get(), r, routes));
@@ -3458,6 +3607,12 @@ struct SoundLibraryExport::InstanceLoad {
       std::future<bool> done;                   // setState on its worker (valid: a setup to load)
       bool failed { false };                    // begin's error: finish gives nullptr
       QString error;
+      // in a helper (as SoundLibraryHost::Pending): made, set, its state read for the resave, settled and its parameters
+      // read on the worker, the main thread never waiting on a helper
+      bool remote { false };
+      bool fetchState { false };
+      QByteArray fetched;
+      bool settled { false };
       ~InstanceLoad()
             {
             if (done.valid())
@@ -3489,11 +3644,48 @@ SoundLibraryExport::beginInstance(Score* score, const SoundLib::Route& r, float 
             l->own.reset(new Vst3Synth);
             l->own->init(sampleRate);
             l->own->setVarispeed(library->varispeed);
-            l->plugin = Vst3Plugin::load(path, sampleRate, 4096, &l->error);
-            if (!l->plugin)
-                  l->failed = true;
+            l->remote = Vst3Remote::processes() > 0;
+            if (!l->remote) {
+                  l->plugin = Vst3Plugin::load(path, sampleRate, 4096, &l->error);
+                  if (!l->plugin)
+                        l->failed = true;
+                  }
             }
-      if (!l->failed && SoundLibraryHost::hasSetup(*library, r.instrument->name)) {
+      if (!l->failed && l->remote) {
+            // (in a helper: every step that touches the plug-in on the worker; the helper that hosts the playback's
+            // instance of the same patch first, Kontakt sharing its samples there)
+            QString e;
+            if (SoundLibraryHost::hasSetup(*library, r.instrument->name)) {
+                  QElapsedTimer t;
+                  t.start();
+                  l->state = SoundLibraryHost::setupState(*library, r.instrument->name, path, &e, nullptr, r.part);
+                  l->setupMs = t.nsecsElapsed() / 1e6;
+                  if (l->state.isEmpty())
+                        qWarning("Sound library: %s", qPrintable(e));
+                  l->fetchState = !l->state.isEmpty() && SoundLibraryHost::needsResave(*library, r.instrument->name);
+                  }
+            InstanceLoad* lp = l.get();
+            const QString patch = r.instrument->name;
+            l->done = std::async(std::launch::async, [lp, path, sampleRate, patch]() {
+                  LagProbe::nameThread("even levels: setState");
+                  SoundLibraryHost::workerThread(true);
+                  lp->plugin = Vst3Plugin::load(path, sampleRate, 4096, &lp->error, patch);
+                  bool ok = lp->plugin != nullptr;
+                  if (ok && !lp->state.isEmpty()) {
+                        ok = lp->plugin->setState(lp->state);
+                        if (ok) {
+                              if (lp->fetchState)
+                                    lp->fetched = lp->plugin->state();
+                              lp->plugin->settle();
+                              lp->plugin->prefetchParameters();
+                              lp->settled = true;
+                              }
+                        }
+                  SoundLibraryHost::workerThread(false);
+                  return ok;
+                  });
+            }
+      else if (!l->failed && SoundLibraryHost::hasSetup(*library, r.instrument->name)) {
             // (loadSetup's steps: the state made here, set on the worker; an empty one: loadSetup's false, warned)
             QElapsedTimer t;
             t.start();
@@ -3533,12 +3725,20 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::finishInstance(InstanceLoad* l, S
             }
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       const SoundLib::Route& r = l->route;
+      const bool set = l->done.valid() && l->done.get();
       Vst3Plugin* p = l->plugin.get();
-      if (l->done.valid()) {
-            // (loadSetup's rest, on the main thread as there)
-            if (l->done.get() && library) {
-                  SoundLibraryHost::setupLoaded(p, *library, r.instrument->name, l->state, l->setupMs);
-                  p->settle();
+      if (!p) {
+            if (error)
+                  *error = l->error;
+            return nullptr;
+            }
+      if (!l->state.isEmpty()) {
+            // (loadSetup's rest, on the main thread as there; in a helper settled on the worker)
+            if (set && library) {
+                  SoundLibraryHost::setupLoaded(p, *library, r.instrument->name, l->state, l->setupMs,
+                                                l->settled && l->fetchState ? &l->fetched : nullptr);
+                  if (!l->settled)
+                        p->settle();
                   SoundLibraryHost::recordSetupValues(p, *library, r.instrument->name);
                   }
             else {

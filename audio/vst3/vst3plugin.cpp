@@ -10,6 +10,7 @@
 
 #include "vst3plugin.h"
 #include "processallocator.h"
+#include "backgroundload.h"
 #include "vst3remote.h"
 // (kthost: built without libmscore, tools/soundlibraries/kthost; the host process MuseScoreLibraryHost too: vst3remote.h)
 #if !defined(VST3PLUGIN_NO_SETTINGS) && !defined(VST3_HOST_CHILD)
@@ -371,6 +372,28 @@ class Vst3PluginPrivate {
       bool remoteSingle { false };
       bool shadowVarispeed { false };     // (setPitch's, for pitch())
       double shadowTarget { 1.0 };
+      // what was last read or set of a remote instance's parameters: MuseScore's GUI thread doesn't wait on a helper
+      // busy with a load for what it can do without (parameters(), parameter(): from here while busy; vst3remote.h)
+      mutable std::mutex cacheMutex;
+      mutable bool paramsValid { false };
+      mutable std::vector<Vst3Plugin::Parameter> params;
+      mutable std::map<unsigned, double> values;
+      void cacheParameters(const std::vector<Vst3Plugin::Parameter>& list) const
+            {
+            std::lock_guard<std::mutex> lock(cacheMutex);
+            params = list;
+            paramsValid = true;
+            }
+      // (a setState changed them: kept, not cleared. The cache answers only while the helper is busy, and then what was
+      // last known is the best answer there is without waiting; once it is free every read asks it again and stores the
+      // answer. Cleared, the GUI thread waited for a busy helper after another instance's setState in it: the
+      // remoteParallelLoad test, 1.15 s)
+      void forgetParameters()
+            {
+            }
+
+      // BackgroundLoad: the threads before the instance was made (or markBackground)
+      std::unique_ptr<BackgroundLoad> since;
 
       bool setup();
       void startProcessing();
@@ -501,9 +524,19 @@ void Vst3Plugin::prepareHosts(const QString& path, int instances)
       Vst3Remote::prepare(path, instances);
       }
 
-void Vst3Plugin::shutdownHosts()
+void Vst3Plugin::shutdownHosts(bool quick)
       {
-      Vst3Remote::shutdown();
+      Vst3Remote::shutdown(quick);
+      }
+
+bool Vst3Plugin::busy() const
+      {
+      return d->remote && d->remote->busy();
+      }
+
+qint64 Vst3Plugin::hostPid() const
+      {
+      return d->remote ? d->remote->pid() : -1;
       }
 
 bool Vst3Plugin::remote() const
@@ -597,7 +630,7 @@ bool Vst3Plugin::classInfo(const QString& path, QString* name, quint32 uid[4], Q
       return true;
       }
 
-std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleRate, int maxBlock, QString* error)
+std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleRate, int maxBlock, QString* error, const QString& patch)
       {
       auto fail = [error](const QString& msg) {
             if (error)
@@ -615,15 +648,20 @@ std::unique_ptr<Vst3Plugin> Vst3Plugin::load(const QString& path, double sampleR
       if (Vst3Remote::processes() > 0) {
             QString err;
             QByteArray reply;
-            p->d->remote = Vst3Remote::Instance::load(path, sampleRate, maxBlock, &err, &reply);
-            if (!p->d->remote)
+            bool noHelper = false;
+            p->d->remote = Vst3Remote::Instance::load(path, sampleRate, maxBlock, patch, &err, &reply, &noHelper);
+            if (p->d->remote) {
+                  QDataStream ds(reply);
+                  ds.setVersion(QDataStream::Qt_5_12);
+                  ds >> p->d->name >> p->d->remoteSingle;
+                  readTimes(ds, &p->d->times);
+                  return p;
+                  }
+            if (!noHelper)
                   return fail(err);
-            QDataStream ds(reply);
-            ds.setVersion(QDataStream::Qt_5_12);
-            ds >> p->d->name >> p->d->remoteSingle;
-            readTimes(ds, &p->d->times);
-            return p;
+            // (no helper could be started: in MuseScore's process, as before; Vst3Remote said so once)
             }
+      p->d->since.reset(new BackgroundLoad);
 
       QElapsedTimer clock;
       clock.start();
@@ -1025,8 +1063,9 @@ void Vst3Plugin::processDirect(int frames, float* buffer)
 void Vst3Plugin::idle(std::mutex* processing)
       {
       if (d->remote) {
-            QByteArray reply;
-            d->remote->tryCall(Vst3Remote::Op::IDLE, QByteArray(), &reply);       // (skipped while it loads another)
+            // (not waited for; skipped while its helper loads: its own editor's changes wait for it)
+            if (!d->remote->busy())
+                  d->remote->call(Vst3Remote::Op::IDLE, QByteArray(), nullptr, false, false);
             return;
             }
       std::vector<std::pair<ParamID, ParamValue>> changes;
@@ -1167,6 +1206,8 @@ bool Vst3Plugin::setState(const QByteArray& state)
                   ds >> ok;
                   readTimes(ds, &d->times);
             }
+            d->forgetParameters();
+            d->titleIndexValid = false;
             d->remote->loaded();
             return ok;
             }
@@ -1254,14 +1295,89 @@ double Vst3Plugin::secondsSinceState() const
 //   createEditor
 //---------------------------------------------------------
 
-bool Vst3Plugin::showRemoteEditor(const QString& title)
+bool Vst3Plugin::showRemoteEditor(const QString& title, bool* later)
       {
-      if (!d->remote)
+      if (later)
+            *later = false;
+      if (!d->remote || !d->remote->alive())
             return false;
-      REMOTE_REPLY(ds, Vst3Remote::Op::SHOW_EDITOR, remoteArgs([&](QDataStream& a) { a << title; }), false);
+      // (its window comes to the front: Windows lets only the foreground process give that away)
+      Vst3Remote::allowForeground(d->remote->pid());
+      const QByteArray args = remoteArgs([&](QDataStream& a) { a << title; });
+      if (d->remote->busy()) {
+            // (its helper loads: the window opens once it is done, not waited for here)
+            d->remote->call(Vst3Remote::Op::SHOW_EDITOR, args, nullptr, false, false);
+            if (later)
+                  *later = true;
+            return true;
+            }
+      REMOTE_REPLY(ds, Vst3Remote::Op::SHOW_EDITOR, args, false);
       bool ok = false;
       ds >> ok;
       return ok;
+      }
+
+void Vst3Plugin::closeRemoteEditor()
+      {
+      if (d->remote && d->remote->alive())
+            d->remote->call(Vst3Remote::Op::CLOSE_EDITOR, QByteArray(), nullptr, false, false);
+      }
+
+void Vst3Plugin::prefetchParameters()
+      {
+      if (!d->remote)
+            return;
+      bool ok = false;
+      const QByteArray reply = d->remote->call(Vst3Remote::Op::PARAMETER_VALUES, QByteArray(), &ok);
+      if (!ok)
+            return;
+      QDataStream ds(reply);
+      ds.setVersion(QDataStream::Qt_5_12);
+      std::vector<Parameter> params;
+      std::map<unsigned, double> values;
+      quint32 n = 0;
+      ds >> n;
+      for (quint32 i = 0; i < n && ds.status() == QDataStream::Ok; ++i) {
+            quint32 id;
+            QString title, units;
+            qint32 steps, flags, unit;
+            double v;
+            ds >> id >> title >> units >> steps >> flags >> unit >> v;
+            params.push_back({ id, title, units, steps, flags, unit });
+            values[id] = v;
+            }
+      std::lock_guard<std::mutex> lock(d->cacheMutex);
+      d->params = params;
+      d->paramsValid = true;
+      d->values = values;
+      }
+
+void Vst3Plugin::markBackground()
+      {
+      if (d->remote) {
+            d->remote->call(Vst3Remote::Op::BACKGROUND_MARK, QByteArray());
+            return;
+            }
+      d->since.reset(new BackgroundLoad);
+      }
+
+BackgroundLoad::Result Vst3Plugin::waitBackground(double limitSeconds)
+      {
+      BackgroundLoad::Result r;
+      if (d->remote) {
+            bool ok = false;
+            const QByteArray reply = d->remote->call(Vst3Remote::Op::BACKGROUND_WAIT, remoteArgs([&](QDataStream& a) { a << limitSeconds; }), &ok);
+            QDataStream ds(reply);
+            ds.setVersion(QDataStream::Qt_5_12);
+            qint32 threads = 0;
+            if (ok)
+                  ds >> r.seconds >> r.quiet >> threads >> r.busiest >> r.memoryMB;
+            r.threads = threads;
+            return r;
+            }
+      if (!d->since)
+            d->since.reset(new BackgroundLoad);
+      return d->since->wait(limitSeconds);
       }
 
 IPlugView* Vst3Plugin::createEditor()
@@ -1432,7 +1548,15 @@ QByteArray Vst3Plugin::controllerState() const
 std::vector<Vst3Plugin::Parameter> Vst3Plugin::parameters() const
       {
       if (d->remote) {
-            REMOTE_REPLY(ds, Vst3Remote::Op::PARAMETERS, QByteArray(), false);
+            if (d->remote->busy()) {
+                  std::lock_guard<std::mutex> lock(d->cacheMutex);
+                  if (d->paramsValid)
+                        return d->params;
+                  }
+            bool ok = false;
+            const QByteArray reply = d->remote->call(Vst3Remote::Op::PARAMETERS, QByteArray(), &ok);
+            QDataStream ds(reply);
+            ds.setVersion(QDataStream::Qt_5_12);
             std::vector<Parameter> params;
             quint32 n = 0;
             ds >> n;
@@ -1443,6 +1567,8 @@ std::vector<Vst3Plugin::Parameter> Vst3Plugin::parameters() const
                   ds >> id >> title >> units >> steps >> flags >> unit;
                   params.push_back({ id, title, units, steps, flags, unit });
                   }
+            if (ok)
+                  d->cacheParameters(params);
             return params;
             }
       std::vector<Parameter> params;
@@ -1509,10 +1635,31 @@ QString Vst3Plugin::looseTitle(const QString& t)
 long Vst3Plugin::parameterId(const QString& title) const
       {
       if (d->remote) {
-            REMOTE_REPLY(ds, Vst3Remote::Op::PARAMETER_ID, remoteArgs([&](QDataStream& a) { a << title; }), false);
-            qint64 id = -1;
-            ds >> id;
-            return long(id);
+            // (its helper's own index, as in MuseScore's process; while the helper is busy, the parameters last read)
+            if (!d->remote->busy()) {
+                  bool ok = false;
+                  const QByteArray reply = d->remote->call(Vst3Remote::Op::PARAMETER_ID, remoteArgs([&](QDataStream& a) { a << title; }), &ok);
+                  QDataStream ds(reply);
+                  ds.setVersion(QDataStream::Qt_5_12);
+                  qint64 id = -1;
+                  ds >> id;
+                  if (ok)
+                        return long(id);
+                  }
+            const QString want = looseTitle(title);
+            if (want.isEmpty())
+                  return -1;
+            std::vector<Parameter> list;
+            {
+                  std::lock_guard<std::mutex> lock(d->cacheMutex);
+                  list = d->params;
+            }
+            if (list.empty())
+                  list = parameters();
+            for (const Parameter& p : list)
+                  if (looseTitle(p.title) == want)
+                        return long(p.id);
+            return -1;
             }
       const QString want = looseTitle(title);
       if (want.isEmpty())
@@ -1544,9 +1691,25 @@ long Vst3Plugin::parameterId(const QString& title) const
 double Vst3Plugin::parameter(unsigned id) const
       {
       if (d->remote) {
-            REMOTE_REPLY(ds, Vst3Remote::Op::PARAMETER, remoteArgs([&](QDataStream& a) { a << quint32(id); }), false);
+            if (d->remote->busy()) {
+                  std::lock_guard<std::mutex> lock(d->cacheMutex);
+                  auto i = d->values.find(id);
+                  if (i != d->values.end())
+                        return i->second;
+                  // (no such parameter in what is known: the plug-in's controller answers 0 for it too)
+                  if (d->paramsValid && std::none_of(d->params.begin(), d->params.end(), [id](const Parameter& p) { return p.id == id; }))
+                        return 0.0;
+                  }
+            bool ok = false;
+            const QByteArray reply = d->remote->call(Vst3Remote::Op::PARAMETER, remoteArgs([&](QDataStream& a) { a << quint32(id); }), &ok);
+            QDataStream ds(reply);
+            ds.setVersion(QDataStream::Qt_5_12);
             double v = 0;
             ds >> v;
+            if (ok) {
+                  std::lock_guard<std::mutex> lock(d->cacheMutex);
+                  d->values[id] = v;
+                  }
             return v;
             }
       return d->controller ? d->controller->getParamNormalized(id) : 0.0;
@@ -1569,18 +1732,24 @@ QString Vst3Plugin::parameterText(unsigned id, double normalized) const
 // (GUI thread, while the audio thread may be in process(): inChanges is the audio thread's, so the
 // processor's change waits with the editor's edits, taken at the next process(); the Controllers
 // window sets parameters live, during playback)
-void Vst3Plugin::setParameter(unsigned id, double normalized)
+void Vst3Plugin::setParameter(unsigned id, double normalized, int sides)
       {
       if (d->remote) {
-            d->remote->call(Vst3Remote::Op::SET_PARAMETER, remoteArgs([&](QDataStream& a) { a << quint32(id) << normalized; }));
+            // the processor's side by the audio channel, taken at the next block exactly as below (a block after this call
+            // plays it, whatever the helper's main thread is doing); the controller's side to the main thread, not waited for
+            d->remote->edit(id, normalized);
+            d->remote->call(Vst3Remote::Op::SET_CONTROLLER_PARAMETER, remoteArgs([&](QDataStream& a) { a << quint32(id) << normalized; }),
+                            nullptr, false, false);
+            std::lock_guard<std::mutex> lock(d->cacheMutex);
+            d->values[id] = qBound(0.0, normalized, 1.0);
             return;
             }
       normalized = qBound(0.0, normalized, 1.0);
-      {
+      if (sides & EDIT_PROCESSOR) {
             std::lock_guard<std::mutex> lock(d->handler.mutex);
             d->handler.edits.emplace_back(id, normalized);
-      }
-      if (d->controller)
+            }
+      if ((sides & EDIT_CONTROLLER) && d->controller)
             d->controller->setParamNormalized(id, normalized);
       }
 
