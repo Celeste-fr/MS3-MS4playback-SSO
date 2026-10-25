@@ -175,6 +175,31 @@ device, exports null; `MS_KHEAP_OFF=1` cures it. Rule: an optimization never cha
   underflow flags, and whether `MS_KHEAP_OFF=1` was set. Nothing without the variable.
 - **ktload** (`tools/soundlibraries/ktload`): `--play s [--block n]` (repeatable), `--rate`, `--note-ms`, `--churn`,
   `--times <file>` (cycle times + the output WAV), `--thread-loads`; kheap's `kheap_scope` around each setState.
+- **Windows build #479** (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40161792540, kheap-realtime @
+  c4d7403594), checked on the VM (`C:\claude\b479\ms`):
+  - load times.log: "allocator: mimalloc (kheap.dll: mimalloc 2.1.7 inside loads, 23 hooks)"; "system (MS_KHEAP_OFF=1)"
+    with the variable.
+  - kheap's scoped mode under stress (`private/kheap-realtime/stress/scoped.cpp`, the build's kheap.dll: 8 threads,
+    1.6 million mallocs / reallocs / frees of every family across threads and scopes, blocks from before the switch):
+    0 bad; outside a scope 1000 of 1000 new blocks the process heap's, inside 1000 of 1000 mimalloc's.
+  - Null test, Whence `--verify-playback --verify-wav`, off / on / on / off (`compare_renders.py`, residual dB; floors
+    off-off, on-on, cross n0-n1, n3-n2): Violins 2 -85.8 / -85.1 / -85.4 / -86.3; Contrabasses -23.6 / -22.7 / -25.5 /
+    -22.0; Violins 1 -8.1 / -6.8 / -6.8 / -7.8; Violas -10.0 / -9.9 / -10.8 / -10.3; Violoncellos -7.1 / -7.5 / -7.1 / -6.7:
+    every cross pair in its floors' range (Violins 2, the deterministic part, -85 dB every way). Its setState sums (one
+    part at a time): off 25.1 / 26.8 s, on 23.9 / 32.1 s (the VM's noise; no gain shown here).
+  - Live playback in the desktop session (Whence 12-TET into VB-Cable, 60 s, `MS_AUDIO_TIMING`, 13.06 ms callbacks),
+    on / off / on / off: callbacks over budget 14 / 43 / 183 / 392, PortAudio underflow flags 0 / 1 / 6 / 57, recorded
+    silence gaps 22 / 21 / 40 / 217. The VM itself underruns (4 vCPU, ten instances); scoped is no worse than the
+    system allocator in either pair. `MS_AUDIO_TIMING`'s over-budget count follows the recorded gaps.
+- **For the owner** (his PC decides): play Whence (or what crackled) with #479 as it starts, then again with
+  `MS_KHEAP_OFF=1`, both with `MS_AUDIO_TIMING=<file>` set (the same file is fine: each stop adds a line saying which).
+  Fixed if the default sounds like `MS_KHEAP_OFF=1` and its lines show no more callbacks over budget. If it still
+  crackles: the default goes to the system allocator (kheap not loaded; `ProcessAllocator::start` without kheap.dll).
+  Score-open time against #477 from load times.log ("At score open: … setState …"): the gain the scoped mode keeps.
+- The Ableton kit's kheap (`~/ableton-optimization` branch `kheap`, LiveCached starts `KHEAP=mi`) is the whole-process
+  mode, the same exposure for Live's and Kontakt's audio threads; not installed (install-kheap.patch not applied), only
+  the test kit runs it. Live has no setState hook to scope: don't install it; if wanted, a mode with mimalloc only on
+  Live's main thread would need its own realtime test in Live first.
 
 ## Build for the owner: #477 (2026-10-24)
 
