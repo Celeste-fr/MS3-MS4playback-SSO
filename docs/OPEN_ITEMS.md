@@ -243,9 +243,9 @@ Keep this file current: close an item by deleting it (the commit message says wh
   demo15 / demofine`). MuseScore #458 plays them dark too (`check.py` strum bright: 639 Hz). **Fix**: map `strumLead`
   50 (`Guitar::strumLeadMs`, guitarplayback.cpp: the set-up 50 ms before the strum key, a previous strum's release moved
   there; at the score's start the set-up stays at 0 and the start lead plays the rest later). StrumLevel re-measured
-  with the lead for all three sets (Pick measured, no longer Finger's). **Left**: a strum on a later chunk's first tick
-  (every 10 bars) still gets its set-up in the strum key's block (the chunk before may release a strum there); Live's
-  clips have no start lead (a strum at 0 in the plain set: dark).
+  with the lead for all three sets (Pick measured, no longer Finger's). **Left**: Live's clips have no start lead (a strum at 0
+  in the plain set: dark). (A strum on a later chunk's first tick gets its set-up strumLead before it since chunk-equal,
+  2026-10-25, as in the whole render: by construction, not in a test.)
 - **W CC11**: CC11 does nothing on Ample by default, so every per-note CC11 level (divisi, track levels, marcato /
   Inspector levels, even levels) never reaches it. Measured 2026-10-21 (`measure_ample.py cc`): with a MIDI-learn entry
   Control ID 16 → M-Master Vol, CC11 acts exactly as CC7 (linear, 64 unity), but the two then overwrite each other (last
@@ -424,10 +424,14 @@ Keep this file current: close an item by deleting it (the commit message says wh
 - **Src**: HANDOFF.md › Even levels; private `sso-legato-fixes/RESULT.md`.
 - **Own**: whether even levels stays on (it is 1 in Recommended).
 
-### 18. Joins across 10-measure chunks and tuning lanes; glissando / ornament velocity
-- **W**: a slur crossing a chunk boundary may re-attack; joins across tuning lanes aren't made; glissando steps and
-  ornament sub-notes keep plain velocity (891a142ed3).
-- **Fix**: carry the join state across chunks.
+### 18. Joins across tuning lanes; glissando / ornament velocity (chunk boundaries: closed 2026-10-25)
+- **Closed** (branch `chunk-equal`, 2026-10-25): live playback's chunks now send what the whole render sends (every event,
+  in order; `MidiRenderer::renderChunk` renders each chunk inside a window of the measures around it: CLAUDE.md › Sound
+  libraries › Chunks; HANDOFF.md › Chunks equal the whole render). The slur re-attack, joins, keepMs, early starts /
+  transitions on a chunk's first tick, bends, switches, pedal, levels, even levels and Ample's strum levels at chunk
+  boundaries are gone (Linux dumps, test `tst_soundlibrary::chunkedEqualsWhole`). **Left**: a chunk rendered before
+  the one before it (a seek, the first after an edit) takes no level from before its window (silent routes only).
+- **W**: joins across tuning lanes aren't made; glissando steps and ornament sub-notes keep plain velocity (891a142ed3).
 
 ### 19. Fast Celli transitions don't finish below ~300 ms a note; SSO's 500 ms transition release
 - **W**: Celli Performance transitions don't complete below ~300 ms per note, in 12-TET too. SSO releases a transition

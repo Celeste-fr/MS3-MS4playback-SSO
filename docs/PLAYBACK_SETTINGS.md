@@ -1130,7 +1130,7 @@ and never less than 15 ms (`MidiRenderer::TRANSITION_MIN_GAP_MS`: SSO's legato e
 to the legato note-on before, at velocity 64 or lower: the audit's DROPPED); a capped transition starts that late. The
 note before still ends `overlap` ms after the moved note-on (`libJoins`), so it stays a transition; the switch and the
 chord's controllers move with it (`libShifts`); its bend's glide is timed from the note-on as played. Not across a
-10-measure chunk or a repeat's start (none can start a chunk: chunks don't break before a library note); Play from a
+repeat's start (and, since chunk-equal 2026-10-25, across a 10-measure chunk as in the whole render); Play from a
 tick pre-rolls to the moved note-on (`PlayStart`). Live: the plain set's clips hold the written notes and LiveTiming
 puts the moved note-on back (Track Delay + MuseScore Link's per-note delays; `tst_liveequivalence::plainWritten`);
 *Live plays the score*'s clips are rendered as played, so they carry it. The audit (`tst_playbackaudit`, `MS_AUDIT_SETTINGS=slurs/transitionsEarly=<n>`)
@@ -1754,8 +1754,8 @@ before. With 1 or 2:
     perfect");
 - only if that moment stays before the route's next note-on / note-off and before any CC11 or dynamics CC the score writes on
   the route (those are mapped by the level in force), inside the render chunk; CC11 levels only (a level on another
-  controller, a marcato's CC1, switches at the note-on). A note-off from an earlier render chunk isn't looked for when the
-  chunk's map doesn't hold it (the first note of such a chunk: with its note-on).
+  controller, a marcato's CC1, switches at the note-on). (Live playback's chunks render inside a window since chunk-equal,
+  2026-10-25: the note before is in the window, as in the whole render.)
 
 Why: Whence's Violas bar 12 (the owner, #470: "when the slur starts. the volume just like jumps in a disjointed way";
 `private/violas-slurstart`): the slur's first note is a plain attack after a staccato G4+50 on the same key and copy, 116 ms
@@ -1939,6 +1939,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Library dynamics CC ahead of the notes at its tick; shorts' velocity on the CC1 scale (calibrated levels off, or not measured) | always | `renderMs4Dynamics`, `libVelocity` | map `<Dynamics cc velocity>` |
 | A lane edited while playing: heard at once (flat lanes' parameters on the instances, the rest rendered again) | always | `SoundLibraryHost::applyPartSettings`, `Seq::renderAgainPlaying` | not a number: no setting |
 | Chunks don't end before a slurred or library note (live playback) | always | `libSlurAcross`, `libNoteAfter` | fixed (correctness: an early start can't cross a chunk) |
+| Chunks rendered inside a window around them (live playback plays the whole render's events) | always | `MidiRenderer::renderChunk`, `libWindow`, `libCut`, `libSnapshotAt` (2026-10-25, chunk-equal; `MS_CHUNK_WINDOWS_OFF=1` to compare) | fixed (correctness: CLAUDE.md › Chunks) |
 | Background loading pauses | 0 ms | `SoundLibraryHost` `INPUT_PAUSE_MS`, `PRELOAD_GAP_MS` | fixed (the owner chose 0) |
 | Prepared states kept (a patch's voice limit and its copies' tunings made once, the very bytes, in memory and in `<setups folder>/prepared`) | always | `SoundLibraryHost` `prepared` (`MS_PREPARED_OFF`: made at each load, to compare) | not a number: load time only, the plug-in gets the same state (2026-10-16, load profile) |
 | mimalloc for the C runtime heap during a plug-in's setState (Windows: kheap.dll, loaded first thing in `main()`, scoped: new blocks from mimalloc only on the thread inside `Vst3Plugin::setState`, every other thread the system allocator) | always (Windows) | `ProcessAllocator::start` / `LoadScope` (`audio/vst3/processallocator.h`, `tools/soundlibraries/kheap`; `MS_KHEAP_OFF=1`: the system allocator, to compare; without kheap.dll: the system allocator; load times.log says which) | not a number: load time only, Kontakt computes the same bytes (renders null at the floor of two passes; 2026-10-23, sso-load: Whence -15 % on the owner's PC, memory +17 %, whole process; 2026-10-24, kheap-realtime: scoped, the whole-process mode crackled the owner's live playback) |

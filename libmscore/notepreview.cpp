@@ -200,6 +200,9 @@ Preview render(MidiRenderer& renderer, const SynthesizerState& synthState, const
             MidiRenderer::Context ctx(synthState);          // (as Seq::renderChunk)
             ctx.metronome = true;
             ctx.renderHarmony = true;
+            // (the chunk's window, its lead-in too: playback's chunks hold only their own events since branch chunk-equal,
+            // as the whole render does, and the state in force at the note may come from before the chunk)
+            renderer.setKeepWindow(true);
             renderer.renderChunk(chunk, events, ctx);
             if (chunkKey)
                   *chunkKey = chunk.utick1();

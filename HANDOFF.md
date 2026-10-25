@@ -104,6 +104,33 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Chunks equal the whole render (branch `chunk-equal`, 2026-10-25, from integrate-1017 0cb99e84be; not merged)
+
+Live playback (Seq: 10-bar chunks) now sends exactly the events the whole-score render sends (export, Live's clips, the
+plain set). A fix, no setting; design: CLAUDE.md › Sound libraries › Chunks, header of `MidiRenderer::renderChunk`.
+- **Found** (`tst_liveequivalence chunkCompare` + `tools/playbackverify/chunk_diff.py`, chunk sizes 10 / 1 / 2 / 3 against
+  one chunk, each chunk in its own map; Whence, the owner's 48-bar copy, share/verifyplayback, the 33 soundlibrary mtest scores (SSO map),
+  Recommended / Library default, Ample with strums; integrate-1017 0cb99e84be): note-ons moved by 1-740 ms (median 69; at
+  Seq's own size in Strings.musicxml: a note at the chunk's first tick 195 ms late, its note before cut late), note-offs
+  -24 .. +734 ms (joins, keepMs), pitch bend in force wrong by up to 74 cents (100 with the 0-everywhere settings) for up
+  to 191 (427) ms (glides lost), CC11 up to 7.8 dB (24 dB) for up to 4 s (a level held from a note > 6 s back,
+  attackLevels), CC1 up to 63 for 10.7 s (chunks of 1-3), switches CC32 moved up to 740 ms, the pedal (CC64) 41 ms late
+  in Piano pedal chords (both presets), CC119 (speedFromWritten) up to 109 for 291 ms, Ample's M-Master Vol 1 tick wrong
+  (0.50 / 0.43) and a keyswitch restated at a chunk's start. Most need a forced break (no clean bar line for 20 bars).
+- **Fix**: each chunk rendered inside a window around it, its own events kept; levels / even levels' glides / even
+  levels' step grid / microtone spellings that last longer than the window come from the window before (renderChunk).
+- **Proved**: every chunked render (sizes 1, 2, 3, 10; own maps and one map; Recommended, Library default, and with
+  plainTiming, transitionLevels, transportReset, hallGuard, fastTransitions, speedFromWritten, fixedTransitions,
+  plainJoins, attackLevels 1 on) byte-identical to the whole render on all the scores above; the whole render and Live's
+  clips byte-identical to before (the plain set is built from those renders: minChunkSize 0, untouched); the audit on
+  Whence and the owner's copy identical. A seek (the middle chunk first): notes identical, CC11 differs only on silent
+  routes (a level from before the first window). Test `tst_soundlibrary::chunkedEqualsWhole` (fails with
+  `MS_CHUNK_WINDOWS_OFF=1`). clickedNote needed `setKeepWindow` (its state in force came from the chunk's restatements).
+- **Untried**: on the VM / with real SSO or Ample (needs a Windows build); the GUI's Seq itself (the harness renders as
+  Seq's background and first fill do). Rendering cost at 10 bars about the same; at the window's 6 s / 4 s margins a
+  note or level lasting longer and not carried would differ (none found). `libSlurAcross` / `libNoteAfter` (chunk
+  breaks avoided at slurs / bar-line notes) are no longer needed but kept (fewer windows).
+
 ## Chunk-end levels (branch `chunk-end-levels`, 2026-10-25, from integrate-1017 6dd53a9e97; not merged)
 
 The owner (live playback, SSO hosted, his Whence with empty bars appended after bar 16 to 48): "after bar 16 at the start of

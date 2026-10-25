@@ -36,6 +36,7 @@
 #include "noteevent.h"
 #include "part.h"
 #include "rendermidi.h"
+#include <limits>
 #include "repeat.h"
 #include "repeatlist.h"
 #include "score.h"
@@ -1802,6 +1803,27 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   auto microtoneSpelling = [&](const Note* note, const SoundLib::Choice& c, const Note* from, int channel, int* key) {
                         libSpellKey.erase(note);
                         libSpellCents.erase(note);
+                        // (playback's chunks render a note in more than one window, renderChunk: its first spelling stays, made
+                        // with the notes before it rendered as the whole score renders them; a whole render spells each once)
+                        const auto memo = libSpelled.find({ note, tickOffset });
+                        if (memo != libSpelled.end()) {
+                              if (memo->second.first >= 0) {
+                                    *key = memo->second.first;
+                                    libSpellKey[note] = memo->second.first;
+                                    libSpellCents[note] = memo->second.second;
+                                    }
+                              return;
+                              }
+                        struct Remember {
+                              std::map<std::pair<const Note*, int>, std::pair<int, double>>& m;
+                              std::pair<const Note*, int> k;
+                              std::map<const Note*, int>& keys;
+                              std::map<const Note*, double>& cents;
+                              ~Remember() {
+                                    auto sk = keys.find(k.first);
+                                    m[k] = sk == keys.end() ? std::make_pair(-1, 0.0) : std::make_pair(sk->second, cents[k.first]);
+                                    }
+                              } remember { libSpelled, { note, tickOffset }, libSpellKey, libSpellCents };
                         auto b = libBend.find(channel);
                         if (!c || c.patch < 0 || b == libBend.end() || size_t(c.patch) >= b->second.size() || b->second[size_t(c.patch)] <= 0)
                               return;
@@ -3862,6 +3884,9 @@ struct MidiRenderer::LibCarry {
             };
       std::map<int, Level> levels;            // route -> the note level in force
       std::map<int, Even> even;               // route -> the even levels' glide in force
+      // (playback's chunks, a window's start: route -> the run going on there, its steps' grid (seconds) and its last
+      // note-on in the window before)
+      std::map<int, std::pair<double, int>> evenRuns;
       };
 
 void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
@@ -3877,6 +3902,10 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
       auto carried = libCarry.find(utick1);
       const std::shared_ptr<LibCarry> from = carried == libCarry.end() ? nullptr : carried->second;
       carryAt(utick2).levels.clear();
+      // (playback's chunks: the levels in force at the next chunk's window's start, renderChunk)
+      const int snapAt = libSnapshotAt > utick1 && libSnapshotAt < utick2 ? libSnapshotAt : -1;
+      if (snapAt >= 0)
+            carryAt(snapAt).levels.clear();
       if (libLevels.empty() && (!from || from->levels.empty()))
             return;
       // (a library whose dynamics are CC11: no plain volume to add volumeDb to)
@@ -4168,7 +4197,25 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             libAttackLevelAt[{ note, i->first }] = uAt;
             return true;
             };
+      // the levels in force at tick t (the chunk's end, the next window's start): what a later chunk takes up
+      auto carryOut = [&](int t) {
+            LibCarry& out = carryAt(t);
+            for (const auto& a : active) {
+                  LibCarry::Level c { *a.second.level, a.second.like, a.second.tick, {} };
+                  auto end = events->lower_bound(t);
+                  for (int controller : controllersOf(c.level))
+                        c.written[controller] = valueAt(end, a.first, controller, fallbackOf(c.level, controller));
+                  if (dynamicsCC >= 0)
+                        c.written[dynamicsCC] = dynAt(end, a.first);
+                  out.levels.emplace(a.first, c);
+                  }
+            };
+      bool snapped = snapAt < 0;
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
+            if (!snapped && i->first >= snapAt) {
+                  carryOut(snapAt);
+                  snapped = true;
+                  }
             NPlayEvent& ev = i->second;
             if (!ev.isExternal() || ev.librarySwitch() || ev.libraryLevel())
                   continue;
@@ -4213,17 +4260,10 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   continue;
             switchTo(i, i->first, route, level, i->first, ev);
             }
+      if (!snapped)
+            carryOut(snapAt);
       // the chunk's end: nothing undone (what still sounds keeps its level); the next chunk takes the levels in force up
-      LibCarry& out = carryAt(utick2);
-      for (const auto& a : active) {
-            LibCarry::Level c { *a.second.level, a.second.like, a.second.tick, {} };
-            auto end = events->lower_bound(utick2);
-            for (int controller : controllersOf(c.level))
-                  c.written[controller] = valueAt(end, a.first, controller, fallbackOf(c.level, controller));
-            if (dynamicsCC >= 0)
-                  c.written[dynamicsCC] = dynAt(end, a.first);
-            out.levels.emplace(a.first, c);
-            }
+      carryOut(utick2);
       }
 
 //---------------------------------------------------------
@@ -4258,7 +4298,19 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
             carryPtr = std::make_shared<LibCarry>();
       const std::shared_ptr<LibCarry> carry = carryPtr;
       carry->even.clear();
+      // (playback's chunks: the glides in force at the next chunk's window's start, renderChunk)
+      const int snapAt = libSnapshotAt > utick1 && libSnapshotAt < utick2 ? libSnapshotAt : -1;
+      std::shared_ptr<LibCarry> snap;
+      if (snapAt >= 0) {
+            std::shared_ptr<LibCarry>& sp = libCarry[snapAt];
+            if (!sp)
+                  sp = std::make_shared<LibCarry>();
+            snap = sp;
+            snap->even.clear();
+            }
       const bool fromEven = from && !from->even.empty();
+      if (snap)
+            snap->evenRuns.clear();
       auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
       struct On {
             EventMap::iterator it;
@@ -4362,15 +4414,20 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                   auto r = byRoute.find(route);
                   const int endTick = r != byRoute.end() && !r->second.empty() ? levelTickOf(r->second.front()) : utick2;
                   int base = c.base;
+                  int baseAtSnap = -1;                    // (the CC11 as written in force at the snapshot)
                   for (auto i = events->lower_bound(utick1); i != events->end() && i->first < endTick; ++i) {
                         NPlayEvent& ev = i->second;
                         if (!ev.isExternal() || ev.type() != ME_CONTROLLER || ev.librarySwitch() || ev.controller() != CTRL_EXPRESSION
                             || routeOf(ev) != route)
                               continue;
+                        if (snap && baseAtSnap < 0 && i->first >= snapAt)
+                              baseAtSnap = base;
                         base = ev.value();
                         ev.setValue(scaled(base, EvenLevels::glideAt(c.centres, c.dbs, score->utick2utime(i->first))));
                         ev.setLibraryLevel(true);
                         }
+                  if (snap && endTick > snapAt)            // (held on past the snapshot)
+                        snap->even[route] = { c.centres, c.dbs, baseAtSnap >= 0 ? baseAtSnap : base, c.like };
                   if (endTick >= utick2) {
                         carry->even[route] = { c.centres, c.dbs, base, c.like };
                         continue;
@@ -4485,6 +4542,19 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                   // the run before ends there)
                   const int startTick = levelTickOf(ns[s]);
                   const double tStart = startTick == ns[s].tick ? ns[s].on : score->utick2utime(startTick);
+                  // (playback's chunks: a run going on from before this window keeps its steps' grid, the run's own start in
+                  // the window before, renderChunk; its first steps here from this run's start)
+                  double grid = tStart;
+                  int firstStep = 0;
+                  if (from) {
+                        auto fr = from->evenRuns.find(route);
+                        if (fr != from->evenRuns.end() && ns[s].tick <= fr->second.second && fr->second.first < tStart) {
+                              grid = fr->second.first;
+                              firstStep = int(std::ceil((tStart - grid) * 1000.0 / EvenLevels::STEP_MS - 1e-9));
+                              }
+                        }
+                  if (snap && ns[s].tick < snapAt && ns[e].tick >= snapAt)
+                        snap->evenRuns[route] = { grid, ns[e].tick };
                   const int endTick = e + 1 < ns.size() ? levelTickOf(ns[e + 1]) : utick2;
                   const NPlayEvent like = ns[s].it->second;
                   // the CC11s the route gets in the span (the per-note levels' schedule), and the value before it
@@ -4496,6 +4566,15 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                               existing.push_back(i);
                         }
                   int base = valueBefore(events->lower_bound(startTick), route, CTRL_EXPRESSION, fallback);
+                  // (playback's chunks: the run's glide held past its last note-on into the next chunk's window's start:
+                  // taken there, with the CC11 as written in force there)
+                  if (snap && ns[e].tick < snapAt && endTick > snapAt) {
+                        int b = base;
+                        for (const auto& it : existing)
+                              if (it->first < snapAt)
+                                    b = it->second.value();
+                        snap->even[route] = { centres, dbs, b, like };
+                        }
                   int out = -1;
                   std::vector<std::pair<int, int>> inserts;          // (tick, value)
                   const double tEnd = score->utick2utime(endTick);
@@ -4504,8 +4583,8 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                   const double minGap = 0.7 * EvenLevels::STEP_MS / 1000.0;
                   double lastT = -1;
                   size_t x = 0;
-                  for (int step = 0;; ++step) {
-                        const double t = tStart + step * EvenLevels::STEP_MS / 1000.0;
+                  for (int step = firstStep;; ++step) {
+                        const double t = grid + step * EvenLevels::STEP_MS / 1000.0;
                         const int tick = t < tEnd ? std::max(startTick, score->utime2utick(t)) : endTick;
                         // the span's own CC11s up to here: the base, mapped by the glide at their time
                         while (x < existing.size() && existing[x]->first <= tick && existing[x]->first < endTick) {
@@ -6436,7 +6515,164 @@ void MidiRenderer::renderScore(EventMap* events, const Context& ctx)
             }
       }
 
+//---------------------------------------------------------
+//   renderChunk
+//    Playback's chunks (minChunkSize > 0: Seq, the audit, the even-levels and real-range renders, a clicked note) on a
+//    score with sound library parts play as the whole score renders (one chunk a repeat segment: the export, Live's
+//    clips, the plain set): every chunk is rendered inside a window of the measures around it (libWindow: from
+//    WINDOW_BEFORE_S before it, and the start of every note still sounding at its start, to WINDOW_AFTER_S after it, in
+//    its repeat segment), and the window's events from the chunk's start to its end are kept (libCut). Its notes' early
+//    starts, joins, bends, levels, strums and track delays then come out as they do in the whole render, whatever falls
+//    on the chunk's first tick (branch chunk-equal, 2026-10-25). Before, each chunk was rendered alone: a note on the
+//    chunk's first tick couldn't start early (a transition early by its modelled arrival or glide's middle played 40-70
+//    ms late, its bend glide lost), the note before kept its note-off (no join, no keepMs cut), and a chunk's end put
+//    strum levels back (guitarplayback.cpp). The ownership of a chunk boundary b: the chunk before owns events up to b
+//    when it is rendered first (playback going on); the chunk after b, rendered first (a seek, a start from b), takes
+//    its own notes' early events before b too (a pre-roll, from its earliest note-on of a note written from b on), and
+//    the chunk before rendered later stops there. Only the chunk's own notes go into the trace and the even-levels
+//    information. Without library parts, or a chunk alone in its segment: rendered as before
+//---------------------------------------------------------
+
+MidiRenderer::Chunk MidiRenderer::libWindow(const Chunk& chunk, bool* segmentStart, bool* segmentEnd, bool* windowStart, bool* windowEnd) const
+      {
+      *segmentStart = *segmentEnd = *windowStart = *windowEnd = true;
+      auto it = std::find_if(chunks.begin(), chunks.end(), [&](const Chunk& c) {
+            return c.startMeasure() == chunk.startMeasure() && c.tickOffset() == chunk.tickOffset(); });
+      if (it == chunks.end() || it->lastMeasure() != chunk.lastMeasure())
+            return Chunk();
+      auto contiguous = [](const Chunk& a, const Chunk& b) {
+            return a.tickOffset() == b.tickOffset() && a.endMeasure() == b.startMeasure(); };
+      auto first = it, last = it;
+      while (first != chunks.begin() && contiguous(*std::prev(first), *first))
+            --first;
+      while (std::next(last) != chunks.end() && contiguous(*last, *std::next(last)))
+            ++last;
+      *segmentStart = first == it;
+      *segmentEnd = last == it;
+      if (*segmentStart && *segmentEnd)
+            return Chunk();
+      const int offset = chunk.tickOffset();
+      const Measure* from = chunk.startMeasure();
+      if (!*segmentStart) {
+            const Measure* segFirst = first->startMeasure();
+            // (every note still sounding at the chunk's start: from its tie chain's first note)
+            int earliest = chunk.tick1();
+            if (const Measure* before = from->prevMeasure()) {
+                  for (const Segment* seg = before->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest))
+                        for (int track = 0; track < score->ntracks(); ++track) {
+                              const Element* e = seg->element(track);
+                              if (!e || !e->isChord())
+                                    continue;
+                              for (const Note* n : toChord(e)->notes())
+                                    if (n->tieFor())
+                                          earliest = std::min(earliest, n->firstTiedNote()->chord()->tick().ticks());
+                              }
+                  }
+            const double target = score->utick2utime(chunk.utick1()) - WINDOW_BEFORE_S - libDelayLead / 1000.0;
+            while (from != segFirst && from->prevMeasure()
+                   && (from->tick().ticks() > earliest || score->utick2utime(from->tick().ticks() + offset) > target))
+                  from = from->prevMeasure();
+            *windowStart = from == segFirst;
+            }
+      const Measure* to = chunk.lastMeasure();
+      if (!*segmentEnd) {
+            const Measure* segLast = last->lastMeasure();
+            const double target = score->utick2utime(chunk.utick2()) + WINDOW_AFTER_S + (libDelayLead + libStartLead) / 1000.0;
+            while (to != segLast && to->nextMeasure() && score->utick2utime(to->endTick().ticks() + offset) < target)
+                  to = to->nextMeasure();
+            *windowEnd = to == segLast;
+            }
+      return Chunk(offset, from, to);
+      }
+
 void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Context& ctx)
+      {
+      bool segmentStart = true, segmentEnd = true, windowStart = true, windowEnd = true;
+      // (MS_CHUNK_WINDOWS_OFF=1: each chunk alone, as before 2026-10-25, to compare)
+      const Chunk window = minChunkSize > 0 && library && !libRoutePatches.empty() && !qEnvironmentVariableIsSet("MS_CHUNK_WINDOWS_OFF")
+                           ? libWindow(chunk, &segmentStart, &segmentEnd, &windowStart, &windowEnd) : Chunk();
+      if (!window) {
+            renderWindow(chunk, events, ctx);
+            return;
+            }
+      LagProbe::Scope probe("MidiRenderer::renderChunk (window)");
+      const int u1 = chunk.utick1(), u2 = chunk.utick2();
+      const size_t traceFrom = libTrace ? libTrace->size() : 0;
+      const size_t infoFrom = evenInfo ? evenInfo->size() : 0;
+      // the levels in force where the next chunk's window starts (libCarry, as at a chunk's end: a route's level and even
+      // levels' glide last until its next note-on, however long after): this window takes them there for it, as it takes
+      // them at its own start from the window before (none rendered before it: none). A window's end carries nothing
+      // (no chunk starts there) but at a repeat segment's end, as in the whole render
+      libSnapshotAt = -1;
+      {
+            auto next = std::find_if(chunks.begin(), chunks.end(), [&](const Chunk& c) {
+                  return c.startMeasure() == chunk.endMeasure() && c.tickOffset() == chunk.tickOffset(); });
+            bool ns = true, ne = true, nws = true, nwe = true;
+            const Chunk nextWindow = next == chunks.end() || segmentEnd ? Chunk() : libWindow(*next, &ns, &ne, &nws, &nwe);
+            if (nextWindow && !nws && nextWindow.utick1() > window.utick1())
+                  libSnapshotAt = nextWindow.utick1();
+      }
+      EventMap all;
+      renderWindow(window, &all, ctx);
+      libSnapshotAt = -1;
+      if (!windowEnd)
+            libCarry.erase(window.utick2());
+      auto own = [&](const Note* n) {
+            const int t = n->chord()->tick().ticks() + chunk.tickOffset();
+            return t >= u1 && t < u2;
+            };
+      if (libTrace)
+            libTrace->erase(std::remove_if(libTrace->begin() + long(traceFrom), libTrace->end(),
+                                           [&](const LibTrace& t) { return !t.note || !own(t.note); }), libTrace->end());
+      if (evenInfo)
+            evenInfo->erase(std::remove_if(evenInfo->begin() + long(infoFrom), evenInfo->end(),
+                                           [&](const EvenLevels::NoteInfo& i) { return !i.note || !own(i.note); }), evenInfo->end());
+      events->startEarlyMs = all.startEarlyMs;
+      events->startLeadMs = all.startLeadMs;
+      events->delayLeadMs = all.delayLeadMs;
+      if (libProbing || libKeepWindow) {        // (the start lead's probe, a clicked note: the whole window, nothing owned)
+            events->insert(all.begin(), all.end());
+            return;
+            }
+      // the boundaries' owners (libCut): set by the first chunk rendered next to them
+      int low = std::numeric_limits<int>::min();
+      if (!segmentStart) {
+            auto c = libCut.find(u1);
+            if (c != libCut.end())
+                  low = c->second;
+            else {
+                  // (rendered before the chunk before: a pre-roll of its own notes' early events)
+                  low = u1;
+                  for (const auto& te : all) {
+                        if (te.first >= u1)
+                              break;
+                        const NPlayEvent& e = te.second;
+                        if (e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch() && e.note() && own(e.note())) {
+                              low = te.first;
+                              break;
+                              }
+                        }
+                  libCut[u1] = low;
+                  }
+            }
+      int high = std::numeric_limits<int>::max();
+      if (!segmentEnd) {
+            auto c = libCut.find(u2);
+            if (c != libCut.end())
+                  high = c->second;
+            else
+                  libCut[u2] = high = u2;
+            }
+      for (auto i = all.lower_bound(low); i != all.end() && i->first < high; ++i)
+            events->insert(*i);
+      }
+
+//---------------------------------------------------------
+//   renderWindow
+//    the measures of one chunk rendered (playback's chunk itself, or the window around it: renderChunk)
+//---------------------------------------------------------
+
+void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Context& ctx)
       {
       LagProbe::Scope probe("MidiRenderer::renderChunk");
       // the start lead (libraryDelayLead) comes from the score's first notes: a later chunk rendered before the first
@@ -6729,6 +6965,7 @@ void MidiRenderer::updateState()
             libStartLead = 0.0;
             libStartKnown = false;
             libCarry.clear();
+            libCut.clear();
             libLanes.clear();
             libDivisi.clear();
             libLaneCents.clear();
@@ -6742,6 +6979,7 @@ void MidiRenderer::updateState()
             libSpeed.clear();
             libSpellKey.clear();
             libSpellCents.clear();
+            libSpelled.clear();
             library = SoundLib::current();
             libGeneration = SoundLib::routesGeneration();
             if (library) {

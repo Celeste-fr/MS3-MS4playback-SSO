@@ -162,6 +162,9 @@ class MidiRenderer {
       // written one, and the bend it then plays (cents from that key)
       std::map<const Note*, int> libSpellKey;
       std::map<const Note*, double> libSpellCents;
+      // … each (note, tickOffset)'s spelling as first made (key, or -1: its own; cents): playback's chunks render a note in
+      // more than one window (renderChunk), the first with the notes before it as the whole render has them
+      std::map<std::pair<const Note*, int>, std::pair<int, double>> libSpelled;
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
@@ -214,6 +217,13 @@ class MidiRenderer {
       // cleared with the renderer's state, updateState)
       struct LibCarry;
       std::map<int, std::shared_ptr<LibCarry>> libCarry;
+      // playback's chunks rendered in windows (renderChunk): each boundary's cut (utick -> from where the chunk after it owns
+      // the events: the boundary, or its pre-roll when that chunk was rendered first); cleared with the renderer's state
+      std::map<int, int> libCut;
+      bool libKeepWindow { false };     // (setKeepWindow)
+      int libSnapshotAt { -1 };         // (renderChunk: the next chunk's window's start, where this one leaves its levels)
+      static constexpr double WINDOW_BEFORE_S = 6.0;            // the window: this long before the chunk (seconds) …
+      static constexpr double WINDOW_AFTER_S = 4.0;             // … and after it
       // track delays and levels (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)
       std::map<const Part*, TrackDelays::Delays> libTrackDelays;
       std::set<const Note*> libPlainNotes;                      // [slurs] plainPerformance: the notes played plain
@@ -339,6 +349,7 @@ class MidiRenderer {
             };
 
       void updateChunksPartition();
+      Chunk libWindow(const Chunk&, bool* segmentStart, bool* segmentEnd, bool* windowStart, bool* windowEnd) const;
       static bool canBreakChunk(const Measure* last);
       bool libSlurAcross(const Measure* last) const;
       bool libNoteAfter(const Measure* last) const;
@@ -381,6 +392,9 @@ class MidiRenderer {
             bool renderHarmony{false};
             Context(const SynthesizerState& ss) : synthState(ss) {}
             };
+   private:
+      void renderWindow(const Chunk&, EventMap* events, const Context& ctx);     // (renderChunk: a chunk or its window)
+   public:
 
       void renderScore(EventMap* events, const Context& ctx);
       void renderChunk(const Chunk&, EventMap* events, const Context& ctx);
@@ -399,6 +413,9 @@ class MidiRenderer {
       // the played render's and puts that timing back at playback (Track Delay and the MuseScore Link device)
       void setWrittenTiming(bool v) { writtenTiming = v; needUpdate = true; }
       void setMinChunkSize(int sizeMeasures) { minChunkSize = sizeMeasures; needUpdate = true; }
+      // renderChunk gives a chunk's whole window (renderChunk: the measures before it too, with the controllers and switches
+      // they leave in force), not only the chunk's own events: a clicked note's state in force (notepreview.h)
+      void setKeepWindow(bool v) { libKeepWindow = v; }
       void setLibraryTrace(std::vector<LibTrace>* trace) { libTrace = trace; }
       // every note-on on a Performance legato patch as rendered, with its context (evenlevels.h; the measurement job)
       void setEvenLevelsInfo(std::vector<EvenLevels::NoteInfo>* info) { evenInfo = info; }

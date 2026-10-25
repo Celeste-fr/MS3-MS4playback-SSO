@@ -196,6 +196,7 @@ class TestSoundLibrary : public QObject, public MTest
       void levelRealRange();
       void noLevelSpikes();
       void chunkEndLevels();
+      void chunkedEqualsWhole();
       void startLead();
       void evenLevelsGlide();
       void evenAutoWindows();
@@ -5410,7 +5411,8 @@ void TestSoundLibrary::chunkEndLevels()
                                                   .arg(rc.first.second).arg(at(rc.second, end + 100000)).arg(at(rc.second, end - 1))));
                               }
                         }
-                  QVERIFY2(compared > 20, qPrintable(QString("%1: %2 compared").arg(what).arg(compared)));
+                  // (since chunk-equal the chunks restate nothing the whole render does not: each render's own values, 7 each)
+                  QVERIFY2(compared >= 14, qPrintable(QString("%1: %2 compared").arg(what).arg(compared)));
                   // the D5 (Long) 6 dB softer by CC11, the staccato E5 after it (in its own chunk) as written
                   int d5 = -1, e5 = -1;
                   for (const auto& on : noteOns(bars.first)) {
@@ -5494,6 +5496,164 @@ void TestSoundLibrary::chunkEndLevels()
                   QVERIFY2(tv.second == held, qPrintable(QString("tick %1: CC11 %2 after the run's %3").arg(tv.first).arg(tv.second).arg(held)));
       delete score;
       }
+      }
+
+//---------------------------------------------------------
+//   chunkedEqualsWhole
+//    playback's chunks (MidiRenderer::renderChunk: each chunk inside a window of the measures around it, branch chunk-equal)
+//    send the same events as the whole score's render (the export, Live's clips): every event, at its tick, in its order,
+//    a chunk a bar or ten bars (at least, as Seq's), each chunk in its own map as Seq renders in the background, with the
+//    shipped SSO map and calibration (Recommended and Library default) and Ample's: slurs and plain Performance notes over
+//    chunk boundaries (joins, keepMs, early transitions, microtone bends and spelling), accents, staccatos, real range,
+//    divisi chords, even levels (values set on every Performance note, runs and held glides over the boundaries), strums.
+//    Fails with MS_CHUNK_WINDOWS_OFF=1 (each chunk alone, as before). A seek (the middle chunk rendered first, then the
+//    rest, then the start): every note-on and note-off as the whole render's, none twice or missing
+//---------------------------------------------------------
+
+void TestSoundLibrary::chunkedEqualsWhole()
+      {
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      QVERIFY2(ample, qPrintable(error));
+      auto cal = SoundLib::readCalibration(QString(), root + "/../share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json");
+      QVERIFY(cal);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset {
+            ~Reset() {
+                  SoundLib::setCurrent(nullptr);
+                  SoundLib::setDynamicsCalibration(nullptr);
+                  SoundLib::setOutput(SoundLib::Output::MIDI);
+                  Playback::setIniValuesForTest({});
+                  }
+            } reset;
+      // each event as a line, by tick and route (the routes' order at one tick doesn't matter: each its own channel or
+      // instance, sent in one block; on one route the order is kept)
+      auto lines = [](const EventMap& ev) {
+            std::vector<std::pair<std::pair<int, int>, const std::pair<const int, NPlayEvent>*>> sorted;
+            for (const auto& te : ev)
+                  sorted.push_back({ { te.first, te.second.isExternal() ? 0x10000 + te.second.extPort() * 16 + te.second.extChannel()
+                                                                         : te.second.channel() }, &te });
+            std::stable_sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+            QStringList l;
+            for (const auto& sp : sorted) {
+                  const auto& te = *sp.second;
+                  const NPlayEvent& e = te.second;
+                  l << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9").arg(te.first).arg(e.isExternal() ? 0x10000 + e.extPort() * 16 + e.extChannel() : e.channel())
+                       .arg(int(e.type())).arg(e.dataA()).arg(e.dataB()).arg(double(e.tuning()), 0, 'g', 9)
+                       .arg(e.librarySwitch() ? "s" : "-").arg(e.note() ? e.note()->tick().ticks() : -1).arg(e.note() ? e.note()->pitch() : -1);
+                  }
+            return l;
+            };
+      // the note-ons and note-offs (route, tick, key, velocity) as a sorted list
+      auto notes = [](const EventMap& ev) {
+            std::vector<std::tuple<int, int, int, int>> n;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && (e.type() == ME_NOTEON || e.type() == ME_NOTEOFF))
+                        n.emplace_back(e.extPort() * 16 + e.extChannel(), te.first, e.pitch(), e.type() == ME_NOTEOFF ? 0 : e.velo());
+                  }
+            std::sort(n.begin(), n.end());
+            return n;
+            };
+      auto render = [](MasterScore* score, int chunkSize, bool seek, int* chunkCount) {
+            score->setPlaylistDirty();
+            score->setExpandRepeats(true);
+            MidiRenderer r(score);
+            r.setMinChunkSize(chunkSize);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            ctx.renderHarmony = true;
+            std::vector<MidiRenderer::Chunk> order;
+            for (MidiRenderer::Chunk c = r.getChunkAt(0); c; c = r.getChunkAt(c.utick2()))
+                  order.push_back(c);
+            if (seek)
+                  std::rotate(order.begin(), order.begin() + long(order.size() / 2), order.end());
+            EventMap events;
+            for (const MidiRenderer::Chunk& c : order) {
+                  EventMap part;
+                  r.renderChunk(c, &part, ctx);
+                  events.insert(part.begin(), part.end());
+                  }
+            *chunkCount = int(order.size());
+            return events;
+            };
+      struct Case { std::shared_ptr<SoundLib::Library> lib; QString file; bool even; QString settings; };
+      const QString share = root + "/../share/verifyplayback/";
+      const std::vector<Case> cases {
+            { sso, share + "Heard passages.musicxml", true }, { sso, share + "Mixed techniques.musicxml", false },
+            { sso, share + "Strings.musicxml", false }, { sso, share + "Staccato lengths.musicxml", false },
+            { sso, root + "/" + DIR + "plain-accents.musicxml", false }, { sso, root + "/" + DIR + "real-range.musicxml", false },
+            { sso, root + "/" + DIR + "quartertones-line.musicxml", false }, { sso, root + "/" + DIR + "divisi.musicxml", false },
+            { sso, root + "/" + DIR + "chunk-end.musicxml", true }, { sso, root + "/" + DIR + "articulations.musicxml", false },
+            { ample, root + "/" + DIR + "guitar-techniques.musicxml", false },
+            // (strums: bar 2's muted f strum restores CC7 right before bar 3's first note, a chunk's first)
+            { ample, root + "/" + DIR + "guitar-techniques.musicxml", false, "guitar/strums=1;guitar/softStrums=0;guitar/pinchHarmonics=1" },
+            { ample, root + "/" + DIR + "guitar-techniques.musicxml", false, "guitar/strums=1;guitar/softStrums=2" },
+            { ample, root + "/" + DIR + "guitar.musicxml", false } };
+      int split = 0;
+      for (const Case& c : cases) {
+            SoundLib::setCurrent(c.lib);
+            SoundLib::setDynamicsCalibration(c.lib == sso ? cal : nullptr);
+            for (const Playback::Preset& p : Playback::presets()) {
+                  std::map<QString, QString> ini;
+                  for (const auto& v : p.values)
+                        ini[v.first] = QString::number(v.second);
+                  for (const QString& kv : c.settings.split(';', QString::SkipEmptyParts))
+                        ini[kv.section('=', 0, 0)] = kv.section('=', 1);
+                  Playback::setIniValuesForTest(ini);
+                  MasterScore* score = readCreatedScore(c.file);
+                  QVERIFY2(score, qPrintable(c.file));
+                  score->rebuildMidiMapping();
+                  // (a strum line: a straight arpeggio, as guitarChords makes them)
+                  for (Segment* sg = score->firstSegment(SegmentType::ChordRest); sg && !c.settings.isEmpty(); sg = sg->next1(SegmentType::ChordRest))
+                        if (sg->element(0) && sg->element(0)->isChord())
+                              if (Arpeggio* a = toChord(sg->element(0))->arpeggio())
+                                    a->setArpeggioType(a->arpeggioType() == ArpeggioType::UP ? ArpeggioType::UP_STRAIGHT
+                                                       : a->arpeggioType() == ArpeggioType::DOWN ? ArpeggioType::DOWN_STRAIGHT : a->arpeggioType());
+                  int n = 0;
+                  if (c.even) {
+                        // every Performance note's even level: -3 / +3 dB in turn (its context as rendered: current)
+                        std::vector<EvenLevels::NoteInfo> in;
+                        {
+                              score->setPlaylistDirty();
+                              MidiRenderer r(score);
+                              r.setEvenLevelsInfo(&in);
+                              SynthesizerState ss;
+                              MidiRenderer::Context ctx(ss);
+                              ctx.metronome = false;
+                              EventMap ev;
+                              r.renderScore(&ev, ctx);
+                        }
+                        for (size_t k = 0; k < in.size(); ++k) {
+                              Note* note = const_cast<Note*>(in[k].note);
+                              note->setEvenLevel(k % 2 ? 3.0 : -3.0);
+                              note->setEvenContext(in[k].context);
+                              }
+                        }
+                  const EventMap whole = render(score, 0, false, &n);
+                  const QStringList w = lines(whole);
+                  for (int size : { 1, 10 }) {
+                        const QString what = QString("%1%2, %3, chunks of %4").arg(QFileInfo(c.file).completeBaseName(),
+                                                    c.settings.isEmpty() ? QString() : " (" + c.settings + ")", p.id).arg(size);
+                        const QStringList b = lines(render(score, size, false, &n));
+                        if (n > 1)
+                              ++split;
+                        int k = 0;
+                        while (k < w.size() && k < b.size() && w[k] == b[k])
+                              ++k;
+                        QVERIFY2(k == w.size() && k == b.size(),
+                                 qPrintable(QString("%1 (%2 chunks): event %3 of %4 / %5: whole '%6', chunked '%7'").arg(what).arg(n).arg(k)
+                                            .arg(w.size()).arg(b.size()).arg(k < w.size() ? w[k] : "-").arg(k < b.size() ? b[k] : "-")));
+                        if (size == 1)
+                              QVERIFY2(notes(render(score, size, true, &n)) == notes(whole), qPrintable(what + ": a seek's notes"));
+                        }
+                  delete score;
+                  }
+            }
+      QVERIFY2(split >= 20, qPrintable(QString::number(split)));
       }
 
 //---------------------------------------------------------

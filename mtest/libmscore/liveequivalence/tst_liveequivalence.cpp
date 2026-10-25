@@ -214,6 +214,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void utilitySet();
       void scriptValuesSet();
       void dumpEvents();
+      void chunkCompare();
       void playbackSettingsWidget();
       };
 
@@ -7914,6 +7915,160 @@ void TestLiveEquivalence::utilitySet()
             if (!t.devices.isEmpty())
                   qInfo("%s: fader %.3f dB, MuseScore gain %s", qPrintable(t.name), LiveSetWriter::utilityDb(t.volume),
                         t.hasMuseScoreGain ? qPrintable(QString("%1 dB").arg(LiveSetWriter::utilityDb(t.museScoreGain), 0, 'f', 3)) : "none");
+      }
+
+//---------------------------------------------------------
+//   chunk rendering (chunkCompare, chunkedEqualsWhole)
+//    renderAsPlayed: the score as Seq plays it, chunk by chunk (MidiRenderer::getChunkAt, chunkSize measures at least),
+//    each chunk in its own map (Seq's background rendering) or all in one (Seq::collectEvents' first fill), merged in order;
+//    chunkSize 0: as the export renders it (one chunk a repeat segment). eventLines: each event as a line, "utick route
+//    type a b tuning flags note", route = port * 16 + channel for a library event (0x10000 +), else the channel
+//---------------------------------------------------------
+
+static EventMap renderAsPlayed(MasterScore* score, int chunkSize, bool ownMaps, bool clips = false, QList<int>* bounds = nullptr,
+                               bool seek = false)
+      {
+      score->setPlaylistDirty();
+      score->masterScore()->setExpandRepeats(true);
+      MidiRenderer r(score);
+      r.setMinChunkSize(chunkSize);
+      r.setForLiveClips(clips);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      ctx.renderHarmony = true;
+      EventMap events;
+      std::vector<MidiRenderer::Chunk> order;
+      for (MidiRenderer::Chunk c = r.getChunkAt(0); c; c = r.getChunkAt(c.utick2()))
+            order.push_back(c);
+      if (bounds)
+            for (const MidiRenderer::Chunk& c : order)
+                  *bounds << c.utick1();
+      // (seek: playback started at the middle chunk, played to the end, then from the start: Seq keeps what it rendered)
+      if (seek)
+            std::rotate(order.begin(), order.begin() + long(order.size() / 2), order.end());
+      for (const MidiRenderer::Chunk& c : order) {
+            if (ownMaps) {
+                  EventMap part;
+                  r.renderChunk(c, &part, ctx);
+                  events.insert(part.begin(), part.end());
+                  }
+            else
+                  r.renderChunk(c, &events, ctx);
+            }
+      return events;
+      }
+
+static QStringList eventLines(const EventMap& events, const Score* score = nullptr)
+      {
+      QStringList lines;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            const int route = e.isExternal() ? 0x10000 + e.extPort() * 16 + e.extChannel() : e.channel();
+            QString flags = QString("%1%2%3").arg(e.librarySwitch() ? "s" : "").arg(e.librarySpeed() ? "p" : "").arg(e.libraryLevel() ? "l" : "");
+            if (flags.isEmpty())
+                  flags = "-";
+            const QString note = e.note() ? QString("%1/%2").arg(e.note()->tick().ticks()).arg(e.note()->pitch()) : QString("-");
+            lines << QString("%1 %2 %3 %4 %5 %6 %7 %8 %9").arg(te.first).arg(score ? score->utick2utime(te.first) : 0.0, 0, 'f', 6).arg(route).arg(int(e.type())).arg(e.dataA()).arg(e.dataB())
+                     .arg(double(e.tuning()), 0, 'g', 9).arg(flags, note);
+            }
+      return lines;
+      }
+
+//---------------------------------------------------------
+//   chunkCompare
+//    a tool, skipped unless MS_CHUNK_SCORE (';'-separated scores) and MS_CHUNK_OUT (a folder) are set: each score
+//    rendered whole (as the export) and as played in chunks of MS_CHUNK_SIZES measures (default "10,1,2,3"), each chunk
+//    in its own map, and with MS_CHUNK_SAME also all in one map, written as eventLines to <out>/<score> <render>.txt for
+//    tools/playbackverify/chunk_diff.py. MS_CHUNK_MAP: the map (default SSO's in share), MS_CHUNK_CALIBRATION its
+//    dynamics.json, MS_CHUNK_PRESET recommended / library (else the built-in defaults), MS_CHUNK_SETTINGS "id=value;…"
+//    on top (the ini's)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::chunkCompare()
+      {
+      if (!qEnvironmentVariableIsSet("MS_CHUNK_SCORE") || !qEnvironmentVariableIsSet("MS_CHUNK_OUT"))
+            QSKIP("MS_CHUNK_SCORE, MS_CHUNK_OUT not set");
+      QString error;
+      const QString mapPath = qEnvironmentVariableIsSet("MS_CHUNK_MAP") ? qEnvironmentVariable("MS_CHUNK_MAP")
+                                    : root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml";
+      std::shared_ptr<SoundLib::Library> lib = SoundLib::Library::load(mapPath, &error);
+      QVERIFY2(lib, qPrintable(error));
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setDynamicsCalibration(nullptr); SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      if (!qEnvironmentVariable("MS_CHUNK_CALIBRATION").isEmpty()) {
+            auto cal = SoundLib::readCalibration(QString(), qEnvironmentVariable("MS_CHUNK_CALIBRATION"));
+            QVERIFY(cal);
+            SoundLib::setDynamicsCalibration(cal);
+            }
+      std::map<QString, QString> ini;
+      for (const Playback::Preset& p : Playback::presets())
+            if (qEnvironmentVariable("MS_CHUNK_PRESET") == p.id)
+                  for (const auto& v : p.values)
+                        ini[v.first] = QString::number(v.second);
+      for (const QString& kv : qEnvironmentVariable("MS_CHUNK_SETTINGS").split(';', QString::SkipEmptyParts)) {
+            const int eq = kv.indexOf('=');
+            if (eq > 0)
+                  ini[kv.left(eq).trimmed()] = kv.mid(eq + 1).trimmed();
+            }
+      Playback::setIniValuesForTest(ini);
+      {
+            QStringList kv;
+            for (const auto& v : ini)
+                  kv << v.first + "=" + v.second;
+            qInfo("settings: %s", qPrintable(kv.join(";")));
+      }
+      const QString out = qEnvironmentVariable("MS_CHUNK_OUT");
+      QDir().mkpath(out);
+      QList<int> sizes;
+      for (const QString& s : qEnvironmentVariable("MS_CHUNK_SIZES", "10,1,2,3").split(',', QString::SkipEmptyParts))
+            sizes << s.toInt();
+      for (const QString& path : qEnvironmentVariable("MS_CHUNK_SCORE").split(';', QString::SkipEmptyParts)) {
+            MasterScore* score = readCreatedScore(path);
+            QVERIFY2(score, qPrintable(path));
+            score->rebuildMidiMapping();
+            // MS_CHUNK_STRAIGHT: the first staff's arpeggios straight (Ample's strum lines, as tst_soundlibrary's guitarChords)
+            for (Segment* sg = score->firstSegment(SegmentType::ChordRest); sg && qEnvironmentVariableIsSet("MS_CHUNK_STRAIGHT");
+                 sg = sg->next1(SegmentType::ChordRest))
+                  if (sg->element(0) && sg->element(0)->isChord())
+                        if (Arpeggio* a = toChord(sg->element(0))->arpeggio())
+                              a->setArpeggioType(a->arpeggioType() == ArpeggioType::UP ? ArpeggioType::UP_STRAIGHT
+                                                 : a->arpeggioType() == ArpeggioType::DOWN ? ArpeggioType::DOWN_STRAIGHT : a->arpeggioType());
+            const QString base = out + "/" + QFileInfo(path).completeBaseName();
+            auto write = [&](const QString& name, const EventMap& ev, const QList<int>& bounds) {
+                  QFile f(base + " " + name + ".txt");
+                  QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Text));
+                  QStringList b;
+                  for (int u : bounds)
+                        b << QString("%1:%2").arg(u).arg(score->utick2utime(u), 0, 'f', 6);
+                  f.write((QString("# chunks %1\n").arg(b.join(" ")) + eventLines(ev, score).join("\n") + "\n").toUtf8());
+                  };
+            QList<int> bounds;
+            QElapsedTimer timer;
+            timer.start();
+            write("whole", renderAsPlayed(score, 0, false, false, &bounds), bounds);
+            qInfo("%s whole: %lld ms", qPrintable(QFileInfo(path).completeBaseName()), timer.elapsed());
+            for (int size : sizes) {
+                  bounds.clear();
+                  QElapsedTimer timer;
+                  timer.start();
+                  write(QString("chunk%1").arg(size), renderAsPlayed(score, size, true, false, &bounds), bounds);
+                  qInfo("%s chunk%d: %lld ms", qPrintable(QFileInfo(path).completeBaseName()), size, timer.elapsed());
+                  if (qEnvironmentVariableIsSet("MS_CHUNK_SEEK")) {
+                        bounds.clear();
+                        write(QString("seek%1").arg(size), renderAsPlayed(score, size, true, false, &bounds, true), bounds);
+                        }
+                  if (qEnvironmentVariableIsSet("MS_CHUNK_SAME")) {
+                        bounds.clear();
+                        write(QString("same%1").arg(size), renderAsPlayed(score, size, false, false, &bounds), bounds);
+                        }
+                  }
+            bounds.clear();
+            if (qEnvironmentVariableIsSet("MS_CHUNK_CLIPS"))      // (Live's clips: one chunk a repeat segment, for before/after)
+                  write("clips", renderAsPlayed(score, 0, false, true, &bounds), bounds);
+            delete score;
+            }
       }
 
 //---------------------------------------------------------
