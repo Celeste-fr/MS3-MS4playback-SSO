@@ -1,13 +1,21 @@
-// kheap: mimalloc for the whole process in place of the C runtime's heap (sso-load, 2026-10-23), and the
-// measurement of that heap's share of Kontakt's load.
+// kheap: mimalloc in place of the C runtime's heap (sso-load, 2026-10-23), and the measurement of that heap's share of
+// Kontakt's load.
 //
-// MuseScore on Windows loads it first thing in main() (audio/vst3/processallocator.cpp: kheap_start("mi"), before any
-// plug-in exists; MS_KHEAP_OFF=1 leaves the system allocator, to compare): from then on the CRT's malloc family
+// MuseScore on Windows loads it first thing in main() (audio/vst3/processallocator.cpp: kheap_start("mi-scoped"), before
+// any plug-in exists; MS_KHEAP_OFF=1 leaves the system allocator, to compare). The hooks answer the CRT's malloc family
 // (ucrtbase: malloc, free, realloc, calloc, _msize, _expand, _recalloc, their _base forms and the whole _aligned family)
-// is answered by mimalloc 2.1.7 (static). Rules that keep every block on its own heap:
-//   - a block mimalloc doesn't own (mi_is_in_heap_region: made before the switch, by Qt's start-up, inside a hook, or by
+// and ntdll's heap calls for the whole process, but in the scoped mode (kheap-realtime, 2026-10-24) a NEW block comes from
+// mimalloc 2.1.7 (static) only on a thread inside kheap_scope(1) .. kheap_scope(0): MuseScore's Vst3Plugin::setState, the
+// load that makes Kontakt's millions of small allocations. Every other thread (the audio callback, Kontakt's own voice,
+// disk and preload threads, Qt's GUI) gets the CRT's blocks as without kheap, and a mimalloc block grown there moves to
+// the CRT (realloc, _recalloc, the aligned reallocs, HeapReAlloc); mimalloc's frees of its own blocks stay (a free from
+// another thread is an atomic push onto the owner's list), with abandoned_reclaim_on_free off, so no thread outside a
+// load ever takes over a segment a finished load thread left. Why: the whole-process mode (kheap_start("mi"), builds
+// #474-#477) made the owner's live playback (hosted Kontakt + SSO through PortAudio) crackle on every audio device while
+// renders nulled; MS_KHEAP_OFF=1 cured it (the owner, 2026-10-24). Rules that keep every block on its own heap:
+//   - a block mimalloc doesn't own (mi_is_in_heap_region: made before the switch, outside a scope, inside a hook, or by
 //     another heap) always goes to the original function; realloc / _recalloc / the aligned reallocs of such a block
-//     move it into mimalloc (copied, the old one freed by the CRT) or leave it the CRT's;
+//     move it into mimalloc inside a scope (copied, the old one freed by the CRT) or leave it the CRT's;
 //   - ntdll's RtlFreeHeap / RtlSizeHeap / RtlReAllocateHeap give a mimalloc block to mimalloc, whoever calls them
 //     (code that frees a malloc block with HeapFree on the CRT's heap);
 //   - all hooks or none (start()); the DLL is never unloaded and does nothing at detach: Qt's, the CRT's and the
@@ -17,7 +25,8 @@
 //   KHEAP=count: read-only. Counts and times the CRT's malloc family and ntdll's RtlAllocateHeap / RtlFreeHeap /
 //       RtlReAllocateHeap (direct calls, not from inside a CRT call), by phase (ktmark) and by caller module (Kontakt /
 //       ucrtbase / other). ktdump writes it.
-//   KHEAP=mi: as MuseScore's; KHEAP_RTL=1 also answers Kontakt's own direct HeapAlloc / HeapReAlloc (4 calls in a load).
+//   KHEAP=mi: the whole process (builds #474-#477); KHEAP=mi-scoped: as MuseScore's now (ktload calls kheap_scope
+//       around each setState); KHEAP_RTL=1 also answers Kontakt's own direct HeapAlloc / HeapReAlloc (4 calls in a load).
 //   KHEAP_NOCOUNT=1: no counts and no timing (speed runs). KHEAP_SKIP=crt|rtl|<function>[;…] (count mode only),
 //   KHEAP_CRASH=<file> (the first exceptions to a file): debugging.
 //
@@ -57,6 +66,13 @@ struct TIn {
       TIn& operator--() { tinSet(tinGet() - 1); return *this; }
       };
 static TIn t_in;
+// the scoped mode (kheap-realtime, 2026-10-24): new blocks come from mimalloc only on a thread inside kheap_scope(1) ..
+// kheap_scope(0) (MuseScore's setState of a plug-in); every other thread's new blocks are the CRT's again. A second
+// TlsAlloc slot, read from the TEB as t_in.
+static DWORD g_tlsScope = 0xffffffff;
+static inline intptr_t scopeGet() { return g_tlsScope < 64 ? (intptr_t)__readgsqword(0x1480 + 8 * g_tlsScope) : 0; }
+static inline void scopeSet(intptr_t v) { if (g_tlsScope < 64) __writegsqword(0x1480 + 8 * g_tlsScope, (unsigned long long)v); }
+static bool g_scoped = false;
 static bool g_mi = false, g_miRtl = false, g_count = true;   // g_count false (KHEAP_NOCOUNT=1): no timing, no counts
 static uintptr_t g_kBase = 0, g_kEnd = 0, g_uBase = 0, g_uEnd = 0;
 static LARGE_INTEGER g_freq;
@@ -95,6 +111,8 @@ static inline void note(Api api, void* ra, long long t0, size_t bytes, bool mi)
       }
 
 static inline bool ours(const void* p) { return p && mi_is_in_heap_region(p); }
+// a new block from mimalloc? (the whole process; scoped: only inside kheap_scope on this thread)
+static inline bool newMi() { return g_mi && (!g_scoped || scopeGet() > 0); }
 
 // --- the CRT (ucrtbase) ---
 typedef void* (__cdecl* malloc_t)(size_t);
@@ -123,8 +141,9 @@ static expand_t o_expand, o_expand_base;
 static void* doMalloc(malloc_t o, size_t n, void* ra)
       {
       GUARD(o(n))
-      void* p = g_mi ? mi_malloc(n) : o(n);
-      note(MALLOC, ra, t0, n, g_mi); --t_in; return p;
+      const bool mi = newMi();
+      void* p = mi ? mi_malloc(n) : o(n);
+      note(MALLOC, ra, t0, n, mi); --t_in; return p;
       }
 static void doFree(free_t o, void* p, void* ra)
       {
@@ -143,8 +162,16 @@ static void* doRealloc(realloc_t o, void* p, size_t n, void* ra)
       bool mi = false;
       if (!g_mi) r = o(p, n);
       else if (mine && n == 0) { mi_free(p); r = nullptr; mi = true; }     // (the CRT's realloc(p, 0): freed, NULL)
+      else if (!newMi()) {
+            if (!mine) r = o(p, n);
+            else {        // scoped, outside a scope: a mimalloc block moves to the CRT
+                  r = o(nullptr, n);
+                  if (r) { const size_t old = mi_usable_size(p); memcpy(r, p, old < n ? old : n); mi_free(p); }
+                  mi = true;
+                  }
+            }
       else if (mine || !p) { r = mi_realloc(p, n); mi = true; }
-      else if (!p || n == 0) r = o(p, n);
+      else if (n == 0) r = o(p, n);
       else {        // a block made before the hooks: move it into mimalloc
             const size_t old = o_msize_base ? o_msize_base(p) : o_msize(p);
             r = mi_malloc(n);
@@ -156,8 +183,9 @@ static void* doRealloc(realloc_t o, void* p, size_t n, void* ra)
 static void* doCalloc(calloc_t o, size_t a, size_t b, void* ra)
       {
       GUARD(o(a, b))
-      void* p = g_mi ? mi_calloc(a, b) : o(a, b);
-      note(CALLOC, ra, t0, a * b, g_mi); --t_in; return p;
+      const bool mi = newMi();
+      void* p = mi ? mi_calloc(a, b) : o(a, b);
+      note(CALLOC, ra, t0, a * b, mi); --t_in; return p;
       }
 static size_t doMsize(msize_t o, void* p, void* ra)
       {
@@ -175,7 +203,13 @@ static void* doRecalloc(recalloc_t o, void* p, size_t a, size_t b, void* ra)
       void* r;
       bool mi = false;
       if (!g_mi) r = o(p, a, b);
-      else if (mine || !p) { r = mi_recalloc(p, a, b); mi = true; }
+      else if (mine && !newMi()) {        // scoped, outside a scope: to the CRT (calloc zeroes the rest)
+            r = (o_calloc_base ? o_calloc_base : o_calloc)(a, b);
+            const size_t n = a * b;
+            if (r || n == 0) { const size_t old = mi_usable_size(p); if (r) memcpy(r, p, old < n ? old : n); mi_free(p); }
+            mi = true;
+            }
+      else if (mine || (!p && newMi())) { r = mi_recalloc(p, a, b); mi = true; }
       else r = o(p, a, b);       // (a block from before the hooks stays the CRT's)
       note(REALLOC, ra, t0, a * b, mi); --t_in; return r;
       }
@@ -218,15 +252,17 @@ static void* __cdecl h_amalloc(size_t n, size_t al)
       {
       GUARD(o_amalloc(n, al))
       void* ra = _ReturnAddress();
-      void* p = g_mi ? mi_malloc_aligned(n, al < sizeof(void*) ? sizeof(void*) : al) : o_amalloc(n, al);
-      note(AMALLOC, ra, t0, n, g_mi); --t_in; return p;
+      const bool mi = newMi();
+      void* p = mi ? mi_malloc_aligned(n, al < sizeof(void*) ? sizeof(void*) : al) : o_amalloc(n, al);
+      note(AMALLOC, ra, t0, n, mi); --t_in; return p;
       }
 static void* __cdecl h_aomalloc(size_t n, size_t al, size_t off)
       {
       GUARD(o_aomalloc(n, al, off))
       void* ra = _ReturnAddress();
-      void* p = g_mi ? mi_malloc_aligned_at(n, al < sizeof(void*) ? sizeof(void*) : al, off) : o_aomalloc(n, al, off);
-      note(AMALLOC, ra, t0, n, g_mi); --t_in; return p;
+      const bool mi = newMi();
+      void* p = mi ? mi_malloc_aligned_at(n, al < sizeof(void*) ? sizeof(void*) : al, off) : o_aomalloc(n, al, off);
+      note(AMALLOC, ra, t0, n, mi); --t_in; return p;
       }
 static void __cdecl h_afree(void* p)
       {
@@ -249,6 +285,18 @@ static void* moveAligned(void* p, size_t n, size_t al, size_t off, bool zero, si
       (void)count;
       return r;
       }
+// scoped, outside a scope: a mimalloc aligned block moves to the CRT's aligned family
+static void* toCrtAligned(void* p, size_t n, size_t al, size_t off, bool zero)
+      {
+      void* r = off ? o_aomalloc(n, al, off) : o_amalloc(n, al);
+      if (r) {
+            const size_t old = mi_usable_size(p);
+            if (zero) memset(r, 0, n);
+            memcpy(r, p, old < n ? old : n);
+            mi_free(p);
+            }
+      return r;
+      }
 static void* __cdecl h_arealloc(void* p, size_t n, size_t al)
       {
       const bool mine = g_mi && ours(p);
@@ -258,6 +306,7 @@ static void* __cdecl h_arealloc(void* p, size_t n, size_t al)
       bool mi = g_mi;
       if (!g_mi) r = o_arealloc(p, n, al);
       else if (mine && n == 0) { mi_free(p); r = nullptr; }
+      else if (!newMi()) { if (mine) r = toCrtAligned(p, n, al, 0, false); else { r = o_arealloc(p, n, al); mi = false; } }
       else if (mine || !p) r = mi_realloc_aligned(p, n, al < sizeof(void*) ? sizeof(void*) : al);
       else if (n == 0) { r = o_arealloc(p, 0, al); mi = false; }
       else r = moveAligned(p, n, al, 0, false, 0);
@@ -272,6 +321,7 @@ static void* __cdecl h_aorealloc(void* p, size_t n, size_t al, size_t off)
       bool mi = g_mi;
       if (!g_mi) r = o_aorealloc(p, n, al, off);
       else if (mine && n == 0) { mi_free(p); r = nullptr; }
+      else if (!newMi()) { if (mine) r = toCrtAligned(p, n, al, off, false); else { r = o_aorealloc(p, n, al, off); mi = false; } }
       else if (mine || !p) r = mi_realloc_aligned_at(p, n, al < sizeof(void*) ? sizeof(void*) : al, off);
       else if (n == 0) { r = o_aorealloc(p, 0, al, off); mi = false; }
       else r = moveAligned(p, n, al, off, false, 0);
@@ -285,7 +335,8 @@ static void* __cdecl h_arecalloc(void* p, size_t c, size_t n, size_t al)
       void* r;
       bool mi = g_mi;
       if (!g_mi) r = o_arecalloc(p, c, n, al);
-      else if (mine || !p) r = mi_recalloc_aligned(p, c, n, al < sizeof(void*) ? sizeof(void*) : al);
+      else if (mine && !newMi()) r = toCrtAligned(p, c * n, al, 0, true);
+      else if (mine || (!p && newMi())) r = mi_recalloc_aligned(p, c, n, al < sizeof(void*) ? sizeof(void*) : al);
       else { r = o_arecalloc(p, c, n, al); mi = false; }       // (a block from before the hooks stays the CRT's)
       note(AREALLOC, ra, t0, c * n, mi); --t_in; return r;
       }
@@ -297,7 +348,8 @@ static void* __cdecl h_aorecalloc(void* p, size_t c, size_t n, size_t al, size_t
       void* r;
       bool mi = g_mi;
       if (!g_mi) r = o_aorecalloc(p, c, n, al, off);
-      else if (mine || !p) r = mi_recalloc_aligned_at(p, c, n, al < sizeof(void*) ? sizeof(void*) : al, off);
+      else if (mine && !newMi()) r = toCrtAligned(p, c * n, al, off, true);
+      else if (mine || (!p && newMi())) r = mi_recalloc_aligned_at(p, c, n, al < sizeof(void*) ? sizeof(void*) : al, off);
       else { r = o_aorecalloc(p, c, n, al, off); mi = false; }
       note(AREALLOC, ra, t0, c * n, mi); --t_in; return r;
       }
@@ -321,7 +373,7 @@ static PVOID NTAPI h_RtlAllocateHeap(PVOID heap, ULONG flags, SIZE_T n)
       {
       if (t_in) return o_RtlAllocateHeap(heap, flags, n);
       ++t_in; const long long t0 = qpc(); void* ra = _ReturnAddress();
-      const bool mi = g_miRtl && callerOf(ra) == C_KONTAKT && !(flags & ~(HEAP_ZERO_MEMORY | HEAP_NO_SERIALIZE | HEAP_GENERATE_EXCEPTIONS));
+      const bool mi = g_miRtl && newMi() && callerOf(ra) == C_KONTAKT && !(flags & ~(HEAP_ZERO_MEMORY | HEAP_NO_SERIALIZE | HEAP_GENERATE_EXCEPTIONS));
       PVOID p = mi ? ((flags & HEAP_ZERO_MEMORY) ? mi_zalloc(n) : mi_malloc(n)) : o_RtlAllocateHeap(heap, flags, n);
       note(RTL_ALLOC, ra, t0, n, mi); --t_in; return p;
       }
@@ -341,6 +393,11 @@ static PVOID NTAPI h_RtlReAllocateHeap(PVOID heap, ULONG flags, PVOID p, SIZE_T 
       PVOID r;
       if (mine) {
             if (flags & HEAP_REALLOC_IN_PLACE_ONLY) r = mi_expand(p, n);
+            else if (!newMi()) {        // scoped, outside a scope: to the heap it was asked of
+                  const size_t old = mi_usable_size(p);
+                  r = o_RtlAllocateHeap(heap, flags & (HEAP_ZERO_MEMORY | HEAP_NO_SERIALIZE | HEAP_GENERATE_EXCEPTIONS), n);
+                  if (r) { memcpy(r, p, old < n ? old : n); mi_free(p); }
+                  }
             else r = (flags & HEAP_ZERO_MEMORY) ? mi_rezalloc(p, n) : mi_realloc(p, n);
             }
       else r = o_RtlReAllocateHeap(heap, flags, p, n);
@@ -456,7 +513,9 @@ static int start(const char* mode, bool count)
       if (g_started.load()) return g_started.load() > 0;
       if (g_tls >= 64) { snprintf(g_why, sizeof g_why, "no TLS slot below 64 (%lu)", g_tls); g_started = -1; return 0; }
       ++t_in;
-      g_mi = mode && !strcmp(mode, "mi");
+      g_mi = mode && (!strcmp(mode, "mi") || !strcmp(mode, "mi-scoped"));
+      g_scoped = g_mi && !strcmp(mode, "mi-scoped");
+      if (g_scoped && g_tlsScope >= 64) { snprintf(g_why, sizeof g_why, "no scope TLS slot below 64 (%lu)", g_tlsScope); g_started = -1; --t_in; return 0; }
       const char* rtl = getenv("KHEAP_RTL");
       g_miRtl = g_mi && rtl && !strcmp(rtl, "1");
       g_count = count;
@@ -470,6 +529,8 @@ static int start(const char* mode, bool count)
             g_uBase = (uintptr_t)u; g_uEnd = g_uBase + h->OptionalHeader.SizeOfImage;
       }
       mi_option_set(mi_option_verbose, 0);
+      // scoped: a free on a thread outside the loads (the audio callback's) never takes over a segment a load left
+      if (g_scoped && !getenv("MIMALLOC_ABANDONED_RECLAIM_ON_FREE")) mi_option_disable(mi_option_abandoned_reclaim_on_free);
       void* warm = mi_malloc(16); mi_free(warm);    // (mimalloc's process init before any hook)
       if (MH_Initialize() != MH_OK) { snprintf(g_why, sizeof g_why, "MinHook did not initialise"); g_started = -1; --t_in; return 0; }
       const char* skip = getenv("KHEAP_SKIP");       // (debugging: "crt", "rtl", or a hook's name; never with mi)
@@ -530,7 +591,7 @@ static int start(const char* mode, bool count)
             --t_in;
             return 0;
             }
-      snprintf(g_why, sizeof g_why, "%s, %zu hooks", g_mi ? "mimalloc 2.1.7" : "counting (the C runtime's heap)", made.size());
+      snprintf(g_why, sizeof g_why, "%s, %zu hooks", g_scoped ? "mimalloc 2.1.7 inside loads" : g_mi ? "mimalloc 2.1.7" : "counting (the C runtime's heap)", made.size());
       g_started = 1;
       --t_in;
       return 1;
@@ -541,6 +602,12 @@ static int start(const char* mode, bool count)
 extern "C" __declspec(dllexport) int kheap_start(const char* mode)
       {
       return start(mode, false);
+      }
+// the scoped mode: kheap_scope(1) before a load on this thread, kheap_scope(0) after (nestable); no-op otherwise
+extern "C" __declspec(dllexport) void kheap_scope(int enter)
+      {
+      const intptr_t v = scopeGet() + (enter ? 1 : -1);
+      scopeSet(v < 0 ? 0 : v);
       }
 extern "C" __declspec(dllexport) const char* kheap_status()
       {
@@ -555,6 +622,7 @@ BOOL WINAPI DllMain(HINSTANCE, DWORD reason, LPVOID)
       QueryPerformanceFrequency(&g_freq);
       QueryPerformanceCounter(&g_t0);
       g_tls = TlsAlloc();
+      g_tlsScope = TlsAlloc();
       if (getenv("KHEAP_CRASH")) AddVectoredExceptionHandler(1, onCrash);    // (debugging: the first exceptions to a file)
       // the measurement tools (ktload --dll / --trace, launchw): KHEAP=count|mi starts it at load
       if (const char* mode = getenv("KHEAP")) {

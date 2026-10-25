@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "vst3plugin.h"
+#include "processallocator.h"
 #ifndef VST3PLUGIN_NO_SETTINGS     // (kthost: built without libmscore, tools/soundlibraries/kthost)
 #include "libmscore/playbacksettings.h"
 #endif
@@ -1052,6 +1053,9 @@ bool Vst3Plugin::setState(const QByteArray& state)
             };
       d->times.component = d->times.controllerComponent = d->times.controller = d->times.mapping = 0;
       d->sinceState = 0;
+      // the plug-in's allocations while it loads from mimalloc (kheap's scoped mode: Kontakt's setState makes millions
+      // of them); after it, and on every other thread, the system allocator (realtime-safe: kheap-realtime, 2026-10-24)
+      ProcessAllocator::LoadScope loading;
       {
             IPtr<MemoryStream> s = owned(new MemoryStream(componentState.data(), componentState.size()));
             const tresult r = d->component->setState(s);

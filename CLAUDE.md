@@ -445,16 +445,22 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   worker thread or the GUI thread, one background-loading instance at a time; load times.log "(hosted)"; test
   `tst_liveequivalence::backgroundLoadHosted`; measured need: Pick / Strum 1.0 s, Finger 0.25 s). Even levels'
   background measurer doesn't wait yet (SSO only; HANDOFF.md › Lane jumps and Ample's background load).
-- **mimalloc for the whole process on Windows** (branch `sso-load`, 2026-10-23; the owner's PC: Whence's states load
-  -15 %, memory +17 %): `main()` first calls `ProcessAllocator::start()` (`audio/vst3/processallocator.*`), which loads
-  `kheap.dll` from MuseScore's folder (`tools/soundlibraries/kheap`, MinHook + mimalloc in `thirdparty/`, built and
-  installed into bin/ with MSVC) and pins it; from then on the C runtime's malloc family is mimalloc's. Kontakt's
-  setState makes millions of small allocations (18.9 million for Violins 1 - Performance). A block mimalloc doesn't
-  own (made before, by Qt's start-up, by another heap) always goes back to the CRT, HeapFree / HeapSize / HeapReAlloc of
-  a mimalloc block to mimalloc (so MuseScore's own /MT code, on the process heap, and the DLLs on ucrtbase still free
-  each other's blocks); all hooks or none; nothing undone at exit. Always on, load time only (renders null at
-  the floor); `MS_KHEAP_OFF=1` the system allocator, to compare; without kheap.dll the system allocator. load times.log
-  says which ("allocator: …", once per process). Linux / macOS: nothing.
+- **mimalloc for setState only on Windows** (branch `sso-load`, 2026-10-23; scoped by `kheap-realtime`, 2026-10-24):
+  `main()` first calls `ProcessAllocator::start()` (`audio/vst3/processallocator.*`), which loads `kheap.dll` from
+  MuseScore's folder (`tools/soundlibraries/kheap`, MinHook + mimalloc in `thirdparty/`, built and installed into bin/
+  with MSVC), pins it and starts it **scoped** (`kheap_start("mi-scoped")`): a new block comes from mimalloc only on a
+  thread inside `ProcessAllocator::LoadScope` (`Vst3Plugin::setState`: Kontakt's setState makes millions of small
+  allocations, 18.9 million for Violins 1 - Performance); every other thread (the audio callback, Kontakt's own
+  threads, the GUI) keeps the system allocator, a mimalloc block grown there moves to the CRT, and no thread outside a
+  load reclaims a segment a load thread left (`abandoned_reclaim_on_free` off). **Never mimalloc for the whole process
+  again**: builds #474-#477 did, and the owner's live playback crackled on every audio device while renders nulled
+  (`MS_KHEAP_OFF=1` cured it, 2026-10-24; not reproduced on the VM: HANDOFF.md › kheap and realtime audio). A block
+  mimalloc doesn't own always goes back to the CRT, HeapFree / HeapSize / HeapReAlloc of a mimalloc block to mimalloc
+  (MuseScore's own /MT code and the DLLs on ucrtbase still free each other's blocks); all hooks or none; nothing undone
+  at exit. Load time only (renders null at the floor); `MS_KHEAP_OFF=1` the system allocator, to compare; without
+  kheap.dll the system allocator. load times.log says which ("allocator: …", once per process). Linux / macOS: nothing.
+  `MS_AUDIO_TIMING=<file>` (`audiodrivers/pa.cpp`): each play's audio callbacks against their budget, one line per play
+  (the crackle test: callbacks over budget).
 - **Setups are made by MuseScore** from each patch's `.nki` (`audio/vst3/kontaktsetup.*`), then replaced by
   Kontakt's own state after the first load (`resave`). The states loaded (voice limit 512, the copies' Tune slots) are **prepared once**
   and kept, byte for byte, in memory and `<setups folder>/prepared` (`prepared` in soundlibraryhost.cpp; 2026-10-16, the
@@ -581,7 +587,7 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   GUI with sound: Xvfb + PulseAudio null sink (`pulseaudio -n --load=module-null-sink
   --load=module-native-protocol-unix`, own `XDG_RUNTIME_DIR`); under `QT_QPA_PLATFORM=offscreen` the Live link
   never binds its port. Env knobs: `MSTESTSYNTH_INIT_MS` / `_SETSTATE_MS` / `_STREAM_MS` / `_STREAM_MB`,
-  `MS_KONTAKT_MAX_VOICES`, `MS_SOUNDLIBRARY_LOAD_THREADS`, `MS_PREPARED_OFF` (prepared states made at each load), `MS_KHEAP_OFF=1` (Windows: the system allocator, not kheap's mimalloc),
+  `MS_KONTAKT_MAX_VOICES`, `MS_SOUNDLIBRARY_LOAD_THREADS`, `MS_PREPARED_OFF` (prepared states made at each load), `MS_KHEAP_OFF=1` (Windows: the system allocator, not kheap's mimalloc), `MS_AUDIO_TIMING=<file>` (PortAudio callbacks' times per play),
   `MS_EDIT_LAG_OFF=1` (the edit-lag speedups off: the code as before them, to compare; `EditLag`, recentresults.h),
   `MS_LIVESET_OUT=<file>` (liveSetWrite's set).
 - Other tests: `tools/soundlibraries/test_make_setups.py`, `test_extract_library_files.py`; Node in

@@ -22,6 +22,8 @@ namespace ProcessAllocator {
 
 static char g_description[320] = "system (not started)";
 static bool g_mimalloc = false;
+typedef void (*scope_t)(int);
+static scope_t g_scope = nullptr;      // kheap_scope, once kheap answers
 
 void start()
       {
@@ -57,18 +59,33 @@ void start()
       typedef const char* (*status_t)();
       const start_t kstart = (start_t)GetProcAddress(h, "kheap_start");
       const status_t kstatus = (status_t)GetProcAddress(h, "kheap_status");
-      if (!kstart || !kstatus) {
-            snprintf(g_description, sizeof g_description, "system (kheap.dll has no kheap_start)");
+      const scope_t kscope = (scope_t)GetProcAddress(h, "kheap_scope");
+      if (!kstart || !kstatus || !kscope) {
+            snprintf(g_description, sizeof g_description, "system (kheap.dll has no kheap_start / kheap_scope)");
             FreeLibrary(h);
             return;
             }
       HMODULE pinned = nullptr;           // (never unloaded: its blocks are freed to the end of the process)
       GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN | GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR)kstart, &pinned);
-      g_mimalloc = kstart("mi") == 1;
+      g_mimalloc = kstart("mi-scoped") == 1;
+      if (g_mimalloc)
+            g_scope = kscope;
       snprintf(g_description, sizeof g_description, "%s (kheap.dll: %s)", g_mimalloc ? "mimalloc" : "system", kstatus());
 #else
       snprintf(g_description, sizeof g_description, "system");
 #endif
+      }
+
+LoadScope::LoadScope()
+      {
+      if (g_scope)
+            g_scope(1);
+      }
+
+LoadScope::~LoadScope()
+      {
+      if (g_scope)
+            g_scope(0);
       }
 
 const char* description()
