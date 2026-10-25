@@ -208,6 +208,12 @@ class MidiRenderer {
             const Part* rangePart { nullptr };
             };
       std::map<const Note*, LibLevel> libLevels;
+      // the per-note levels still in force on each route at a chunk's end (libraryNoteLevels: the level of the route's
+      // last note; libraryEvenLevels: its glide), by the chunk's utick2: the next chunk takes them up, so what still sounds
+      // there (a note held over, a release) keeps its level until the route's next note-on (LibCarry in rendermidi.cpp;
+      // cleared with the renderer's state, updateState)
+      struct LibCarry;
+      std::map<int, std::shared_ptr<LibCarry>> libCarry;
       // track delays and levels (trackdelays.h): the parts with any, and each route's part and patch (port * 16 + channel)
       std::map<const Part*, TrackDelays::Delays> libTrackDelays;
       std::set<const Note*> libPlainNotes;                      // [slurs] plainPerformance: the notes played plain

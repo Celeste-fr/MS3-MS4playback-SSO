@@ -3839,15 +3839,46 @@ void MidiRenderer::libraryDelayLead(const Chunk& chunk, EventMap* events)
 //    the note-on (its release) takes the note's level, and the note's own release the next note's. A chord's
 //    notes at one tick on one route: the first one's level. volumeDb is CC11 on top of what CC11 has (the value in
 //    force, or the note's CC11 map): one CC11 schedule per route whatever sets it. The one place that schedules
-//    such per-note controller values (a merge point for other per-note levels)
+//    such per-note controller values (a merge point for other per-note levels).
+//    A chunk's end undoes nothing (branch chunk-end-levels, 2026-10-25): the level in force on a route at the end stays
+//    until the route's next note-on, in a later chunk too (libCarry: the next chunk maps its controllers by it, the
+//    values it restates at its start among them, and its first note-on on the route switches as any other). Before, the
+//    end put the values in force back (or the next chunk's start restated them unmapped) while the last note's release
+//    still rang: the owner's Whence with empty bars after bar 16, every SSO route's CC11 from 24-59 to 127 at bar 17
+//    (the chunk boundary), +7 .. +14 dB on the tails, "suddenly gets really loud before stopping"
 //---------------------------------------------------------
+
+struct MidiRenderer::LibCarry {
+      struct Level {
+            LibLevel level;
+            NPlayEvent like;
+            int tick;
+            std::map<int, int> written;         // controller -> its value in force as written at the chunk's end
+            };
+      struct Even {
+            std::vector<double> centres, dbs;   // the glide of the route's last run (held at its end)
+            int base;                           // the CC11 under it (unscaled) at the chunk's end
+            NPlayEvent like;
+            };
+      std::map<int, Level> levels;            // route -> the note level in force
+      std::map<int, Even> even;               // route -> the even levels' glide in force
+      };
 
 void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
       {
-      if (libLevels.empty())
-            return;
       const int utick1 = chunk.utick1();
       const int utick2 = chunk.utick2();
+      auto carryAt = [&](int u) -> LibCarry& {
+            std::shared_ptr<LibCarry>& c = libCarry[u];
+            if (!c)
+                  c = std::make_shared<LibCarry>();
+            return *c;
+            };
+      auto carried = libCarry.find(utick1);
+      const std::shared_ptr<LibCarry> from = carried == libCarry.end() ? nullptr : carried->second;
+      carryAt(utick2).levels.clear();
+      if (libLevels.empty() && (!from || from->levels.empty()))
+            return;
       // (a library whose dynamics are CC11: no plain volume to add volumeDb to)
       const bool volume = library && library->dynamicsCC != CTRL_EXPRESSION;
       // [levels] realRange: CC11 follows the dynamics CC in force (as written)
@@ -3921,6 +3952,14 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             };
       struct Active { const LibLevel* level; int tick; NPlayEvent like; };
       std::map<int, Active> active;                         // route -> the note level in force
+      // the chunk before's levels in force at its end (its routes' last notes and what still rings of them)
+      if (from) {
+            for (const auto& c : from->levels) {
+                  active[c.first] = { &c.second.level, c.second.tick, c.second.like };
+                  for (const auto& w : c.second.written)
+                        inForce[{ c.first, w.first }] = w.second;
+                  }
+            }
       // at it (tick t, inserted before it): the level in force on the route goes (the values in force again), the
       // note's comes (nullptr: none). A controller the note's level sets too is not put back first: at the same tick
       // the value in force would last no time and only reach a MIDI port or Live's clip as a spike (CC11 14, 127, 15)
@@ -4174,18 +4213,16 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                   continue;
             switchTo(i, i->first, route, level, i->first, ev);
             }
-      // the chunk's end: the values in force again; a real range's CC11 keeps the note's (a note held over the chunk's
-      // end keeps its level; flagged, so the next chunk takes the value as written from before it)
+      // the chunk's end: nothing undone (what still sounds keeps its level); the next chunk takes the levels in force up
+      LibCarry& out = carryAt(utick2);
       for (const auto& a : active) {
-            const LibLevel& level = *a.second.level;
-            for (int controller : controllersOf(level)) {
-                  const int written = inForce[{ a.first, controller }];
-                  const bool keep = level.range && controller == CTRL_EXPRESSION;
-                  const int dyn = dynamicsCC >= 0 ? inForce[{ a.first, dynamicsCC }] : 64;
-                  events->insert(events->lower_bound(utick2),
-                                 std::make_pair(utick2, keep ? levelEvent(a.second.like, controller, mapOf(level, controller, written, dyn))
-                                                              : controllerEvent(a.second.like, controller, written)));
-                  }
+            LibCarry::Level c { *a.second.level, a.second.like, a.second.tick, {} };
+            auto end = events->lower_bound(utick2);
+            for (int controller : controllersOf(c.level))
+                  c.written[controller] = valueAt(end, a.first, controller, fallbackOf(c.level, controller));
+            if (dynamicsCC >= 0)
+                  c.written[dynamicsCC] = dynAt(end, a.first);
+            out.levels.emplace(a.first, c);
             }
       }
 
@@ -4197,9 +4234,11 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
 //    with a value, to EvenLevels::rendered (stale or current). With the setting on, each run of joined notes on a route
 //    whose values are current plays the glide: CC11 times 10^(glide / 20) (the glide linear in dB between the notes' nodes,
 //    EvenLevels::nodeTime: halfway from each note-on to the next joined one; held at the ends), on every CC11 the route gets there (the per-note levels' schedule) and a
-//    message every STEP_MS where the value changes; the CC11 in force again at the next note-on on the route (else the
-//    chunk's end). Flagged as a level (valueAt takes the value as written from before them). The chunk's own notes; a
-//    note-off after the chunk's end is looked for after it
+//    message every STEP_MS where the value changes; the CC11 in force again at the next note-on on the route (in a later
+//    chunk too: the glide at a chunk's end is held, libCarry, on the next chunk's CC11s up to the route's first note-on
+//    there, branch chunk-end-levels; before, the chunk's end put it back while the last note's release rang). Flagged as a
+//    level (valueAt takes the value as written from before them). The chunk's own notes; a note-off after the chunk's end
+//    is looked for after it
 //---------------------------------------------------------
 
 void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
@@ -4211,6 +4250,15 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
       const int dynamicsCC = library->dynamicsCC >= 0 && library->dynamicsCC != CTRL_EXPRESSION ? library->dynamicsCC : -1;
       // (a library whose dynamics are CC11: no plain volume for the glide)
       const bool volume = library->dynamicsCC != CTRL_EXPRESSION;
+      // the glides in force at the chunk before's end (from), at this one's (carry)
+      auto carried = libCarry.find(utick1);
+      const std::shared_ptr<LibCarry> from = carried == libCarry.end() || !libEvenOn || !volume ? nullptr : carried->second;
+      std::shared_ptr<LibCarry>& carryPtr = libCarry[utick2];
+      if (!carryPtr)
+            carryPtr = std::make_shared<LibCarry>();
+      const std::shared_ptr<LibCarry> carry = carryPtr;
+      carry->even.clear();
+      const bool fromEven = from && !from->even.empty();
       auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
       struct On {
             EventMap::iterator it;
@@ -4287,8 +4335,50 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                               }
                   }
             }
-      if (!any && !evenInfo)
+      if (!any && !evenInfo && !fromEven)
             return;
+      auto scaled = [](int base, double db) {
+            return base <= 0 ? base : qBound(1, int(std::lround(base * std::pow(10.0, db / 20.0))), 127);
+            };
+      auto glideEvent = [&](const NPlayEvent& like, int value) {
+            NPlayEvent c(ME_CONTROLLER, like.channel(), CTRL_EXPRESSION, value);
+            c.setExternal(like.extPort(), like.extChannel());
+            c.setLibraryPatch(like.libraryPatch());
+            c.setOriginatingStaff(like.getOriginatingStaff());
+            c.setLibraryLevel(true);
+            return c;
+            };
+      // where a note's level goes (its note-on; [levels] attackLevels: libAttackLevelAt)
+      auto levelTickOf = [&](const On& n) {
+            auto at = libAttackLevelAt.find({ n.note, n.tick });
+            return at == libAttackLevelAt.end() ? n.tick : at->second;
+            };
+      // the chunk before's glides: held on the route's CC11s up to its first note-on here, the CC11 in force again there
+      // (no note-on on the route: held on, into the next chunk)
+      if (fromEven) {
+            for (const auto& fe : from->even) {
+                  const int route = fe.first;
+                  const LibCarry::Even& c = fe.second;
+                  auto r = byRoute.find(route);
+                  const int endTick = r != byRoute.end() && !r->second.empty() ? levelTickOf(r->second.front()) : utick2;
+                  int base = c.base;
+                  for (auto i = events->lower_bound(utick1); i != events->end() && i->first < endTick; ++i) {
+                        NPlayEvent& ev = i->second;
+                        if (!ev.isExternal() || ev.type() != ME_CONTROLLER || ev.librarySwitch() || ev.controller() != CTRL_EXPRESSION
+                            || routeOf(ev) != route)
+                              continue;
+                        base = ev.value();
+                        ev.setValue(scaled(base, EvenLevels::glideAt(c.centres, c.dbs, score->utick2utime(i->first))));
+                        ev.setLibraryLevel(true);
+                        }
+                  if (endTick >= utick2) {
+                        carry->even[route] = { c.centres, c.dbs, base, c.like };
+                        continue;
+                        }
+                  if (scaled(base, EvenLevels::glideAt(c.centres, c.dbs, score->utick2utime(endTick))) != base)
+                        events->insert(events->lower_bound(endTick), std::make_pair(endTick, glideEvent(c.like, base)));
+                  }
+            }
       for (auto& br : byRoute) {
             const int route = br.first;
             std::vector<On>& ns = br.second;
@@ -4377,17 +4467,6 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
             if (!libEvenOn || !volume || !anyHere)
                   continue;
             const int fallback = qBound(0, library->expressionValue, 127);
-            auto controllerEvent = [&](const NPlayEvent& like, int value) {
-                  NPlayEvent c(ME_CONTROLLER, like.channel(), CTRL_EXPRESSION, value);
-                  c.setExternal(like.extPort(), like.extChannel());
-                  c.setLibraryPatch(like.libraryPatch());
-                  c.setOriginatingStaff(like.getOriginatingStaff());
-                  c.setLibraryLevel(true);
-                  return c;
-                  };
-            auto scaled = [](int base, double db) {
-                  return base <= 0 ? base : qBound(1, int(std::lround(base * std::pow(10.0, db / 20.0))), 127);
-                  };
             for (size_t s = 0; s < ns.size();) {
                   if (!applies[s]) {
                         ++s;
@@ -4404,13 +4483,9 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                         }
                   // ([levels] attackLevels: a note whose level went at its onset, libAttackLevelAt: the glide starts there, and
                   // the run before ends there)
-                  auto levelTick = [&](const On& n) {
-                        auto at = libAttackLevelAt.find({ n.note, n.tick });
-                        return at == libAttackLevelAt.end() ? n.tick : at->second;
-                        };
-                  const int startTick = levelTick(ns[s]);
+                  const int startTick = levelTickOf(ns[s]);
                   const double tStart = startTick == ns[s].tick ? ns[s].on : score->utick2utime(startTick);
-                  const int endTick = e + 1 < ns.size() ? levelTick(ns[e + 1]) : utick2;
+                  const int endTick = e + 1 < ns.size() ? levelTickOf(ns[e + 1]) : utick2;
                   const NPlayEvent like = ns[s].it->second;
                   // the CC11s the route gets in the span (the per-note levels' schedule), and the value before it
                   std::vector<EventMap::iterator> existing;
@@ -4457,10 +4532,13 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                               lastT = at;
                               }
                         }
-                  if (out != base)
+                  // (the route's last run: its glide held into the next chunk, up to the route's next note-on: libCarry)
+                  if (e + 1 >= ns.size())
+                        carry->even[route] = { centres, dbs, base, like };
+                  else if (out != base)
                         inserts.push_back({ endTick, base });
                   for (const auto& in : inserts)
-                        events->insert(events->lower_bound(in.first), std::make_pair(in.first, controllerEvent(like, in.second)));
+                        events->insert(events->lower_bound(in.first), std::make_pair(in.first, glideEvent(like, in.second)));
                   s = e + 1;
                   }
             }
@@ -6650,6 +6728,7 @@ void MidiRenderer::updateState()
             libStartLost.clear();
             libStartLead = 0.0;
             libStartKnown = false;
+            libCarry.clear();
             libLanes.clear();
             libDivisi.clear();
             libLaneCents.clear();

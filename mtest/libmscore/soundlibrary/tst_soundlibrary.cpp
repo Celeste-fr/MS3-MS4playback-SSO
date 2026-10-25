@@ -189,6 +189,7 @@ class TestSoundLibrary : public QObject, public MTest
       void gainStage();
       void levelRealRange();
       void noLevelSpikes();
+      void chunkEndLevels();
       void startLead();
       void evenLevelsGlide();
       void evenAutoWindows();
@@ -5291,6 +5292,197 @@ void TestSoundLibrary::noLevelSpikes()
       r.renderScore(&clips, ctx);
       check(clips, "Live's clips");
       delete score;
+      }
+
+//---------------------------------------------------------
+//   chunkEndLevels
+//    a chunk's end undoes no per-note level (branch chunk-end-levels; the owner's Whence with empty bars after bar 16:
+//    every SSO route's CC11 to 127 at bar 17, the chunk boundary, under the last notes' releases). chunk-end.musicxml
+//    rendered a chunk a bar (playback's chunks, at every bar line) plays every CC1 / CC11 as one chunk does, hosted and as
+//    Live's clips, with a track level on Long (-6 dB by CC11): a slur's release over an empty bar, a long D5 tied over a
+//    bar line, a staccato E5 after it (no level: CC11 as written), a long F5 ringing into empty bars; [levels] realRange
+//    (every note's CC11 by the dynamic) on and off. And nothing changes at the score's end. [levels] evenLevels: a run's
+//    glide held after it, over the chunk ends, to the end (no note on its route after it)
+//---------------------------------------------------------
+
+void TestSoundLibrary::chunkEndLevels()
+      {
+      using Steps = std::map<std::pair<int, int>, std::map<int, int>>;     // (route, controller) -> tick -> value (the last at a tick)
+      auto steps = [](const EventMap& ev) {
+            Steps st;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && !e.librarySwitch() && e.type() == ME_CONTROLLER
+                      && (e.controller() == CTRL_EXPRESSION || e.controller() == CTRL_MODULATION))
+                        st[{ e.extPort() * 16 + e.extChannel(), e.controller() }][te.first] = e.value();
+                  }
+            return st;
+            };
+      auto at = [](const std::map<int, int>& s, int tick) {
+            auto i = s.upper_bound(tick);
+            return i == s.begin() ? -1 : std::prev(i)->second;
+            };
+      auto render = [](MasterScore* score, int chunkSize, bool clips, std::vector<EvenLevels::NoteInfo>* info = nullptr) {
+            score->setPlaylistDirty();
+            MidiRenderer r(score);
+            r.setMinChunkSize(chunkSize);
+            r.setForLiveClips(clips);
+            r.setEvenLevelsInfo(info);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            EventMap events;
+            r.renderScore(&events, ctx);
+            int chunks = 0;
+            for (int utick = 0;; ++chunks) {
+                  const MidiRenderer::Chunk ch = r.getChunkAt(utick);
+                  if (!ch)
+                        break;
+                  utick = ch.utick2();
+                  }
+            return std::make_pair(std::move(events), chunks);
+            };
+      auto noteOns = [](const EventMap& ev) {
+            std::vector<std::tuple<int, int, int>> on;       // tick, route, pitch
+            for (const auto& te : ev)
+                  if (te.second.isExternal() && !te.second.librarySwitch() && te.second.type() == ME_NOTEON && te.second.velo() > 0)
+                        on.emplace_back(te.first, te.second.extPort() * 16 + te.second.extChannel(), te.second.pitch());
+            return on;
+            };
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+         "<Instrument name='Violin' ids='violin' realSpan='60:28 84:28'"
+         " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/84:-6 64/84:0 112/84:3 127/84:4'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Staccato' value='40' techniques='short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin Legato' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato' modifiers='performance'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "chunk-end.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const int end = score->lastMeasure()->endTick().ticks();
+      score->setMetaTag(TrackDelays::metaTag, "[{\"part\":0,\"name\":\"Violin\",\"levels\":{\"Violin / Long\":-6}}]");
+      for (const char* range : { "0", "1" }) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", range } });
+            for (bool clips : { false, true }) {
+                  const QString what = QString("realRange %1%2").arg(range).arg(clips ? ", Live's clips" : "");
+                  const auto one = render(score, 1000, clips);
+                  const auto bars = render(score, 1, clips);
+                  QCOMPARE(one.second, 1);
+                  QVERIFY2(bars.second >= 4, qPrintable(QString::number(bars.second)));
+                  QCOMPARE(noteOns(bars.first), noteOns(one.first));
+                  const Steps a = steps(one.first);
+                  const Steps b = steps(bars.first);
+                  int compared = 0;
+                  for (const Steps* s : { &a, &b }) {
+                        for (const auto& rc : *s) {
+                              auto x = a.find(rc.first);
+                              auto y = b.find(rc.first);
+                              QVERIFY2(x != a.end() && y != b.end(), qPrintable(QString("%1: route %2 CC%3 in one render only")
+                                                                                 .arg(what).arg(rc.first.first).arg(rc.first.second)));
+                              for (const auto& tv : rc.second) {
+                                    QVERIFY2(at(x->second, tv.first) == at(y->second, tv.first),
+                                             qPrintable(QString("%1: route %2 CC%3 at tick %4: %5 in one chunk, %6 in a chunk a bar")
+                                                        .arg(what).arg(rc.first.first).arg(rc.first.second).arg(tv.first)
+                                                        .arg(at(x->second, tv.first)).arg(at(y->second, tv.first))));
+                                    ++compared;
+                                    }
+                              // the score's end: nothing changes there (what rings keeps its level)
+                              QVERIFY2(at(rc.second, end + 100000) == at(rc.second, end - 1),
+                                       qPrintable(QString("%1: route %2 CC%3 at the end: %4, before it %5").arg(what).arg(rc.first.first)
+                                                  .arg(rc.first.second).arg(at(rc.second, end + 100000)).arg(at(rc.second, end - 1))));
+                              }
+                        }
+                  QVERIFY2(compared > 20, qPrintable(QString("%1: %2 compared").arg(what).arg(compared)));
+                  // the D5 (Long) 6 dB softer by CC11, the staccato E5 after it (in its own chunk) as written
+                  int d5 = -1, e5 = -1;
+                  for (const auto& on : noteOns(bars.first)) {
+                        auto cc11 = b.find({ std::get<1>(on), CTRL_EXPRESSION });
+                        QVERIFY(cc11 != b.end());
+                        if (std::get<2>(on) == 74)
+                              d5 = at(cc11->second, std::get<0>(on));
+                        else if (std::get<2>(on) == 76)
+                              e5 = at(cc11->second, std::get<0>(on));
+                        }
+                  if (QString(range) == "0")
+                        QVERIFY2(d5 == 64 && e5 == 127, qPrintable(QString("%1: D5 CC11 %2, E5 %3").arg(what).arg(d5).arg(e5)));
+                  else
+                        QVERIFY2(d5 > 0 && e5 > 0 && d5 < e5, qPrintable(QString("%1: D5 CC11 %2, E5 %3").arg(what).arg(d5).arg(e5)));
+                  }
+            }
+      delete score;
+      }
+      // [levels] evenLevels: the slur's run (a Performance legato), values -3 / +3 dB in turn; after its last note-off the
+      // route's CC11 stays as the glide left it, over every bar line to the end
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' legatoDelay='-12:220 -2:240 -1:230 +1:220 +2:200 +12:440'"
+         " onset='60'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      const std::map<QString, QString> base { { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" },
+                                              { "levels/realRange", "0" }, { "levels/evenLevels", "0" } };
+      Playback::setIniValuesForTest(base);
+      MasterScore* score = readScore(DIR + "chunk-end.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      std::vector<EvenLevels::NoteInfo> in;
+      render(score, 1, false, &in);
+      std::sort(in.begin(), in.end(), [](const EvenLevels::NoteInfo& a, const EvenLevels::NoteInfo& b) { return a.on < b.on; });
+      QVERIFY2(in.size() >= 8, qPrintable(QString::number(in.size())));
+      const int route = in[0].route;
+      int last = -1;
+      for (size_t k = 0; k < in.size(); ++k) {
+            if (in[k].route != route)
+                  continue;
+            Note* note = const_cast<Note*>(in[k].note);
+            note->setEvenLevel(k % 2 ? 3.0 : -3.0);
+            note->setEvenContext(in[k].context);
+            last = int(k);
+            }
+      QCOMPARE(last, 7);
+      std::map<QString, QString> on = base;
+      on["levels/evenLevels"] = "1";
+      Playback::setIniValuesForTest(on);
+      const auto bars = render(score, 1, false);
+      QVERIFY(bars.second >= 4);
+      const Steps st = steps(bars.first);
+      auto cc11 = st.find({ route, CTRL_EXPRESSION });
+      QVERIFY(cc11 != st.end());
+      // the run's last note-off on the route
+      int off = -1;
+      for (const auto& te : bars.first)
+            if (te.second.isExternal() && te.second.extPort() * 16 + te.second.extChannel() == route
+                && (te.second.type() == ME_NOTEOFF || (te.second.type() == ME_NOTEON && te.second.velo() == 0)))
+                  off = te.first;
+      QVERIFY(off > 0);
+      const int held = at(cc11->second, off);
+      int first = -1;
+      for (const auto& o : noteOns(bars.first))
+            if (std::get<1>(o) == route) {
+                  first = std::get<0>(o);
+                  break;
+                  }
+      QVERIFY2(held != at(cc11->second, first), qPrintable(QString("the glide's end %1: as at its start").arg(held)));
+      for (const auto& tv : cc11->second)
+            if (tv.first > off)
+                  QVERIFY2(tv.second == held, qPrintable(QString("tick %1: CC11 %2 after the run's %3").arg(tv.first).arg(tv.second).arg(held)));
+      delete score;
+      }
       }
 
 //---------------------------------------------------------

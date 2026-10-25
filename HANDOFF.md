@@ -46,6 +46,31 @@ Not merged, each with its own "Paused 2026-10-18" note on its branch:
 Load-time facts: Kontakt's setState is the cost (the instrument script is compiled once per tuning slot, +1.3-1.7 s
 per slot); MuseScore's own work is about 4 % of a score open.
 
+## Chunk-end levels (branch `chunk-end-levels`, 2026-10-25, from integrate-1017 6dd53a9e97; not merged)
+
+The owner (live playback, SSO hosted, his Whence with empty bars appended after bar 16 to 48): "after bar 16 at the start of
+bar 17, it suddenly gets really loud before stopping". A fix, no setting; CLAUDE.md › Sound libraries (libraryNoteLevels).
+- **Cause** (chunked dump, as Seq plays: 10-bar chunks): the per-note levels lived inside one chunk. At a chunk's end
+  `libraryNoteLevels` put the written values back (a real range's CC11 kept), and the next chunk's start restated the
+  written controllers (CC11 = the map's expression 127, the dynamic's CC1) unmapped, with no level in force. Every SSO
+  route jumped at bar 17 (the boundary) while the last notes' releases rang: Violins 1 - Performance slots +11.7 .. +17.0
+  dB, Violins 2 +12.0 .. +12.5, Violas +6.7 .. +16.1, Celli +14.8 .. +24.0, Basses +12.8 / +13.4 (CC11 8-59 -> 127;
+  tails 0-2.3 s after their note-offs). Even levels' glide was put back at the chunk's end the same way.
+- **Fix**: `MidiRenderer::libCarry` (by the chunk's end tick): each route's level in force (LibLevel, the written values)
+  and even levels' last glide go to the next chunk, which maps its controllers by them (its start's restatements among
+  them) until the route's first note-on, where the level switches as inside a chunk. Nothing at a chunk's or the score's
+  end. A chunk rendered without the one before (a seek, the first after an edit) starts as before (nothing rings there).
+- **Proved** (dumps through tst_liveequivalence dumpEvents, defaults and Recommended, chunked / renderMidi / Live's
+  clips; pre = integrate-1017's build, identical to the owner's dump): the owner's copy changes only at the chunk
+  starts of bars 17, 27, 37, 47 (chunked: CC11 now held at the level, 34 route files) and at the score's end (bar 48:
+  same-value or 70 s-late restores gone); Whence (16 bars, one chunk) only at its end, every removed event the value
+  already in force: no sound change. Note-ons / offs, bends, trace, gains unchanged; the audit on both identical;
+  editLagIdentical on both passes. Test `tst_soundlibrary::chunkEndLevels` (fails before the fix at bar 2's chunk start
+  and at the score's end).
+- **Untried**: on the VM / with the real SSO (needs a Windows build). Not covered: Ample strums' CC7 level
+  (`guitarplayback.cpp`, restored at the chunk's end, and the volume lane's restatement at the next chunk's start): the
+  same kind of jump on a strum ringing over a chunk boundary.
+
 ## Async load (branch `async-load`, 2026-10-24, from integrate-1017 426a759d88; not merged)
 
 The owner: "is it possible for SSO to load without locking up the rest of MuseScore? just have the playback button grayed
