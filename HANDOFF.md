@@ -266,6 +266,14 @@ device, exports null; `MS_KHEAP_OFF=1` cures it. Rule: an optimization never cha
   the test kit runs it. Live has no setState hook to scope: don't install it; if wanted, a mode with mimalloc only on
   Live's main thread would need its own realtime test in Live first.
 
+## Build for the owner: #481 (2026-10-25)
+
+Windows build #481 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40191534206, integrate-1017): #480 plus
+chunk-end-levels (a note's level and even-levels glide carried across chunk boundaries: the owner's Whence copy jumped
++7..+24 dB at bar 17 in live playback). Linux dumps only (the export and Live's clips render one chunk: unchanged but
+for the score's end); not run on the VM: the fix acts in live playback's chunks, which the VM's offline checks don't
+render. The owner to check his copy at bar 17.
+
 ## Build for the owner: #480 (2026-10-25)
 
 Windows build #480 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40165471973, integrate-1017 @ 796eb9b0ae):
