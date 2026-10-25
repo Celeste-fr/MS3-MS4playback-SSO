@@ -68,6 +68,8 @@ target_include_directories(MuseScoreLibraryHost PRIVATE
 target_link_libraries(MuseScoreLibraryHost Qt5::Widgets Qt5::Core vst3sdk_hosting Threads::Threads)
 if (WIN32)
       target_link_libraries(MuseScoreLibraryHost psapi)
+      # (no PCH here, which defines it for MuseScore's targets: windows.h's min / max macros break std::max; build 482)
+      target_compile_definitions(MuseScoreLibraryHost PRIVATE NOMINMAX)
 endif ()
 target_compile_definitions(MuseScoreLibraryHost PRIVATE VST3_HOST_CHILD SMTG_RENAME_ASSERT=1 $<IF:$<CONFIG:Debug>,DEVELOPMENT=1,RELEASE=1>)
 target_compile_features(MuseScoreLibraryHost PRIVATE cxx_std_17)
