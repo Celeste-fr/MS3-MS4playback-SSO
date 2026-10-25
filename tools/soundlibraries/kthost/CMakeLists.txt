@@ -33,6 +33,7 @@ add_executable(kthost
       kthost.cpp
       ${KTHOST_ROOT}/audio/vst3/vst3plugin.cpp
       ${KTHOST_ROOT}/audio/vst3/kontaktsetup.cpp
+      ${KTHOST_ROOT}/audio/vst3/processallocator.cpp
       )
 target_include_directories(kthost PRIVATE
       ${KTHOST_ROOT}

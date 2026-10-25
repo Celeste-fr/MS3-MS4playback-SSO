@@ -33,6 +33,16 @@ namespace ProcessAllocator {
 void start();
 const char* description();
 bool mimalloc();
+
+// a plug-in's load on this thread (Vst3Plugin::setState): with kheap's scoped mode, new blocks come from mimalloc only
+// on a thread inside such a scope; every other thread (the audio callback's, Kontakt's own) keeps the system allocator.
+// Nestable; nothing without kheap.
+struct LoadScope {
+      LoadScope();
+      ~LoadScope();
+      LoadScope(const LoadScope&) = delete;
+      LoadScope& operator=(const LoadScope&) = delete;
+      };
 }
 }
 
