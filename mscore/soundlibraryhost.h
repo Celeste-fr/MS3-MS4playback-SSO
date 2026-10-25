@@ -103,6 +103,8 @@ class SoundLibraryHost : public QObject {
                                           // (scriptValuesFor, as text); another score's: loaded again
             };
       std::array<Slot, 64> _slots;
+      std::set<int> _lostSlots;           // slots whose instance's host process ended, said (checkHostProcesses)
+      void checkHostProcesses();
       // the part each slot plays (its patch, an extra, a copy for another tuning) and the score, from
       // the last sync: the Mixer's values go to the slots (applyMixer). Only compared with the score's
       // parts before use (a part deleted since isn't read)

@@ -30,6 +30,8 @@ add_library(vst3host STATIC
       vst3plugin.cpp
       vst3plugin.h
       vst3synth.cpp
+      vst3remote.cpp
+      vst3remote.h
       evenmeasure.cpp
       evenmeasure.h
       wavwriter.h
@@ -46,3 +48,26 @@ target_compile_definitions(vst3host PRIVATE SMTG_RENAME_ASSERT=1 $<IF:$<CONFIG:D
 if (BUILD_PCH)
       target_use_pch(vst3host)
 endif (BUILD_PCH)
+
+# msvst3host: the host process for instances outside MuseScore's ([soundlibrary] hostProcesses, vst3remote.h): the same
+# Vst3Plugin, without libmscore (VST3_HOST_CHILD), and the editor window
+find_package(Qt5Widgets REQUIRED)
+find_package(Threads REQUIRED)
+if (WIN32)
+      add_executable(msvst3host WIN32 vst3hostmain.cpp vst3remote.cpp vst3remote.h vst3plugin.cpp vst3plugin.h
+            ${PROJECT_SOURCE_DIR}/mscore/vst3editor.cpp ${PROJECT_SOURCE_DIR}/mscore/vst3editor.h)
+else ()
+      add_executable(msvst3host vst3hostmain.cpp vst3remote.cpp vst3remote.h vst3plugin.cpp vst3plugin.h
+            ${PROJECT_SOURCE_DIR}/mscore/vst3editor.cpp ${PROJECT_SOURCE_DIR}/mscore/vst3editor.h)
+endif ()
+target_include_directories(msvst3host PRIVATE
+      ${PROJECT_SOURCE_DIR}
+      ${PROJECT_BINARY_DIR}
+      ${PROJECT_SOURCE_DIR}/thirdparty/vst3sdk
+      )
+target_link_libraries(msvst3host Qt5::Widgets Qt5::Core vst3sdk_hosting Threads::Threads)
+target_compile_definitions(msvst3host PRIVATE VST3_HOST_CHILD SMTG_RENAME_ASSERT=1 $<IF:$<CONFIG:Debug>,DEVELOPMENT=1,RELEASE=1>)
+target_compile_features(msvst3host PRIVATE cxx_std_17)
+add_dependencies(vst3host msvst3host)
+target_compile_definitions(vst3host PRIVATE VST3HOST_BUILD_PATH="$<TARGET_FILE:msvst3host>")
+install(TARGETS msvst3host RUNTIME DESTINATION bin)
