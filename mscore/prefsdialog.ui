@@ -2969,6 +2969,39 @@
             </property>
            </widget>
           </item>
+          <item row="0" column="6">
+           <layout class="QHBoxLayout" name="portaudioLatencyLayout">
+            <item>
+             <widget class="QLabel" name="portaudioLatencyLabel">
+              <property name="text">
+               <string>Audio buffer:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="portaudioLatency">
+              <property name="toolTip">
+               <string>How far ahead MuseScore renders the sound, in milliseconds. If playback crackles (sound libraries such as Kontakt need time), raise it, e.g. to 100 or 200 ms; playback then responds that much later. Default: the device's own low latency.</string>
+              </property>
+              <property name="accessibleName">
+               <string>Audio buffer</string>
+              </property>
+              <property name="specialValueText">
+               <string>Default</string>
+              </property>
+              <property name="suffix">
+               <string extracomment="milliseconds">ms</string>
+              </property>
+              <property name="maximum">
+               <number>1000</number>
+              </property>
+              <property name="singleStep">
+               <number>10</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
           <item row="2" column="2">
            <widget class="QLabel" name="portMidiOutputLabel">
             <property name="text">

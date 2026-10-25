@@ -555,6 +555,7 @@ void PreferenceDialog::start()
 #ifdef USE_PORTAUDIO
                   new IntPreferenceItem(PREF_IO_PORTAUDIO_DEVICE, portaudioApi, doNothing, doNothing),
                   new IntPreferenceItem(PREF_IO_PORTAUDIO_DEVICE, portaudioDevice, doNothing, doNothing),
+                  new IntPreferenceItem(PREF_IO_PORTAUDIO_LATENCY, portaudioLatency, doNothing),
 #endif
 #ifdef USE_PORTMIDI
                   new StringPreferenceItem(PREF_IO_PORTMIDI_INPUTDEVICE, portMidiInput, doNothing, doNothing),
@@ -1633,6 +1634,9 @@ void PreferenceDialog::apply()
                || (preferences.getBool(PREF_IO_PORTAUDIO_USEPORTAUDIO) != portaudioDriver->isChecked())
 #endif
                || (preferences.getBool(PREF_IO_PULSEAUDIO_USEPULSEAUDIO) != pulseaudioDriver->isChecked())
+#ifdef USE_PORTAUDIO
+               || (preferences.getInt(PREF_IO_PORTAUDIO_LATENCY) != portaudioLatency->value())
+#endif
 #ifdef USE_ALSA
                || (preferences.getString(PREF_IO_ALSA_DEVICE) != alsaDevice->text())
                || (preferences.getInt(PREF_IO_ALSA_SAMPLERATE) != alsaSampleRate->currentData().toInt())
@@ -1643,6 +1647,7 @@ void PreferenceDialog::apply()
                   preferences.setPreference(PREF_IO_ALSA_USEALSAAUDIO, alsaDriver->isChecked());
 #ifdef USE_PORTAUDIO
                   preferences.setPreference(PREF_IO_PORTAUDIO_USEPORTAUDIO, portaudioDriver->isChecked());
+                  preferences.setPreference(PREF_IO_PORTAUDIO_LATENCY, portaudioLatency->value());
 #endif
                   preferences.setPreference(PREF_IO_PULSEAUDIO_USEPULSEAUDIO, pulseaudioDriver->isChecked());
 #ifdef USE_ALSA

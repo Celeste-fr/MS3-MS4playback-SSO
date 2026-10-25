@@ -230,6 +230,7 @@ void Preferences::init(bool storeInMemoryOnly)
       #ifdef USE_PORTAUDIO
             {PREF_IO_PORTAUDIO_DEVICE,                             new IntPreference(-1, false)},
             {PREF_IO_PORTAUDIO_DEVICENAME,                         new StringPreference("", false)},
+            {PREF_IO_PORTAUDIO_LATENCY,                            new IntPreference(0, false)},
             {PREF_IO_PORTAUDIO_USEPORTAUDIO,                       new BoolPreference(defaultUsePortAudio, false)},
       #endif
       #ifdef USE_PORTMIDI

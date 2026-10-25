@@ -164,7 +164,10 @@ bool Portaudio::init(bool)
       out.device           = idx;
       out.channelCount     = 2;
       out.sampleFormat     = paFloat32;
-      out.suggestedLatency = di->defaultLowOutputLatency;
+      // the audio buffer: Preferences › I/O › Audio buffer in ms, 0 the device's low latency (as before). A
+      // larger buffer gives the hosted libraries (Kontakt + SSO) more time per block: no crackles, later response
+      const int latencyMs = preferences.getInt(PREF_IO_PORTAUDIO_LATENCY);
+      out.suggestedLatency = latencyMs > 0 ? latencyMs / 1000.0 : di->defaultLowOutputLatency;
       out.hostApiSpecificStreamInfo = 0;
 
       err = Pa_OpenStream(&stream, 0, &out, double(_sampleRate), 0, 0, paCallback, (void*)this);
