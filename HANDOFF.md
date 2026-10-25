@@ -53,9 +53,30 @@ oop-load showed setState is one CPU-bound thread per process (VM: 37 s in 1 proc
   busy for ever: the probe stuck after phase l in 2 of 5 runs; a latent bug in-process too); kthost links vst3remote.cpp
   but hosts in-process.
 - **Offline renders** use helpers too (they go through load()); nulled on Linux by the suites; on the VM: the heard check.
-- **Untried:** Windows, Kontakt, SSO, Ample in a helper; the editor window in a helper (a top-level window of the helper's,
-  `AllowSetForegroundWindow`); MMCSS in the helper; the job object ending helpers with MuseScore on Windows. See the VM
-  results below when they exist.
+- **Windows builds:** build 482 failed (std::max under windows.h in the helper, no PCH:
+  https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40223936264), build 483 at 9a8edc7e0a good
+  (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40224978823; the CI runner: tst_soundlibrary 150 passed / 8
+  skipped, remoteNull bit-identical, remoteTiming 38.5 us median at 64 frames .. 95 us at 512, p99 77-382 us).
+- **VM, build 483, Kontakt 8 + SSO, Whence (quarter tones), Recommended** (`C:\claude\b483\ms`, scripts in private/checkoop):
+  - Probe o (score open), helpers / in-process (same build, `MS_VST3_HOST_PROCESSES=0`): every instance loaded in 15.0 /
+    15.3 s against 29.2 / 32.1 s (first cold helper run 30.8 s, in-process 29.7); event loop max lateness 182-189 ms against
+    6.6 s; Windows' "Not responding" 0 against 1-2 times. The window stays free with Kontakt now (it didn't with build 480's
+    async load).
+  - Probe l,r,g with helpers against build 480: an edit's reload 15 ms (58.9 s), pitch-up during loading 0.42-0.50 s
+    (5.6-9.7 s), r's play press 0.23 s (5.3 s); g plays on after the change; no "Not responding".
+  - MS_AUDIO_TIMING, 60 s of Whence playing, ABBA, budget 23.22 ms, ~2300 callbacks: helpers 3 / 4 over budget (p99 8.2 / 7.6
+    ms, max 167 / 93), in-process 5 / 1 (p99 6.4 / 6.5, max 389 / 382). Round trip overhead on the VM median 380-440 us, p99
+    ~2.5 ms. No crackle measure worse than in-process; nobody listened.
+  - Open: while loading (stopped) the audio callback stalled once per helper start, ~2.6 s (mean 2.2 ms; in-process max 0.9).
+    Not in the helpers' round-trip maxima (<= 166 ms); cause unknown; nothing plays then.
+  - Kill test: the helper holding 8.2 GB killed while playing: noticed the same second, MuseScore stayed up, 5 instances
+    reloaded in 7.6 s (one in a new helper), playback went on; ~7 s silent in the recording.
+  - Heard check (export, per route) with helpers against check480's t1: 0 differing events in all five parts, detector 0
+    findings; report ARRIVAL 36 fail / 16 warn, UNHEARD 194; in-process control on build 483 (t1i): 35 / 16, 190; check480:
+    32 / 18, 190; RHYTHM, LEVEL the same: take spread.
+- **Untried:** Ample in a helper (the AGM trial ends 2026-10-25); the editor window in a helper (a top-level window of the
+  helper's, `AllowSetForegroundWindow`); closing MuseScore during a load with helpers on Windows; MMCSS in the helper; the
+  owner's PC (6 cores: more helpers), a cold local disk.
 - Files outside the repo: `~/MuseScore/ms3fork/ovl-oophost/` (overlay build, lp/ probe logs), `private/checkoop/` (VM).
 
 ## Paused 2026-10-18: where to pick up
