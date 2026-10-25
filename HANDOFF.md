@@ -324,6 +324,14 @@ device, exports null; `MS_KHEAP_OFF=1` cures it. Rule: an optimization never cha
   the test kit runs it. Live has no setState hook to scope: don't install it; if wanted, a mode with mimalloc only on
   Live's main thread would need its own realtime test in Live first.
 
+## Build for the owner: #484 (2026-10-25)
+
+Windows build #484 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40230637035, integrate-1017): #481 plus
+oop-host (sound-library plug-ins in helper processes; checked on the VM as build 483: HANDOFF.md › Out-of-process host).
+The merged tree itself not run on the VM (483 = oop-host without chunk-end-levels, 481 = the rest). For the owner to try:
+loading while editing, crackles (MS_KHEAP_OFF removed), his Whence at bar 17, a Kontakt editor, closing during a load;
+`MS_VST3_HOST_PROCESSES=0` for in-process.
+
 ## Build for the owner: #481 (2026-10-25)
 
 Windows build #481 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40191534206, integrate-1017): #480 plus
