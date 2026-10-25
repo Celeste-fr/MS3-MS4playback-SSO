@@ -252,7 +252,10 @@ void EvenAutoMeasurer::dispatch(const EvenAuto::Job& job)
 void EvenAutoMeasurer::loadStep()
       {
 #ifdef USE_VST3
-      if (_toLoad.empty() || !_score)
+      // (a load in steps still to finish counts too: its job left _toLoad when it began. Returning here then left it
+      // pending for ever, the measurer busy and its notes unmeasured, whenever no other job was waiting to load; seen
+      // with helpers, the lag probe stuck after phase l, 2 of 5 runs)
+      if ((_toLoad.empty() && !_pendingLoad) || !_score)
             return;
       // the playback's own instances first (the load profile, 2026-10-16: at score open both loaded on the main thread,
       // one each in turn, so the last of the score's instances came in a measurer's load later each time). What is
@@ -514,6 +517,22 @@ void EvenAutoMeasurer::onResult(const EvenAuto::Result& r)
 bool EvenAutoMeasurer::probeBusy() const
       {
       return _session && (_session->busy() || !_toLoad.empty() || _pendingLoad);
+      }
+
+QString EvenAutoMeasurer::probeState() const
+      {
+      int queued = 0;
+      int dead = 0;
+      for (const auto& i : _instances) {
+            queued += int(i.second->queue.size());
+#ifdef USE_VST3
+            if (i.second->stop)
+                  ++dead;
+#endif
+            }
+      return QString("session %1 (%2), to load %3, pending load %4, instances %5 (stopped %6), queued %7, failed %8")
+             .arg(_session ? 1 : 0).arg(_session ? _session->pendingText().join("; ") : QString())
+             .arg(_toLoad.size()).arg(_pendingLoad ? 1 : 0).arg(_instances.size()).arg(dead).arg(queued).arg(_failed.size());
       }
 
 void EvenAutoMeasurer::setProbePaused(bool on)

@@ -137,6 +137,7 @@ class EvenAutoMeasurer : public QObject {
       // edits not looked at, Play doesn't wait, the workers idle (the probe's "measurement paused" phases); refresh: the
       // session made or dropped for the setting as it is now
       bool probeBusy() const;
+      QString probeState() const;         // (the lag probe's note while it waits: what is still busy)
       void setProbePaused(bool on);
       void probeRefresh(Score* cs);
       void shutdown();                    // MuseScore quits: workers stopped, instances released, cache saved

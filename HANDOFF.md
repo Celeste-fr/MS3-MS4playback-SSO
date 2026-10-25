@@ -21,6 +21,43 @@ The owner's goal for October 2026: everything a later AI needs to make playback 
 - **How he judges timing:** one section alone with a metronome click, long rests cut out, about 20 s a clip, one
   question per page.
 
+## Out-of-process host (branch `oop-host`, 2026-10-25, from integrate-1017 6dd53a9e97 + kontakt-procs; not merged)
+
+The owner approved ("seems good") hosting the library's plug-ins in helper processes: build 480 showed Kontakt doing its
+setState work on its process's GUI thread even when called from a worker, so MuseScore's window froze 8-18 s per big patch;
+oop-load showed setState is one CPU-bound thread per process (VM: 37 s in 1 process, 21 s in 2, 19 s in 3). Design in
+`audio/vst3/vst3remote.h`'s header; CLAUDE.md › Hosting › Plug-ins in helper processes.
+- **What it is:** `MuseScoreLibraryHost[.exe]` next to MuseScore3Evo.exe; `[soundlibrary] hostProcesses` -1 (auto, new
+  default: physical cores - 1, at least 2 on 2 cores / 4 threads), 0 in-process as before, `MS_VST3_HOST_PROCESSES` wins.
+  The same Vst3Plugin calls replayed in the helper on the same kind of thread; same-block audio over shared memory.
+- **Sound-identical (Linux, test synth):** `tst_soundlibrary::remoteNull`: 900 random steps (tuned notes on 3 slots incl. a
+  linked one, varispeed glides, blocks of 1-4096 frames, CC1, parameters, Mixer, transport restarts, all notes off, settle)
+  bit-identical in-process / 1 helper / 2 helpers, states identical. The full suites pass both ways
+  (`MS_VST3_HOST_PROCESSES=0` and the default): tst_soundlibrary, tst_liveequivalence (verify, live equivalence, even
+  levels, hosted slots, Ample state, background loads all run through helpers by default).
+- **Round trip per block (remoteTiming, 4 instances in 2 helpers, paced like a callback, dev PC):** overhead (round trip less
+  the helpers' own process time) median 41-53 us at 64 frames (p99 67-172), 54-65 at 128, 84-99 at 256, 144-163 at 512 (p99
+  237-357); a 64-frame block lasts 1333 us. No added latency (same block).
+- **Linux GUI, Whence with the test synth at 1 s a setState (22 instances by varispeed), lag probe o,l,r,g:** score open
+  22.3-22.5 s in-process -> 5.1-5.3 s with 5 helpers (3 runs); an edit's / Play's 5 instances 5.1 -> 1.0 s; event loop max
+  lateness at opening 211 -> 28-86 ms; audio callback mean 0.5-0.7 -> 0.6-1.0 ms of 21.6, overruns the same. (With the
+  first rule, a patch's copies all to the helper holding the patch, the open took 10.1-10.3 s: the 4-5 copies of a patch
+  waited for each other; now that helper is used only when it isn't loading.)
+- **Crash / hang:** a helper killed: its instances silent at once, nothing waits; `SoundLibraryHost::checkHostProcesses`
+  reloads them in a new helper and the part sounds sample for sample as before (`tst_liveequivalence::hostCrashRecovery`);
+  a patch whose helper ended 3 times isn't reloaded. A helper that doesn't answer a block for 15 s is ended (`remoteHung`,
+  SIGSTOP). The even levels' measurer drops a dead instance's result and reloads it.
+- **Fixed on the way:** setParameter's processor side now goes with the next block (it raced the helper's main thread:
+  vst3Settle); the GUI thread's parameter reads of a busy helper come from the cache (kept across a setState; 1.15 s -> 0);
+  `EvenAutoMeasurer::loadStep` returned before finishing a load in steps when no other job waited (the measurer then stayed
+  busy for ever: the probe stuck after phase l in 2 of 5 runs; a latent bug in-process too); kthost links vst3remote.cpp
+  but hosts in-process.
+- **Offline renders** use helpers too (they go through load()); nulled on Linux by the suites; on the VM: the heard check.
+- **Untried:** Windows, Kontakt, SSO, Ample in a helper; the editor window in a helper (a top-level window of the helper's,
+  `AllowSetForegroundWindow`); MMCSS in the helper; the job object ending helpers with MuseScore on Windows. See the VM
+  results below when they exist.
+- Files outside the repo: `~/MuseScore/ms3fork/ovl-oophost/` (overlay build, lp/ probe logs), `private/checkoop/` (VM).
+
 ## Paused 2026-10-18: where to pick up
 
 The owner paused the project. This branch (`integrate-1017`) holds everything merged; all fork tests pass on Linux.

@@ -59,9 +59,9 @@
 #include <unistd.h>
 #endif
 
-#ifndef VST3_HOST_CHILD
+#if !defined(VST3_HOST_CHILD) && !defined(VST3PLUGIN_NO_SETTINGS)
 #include "libmscore/playbacksettings.h"
-#else
+#elif defined(VST3_HOST_CHILD)
 #include <QApplication>
 #include <QWidget>
 #include "mscore/vst3editor.h"
@@ -971,8 +971,8 @@ static int physicalCores()
 
 int processes()
       {
-#ifdef VST3_HOST_CHILD
-      return 0;                     // (a helper hosts in its own process)
+#if defined(VST3_HOST_CHILD) || defined(VST3PLUGIN_NO_SETTINGS)
+      return 0;                     // (a helper hosts in its own process; kthost, without the settings, in its own too)
 #else
       if (s_unavailable)
             return 0;
@@ -1184,11 +1184,14 @@ std::unique_ptr<Instance> Instance::load(const QString& path, double sampleRate,
             dropDead();
             const int k = std::max(1, processes());
             const int alive = int(std::count_if(registry().begin(), registry().end(), [](const std::shared_ptr<Process>& p) { return !p->dead; }));
-            // the helper that hosts the same patch (Kontakt shares its samples in a process), else the one loading the
-            // fewest now, then holding the fewest; a new one while all are loading
+            // the helper that hosts the same patch when it isn't loading (Kontakt shares its samples in a process: the even
+            // levels' measurer's copy of a playback instance), else the one loading the fewest now, then holding the fewest;
+            // a new one while all are loading. (Copies of one patch loading together spread over the helpers: the Linux GUI
+            // run, 22 instances by varispeed, 4-5 copies of a patch each, piled into one helper behind each other; with
+            // Kontakt's hosted slots a patch's copies are one instance)
             if (!key.isEmpty())
                   for (const auto& p : registry())
-                        if (!p->dead && p->keys.count(key))
+                        if (!p->dead && p->keys.count(key) && p->loading == 0)
                               proc = p;
             if (!proc) {
                   for (const auto& p : registry())
