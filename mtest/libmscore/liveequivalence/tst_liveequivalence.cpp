@@ -26,6 +26,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
+#include <QCryptographicHash>
 #include <QTemporaryFile>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
@@ -185,6 +186,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveMicCompensation();
       void liveTracksJson();
       void hostedSlots();
+      void vialSetupState();
       void chordVoicesHosted();
       void chordVoicesLive();
       void divisiLive();
@@ -5465,6 +5467,54 @@ void TestLiveEquivalence::updateLiveSet()
       QVERIFY(pg >= 0 && pk > pg);
       QCOMPARE(x2.childValue(pk, "TrackGroupId"), x2.attr(pg, "Id"));
       delete with;
+      }
+
+//---------------------------------------------------------
+//   vialSetupState
+//    a preset library's state (the Vial Instrumental map: <Files presets>, <Instrument preset>): the patch's preset file
+//    from the library's folder (here MS_PRESET_FOLDER) is the component state, byte for byte, read at every load (an
+//    edited preset plays at once), no controller state; without the file no state and an error naming it
+//---------------------------------------------------------
+
+void TestLiveEquivalence::vialSetupState()
+      {
+      QString error;
+      auto lib = SoundLib::Library::load(root + "/../share/soundlibraries/Vial Instrumental.xml", &error);
+      QVERIFY2(lib, qPrintable(error));
+      QVERIFY(!SoundLibraryHost::makesSetups(*lib));
+      QTemporaryDir data;
+      qputenv("MS_PRESET_FOLDER", data.path().toUtf8());
+      QCOMPARE(SoundLibraryHost::libraryFolder(*lib), data.path());
+      const QString file = data.path() + "/Vial Instrumental/Presets/SSO imitations/Violins 1 - Long.vital";
+      QCOMPARE(SoundLibraryHost::presetPath(*lib, "Violins 1"), file);
+      QFile::remove(SoundLibraryHost::setupFile(*lib, "Violins 1"));
+      QVERIFY(!SoundLibraryHost::hasSetup(*lib, "Violins 1"));
+      error.clear();
+      QVERIFY(SoundLibraryHost::setupState(*lib, "Violins 1", "/x/Vial.vst3", &error).isEmpty());
+      QVERIFY2(error.contains("Violins 1 - Long.vital"), qPrintable(error));
+      QVERIFY(QDir().mkpath(QFileInfo(file).absolutePath()));
+      auto write = [&](const QByteArray& bytes) {
+            QFile f(file);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write(bytes);
+            };
+      const QByteArray preset("{\"preset_name\": \"Violins 1 - Long\", \"settings\": {\"volume\": 0.5}}");
+      write(preset);
+      QVERIFY(SoundLibraryHost::hasSetup(*lib, "Violins 1"));
+      QString name;
+      QByteArray component, controller("?");
+      QVERIFY(Vst3Plugin::splitState(SoundLibraryHost::setupState(*lib, "Violins 1", "/x/Vial.vst3", &error), &name, &component,
+                                     &controller));
+      QCOMPARE(name, QString("Vial"));
+      QCOMPARE(component, preset);
+      QVERIFY(controller.isEmpty());
+      const QByteArray edited("{\"preset_name\": \"Violins 1 - Long\", \"settings\": {\"volume\": 0.25}}");
+      write(edited);
+      QVERIFY(Vst3Plugin::splitState(SoundLibraryHost::setupState(*lib, "Violins 1", "/x/Vial.vst3", &error), nullptr, &component,
+                                     nullptr));
+      QCOMPARE(component, edited);
+      QVERIFY(SoundLibraryHost::setupId(*lib, "Violins 1") == QCryptographicHash::hash(edited, QCryptographicHash::Sha1).toHex());
+      qunsetenv("MS_PRESET_FOLDER");
       }
 
 //---------------------------------------------------------

@@ -31,6 +31,7 @@
 #include "libmscore/rendermidi.h"
 #include "libmscore/accidental.h"
 #include "libmscore/instrument.h"
+#include "libmscore/instrtemplate.h"
 #include "libmscore/part.h"
 #include "libmscore/automation.h"
 #include "libmscore/partcontrollers.h"
@@ -210,6 +211,7 @@ class TestSoundLibrary : public QObject, public MTest
       void keyShift();
       void ampleMap();
       void ampleRender();
+      void vialMap();
       void ampleStrums();
       void ampleSoftStrums();
       void ampleStrumLead();
@@ -237,6 +239,7 @@ class TestSoundLibrary : public QObject, public MTest
       void voiceLanesMemory();
       void divisiLevel();
 #ifdef TESTSYNTH
+      void vialHosted();
       void evenAutoTestSynth();
       void mixerSlot();
       void transportRestart();
@@ -7095,6 +7098,181 @@ void TestSoundLibrary::ampleRender()
       }
 
 //---------------------------------------------------------
+//   vialMap
+//    the Vial Instrumental maps (gen_vial.py, the owner's "SSO imitations" presets, 2026-10-25): 13 instruments with the
+//    ids of their SSO equivalents, each one Long articulation for every technique and its preset file (Vial.vst3: .vital,
+//    Fuse: .vialfuse); no switching; CC1 dynamics, CC11 at 127, CC21 vibrato (64; senza / molto vib.) on the eight that
+//    have it; the preset folder by Vial's rule (MS_PRESET_FOLDER, Vial.config's data_directory over Vital's unless it
+//    is the default, the default); vial.musicxml's Violins, flute and horn rendered: each part one route, its CC1 /
+//    CC11 / CC21, no switch (hosted, the route's instance gets them on MIDI channel 1)
+//---------------------------------------------------------
+
+void TestSoundLibrary::vialMap()
+      {
+      QString error;
+      auto vial = SoundLib::Library::load(root + "/../share/soundlibraries/Vial Instrumental.xml", &error);
+      QVERIFY2(vial, qPrintable(error));
+      auto fuse = SoundLib::Library::load(root + "/../share/soundlibraries/Vial Instrumental (Fuse).xml", &error);
+      QVERIFY2(fuse, qPrintable(error));
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      QCOMPARE(vial->plugins, QStringList({ "Vial.vst3" }));
+      QCOMPARE(fuse->plugins, QStringList({ "Vial Fuse.vst3", "VialFuse.vst3" }));
+      QCOMPARE(vial->dynamicsCC, 1);
+      QVERIFY(vial->registryName.isEmpty());                    // (MuseScore makes no setups: the presets are the states)
+      QCOMPARE(vial->presets.documents, QString("Vial"));
+      QCOMPARE(vial->presets.configs, QStringList({ "vial/Vial.config", "vital/Vital.config" }));
+      const std::set<QString> vibrato { "Violins 1", "Violins 2", "Violas", "Celli", "Flute Solo", "Oboe Solo", "Clarinet Solo",
+                                        "Bassoon Solo" };
+      const QStringList names { "Violins 1", "Violins 2", "Violas", "Celli", "Basses", "Flute Solo", "Oboe Solo", "Clarinet Solo",
+                                "Bassoon Solo", "Horn Solo", "Trumpet Solo", "Tenor Trombone Solo", "Tuba Solo" };
+      for (const auto* lib : { vial.get(), fuse.get() }) {
+            QCOMPARE(int(lib->instruments.size()), names.size());
+            for (int i = 0; i < names.size(); ++i) {
+                  const SoundLib::LibInstrument& li = lib->instruments[size_t(i)];
+                  QCOMPARE(li.name, names[i]);
+                  QVERIFY(li.switchType == SoundLib::SwitchType::NONE);
+                  QCOMPARE(int(li.articulations.size()), 1);
+                  QCOMPARE(li.articulations[0].name, QString("Long"));
+                  for (const char* t : { "long", "legato", "short", "staccatissimo", "spiccato", "tenuto", "marcato", "longmarcato",
+                                         "pizzicato", "bartok", "collegno" })
+                        QVERIFY2(li.articulations[0].techniques.contains(t), t);
+                  const QString file = names[i] + " - Long" + (lib == vial.get() ? ".vital" : ".vialfuse");
+                  QCOMPARE(li.preset, (lib == vial.get() ? QString("Vial Instrumental/Presets/SSO imitations/")
+                                                         : QString("Fuse/Vial Instrumental/SSO imitations/")) + file);
+                  // the SSO equivalent's ids and part name rule
+                  const SoundLib::LibInstrument* s = nullptr;
+                  for (const SoundLib::LibInstrument& x : sso->instruments)
+                        if (x.name == li.name && !x.extra() && !s)
+                              s = &x;
+                  QVERIFY2(s, qPrintable(li.name));
+                  QCOMPARE(li.ids, s->ids);
+                  QCOMPARE(li.partName.pattern(), s->partName.pattern());
+                  const SoundLib::Controller* vib = nullptr;
+                  for (const SoundLib::Controller& c : li.allControllers) {
+                        QCOMPARE(c.id, QString("vibrato"));             // (the only controller)
+                        vib = &c;
+                        }
+                  QCOMPARE(bool(vib), vibrato.count(li.name) == 1);
+                  if (vib) {
+                        QCOMPARE(vib->cc, 21);
+                        QCOMPARE(vib->defaultValue, 64);
+                        }
+                  }
+            }
+
+      // the preset folder: the override, Vial's config, Vital's, the default
+      QTemporaryDir home;
+      const QByteArray oldHome = qgetenv("HOME"), oldXdg = qgetenv("XDG_DATA_HOME");
+      qputenv("HOME", home.path().toUtf8());
+      qunsetenv("XDG_DATA_HOME");
+      qunsetenv("MS_PRESET_FOLDER");
+      const QString def = home.path() + "/.local/share/vital";
+      QCOMPARE(SoundLib::presetFolder(*vial), def);
+      QDir(home.path()).mkpath(".vial");
+      QDir(home.path()).mkpath(".vital");
+      QDir(home.path()).mkpath("own");
+      QDir(home.path()).mkpath("official");
+      QDir(home.path()).mkpath(".local/share/vital");
+      auto config = [&](const QString& file, const QString& dir) {
+            QFile f(home.path() + "/" + file);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            QJsonObject o;
+            o["data_directory"] = dir;
+            f.write(QJsonDocument(o).toJson());
+            };
+      config(".vital/Vital.config", home.path() + "/official");
+      QCOMPARE(SoundLib::presetFolder(*vial), home.path() + "/official");
+      config(".vial/Vial.config", home.path() + "/own");
+      QCOMPARE(SoundLib::presetFolder(*vial), home.path() + "/own");
+      config(".vial/Vial.config", def);                            // (Vial's own default: official Vital's wins)
+      QCOMPARE(SoundLib::presetFolder(*vial), home.path() + "/official");
+      config(".vital/Vital.config", home.path() + "/gone");        // (a folder that isn't there: not taken)
+      QCOMPARE(SoundLib::presetFolder(*vial), def);
+      qputenv("XDG_DATA_HOME", (home.path() + "/xdg").toUtf8());
+      QFile::remove(home.path() + "/.vial/Vial.config");
+      QCOMPARE(SoundLib::presetFolder(*vial), home.path() + "/xdg/vial");
+      qputenv("MS_PRESET_FOLDER", "/some/folder");
+      QCOMPARE(SoundLib::presetFolder(*vial), QString("/some/folder"));
+      QCOMPARE(SoundLib::presetFile(vial->instruments[0], "/some/folder"),
+               QString("/some/folder/Vial Instrumental/Presets/SSO imitations/Violins 1 - Long.vital"));
+      QVERIFY(SoundLib::presetFolder(*sso).isEmpty());             // (not a preset library)
+      // the component state: a .vital's bytes as they are; a .vialfuse's with Fuse's header in front
+      const QByteArray json("{\"format\": \"vial_fuse\", \"slots\": []}");
+      QCOMPARE(SoundLib::presetComponent(*vial, "/p/Violins 1 - Long.vital", json), json);
+      const QByteArray withHeader = SoundLib::presetComponent(*fuse, "/p/Violins 1 - Long.vialfuse", json);
+      const QJsonObject h = QJsonDocument::fromJson(withHeader).object();
+      QCOMPARE(h.value("fuse_preset").toObject().value("name").toString(), QString("Violins 1 - Long"));
+      QCOMPARE(h.value("format").toString(), QString("vial_fuse"));
+      QVERIFY(withHeader.endsWith(json.mid(1)));                   // (the file's bytes after the header, unchanged)
+      QCOMPARE(SoundLib::presetComponent(*fuse, "/p/x.vialfuse", withHeader), withHeader);        // (a header already: kept)
+      QCOMPARE(QJsonDocument::fromJson(SoundLib::presetComponent(*fuse, "/p/x.vialfuse", "{ }")).object().size(), 1);
+      qunsetenv("MS_PRESET_FOLDER");
+      qputenv("HOME", oldHome);
+      if (oldXdg.isEmpty())
+            qunsetenv("XDG_DATA_HOME");
+      else
+            qputenv("XDG_DATA_HOME", oldXdg);
+
+      // a score: Violins on Violins 1, the flute, the horn; every event on channel 1 of the part's route
+      SoundLib::setCurrent(vial);
+      MasterScore* score = readScore(DIR + "vial.musicxml");
+      QVERIFY(score);
+      // (MusicXML has no sound for a violin section: its strings.group imports as "strings"; the section's template)
+      const InstrumentTemplate* violins = searchTemplate("violins");
+      QVERIFY(violins);
+      score->parts().front()->setInstrument(Instrument::fromTemplate(violins));
+      score->rebuildMidiMapping();
+      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *vial);
+      QStringList partIds;
+      for (const Part* p : score->parts())
+            partIds << p->instrument()->getId();
+      QVERIFY2(routes.size() == 3, qPrintable(partIds.join(" ")));
+      std::map<int, QString> patchOf;                     // route slot -> patch
+      for (const SoundLib::Route& r : routes)
+            patchOf[r.port * 16 + r.channel] = r.instrument->name;
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::map<QString, std::map<int, std::vector<std::pair<int, int>>>> ccs;        // patch -> controller -> (tick, value)
+      std::map<QString, int> notes;
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (!ev.isExternal())
+                  continue;
+            const auto it = patchOf.find(ev.extPort() * 16 + ev.extChannel());
+            QVERIFY(it != patchOf.end());
+            QVERIFY(ev.type() != ME_PROGRAM && !ev.librarySwitch());
+            if (ev.type() == ME_NOTEON && ev.velo() > 0)
+                  ++notes[it->second];
+            else if (ev.type() == ME_CONTROLLER)
+                  ccs[it->second][ev.controller()].push_back({ te.first, ev.value() });
+            }
+      for (const char* p : { "Violins 1", "Flute Solo", "Horn Solo" }) {
+            QCOMPARE(notes[p], 4);
+            QVERIFY2(!ccs[p][11].empty() && ccs[p][11].front().second == 127, p);
+            QVERIFY2(ccs[p][1].size() > 4, p);                                           // (mp, the crescendo, f)
+            QVERIFY2(ccs[p][1].back().second > ccs[p][1].front().second, p);
+            QVERIFY2(ccs[p][32].empty(), p);
+            }
+      for (const char* p : { "Violins 1", "Flute Solo" }) {
+            const auto& v = ccs[p][21];
+            QVERIFY2(!v.empty() && v.front() == std::make_pair(0, 64), p);
+            auto at = [&v](int tick) { int x = -1; for (const auto& e : v) if (e.first <= tick) x = e.second; return x; };
+            QCOMPARE(at(2 * 1920 + 10), 0);                 // senza vib.
+            QCOMPARE(at(3 * 1920 + 10), 127);               // molto vib.
+            }
+      QVERIFY(ccs["Horn Solo"][21].empty());
+      // hosted, a route is an instance of its own, its events on MIDI channel 1 (Vst3Synth::target: channel 0 unless a
+      // Kontakt slot links it); no hosted slots for a library that isn't Kontakt
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      QVERIFY(!SoundLib::hostedSlots(score, *vial));
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      delete score;
+      SoundLib::setCurrent(nullptr);
+      }
+
+//---------------------------------------------------------
 //   Guitar notation on Ample Guitar M (guitarplayback.cpp, branch ample-phase2): guitar-techniques.musicxml, bar 1 two
 //   strum lines (up, down: made straight here, MusicXML has only wavy arpeggios), a plain chord, a note; bar 2 a ppp
 //   strum and a muted (cross noteheads) one at f; bar 3 a note with string number 2, an artificial harmonic (A + the
@@ -9573,6 +9751,154 @@ void TestSoundLibrary::kontaktSetupReal()
 //   vst3Plugin
 //    a VST 3 instrument hosted: notes to sound, CCs to its mapped parameters, state kept
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   vialHosted
+//    the real Vial (MS_VIAL_VST3: its .vst3 bundle; MS_PRESET_FOLDER: Vial's data folder with the Vial Instrumental pack;
+//    skipped without them: the owner's presets are not in the repository) with a preset of the map: setState with the
+//    preset file's bytes loads it (the state Vial gives back is that preset: every setting as it was; Vial adds "tuning"
+//    and its newer settings at their defaults, and JUCE's private data after the JSON), and it sounds; CC1 at 40 under
+//    64; CC11 at 64 plays 20 log10(64 / 127) = -5.95 dB under 127 (an exact gain) where the preset has a CC11 row
+//    (Vial with voice_expression). MS_VIAL_PATCH: the map's instrument (default Violins 1); MS_VIAL_MAP: the map (default
+//    "Vial Instrumental"; "Vial Instrumental (Fuse)" with Vial Fuse's bundle)
+//---------------------------------------------------------
+
+static double rms(const std::vector<float>& b, int side);
+static double dB(double a, double b);
+
+void TestSoundLibrary::vialHosted()
+      {
+      const QString plugin = qEnvironmentVariable("MS_VIAL_VST3");
+      if (plugin.isEmpty() || qEnvironmentVariable("MS_PRESET_FOLDER").isEmpty())
+            QSKIP("MS_VIAL_VST3 / MS_PRESET_FOLDER not set");
+      QString error;
+      auto vial = SoundLib::Library::load(root + "/../share/soundlibraries/" + qEnvironmentVariable("MS_VIAL_MAP", "Vial Instrumental")
+                                          + ".xml", &error);
+      QVERIFY2(vial, qPrintable(error));
+      const QString name = qEnvironmentVariable("MS_VIAL_PATCH", "Violins 1");
+      const SoundLib::LibInstrument* li = nullptr;
+      for (const SoundLib::LibInstrument& x : vial->instruments)
+            if (x.name == name)
+                  li = &x;
+      QVERIFY2(li, qPrintable(name));
+      QFile f(SoundLib::presetFile(*li, SoundLib::presetFolder(*vial)));
+      QVERIFY2(f.open(QIODevice::ReadOnly), qPrintable(f.fileName()));
+      const QByteArray preset = f.readAll();
+      const QJsonObject want = QJsonDocument::fromJson(preset).object();
+      QVERIFY(!want.isEmpty());
+      const QByteArray state = Vst3Plugin::joinState("Vial", SoundLib::presetComponent(*vial, f.fileName(), preset), QByteArray());
+      const int rate = 48000;
+      auto render = [&](int cc1, int cc11, int cc21, double* rmsOut, QJsonObject* back) {
+            QString err;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(plugin, rate, 512, &err);
+            QVERIFY2(p, qPrintable(err));
+            QVERIFY(p->setState(state));
+            if (back) {
+                  QByteArray component;
+                  QVERIFY(Vst3Plugin::splitState(p->state(), nullptr, &component, nullptr));
+                  // (JUCE's VST 3 wrapper may add its own data after the JSON: the JSON object up to its end)
+                  const int end = component.lastIndexOf('}');
+                  if (!qEnvironmentVariable("MS_VIAL_DUMP").isEmpty()) {
+                        QFile d(qEnvironmentVariable("MS_VIAL_DUMP"));
+                        if (d.open(QIODevice::WriteOnly))
+                              d.write(component);
+                        }
+                  QJsonParseError pe;
+                  *back = QJsonDocument::fromJson(component.left(end + 1), &pe).object();
+                  QVERIFY2(pe.error == QJsonParseError::NoError, qPrintable(pe.errorString()));
+                  }
+            std::vector<float> b(2 * 512, 0.f);
+            for (int i = 0; i < 20; ++i) {                                // (settle)
+                  std::fill(b.begin(), b.end(), 0.f);
+                  p->process(512, b.data());
+                  }
+            p->midi(ME_CONTROLLER, 0, 1, cc1);
+            p->midi(ME_CONTROLLER, 0, 11, cc11);
+            p->midi(ME_CONTROLLER, 0, 21, cc21);
+            p->midi(ME_NOTEON, 0, li->name.contains("Bass") || li->name.contains("Tuba") ? 41 : 67, 80);
+            std::vector<float> all;
+            for (int i = 0; i < rate * 2 / 512; ++i) {                    // 2 s held
+                  std::fill(b.begin(), b.end(), 0.f);
+                  p->process(512, b.data());
+                  all.insert(all.end(), b.begin(), b.end());
+                  }
+            const std::vector<float> held(all.begin() + 2 * rate / 2, all.end());   // (from 0.5 s on)
+            *rmsOut = (rms(held, 0) + rms(held, 1)) / 2;
+            };
+      double full = 0, half = 0, soft = 0, novib = 0;
+      QJsonObject back;
+      render(64, 127, 64, &full, &back);
+      if (QTest::currentTestFailed())
+            return;
+      // the state given back is the preset: every value of the preset as it was (numbers to 1e-5: Vial keeps floats);
+      // Vial adds "tuning" and the settings the preset leaves at their defaults (its newer parameters: 342 for Violins 1
+      // - Long, 2026-10-25), Fuse the same in its slots' presets and its header ("fuse_preset", whose name the map's
+      // presetHeader gives: the top "name" / "author" of a .vialfuse it doesn't keep)
+      QStringList differ;
+      int added = 0;
+      std::function<void(const QString&, const QJsonValue&, const QJsonValue&)> within
+            = [&](const QString& at, const QJsonValue& a, const QJsonValue& b) {
+            if (a.isDouble() && b.isDouble()) {
+                  if (std::fabs(a.toDouble() - b.toDouble()) > 1e-5 * std::max(1.0, std::fabs(a.toDouble())))
+                        differ << at;
+                  }
+            else if (a.type() != b.type())
+                  differ << at;
+            else if (a.isArray()) {
+                  const QJsonArray x = a.toArray(), y = b.toArray();
+                  if (x.size() != y.size())
+                        differ << at + "[]";
+                  else
+                        for (int i = 0; i < x.size(); ++i)
+                              within(QString("%1[%2]").arg(at).arg(i), x[i], y[i]);
+                  }
+            else if (a.isObject()) {
+                  const QJsonObject x = a.toObject(), y = b.toObject();
+                  for (auto it = x.begin(); it != x.end(); ++it) {
+                        if (at.isEmpty() && !vial->presets.header.isEmpty() && (it.key() == "name" || it.key() == "author"))
+                              continue;
+                        if (!y.contains(it.key()))
+                              differ << at + "." + it.key();
+                        else
+                              within(at + "." + it.key(), it.value(), y.value(it.key()));
+                        }
+                  for (auto it = y.begin(); it != y.end(); ++it)
+                        if (!x.contains(it.key())) {
+                              ++added;
+                              if (at.isEmpty() && it.key() != "tuning" && it.key() != vial->presets.header)
+                                    differ << "+" + it.key();
+                              }
+                  }
+            else if (a != b)
+                  differ << at;
+            };
+      within(QString(), want, back);
+      if (!vial->presets.header.isEmpty())
+            QCOMPARE(back.value(vial->presets.header).toObject().value("name").toString(), name + " - Long");
+      qDebug("vialHosted: %s, %d values added by the plug-in; differing: %s", qPrintable(name), added,
+             qPrintable(differ.mid(0, 20).join(" ")));
+      QVERIFY2(differ.isEmpty(), qPrintable(differ.mid(0, 20).join(" ")));
+      render(64, 64, 64, &half, nullptr);
+      render(40, 127, 64, &soft, nullptr);
+      render(64, 127, 0, &novib, nullptr);
+      qDebug("vialHosted: rms %.5f; CC11 64 %.2f dB; CC1 40 %.2f dB; CC21 0 %.2f dB", full, dB(half, full), dB(soft, full),
+             dB(novib, full));
+      QVERIFY2(full > 1e-3, "silent");
+      QVERIFY(dB(soft, full) < -1.0);
+      // CC11: an exact gain where the preset takes it (a modulation from a MIDI CC source listening to CC11: Vial's
+      // midi_cc_<n>_number = 11, the vial sessions' cc_apply.py, -> voice_expression); a preset without it ignores CC11
+      const QJsonObject settings = want.value("settings").toObject();
+      bool cc11 = false;
+      for (const QJsonValue& m : settings.value("modulations").toArray()) {
+            const QString src = m.toObject().value("source").toString();
+            if (src.startsWith("midi_cc_") && settings.value(src + "_number").toDouble() == 11)
+                  cc11 = true;
+            }
+      if (cc11)
+            QVERIFY2(std::fabs(dB(half, full) - 20 * std::log10(64.0 / 127.0)) < 0.5, qPrintable(QString::number(dB(half, full))));
+      else
+            qWarning("vialHosted: %s has no CC11 row: CC11 not checked (%.2f dB at 64)", qPrintable(name), dB(half, full));
+      }
 
 //---------------------------------------------------------
 //   vst3LoadTimes

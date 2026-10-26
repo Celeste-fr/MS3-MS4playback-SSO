@@ -25,7 +25,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDir>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
 
@@ -1069,6 +1071,15 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
             else if (r.name() == "Files") {
                   // <Files registry="Spitfire Symphony Orchestra"/>: where the library is installed
                   lib->registryName = a.value("registry").toString();
+                  // <Files presets="Vial" presetsHome=".local/share/vital" presetConfig="…;…" presetKey="data_directory"/>:
+                  // where a preset library's presets are (Vial's data folder)
+                  lib->presets.documents = a.value("presets").toString();
+                  lib->presets.home = a.value("presetsHome").toString();
+                  lib->presets.configs = a.value("presetConfig").toString().split(';', QString::SkipEmptyParts);
+                  lib->presets.key = a.value("presetKey").toString();
+                  lib->presets.header = a.value("presetHeader").toString();
+                  if (!lib->presets.configs.isEmpty() && lib->presets.key.isEmpty())
+                        return fail(QString("%1:%2: Files: presetConfig without presetKey").arg(path).arg(r.lineNumber()));
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Patch") {
@@ -1105,6 +1116,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.nki = a.value("nki").toString();
+                  li.preset = a.value("preset").toString();
                   li.testPitch = a.hasAttribute("pitch") ? a.value("pitch").toInt() : -1;
                   li.setupValues = readSetupValues(a.value("setup").toString());
                   li.ids = words(a.value("ids").toString().toLower());
@@ -1339,6 +1351,88 @@ const LibInstrument* Library::match(const Instrument* instrument, const Part* pa
 //---------------------------------------------------------
 //   choose
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   presetFolder, presetFile
+//    a preset library's folder (<Files presets>: Vial's data folder, its rule as Vial's LoadSave::getDataDirectory has
+//    it: its own config's data_directory, else official Vital's, else Documents/Vial on Windows, ~/.local/share/vital
+//    or $XDG_DATA_HOME/vial elsewhere)
+//---------------------------------------------------------
+
+static QString configFolder(const QString& config, const QString& key)
+      {
+#ifdef Q_OS_WIN
+      const QString base = qEnvironmentVariable("APPDATA");
+      const QString file = base.isEmpty() ? QString() : base + "/" + config;
+#else
+      const QString file = QDir::homePath() + "/." + config;
+#endif
+      QFile f(file);
+      if (file.isEmpty() || !f.open(QIODevice::ReadOnly))
+            return QString();
+      const QJsonValue v = QJsonDocument::fromJson(f.readAll()).object().value(key);
+      const QString dir = v.isString() ? QDir::fromNativeSeparators(v.toString()) : QString();
+      return !dir.isEmpty() && QDir::isAbsolutePath(dir) && QFileInfo(dir).isDir() ? QDir::cleanPath(dir) : QString();
+      }
+
+QString presetFolder(const Library& library)
+      {
+      if (library.presets.empty())
+            return QString();
+      const QString env = qEnvironmentVariable("MS_PRESET_FOLDER");
+      if (!env.isEmpty())
+            return QDir::fromNativeSeparators(env);
+#ifdef Q_OS_WIN
+      const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+      const QString def = QDir::cleanPath(docs + "/" + library.presets.documents);
+#else
+      const QString xdg = qEnvironmentVariable("XDG_DATA_HOME").trimmed();
+      const QString def = QDir::cleanPath(!xdg.isEmpty() ? xdg + "/" + library.presets.documents.toLower()
+                                                         : QDir::homePath() + "/" + library.presets.home);
+#endif
+      QStringList named;
+      for (const QString& c : library.presets.configs)
+            named << configFolder(c, library.presets.key);
+      if (!named.isEmpty() && !named.front().isEmpty()) {
+            if (named.front() != def)
+                  return named.front();
+            for (int i = 1; i < named.size(); ++i)
+                  if (!named[i].isEmpty())
+                        return named[i];
+            return named.front();
+            }
+      for (const QString& n : named)
+            if (!n.isEmpty())
+                  return n;
+      return def;
+      }
+
+QString presetFile(const LibInstrument& patch, const QString& folder)
+      {
+      if (patch.preset.isEmpty() || folder.isEmpty())
+            return QString();
+      return QDir::cleanPath(folder + "/" + patch.preset);
+      }
+
+QByteArray presetComponent(const Library& library, const QString& file, const QByteArray& bytes)
+      {
+      // (Vial Fuse shows the name of "fuse_preset" in its header, which a .vialfuse file doesn't carry; the file's bytes
+      // otherwise as they are)
+      const int open = bytes.indexOf('{');
+      if (library.presets.header.isEmpty() || open < 0 || bytes.contains("\"" + library.presets.header.toUtf8() + "\""))
+            return bytes;
+      QJsonObject h;
+      h["name"] = QFileInfo(file).completeBaseName();
+      h["path"] = QDir::toNativeSeparators(file);
+      const QByteArray header = QJsonDocument(QJsonObject { { library.presets.header, h } }).toJson(QJsonDocument::Compact);
+      QByteArray insert = header.left(header.size() - 1);       // ({"fuse_preset":{…} and the file's keys after it)
+      int next = open + 1;
+      while (next < bytes.size() && QChar(bytes[next]).isSpace())
+            ++next;
+      if (next < bytes.size() && bytes[next] != '}')
+            insert += ',';
+      return bytes.left(open) + insert + bytes.mid(open + 1);
+      }
 
 bool Choice::sampledOrnament() const
       {

@@ -21,6 +21,30 @@ The owner's goal for October 2026: everything a later AI needs to make playback 
 - **How he judges timing:** one section alone with a metronome click, long rests cut out, about 20 s a clip, one
   question per page.
 
+## Vial Instrumental (branch `vial-map`, 2026-10-25, from integrate-1017 b163700144; not merged)
+
+The owner's "SSO imitations" Vial presets as a sound library (approved 2026-10-25, relayed by the vial sessions).
+- Maps (generated: `tools/soundlibraries/gen_vial.py`, ids from the SSO map): `Vial Instrumental.xml` (hosted Vial.vst3,
+  `<data>/Vial Instrumental/Presets/SSO imitations/<name>.vital`) and `Vial Instrumental (Fuse).xml` (Vial Fuse.vst3,
+  `<data>/Fuse/Vial Instrumental/SSO imitations/<name>.vialfuse`, `presetHeader="fuse_preset"`). The owner picks one in
+  Preferences › I/O › Library (one library at a time, OPEN_ITEMS 14); the data folder as Vial finds it (Vial.config's
+  `data_directory`, else Vital's, else Documents\Vial), or *View › Sound Library… › Library folder…*.
+- Code: `SoundLib::presetFolder` / `presetFile` / `presetComponent` (soundlibrary.cpp), `SoundLibraryHost::presetPath`,
+  `savedSetupState`'s preset branch (the file's bytes are the component state, read at every load), the Sound Library
+  window's folder box for preset libraries.
+- What plays: one Long preset per part for every technique, CC1 dynamics as MS4 writes them, CC11 127, CC21 64 (vibrato;
+  senza / non vib. 0, molto vib. 127, ord. 64) on the eight with vibrato. None of SSO's measurements (they're SSO's).
+- Tested on Linux (`tst_soundlibrary::vialMap`; `vialHosted` with `MS_VIAL_VST3` + `MS_PRESET_FOLDER`, skipped without;
+  `tst_liveequivalence::vialSetupState`): the real Linux Vial.vst3 / VialFuse.vst3 load the presets of the private pack
+  (`~/vial-sso/work/cc/zip0`, unzipped outside the repo) through setState: every preset value comes back (Vial adds its
+  defaults for 342 newer settings and "tuning"; JUCE appends its private data), in process and in a helper; it sounds,
+  CC1 40 is 4.2-5.2 dB under 64. **CC11 / CC21 do nothing with that pack and the private Linux bundle** (the presets have no
+  CC rows yet, the vial sessions' preset update pending): the CC11 check runs only where the preset has a CC11 row; with
+  the gap-expression build of Vial and a preset given the row by `cc_apply.py`, CC11 64 = -5.95 dB exactly.
+- Open: Windows untried (build only when the owner needs it); Live / MIDI out untried (LIVE.md › What still differs);
+  re-run `vialHosted` (all 13, `MS_VIAL_PATCH`) when the updated pack with CC11 / CC21 ships; the final CC21 list may
+  change the eight (gen_vial.py PRESETS).
+
 ## Out-of-process host (branch `oop-host`, 2026-10-25, from integrate-1017 6dd53a9e97 + kontakt-procs; not merged)
 
 The owner approved ("seems good") hosting the library's plug-ins in helper processes: build 480 showed Kontakt doing its

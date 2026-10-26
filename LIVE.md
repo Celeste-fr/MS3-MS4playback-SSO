@@ -1186,6 +1186,11 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
+- **Vial Instrumental** (branch `vial-map`, 2026-10-25; a preset library, README › Preset libraries): hosted playback
+  only was made and tested. Create / Update Live Set would by the existing paths give the Vial track its preset as the
+  plug-in's state (`SoundLibraryHost::setupState`, as for Ample) with CC1 / CC11 / CC21 in the clips, but nothing of it
+  was run (Live's VST 3 device for Vial, the plain set's Kontakt-made multis and Utility). MIDI out sends the same CCs on
+  channel 1; the receiving host must load the preset itself.
 - **Ample Guitar M** (branch `ample-map`, 2026-10-18; a plug-in that isn't Kontakt): Create / Update Live Set and *Live
   plays the score* were not made or tried for it. By the existing paths its track should get the plug-in's own default
   state (a patch with a state setting has one: `SoundLibraryHost::defaultState`) with the part's sample set and flat

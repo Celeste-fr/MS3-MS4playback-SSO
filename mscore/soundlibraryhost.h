@@ -213,6 +213,7 @@ class SoundLibraryHost : public QObject {
       static QString libraryFolder(const SoundLib::Library& library);   // where its .nki are; empty: not found
       static void setLibraryFolder(const SoundLib::Library& library, const QString& folder);
       static QString nkiPath(const SoundLib::Library& library, const QString& patch);
+      static QString presetPath(const SoundLib::Library& library, const QString& patch);    // a preset library's (Vial)
       static const SoundLib::LibInstrument* findPatch(const SoundLib::Library& library, const QString& name);
       static QByteArray setupId(const SoundLib::Library& library, const QString& patch);  // changes with its setup
       // the voice limit MuseScore gives every Kontakt patch it sets up (setupState): 512, or
