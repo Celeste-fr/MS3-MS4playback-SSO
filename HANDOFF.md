@@ -10,8 +10,10 @@ a section there when you need the background of that topic. Commit messages desc
 State: integrate-1017 has everything through chunk-equal (live playback's chunks = the whole render); last build for the
 owner is #484 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40230637035: helper processes, crackle fix,
 bar-17 fix; chunk-equal is NOT in it). Waiting on the owner's report of #484 (loading, crackles, bar 17, Kontakt editor,
-closing during a load). In progress when paused: branch `vial-map` (Vial Instrumental map: 13 Long presets, CC1 / CC11 /
-CC21 on channel 1; WIP commit; Linux Vial bundles in ~/MuseScore/ms3fork/private/vial-vst3; the presets answer CC11 only
+closing during a load). In progress when paused: branch `vial-map` (WIP d0ac45e4fe, not merged: `Vial Instrumental.xml` and `(Fuse).xml` by
+`gen_vial.py`, presets loaded from Vial's data folder, Preferences › I/O › Library; real Linux Vial loads and plays them;
+left: re-run vialHosted on all 13 when the CC11 / CC21 pack ships, the final CC21 list, Windows, Live / MIDI out; 13 Long
+presets, CC1 / CC11 / CC21 on channel 1; Linux Vial bundles in ~/MuseScore/ms3fork/private/vial-vst3; the presets answer CC11 only
 after vial sso's preset update, not shipped: paused too, its state in ~/vial-sso/HANDOFF.md; only CC1 works now). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
 targeted fixes, the owner picks what he hears.
 
