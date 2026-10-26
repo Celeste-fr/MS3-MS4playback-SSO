@@ -5,6 +5,16 @@ The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuni
 Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
 a section there when you need the background of that topic. Commit messages describe each step in detail.
 
+## Paused 2026-10-25 (the owner: "pause project")
+
+State: integrate-1017 has everything through chunk-equal (live playback's chunks = the whole render); last build for the
+owner is #484 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40230637035: helper processes, crackle fix,
+bar-17 fix; chunk-equal is NOT in it). Waiting on the owner's report of #484 (loading, crackles, bar 17, Kontakt editor,
+closing during a load). In progress when paused: branch `vial-map` (Vial Instrumental map: 13 Long presets, CC1 / CC11 /
+CC21 on channel 1; WIP commit; Linux Vial bundles in ~/MuseScore/ms3fork/private/vial-vst3; the presets answer CC11 only
+after vial sso's preset update). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
+targeted fixes, the owner picks what he hears.
+
 ## The knowledge base (2026-10-21): read these before starting new playback work
 
 The owner's goal for October 2026: everything a later AI needs to make playback eventually sound perfect.
