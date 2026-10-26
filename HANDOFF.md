@@ -12,7 +12,7 @@ owner is #484 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40
 bar-17 fix; chunk-equal is NOT in it). Waiting on the owner's report of #484 (loading, crackles, bar 17, Kontakt editor,
 closing during a load). In progress when paused: branch `vial-map` (Vial Instrumental map: 13 Long presets, CC1 / CC11 /
 CC21 on channel 1; WIP commit; Linux Vial bundles in ~/MuseScore/ms3fork/private/vial-vst3; the presets answer CC11 only
-after vial sso's preset update). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
+after vial sso's preset update, not shipped: paused too, its state in ~/vial-sso/HANDOFF.md; only CC1 works now). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
 targeted fixes, the owner picks what he hears.
 
 ## The knowledge base (2026-10-21): read these before starting new playback work
