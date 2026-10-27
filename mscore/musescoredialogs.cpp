@@ -162,9 +162,12 @@ AboutBoxDialog::AboutBoxDialog()
       if (build.size() >= 5) {
             versionLabel->setText(tr("Version: %1").arg(VERSION) + tr(" Evolution") + QString(" — build %1 (%2 %3)").arg(build[0], build[1], build[2]));
             revisionLabel->setText(tr("Revision: %1").arg(QString("<a href=\"%1\">%2</a>").arg(build.last(), build[0])));
+            _shownRevision = build[0];
             }
-      else if (!revision.isEmpty())
+      else if (!revision.isEmpty()) {
             revisionLabel->setText(tr("Revision: %1").arg(QString("<a href=\"https://github.com/Jojo-Schmitz/musescore/commit/%1\">%1</a>").arg(revision)));
+            _shownRevision = revision;
+            }
       else {
             revisionLabel->setText("");
             copyRevisionButton->setVisible(false);
@@ -208,17 +211,10 @@ AboutBoxDialog::AboutBoxDialog()
 //   copyRevisionToClipboard
 //---------------------------------------------------------
 
+// only the revision shown (this fork: its commit, which names the build), not the OS / version line upstream copies
 void AboutBoxDialog::copyRevisionToClipboard()
       {
-      QApplication::clipboard()->setText(
-            QString("OS: %1, Arch.: %2, MuseScore Studio version (%3-bit): %4-%5")
-                  .arg(QSysInfo::prettyProductName()
-                       + ((QSysInfo::productType() == "windows" && (QSysInfo::productVersion() == "10" || QSysInfo::productVersion() == "11"))
-                          ? " or later" : ""), QSysInfo::currentCpuArchitecture())
-                  .arg(QSysInfo::WordSize)
-                  .arg(VERSION, BUILD_NUMBER)
-            + QString(revision.isEmpty() ? "" : ", revision: [%1](https://github.com/Jojo-Schmitz/MuseScore/commit/%1)")
-                  .arg(revision));
+      QApplication::clipboard()->setText(_shownRevision);
       }
 
 //---------------------------------------------------------

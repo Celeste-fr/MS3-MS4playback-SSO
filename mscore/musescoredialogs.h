@@ -34,6 +34,8 @@ namespace Ms {
 class AboutBoxDialog : public QDialog, Ui::AboutBox {
       Q_OBJECT
 
+      QString _shownRevision;   // the revision the dialog shows, which its copy button copies
+
    public:
       AboutBoxDialog();
 
