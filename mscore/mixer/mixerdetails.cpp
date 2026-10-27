@@ -395,13 +395,13 @@ void MixerDetails::updateLibrary()
       updateTrackDelay(false);
       if (!_mti)
             return;
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       Part* part = _mti->part();
-      if (!library || !SoundLib::active() || !part)
+      if (!part)
             return;
       const Part* master = PartPlaybackModes::masterPart(part);
-      if (!master || master->instruments()->empty()
-          || !PartPlaybackModes::playsLibrary(master, PartPlaybackModes::read(part->masterScore())))
+      // (the part's own library: the global one, or the engine it names, SoundLib::libraryOf; none: it plays MS3 / MS4)
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::libraryOf(master);
+      if (!library || !master || master->instruments()->empty())
             return;
       const SoundLib::LibInstrument* li = library->match(master->instruments()->begin()->second, master);
       if (!li)
@@ -505,9 +505,22 @@ void MixerDetails::updatePlayback()
       playbackCombo->addItem(tr("Global default"), int(PartPlayback::DEFAULT));   // (names: the owner, 2026-10-07)
       playbackCombo->addItem(playbackModeName(PlaybackMode::MS3), int(PartPlayback::MS3));
       playbackCombo->addItem(playbackModeName(PlaybackMode::MS4), int(PartPlayback::MS4));
-      playbackCombo->addItem(playbackModeName(PlaybackMode::LIBRARY), int(PartPlayback::LIBRARY));
+      // each sound library by its name (the owner, 2026-10-26: Vial Instrumental an engine as SSO is; several in one score):
+      // the part's metaTag "library:<name>"; an old score's "library" plays the global mode's library, shown as it
       const Part* part = _mti ? _mti->part() : nullptr;
-      playbackCombo->setCurrentIndex(playbackCombo->findData(int(part ? PartPlaybackModes::of(part) : PartPlayback::DEFAULT)));
+      const PartPlayback mode = part ? PartPlaybackModes::of(part) : PartPlayback::DEFAULT;
+      int selected = playbackCombo->findData(int(mode));
+      QString own = part && mode == PartPlayback::LIBRARY ? PartPlaybackModes::libraryOf(part) : QString();
+      if (part && mode == PartPlayback::LIBRARY && own.isEmpty())
+            own = globalSoundEngine();
+      addEngineItems(playbackCombo, int(PartPlayback::LIBRARY), own, &selected);
+      if (mode == PartPlayback::LIBRARY && playbackCombo->itemData(selected, Qt::UserRole + 1).toString() != own) {
+            // (a library MuseScore doesn't offer here: kept as the score has it)
+            playbackCombo->addItem(own.isEmpty() ? playbackModeName(PlaybackMode::LIBRARY) : own, int(PartPlayback::LIBRARY));
+            selected = playbackCombo->count() - 1;
+            playbackCombo->setItemData(selected, own, Qt::UserRole + 1);
+            }
+      playbackCombo->setCurrentIndex(selected);
       playbackCombo->setEnabled(part);
       labelPlayback->setEnabled(part);
       }
@@ -525,9 +538,18 @@ void MixerDetails::playbackChanged(int index)
       Score* score = part->score();
       MasterScore* ms = score->masterScore();
       std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
-      modes[PartPlaybackModes::masterPart(part)] = PartPlayback(playbackCombo->itemData(index).toInt());
+      std::map<const Part*, QString> libraries = PartPlaybackModes::libraries(ms);
+      const Part* master = PartPlaybackModes::masterPart(part);
+      modes[master] = PartPlayback(playbackCombo->itemData(index).toInt());
+      // (a library by its engine's name, "library:<name>"; the global library's engine too: the part keeps it when the
+      // global mode changes)
+      const QString engine = playbackCombo->itemData(index, Qt::UserRole + 1).toString();
+      if (modes[master] == PartPlayback::LIBRARY && !engine.isEmpty())
+            libraries[master] = engine;
+      else
+            libraries.erase(master);
       QMap<QString, QString> tags = ms->metaTags();
-      const QString value = PartPlaybackModes::write(ms, modes);
+      const QString value = PartPlaybackModes::write(ms, modes, libraries);
       if (value.isEmpty())
             tags.remove(PartPlaybackModes::metaTag);
       else
@@ -614,11 +636,15 @@ void MixerDetails::trackDelayChanged()
 
 void MixerDetails::editTrackDelays()
       {
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
-      if (!_mti || !library)
+      if (!_mti)
             return;
       Part* part = _mti->part();
       const Part* master = PartPlaybackModes::masterPart(part);
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::libraryOf(master);     // (the part's own: several)
+      if (!library)
+            library = SoundLib::current();
+      if (!library)
+            return;
       TrackDelays::Delays d = TrackDelays::of(part, TrackDelays::read(part->masterScore()));
       std::vector<const SoundLib::LibInstrument*> patches;
       for (const SoundLib::Route& r : SoundLib::routes(part->masterScore(), *library))

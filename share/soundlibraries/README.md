@@ -27,6 +27,29 @@ keyswitches or program changes for other libraries).
 This only works with the **MuseScore 4** dynamics method (View › Synthesizer › Dynamics). That
 is the default.
 
+## Several libraries in one score: engines
+
+Each map here is an **engine** MuseScore can play, offered by its name ("Spitfire Symphony Orchestra", "Vial
+Instrumental", "Ample Guitar M"): the global playback mode (the Mixer's and the Play Panel's *Global playback* box,
+Preferences › I/O › Sound library) lists MS3, MS4 and every engine, and so does each part's *Part playback* in the
+Mixer. A part set to an engine plays it whatever the global mode is, so SSO parts and Vial parts play together, each
+engine through its own plug-in (an instance per part as ever; `SoundLib::scoreLibraries`, `SoundLibraryHost::sync`).
+The score keeps the choice in its metaTag `partPlayback` as `"mode": "library:<engine>"` (MuseScore 3.6 keeps it); a
+part's older `"library"` plays the global mode's library, as before.
+
+- A map named `<engine> (<variant>)` is a variant of the engine `<engine>`: `Vial Instrumental (Fuse).xml` is Vial
+  Instrumental played through Vial Fuse.vst3's mic mixers. Preferences › I/O › Sound library › *Vial Instrumental
+  plays:* picks the variant (preference `io/soundLibraryVariants`), for the global library and every part set to Vial.
+- An engine whose plug-in isn't installed (hosted: not found in the VST 3 folders; `MS_VST3_PATH` adds folders) is
+  grayed in the boxes, its tooltip saying so; a score's part set to it plays MS4. Over MIDI output only the global
+  library plays: the other engines are grayed, their parts play MS4.
+- Measurements are each map's own: SSO's calibration, onsets, section balance, real range, mic compensation and so on
+  apply to SSO's patches only, whichever engine is global (another engine's calibration is read from its own
+  `<map>.dynamics.json` / setups folder); a map without them (Vial's) plays the written dynamics as they are. The master
+  trim is measured on the first library of the score with a `<Dynamics crest>` (SSO) and lowers every library patch.
+  Even levels, the playback audit and the playback verification look at the global library's parts only. Live: the
+  global library alone (LIVE.md › What still differs).
+
 ## Setup on Windows with Spitfire Symphony Orchestra (plug-in in MuseScore)
 
 MuseScore hosts the library's plug-in itself (Kontakt, VST 3). There is no separate host, no

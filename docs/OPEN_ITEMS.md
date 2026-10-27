@@ -387,12 +387,16 @@ Keep this file current: close an item by deleting it (the commit message says wh
   `gen_ample.py`.
 - **Untried**: everything Ample in real Live; the GUI seek.
 
-### 14. Only one sound library plays at a time
-- **W**: `SoundLib::current()` holds one library (preference `io/soundLibrary`): a score can't play SSO and Ample parts
-  together. Found reading the code; not documented elsewhere.
-- **Fix**: per-instrument `<Plugin>` / several libraries active (new C++), or one "Ample Guitars" map hosting several
-  plug-ins.
-- **Own**: whether that matters, and how the four other guitars ship (Missing tools #6).
+### 14. LIFTED for hosted playback (branch `vial-engine`, 2026-10-26): several libraries in one score
+- **Done**: each part may play its own engine (metaTag `partPlayback` "library:<engine>"; soundlibrary.h › engines,
+  `SoundLib::scoreLibraries` / `allRoutes`): SSO and Vial (or Ample) parts together, each on its own plug-in, the global
+  library's routes from slot 0 as when it was alone (one-library scores render byte for byte as before).
+- **Left**: Live (Create / Update Live Set, *Live plays the score*) and MIDI out play the global library alone (the
+  other engines' parts MS4 there, said: LIVE.md › What still differs); even levels' measurement, the playback audit and
+  the verification look at the global library's parts only; a part's unautomated controller value (the lanes' dashed
+  line, `PartControllers::setSetupValues`) is read from the global library's setups; 64 slots for all libraries
+  together. The four other Ample guitars could now ship as maps of their own (Missing tools #6).
+- **Own**: whether Live / MIDI out for a second engine matters.
 
 ### 15. plainAttack and plainShift come from one take each
 - **W**: `plainAttack` (V1 19.5, V2 29.2, Va 37.1, Vc 38.7, Cb 37.5 ms) = medians of 39 attacks per section in one heard

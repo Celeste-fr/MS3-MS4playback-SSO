@@ -220,12 +220,27 @@ QStringList SoundLibraryHost::pluginFolders()
 #else
       dirs << QDir::homePath() + "/.vst3" << "/usr/lib/vst3" << "/usr/local/lib/vst3";
 #endif
+      // (MS_VST3_PATH, folders by the system's list separator: searched first; the tests' private bundles)
+      const QString extra = qEnvironmentVariable("MS_VST3_PATH");
+      if (!extra.isEmpty())
+            dirs = extra.split(QDir::listSeparator(), QString::SkipEmptyParts) + dirs;
       return dirs;
       }
 
 QString SoundLibraryHost::pluginPath(const SoundLib::Library& library, QString* error)
       {
-      const QString chosen = preferences.getString(PREF_IO_SOUNDLIBRARY_PLUGIN);
+      QString chosen = preferences.getString(PREF_IO_SOUNDLIBRARY_PLUGIN);
+      // (the plug-in chosen in the preferences is the current library's, or any library's whose plug-in it is by name:
+      // several libraries, another engine finds its own, SoundLib::engineOf)
+      if (!chosen.isEmpty()) {
+            const std::shared_ptr<const SoundLib::Library> cur = SoundLib::current();
+            const QString file = QFileInfo(chosen).fileName();
+            bool its = !cur || cur.get() == &library || SoundLib::engineOf(*cur) == SoundLib::engineOf(library);
+            for (const QString& f : library.plugins)
+                  its = its || f.compare(file, Qt::CaseInsensitive) == 0;
+            if (!its)
+                  chosen.clear();
+            }
       if (!chosen.isEmpty()) {
             if (QFileInfo::exists(chosen))
                   return chosen;
@@ -306,6 +321,13 @@ void SoundLibraryHost::loadCalibration()
       if (library)
             c = SoundLib::readCalibration(calibrationFile(*library), shippedCalibrationFile(*library), &sources);
       SoundLib::setDynamicsCalibration(c);
+      // (another engine a part plays, several libraries: its own calibration the same way, read when first asked for;
+      // SoundLib::calibrationFor. A map without one, Vial's: none)
+      SoundLib::setCalibrationLoader([](const SoundLib::Library& l) -> std::shared_ptr<const SoundLib::DynamicsCalibration> {
+            std::shared_ptr<const SoundLib::DynamicsCalibration> other
+                  = SoundLib::readCalibration(calibrationFile(l), shippedCalibrationFile(l), nullptr);
+            return other && !other->patches().empty() ? other : nullptr;
+            });
       // what this calibration is made of, for every render's preflight (renderpreflight.h): the working MuseScore
       // plays the main setups folder; a background job has set its copy (setDataFolder, RenderPreflight::setSetups)
       if (library) {
@@ -1931,7 +1953,8 @@ long SoundLibraryHost::knownParameterId(const SoundLib::Library& library, const 
 //    (the renderer's ME_PARAMETER events are by that index), as titled on this instance
 //---------------------------------------------------------
 
-static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, const std::vector<SoundLib::Route>& routes)
+static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, const std::vector<SoundLib::Route>& routes,
+                                      const SoundLib::Library& library)
       {
       const SoundLib::LibInstrument* main = r.instrument;
       for (const SoundLib::Route& m : routes)
@@ -1944,9 +1967,8 @@ static std::vector<long> parameterIds(Vst3Plugin* p, const SoundLib::Route& r, c
             if (!c.param.isEmpty())
                   byTitle[c.param] = ids.back();
             }
-      if (const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current())
-            if (r.instrument)
-                  SoundLibraryHost::rememberParameterIds(*lib, r.instrument->name, byTitle);
+      if (r.instrument)
+            SoundLibraryHost::rememberParameterIds(library, r.instrument->name, byTitle);
       return ids;
       }
 
@@ -2040,12 +2062,14 @@ void SoundLibraryHost::checkHostProcesses()
       if (!vst)
             return;
       QStringList lost;
+      QStringList lostLibraries;          // (each one's library's name: several, _slotLibraries)
       std::vector<int> lostSlots;
       for (int k = 0; k < vst->slotCount(); ++k) {
             const Vst3Plugin* p = vst->plugin(k);
             if (p && !p->alive()) {
                   lostSlots.push_back(k);
                   lost << _slots[size_t(k)].instrument;
+                  lostLibraries << (k < 64 && _slotLibraries[size_t(k)] ? _slotLibraries[size_t(k)]->name : QString());
                   }
             }
       // (spares in a helper that ended: nothing to keep)
@@ -2057,8 +2081,9 @@ void SoundLibraryHost::checkHostProcesses()
       // (a patch whose helper ended three times this session isn't loaded again: it would only end it again)
       // (by library and patch: another library's patch of that name is another patch)
       QStringList given;
-      for (const QString& name : lost) {
-            const QString key = (library ? library->name : QString()) + "|" + name;
+      for (int i = 0; i < lost.size(); ++i) {
+            const QString& name = lost[i];
+            const QString key = (!lostLibraries[i].isEmpty() ? lostLibraries[i] : library ? library->name : QString()) + "|" + name;
             if (++_crashes[key] >= MAX_HELPER_ENDS) {
                   _crashedPatches.insert(key);
                   given << name;
@@ -2397,6 +2422,7 @@ static std::mutex& backgroundLoadMutex()
 
 struct SoundLibraryHost::Pending {
       int slot { -1 };
+      std::shared_ptr<const SoundLib::Library> library;     // its library (several: syncSome's; null: harvest's)
       QString name;
       bool setup { false };               // it has a setup to load
       std::unique_ptr<Vst3Plugin> plugin;
@@ -2637,8 +2663,10 @@ void SoundLibraryHost::startSetState(Pending* pl, const QByteArray& state, doubl
 //    spare (another score is shown since it started)
 //---------------------------------------------------------
 
-void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::Library& library)
+void SoundLibraryHost::finishLoad(std::unique_ptr<Pending> pl, const SoundLib::Library& given)
       {
+      const std::shared_ptr<const SoundLib::Library> own = pl->library;       // (its own library, kept while it finishes)
+      const SoundLib::Library& library = own ? *own : given;
       LagProbe::Scope probe("SoundLibraryHost::finishLoad");
       const bool threaded = true;               // (every setState on a worker thread since 2026-10-24: startSetState)
       // (in a helper, made by its worker: none when that failed)
@@ -2967,13 +2995,17 @@ static const std::vector<SoundLib::Route>& routesFor(MasterScore* score, const s
       const int state = undo && !undo->active() ? undo->state() : -1;
       const QString modes = score->metaTag(PartPlaybackModes::metaTag);
       const QString lanes = score->metaTag(SoundLib::laneSettingsMetaTag);
-      const bool bySlots = SoundLib::hostedSlots(score, *library);      // ([tuning] hostedTuning: fixed copies or not)
+      bool bySlots = SoundLib::hostedSlots(score, *library);            // ([tuning] hostedTuning: fixed copies or not)
+      // (several libraries, SoundLib::scoreLibraries: every one's routes, the current one's first; its alone as ever)
+      const std::vector<std::shared_ptr<const SoundLib::Library>> libs = SoundLib::scoreLibraries(score);
+      for (const std::shared_ptr<const SoundLib::Library>& l : libs)
+            bySlots = bySlots || (l != library && SoundLib::hostedSlots(score, *l));
       if (cache.score != score || cache.library != library || state < 0 || cache.state != state
           || cache.generation != SoundLib::routesGeneration() || cache.modes != modes || cache.lanes != lanes
           || cache.bySlots != bySlots) {
             QElapsedTimer t;
             t.start();
-            cache.routes = SoundLib::routes(score, *library);
+            cache.routes = libs.size() > 1 ? SoundLib::allRoutes(score) : SoundLib::routes(score, *library);
             cache.score = score;
             cache.library = library;
             cache.state = state;
@@ -3012,10 +3044,33 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             Syncing(bool& x) : b(x) { b = true; }
             ~Syncing() { b = false; }
             } syncing(_syncing);
-      const QString path = pluginPath(*library, error);
-      if (path.isEmpty())
+      // (several libraries: the current one's plug-in missing silences its parts only, the others' load)
+      QString pathError;
+      const QString path = pluginPath(*library, &pathError);
+      if (path.isEmpty() && !SoundLib::severalLibraries(score)) {
+            if (error)
+                  *error = pathError;
             return false;
+            }
+      if (path.isEmpty() && error)
+            *error = pathError;
       vst->setVarispeed(library->varispeed);
+      // several libraries (SoundLib::scoreLibraries: the current one, then the engines parts name): each one's instances by
+      // its own plug-in, varispeed or not slot by slot. An engine whose plug-in isn't found plays no part (its parts MS4:
+      // SoundLib::engineAvailable)
+      std::vector<std::shared_ptr<const SoundLib::Library>> libs = SoundLib::scoreLibraries(score);
+      if (libs.empty() || libs.front() != library)
+            libs.insert(libs.begin(), library);
+      std::map<const SoundLib::Library*, QString> paths { { library.get(), path } };
+      for (const std::shared_ptr<const SoundLib::Library>& l : libs)
+            if (!paths.count(l.get()))
+                  paths[l.get()] = pluginPath(*l);
+      auto libraryOf = [&](const SoundLib::Library* l) -> std::shared_ptr<const SoundLib::Library> {
+            for (const std::shared_ptr<const SoundLib::Library>& x : libs)
+                  if (x.get() == l)
+                        return x;
+            return library;
+            };
       // at play: what worker threads are loading, first
       if (maxLoads < 0)
             harvest(*library, 0);
@@ -3030,6 +3085,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             QString tuning;                     // tuningKey(cents)
             std::map<QString, QByteArray> values;     // the script values the score's playback settings set (scriptValuesFor)
             QString valuesText;                 // (valuesKey)
+            const SoundLib::Library* library { nullptr };     // its library (several: each its own plug-in)
+            QString path;                       // its plug-in
             };
       std::array<bool, 64> used {};
       std::vector<Need> needs;
@@ -3040,6 +3097,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       checkCopiesMemory(*library, score->masterScore(), routes, true);      // (short of memory: a warning, all loaded)
       _slotParts.fill(nullptr);
       _slotPatches.fill(QString());
+      _slotLibraries.fill(nullptr);
       _slotScore = score->masterScore();
       for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
@@ -3047,31 +3105,43 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             const int k = r.port * 16 + r.channel;
             _slotParts[size_t(k)] = r.part;
             _slotPatches[size_t(k)] = r.instrument->name;
+            _slotLibraries[size_t(k)] = libraryOf(r.library ? r.library : library.get());
             used[k] = true;
             _slots[k].part = r.part->partName();
+            vst->setVarispeed(k, _slotLibraries[size_t(k)]->varispeed);
             }
       // an instance per route, or (hosted slots) a patch's copies in one, each slot tuned by Kontakt's Tune
-      // (SoundLib::instances); a patch whose setup can't be tuned: an instance per copy, plain
-      for (const SoundLib::Instance& in : SoundLib::instances(score->masterScore(), *library, routes)) {
-            if (_crashedPatches.count(library->name + "|" + in.instrument->name))
-                  continue;             // (its helper ended again and again: checkHostProcesses)
-            const bool setup = hasSetup(*library, in.instrument->name);
-            if (in.tuned() && untunable().count(in.instrument->name)) {
-                  for (int k : in.routes)
-                        needs.push_back({ k, in.instrument->name, setup, {}, { k }, QString() });
+      // (SoundLib::instances); a patch whose setup can't be tuned: an instance per copy, plain. Library by library
+      for (const std::shared_ptr<const SoundLib::Library>& lib : libs) {
+            std::vector<SoundLib::Route> own;
+            for (const SoundLib::Route& r : routes)
+                  if ((r.library ? r.library : library.get()) == lib.get())
+                        own.push_back(r);
+            const QString& libPath = paths[lib.get()];
+            if (own.empty() || libPath.isEmpty())
+                  continue;
+            for (const SoundLib::Instance& in : SoundLib::instances(score->masterScore(), *lib, own)) {
+                  if (_crashedPatches.count(lib->name + "|" + in.instrument->name))
+                        continue;             // (its helper ended again and again: checkHostProcesses)
+                  const bool setup = hasSetup(*lib, in.instrument->name);
+                  if (in.tuned() && untunable().count(in.instrument->name)) {
+                        for (int k : in.routes)
+                              needs.push_back({ k, in.instrument->name, setup, {}, { k }, QString(), {}, QString(), lib.get(), libPath });
+                        }
+                  else
+                        needs.push_back({ in.slot, in.instrument->name, setup, in.cents, in.routes, tuningKey(in.cents), {}, QString(),
+                                          lib.get(), libPath });
                   }
-            else
-                  needs.push_back({ in.slot, in.instrument->name, setup, in.cents, in.routes, tuningKey(in.cents) });
             }
       for (Need& n : needs) {
-            n.values = scriptValuesFor(*library, n.name, score);
+            n.values = scriptValuesFor(*n.library, n.name, score);
             // (a non-Kontakt part's state settings: another sample set is another instance)
-            for (const auto& v : stateValuesFor(*library, n.name, _slotParts[size_t(n.slot)]))
+            for (const auto& v : stateValuesFor(*n.library, n.name, _slotParts[size_t(n.slot)]))
                   n.values[v.first] = v.second;
             n.valuesText = valuesKey(n.values);
             }
-      auto fits = [&path](const Vst3Plugin* p, const Slot& s, const Need& n) {
-            return p && p->alive() && p->path() == path && s.instrument == n.name && (s.hasSetup || s.setupFailed || !n.setup)
+      auto fits = [](const Vst3Plugin* p, const Slot& s, const Need& n) {
+            return p && p->alive() && p->path() == n.path && s.instrument == n.name && (s.hasSetup || s.setupFailed || !n.setup)
                    && s.tuning == n.tuning && s.values == n.valuesText;
             };
 
@@ -3119,8 +3189,8 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       // finish is a small one (longest processing time first; a setup's size stands for its load time: the string
       // Performance patches' states are the biggest, 10-14 MB, and the slowest, oop-load)
       if (Vst3Remote::processes() > 1 && toLoad.size() > 1) {
-            auto weight = [&library](const Need* n) {
-                  return QFileInfo(setupFile(*library, n->name)).size() * qint64(std::max<size_t>(1, n->cents.size()));
+            auto weight = [](const Need* n) {
+                  return QFileInfo(setupFile(*n->library, n->name)).size() * qint64(std::max<size_t>(1, n->cents.size()));
                   };
             std::stable_sort(toLoad.begin(), toLoad.end(), [&weight](const Need* a, const Need* b) { return weight(a) > weight(b); });
             }
@@ -3142,8 +3212,13 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       int loads = 0;
       const int threads = parallelLoads();
       // (host processes: started together for what this batch loads, each loading the plug-in's module meanwhile)
-      if (!toLoad.empty())
-            Vst3Plugin::prepareHosts(path, maxLoads < 0 ? int(toLoad.size()) : std::min(int(toLoad.size()), std::max(1, threads)));
+      if (!toLoad.empty()) {
+            std::map<QString, int> perPath;             // (several libraries: each plug-in's)
+            for (const Need* n : toLoad)
+                  ++perPath[n->path];
+            for (const auto& pp : perPath)
+                  Vst3Plugin::prepareHosts(pp.first, maxLoads < 0 ? pp.second : std::min(pp.second, std::max(1, threads)));
+            }
       if (!toLoad.empty() && (maxLoads < 0 || loads < maxLoads)) {
             batchStart(maxLoads < 0 ? QString("At play") : _preloadKind);
             _batch->routesMs += routesMs;
@@ -3171,13 +3246,14 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
                   waiting = true;
                   }
             if (mscore)
-                  mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(library->name, n->name)
+                  mscore->showMessage(maxLoads < 0 ? tr("Loading %1: %2…").arg(n->library->name, n->name)
                                                    : tr("Loading sounds: %1 of %2…").arg(_progressLoaded).arg(_progressTotal), 0);
-            std::unique_ptr<Pending> pl = beginLoad(n->slot, n->name, n->setup, n->cents, n->routes, *library, path, error, n->values);
+            std::unique_ptr<Pending> pl = beginLoad(n->slot, n->name, n->setup, n->cents, n->routes, *n->library, n->path, error, n->values);
             if (!pl) {
                   ok = false;
                   break;
                   }
+            pl->library = libraryOf(n->library);
             if (pl->done.valid()) {
                   _pending.push_back(std::move(pl));
                   if (maxLoads < 0)                         // (at play: no more than threads at once)
@@ -3225,7 +3301,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             for (const SoundLib::Route& r : routes) {
                   const int slot = r.port * 16 + r.channel;
                   if (Vst3Plugin* p = r.instrument->kit ? nullptr : vst->instance(slot))     // (a linked slot: its instance's)
-                        vst->setParameterIds(slot, parameterIds(p, r, routes));
+                        vst->setParameterIds(slot, parameterIds(p, r, routes, r.library ? *r.library : *library));
                   }
             }
       for (int k = 0; k < 64; ++k) {
@@ -3322,6 +3398,7 @@ void SoundLibraryHost::release()
             vst->clearLinks();
       _slotParts.fill(nullptr);
       _slotPatches.fill(QString());
+      _slotLibraries.fill(nullptr);
       _slotScore = nullptr;
       _spares.clear();
       _idle.stop();
@@ -3396,7 +3473,8 @@ void SoundLibraryHost::applyMixer(const Score* score)
                         d = TrackDelays::of(part, delays);
                         computed = true;
                         }
-                  const double gain = library ? TrackDelays::patchGain(*library, d, _slotPatches[size_t(k)]) : 1.0;
+                  const SoundLib::Library* lib = _slotLibraries[size_t(k)] ? _slotLibraries[size_t(k)].get() : library.get();
+                  const double gain = lib ? TrackDelays::patchGain(*lib, d, _slotPatches[size_t(k)]) : 1.0;
                   vst->setMix(k, m.volume, m.pan, m.muted, float(gain));
                   }
             }
@@ -3427,15 +3505,17 @@ std::vector<int> SoundLibraryHost::applyPartSettings(MasterScore* ms, const Part
                   skip.push_back(lane.target);
       // a state setting changed (Ample's sample set: stateValuesFor): the part loads again at the next sync (play, export)
       for (int k : slotsOf(master)) {
-            std::map<QString, QByteArray> values = scriptValuesFor(*library, _slotPatches[size_t(k)], ms);
-            for (const auto& v : stateValuesFor(*library, _slotPatches[size_t(k)], master))
+            const SoundLib::Library& lib = _slotLibraries[size_t(k)] ? *_slotLibraries[size_t(k)] : *library;
+            std::map<QString, QByteArray> values = scriptValuesFor(lib, _slotPatches[size_t(k)], ms);
+            for (const auto& v : stateValuesFor(lib, _slotPatches[size_t(k)], master))
                   values[v.first] = v.second;
             if (vst->plugin(k) && valuesKey(values) != _slots[size_t(k)].values) {
                   routesMayChange();
                   break;
                   }
             }
-      return LibraryControllers::applyPart(vst, SoundLib::routes(ms, *library), master, all,
+      return LibraryControllers::applyPart(vst, SoundLib::severalLibraries(ms) ? SoundLib::allRoutes(ms) : SoundLib::routes(ms, *library),
+                                           master, all,
                                            [this](int slot) { return &_slots[size_t(slot)].patchValues; }, skip);
 #else
       Q_UNUSED(ms);
@@ -3542,13 +3622,20 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
                   *error = QObject::tr("No sound library");
             return nullptr;
             }
-      const QString path = SoundLibraryHost::pluginPath(*library, error);
-      if (path.isEmpty())
+      // (several libraries, SoundLib::scoreLibraries: each one's instances by its own plug-in, as SoundLibraryHost loads them)
+      const bool several = SoundLib::severalLibraries(score->masterScore());
+      QString pathError;
+      const QString path = SoundLibraryHost::pluginPath(*library, &pathError);
+      if (path.isEmpty() && !several) {
+            if (error)
+                  *error = pathError;
             return nullptr;
+            }
       std::shared_ptr<Vst3Synth> own(new Vst3Synth);
       own->init(sampleRate);
       own->setVarispeed(library->varispeed);
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
+      const std::vector<SoundLib::Route> routes = several ? SoundLib::allRoutes(score->masterScore())
+                                                          : SoundLib::routes(score->masterScore(), *library);
       const std::map<const Part*, Automation::PartLanes> lanes = Automation::read(score->masterScore());
       checkCopiesMemory(*library, score->masterScore(), routes, false);     // (short of memory: a warning, all loaded)
       auto routeAt = [&routes](int slot) -> const SoundLib::Route* {
@@ -3559,22 +3646,43 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
             };
       // as SoundLibraryHost loads them: an instance per route, or (hosted slots) a patch's copies in one, each slot tuned
       // by Kontakt's Tune on its own MIDI channel (SoundLib::instances); a setup that can't be tuned: plain, one per copy
-      std::vector<SoundLib::Instance> all = SoundLib::instances(score->masterScore(), *library, routes);
+      std::vector<SoundLib::Instance> all;
+      std::map<int, std::pair<std::shared_ptr<const SoundLib::Library>, QString>> libraryAt;   // instance slot -> library, plug-in
+      for (const std::shared_ptr<const SoundLib::Library>& lib : several ? SoundLib::scoreLibraries(score->masterScore())
+                                                                         : std::vector<std::shared_ptr<const SoundLib::Library>> { library }) {
+            std::vector<SoundLib::Route> mine;
+            for (const SoundLib::Route& r : routes)
+                  if (!several || r.library == lib.get())
+                        mine.push_back(r);
+            const QString libPath = lib == library ? path : SoundLibraryHost::pluginPath(*lib, error);
+            if (mine.empty() || libPath.isEmpty())
+                  continue;
+            for (const SoundLib::Instance& in : SoundLib::instances(score->masterScore(), *lib, mine)) {
+                  all.push_back(in);
+                  libraryAt[in.slot] = { lib, libPath };
+                  }
+            for (const SoundLib::Route& r : mine)
+                  own->setVarispeed(r.port * 16 + r.channel, lib->varispeed);
+            }
       for (size_t n = 0; n < all.size(); ++n) {
             const SoundLib::Instance in = all[n];
             const SoundLib::Route* r = routeAt(in.slot);
             if (!r || (parts && !parts->count(r->part)))
                   continue;
-            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(path, sampleRate, 4096, error, in.instrument->name);
+            auto la = libraryAt.find(in.slot);
+            const std::shared_ptr<const SoundLib::Library> libRef = la != libraryAt.end() ? la->second.first : library;
+            const SoundLib::Library& lib = *libRef;
+            const QString libPath = la != libraryAt.end() ? la->second.second : path;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(libPath, sampleRate, 4096, error, in.instrument->name);
             if (!p)
                   return nullptr;
             QString e;
             bool tuned = false;
-            if (SoundLibraryHost::hasSetup(*library, in.instrument->name)
-                && !SoundLibraryHost::loadInstanceSetup(p.get(), *library, in.instrument->name, in.cents, path, &e, &tuned, score,
+            if (SoundLibraryHost::hasSetup(lib, in.instrument->name)
+                && !SoundLibraryHost::loadInstanceSetup(p.get(), lib, in.instrument->name, in.cents, libPath, &e, &tuned, score,
                                                          r->part))   // (its state settings: stateValuesFor)
                   qWarning("Sound library: %s", qPrintable(e));
-            waitForBackgroundLoad(*library, p.get(), in.instrument->name);
+            waitForBackgroundLoad(lib, p.get(), in.instrument->name);
             if (in.tuned() && !tuned && in.multi()) {
                   // (its setup isn't Kontakt's: the other copies an instance each, plain)
                   for (size_t i = 1; i < in.routes.size(); ++i) {
@@ -3583,6 +3691,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
                         one.routes = { in.routes[i] };
                         one.cents.clear();
                         all.push_back(one);
+                        libraryAt[one.slot] = { libRef, libPath };
                         }
                   }
             LibraryControllers::applyParameters(p.get(), *r, lanes, nullptr);
@@ -3590,7 +3699,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
                   const SoundLib::Route* ri = routeAt(in.routes[i]);
                   own->setLink(in.routes[i], in.slot, int(i), tuned);
                   if (ri)
-                        own->setParameterIds(in.routes[i], parameterIds(p.get(), *ri, routes));
+                        own->setParameterIds(in.routes[i], parameterIds(p.get(), *ri, routes, lib));
                   if (patches)
                         (*patches)[in.routes[i]] = in.instrument->name;
                   }
@@ -3599,9 +3708,19 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score* score, float
       return own;
       }
 
+// (the route's own library: several, SoundLib::scoreLibraries; else the current one)
+static std::shared_ptr<const SoundLib::Library> routeLibrary(Score* score, const SoundLib::Route& r)
+      {
+      if (r.library && score)
+            for (const std::shared_ptr<const SoundLib::Library>& l : SoundLib::scoreLibraries(score->masterScore()))
+                  if (l.get() == r.library)
+                        return l;
+      return SoundLib::current();
+      }
+
 std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const SoundLib::Route& r, float sampleRate, QString* error)
       {
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      std::shared_ptr<const SoundLib::Library> library = routeLibrary(score, r);
       if (!library || !r.instrument) {
             if (error)
                   *error = QObject::tr("No sound library");
@@ -3623,7 +3742,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score* score, const 
       waitForBackgroundLoad(*library, p.get(), r.instrument->name);
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       LibraryControllers::applyParameters(p.get(), r, Automation::read(score->masterScore()), nullptr);
-      own->setParameterIds(0, parameterIds(p.get(), r, routes));
+      own->setParameterIds(0, parameterIds(p.get(), r, routes, *library));
       own->setPlugin(0, std::move(p));
       return own;
       }
@@ -3658,11 +3777,10 @@ static void deleteInstanceLoad(SoundLibraryExport::InstanceLoad* l)
 std::unique_ptr<SoundLibraryExport::InstanceLoad, void(*)(SoundLibraryExport::InstanceLoad*)>
 SoundLibraryExport::beginInstance(Score* score, const SoundLib::Route& r, float sampleRate, QString* error)
       {
-      Q_UNUSED(score);
       std::unique_ptr<InstanceLoad, void(*)(InstanceLoad*)> l(new InstanceLoad, deleteInstanceLoad);
       l->route = r;
       // (as loadInstance, to its loadSetup)
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      std::shared_ptr<const SoundLib::Library> library = routeLibrary(score, r);
       if (!library || !r.instrument) {
             l->failed = true;
             l->error = QObject::tr("No sound library");
@@ -3753,7 +3871,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::finishInstance(InstanceLoad* l, S
                   *error = l->error;
             return nullptr;
             }
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      std::shared_ptr<const SoundLib::Library> library = routeLibrary(score, l->route);
       const SoundLib::Route& r = l->route;
       const bool set = l->done.valid() && l->done.get();
       Vst3Plugin* p = l->plugin.get();
@@ -3784,7 +3902,7 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::finishInstance(InstanceLoad* l, S
       // (as loadInstance from here: the routes and controllers as they are now)
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score->masterScore(), *library);
       LibraryControllers::applyParameters(p, r, Automation::read(score->masterScore()), nullptr);
-      l->own->setParameterIds(0, parameterIds(p, r, routes));
+      l->own->setParameterIds(0, parameterIds(p, r, routes, *library));
       l->own->setPlugin(0, std::move(l->plugin));
       return l->own;
       }
@@ -3892,9 +4010,11 @@ void SoundLibraryExport::setExportMix(Vst3Synth* vst, Score* score, bool mute)
       for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
             vst->setExportMix(k, 100, 64, false);
       const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
-      for (const SoundLib::Route& r : SoundLib::routes(score->masterScore(), *library)) {
+      for (const SoundLib::Route& r : SoundLib::severalLibraries(score->masterScore()) ? SoundLib::allRoutes(score->masterScore())
+                                                                                        : SoundLib::routes(score->masterScore(), *library)) {
             const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
-            const double gain = TrackDelays::patchGain(*library, TrackDelays::of(r.part, delays), r.instrument->name);
+            const double gain = TrackDelays::patchGain(r.library ? *r.library : *library, TrackDelays::of(r.part, delays),
+                                                       r.instrument->name);
             vst->setExportMix(r.port * 16 + r.channel, m.volume, m.pan, mute && m.muted, float(gain));
             }
 #else

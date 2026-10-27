@@ -65,6 +65,7 @@
 #include "libmscore/part.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
+#include "libmscore/instrtemplate.h"
 #include "libmscore/partplayback.h"
 #include "libmscore/renderpreflight.h"
 #include "libmscore/soundlibrary.h"
@@ -187,6 +188,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void liveTracksJson();
       void hostedSlots();
       void vialSetupState();
+      void twoLibraries();
       void chordVoicesHosted();
       void chordVoicesLive();
       void divisiLive();
@@ -5484,6 +5486,7 @@ void TestLiveEquivalence::vialSetupState()
       QVERIFY2(lib, qPrintable(error));
       QVERIFY(!SoundLibraryHost::makesSetups(*lib));
       QTemporaryDir data;
+      const QByteArray oldFolder = qgetenv("MS_PRESET_FOLDER");      // (put back after: twoLibraries hosts the real Vial with it)
       qputenv("MS_PRESET_FOLDER", data.path().toUtf8());
       QCOMPARE(SoundLibraryHost::libraryFolder(*lib), data.path());
       const QString file = data.path() + "/Vial Instrumental/Presets/SSO imitations/Violins 1 - Long.vital";
@@ -5515,7 +5518,226 @@ void TestLiveEquivalence::vialSetupState()
                                      nullptr));
       QCOMPARE(component, edited);
       QVERIFY(SoundLibraryHost::setupId(*lib, "Violins 1") == QCryptographicHash::hash(edited, QCryptographicHash::Sha1).toHex());
-      qunsetenv("MS_PRESET_FOLDER");
+      if (oldFolder.isEmpty())
+            qunsetenv("MS_PRESET_FOLDER");
+      else
+            qputenv("MS_PRESET_FOLDER", oldFolder);
+      }
+
+//---------------------------------------------------------
+//   twoLibraries
+//    several libraries in one score (the owner, 2026-10-26: Vial Instrumental an engine as SSO is; soundlibrary.h ›
+//    engines): vial.musicxml's Violins on the current library (the test synth standing in for SSO), its Flute set to
+//    "library:Vial Instrumental" (partplayback.h), its Horn on the current one, which lacks it (MS4). The modes read and
+//    written; the routes: the current library's from slot 0 as alone, Vial's after (each route with its library); the
+//    Violins' events the same whether the Flute plays Vial or MS4; the Flute's on its slot with Vial's map's CC1 / CC11.
+//    MIDI out and Live: the current library alone (the Flute MS4, listed by otherEngineParts); an engine whose plug-in
+//    isn't found: MS4. With the real Vial (MS_VIAL_VST3 and MS_PRESET_FOLDER, as tst_soundlibrary::vialHosted; the
+//    Flute's preset "Flute Solo - Long.vital" there): an export's instances and SoundLibraryHost::sync load the test synth
+//    in slot 0 and Vial.vst3 in slot 1 with the preset, and the Flute's note sounds
+//---------------------------------------------------------
+
+void TestLiveEquivalence::twoLibraries()
+      {
+      LiveHost host(this, QString(), { "Violins 1" },
+                    "<SoundLibrary name='LiveT'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                    "<Instrument name='Violins 1' ids='violins'>"
+                    "<Articulation name='Long' value='1' techniques='long legato'/>"
+                    "</Instrument></SoundLibrary>");
+      QVERIFY(host.ok);
+      const SoundLib::Library& lib = *host.lib;
+      const QString vialMap = root + "/../share/soundlibraries/Vial Instrumental.xml";
+      SoundLib::setEngines({ { "LiveT", lib.path }, { "Vial Instrumental", vialMap } });
+      SoundLib::setEngineAvailable(nullptr);
+      struct Reset {
+            ~Reset() { SoundLib::setEngines({}); SoundLib::setEngineAvailable(nullptr); SoundLib::setOutput(SoundLib::Output::PLUGIN); }
+            } reset;
+      std::shared_ptr<const SoundLib::Library> vial = SoundLib::engine("Vial Instrumental");
+      QVERIFY(vial);
+      QCOMPARE(SoundLib::engine("LiveT").get(), &lib);                  // (the current library: itself)
+      QCOMPARE(SoundLib::engineOf(*vial), QString("Vial Instrumental"));
+      Playback::setIniValuesForTest({});
+      MasterScore* score = readScore(DIR + "vial.musicxml");
+      QVERIFY(score);
+      // (MusicXML has no sound for a violin section: its strings.group imports as "strings"; the section's template)
+      const InstrumentTemplate* section = searchTemplate("violins");
+      QVERIFY(section);
+      score->parts().front()->setInstrument(Instrument::fromTemplate(section));
+      score->rebuildMidiMapping();
+      Part* violins = score->parts()[0];
+      Part* flute = score->parts()[1];
+      Part* horn = score->parts()[2];
+      auto events = [&]() {
+            score->setPlaylistDirty();
+            EventMap ev;
+            SynthesizerState ss;
+            score->renderMidi(&ev, false, true, ss);
+            return ev;
+            };
+      auto onSlot = [](const EventMap& ev, int slot) {
+            QStringList out;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && e.extPort() * 16 + e.extChannel() == slot)
+                        out << QString("%1 %2 %3 %4 %5").arg(te.first).arg(e.type()).arg(e.dataA()).arg(e.dataB()).arg(e.tuning());
+                  }
+            return out;
+            };
+      // the Flute on MS4: the current library alone
+      std::map<const Part*, PartPlayback> modes { { flute, PartPlayback::MS4 } };
+      score->setMetaTag(PartPlaybackModes::metaTag, PartPlaybackModes::write(score, modes));
+      QVERIFY(!SoundLib::severalLibraries(score));
+      const std::vector<SoundLib::Route> alone = SoundLib::routes(score, lib);
+      QCOMPARE(int(alone.size()), 1);
+      const QStringList violinsAlone = onSlot(events(), 0);
+      QVERIFY(!violinsAlone.isEmpty());
+      // the Flute on Vial: the metaTag's "library:<name>", read back
+      modes[flute] = PartPlayback::LIBRARY;
+      const std::map<const Part*, QString> names { { flute, "Vial Instrumental" } };
+      const QString tag = PartPlaybackModes::write(score, modes, names);
+      QVERIFY2(tag.contains("\"mode\":\"library:Vial Instrumental\""), qPrintable(tag));
+      score->setMetaTag(PartPlaybackModes::metaTag, tag);
+      QCOMPARE(PartPlaybackModes::of(flute), PartPlayback::LIBRARY);
+      QCOMPARE(PartPlaybackModes::libraryOf(flute), QString("Vial Instrumental"));
+      QCOMPARE(PartPlaybackModes::libraryOf(violins), QString());
+      QCOMPARE(PartPlaybackModes::write(score, PartPlaybackModes::read(score)), tag);   // (the name kept)
+      QVERIFY(SoundLib::libraryOf(flute) == vial);
+      QCOMPARE(SoundLib::libraryOf(violins).get(), &lib);
+      QCOMPARE(SoundLib::libraryOf(horn).get(), &lib);
+      const std::vector<std::shared_ptr<const SoundLib::Library>> libs = SoundLib::scoreLibraries(score);
+      QCOMPARE(int(libs.size()), 2);
+      QCOMPARE(libs[0].get(), &lib);
+      QVERIFY(libs[1] == vial);
+      // the routes: the current library's as alone, Vial's after it
+      const std::vector<SoundLib::Route> all = SoundLib::allRoutes(score);
+      QCOMPARE(int(all.size()), 2);
+      QCOMPARE(all[0].part, (const Part*)violins);
+      QCOMPARE(all[0].library, &lib);
+      QCOMPARE(all[0].port * 16 + all[0].channel, 0);
+      QCOMPARE(all[1].part, (const Part*)flute);
+      QCOMPARE(all[1].library, vial.get());
+      QCOMPARE(all[1].instrument->name, QString("Flute Solo"));
+      QCOMPARE(all[1].port * 16 + all[1].channel, 1);
+      const std::vector<SoundLib::Route> current = SoundLib::routes(score, lib);
+      QCOMPARE(int(current.size()), 1);
+      QCOMPARE(current[0].part, (const Part*)violins);
+      const std::vector<SoundLib::Route> own = SoundLib::routes(score, *vial);
+      QCOMPARE(int(own.size()), 1);
+      QCOMPARE(own[0].port * 16 + own[0].channel, 1);
+      // rendered: the Violins as alone, the Flute on slot 1 (its dynamics on CC1, CC11 at Vial's 127, no switch)
+      const EventMap both = events();
+      QCOMPARE(onSlot(both, 0), violinsAlone);
+      bool noteOn = false, cc1 = false, cc11 = false, switched = false;
+      for (const auto& te : both) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != 1)
+                  continue;
+            noteOn = noteOn || (e.type() == ME_NOTEON && e.velo() > 0);
+            cc1 = cc1 || (e.type() == ME_CONTROLLER && e.controller() == 1);
+            cc11 = cc11 || (e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION && e.value() == 127);
+            switched = switched || e.librarySwitch();
+            }
+      QVERIFY(noteOn && cc1 && cc11 && !switched);
+      // MIDI out (and Live): the current library alone, the Flute MS4 there and named by otherEngineParts
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      QVERIFY(!SoundLib::severalLibraries(score));
+      QVERIFY(!SoundLib::libraryOf(flute));
+      QCOMPARE(int(SoundLib::allRoutes(score).size()), 1);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      QCOMPARE(int(SoundLib::allRoutes(score, true).size()), 1);
+      const std::vector<std::pair<const Part*, QString>> others = SoundLib::otherEngineParts(score);
+      QCOMPARE(int(others.size()), 1);
+      QCOMPARE(others[0].first, (const Part*)flute);
+      QCOMPARE(others[0].second, QString("Vial Instrumental"));
+      // an engine that can't play here (its plug-in not found): the Flute MS4, the Violins as alone
+      SoundLib::setEngineAvailable([&vial](const SoundLib::Library& l) { return &l != vial.get(); });
+      QVERIFY(!SoundLib::libraryOf(flute));
+      QCOMPARE(int(SoundLib::allRoutes(score).size()), 1);
+      QCOMPARE(onSlot(events(), 0), violinsAlone);
+      QVERIFY(onSlot(events(), 1).isEmpty());
+      SoundLib::setEngineAvailable(nullptr);
+
+      // hosted with the real Vial
+      const QString plugin = qEnvironmentVariable("MS_VIAL_VST3");
+      if (plugin.isEmpty() || qEnvironmentVariable("MS_PRESET_FOLDER").isEmpty()) {
+            delete score;
+            QSKIP("MS_VIAL_VST3 / MS_PRESET_FOLDER not set: the routes and renders checked, Vial not hosted");
+            }
+      const QByteArray oldPath = qgetenv("MS_VST3_PATH");
+      qputenv("MS_VST3_PATH", QFileInfo(plugin).absolutePath().toUtf8());       // (where pluginPath finds Vial.vst3)
+      struct PathBack { QByteArray v; ~PathBack() { if (v.isEmpty()) qunsetenv("MS_VST3_PATH"); else qputenv("MS_VST3_PATH", v); } } back { oldPath };
+      QString error;
+      QCOMPARE(QFileInfo(SoundLibraryHost::pluginPath(*vial, &error)).fileName(), QString("Vial.vst3"));
+      QCOMPARE(QFileInfo(SoundLibraryHost::pluginPath(lib, &error)).fileName(), QFileInfo(TESTSYNTH).fileName());
+      QVERIFY2(SoundLibraryHost::hasSetup(*vial, "Flute Solo"), qPrintable(SoundLibraryHost::presetPath(*vial, "Flute Solo")));
+      auto sounds = [](Vst3Synth* vst, int slot, float rate = 48000) {
+            vst->beginExport(rate);
+            vst->play(PlayEvent(ME_CONTROLLER, slot, 1, 80));
+            vst->play(PlayEvent(ME_CONTROLLER, slot, 11, 127));
+            vst->play(PlayEvent(ME_NOTEON, slot, 72, 100));
+            std::vector<float> b(2 * 4800, 0.f), all;
+            for (int i = 0; i < 10; ++i) {
+                  std::fill(b.begin(), b.end(), 0.f);
+                  vst->process(4800, b.data(), nullptr, nullptr);
+                  all.insert(all.end(), b.begin(), b.end());
+                  }
+            vst->play(PlayEvent(ME_NOTEOFF, slot, 72, 0));
+            vst->endExport();
+            return (rms(all, 0) + rms(all, 1)) / 2;
+            };
+      // (state: the export's own instance gives its state back; the host's, in a helper, keeps it there)
+      auto checkLoaded = [&](Vst3Synth* vst, bool state) {
+            QVERIFY(vst->plugin(0) && vst->plugin(1));
+            QCOMPARE(QFileInfo(vst->plugin(0)->path()).fileName(), QFileInfo(TESTSYNTH).fileName());
+            QCOMPARE(QFileInfo(vst->plugin(1)->path()).fileName(), QString("Vial.vst3"));
+            QByteArray component;
+            if (state) {
+                  QVERIFY(Vst3Plugin::splitState(vst->plugin(1)->state(), nullptr, &component, nullptr));
+                  QVERIFY2(component.contains("Flute"), "the Flute's preset");       // (its preset's name in the state Vial gives back)
+                  }
+            // (the host's instances at the sequencer's rate, as they were made: MScore::sampleRate. In a helper on Linux, Vial
+            // applies its state only once the host's idle timer has run for a while (measured: silent after 100 ms of the
+            // event loop, sounding after 600 ms; a sleep without the event loop doesn't do it; in MuseScore's process at
+            // once): the event loop runs in steps of 100 ms, up to 5 s, until it sounds, the time logged)
+            const float rate = state ? 48000.f : float(MScore::sampleRate);
+            double r = sounds(vst, 1, rate);
+            int waited = 0;
+            while (!state && !(r > 1e-4) && waited < 5000) {
+                  QTest::qWait(100);
+                  waited += 100;
+                  r = sounds(vst, 1, rate);
+                  }
+            qDebug("twoLibraries: the Flute on Vial, rms %.5f (the Violins on the test synth %.5f) at %.0f Hz, after %d ms of the "
+                   "event loop", r, sounds(vst, 0, rate), rate, waited);
+            QVERIFY2(r > 1e-4, "the Flute on Vial is silent");
+            };
+      {
+            std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000, &error);
+            QVERIFY2(vst, qPrintable(error));
+            checkLoaded(vst.get(), true);
+      }
+      {
+            MasterSynthesizer master;
+            master.registerSynthesizer(new Vst3Synth);
+            MasterSynthesizer* was = synti;
+            synti = &master;
+            SoundLibraryHost* h = SoundLibraryHost::instance();
+            QVERIFY2(h->sync(score, &error), qPrintable(error));
+            Vst3Synth* s = h->synth();
+            QVERIFY(s);
+            checkLoaded(s, false);
+            QVERIFY(h->loaded(0) && h->loaded(1));
+            QCOMPARE(h->slotsOf(flute), std::vector<int>({ 1 }));
+            QCOMPARE(h->slotsOf(violins), std::vector<int>({ 0 }));
+            // the Flute back to MS4: its Vial instance goes at the next sync, the test synth stays
+            modes[flute] = PartPlayback::MS4;
+            score->setMetaTag(PartPlaybackModes::metaTag, PartPlaybackModes::write(score, modes, names));
+            QVERIFY2(h->sync(score, &error), qPrintable(error));
+            QVERIFY(s->plugin(0) && !s->plugin(1));
+            h->release();
+            synti = was;
+      }
+      delete score;
       }
 
 //---------------------------------------------------------

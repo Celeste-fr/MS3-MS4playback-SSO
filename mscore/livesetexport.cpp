@@ -714,6 +714,22 @@ int recordWritten(MasterScore* score, const LiveSetWriter::Spec& spec, const QBy
 //   createLiveSetDialog
 //---------------------------------------------------------
 
+// several libraries (SoundLib::scoreLibraries): Live plays the global library alone; a part MuseScore plays by another
+// engine (Vial Instrumental …) is left out of the set, said before (LIVE.md › What still differs). false: cancelled
+static bool otherEnginesLeftOut(MasterScore* score, const SoundLib::Library& library, QWidget* parent, const QString& title)
+      {
+      const std::vector<std::pair<const Part*, QString>> others = SoundLib::otherEngineParts(score);
+      if (others.empty())
+            return true;
+      QStringList lines;
+      for (const auto& o : others)
+            lines << QString("%1 (%2)").arg(o.first->partName(), o.second);
+      return QMessageBox::information(parent, title, QObject::tr("Live plays only the global sound library, %1. These parts play "
+                                                                 "another library in MuseScore and are left out of the set:\n\n%2")
+                                      .arg(library.name, lines.join("\n")), QMessageBox::Ok | QMessageBox::Cancel)
+             == QMessageBox::Ok;
+      }
+
 void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       {
       const QString title = onlyMissing ? QObject::tr("Add Missing Tracks") : QObject::tr("Create Live Set");
@@ -722,6 +738,8 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
             QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences › I/O › Sound library)."));
             return;
             }
+      if (!otherEnginesLeftOut(score, *library, parent, title))
+            return;
       LiveSetPlan plan;
       QString error;
       QApplication::setOverrideCursor(Qt::WaitCursor);
@@ -1061,6 +1079,8 @@ void updateLiveSetDialog(MasterScore* score, QWidget* parent)
             QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences › I/O › Sound library)."));
             return;
             }
+      if (!otherEnginesLeftOut(score, *library, parent, title))
+            return;
       QString start = linkedSet(score);
       if (start.isEmpty() || !QFileInfo::exists(start)) {
             start = score->fileInfo()->absolutePath();

@@ -680,6 +680,9 @@ void updateExternalValuesFromPreferences() {
             // patch plays its notes)
             if (output == SoundLib::Output::PLUGIN)
                   SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+                        // (the patch's own library: several, SoundLib::scoreLibraries)
+                        if (li.library)
+                              return SoundLibraryHost::hasSetup(*li.library, li.name);
                         std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
                         return library && SoundLibraryHost::hasSetup(*library, li.name);
                         });
@@ -688,6 +691,12 @@ void updateExternalValuesFromPreferences() {
             if (mscore)
                   for (MasterScore* s : mscore->scores())
                         s->setPlaylistDirty();
+            }
+      // the other engines a part may play (soundlibrary.h › engines: Vial Instrumental next to SSO), each one's variant
+      if (updateSoundEngines() && mscore) {
+            for (MasterScore* s : mscore->scores())
+                  s->setPlaylistDirty();
+            mscore->updatePlaybackMode();
             }
 
       MScore::selectColor[0] = preferences.getColor(PREF_UI_SCORE_VOICE1_COLOR);
@@ -5188,6 +5197,8 @@ static bool verifyInBackground(const QStringList& argv)
             log(line);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            if (li.library)             // (the patch's own library: several, SoundLib::scoreLibraries)
+                  return SoundLibraryHost::hasSetup(*li.library, li.name);
             std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
             return l && SoundLibraryHost::hasSetup(*l, li.name);
             });
@@ -5282,6 +5293,8 @@ static bool evenLevelsInBackground(const QStringList&)
             log(line);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            if (li.library)             // (the patch's own library: several, SoundLib::scoreLibraries)
+                  return SoundLibraryHost::hasSetup(*li.library, li.name);
             std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
             return l && SoundLibraryHost::hasSetup(*l, li.name);
             });
@@ -5341,6 +5354,8 @@ static bool liveSetInBackground(const QStringList& argv)
             log(line);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            if (li.library)             // (the patch's own library: several, SoundLib::scoreLibraries)
+                  return SoundLibraryHost::hasSetup(*li.library, li.name);
             std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
             return l && SoundLibraryHost::hasSetup(*l, li.name);
             });

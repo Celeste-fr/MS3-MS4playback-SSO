@@ -33,6 +33,44 @@ The owner's goal for October 2026: everything a later AI needs to make playback 
 - **How he judges timing:** one section alone with a metronome click, long rests cut out, about 20 s a clip, one
   question per page.
 
+## Several libraries: Vial Instrumental as an engine (branch `vial-engine`, 2026-10-26, from integrate-1017 0f4abe48ea; not merged)
+
+The owner (2026-10-26): "natively integrate Vial Instrumental as another playback engine, like we have now for ms3, ms4
+and sso"; MuseScore uses his installed Vial (Vial.vst3 where its installer puts it, the VST 3 folders); not found: the
+engine grayed, its tooltip saying so; Vial stays a hosted VST 3 (GPL v3: never compiled or linked into MuseScore).
+- What the user sees: the Mixer's / Play Panel's *Global playback* box and each part's *Part playback* list MuseScore 3,
+  MuseScore 4 and every library by name (Spitfire Symphony Orchestra, Vial Instrumental, Ample Guitar M); an engine that
+  can't play here (plug-in not found; over MIDI out every one but the global) is grayed with the reason as tooltip.
+  Preferences › I/O › Sound library lists the engines once each, with a row *Vial Instrumental plays: Vial / Fuse* (the
+  variant, preference `io/soundLibraryVariants`; a map "<engine> (<variant>)" is a variant). A part set to Vial plays
+  through Vial.vst3 next to the SSO parts' Kontakt, each part its own instance.
+- File: metaTag `partPlayback` `"mode": "library:<engine>"` (3.6 keeps metaTags); `"library"` stays the global one.
+  Default unchanged: nothing plays otherwise until a part names another engine.
+- Code: soundlibrary.h › engines (`setEngines`, `engine`, `engineOf`, `libraryOf`, `scoreLibraries`, `allRoutes`,
+  `Route::library`, `LibInstrument::library`, `calibrationFor` + `setCalibrationLoader`, `otherEngineParts`);
+  partplayback.h (`libraries`, `libraryOf`, `write` with names); rendermidi (`LibPart::library`, `libAt`, `plib`);
+  soundlibraryhost (`syncSome` library by library, `_slotLibraries`, `Pending::library`, `pluginPath`'s override only for
+  its library, `MS_VST3_PATH`; the export's `loadInstances` / `beginInstance` / `finishInstance` by the route's
+  library); contextlevel (`allRoutes`, mics by the patch's map, `trimLibrary`); `Vst3Synth::setVarispeed(slot, on)`;
+  playbackmode.h (`soundEngines`, variants, `soundEngineAvailable`, `addEngineItems`, `updateSoundEngines`); the Mixer,
+  Preferences, Create / Update Live Set's warning.
+- Per place: per library = routes, renderer, hosting, export instances, Mixer gains, volumes (section balance, level
+  rule, real range, mics), master trim (measured on the first library with a crest, applied to all); the global
+  library's only = even levels' measurement, the audit, the verification, Live and MIDI out (the other engines' parts
+  MS4 there, said before a Live set is written: LIVE.md › What still differs), the Sound Library window,
+  `PartControllers::setSetupValues` (a part's unautomated value read from the global library's setups).
+- Tested (Linux, 2026-10-27): `tst_liveequivalence::twoLibraries` (test synth as the current library standing in for SSO,
+  the real Linux Vial.vst3 7a75da1 with the private preset pack for the Flute, in the helper processes and in-process);
+  Whence `dumpEvents` before / after (Recommended, chunked: 53 files identical; `MS_DUMP_LIVE`: 56 identical);
+  tst_liveequivalence 85 / 4 skipped, tst_soundlibrary 155 / 7 skipped (`vialHosted` skips in the whole run: `vialMap`
+  unsets MS_PRESET_FOLDER before it, as on integrate-1017; run alone with the real Vial: passes), tst_liveintegration 69.
+  Untried: Windows, the GUI boxes by hand, SSO + Vial with Kontakt.
+- Finding: Vial hosted in a helper process (Linux) is silent for ~200-600 ms of the GUI event loop after
+  `SoundLibraryHost::sync` (a sleep doesn't help; in-process it sounds at once): the test waits on the event loop. On
+  playback that is under Play's own start; check on Windows whether a first note right after a load is cut.
+- Left: Live and MIDI out for a second engine (its parts MS4 there), even levels / audit / verification for the global
+  library only, `setSetupValues` from the global library, Vial Fuse chosen per engine only (not per part).
+
 ## Vial Instrumental (branch `vial-map`, 2026-10-25, from integrate-1017 b163700144; not merged)
 
 The owner's "SSO imitations" Vial presets as a sound library (approved 2026-10-25, relayed by the vial sessions).

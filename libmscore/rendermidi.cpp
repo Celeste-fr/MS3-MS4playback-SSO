@@ -1272,7 +1272,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // extrapolated under its lowest measured point: the rest by CC11 (*under; calibratedVelocityFloored).
                   // Else (0, or a curve missing) its level on the CC's scale, an accent's share included (levelVelocity).
                   // -1: MS4's velocity
-                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::dynamicsCalibration() : nullptr;
+                  // (the part's own library: its calibration and its map's measurements only, SoundLib::calibrationFor)
+                  const SoundLib::Library* plib = lp && lp->library ? lp->library : library.get();
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::calibrationFor(plib) : nullptr;
                   const int calibratedMode = cal ? int(std::lround(Playback::value("levels/calibrated", score))) : 0;
                   // the held note: what 1 and 2 match a velocity technique and a Performance legato note to
                   // (performanceLevel), and what a capped short's rest by CC11 is measured against (realRangeLevel)
@@ -1329,8 +1331,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   std::map<std::pair<const SoundLib::Articulation*, int>, std::shared_ptr<const std::vector<int>>> performanceMaps;
                   auto performanceLevel = [&](const Note* note, const SoundLib::Choice& c) {
                         std::shared_ptr<const std::vector<int>> none;
-                        if (!c || !libHeld || c.articulation->attacks.empty() || library->dynamicsCC < 0
-                            || library->dynamicsCC == CTRL_EXPRESSION)
+                        if (!c || !libHeld || c.articulation->attacks.empty() || plib->dynamicsCC < 0
+                            || plib->dynamicsCC == CTRL_EXPRESSION)
                               return none;
                         const std::pair<const SoundLib::Articulation*, int> key { c.articulation, note->ppitch() };
                         auto m = performanceMaps.find(key);
@@ -1351,8 +1353,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // [levels] context (contextlevel.h): a note on an articulation with a measured context level plays its
                   // dynamics CC at the written dynamic's value, its phrase's gain less the score's largest by CC11 (the
                   // patches' volumes play the rest: TrackDelays::patchGain); NAN: not such a note
-                  const bool contextOn = li && ContextLevel::on(score) && library->dynamicsCC >= 0
-                                         && library->dynamicsCC != CTRL_EXPRESSION;
+                  const bool contextOn = li && ContextLevel::on(score) && plib->dynamicsCC >= 0
+                                         && plib->dynamicsCC != CTRL_EXPRESSION;
                   auto contextDb = [&](const Note* note, const SoundLib::Choice& c) {
                         if (!contextOn || !c || !ContextLevel::has(c.articulation) || c.articulation->attacks.empty())
                               return double(NAN);
@@ -1400,7 +1402,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const double up = db > 0 ? db : 0.0;
                               LibLevel l;
                               if (up > 0) {
-                                    l.controller = library->dynamicsCC;
+                                    l.controller = plib->dynamicsCC;
                                     l.fallback = Ms4::expressionLevel(dynLevel);
                                     l.map = [own, up](int x) {
                                           if (x <= 0)
@@ -1421,7 +1423,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               SoundLib::DynamicsCurve own = ownCurve ? ownCurve->atPitch(note->ppitch()) : SoundLib::DynamicsCurve();
                               const double up = db > 0 ? db : 0.0;
                               LibLevel l;
-                              l.controller = library->dynamicsCC;
+                              l.controller = plib->dynamicsCC;
                               l.fallback = Ms4::expressionLevel(dynLevel);
                               l.map = [performance, own, up](int x) {
                                     if (x <= 0)
@@ -1454,15 +1456,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         LibLevel l;
                         if (db < 0) {
                               l.controller = CTRL_EXPRESSION;
-                              l.fallback = library->dynamicsCC == CTRL_EXPRESSION ? Ms4::expressionLevel(dynLevel) : library->expressionValue;
+                              l.fallback = plib->dynamicsCC == CTRL_EXPRESSION ? Ms4::expressionLevel(dynLevel) : plib->expressionValue;
                               const SoundLib::DynamicsCurve* held = cal ? SoundLib::heldCurve(*cal, libPatches) : nullptr;
-                              if (held && library->dynamicsCC != CTRL_EXPRESSION)
+                              if (held && plib->dynamicsCC != CTRL_EXPRESSION)
                                     curve.points = held->expression;
                               }
                         else {
-                              if (library->dynamicsCC < 0)
+                              if (plib->dynamicsCC < 0)
                                     return;
-                              l.controller = library->dynamicsCC;
+                              l.controller = plib->dynamicsCC;
                               l.fallback = Ms4::expressionLevel(dynLevel);
                               if (own && (own->drivenBy == "controller" || own->drivenBy == "both"))
                                     curve.points = own->points;
@@ -1489,7 +1491,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (mt != d->second.micTop.end()) {
                               auto m = libMics.find({ st1->part(), patch });
                               if (m != libMics.end())
-                                    libLevels[note].volumeDb += ContextLevel::micOffsetDb(*patch, *library, m->second->at(note->chord()->tick().ticks()))
+                                    libLevels[note].volumeDb += ContextLevel::micOffsetDb(*patch, *plib, m->second->at(note->chord()->tick().ticks()))
                                                                 - mt->second;
                               }
                         // [levels] evenLevels' headroom (evenlevels.h): the patch's volume plays it, its notes that much lower
@@ -1508,7 +1510,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // by CC11 (a volume on top of the others: dB add up), every voice the line's too, so the chord adds up to
                   // one section; the level at the note's own start for as long as it sounds (a held note keeps it under a
                   // chord change: no CC11 move inside a note). An assumption from player counts, not measured divisi data
-                  const bool divisiOn = li && Playback::on("levels/divisi", score) && library->dynamicsCC != CTRL_EXPRESSION;
+                  const bool divisiOn = li && Playback::on("levels/divisi", score) && plib->dynamicsCC != CTRL_EXPRESSION;
                   auto divisiLevel = [&](const Note* note, const SoundLib::Choice& c) {
                         if (!divisiOn || !c || c.patch < 0 || c.patch >= int(libPatches.size()) || !libPatches[size_t(c.patch)]->mono)
                               return;
@@ -1520,8 +1522,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // (realDb at its pitch), less its part's R (the patches' volumes play it: TrackDelays::patchGain); a
                   // short whose calibrated velocity is capped (127 and still under the level it should have, or 1 and still
                   // over it) gets the rest by CC11 (realExtra; not with the note's own velocity, the Velocity lane)
-                  const bool rangeOn = li && ContextLevel::realRange(score) && library->dynamicsCC >= 0
-                                       && library->dynamicsCC != CTRL_EXPRESSION;
+                  const bool rangeOn = li && ContextLevel::realRange(score) && plib->dynamicsCC >= 0
+                                       && plib->dynamicsCC != CTRL_EXPRESSION;
                   const bool rangeSpans = rangeOn && ContextLevel::clarkLuceSpans(score);
                   auto realRangeLevel = [&](const Note* note, const SoundLib::Choice& c, int velocity, const Ms4::NoteResult& r, int dynLevel) {
                         if (!rangeOn || !c)
@@ -3046,16 +3048,17 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                                     }
                               }
                         }
-                  if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
+                  const SoundLib::Library* plib = lp->library ? lp->library : library.get();
+                  if (plib->dynamicsCC < 0 || plib->dynamicsCC > 127)
                         continue;
-                  controller = library->dynamicsCC;
+                  controller = plib->dynamicsCC;
                   for (const auto& ip : *part->instruments()) {
                         if (!libraryPlays(ip.second))
                               continue;
                         const int ch = ip.second->channel(0)->channel();
                         channels.push_back(ch);
                         if (controller != CTRL_EXPRESSION) {
-                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, library->expressionValue, 127));
+                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, plib->expressionValue, 127));
                               ev.setOriginatingStaff(part->staff(0)->idx());
                               events->insert(std::make_pair(tick1 + tickOffset, ev));
                               }
@@ -3999,7 +4002,9 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             carryAt(snapAt).levels.clear();
       if (libLevels.empty() && (!from || from->levels.empty()))
             return;
-      // (a library whose dynamics are CC11: no plain volume to add volumeDb to)
+      // (a library whose dynamics are CC11: no plain volume to add volumeDb to. Of several libraries the current one's
+      // dynamics controller here: every map MuseScore has sends CC11 as the expression, none its dynamics on it, and
+      // realRange's levels are the measured library's alone)
       const bool volume = library && library->dynamicsCC != CTRL_EXPRESSION;
       // [levels] realRange: CC11 follows the dynamics CC in force (as written)
       const int dynamicsCC = library && library->dynamicsCC >= 0 && library->dynamicsCC != CTRL_EXPRESSION ? library->dynamicsCC : -1;
@@ -4136,7 +4141,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
                       && routeOf(e) == route)
                         return e.value();
                   }
-            return library ? qBound(0, library->expressionValue, 127) : 127;
+            return library ? qBound(0, libAt(route)->expressionValue, 127) : 127;
             };
       auto transitionSwitch = [&](EventMap::iterator i, int route, const LibLevel* level, const NPlayEvent& ev) {
             auto g = ev.note() ? libGlide.find(ev.note()) : libGlide.end();
@@ -4162,7 +4167,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             auto at = events->lower_bound(uArrive);
             const int to = level ? mapOf(*level, CTRL_EXPRESSION, valueAt(at, route, CTRL_EXPRESSION, fallbackOf(*level, CTRL_EXPRESSION)),
                                          dynAt(at, route))
-                                 : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, library->expressionValue, 127) : 127);
+                                 : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, libAt(route)->expressionValue, 127) : 127);
             if (from == to)
                   return false;
             // the ramp between leave and arrival (the values in between; the arrival's own by switchTo)
@@ -4281,7 +4286,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             auto at = events->lower_bound(uAt);
             const int to = level ? mapOf(*level, CTRL_EXPRESSION, valueAt(at, route, CTRL_EXPRESSION, fallbackOf(*level, CTRL_EXPRESSION)),
                                          dynAt(at, route))
-                                 : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, library->expressionValue, 127) : 127);
+                                 : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, libAt(route)->expressionValue, 127) : 127);
             if (from == to || (attackLevels == 2 && to < from))
                   return false;
             switchTo(events->lower_bound(uAt), uAt, route, level, i->first, ev);
@@ -7018,7 +7023,7 @@ void MidiRenderer::updateState()
       const QString delays = score->masterScore()->metaTag(TrackDelays::metaTag);
       if (delays != trackDelaysTag)
             needUpdate = true;
-      if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
+      if (libCurrent != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
           || automation != partAutomation || settings != playbackSettingsTag
           || Playback::generation() != playbackGeneration)
             needUpdate = true;
@@ -7071,13 +7076,23 @@ void MidiRenderer::updateState()
             libSpellKey.clear();
             libSpellCents.clear();
             libSpelled.clear();
-            library = SoundLib::current();
+            libCurrent = SoundLib::current();
+            library = libCurrent;
+            libSlotLibrary.clear();
+            libLibraries = SoundLib::scoreLibraries(score, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
+            if (!library && !libLibraries.empty())
+                  library = libLibraries.front();
             libGeneration = SoundLib::routesGeneration();
             if (library) {
                   const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score->masterScore());
-                  const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
+                  // (several libraries: each one's routes after the one before, the current library's first: SoundLib::allRoutes;
+                  // the current one alone: its routes as ever)
+                  const std::vector<SoundLib::Route> routes = libLibraries.size() > 1
+                        ? SoundLib::allRoutes(score, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI)
+                        : SoundLib::routes(score, *library, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
                   const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
                   for (const SoundLib::Route& r : routes) {
+                        libSlotLibrary[r.port * 16 + r.channel] = r.library ? r.library : library.get();
                         libRoutePatches[r.port * 16 + r.channel] = { r.part, r.instrument };
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
                         if (d.empty() && d.rule.empty() && d.even.empty() && d.evenAll == 0.0 && d.plain.empty())
@@ -7086,8 +7101,10 @@ void MidiRenderer::updateState()
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };
                         libDelayLead = std::max(libDelayLead, -TrackDelays::earliest(d));
                         }
-                  if (ContextLevel::micCompensation(score) && !library->micFader.empty()) {
+                  if (ContextLevel::micCompensation(score)) {
                         for (const SoundLib::Route& r : routes) {
+                              if (libAt(r.port * 16 + r.channel)->micFader.empty())
+                                    continue;
                               if (r.lane != 0 || !r.instrument->hasMicLevels || libMics.count({ r.part, r.instrument }))
                                     continue;
                               auto v = std::make_shared<ContextLevel::MicValues>(ContextLevel::micValues(r.part, *r.instrument, allLanes));
@@ -7101,7 +7118,9 @@ void MidiRenderer::updateState()
                         Part* part = const_cast<Part*>(r.part);
                         LibPart& lp = libParts[part];
                         lp.route = r;
-                        lp.velocityDynamics = library->velocityDynamics;
+                        lp.library = libAt(r.port * 16 + r.channel);
+                        const SoundLib::Library& lib = *lp.library;
+                        lp.velocityDynamics = lib.velocityDynamics;
                         lp.text.build(score, part, r.instrument->guitar.get());
                         // automation: a lane takes its controller's place (its part value, its staff texts)
                         QSet<QString> automated;
@@ -7133,7 +7152,7 @@ void MidiRenderer::updateState()
                               // a lane Live's set has as it is here (automation.h) while the library plays
                               // through Live: Live plays it; MuseScore sends nothing for its controller
                               const int laneCC = a.cc >= 0 ? a.cc : lane.cc();
-                              if (laneCC >= 0 && laneCC == library->dynamicsCC && !lane.points.empty())
+                              if (laneCC >= 0 && laneCC == lib.dynamicsCC && !lane.points.empty())
                                     lp.dynamicsLaneFrom = std::min(lp.dynamicsLaneFrom, lane.points.front().tick);
                               if (lane.playedByLive() && (SoundLib::output() == SoundLib::Output::MIDI || forLiveClips)) {
                                     automated.insert(lane.target);
@@ -7177,11 +7196,11 @@ void MidiRenderer::updateState()
                         // varispeed: a note plays at its lane's tuning (within the tolerance of its own),
                         // so a note joining a lane never retunes what still sounds on it
                         bool tuned = false;           // (a part with no microtones: no bends either)
-                        if (library->varispeed && !r.instrument->kit) {
-                              const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *library);
+                        if (lib.varispeed && !r.instrument->kit) {
+                              const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, lib);
                               // (fixed copies as routes() gives them: Live's, MIDI out, hosted slots)
                               const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes,
-                                                                          SoundLib::fixedLanes(score, *library, forLiveClips));
+                                                                          SoundLib::fixedLanes(score, lib, forLiveClips));
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
@@ -7194,14 +7213,14 @@ void MidiRenderer::updateState()
                         else if (SoundLib::anyMono(lp.patches) && !r.instrument->kit) {
                               // (a monophonic patch without varispeed: its voices' copies only, untuned, as routes() gives them)
                               const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, std::numeric_limits<double>::infinity(),
-                                                                          SoundLib::laneSettings(score, *library).tail, 1, false);
+                                                                          SoundLib::laneSettings(score, lib).tail, 1, false);
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
                               libDivisi.insert(l.sounding.begin(), l.sounding.end());
                               }
                         for (const auto& ip : *part->instruments()) {
-                              const SoundLib::LibInstrument* li = library->match(ip.second, part);
+                              const SoundLib::LibInstrument* li = lib.match(ip.second, part);
                               lp.instruments[ip.second] = li;
                               if (li)
                                     libRoutes[ip.second->channel(0)->channel()] = li == r.instrument ? outs

@@ -14,6 +14,7 @@
 #include "staff.h"
 
 #include <atomic>
+#include <set>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -24,6 +25,21 @@ namespace PartPlaybackModes {
 const char* const metaTag = "partPlayback";
 
 static const char* const NAMES[] = { "", "ms3", "ms4", "library" };
+static const QString LIBRARY_PREFIX("library:");
+
+// a record's mode and its library's name ("library:<name>": LIBRARY and the name)
+static PartPlayback modeOf(const QString& text, QString* library = nullptr)
+      {
+      if (text.startsWith(LIBRARY_PREFIX)) {
+            if (library)
+                  *library = text.mid(LIBRARY_PREFIX.size());
+            return PartPlayback::LIBRARY;
+            }
+      for (int i = 1; i < 4; ++i)
+            if (text == NAMES[i])
+                  return PartPlayback(i);
+      return PartPlayback::DEFAULT;
+      }
 
 //---------------------------------------------------------
 //   read
@@ -40,10 +56,7 @@ std::map<const Part*, PartPlayback> read(const MasterScore* score)
       const QJsonArray list = QJsonDocument::fromJson(tag.toUtf8()).array();
       for (const QJsonValue& v : list) {
             const QJsonObject o = v.toObject();
-            PartPlayback mode = PartPlayback::DEFAULT;
-            for (int i = 1; i < 4; ++i)
-                  if (o.value("mode").toString() == NAMES[i])
-                        mode = PartPlayback(i);
+            const PartPlayback mode = modeOf(o.value("mode").toString());
             if (mode == PartPlayback::DEFAULT)
                   continue;
             const Part* part = findPart(score, o.value("part").toInt(-1), o.value("name").toString(),
@@ -52,6 +65,50 @@ std::map<const Part*, PartPlayback> read(const MasterScore* score)
                   modes[part] = mode;
             }
       return modes;
+      }
+
+//---------------------------------------------------------
+//   libraries
+//    (read()'s rule for finding the part, the same records)
+//---------------------------------------------------------
+
+std::map<const Part*, QString> libraries(const MasterScore* score)
+      {
+      std::map<const Part*, QString> out;
+      if (!score)
+            return out;
+      const QString tag = score->metaTag(metaTag);
+      if (tag.isEmpty() || !tag.contains(LIBRARY_PREFIX))
+            return out;
+      std::set<const Part*> found;
+      const QJsonArray list = QJsonDocument::fromJson(tag.toUtf8()).array();
+      for (const QJsonValue& v : list) {
+            const QJsonObject o = v.toObject();
+            QString name;
+            if (modeOf(o.value("mode").toString(), &name) == PartPlayback::DEFAULT)
+                  continue;
+            const Part* part = findPart(score, o.value("part").toInt(-1), o.value("name").toString(),
+                                        [&found](const Part* p) { return found.count(p) > 0; });
+            if (!part)
+                  continue;
+            found.insert(part);
+            if (!name.isEmpty())
+                  out[part] = name;
+            }
+      return out;
+      }
+
+QString libraryOf(const Part* part, const std::map<const Part*, QString>& libraries)
+      {
+      if (libraries.empty())
+            return QString();
+      auto it = libraries.find(masterPart(part));
+      return it == libraries.end() ? QString() : it->second;
+      }
+
+QString libraryOf(const Part* part)
+      {
+      return part && part->score() ? libraryOf(part, libraries(part->score()->masterScore())) : QString();
       }
 
 //---------------------------------------------------------
@@ -77,6 +134,12 @@ const Part* findPart(const MasterScore* score, int index, const QString& name, c
 
 QString write(const MasterScore* score, const std::map<const Part*, PartPlayback>& modes)
       {
+      return write(score, modes, libraries(score));
+      }
+
+QString write(const MasterScore* score, const std::map<const Part*, PartPlayback>& modes,
+              const std::map<const Part*, QString>& libraries)
+      {
       QJsonArray list;
       const QList<Part*>& parts = score->parts();
       for (int i = 0; i < parts.size(); ++i) {
@@ -86,7 +149,11 @@ QString write(const MasterScore* score, const std::map<const Part*, PartPlayback
             QJsonObject o;
             o["part"] = i;
             o["name"] = parts[i]->partName();
-            o["mode"] = NAMES[int(it->second)];
+            auto lib = libraries.find(parts[i]);
+            if (it->second == PartPlayback::LIBRARY && lib != libraries.end() && !lib->second.isEmpty())
+                  o["mode"] = LIBRARY_PREFIX + lib->second;
+            else
+                  o["mode"] = NAMES[int(it->second)];
             list.append(o);
             }
       return list.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(list).toJson(QJsonDocument::Compact));
