@@ -45,7 +45,7 @@ The owner's "SSO imitations" Vial presets as a sound library (approved 2026-10-2
   `savedSetupState`'s preset branch (the file's bytes are the component state, read at every load), the Sound Library
   window's folder box for preset libraries.
 - What plays: one Long preset per part for every technique, CC1 dynamics as MS4 writes them, CC11 127, CC21 64 (vibrato;
-  senza / non vib. 0, molto vib. 127, ord. 64) on the eight with vibrato. None of SSO's measurements (they're SSO's).
+  senza / non vib. 0, molto vib. 127, ord. 64) on the ten with vibrato (trumpet and tenor trombone added 2026-10-26, the owner via the vial session; their presets get the CC21 rows later, until then CC21 does nothing there). None of SSO's measurements (they're SSO's).
 - Tested on Linux (`tst_soundlibrary::vialMap`; `vialHosted` with `MS_VIAL_VST3` + `MS_PRESET_FOLDER`, skipped without;
   `tst_liveequivalence::vialSetupState`): the real Linux Vial.vst3 / VialFuse.vst3 load the presets of the private pack
   (`~/vial-sso/work/cc/zip0`, unzipped outside the repo) through setState: every preset value comes back (Vial adds its
@@ -55,7 +55,7 @@ The owner's "SSO imitations" Vial presets as a sound library (approved 2026-10-2
   the gap-expression build of Vial and a preset given the row by `cc_apply.py`, CC11 64 = -5.95 dB exactly.
 - Open: Windows untried (build only when the owner needs it); Live / MIDI out untried (LIVE.md › What still differs);
   re-run `vialHosted` (all 13, `MS_VIAL_PATCH`) when the updated pack with CC11 / CC21 ships; the final CC21 list may
-  change the eight (gen_vial.py PRESETS).
+  change the ten (gen_vial.py PRESETS).
 
 ## Out-of-process host (branch `oop-host`, 2026-10-25, from integrate-1017 6dd53a9e97 + kontakt-procs; not merged)
 

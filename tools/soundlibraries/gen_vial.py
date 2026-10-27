@@ -35,8 +35,8 @@ PRESETS = [
     ('Clarinet Solo', 'Clarinet Solo - Long', True),
     ('Bassoon Solo', 'Bassoon Solo - Long', True),
     ('Horn Solo', 'Horn Solo - Long', False),
-    ('Trumpet Solo', 'Trumpet Solo - Long', False),
-    ('Tenor Trombone Solo', 'Tenor Trombone Solo - Long', False),
+    ('Trumpet Solo', 'Trumpet Solo - Long', True),
+    ('Tenor Trombone Solo', 'Tenor Trombone Solo - Long', True),
     ('Tuba Solo', 'Tuba Solo - Long', False),
 ]
 # every technique MuseScore asks for plays the Long preset (SSO's one-articulation patches' list; ornaments - trills,

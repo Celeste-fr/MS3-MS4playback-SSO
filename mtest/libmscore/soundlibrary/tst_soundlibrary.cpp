@@ -7105,7 +7105,7 @@ void TestSoundLibrary::ampleRender()
 //   vialMap
 //    the Vial Instrumental maps (gen_vial.py, the owner's "SSO imitations" presets, 2026-10-25): 13 instruments with the
 //    ids of their SSO equivalents, each one Long articulation for every technique and its preset file (Vial.vst3: .vital,
-//    Fuse: .vialfuse); no switching; CC1 dynamics, CC11 at 127, CC21 vibrato (64; senza / molto vib.) on the eight that
+//    Fuse: .vialfuse); no switching; CC1 dynamics, CC11 at 127, CC21 vibrato (64; senza / molto vib.) on the ten that
 //    have it; the preset folder by Vial's rule (MS_PRESET_FOLDER, Vial.config's data_directory over Vital's unless it
 //    is the default, the default); vial.musicxml's Violins, flute and horn rendered: each part one route, its CC1 /
 //    CC11 / CC21, no switch (hosted, the route's instance gets them on MIDI channel 1)
@@ -7127,7 +7127,7 @@ void TestSoundLibrary::vialMap()
       QCOMPARE(vial->presets.documents, QString("Vial"));
       QCOMPARE(vial->presets.configs, QStringList({ "vial/Vial.config", "vital/Vital.config" }));
       const std::set<QString> vibrato { "Violins 1", "Violins 2", "Violas", "Celli", "Flute Solo", "Oboe Solo", "Clarinet Solo",
-                                        "Bassoon Solo" };
+                                        "Bassoon Solo", "Trumpet Solo", "Tenor Trombone Solo" };
       const QStringList names { "Violins 1", "Violins 2", "Violas", "Celli", "Basses", "Flute Solo", "Oboe Solo", "Clarinet Solo",
                                 "Bassoon Solo", "Horn Solo", "Trumpet Solo", "Tenor Trombone Solo", "Tuba Solo" };
       for (const auto* lib : { vial.get(), fuse.get() }) {

@@ -83,9 +83,19 @@
   </Instrument>
   <Instrument name="Trumpet Solo" ids="trumpet bb-trumpet c-trumpet a-trumpet d-trumpet eb-trumpet e-trumpet f-trumpet" preset="Fuse/Vial Instrumental/SSO imitations/Trumpet Solo - Long.vialfuse">
     <Articulation name="Long" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Controller id="vibrato" name="Vibrato (CC21)" cc="21" default="64">
+      <Text match="(senza|non) vib(\.|rato)?" value="0"/>
+      <Text match="molto vib(\.|rato)?" value="127"/>
+      <Text match="(ord\.?|ordinario|norm\.?|vib\.|vibrato)" value="64"/>
+    </Controller>
   </Instrument>
   <Instrument name="Tenor Trombone Solo" ids="trombone tenor-trombone alto-trombone" preset="Fuse/Vial Instrumental/SSO imitations/Tenor Trombone Solo - Long.vialfuse">
     <Articulation name="Long" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
+    <Controller id="vibrato" name="Vibrato (CC21)" cc="21" default="64">
+      <Text match="(senza|non) vib(\.|rato)?" value="0"/>
+      <Text match="molto vib(\.|rato)?" value="127"/>
+      <Text match="(ord\.?|ordinario|norm\.?|vib\.|vibrato)" value="64"/>
+    </Controller>
   </Instrument>
   <Instrument name="Tuba Solo" ids="tuba f-tuba eb-tuba c-tuba bb-tuba bass-f-tuba bass-eb-tuba" preset="Fuse/Vial Instrumental/SSO imitations/Tuba Solo - Long.vialfuse">
     <Articulation name="Long" value="1" techniques="long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno"/>
