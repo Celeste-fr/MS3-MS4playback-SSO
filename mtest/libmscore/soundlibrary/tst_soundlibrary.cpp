@@ -1980,7 +1980,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[shorts]\n", "[shorts]\nstaccatoLength=%11\n").replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nattackLevels=%7\ntransitionLevels=0\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainBowed=%8\nplainAccents=%9\nmicrotoneBends=%10\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=0\n";
+                                + "\n[levels]\nattackLevels=%7\ntransitionLevels=0\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nmicrotoneBends=%10\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=0\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2).arg(3).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1989,15 +1989,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainBowed=0\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAuto=0\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainBowed=1\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
+               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainBowed=1\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n\n[shorts]\nstaccatoLength=1\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=0\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=0\n\n[shorts]\nstaccatoLength=1\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -2027,13 +2027,13 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainBowed", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "shorts/staccatoLength", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "shorts/staccatoLength", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // attackLevels likewise (2 by default since 2026-10-23, Recommended's)
       QCOMPARE(Playback::detectPreset({ { "levels/attackLevels", 2 } }), QString("recommended"));
-      // plainBowed likewise (1 by default since 2026-10-26, Recommended's)
-      QCOMPARE(Playback::detectPreset({ { "slurs/plainBowed", 1 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "slurs/plainBowed", 0 } }), QString());
+      // plainAuto likewise (1 by default since 2026-10-26, Recommended's)
+      QCOMPARE(Playback::detectPreset({ { "slurs/plainAuto", 1 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "slurs/plainAuto", 0 } }), QString());
       // staccatoLength likewise (1 by default since 2026-10-24, Recommended's)
       QCOMPARE(Playback::detectPreset({ { "shorts/staccatoLength", 1 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "levels/attackLevels", 1 } }), QString());
@@ -2061,7 +2061,7 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 }, { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                         { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainBowed", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
+                                         { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
                                          { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "shorts/staccatoLength", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
@@ -2803,6 +2803,26 @@ void TestSoundLibrary::plainPerformance()
             QCOMPARE(n.velo, MidiRenderer::PLAIN_VELOCITY);
             QVERIFY2(withinMs(n.on, ms(tp.first)), qPrintable(QString("%1: %2 against %3").arg(tp.second).arg(n.on).arg(ms(tp.first))));
             }
+      // [slurs] plainAuto 1 (2026-10-26, the owner: "smooth after a rest, bowed on each new bow, fingered inside a slur,
+      // spiccato for staccatos"): C5 (after silence) and m3's arco E5 (after the pizzicati, another patch: silence on its
+      // own) smooth (5), 220 ms early (smooth 300 - plainShift 80; C5 at the score's start by the start lead, 220); D5,
+      // touching C5 without a slur, bowed (93); the staccatos, G5 after a staccato and the slur's A5 B5 64 as before
+      {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", "1" } });
+            const R au = render();
+            QVERIFY2(withinMs(au.startLead, 220.0), qPrintable(QString::number(au.startLead)));
+            const std::map<std::pair<int, int>, int> velo = { { { 0, 72 }, 5 }, { { 480, 74 }, 93 }, { { 4800, 76 }, 5 } };
+            for (const auto& tp : plainNotes) {
+                  const N n = at(au, tp.first, tp.second);
+                  const auto v = velo.find(tp);
+                  const bool smooth = v != velo.end() && v->second == 5;
+                  const double want = at(on, tp.first, tp.second).on + au.startLead - (smooth ? 220.0 : 0.0);
+                  QVERIFY2(n.velo == (v != velo.end() ? v->second : MidiRenderer::PLAIN_VELOCITY) && withinMs(n.on, want),
+                           qPrintable(QString("%1 %2: %3 at %4, want %5").arg(tp.first).arg(tp.second).arg(n.velo).arg(n.on).arg(want)));
+                  }
+            QVERIFY(au.trace.at({ 480, 74 })->from);
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" } });
+      }
       for (const SoundLib::Route& rt : SoundLib::routes(score, *lib))
             QVERIFY(rt.instrument->name != "Violin - Sul G - Performance" || std::none_of(on.notes.begin(), on.notes.end(),
                                                                                          [](const N& n) { return n.patch.contains("Sul G"); }));

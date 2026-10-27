@@ -183,14 +183,18 @@ static const std::vector<Definition> DEFINITIONS = {
         "plays as a transition from it; 0: it goes on the copy at its own tuning and starts with its own attack, as a new "
         "bow stroke", true },
       // (2026-10-26, branch celli-bowed: the owner on Whence's Celli bars 1-2, a slur's first note touching the slur before,
-      // its Velocity lane "64 · fingered": "this is not supposed to be fingered. it's supposed to be bowed". [slurs]
-      // transitions (2026-10-12) plays it bowed; plainPerformance (2026-10-17) sent every plain note at 64, SSO's fingered,
-      // so the bowed one was lost. 1 by default and in Recommended (his rule of 2026-10-12, restated), 0 in Library default;
-      // performanceNote's slurToSlur)
-      { "slurs/plainBowed", 1, 0, 1, "on/off",
-        "with [slurs] plainPerformance and [slurs] transitions: 1 a slur starting where the slur before ends (touching, no "
-        "accent) plays the bowed transition from it (SSO: velocity 93, Violas 100), as without plainPerformance; 0 at "
-        "plainPerformance's velocity 64, SSO's fingered transition", true },
+      // its Velocity lane "64 · fingered": "this is not supposed to be fingered. it's supposed to be bowed", and "slurs should
+      // have smooth start when there's nothing preceding it". [slurs] transitions / smoothStart (2026-10-12) play them so;
+      // plainPerformance (2026-10-17) sent every plain note at 64, so both were lost. One setting for both (he worried about
+      // "too many rules"; widened the same day: every note after a rest smooth, every new bow bowed; first [slurs]
+      // plainBowed, never in a Windows build: REMOVED). 1 by default and in Recommended,
+      // 0 in Library default; performanceNote's plainAuto)
+      { "slurs/plainAuto", 1, 0, 1, "on/off",
+        "with [slurs] plainPerformance: 1 smooth after a rest, bowed on each new bow, fingered inside a slur, spiccato for "
+        "staccatos: a plain note (no velocity or technique of its own) after silence on its patch plays the smooth attack "
+        "(velocity 5), early by its measured onset less the patch's plainShift; a note touching the note before outside a "
+        "slur going on the bowed transition (SSO: 93, Violas 100); inside a slur 64, SSO's fingered; staccatos, accents and a "
+        "key struck again as before. 0: every such note at 64", true },
       // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM, 0 in both presets until the owner has heard
       // it; MidiRenderer::libraryFastTransitions)
       { "slurs/fastTransitions", 0, 0, 1, "on/off",
@@ -494,6 +498,7 @@ static const char* const REMOVED[] = {
       "legato/fastTechnique", "legato/fastFirsts", "legato/fastBelowShare", "legato/levelBalance", "legato/levelMaxDb",
       "legato/levelHeadroomDb", "shorts/calibratedVelocity", "pedal/upAfterMs", "pedal/downAfterMs", "pedal/upMaxShare",
       "pedal/downMaxShare", "dynamics/evenSteps", "tuning/oneInstance", "tracks/mapDelays",
+      "slurs/plainBowed",     // (2026-10-26, branch celli-bowed only: became slurs/plainAuto the same day)
       };
 
 static bool removed(const QString& id)
@@ -604,7 +609,7 @@ QString iniTemplate()
 //    until the owner has heard it); slurs/speedFromWritten (0 in both since
 //    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions and slurs/fastTransitions (0 in
 //    both since 2026-10-20, until the owner has heard them); notes/transportReset and levels/hallGuard (0 in both since 2026-10-21
-//    until the owner decides); slurs/microtoneBends (0 in both 2026-10-21, 1 in Recommended since 2026-10-22: the owner heard it); slurs/plainBowed (1 in Recommended and by default, 0 in Library default, since 2026-10-26: the owner, "supposed to be bowed"); slurs/plainAccents (0 in both from 2026-10-20 until the owner
+//    until the owner decides); slurs/microtoneBends (0 in both 2026-10-21, 1 in Recommended since 2026-10-22: the owner heard it); slurs/plainAuto (1 in Recommended and by default, 0 in Library default, since 2026-10-26: the owner, "supposed to be bowed", "smooth start"); slurs/plainAccents (0 in both from 2026-10-20 until the owner
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
 //    2026-10-20: the owner approved the rule); levels/transitionLevels (0 in both since 2026-10-22, branch slur-joins, until the
@@ -632,10 +637,10 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainBowed", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 2 }, { "shorts/staccatoLength", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
-                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainBowed", 0 }, { "levels/context", 0 },
+                                              { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 0 }, { "shorts/staccatoLength", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
@@ -820,9 +825,9 @@ void setIniValuesForTest(const std::map<QString, QString>& values)
       // (slurs/plainAccents likewise, 2 by default since 2026-10-21)
       if (!values.count("slurs/plainAccents"))
             take(*i, "slurs", "plainAccents", "0");
-      // (slurs/plainBowed likewise, 1 by default since 2026-10-26)
-      if (!values.count("slurs/plainBowed"))
-            take(*i, "slurs", "plainBowed", "0");
+      // (slurs/plainAuto likewise, 1 by default since 2026-10-26)
+      if (!values.count("slurs/plainAuto"))
+            take(*i, "slurs", "plainAuto", "0");
       // (slurs/microtoneBends likewise, 1 by default since 2026-10-22)
       if (!values.count("slurs/microtoneBends"))
             take(*i, "slurs", "microtoneBends", "0");

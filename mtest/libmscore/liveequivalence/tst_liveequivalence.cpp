@@ -191,6 +191,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void chordVoicesLive();
       void divisiLive();
       void microtoneBendsLive();
+      void plainAutoLive();
       void plainJoinsLive();
       void transitionLevelsLive();
       void attackLevelsLive();
@@ -8688,6 +8689,95 @@ void TestLiveEquivalence::microtoneBendsLive()
                         if (n.source)
                               route.push_back(n.pitch);
             QCOMPARE(route, keys);
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainAutoLive
+//    [slurs] plainAuto (branch celli-bowed, 2026-10-26) reaches Live: plain-auto.musicxml (a rest, a slur C5 D5 E5; a slur F5
+//    G5 touching it; a rest, a lone A5) on a plain Performance patch (plainShift 80, smooth onset 300). With 1 C5 and A5,
+//    after silence, play the smooth attack (5) 220 ms early (300 - 80), F5 (a new bow) the bowed transition (93), the
+//    slurred notes 64; with 0 all 64 at their written start. The plain set's technique clip holds the same velocities and, with
+//    the Track Delay and the device's delays, plays every note-on / note-off MuseScore plays (as plainWritten)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainAutoLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='80'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-auto.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto render = [score](bool written) {
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setWrittenTiming(written);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      for (int plainAuto : { 1, 0 }) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
+                                            { "slurs/plainAuto", QString::number(plainAuto) } });
+            score->setPlaylistDirty();
+            const EventMap played = render(false);
+            const EventMap written = render(true);
+            const LiveClips::Timeline tl = LiveClips::timeline(score);
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+            // MuseScore's own: each key's velocity and note-on (ms), every note-on / note-off (route, key, units)
+            std::map<int, std::pair<int, double>> museScore;
+            std::multiset<std::tuple<int, int, int, bool>> want;
+            for (const auto& te : played) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF))
+                        continue;
+                  const bool on = e.type() == ME_NOTEON && e.velo() > 0;
+                  if (on)
+                        museScore[e.pitch()] = { e.velo(), score->utick2utime(te.first) * 1000.0 };
+                  want.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), on));
+                  }
+            const std::map<int, int> velocity = plainAuto ? std::map<int, int> { { 72, 5 }, { 74, 64 }, { 76, 64 }, { 77, 93 }, { 79, 64 }, { 81, 5 } }
+                                                          : std::map<int, int> { { 72, 64 }, { 74, 64 }, { 76, 64 }, { 77, 64 }, { 79, 64 }, { 81, 64 } };
+            for (const auto& kv : velocity)
+                  QVERIFY2(museScore.count(kv.first) && museScore[kv.first].first == kv.second,
+                           qPrintable(QString("plainAuto %1, key %2: %3").arg(plainAuto).arg(kv.first).arg(museScore[kv.first].first)));
+            const double c5 = museScore[74].second - museScore[72].second;          // (D5 on its beat: a transition)
+            QVERIFY2(std::fabs(c5 - (plainAuto ? 720.0 : 500.0)) < 1.1, qPrintable(QString("plainAuto %1: C5 %2 ms before D5").arg(plainAuto).arg(c5)));
+            QVERIFY2(std::fabs(museScore[81].second - museScore[72].second - 3000.0) < 1.1,
+                     qPrintable(QString::number(museScore[81].second - museScore[72].second)));   // (the lone A5: as early as C5)
+            // the plain set: the technique clip's velocities, the notes as Live plays them
+            std::map<int, int> clip;
+            std::multiset<std::tuple<int, int, int, bool>> got;
+            for (const PlainLiveSet::Section& sec : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : sec.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                              for (const PlainLiveSet::Technique& t : k.techniques)
+                                    for (const LiveClips::Note& n : t.notes) {
+                                          clip[n.pitch] = n.velocity;
+                                          const std::pair<double, double> at = LiveTiming::playedBy(t.timing, n, tl.bpm);
+                                          got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.first)), true));
+                                          got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.second)), false));
+                                          }
+            QCOMPARE(clip, velocity);
+            QCOMPARE(got, want);
             }
       delete score;
       }
