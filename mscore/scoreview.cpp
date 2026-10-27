@@ -3873,6 +3873,146 @@ void ScoreView::pageTop()
       }
 
 //---------------------------------------------------------
+//   nearestShownStaff
+//    the staff of sys nearest staffIdx (by index) that is shown,
+//    or the one nearest the canvas y (by position) when y >= 0
+//---------------------------------------------------------
+
+static int nearestShownStaff(const System* sys, int staffIdx, qreal y = -1.0)
+      {
+      int best = -1;
+      qreal bestDistance = 0.0;
+      for (int i = 0; i < int(sys->staves()->size()); ++i) {
+            if (!sys->staff(i)->show())
+                  continue;
+            qreal distance;
+            if (y >= 0.0) {
+                  const qreal top = sys->staffCanvasYpage(i);
+                  const qreal bottom = top + sys->staff(i)->bbox().height();
+                  distance = qMax(qMax(top - y, y - bottom), 0.0);
+                  }
+            else
+                  distance = qAbs(i - staffIdx);
+            if (best == -1 || distance < bestDistance) {
+                  best = i;
+                  bestDistance = distance;
+                  }
+            }
+      return best == -1 ? 0 : best;
+      }
+
+//---------------------------------------------------------
+//   viewAnchor
+//    the selection's measure and staff if the measure is in view,
+//    else the measure at (or nearest) the view's centre and its
+//    staff nearest the centre; used by MuseScore::switchLayoutMode
+//---------------------------------------------------------
+
+ViewAnchor ScoreView::viewAnchor() const
+      {
+      ViewAnchor a;
+      if (!score())
+            return a;
+      const QRectF view = toLogical(QRectF(rect()));
+      const QPointF centre = view.center();
+      const Measure* m = nullptr;
+      int staffIdx = -1;
+
+      const Selection& sel = score()->selection();
+      Fraction selTick(-1, 1);
+      if (sel.isRange() && sel.startSegment()) {
+            selTick  = sel.startSegment()->tick();
+            staffIdx = sel.staffStart();
+            }
+      else if (!sel.isRange() && !sel.elements().isEmpty()) {
+            const Element* el = sel.elements().front();
+            if (const Measure* em = el->findMeasure()) {
+                  selTick  = em->tick();
+                  staffIdx = el->staffIdx();
+                  }
+            }
+      if (selTick >= Fraction(0, 1)) {
+            m = score()->tick2measureMM(selTick);       // a multimeasure rest shows the selection's measure
+            if (!m || !m->system() || !view.intersects(m->canvasBoundingRect())) {
+                  m = nullptr;
+                  staffIdx = -1;
+                  }
+            }
+
+      if (!m) {
+            qreal best = 0.0;
+            for (const Measure* mm = score()->firstMeasureMM(); mm; mm = mm->nextMeasureMM()) {
+                  if (!mm->system())
+                        continue;
+                  const QRectF r = mm->canvasBoundingRect();
+                  if (!view.intersects(r))
+                        continue;
+                  // distance from the view's centre, 0 inside the measure
+                  const qreal dx = qMax(qMax(r.left() - centre.x(), centre.x() - r.right()), 0.0);
+                  const qreal dy = qMax(qMax(r.top() - centre.y(), centre.y() - r.bottom()), 0.0);
+                  const qreal d  = dx * dx + dy * dy;
+                  if (!m || d < best) {
+                        m = mm;
+                        best = d;
+                        }
+                  }
+            }
+      if (!m)
+            return a;
+
+      const System* sys = m->system();
+      if (staffIdx < 0 || staffIdx >= int(sys->staves()->size()) || !sys->staff(staffIdx)->show())
+            staffIdx = nearestShownStaff(sys, -1, centre.y());
+      a.tick     = m->tick();
+      a.staffIdx = staffIdx;
+      a.screenY  = sys->staffCanvasYpage(staffIdx) * physicalZoomLevel() + yoffset();
+      return a;
+      }
+
+//---------------------------------------------------------
+//   showViewAnchor
+//    centre the anchor's measure horizontally and put its staff
+//    at the anchor's height, within the score's scroll limits
+//---------------------------------------------------------
+
+void ScoreView::showViewAnchor(const ViewAnchor& a)
+      {
+      if (!a.valid() || !score() || score()->pages().empty())
+            return;
+      const Measure* m = score()->tick2measureMM(a.tick);
+      if (!m || !m->system())
+            return;
+      const System* sys = m->system();
+      int staffIdx = a.staffIdx;
+      if (staffIdx >= int(sys->staves()->size()) || !sys->staff(staffIdx)->show())
+            staffIdx = nearestShownStaff(sys, staffIdx);
+
+      const qreal zoom = physicalZoomLevel();
+      qreal x = width() * 0.5 - m->canvasBoundingRect().center().x() * zoom;
+      qreal y = a.screenY - sys->staffCanvasYpage(staffIdx) * zoom;
+
+      if (score()->lineMode()) {
+            // as adjustCanvasPosition: no empty space left of the score or right of its end
+            const qreal scoreEnd = score()->pages().front()->width() * zoom + x;
+            if (x > thinPadding)
+                  x = thinPadding;
+            else if (scoreEnd < width())
+                  x += width() - scoreEnd;
+            // the score's top stays under the bar ruler (pageTop) unless the score is taller than the view
+            const qreal top = BarRuler::height(this);
+            const qreal scoreHeight = score()->pages().front()->height() * zoom;
+            if (top + scoreHeight <= height())
+                  y = top;
+            else
+                  y = qBound(height() - scoreHeight, y, top);
+            setOffset(x, y);
+            }
+      else
+            setConstrainedOffset(x, y);
+      update();
+      }
+
+//---------------------------------------------------------
 //   pageEnd
 //---------------------------------------------------------
 

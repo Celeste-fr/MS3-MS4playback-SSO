@@ -8662,11 +8662,9 @@ void MuseScore::switchLayoutMode(int val)
 
 void MuseScore::switchLayoutMode(LayoutMode mode)
       {
-      // find a measure to use as reference, if possible
-      QRectF view = cv->toLogical(QRect(0.0, 0.0, width(), height()));
-      Measure* m = cs->firstMeasureMM();
-      while (m && !view.intersects(m->canvasBoundingRect()))
-            m = m->nextMeasureMM();
+      // the measure to keep in view: the selection's if it is visible, else the one at the view's centre;
+      // it is centred horizontally after the switch, its staff at the same height (ScoreView::viewAnchor)
+      const ViewAnchor anchor = cv->viewAnchor();
 
       cv->loopUpdate(getAction("loop")->isChecked());
 
@@ -8700,8 +8698,7 @@ void MuseScore::switchLayoutMode(LayoutMode mode)
                   }
             }
 
-      if (m && m != cs->firstMeasureMM())
-            cv->adjustCanvasPosition(m, false);
+      cv->showViewAnchor(anchor);
       if (cv->noteEntryMode())
             cv->moveCursor();
       }

@@ -152,6 +152,20 @@ struct ScoreViewState {
 };
 
 //---------------------------------------------------------
+//   ViewAnchor
+//    what a layout mode switch keeps in place (ScoreView::viewAnchor):
+//    a measure, centred horizontally, and one of its staves
+//    at the same height on the screen
+//---------------------------------------------------------
+
+struct ViewAnchor {
+      Fraction tick { -1, 1 };      // the measure's tick; -1: none
+      int staffIdx  { 0 };
+      qreal screenY { 0.0 };        // the staff's top line, in pixels from the view's top
+      bool valid() const { return tick >= Fraction(0, 1); }
+      };
+
+//---------------------------------------------------------
 //   ScoreView
 //---------------------------------------------------------
 
@@ -470,6 +484,8 @@ class ScoreView : public QWidget, public MuseScoreView {
       void pagePrev();
       void pageTop();
       void pageEnd();
+      ViewAnchor viewAnchor() const;
+      void showViewAnchor(const ViewAnchor&);
       QPointF toLogical(const QPoint& p) const   { return imatrix.map(QPointF(p)); }
       QPointF toPhysical(const QPointF& p) const {return _matrix.map(p); }
       QRectF toLogical(const QRectF& r) const    { return imatrix.mapRect(r); }
