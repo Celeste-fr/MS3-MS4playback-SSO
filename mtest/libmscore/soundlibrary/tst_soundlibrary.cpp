@@ -9821,11 +9821,20 @@ void TestSoundLibrary::vialHosted()
       QVERIFY(!want.isEmpty());
       const QByteArray state = Vst3Plugin::joinState("Vial", SoundLib::presetComponent(*vial, f.fileName(), preset), QByteArray());
       const int rate = 48000;
+      std::vector<std::pair<unsigned, double>> edits;                 // (parameters set after the state, normalized)
+      std::vector<float>* heldOut = nullptr;                          // (the held part's samples, when set)
       auto render = [&](int cc1, int cc11, int cc21, double* rmsOut, QJsonObject* back) {
             QString err;
             std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(plugin, rate, 512, &err);
             QVERIFY2(p, qPrintable(err));
             QVERIFY(p->setState(state));
+            if (!qEnvironmentVariable("MS_VIAL_PARAMS").isEmpty() && back)
+                  for (const Vst3Plugin::Parameter& x : p->parameters())
+                        if (x.title.contains(QRegularExpression(qEnvironmentVariable("MS_VIAL_PARAMS"), QRegularExpression::CaseInsensitiveOption)))
+                              qDebug("vialHosted: parameter %u \"%s\" = %.4f (%s)", x.id, qPrintable(x.title), p->parameter(x.id),
+                                     qPrintable(p->parameterText(x.id, p->parameter(x.id))));
+            for (const auto& e : edits)
+                  p->setParameter(e.first, e.second);
             if (back) {
                   QByteArray component;
                   QVERIFY(Vst3Plugin::splitState(p->state(), nullptr, &component, nullptr));
@@ -9857,6 +9866,8 @@ void TestSoundLibrary::vialHosted()
                   }
             const std::vector<float> held(all.begin() + 2 * rate / 2, all.end());   // (from 0.5 s on)
             *rmsOut = (rms(held, 0) + rms(held, 1)) / 2;
+            if (heldOut)
+                  *heldOut = held;
             };
       double full = 0, half = 0, soft = 0, novib = 0;
       QJsonObject back;
@@ -9931,6 +9942,51 @@ void TestSoundLibrary::vialHosted()
             QVERIFY2(std::fabs(dB(half, full) - 20 * std::log10(64.0 / 127.0)) < 0.5, qPrintable(QString::number(dB(half, full))));
       else
             qWarning("vialHosted: %s has no CC11 row: CC11 not checked (%.2f dB at 64)", qPrintable(name), dB(half, full));
+      // Vial Fuse: the .vialfuse's mic layers loaded (the vial session, 2026-10-27): its default is the Tree alone (A Level
+      // 0 dB, B-E -inf), made to null against the .vital, so the renders above can't tell; its slots' delays B-E are
+      // nonzero (its slots' B .. the last: winds 4 mics, strings 5), and the Close mic alone (A Level -inf, B Level 0 dB)
+      // sounds, differently from the Tree (the two renders' difference over -30 dB against the Tree, where the same sound
+      // nulls; 2026-10-27: -8.1 (Horn) .. +7.5 dB (Flute);
+      // Violins 2's Close mic is as loud as its Tree, 0.02 dB, but another sound), within a few dB (each layer note-flat at
+      // the Tree's level plus SSO's median mic offset)
+      if (!vial->presets.header.isEmpty()) {
+            int mics = 0;                                               // (the slots in use; the rest are null)
+            for (const QJsonValue& x : want.value("slots").toArray())
+                  mics += x.isObject();
+            QString err;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(plugin, rate, 512, &err);
+            QVERIFY2(p, qPrintable(err));
+            QVERIFY(p->setState(state));
+            const long aLevel = p->parameterId("A Level"), bLevel = p->parameterId("B Level");
+            QVERIFY(aLevel >= 0 && bLevel >= 0);
+            const double zeroDb = p->parameter(unsigned(aLevel));       // (the Tree's 0 dB, normalized)
+            QVERIFY2(mics >= 2, qPrintable(QString::number(mics)));
+            for (int i = 1; i < mics; ++i) {
+                  const QString d = QString("%1 Delay").arg(QChar('A' + i));
+                  const long id = p->parameterId(d);
+                  QVERIFY2(id >= 0 && p->parameter(unsigned(id)) > 0, qPrintable(d));
+                  }
+            p.reset();
+            double tree = 0, close = 0;
+            std::vector<float> treeHeld, closeHeld;
+            heldOut = &treeHeld;
+            render(64, 127, 64, &tree, nullptr);
+            edits = { { unsigned(aLevel), 0.0 }, { unsigned(bLevel), zeroDb } };
+            heldOut = &closeHeld;
+            render(64, 127, 64, &close, nullptr);
+            edits.clear();
+            heldOut = nullptr;
+            QCOMPARE(closeHeld.size(), treeHeld.size());
+            std::vector<float> diff(treeHeld.size());
+            for (size_t i = 0; i < diff.size(); ++i)
+                  diff[i] = closeHeld[i] - treeHeld[i];
+            const double apart = dB((rms(diff, 0) + rms(diff, 1)) / 2, tree);
+            qDebug("vialHosted: Fuse %d mics, Close alone %.2f dB against the Tree, their difference %.2f dB", mics,
+                   dB(close, tree), apart);
+            QVERIFY2(close > 1e-4, "the Close mic alone is silent");
+            QVERIFY2(apart > -30.0, "the Close mic alone sounds as the Tree: the mic layers not loaded");
+            QVERIFY2(std::fabs(dB(close, tree)) < 12.0, qPrintable(QString::number(dB(close, tree))));
+            }
       }
 
 //---------------------------------------------------------
