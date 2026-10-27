@@ -20,6 +20,7 @@
 #include <QtTest/QtTest>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QStandardPaths>
 #include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -7161,8 +7162,32 @@ void TestSoundLibrary::vialMap()
                   }
             }
 
-      // the preset folder: the override, Vial's config, Vital's, the default
+      // the preset folder: the override, Vial's config, Vital's, the default (Windows: the configs in %APPDATA%, the
+      // default Documents/Vial; elsewhere in HOME, the default ~/.local/share/vital or $XDG_DATA_HOME/vial)
       QTemporaryDir home;
+#ifdef Q_OS_WIN
+      const QByteArray oldAppData = qgetenv("APPDATA");
+      qputenv("APPDATA", home.path().toUtf8());
+      qunsetenv("MS_PRESET_FOLDER");
+      const QString def = QDir::cleanPath(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) + "/Vial");
+      QCOMPARE(SoundLib::presetFolder(*vial), def);
+      for (const char* d : { "vial", "vital", "own", "official" })
+            QDir(home.path()).mkpath(d);
+      auto config = [&](const QString& file, const QString& dir) {
+            QFile f(home.path() + "/" + file);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            QJsonObject o;
+            o["data_directory"] = dir;
+            f.write(QJsonDocument(o).toJson());
+            };
+      config("vital/Vital.config", home.path() + "/official");
+      QCOMPARE(SoundLib::presetFolder(*vial), home.path() + "/official");
+      config("vial/Vial.config", home.path() + "/own");
+      QCOMPARE(SoundLib::presetFolder(*vial), home.path() + "/own");
+      QFile::remove(home.path() + "/vial/Vial.config");
+      config("vital/Vital.config", home.path() + "/gone");         // (a folder that isn't there: not taken)
+      QCOMPARE(SoundLib::presetFolder(*vial), def);
+#else
       const QByteArray oldHome = qgetenv("HOME"), oldXdg = qgetenv("XDG_DATA_HOME");
       qputenv("HOME", home.path().toUtf8());
       qunsetenv("XDG_DATA_HOME");
@@ -7192,6 +7217,7 @@ void TestSoundLibrary::vialMap()
       qputenv("XDG_DATA_HOME", (home.path() + "/xdg").toUtf8());
       QFile::remove(home.path() + "/.vial/Vial.config");
       QCOMPARE(SoundLib::presetFolder(*vial), home.path() + "/xdg/vial");
+#endif
       qputenv("MS_PRESET_FOLDER", "/some/folder");
       QCOMPARE(SoundLib::presetFolder(*vial), QString("/some/folder"));
       QCOMPARE(SoundLib::presetFile(vial->instruments[0], "/some/folder"),
@@ -7208,11 +7234,15 @@ void TestSoundLibrary::vialMap()
       QCOMPARE(SoundLib::presetComponent(*fuse, "/p/x.vialfuse", withHeader), withHeader);        // (a header already: kept)
       QCOMPARE(QJsonDocument::fromJson(SoundLib::presetComponent(*fuse, "/p/x.vialfuse", "{ }")).object().size(), 1);
       qunsetenv("MS_PRESET_FOLDER");
+#ifdef Q_OS_WIN
+      qputenv("APPDATA", oldAppData);
+#else
       qputenv("HOME", oldHome);
       if (oldXdg.isEmpty())
             qunsetenv("XDG_DATA_HOME");
       else
             qputenv("XDG_DATA_HOME", oldXdg);
+#endif
 
       // a score: Violins on Violins 1, the flute, the horn; every event on channel 1 of the part's route
       SoundLib::setCurrent(vial);
