@@ -101,7 +101,8 @@ measured curve or CC11 / CC1 per note, `libraryNoteLevels`; built-in: SoundFont 
 measures (`Score::cmdRemoveTimeSig`). Numpad 1-7 enter scale degrees (`Score::scaleDegreeStep`; on Linux/xcb
 `ScoreView::event` takes the keypad keys, `numpadDegreeAction`; `Shortcut::load` gives new actions their defaults
 in an old shortcuts.xml). Continuous View has a bar ruler (`mscore/barruler.*`: every bar's number along the top,
-as the measure-number style counts, view only, View › Bar Ruler).
+as the measure-number style counts, view only, View › Bar Ruler). Switching the view mode keeps the selection's measure (if in view) or the one at the view's centre centred
+horizontally, its staff at the same height (`ScoreView::viewAnchor` / `showViewAnchor`, from `MuseScore::switchLayoutMode`).
 
 **Tuning** (`libmscore/tuning.h`): temperament (metaTag `temperament`, the Tuning plugin's JSON) + accidental rules
 (microtonal, HEJI, Johnston, stacked accidentals as hidden `Symbol`s) + the note's own tuning. `tuningtables.h`
