@@ -505,7 +505,7 @@ Where `sectionLevel2` comes from (`tools/soundlibraries/section_balance_cl.py` w
   TU's measure for a decaying tone (the fast-weighted pressure squared averaged over the recording: `tu_transient.py`
   reproduces the CSV's harp values within 0.005 dB) as an energy, SSO's harp (`sso_percussion_levels.json`, velocity 64)
   over the same span after the note-on; TU's mp by rule D; to Clark & Luce's scale by the median (M2 + sectionLevel's D)
-  over the nine solo winds with their own Clark & Luce instrument (RMS 3.3 dB; -9.81 since iteration 8's directivity): -10.41 dB, about ±4 dB. The timpani
+  over the nine solo winds with their own Clark & Luce instrument (RMS 3.3 dB): -9.81 dB since iteration 8's directivity (-10.41 before), about ±4 dB. The timpani
   measured that way (+1.65) were not applied (TU's D2 series name no markings: mp's step unknown by about 7 dB).
 - The timpani (since 2026-10-15, Iterations 10 and 14): the Spheres dataset's Romeo and Juliet (1880 version), every part
   recorded alone, markings read from the 1881 Bote & G. Bock full score (review page

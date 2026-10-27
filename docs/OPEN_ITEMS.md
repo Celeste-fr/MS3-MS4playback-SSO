@@ -579,7 +579,8 @@ Keep this file current: close an item by deleting it (the commit message says wh
     map have no committed producer (TOOLS.md › 6; `sso_accent_attack` has one since 2026-10-21); kthost has no source
     (Missing tools #4). (Fixed 2026-10-21: octave_measure's paths, compare_renders.py's silent-note crash,
     run_fork_tests.sh's missing Node tests, the heard check's stale VM address.)
-37. **Docs drift**: CLAUDE.md says `[slurs] plainAccents` 0 everywhere (2 by default and in Recommended since
+37. **Docs drift** (checked 2026-10-26 against the map: CLAUDE.md's plainAccents and sectionLevel2 numbers already current, the harp line made
+    unambiguous; the rest historical and dated; closed): CLAUDE.md says `[slurs] plainAccents` 0 everywhere (2 by default and in Recommended since
     4cec902067); its `sectionLevel2` numbers differ from PLAYBACK_SETTINGS.md (V1 −0.13 vs −0.03, V2 +1.02 vs +1.12,
     Va −7.03 vs −7.08, Vc +2.69 vs +2.56, Cb +3.45 vs +3.43, Trumpets a6 +19.67 vs +20.45); PLAYBACK_SETTINGS.md gives the
     harp as −9.81 and −10.41 and the presets table still says staccato D −4.2 (now −3.4); HANDOFF l.1320's "other
