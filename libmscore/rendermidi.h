@@ -89,6 +89,7 @@ class MidiRenderer {
       // parts played by an external sound library (soundlibrary.h, MS4 note model only)
       struct LibPart {
             SoundLib::Route route;                          // the main patch's
+            const SoundLib::Library* library { nullptr };   // the library it plays (of several: SoundLib::libraryOf)
             SoundLib::TextTechniques text;
             // the main patch's MIDI controllers (vibrato …): the part's setting, its flat lane's or the map's default
             // (partcontrollers.h; -1: the patch's own), and the staff text that changes it (tick -> value)
@@ -121,7 +122,18 @@ class MidiRenderer {
                   return li == route.instrument ? patches : std::vector<const SoundLib::LibInstrument*> { li };
                   }
             };
+      // the library the parts play (the current one: SoundLib::current; without it, the first a part names) and every
+      // library the score's parts play (SoundLib::scoreLibraries: the current one first; each part's in LibPart::library,
+      // each route's in libSlotLibrary)
       std::shared_ptr<const SoundLib::Library> library;
+      std::shared_ptr<const SoundLib::Library> libCurrent;
+      std::vector<std::shared_ptr<const SoundLib::Library>> libLibraries;
+      std::map<int, const SoundLib::Library*> libSlotLibrary;
+      // the library of a route (slot: port * 16 + channel), else the one the parts play
+      const SoundLib::Library* libAt(int slot) const {
+            auto it = libSlotLibrary.find(slot);
+            return it != libSlotLibrary.end() ? it->second : library.get();
+            }
       int libGeneration = -1;
       std::map<const Part*, LibPart> libParts;
       // every part's technique texts (SoundLib::TextTechniques), for their levels (TextState::db; articulation.h MarcatoLevel)

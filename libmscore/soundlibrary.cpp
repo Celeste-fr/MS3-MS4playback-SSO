@@ -1312,6 +1312,10 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   }
             main->extras.push_back(&li);
             }
+      for (LibInstrument& li : lib->instruments)
+            li.library = lib.get();
+      for (LibInstrument& li : lib->otherPatches)
+            li.library = lib.get();
       return lib;
       }
 
@@ -1719,9 +1723,13 @@ std::map<const Part*, std::map<QString, double>> plainPerformancePatches(const S
       std::map<const Part*, std::map<QString, double>> out;
       if (!score || !Playback::on("slurs/plainPerformance", score))
             return out;
+      const bool several = severalLibraries(score);
       for (const Part* part : score->masterScore()->parts()) {
+            // (several libraries: the part's own library's patches; libraryOf)
+            std::shared_ptr<const Library> own = several ? libraryOf(part) : nullptr;
+            const Library& lib = own ? *own : library;
             for (const auto& ip : *part->instruments()) {
-                  const LibInstrument* li = library.match(ip.second, part);
+                  const LibInstrument* li = lib.match(ip.second, part);
                   if (!li)
                         continue;
                   for (const LibInstrument* p : li->patches())
@@ -2134,11 +2142,27 @@ bool DynamicsCalibration::write(const QString& file) const
 static std::mutex calibrationMutex;
 static std::shared_ptr<const DynamicsCalibration> calibration;
 
+// (another engine's calibration, calibrationFor: the application's loader, once per library until the next
+// setDynamicsCalibration)
+static std::function<std::shared_ptr<const DynamicsCalibration>(const Library&)> calibrationLoader;
+static std::map<const Library*, std::shared_ptr<const DynamicsCalibration>> otherCalibrations;
+
 void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c)
       {
       {
             std::lock_guard<std::mutex> lock(calibrationMutex);
             calibration = c;
+            otherCalibrations.clear();
+      }
+      ++generation;
+      }
+
+void setCalibrationLoader(std::function<std::shared_ptr<const DynamicsCalibration>(const Library&)> loader)
+      {
+      {
+            std::lock_guard<std::mutex> lock(calibrationMutex);
+            calibrationLoader = loader;
+            otherCalibrations.clear();
       }
       ++generation;
       }
@@ -2246,12 +2270,9 @@ static bool available(const LibInstrument& li)
 std::vector<std::pair<QString, QString>> ownTechniques(const Note* note)
       {
       std::vector<std::pair<QString, QString>> out;
-      const std::shared_ptr<const Library> library = current();
       const Part* part = note ? note->part() : nullptr;
+      const std::shared_ptr<const Library> library = libraryOf(part);     // (none: its mode, or its engine can't play here)
       if (!library || !part)
-            return out;
-      const Part* master = PartPlaybackModes::masterPart(part);
-      if (!PartPlaybackModes::playsLibrary(master, PartPlaybackModes::read(note->score()->masterScore())))
             return out;
       const LibInstrument* li = library->match(part->instrument(note->chord()->tick()), part);
       if (!li || li->kit)
@@ -2275,6 +2296,176 @@ std::shared_ptr<const Library> current()
 bool active()
       {
       return currentActive;
+      }
+
+//---------------------------------------------------------
+//   engines
+//---------------------------------------------------------
+
+static std::mutex engineMutex;
+static std::vector<std::pair<QString, QString>> engineList;                    // name -> map path
+static std::map<QString, std::shared_ptr<const Library>> engineLoaded;          // map path -> its library
+static std::function<bool(const Library&)> engineAvailableFn;
+
+void setEngines(const std::vector<std::pair<QString, QString>>& engines)
+      {
+      bool changed = false;
+      {
+            std::lock_guard<std::mutex> lock(engineMutex);
+            changed = engines != engineList;
+            engineList = engines;
+      }
+      if (changed)
+            routesChanged();
+      }
+
+std::vector<QString> engineNames()
+      {
+      std::lock_guard<std::mutex> lock(engineMutex);
+      std::vector<QString> out;
+      for (const auto& e : engineList)
+            out.push_back(e.first);
+      return out;
+      }
+
+QString engineOf(const Library& library)
+      {
+      static const QRegularExpression variant("^(.*) \\([^()]*\\)$");
+      const QRegularExpressionMatch m = variant.match(library.name);
+      if (m.hasMatch()) {
+            std::lock_guard<std::mutex> lock(engineMutex);
+            for (const auto& e : engineList)
+                  if (e.first == m.captured(1))
+                        return e.first;
+            }
+      return library.name;
+      }
+
+std::shared_ptr<const Library> engine(const QString& name)
+      {
+      if (name.isEmpty())
+            return nullptr;
+      const std::shared_ptr<const Library> cur = current();
+      if (cur && engineOf(*cur) == name)
+            return cur;
+      std::lock_guard<std::mutex> lock(engineMutex);
+      for (const auto& e : engineList) {
+            if (e.first != name)
+                  continue;
+            auto it = engineLoaded.find(e.second);
+            if (it != engineLoaded.end())
+                  return it->second;
+            QString error;
+            std::shared_ptr<const Library> lib = Library::load(e.second, &error);
+            if (!lib)
+                  qWarning("Sound library %s: %s", qPrintable(name), qPrintable(error));
+            engineLoaded[e.second] = lib;
+            return lib;
+            }
+      return nullptr;
+      }
+
+void setEngineAvailable(std::function<bool(const Library&)> available)
+      {
+      std::lock_guard<std::mutex> lock(engineMutex);
+      engineAvailableFn = available;
+      }
+
+bool engineAvailable(const Library& library)
+      {
+      if (current().get() == &library)
+            return true;
+      std::function<bool(const Library&)> fn;
+      {
+            std::lock_guard<std::mutex> lock(engineMutex);
+            fn = engineAvailableFn;
+      }
+      return !fn || fn(library);
+      }
+
+std::shared_ptr<const Library> libraryOf(const Part* part, const std::map<const Part*, PartPlayback>& modes,
+                                         const std::map<const Part*, QString>& names, bool forLive)
+      {
+      if (!part || !PartPlaybackModes::playsLibrary(part, modes))
+            return nullptr;
+      const QString name = PartPlaybackModes::libraryOf(part, names);
+      const std::shared_ptr<const Library> cur = current();
+      if (name.isEmpty() || (cur && engineOf(*cur) == name))
+            return cur;
+      if (forLive || output() != Output::PLUGIN)
+            return nullptr;
+      const std::shared_ptr<const Library> lib = engine(name);
+      return lib && engineAvailable(*lib) ? lib : nullptr;
+      }
+
+std::shared_ptr<const Library> libraryOf(const Part* part)
+      {
+      if (!part || !part->score())
+            return nullptr;
+      const MasterScore* ms = part->score()->masterScore();
+      return libraryOf(PartPlaybackModes::masterPart(part), PartPlaybackModes::read(ms), PartPlaybackModes::libraries(ms));
+      }
+
+std::vector<std::shared_ptr<const Library>> scoreLibraries(const Score* score, bool forLive)
+      {
+      std::vector<std::shared_ptr<const Library>> out;
+      if (const std::shared_ptr<const Library> cur = current())
+            out.push_back(cur);
+      if (!score || forLive || output() != Output::PLUGIN)
+            return out;
+      const MasterScore* ms = score->masterScore();
+      const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
+      if (names.empty())
+            return out;
+      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
+      std::map<QString, std::shared_ptr<const Library>> others;
+      for (const Part* part : score->parts()) {
+            const std::shared_ptr<const Library> lib = libraryOf(part, modes, names);
+            if (lib && (out.empty() || lib != out.front()))
+                  others[engineOf(*lib)] = lib;
+            }
+      for (const auto& o : others)
+            out.push_back(o.second);
+      return out;
+      }
+
+bool severalLibraries(const Score* score)
+      {
+      return scoreLibraries(score).size() > 1;
+      }
+
+std::vector<std::pair<const Part*, QString>> otherEngineParts(const Score* score)
+      {
+      std::vector<std::pair<const Part*, QString>> out;
+      if (!score)
+            return out;
+      const MasterScore* ms = score->masterScore();
+      const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
+      if (names.empty())
+            return out;
+      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
+      const std::shared_ptr<const Library> cur = current();
+      for (const Part* part : ms->parts()) {
+            const QString name = PartPlaybackModes::libraryOf(part, names);
+            if (!name.isEmpty() && PartPlaybackModes::playsLibrary(part, modes) && !(cur && engineOf(*cur) == name))
+                  out.push_back({ part, name });
+            }
+      return out;
+      }
+
+std::shared_ptr<const DynamicsCalibration> calibrationFor(const Library* library)
+      {
+      if (!library)
+            return nullptr;
+      if (library == current().get())
+            return dynamicsCalibration();
+      std::lock_guard<std::mutex> lock(calibrationMutex);
+      auto it = otherCalibrations.find(library);
+      if (it != otherCalibrations.end())
+            return it->second;
+      std::shared_ptr<const DynamicsCalibration> c = calibrationLoader ? calibrationLoader(*library) : nullptr;
+      otherCalibrations[library] = c;
+      return c;
       }
 
 //---------------------------------------------------------
@@ -2320,14 +2511,29 @@ bool anyMono(const std::vector<const LibInstrument*>& patches)
       return std::any_of(patches.begin(), patches.end(), [](const LibInstrument* p) { return p && p->mono; });
       }
 
-std::vector<Route> routes(const Score* score, const Library& library, bool forLive)
+// library's routes from slot k on (k: past them, as far as MAX_PORTS); asDefault: library plays the parts that play the
+// current library (the current one, or a map in its place: the tests'), else the parts naming its engine
+static std::vector<Route> routesFrom(const Score* score, const Library& library, bool forLive, int& k, bool asDefault,
+                                     const std::map<const Part*, PartPlayback>& modes, const std::map<const Part*, QString>& names)
       {
       std::vector<Route> result;
-      int k = 0;
-      // a part plays the library by its own playback mode, else by the global one (partplayback.h)
-      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(score->masterScore());
+      const std::shared_ptr<const Library> cur = current();
+      const QString own = engineOf(library);
       for (const Part* part : score->parts()) {
+            // a part plays the library by its own playback mode, else by the global one (partplayback.h); of several
+            // libraries, the one it names (libraryOf: the current one where it names none or its engine can't play)
             if (!PartPlaybackModes::playsLibrary(part, modes))
+                  continue;
+            if (!names.empty()) {
+                  const QString name = PartPlaybackModes::libraryOf(part, names);
+                  if (asDefault) {
+                        if (!name.isEmpty() && name != own && !(cur && engineOf(*cur) == name))
+                              continue;
+                        }
+                  else if (name != own)
+                        continue;
+                  }
+            else if (!asDefault)
                   continue;
             const LibInstrument* li = library.match(part->instrument(), part);
             if (!li)
@@ -2376,12 +2582,49 @@ std::vector<Route> routes(const Score* score, const Library& library, bool forLi
                         const double cents = lane < int(fixed[size_t(p)].size()) ? fixed[size_t(p)][size_t(lane)]
                                              : !laned || !library.varispeed ? 0.0 : std::numeric_limits<double>::quiet_NaN();
                         const int voice = lane < int(voices[size_t(p)].size()) ? voices[size_t(p)][size_t(lane)] : 0;
-                        result.push_back(Route { part, patches[p], k / 16, k % 16, p, lane, cents, voice });
+                        result.push_back(Route { part, patches[p], &library, k / 16, k % 16, p, lane, cents, voice });
                         ++k;
                         }
                   }
             }
       return result;
+      }
+
+std::vector<Route> routes(const Score* score, const Library& library, bool forLive)
+      {
+      const MasterScore* ms = score->masterScore();
+      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
+      const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
+      int k = 0;
+      const std::shared_ptr<const Library> cur = current();
+      // (the current library, or a map in its place: from slot 0, as when it was the only one)
+      if (names.empty() || (cur && (cur.get() == &library || engineOf(*cur) == engineOf(library))))
+            return routesFrom(score, library, forLive, k, true, modes, names);
+      for (const std::shared_ptr<const Library>& lib : scoreLibraries(score, forLive)) {
+            if (lib.get() == &library)
+                  return routesFrom(score, library, forLive, k, lib == cur, modes, names);
+            routesFrom(score, *lib, forLive, k, lib == cur, modes, names);
+            }
+      // (a map no part names: in the current library's place)
+      k = 0;
+      return routesFrom(score, library, forLive, k, true, modes, names);
+      }
+
+std::vector<Route> allRoutes(const Score* score, bool forLive)
+      {
+      std::vector<Route> out;
+      if (!score)
+            return out;
+      const MasterScore* ms = score->masterScore();
+      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
+      const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
+      const std::shared_ptr<const Library> cur = current();
+      int k = 0;
+      for (const std::shared_ptr<const Library>& lib : scoreLibraries(score, forLive)) {
+            std::vector<Route> r = routesFrom(score, *lib, forLive, k, lib == cur, modes, names);
+            out.insert(out.end(), r.begin(), r.end());
+            }
+      return out;
       }
 
 //---------------------------------------------------------

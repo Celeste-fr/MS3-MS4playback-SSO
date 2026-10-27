@@ -1186,6 +1186,14 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
+- **Parts on another engine** (several libraries in one score, branch `vial-engine`, 2026-10-26; soundlibrary.h ›
+  engines): Live plays the global library alone. A part whose own playback names another engine (the Mixer's *Part
+  playback*: "Vial Instrumental" while the global library is SSO; metaTag `partPlayback` "library:<name>") has no
+  route for Live (`SoundLib::routes(…, forLive)`, `scoreLibraries(score, true)`): Create Live Set and Update Live Set
+  say so before they write (`otherEnginesLeftOut` in livesetexport.cpp: the parts and their engines, OK / Cancel) and
+  leave those parts out; *Live plays the score*'s clips and the plain set have no track for them. MIDI out the same
+  (the part plays MS4 there; the Mixer's and Play Panel's engine boxes gray every engine but the global one, saying
+  why). Hosted playback in MuseScore plays them on their own plug-in (Vial.vst3 next to Kontakt).
 - **Vial Instrumental** (branch `vial-map`, 2026-10-25; a preset library, README › Preset libraries): hosted playback
   only was made and tested. Create / Update Live Set would by the existing paths give the Vial track its preset as the
   plug-in's state (`SoundLibraryHost::setupState`, as for Ample) with CC1 / CC11 / CC21 in the clips, but nothing of it

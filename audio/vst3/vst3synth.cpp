@@ -257,7 +257,8 @@ void Vst3Synth::deliver(const PlayEvent& event)
       const bool noteOn = event.type() == ME_NOTEON && event.dataB() > 0;
       const bool noteOff = event.type() == ME_NOTEOFF || (event.type() == ME_NOTEON && event.dataB() == 0);
       std::array<unsigned char, 128>& sounding = _sounding[size_t(slot)];
-      if (_varispeed && !tuned && noteOn) {
+      const bool varispeed = varispeedAt(slot);
+      if (varispeed && !tuned && noteOn) {
             bool any = false;
             for (unsigned char n : sounding)
                   any = any || n > 0;
@@ -284,7 +285,7 @@ void Vst3Synth::deliver(const PlayEvent& event)
             ++sounding[size_t(key)];
       else if (noteOff && sounding[size_t(key)] > 0)
             --sounding[size_t(key)];
-      plugin->midi(event.type(), midiChannel, event.dataA(), event.dataB(), (_varispeed || tuned) ? 0.f : event.tuning());
+      plugin->midi(event.type(), midiChannel, event.dataA(), event.dataB(), (varispeed || tuned) ? 0.f : event.tuning());
       }
 
 void Vst3Synth::play(const PlayEvent& event)

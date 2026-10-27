@@ -18,10 +18,12 @@
 //   MS3      MuseScore 3.6's rendering (dynamics method 1: SND and changes at the start of a
 //            segment, CC2), not the sound library
 //   MS4      the MuseScore 4 note model, not the sound library
-//   LIBRARY  the sound library (MS4 rendering; a part the library lacks plays as MS4)
+//   LIBRARY  a sound library (MS4 rendering; a part the library lacks plays as MS4): the global mode's
+//            library ("library"), or one of its own ("library:<name>", the engine's name: "Vial Instrumental";
+//            the owner, 2026-10-26: several libraries in one score, each part by its own engine; SoundLib::libraryOf)
 //
 //   Kept in the score as the metaTag "partPlayback" (MuseScore 3.6 keeps metaTags through a
-//   round trip), JSON: [{"part": index, "name": part name, "mode": "ms3" | "ms4" | "library"}].
+//   round trip), JSON: [{"part": index, "name": part name, "mode": "ms3" | "ms4" | "library" | "library:<name>"}].
 //   A part is found by its index when the name matches there, else by its name, else (renamed)
 //   by its index. Parts of an
 //   excerpt follow their master score's part. Per part, not per staff: a part's staves share
@@ -46,8 +48,17 @@ extern const char* const metaTag;
 
 // the parts of the master score with a mode of their own
 std::map<const Part*, PartPlayback> read(const MasterScore* score);
-// the metaTag's value for these modes (empty: none)
+// the metaTag's value for these modes (empty: none); a part still LIBRARY keeps the library the score names for it
 QString write(const MasterScore* score, const std::map<const Part*, PartPlayback>& modes);
+// the parts of the master score whose mode names a library of their own ("library:<name>"): part -> the name
+std::map<const Part*, QString> libraries(const MasterScore* score);
+// the metaTag's value for these modes, a LIBRARY part with a name in libraries playing that library (empty name: the
+// global mode's)
+QString write(const MasterScore* score, const std::map<const Part*, PartPlayback>& modes,
+              const std::map<const Part*, QString>& libraries);
+// a part's own library's name, from libraries as libraries() gives them (empty: the global mode's library, or none)
+QString libraryOf(const Part* part, const std::map<const Part*, QString>& libraries);
+QString libraryOf(const Part* part);
 // the part a score's record of it names: by its index when the name matches there, else by its
 // name, else (renamed) by its index; never one taken already (partcontrollers.h uses it too)
 const Part* findPart(const MasterScore* score, int index, const QString& name, const std::function<bool(const Part*)>& taken);

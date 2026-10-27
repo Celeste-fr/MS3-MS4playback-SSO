@@ -151,7 +151,10 @@ const std::vector<SoundLib::Route>& AutomationLanes::libraryRoutes() const
             _routes.clear();
             Score* s = score();
             const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
-            if (s && lib)
+            // (several libraries: every one's parts, each with its own controllers; SoundLib::allRoutes)
+            if (s && SoundLib::severalLibraries(s->masterScore()))
+                  _routes = SoundLib::allRoutes(s->masterScore());
+            else if (s && lib)
                   _routes = SoundLib::routes(s->masterScore(), *lib);
             _routesValid = true;
             }
@@ -271,14 +274,17 @@ std::vector<AutomationLanes::Target> AutomationLanes::libraryTargets(const Part*
       std::vector<Target> out;
       Score* s = score();
       const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
-      if (!s || !lib || !part)
+      if (!s || !(lib || SoundLib::severalLibraries(s->masterScore())) || !part)
             return out;
       const Part* master = PartPlaybackModes::masterPart(part);
       std::vector<SoundLib::Controller> ctrls;
       bool any = false;
+      const SoundLib::Library* own = lib.get();         // (the part's library: several, its route's)
       for (const SoundLib::Route& r : libraryRoutes()) {
             if (r.part != master || r.lane != 0 || !r.instrument)
                   continue;
+            if (!any && r.library)
+                  own = r.library;
             any = true;
             for (const SoundLib::Controller& c : r.instrument->allControllers) {
                   bool have = false;
@@ -297,12 +303,12 @@ std::vector<AutomationLanes::Target> AutomationLanes::libraryTargets(const Part*
             return nullptr;
             };
       std::set<QString> taken;
-      if (lib->dynamicsCC >= 0 && lib->dynamicsCC <= 127) {
-            const SoundLib::Controller* c = byCC(lib->dynamicsCC);
-            out.push_back({ c ? c->id : QString("cc%1").arg(lib->dynamicsCC), tr("Dynamics (CC%1)").arg(lib->dynamicsCC), false });
+      if (own->dynamicsCC >= 0 && own->dynamicsCC <= 127) {
+            const SoundLib::Controller* c = byCC(own->dynamicsCC);
+            out.push_back({ c ? c->id : QString("cc%1").arg(own->dynamicsCC), tr("Dynamics (CC%1)").arg(own->dynamicsCC), false });
             taken.insert(out.back().id);
             }
-      if (lib->dynamicsCC != 11) {
+      if (own->dynamicsCC != 11) {
             const SoundLib::Controller* c = byCC(11);
             out.push_back({ c ? c->id : QString("cc11"), tr("Expression (CC11)"), false });
             taken.insert(out.back().id);
@@ -751,7 +757,12 @@ QString AutomationLanes::valueText(const QString& target, double v) const
             return LiveClipEdit::velocityText(v, LiveClipEdit::velMode(lane(p, target)));
             }
       // a controller whose map lists how the plug-in shows it (<Controller display>: Ample's parameters): that text
-      if (const std::shared_ptr<const SoundLib::Library> lib = SoundLib::current()) {
+      const Score* shownScore = score();
+      std::vector<std::shared_ptr<const SoundLib::Library>> libs = shownScore ? SoundLib::scoreLibraries(shownScore->masterScore())
+                                                                              : std::vector<std::shared_ptr<const SoundLib::Library>>();
+      if (libs.empty() && SoundLib::current())
+            libs.push_back(SoundLib::current());
+      for (const std::shared_ptr<const SoundLib::Library>& lib : libs) {       // (several libraries: each one's)
             auto shown = [&](const SoundLib::Controller& c) {
                   return c.id == target && !c.display.empty() ? SoundLib::controllerText(c, v) : QString();
                   };

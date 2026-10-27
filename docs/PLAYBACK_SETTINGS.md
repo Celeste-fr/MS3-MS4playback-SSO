@@ -1871,6 +1871,19 @@ tab playing through its Live track, the piano roll's and drum roll's keyboards a
 Hosted, a route whose patch isn't loaded yet (a technique added since the score's last load) stays silent and the
 host loads the score's patches in the background; the next click plays it.
 
+## Several libraries (engines)
+
+Not a setting: the owner, 2026-10-26, "natively integrate Vial Instrumental as another playback engine, like we have now
+for ms3, ms4 and sso" (branch `vial-engine`; share/soundlibraries/README.md › Several libraries). A part may play
+another library than the global one (metaTag `partPlayback` "library:<engine>"). Every adjustment in this file is
+read from the note's own library's map: a Vial part gets none of SSO's measured layers (no calibration, onsets, level
+rule, section balance, real range, mic compensation, even levels: Vial's map has none), an SSO part keeps all of them
+when Vial is the global library (its calibration read as the global one's would be: `SoundLib::calibrationFor`). The
+master trim (› Gain stage and master trim) is measured on the score's first library with a crest and lowers every
+library patch, Vial's too (one master level). Even levels' measurement, the audit and the verification: the global
+library's parts only. A score that plays one library renders byte for byte as before (Whence: `dumpEvents` identical,
+2026-10-26).
+
 ## Inventory
 
 Not in the table, because they are corrections and not adjustments (no setting, the same in every preset): a percussion

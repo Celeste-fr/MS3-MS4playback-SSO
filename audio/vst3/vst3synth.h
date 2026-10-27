@@ -45,6 +45,13 @@ class Vst3Synth : public Synthesizer {
       std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
                                                     // controller index (ME_PARAMETER events), -1: none
       std::atomic<bool> _varispeed { false };
+      // per slot, over _varispeed (several libraries: each one's plug-in its own way, SoundLib::scoreLibraries): 0 as
+      // _varispeed, 1 varispeed, 2 not
+      std::array<std::atomic<unsigned char>, 64> _slotVarispeed {};
+      bool varispeedAt(int slot) const {
+            const unsigned char v = slot >= 0 && slot < 64 ? _slotVarispeed[size_t(slot)].load() : 0;
+            return v == 0 ? _varispeed.load() : v == 1;
+            }
       // a slot played by another slot's instance (host >= 0), on MIDI channel channel (0-15) of it; tuned: the
       // instance's state tunes it (Kontakt's Tune), so a note's tuning is neither varispeed nor sent
       struct Link {
@@ -122,7 +129,9 @@ class Vst3Synth : public Synthesizer {
       // a note's tuning as the speed of its slot (Vst3Plugin::setPitch), for a library whose plug-in
       // ignores a note's tuning: set at each note-on, at once when nothing sounds on the slot (the
       // lanes see to that, SoundLib::Lanes), else gliding (legato)
-      void setVarispeed(bool on) { _varispeed = on; }
+      void setVarispeed(bool on) { _varispeed = on; for (auto& v : _slotVarispeed) v = 0; }
+      // a slot's own (several libraries), over setVarispeed's until it is called again
+      void setVarispeed(int slot, bool on) { if (slot >= 0 && slot < 64) _slotVarispeed[size_t(slot)] = on ? 1 : 2; }
       // (GUI thread) slot played by host's instance on its MIDI channel (0-15; host -1: by its own, channel 0); tuned: its
       // tuning is in the instance's state (no varispeed, no note tuning sent). The Mixer of a linked slot is its host's
       // (one instance, one output: a patch's copies are one part's, at one patch volume)

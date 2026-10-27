@@ -250,6 +250,7 @@ void Preferences::init(bool storeInMemoryOnly)
 #endif
             {PREF_IO_SOUNDLIBRARY_PLUGIN,                          new StringPreference("")},
             {PREF_IO_SOUNDLIBRARY_LAST,                            new StringPreference("", false)},
+            {PREF_IO_SOUNDLIBRARY_VARIANTS,                        new StringPreference("", false)},
             // worker threads that set the sound library's setups (SoundLibraryHost::loadThreads): 0, the GUI thread
             {"io/soundLibraryLoadThreads",                         new IntPreference(0)},
             {PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS,           new IntPreference(0)},

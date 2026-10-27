@@ -408,9 +408,21 @@ static bool rangeNeedsRender(const MasterScore* score)
       if (!score || !library || !realRange(score) || library->dynamicsCC < 0 || library->dynamicsCC == CTRL_EXPRESSION)
             return false;
       bool any = false;
-      for (const SoundLib::Route& r : SoundLib::routes(score, *library))
+      // (of several libraries every one's parts: the map's measurements are its own patches', SoundLib::allRoutes)
+      for (const SoundLib::Route& r : SoundLib::allRoutes(score))
             any = any || hasRealRange(r.instrument);
       return any;
+      }
+
+// the library the master trim measures: the first of the score's libraries whose map gives a crest (its calibration's),
+// else the current one (several libraries: SSO's parts whatever the global library is; contextlevel.h › Gain stage)
+static std::shared_ptr<const SoundLib::Library> trimLibrary(const MasterScore* score)
+      {
+      const std::vector<std::shared_ptr<const SoundLib::Library>> libs = SoundLib::scoreLibraries(score);
+      for (const std::shared_ptr<const SoundLib::Library>& l : libs)
+            if (std::isfinite(l->crestDb))
+                  return l;
+      return libs.empty() ? SoundLib::current() : libs.front();
       }
 
 //---------------------------------------------------------
@@ -530,7 +542,11 @@ static VolumesCall volumesCall(const MasterScore* score, const SoundLib::Library
       v.sectionMode = sectionBalanceMode(score);
       v.section = v.sectionMode > 0;
       v.real = realRange(score) && !rangePass;
-      v.mics = micCompensation(score) && !library.micFader.empty();
+      bool micLaws = !library.micFader.empty();       // (of several libraries: any one's)
+      if (!micLaws)
+            for (const std::shared_ptr<const SoundLib::Library>& l : SoundLib::scoreLibraries(score))
+                  micLaws = micLaws || !l->micFader.empty();
+      v.mics = micCompensation(score) && micLaws;
       v.any = v.context || v.section || v.real || v.mics;
       if (!v.any)
             return v;
@@ -596,7 +612,8 @@ static std::map<const Part*, std::map<const SoundLib::LibInstrument*, double>> m
                   if (!p->hasMicLevels)
                         continue;
                   const MicValues v = micValues(pp.first, *p, lanes);
-                  double top = micOffsetDb(*p, library, v.at(0));
+                  const SoundLib::Library& lib = p->library ? *p->library : library;    // (the patch's own map's laws)
+                  double top = micOffsetDb(*p, lib, v.at(0));
                   if (v.automated()) {
                         if (ticks.empty()) {
                               for (const Segment* seg = score->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest))
@@ -609,7 +626,7 @@ static std::map<const Part*, std::map<const SoundLib::LibInstrument*, double>> m
                         if (!ticks.empty()) {
                               top = -1e9;
                               for (int t : ticks)
-                                    top = std::max(top, micOffsetDb(*p, library, v.at(t)));
+                                    top = std::max(top, micOffsetDb(*p, lib, v.at(t)));
                               }
                         }
                   if (top != 0.0)
@@ -623,7 +640,9 @@ static std::map<const Part*, Volumes> compute(const MasterScore* score, const So
                                               const std::map<const Part*, double>& ranges, bool mics)
       {
       std::map<const Part*, Volumes> out;
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library);
+      // (several libraries: every one's parts, each patch by its own map's measurements; a map without them, Vial's, none)
+      const std::vector<SoundLib::Route> routes = SoundLib::severalLibraries(score) ? SoundLib::allRoutes(score)
+                                                                                     : SoundLib::routes(score, library);
       std::map<const Part*, std::vector<const SoundLib::LibInstrument*>> patches;
       for (const SoundLib::Route& r : routes)
             if (r.lane == 0)
@@ -777,7 +796,7 @@ static bool trimNeedsRender(const SoundLib::Library& library, const std::map<con
             any = any || !d.second.rule.empty() || !d.second.even.empty();
       if (!any || library.dynamicsCC == CTRL_EXPRESSION)
             return false;
-      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::calibrationFor(&library);
       return cal && !cal->patches().empty() && std::isfinite(library.crestDb);
       }
 
@@ -803,7 +822,7 @@ static MasterTrim computeTrim(const MasterScore* score, const SoundLib::Library&
             loudest = std::max(loudest, gainDb[key]);
             }
       t.fallbackDb = std::max(0.0, loudest - TrackDelays::MAX_DB);
-      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::dynamicsCalibration();
+      const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::calibrationFor(&library);
       if (!cal || cal->patches().empty() || !std::isfinite(library.crestDb)) {
             t.db = t.fallbackDb;
             return t;
@@ -963,7 +982,7 @@ static MasterTrim computeTrim(const MasterScore* score, const SoundLib::Library&
 
 MasterTrim computeMasterTrim(const MasterScore* score)
       {
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      std::shared_ptr<const SoundLib::Library> library = trimLibrary(score);
       if (!score || !library)
             return MasterTrim();
       TrimGuard guard;
@@ -1009,7 +1028,7 @@ static void trimStep(RenderJob& j)
 
 MasterTrim masterTrim(const MasterScore* score)
       {
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      std::shared_ptr<const SoundLib::Library> library = score ? trimLibrary(score) : nullptr;
       // (none inside the real range's render either: it needs no gains, and its volumes lack R)
       if (!score || !library || trimPass || rangePass)
             return MasterTrim();
@@ -1091,7 +1110,8 @@ bool warmStep(const MasterScore* score)
       // the master trim (its render)
       std::map<const Part*, TrackDelays::Delays> delays;
       QString key;
-      if (!trimCall(score, *library, &delays, &key))
+      const std::shared_ptr<const SoundLib::Library> trimLib = trimLibrary(score);
+      if (!trimCall(score, *trimLib, &delays, &key))
             return true;
       {
             QMutexLocker lock(&trimMutex);
@@ -1099,7 +1119,7 @@ bool warmStep(const MasterScore* score)
             if (c != trimCache.end() && c->second.find(key, untracked))
                   return true;
       }
-      if (trimNeedsRender(*library, delays)) {
+      if (trimNeedsRender(*trimLib, delays)) {
             if (!trimJob || trimJob->score != score || trimJob->key != key || trimJob->untracked != untracked) {
                   trimJob.reset(new RenderJob);
                   trimJob->score = score;

@@ -49,6 +49,7 @@
 #include <QStringList>
 
 #include "ms4playback.h"
+#include "partplayback.h"
 
 namespace Ms {
 
@@ -59,6 +60,9 @@ class Part;
 class Score;
 
 namespace SoundLib {
+
+class Library;
+class DynamicsCalibration;
 
 //---------------------------------------------------------
 //   Technique vocabulary
@@ -381,6 +385,7 @@ struct Guitar {
 
 struct LibInstrument {
       QString name;                       // the library's name for it (the patch to load)
+      const Library* library { nullptr }; // the library it is of (set as the map loads)
       std::shared_ptr<const Guitar> guitar;   // <Guitar>: guitar notation's keys (guitarplayback.cpp); null: none
       QStringList ids;                    // MuseScore instrument ids it serves
       QString with;                       // an extra patch: the main patch it plays with
@@ -729,6 +734,49 @@ void setCurrent(std::shared_ptr<const Library> library);
 std::shared_ptr<const Library> current();
 bool active();
 
+//---------------------------------------------------------
+//   engines: several libraries in one score (the owner, 2026-10-26: "natively integrate Vial Instrumental as another
+//   playback engine, like we have now for ms3, ms4 and sso")
+//    An engine is a library MuseScore offers by its name ("Spitfire Symphony Orchestra", "Vial Instrumental"); a map
+//    named "<engine> (<variant>)" is a variant of that engine ("Vial Instrumental (Fuse)": the application picks which
+//    variant an engine plays, setEngines). A part's own mode "library:<name>" (partplayback.h) plays that engine; every
+//    other library part (the global mode's library, "library") the current library. The current library comes first
+//    everywhere (its routes from slot 0, as when it was the only one: a score playing it alone renders the same), the
+//    other engines' parts after it, by engine name. Only the plug-in output hosts more than one library: over MIDI out
+//    and in Live (forLive) the current library plays alone, a part of another engine plays as MS4 (LIVE.md › What still
+//    differs). Each library's measurements (calibration, onsets, levels) are its own map's: none reach another's parts
+//---------------------------------------------------------
+
+// the engines the application offers: name -> the map it plays (its chosen variant), each loaded on first use
+void setEngines(const std::vector<std::pair<QString, QString>>& engines);
+std::vector<QString> engineNames();
+// the engine's library: the current library when it is that engine (or a variant of it), else its map, loaded once
+// (null: not an engine, or its map doesn't load)
+std::shared_ptr<const Library> engine(const QString& name);
+// the engine a library is: its name without " (<variant>)" when that is an engine's name, else its name
+QString engineOf(const Library& library);
+// whether an engine can play here (the application's test: hosted, its plug-in found); none set: every one. The
+// current library always can (as before)
+void setEngineAvailable(std::function<bool(const Library&)> available);
+bool engineAvailable(const Library& library);
+// the library a part plays (its master part's mode): its own engine where it names one that can play (plug-in output
+// only), else the current library; null: it plays no library (its mode, or its engine can't play here: MS4)
+std::shared_ptr<const Library> libraryOf(const Part* part);
+std::shared_ptr<const Library> libraryOf(const Part* part, const std::map<const Part*, PartPlayback>& modes,
+                                         const std::map<const Part*, QString>& names, bool forLive = false);
+// the libraries the score's parts play, the current one first (even when no part plays it), then the others by name
+// (forLive, or MIDI out: the current one alone)
+std::vector<std::shared_ptr<const Library>> scoreLibraries(const Score* score, bool forLive = false);
+// a library other than the current one plays parts of the score (several libraries: the parts of each)
+bool severalLibraries(const Score* score);
+// the parts whose own mode names another engine than the current library's ("library:<name>"), whatever the output: the
+// parts Live and MIDI out leave out (they play as MS4 there), with each one's engine
+std::vector<std::pair<const Part*, QString>> otherEngineParts(const Score* score);
+// a library's dynamics calibration: the current library's dynamicsCalibration(), another engine's from the application's
+// loader (setCalibrationLoader: its user file and shipped one, as the current library's), kept until the next
+// setDynamicsCalibration; null: none (a library without measurements: Vial's)
+std::shared_ptr<const DynamicsCalibration> calibrationFor(const Library* library);
+
 // where the library parts play: MIDI out (the library in a host of its own), or the library's
 // plug-in hosted by MuseScore (audio/vst3, mscore/soundlibraryhost)
 enum class Output : signed char { MIDI, PLUGIN };
@@ -798,6 +846,7 @@ class DynamicsCalibration {
 
 void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c);
 std::shared_ptr<const DynamicsCalibration> dynamicsCalibration();
+void setCalibrationLoader(std::function<std::shared_ptr<const DynamicsCalibration>(const Library&)> loader);
 // the part's held note's curve (the articulation a plain long note chooses), when measured
 const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches);
 // the dynamics CC value for a patch other than the held note's (the owner's check of 2026-09-28:
@@ -840,6 +889,7 @@ constexpr int MAX_PORTS = 4;
 struct Route {
       const Part* part { nullptr };
       const LibInstrument* instrument { nullptr };      // the patch played on this route
+      const Library* library { nullptr };               // the library it is of (engines above: one of several)
       int port { 0 };
       int channel { 0 };
       int patch { 0 };                    // its index in the main patch's patches()
@@ -855,7 +905,11 @@ bool anyMono(const std::vector<const LibInstrument*>& patches);
 
 // forLive: the routes of Live's tracks (Create Live Set, Live's clips): a copy per tuning, each at a fixed tuning
 // (lanes(…, fixedTuning)), which a copy's Kontakt keeps as its Tune (KontaktSetup::withTune): Live can't varispeed
+// Several libraries (engines above): library's routes, numbered after the routes of the libraries before it (the
+// current library's from 0); a library the score's parts don't name plays as the current one would (the tests' maps)
 std::vector<Route> routes(const Score* score, const Library& library, bool forLive = false);
+// every library's routes (scoreLibraries' order), each with its library
+std::vector<Route> allRoutes(const Score* score, bool forLive = false);
 
 //---------------------------------------------------------
 //   hosted tuning ([tuning] hostedTuning; the owner, 2026-10-15: "Whence takes absolutely forever to load all the
