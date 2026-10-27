@@ -188,13 +188,17 @@ static const std::vector<Definition> DEFINITIONS = {
       // plainPerformance (2026-10-17) sent every plain note at 64, so both were lost. One setting for both (he worried about
       // "too many rules"; widened the same day: every note after a rest smooth, every new bow bowed; first [slurs]
       // plainBowed, never in a Windows build: REMOVED). 1 by default and in Recommended,
-      // 0 in Library default; performanceNote's plainAuto)
-      { "slurs/plainAuto", 1, 0, 1, "on/off",
+      // 0 in Library default; performanceNote's plainAuto). 2 (branch bowed-early, 2026-10-27, for the owner to compare by
+      // ear; 1 stays the default and Recommended's until he decides): as 1, each new bow stroke early by the map's bowedEarly
+      // (the bowed transition's measured heard time less plainShift, sso_legato_glide_bowed.json; collectNote's bowedEarly)
+      { "slurs/plainAuto", 1, 0, 2, "",
         "with [slurs] plainPerformance: 1 smooth after a rest, bowed on each new bow, fingered inside a slur, spiccato for "
         "staccatos: a plain note (no velocity or technique of its own) after silence on its patch plays the smooth attack "
         "(velocity 5), early by its measured onset less the patch's plainShift; a note touching the note before outside a "
         "slur going on the bowed transition (SSO: 93, Violas 100); inside a slur 64, SSO's fingered; staccatos, accents and a "
-        "key struck again as before. 0: every such note at 64", true },
+        "key struck again as before. 2: as 1, and each new bow stroke (the bowed transition) sent early by its patch's "
+        "measured bowedEarly beyond plainShift (Violins 1 125, Violins 2 151, Violas 55, Celli 106, Basses 64 ms), capped so the "
+        "note before keeps keepMs. 0: every such note at 64", true },
       // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM, 0 in both presets until the owner has heard
       // it; MidiRenderer::libraryFastTransitions)
       { "slurs/fastTransitions", 0, 0, 1, "on/off",

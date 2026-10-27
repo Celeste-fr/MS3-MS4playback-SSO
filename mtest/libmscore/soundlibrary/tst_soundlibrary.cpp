@@ -2690,11 +2690,12 @@ void TestSoundLibrary::plainPerformance()
             QVERIFY2(listed, p.id);
             }
       QCOMPARE(Playback::definition("slurs/plainPerformance")->value, 1.0);        // (the built-in default; the tests' ini sets 0 unless it says otherwise)
-      auto lib = loadMap(map.arg(" plainShift='80'"));
+      auto lib = loadMap(map.arg(" plainShift='80' bowedEarly='40'"));
       QVERIFY(lib);
       for (const SoundLib::LibInstrument& li : lib->instruments) {
             if (li.name == "Violin - Performance") {
                   QCOMPARE(li.plainShiftMs, 80.0);
+                  QCOMPARE(li.bowedEarlyMs, 40.0);
                   QVERIFY(SoundLib::plainPerformanceArticulation(li));
                   }
             else {
@@ -2808,9 +2809,10 @@ void TestSoundLibrary::plainPerformance()
       // [slurs] plainAuto 1 (2026-10-26, the owner: "smooth after a rest, bowed on each new bow, fingered inside a slur,
       // spiccato for staccatos"): C5 (after silence) and m3's arco E5 (after the pizzicati, another patch: silence on its
       // own) smooth (5), 220 ms early (smooth 300 - plainShift 80; C5 at the score's start by the start lead, 220); D5,
-      // touching C5 without a slur, bowed (93); the staccatos, G5 after a staccato and the slur's A5 B5 64 as before
-      {
-            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", "1" } });
+      // touching C5 without a slur, bowed (93); the staccatos, G5 after a staccato and the slur's A5 B5 64 as before.
+      // plainAuto 2 (branch bowed-early): as 1, D5 (the bowed transition) the map's bowedEarly (40 ms) earlier
+      for (int plainAuto : { 1, 2 }) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", QString::number(plainAuto) } });
             const R au = render();
             QVERIFY2(withinMs(au.startLead, 220.0), qPrintable(QString::number(au.startLead)));
             const std::map<std::pair<int, int>, int> velo = { { { 0, 72 }, 5 }, { { 480, 74 }, 93 }, { { 4800, 76 }, 5 } };
@@ -2818,7 +2820,8 @@ void TestSoundLibrary::plainPerformance()
                   const N n = at(au, tp.first, tp.second);
                   const auto v = velo.find(tp);
                   const bool smooth = v != velo.end() && v->second == 5;
-                  const double want = at(on, tp.first, tp.second).on + au.startLead - (smooth ? 220.0 : 0.0);
+                  const bool bowed = v != velo.end() && v->second == 93;
+                  const double want = at(on, tp.first, tp.second).on + au.startLead - (smooth ? 220.0 : 0.0) - (bowed && plainAuto == 2 ? 40.0 : 0.0);
                   QVERIFY2(n.velo == (v != velo.end() ? v->second : MidiRenderer::PLAIN_VELOCITY) && withinMs(n.on, want),
                            qPrintable(QString("%1 %2: %3 at %4, want %5").arg(tp.first).arg(tp.second).arg(n.velo).arg(n.on).arg(want)));
                   }

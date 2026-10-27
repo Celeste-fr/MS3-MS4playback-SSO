@@ -8920,8 +8920,9 @@ void TestLiveEquivalence::microtoneBendsLive()
 //    [slurs] plainAuto (branch celli-bowed, 2026-10-26) reaches Live: plain-auto.musicxml (a rest, a slur C5 D5 E5; a slur F5
 //    G5 touching it; a rest, a lone A5) on a plain Performance patch (plainShift 80, smooth onset 300). With 1 C5 and A5,
 //    after silence, play the smooth attack (5) 220 ms early (300 - 80), F5 (a new bow) the bowed transition (93), the
-//    slurred notes 64; with 0 all 64 at their written start. The plain set's technique clip holds the same velocities and, with
-//    the Track Delay and the device's delays, plays every note-on / note-off MuseScore plays (as plainWritten)
+//    slurred notes 64; with 0 all 64 at their written start; with 2 (branch bowed-early) as 1, F5 its bowedEarly (40) earlier.
+//    The plain set's technique clip holds the same velocities and, with the Track Delay and the device's delays, plays every
+//    note-on / note-off MuseScore plays (as plainWritten)
 //---------------------------------------------------------
 
 void TestLiveEquivalence::plainAutoLive()
@@ -8933,7 +8934,7 @@ void TestLiveEquivalence::plainAutoLive()
          "<Instrument name='Violin' ids='violin'>"
          "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
          "</Instrument>"
-         "<Instrument name='Violin - Performance' with='Violin' plainShift='80'>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='80' bowedEarly='40'>"
          "<Switch type='none'/>"
          "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
          " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
@@ -8943,6 +8944,7 @@ void TestLiveEquivalence::plainAutoLive()
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       MasterScore* score = readScore(DIR + "plain-auto.musicxml");
+      std::map<int, double> f5;     // plainAuto -> E5's note-on to F5's (ms)
       QVERIFY(score);
       score->rebuildMidiMapping();
       auto render = [score](bool written) {
@@ -8956,7 +8958,7 @@ void TestLiveEquivalence::plainAutoLive()
             r.renderScore(&events, ctx);
             return events;
             };
-      for (int plainAuto : { 1, 0 }) {
+      for (int plainAuto : { 0, 1, 2 }) {
             Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
                                             { "slurs/plainAuto", QString::number(plainAuto) } });
             score->setPlaylistDirty();
@@ -8983,6 +8985,11 @@ void TestLiveEquivalence::plainAutoLive()
                            qPrintable(QString("plainAuto %1, key %2: %3").arg(plainAuto).arg(kv.first).arg(museScore[kv.first].first)));
             const double c5 = museScore[74].second - museScore[72].second;          // (D5 on its beat: a transition)
             QVERIFY2(std::fabs(c5 - (plainAuto ? 720.0 : 500.0)) < 1.1, qPrintable(QString("plainAuto %1: C5 %2 ms before D5").arg(plainAuto).arg(c5)));
+            f5[plainAuto] = museScore[77].second - museScore[76].second;
+            if (plainAuto == 2)
+                  QVERIFY2(std::fabs(f5[2] - (f5[0] - 40.0)) < 1.1, qPrintable(QString("F5 %1 ms after E5, as written %2").arg(f5[2]).arg(f5[0])));
+            else if (plainAuto == 1)
+                  QVERIFY2(std::fabs(f5[1] - f5[0]) < 1.1, qPrintable(QString("F5 %1 ms after E5, as written %2").arg(f5[1]).arg(f5[0])));
             QVERIFY2(std::fabs(museScore[81].second - museScore[72].second - 3000.0) < 1.1,
                      qPrintable(QString::number(museScore[81].second - museScore[72].second)));   // (the lone A5: as early as C5)
             // the plain set: the technique clip's velocities, the notes as Live plays them

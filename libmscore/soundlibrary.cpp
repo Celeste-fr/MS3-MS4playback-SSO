@@ -1150,6 +1150,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         if (ok && std::isfinite(v))
                               li.plainAttackMs = std::max(0.0, std::min(1000.0, v));
                         }
+                  if (a.hasAttribute("bowedEarly")) {
+                        bool ok = false;
+                        const double v = a.value("bowedEarly").toDouble(&ok);
+                        if (ok && std::isfinite(v))
+                              li.bowedEarlyMs = std::max(0.0, std::min(1000.0, v));
+                        }
                   li.transportResetScript = a.value("transportResetScript").toString();
                   li.hallDrop = qBound(0, a.value("hallDrop").toInt(), 127);
                   for (const QString& c : a.value("avoidCC").toString().split(' ', QString::SkipEmptyParts)) {

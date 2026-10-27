@@ -1235,7 +1235,8 @@ void TestPerformanceTechnique::duplicateAutomation()
 //    it; E6 goes on from it by a transition (until 2026-10-12 a re-attack: the accent made D6's choice other than
 //    "legato"). 0: under a slur bowed (93), G5 a re-attack (106) with F5 ending 54 ms before it. With [slurs]
 //    plainPerformance: by [slurs] plainAuto G5 bowed (93) and C5, after silence, smooth (5), early by its onset less the
-//    patch's plainShift; without the slurs every touching note bowed; plainAuto 0 all 64
+//    patch's plainShift; without the slurs every touching note bowed; plainAuto 0 all 64; plainAuto 2 as 1, each bowed
+//    note sent its patch's bowedEarly earlier (branch bowed-early), F5 still ending 24 ms after G5's moved note-on
 //---------------------------------------------------------
 
 void TestPerformanceTechnique::slurTransitions()
@@ -1284,12 +1285,16 @@ void TestPerformanceTechnique::slurTransitions()
       QVERIFY(legato && legato->attack("smooth"));
       const double smoothEarly = legato->startOnset(legato->attack("smooth"), 72, false) - v1->plainShiftMs;
       QVERIFY2(smoothEarly > 20, qPrintable(QString::number(smoothEarly)));   // (34.4 ms: 100.2 - 65.8)
-      for (int plainAuto : { 1, 0 }) {
+      // ([slurs] plainAuto 2: a new bow stroke its patch's bowedEarly earlier; Violins 1 - Performance 125.2 ms)
+      QVERIFY2(std::isfinite(v1->bowedEarlyMs) && v1->bowedEarlyMs > 100, qPrintable(QString::number(v1->bowedEarlyMs)));
+      std::map<int, double> bowedGap;     // plainAuto -> F5's note-on to G5's
+      for (int plainAuto : { 2, 1, 0 }) {
             MasterScore* ps = score(false, "slurs.musicxml");
             QVERIFY(ps);
             ps->setMetaTag(Playback::metaTag, QString("slurs/plainPerformance=1;slurs/plainAuto=%1").arg(plainAuto));
             std::map<int, Key> k = render(ps, lib);
             QVERIFY(k.count(72) && k.count(74) && k.count(79));
+            bowedGap[plainAuto] = ms(k[79].on - k[77].on);
             QCOMPARE(k[79].velocity, plainAuto ? 93 : MidiRenderer::PLAIN_VELOCITY);
             QVERIFY2(within(ms(k[77].off - k[79].on), 24), qPrintable(QString::number(ms(k[77].off - k[79].on))));
             QCOMPARE(k[72].velocity, plainAuto ? 5 : MidiRenderer::PLAIN_VELOCITY);
@@ -1299,9 +1304,12 @@ void TestPerformanceTechnique::slurTransitions()
                   QVERIFY2(k[p].velocity == MidiRenderer::PLAIN_VELOCITY, qPrintable(QString("key %1: %2").arg(p).arg(k[p].velocity)));
             delete ps;
             }
+      QVERIFY2(within(bowedGap[1], 500) && within(bowedGap[0], 500), qPrintable(QString("%1 %2").arg(bowedGap[1]).arg(bowedGap[0])));
+      QVERIFY2(within(bowedGap[2], 500 - v1->bowedEarlyMs), qPrintable(QString::number(bowedGap[2])));
       // without the slurs (détaché): C5 after silence smooth and early as above, every other note touching the one before a
-      // new bow stroke, bowed (93); plainAuto 0 all 64
-      for (int plainAuto : { 1, 0 }) {
+      // new bow stroke, bowed (93); plainAuto 0 all 64; 2 every bowed note bowedEarly earlier (D5 after the smooth C5,
+      // the notes after it as before: each one moved as much)
+      for (int plainAuto : { 2, 1, 0 }) {
             MasterScore* ps = score(false, "slurs.musicxml");
             QVERIFY(ps);
             std::vector<Spanner*> slurs;
@@ -1317,7 +1325,8 @@ void TestPerformanceTechnique::slurTransitions()
             QVERIFY(k.count(72) && k.count(74));
             QCOMPARE(k[72].velocity, plainAuto ? 5 : MidiRenderer::PLAIN_VELOCITY);
             const double gap = ms(k[74].on - k[72].on);
-            QVERIFY2(within(gap, 500 + (plainAuto ? smoothEarly : 0.0)), qPrintable(QString::number(gap)));
+            QVERIFY2(within(gap, 500 + (plainAuto ? smoothEarly : 0.0) - (plainAuto == 2 ? v1->bowedEarlyMs : 0.0)), qPrintable(QString::number(gap)));
+            QVERIFY2(within(ms(k[76].on - k[74].on), 500), qPrintable(QString::number(ms(k[76].on - k[74].on))));
             const int bowed = legato->legatoVelocity > 0 ? legato->legatoVelocity : legato->transition("bowed")->velocity;
             for (int p : { 74, 76, 77, 79, 81, 83, 84, 88 })
                   QVERIFY2(k[p].velocity == (plainAuto ? bowed : MidiRenderer::PLAIN_VELOCITY), qPrintable(QString("key %1: %2").arg(p).arg(k[p].velocity)));

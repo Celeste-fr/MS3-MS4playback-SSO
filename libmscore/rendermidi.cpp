@@ -1907,7 +1907,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                            bool accentAttack = false;     // [slurs] plainAccents 2 / 3: the accented attack
                                            // [slurs] plainAuto: a plain note after silence on its patch on the smooth attack
                                            // (its measured onset, less the patch's plainShift, its own early start)
-                                           const SoundLib::Articulation::Technique* smoothStart = nullptr; };
+                                           const SoundLib::Articulation::Technique* smoothStart = nullptr;
+                                           // [slurs] plainAuto: a new bow stroke on the bowed transition (2: early by the
+                                           // patch's bowedEarly beyond its plainShift, collectNote)
+                                           bool plainBowed = false; };
                   // a staccato as written (staccato, staccatissimo; the first of its tie chain's): [slurs] plainPerformance
                   // plays it as a spiccato attack
                   auto staccatoNote = [&](const Note* n) {
@@ -2035,6 +2038,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               // other will use bowed"); before, plainPerformance's 64 made it SSO's fingered one. 0: 64)
                               if (c.plain && !explicitTechnique && !(slurToSlur && own <= 0 && plainAuto))
                                     p.velocity = plainVelocity;
+                              else if (c.plain && !explicitTechnique && own <= 0)
+                                    p.plainBowed = t->name == "bowed";
                               return p;
                               }
                         if (plain) {
@@ -2071,6 +2076,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // after a slur), the bowed transition instead of 64, SSO's fingered: as a slur after a
                                     // slur, above)
                                     p.velocity = a->legatoVelocity > 0 ? a->legatoVelocity : t->velocity;
+                                    p.plainBowed = true;
                                     }
                               else
                                     p.velocity = plainVelocity;
@@ -2305,6 +2311,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           t.performance = perf.from ? LibPerformance::TRANSITION : LibPerformance::ATTACK;
                                           t.joinMs = perf.before ? int(std::lround(perf.endMs)) : PerformanceTechnique::JOIN_AUTO;
                                           t.attack = perf.timedAttack ? perf.timedAttack : perf.smoothStart;
+                                          t.plainBowed = perf.plainBowed;
                                           }
                                     }
                               // [slurs] speedFromWritten (the owner approved, 2026-10-17): a legato note-on (a transition from the
@@ -2434,16 +2441,26 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // with 1's full bends the 12-TET notes between the quarter tones were heard late, in tune
                                     // 24 % / 19 % of their time (Violas 50 %); this early 49 % / 53 %, the quarter tones 17 -> 22 %
                                     // / 11 -> 24 %: microtone-next's RESULT.md)
+                                    // ([slurs] plainAuto 2, branch bowed-early, 2026-10-27: a plain new bow stroke on the bowed
+                                    // transition (performanceNote's plainBowed) early by its patch's bowedEarly, the bowed
+                                    // transition's measured heard time (f0 leave + 23.5 ms, Polfreman 2013) after its note-on less
+                                    // the plainShift the patch already goes early: Violins 1 125, Violins 2 151, Violas 55, Celli
+                                    // 106, Basses 64 ms (kthost + Kontakt 8 + SSO, sso_legato_glide_bowed.json); by midEarly's
+                                    // mechanism and caps; 1: as written, plainShift only)
                                     const SoundLib::LibInstrument* tpi = libPatches[libChoice.patch];
+                                    const bool bowedEarly = libChoice.plain && !libPlainTiming && libPlainAuto == 2 && perf.plainBowed
+                                                            && std::isfinite(tpi->bowedEarlyMs) && tpi->bowedEarlyMs > 0;
                                     const bool midEarly = libChoice.plain && !libPlainTiming && libMicrotoneBends == 3 && glideFingered
                                                           && glideMeasured && !libChoice.articulation->bendGlidesFingered.empty()
                                                           && std::isfinite(tpi->plainShiftMs);
-                                    const int transitionsMode = midEarly ? 3 : libChoice.plain ? (libPlainTiming ? std::max(1, libTransitionsEarly) : 0)
+                                    const int transitionsMode = (midEarly || bowedEarly) ? 3 : libChoice.plain ? (libPlainTiming ? std::max(1, libTransitionsEarly) : 0)
                                                                                            : libTransitionsEarly;
-                                    if (transitionsMode > 0 && perf.on && perf.from && offset == 0 && g.arriveMs > 0) {
+                                    if (transitionsMode > 0 && perf.on && perf.from && offset == 0 && (g.arriveMs > 0 || bowedEarly)) {
                                           double shiftMs = g.arriveMs;
-                                          const bool fallback = transitionsMode >= 2 && !glideMeasured;
-                                          if (midEarly) {
+                                          const bool fallback = transitionsMode >= 2 && !glideMeasured && !bowedEarly;
+                                          if (bowedEarly)
+                                                shiftMs = tpi->bowedEarlyMs;
+                                          else if (midEarly) {
                                                 // (at most the middle after the shortest measured note, Whence's sixteenths: the
                                                 // slower glides' middles weren't checked against the sound, and one shift keeps
                                                 // a part's transitions evenly spaced where its notes change speed)
@@ -6910,6 +6927,7 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
       libPlainTiming = library && !writtenTiming && Playback::on("slurs/plainPerformance", score) && Playback::on("slurs/plainTiming", score);
       libStaccatoLength = library && Playback::on("shorts/staccatoLength", score);
       libMicrotoneBends = library ? int(std::lround(Playback::value("slurs/microtoneBends", score))) : 0;
+      libPlainAuto = library ? int(std::lround(Playback::value("slurs/plainAuto", score))) : 0;
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();

@@ -448,6 +448,10 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   // its note-on; it went early by that less the shift)
                   if (p->hasOnset && p->trace->attack && !p->trace->from)
                         p->onset = onsetOf(p, p->pitch);
+                  // (a new bow stroke on the bowed transition, [slurs] plainAuto 1 / 2: heard the patch's bowedEarly later
+                  // than its plainShift, measured: sso_legato_glide_bowed.json; 2 sent it that much earlier)
+                  else if (p->hasOnset && p->trace->plainBowed && std::isfinite(p->trace->patch->bowedEarlyMs))
+                        p->onset = shift + p->trace->patch->bowedEarlyMs;
                   p->hasArrival = p->hasOnset;
                   p->arrival = sent(p) + p->onset - ms(p->written);
                   }

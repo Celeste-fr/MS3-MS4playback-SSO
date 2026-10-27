@@ -201,7 +201,8 @@ class MidiRenderer {
       // there), instead of the patch's one plainShift
       bool libPlainTiming = false;
       bool libStaccatoLength = false;                             // [shorts] staccatoLength (this chunk; written timing too)
-      int libMicrotoneBends = 0;                                  // [slurs] microtoneBends 0-2 (this chunk)
+      int libMicrotoneBends = 0;                                  // [slurs] microtoneBends 0-3 (this chunk)
+      int libPlainAuto = 0;                                       // [slurs] plainAuto 0-2 (this chunk)
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]
@@ -304,6 +305,9 @@ class MidiRenderer {
             // has no measured glide so that modes 2 / 3 fell back to the arrival (mode 1's model)
             double earlyMeantMs { -1 };
             bool earlyFallback { false };
+            // [slurs] plainAuto: a plain new bow stroke on the bowed transition (heard the patch's plainShift + bowedEarly
+            // after its note-on: the audit)
+            bool plainBowed { false };
             };
       // SSO's Performance legato doesn't play a legato note-on less than this after the legato note-on before on its
       // route (at velocity 64 or lower; from reading its script, behaviour only): the audit's DROPPED, and the least a

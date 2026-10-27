@@ -1359,6 +1359,14 @@ MONO = re.compile(r' - (Total )?Performance$')
 PLAIN_SHIFT = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                             'sso_plain_performance_shift.json'), encoding='utf-8')).items()
                if not k.startswith('_')}
+# bowedEarly= (ms; [slurs] plainAuto 2, branch bowed-early, 2026-10-27): with plainAuto's new bow stroke on the bowed
+# transition (93, Violas 100) the note goes this much earlier than the patch's plainShift already sends it: the bowed
+# transition's median heard time (f0 leave + 23.5 ms) after its note-on less plainShift, without the octave rows (YIN's
+# octave confusion): sso_legato_glide_bowed.json `proposalNoOctavesMs` (legato_glide/bowed.py; kthost + Kontakt 8 + SSO
+# on the Windows VM, 192 transitions a section)
+BOWED_EARLY = {k: v['proposalNoOctavesMs'] for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                                     'sso_legato_glide_bowed.json'), encoding='utf-8')).items()
+               if not k.startswith('_') and 'proposalNoOctavesMs' in v}
 LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
                               encoding='utf-8'))
 # bendGlideFingered= (2026-10-21, branch fast-microtones): the same for the fingered transition, velocity 64 as [slurs]
@@ -1796,6 +1804,8 @@ for i, line in enumerate(out):
                 out[i] = out[i][:-len(end)] + f' plainShift="{PLAIN_SHIFT[current]["shiftMs"]:g}"' + end
                 if 'attackMs' in PLAIN_SHIFT[current]:
                     out[i] = out[i][:-len(end)] + f' plainAttack="{PLAIN_SHIFT[current]["attackMs"]:g}"' + end
+                if current in BOWED_EARLY:
+                    out[i] = out[i][:-len(end)] + f' bowedEarly="{BOWED_EARLY[current]:g}"' + end
             if staccatoAttributes(current):
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + staccatoAttributes(current) + end

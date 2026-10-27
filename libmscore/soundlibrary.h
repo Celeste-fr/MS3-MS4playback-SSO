@@ -429,6 +429,11 @@ struct LibInstrument {
       // plainAttack>, ms: the median heard - sent of the plain attacks at velocity 64, measured in context, 15 dB under the
       // peak; sso_plain_performance_shift.json `attackMs`); a transition by its modelled arrival. NaN: not measured (as written)
       double plainAttackMs { NAN };
+      // [slurs] plainAuto 2 (branch bowed-early, 2026-10-27): a plain new bow stroke on the bowed transition goes this many ms
+      // earlier than the patch's plainShift (<Instrument bowedEarly>: the bowed transition's median heard time, f0 leave +
+      // 23.5 ms, after its note-on less plainShift, without the octaves; sso_legato_glide_bowed.json `proposalNoOctavesMs`
+      // -> gen_spitfire_sso.py BOWED_EARLY). NaN: not measured (plainShift only)
+      double bowedEarlyMs { NAN };
       // a monophonic patch (<Instrument mono="1">: SSO's Performance patches, whose script plays ONE legato line: a note-on
       // while a note is held is a transition that ends it, one < 15 ms after the note-on before at velocity <= 64 is
       // dropped; read from the patch's script, ownlegato-study): two notes sounding together on one of its slots lose one.
