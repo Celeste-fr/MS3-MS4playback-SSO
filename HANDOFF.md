@@ -54,7 +54,7 @@ The owner's "SSO imitations" Vial presets as a sound library (approved 2026-10-2
   CC rows yet, the vial sessions' preset update pending): the CC11 check runs only where the preset has a CC11 row; with
   the gap-expression build of Vial and a preset given the row by `cc_apply.py`, CC11 64 = -5.95 dB exactly.
 - Open: Windows untried (build only when the owner needs it); Live / MIDI out untried (LIVE.md › What still differs);
-  re-run `vialHosted` (all 13, `MS_VIAL_PATCH`) when the updated pack with CC11 / CC21 ships; the final CC21 list may
+  `vialHosted` re-run 2026-10-27 on the CC11 pack (md5 cd7b74fb…) with Vial main 7a75da1's Linux bundles (`~/vial-bin/linux-vst3-7a75da1/`): all 26 (13 .vital, 13 .vialfuse) pass, every setting kept, CC11 64 -5.95 dB, CC1 40 -3.7 .. -5.2 dB, CC21 0 0.00 dB (no depth rows yet); each .vialfuse renders the .vital's rms to 5 digits (asked the vial session whether that is meant); re-run when the CC21 rows ship; the final CC21 list may
   change the ten (gen_vial.py PRESETS).
 
 ## Out-of-process host (branch `oop-host`, 2026-10-25, from integrate-1017 6dd53a9e97 + kontakt-procs; not merged)
