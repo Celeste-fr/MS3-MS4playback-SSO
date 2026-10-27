@@ -322,12 +322,30 @@ check's f0 midpoints (`heard_midpoints.py`). No consumer yet: the data for a pro
 (`tools/vm/kthost_batch.ps1` through `vmjob.py`) → `accent_attack.py analyse <wavs> <work> <out.json> --about-from
 sso_accent_attack.json` (`test_accent_attack.py`; the private accent-level `mkfull.py` / `anafull2.py`, folded in).
 
-**jsons without a committed producer** (made by one-off scripts whose sources are lost or one-off; each records its
-method in an "about" / "_about" / "method" key, the recipe to re-measure it; the kthost 3-step with `vmjob.py` +
-`kthost_batch.ps1` reproduces the VM side of any of them, and `measure_patch.py` covers the sweeps):
-`sso_bad_samples`, `sso_smooth_onset`, `sso_plain_performance_shift`, `sso_performance_layers`,
-`sso_percussion_levels`, `sso_rachm_cc1_sweep`, `sso_rachm_context_match`, `sso_slur_swell`, `spheres_k550_staccato`,
-`sso_patch_controls`, `sso_nki_*`, `sso_percussion_hits`, `sso_drum_keys_sounding`.
+**Producers of the jsons that had none** (branch `json-producers`, 2026-10-26; OPEN_ITEMS 36, Missing tools #11). The list
+checked against what the generators read: every other json that gen_spitfire_sso.py, section_balance_cl.py,
+section_balance_winds.py, real_range.py, technique_offsets.py, rachm_quick_levels.py or level_rule.py reads names its
+producer in this file or in its own "method" / "tool" key. VM steps are the kthost 3-step (Conventions above: `events`,
+`vmjob.py` + `kthost_batch.ps1`, `analyse`); nothing here was re-run on the VM. Tests: `test_json_producers.py`.
+
+| json | producer | inputs | reproduces |
+|---|---|---|---|
+| `sso_nki_files.txt`, `sso_nki_keys.json`, `sso_nki_articulations.json` (→ `nki=`, `pitch=`, `scan=`) | `nki_tables.py <library.json>`; `--check-groups` | library.json of `extract_library_files.py` (the owner's, 2026-09-27; not in the repo) | via `sso_nki_groups.json` (same extract): articulations 700 / 700 and key ranges 699 / 700 identical, files and layout identical (Oboe Principal - Total Performance's [0, 127] comes from zones outside the first mic); the key median (median_low of the zones' roots) unverified |
+| `sso_nki_groups.json` | `nki_articulation_details.py --groups` (existing) | the same library.json | not re-run: input private |
+| `sso_performance_layers.json` (→ portamento velocity, `speedCC`, `speedScript`, `legatoGap`) | `performance_layers.py [--check]` | `sso_nki_groups.json`; speedCC / speedScript / legatoGapMs read from the patches' scripts (private, CLAUDE.md › script text) and carried over | yes, byte-identical (portamento and fingeredLow derived; the three script values copied) |
+| `sso_plain_performance_shift.json` attackMs (→ `plainAttack`) | `plain_performance_shift.py attack <report.json>` | the heard check of `Mixed techniques.musicxml` (build 457, export, Recommended; `heard_check.sh`), its report.json private (mixed-techniques/hc1) | yes, byte-identical (19.5 / 29.2 / 37.1 / 38.7 / 37.5 ms) |
+| `sso_plain_performance_shift.json` shiftMs (→ `plainShift`) | `plain_shift/abl.py make` → VM kthost → `abl.py mix` → `plain_shift/latency.py` → `plain_performance_shift.py shift` (recipe in abl.py's header; recovered from the private plain-shift copy of qt-bends' abl.py) | `Heard passages.musicxml` dumps (tst_playbackaudit MS_AUDIT_DUMP, dumpEvents chunked) + VM renders | can't re-derive: the 2026-10-17 VM renders were not kept; re-measurable |
+| `sso_smooth_onset.json` (→ `attackOnset`) | `smooth_onset.py events` → VM kthost → `analyse`; `summary --check` | VM renders (not kept) | median and byPitch from the committed rows: yes, exactly; rows need the VM (events / analyse rebuilt from the `_about`, tested on a synthetic render only) |
+| `sso_percussion_levels.json` (→ section_balance_cl.py / spheres_timpani.py: harp, timpani, percussion, Grand Piano) | `percussion_levels.py events` → VM kthost (`-secs 4000`) → `analyse`; `check-events` | VM renders (not kept) | the event plan: yes, all eight patches' notes identical; levels need the VM (the private anaperc.py / mkpiano.py folded in; the timpani's and hits' CC32 1 assumed) |
+| `sso_drum_keys_sounding.json` (→ the generator's `_SNARE` / `_TRIANGLE` keys) | `drum_keys_from_check.py <check folder/zip>` | the key scan's results.json: `MuseScore3Evo.exe --scan-keys "Spitfire Symphony Orchestra"` (the owner's run 182, 2026-09-28; private) | format round trip byte-identical; not run on a real scan (none on the dev machine) |
+| `spheres_k550_staccato.json` (→ technique_offsets.py → `heldOffset`) | `spheres_fetch.py get` (stems) → `spheres_k550_staccato.py envelopes` → `measure` / `compare` | Spheres stems (public, Zenodo 17347681); note times = the owner-confirmed readings kept in the json | within 0.06 dB (median) on the held, quarter and whole notes; the staccato passages +0.05 / +1.07 / +0.94 dB median (V1 / Vc / Cb, up to 5.7 on a note): D -2.6 instead of -3.4 dB (inside its interval). The committed file kept; OPEN_ITEMS 36 |
+| `sso_bad_samples.json` (→ `avoid`) | `measure_patch.py all --what level,tone --repeats 12 --repeat-gap 0.4 …` + `tone_check.py`'s `avoid` proposal (docs/MEASURING.md › Tone has the command) | VM renders | can't byte-reproduce: `avoid` is a person-checked decision on the proposal; the 2026-10-10 renders and screen script were not kept |
+| `sso_patch_controls.json` (→ each patch's `<Controller>`s) | none | the owner's extract of 2026-09-27 (run 151): `MuseScore3Evo.exe --extract-library "Spitfire Symphony Orchestra" --extract-patches all`; rule (commit b391fb24f9): each patch's automation-slot titles in slot order, Kontakt's placeholders (Unused CC/mic, NIKT<n>, CC 0) out | can't: no extract on the dev machine to write and test a reader against |
+| `sso_percussion_hits.json` (→ `<Drum>`) | none | readings of the owner's Kickstart window pictures (`--window-pictures`, run 198), reviewed on a page | can't: a reading of pictures (review-page rule), not a measurement |
+| `sso_rachm_context_match.json` (→ rachm_quick_levels.py → `quickLevel`) | none | in-context renders of the owner's score with the swapped notes' CC1 fixed (cc803150fb, branch rachm-register-curves; a temporary renderer change), per-group levels not kept | can't: one-off; Long (Rachm.) plays only under "non performance" in Recommended |
+| `clark_luce_levels.json` (→ section_balance_cl.py) | none | Clark & Luce 1965, Fig. 2 (printed) | can't: a reading of a published figure (clark_luce_table2.py derives Table II from it) |
+| `sso_rachm_cc1_sweep.json` | not read by a generator (a record) | | superseded by `rachm_register_sweep.py` → `sso_rachm_register_curves.json` (agrees within 0.01 dB) |
+| `sso_slur_swell.json` | not read by a generator (transition_levels_report.py reads its means); `slur_swell.py summary --check` | dumpEvents of Whence 12-TET (the owner's) + VM renders | means from the committed notes within 0.01; notes need the VM (`measure_patch.py` transition cells measure the same question on any figure) |
 
 ---
 

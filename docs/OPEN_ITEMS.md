@@ -574,11 +574,21 @@ Keep this file current: close an item by deleting it (the commit message says wh
     the strings' audit is nearly vacuous; LEVEL STEP 0.69 dB still "proposed".
 35. **Onset detectors**: harmonics SD 56 ms on SSO unexplained (synthetic ≤ 17); loudness reads only near-isolated
     notes (2-30 of 120-207).
-36. **Tools that can't be re-run as they stand**: `qt_bends/abl.py` (not in this tree); `ab/`'s MS4 A/B and trace tools
-    (stale install paths; the round-trip test moved to `tools/roundtrip/roundtrip2.py`, which runs); 13 jsons feeding the
-    map have no committed producer (TOOLS.md › 6; `sso_accent_attack` has one since 2026-10-21); kthost has no source
-    (Missing tools #4). (Fixed 2026-10-21: octave_measure's paths, compare_renders.py's silent-note crash,
-    run_fork_tests.sh's missing Node tests, the heard check's stale VM address.)
+36. **Tools that can't be re-run as they stand**: `qt_bends/abl.py` (not in this tree; its plain-shift copy is now
+    `tools/soundlibraries/plain_shift/abl.py`); `ab/`'s MS4 A/B and trace tools (stale install paths; the round-trip test
+    moved to `tools/roundtrip/roundtrip2.py`, which runs). The map's jsons without a producer: done 2026-10-26 (branch
+    json-producers, TOOLS.md › 6's table): producers for 10 (the three sso_nki_* files counted), each checked against the committed file where its inputs exist
+    (byte-identical: sso_performance_layers, sso_plain_performance_shift's attackMs, sso_drum_keys_sounding's format;
+    sso_nki_* through sso_nki_groups.json, 700 / 700 articulations; the derived parts of sso_smooth_onset, sso_slur_swell,
+    sso_percussion_levels' event plan); five can't be produced by code (sso_bad_samples' person-checked avoid,
+    sso_patch_controls (the owner's extract only), sso_percussion_hits (picture readings), sso_rachm_context_match (one-off),
+    clark_luce_levels (a figure reading)). **Open: spheres_k550_staccato's staccato levels** don't come back from the
+    stems' perceived envelope over each note's [t0, t0 + dur] (held notes within 0.06 dB, staccatos +0.05 / +1.07 /
+    +0.94 dB median for V1 / Vc / Cb): technique_offsets.py then gives the bowed-staccato D -2.6 [-4.7, -0.5] dB instead
+    of the shipped -3.4 [-5.7, -0.9]. The 2026-10-15 measuring script is lost, so which window it used is unknown; the
+    shipped value stays until the owner decides (re-measure the staccatos with a stated window, or keep -3.4). kthost
+    has its source since Missing tools #4. (Fixed 2026-10-21: octave_measure's paths, compare_renders.py's silent-note
+    crash, run_fork_tests.sh's missing Node tests, the heard check's stale VM address.)
 37. **Docs drift** (checked 2026-10-26 against the map: CLAUDE.md's plainAccents and sectionLevel2 numbers already current, the harp line made
     unambiguous; the rest historical and dated; closed): CLAUDE.md says `[slurs] plainAccents` 0 everywhere (2 by default and in Recommended since
     4cec902067); its `sectionLevel2` numbers differ from PLAYBACK_SETTINGS.md (V1 −0.13 vs −0.03, V2 +1.02 vs +1.12,
@@ -747,14 +757,21 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
   retries, fetch, guarded delete), `kthost_batch.ps1` (TOOLS.md › 10). `heard_check.sh` and `repeat_check.py` use it.
   Left: the private batch scripts and the Ample harness still have their own ssh lines (move them when next used).
 
-### 11. Re-runnable producers for the jsons without one; fixed stale tools (partly built 2026-10-21, branch kb-tools)
-- Fixed: `octave_measure/analyze.py` / `fam.py` (paths from the command line), `compare_renders.py` (silent note),
-  `run_fork_tests.sh` (every Node test, the new Python tests), the round trip (`tools/roundtrip/roundtrip2.py` +
+### 11. Re-runnable producers for the jsons without one; fixed stale tools: BUILT (branch kb-tools 2026-10-21, json-producers 2026-10-26)
+- Fixed (kb-tools): `octave_measure/analyze.py` / `fam.py` (paths from the command line), `compare_renders.py` (silent
+  note), `run_fork_tests.sh` (every Node test, the new Python tests), the round trip (`tools/roundtrip/roundtrip2.py` +
   `portable_fork.sh`), the heard check's VM address (`tools/vm/vmlib.py`'s config). Producer: `accent_attack.py`
-  (`sso_accent_attack`). Left: the other 13 (their recipes are in their own "about" keys; the private sources of
-  `sso_bad_samples`, `sso_smooth_onset`, `sso_plain_performance_shift` (qt-bends' `abl.py`), `sso_performance_layers`,
-  `sso_percussion_levels`, `sso_rachm_cc1_sweep`, `sso_rachm_context_match`, `sso_slur_swell` were not found on the dev
-  machine), best rebuilt as `measure_patch.py` (#1) cells; Spheres' stem fetcher `rzip.py` (private accent-spheres).
+  (`sso_accent_attack`).
+- **Built (json-producers)**: `nki_tables.py` (sso_nki_files / _keys / _articulations), `performance_layers.py`,
+  `plain_performance_shift.py` + `plain_shift/abl.py` / `latency.py` (recovered), `smooth_onset.py`,
+  `percussion_levels.py` (the private anaperc.py / mkpiano.py / mergepiano.py folded in), `drum_keys_from_check.py`,
+  `spheres_fetch.py` (the private rzip.py) + `spheres_k550_staccato.py`, `slur_swell.py`; `test_json_producers.py`
+  (run_fork_tests.sh). Each json's producer, inputs and what reproduces: TOOLS.md › 6.
+- **Left**: no producer can be written for sso_bad_samples (avoid is a person's decision on tone_check.py's proposal),
+  sso_patch_controls (needs the owner's extract to test a reader), sso_percussion_hits (picture readings),
+  sso_rachm_context_match (one-off renders with a temporary renderer change), clark_luce_levels (a figure reading). The VM
+  halves (smooth_onset, percussion_levels, plain shift, slur swell) were not re-run; when they are, compare with the
+  committed files before replacing them. The K. 550 staccato discrepancy: item 36.
 
 ### 12. Patch tone / noise analyzer: BUILT (branch `tone-check`, 2026-10-23)
 - **Built**: `tools/soundlibraries/tone_check.py` (docs/MEASURING.md › Tone, TOOLS.md › 4) and measure_patch.py
