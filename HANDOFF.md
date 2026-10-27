@@ -387,6 +387,25 @@ device, exports null; `MS_KHEAP_OFF=1` cures it. Rule: an optimization never cha
   the test kit runs it. Live has no setState hook to scope: don't install it; if wanted, a mode with mimalloc only on
   Live's main thread would need its own realtime test in Live first.
 
+## Build for the owner: #485 (2026-10-27)
+
+Windows build #485 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40454299721, integrate-1017 @ 377a25afca):
+#484 plus chunk-equal (live playback's chunks = the whole render), the Vial map, docs. Its one test failure, vialMap, was a
+test-only Windows path issue, fixed in 0f6ece92de. Checked on the VM (private `check485/RESULT.md`, real Kontakt + SSO,
+nobody listened; the VM is now at 172.28.59.4):
+- Whence's export is the same as build 483's except the CC11 restates at the score's last tick, which are gone (chunk-equal).
+  Detector 0 findings. The heard-check counts are within take spread. The audit matches check480's (ARRIVAL 12, LEVEL STEP
+  12 info, the rest 0).
+- Opening with helpers matches build 483 interleaved under the same load (35-39 s each today: the VM was slow, every
+  setState ~2.5x 2026-10-25's). "Not responding" 0. In-process (`MS_VST3_HOST_PROCESSES=0`): 80.6 s and 5 "Not
+  responding".
+- Play works. Callbacks over budget are equal for builds 485 and 483 today (the VM's load).
+- **Closing during a load now works**: the save prompt appears within 2.4-4.5 s, MuseScore exits 0 within ~5 s, and no
+  helper is left. Build 480 waited for the whole load. One cosmetic log line: a helper ended at shutdown is reported as
+  "loading them again", but nothing reloads.
+- Since 3e31313ce9 (`[slurs] plainBowed`, 1 in Recommended), dumps of HEAD no longer match build 485's Recommended. Use
+  plainBowed=0 to compare against 485.
+
 ## Build for the owner: #484 (2026-10-25)
 
 Windows build #484 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40230637035, integrate-1017): #481 plus
