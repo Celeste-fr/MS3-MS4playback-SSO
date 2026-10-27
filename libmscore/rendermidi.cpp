@@ -1906,6 +1906,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         for (Ms4::Art art : r.arts)
                               accent |= art == Ms4::Art::Accent || art == Ms4::Art::Marcato;
                         bool transition = false;
+                        bool slurToSlur = false;          // (Auto's bowed transition from a slur into the next: below)
                         if (ownJoin) {
                               if (join >= -std::max(0.0, a->legatoGapMs)) {
                                     if (tr != PerformanceTechnique::Transition::AUTO)
@@ -1928,6 +1929,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                  && slurAt(note, true) && slurAt(joinable, false)) {
                               t = autoTransition(true);           // (a slur right after a slur: no re-attack)
                               transition = t;
+                              slurToSlur = t && t->name == "bowed";
                               }
                         const int own = note->libraryVelocity();
                         // [slurs] plainPerformance (Choice::plain; abl.py's PLAIN, the owner's "C", 2026-10-17): velocity 64
@@ -1978,7 +1980,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               p.velocity = own > 0 ? own : (t->name == "bowed" && a->legatoVelocity > 0) ? a->legatoVelocity : t->velocity;
                               p.before = joinable;
                               p.endMs = ownJoin ? join : a->overlapMs > 0 ? a->overlapMs : 0;
-                              if (c.plain && !explicitTechnique)
+                              // ([slurs] plainBowed, branch celli-bowed, 2026-10-26: with plainPerformance a slur that starts
+                              // where the slur before ends keeps [slurs] transitions' bowed transition, its velocity (93;
+                              // Violas' legatoVelocity 100), as the owner set it on 2026-10-12 ("two slurs adjacent to each
+                              // other will use bowed"); before, plainPerformance's 64 made it SSO's fingered one. 0: 64)
+                              if (c.plain && !explicitTechnique && !(slurToSlur && own <= 0 && Playback::on("slurs/plainBowed", score)))
                                     p.velocity = plainVelocity;
                               return p;
                               }

@@ -1233,7 +1233,8 @@ void TestPerformanceTechnique::duplicateAutomation()
 //    note before ending 24 ms after them; G5, a slur's first note right after the slur before, a bowed transition (93)
 //    from F5 (F5 ending 24 ms after it, not cut); D6's accent keeps the accented attack (122), C6 ending 54 ms before
 //    it; E6 goes on from it by a transition (until 2026-10-12 a re-attack: the accent made D6's choice other than
-//    "legato"). 0: under a slur bowed (93), G5 a re-attack (106) with F5 ending 54 ms before it
+//    "legato"). 0: under a slur bowed (93), G5 a re-attack (106) with F5 ending 54 ms before it. With [slurs]
+//    plainPerformance: G5 bowed (93) by [slurs] plainBowed, else 64 (fingered)
 //---------------------------------------------------------
 
 void TestPerformanceTechnique::slurTransitions()
@@ -1262,6 +1263,22 @@ void TestPerformanceTechnique::slurTransitions()
                   }
             QVERIFY2(within(ms(k[86].on - k[84].off), 54), qPrintable(QString::number(ms(k[86].on - k[84].off))));
             delete s;
+            }
+      // [slurs] plainPerformance (every plain note at 64, SSO's fingered transition) with [slurs] plainBowed (branch
+      // celli-bowed, 2026-10-26; the owner: "this is not supposed to be fingered. it's supposed to be bowed"): 1 G5, the slur
+      // starting where the slur before ends, keeps the bowed transition (93) from F5, F5 ending 24 ms after it; 0 (as
+      // before) 64, fingered. The notes under a slur 64 either way
+      for (int bowed : { 1, 0 }) {
+            MasterScore* ps = score(false, "slurs.musicxml");
+            QVERIFY(ps);
+            ps->setMetaTag(Playback::metaTag, QString("slurs/plainPerformance=1;slurs/plainBowed=%1").arg(bowed));
+            std::map<int, Key> k = render(ps, lib);
+            QVERIFY(k.count(79));
+            QCOMPARE(k[79].velocity, bowed ? 93 : MidiRenderer::PLAIN_VELOCITY);
+            QVERIFY2(within(ms(k[77].off - k[79].on), 24), qPrintable(QString::number(ms(k[77].off - k[79].on))));
+            for (int p : { 74, 76, 77, 81, 83, 84 })
+                  QVERIFY2(k[p].velocity == MidiRenderer::PLAIN_VELOCITY, qPrintable(QString("key %1: %2").arg(p).arg(k[p].velocity)));
+            delete ps;
             }
       // slur-repeat.musicxml: [C5 C5 D5 E5], the same key struck again under a slur: not after silence, so spiccato (112),
       // not smooth (until 2026-10-12 smooth: smoothStart took "no transition" for silence)
