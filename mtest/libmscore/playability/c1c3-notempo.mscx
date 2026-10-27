@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<museScore version="3.02">
+<programVersion>3.6.2</programVersion>
+<Score>
+<Division>480</Division>
+<Part><Staff id="1"><StaffType group="pitched"><name>stdNormal</name></StaffType><defaultClef>G</defaultClef></Staff><trackName>Flute</trackName><Instrument><longName>Flute</longName><trackName>Flute</trackName><instrumentId>wind.flutes.flute</instrumentId><Channel><program value="73"/></Channel></Instrument></Part>
+<Staff id="1"><Measure><voice><Clef><concertClefType>G</concertClefType><transposingClefType>G</transposingClefType></Clef><KeySig><accidental>0</accidental></KeySig><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig><Dynamic><subtype>mf</subtype></Dynamic><Chord><durationType>whole</durationType><Note><pitch>72</pitch><tpc>14</tpc></Note></Chord></voice></Measure><Measure><voice><Tempo><tempo>2</tempo><followText>1</followText><text>Tempo I <sym>metNoteQuarterUp</sym> = 120</text></Tempo><Chord><durationType>whole</durationType><Note><pitch>72</pitch><tpc>14</tpc></Note></Chord></voice></Measure><Measure><voice><Rest><durationType>measure</durationType><duration>4/4</duration></Rest></voice></Measure><Measure><voice><Rest><durationType>measure</durationType><duration>4/4</duration></Rest></voice></Measure></Staff>
+</Score>
+</museScore>

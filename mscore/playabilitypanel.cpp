@@ -166,6 +166,8 @@ PlayabilityPanel::PlayabilityPanel(QWidget* parent)
       _off = new QLabel;
       _off->setWordWrap(true);
       vl->addWidget(_off);
+      _summary = new QLabel;
+      vl->addWidget(_summary);
 
       _stack = new QStackedWidget;
       _stack->setMinimumSize(0, 0);
@@ -242,6 +244,14 @@ PlayabilityPanel::PlayabilityPanel(QWidget* parent)
       sf.setPixelSize(11);
       _selected->setFont(sf);
       vl->addWidget(_selected);
+
+      // woodwind and brass register x dynamic notes (W2/B1): shown under every page
+      _windNotes = new QLabel;
+      _windNotes->setWordWrap(true);
+      _windNotes->setTextInteractionFlags(Qt::TextSelectableByMouse);
+      _windNotes->setFont(sf);
+      _windNotes->setVisible(false);
+      vl->addWidget(_windNotes);
 
       QHBoxLayout* buttons = new QHBoxLayout;
       _toggle = new QPushButton;
@@ -356,7 +366,7 @@ void PlayabilityPanel::setScore(Score* s)
             }
       rebuildChips();
       const ChordInfo info = _info;
-      _board->setLayout([info](double w, double h) { return Playability::layoutFingerboard(info, w, h); });
+      _board->setLayout([info](double w, double h) { return Playability::layoutDiagram(info, w, h); });
       updatePage();
       syncRow();
       }
@@ -367,20 +377,20 @@ void PlayabilityPanel::rebuildTable()
       for (int i = 0; i < int(_rows.size()); ++i) {
             const PlayabilityRow& r = _rows[i];
             // what the row is: red for something unplayable, dark yellow for a stretch or a limit
-            // that is over, the colours the noteheads get
+            // that is over, teal for a notation finding: the colours the noteheads get
             QPixmap px(10, 10);
             px.fill(Qt::transparent);
             {
             QPainter p(&px);
             p.setRenderHint(QPainter::Antialiasing);
             p.setPen(Qt::NoPen);
-            p.setBrush(r.error() ? Playability::IMPOSSIBLE_COLOR : Playability::OUT_OF_REACH_COLOR);
+            p.setBrush(r.error() ? Playability::IMPOSSIBLE_COLOR : r.notation() ? Playability::NOTATION_COLOR : Playability::OUT_OF_REACH_COLOR);
             p.drawRoundedRect(QRectF(0, 0, 10, 10), 2, 2);
             }
             QTableWidgetItem* mark = new QTableWidgetItem(QIcon(px), "");
             mark->setData(ROLE_ROW, i);
-            mark->setToolTip(r.error() ? tr("Cannot be played")
-                              : r.advisory() ? tr("Playable, but may sound unclear") : tr("Hard to play, or over a limit"));
+            mark->setToolTip(r.error() ? tr("Cannot be played") : r.notation() ? tr("Notation: how it is written, not whether it can be played")
+                                                                         : tr("Hard to play, or over a limit"));
             _table->setItem(i, 0, mark);
             QTableWidgetItem* bar = new QTableWidgetItem(QString::number(r.bar));
             _table->setItem(i, 1, bar);
@@ -392,6 +402,19 @@ void PlayabilityPanel::rebuildTable()
             _table->setItem(i, 3, reason);
             }
       fitReasonColumn();
+      // the counts, playability and notation apart
+      int red = 0, warn = 0, notation = 0;
+      for (const PlayabilityRow& r : _rows)
+            ++(r.error() ? red : r.notation() ? notation : warn);
+      QStringList parts;
+      if (red)
+            parts << tr("%n cannot be played", "", red);
+      if (warn)
+            parts << tr("%n hard to play", "", warn);
+      if (notation)
+            parts << tr("%n notation", "", notation);
+      _summary->setText(parts.join(QString::fromUtf8(" · ")));
+      _summary->setVisible(!parts.isEmpty());
       }
 
 // Bar and Staff as wide as their longest entry; Reason as wide as its longest reason, or the rest
@@ -460,7 +483,8 @@ void PlayabilityPanel::showGraph(int i)
 
 //---------------------------------------------------------
 //   updatePage
-//    while a playable stop or a natural harmonic is selected, its fingerboard replaces the list;
+//    while a playable stop or a natural harmonic is selected, its fingerboard replaces the list
+//    (a harp chord: the pedals; timpani: the drums; a keyboard chord: its hand's keyboard strip);
 //    while wind notes are, their register graph; "List" goes back to the list
 //---------------------------------------------------------
 
@@ -483,7 +507,16 @@ void PlayabilityPanel::updatePage()
       else
             _stack->setCurrentWidget(_table);
       _toggle->setVisible(board || graph);
-      _toggle->setText(_showList ? (board ? tr("Fingerboard") : tr("Graph")) : tr("List"));
+      QString boardName;
+      switch (_info.kind) {
+            case ChordInfo::Kind::HARP:     boardName = tr("Pedals"); break;
+            case ChordInfo::Kind::TIMPANI:  boardName = tr("Drums"); break;
+            case ChordInfo::Kind::KEYBOARD: boardName = tr("Keyboard"); break;
+            case ChordInfo::Kind::SLIDE:    boardName = tr("Slide"); break;
+            case ChordInfo::Kind::VALVES:   boardName = tr("Valves"); break;
+            default:                        boardName = tr("Fingerboard"); break;
+            }
+      _toggle->setText(_showList ? (board ? boardName : tr("Graph")) : tr("List"));
       updateSelectedLine();
       }
 
@@ -498,6 +531,8 @@ void PlayabilityPanel::updateSelectedLine()
       if (!_info.tuning.isEmpty())
             text += "\n" + tr("Tuning: %1").arg(_info.tuning);        // a scordatura in force
       _selected->setText(text);
+      _windNotes->setVisible(!_info.windNotes.isEmpty());
+      _windNotes->setText(_info.windNotes.join("\n"));
       }
 
 void PlayabilityPanel::toggleList()

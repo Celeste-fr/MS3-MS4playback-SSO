@@ -30,6 +30,7 @@
 namespace Ms {
 
 class Score;
+class Part;
 
 struct DrawItem {
       enum class Kind : char { LINE, RECT, CIRCLE, LABEL, META };
@@ -58,6 +59,24 @@ namespace Playability {
 // a playable stop or a natural harmonic (ChordInfo::kind); empty below the minimum size
 DisplayList layoutFingerboard(const ChordInfo& geom, double w, double h);
 bool namesShown(const DisplayList& items);
+// the diagram for the chord's kind: the fingerboard, the harp's pedals, the timpani, a keyboard hand,
+// a trombone's slide, valve brass fingerings
+DisplayList layoutDiagram(const ChordInfo& info, double w, double h);
+// H1: harpists' pedal diagram (K&G p. 277): a line for the middle notch, a mark per pedal in the
+// order D C B | E F G A, above the line up (flat), through it middle (natural), below down (sharp);
+// the pedals changed for the chord highlighted
+DisplayList layoutHarpPedals(const ChordInfo& info, double w, double h);
+// P1: the drums side by side, largest left: range, tuning at the chord, the next retune and its time
+DisplayList layoutTimpani(const ChordInfo& info, double w, double h);
+// K1: a keyboard strip with the hand's notes, its span, and the octave, 9th and 10th from its lowest note
+DisplayList layoutKeyboard(const ChordInfo& info, double w, double h);
+// B4-B6 (diagrams-spec-brass.md): a horizontal slide strip, positions I-VII (♯ positions a little
+// toward I), the note's positions per side: the standard filled, alternatives outlined, attachment
+// extras faint; the travel from the previous note's position as an arrow
+DisplayList layoutSlide(const ChordInfo& info, double w, double h);
+// valve buttons (3, 4 or 5; the horn's thumb T first), pressed ones filled: the standard fingering
+// large (the horn: its F and B♭ sides), the alternatives small in rows below, each with its labels
+DisplayList layoutValves(const ChordInfo& info, double w, double h);
 
 //---------------------------------------------------------
 //   W1: the register graph of the selected wind notes' whole bars, every voice, one instrument
@@ -112,6 +131,8 @@ WindModel windModel(Score* score, bool museScoreRange = true);
 DisplayList layoutWindGraph(const WindModel& model, int graph, double w, double h);
 // the plugin's id for a MusicXML instrument id and the part's name ("Clarinet in A"), or empty
 QString windResolve(const QString& instrumentId, const QString& name);
+// the wind id of the instrument in force at a tick: its own id and long name, else the part's
+QString windAt(const Part* part, int tick);
 
 }     // namespace Playability
 }     // namespace Ms

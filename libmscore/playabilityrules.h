@@ -26,6 +26,7 @@
 #include <vector>
 #include <QString>
 #include <QStringList>
+#include "playabilitywindsdyn.h"
 
 namespace Ms {
 namespace Playability {
@@ -188,14 +189,16 @@ QString inspectNatural(const StringInstrument& in, const std::vector<HarmonicNot
 // Askenfelt 1986 p. 1011, Flesch p. 64 ≈ 15 s), p 6 / 12 (Wagner p. 30), mf 3 / 6 (Russo), f 2.5 /
 // 4.5 (Forsyth p. 390, Schoonderwaldt 2009 p. 2715, Wagner p. 30), ff 1.5 / 3 (Sevsay, Russo).
 // Cello and bass × 0.6 derived from Forsyth p. 445 (bass bow changed every 3–4 s at p). Without any
-// dynamic a passage counts as mf (velocity 80).
+// dynamic a passage counts as mp (velocity 64): MS4's "natural" level, owner 2026-10-11.
 struct BowLimit {
       bool valid { false };
       double warn { 0 };
       double red { 0 };
       };
 BowLimit bowLimit(const StringInstrument& in, const QString& tier);
-constexpr int DEFAULT_VELOCITY = 80;
+// No dynamic in force = MS4's "natural" level (Ms4::NATURAL, 0.5 dB above mp), counted as mp:
+// MuseScore's mp velocity 64 (owner decision 2026-10-11). Every level lookup falls back to it.
+constexpr int NO_DYNAMIC_VELOCITY = 64;
 
 // Dynamics as MuseScore's velocities (verified on 3.6.2): pp 33, p 49, mf 80, f 96, ff 112 …; a
 // dynamic that changes after its attack settles at velocity + change (fp 49, sfp 65). Accents (sf,
@@ -207,6 +210,9 @@ bool isLoud(double velocity);
 // S11 tiers, split halfway between MuseScore's default velocities; mp goes with p
 QString dynamicTier(double velocity);
 int tierOrder(const QString& tier);
+// W2/B1 levels (SPEC-w2b1): soft = the pp tier (pp or softer), p/mp = the p tier, fff = velocity 126
+// or more, MuseScore's own fff velocity (owner 2026-10-10)
+bool windLevelMatches(WindLevel level, double velocity);
 
 // S10 slurred staccato, SECTIONS only (Wagner p. 35: four to six notes soft, three at f-ff;
 // Forsyth p. 344, Sevsay p. 13); soloists: no count limit.
@@ -215,15 +221,7 @@ constexpr int GROUP_STACCATO_LOUD = 3;
 // S10 jeté, SECTIONS only: more than 6 notes on one stroke is a warning on every bowed string
 // (Sevsay p. 18, Wagner p. 40; the owner's choice, 2026-09-14). A single player's jeté is timed.
 constexpr int JETE_MAX = 6;
-// S12 fast passages, double bass SECTIONS only: an ADVISORY (yellow), not a limit: notes of 94 ms or less each, a
-// run over 1.25 s. The owner's rule (2026-10-04), not the books': re-read against the scans
-// (https://claude.ai/artifact/KzdKk7UrH1HyJ2aFoYFR9h), Prout (1877 §40, 1897 §145) says players can play such passages
-// but they sound "confused and unclear", Jadassohn (Ex 193) "not always clear"; neither note length nor run length
-// nor register separates the passages the books criticize from those they accept (Forsyth Ex 282: 94 ms for 3 s or
-// more in the bottom register, accepted; Prout Ex 51: 129 ms, criticized). The numbers were candidate A of the page
-// "Checker Speed Sources" (Adler's 94 ms run, Kennan's 1.25 s); the owner kept them as the advisory's trigger
-constexpr double FAST_NOTE_SECONDS = 0.094;
-constexpr double FAST_RUN_SECONDS = 1.25;
+// S12 (fast double bass runs) dropped 2026-10-13: no source prints a speed or length (owner).
 
 // S13 fingered tremolo ("between notes"): fine on one string within span0 at that position or with
 // an open string; out of reach when both notes are stopped on two adjacent strings (Forsyth
@@ -280,6 +278,326 @@ int divState(const QString& text);
 // a text as a player reads it: a dynamic's SMuFL symbols become their letters, other tags go
 QString plainText(const QString& xmlText);
 
+//---------------------------------------------------------
+//   H1 harp pedals, H2 harp hands, P1 timpani, K1 keyboard span: the owner's approved spec
+//   (diagrams-spec-htk.md, 2026-10-08). Severity: what a book calls impossible is red, what it
+//   calls difficult / rare / to avoid is a warning.
+//---------------------------------------------------------
+
+// letters: 0 C, 1 D, 2 E, 3 F, 4 G, 5 A, 6 B
+struct HarpNote {
+      int letter { 0 };
+      int alter { 0 };              // -2 … +2
+      int octave { 0 };             // the octave of the letter: Cb4 is on the C string of octave 4
+      };
+HarpNote harpNote(int tpc, int pitch);
+// 47 strings, C1 to G7 (Adler p. 90, Ex 4-1): with the pedals Cb1 to G#7
+bool harpHasString(const HarpNote& n);
+int harpStringIndex(const HarpNote& n);              // 0 = the C1 string; one per letter and octave
+// the C and D of octave 1 have no pedal: retuned by hand (Adler p. 90)
+bool harpHandTuned(const HarpNote& n);
+// the bottom seven strings, C1 to B1 (the string layout, Adler p. 90 Ex 4-1; Blatter p. 256)
+bool harpLowestOctave(const HarpNote& n);
+// pedal order, left to right: D C B | E F G A; the left foot works D C B (Adler p. 91)
+extern const int HARP_PEDAL_ORDER[7];                // letters
+bool harpLeftFoot(int letter);
+// the key signature's alteration of a letter (fifths: + sharps, - flats)
+int keyAlter(int fifths, int letter);
+QString letterName(int letter, int alter);           // "Cb", "F#", "D"
+// the same pitch on a neighbouring letter, a single accidental at most (Cb = B, F = E#, F# = Gb);
+// empty for D, G and A, which have none (Kennan & Grantham p. 278), and for double accidentals
+QString harpEnharmonic(int letter, int alter);
+// H2: more notes in one hand at once is red (Blatter p. 256, K&G p. 281); a chord wider than a
+// 10th in one hand a warning: ten strings, both ends counted (Blatter p. 256, K&G p. 281)
+constexpr int HARP_HAND_NOTES = 4;
+constexpr int HARP_HAND_STRINGS = 10;
+
+//---------------------------------------------------------
+//   P1 timpani: drum ranges (Adler p. 445 Ex 12-24, K&G p. 227 Ex 13.1, Blatter p. 211 Ex 5.4),
+//   four drums, a fifth (the 20″ piccolo) only when the part names one; 15 s to retune a drum
+//   (Blatter p. 210)
+//---------------------------------------------------------
+
+struct TimpaniDrum {
+      const char* size;
+      int lo, hi;                   // sounding MIDI
+      double middle() const { return (lo + hi) / 2.0; }
+      };
+std::vector<TimpaniDrum> timpaniDrums(bool fifth);   // largest first
+constexpr double TIMPANI_RETUNE_SECONDS = 15.0;
+// a text naming a fifth drum: "5 drums", "five timpani", "piccolo timpano", "timpano piccolo"
+bool timpaniFifthDrum(const QString& text);
+
+struct TimpaniMoment {
+      double start { 0 };           // seconds
+      std::vector<int> pitches;     // distinct, ascending
+      std::vector<double> ends;     // per pitch: the end of its longest note, seconds
+      };
+struct TimpaniNotePlan {
+      enum class Problem : char { NONE, RANGE, TOO_MANY, NO_DRUM, RETUNE };
+      int pitch { 0 };
+      int drum { -1 };
+      Problem problem { Problem::NONE };
+      int from { -1 };              // the drum's pitch before a retune, else -1
+      double seconds { 0 };         // the time the retune has
+      };
+struct TimpaniPlan {
+      std::vector<std::vector<TimpaniNotePlan>> moments;
+      std::vector<std::vector<int>> tuning;          // per moment, per drum after it: pitch or -1
+      };
+// The planner (K&G p. 227, Blatter p. 211): a pitch goes to a free drum already tuned to it; else
+// to a free drum whose range holds it, choosing (1) one that leaves TIMPANI_RETUNE_SECONDS from its
+// last note to this one (a drum not yet used always does), (2) a drum not yet used, so a tuned
+// drum keeps its tuning, (3) the drum whose middle is nearest the pitch, (4) the larger drum.
+// Pitches with fewer drums to choose from are placed first. A drum is free when it has no note
+// at this moment and its last note has ended.
+TimpaniPlan planTimpani(const std::vector<TimpaniMoment>& moments, bool fifth);
+
+//---------------------------------------------------------
+//   K1 keyboard hand span (Blatter p. 244): more than a 9th a warning, more than a 10th red.
+//   Intervals bands are inclusive: a 9th is up to the major 9th (14 semitones), a 10th up to
+//   the major 10th (16). Measured in semitones: keys are as wide whatever their spelling.
+//---------------------------------------------------------
+
+constexpr int KEYBOARD_NINTH = 14;
+constexpr int KEYBOARD_TENTH = 16;
+constexpr int KEYBOARD_OCTAVE = 12;
+// a keyboard with a grand staff: piano, harpsichord, celesta, clavichord, organ, harmonium,
+// virginal (not accordions); harp, timpani by their MusicXML id, else the name
+bool isKeyboard(const QString& instrumentId, const QString& name);
+bool isHarp(const QString& instrumentId, const QString& name);
+bool isTimpani(const QString& instrumentId, const QString& name);
+
+//---------------------------------------------------------
+//   B4-B6 trombone slide, valve brass fingerings: the owner's approved spec (diagrams-spec-brass.md,
+//   2026-10-08). The lists come from Blatter's charts (playabilitybrass.h, generated): trombone
+//   pp. 469-470, valved brass pp. 463-464, horn pp. 461-462; where a chart covers a note its entries
+//   are the list, in printed order, the first the standard one. Outside a chart's range the list is
+//   derived: partials 2-16 (Adler p. 299, BR1) of each valve combination's or position's fundamental,
+//   valve steps 2 / 1 / 3 semitones (Adler p. 303, Blatter p. 459), the 4th valve a perfect 4th (the chart's +4 row
+//   bears it out); no 7th partial on valve brass (Blatter p. 459, BR8).
+//---------------------------------------------------------
+
+enum class Brass : char { NONE, TENOR_TROMBONE, BASS_TROMBONE, ALTO_TROMBONE, CONTRABASS_TROMBONE,
+      HORN, TRUMPET, EUPHONIUM, BARITONE, F_TUBA, EB_TUBA, CC_TUBA, BBB_TUBA };
+// by the MusicXML id (brass.trombone…, brass.french-horn, brass.trumpet…, brass.cornet…,
+// brass.flugelhorn, brass.euphonium, brass.baritone-horn, brass.tuba…), else the name; a tuba's key
+// from its name (generic: BB-flat, MuseScore's tuba range starting on that fundamental)
+Brass brassType(const QString& instrumentId, const QString& name);
+bool isTrombone(Brass b);
+QString brassName(Brass b);
+
+constexpr int VALVE_STEP[4] = { 2, 1, 3, 5 };       // valves 1-4, semitones; the 5th's is not known
+constexpr int BRASS_PARTIAL_LO = 2;                 // derived lists (BR1)
+constexpr int BRASS_PARTIAL_HI = 16;
+constexpr int BRASS_SPECIALIST = 9;                 // partials 9 and up (Blatter p. 458, BR4)
+bool outOfTunePartial(int n);                       // 7, 11, 13, 14 (Adler p. 299, BR2)
+// the harmonic n whose 12 log2 n lies within half a semitone of the interval; 0 none
+int partialOf(int semitones);
+// a raised (♯) slide position: the partial just under the note, by less than a semitone
+int raisedPartialOf(int semitones);
+
+// a text naming a trombone attachment ("F attachment", "F trigger", "with F", "E attachment"):
+// bit 1 F, bit 2 E
+int brassAttachments(const QString& text);
+constexpr int ATTACH_F = 1;
+constexpr int ATTACH_E = 2;
+// a text naming the valves ("4 valves", "five-valve"): their count, else 0
+int brassValveText(const QString& text);
+// the valves assumed without a text: trumpet group 3 (Adler p. 335; Sevsay p. 93), euphonium 4
+// (Adler p. 354; Sevsay p. 109), baritone 3 (Sevsay p. 109), tubas 4 (Sevsay p. 109; Kennan &
+// Grantham, tuba section), horn 3 and the thumb
+int brassValves(Brass b);
+// whether partials 9-16 are labelled "specialists": not on horn and tubas, whose players reach the
+// 16th partial (Blatter p. 458, BR4); unnamed there (trombones, euphonium, baritone): the usual 1-8
+bool brassSpecialists(Brass b);
+
+struct BrassEntry {
+      // a slide position
+      int side { 0 };               // 0 no attachment, 1 F, 2 E
+      int position { 0 };           // as Blatter numbers it, 1-7
+      bool raised { false };
+      // a fingering
+      int mask { 0 };               // bit 0 valve 1 … bit 4 valve 5; 0x20 the horn's thumb
+      int chartRow { -1 };          // 0 the 3-valve row, 1 +4, 2 +5; -1 derived or the horn
+      // both
+      int partial { 0 };            // 0 not known (5th valve)
+      bool pedal { false };         // the chart's pedal bracket, or partial 1
+      bool extra { false };         // an attachment the part doesn't name (tenor's F)
+      bool playable { true };       // with the instrument's valves
+      bool derived { false };
+      QString name;                 // "II", "♯IV", "F VI", "E 3"; "0", "1+3", "T2+3"
+      QStringList labels;
+      double slot() const;          // on the slide: 0 = I … 6 = VII, a raised position a little toward I
+      };
+
+// B6 lists: sounding pitch for trombones, tubas, euphonium and baritone; written for the trumpet
+// group (any key) and the horn (as in F)
+std::vector<BrassEntry> slideEntries(Brass b, int attachments, int pitch);
+std::vector<BrassEntry> valveEntries(Brass b, int valves, int pitch);
+std::vector<BrassEntry> brassEntries(Brass b, int attachments, int valves, int pitch);
+// the pitch the lists are read at
+int brassChartPitch(Brass b, int sounding, int transposeChromatic);
+QString slidePositionName(int side, int position, bool raised);
+QString fingeringName(int mask);
+// B5: a glissando between two sounding pitches: 0 fine, 1 only on the pedal partial (warning), 2 red;
+// why in *reason
+int slideGlissando(Brass b, int attachments, int from, int to, QString* reason);
+constexpr int GLISSANDO_MAX = 6;                    // a tritone (Adler p. 347, TB17)
+
+// G7 ledger lines (SPEC-g7g8, owner-approved 2026-10-11), counted from the note's displayed staff line on
+// 5-line pitched staves, the way Chord::addLedgerLines draws them
+// (the double-bass rule, 3 or more -> a clef change, is replaced by C1-CLEF-CHANGE below, SPEC-c1c3)
+constexpr int LEDGER_OTTAVA_MAX = 4;                // pitched instruments not in C1_MULTI_CLEF_IDS: more than 4, 8va / 15ma / 8vb (Adler p. 767)
+// G8: "div." / "div" / "divisi" as a whole word in a wind or brass staff's text (Adler p. 179)
+constexpr const char* WIND_DIVISI_WORDS = "\\b(div|divisi)\\b";
+
+//---------------------------------------------------------
+//   N1 uncancelled techniques, N2 shared-staff accidentals, T1-T4 (SPEC-n1n2t, owner-approved 2026-10-11).
+//   Word lists: case-insensitive regexes matched as whole words (the pass wraps each list in
+//   (?<!\w)(?:...)(?!\w)); only the spellings in research/n1n2-notes.md and t1-t4-notes.md.
+//---------------------------------------------------------
+
+// N1 "ord." family: cancels non vibrato, special pizzicati, col legno, sul ponticello, sul tasto
+// (Adler p. 33, p. 171; Kennan & Grantham p. 66; Sevsay p. 122; Blatter pp. 37-38)
+constexpr const char* N1_ORD_WORDS = "ord\\.?|ordinario|modo\\s+ordinario|normale|normal|naturale|natural|nat\\.|naturel|ordinaire|"
+                                     "natürlich|ordinary|gewöhnlich";
+// senza / non vibrato -> con vibrato, normale, ord. (Adler p. 171; Kennan & Grantham p. 66; Sevsay pp. 32, 122; Blatter p. 40)
+constexpr const char* N1_VIB_ON = "senza\\s+vibrato|non\\s+vibrato|senza\\s+vib\\.|non\\s+vib\\.|kein\\s+vib\\.|white\\s+tone";
+constexpr const char* N1_VIB_OFF = "con\\s+vibrato|con\\s+vib\\.|mit\\s+vib\\.|normal\\s+vibrato";
+// strings con sordino -> senza sordino (Kennan & Grantham p. 64; Sevsay p. 47; Blatter p. 36)
+constexpr const char* N1_STR_MUTE_ON = "con\\s+(?:la\\s+)?sord(?:ino|ina|\\.)|with\\s+(?:a\\s+)?mutes?|mutes?\\s+on|muted|"
+                                       "mit\\s+dämpfer|avec\\s+sourdine|put\\s+on\\s+mutes";
+constexpr const char* N1_STR_MUTE_OFF = "senza\\s+sord(?:ino|ina|\\.)|without\\s+(?:a\\s+)?mutes?|mutes?\\s+off|ohne\\s+dämpfer|"
+                                        "sans\\s+sourdine|sin\\s+sordina|take\\s+off\\s+mutes";
+// brass con sordino / mute -> senza sordino, open; trumpets: "gestopft" = muted, "offen" = mute off
+// (Adler pp. 322, 333-334; Kennan & Grantham p. 133; Blatter p. 143)
+constexpr const char* N1_BRASS_MUTE_ON = "con\\s+sord(?:ino|ina|\\.)|with\\s+mute|muted|mit\\s+dämpfer|gedämpft|"
+                                         "avec\\s+sourdine|sourdine";
+constexpr const char* N1_TRUMPET_MUTE_ON = "gestopft";
+constexpr const char* N1_BRASS_MUTE_OFF = "senza\\s+sord(?:ino|ina|\\.)|open|offen|ouvert|without\\s+mute|remove\\s+mute|"
+                                          "enlever\\s+la\\s+sourdine|ôter\\s+la\\s+sourdine|dämpfer\\s+weg|dämpfer\\s+absetzen|"
+                                          "togliere\\s+la\\s+sordina|via\\s+sordina|quitar\\s+la\\s+sordina|sans\\s+sourdine|"
+                                          "keine\\s+dämpfer|ohne\\s+dämpfer|sin\\s+sordina";
+// pizz. -> arco: the strings pass's pizzState (Adler p. 34; Kennan & Grantham p. 8; Sevsay p. 41; Blatter p. 27; Jacob p. 16)
+// special pizzicati -> arco, ord. (Kennan & Grantham p. 66: snap, nail, plectrum, pinch, buzz, guitar pizz.,
+// pizz. tremolo / glissando / behind the bridge)
+constexpr const char* N1_SPECIAL_PIZZ_ON = "(?:snap|bart[oó]k|nail|plectrum|pinch|buzz|guitar)\\s+pizz(?:\\.|icato)?|"
+                                           "pizz(?:\\.|icato)?\\s+(?:trem(?:olo|\\.)|gliss(?:ando|\\.)|behind\\s+the\\s+bridge)";
+constexpr const char* N1_SPECIAL_PIZZ_OFF = "arco";
+// col legno, sul ponticello, sul tasto -> ord. (Adler p. 33; Sevsay p. 41; Blatter pp. 37-38)
+constexpr const char* N1_COL_LEGNO_ON = "col\\s+legno(?:\\s+(?:battuto|tratto))?";
+constexpr const char* N1_PONT_ON = "sul\\s+pont(?:icello|\\.)";
+constexpr const char* N1_TASTO_ON = "sul\\s+tasto";
+// horn stopped (the word) -> open (Adler p. 323; Kennan & Grantham p. 134 names bouché too)
+constexpr const char* N1_HORN_STOP_ON = "stopped|gestopft|chiuso|bouché";
+constexpr const char* N1_HORN_STOP_OFF = "open|offen|aperto";
+
+// flutter-tongue (owner 2026-10-11, the tied case only): a flutter-tongued note (single-note tremolo strokes
+// under a flutter text) tied into a note without strokes needs ord. / nat. / norm. at the plain note
+// (Gould, Behind Bars p. 247; cancel words p. 495)
+constexpr const char* N1_FLUTTER_ON = "flz\\.?|flt\\.|frull\\.|flatterzunge|frullato|flutter[-\\s]?tongu(?:e|ed|ing)";
+constexpr const char* N1_FLUTTER_OFF = "ord\\.|nat\\.|norm\\.|ordinario|modo\\s+ordinario|normale|naturale";
+
+// T1 horn stopped notes: written pitch (as in F) below G♭3 needs a stopping mute (Kennan & Grantham p. 134)
+constexpr int STOPPED_HORN_LOW = 54;                // written G♭3: lower is marked
+constexpr const char* T1_STOPPING_MUTE_ON = "stopping\\s+mute|stopfdämpfer";
+constexpr const char* T1_STOPPING_MUTE_OFF = "open|offen|aperto|senza\\s+sord(?:ino|ina|\\.)";
+// T2 left-hand pizzicato: sections on open strings only (Kennan & Grantham p. 9); a soloist's run of
+// left-hand pizz. notes spans at most a perfect 4th (Sevsay p. 42; Adler p. 35 Ex 2-56)
+constexpr int LH_PIZZ_RUN_MAX = 5;                  // semitones, a perfect 4th
+// T4 flutter-tongue on double reeds (Adler p. 174; Kennan & Grantham p. 109; Sevsay p. 121; Blatter p. 80)
+constexpr const char* T4_FLUTTER_WORDS = "flz\\.?|flatterzunge|flatterz\\.|flutter[-\\s]?tongu(?:e|ed|ing)|frullato|fltg\\.?";
+
+//---------------------------------------------------------
+//   R1 mallet chords, R2 clarinet key choice, R3 string glissando, R4 vocal notation (SPEC-r1r4,
+//   owner-approved 2026-10-11; research/r1r2-notes.md, r3r4-notes.md). Every row "risky".
+//---------------------------------------------------------
+
+// R1 marimba, vibraphone, xylophone, glockenspiel (instrument ids; else the name when there is no id)
+constexpr const char* R1_MALLET_IDS = "^pitched-percussion\\.(marimba|vibraphone|xylophone|glockenspiel)(\\.|$)";
+constexpr const char* R1_MALLET_NAMES = "marimba|vibraphone|xylophone|glockenspiel";
+// R1-COUNT: more than 4 notes struck at one onset, one player, two mallets per hand
+// (Adler pp. 437-441; Blatter pp. 200, 204; Kennan & Grantham pp. 235-241; Sevsay pp. 147-153)
+constexpr int R1_MAX_NOTES = 4;
+constexpr int R1_MAX_PER_HAND = 2;
+// R1-SPAN: one hand's two mallets at most an octave apart (Kennan & Grantham p. 238; Sevsay p. 147)
+constexpr int R1_HAND_SPAN_MAX = 12;                // semitones; more is marked
+
+// R2 written key signature of a transposing part (Kennan & Grantham pp. 89-90, 117, 209; Gould p. 252)
+constexpr int R2_BB_TO_A_SHARPS = 5;                // B♭ clarinet: 5+ sharps -> A clarinet (K&G pp. 89-90)
+constexpr int R2_BB_TO_A_FLATS = 6;                 // B♭ clarinet: 6+ flats -> A clarinet (K&G pp. 117, 209)
+constexpr int R2_A_TO_BB = 6;                       // A clarinet: 6+ sharps or flats -> B♭ clarinet (K&G pp. 90, 117, 209)
+constexpr int R2_RESPELL_7 = 7;                     // 7 sharps / flats -> the 5-accidental key (Gould p. 252; K&G pp. 90, 117)
+constexpr int R2_RESPELL_6 = 6;                     // 6 on the wrong side for the instrument's key (Gould p. 252)
+
+// R3 string indications (Gould p. 394; Adler p. 54): "sul" + a note letter, or a roman numeral I-IV
+// leading the text ("IV", "II sempre"). The research notes list no German or Italian string names.
+constexpr const char* R3_STRING_LETTER = "\\bsul(?:la)?\\s+(?:the\\s+)?([A-G])(?![A-Za-z])";
+constexpr const char* R3_STRING_ROMAN = "^(IV|I{1,3})(?![A-Za-z])";
+
+// R4 voice staves: MusicXML ids voice.* (not the kazoo); tenor: voice.tenor (Gould p. 433: treble 8vb)
+constexpr const char* R4_VOICE_IDS = "^voice\\.(?!kazoo)";
+constexpr const char* R4_VOICE_NAMES = "\\b(voice|choir|chorus|soprano|mezzo|alto|contralto|countertenor|tenor|baritone|bass)\\b";
+constexpr const char* R4_TENOR_ID = "voice.tenor";
+// R5 tessitura (Blatter p. 380; central pitches Blatter pp. 314-319, sounding, as printed): most of the sung time within a
+// perfect 5th either side of the voice's central pitch; under R5_MIN_SHARE the notes outside are marked
+constexpr int R5_BAND = 7;                          // semitones either side, both ends inside
+constexpr double R5_MIN_SHARE = 0.75;               // Blatter's 75-80 %, the lower end
+struct VoiceCentre { const char* id; int pitch; int tpc; };        // the band's ends: tpc -1 / +1 (a 5th down / up)
+constexpr VoiceCentre R5_CENTRES[] = {
+      { "voice.soprano", 70, 12 }, { "voice.child", 70, 12 }, { "voice.mezzo-soprano", 69, 17 },
+      { "voice.alto", 67, 15 }, { "voice.countertenor", 67, 15 }, { "voice.tenor", 59, 19 },
+      { "voice.baritone", 53, 13 }, { "voice.bass", 50, 16 } };
+
+
+//---------------------------------------------------------
+//   C1 clefs, C2 tempo marking, C3 slur over repeated notes (SPEC-c1c3, owner-approved 2026-10-13;
+//   research/c1c3-notes.md). Every row "risky"; the category of each kind is set in NOTATION_KINDS.
+//---------------------------------------------------------
+
+// C1-CLEF-SET: instruments with one clef (Gould pp. 253, 260, 262, 276, 279; Kennan & Grantham p. 22).
+// Treble = treble, treble 8vb / 8va / 15mb / 15ma; bass = bass and its octave clefs. Not marked, the books
+// conflicting: tenor trombone treble, bass trombone tenor / treble, bass clarinet bass clef.
+constexpr const char* C1_TREBLE_ONLY_IDS =          // flute, piccolo, oboe, clarinets (E♭, B♭, A), saxophones, trumpets
+      "^(wind\\.flutes\\.flute|wind\\.flutes\\.flute\\.piccolo|wind\\.reed\\.oboe|"
+      "wind\\.reed\\.clarinet(\\.(eflat|bflat|a))?|wind\\.reed\\.saxophone(\\..*)?|"
+      "brass\\.trumpet(\\.(bflat|c|d|piccolo|pocket))?)$";
+constexpr const char* C1_BASS_ONLY_IDS = "^brass\\.tuba(\\.bass)?$";                    // tuba (Gould p. 262)
+constexpr const char* C1_NO_ALTO_IDS = "^strings\\.cello$";                             // cello: never alto (Kennan & Grantham p. 22)
+constexpr const char* C1_NO_BASS_IDS = "^pitched-percussion\\.(glockenspiel|vibraphone)$";  // always treble (Gould p. 276)
+// unpitched percussion (a drumset instrument): no treble or bass clef (Gould p. 279)
+
+// C1-CLEF-CHANGE: instruments that read more than one clef (Sevsay p. 6; Adler p. 84; Gould pp. 7, 393)
+constexpr const char* C1_MULTI_CLEF_IDS =
+      "^(strings\\.(viola|cello|contrabass)|wind\\.reed\\.(bassoon|contrabassoon)|brass\\.french-horn|"
+      "brass\\.trombone(\\.(tenor|alto|bass|contrabass))?|brass\\.(euphonium|baritone-horn)|pluck\\.harp|"
+      "keyboard\\.(piano(\\..*)?|celesta|harpsichord|organ(\\..*)?|clavichord)|pitched-percussion\\.marimba(\\.bass)?)$";
+// of those, the ones whose outermost clefs are treble (above) and bass (below): no clef lies beyond them, so a note
+// above the treble clef or below the bass clef is not a clef-change case
+constexpr const char* C1_OUTER_CLEF_IDS =
+      "^(pluck\\.harp|keyboard\\.(piano(\\..*)?|celesta|harpsichord|organ(\\..*)?|clavichord)|pitched-percussion\\.marimba(\\.bass)?)$";
+constexpr int C1_CLEF_LEDGER_MIN = 3;               // a note needing 3 or more ledger lines (Sevsay p. 6; Adler p. 84)
+constexpr int C1_CLEF_RUN_MIN = 3;                  // 3 such notes in a row; 1 or 2 are not marked (Sevsay p. 6)
+// C1-HORN-BASS: a horn note in bass clef written above G3 (Blatter p. 152)
+constexpr int C1_HORN_BASS_MAX = 55;                // written MIDI pitch, G3; higher is marked
+
+// C2-TEMPO-I: a return to the first tempo, confirmed with its metronome mark the first time (Gould p. 184)
+constexpr const char* C2_TEMPO_I_WORDS = "tempo\\s+(i|1|primo)";
+
+// C3-SLUR-REPEAT: a slurred repeated pitch needs an articulation (Gould pp. 245, 401, 403; Kennan & Grantham p. 108).
+// Articulations (SMuFL names) that rearticulate:
+constexpr const char* C3_ARTIC_NAMES = "^artic(Staccato|Staccatissimo|Tenuto|Accent|Marcato)";
+// the written-instruction alternative (Gould p. 245): a "legato" text at or after the slur's start
+constexpr const char* C3_LEGATO_WORDS = "legato";
+
+// The two categories (PLAYABILITY.md): every row kind listed here is a NOTATION finding (its own
+// colour and count); every other kind is playability. Re-tag a kind by moving it in or out of this list.
+constexpr const char* NOTATION_KINDS[] = {
+      "ledger", "clef", "divisi", "firstDynamic", "technique", "accidental", "clarinetKey",
+      "stringName", "harmonicString", "harmonicLine", "vocal", "tempo", "slurRepeat" };
+
 }     // namespace Playability
 }     // namespace Ms
+
 #endif

@@ -29,7 +29,8 @@ def text(t):
 
 
 head = ('<Clef><concertClefType>G</concertClefType><transposingClefType>G</transposingClefType></Clef>'
-        '<KeySig><accidental>0</accidental></KeySig><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>')
+        '<KeySig><accidental>0</accidental></KeySig><TimeSig><sigN>4</sigN><sigD>4</sigD></TimeSig>'
+        '<Dynamic><subtype>mf</subtype></Dynamic>')
 bars = [
     head + chord('half', ('Eb', 75)) + chord('half', ('E', 76)),
     text('scord. F D A E') + chord('quarter', ('F', 53)) + chord('quarter', ('F', 53), ('A', 69))

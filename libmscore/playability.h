@@ -38,7 +38,8 @@ enum class PlayMark : char {
       NONE,
       OPEN,             // played on an open string
       OUT_OF_REACH,     // a stretch, or risky: dark yellow, as MuseScore's "out of amateur range"
-      IMPOSSIBLE        // red, as MuseScore's "out of professional range"
+      IMPOSSIBLE,       // red, as MuseScore's "out of professional range"
+      NOTATION          // a notation finding (NOTATION_KINDS): teal; a playability mark wins over it
       };
 
 struct PlayabilityRow {
@@ -50,11 +51,11 @@ struct PlayabilityRow {
       QString staff;                // the part's long name
       QString staffShort;           // its short name, else an abbreviation of the long name
       QString kind;                 // "stop", "harmonic"
-      QString verdict;              // "impossible", "outOfReach", "risky", "advisory" (may sound unclear; S12)
+      QString verdict;              // "impossible", "outOfReach", "risky"; "notation" for a NOTATION_KINDS kind
       QString reason;
       QString notes;
       bool error() const { return verdict == "impossible"; }
-      bool advisory() const { return verdict == "advisory"; }
+      bool notation() const { return verdict == "notation"; }
       };
 
 struct PlayabilityResult {
@@ -64,6 +65,7 @@ struct PlayabilityResult {
       int playable { 0 };
       int outOfReach { 0 };
       int impossible { 0 };
+      int notation { 0 };           // notation rows (counted apart from outOfReach)
       int div { 0 };
       int harmonics { 0 };
       };
@@ -104,8 +106,65 @@ struct HarmonicNoteInfo {
       std::vector<HarmonicOptionInfo> options;
       };
 
+// H1: the harp's pedals at a chord, in pedal order D C B | E F G A
+struct HarpPedalInfo {
+      int letter[7] {};             // the letter of each pedal (0 C … 6 B)
+      int setting[7] {};            // -1 up (flat), 0 middle (natural), 1 down (sharp)
+      bool changed[7] {};           // changed just before the chord
+      };
+
+// P1: one drum at a chord
+struct TimpaniDrumInfo {
+      QString size;                 // "32″"
+      int lo { 0 }, hi { 0 };
+      QString range;                // "D2–A2"
+      int pitch { -1 };             // its tuning after the chord, -1 none yet
+      QString name;
+      bool playing { false };       // struck at the chord
+      bool retunedHere { false };   // retuned for the chord
+      bool hasNext { false };       // its next retune
+      QString nextFrom, nextTo;
+      double nextSeconds { 0 };
+      int nextBar { 0 };
+      bool nextShort { false };     // under the 15 s
+      };
+
+// K1: one hand at a chord
+struct KeyboardHandInfo {
+      bool right { true };
+      std::vector<int> pitches;     // ascending
+      QStringList names;
+      bool arpeggio { false };
+      };
+
+// B4-B6: one slide position or valve fingering of a brass note (diagrams-spec-brass.md)
+struct BrassEntryInfo {
+      QString name;                 // "II", "♯IV", "F VI", "E 3"; "1+3", "T2"
+      int side { 0 };               // trombone: 0 no attachment, 1 F, 2 E
+      int position { 0 };           // trombone: the chart's position number on its side
+      bool raised { false };        // a ♯ (shortened) position
+      double slot { 0 };            // trombone: 0 = I … 6 = VII on the slide
+      int mask { 0 };               // valves: bit 0 valve 1 … bit 4 valve 5, 0x20 the horn's thumb
+      bool standard { false };      // the chart's first choice (the horn: on each side)
+      bool extra { false };         // an attachment the part does not name, shown as an extra
+      bool playable { true };       // the instrument has the valves
+      QStringList labels;           // "partial 4", "out of tune", "specialists", …
+      };
+
+struct BrassInfo {
+      QString instrument;
+      QString note;                 // the note, as the chart reads it (written for transposing brass)
+      int valves { 0 };             // 3, 4 or 5; 0 a trombone
+      bool horn { false };          // F and B♭ sides, thumb T
+      std::vector<BrassEntryInfo> entries;
+      bool hasPrevious { false };   // trombone: the previous note's standard position
+      double previousSlot { 0 };
+      QString previousName;
+      bool noTrueLegato { false };  // B4: slurred, the slide moves with the pitch
+      };
+
 struct ChordInfo {
-      enum class Kind : char { NONE, STOP, HARMONIC };
+      enum class Kind : char { NONE, STOP, HARMONIC, HARP, TIMPANI, KEYBOARD, SLIDE, VALVES };
       QString text;                 // the Selected line, without "Selected: "
       bool bowedString { false };   // the chord is on a bowed string instrument
       Kind kind { Kind::NONE };     // what the fingerboard shows
@@ -120,6 +179,13 @@ struct ChordInfo {
       double reach { 0 };
       std::vector<HarmonicNoteInfo> harmonics;      // HARMONIC
       bool atNode { false };
+      HarpPedalInfo harp;                           // HARP
+      std::vector<TimpaniDrumInfo> drums;           // TIMPANI
+      KeyboardHandInfo hand;                        // KEYBOARD
+      BrassInfo brass;                              // SLIDE, VALVES
+      QStringList windNotes;        // woodwinds / brass: "<note>: <W2/B1 rule text> (<source>)", every rule it falls under;
+                                    // then W5 "<main> tr <upper>" / "<a> ↔ <b>: <rule text> (<source>)"
+                                    // then B3 "<entering notes>" / "<from> → <to>: <rule text> (<source>)"
       };
 
 namespace Playability {
@@ -131,6 +197,8 @@ extern QColor openStringColor;        // the owner's choice, 2026-09-27: slate g
 
 const QColor IMPOSSIBLE_COLOR = QColor(Qt::red);
 const QColor OUT_OF_REACH_COLOR = QColor(Qt::darkYellow);
+const QColor NOTATION_COLOR = QColor(0x00, 0x97, 0xa7);          // teal #0097a7: not red, dark yellow, the open-string grey or a voice colour
+bool isNotationKind(const QString& kind);
 
 // the whole pass; always runs (tests call it directly), whatever `enabled` says
 PlayabilityResult analyse(Score* score);
