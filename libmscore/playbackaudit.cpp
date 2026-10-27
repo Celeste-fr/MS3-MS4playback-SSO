@@ -444,6 +444,10 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   const double shift = p->trace->patch->plainShiftMs;
                   p->hasOnset = std::isfinite(shift);
                   p->onset = p->hasOnset ? shift : 0.0;
+                  // ([slurs] plainAuto: a slur's first note after silence on the smooth attack, heard its own onset after
+                  // its note-on; it went early by that less the shift)
+                  if (p->hasOnset && p->trace->attack && !p->trace->from)
+                        p->onset = onsetOf(p, p->pitch);
                   p->hasArrival = p->hasOnset;
                   p->arrival = sent(p) + p->onset - ms(p->written);
                   }

@@ -1748,6 +1748,33 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return false;
                         };
 
+                  // a note of the chord just before on its track, on the same patch, ending where this note starts, on any
+                  // voice lane ([slurs] plainAuto: not after silence, so no smooth attack, though a chord's voices may keep
+                  // it from a transition)
+                  auto touchesPatch = [&](const Note* note, const SoundLib::Choice& c) {
+                        Chord* ch = note->chord();
+                        if (ch->isGrace())
+                              return false;
+                        ChordRest* pcr = prevChordRest(ch, true);
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick())
+                              return false;
+                        const RepeatList& repeats = score->repeatList();
+                        auto rs = repeats.findRepeatSegmentFromUTick(ch->tick().ticks() + tickOffset);
+                        if (rs == repeats.end() || pcr->tick().ticks() < (*rs)->tick)
+                              return false;
+                        for (const Note* pn : toChord(pcr)->notes()) {
+                              if (!pn->play())
+                                    continue;
+                              const Note* first = pn->firstTiedNote();
+                              const Chord* fc = first->chord();
+                              const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
+                              const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
+                              if (pc && pc.patch == c.patch)
+                                    return true;
+                              }
+                        return false;
+                        };
+
                   // a note's key and tuning as sent ([slurs] microtoneBends 1 may move a microtonal note to another key,
                   // microtoneSpelling): the key without a key shift, the tuning its lane's (cents from that key)
                   auto playedKey = [&](const Note* n) {
@@ -1864,7 +1891,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                            int velocity = -1; const Note* before = nullptr; double endMs = 0;
                                            const SoundLib::Articulation::Technique* timedAttack = nullptr;
                                            bool shortenOnly = false;
-                                           bool accentAttack = false; };  // [slurs] plainAccents 2 / 3: the accented attack
+                                           bool accentAttack = false;     // [slurs] plainAccents 2 / 3: the accented attack
+                                           // [slurs] plainAuto: a plain note after silence on its patch on the smooth attack
+                                           // (its measured onset, less the patch's plainShift, its own early start)
+                                           const SoundLib::Articulation::Technique* smoothStart = nullptr; };
                   // a staccato as written (staccato, staccatissimo; the first of its tie chain's): [slurs] plainPerformance
                   // plays it as a spiccato attack
                   auto staccatoNote = [&](const Note* n) {
@@ -1942,6 +1972,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const bool plain = c.plain && !ownJoin;
                         const bool explicitTechnique = tr != PerformanceTechnique::Transition::AUTO || at != PerformanceTechnique::Attack::AUTO;
                         const int plainVelocity = own > 0 ? own : PLAIN_VELOCITY;
+                        // [slurs] plainAuto (the owner, 2026-10-26: "smooth after a rest, bowed on each new bow, fingered inside
+                        // a slur, spiccato for staccatos"): on Auto without a velocity of its own, a note after silence on its
+                        // patch smooth, a note touching the note before outside a slur going on bowed (a slur after a slur:
+                        // the transition branch's slurToSlur), inside a slur fingered (64); staccatos, accents and a key
+                        // struck again as plain plays them
+                        const bool plainAuto = c.plain && Playback::on("slurs/plainAuto", score);
                         // [slurs] plainAccents 2 / 3: an accent or marcato (as `accent` above) on Auto, without a velocity of its
                         // own, that plays an attack (a staccato's, or a note outside a slur) takes the accented attack instead
                         // of 64, as [slurs] performance gives it; a note touching the one before on the patch is re-attacked
@@ -1980,11 +2016,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               p.velocity = own > 0 ? own : (t->name == "bowed" && a->legatoVelocity > 0) ? a->legatoVelocity : t->velocity;
                               p.before = joinable;
                               p.endMs = ownJoin ? join : a->overlapMs > 0 ? a->overlapMs : 0;
-                              // ([slurs] plainBowed, branch celli-bowed, 2026-10-26: with plainPerformance a slur that starts
+                              // ([slurs] plainAuto 1, branch celli-bowed, 2026-10-26: with plainPerformance a slur that starts
                               // where the slur before ends keeps [slurs] transitions' bowed transition, its velocity (93;
                               // Violas' legatoVelocity 100), as the owner set it on 2026-10-12 ("two slurs adjacent to each
                               // other will use bowed"); before, plainPerformance's 64 made it SSO's fingered one. 0: 64)
-                              if (c.plain && !explicitTechnique && !(slurToSlur && own <= 0 && Playback::on("slurs/plainBowed", score)))
+                              if (c.plain && !explicitTechnique && !(slurToSlur && own <= 0 && plainAuto))
                                     p.velocity = plainVelocity;
                               return p;
                               }
@@ -2003,6 +2039,25 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     p.velocity = own > 0 ? own : t->velocity;
                                     if (libPlainTiming && t->hasOnset())
                                           p.timedAttack = t;
+                                    }
+                              else if (plainAuto && own <= 0 && !explicitTechnique && !accent && !joinable && !touchesPatch(note, c)
+                                       && (t = a->attack("smooth"))) {
+                                    // ([slurs] plainAuto 1, 2026-10-26, the owner: "slurs should have smooth start when there's
+                                    // nothing preceding it", then every note after silence on its patch, slurred or not: the
+                                    // smooth attack instead of 64; early by its own onset less the patch's plainShift:
+                                    // smoothStart below, collectNote; with [slurs] plainTiming by its own onset)
+                                    p.velocity = t->velocity;
+                                    p.smoothStart = t;
+                                    if (libPlainTiming && t->hasOnset())
+                                          p.timedAttack = t;
+                                    }
+                              else if (plainAuto && own <= 0 && !explicitTechnique && !accent && joinable
+                                       && (t = a->transition("bowed"))) {
+                                    // ([slurs] plainAuto 1: a new bow stroke, a note touching the note before on its patch
+                                    // outside a slur going on (détaché, a slur's first note after an unslurred one, the note
+                                    // after a slur), the bowed transition instead of 64, SSO's fingered: as a slur after a
+                                    // slur, above)
+                                    p.velocity = a->legatoVelocity > 0 ? a->legatoVelocity : t->velocity;
                                     }
                               else
                                     p.velocity = plainVelocity;
@@ -2236,7 +2291,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           t.velocity = libNote.velocity;
                                           t.performance = perf.from ? LibPerformance::TRANSITION : LibPerformance::ATTACK;
                                           t.joinMs = perf.before ? int(std::lround(perf.endMs)) : PerformanceTechnique::JOIN_AUTO;
-                                          t.attack = perf.timedAttack;
+                                          t.attack = perf.timedAttack ? perf.timedAttack : perf.smoothStart;
                                           }
                                     }
                               // [slurs] speedFromWritten (the owner approved, 2026-10-17): a legato note-on (a transition from the
@@ -2290,10 +2345,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           libAttackShiftMs[note] = ap->plainShiftMs;
                                     if (!from && !note->tieBack()) {
                                           double onsetMs = libChoice.plain && std::isfinite(ap->plainAttackMs) ? ap->plainAttackMs : 0.0;
-                                          if (!libChoice.plain || perf.timedAttack)
+                                          const SoundLib::Articulation::Technique* attackT = perf.timedAttack ? perf.timedAttack : perf.smoothStart;
+                                          if (!libChoice.plain || attackT)
                                                 for (const Note* n : note->chord()->notes())
                                                       if (n->play())
-                                                            onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(perf.timedAttack, n->ppitch(), libOnsetByPitch));
+                                                            onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(attackT, n->ppitch(), libOnsetByPitch));
                                           if (onsetMs > 0)
                                                 libAttackOnset[note] = onsetMs;
                                           }
@@ -2400,6 +2456,35 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                 config.libWrittenOn = &libShiftWritten;
                                                 libShiftOn = libShiftWritten = -1;
                                                 }
+                                          }
+                                    }
+                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && libChoice.plain && !libPlainTiming && perf.on
+                                       && perf.smoothStart && perf.smoothStart->hasOnset() && !note->tieBack()) {
+                                    // [slurs] plainAuto: a plain note after silence on its patch on the smooth attack, whose
+                                    // measured onset (<Articulation attackOnset>: SSO's 91-236 ms) is longer than the patch's
+                                    // plainShift, the whole patch's early start (TrackDelays): early by the difference, times
+                                    // heldNotes/early %, when positive, so that it is heard on the beat as the plain notes are;
+                                    // capped as an attack (the note before on its patch keeps keepMs; the start lead at the
+                                    // score's start), as microtoneBends 3's midEarly. Written timing (Live's clips): as written,
+                                    // LiveTiming puts it back at playback
+                                    const SoundLib::LibInstrument* pi = libPatches[libChoice.patch];
+                                    double onsetMs = 0;
+                                    for (const Note* n : note->chord()->notes())
+                                          if (n->play())
+                                                onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset", pi->name, libChoice.articulation->name,
+                                                                   n->ppitch(), libChoice.articulation->startOnset(perf.smoothStart, n->ppitch(), libOnsetByPitch)));
+                                    const double shiftMs = std::isfinite(pi->plainShiftMs) ? std::max(0.0, pi->plainShiftMs) : 0.0;
+                                    const double earlyMs = onsetMs * libOnsetEarly / 100.0 - shiftMs;
+                                    const int earliest = earlyMs > 0 ? onsetEarliest(note, libChoice, 0.0) : -1;
+                                    if (libTrace && !libTrace->empty() && libTrace->back().note == note)
+                                          libTrace->back().earlyMeantMs = std::max(0.0, earlyMs);
+                                    if (earliest >= 0 && earlyMs > 0) {
+                                          config.libEarly = earlyMs / 1000.0;
+                                          config.libEarliest = earliest;
+                                          config.libLost = &libStartLost;
+                                          config.libOn = &libShiftOn;
+                                          config.libWrittenOn = &libShiftWritten;
+                                          libShiftOn = libShiftWritten = -1;
                                           }
                                     }
                               else if (offset == 0 && libOnsetEarly > 0 && libChoice && libChoice.plain && libPlainTiming && perf.on

@@ -1234,7 +1234,8 @@ void TestPerformanceTechnique::duplicateAutomation()
 //    from F5 (F5 ending 24 ms after it, not cut); D6's accent keeps the accented attack (122), C6 ending 54 ms before
 //    it; E6 goes on from it by a transition (until 2026-10-12 a re-attack: the accent made D6's choice other than
 //    "legato"). 0: under a slur bowed (93), G5 a re-attack (106) with F5 ending 54 ms before it. With [slurs]
-//    plainPerformance: G5 bowed (93) by [slurs] plainBowed, else 64 (fingered)
+//    plainPerformance: by [slurs] plainAuto G5 bowed (93) and C5, after silence, smooth (5), early by its onset less the
+//    patch's plainShift; without the slurs every touching note bowed; plainAuto 0 all 64
 //---------------------------------------------------------
 
 void TestPerformanceTechnique::slurTransitions()
@@ -1264,20 +1265,63 @@ void TestPerformanceTechnique::slurTransitions()
             QVERIFY2(within(ms(k[86].on - k[84].off), 54), qPrintable(QString::number(ms(k[86].on - k[84].off))));
             delete s;
             }
-      // [slurs] plainPerformance (every plain note at 64, SSO's fingered transition) with [slurs] plainBowed (branch
-      // celli-bowed, 2026-10-26; the owner: "this is not supposed to be fingered. it's supposed to be bowed"): 1 G5, the slur
-      // starting where the slur before ends, keeps the bowed transition (93) from F5, F5 ending 24 ms after it; 0 (as
-      // before) 64, fingered. The notes under a slur 64 either way
-      for (int bowed : { 1, 0 }) {
+      // [slurs] plainPerformance (every plain note at 64, SSO's fingered transition) with [slurs] plainAuto (branch
+      // celli-bowed, 2026-10-26; the owner: "this is not supposed to be fingered. it's supposed to be bowed", "slurs should
+      // have smooth start when there's nothing preceding it"): 1 G5, the slur starting where the slur before ends, keeps the
+      // bowed transition (93) from F5, F5 ending 24 ms after it, and C5, the first note after silence, the smooth
+      // attack (5), early by Violins 1 - Performance's smooth onset less its plainShift (the start lead moves the rest
+      // later); 0 (as plainPerformance alone) both 64 at their written start. The notes under a slur 64 either way
+      const SoundLib::LibInstrument* v1 = nullptr;
+      const SoundLib::Articulation* legato = nullptr;
+      for (const auto* list : { &lib->instruments, &lib->otherPatches })
+            for (const auto& i : *list)
+                  for (const auto& a : i.articulations)
+                        if (i.name == "Violins 1 - Performance" && !a.attacks.empty()) {
+                              v1 = &i;
+                              legato = &a;
+                              }
+      QVERIFY(v1 && std::isfinite(v1->plainShiftMs));
+      QVERIFY(legato && legato->attack("smooth"));
+      const double smoothEarly = legato->startOnset(legato->attack("smooth"), 72, false) - v1->plainShiftMs;
+      QVERIFY2(smoothEarly > 20, qPrintable(QString::number(smoothEarly)));   // (34.4 ms: 100.2 - 65.8)
+      for (int plainAuto : { 1, 0 }) {
             MasterScore* ps = score(false, "slurs.musicxml");
             QVERIFY(ps);
-            ps->setMetaTag(Playback::metaTag, QString("slurs/plainPerformance=1;slurs/plainBowed=%1").arg(bowed));
+            ps->setMetaTag(Playback::metaTag, QString("slurs/plainPerformance=1;slurs/plainAuto=%1").arg(plainAuto));
             std::map<int, Key> k = render(ps, lib);
-            QVERIFY(k.count(79));
-            QCOMPARE(k[79].velocity, bowed ? 93 : MidiRenderer::PLAIN_VELOCITY);
+            QVERIFY(k.count(72) && k.count(74) && k.count(79));
+            QCOMPARE(k[79].velocity, plainAuto ? 93 : MidiRenderer::PLAIN_VELOCITY);
             QVERIFY2(within(ms(k[77].off - k[79].on), 24), qPrintable(QString::number(ms(k[77].off - k[79].on))));
+            QCOMPARE(k[72].velocity, plainAuto ? 5 : MidiRenderer::PLAIN_VELOCITY);
+            const double gap = ms(k[74].on - k[72].on);
+            QVERIFY2(within(gap, 500 + (plainAuto ? smoothEarly : 0.0)), qPrintable(QString::number(gap)));
             for (int p : { 74, 76, 77, 81, 83, 84 })
                   QVERIFY2(k[p].velocity == MidiRenderer::PLAIN_VELOCITY, qPrintable(QString("key %1: %2").arg(p).arg(k[p].velocity)));
+            delete ps;
+            }
+      // without the slurs (détaché): C5 after silence smooth and early as above, every other note touching the one before a
+      // new bow stroke, bowed (93); plainAuto 0 all 64
+      for (int plainAuto : { 1, 0 }) {
+            MasterScore* ps = score(false, "slurs.musicxml");
+            QVERIFY(ps);
+            std::vector<Spanner*> slurs;
+            for (auto i : ps->spanner())
+                  if (i.second->isSlur())
+                        slurs.push_back(i.second);
+            ps->startCmd();
+            for (Spanner* sp : slurs)
+                  ps->undoRemoveElement(sp);
+            ps->endCmd();
+            ps->setMetaTag(Playback::metaTag, QString("slurs/plainPerformance=1;slurs/plainAuto=%1").arg(plainAuto));
+            std::map<int, Key> k = render(ps, lib);
+            QVERIFY(k.count(72) && k.count(74));
+            QCOMPARE(k[72].velocity, plainAuto ? 5 : MidiRenderer::PLAIN_VELOCITY);
+            const double gap = ms(k[74].on - k[72].on);
+            QVERIFY2(within(gap, 500 + (plainAuto ? smoothEarly : 0.0)), qPrintable(QString::number(gap)));
+            const int bowed = legato->legatoVelocity > 0 ? legato->legatoVelocity : legato->transition("bowed")->velocity;
+            for (int p : { 74, 76, 77, 79, 81, 83, 84, 88 })
+                  QVERIFY2(k[p].velocity == (plainAuto ? bowed : MidiRenderer::PLAIN_VELOCITY), qPrintable(QString("key %1: %2").arg(p).arg(k[p].velocity)));
+            QCOMPARE(k[86].velocity, MidiRenderer::PLAIN_VELOCITY);       // (D6's accent: plainAccents', 0 here)
             delete ps;
             }
       // slur-repeat.musicxml: [C5 C5 D5 E5], the same key struck again under a slur: not after silence, so spiccato (112),
