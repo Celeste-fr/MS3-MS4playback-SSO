@@ -35,6 +35,7 @@
 #include "libmscore/instrtemplate.h"
 #include "libmscore/part.h"
 #include "libmscore/automation.h"
+#include "libmscore/enginelane.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
@@ -199,6 +200,7 @@ class TestSoundLibrary : public QObject, public MTest
       void noLevelSpikes();
       void chunkEndLevels();
       void chunkedEqualsWhole();
+      void engineLane();
       void startLead();
       void evenLevelsGlide();
       void evenAutoWindows();
@@ -5681,6 +5683,151 @@ void TestSoundLibrary::chunkedEqualsWhole()
                   }
             }
       QVERIFY2(split >= 20, qPrintable(QString::number(split)));
+      }
+
+//---------------------------------------------------------
+//   engineLane
+//    a part's Engine lane (enginelane.h; rendermidi.cpp › Engine lanes): engine-lane.musicxml's Violin, its own engine MS4,
+//    the lane switching to the library at bar 3 and back to MS4 at bar 5 (hard switches). Each note on the engine in force
+//    at its tick: bars 1-2 and 5-6 built in (not routed, libraryPatch -1), bars 3-4 on the library's route; the slur from
+//    bar 2 into bar 3 doesn't make bar 3's first note a transition (an attack: spiccato 112), the slur's note after it is
+//    one. Chunks of 1 and 10 bars: the routed events as the whole render's, every note-on / note-off too. Without the lane
+//    the part plays MS4 alone, no route. MS4 -> MS3 -> MS4 (no library): bars 3-4 under CC11 127 (MS3's dynamics), MS4's
+//    level back at bar 5, every note once
+//---------------------------------------------------------
+
+void TestSoundLibrary::engineLane()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'><Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/performance", "1" }, { "levels/context", "0" },
+                                      { "levels/realRange", "0" }, { "levels/evenLevels", "0" },
+                                      { "slurs/smoothStart", "0" }, { "slurs/plainPerformance", "0" } });
+      MasterScore* score = readScore(DIR + "engine-lane.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Part* violin = score->parts().front();
+      score->setMetaTag(PartPlaybackModes::metaTag, PartPlaybackModes::write(score, { { violin, PartPlayback::MS4 } }));
+      const int bar = 4 * DIVISION;
+      auto render = [&](int chunkSize) {
+            score->setPlaylistDirty();
+            MidiRenderer r(score);
+            r.setMinChunkSize(chunkSize);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            EventMap events;
+            for (MidiRenderer::Chunk c = r.getChunkAt(0); c; c = r.getChunkAt(c.utick2())) {
+                  EventMap part;
+                  r.renderChunk(c, &part, ctx);
+                  events.insert(part.begin(), part.end());
+                  }
+            return events;
+            };
+      auto setLane = [&](const QStringList& engines, const std::vector<std::pair<int, QString>>& points) {
+            Automation::Lane l;
+            l.target = EngineLane::TARGET;
+            EngineLane::setEngines(l, engines);
+            for (const auto& p : points)
+                  l.points.push_back(Automation::Point(p.first, EngineLane::valueOf(engines, p.second), Automation::Curve::STEP));
+            score->setMetaTag(Automation::metaTag, Automation::write(score, { { violin, { l } } }));
+            };
+      // without the lane: MS4 alone
+      {
+            const EventMap ev = render(0);
+            for (const auto& te : ev)
+                  QVERIFY(!te.second.isExternal());
+            QVERIFY(SoundLib::routes(score, *lib).empty());
+      }
+      const QStringList engines { "ms3", "ms4", "library:t" };
+      setLane(engines, { { 2 * bar, "library:t" }, { 4 * bar, "ms4" } });
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);       // (the library loaded for the whole score: Long and Performance)
+      auto noteLines = [](const EventMap& ev, bool routed) {
+            QStringList l;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() != routed || e.librarySwitch() || !(e.type() == ME_NOTEON || e.type() == ME_NOTEOFF) || !e.note())
+                        continue;
+                  l << QString("%1 %2 %3 %4").arg(te.first).arg(e.pitch()).arg(e.velo()).arg(e.isExternal() ? e.extPort() * 16 + e.extChannel() : e.channel());
+                  }
+            l.sort();
+            return l;
+            };
+      auto routedLines = [](const EventMap& ev) {
+            QStringList l;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal())
+                        l << QString("%1 %2 %3 %4 %5 %6").arg(te.first).arg(e.extPort() * 16 + e.extChannel()).arg(int(e.type()))
+                             .arg(e.dataA()).arg(e.dataB()).arg(e.librarySwitch() ? "s" : "-");
+                  }
+            return l;
+            };
+      const EventMap whole = render(0);
+      int builtIn = 0, routed = 0, cc11 = 0;
+      std::map<int, int> velocityAt;          // a routed note's tick -> velocity
+      for (const auto& te : whole) {
+            const NPlayEvent& e = te.second;
+            if (e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION && !e.isExternal() && e.libraryPatch() < 0)
+                  ++cc11;
+            if (e.type() != ME_NOTEON || e.velo() == 0 || e.librarySwitch() || !e.note())
+                  continue;
+            const int t = e.note()->tick().ticks();
+            const bool lib = t >= 2 * bar && t < 4 * bar;
+            QVERIFY2(e.isExternal() == lib, qPrintable(QString("note at %1: routed %2").arg(t).arg(e.isExternal())));
+            if (lib) {
+                  ++routed;
+                  velocityAt[t] = e.velo();
+                  }
+            else {
+                  ++builtIn;
+                  QCOMPARE(e.libraryPatch(), -1);
+                  }
+            }
+      QCOMPARE(builtIn, 16);
+      QCOMPARE(routed, 8);
+      QVERIFY(cc11 > 0);                      // (MS4's dynamics on the built-in channel)
+      // bar 3's first note: an attack (the slur from bar 2 doesn't cross the switch); its second, in the slur: a transition
+      QCOMPARE(velocityAt[2 * bar], 112);
+      QVERIFY2(velocityAt[2 * bar + DIVISION] >= 20 && velocityAt[2 * bar + DIVISION] <= 84,
+               qPrintable(QString::number(velocityAt[2 * bar + DIVISION])));
+      for (int size : { 1, 10 }) {
+            const EventMap b = render(size);
+            QCOMPARE(routedLines(b), routedLines(whole));
+            QCOMPARE(noteLines(b, false), noteLines(whole, false));
+            }
+      // MS4 -> MS3 -> MS4, no library
+      setLane(engines, { { 2 * bar, "ms3" }, { 4 * bar, "ms4" } });
+      QVERIFY(SoundLib::routes(score, *lib).empty());
+      const EventMap m3 = render(0);
+      std::map<int, int> cc;                  // tick -> CC11 on the part's channel
+      const int ch = violin->instrument()->channel(0)->channel();
+      int notes = 0;
+      for (const auto& te : m3) {
+            const NPlayEvent& e = te.second;
+            QVERIFY(!e.isExternal());
+            if (e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION && e.channel() == ch)
+                  cc[te.first] = e.value();
+            if (e.type() == ME_NOTEON && e.velo() > 0 && e.note())
+                  ++notes;
+            }
+      QCOMPARE(notes, 24);
+      auto ccAt = [&cc](int t) { auto i = cc.upper_bound(t); return i == cc.begin() ? -1 : std::prev(i)->second; };
+      QCOMPARE(ccAt(2 * bar), 127);
+      QCOMPARE(ccAt(3 * bar), 127);
+      QVERIFY(ccAt(bar) > 0 && ccAt(bar) < 127);
+      QCOMPARE(ccAt(4 * bar), ccAt(bar));
+      delete score;
       }
 
 //---------------------------------------------------------

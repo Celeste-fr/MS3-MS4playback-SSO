@@ -56,6 +56,7 @@
 #include "vibrato.h"
 #include "partcontrollers.h"
 #include "partplayback.h"
+#include "enginelane.h"
 #include "playbacksettings.h"
 #include "tuning.h"
 #include "volta.h"
@@ -965,6 +966,8 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                         continue;
 
                   Chord* chord = toChord(cr);
+                  if (sctx.engine >= 0 && engineAt(chord->part(), chord->tick().ticks()) != sctx.engine)
+                        continue;         // (an Engine lane's other engine plays it)
                   Staff* st1   = chord->staff();
                   Instrument* instr = chord->part()->instrument(Fraction::fromTicks(tick));
                   int channel = instr->channel(chord->upNote()->subchannel())->channel();
@@ -1056,6 +1059,8 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                         continue;
 
                   Chord* chord = toChord(cr);
+                  if (sctx.engine >= 0 && engineAt(st1->part(), chord->tick().ticks()) != sctx.engine)
+                        continue;         // (an Engine lane's other engine plays it)
 
                   Instrument* instr = st1->part()->instrument(tick);
                   int subchannel = chord->upNote()->subchannel();
@@ -1230,6 +1235,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   if (!cr || !cr->isChord())
                         continue;
                   Chord* chord = toChord(cr);
+                  if (sctx.engine >= 0 && engineAt(st1->part(), chord->tick().ticks()) != sctx.engine)
+                        continue;         // (an Engine lane's other engine plays it)
                   Instrument* instr = st1->part()->instrument(tick);
                   int channel = instr->channel(chord->upNote()->subchannel())->channel();
                   events->registerChannel(channel);
@@ -1248,7 +1255,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const LibPart* lp = nullptr;
                   const SoundLib::LibInstrument* li = nullptr;
                   {
-                        auto lpit = libParts.find(st1->part());
+                        auto lpit = st1->part() == libSuppress ? libParts.end() : libParts.find(st1->part());
                         if (lpit != libParts.end()) {
                               auto iit = lpit->second.instruments.find(instr);
                               if (iit != lpit->second.instruments.end() && iit->second) {
@@ -1676,8 +1683,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (note->tieBack() || ch->isGrace() || !ch->graceNotesBefore().empty())
                               return nullptr;
                         ChordRest* pcr = prevChordRest(ch, true);
-                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick())
-                              return nullptr;
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
+                            || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
+                              return nullptr;       // (on another engine before an Engine lane's switch: the line starts afresh)
                         const Chord* pch = toChord(pcr);
                         const int utick = ch->tick().ticks() + tickOffset;
                         const RepeatList& repeats = score->repeatList();
@@ -1731,7 +1739,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (note->tieBack() || ch->isGrace())
                               return false;
                         ChordRest* pcr = prevChordRest(ch, true);
-                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick())
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
+                            || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
                               return false;
                         const RepeatList& repeats = score->repeatList();
                         auto rs = repeats.findRepeatSegmentFromUTick(ch->tick().ticks() + tickOffset);
@@ -1758,7 +1767,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (ch->isGrace())
                               return false;
                         ChordRest* pcr = prevChordRest(ch, true);
-                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick())
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
+                            || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
                               return false;
                         const RepeatList& repeats = score->repeatList();
                         auto rs = repeats.findRepeatSegmentFromUTick(ch->tick().ticks() + tickOffset);
@@ -1797,7 +1807,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const Note* last = note->lastTiedNote();
                         Chord* ch = last->chord();
                         ChordRest* ncr = nextChordRest(ch, true);
-                        if (!ncr || !ncr->isChord() || ncr->track() != ch->track() || ch->tick() + ch->actualTicks() != ncr->tick())
+                        if (!ncr || !ncr->isChord() || ncr->track() != ch->track() || ch->tick() + ch->actualTicks() != ncr->tick()
+                            || engineCrosses(ch->part(), ch->tick().ticks(), ncr->tick().ticks()))
                               return nullptr;
                         const Chord* nch = toChord(ncr);
                         if (!nch->graceNotesBefore().empty())
@@ -2113,7 +2124,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         int earliest = std::max(libChunkStart, (*rs)->utick);
                         ChordRest* pcr = prevChordRest(ch, true);
                         if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
-                            || pcr->tick().ticks() < (*rs)->tick)
+                            || pcr->tick().ticks() < (*rs)->tick || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
                               return earliest;
                         for (const Note* pn : toChord(pcr)->notes()) {
                               if (!pn->play())
@@ -2934,13 +2945,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
 //    to its whole synth), and the level in force at the chunk's start
 //---------------------------------------------------------
 
-void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
+void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events, const Part* only)
       {
       const int tick1 = chunk.tick1();
       const int tick2 = chunk.tick2();
       const int tickOffset = chunk.tickOffset();
       // in the score's order, not the map's (keyed by pointer): same-tick events come out the same every run
       for (const Part* part : score->parts()) {
+            if (only ? part != only : (engineSegs.count(part) && !libParts.count(part)))
+                  continue;         // (a part switching engines without a library: its own pass, renderEngineParts)
             auto pc = ms4Parts.find(part);
             if (pc == ms4Parts.end())
                   continue;
@@ -2962,7 +2975,7 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
             // a sound library part: its dynamics on the library's controller, on the channel it
             // plays on; no presets (a program change would reach the library)
-            auto lpit = libParts.find(part);
+            auto lpit = part == libSuppress ? libParts.end() : libParts.find(part);
             const LibPart* lp = lpit != libParts.end() ? &lpit->second : nullptr;
             auto libraryPlays = [lp](const Instrument* instr) {
                   if (!lp)
@@ -3240,7 +3253,8 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                                           move = false;       // (its note started after the new start)
                                     }
                               }
-                        else if (ev.type() == ME_CONTROLLER && i->first == s.chordTick) {
+                        else if (ev.type() == ME_CONTROLLER && i->first == s.chordTick
+                                 && !(ev.libraryPatch() < 0 && !engineSegs.empty())) {     // (not an Engine lane's built-in)
                               move = true;
                               for (auto j = events->upper_bound(s.on); j != i; ++j) {
                                     const NPlayEvent& o = j->second;
@@ -5040,7 +5054,8 @@ void MidiRenderer::collectMeasureEvents(EventMap* events, Measure const * m, con
                   break;
             }
 
-      collectProgramChanges(events, m, sctx.staff, tickOffset);
+      if (!sctx.extra)
+            collectProgramChanges(events, m, sctx.staff, tickOffset);
       }
 
 //---------------------------------------------------------
@@ -6842,7 +6857,7 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
       // method (SND and changes at the start of a segment) on CC2 unless the global one has a CC;
       // MS4 and the sound library the MuseScore 4 note model
       const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(score->masterScore());
-      auto methodOf = [&](const Part* part) {
+      auto ownMethodOf = [&](const Part* part) {
             switch (PartPlaybackModes::of(part, modes)) {
                   case PartPlayback::MS3:
                         return DynamicsRenderMethod::SEG_START;
@@ -6853,6 +6868,32 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
                         break;
                   }
             return renderMethod;
+            };
+      // Engine lanes (enginelane.h): each switching part's engine from each switch on, its own engine from tick 0; a
+      // library the part has no routes of (MIDI out, not found) plays MS4, as a part the library lacks
+      engineSegs.clear();
+      for (const auto& es : engineSwitches) {
+            const Part* part = es.first;
+            const bool routed = libParts.count(part) > 0;
+            const int own = routed && PartPlaybackModes::playsLibrary(part, modes) ? ENGINE_LIB
+                            : ownMethodOf(part) == DynamicsRenderMethod::MS4 ? ENGINE_MS4 : ENGINE_MS3;
+            std::vector<EngineSeg> segs { { 0, own, 0 } };
+            for (const auto& sw : es.second) {
+                  const QString& e = sw.second.first;
+                  const int kind = e == "ms3" ? ENGINE_MS3 : e == "ms4" || !routed ? ENGINE_MS4 : ENGINE_LIB;
+                  if (sw.first <= 0)
+                        segs.front().kind = kind;
+                  else if (kind != segs.back().kind)
+                        segs.push_back({ sw.first, kind, sw.second.second });
+                  }
+            engineSegs[part] = segs;
+            }
+      auto methodOf = [&](const Part* part) {
+            auto es = engineSegs.find(part);
+            if (es == engineSegs.end())
+                  return ownMethodOf(part);
+            const bool ms4 = std::any_of(es->second.begin(), es->second.end(), [](const EngineSeg& g) { return g.kind != ENGINE_MS3; });
+            return ms4 ? DynamicsRenderMethod::MS4 : DynamicsRenderMethod::SEG_START;
             };
       ms4Active.clear();
       for (Part* part : score->parts())
@@ -6883,7 +6924,10 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
             sctx.method = methodOf(st->part());
             sctx.cc = sctx.method == renderMethod || cc > 0 ? cc : 2;
             sctx.renderHarmony = ctx.renderHarmony;
-            renderStaffChunk(chunk, events, sctx);
+            if (engineSegs.count(st->part()))
+                  renderEngineStaff(chunk, events, sctx, renderMethod, cc);
+            else
+                  renderStaffChunk(chunk, events, sctx);
             }
       if (chunk.utick1() == 0) {
             libStartLead = 0.0;
@@ -6896,13 +6940,16 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
       events->startLeadMs = forLiveClips ? 0.0 : libStartLead;
       events->delayLeadMs = forLiveClips ? 0.0 : libDelayLead;
       ms4Mode = !ms4Active.empty();
-      if (ms4Mode)
+      if (ms4Mode) {
             renderMs4Dynamics(chunk, events);
+            renderEngineDynamics(chunk, events);
+            }
 
       events->fixupMIDI();
 
       // create sustain pedal events
       renderSpanners(chunk, events);
+      renderEnginePedals(chunk, events);
 
       if (ms4Mode)
             finishLibraryEvents(chunk, events);
@@ -6941,6 +6988,194 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
             }
       libraryHostedParameters(chunk, events);
       libraryDelayLead(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   Engine lanes (enginelane.h; the owner, 2026-10-26/27: "switch playback engine for just a few measures and switch
+//   back")
+//    A part with an Engine lane (engineSegs: its engine from each switch on) renders its staves once per engine it uses,
+//    each pass only the chords whose tick falls on that engine (StaffContext::engine): the library's (its LibPart, as
+//    ever), MS4's (its LibPart hidden: libSuppress, so the MS4 path plays its notes on the part's own channels) and
+//    MS3's (SEG_START). A note sounding at a switch ends on its old engine (its tie chain goes with its first note); a
+//    slur's or a plain line's legato never joins two chords on either side of a switch (engineCrosses: legatoTransition,
+//    struckAgain, touchesPatch, nextLegato, onsetEarliest), so the new engine's line starts afresh. Where the part has
+//    library routes its built-in passes' events carry libraryPatch -1 (mergeBuiltIn: as a kit's built-in drums), so
+//    finishLibraryEvents leaves them to the built-in synthesizer. Its MS4 dynamics (CC11) and presets come from a pass of
+//    their own (renderEngineDynamics); with MS3 segments too, MS4's CC11 is left out there (127 at the MS3 segment's
+//    start, the level in force restated where MS4 comes back) and each engine's presets are sent where it starts. The
+//    pedal (renderSpanners: on the library's route) is copied to the built-in synthesizer (renderEnginePedals). Parts
+//    without an Engine lane: untouched (no pass, no copy, no mark)
+//---------------------------------------------------------
+
+int MidiRenderer::engineAt(const Part* part, int tick) const
+      {
+      if (engineSegs.empty())
+            return -1;
+      auto es = engineSegs.find(part);
+      if (es == engineSegs.end())
+            return -1;
+      int kind = es->second.front().kind;
+      for (const EngineSeg& g : es->second) {
+            if (g.tick > tick)
+                  break;
+            kind = g.kind;
+            }
+      return kind;
+      }
+
+bool MidiRenderer::engineCrosses(const Part* part, int tick1, int tick2) const
+      {
+      return !engineSegs.empty() && engineAt(part, tick1) != engineAt(part, tick2);
+      }
+
+void MidiRenderer::mergeBuiltIn(EventMap* events, const EventMap& builtIn, bool mark)
+      {
+      for (const auto& te : builtIn) {
+            NPlayEvent e(te.second);
+            if (mark)
+                  e.setLibraryPatch(-1);
+            events->registerChannel(e.channel());
+            events->insert(std::make_pair(te.first, e));
+            }
+      }
+
+void MidiRenderer::renderEngineStaff(const Chunk& chunk, EventMap* events, const StaffContext& sctx, DynamicsRenderMethod globalMethod, int cc)
+      {
+      const Part* part = sctx.staff->part();
+      const std::vector<EngineSeg>& segs = engineSegs.at(part);
+      const bool routed = libParts.count(part) > 0;
+      EventMap builtIn;
+      bool first = true;
+      for (int kind : { int(ENGINE_LIB), int(ENGINE_MS4), int(ENGINE_MS3) }) {
+            if (std::none_of(segs.begin(), segs.end(), [kind](const EngineSeg& g) { return g.kind == kind; }))
+                  continue;
+            StaffContext c = sctx;
+            c.engine = kind;
+            c.method = kind == ENGINE_MS3 ? DynamicsRenderMethod::SEG_START : DynamicsRenderMethod::MS4;
+            c.cc = c.method == globalMethod || cc > 0 ? cc : 2;
+            c.extra = !first;
+            c.renderHarmony = first && sctx.renderHarmony;
+            libSuppress = routed && kind == ENGINE_MS4 ? part : nullptr;
+            renderStaffChunk(chunk, routed && kind != ENGINE_LIB ? &builtIn : events, c);
+            libSuppress = nullptr;
+            first = false;
+            }
+      mergeBuiltIn(events, builtIn, true);
+      }
+
+void MidiRenderer::renderEngineDynamics(const Chunk& chunk, EventMap* events)
+      {
+      if (engineSegs.empty())
+            return;
+      const int tick1 = chunk.tick1();
+      const int tick2 = chunk.tick2();
+      const int tickOffset = chunk.tickOffset();
+      for (const Part* part : score->parts()) {
+            auto es = engineSegs.find(part);
+            if (es == engineSegs.end() || !ms4Active.count(part))
+                  continue;
+            const std::vector<EngineSeg>& segs = es->second;
+            auto uses = [&segs](int kind) { return std::any_of(segs.begin(), segs.end(), [kind](const EngineSeg& g) { return g.kind == kind; }); };
+            if (!uses(ENGINE_MS4))
+                  continue;
+            const bool routed = libParts.count(part) > 0;
+            EventMap dyn;
+            libSuppress = routed ? part : nullptr;
+            renderMs4Dynamics(chunk, &dyn, part);
+            libSuppress = nullptr;
+            if (uses(ENGINE_MS3)) {
+                  // MS3's segments: no CC11 of MS4's there (127 from their start: MS3's own dynamics), MS3's programs; where
+                  // MS4 comes back, its CC11 in force and its presets again
+                  auto kindAt = [&](int tick) { return engineAt(part, tick); };
+                  std::map<int, int> lastCC11;              // channel -> value, as the events go
+                  std::vector<std::pair<int, NPlayEvent>> presets;
+                  for (const auto& te : dyn) {
+                        const NPlayEvent& e = te.second;
+                        if (te.first == tick1 + tickOffset && e.type() == ME_CONTROLLER
+                            && (e.controller() == CTRL_HBANK || e.controller() == CTRL_LBANK || e.controller() == CTRL_PROGRAM))
+                              presets.push_back(te);
+                        }
+                  EventMap out;
+                  std::vector<int> starts { tick1 };
+                  for (const EngineSeg& g : segs)
+                        if (g.tick > tick1 && g.tick < tick2)
+                              starts.push_back(g.tick);
+                  size_t next = 1;
+                  auto restate = [&](int tick) {
+                        const int kind = kindAt(tick);
+                        const int at = tick + tickOffset;
+                        if (kind == ENGINE_MS3) {
+                              for (const auto& ip : *part->instruments()) {
+                                    for (const Channel* ch : ip.second->channel()) {
+                                          const Channel* pc = score->masterScore()->playbackChannel(ch);
+                                          const int c = pc->channel();
+                                          for (const NPlayEvent& ev : { NPlayEvent(ME_CONTROLLER, c, CTRL_HBANK, (pc->bank() >> 7) & 0x7f),
+                                                                        NPlayEvent(ME_CONTROLLER, c, CTRL_LBANK, pc->bank() & 0x7f),
+                                                                        NPlayEvent(ME_CONTROLLER, c, CTRL_PROGRAM, pc->program()),
+                                                                        NPlayEvent(ME_CONTROLLER, c, CTRL_EXPRESSION, 127) }) {
+                                                NPlayEvent e(ev);
+                                                e.setOriginatingStaff(part->staff(0)->idx());
+                                                out.insert(std::make_pair(at, e));
+                                                }
+                                          }
+                                    }
+                              }
+                        else if (kind == ENGINE_MS4 && tick != tick1) {
+                              for (const auto& p : presets)
+                                    out.insert(std::make_pair(at, p.second));
+                              for (const auto& l : lastCC11) {
+                                    NPlayEvent e(ME_CONTROLLER, l.first, CTRL_EXPRESSION, l.second);
+                                    e.setOriginatingStaff(part->staff(0)->idx());
+                                    out.insert(std::make_pair(at, e));
+                                    }
+                              }
+                        };
+                  if (kindAt(tick1) == ENGINE_MS3)
+                        restate(tick1);
+                  for (const auto& te : dyn) {
+                        while (next < starts.size() && starts[next] + tickOffset <= te.first)
+                              restate(starts[next++]);
+                        const NPlayEvent& e = te.second;
+                        const bool cc11 = e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION;
+                        if (cc11)
+                              lastCC11[e.channel()] = e.value();
+                        const bool preset = e.type() == ME_CONTROLLER && te.first == tick1 + tickOffset
+                                            && (e.controller() == CTRL_HBANK || e.controller() == CTRL_LBANK || e.controller() == CTRL_PROGRAM);
+                        if (kindAt(te.first - tickOffset) == ENGINE_MS3 && (cc11 || preset))
+                              continue;
+                        out.insert(te);
+                        }
+                  while (next < starts.size())
+                        restate(starts[next++]);
+                  dyn.swap(out);
+                  }
+            mergeBuiltIn(events, dyn, routed);
+            }
+      }
+
+void MidiRenderer::renderEnginePedals(const Chunk& chunk, EventMap* events)
+      {
+      if (engineSegs.empty())
+            return;
+      std::vector<std::pair<int, NPlayEvent>> copies;
+      for (const auto& es : engineSegs) {
+            const Part* part = es.first;
+            if (!libParts.count(part) || std::all_of(es.second.begin(), es.second.end(), [](const EngineSeg& g) { return g.kind == ENGINE_LIB; }))
+                  continue;
+            const int s1 = part->staff(0)->idx();
+            const int s2 = s1 + part->nstaves();
+            for (auto i = events->lower_bound(chunk.utick1()); i != events->end(); ++i) {
+                  const NPlayEvent& e = i->second;
+                  if (e.type() == ME_CONTROLLER && e.controller() == CTRL_SUSTAIN && !e.isExternal() && e.libraryPatch() >= 0
+                      && e.getOriginatingStaff() >= s1 && e.getOriginatingStaff() < s2) {
+                        NPlayEvent c(e);
+                        c.setLibraryPatch(-1);
+                        copies.emplace_back(i->first, c);
+                        }
+                  }
+            }
+      for (const auto& c : copies)
+            events->insert(events->lower_bound(c.first), c);
       }
 
 //---------------------------------------------------------
@@ -7039,10 +7274,18 @@ void MidiRenderer::updateState()
             score->updateCapo();
 
             velocityLanes.clear();
-            for (const auto& pl : Automation::read(score->masterScore()))
+            engineSwitches.clear();
+            // (Engine lanes: not for Live's clips, nor over MIDI out to a library: the parts play their own engines there)
+            const bool engineLanes = !forLiveClips && !(SoundLib::output() == SoundLib::Output::MIDI && SoundLib::current());
+            for (const auto& pl : Automation::read(score->masterScore())) {
                   for (const Automation::Lane& l : pl.second)
                         if (l.target == Automation::VELOCITY_TARGET && !l.points.empty())
                               velocityLanes[pl.first] = l;
+                  const Automation::Lane* el = engineLanes ? EngineLane::laneOf(pl.second) : nullptr;
+                  if (el)
+                        for (const EngineLane::Switch& sw : EngineLane::switches(*el))
+                              engineSwitches[pl.first].push_back({ sw.tick, { sw.engine, sw.fadeMs } });
+                  }
             libParts.clear();
             partTexts.clear();
             for (Part* part : score->parts())

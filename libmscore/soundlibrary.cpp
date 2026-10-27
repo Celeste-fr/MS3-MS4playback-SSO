@@ -11,6 +11,7 @@
 #include "soundlibrary.h"
 #include "calibrationfile.h"
 #include "partplayback.h"
+#include "enginelane.h"
 #include "playbacksettings.h"
 
 #include <algorithm>
@@ -2383,6 +2384,35 @@ bool engineAvailable(const Library& library)
       return !fn || fn(library);
       }
 
+//---------------------------------------------------------
+//   playingModes
+//    the parts' modes and library names as they play: partplayback.h's, and a part whose own engine plays no library
+//    but whose Engine lane names one (enginelane.h) plays that library too (its routes loaded for the whole score; the
+//    renderer plays each note on the engine in force at it). With MIDI out and for Live: partplayback.h's alone
+//---------------------------------------------------------
+
+static void playingModes(const MasterScore* ms, bool forLive, std::map<const Part*, PartPlayback>& modes,
+                         std::map<const Part*, QString>& names)
+      {
+      modes = PartPlaybackModes::read(ms);
+      names = PartPlaybackModes::libraries(ms);
+      if (forLive || output() != Output::PLUGIN || !ms)
+            return;
+      const QString tag = ms->metaTag(Automation::metaTag);
+      if (!tag.contains(QString("\"%1\"").arg(EngineLane::TARGET)))
+            return;
+      for (const auto& pl : Automation::read(ms)) {
+            const Automation::Lane* lane = EngineLane::laneOf(pl.second);
+            if (!lane || PartPlaybackModes::playsLibrary(pl.first, modes))
+                  continue;
+            const QString name = EngineLane::libraryOf(*lane);
+            if (name.isEmpty())
+                  continue;
+            modes[pl.first] = PartPlayback::LIBRARY;
+            names[pl.first] = name;
+            }
+      }
+
 std::shared_ptr<const Library> libraryOf(const Part* part, const std::map<const Part*, PartPlayback>& modes,
                                          const std::map<const Part*, QString>& names, bool forLive)
       {
@@ -2403,7 +2433,10 @@ std::shared_ptr<const Library> libraryOf(const Part* part)
       if (!part || !part->score())
             return nullptr;
       const MasterScore* ms = part->score()->masterScore();
-      return libraryOf(PartPlaybackModes::masterPart(part), PartPlaybackModes::read(ms), PartPlaybackModes::libraries(ms));
+      std::map<const Part*, PartPlayback> modes;
+      std::map<const Part*, QString> names;
+      playingModes(ms, false, modes, names);
+      return libraryOf(PartPlaybackModes::masterPart(part), modes, names);
       }
 
 std::vector<std::shared_ptr<const Library>> scoreLibraries(const Score* score, bool forLive)
@@ -2414,10 +2447,11 @@ std::vector<std::shared_ptr<const Library>> scoreLibraries(const Score* score, b
       if (!score || forLive || output() != Output::PLUGIN)
             return out;
       const MasterScore* ms = score->masterScore();
-      const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
+      std::map<const Part*, PartPlayback> modes;
+      std::map<const Part*, QString> names;
+      playingModes(ms, forLive, modes, names);
       if (names.empty())
             return out;
-      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
       std::map<QString, std::shared_ptr<const Library>> others;
       for (const Part* part : score->parts()) {
             const std::shared_ptr<const Library> lib = libraryOf(part, modes, names);
@@ -2593,8 +2627,9 @@ static std::vector<Route> routesFrom(const Score* score, const Library& library,
 std::vector<Route> routes(const Score* score, const Library& library, bool forLive)
       {
       const MasterScore* ms = score->masterScore();
-      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
-      const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
+      std::map<const Part*, PartPlayback> modes;
+      std::map<const Part*, QString> names;
+      playingModes(ms, forLive, modes, names);
       int k = 0;
       const std::shared_ptr<const Library> cur = current();
       // (the current library, or a map in its place: from slot 0, as when it was the only one)
@@ -2616,8 +2651,9 @@ std::vector<Route> allRoutes(const Score* score, bool forLive)
       if (!score)
             return out;
       const MasterScore* ms = score->masterScore();
-      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
-      const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
+      std::map<const Part*, PartPlayback> modes;
+      std::map<const Part*, QString> names;
+      playingModes(ms, forLive, modes, names);
       const std::shared_ptr<const Library> cur = current();
       int k = 0;
       for (const std::shared_ptr<const Library>& lib : scoreLibraries(score, forLive)) {

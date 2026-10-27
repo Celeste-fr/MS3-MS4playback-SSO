@@ -1186,6 +1186,9 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
+- An Engine lane (libmscore/enginelane.h, branch `engine-lane`): Live, Create Live Set and MIDI out ignore it; the part
+  plays its own engine throughout there.
+
 - **Parts on another engine** (several libraries in one score, branch `vial-engine`, 2026-10-26; soundlibrary.h ›
   engines): Live plays the global library alone. A part whose own playback names another engine (the Mixer's *Part
   playback*: "Vial Instrumental" while the global library is SSO; metaTag `partPlayback` "library:<name>") has no

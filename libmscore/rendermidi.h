@@ -82,6 +82,20 @@ class MidiRenderer {
       std::set<const Part*> ms4Active;                      // its parts that use it (partplayback.h)
       QString partModes;                                    // the parts' playback modes as last read
       QString partAutomation;                               // the parts' automation lanes as last read
+      // Engine lanes (enginelane.h; rendermidi.cpp › Engine lanes): a part's engine from each tick on, from tick 0 (its
+      // own engine there), a part without a lane (or for Live's clips) not listed. The switches as read (updateState),
+      // their kinds resolved for the chunk (renderWindow: a library the part has no routes of plays MS4)
+      enum EngineKind : signed char { ENGINE_MS3, ENGINE_MS4, ENGINE_LIB };
+      struct EngineSeg {
+            int tick { 0 };
+            int kind { ENGINE_MS4 };
+            int fadeMs { 0 };
+            };
+      std::map<const Part*, std::vector<std::pair<int, std::pair<QString, int>>>> engineSwitches;   // tick -> engine, fade
+      std::map<const Part*, std::vector<EngineSeg>> engineSegs;
+      const Part* libSuppress { nullptr };                  // a pass of a part's built-in notes: it has no LibPart
+      int engineAt(const Part* part, int tick) const;      // its kind (-1: the part has no switches)
+      bool engineCrosses(const Part* part, int tick1, int tick2) const;  // another engine at tick2 than at tick1
       bool forLiveClips { false };
       bool flatParamEvents { false };                       // setFlatParamEvents
       bool writtenTiming { false };                         // setWrittenTiming
@@ -358,6 +372,8 @@ class MidiRenderer {
             DynamicsRenderMethod method{DynamicsRenderMethod::SIMPLE};
             int cc{0};
             bool renderHarmony{false};
+            int engine{-1};         // an Engine lane's pass: only the chords on this engine (EngineKind; -1: all)
+            bool extra{false};      // not the staff's first pass: no program changes, no chord symbols
             };
 
       void updateChunksPartition();
@@ -376,7 +392,13 @@ class MidiRenderer {
       void collectMeasureEventsSimple(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset);
       void collectMeasureEventsDefault(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset);
       void collectMeasureEventsMs4(EventMap* events, Measure const * m, const StaffContext& sctx, int tickOffset);
-      void renderMs4Dynamics(const Chunk&, EventMap* events);
+      void renderMs4Dynamics(const Chunk&, EventMap* events, const Part* only = nullptr);   // (only: that part alone)
+      // Engine lanes (rendermidi.cpp › Engine lanes): a switching part's staff pass by pass, its MS4 dynamics, its pedal on
+      // both engines, a fade's levels
+      void renderEngineStaff(const Chunk&, EventMap* events, const StaffContext& sctx, DynamicsRenderMethod globalMethod, int cc);
+      void renderEngineDynamics(const Chunk&, EventMap* events);
+      void renderEnginePedals(const Chunk&, EventMap* events);
+      void mergeBuiltIn(EventMap* events, const EventMap& builtIn, bool mark);
       SoundLib::Choice libraryChoice(const LibPart& lp, const SoundLib::LibInstrument& li, const Note* note,
                                      const std::vector<Ms4::ArtRef>& noteArts, int tick, int ticks) const;
       static void putLibrarySwitch(EventMap* events, const SoundLib::LibInstrument& li, int channel,

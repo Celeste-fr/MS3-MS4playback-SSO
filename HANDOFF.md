@@ -33,6 +33,31 @@ The owner's goal for October 2026: everything a later AI needs to make playback 
 - **How he judges timing:** one section alone with a metronome click, long rests cut out, about 20 s a clip, one
   question per page.
 
+## Engine lane (branch `engine-lane`, 2026-10-27, from integrate-1017 4e6d877914; not merged)
+
+The owner (2026-10-26/27): "make the playback engine automatable, so you can switch playback engine for just a few
+measures and switch back", plus a configurable fade at the switches. **Stage 1 done: the lane and hard switches. Fades
+not played yet.**
+- What the user sees: in Continuous View every part has its automation header row now (with automation lanes on), and
+  its first lane is **Engine**: steps MuseScore 3 / MuseScore 4 / each library (playbackmode.h's engines; a library whose
+  plug-in isn't found grayed). Click / drag as any lane (values snap to the engines, every point a step); right-click: the
+  point's engine, Delete, or "Switch to ▸" an engine at the mouse; the dashed line is the part's own engine.
+- Design: libmscore/enginelane.h (header comment; code at the end of automation.cpp, no new .cpp), rendermidi.cpp ›
+  Engine lanes (header comment above `engineAt`), soundlibrary.cpp `playingModes` (a lane's library loaded for the whole
+  score), mscore/automationlanes.cpp (`engineChoices`, `ownEngine`, `engineMenu`).
+- Each note on the engine at its chord's tick; a note sounding at a switch ends on its old engine; legato never joins
+  across a switch (`engineCrosses` in legatoTransition, struckAgain, touchesPatch, nextLegato, onsetEarliest).
+  Built-in events of a part with library routes carry libraryPatch -1 (as a kit's drums); its pedal goes to both.
+  MS3 segments: MS4's CC11 left out (127), MS3's programs at their start, MS4's presets and CC11 restated where MS4 returns.
+- Open: (1) **fades**: `EngineLane::fadeMs` / `setFadeMs` store a fade per point (extra "fades"), the renderer ignores it and
+  the menu item is hidden (`engineMenu`); to do: notes in [switch, switch + fade) on both engines, the old by CC11 (library;
+  the CC11 schedule `libLevels` is per note, a glide needs `libraryEvenLevels`-like steps) / CC11 on the channel
+  (FluidSynth), equal power. (2) One library per part: a lane naming a second library plays the part's first one.
+  (3) A moved point loses its fade (fades keyed by tick). (4) Live / MIDI out: the lane is ignored (the part plays its own
+  engine; Create Live Set doesn't warn yet). (5) MS3 -> MS4: an MS3 SND part's CC2 is not reset at MS4's start. (6) Even
+  levels, the audit, the verification see only the library segments' notes (untried). (7) GUI untried by hand.
+- Tested (Linux, test synth map; no Kontakt / SSO): see the branch's commit message.
+
 ## Several libraries: Vial Instrumental as an engine (branch `vial-engine`, 2026-10-26, from integrate-1017 0f4abe48ea; not merged)
 
 The owner (2026-10-26): "natively integrate Vial Instrumental as another playback engine, like we have now for ms3, ms4

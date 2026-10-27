@@ -23,6 +23,8 @@
 #include "libmscore/partcontrollers.h"
 #include "libmscore/part.h"
 #include "libmscore/partplayback.h"
+#include "libmscore/enginelane.h"
+#include "playbackmode.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
 #include "libmscore/sig.h"
@@ -142,6 +144,7 @@ void AutomationLanes::clearTargets() const
       {
       _targets.clear();
       _routesValid = false;
+      _enginesValid = false;
       }
 
 // the library's routes, once for every part's header and targets (SoundLib::routes reads the whole score)
@@ -182,6 +185,9 @@ bool AutomationLanes::hasHeader(const Part* part) const
       if (!s || !part)
             return false;
       if (LiveIntegration::LiveClipEditor::instance()->isClipScore(s))
+            return true;
+      // (every part: its Engine lane, enginelane.h, switches it to another engine)
+      if (!engineChoices().isEmpty())
             return true;
       const Part* master = PartPlaybackModes::masterPart(part);
       for (const SoundLib::Route& r : libraryRoutes())
@@ -256,8 +262,9 @@ std::vector<AutomationLanes::Target> AutomationLanes::computeTargets(const Part*
                         out.push_back({ LiveClipEdit::liveTarget(p.d, p.p), p.name, false, true });
             return out;
             }
-      // the notes' Velocity and Join lanes first, then the library's controls
+      // the part's Engine lane (enginelane.h) first, then the notes' Velocity and Join lanes, then the library's controls
       out = _notes->targets(PartPlaybackModes::masterPart(part));
+      out.insert(out.begin(), Target { EngineLane::TARGET, tr("Engine"), false, false });
       for (const Target& t : libraryTargets(part))
             out.push_back(t);
       // a part Live plays (Live plays the score): its Live track's parameters too
@@ -348,8 +355,11 @@ Lane AutomationLanes::lane(const Part* master, const QString& target) const
       return l;
       }
 
-void AutomationLanes::setLane(const Part* master, const Lane& l)
+void AutomationLanes::setLane(const Part* master, const Lane& lane)
       {
+      Lane l = lane;
+      if (l.target == EngineLane::TARGET)
+            EngineLane::normalize(l, engineChoices());      // (its engines' steps, every point a step)
       if (!_working) {
             _work = lanes();
             _working = true;
@@ -749,8 +759,10 @@ double AutomationLanes::yOfValue(const Row& r, double v) const
       return vr.bottom() - v * vr.height();
       }
 
-QString AutomationLanes::valueText(const QString& target, double v) const
+QString AutomationLanes::valueText(const QString& target, const Part* master, double v) const
       {
+      if (target == EngineLane::TARGET)
+            return engineName(EngineLane::engineAt(EngineLane::engines(lane(master, target), engineChoices()), v));
       if (target == LiveClipEdit::VELOCITY_TARGET) {
             const Score* s = score();
             const Part* p = s && !s->masterScore()->parts().empty() ? s->masterScore()->parts().front() : nullptr;
@@ -1211,8 +1223,47 @@ void AutomationLanes::paintEnvelope(QPainter& p, const QRectF& rect, const QRect
 //    Expression, a Live track's parameter)
 //---------------------------------------------------------
 
+// the engines an Engine lane offers (playbackmode.h's: MuseScore 3, MuseScore 4, each library), once per targets' refresh
+QStringList AutomationLanes::engineChoices() const
+      {
+      if (!_enginesValid) {
+            _engines = QStringList { "ms3", "ms4" };
+            for (const SoundEngine& e : soundEngines())
+                  _engines << "library:" + e.name;
+            _enginesValid = true;
+            }
+      return _engines;
+      }
+
+// a part's own engine as an Engine lane names it (its playback mode, partplayback.h; the global one's where it has none)
+QString AutomationLanes::ownEngine(const Part* master) const
+      {
+      PartPlayback mode = PartPlaybackModes::of(master);
+      if (mode == PartPlayback::DEFAULT) {
+            const PlaybackMode g = playbackMode();
+            mode = g == PlaybackMode::MS3 ? PartPlayback::MS3 : g == PlaybackMode::MS4 ? PartPlayback::MS4 : PartPlayback::LIBRARY;
+            }
+      if (mode == PartPlayback::MS3)
+            return "ms3";
+      if (mode == PartPlayback::MS4)
+            return "ms4";
+      const QString own = PartPlaybackModes::libraryOf(master);
+      return "library:" + (own.isEmpty() ? globalSoundEngine() : own);
+      }
+
+QString AutomationLanes::engineName(const QString& engine)
+      {
+      if (engine == "ms3")
+            return tr("MuseScore 3");
+      if (engine == "ms4")
+            return tr("MuseScore 4");
+      return engine.startsWith("library:") ? engine.mid(8) : engine;
+      }
+
 double AutomationLanes::unautomatedValue(const Row& r) const
       {
+      if (r.target == EngineLane::TARGET)
+            return EngineLane::valueOf(EngineLane::engines(lane(r.master, r.target), engineChoices()), ownEngine(r.master));
       for (const SoundLib::Route& rt : libraryRoutes()) {
             if (PartPlaybackModes::masterPart(rt.part) != r.master || rt.patch != 0 || rt.lane != 0 || !rt.instrument)
                   continue;
@@ -1281,7 +1332,7 @@ void AutomationLanes::paintHeader(QPainter& p, const Row& r) const
       double v = l.valueAt(at);
       if (v < 0 && !NoteLane::isTarget(r.target))
             v = unautomatedValue(r);          // (no point there: the controller's own value, Live's dashed line)
-      QString line2 = v >= 0 ? valueText(r.target, v) : QString::fromUtf8("–");
+      QString line2 = v >= 0 ? valueText(r.target, r.master, v) : QString::fromUtf8("–");
       if (live)
             line2 += "  " + tr("Live");
       QString title = r.name;
@@ -1477,7 +1528,7 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
             _drag = Drag::MOVE;
             _working = false;
             _hover = p;
-            _hoverText = valueText(r.target, _before.points[size_t(pt)].value);
+            _hoverText = valueText(r.target, r.master, _before.points[size_t(pt)].value);
             _view->update();
             return true;
             }
@@ -1580,7 +1631,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   std::vector<int> sel = moved;
                   select(r, sel);
                   _hover = QPointF(pointX(g.tick + dtick), yOfValue(r, std::min(1.0, std::max(0.0, g.value + dv))));
-                  _hoverText = valueText(r.target, std::min(1.0, std::max(0.0, g.value + dv)));
+                  _hoverText = valueText(r.target, r.master, std::min(1.0, std::max(0.0, g.value + dv)));
                   _view->update();
                   return true;
                   }
@@ -1613,7 +1664,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   setLane(r.master, l);
                   _drawCell = t0;
                   _hover = p;
-                  _hoverText = valueText(r.target, v);
+                  _hoverText = valueText(r.target, r.master, v);
                   _view->update();
                   return true;
                   }
@@ -1638,7 +1689,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   Edit::drawFree(l, std::vector<std::pair<int, double>>(_freePath.begin(), _freePath.end()), &_before);
                   setLane(r.master, l);
                   _hover = p;
-                  _hoverText = valueText(r.target, v);
+                  _hoverText = valueText(r.target, r.master, v);
                   _view->update();
                   return true;
                   }
@@ -1661,7 +1712,7 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
                   setLane(r.master, l);
                   select(r, moved);
                   _hover = p;
-                  _hoverText = valueText(r.target, std::min(1.0, std::max(0.0, a.value + dv)));
+                  _hoverText = valueText(r.target, r.master, std::min(1.0, std::max(0.0, a.value + dv)));
                   _view->update();
                   return true;
                   }
@@ -1779,12 +1830,12 @@ void AutomationLanes::hover(const QPoint& pos)
                   const Lane l = lane(r->master, r->target);
                   const int pt = pointAt(*r, l, p);
                   if (pt >= 0)
-                        _hoverText = valueText(r->target, l.points[size_t(pt)].value);
+                        _hoverText = valueText(r->target, r->master, l.points[size_t(pt)].value);
                   else if (l.points.empty() || xToTick(p.x()) < l.points.front().tick) {
                         // on the dashed line (no point there): the value the controller plays, as Live shows it
                         const double u = unautomatedValue(*r);
                         if (u >= 0 && std::fabs(p.y() - yOfValue(*r, u)) <= 6 * pixel())
-                              _hoverText = valueText(r->target, u);
+                              _hoverText = valueText(r->target, r->master, u);
                         }
                   }
             }
@@ -1825,6 +1876,8 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
             _notes->contextMenu(r, p, globalPos);
             return true;
             }
+      if (r.target == EngineLane::TARGET)
+            return engineMenu(r, p, globalPos);
       Lane l = lane(r.master, r.target);
       const int pt = pointAt(r, l, p);
       const int tick = xToTick(p.x());
@@ -1985,6 +2038,83 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
             setLane(r.master, l);
             select(r, {});
             commit(tr("Automation: lane cleared"));
+            }
+      else if (a == hide)
+            showLane(r.part, r.target, false);
+      return true;
+      }
+
+//---------------------------------------------------------
+//   engineMenu
+//    the Engine lane's right-click menu (enginelane.h): on a point its engine (one of the lane's), its fade and Delete;
+//    elsewhere a switch to an engine at the mouse's time (snapped to the grid); Clear Lane, Hide Lane
+//---------------------------------------------------------
+
+bool AutomationLanes::engineMenu(const Row& r, const QPointF& p, const QPoint& globalPos)
+      {
+      Lane l = lane(r.master, r.target);
+      EngineLane::normalize(l, engineChoices());
+      const QStringList engines = EngineLane::engines(l, engineChoices());
+      const int pt = pointAt(r, l, p);
+      const int tick = pt >= 0 ? l.points[size_t(pt)].tick : snap(xToTick(p.x()), false);
+      QMenu menu;
+      QMenu* to = menu.addMenu(pt >= 0 ? tr("Engine") : tr("Switch to"));
+      std::map<QAction*, QString> engineOf;
+      const QString current = pt >= 0 ? EngineLane::engineAt(engines, l.points[size_t(pt)].value) : QString();
+      for (const QString& e : engines) {
+            QAction* a = to->addAction(engineName(e));
+            a->setCheckable(pt >= 0);
+            a->setChecked(e == current);
+            QString why;
+            if (e.startsWith("library:") && !soundEngineAvailable(e.mid(8), &why)) {
+                  a->setEnabled(false);
+                  a->setToolTip(why);
+                  }
+            engineOf[a] = e;
+            }
+      // (a fade per switch, EngineLane::fadeMs, is stored but not yet played: its menu item comes with the renderer's fades)
+      QAction* fade = nullptr;
+      QAction* del = nullptr;
+      if (pt >= 0)
+            del = menu.addAction(tr("Delete"));
+      menu.addSeparator();
+      QAction* clear = l.points.empty() ? nullptr : menu.addAction(tr("Clear Lane"));
+      QAction* hide = menu.addAction(tr("Hide Lane"));
+      QAction* a = menu.exec(globalPos);
+      if (!a)
+            return true;
+      if (engineOf.count(a)) {
+            const double v = EngineLane::valueOf(engines, engineOf[a]);
+            if (pt >= 0)
+                  l.points[size_t(pt)].value = v;
+            else
+                  Edit::addPoint(l, tick, v);
+            setLane(r.master, l);
+            commit(tr("Engine: %1").arg(engineName(engineOf[a])));
+            }
+      else if (a == fade) {
+            bool ok = false;
+            const int ms = QInputDialog::getInt(_view, tr("Engine switch"),
+                                                tr("Fade (ms; 0: a hard switch): the notes there play on both engines, "
+                                                   "the old one fading out and the new one in"),
+                                                EngineLane::fadeMs(l, tick), 0, 60000, 10, &ok);
+            if (!ok)
+                  return true;
+            EngineLane::setFadeMs(l, tick, ms);
+            setLane(r.master, l);
+            commit(tr("Engine: fade %1 ms").arg(ms));
+            }
+      else if (a == del) {
+            Edit::removePoints(l, { pt });
+            setLane(r.master, l);
+            select(r, {});
+            commit(tr("Engine: switch removed"));
+            }
+      else if (a == clear) {
+            l.points.clear();
+            setLane(r.master, l);
+            select(r, {});
+            commit(tr("Engine: lane cleared"));
             }
       else if (a == hide)
             showLane(r.part, r.target, false);

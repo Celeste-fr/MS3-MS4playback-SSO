@@ -325,7 +325,14 @@ class AutomationLanes : public QObject {
       void paintControls(QPainter& p, const Row& r, const QRectF& h) const;
       bool _tipShown { false };
       QString headLabel(const Row& r) const;
-      QString valueText(const QString& target, double v) const;     // (0-127; the Velocity lane: % or 1-127)
+      QString valueText(const QString& target, const Part* master, double v) const;     // (0-127; the Velocity lane: % or 1-127)
+      // the Engine lane (enginelane.h): the engines it offers, a part's own, an engine's name as shown
+      mutable QStringList _engines;
+      mutable bool _enginesValid { false };
+      QStringList engineChoices() const;
+      QString ownEngine(const Part* master) const;
+      static QString engineName(const QString& engine);
+      bool engineMenu(const Row& r, const QPointF& p, const QPoint& globalPos);
       void select(const Row& r, const std::vector<int>& sel);
       void dropFocus();
       void addLaneMenu(const Row& r, const QPoint& globalPos);

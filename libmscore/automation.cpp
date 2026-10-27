@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "automation.h"
+#include "enginelane.h"
 #include "partplayback.h"
 #include "performancetechnique.h"
 #include "part.h"
@@ -1214,4 +1215,133 @@ std::pair<int, int> duplicateTimeSelection(MasterScore* score, const Part* part,
       }
 
 }     // namespace Automation
+}     // namespace Ms
+
+//---------------------------------------------------------
+//   EngineLane (enginelane.h)
+//---------------------------------------------------------
+
+namespace Ms {
+namespace EngineLane {
+
+const char* const TARGET = "engine";
+
+QStringList engines(const Automation::Lane& lane, const QStringList& defaults)
+      {
+      QStringList out;
+      for (const QJsonValue& v : lane.extra.value("engines").toArray())
+            if (!v.toString().isEmpty())
+                  out << v.toString();
+      return out.isEmpty() ? defaults : out;
+      }
+
+double valueOf(const QStringList& engines, const QString& engine)
+      {
+      const int i = engines.indexOf(engine);
+      if (i < 0)
+            return -1;
+      return engines.size() < 2 ? 0.0 : double(i) / (engines.size() - 1);
+      }
+
+QString engineAt(const QStringList& engines, double value)
+      {
+      if (engines.isEmpty())
+            return QString();
+      const int i = engines.size() < 2 ? 0 : int(std::lround(qBound(0.0, value, 1.0) * (engines.size() - 1)));
+      return engines.at(qBound(0, i, engines.size() - 1));
+      }
+
+void setEngines(Automation::Lane& lane, const QStringList& list)
+      {
+      const QStringList old = engines(lane);
+      for (Automation::Point& p : lane.points) {
+            const QString e = engineAt(old.isEmpty() ? list : old, p.value);
+            const double v = valueOf(list, e);
+            p.value = v >= 0 ? v : qBound(0.0, p.value, 1.0);
+            }
+      QJsonArray a;
+      for (const QString& e : list)
+            a.append(e);
+      lane.extra["engines"] = a;
+      }
+
+void normalize(Automation::Lane& lane, const QStringList& defaults)
+      {
+      if (!lane.extra.contains("engines"))
+            setEngines(lane, defaults);
+      const QStringList list = engines(lane);
+      for (Automation::Point& p : lane.points) {
+            p.value = std::max(0.0, valueOf(list, engineAt(list, p.value)));
+            p.curve = Automation::Curve::STEP;
+            p.straighten();
+            }
+      if (lane.extra.contains("fades")) {
+            QJsonObject fades = lane.extra.value("fades").toObject();
+            for (const QString& k : fades.keys()) {
+                  const int t = k.toInt();
+                  if (std::none_of(lane.points.begin(), lane.points.end(), [t](const Automation::Point& p) { return p.tick == t; })
+                      || fades.value(k).toInt() <= 0)
+                        fades.remove(k);
+                  }
+            if (fades.isEmpty())
+                  lane.extra.remove("fades");
+            else
+                  lane.extra["fades"] = fades;
+            }
+      }
+
+int fadeMs(const Automation::Lane& lane, int tick)
+      {
+      return std::max(0, lane.extra.value("fades").toObject().value(QString::number(tick)).toInt());
+      }
+
+void setFadeMs(Automation::Lane& lane, int tick, int ms)
+      {
+      QJsonObject fades = lane.extra.value("fades").toObject();
+      if (ms > 0)
+            fades[QString::number(tick)] = ms;
+      else
+            fades.remove(QString::number(tick));
+      if (fades.isEmpty())
+            lane.extra.remove("fades");
+      else
+            lane.extra["fades"] = fades;
+      }
+
+const Automation::Lane* laneOf(const Automation::PartLanes& lanes)
+      {
+      for (const Automation::Lane& l : lanes)
+            if (l.target == TARGET && !l.points.empty())
+                  return &l;
+      return nullptr;
+      }
+
+std::vector<Switch> switches(const Automation::Lane& lane)
+      {
+      std::vector<Switch> out;
+      const QStringList list = engines(lane);
+      if (list.isEmpty())
+            return out;
+      for (size_t i = 0; i < lane.points.size(); ++i) {
+            const Automation::Point& p = lane.points[i];
+            // (two points at one tick: the later one holds from it, automation.h)
+            if (i + 1 < lane.points.size() && lane.points[i + 1].tick == p.tick)
+                  continue;
+            const QString e = engineAt(list, p.value);
+            if (!out.empty() && out.back().engine == e)
+                  continue;
+            out.push_back({ p.tick, e, fadeMs(lane, p.tick) });
+            }
+      return out;
+      }
+
+QString libraryOf(const Automation::Lane& lane)
+      {
+      for (const Switch& s : switches(lane))
+            if (s.engine.startsWith("library:"))
+                  return s.engine.mid(8);
+      return QString();
+      }
+
+}     // namespace EngineLane
 }     // namespace Ms
