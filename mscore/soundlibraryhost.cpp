@@ -372,9 +372,11 @@ bool SoundLibraryHost::hasSetup(const SoundLib::Library& library, const QString&
             const QString nki = nkiPath(library, instrument);
             return !nki.isEmpty() && QFileInfo::exists(nki);
             }
-      // (a non-Kontakt patch with state settings: from the plug-in's default state when it has no setup file)
+      // (a non-Kontakt patch with state settings: from the plug-in's default state when it has no setup file; a preset
+      // library's patch: its preset file, presetPath)
       const SoundLib::LibInstrument* li = findPatch(library, instrument);
-      return QFileInfo::exists(setupFile(library, instrument)) || (li && hasStateSettings(*li));
+      return QFileInfo::exists(setupFile(library, instrument)) || (li && hasStateSettings(*li))
+             || (li && !li->preset.isEmpty() && QFileInfo::exists(presetPath(library, instrument)));
       }
 
 //---------------------------------------------------------
@@ -407,13 +409,16 @@ static QString folderKey(const SoundLib::Library& library)
 // library (its ContentDir), else none
 QString SoundLibraryHost::libraryFolder(const SoundLib::Library& library)
       {
-      if (!makesSetups(library))
+      if (!makesSetups(library) && library.presets.empty())
             return QString();
       auto c = chosenFolders().find(library.name);
       if (c == chosenFolders().end())
             c = chosenFolders().emplace(library.name, QSettings().value(folderKey(library)).toString()).first;
       if (!c->second.isEmpty() && QFileInfo(c->second).isDir())
             return QDir::fromNativeSeparators(c->second);
+      // a preset library (Vial): its own data folder (SoundLib::presetFolder: MS_PRESET_FOLDER, Vial's config, its default)
+      if (!makesSetups(library))
+            return SoundLib::presetFolder(library);
 #ifdef Q_OS_WIN
       static std::map<QString, QString> found;          // (the registry read once)
       auto it = found.find(library.registryName);
@@ -452,6 +457,13 @@ const SoundLib::LibInstrument* SoundLibraryHost::findPatch(const SoundLib::Libra
             if (li.name == name)
                   return &li;
       return nullptr;
+      }
+
+// a preset library's patch: its preset file (<Instrument preset>) in the library's folder
+QString SoundLibraryHost::presetPath(const SoundLib::Library& library, const QString& patch)
+      {
+      const SoundLib::LibInstrument* li = findPatch(library, patch);
+      return li ? SoundLib::presetFile(*li, libraryFolder(library)) : QString();
       }
 
 QString SoundLibraryHost::nkiPath(const SoundLib::Library& library, const QString& patch)
@@ -499,7 +511,8 @@ QByteArray SoundLibraryHost::setupId(const SoundLib::Library& library, const QSt
             const QByteArray made = QJsonDocument(madeFrom(library, *li)).toJson(QJsonDocument::Compact);
             return QCryptographicHash::hash(made, QCryptographicHash::Sha1).toHex();
             }
-      QFile f(setupFile(library, patch));
+      QFile f(li && !li->preset.isEmpty() && QFileInfo::exists(presetPath(library, patch)) ? presetPath(library, patch)
+                                                                                         : setupFile(library, patch));
       if (!f.open(QIODevice::ReadOnly))
             return QByteArray();
       return QCryptographicHash::hash(f.readAll(), QCryptographicHash::Sha1).toHex();
@@ -1174,6 +1187,23 @@ QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, c
             error = &dummy;
       const QString file = setupFile(library, patch);
       const SoundLib::LibInstrument* li = findPatch(library, patch);
+      if (!makesSetups(library) && li && !li->preset.isEmpty()) {
+            // a preset library (Vial): the preset file's bytes are the plug-in's component state (Vial's VST 3 state is
+            // its preset JSON); read at every load, so an updated preset plays at once. Its controller has no state
+            const QString preset = presetPath(library, patch);
+            QFile pf(preset);
+            if (!preset.isEmpty() && pf.open(QIODevice::ReadOnly)) {
+                  const QByteArray bytes = SoundLib::presetComponent(library, preset, pf.readAll());
+                  if (!bytes.isEmpty())
+                        return writeState(QFileInfo(pluginPath).completeBaseName(), bytes, QByteArray());
+                  }
+            QFile f(file);                      // (a setup file of the patch's own, else the preset's absence)
+            if (f.open(QIODevice::ReadOnly))
+                  return f.readAll();
+            *error = preset.isEmpty() ? tr("%1: the folder of its presets was not found. Choose it in View › Sound Library… › Library folder….").arg(library.name)
+                                      : tr("The preset of %1 was not found: %2").arg(patch, QDir::toNativeSeparators(preset));
+            return QByteArray();
+            }
       if (!makesSetups(library) || !li || li->nki.isEmpty()) {
             QFile f(file);
             if (f.open(QIODevice::ReadOnly))
@@ -3915,7 +3945,7 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
       _info->setTextInteractionFlags(Qt::TextSelectableByMouse);
       layout->addWidget(_info);
       // the library's own folder, for every score (the owner, 2026-10-15: moved here from Mixer › Advanced Options…)
-      if (_library && SoundLibraryHost::available() && SoundLibraryHost::makesSetups(*_library)) {
+      if (_library && SoundLibraryHost::available() && (SoundLibraryHost::makesSetups(*_library) || !_library->presets.empty())) {
             QGroupBox* libBox = new QGroupBox(_library->name, this);
             libBox->setObjectName("libraryBox");
             QHBoxLayout* h = new QHBoxLayout(libBox);
@@ -3924,7 +3954,9 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
             _folder->setTextInteractionFlags(Qt::TextSelectableByMouse);
             QPushButton* folder = new QPushButton(tr("Library folder…"), libBox);
             folder->setObjectName("libraryFolder");
-            folder->setToolTip(tr("Where %1 is installed (its folder with Instruments and Samples)").arg(_library->name));
+            folder->setToolTip(SoundLibraryHost::makesSetups(*_library)
+                               ? tr("Where %1 is installed (its folder with Instruments and Samples)").arg(_library->name)
+                               : tr("The plug-in's data folder, where %1's presets are").arg(_library->name));
             h->addWidget(_folder, 1);
             h->addWidget(folder);
             layout->addWidget(libBox);
@@ -3933,7 +3965,7 @@ SoundLibraryDialog::SoundLibraryDialog(std::shared_ptr<const SoundLib::Library> 
                                                                         SoundLibraryHost::libraryFolder(*_library));
                   if (dir.isEmpty())
                         return;
-                  if (!QFileInfo::exists(dir + "/Instruments"))
+                  if (SoundLibraryHost::makesSetups(*_library) && !QFileInfo::exists(dir + "/Instruments"))
                         QMessageBox::warning(this, windowTitle(), tr("%1 has no Instruments folder.").arg(QDir::toNativeSeparators(dir)));
                   SoundLibraryHost::setLibraryFolder(*_library, dir);
                   rebuild();
@@ -3963,9 +3995,12 @@ void SoundLibraryDialog::rebuild()
       {
       if (_folder) {
             const QString folder = SoundLibraryHost::libraryFolder(*_library);
-            _folder->setText(folder.isEmpty() ? tr("%1 was not found on this computer: choose its folder (the one with "
-                                                   "Instruments and Samples).").arg(_library->name)
-                                              : tr("Installed in %1").arg(QDir::toNativeSeparators(folder)));
+            if (!SoundLibraryHost::makesSetups(*_library))
+                  _folder->setText(tr("Presets from %1").arg(QDir::toNativeSeparators(folder)));
+            else
+                  _folder->setText(folder.isEmpty() ? tr("%1 was not found on this computer: choose its folder (the one with "
+                                                         "Instruments and Samples).").arg(_library->name)
+                                                    : tr("Installed in %1").arg(QDir::toNativeSeparators(folder)));
             }
       Score* score = _score ? _score.data() : mscore ? mscore->currentScore() : nullptr;
       // (what was open stays open)
@@ -4049,7 +4084,8 @@ void SoundLibraryDialog::rebuild()
                   const int slot = r.port * 16 + r.channel;
                   const bool setup = SoundLibraryHost::hasSetup(*_library, r.instrument->name);
                   const bool makes = SoundLibraryHost::makesSetups(*_library);
-                  item->setText(STATUS, !setup ? (makes ? tr("Its .nki was not found") : tr("No setup"))
+                  item->setText(STATUS, !setup ? (makes ? tr("Its .nki was not found")
+                                                        : !r.instrument->preset.isEmpty() ? tr("Its preset was not found") : tr("No setup"))
                                                : host->loaded(slot) ? tr("Loaded") : tr("Ready"));
                   QPushButton* show = new QPushButton(tr("Show"));
                   _tree->setItemWidget(item, SHOW, show);

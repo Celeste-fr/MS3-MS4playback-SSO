@@ -296,6 +296,7 @@ struct Controller {
 // the text the plug-in shows for a lane value 0-1 of the controller (its display), empty: none listed
 QString controllerText(const Controller& controller, double value);
 
+
 struct LibInstrument;
 // the index in li's allControllers of the parameter controller that plays MIDI controller cc when hosted
 // (Controller::hosted), -1: none
@@ -495,6 +496,10 @@ struct LibInstrument {
       // in the library's folder (Library::registryName), and the script values set in it
       QString nki;                        // "Instruments/Symphonic Strings/Violins 1 - All techniques.nki"
       std::vector<std::pair<QString, QString>> setupValues;   // ("$iooxo", "3"): UACC switching
+      // a plug-in that isn't Kontakt, whose state is a preset file (<Instrument preset>: Vial, whose VST 3 state is the
+      // preset's JSON): the file under the library's preset folder (Library::presets, presetFolder()), its bytes the
+      // component state loaded (SoundLibraryHost::savedSetupState)
+      QString preset;                     // "Vial Instrumental/Presets/SSO imitations/Violins 1 - Long.vital"
 
       bool extra() const { return !with.isEmpty(); }
       std::vector<const LibInstrument*> patches() const;    // this one, then its extras
@@ -609,10 +614,32 @@ class Library {
       std::vector<LibInstrument> otherPatches;
       QString registryName;               // <Files registry>: NI's registry key of the library
                                           // (its ContentDir is the folder the .nki paths start from)
+      // <Files presets="Vial" presetsHome=".local/share/vital" presetConfig="vial/Vial.config;vital/Vital.config"
+      //        presetKey="data_directory"/>: the folder the patches' preset paths start from (presetFolder())
+      struct Presets {
+            QString documents;            // Windows: <Documents>/<it> (Vial's default data folder)
+            QString home;                 // elsewhere: <home>/<it>; with XDG_DATA_HOME set, <it>/<documents in lower case>
+            QStringList configs;          // JSON files naming another folder (Windows under %APPDATA%, elsewhere ~/.<it>)
+            QString key;                  // the configs' key holding it
+            QString header;               // <Files presetHeader>: the key a state gets {"name", "path"} of its preset under
+                                          // (Vial Fuse's "fuse_preset": the name its header shows), when the file has none
+            bool empty() const { return documents.isEmpty() && home.isEmpty(); }
+            };
+      Presets presets;
 
       static std::shared_ptr<Library> load(const QString& path, QString* error = nullptr);
       const LibInstrument* match(const Instrument* instrument, const Part* part) const;
       };
+
+// a preset library's folder (Library::presets): MS_PRESET_FOLDER, else the first config naming an existing folder (a
+// later one wins over the first when the first names the default folder itself: Vial's rule, LoadSave::chooseDataDirectory,
+// so that the folder official Vital uses stays Vial's), else the default; empty for a library without presets
+QString presetFolder(const Library& library);
+// the patch's preset file in folder (empty: none)
+QString presetFile(const LibInstrument& patch, const QString& folder);
+// the component state of a preset file's bytes: the bytes, with <Files presetHeader>'s {"name", "path"} put in front
+// of the file's own keys when it has none
+QByteArray presetComponent(const Library& library, const QString& file, const QByteArray& bytes);
 
 //---------------------------------------------------------
 //   Choice
