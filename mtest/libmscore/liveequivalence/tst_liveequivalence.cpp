@@ -189,6 +189,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void hostedSlots();
       void vialSetupState();
       void twoLibraries();
+      void vialLevels();
       void chordVoicesHosted();
       void chordVoicesLive();
       void divisiLive();
@@ -5737,6 +5738,142 @@ void TestLiveEquivalence::twoLibraries()
             h->release();
             synti = was;
       }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   vialLevels
+//    Vial Instrumental as loud as SSO at every written dynamic (gen_vial.py, vial_levels.py; docs/PLAYBACK_SETTINGS.md ›
+//    Vial levels). 1: for each of the 13 instruments at every pitch both were measured at and every marking, the level
+//    MuseScore's functions give with the shipped maps on the measured curves (sso_cc1_curves.json /
+//    sso_winds_cc1_curves.json, vial_cc1_curves.json; loudDb) - A(cc1, p) + realRangeDb(cc1, p) + sectionLevel2 -
+//    is SSO's within 0.5 dB. 2: rendered (realRange 2 and sectionBalance 2, Recommended's), a flute on SSO and one on
+//    Vial in one score (vial-levels.musicxml, A4 at ppp .. fff): each note's CC11 and its patch's gain stage put the two
+//    within 0.5 dB on the same curves (CC11's steps included); with both settings 0 (Library default) Vial plays CC11
+//    127 and no gain, as before
+//---------------------------------------------------------
+
+void TestLiveEquivalence::vialLevels()
+      {
+      const QString maps = root + "/../share/soundlibraries/";
+      const QString tools = root + "/../tools/soundlibraries/";
+      SoundLib::setEngines({ { "Spitfire Symphony Orchestra", maps + "Spitfire Symphony Orchestra.xml" },
+                             { "Vial Instrumental", maps + "Vial Instrumental.xml" } });
+      SoundLib::setEngineAvailable(nullptr);
+      std::shared_ptr<const SoundLib::Library> sso = SoundLib::engine("Spitfire Symphony Orchestra");
+      std::shared_ptr<const SoundLib::Library> vial = SoundLib::engine("Vial Instrumental");
+      QVERIFY(sso && vial);
+      SoundLib::setCurrent(sso);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset {
+            ~Reset() { SoundLib::setEngines({}); SoundLib::setEngineAvailable(nullptr); SoundLib::setCurrent(nullptr);
+                       Playback::setIniValuesForTest({}); }
+            } reset;
+      // the measured loudDb by pitch and CC1, per instrument
+      typedef std::map<int, std::map<int, double>> Curve;
+      auto curves = [](const QStringList& files) {
+            std::map<QString, Curve> out;
+            for (const QString& f : files) {
+                  QFile j(f);
+                  if (!j.open(QIODevice::ReadOnly))
+                        continue;
+                  const QJsonObject secs = QJsonDocument::fromJson(j.readAll()).object().value("sections").toObject();
+                  for (auto s = secs.begin(); s != secs.end(); ++s) {
+                        const QJsonObject pts = s.value().toObject().value("points").toObject();
+                        for (auto p = pts.begin(); p != pts.end(); ++p)
+                              for (const QJsonValue& r : p.value().toArray())
+                                    if (r.toObject().contains("loudDb"))
+                                          out[s.key()][p.key().toInt()][r.toObject().value("cc").toInt()] = r.toObject().value("loudDb").toDouble();
+                        }
+                  }
+            return out;
+            };
+      const std::map<QString, Curve> ssoCurves = curves({ tools + "sso_cc1_curves.json", tools + "sso_winds_cc1_curves.json" });
+      const std::map<QString, Curve> vialCurves = curves({ tools + "vial_cc1_curves.json" });
+      QCOMPARE(int(vialCurves.size()), 13);
+      auto mainPatch = [](const SoundLib::Library& lib, const QString& name) -> const SoundLib::LibInstrument* {
+            for (const SoundLib::LibInstrument& li : lib.instruments)
+                  if (li.name == name && li.with.isEmpty())
+                        return &li;
+            return nullptr;
+            };
+      const int marks[] = { 16, 32, 48, 64, 80, 96, 112, 127 };
+      // 1: every instrument, pitch and marking
+      int compared = 0;
+      for (const auto& vc : vialCurves) {
+            const SoundLib::LibInstrument* vi = mainPatch(*vial, vc.first);
+            const SoundLib::LibInstrument* si = mainPatch(*sso, vc.first);
+            QVERIFY2(vi && si && ssoCurves.count(vc.first), qPrintable(vc.first));
+            QVERIFY2(ContextLevel::hasRealRange(vi), qPrintable(vc.first));
+            QCOMPARE(vi->realStepsDb, si->realStepsDb);
+            const Curve& sc = ssoCurves.at(vc.first);
+            for (const auto& vp : vc.second) {
+                  if (!sc.count(vp.first))
+                        continue;
+                  for (int x : marks) {
+                        const double v = vp.second.at(x) + ContextLevel::realRangeDb(*vi, x, vp.first, true) + vi->sectionLevelFor(2);
+                        const double s = sc.at(vp.first).at(x) + ContextLevel::realRangeDb(*si, x, vp.first, true) + si->sectionLevelFor(2);
+                        QVERIFY2(std::fabs(v - s) < 0.5, qPrintable(QString("%1 pitch %2 CC1 %3: Vial %4, SSO %5")
+                                                                     .arg(vc.first).arg(vp.first).arg(x).arg(v).arg(s)));
+                        ++compared;
+                        }
+                  }
+            }
+      QVERIFY2(compared > 13 * 8 * 10, qPrintable(QString::number(compared)));
+      // 2: rendered, the second flute on Vial
+      MasterScore* score = readScore(DIR + "vial-levels.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Part* fluteSso = score->parts()[0];
+      Part* fluteVial = score->parts()[1];
+      std::map<const Part*, PartPlayback> modes { { fluteVial, PartPlayback::LIBRARY } };
+      score->setMetaTag(PartPlaybackModes::metaTag, PartPlaybackModes::write(score, modes, { { fluteVial, "Vial Instrumental" } }));
+      QVERIFY(SoundLib::libraryOf(fluteVial) == vial);
+      QCOMPARE(SoundLib::libraryOf(fluteSso).get(), sso.get());
+      const std::vector<SoundLib::Route> routes = SoundLib::allRoutes(score);
+      QCOMPARE(int(routes.size()), 2);
+      for (bool on : { true, false }) {
+            const QString v = on ? "2" : "0";
+            Playback::setIniValuesForTest({ { "levels/realRange", v }, { "levels/sectionBalance", v } });
+            score->setPlaylistDirty();
+            EventMap ev;
+            SynthesizerState ss;
+            score->renderMidi(&ev, false, true, ss);
+            const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+            std::map<const Part*, std::vector<std::pair<int, double>>> heard;      // (CC1, applied dB) per note
+            for (const SoundLib::Route& r : routes) {
+                  const int slot = r.port * 16 + r.channel;
+                  const double gain = TrackDelays::gainStageDb(*r.library, TrackDelays::of(r.part, delays), r.instrument->name);
+                  int cc1 = -1, cc11 = 127;
+                  for (const auto& te : ev) {
+                        const NPlayEvent& e = te.second;
+                        if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != slot)
+                              continue;
+                        if (e.type() == ME_CONTROLLER && e.controller() == 1)
+                              cc1 = e.value();
+                        else if (e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION)
+                              cc11 = e.value();
+                        else if (e.type() == ME_NOTEON && e.velo() > 0)
+                              heard[r.part].push_back({ cc1, 20 * std::log10(cc11 / 127.0) + gain });
+                        }
+                  }
+            QCOMPARE(int(heard[fluteSso].size()), 8);
+            QCOMPARE(int(heard[fluteVial].size()), 8);
+            const Curve& sc = ssoCurves.at("Flute Solo");
+            const Curve& vc = vialCurves.at("Flute Solo");
+            for (int i = 0; i < 8; ++i) {
+                  const int x = heard[fluteVial][size_t(i)].first;
+                  QCOMPARE(x, marks[i]);
+                  QCOMPARE(heard[fluteSso][size_t(i)].first, x);
+                  if (!on) {
+                        QCOMPARE(heard[fluteVial][size_t(i)].second, 0.0);
+                        continue;
+                        }
+                  const double v = vc.at(69).at(x) + heard[fluteVial][size_t(i)].second;
+                  const double s = sc.at(69).at(x) + heard[fluteSso][size_t(i)].second;
+                  QVERIFY2(std::fabs(v - s) < 0.5, qPrintable(QString("rendered, CC1 %1: Vial %2, SSO %3").arg(x).arg(v).arg(s)));
+                  }
+            }
       delete score;
       }
 

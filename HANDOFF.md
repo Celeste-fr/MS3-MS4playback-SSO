@@ -58,6 +58,15 @@ not played yet.**
   levels, the audit, the verification see only the library segments' notes (untried). (7) GUI untried by hand.
 - Tested (Linux, test synth map; no Kontakt / SSO): see the branch's commit message.
 
+## Vial levels (branch `vial-levels`, 2026-10-27, from integrate-1017 4e6d877914)
+
+A Vial part as loud as the SSO part at the same written dynamic (the owner: measured, not by ear): docs/PLAYBACK_SETTINGS.md ›
+Vial levels; `tools/soundlibraries/vial_levels.py` sweep / fit / check (Linux kthost, Vial c29c49e, the owner's presets read
+in place). Matched on loudDb; the check (real plug-in, MuseScore's CC11 and gain stage under Recommended) within 0.53 dB.
+Open: the winds measure +2 .. +7 phon louder on Vial by the other loudness measures (envelopes differ): if the owner hears
+Vial's winds too loud against SSO, matching on phon is the alternative (`fit`'s offset by another measure: `offsetBy` lists each). Untried
+on Windows Vial (same code; the Windows build reads the same presets).
+
 ## Several libraries: Vial Instrumental as an engine (branch `vial-engine`, 2026-10-26, from integrate-1017 0f4abe48ea; not merged)
 
 The owner (2026-10-26): "natively integrate Vial Instrumental as another playback engine, like we have now for ms3, ms4

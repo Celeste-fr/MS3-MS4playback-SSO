@@ -7436,7 +7436,10 @@ void TestSoundLibrary::vialMap()
             patchOf[r.port * 16 + r.channel] = r.instrument->name;
       EventMap events;
       SynthesizerState ss;
+      // (the levels off, as in Library default: CC11 127; Recommended's realRange / sectionBalance: tst_liveequivalence::vialLevels)
+      Playback::setIniValuesForTest({ { "levels/realRange", "0" }, { "levels/sectionBalance", "0" } });
       score->renderMidi(&events, false, true, ss);
+      Playback::setIniValuesForTest({});
       std::map<QString, std::map<int, std::vector<std::pair<int, int>>>> ccs;        // patch -> controller -> (tick, value)
       std::map<QString, int> notes;
       for (const auto& te : events) {
