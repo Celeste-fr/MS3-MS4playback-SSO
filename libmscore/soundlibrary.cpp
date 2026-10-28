@@ -2985,6 +2985,9 @@ double divisiDb(int voices)
       return voices > 1 ? -10.0 * std::log10(double(voices)) : 0.0;
       }
 
+// (a unison on a monophonic patch: the same key and a tuning within a cent; a quarter tone apart is no unison)
+static const double UNISON_CENTS = 1.0;
+
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
             double toleranceCents, double tailSeconds, int maxLanes, bool fixedTuning)
       {
@@ -3020,6 +3023,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             int voice { 0 };              // a monophonic patch's voice (0 the line)
             bool plain { false };         // [slurs] plainPerformance's (Choice::plain): touching the note before, a transition
             int chordNotes { 1 };         // its chord's notes on its patch (a monophonic patch's chord: > 1)
+            const Note* unisonOf { nullptr };   // a monophonic patch's unison duplicate: the note that plays it (Lanes::unison)
             bool attacks { false };       // a plain note attacked afresh even right after a note of its patch (rendermidi's
                                           // performanceNote: a staccato, an accented re-attack under [slurs] plainAccents 2 / 3,
                                           // a join of its own wider than the map's legatoGap)
@@ -3109,10 +3113,24 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   std::stable_sort(group.begin(), group.end(), [&](size_t a, size_t b) {
                         const Note* na = items[a].note;
                         const Note* nb = items[b].note;
-                        return na->ppitch() != nb->ppitch() ? na->ppitch() < nb->ppitch() : items[a].cents < items[b].cents;
+                        if (na->ppitch() != nb->ppitch())
+                              return na->ppitch() < nb->ppitch();
+                        if (std::fabs(items[a].cents - items[b].cents) > UNISON_CENTS)
+                              return items[a].cents < items[b].cents;
+                        return items[a].off > items[b].off;           // (a unison: the longer note first, kept)
                         });
+                  const Item* kept = nullptr;
                   for (size_t i : group) {
                         Item& it = items[i];
+                        // (a unison with the note placed just before: one note, the kept one's voice; Lanes::unison)
+                        if (kept && kept->note->ppitch() == it.note->ppitch() && std::fabs(kept->cents - it.cents) <= UNISON_CENTS) {
+                              it.voice = kept->voice;
+                              it.unisonOf = kept->note;
+                              out.unison[it.note] = kept->note;
+                              voiceOfNote[it.note] = kept->voice;
+                              continue;
+                              }
+                        kept = &it;
                         int v = 0;
                         while (v < int(voiceEnd.size()) && voiceEnd[size_t(v)] > it.on + 1e-6)
                               ++v;
@@ -3168,7 +3186,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                         if (items[i].patch != int(p) || items[i].grace)
                               continue;
                         group.push_back(i);
-                        if (items[i].off > on + 1e-6)
+                        if (items[i].off > on + 1e-6 && !items[i].unisonOf)     // (a unison: one voice)
                               ends.push_back(items[i].off);
                         }
                   const int n = std::max(int(ends.size()), 1);
@@ -3208,6 +3226,8 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   fixed[p] = !(bend && patches[p]->bendCents > 0);
             }
       for (const Item& it : items) {
+            if (it.unisonOf)                    // (a unison duplicate: no lane of its own; the kept note's, below)
+                  continue;
             std::vector<Lane>& lanes = byPool[size_t(it.patch)][size_t(it.voice)];
             if (lanes.empty())
                   lanes.emplace_back();
@@ -3328,6 +3348,14 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             auto nl = out.lane.find(it.note);
             if (nl != out.lane.end())
                   nl->second += offset[size_t(it.patch)][size_t(it.voice)];
+            }
+      for (const auto& u : out.unison) {              // (a unison duplicate: the kept note's lane and tuning)
+            auto l = out.lane.find(u.second);
+            if (l != out.lane.end())
+                  out.lane[u.first] = l->second;
+            auto c = out.cents.find(u.second);
+            if (c != out.cents.end())
+                  out.cents[u.first] = c->second;
             }
       for (const auto& t : tiedTo) {
             auto l = out.lane.find(t.second);

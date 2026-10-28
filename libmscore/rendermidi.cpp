@@ -2154,6 +2154,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   int libShiftWritten = -1;
                   std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
                   auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0, bool once = false) {
+                        // a mono patch's unison duplicate (SoundLib::Lanes::unison): the kept note plays the unison, one
+                        // section on one copy; this one sends nothing (two copies on one key in phase: +3 dB, combing)
+                        if (li && libUnison.count(note))
+                              return;
                         // a discrete glissando: its steps over the note's length, each a note of its own at the
                         // dynamic of its time; tied into, the first step is left out (the tie took it)
                         const std::vector<int> steps = ms4DiscreteGlissando(note);
@@ -2653,7 +2657,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // a note of its own at a given start, length and pitch offset
                   auto renderAt = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int start, int length, int pitchOffset = 0) {
                         // (glissando notes need the tieBack exemption: they play their later steps)
-                        if (!note->play())
+                        if (!note->play() || (li && libUnison.count(note)))      // (a unison duplicate: collect)
                               return;
                         const std::vector<Ms4::ArtRef> noteArts = Ms4::noteArticulations(note, arts);
                         Ms4::NoteResult r = Ms4::note(ctx.family, noteArts, ctx.dynamics.levelAt(note->track(), start + tickOffset), ctx.snd);
@@ -3337,12 +3341,21 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       // last one's note off, cut at once; 164 such keys in the piece). From a little before the chunk: a note
       // of the chunk before may still sound into it
       if (Playback::on("notes/sameKeyEndsFirst", score)) {           // (playback settings [notes])
-            std::map<std::tuple<int, int, int>, int> sounding;      // channel, patch, key -> notes on
+            // (by lane too: a patch's tuning / voice copies are routes of their own, a key on one copy doesn't end the
+            // same key on another; keyed by channel alone, two voices' unison lost one note to a zero length, or, its
+            // starts apart, the moved note-off landed before the later note-on, which then hung: unison.musicxml)
+            auto laneOf = [&](const NPlayEvent& e) {
+                  if (!e.note())
+                        return 0;
+                  auto l = libLanes.find(e.note());
+                  return l == libLanes.end() ? 0 : l->second;
+                  };
+            std::map<std::tuple<int, int, int, int>, int> sounding;      // channel, patch, lane, key -> notes on
             for (auto i = events->lower_bound(std::max(0, chunk.utick1() - 8 * DIVISION)); i != events->end(); ++i) {
                   const NPlayEvent& ev = i->second;
                   if (ev.type() != ME_NOTEON || ev.librarySwitch() || !libRoutes.count(ev.channel()) || ev.libraryPatch() < 0)
                         continue;
-                  const auto key = std::make_tuple(ev.channel(), ev.libraryPatch(), ev.pitch());
+                  const auto key = std::make_tuple(ev.channel(), ev.libraryPatch(), laneOf(ev), ev.pitch());
                   if (ev.velo() == 0) {
                         auto s = sounding.find(key);
                         if (s != sounding.end() && s->second > 0)
@@ -3355,7 +3368,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                         for (auto j = std::next(i); j != events->end(); ++j) {
                               const NPlayEvent& o = j->second;
                               if (o.type() == ME_NOTEON && o.velo() == 0 && !o.librarySwitch() && o.channel() == ev.channel()
-                                  && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch()) {
+                                  && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch() && laneOf(o) == laneOf(ev)) {
                                     // (the earliest note off of the key after it: the overlapping note's, or of a
                                     // shorter note inside a held one, whose key then stays down until the held
                                     // one's note off; right before the strike, after a unison at the same tick)
@@ -7490,6 +7503,7 @@ void MidiRenderer::updateState()
             libCut.clear();
             libLanes.clear();
             libDivisi.clear();
+            libUnison.clear();
             libLaneCents.clear();
             libBend.clear();
             libGlideFrom.clear();
@@ -7631,6 +7645,7 @@ void MidiRenderer::updateState()
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
                               libDivisi.insert(l.sounding.begin(), l.sounding.end());
+                              libUnison.insert(l.unison.begin(), l.unison.end());
                               for (const auto& nc : l.cents) {
                                     libLaneCents[nc.first] = nc.second;
                                     tuned = tuned || std::fabs(nc.second) > 1e-6;
@@ -7644,6 +7659,7 @@ void MidiRenderer::updateState()
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
                               libDivisi.insert(l.sounding.begin(), l.sounding.end());
+                              libUnison.insert(l.unison.begin(), l.unison.end());
                               }
                         for (const auto& ip : *part->instruments()) {
                               const SoundLib::LibInstrument* li = lib.match(ip.second, part);

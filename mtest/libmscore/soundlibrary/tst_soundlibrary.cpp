@@ -241,6 +241,7 @@ class TestSoundLibrary : public QObject, public MTest
       void chordVoices();
       void voiceLanesMemory();
       void divisiLevel();
+      void monoUnison();
 #ifdef TESTSYNTH
       void vialHosted();
       void evenAutoTestSynth();
@@ -17450,6 +17451,84 @@ void TestSoundLibrary::divisiLevel()
       Playback::setIniValuesForTest({});
       SoundLib::setCurrent(map(false));
       check(levels(render(false)), none, "not monophonic");
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   monoUnison
+//    A mono patch's unison (two notes of one pitch and tuning starting together: two staff voices meeting, a doubled
+//    chord note) is ONE note (Lanes::unison, MidiRenderer::libUnison): the duplicate takes the kept note's voice, counts
+//    in no divisi n and sends nothing. Before, one copy's note was cut to zero length (sameKeyEndsFirst, keyed by
+//    channel alone) or hung, and the other played 3 dB under a lone note. unison.musicxml: m1 two voices (unisons on
+//    beats 2-3), m2 a chord with a doubled G4, m3 two voices on one G5, m4 a lone C5
+//---------------------------------------------------------
+
+void TestSoundLibrary::monoUnison()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::PLUGIN); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin' mono='1'>"
+         "<Articulation name='Legato' value='20' techniques='legato long'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      MasterScore* score = readScore(DIR + "unison.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const Part* part = score->parts()[0];
+      std::vector<const Note*> notes;               // in score order: per segment voice 1's chord then voice 2's, each from the lowest
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (int track = 0; track < 2; ++track)
+                  if (s->element(track) && s->element(track)->isChord())
+                        for (const Note* n : toChord(s->element(track))->notes())
+                              notes.push_back(n);
+      // m1: C5/A4, D5/D5, E5/E5, F5/C5; m2: G4 G4 D5 (one chord); m3: G5/G5; m4: C5
+      QCOMPARE(int(notes.size()), 14);
+      const SoundLib::Lanes l = SoundLib::lanes(score, part, { &lib->instruments[0] }, 3, 0.5, 4, true);
+      // notes: 0 C5 1 A4 | 2 D5 3 D5 | 4 E5 5 E5 | 6 F5 7 C5 | 8 G4 9 G4 10 D5 | 11 G5 12 G5 | 13 C5
+      // the unisons: voice 2's D5 / E5 (3, 5), the chord's second G4 (9: equal lengths, the first kept), voice 2's G5 (12)
+      QCOMPARE(int(l.unison.size()), 4);
+      for (int i : { 3, 5, 9, 12 }) {
+            QVERIFY(l.unison.count(notes[size_t(i)]));
+            QCOMPARE(l.unison.at(notes[size_t(i)]), notes[size_t(i - 1)]);
+            QCOMPARE(l.lane.count(notes[size_t(i)]) ? l.lane.at(notes[size_t(i)]) : 0,
+                     l.lane.count(notes[size_t(i - 1)]) ? l.lane.at(notes[size_t(i - 1)]) : 0);
+            }
+      // a unison is one voice: n = 1 (no divisi); a real chord (m1 beats 1 and 4, m2's G4 + D5) n = 2
+      const std::vector<int> sounding = { 2, 2, 1, 0, 1, 0, 2, 2, 2, 0, 2, 1, 0, 1 };   // (0: a duplicate)
+      for (size_t i = 0; i < 14; ++i)
+            if (!l.unison.count(notes[i]))
+                  QCOMPARE(l.sounding.count(notes[i]) ? l.sounding.at(notes[i]) : 1, sounding[i]);
+      // two voices at most (before the fix three: m2's doubled G4 opened a third copy)
+      QCOMPARE(l.count[0], 2);
+      // rendered (plugin output and Live's clips): a unison duplicate sends no note-on; the kept note plays at 0 dB
+      // (CC11 as a lone note's), never two note-ons of one key at one instant on two routes of the patch
+      for (bool forLive : { false, true }) {
+            score->setPlaylistDirty();
+            SoundLib::setCurrent(lib);
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(forLive);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            std::map<std::pair<int, int>, std::set<int>> onAt;        // (tick, key) -> routes with a note-on
+            std::set<const Note*> sent;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch() || ev.type() != ME_NOTEON || ev.velo() == 0)
+                        continue;
+                  onAt[{ te.first, ev.pitch() }].insert(ev.extPort() * 16 + ev.extChannel());
+                  if (ev.note())
+                        sent.insert(ev.note());
+                  }
+            for (const auto& o : onAt)
+                  QCOMPARE(int(o.second.size()), 1);
+            for (const auto& u : l.unison)
+                  QVERIFY(!sent.count(u.first));
+            }
       delete score;
       }
 

@@ -160,6 +160,7 @@ class MidiRenderer {
       // channel -> MIDI out port and channel per patch, per lane (SoundLib::Lanes: copies of a patch by tuning)
       std::map<int, std::vector<std::vector<std::pair<int, int>>>> libRoutes;
       std::map<const Note*, int> libLanes;                        // a note's lane, when not 0
+      std::map<const Note*, const Note*> libUnison;               // a mono patch's unison duplicate -> the note that plays it (SoundLib::Lanes::unison): not sent
       std::map<const Note*, int> libDivisi;                       // [levels] divisi: a mono patch's note's voices sounding at its start (> 1; SoundLib::Lanes::sounding)
       std::map<const Note*, double> libLaneCents;                 // a note's tuning as its lane plays it (varispeed)
       // channel -> per patch: its pitch bend range in cents (SoundLib::LibInstrument::bendCents; 0: none)

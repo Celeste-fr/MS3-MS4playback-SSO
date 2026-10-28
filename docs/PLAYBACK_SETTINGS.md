@@ -1704,6 +1704,15 @@ the others share the Violas script, an assumption checked on Celli).
 - Cost: a slot per extra voice (Kontakt compiles its script per slot, ~1.3-1.7 s at load; ~220 MB).
 - Tests: `tst_soundlibrary::chordVoices`, `tst_liveequivalence::chordVoicesLive` / `chordVoicesHosted`,
   `tst_playbackaudit::chordFindings`. Untried with Kontakt / SSO and in Live.
+- A unison is one note (2026-10-28, branch `bowed-join`; a fix, no setting): two notes of one pitch and tuning (within
+  1 cent) starting together on a mono patch (two staff voices meeting, a doubled chord note) are ONE note:
+  `SoundLib::Lanes::unison` maps the duplicate (the shorter, else the later one) to the kept note, whose voice, lane
+  and tuning it takes; it counts in no divisi n and `MidiRenderer::libUnison` sends nothing for it. Before, the two
+  notes sat on two voice copies of one key: `notes/sameKeyEndsFirst` (keyed by channel and key, not by copy) cut one
+  copy's note to zero length, or, its starts apart, moved a note-off before the later note-on, which then hung; the
+  other copy played 3 dB under a lone note (divisi n = 2) while the same sample on two copies in phase adds +3 dB.
+  `sameKeyEndsFirst` now keys by lane too, so one copy's note-off never ends another copy's note. A quarter tone
+  apart is no unison. Test: `tst_soundlibrary::monoUnison` (`unison.musicxml`).
 
 ## Divisi level
 

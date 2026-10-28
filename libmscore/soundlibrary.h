@@ -1014,6 +1014,13 @@ struct Lanes {
       // the notes starting with it included (a grace note: its chord's count); only where more than 1 ([levels] divisi:
       // divisiDb; a note held under a chord change keeps the count at its own start)
       std::map<const Note*, int> sounding;
+      // a monophonic patch's unison: a note starting together with another of the same pitch and tuning on the same patch
+      // (two staff voices meeting, a doubled chord note) -> the note that plays it (the longer one, as written, ties
+      // included). A real section in unison is one section, its players already incoherent; two copies of one patch on
+      // one key at one instant play the same sample in phase (+6 dB less divisi's 3 = +3 dB, combing if not at one
+      // instant). So the unison is ONE note on one voice: the duplicate takes the kept note's voice, lane and tuning,
+      // counts as no voice in sounding, and the renderer sends nothing for it (MidiRenderer::libUnison)
+      std::map<const Note*, const Note*> unison;
       };
 // [levels] divisi (the owner, 2026-10-20, "yes": as a real orchestra plays it): a section divided into n groups, each
 // note played by 1 / n of the players: n equal incoherent groups add up as powers to one section, so each plays
