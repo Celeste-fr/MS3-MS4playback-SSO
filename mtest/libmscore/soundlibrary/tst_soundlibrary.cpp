@@ -10102,6 +10102,38 @@ void TestSoundLibrary::vialHosted()
              dB(novib, full));
       QVERIFY2(full > 1e-3, "silent");
       QVERIFY(dB(soft, full) < -1.0);
+      // CC21 vibrato depth (the vial sessions' rows, 2026-10-27: 127 the preset's full vibrato, 64 less, 0 none) where the
+      // map gives the patch a CC21 controller: the held sound differs between the three (vibrato moves the pitch: the
+      // level hardly changes, the waveform does); a patch without it: CC21 changes nothing
+      {
+            bool hasVibrato = false;
+            for (const SoundLib::Controller& c : li->allControllers)
+                  if (c.cc == 21)
+                        hasVibrato = true;
+            std::vector<float> v127, again, v64, v0;
+            double r = 0;
+            heldOut = &v127; render(64, 127, 127, &r, nullptr);
+            heldOut = &again; render(64, 127, 127, &r, nullptr);
+            heldOut = &v64; render(64, 127, 64, &r, nullptr);
+            heldOut = &v0; render(64, 127, 0, &r, nullptr);
+            heldOut = nullptr;
+            auto residualDb = [](const std::vector<float>& x, const std::vector<float>& y) {
+                  double e = 0, d = 0;
+                  for (size_t i = 0; i < std::min(x.size(), y.size()); ++i) {
+                        e += double(x[i]) * x[i];
+                        d += double(x[i] - y[i]) * (x[i] - y[i]);
+                        }
+                  return 10 * std::log10((d + 1e-30) / (e + 1e-30));
+                  };
+            const double same = residualDb(v127, again);
+            const double d64 = residualDb(v127, v64), d0 = residualDb(v127, v0), d64_0 = residualDb(v64, v0);
+            qDebug("vialHosted: %s CC21 (map: %s): 127 twice %.1f dB, 64 against 127 %.1f dB, 0 against 127 %.1f dB, 64 against 0 %.1f dB",
+                   qPrintable(name), hasVibrato ? "yes" : "no", same, d64, d0, d64_0);
+            QVERIFY2(same < -60, qPrintable(name));                     // (a render repeats: the differences are CC21's)
+            // (64 and 0 nearer each other where the preset's depth at 64 is small: the bassoon's 0.26 of 127's, -30.1 dB)
+            if (hasVibrato)
+                  QVERIFY2(d64 > -30 && d0 > -30 && d64_0 > -40, qPrintable(name));
+            }
       // CC11: an exact gain where the preset takes it (a modulation from a MIDI CC source listening to CC11: Vial's
       // midi_cc_<n>_number = 11, the vial sessions' cc_apply.py, -> voice_expression); a preset without it ignores CC11
       const QJsonObject settings = want.value("settings").toObject();

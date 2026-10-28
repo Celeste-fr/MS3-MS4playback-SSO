@@ -138,6 +138,12 @@ The owner's "SSO imitations" Vial presets as a sound library (approved 2026-10-2
   `vialHosted` re-run 2026-10-27 on the CC11 pack (md5 cd7b74fb…) with Vial main 7a75da1's Linux bundles (`~/vial-bin/linux-vst3-7a75da1/`): all 26 (13 .vital, 13 .vialfuse) pass, every setting kept, CC11 64 -5.95 dB, CC1 40 -3.7 .. -5.2 dB, CC21 0 0.00 dB (no depth rows yet); each .vialfuse renders the .vital's rms to 5 digits (asked the vial session whether that is meant); re-run when the CC21 rows ship; the final CC21 list may
   change the ten (gen_vial.py PRESETS).
 
+**CC21 vibrato rows checked hosted** (2026-10-27, the vial sessions' package md5 65519f3e…, Linux Vial c29c49e, `vialHosted`
+with `MS_VIAL_VST3` / `MS_PRESET_FOLDER`, both maps, all 13 instruments: 26 pass): a render repeats exactly (-315 dB);
+on the 10 patches with the map's CC21 the held sound differs between CC21 127 / 64 / 0 (residual against 127: 64 -7.3 ..
+-24.9 dB, 0 -3.8 .. -18.7 dB; the bassoon's 64 against 0 -30.1 dB, its depth at 64 0.26 of 127's); Basses, horn, tuba:
+CC21 changes nothing. The held level at the test's settings unchanged from the earlier presets to 5 digits.
+
 ## Out-of-process host (branch `oop-host`, 2026-10-25, from integrate-1017 6dd53a9e97 + kontakt-procs; not merged)
 
 The owner approved ("seems good") hosting the library's plug-ins in helper processes: build 480 showed Kontakt doing its
