@@ -1178,7 +1178,12 @@ and in Recommended, 0 in Library default; the owner, 2026-10-17, after hearing t
     in its fingered band 20-84). The owner, Whence's Celli bars 1-2, the Velocity lane's "64 · fingered" on a slur's first
     note: "it's supposed to be bowed". Its bend glides as the bowed transition's (`bendGlide`); `[slurs] microtoneBends` 3
     doesn't move it early (that is for fingered ones); even levels take it as a slur start (`newSlur`); a slur after a slur
-    overlaps the note before by the map's `overlap` as `[slurs] transitions` plays it, a détaché note touches it;
+    overlaps the note before by the map's `overlap` as `[slurs] transitions` plays it, a détaché note touches it. It goes
+    on the note before's copy also at another tuning (`SoundLib::lanes`' `plainJoin`, as `[slurs] plainJoins` 1 does;
+    branch `bowed-join`, 2026-10-28): before, a touching note outside a slur at another quarter-tone tuning went on its
+    tuning's copy and was sent bowed there with no note to go on from, a fresh attack at 93 (the owner, Whence's Violins
+    1 bar 16, F#5 into the quarter-sharp G5: "the transition between the last note and the penultimate note is wrong";
+    Whence, Recommended: that note, the Basses' bars 10 / 14 and the Violas' bars 12 / 16 join, no other note changes);
   - **inside a slur**: 64, SSO's fingered transition, as before;
   - unchanged: a staccato (and a note after a staccato) a spiccato attack at 64, an accent as `[slurs] plainAccents` plays
     it, the same key struck again right after itself 64 (an attack).
