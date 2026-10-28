@@ -16,11 +16,13 @@ Conventions:
   **New measurements: use `measure_patch.py`** (docs/MEASURING.md), which does the three steps for any patch; kthost now
   has its source in the repo (`tools/soundlibraries/kthost/`, `C:\claude\ps\kt\kthost.exe` on the VM), and the old
   scripts run with it by changing the exe's path.
-- **Wrappers**: Linux builds and tests run through a wrapper that bind-mounts the worktree over the build dir's
-  configured path (CLAUDE.md › Building and testing). Current form: an overlay folder per branch,
-  `~/MuseScore/ms3fork/ovl-<branch>/<xx>.sh '<command>'` (flock on `private/BUILD_LOCK`, overlayfs build.rel over
-  `build-integrate`); older form `ninja-<name>.sh` / `run-<name>.sh`; builds one at a time through `build-queue.sh
-  <wrapper> ninja -j6 <target>`. Below, `WRAP` stands for that wrapper.
+- **Builds** (since 2026-10-28, disk cleanup): the integration worktree (`.claude/worktrees/integrate-1017`) has its own
+  plain build dir, `build.rel` (configured at the worktree's real path, ~8 GB; flags as CLAUDE.md › Building and testing);
+  build under `flock ~/MuseScore/ms3fork/private/BUILD_LOCK`. `~/MuseScore/ms3fork/ovl-check/ck.sh '<command>'` runs a
+  command in it (kept for older scripts; no overlay any more). Before 2026-10-28 builds ran through overlay folders per
+  branch (`ovl-<branch>/<xx>.sh`, overlayfs build.rel over `build-integrate`; 28 GB for one build), and earlier
+  `ninja-<name>.sh` / `run-<name>.sh`; old scripts are archived in `private/archive/ovl/`. A new branch: its own worktree
+  and build dir (or build in the integration worktree after merging). Below, `WRAP` stands for `ck.sh`.
 - **VM etiquette**: one VM-heavy job at a time; scripts take `C:\claude\quiet.lock` and a local `private/VM_PAUSE`
   while they run and remove them after; never touch the owner's setups or `AGM_info.xml`. **The VM's address, key and
   the lock protocol live in one place, `tools/vm/vmlib.py`** (section 10): new tools use it (`vm.sh` for sh scripts,
