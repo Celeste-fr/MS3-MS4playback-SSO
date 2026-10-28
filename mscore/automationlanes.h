@@ -101,6 +101,10 @@
 //   take it (ShortcutOverride) only while there is a time selection or a lane has the focus. Points selected in a lane
 //   since the score's selection last changed take over: Ctrl+D then duplicates those (as before).
 //   Not here: a lane's rubber band as a time selection (it selects points).
+//   Lane heights (the owner, 2026-10-28; laneheights.h has the gestures, which are Live's and which ours): every lane
+//   under the header row has its own height; drag the lower edge of its header box (Alt: every lane), Alt + "+" / "-"
+//   on the focused lane, double-click the edge or the menu's Reset Lane Height / Reset All Lane Heights for the default.
+//   computeRows stacks the rows by them and updateSpace gives the layout their sum, so the score below moves with them.
 //   Under a library part's header row, first: the Velocity and Join lanes, a stem per note (notelanes.h); there a
 //   background drag draws its rubber band as the lanes do, and Ctrl+D with stems selected copies their values onto the
 //   notes at the same places right after them (the span rounded out to the grid; NoteLanes::duplicateSelected; a time
@@ -123,8 +127,11 @@
 #include "libmscore/automation.h"
 #include "libmscore/soundlibrary.h"
 #include "lanefolds.h"
+#include "laneheights.h"
 
+class QAction;
 class QColor;
+class QMenu;
 class QContextMenuEvent;
 class QKeyEvent;
 class QMouseEvent;
@@ -193,6 +200,14 @@ class AutomationLanes : public QObject {
       std::vector<const Part*> headerParts() const;           // the parts with a header row, in score order
       void showLane(const Part* part, const QString& target, bool on = true);
       void setDrawMode(bool on) { _drawMode = on; }
+      // a lane's height (laneheights.h; spatium), per score and view part, for the session; set (all: every lane of the
+      // score) / reset lay the lanes out again
+      double laneHeight(const Part* part, const QString& target) const;
+      void setLaneHeight(const Part* part, const QString& target, double sp, bool all = false);
+      void resetLaneHeight(const Part* part, const QString& target);
+      void resetAllLaneHeights();
+      // the lane whose header box's lower edge is at pixel (viewport; the resize grip), else nullptr
+      const Row* resizeEdgeAt(const QPoint& pixel) const;
       // a lane's line as paintLane draws it (also for the tests' pictures): rect the lane, valueRect its values (0 at
       // the bottom, 1 at the top), unautomated the controller's value without a point (partcontrollers.h; -1: not
       // known), px a screen pixel, selected the selected points' indices
@@ -217,11 +232,18 @@ class AutomationLanes : public QObject {
 
    private:
       friend class NoteLanes;       // (the Velocity and Join lanes: notelanes.h)
-      enum class Drag : signed char { NONE, PENDING, MOVE, CURVE, RUBBER, DRAW, FREE, SEGMENT };
+      enum class Drag : signed char { NONE, PENDING, MOVE, CURVE, RUBBER, DRAW, FREE, SEGMENT, RESIZE };
 
       ScoreView* _view;
       NoteLanes* _notes;
       LaneFolds _folds;                                        // view parts whose lanes are open, per score
+      LaneHeights _heights;                                    // the lanes' heights, per score and view part
+      // a lane's height being dragged (Drag::RESIZE): the lane, its height at the press; the resize cursor shown
+      const Part* _resizePart { nullptr };
+      QString _resizeTarget;
+      double _resizeStart { 0 };
+      bool _resizeCursor { false };
+      void setResizeCursor(bool on);
       bool _spaceQueued { false };                             // updateSpace after the layout (queueSpace)
       std::map<const Part*, std::set<QString>> _added;         // master part -> empty lanes shown
       std::map<const Part*, std::set<QString>> _hidden;
@@ -336,6 +358,13 @@ class AutomationLanes : public QObject {
       void select(const Row& r, const std::vector<int>& sel);
       void dropFocus();
       void addLaneMenu(const Row& r, const QPoint& globalPos);
+      // a lane's right-click menu: Reset Lane Height, Reset All Lane Heights (each only when there is one to reset)
+      struct HeightActions {
+            QAction* reset { nullptr };
+            QAction* resetAll { nullptr };
+            };
+      HeightActions addHeightActions(QMenu& menu, const Row& r) const;
+      bool heightAction(const QAction* a, const HeightActions& h, const Row& r);      // true: it was one of them
       };
 
 }     // namespace Ms

@@ -59,6 +59,7 @@
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
 #include "mscore/lanefolds.h"
+#include "mscore/laneheights.h"
 #include "mscore/automationlanes.h"
 #include "mscore/notelanes.h"
 #include "mscore/soundlibraryhost.h"
@@ -132,6 +133,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipEnvelopeMapping();
       void laneTimeAxis();
       void laneFolds();
+      void laneHeights();
       void laneDashedLine();
       void lanePointsOnBarLines();
       void noteLaneRubber();
@@ -3786,6 +3788,228 @@ void TestLiveIntegration::laneFolds()
       QCOMPARE(score->parts().size(), 2);
       f.keepOnly(score, parts(score));
       QVERIFY(f.isOpen(score, violin) && !f.isOpen(score, flute));
+      delete other;
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   laneHeights
+//    resizable lanes (the owner, 2026-10-28: "a way to resize the automation lanes like in Live, with a way to reset
+//    them to the default height"; laneheights.h): each lane's own height, clamped to MIN_SP .. MAX_SP, Alt: every lane,
+//    a step (Alt + / -), reset one / all, per score, kept over undo, a part removed dropped, never the score's state;
+//    the rows stacked by them (a lane taller: its rect and the ones below), the grip at a lane's lower edge, the layout's
+//    room (Score::setAutomationSpace) moving the next part's staves by as much; folding still works beside it.
+//    MS_LANE_PNG=<folder>: a part's header row and three lanes at the default heights and with the Velocity lane resized
+//    (lane-resize-before.png, lane-resize-after.png)
+//---------------------------------------------------------
+
+void TestLiveIntegration::laneHeights()
+      {
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      MasterScore* other = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(other);
+      const Part* violin = score->parts()[0];
+      const Part* flute = score->parts()[1];
+      const QString cc1 = "cc1", vel = "note:velocity";
+      using H = LaneHeights;
+      LaneHeights h;
+      QCOMPARE(h.height(score, violin, cc1), H::DEFAULT_SP);
+      QVERIFY(h.isDefault(score, violin, cc1) && !h.anyChanged(score));
+      // one lane: only it
+      h.set(score, violin, cc1, 9.0);
+      QCOMPARE(h.height(score, violin, cc1), 9.0);
+      QCOMPARE(h.height(score, violin, vel), H::DEFAULT_SP);
+      QCOMPARE(h.height(score, flute, cc1), H::DEFAULT_SP);
+      QCOMPARE(h.height(other, other->parts()[0], cc1), H::DEFAULT_SP);       // (per score)
+      QVERIFY(h.anyChanged(score) && !h.anyChanged(other));
+      // the limits
+      h.set(score, violin, vel, 0.1);
+      QCOMPARE(h.height(score, violin, vel), H::MIN_SP);
+      h.set(score, violin, vel, 1000);
+      QCOMPARE(h.height(score, violin, vel), H::MAX_SP);
+      QVERIFY(H::MIN_SP >= 2.4 && H::MIN_SP < H::DEFAULT_SP && H::MAX_SP > H::DEFAULT_SP);      // (one header line: 10 pt = 2 sp)
+      // a step (Alt + / Alt -), stopping at the limits
+      QCOMPARE(h.step(score, violin, vel, +1), H::MAX_SP);
+      h.set(score, violin, vel, H::DEFAULT_SP);
+      QCOMPARE(h.step(score, violin, vel, +1), H::DEFAULT_SP + H::STEP_SP);
+      QCOMPARE(h.step(score, violin, vel, -1), H::DEFAULT_SP);
+      for (int i = 0; i < 20; ++i)
+            h.step(score, violin, vel, -1);
+      QCOMPARE(h.height(score, violin, vel), H::MIN_SP);
+      // reset one: the default again; the other lane's own stays
+      h.reset(score, violin, vel);
+      QVERIFY(h.isDefault(score, violin, vel));
+      QCOMPARE(h.height(score, violin, cc1), 9.0);
+      // Alt: every lane of the score, also lanes not seen yet; then one reset to the default (not to the Alt height)
+      h.setAll(score, 7.0);
+      QCOMPARE(h.height(score, violin, cc1), 7.0);
+      QCOMPARE(h.height(score, flute, "cc11"), 7.0);
+      QCOMPARE(h.height(other, other->parts()[0], cc1), H::DEFAULT_SP);
+      h.reset(score, flute, "cc11");
+      QCOMPARE(h.height(score, flute, "cc11"), H::DEFAULT_SP);
+      QCOMPARE(h.height(score, flute, cc1), 7.0);
+      h.setAll(score, 0);
+      QCOMPARE(h.height(score, violin, cc1), H::MIN_SP);
+      // reset all
+      h.resetAll(score);
+      QVERIFY(!h.anyChanged(score) && h.isDefault(score, violin, cc1) && h.isDefault(score, flute, "cc11"));
+      // setting the default back is no change left over
+      h.set(score, violin, cc1, 6.0);
+      h.set(score, violin, cc1, H::DEFAULT_SP);
+      QVERIFY(!h.anyChanged(score));
+
+      // undo / redo keep it and the score isn't changed by it; a part removed: its heights go
+      auto parts = [](const Score* s) {
+            std::set<const Part*> out;
+            for (const Part* p : s->parts())
+                  out.insert(p);
+            return out;
+            };
+      const bool dirtyBefore = score->dirty();
+      h.set(score, violin, cc1, 8.0);
+      h.set(score, flute, cc1, 4.0);
+      QCOMPARE(score->dirty(), dirtyBefore);
+      QVERIFY(!score->metaTags().contains("laneHeights"));
+      score->startCmd();
+      score->undo(new ChangeMetaText(score, "laneHeightsTest", "1"));
+      score->endCmd();
+      score->undoRedo(true, nullptr);
+      h.keepOnly(score, parts(score));
+      QCOMPARE(h.height(score, violin, cc1), 8.0);
+      QCOMPARE(h.height(score, flute, cc1), 4.0);
+      score->startCmd();
+      score->cmdRemovePart(const_cast<Part*>(flute));
+      score->endCmd();
+      h.keepOnly(score, parts(score));
+      QCOMPARE(h.height(score, violin, cc1), 8.0);
+      score->undoRedo(true, nullptr);
+      QCOMPARE(score->parts().size(), 2);
+      QCOMPARE(h.height(score, flute, cc1), H::DEFAULT_SP);           // (back, at the default)
+
+      // folding beside it: the heights don't fold or open anything, a folded part's lanes keep their heights
+      LaneFolds f;
+      QVERIFY(f.toggle(score, violin));
+      h.set(score, violin, vel, 12.0);
+      QVERIFY(f.isOpen(score, violin) && !f.isOpen(score, flute));
+      QVERIFY(!f.toggle(score, violin));
+      QCOMPARE(h.height(score, violin, vel), 12.0);
+      QVERIFY(f.toggle(score, violin));
+      QCOMPARE(h.height(score, violin, vel), 12.0);
+
+      // the geometry: the rows stacked by their heights (computeRows), the room (updateSpace), the grip (edgeAt)
+      const double HEAD = 3.2;
+      const double sp = 10.0;
+      std::vector<double> lanes { H::DEFAULT_SP, H::DEFAULT_SP, H::DEFAULT_SP };
+      auto rows0 = H::stack(100, HEAD, lanes, sp);
+      QCOMPARE(int(rows0.size()), 3);
+      QCOMPARE(rows0[0].first, 100 + HEAD * sp);
+      QCOMPARE(rows0[1].first - rows0[0].first, (H::DEFAULT_SP + H::GAP_SP) * sp);
+      QCOMPARE(H::spaceOf(HEAD, lanes), HEAD + 3 * (H::DEFAULT_SP + H::GAP_SP));
+      // the grip: at the lower edge (and the gap under it), not inside the lane; the upper lane where they meet
+      QCOMPARE(H::edgeAt(rows0, rows0[0].second - 1), 0);
+      QCOMPARE(H::edgeAt(rows0, rows0[0].second + 2), 0);
+      QCOMPARE(H::edgeAt(rows0, rows0[1].second), 1);
+      QCOMPARE(H::edgeAt(rows0, rows0[2].second + 1), 2);
+      QCOMPARE(H::edgeAt(rows0, (rows0[0].first + rows0[0].second) / 2), -1);
+      QCOMPARE(H::edgeAt(rows0, rows0[0].first + 1), -1);
+      QCOMPARE(H::edgeAt(rows0, rows0[2].second + 10), -1);
+      // the second lane resized: it and the lanes below move, the first doesn't, the grip follows its new edge
+      lanes[1] = 10.0;
+      auto rows1 = H::stack(100, HEAD, lanes, sp);
+      QVERIFY(rows1[0] == rows0[0]);
+      QCOMPARE(rows1[1].first, rows0[1].first);
+      QCOMPARE(rows1[1].second - rows1[1].first, 10.0 * sp);
+      QCOMPARE(rows1[2].first - rows0[2].first, (10.0 - H::DEFAULT_SP) * sp);
+      QCOMPARE(H::edgeAt(rows1, rows0[1].second), -1);                  // (the old edge: inside the lane now)
+      QCOMPARE(H::edgeAt(rows1, rows1[1].second), 1);
+      // a lane at the minimum (on screen as short as 8 px): its top pixel isn't the grip
+      auto shortRows = H::stack(0, HEAD, { H::MIN_SP }, 3.2);
+      QCOMPARE(H::edgeAt(shortRows, shortRows[0].first), -1);
+      QCOMPARE(H::edgeAt(shortRows, shortRows[0].second), 0);
+
+      // the layout: the room under the violin moves the flute's staves by as much (System::layout2)
+      score->setLayoutMode(LayoutMode::LINE);
+      auto fluteY = [&]() {
+            score->doLayout();
+            System* sys = score->firstMeasureMM()->system();
+            return sys->staff(flute->staves()->front()->idx())->y();
+            };
+      const std::vector<double> before { H::DEFAULT_SP, H::DEFAULT_SP };
+      score->setAutomationSpace({ { violin, H::spaceOf(HEAD, before) } });
+      const double y0 = fluteY();
+      score->setAutomationSpace({ { violin, H::spaceOf(HEAD, { H::DEFAULT_SP, 11.0 }) } });
+      const double y1 = fluteY();
+      QVERIFY2(std::fabs((y1 - y0) - (11.0 - H::DEFAULT_SP) * score->spatium()) < 1e-6, qPrintable(QString("%1 -> %2").arg(y0).arg(y1)));
+      score->setAutomationSpace({});
+
+      if (qEnvironmentVariableIsSet("MS_LANE_PNG")) {
+            // the rows as automationlanes.cpp lays them out and colours them: the header band, the Velocity lane's stems,
+            // a Dynamics and an Expression lane; after: the Velocity lane 11 sp, Dynamics at the minimum
+            const QString dir = qEnvironmentVariable("MS_LANE_PNG");
+            QDir().mkpath(dir);
+            const double s = 6.6;           // (a spatium at 100 % zoom, screen pixels)
+            for (bool after : { false, true }) {
+                  const std::vector<double> hs = after ? std::vector<double> { 11.0, H::MIN_SP, H::DEFAULT_SP }
+                                                       : std::vector<double> { H::DEFAULT_SP, H::DEFAULT_SP, H::DEFAULT_SP };
+                  const auto rs = H::stack(4, HEAD, hs, s);
+                  const int w = 520;
+                  QImage img(w, int(rs.back().second + 4 * s), QImage::Format_ARGB32);
+                  img.fill(Qt::white);
+                  QPainter p(&img);
+                  p.setRenderHint(QPainter::Antialiasing);
+                  QFont font = p.font();
+                  font.setPixelSize(13);
+                  p.setFont(font);
+                  const QRectF head(0, 4, w, HEAD * s);
+                  p.fillRect(head, QColor(222, 219, 214));
+                  p.fillRect(QRectF(0, 4, 190, HEAD * s), QColor(214, 211, 206));
+                  p.setPen(QColor(29, 31, 34));
+                  p.drawText(head.adjusted(6, 0, 0, 0), Qt::AlignVCenter | Qt::AlignLeft, QString::fromUtf8("▾ Automation · Violin"));
+                  const char* names[] = { "Velocity", "Dynamics (CC1)", "Expression (CC11)" };
+                  const QColor bands[] = { QColor(246, 246, 246), QColor(242, 246, 251), QColor(242, 246, 251) };
+                  for (size_t i = 0; i < rs.size(); ++i) {
+                        const QRectF lane(0, rs[i].first, w, rs[i].second - rs[i].first);
+                        p.fillRect(lane, bands[i]);
+                        const QRectF data = lane.adjusted(150, 0, 0, 0);
+                        const QRectF vr = data.adjusted(0, 0.45 * s, 0, -0.45 * s);
+                        if (i == 0) {
+                              for (int k = 0; k < 12; ++k) {
+                                    const double x = data.left() + 15 + k * 30;
+                                    const double v = 0.3 + 0.05 * (k % 7);
+                                    const double y = vr.bottom() - v * vr.height();
+                                    p.setPen(QPen(QColor::fromHsv(130, 210, 175), 1.5));
+                                    p.drawLine(QPointF(x, vr.bottom()), QPointF(x, y));
+                                    p.setBrush(QColor::fromHsv(130, 210, 175));
+                                    p.drawEllipse(QPointF(x, y), 3.5, 3.5);
+                                    }
+                              }
+                        else {
+                              Automation::Lane l;
+                              l.target = i == 1 ? "cc1" : "cc11";
+                              l.points = { Automation::Point(0, 0.3, Automation::Curve::LINEAR), Automation::Point(960, 0.8, Automation::Curve::LINEAR),
+                                           Automation::Point(1920, 0.5, Automation::Curve::STEP) };
+                              auto x = [&](int t) { return data.left() + 20 + t * 0.15; };
+                              AutomationLanes::paintEnvelope(p, data, vr, l, -1, x, 1.0, QColor(47, 109, 181), {}, data);
+                              }
+                        p.setPen(QPen(QColor(200, 200, 200), 1.0));
+                        p.setBrush(Qt::NoBrush);
+                        p.drawRect(data);
+                        const QRectF hb(0, lane.top(), 150, lane.height());
+                        p.fillRect(hb, i == 0 ? QColor(226, 234, 245) : QColor(226, 234, 245));
+                        p.setPen(QColor(29, 31, 34));
+                        p.drawText(hb.adjusted(10, 0, -4, 0), Qt::AlignVCenter | Qt::AlignLeft,
+                                   QFontMetrics(font).elidedText(names[i], Qt::ElideRight, 136));
+                        // the grip: the header box's lower edge (laneheights.h), marked where the mouse would take it
+                        if (after && i == 0) {
+                              p.setPen(QPen(QColor(29, 79, 140), 2.0));
+                              p.drawLine(QPointF(0, lane.bottom()), QPointF(150, lane.bottom()));
+                              }
+                        }
+                  p.end();
+                  QVERIFY(img.save(dir + (after ? "/lane-resize-after.png" : "/lane-resize-before.png")));
+                  }
+            }
       delete other;
       delete score;
       }

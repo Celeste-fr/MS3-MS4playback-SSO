@@ -54,8 +54,7 @@ namespace Ms {
 std::vector<Automation::Point> AutomationLanes::_clipboard;
 
 static const double HEAD_SP = 3.2;        // the part's header row, spatium (the instrument names' 10 pt fit: textPx)
-static const double LANE_SP = 5.0;        // a lane
-static const double GAP_SP = 0.4;
+// a lane's height and the gap under it: laneheights.h (each lane its own, resizable)
 static const int HEADER_PX = 150;         // the headers' width on screen
 static const int HEADER_MIN_PX = 80;      // a lane's at least, left of bar 1 (headerRect)
 static const int HEADER_MAX_PX = 420;     // the header row's at most (its label: headerRect)
@@ -115,6 +114,7 @@ void AutomationLanes::scoreChanged()
             for (const Part* p : s->parts())
                   parts.insert(p);
       _folds.keepOnly(s, parts);          // (the folding stays: only parts gone are dropped)
+      _heights.keepOnly(s, parts);        // (and the lanes' heights)
       queueSpace();                       // (a score opened: its headers)
       _view->update();
       }
@@ -222,6 +222,89 @@ void AutomationLanes::showLane(const Part* part, const QString& target, bool on)
             _hidden[master].insert(target);
             }
       updateSpace();
+      }
+
+//---------------------------------------------------------
+//   lane heights (laneheights.h)
+//---------------------------------------------------------
+
+double AutomationLanes::laneHeight(const Part* part, const QString& target) const
+      {
+      return _heights.height(score(), part, target);
+      }
+
+void AutomationLanes::setLaneHeight(const Part* part, const QString& target, double sp, bool all)
+      {
+      if (all)
+            _heights.setAll(score(), sp);
+      else
+            _heights.set(score(), part, target, sp);
+      updateSpace();          // (the rows and the layout below them; nothing when the heights came out the same)
+      }
+
+void AutomationLanes::resetLaneHeight(const Part* part, const QString& target)
+      {
+      _heights.reset(score(), part, target);
+      updateSpace();
+      }
+
+void AutomationLanes::resetAllLaneHeights()
+      {
+      _heights.resetAll(score());
+      updateSpace();
+      }
+
+// the grip: the lower edge of a lane's header box (Live's split line under a track's header), the lanes of all parts
+const AutomationLanes::Row* AutomationLanes::resizeEdgeAt(const QPoint& pixel) const
+      {
+      rows();
+      std::vector<std::pair<double, double>> ys;
+      std::vector<const Row*> lanesOf;
+      for (const Row& r : _rows) {
+            if (r.target.isEmpty())
+                  continue;
+            const QRectF h = headerRect(r);
+            if (pixel.x() < h.left() || pixel.x() > h.right())
+                  return nullptr;               // (every lane's box is as wide: off one, off all)
+            ys.push_back({ h.top(), h.bottom() });
+            lanesOf.push_back(&r);
+            }
+      const int i = LaneHeights::edgeAt(ys, pixel.y());
+      return i >= 0 ? lanesOf[size_t(i)] : nullptr;
+      }
+
+void AutomationLanes::setResizeCursor(bool on)
+      {
+      if (on == _resizeCursor)
+            return;
+      _resizeCursor = on;
+      if (on)
+            _view->setCursor(Qt::SizeVerCursor);
+      else
+            _view->unsetCursor();
+      }
+
+AutomationLanes::HeightActions AutomationLanes::addHeightActions(QMenu& menu, const Row& r) const
+      {
+      HeightActions h;
+      if (!_heights.isDefault(score(), r.part, r.target))
+            h.reset = menu.addAction(tr("Reset Lane Height"));
+      if (_heights.anyChanged(score()))
+            h.resetAll = menu.addAction(tr("Reset All Lane Heights"));
+      return h;
+      }
+
+bool AutomationLanes::heightAction(const QAction* a, const HeightActions& h, const Row& r)
+      {
+      if (!a)
+            return false;
+      if (a == h.reset)
+            resetLaneHeight(r.part, r.target);
+      else if (a == h.resetAll)
+            resetAllLaneHeights();
+      else
+            return false;
+      return true;
       }
 
 // (the folding doesn't follow the selection: lanefolds.h; the time selection does, timeSelection)
@@ -472,8 +555,11 @@ void AutomationLanes::updateSpace()
       std::map<const Part*, qreal> space;
       for (const Part* p : headerParts()) {
             // (folded: the header row only; targets() for open parts only: it renders the notes once)
-            const size_t n = isOpen(p) ? shownTargets(PartPlaybackModes::masterPart(p), targets(p)).size() : 0;
-            space[p] = HEAD_SP + double(n) * (LANE_SP + GAP_SP);
+            std::vector<double> heights;
+            if (isOpen(p))
+                  for (const QString& t : shownTargets(PartPlaybackModes::masterPart(p), targets(p)))
+                        heights.push_back(laneHeight(p, t));
+            space[p] = LaneHeights::spaceOf(HEAD_SP, heights);
             }
       _rowsValid = false;
       if (space == s->automationSpace()) {
@@ -553,10 +639,11 @@ std::vector<AutomationLanes::Row> AutomationLanes::computeRows() const
                         if (!n.isEmpty())
                               r.name = n;
                         }
-                  r.rect = QRectF(x0, y, x1 - x0, LANE_SP * sp);
+                  const double h = laneHeight(part, t);        // (laneheights.h)
+                  r.rect = QRectF(x0, y, x1 - x0, h * sp);
                   r.dataX = m->canvasPos().x();
                   out.push_back(r);
-                  y += (LANE_SP + GAP_SP) * sp;
+                  y += (h + LaneHeights::GAP_SP) * sp;
                   }
             }
       return out;
@@ -1469,6 +1556,16 @@ bool AutomationLanes::mousePress(QMouseEvent* ev)
             return false;
       if (ev->button() != Qt::LeftButton)
             return rowAt(_view->toLogical(ev->pos())) != nullptr && ev->button() == Qt::RightButton;
+      // a lane's lower edge (its header box's): its height (laneheights.h)
+      if (const Row* e = resizeEdgeAt(ev->pos())) {
+            _resizePart = e->part;
+            _resizeTarget = e->target;
+            _resizeStart = laneHeight(e->part, e->target);
+            _pressPixel = ev->pos();
+            _drag = Drag::RESIZE;
+            setResizeCursor(true);
+            return true;
+            }
       if (headerClick(ev->pos()))
             return true;
       const QPointF p = _view->toLogical(ev->pos());
@@ -1568,6 +1665,18 @@ bool AutomationLanes::mouseMove(QMouseEvent* ev)
       if (_drag == Drag::NONE) {
             hover(ev->pos());
             return false;
+            }
+      if (_drag == Drag::RESIZE) {
+            // the lane's height follows the mouse (its top stays: the rows above don't move); Alt: every lane of the
+            // score to that height, as Live resizes all tracks with Alt held
+            const double spPx = (score() ? score()->spatium() : 5.0) * _view->matrix().m11();
+            const double h = _resizeStart + (ev->pos().y() - _pressPixel.y()) / std::max(spPx, 1e-6);
+            if (ev->modifiers() & Qt::AltModifier)
+                  _heights.setAll(score(), h);
+            else
+                  _heights.set(score(), _resizePart, _resizeTarget, h);
+            queueSpace();           // (laid out once the moves queued meanwhile are in: one layout, not one a move)
+            return true;
             }
       const QPointF p = _view->toLogical(ev->pos());
       const Row& r = _dragRow;
@@ -1730,6 +1839,12 @@ bool AutomationLanes::mouseRelease(QMouseEvent* ev)
             }
       if (_drag == Drag::NONE)
             return false;
+      if (_drag == Drag::RESIZE) {
+            _drag = Drag::NONE;
+            setResizeCursor(resizeEdgeAt(ev->pos()) != nullptr);
+            _view->update();
+            return true;
+            }
       const Drag d = _drag;
       _drag = Drag::NONE;
       _rubber = QRectF();
@@ -1767,6 +1882,7 @@ bool AutomationLanes::mouseRelease(QMouseEvent* ev)
                   commit(tr("Automation: segment moved"));
                   return true;
             case Drag::RUBBER:
+            case Drag::RESIZE:
             case Drag::NONE:
                   _view->update();
                   return true;
@@ -1776,6 +1892,16 @@ bool AutomationLanes::mouseRelease(QMouseEvent* ev)
 
 bool AutomationLanes::mouseDoubleClick(QMouseEvent* ev)
       {
+      // on a lane's lower edge: its default height (ours: Live has no reset); Alt: every lane's
+      if (const Row* e = resizeEdgeAt(ev->pos())) {
+            const Row r = *e;
+            _drag = Drag::NONE;
+            if (ev->modifiers() & Qt::AltModifier)
+                  resetAllLaneHeights();
+            else
+                  resetLaneHeight(r.part, r.target);
+            return true;
+            }
       const QPointF p = _view->toLogical(ev->pos());
       const Row* rp = rowAt(p);
       if (!rp || rp->target.isEmpty())
@@ -1814,8 +1940,10 @@ bool AutomationLanes::mouseDoubleClick(QMouseEvent* ev)
 
 void AutomationLanes::hover(const QPoint& pos)
       {
-      if (rows().empty())
+      if (rows().empty()) {
+            setResizeCursor(false);
             return;
+            }
       const QPointF p = _view->toLogical(pos);
       const Row* r = rowAt(p);
       const QPointF old = _hover;
@@ -1841,9 +1969,14 @@ void AutomationLanes::hover(const QPoint& pos)
             }
       if (old != _hover || oldText != _hoverText)
             _view->update();
+      // a lane's lower edge: the resize cursor (laneheights.h)
+      const bool edge = resizeEdgeAt(pos) != nullptr;
+      setResizeCursor(edge);
       // a header row's control, or its name: a tooltip
       QString tip;
-      if (r && r->target.isEmpty()) {
+      if (edge)
+            tip = tr("Drag: this lane's height; Alt+drag: every lane's\nDouble-click: the default height; Alt+double-click: every lane's");
+      else if (r && r->target.isEmpty()) {
             const QRectF h = headerRect(*r);
             if (h.contains(pos)) {
                   const Control c = controlAt(h, pos);
@@ -1875,6 +2008,8 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
                 || (NoteLane::isTarget(r.target) && p.y() >= r.rect.top() && p.y() < r.rect.bottom()))
                   rp = &r;
             }
+      if (!rp)
+            rp = resizeEdgeAt(pos);       // (the gap under a lane's header box: that lane's)
       if (!rp)
             return false;
       const Row r = *rp;
@@ -1960,8 +2095,10 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
       menu.addSeparator();
       QAction* clear = l.points.empty() ? nullptr : menu.addAction(tr("Clear Lane"));
       QAction* hide = menu.addAction(tr("Hide Lane"));
+      menu.addSeparator();
+      const HeightActions heights = addHeightActions(menu, r);
       QAction* a = menu.exec(globalPos);
-      if (!a)
+      if (!a || heightAction(a, heights, r))
             return true;
       const LiveClipEdit::VelMode vm = LiveClipEdit::velMode(l);
       if (a == scale || a == absolute) {
@@ -2090,8 +2227,10 @@ bool AutomationLanes::engineMenu(const Row& r, const QPointF& p, const QPoint& g
       menu.addSeparator();
       QAction* clear = l.points.empty() ? nullptr : menu.addAction(tr("Clear Lane"));
       QAction* hide = menu.addAction(tr("Hide Lane"));
+      menu.addSeparator();
+      const HeightActions heights = addHeightActions(menu, r);
       QAction* a = menu.exec(globalPos);
-      if (!a)
+      if (!a || heightAction(a, heights, r))
             return true;
       if (engineOf.count(a)) {
             const double v = EngineLane::valueOf(engines, engineOf[a]);
@@ -2157,6 +2296,10 @@ bool AutomationLanes::wantsKey(const QKeyEvent* ev) const
             case Qt::Key_2:
             case Qt::Key_4:
                   return m == Qt::ControlModifier;
+            case Qt::Key_Plus:          // the focused lane's height (Live's Alt + / Alt -; "+" may need Shift)
+            case Qt::Key_Equal:
+            case Qt::Key_Minus:
+                  return !_selTarget.isEmpty() && (m == Qt::AltModifier || m == (Qt::AltModifier | Qt::ShiftModifier));
             default:
                   return false;
             }
@@ -2166,6 +2309,15 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
       {
       if (!wantsKey(ev))
             return false;
+      if (ev->key() == Qt::Key_Plus || ev->key() == Qt::Key_Equal || ev->key() == Qt::Key_Minus) {
+            for (const Row& x : rows())
+                  if (x.master == _selPart && x.target == _selTarget) {
+                        setLaneHeight(x.part, x.target, laneHeight(x.part, x.target)
+                                      + (ev->key() == Qt::Key_Minus ? -1 : 1) * LaneHeights::STEP_SP);
+                        break;
+                        }
+            return true;
+            }
       if (ev->key() == Qt::Key_D && duplicateTimeSelection())
             return true;
       if (ev->key() == Qt::Key_D && NoteLane::isTarget(_selTarget)) {

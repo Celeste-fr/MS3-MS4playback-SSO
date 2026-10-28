@@ -740,7 +740,11 @@ void NoteLanes::contextMenu(const Row& r, const QPointF& p, const QPoint& global
       QAction* resetLane = menu.addAction(tr("Clear Lane"));
       menu.addSeparator();
       QAction* hide = menu.addAction(tr("Hide Lane"));
+      menu.addSeparator();
+      const AutomationLanes::HeightActions heights = _lanes->addHeightActions(menu, r);       // (laneheights.h)
       QAction* a = menu.exec(globalPos);
+      if (_lanes->heightAction(a, heights, r))
+            return;
       if (a == hide)
             _lanes->showLane(r.part, r.target, false);
       else if (a == resetLane) {
