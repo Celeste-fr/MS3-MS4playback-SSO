@@ -123,7 +123,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
 
       // the tracks: section, part, patch and tuning (Live's routes, a Kontakt for each: a patch that doesn't bend has a
       // copy per tuning, tuned by its Tune; a bending patch's copies are tuned by their bends)
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library, true);
+      const std::vector<SoundLib::Route> routes = SoundLib::liveRoutes(score, library);
       const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
       for (const SoundLib::Route& r : routes) {
             const QString id = r.part && r.part->instrument() ? r.part->instrument()->getId() : QString();
@@ -145,11 +145,12 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             Kontakt k;
             k.instrument = r.instrument;
             k.patch = r.instrument ? r.instrument->name : QString();
-            k.gain = TrackDelays::patchGain(library, p->delays, k.patch);
-            k.faderGain = TrackDelays::faderGain(library, p->delays, k.patch);
-            k.gainStageDb = TrackDelays::gainStageDb(library, p->delays, k.patch);
+            const SoundLib::Library& rl = r.library ? *r.library : library;   // (several libraries: the route's own)
+            k.gain = TrackDelays::patchGain(rl, p->delays, k.patch);
+            k.faderGain = TrackDelays::faderGain(rl, p->delays, k.patch);
+            k.gainStageDb = TrackDelays::gainStageDb(rl, p->delays, k.patch);
             k.trimDb = p->delays.trim;
-            k.legacyGain = TrackDelays::legacyPatchGain(library, p->delays, k.patch);
+            k.legacyGain = TrackDelays::legacyPatchGain(rl, p->delays, k.patch);
             k.port = r.port;
             k.channel = r.channel;
             k.patchIndex = r.patch;

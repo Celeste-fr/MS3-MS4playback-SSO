@@ -742,9 +742,10 @@ bool active();
 //    variant an engine plays, setEngines). A part's own mode "library:<name>" (partplayback.h) plays that engine; every
 //    other library part (the global mode's library, "library") the current library. The current library comes first
 //    everywhere (its routes from slot 0, as when it was the only one: a score playing it alone renders the same), the
-//    other engines' parts after it, by engine name. Only the plug-in output hosts more than one library: over MIDI out
-//    and in Live (forLive) the current library plays alone, a part of another engine plays as MS4 (LIVE.md › What still
-//    differs). Each library's measurements (calibration, onsets, levels) are its own map's: none reach another's parts
+//    other engines' parts after it, by engine name. Hosted, an engine whose plug-in MuseScore doesn't find plays as MS4;
+//    over MIDI out and in Live (forLive) every engine whose map loads plays on its own routes, after the current
+//    library's (branch vial-live, 2026-10-27: Live's tracks or the receiving host hold the plug-in; liveRoutes). Each
+//    library's measurements (calibration, onsets, levels) are its own map's: none reach another's parts
 //---------------------------------------------------------
 
 // the engines the application offers: name -> the map it plays (its chosen variant), each loaded on first use
@@ -759,18 +760,18 @@ QString engineOf(const Library& library);
 // current library always can (as before)
 void setEngineAvailable(std::function<bool(const Library&)> available);
 bool engineAvailable(const Library& library);
-// the library a part plays (its master part's mode): its own engine where it names one that can play (plug-in output
-// only), else the current library; null: it plays no library (its mode, or its engine can't play here: MS4)
+// the library a part plays (its master part's mode): its own engine where it names one that can play (hosted: its plug-in
+// found; forLive or MIDI out: its map loads), else the current library; null: it plays no library (its mode, or its
+// engine can't play here: MS4)
 std::shared_ptr<const Library> libraryOf(const Part* part);
 std::shared_ptr<const Library> libraryOf(const Part* part, const std::map<const Part*, PartPlayback>& modes,
                                          const std::map<const Part*, QString>& names, bool forLive = false);
 // the libraries the score's parts play, the current one first (even when no part plays it), then the others by name
-// (forLive, or MIDI out: the current one alone)
 std::vector<std::shared_ptr<const Library>> scoreLibraries(const Score* score, bool forLive = false);
 // a library other than the current one plays parts of the score (several libraries: the parts of each)
 bool severalLibraries(const Score* score);
-// the parts whose own mode names another engine than the current library's ("library:<name>"), whatever the output: the
-// parts Live and MIDI out leave out (they play as MS4 there), with each one's engine
+// the parts whose own mode names another engine than the current library's ("library:<name>") whose map doesn't load:
+// the parts Live and MIDI out leave out (they play as MS4 there), with each one's engine
 std::vector<std::pair<const Part*, QString>> otherEngineParts(const Score* score);
 // a library's dynamics calibration: the current library's dynamicsCalibration(), another engine's from the application's
 // loader (setCalibrationLoader: its user file and shipped one, as the current library's), kept until the next
@@ -910,6 +911,10 @@ bool anyMono(const std::vector<const LibInstrument*>& patches);
 std::vector<Route> routes(const Score* score, const Library& library, bool forLive = false);
 // every library's routes (scoreLibraries' order), each with its library
 std::vector<Route> allRoutes(const Score* score, bool forLive = false);
+// Live's and MIDI out's routes (Create / Update Live Set, Live's clips, MIDI out): the current library's (routes(…, true))
+// when no part plays another engine, else every library's (allRoutes(…, true)), each route with its library: the
+// renderer's slots for Live and MIDI out (setForLiveClips, Output::MIDI)
+std::vector<Route> liveRoutes(const Score* score, const Library& library);
 
 //---------------------------------------------------------
 //   hosted tuning ([tuning] hostedTuning; the owner, 2026-10-15: "Whence takes absolutely forever to load all the

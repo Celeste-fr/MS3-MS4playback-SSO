@@ -164,14 +164,15 @@ static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const S
             if (t.group || t.midiTo >= 0 || !t.instrument || t.instrument->kit || !t.partRef)
                   continue;
             const Automation::PartLanes pl = Automation::lanes(t.partRef, lanes);
+            const SoundLib::Library& tl = t.instrument->library ? *t.instrument->library : library;  // (several: its own)
             for (LiveSetWriter::ParameterAutomation& a : t.automation)
-                  a.id = SoundLibraryHost::knownParameterId(library, t.instrument->name, a.name);
+                  a.id = SoundLibraryHost::knownParameterId(tl, t.instrument->name, a.name);
             for (const SoundLib::Controller& c : t.instrument->allControllers) {
                   if (c.param.isEmpty())
                         continue;
                   LiveSetWriter::Constant k;
                   k.name = c.param;
-                  k.id = SoundLibraryHost::knownParameterId(library, t.instrument->name, c.param);
+                  k.id = SoundLibraryHost::knownParameterId(tl, t.instrument->name, c.param);
                   const double v = PartControllers::value(t.partRef, c, lanes);       // (a flat lane, else the map's default)
                   if (v >= 0)
                         k.value = v / 127.0;            // (as Create Live Set's state and panel have it)
@@ -310,14 +311,31 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                                        "", allIns);
 
 #ifdef USE_VST3
-      QString pluginError;
-      const QString pluginPath = SoundLibraryHost::pluginPath(library, &pluginError);
-      QString pluginName;
-      quint32 uid[4] = { 0, 0, 0, 0 };
-      bool plugin = !pluginPath.isEmpty() && Vst3Plugin::classInfo(pluginPath, &pluginName, uid, &pluginError);
-      if (!plugin)
-            plan->notes << QObject::tr("No plug-in on the tracks: %1").arg(pluginError.isEmpty() ? QObject::tr("the library's plug-in "
-                                                                                                          "was not found") : pluginError);
+      // each library's plug-in (several libraries, branch vial-live: a track's library is its patch's; the global
+      // library's first, so a set of one library notes as before)
+      struct PluginOf {
+            QString path;
+            QString name;
+            quint32 uid[4] { 0, 0, 0, 0 };
+            bool ok { false };
+            };
+      std::map<const SoundLib::Library*, PluginOf> pluginOf;
+      auto pluginFor = [&](const SoundLib::Library& lib) -> const PluginOf& {
+            auto it = pluginOf.find(&lib);
+            if (it != pluginOf.end())
+                  return it->second;
+            PluginOf& po = pluginOf[&lib];
+            QString pluginError;
+            po.path = SoundLibraryHost::pluginPath(lib, &pluginError);
+            po.ok = !po.path.isEmpty() && Vst3Plugin::classInfo(po.path, &po.name, po.uid, &pluginError);
+            if (!po.ok) {
+                  const QString why = pluginError.isEmpty() ? QObject::tr("the library's plug-in was not found") : pluginError;
+                  plan->notes << (&lib == &library ? QObject::tr("No plug-in on the tracks: %1").arg(why)
+                                                   : QObject::tr("No plug-in on the %1 tracks: %2").arg(lib.name, why));
+                  }
+            return po;
+            };
+      const bool plugin = pluginFor(library).ok;
       // by patch and the part's state settings (a non-Kontakt plug-in's load-time values, e.g. Ample's DBName: their flat
       // lanes, SoundLibraryHost::stateValuesFor, as hosted playback loads them; copies for other tunings share it)
       std::map<QString, LiveSetWriter::Plugin> made;
@@ -331,25 +349,35 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
       std::map<std::pair<const Part*, QString>, std::vector<SoundLibraryHost::AppliedParameter>> laneParameters;
       int slow = 0;
       QStringList tunedTracks;
+      const SoundLib::Library& libraryIn = library;
       for (LiveSetWriter::Track& t : tracks) {
-            if (!plugin)
-                  break;
             if (t.group || t.midiTo >= 0)       // (the plain set's groups and technique tracks)
                   continue;
             if (plan->skipPlugin && plan->skipPlugin(t))
                   continue;
             if (!t.instrument || t.instrument->kit) {
-                  plan->left << QObject::tr("%1: a kit has no patch of its own (its drums play on their own tracks)").arg(t.name);
+                  if (plugin)
+                        plan->left << QObject::tr("%1: a kit has no patch of its own (its drums play on their own tracks)").arg(t.name);
                   continue;
                   }
+            // (the track's library: its patch's; one without a plug-in here gets none)
+            const SoundLib::Library& library = t.instrument->library ? *t.instrument->library : libraryIn;
+            const PluginOf& po = pluginFor(library);
+            if (!po.ok)
+                  continue;
+            const QString& pluginPath = po.path;
+            const QString& pluginName = po.name;
+            const quint32* uid = po.uid;
             const QString patch = t.instrument->name;
-            if (failed.count(patch)) {
-                  plan->left << QString("%1: %2").arg(t.name, failed[patch]);
+            // (by library and patch: two libraries may name a patch alike; the global library's keys as before)
+            const QString libKey = &library == &libraryIn ? patch : library.name + "\n" + patch;
+            if (failed.count(libKey)) {
+                  plan->left << QString("%1: %2").arg(t.name, failed[libKey]);
                   continue;
                   }
             // the part's state settings (a state can't be automated in Live, nor change while MuseScore plays: each lane's
             // value at the start, PartControllers::stateValue; LIVE.md › What still differs)
-            const QString madeKey = patch + "\n" + PartControllers::valuesKey(SoundLibraryHost::stateValuesFor(library, patch, t.partRef));
+            const QString madeKey = libKey + "\n" + PartControllers::valuesKey(SoundLibraryHost::stateValuesFor(library, patch, t.partRef));
             if (!made.count(madeKey)) {
                   QString err;
                   QByteArray state;
@@ -362,7 +390,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))
                         err = QObject::tr("its setup could not be read");
                   if (!err.isEmpty()) {
-                        failed[patch] = err;
+                        failed[libKey] = err;
                         plan->left << QString("%1: %2").arg(t.name, err);
                         continue;
                         }
@@ -714,8 +742,9 @@ int recordWritten(MasterScore* score, const LiveSetWriter::Spec& spec, const QBy
 //   createLiveSetDialog
 //---------------------------------------------------------
 
-// several libraries (SoundLib::scoreLibraries): Live plays the global library alone; a part MuseScore plays by another
-// engine (Vial Instrumental …) is left out of the set, said before (LIVE.md › What still differs). false: cancelled
+// several libraries (SoundLib::scoreLibraries): Live plays every engine's parts on their own tracks (branch vial-live,
+// 2026-10-27); only a part whose engine's map doesn't load is left out of the set, said before (LIVE.md › What still
+// differs). false: cancelled
 static bool otherEnginesLeftOut(MasterScore* score, const SoundLib::Library& library, QWidget* parent, const QString& title)
       {
       const std::vector<std::pair<const Part*, QString>> others = SoundLib::otherEngineParts(score);
@@ -724,8 +753,8 @@ static bool otherEnginesLeftOut(MasterScore* score, const SoundLib::Library& lib
       QStringList lines;
       for (const auto& o : others)
             lines << QString("%1 (%2)").arg(o.first->partName(), o.second);
-      return QMessageBox::information(parent, title, QObject::tr("Live plays only the global sound library, %1. These parts play "
-                                                                 "another library in MuseScore and are left out of the set:\n\n%2")
+      return QMessageBox::information(parent, title, QObject::tr("These parts play a library whose map could not be read and are "
+                                                                 "left out of the set (the global library is %1):\n\n%2")
                                       .arg(library.name, lines.join("\n")), QMessageBox::Ok | QMessageBox::Cancel)
              == QMessageBox::Ok;
       }
@@ -1012,7 +1041,8 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                   QString err;
                   std::map<QString, long> ids;
 #ifdef USE_VST3
-                  const QString pluginPath = SoundLibraryHost::pluginPath(library, &err);
+                  const QString pluginPath = SoundLibraryHost::pluginPath(t.instrument && t.instrument->library ? *t.instrument->library
+                                                                                                           : library, &err);
                   const QByteArray state = pluginPath.isEmpty() ? QByteArray()
                                            : SoundLibraryHost::stateWithParameters(s->second, pluginPath, values, &ids, &err);
 #else

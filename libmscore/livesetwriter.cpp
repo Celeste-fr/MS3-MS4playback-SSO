@@ -1035,7 +1035,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             return out;
       std::map<const Part*, int> colorOf;
       const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
-      for (const SoundLib::Route& r : SoundLib::routes(score, library, true)) {
+      for (const SoundLib::Route& r : SoundLib::liveRoutes(score, library)) {
             Track t;
             t.part = r.part ? r.part->partName() : QString();
             t.instrument = r.instrument;
@@ -1056,8 +1056,9 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             // the Mixer as MuseScore's host plays the part (mute, not solo: as MuseScore's export)
             const SoundLib::PartMix m = SoundLib::partMix(r.part, false);
             const TrackDelays::Delays d = TrackDelays::of(r.part, delays);
-            const double stage = TrackDelays::gainStageDb(library, d, t.patch);
-            const KontaktGains g = kontaktGains(m.volume, TrackDelays::faderGain(library, d, t.patch), stage);
+            const SoundLib::Library& rl = r.library ? *r.library : library;   // (several libraries: the route's own)
+            const double stage = TrackDelays::gainStageDb(rl, d, t.patch);
+            const KontaktGains g = kontaktGains(m.volume, TrackDelays::faderGain(rl, d, t.patch), stage);
             t.volume = g.volume;
             t.utility = g.hasUtility;
             t.utilityGain = g.utility;

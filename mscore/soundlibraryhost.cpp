@@ -4134,7 +4134,8 @@ void SoundLibraryDialog::rebuild()
             return;
             }
       score = score->masterScore();
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *_library, _output != SoundLib::Output::PLUGIN);   // (MIDI out: no varispeed)
+      const std::vector<SoundLib::Route> routes = _output != SoundLib::Output::PLUGIN ? SoundLib::liveRoutes(score, *_library)   // (MIDI out: no varispeed; every engine)
+                                                                                      : SoundLib::routes(score, *_library);
       const bool plugin = _output == SoundLib::Output::PLUGIN;
       SoundLibraryHost* host = SoundLibraryHost::instance();
       enum { PART, PATCH, STATUS, SHOW, MEMORY };
@@ -4191,7 +4192,12 @@ void SoundLibraryDialog::rebuild()
                         item->setText(PART, r.lane > 0 ? QString("~ %1").arg(tr("other tuning %1").arg(r.lane))
                                                        : QString("+ %1").arg(tr("extra patch")));
                         }
-                  item->setText(PATCH, r.instrument->name);
+                  // (several libraries over MIDI out: another engine's patch named with its library, e.g. its preset to load)
+                  item->setText(PATCH, !plugin && r.library && r.library != _library.get()
+                                       ? QString("%1 (%2%3)").arg(r.instrument->name, r.library->name,
+                                                                  r.instrument->preset.isEmpty() ? QString()
+                                                                  : ": " + QFileInfo(r.instrument->preset).fileName())
+                                       : r.instrument->name);
                   if (r.instrument->kit) {
                         item->setText(STATUS, tr("(its drum sounds play on the patches under it)"));
                         continue;

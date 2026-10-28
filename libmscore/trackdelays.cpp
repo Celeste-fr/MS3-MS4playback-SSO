@@ -301,8 +301,8 @@ std::map<int, int> midiVolumes(const MasterScore* score, const SoundLib::Library
       double over = 0.0;
       bool any = false;
       const double top = 40.0 * std::log10(1.27);                         // CC7 127: (127 / 100)², +4.15 dB
-      for (const SoundLib::Route& r : SoundLib::routes(score, library, true)) {
-            const double gain = patchGain(library, of(r.part, delays), r.instrument->name);
+      for (const SoundLib::Route& r : SoundLib::liveRoutes(score, library)) {
+            const double gain = patchGain(r.library ? *r.library : library, of(r.part, delays), r.instrument->name);
             const int v = qBound(0, SoundLib::partMix(r.part, withSolo).volume, 127);
             if (v == 0 || !(gain > 0.0))
                   continue;

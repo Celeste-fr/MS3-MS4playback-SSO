@@ -41,14 +41,14 @@ part's older `"library"` plays the global mode's library, as before.
   Instrumental played through Vial Fuse.vst3's mic mixers. Preferences › I/O › Sound library › *Vial Instrumental
   plays:* picks the variant (preference `io/soundLibraryVariants`), for the global library and every part set to Vial.
 - An engine whose plug-in isn't installed (hosted: not found in the VST 3 folders; `MS_VST3_PATH` adds folders) is
-  grayed in the boxes, its tooltip saying so; a score's part set to it plays MS4. Over MIDI output only the global
-  library plays: the other engines are grayed, their parts play MS4.
+  grayed in the boxes, its tooltip saying so; a score's part set to it plays MS4. Over MIDI output every engine whose map loads plays, each part on its own
+  port / channel after the global library's (the receiving host loads the patch or preset itself).
 - Measurements are each map's own: SSO's calibration, onsets, section balance, real range, mic compensation and so on
   apply to SSO's patches only, whichever engine is global (another engine's calibration is read from its own
   `<map>.dynamics.json` / setups folder); a map without them (Vial's) plays the written dynamics as they are. The master
   trim is measured on the first library of the score with a `<Dynamics crest>` (SSO) and lowers every library patch.
-  Even levels, the playback audit and the playback verification look at the global library's parts only. Live: the
-  global library alone (LIVE.md › What still differs).
+  Even levels, the playback audit and the playback verification look at the global library's parts only. Live: every
+  engine's parts, each patch a track with its own library's plug-in and state (LIVE.md › What still differs).
 
 ## Setup on Windows with Spitfire Symphony Orchestra (plug-in in MuseScore)
 

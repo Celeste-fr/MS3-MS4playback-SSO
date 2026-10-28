@@ -451,7 +451,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             return out;
       const int end = playedTicks(score);
       std::map<int, RouteNotes> byRoute = clipNotes(events, tl, end);
-      const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library, true);
+      const std::vector<SoundLib::Route> routes = SoundLib::liveRoutes(score, library);
       for (const SoundLib::Route& r : routes) {
             Track t;
             t.port = r.port;

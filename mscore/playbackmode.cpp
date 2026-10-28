@@ -190,18 +190,16 @@ bool soundEngineAvailable(const QString& engine, QString* why)
       const std::shared_ptr<const SoundLib::Library> cur = SoundLib::current();
       if (cur && SoundLib::engineOf(*cur) == engine)
             return true;                  // (the global library: as ever)
-      if (SoundLib::output() != SoundLib::Output::PLUGIN) {
-            if (why)
-                  *why = QObject::tr("Over MIDI output only the global library plays (Preferences › I/O › Sound library): "
-                                     "%1 plays only hosted, as a plug-in in MuseScore.").arg(engine);
-            return false;
-            }
       const std::shared_ptr<const SoundLib::Library> lib = SoundLib::engine(engine);
       if (!lib) {
             if (why)
                   *why = QObject::tr("The map of %1 could not be read.").arg(engine);
             return false;
             }
+      // (over MIDI output the receiving host plays it, on its own ports and channels: Sound Library window; branch
+      // vial-live, 2026-10-27)
+      if (SoundLib::output() != SoundLib::Output::PLUGIN)
+            return true;
       QString error;
       if (SoundLibraryHost::pluginPath(*lib, &error).isEmpty()) {
             if (why)

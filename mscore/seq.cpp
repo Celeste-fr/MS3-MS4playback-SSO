@@ -2721,7 +2721,7 @@ std::vector<std::pair<int, int>> Seq::libraryOuts(const Part* part)
             }
       if (_libOutsStale || _libOutsScore != cs || _libOutsGeneration != SoundLib::routesGeneration()) {
             _libOuts.clear();
-            for (const SoundLib::Route& r : SoundLib::routes(cs, *library, true))     // (MIDI out: no varispeed)
+            for (const SoundLib::Route& r : SoundLib::liveRoutes(cs, *library))     // (MIDI out: no varispeed; every engine)
                   _libOuts.push_back({ r.part, { r.port, r.channel } });
             _libOutsScore = cs;
             _libOutsGeneration = SoundLib::routesGeneration();

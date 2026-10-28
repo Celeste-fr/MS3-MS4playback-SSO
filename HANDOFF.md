@@ -33,6 +33,29 @@ The owner's goal for October 2026: everything a later AI needs to make playback 
 - **How he judges timing:** one section alone with a metronome click, long rests cut out, about 20 s a clip, one
   question per page.
 
+## Vial parts in Live and over MIDI out (branch `vial-live`, 2026-10-27, from integrate-1017 4e6d877914; not merged)
+
+A part set to another engine (Vial Instrumental beside SSO) was left out of Create / Update Live Set and MIDI out (MS4
+there). Now it reaches both like an SSO part (LIVE.md › What still differs › Parts on another engine):
+- `SoundLib::liveRoutes(score, library)`: Live's and MIDI out's routes, every engine's after the current library's when
+  another engine plays (`allRoutes(…, true)`), else `routes(…, true)` as before; `libraryOf` / `scoreLibraries` no longer
+  drop other engines for forLive / MIDI out (the plug-in check stays for hosted playback only); `otherEngineParts` only
+  parts whose engine's map doesn't load. Used by the plain set, the route set, *Live plays the score*'s clips, the
+  automation import, `Seq::libraryOuts`, `TrackDelays::midiVolumes` and the Sound Library window's MIDI out list (another
+  engine's patch shown with its library and preset file). The renderer needed no change (it already asked
+  `scoreLibraries(score, forLive || MIDI)`).
+- `planLiveSet`: a plug-in per library (`pluginFor`: path, class name, uid; "No plug-in on the <library> tracks" when one
+  is missing), each Kontakt / device track's state, parameters and knob ids from its patch's library
+  (`LibInstrument::library`); made / failed setups keyed by library and patch (two libraries name patches alike; the
+  global library's keys as before). Update Live Set's panel-knob state change uses the track's library's plug-in.
+- Mixer / Play Panel: over MIDI out an engine is offered when its map loads (`soundEngineAvailable`).
+- Tests (Linux, no Live, no real Vial): `tst_liveequivalence::vialLive` (stand-in preset under a temp MS_PRESET_FOLDER, the
+  test synth's bundle copied as `Vial.vst3` on MS_VST3_PATH); `twoLibraries` updated (Live / MIDI out now carry the Flute).
+  Whence (Recommended) dumpEvents chunked and MS_DUMP_LIVE before / after: see the commit.
+- Left: real Live (`tools/live/realcheck` on the VM: Live 12.4 loading Vial.vst3 / Vial Fuse.vst3 from the set, the preset
+  restored from ProcessorState, CC1 / CC11 / CC21 heard); Update Live Set on a set whose Vial tracks were edited in Live;
+  MIDI out with a real external Vial.
+
 ## Several libraries: Vial Instrumental as an engine (branch `vial-engine`, 2026-10-26, from integrate-1017 0f4abe48ea; not merged)
 
 The owner (2026-10-26): "natively integrate Vial Instrumental as another playback engine, like we have now for ms3, ms4

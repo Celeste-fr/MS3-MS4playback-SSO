@@ -2392,9 +2392,11 @@ std::shared_ptr<const Library> libraryOf(const Part* part, const std::map<const 
       const std::shared_ptr<const Library> cur = current();
       if (name.isEmpty() || (cur && engineOf(*cur) == name))
             return cur;
-      if (forLive || output() != Output::PLUGIN)
-            return nullptr;
       const std::shared_ptr<const Library> lib = engine(name);
+      // (Live and MIDI out play every engine on its own routes: the plug-in is the one on Live's tracks or the receiving
+      // host's, not MuseScore's, so whether MuseScore finds it doesn't matter there; branch vial-live, 2026-10-27)
+      if (forLive || output() != Output::PLUGIN)
+            return lib;
       return lib && engineAvailable(*lib) ? lib : nullptr;
       }
 
@@ -2411,7 +2413,7 @@ std::vector<std::shared_ptr<const Library>> scoreLibraries(const Score* score, b
       std::vector<std::shared_ptr<const Library>> out;
       if (const std::shared_ptr<const Library> cur = current())
             out.push_back(cur);
-      if (!score || forLive || output() != Output::PLUGIN)
+      if (!score)
             return out;
       const MasterScore* ms = score->masterScore();
       const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
@@ -2420,7 +2422,7 @@ std::vector<std::shared_ptr<const Library>> scoreLibraries(const Score* score, b
       const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
       std::map<QString, std::shared_ptr<const Library>> others;
       for (const Part* part : score->parts()) {
-            const std::shared_ptr<const Library> lib = libraryOf(part, modes, names);
+            const std::shared_ptr<const Library> lib = libraryOf(part, modes, names, forLive);
             if (lib && (out.empty() || lib != out.front()))
                   others[engineOf(*lib)] = lib;
             }
@@ -2447,7 +2449,8 @@ std::vector<std::pair<const Part*, QString>> otherEngineParts(const Score* score
       const std::shared_ptr<const Library> cur = current();
       for (const Part* part : ms->parts()) {
             const QString name = PartPlaybackModes::libraryOf(part, names);
-            if (!name.isEmpty() && PartPlaybackModes::playsLibrary(part, modes) && !(cur && engineOf(*cur) == name))
+            if (!name.isEmpty() && PartPlaybackModes::playsLibrary(part, modes) && !(cur && engineOf(*cur) == name)
+                && !libraryOf(part, modes, names, true))
                   out.push_back({ part, name });
             }
       return out;
@@ -2625,6 +2628,13 @@ std::vector<Route> allRoutes(const Score* score, bool forLive)
             out.insert(out.end(), r.begin(), r.end());
             }
       return out;
+      }
+
+std::vector<Route> liveRoutes(const Score* score, const Library& library)
+      {
+      if (!score)
+            return {};
+      return scoreLibraries(score, true).size() > 1 ? allRoutes(score, true) : routes(score, library, true);
       }
 
 //---------------------------------------------------------

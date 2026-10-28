@@ -1186,19 +1186,32 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
-- **Parts on another engine** (several libraries in one score, branch `vial-engine`, 2026-10-26; soundlibrary.h ›
-  engines): Live plays the global library alone. A part whose own playback names another engine (the Mixer's *Part
-  playback*: "Vial Instrumental" while the global library is SSO; metaTag `partPlayback` "library:<name>") has no
-  route for Live (`SoundLib::routes(…, forLive)`, `scoreLibraries(score, true)`): Create Live Set and Update Live Set
-  say so before they write (`otherEnginesLeftOut` in livesetexport.cpp: the parts and their engines, OK / Cancel) and
-  leave those parts out; *Live plays the score*'s clips and the plain set have no track for them. MIDI out the same
-  (the part plays MS4 there; the Mixer's and Play Panel's engine boxes gray every engine but the global one, saying
-  why). Hosted playback in MuseScore plays them on their own plug-in (Vial.vst3 next to Kontakt).
-- **Vial Instrumental** (branch `vial-map`, 2026-10-25; a preset library, README › Preset libraries): hosted playback
-  only was made and tested. Create / Update Live Set would by the existing paths give the Vial track its preset as the
-  plug-in's state (`SoundLibraryHost::setupState`, as for Ample) with CC1 / CC11 / CC21 in the clips, but nothing of it
-  was run (Live's VST 3 device for Vial, the plain set's Kontakt-made multis and Utility). MIDI out sends the same CCs on
-  channel 1; the receiving host must load the preset itself.
+- **Parts on another engine** (several libraries in one score, branch `vial-engine`, 2026-10-26; in Live and over MIDI
+  out since branch `vial-live`, 2026-10-27; soundlibrary.h › engines): a part whose own playback names another engine
+  (the Mixer's *Part playback*: "Vial Instrumental" while the global library is SSO; metaTag `partPlayback`
+  "library:<name>") has Live's and MIDI out's routes of its own after the global library's (`SoundLib::liveRoutes`:
+  `allRoutes(…, forLive)` when another engine plays, else `routes(…, true)` as before, so an SSO-only score's set and MIDI
+  out are unchanged; `libraryOf(…, forLive)` / MIDI out don't ask whether MuseScore finds the plug-in: Live's tracks or
+  the receiving host hold it). Create Live Set's plain set gives it a part group in its section, a track per patch
+  holding that engine's own plug-in (each library's `SoundLibraryHost::pluginPath` / `classInfo`, `planLiveSet`'s
+  `pluginFor`; Vial.vst3, or Vial Fuse.vst3 when Preferences picks the Fuse variant) with the patch's state as hosted
+  playback loads it (`setupState`: Vial's preset file's bytes as the component state), its technique track (Vial: one,
+  the patch's name, no switch) and Controllers clip (CC1, CC11, CC21) as for SSO; each route's gains by its own library
+  (`TrackDelays::patchGain` etc.: Vial has none, 0 dB). The route set and *Live plays the score*'s clips the same.
+  Update Live Set handles its tracks as any other (read back by their keys; a set unchanged writes nothing:
+  `tst_liveequivalence::vialLive`); untried: an edited set with Vial tracks. Over MIDI out its notes go to its own port
+  / channel (Sound Library window: "<patch> (Vial Instrumental: <preset>.vital)", which the receiving Vial must load
+  itself). Only a part whose engine's map can't be read is left out, said before writing (`otherEnginesLeftOut`).
+  Hosted in MuseScore a part on an engine whose plug-in isn't found still plays MS4 (Vial not installed).
+  **Only real Live can show** (`tools/live/realcheck` on the VM, not run): that Live 12.4 loads Vial.vst3 (and Vial
+  Fuse.vst3) from the set's PluginDevice (its class id from Vial's module, `audioOutputs` 2) and that Vial restores the
+  preset from the ProcessorState (the preset's bytes, no controller state) as `setState` does hosted; that the Flute's
+  track sounds as MuseScore's export (`--live-equivalence`) with SSO beside it; Vial's CC1 / CC11 / CC21 from the
+  Controllers clip through the MuseScore Link copy and MIDI To.
+- **Vial Instrumental** (branch `vial-map`, 2026-10-25; a preset library, README › Preset libraries): as the global
+  library or as an engine beside SSO the same paths (above); tested on Linux against the model only (stand-in preset and
+  a renamed test synth as Vial.vst3), never in Live. MIDI out sends CC1 / CC11 / CC21 on the part's own channel; the
+  receiving host must load the preset itself.
 - **Ample Guitar M** (branch `ample-map`, 2026-10-18; a plug-in that isn't Kontakt): Create / Update Live Set and *Live
   plays the score* were not made or tried for it. By the existing paths its track should get the plug-in's own default
   state (a patch with a state setting has one: `SoundLibraryHost::defaultState`) with the part's sample set and flat
