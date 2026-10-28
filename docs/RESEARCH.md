@@ -801,6 +801,25 @@ spread within a group is real there. QUARTET / EEP (MTG) are real simultaneous q
 
 **Value: low–medium.** The thresholds are already defensible. **Effort: medium.**
 
+**Humanize from real players (2026-10-28; the owner asked whether to add more randomness, "shift them according to
+real player patterns").**
+- What already varies: SSO records whole sections (the spread within a section is in the samples), its round robins
+  and random modulators (the owner kept them: fixedTransitions "keep A"). What doesn't: the sections against each
+  other, which MuseScore puts on the beat exactly.
+- The size: sections hold about ±30 ms (Pätynen et al. 2012), quartet players scatter with an SD of 24–28 ms (Wing
+  et al. 2014), listeners detect about 8 ms SD (Wing et al. 2014b).
+- The pattern: listeners prefer timing deviations correlated over long spans to uncorrelated random ones (Hennig et
+  al. 2011, *PLoS ONE* 6, e26457 [abstract]: the "humanize" of audio software is white noise, the less liked); added
+  microtiming lowered groove and naturalness ratings in synthesised Jazz / Funk / Samba (Davies et al. 2013, *Music
+  Percept.* 30(5) [abstract]), so more is not better by itself.
+- A generative model fitted to real players: first-order linear phase correction (Wing et al. 2014, J. R. Soc.
+  Interface 11, 20131125): each player corrects a share α of its asynchrony to the others at every onset, plus its own
+  timekeeper and motor noise; both quartets near the variance-minimising α (1/N for N players, per a summary, not
+  checked in the full text). Simulated per section, this gives slowly drifting, mutually corrected deviations of the
+  measured size, not jitter. Basses first by ~20 ms (Tahvanainen et al. 2015) could be its offset, as an option.
+- Missing: the parameters for an orchestra's sections (the quartet's are the nearest), and any series from a live
+  orchestra's multitracks (Spheres / Aalto overdubbed, above).
+
 ### 2.3 Legato transitions in real string playing
 
 **Question.** How long does a slurred note change take in real playing, by interval and note length, finger change
