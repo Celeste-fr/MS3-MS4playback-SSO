@@ -197,6 +197,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void plainAutoLive();
       void plainJoinsLive();
       void transitionLevelsLive();
+      void transitionTailsLive();
       void attackLevelsLive();
       void staccatoLengthLive();
       void speedSentLive();
@@ -9486,6 +9487,107 @@ void TestLiveEquivalence::transitionLevelsLive()
                                           lane.insert(pt.second);
       for (const QString& v : values(cc11[ramped]))
             QVERIFY2(lane.count(v.toInt()), qPrintable(QString("CC11 %1 not in the plain set's lane").arg(v)));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   transitionTailsLive
+//    [levels] transitionLevels 2 (tst_soundlibrary::transitionTails) reaches Live: tail-levels.musicxml, touching p C5, f D5,
+//    p E5 on plain Performance: MuseScore's CC1 ramps over the D5's and the E5's glides (values between p and f) are the
+//    route set's CC1 carrier notes value for value, and every value is a point of the plain set's CC1 lane
+//---------------------------------------------------------
+
+void TestLiveEquivalence::transitionTailsLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='0'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' bendGlide='136:65:158'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "tail-levels.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
+                                      { "levels/transitionLevels", "2" } });
+      score->setPlaylistDirty();
+      EventMap events;
+      score->renderMidi(&events, false, true, SynthesizerState());
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      // MuseScore: each library route's CC1 values in order (one per Live unit, the last at a unit)
+      std::map<QString, std::vector<std::pair<int, int>>> cc1;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal() || e.librarySwitch() || e.type() != ME_CONTROLLER || e.controller() != 1)
+                  continue;
+            std::vector<std::pair<int, int>>& c = cc1[QString("%1:%2").arg(e.extPort()).arg(e.extChannel() + 1)];
+            const int at = tl.units(te.first);
+            if (!c.empty() && c.back().first == at)
+                  c.back().second = e.value();
+            else
+                  c.push_back({ at, e.value() });
+            }
+      auto values = [](const std::vector<std::pair<int, int>>& c) {
+            QStringList out;
+            for (const auto& p : c)
+                  if (out.isEmpty() || out.last() != QString::number(p.second))
+                        out << QString::number(p.second);
+            return out;
+            };
+      QString ramped;
+      for (const auto& c : cc1)
+            if (values(c.second).size() >= 10)
+                  ramped = c.first;
+      QVERIFY2(!ramped.isEmpty(), "no route with a CC1 ramp");
+      // the route set's clips: the same values (CC1's carrier notes)
+      bool found = false;
+      for (const LiveClips::Track& c : LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl)) {
+            if (c.key != ramped)
+                  continue;
+            found = true;
+            std::vector<std::pair<int, int>> carrier;
+            std::vector<LiveClips::Note> notes = c.notes;
+            std::sort(notes.begin(), notes.end());
+            for (const LiveClips::Note& n : notes)
+                  if (n.pitch == LiveClips::carrierPitch(1))
+                        carrier.push_back({ n.start, LiveClips::carrierValue(n.pitch, n.velocity) });
+            QCOMPARE(values(carrier), values(cc1[ramped]));
+            }
+      QVERIFY(found);
+      // the plain set: every value a point of the Kontakt's CC1 lane
+      score->setPlaylistDirty();
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      EventMap chunked;
+      for (int utick = 0;;) {
+            const MidiRenderer::Chunk c = r.getChunkAt(utick);
+            if (!c)
+                  break;
+            r.renderChunk(c, &chunked, ctx);
+            utick = c.utick2();
+            }
+      const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, chunked, tl);
+      std::set<int> lane;
+      for (const PlainLiveSet::Section& s : l.sections)
+            for (const PlainLiveSet::PartTracks& p : s.parts)
+                  for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                        for (const PlainLiveSet::Lane& ln : k.lanes)
+                              if (ln.cc == 1)
+                                    for (const auto& pt : ln.points)
+                                          lane.insert(pt.second);
+      for (const QString& v : values(cc1[ramped]))
+            QVERIFY2(lane.count(v.toInt()), qPrintable(QString("CC1 %1 not in the plain set's lane").arg(v)));
       delete score;
       }
 

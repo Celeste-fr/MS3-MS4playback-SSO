@@ -753,7 +753,8 @@ void TestPlaybackAudit::chordFindings()
 //    Recommended preset as it is (plain Performance), the shipped SSO map: the subito p inside m1's slur, m3's first note
 //    (mf after m2's diminuendo) and m4's fp fail HALL; m2's quick diminuendo (a ramp) and m5's p on a detached note don't.
 //    [levels] hallGuard 1: none, each such step sent as smaller steps (the audit's model of the script), every value the plain
-//    render sends sent too, at its tick or within 20 ms
+//    render sends sent too, at its tick or within 20 ms. (Both with [levels] transitionLevels 0; with 2, Recommended's since
+//    2026-10-28, m1's and m3's drops come at transitions and are ramped over the glide: only m4's fp fails)
 //---------------------------------------------------------
 
 void TestPlaybackAudit::hallFindings()
@@ -766,13 +767,15 @@ void TestPlaybackAudit::hallFindings()
       MasterScore* score = readScore(DIR + "hall.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
-      auto run = [&](const char* guard, EventMap* events) {
+      // (transitionLevels 0: the drops at transitions as one step each; 2, Recommended's since 2026-10-28, ramps them: below)
+      auto run = [&](const char* guard, EventMap* events, const char* transitionLevels = "0") {
             std::map<QString, QString> values;
             for (const Playback::Preset& p : Playback::presets())
                   if (QString(p.id) == "recommended")
                         for (const auto& v : p.values)
                               values[v.first] = QString::number(v.second);
             values["levels/hallGuard"] = guard;
+            values["levels/transitionLevels"] = transitionLevels;
             Playback::setIniValuesForTest(values);
             score->setPlaylistDirty();
             std::vector<MidiRenderer::LibTrace> trace;
@@ -790,6 +793,16 @@ void TestPlaybackAudit::hallFindings()
                   QVERIFY2(f.value >= 10 && f.text.contains("Violins 1 - Performance"), qPrintable(f.text));
                   }
       QCOMPARE(bars, (std::set<int> { 1, 3, 4 }));
+      // [levels] transitionLevels 2: the drops at bar 1's and bar 3's transitions held to the glide's leave and ramped, so
+      // no Hall trigger there; bar 4's fp on its held note is left
+      {
+            EventMap tails;
+            PlaybackAudit::Report t = run("0", &tails, "2");
+            QVERIFY2(t.count(PlaybackAudit::Kind::HALL, PlaybackAudit::Severity::FAIL) == 1, qPrintable(t.text()));
+            for (const PlaybackAudit::Finding& f : t.findings)
+                  if (f.kind == PlaybackAudit::Kind::HALL)
+                        QCOMPARE(f.bar, 4);
+            }
       r = run("1", &guarded);
       QVERIFY2(r.count(PlaybackAudit::Kind::HALL) == 0, qPrintable(r.text()));
       // the guarded CC1: steps of at most 9 while the route plays, each change at least 1 ms after the one before;

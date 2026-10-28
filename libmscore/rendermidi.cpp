@@ -3458,6 +3458,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       libraryPitchBends(chunk, events);
       libraryTimingOverrides(chunk, events);
       libraryEvenLevels(chunk, events);
+      libraryTransitionTails(chunk, events);
       libraryTrackDelays(chunk, events);
       libraryFastTransitions(score, libRoutePatches, chunk.utick1(), events);
       libraryMaxVelocity(chunk, events);
@@ -4154,7 +4155,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
       // (a single note's, 47) dropped 6-7 dB over its last 100 ms. CC11 levels only (a level on another controller, a
       // marcato's CC1, switches at the note-on as before); a CC11 the score writes between note-on and arrival is mapped
       // by the new level
-      const bool transitionLevels = volume && score && Playback::on("levels/transitionLevels", score);
+      const bool transitionLevels = volume && score && int(std::lround(Playback::value("levels/transitionLevels", score))) == 1;     // (2: libraryTransitionTails)
       auto cc11Only = [&](const LibLevel* l) {
             if (!l)
                   return true;
@@ -4746,6 +4747,170 @@ void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
                   for (const auto& in : inserts)
                         events->insert(events->lower_bound(in.first), std::make_pair(in.first, glideEvent(like, in.second)));
                   s = e + 1;
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryTransitionTails
+//    [levels] transitionLevels 2 (branch bowed-join, 2026-10-28; the owner on the Hall Guard A/B page, hall.musicxml:
+//    "both have the problem of the tail of the last note suddenly get louder as the next note enters"). The dynamics CC
+//    (SSO: CC1) and CC11 are the route's, every voice of the channel follows them, and a legato transition's note-on
+//    carries the new note's values: the written dynamic it starts on (moved with the note-on, finishLibraryEvents'
+//    libShifts) and its CC11 level (level rule, real range, track and note levels, divisi, even levels' switch). SSO's
+//    transition still plays the note before until it leaves it (the map's bendGlide, 25-140 ms after the note-on; a
+//    bowed new bow stroke heard ~190 ms after it, Violins 1's plainShift + bowedEarly), so the step lifted (or dropped)
+//    what still sounds of the note before and its tail: hall.musicxml bar 2 / bar 5, p into f, CC1 48 -> 96 (+8.5 dB on
+//    Violins 1 - Performance's measured curve) and CC11 54 / 56 -> 82 (+3.8 dB) with the bowed note-on, 66 ms before
+//    the beat, ~+12 dB on the p note's end before the f note is heard.
+//    With 2, at each legato transition (libGlideFrom, its glide libGlide) whose note-on steps the dynamics CC or CC11
+//    on its route (the value at the note-on's tick against the one before it), that step alone is held back: the
+//    controller keeps the note before's value to the glide's leave, then the step comes in linearly (CC11 linear in dB,
+//    the dynamics CC in value), a value every EvenLevels::STEP_MS where it changes, complete at the glide's arrival (at
+//    the latest at the route's next note-on). What moves on the route after the note-on (a hairpin's steps, even
+//    levels' glide) moves as before, the step's remainder on top of it; from the arrival everything as rendered before.
+//    Both directions (a drop at a subito p in a slur too: the note before keeps its level while it sounds; as a ramp it
+//    is no Hall trigger either, libraryHallGuard). Attacks are attackLevels' (no transition: no glide). Run after the
+//    levels and even levels, before the track delays (render ticks; a track delay moves the patch's events together)
+//---------------------------------------------------------
+
+void MidiRenderer::libraryTransitionTails(const Chunk& chunk, EventMap* events)
+      {
+      if (!library || libRoutePatches.empty() || libGlideFrom.empty() || !score)
+            return;
+      if (int(std::lround(Playback::value("levels/transitionLevels", score))) != 2)
+            return;
+      const int utick1 = chunk.utick1();
+      const int utick2 = chunk.utick2();
+      const int dynamicsCC = library->dynamicsCC >= 0 && library->dynamicsCC != CTRL_EXPRESSION ? library->dynamicsCC : -1;
+      auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
+      auto isNoteOn = [](const NPlayEvent& e) {
+            return e.isExternal() && !e.librarySwitch() && e.type() == ME_NOTEON && e.velo() > 0;
+            };
+      auto isCC = [&](const NPlayEvent& e, int route, int controller) {
+            return e.isExternal() && !e.librarySwitch() && e.type() == ME_CONTROLLER && e.controller() == controller
+                   && routeOf(e) == route;
+            };
+      struct Transition { int tick; int route; const Note* note; };
+      std::vector<Transition> transitions;
+      for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!isNoteOn(ev) || ev.libraryDelayed() || !ev.note() || !libGlideFrom.count(ev.note()) || !libGlide.count(ev.note()))
+                  continue;
+            const int route = routeOf(ev);
+            if (!transitions.empty() && transitions.back().tick == i->first && transitions.back().route == route)
+                  continue;                         // (a chord's note: one step per route and tick)
+            transitions.push_back({ i->first, route, ev.note() });
+            }
+      std::vector<int> controllers;
+      if (dynamicsCC >= 0)
+            controllers.push_back(dynamicsCC);
+      controllers.push_back(CTRL_EXPRESSION);
+      for (const Transition& tr : transitions) {
+            const LibGlide& g = libGlide.at(tr.note);
+            const double tOn = score->utick2utime(tr.tick);
+            double tArrive = tOn + std::max(0.0, std::max(g.leaveMs, g.arriveMs)) / 1000.0;
+            // (at the latest the route's next note-on)
+            for (auto j = events->upper_bound(tr.tick); j != events->end() && j->first <= score->utime2utick(tArrive); ++j) {
+                  if (isNoteOn(j->second) && routeOf(j->second) == tr.route) {
+                        tArrive = std::min(tArrive, score->utick2utime(j->first));
+                        break;
+                        }
+                  }
+            const double tLeave = std::min(tArrive, tOn + std::max(0.0, g.leaveMs) / 1000.0);
+            const int uArrive = score->utime2utick(tArrive);
+            if (uArrive <= tr.tick)
+                  continue;
+            for (int controller : controllers) {
+                  // the value before the note-on's tick (none: nothing to keep)
+                  int old = -1;
+                  NPlayEvent like;
+                  for (auto j = events->lower_bound(tr.tick); j != events->begin();) {
+                        --j;
+                        if (isCC(j->second, tr.route, controller)) {
+                              old = j->second.value();
+                              like = j->second;
+                              break;
+                              }
+                        }
+                  if (old < 0)
+                        continue;
+                  // the controller's events from the note-on's tick to the arrival, and its value just after the tick
+                  std::vector<std::pair<int, NPlayEvent>> span;
+                  int stepTo = old;
+                  for (auto j = events->lower_bound(tr.tick); j != events->end() && j->first < uArrive; ++j) {
+                        if (!isCC(j->second, tr.route, controller))
+                              continue;
+                        span.push_back(*j);
+                        if (j->first == tr.tick)
+                              stepTo = j->second.value();
+                        }
+                  if (stepTo == old)
+                        continue;                   // (no step at the note-on)
+                  const bool ratio = controller == CTRL_EXPRESSION && old > 0 && stepTo > 0;
+                  // the value as rendered at time t (span's, from the tick on), with the step's remainder (1 - f) taken out
+                  auto renderedAt = [&](double t) {
+                        int v = old;
+                        for (const auto& e : span)
+                              if (score->utick2utime(e.first) <= t + 1e-9)
+                                    v = e.second.value();
+                        return v;
+                        };
+                  auto heldAt = [&](double t) {
+                        const double f = t <= tLeave ? 0.0 : tArrive > tLeave ? std::min(1.0, (t - tLeave) / (tArrive - tLeave)) : 1.0;
+                        const int v = renderedAt(t);
+                        double y;
+                        if (ratio)
+                              y = v > 0 ? v * std::pow(double(old) / stepTo, 1.0 - f) : 0.0;
+                        else
+                              y = v + (old - stepTo) * (1.0 - f);
+                        int r = int(std::lround(y));
+                        return qBound(ratio && v > 0 ? 1 : 0, r, 127);
+                        };
+                  // the moments to send: the span's own events and a grid from the leave
+                  std::vector<double> times;
+                  for (const auto& e : span)
+                        times.push_back(score->utick2utime(e.first));
+                  for (double t = tLeave; t < tArrive - 1e-9; t += EvenLevels::STEP_MS / 1000.0)
+                        times.push_back(t);
+                  std::sort(times.begin(), times.end());
+                  // out with the span's events, in with the held ones
+                  for (auto j = events->lower_bound(tr.tick); j != events->end() && j->first < uArrive;) {
+                        if (isCC(j->second, tr.route, controller))
+                              j = events->erase(j);
+                        else
+                              ++j;
+                        }
+                  if (!span.empty())
+                        like = span.front().second;
+                  int last = old;
+                  for (double t : times) {
+                        const int v = heldAt(t);
+                        if (v == last)
+                              continue;
+                        last = v;
+                        const int u = std::max(tr.tick, std::min(uArrive - 1, score->utime2utick(t)));
+                        NPlayEvent c(like);
+                        for (const auto& e : span)
+                              if (e.first <= u)
+                                    c = e.second;
+                        c.setValue(v);
+                        // (after what the tick already holds of the route: before a note-on at a later tick)
+                        auto at = events->upper_bound(u);
+                        events->insert(at, std::make_pair(u, c));
+                        }
+                  // from the arrival as rendered (unless an event of its own takes over there; at the route's next
+                  // note-on, before it: what is left of the step goes there)
+                  const int full = renderedAt(tArrive - 1e-9);
+                  bool own = false;
+                  for (auto j = events->lower_bound(uArrive); j != events->end() && j->first == uArrive; ++j)
+                        if (isCC(j->second, tr.route, controller))
+                              own = true;
+                  if (!own && full != last) {
+                        NPlayEvent c(span.empty() ? like : span.back().second);
+                        c.setValue(full);
+                        events->insert(events->lower_bound(uArrive), std::make_pair(uArrive, c));
+                        }
                   }
             }
       }

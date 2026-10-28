@@ -282,11 +282,17 @@ static const std::vector<Definition> DEFINITIONS = {
       // (branch slur-joins, 2026-10-22: Whence's Violas bars 12 / 16, a slur's F#4 into the G4 half note on one copy, the half's
       // lower CC11 sent with its note-on turned the F#4 down 6-7 dB over its last 100 ms; 0 in both presets until the owner
       // has heard it, proposed 1 in Recommended)
-      { "levels/transitionLevels", 0, 0, 1, "on/off",
+      // (2, branch bowed-join, 2026-10-28: the owner on the Hall Guard A/B page, hall.musicxml: "both have the problem of the
+      // tail of the last note suddenly get louder as the next note enters"; the dynamics CC's step too, CC1 48 -> 96 with a
+      // bowed note-on ~190 ms before it is heard; a fix of the per-route schedule: 2 by default and in Recommended, 0 in
+      // Library default; libraryTransitionTails)
+      { "levels/transitionLevels", 2, 0, 2, "",
         "1: where a legato transition's level (CC11: level rule, real range, track and note levels) differs from the note "
         "before's on its copy, the note before keeps its own level to the transition's glide leave, then CC11 moves to the "
         "new note's linear in dB, reaching it at the glide's arrival (SSO's measured bendGlide, else the legato delay); "
-        "0: the new level with the note-on, while SSO still plays the note before", true },
+        "2: the same for every step a transition's note-on brings on its route, the dynamics CC (the written dynamic it "
+        "starts on) and CC11 from whatever sets it, so what still sounds of the note before keeps its level until the "
+        "transition leaves it; 0: the new values with the note-on, while SSO still plays the note before", true },
       // (branch attack-levels, 2026-10-22: Whence's Violas bar 12, the slur's first note, an attack after a staccato on the same
       // key, raised the staccato's release +3.4 dB before the beat with its level-rule CC11 sent with the note-on, 111 ms
       // early by plainShift; 2026-10-23, the owner, "B better": Whence's Violas bars 11-13 alone with a click, even levels on,
@@ -618,7 +624,8 @@ QString iniTemplate()
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
 //    2026-10-20: the owner approved the rule); levels/transitionLevels (0 in both since 2026-10-22, branch slur-joins, until the
-//    owner has heard it); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
+//    owner has heard it; 2 in Recommended and by default, 0 in Library default, since 2026-10-28: a fix, the note before's tail
+//    lifted by the next transition's step, branch bowed-join); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
 //    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both on 2026-10-24, branch
 //    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B"). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
@@ -643,7 +650,7 @@ const std::vector<Preset>& presets()
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 2 }, { "shorts/staccatoLength", 1 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "shorts/staccatoLength", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
@@ -839,6 +846,9 @@ void setIniValuesForTest(const std::map<QString, QString>& values)
       // (levels/attackLevels likewise, 2 by default since 2026-10-23)
       if (!values.count("levels/attackLevels"))
             take(*i, "levels", "attackLevels", "0");
+      // (levels/transitionLevels likewise, 2 by default since 2026-10-28)
+      if (!values.count("levels/transitionLevels"))
+            take(*i, "levels", "transitionLevels", "0");
       // (shorts/staccatoLength likewise, 1 by default since 2026-10-24)
       if (!values.count("shorts/staccatoLength"))
             take(*i, "shorts", "staccatoLength", "0");

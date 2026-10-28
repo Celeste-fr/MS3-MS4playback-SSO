@@ -417,6 +417,7 @@ class MidiRenderer {
       void libraryTrackDelays(const Chunk&, EventMap* events);
       void libraryTimingOverrides(const Chunk&, EventMap* events);      // livetimingoverride.h
       void libraryEvenLevels(const Chunk&, EventMap* events);           // evenlevels.h
+      void libraryTransitionTails(const Chunk&, EventMap* events);      // [levels] transitionLevels 2
       void libraryDelayLead(const Chunk&, EventMap* events);
       void libraryHostedParameters(const Chunk&, EventMap* events);    // soundlibrary.h Controller::hosted
 
