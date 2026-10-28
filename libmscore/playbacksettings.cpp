@@ -199,9 +199,10 @@ static const std::vector<Definition> DEFINITIONS = {
         "key struck again as before. 2: as 1, and each new bow stroke (the bowed transition) sent early by its patch's "
         "measured bowedEarly beyond plainShift (Violins 1 125, Violins 2 151, Violas 55, Celli 106, Basses 64 ms), capped so the "
         "note before keeps keepMs. 0: every such note at 64", true },
-      // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM, 0 in both presets until the owner has heard
-      // it; MidiRenderer::libraryFastTransitions)
-      { "slurs/fastTransitions", 0, 0, 1, "on/off",
+      // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM; 1 in Recommended and by default, 0 in
+      // Library default, since 2026-10-28: the owner, A/B, "the last 3 notes sound slightly more in time";
+      // MidiRenderer::libraryFastTransitions)
+      { "slurs/fastTransitions", 1, 0, 1, "on/off",
         "1: a legato note started less than 15 ms after the note before on its patch, which SSO's legato ignores at velocity 64 "
         "or less (the audit's DROPPED), is sent at velocity 65, the lowest it plays, the same transition family (velocities "
         "20-64 only: a portamento has none above 64); 0: sent as chosen", true },
@@ -618,8 +619,9 @@ QString iniTemplate()
 //    slurs/transitionsEarly (1 in Recommended since 2026-10-15, 0 in Library default); slurs/plainPerformance (1 in Recommended and by default, 0 in Library default,
 //    since 2026-10-17: the owner chose it by ear on the five string sections); slurs/plainTiming (0 in both since 2026-10-21
 //    until the owner has heard it); slurs/speedFromWritten (0 in both since
-//    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions and slurs/fastTransitions (0 in
-//    both since 2026-10-20, until the owner has heard them); levels/hallGuard (0 in both since 2026-10-21 until the owner decides); notes/transportReset (0 in both from
+//    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions (0 in
+//    both since 2026-10-20; the owner, 2026-10-28: "keep A"); slurs/fastTransitions (0 in both 2026-10-20, 1 in Recommended and by default,
+//    0 in Library default, since 2026-10-28: the owner's A/B); levels/hallGuard (0 in both since 2026-10-21 until the owner decides); notes/transportReset (0 in both from
 //    2026-10-21, 1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner's choice); slurs/microtoneBends (0 in both 2026-10-21, 1 in Recommended since 2026-10-22: the owner heard it); slurs/plainAuto (1 in Recommended and by default, 0 in Library default, since 2026-10-26: the owner, "supposed to be bowed", "smooth start"); slurs/plainAccents (0 in both from 2026-10-20 until the owner
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
@@ -649,7 +651,7 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "shorts/staccatoLength", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },

@@ -382,7 +382,7 @@ void TestPlaybackAudit::cappedArrival()
 
 void TestPlaybackAudit::droppedFindings()
       {
-      recommended({ { "levels/calibrated", "0" } });
+      recommended({ { "levels/calibrated", "0" }, { "slurs/fastTransitions", "0" } });
       MasterScore* score = readScore(DIR + "fast-legato.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();
@@ -837,7 +837,7 @@ void TestPlaybackAudit::hallFindings()
 
 void TestPlaybackAudit::avoidedCCFindings()
       {
-      recommended({ { "levels/calibrated", "0" } });
+      recommended({ { "levels/calibrated", "0" }, { "slurs/fastTransitions", "0" } });
       MasterScore* score = readScore(DIR + "fast-legato.musicxml");
       QVERIFY(score);
       score->rebuildMidiMapping();

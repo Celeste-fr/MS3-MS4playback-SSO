@@ -444,7 +444,7 @@ Keep this file current: close an item by deleting it (the commit message says wh
 
 ### 20. DROPPED transitions; speed from written
 - **W**: SSO ignores a legato note-on < 15 ms after the previous at velocity ≤ 64. `[slurs] fastTransitions` sends 65
-  (0 everywhere); portamento velocities 1-19 stay dropped. Whence has 0. `[slurs] speedFromWritten` (0 everywhere,
+  (1 in Recommended since 2026-10-28, the owner's A/B); portamento velocities 1-19 stay dropped. Whence has 0. `[slurs] speedFromWritten` (0 everywhere,
   approved in principle; null test equal within the floor): lanes other than 0 not rendered, a slur over a repeat sends
   no CC119, other Performance patches not covered, Live carrier value 1 plays as 0, a device of protocol ≤ 10 plays key
   113 as a note, resave restore untried with real Kontakt.
@@ -605,7 +605,7 @@ Keep this file current: close an item by deleting it (the commit message says wh
 ## Owner decisions pending
 
 **Settings 0 by default "until the owner has heard it"**: `[slurs] plainTiming` (item 2), `speedFromWritten`
-(20), `fixedTransitions` (11), `fastTransitions` (20), `[notes] transportReset` (11), `[levels] hallGuard` (11a), `[guitar] strums`, `softStrums` 0/1/2, `pinchHarmonics` (10);
+(20), `[levels] hallGuard` (11a), `[guitar] strums`, `softStrums` 0/1/2, `pinchHarmonics` (10);
 `[slurs] evenTransitions` (weak proposal).
 
 **On by default, never heard or confirmed**: calibrated 2 (B′), sectionBalance 2, realRange 2 on music with
