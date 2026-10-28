@@ -57,6 +57,15 @@ not played yet.**
   engine; Create Live Set doesn't warn yet). (5) MS3 -> MS4: an MS3 SND part's CC2 is not reset at MS4's start. (6) Even
   levels, the audit, the verification see only the library segments' notes (untried). (7) GUI untried by hand.
 - Tested (Linux, test synth map; no Kontakt / SSO): see the branch's commit message.
+- **Checked on the Windows VM, build 489** (2026-10-27, Kontakt + SSO and Windows Vial c29c49e, the owner's presets read in
+  place; own test scores, not committed): File > Export audio (`-o`) of a score with Violins on MS4 and a lane MS4 -> Vial ->
+  MS4 -> Vial, Celli on SSO with a lane SSO -> MS4 -> SSO: every bar range on the expected engine (1/3-octave spectrum
+  against single-engine renders of the same score: distance <= 1.3 dB to the expected engine, >= 5 dB to the others).
+  The same score played in the GUI (Play, recorded from the virtual cable): the recording matches the export within
+  0.2 dB per 2 s window, no gap, no "Not responding"; one audio callback of 486 ms (underflow flag 1) at the play's start
+  or stop (not in the music). The lane's editor (Continuous View, right-click "Switch to") not tried by GUI script.
+  Observed: an `-o` export with SSO over SSH hung in Kontakt's setState (in-process and in a helper); the same command
+  in the desktop session (a scheduled task with /it) rendered in 8-17 s.
 
 ## Vial levels (branch `vial-levels`, 2026-10-27, from integrate-1017 4e6d877914)
 
