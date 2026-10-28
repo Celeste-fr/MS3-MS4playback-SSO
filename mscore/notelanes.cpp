@@ -542,9 +542,33 @@ void NoteLanes::resetSelected()
       if (_sel.empty() || !fresh())
             return;
       const bool join = _selTarget == JOIN;
+      if (!join) {
+            // (the Velocity lane shows what the note plays: an attack or transition chosen in the Inspector sets its
+            // velocity as much as the lane's own value does, so Auto resets all three; before, only the own value went,
+            // and a note set to spiccato in the Inspector stayed spiccato)
+            Score* s = _lanes->score();
+            if (!s)
+                  return;
+            s->startCmd();
+            for (const Note* c : _sel) {
+                  Note* n = const_cast<Note*>(c);
+                  if (n->performanceAttack() != PerformanceTechnique::Attack::AUTO)
+                        n->undoChangeProperty(Pid::PERFORMANCE_ATTACK, int(PerformanceTechnique::Attack::AUTO));
+                  if (n->performanceTransition() != PerformanceTechnique::Transition::AUTO)
+                        n->undoChangeProperty(Pid::PERFORMANCE_TRANSITION, int(PerformanceTechnique::Transition::AUTO));
+                  if (n->libraryVelocity() != 0)
+                        n->undoChangeProperty(Pid::LIBRARY_VELOCITY, 0);
+                  }
+            s->endCmd();
+            if (mscore)
+                  mscore->showMessage(tr("Notes: Auto"), 1500);
+            render();
+            _view->update();
+            return;
+            }
       std::map<const Note*, int> values;
       for (const Note* n : _sel)
-            values[n] = join ? PerformanceTechnique::JOIN_AUTO : 0;
+            values[n] = PerformanceTechnique::JOIN_AUTO;
       commit(values, join, tr("Notes: Auto"));
       }
 
@@ -709,16 +733,25 @@ void NoteLanes::contextMenu(const Row& r, const QPointF& p, const QPoint& global
       _view->update();
       QMenu menu;
       QAction* edit = menu.addAction(tr("Edit Value…"));
-      QAction* reset = menu.addAction(tr("Reset to Auto"));
       edit->setEnabled(!_sel.empty());
-      reset->setEnabled(!_sel.empty());
+      // (every note of the part in this lane back to Auto, as the value lanes' Clear Lane and Live's Clear Envelope; the
+      // owner, 2026-10-28: "I thought the reset to option is for the whole automation lane", then no per-stem Reset to
+      // Auto in the menu, Live having none: double-click or Delete still give the selected stems back)
+      QAction* resetLane = menu.addAction(tr("Clear Lane"));
       menu.addSeparator();
       QAction* hide = menu.addAction(tr("Hide Lane"));
       QAction* a = menu.exec(globalPos);
       if (a == hide)
             _lanes->showLane(r.part, r.target, false);
-      else if (a == reset)
+      else if (a == resetLane) {
+            _sel.clear();
+            for (const Mark& m : partMarks(r.master))
+                  _sel.insert(m.note);
+            _selTarget = r.target;
             resetSelected();
+            _sel.clear();
+            _view->update();
+            }
       else if (a == edit) {
             int start = join ? 0 : 64;
             for (const Mark& m : partMarks(r.master))

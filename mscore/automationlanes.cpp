@@ -1865,6 +1865,16 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
       {
       const QPointF p = _view->toLogical(pos);
       const Row* rp = rowAt(p);
+      // (a row's header box stays at the view's left edge, also where that is left of the system the row starts at:
+      // there the page's menu came up instead of the lane's, the owner 2026-10-28; a note lane, which has nothing tied to
+      // a tick but its stems, also past the row's ends at its height)
+      for (const Row& r : _rows) {
+            if (rp)
+                  break;
+            if (headerRect(r).contains(pos)
+                || (NoteLane::isTarget(r.target) && p.y() >= r.rect.top() && p.y() < r.rect.bottom()))
+                  rp = &r;
+            }
       if (!rp)
             return false;
       const Row r = *rp;

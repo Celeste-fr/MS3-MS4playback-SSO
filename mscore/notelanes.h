@@ -27,13 +27,15 @@
 //   or ends before it (< 0); a gap up to the map's legatoGap (SSO: 39 ms) still joins by transition, longer re-attacks:
 //   the dashed line, the bands behind (transition / re-attack).
 //   A stem dragged is the note's own value (Note::libraryVelocity / libraryJoin: filled), replacing the rendered one;
-//   double-click, Delete or the menu's Reset to Auto give it back (empty: as rendered). An Inspector technique resets
-//   them too (Note::undoChangeProperty). Live gets them as MuseScore plays them (the renderer's events: liveclips.h).
+//   double-click or Delete give it back (empty: as rendered), the menu's Clear Lane every note of the part; on the
+//   Velocity lane they also set the note's Inspector attack and transition back to Auto (they set its velocity too:
+//   resetSelected; the owner, 2026-10-28). An Inspector technique resets them too (Note::undoChangeProperty). Live
+//   gets them as MuseScore plays them (the renderer's events: liveclips.h).
 //
 //   Editing, as the automation lanes (each gesture one undo step): drag a stem (the selected ones together; Shift:
 //   fine); Ctrl-click: add to / remove from the selection; drag on the background: a rubber band selects; Draw Mode
-//   (the header's pencil): every stem the mouse passes gets its value; right-click: Edit Value…, Reset to Auto, Hide
-//   Lane.
+//   (the header's pencil): every stem the mouse passes gets its value; right-click: Edit Value…, Clear Lane (every
+//   note of the part in the lane back to Auto, as Live's Clear Envelope), Hide Lane.
 //
 //   What the lanes show comes from rendering the score as playback does (MidiRenderer with a LibTrace) when it
 //   changed, a moment later (not while playing: Seq renders then), each note's first rendering (a repeat's second
