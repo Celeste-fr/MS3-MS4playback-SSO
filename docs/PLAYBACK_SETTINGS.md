@@ -1897,13 +1897,31 @@ host loads the score's patches in the background; the next click plays it.
 Not a setting: the owner, 2026-10-26, "natively integrate Vial Instrumental as another playback engine, like we have now
 for ms3, ms4 and sso" (branch `vial-engine`; share/soundlibraries/README.md › Several libraries). A part may play
 another library than the global one (metaTag `partPlayback` "library:<engine>"). Every adjustment in this file is
-read from the note's own library's map: a Vial part gets none of SSO's measured layers (no calibration, onsets, level
-rule, section balance, real range, mic compensation, even levels: Vial's map has none), an SSO part keeps all of them
+read from the note's own library's map: a Vial part gets none of SSO's measured layers but its levels (no calibration,
+onsets, level rule, mic compensation, even levels: Vial's map has none; section balance and real range: › Vial levels),
+an SSO part keeps all of them
 when Vial is the global library (its calibration read as the global one's would be: `SoundLib::calibrationFor`). The
 master trim (› Gain stage and master trim) is measured on the score's first library with a crest and lowers every
 library patch, Vial's too (one master level). Even levels' measurement, the audit and the verification: the global
 library's parts only. A score that plays one library renders byte for byte as before (Whence: `dumpEvents` identical,
 2026-10-26).
+
+## Vial levels
+
+Not a setting of its own (branch `vial-levels`, 2026-10-27; the owner, 2026-10-26/27: a Vial part as loud as the SSO part
+at the same written dynamic, "measured, not by ear"): the Vial maps' 13 instruments carry the SSO instrument's
+`realSteps` / `realSpan` / `realPlay` (the same players' data), their own `longLevel` and SSO's `sectionLevel` /
+`sectionLevel2` moved by a measured offset, so `[levels] realRange` and `sectionBalance` (Recommended 2 / 2, Library
+default 0 / 0: Vial then plays CC11 127 and no gain, as before) play a Vial Long at SSO's Long's level at every marking.
+Made by `tools/soundlibraries/vial_levels.py` (its header is the method): `sweep` renders each preset by kthost
+(Linux, Vial c29c49e) with `sso_cc1_sweep.py`'s events at SSO's swept pitches, CC1 16 .. 127 (`vial_cc1_curves.json`,
+one take a point: Vial has no round robins); `fit` -> `vial_levels.json` -> `gen_vial.py`; `check` renders every preset
+at ppp .. fff at three pitches as MuseScore sends it under Recommended from the generated map
+(`vial_levels_check.json`). **Matched on loudDb** (the loudest 50 ms; the measure the section balance put SSO's Long on
+the real scale with): the check's largest error 0.53 dB (Flute), the strings <= 0.4. **Uncertainty: other loudness
+measures judge the winds louder on Vial**: by the sustain's power +1.8 .. +4.1 dB, LUFS +1.8 .. +3.9, phon +2.1 .. +7.1
+(the presets hold their level, SSO's solo samples peak and decay); the strings within +-1.2 dB (phon -1.8 .. -0.5). Test
+`tst_liveequivalence::vialLevels`.
 
 ## Inventory
 
