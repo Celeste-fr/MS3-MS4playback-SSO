@@ -141,8 +141,23 @@ oop-load showed setState is one CPU-bound thread per process (VM: 37 s in 1 proc
   - MS_AUDIO_TIMING, 60 s of Whence playing, ABBA, budget 23.22 ms, ~2300 callbacks: helpers 3 / 4 over budget (p99 8.2 / 7.6
     ms, max 167 / 93), in-process 5 / 1 (p99 6.4 / 6.5, max 389 / 382). Round trip overhead on the VM median 380-440 us, p99
     ~2.5 ms. No crackle measure worse than in-process; nobody listened.
-  - Open: while loading (stopped) the audio callback stalled once per helper start, ~2.6 s (mean 2.2 ms; in-process max 0.9).
-    Not in the helpers' round-trip maxima (<= 166 ms); cause unknown; nothing plays then.
+  - While loading (stopped) the audio callback stalled ~2.6 s (lag probe o: max 2544 ms, mean 2.2 ms; in-process max 0.9).
+    **Cause found, fixed on branch `helper-stall` (2026-10-27, not merged, not yet on the VM):** a load's last step, settle
+    (SoundLibraryHost: silence rendered right after setState, 0.047 s, or + 0.25 s after the controllers), went to the
+    helper as REQ_SETTLE on the audio channel, and the helper's one audio thread served it in its loop over the instances,
+    holding up the block of every instance in that helper that already played, so MuseScore's callback waited in
+    Instance::wait. Kontakt's first blocks after a setState are slow (the samples just loaded), hence seconds. (The
+    stalled waits came at stopped time, before the first play's MS_AUDIO_TIMING line reset the round trips; the 166 ms
+    maximum was from other runs.) Fix (vst3remote.cpp, the helper only): REQ_SETTLE goes to a settle thread of the helper's
+    own (`Child::settleLoop`), the audio thread skips that instance meanwhile (its caller waits for the settle, so it gets
+    no block then); the old process-wide `processing` mutex became one per instance (`ChildInstance::serving`: idle's
+    remap, the audio or the settle thread), DESTROY waits for a settle in flight. Blocks unchanged (remoteNull
+    bit-identical). Linux, test synth with a slow first block after setState (`MSTESTSYNTH_FIRST_PROCESS_MS`, new): test
+    `tst_soundlibrary::remoteNoStall` (an instance playing in helper 0 while two load, one into helper 0, one into a new
+    helper; 256-frame callbacks paced in real time): longest callback 995.8 ms before (117 callbacks in 1.3 s), 1.6-1.7 ms
+    after (303). For the VM: lag probe o on Whence with helpers, the audio max should fall to in-process levels. Still
+    shared with live slots on the helper's audio thread: offline renders' blocks (the even-levels measurer, an export) of
+    instances in the same helper (the measurer pauses while playing; not measured).
   - Kill test: the helper holding 8.2 GB killed while playing: noticed the same second, MuseScore stayed up, 5 instances
     reloaded in 7.6 s (one in a new helper), playback went on; ~7 s silent in the recording.
   - Heard check (export, per route) with helpers against check480's t1: 0 differing events in all five parts, detector 0

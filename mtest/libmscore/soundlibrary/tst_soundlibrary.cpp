@@ -247,6 +247,7 @@ class TestSoundLibrary : public QObject, public MTest
       void remoteNull();
       void remoteTiming();
       void remoteParallelLoad();
+      void remoteNoStall();
       void remoteKilled();
       void remoteHung();
       void mixerScore();
@@ -10836,6 +10837,104 @@ void TestSoundLibrary::remoteParallelLoad()
       QVERIFY2(one >= 1.15, qPrintable(QString::number(one)));
       QVERIFY2(two < 0.8 * one, qPrintable(QString("%1 / %2").arg(two).arg(one)));
       QVERIFY2(gui1 < 50 && gui2 < 50, qPrintable(QString("%1 / %2 ms").arg(gui1).arg(gui2)));
+      }
+
+//---------------------------------------------------------
+//   remoteNoStall
+//    the audio thread never waits for a helper that starts or loads (helper-stall, 2026-10-27; VM build 483: the callback
+//    stalled ~2.6 s while patches loaded, stopped): an instance plays on slot 0 of helper 0 while two more load, one into
+//    the same helper, one into a helper started for it, each with a slow setState and a slow first block after it
+//    (MSTESTSYNTH_FIRST_PROCESS_MS: what the load's settle renders). The callbacks, paced as a realtime one (256 frames),
+//    each under 50 ms; then the new instances play in their slots
+//---------------------------------------------------------
+
+void TestSoundLibrary::remoteNoStall()
+      {
+      struct Env {
+            ~Env() { qunsetenv("MSTESTSYNTH_SETSTATE_MS"); qunsetenv("MSTESTSYNTH_FIRST_PROCESS_MS"); }
+            } env;
+      HostProcesses hp(2);
+      const int rate = 48000;
+      Vst3Synth vst;
+      vst.init(rate);
+      QString error;
+      Vst3Remote::prepare(TESTSYNTH, 1);
+      std::unique_ptr<Vst3Plugin> a = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error, "patch a");
+      QVERIFY2(a, qPrintable(error));
+      QVERIFY(a->hostPid() > 0);
+      const QByteArray state = a->state();
+      QVERIFY(a->setState(state));
+      a->settle();
+      const qint64 pidA = a->hostPid();
+      vst.setPlugin(0, std::move(a));
+      vst.play(PlayEvent(ME_CONTROLLER, 0, 1, 100));
+      vst.play(PlayEvent(ME_NOTEON, 0, 64, 100));
+
+      std::atomic<bool> stop { false };
+      std::atomic<qint64> maxNs { 0 };
+      std::atomic<int> calls { 0 };
+      std::atomic<int> silent { 0 };
+      std::thread audio([&]() {
+            const int frames = 256;
+            std::vector<float> b(2 * frames);
+            const auto period = std::chrono::nanoseconds(qint64(1e9 * frames / rate));
+            auto next = std::chrono::steady_clock::now();
+            while (!stop) {
+                  std::fill(b.begin(), b.end(), 0.f);
+                  const auto t0 = std::chrono::steady_clock::now();
+                  vst.process(unsigned(frames), b.data(), nullptr, nullptr);
+                  const qint64 ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - t0).count();
+                  if (ns > maxNs)
+                        maxNs = ns;
+                  if (peak(b) == 0.f)
+                        ++silent;
+                  ++calls;
+                  next += period;
+                  if (next < std::chrono::steady_clock::now())
+                        next = std::chrono::steady_clock::now();
+                  std::this_thread::sleep_until(next);
+                  }
+            });
+      QThread::msleep(100);
+
+      qputenv("MSTESTSYNTH_SETSTATE_MS", "300");
+      qputenv("MSTESTSYNTH_FIRST_PROCESS_MS", "1000");
+      // (as SoundLibraryHost loads: the instance made, its setup set on a worker, settled, then put in its slot)
+      std::vector<std::unique_ptr<Vst3Plugin>> loaded(2);
+      for (int k = 0; k < 2; ++k) {
+            loaded[size_t(k)] = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error, QString("patch %1").arg(k));
+            QVERIFY2(loaded[size_t(k)], qPrintable(error));
+            }
+      QCOMPARE(loaded[0]->hostPid(), pidA);           // (the same helper as the one playing)
+      QVERIFY(loaded[1]->hostPid() > 0 && loaded[1]->hostPid() != pidA);       // (a helper started for it)
+      QElapsedTimer t;
+      t.start();
+      std::vector<std::thread> workers;
+      std::atomic<int> ok { 0 };
+      for (auto& p : loaded)
+            workers.emplace_back([&ok, &p, &state]() {
+                  if (p->setState(state)) {
+                        p->settle();
+                        ++ok;
+                        }
+                  });
+      for (std::thread& w : workers)
+            w.join();
+      const double loadSeconds = t.elapsed() / 1000.0;
+      for (int k = 0; k < 2; ++k) {
+            vst.setPlugin(k + 1, std::move(loaded[size_t(k)]));
+            vst.play(PlayEvent(ME_CONTROLLER, k + 1, 1, 100));
+            vst.play(PlayEvent(ME_NOTEON, k + 1, 67 + 3 * k, 100));
+            }
+      QThread::msleep(200);
+      stop = true;
+      audio.join();
+      qInfo("while 2 instances loaded (%.2f s, setState 300 ms + a first block of 1000 ms each): %d callbacks, the longest %.1f ms, %d silent",
+            loadSeconds, int(calls), maxNs / 1e6, int(silent));
+      QCOMPARE(int(ok), 2);
+      QVERIFY2(loadSeconds >= 1.2, qPrintable(QString::number(loadSeconds)));      // (the loads were slow)
+      QVERIFY2(maxNs < 50 * 1000000LL, qPrintable(QString("%1 ms").arg(maxNs / 1e6)));
+      QCOMPARE(int(silent), 0);                       // (slot 0 sounded throughout)
       }
 
 //---------------------------------------------------------

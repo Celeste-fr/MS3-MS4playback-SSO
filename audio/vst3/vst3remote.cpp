@@ -1460,6 +1460,8 @@ struct ChildInstance {
       Header* h { nullptr };
       std::vector<float> rendered;        // a REQ_PROCESS longer than the output area, for REQ_FETCH
       std::unique_ptr<BackgroundLoad> since;      // the threads before it was made (or BACKGROUND_MARK)
+      std::mutex serving;                 // held while a thread plays it (the audio or the settle thread; Vst3Plugin::idle)
+      std::atomic<bool> settling { false };       // its REQ_SETTLE is with the settle thread
       };
 
 class Child {
@@ -1470,9 +1472,15 @@ class Child {
       Signal req;
       std::mutex table;                   // the instances: the main thread changes, the audio thread plays
       std::map<quint32, std::unique_ptr<ChildInstance>> instances;
-      std::mutex processing;              // held while the audio thread plays (Vst3Plugin::idle)
       std::atomic<bool> stop { false };
       std::thread audio;
+      // REQ_SETTLE (a load's last step, SoundLibraryHost: silence rendered right after setState, when a sampler is slowest)
+      // on a thread of its own, not the audio thread's: there it held up every other instance's block in this helper, and
+      // MuseScore's audio callback waited for them (VM build 483: ~2.6 s per load while stopped; helper-stall, 2026-10-27)
+      std::thread settler;
+      std::mutex settleMutex;
+      std::condition_variable settleCv;
+      std::deque<ChildInstance*> settles;
       std::thread reader;
       std::map<quint32, QWidget*> editors;
       // the requests, run one at a time on the main thread in the order they came (drain)
@@ -1481,6 +1489,7 @@ class Child {
       bool draining { false };
 
       void audioLoop();
+      void settleLoop();
       void serve(ChildInstance* in);
       void drain();
       void handle(const QByteArray& request);
@@ -1615,16 +1624,50 @@ void Child::audioLoop()
             if (stop)
                   return;
             std::lock_guard<std::mutex> lock(table);
-            std::lock_guard<std::mutex> playing(processing);
             for (auto& i : instances) {
                   ChildInstance* in = i.second.get();
                   const quint32 want = in->h->reqSeq.load(std::memory_order_acquire);
                   if (want == in->h->doneSeq.load(std::memory_order_relaxed))
                         continue;
-                  serve(in);
+                  if (in->h->kind == REQ_SETTLE) {
+                        if (!in->settling.exchange(true)) {
+                              std::lock_guard<std::mutex> s(settleMutex);
+                              settles.push_back(in);
+                              settleCv.notify_one();
+                              }
+                        continue;
+                        }
+                  {
+                        std::lock_guard<std::mutex> playing(in->serving);
+                        serve(in);
+                  }
                   in->h->doneSeq.store(want, std::memory_order_release);
                   in->done.post();
                   }
+            }
+      }
+
+// the settles the audio thread handed over, one at a time (an instance settling gets no other request: its caller waits)
+void Child::settleLoop()
+      {
+      while (true) {
+            ChildInstance* in = nullptr;
+            {
+                  std::unique_lock<std::mutex> lock(settleMutex);
+                  settleCv.wait(lock, [this]() { return stop || !settles.empty(); });
+                  if (stop)
+                        return;
+                  in = settles.front();
+                  settles.pop_front();
+            }
+            const quint32 want = in->h->reqSeq.load(std::memory_order_acquire);
+            {
+                  std::lock_guard<std::mutex> playing(in->serving);
+                  serve(in);
+            }
+            in->h->doneSeq.store(want, std::memory_order_release);
+            in->settling = false;
+            in->done.post();
             }
       }
 
@@ -1727,6 +1770,9 @@ void Child::handle(const QByteArray& request)
                         instances.erase(i);
                         }
             }
+            // (not while the settle thread plays it)
+            while (gone && gone->settling)
+                  std::this_thread::sleep_for(std::chrono::milliseconds(1));
             gone.reset();
             reply(seq, QByteArray());
             return;
@@ -1776,7 +1822,7 @@ void Child::handle(const QByteArray& request)
                   break;
                   }
             case Op::IDLE:
-                  p->idle(&processing);
+                  p->idle(&in->serving);
                   break;
             case Op::DESCRIBE: {
                   bool hasBase = false;
@@ -1919,6 +1965,7 @@ int childMain(int argc, char** argv)
       if (!writeMessage(c.out, pack([](QDataStream& o) { o << QByteArray("MSLIBHOST") << QString::fromUtf8(ProcessAllocator::description()); })))
             return 4;
       c.audio = std::thread([&c]() { c.audioLoop(); });
+      c.settler = std::thread([&c]() { c.settleLoop(); });
       c.reader = std::thread([&c, &app]() {
             QByteArray m;
             while (readMessage(c.in, &m)) {
@@ -1935,6 +1982,11 @@ int childMain(int argc, char** argv)
       c.stop = true;
       c.req.post();
       c.audio.join();
+      {
+            std::lock_guard<std::mutex> lock(c.settleMutex);
+            c.settleCv.notify_all();
+      }
+      c.settler.join();
       for (auto& e : c.editors)
             delete e.second;
       c.editors.clear();

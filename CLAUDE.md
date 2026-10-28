@@ -532,8 +532,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   trips (`Vst3Remote::timingSummary`). Live and MIDI out unchanged. kthost compiles vst3remote.cpp but always hosts
   in-process (VST3PLUGIN_NO_SETTINGS). VM, build 483 (Kontakt + SSO, Whence): open 15 s against 29-32 s in-process, event
   loop max 0.19 s against 6.6 s, no "Not responding"; playback callbacks over budget as in-process; heard-check export
-  identical to build 480's; a killed helper reloaded in 7.6 s while MuseScore stayed up. Open: a ~2.6 s audio-callback
-  stall per helper start while stopped. Untried: Ample and the editor window in a helper (HANDOFF.md › Out-of-process host).
+  identical to build 480's; a killed helper reloaded in 7.6 s while MuseScore stayed up. A load's settle (REQ_SETTLE) runs on
+  the helper's own settle thread, never its audio thread (branch `helper-stall`, 2026-10-27: there it held up the other
+  instances' blocks, the VM's ~2.6 s callback stall while loading; `tst_soundlibrary::remoteNoStall`; not yet on the VM). Untried: Ample and the editor window in a helper (HANDOFF.md › Out-of-process host).
 - **mimalloc for setState only on Windows** (branch `sso-load`, 2026-10-23; scoped by `kheap-realtime`, 2026-10-24):
   `main()` first calls `ProcessAllocator::start()` (`audio/vst3/processallocator.*`), which loads `kheap.dll` from
   MuseScore's folder (`tools/soundlibraries/kheap`, MinHook + mimalloc in `thirdparty/`, built and installed into bin/
