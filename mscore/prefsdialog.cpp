@@ -1646,6 +1646,24 @@ void PreferenceDialog::apply()
             preferences.setPreference(PREF_IO_JACK_REMEMBERLASTCONNECTIONS, rememberLastMidiConnections->isChecked());
             preferences.setPreference(PREF_IO_JACK_USEJACKTRANSPORT, jackDriver->isChecked() && useJackTransport->isChecked());
 
+            // the PortAudio device: saved before the engine restarts, so that the restart opens it (until 2026-10-29 it was
+            // saved after: a new device alone restarted nothing, with the audio buffer the restart reopened the old one, and
+            // the new device played only after MuseScore was started again). Only a device the user chose: while the saved
+            // device is absent (Voicemeeter not running) the boxes show the default, and OK must not replace the saved
+            // device with it. The box indices are the running PortAudio's, so they are read before the restart.
+            bool portaudioDeviceChanged = false;
+#ifdef USE_PORTAUDIO
+            if (portAudioIsUsed && !noSeq && seq && seq->driver()) {
+                  Portaudio* audio = static_cast<Portaudio*>(seq->driver());
+                  const int api = portaudioApi->currentIndex();
+                  const int device = portaudioDevice->currentIndex();
+                  if (api != audio->currentApi() || device != audio->currentDevice()) {
+                        audio->saveDevice(api, device);
+                        portaudioDeviceChanged = portaudioDriver->isChecked();
+                        }
+                  }
+#endif
+
             if (jackParametersChanged) {
                   // Change parameters of JACK driver without unload
                   if (seq) {
@@ -1660,6 +1678,7 @@ void PreferenceDialog::apply()
                   }
             else if (
                (wasJack != nowJack)
+               || portaudioDeviceChanged
                || (preferences.getBool(PREF_IO_ALSA_USEALSAAUDIO) != alsaDriver->isChecked())
 #ifdef USE_PORTAUDIO
                || (preferences.getBool(PREF_IO_PORTAUDIO_USEPORTAUDIO) != portaudioDriver->isChecked())
@@ -1690,18 +1709,6 @@ void PreferenceDialog::apply()
 
                   restartAudioEngine();
                   }
-#ifdef USE_PORTAUDIO
-            if (portAudioIsUsed && !noSeq) {
-                  Portaudio* audio = static_cast<Portaudio*>(seq->driver());
-                  // only a device the user chose: while the saved device is absent (Voicemeeter not running) the
-                  // boxes show the default, and OK must not replace the saved device with it
-                  const int api = portaudioApi->currentIndex();
-                  const int device = portaudioDevice->currentIndex();
-                  if (api != audio->currentApi() || device != audio->currentDevice())
-                        audio->saveDevice(api, device);
-                  }
-#endif
-
 #ifdef USE_PORTMIDI
             // a new MIDI output (A … D) is opened by a restart of the audio engine
             const bool midiOutputsChanged = preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE) != portMidiOutput->currentText()

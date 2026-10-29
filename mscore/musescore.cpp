@@ -3904,7 +3904,11 @@ void MuseScore::restartAudioEngine()
       if (seq) {
             Driver* driver = driverFactory(seq, "");
             if (driver) {
-                  // Updating synthesizer's sample rate
+                  // the new device's sample rate everywhere, as at startup: the sequencer's frames and the metronome
+                  // (MScore::sampleRate; before 2026-10-29 it kept the old device's, so a device at another rate played
+                  // at the wrong speed), FluidSynth, the effects and the hosted plug-ins (Vst3Synth::init: each
+                  // instance's setupProcessing again, in a helper process too)
+                  MScore::sampleRate = driver->sampleRate();
                   if (seq->synti()) {
                         seq->synti()->setSampleRate(driver->sampleRate());
                         seq->synti()->init();

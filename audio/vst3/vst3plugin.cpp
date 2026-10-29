@@ -1118,6 +1118,8 @@ bool Vst3Plugin::setOffline(bool offline)
 bool Vst3Plugin::setSampleRate(double sampleRate)
       {
       if (d->remote) {
+            if (d->sampleRate == sampleRate)          // (as the helper's own instance would answer: no round trip)
+                  return true;
             d->sampleRate = sampleRate;
             REMOTE_REPLY(ds, Vst3Remote::Op::SET_SAMPLE_RATE, remoteArgs([&](QDataStream& a) { a << sampleRate; }), true);
             bool ok = false;
@@ -1131,6 +1133,11 @@ bool Vst3Plugin::setSampleRate(double sampleRate)
       const bool ok = d->setup();
       d->startProcessing();
       return ok;
+      }
+
+double Vst3Plugin::sampleRate() const
+      {
+      return d->sampleRate;
       }
 
 //---------------------------------------------------------

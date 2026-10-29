@@ -31,6 +31,9 @@
 //                     the Mixer does it), Play right after, then l's rounds while its patches load
 //                  g  a change while playing that needs patches not loaded (the first part to MS4 and back): playback
 //                     stops, the patches load in the background, playback goes on once they are (GoOnPlaying)
+//                  i  the audio device changed in Preferences › I/O (the boxes set, OK clicked) for each step of
+//                     MS_LAG_PROBE_IO ("pa:<host API>/<device>", "alsa:<rate>"), Play after each: the driver's, MScore's,
+//                     the synthesizers' and each hosted instance's sample rate, the audio callbacks while playing
 //                In l / r / g the window system's input reaching MuseScore is logged ("input"): tools/lagprobe/linux/input.py
 //                sends wheel steps with xdotool and gives each one's delay
 //    each action its synchronous time (the command, layout, endCmd and what it calls), its response (to the event loop's

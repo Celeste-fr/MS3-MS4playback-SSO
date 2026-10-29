@@ -24,7 +24,13 @@
 #include <QAbstractEventDispatcher>
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QGroupBox>
+#include <QPushButton>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -42,6 +48,11 @@
 #include "preferences.h"
 #include "scoreview.h"
 #include "seq.h"
+#include "audio/midi/msynthesizer.h"
+#ifdef USE_VST3
+#include "audio/vst3/vst3synth.h"
+#endif
+#include "audiodrivers/driver.h"
 #include "shortcut.h"
 #include "soundlibraryhost.h"
 #include "inspector/inspector.h"
@@ -564,6 +575,111 @@ class Probe : public QObject {
                   a->trigger();
             return QString("was playing %1").arg(playing ? 1 : 0);
             }
+      // phase i: the device chosen in Preferences › I/O, as the user does it
+      void ioSwitch(const QString& step)
+            {
+            mscore->startPreferenceDialog();
+            QDialog* dlg = nullptr;
+            for (QDialog* d : mscore->findChildren<QDialog*>())
+                  if (d->findChild<QGroupBox*>("portaudioDriver"))
+                        dlg = d;
+            QJsonObject o;
+            o["k"] = "io switch";
+            o["step"] = step;
+            o["t"] = ms(now()) / 1000;
+            if (!dlg) {
+                  o["error"] = "no preferences dialog";
+                  write(o);
+                  return;
+                  }
+            QGroupBox* pa = dlg->findChild<QGroupBox*>("portaudioDriver");
+            QGroupBox* alsa = dlg->findChild<QGroupBox*>("alsaDriver");
+            QGroupBox* pulse = dlg->findChild<QGroupBox*>("pulseaudioDriver");
+            if (step.startsWith("pa:")) {
+                  const QString api = step.mid(3).section(QChar(0x2f), 0, 0);
+                  const QString device = step.mid(3).section(QChar(0x2f), 1);
+                  if (pa)
+                        pa->setChecked(true);
+                  QComboBox* apiBox = dlg->findChild<QComboBox*>("portaudioApi");
+                  QComboBox* deviceBox = dlg->findChild<QComboBox*>("portaudioDevice");
+                  if (apiBox && deviceBox) {
+                        const int a = apiBox->findText(api);
+                        if (a >= 0 && a != apiBox->currentIndex()) {
+                              apiBox->setCurrentIndex(a);
+                              emit apiBox->activated(a);          // (as a click: the device list of that API)
+                              }
+                        const int d = deviceBox->findText(device);
+                        if (d >= 0)
+                              deviceBox->setCurrentIndex(d);
+                        o["found"] = a >= 0 && d >= 0;
+                        }
+                  }
+            else if (step.startsWith("alsa:")) {
+                  if (alsa)
+                        alsa->setChecked(true);
+                  if (QComboBox* rate = dlg->findChild<QComboBox*>("alsaSampleRate")) {
+                        const int r = rate->findData(step.mid(5).toInt());
+                        if (r >= 0)
+                              rate->setCurrentIndex(r);
+                        o["found"] = r >= 0;
+                        }
+                  }
+            o["pulseChecked"] = pulse && pulse->isChecked();
+            QDialogButtonBox* box = dlg->findChild<QDialogButtonBox*>("buttonBox");
+            if (box && box->button(QDialogButtonBox::Ok))
+                  box->button(QDialogButtonBox::Ok)->click();
+            o["driverRate"] = seq && seq->driver() ? seq->driver()->sampleRate() : -1;
+            o["mscoreRate"] = MScore::sampleRate;
+            write(o);
+            }
+      void ioPlay(const QString& step, int playMs)
+            {
+            LagProbe::takeAudio();
+            QJsonObject o;
+            o["k"] = "io play";
+            o["step"] = step;
+            o["t"] = ms(now()) / 1000;
+            o["press"] = pressPlay();
+            write(o);
+            auto started = std::make_shared<QElapsedTimer>();
+            started->start();
+            QTimer::singleShot(playMs, this, [this, step, started]() {
+                  const LagProbe::AudioStats a = LagProbe::takeAudio();
+                  QJsonObject r;
+                  r["k"] = "io";
+                  r["step"] = step;
+                  r["t"] = ms(now()) / 1000;
+                  r["playing"] = seq && seq->isPlaying();
+                  r["seqRunning"] = seq && seq->isRunning();
+                  r["driver"] = !seq || !seq->driver() ? QString("none") : portAudioIsUsed ? QString("PortAudio")
+                                : alsaIsUsed ? QString("ALSA") : pulseAudioIsUsed ? QString("PulseAudio") : QString("other");
+                  r["driverRate"] = seq && seq->driver() ? seq->driver()->sampleRate() : -1;
+                  r["mscoreRate"] = MScore::sampleRate;
+                  MasterSynthesizer* m = seq ? seq->synti() : nullptr;
+                  r["masterRate"] = m ? double(m->sampleRate()) : -1.0;
+                  Synthesizer* fluid = m ? m->synthesizer("Fluid") : nullptr;
+                  r["fluidRate"] = fluid ? double(fluid->sampleRate()) : -1.0;
+#ifdef USE_VST3
+                  Synthesizer* vst = m ? m->synthesizer(Vst3Synth::NAME) : nullptr;
+                  r["vst3Rate"] = vst ? double(vst->sampleRate()) : -1.0;
+                  // each hosted instance's rate as set up (Vst3Plugin::setSampleRate's)
+                  QJsonArray rates;
+                  if (Vst3Synth* v = static_cast<Vst3Synth*>(vst)) {
+                        for (int slot = 0; slot < Vst3Synth::MAX_SLOTS; ++slot)
+                              if (Vst3Plugin* p = v->plugin(slot))
+                                    rates.append(p->sampleRate());
+                        }
+                  r["instanceRates"] = rates;
+#endif
+                  // the play position against the wall clock: at the right speed, ticks / s = the tempo's
+                  r["tick"] = seq ? seq->getCurTick() : -1;
+                  r["wallMs"] = double(started->elapsed());
+                  r["callbacks"] = double(a.calls);
+                  r["periodMs"] = a.periodNs / 1e6;
+                  write(r);
+                  pressStop();
+                  });
+            }
       void addLoadingRounds(const QString& phase)
             {
             // while the score's patches load: what the window does with the user's edits, scrolling and Play
@@ -843,6 +959,23 @@ class Probe : public QObject {
                         add("stop g", [this]() { measured("stop", 0, [this]() { return pressStop(); }); }, 2000,
                             []() { return seq && !seq->isPlaying(); }, 20000);
                         add("end g", [this]() { endPhase(); }, 1000);
+                        }
+                  else if (p == "i") {
+                        // i: the audio device changed in Preferences › I/O as the user changes it (the boxes set, OK
+                        // clicked), for each step of MS_LAG_PROBE_IO (comma separated): "pa:<host API>/<device>" a
+                        // PortAudio device, "alsa:<rate>" the ALSA driver at that rate; after each, Play for
+                        // MS_LAG_PROBE_IO_PLAY_MS (4000): the driver's rate, MScore's, the synthesizers' and the audio
+                        // callbacks counted while playing ("io")
+                        const QStringList ioSteps = qEnvironmentVariable("MS_LAG_PROBE_IO").split(QChar(0x2c), QString::SkipEmptyParts);
+                        const int playMs = qEnvironmentVariableIsSet("MS_LAG_PROBE_IO_PLAY_MS")
+                                           ? qEnvironmentVariableIntValue("MS_LAG_PROBE_IO_PLAY_MS") : 4000;
+                        add("setup i", nullptr, 2000, [this]() { return quiet(); }, openTimeout);
+                        add("io before", [this, playMs]() { ioPlay("before", playMs); }, playMs + 1500);
+                        for (const QString& step : ioSteps) {
+                              add("io " + step, [this, step]() { ioSwitch(step); }, 3000,
+                                  []() { return !SoundLibraryHost::instance()->loading(); }, 120000);
+                              add("io play " + step, [this, step, playMs]() { ioPlay(step, playMs); }, playMs + 1500);
+                              }
                         }
                   else if (p == "e") {
                         add("setup e", [this]() { EvenAutoMeasurer::instance()->setProbePaused(false); setEvenLevels(true);

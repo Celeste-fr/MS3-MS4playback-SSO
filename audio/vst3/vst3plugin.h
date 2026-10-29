@@ -127,6 +127,7 @@ class Vst3Plugin {
       // GUI thread, not while process() runs
       bool setOffline(bool offline);      // process mode: offline for audio export
       bool setSampleRate(double sampleRate);
+      double sampleRate() const;          // as set up (load, setSampleRate)
       QByteArray state() const;
       // (the one call that may run on another thread than the one that loaded the instance, when
       // SoundLibraryHost loads on worker threads: soundlibraryhost.h, loadThreads; the instance is

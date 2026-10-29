@@ -508,6 +508,16 @@ void Vst3Synth::setPlugin(int slot, std::unique_ptr<Vst3Plugin> plugin)
       {
       if (slot < 0 || slot >= MAX_SLOTS)
             return;
+      // an instance loaded at another rate (its load began before the audio device changed: restartAudioEngine) is
+      // set up at this synth's before it plays; in no slot yet, so not while process() runs. (Same rate: nothing)
+      if (plugin) {
+            double rate = 0;
+            {
+                  std::lock_guard<std::mutex> lock(_mutex);
+                  rate = _exporting ? _clockRate : double(_sampleRate);
+            }
+            plugin->setSampleRate(rate);
+            }
       std::unique_ptr<Vst3Plugin> old;
       {
             std::lock_guard<std::mutex> lock(_mutex);
