@@ -159,11 +159,24 @@ Keep this file current: close an item by deleting it (the commit message says wh
 - **Src**: private `mixed-techniques/RESULT.md`; HANDOFF.md › Plain timing › Open 3, Mixed techniques.
 - **Cause**: techniques on CC1 keep the library's balance (uncalibrated); slow attacks have no onset rule that fits
   (item 16).
-- **Tool**: `--check-dynamics`, `sso_cc1_sweep.py`, heard check.
-- **Fix**: calibrate CC1 techniques to the Long minus a real-player offset (HANDOFF proposal 3).
-- **Miss**: any real-player data for sul tasto / flautando / harmonics against ordinario (searched: none found). Without
-  it the offset is an assumption (CLAUDE.md: balance from real data; a gap is marked as one).
-- **Own**: whether to use an assumption until data exists.
+- **Tool**: `--check-dynamics`, `sso_cc1_sweep.py`, heard check, `measure_patch.py`.
+- **Fix**: calibrate CC1 techniques to the Long plus a real-player offset (HANDOFF proposal 3): D = offset − SSO's
+  measured offset, by the calibrated CC1 or CC11.
+- **Real-player offsets** (docs/RESEARCH.md › 1.1a, 2026-10-29): sul tasto −5, flautando −5 (both −3 … −9, physics,
+  an assumption), sul pont. −3 (−6 … 0, an assumption), con sord. violin −4 (−3 … −5, three one-violin sources incl.
+  Philharmonia f −3.1), viola / cello / bass mutes as the violin (an assumption), harmonics −5 at mf (±5, Philharmonia
+  only), tremolo and trills 0 (no data, ±5). The Philharmonia strings were measured: not normalised, but their
+  technique files fail controls by ±3-7 dB (non-vibrato mp +3.3, con sord. mp +6.3), so corroboration only.
+- **Plan** (prepared, not run: the VM was held): `/home/volensia/.claude/jobs/c3349e77/tmp/cc1tech/vm_plan.sh`
+  (`plan` / `run` / `analyze`; `PHASE=1|2`, `SECTION=`): 54 `measure_patch.py` plans, the five All-techniques patches,
+  every CC1 technique and the Long as the same-session reference, CC1 16-127 in 8 points, pitches every 5 semitones
+  (harmonics 3-4) over each range, 2.5 s notes, 2 takes ABBA; peak over 2.5 s, mean, onset15 / onset6, releases.
+  Phase 1 (Long, Flautando, Sul Tasto, Super Sul Tasto, Harmonics; 21 plans, 5.0 h audio) ~1-1.5 h VM; phase 2 (mutes,
+  sul pont., tremolos, trill; 33 plans, 7.5 h) ~1.5-2.2 h. It also gives every technique's onset by pitch with 2 takes
+  (the timing half of this item).
+- **Miss**: real players' levels with a known gain for sul tasto / flautando / harmonics / tremolo (OrchideaSOL needs
+  the owner's Ircam account; RESEARCH.md › 6 task 1); viola / cello / bass mutes.
+- **Own**: whether to play the assumed offsets (all but the violin mute are assumptions) once the sweep is in.
 
 ### 5. Fast quarter-tone slurs never reach their pitch
 - **W**: Whence Violas bar 8 never within 30 cents of 61.5 / 64.5 (40-60 c off); Celli bar 1 70-180 c off; quarter-tone

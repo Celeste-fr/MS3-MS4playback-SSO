@@ -39,6 +39,7 @@ uncertainty stated; timing too where possible; anything without data is marked a
 
 1. Levels
    - 1.1 String playing techniques against normal bowing
+   - 1.1a CC1 techniques: the 2026-10-29 search, the Philharmonia check and the SSO sweep plan
    - 1.2 Accents (>, sf, sfz, marcato, fp)
    - 1.3 Divisi and section size
    - 1.4 Dynamic ranges per instrument (after Clark & Luce)
@@ -198,6 +199,100 @@ Experiments, in order of effort:
 **Value: high.** Sul tasto / flautando play 16–54 dB too soft in Recommended today, the largest level error known.
 Harmonics and col legno are 5–30 dB uncertain. **Effort: medium** for (a), about a day: an IRCAM Forum account is needed
 for the audio, which the owner must create. (b) takes 1–2 days per score.
+
+### 1.1a CC1 techniques: the 2026-10-29 search, the Philharmonia check and the SSO sweep plan
+
+Open item 4 (sul tasto / flautando / harmonics and the other CC1 techniques), branch `bowed-join`, 2026-10-29. No VM
+was used; the SSO sweep below is prepared, not run.
+
+**Searched again, nothing new with numbers** (all [read] unless marked):
+- Bow position against level: Guettler, Schoonderwaldt & Askenfelt, "Bow speed or bowing position: which one
+  influences the spectrum the most?", SMAC 03, 67–70 [abstract, via Guettler 2010]: at a constant bow speed a new bow
+  position changes the level by about the ratio of the speeds a player would need, so the level follows bow speed
+  over β, as §1.1's physics says. Schoonderwaldt, Guettler & Askenfelt, "An empirical investigation of bow-force limits
+  in the Schelleng diagram" (*Acta Acustica u. Acustica* 94, 2008; knutsacoustics.com): force limits only, no levels.
+- UNSW (Wolfe, newt.phys.unsw.edu.au/jw/violinarticulation.html): sul tasto / sul ponticello recordings in arbitrary
+  units, no levels.
+- University of Iowa MIS: violin, viola, cello and bass pages (pre-2012 and 2012) have arco and pizzicato only.
+- Spheres (Zenodo 17347681): the metadata lists Mozart, Tchaikovsky and chromatic scales / solos per instrument; no
+  technique labels. Romeo and Juliet's muted passages ([memory]: the love theme's violas con sord.) would need a score
+  reading (review page) and a matched open passage at the same marking: experiment (b) of §1.1, not done.
+- Mutes: da Silva Evangelista & Freire 2025 (*Acta Acustica* 9, 45) still refuses automated access (HTTP 403); it
+  measures heavy practice mutes anyway. Nothing for viola, cello or bass mutes (patents, retailers' reviews only).
+- Natural / artificial harmonics, tremolo, trills: no measured level found anywhere.
+
+**Philharmonia samples, measured** (https://philharmonia.co.uk/audio-sound-samples/, Strings.zip, 2020; MP3; free use,
+no redistribution; audio deleted after measuring, numbers kept in `/data/cc1tech/ph_*.json`, outside the repo). Each
+file's first 3 s: perceived peak (`tools/playbackverify/loudness.py`), the 400 ms momentary maximum (K-weighted) and a
+noise floor (the 5th percentile of 5 ms power above −90 dBFS). Offset = technique − the median of arco-normal at the
+same note and dynamic (any length but phrases), then the median over notes, 90 % bootstrap interval of the median.
+- **Gain check.** The violin is not peak-normalised: arco-normal pp → ff spans 19.3 dB (median of 14 notes, 10–90 %
+  16.8–21.6), 101 of 113 dynamic steps rising. (BALANCE_LOG's bass clarinet, 5.4 dB pp → ff, was normalised; the
+  strings are not.) But the **controls fail**: techniques that should play as loud as ordinario don't. Non-vibrato mp
+  +3.3 dB (violin), −7.1 (viola); con sordino +6.3 at mp but −3.1 at f (violin; a mute can't make it louder); pizzicato
+  −2.7 … +21 (violin). The technique files come from other sessions or batches than the arco-normal ones, with gain or
+  playing steps of about ±3–7 dB; the noise floors differ (violin con sord. 13 dB above arco-normal). One player per
+  instrument, in a room, unknown distance.
+- **Violin results** (perceived; momentary within 1 dB of it): sul tasto p **+5.5** [4.0, 7.1] (n 23); sul ponticello p
+  +3.0 [2.5, 5.5] (23), mf +1.0 [−0.2, 2.4] (16); natural harmonic mf **−5.4** [−7.7, −3.1] (19), p −0.2 [−1.2, 3.6]
+  (10); artificial harmonic mf −4.7 [−6.3, −3.4] (17); con sord. f −3.1 [−4.7, −2.1] (18), mp +6.3 (13); tremolo pp
+  +4.6, mp +8.5, mf −2.5, ff +1.9; col legno battuto / tratto pp-p 0 ± 0.6; trill (M2) mp +6.7. Viola, cello and bass have
+  one or two files per technique (phrases), except cello trills mp −1.7 / −3.2 and bass col legno battuto mf −5.8,
+  harmonics p −5.3 (n 4).
+- **Verdict: not usable for heldOffset**, corroboration grade at best: the controls' ±3–7 dB is as large as the
+  effects. Two readings agree with other evidence: the **mute at f −3 dB** (the violin-mute measurements of §1.1:
+  −3 to −5) and **harmonics at mf −5 dB** (no other source). The sul tasto +5.5 at p contradicts the physical bound
+  (−3 to −9) and is most likely the session step (non-vibrato mp, recorded with it, reads +3.3), or the player bowing
+  faster than at an ordinary p; it says at least that a written p sul tasto is not much softer than an ordinary p.
+
+**Real-player offsets against ordinario at the same written dynamic** (what the fork can use; none is a measurement
+of real players' levels with a known gain):
+
+| technique | offset, dB | source, grade | uncertainty |
+|---|---|---|---|
+| sul tasto | −3 to −9 (centre −5) | physics (Schelleng / Cremer, Askenfelt's β at p and f), derived; Philharmonia violin p reads +5.5 (failed controls) | ±4; an assumption |
+| flautando | −3 to −9 (centre −5) | the same bound (faster, lighter bow over the fingerboard); no data | ±4; an assumption |
+| sul ponticello | −6 to 0 (centre −3) | Guettler's simulation −11 at equal speed, players press harder; Philharmonia violin p +3.0, mf +1.0 | ±4; an assumption |
+| con sordino (violin) | −3 to −5 (centre −4) | UFMG 2022 −3.2 / −5.4 phon, Shar −4 / −5 dBA (one violin each); Philharmonia f −3.1 | ±2 |
+| con sordino (viola, cello, bass) | as the violin | no data | ±4; an assumption |
+| natural / artificial harmonics | −5 (mf) | Philharmonia violin mf −5.4 / −4.7, bass p −5.3 (n 4); p −0.2 | ±5; one player per instrument, failed controls |
+| tremolo (measured, unmeasured) | 0 | no data; Philharmonia −2.5 … +8.5 by dynamic | ±5; an assumption |
+| trills | 0 | no data; Philharmonia violin mp +6.7, cello mp −1.7 / −3.2 | ±5; an assumption |
+
+**SSO's side today** (the shipped `dynamics.json`, one pitch per patch, perceived at CC1 80 against the Long):
+
+| section | CS | Flautando | Harmonics | Sul Tasto | Super Sul Tasto | Sul Pont | Tremolo | Trem Sul Pont |
+|---|---|---|---|---|---|---|---|---|
+| Violins 1 | −6.6 | −29.1 | −12.3 | −29.7 | −49.0 | −2.3 | −0.3 | −9.0 |
+| Violins 2 | −5.5 | −22.0 | −9.8 | – | −61.1 | −2.8 | −2.0 | −7.9 |
+| Violas | −10.3 | −25.6 | −14.8 | – | −63.0 | −1.3 | −2.7 | −8.3 |
+| Celli | −6.2 | −28.6 | −17.6 | – | −44.7 | −7.9 | −4.7 | −10.1 |
+| Basses | – | −27.0 | (not at its pitch) | – | −32.3 | +10.4 | +4.5 | +3.5 |
+
+Against the table above, SSO's flautando / sul tasto are about 15–25 dB too soft and Super Sul Tasto 25–55 dB (its
+probe pitch may lie outside its range: the sweep checks), harmonics 5–13 dB too soft, the mutes within 1–6 dB, sul
+pont within its range except the Basses. These are single pitches and single takes; the sweep measures them by pitch,
+CC1 and take. Only Violins 1 has a Long Sul Tasto; the other sections' "sul tasto" is Super Sul Tasto.
+
+**SSO sweep plan** (prepared 2026-10-29, not run: `/home/volensia/.claude/jobs/c3349e77/tmp/cc1tech/vm_plan.sh`, a
+command file around `measure_patch.py`, docs/MEASURING.md):
+- The five sections' All-techniques patches, articulations by UACC as the map names them: Long (the reference, in the
+  same session), Long CS, Long Harmonics, Long Flautando, Long Sul Pont, Long Sul Tasto (Violins 1), Long Super Sul
+  Tasto, Long CS Sul Pont, Tremolo, Trem Sul Pont, Trem CS (Violins 2, Violas, Celli), Trill (Major 2nd); 54 plans.
+- Notes after silence, 2.5 s, velocity 64, CC11 127, CC1 16 / 32 / 48 / 64 / 80 / 96 / 112 / 127 (sso_cc1_curves.json's
+  points), pitches every 5 semitones over each technique's range from the map's onset keys (harmonics every 4, the
+  Basses' every 3, sounding pitches), 2 takes ABBA, 3.5 s after each note-off (Flautando releases up to 3.5 s).
+- Measured: peak over 2500 ms (the slow attacks peak late), mean, loud50, onset15 / onset6 and release40 / 20. Output:
+  an offset per section, technique, pitch and CC1 against the Long, and each technique's onset by pitch (item 4's timing:
+  the map's onsets came from single takes).
+- Phase 1 (Long, Flautando, Sul Tasto, Super Sul Tasto, Harmonics: 21 plans, 5.0 h of audio) about 1–1.5 h of VM time;
+  phase 2 (the rest, 33 plans, 7.5 h) about 1.5–2.2 h; one section and phase per background job.
+- Then: heldOffset-style D for CC1 techniques = (the table's centre) − SSO's measured offset, played by the calibrated
+  CC1 (`SoundLib::calibratedController`) or CC11 where CC1 can't reach it. The table's values are assumptions except the
+  violin mute: the owner decides whether to use them (CLAUDE.md: a gap is marked as one).
+
+**Value: high** (the largest level error known). **Effort:** the sweep about 3–4 h of VM time plus a day of analysis;
+real-player data still needs OrchideaSOL (§6 task 1) or a controlled recording.
 
 ### 1.2 Accents (>, sf, sfz, marcato, fp)
 
@@ -1375,7 +1470,7 @@ gain is known**: normalised samples can't give levels.
 | 10 | **MTG Vibrato Analysis Dataset** (Cavdir et al. 2016, Zenodo 10.5281/zenodo.182244) | violin vibrato start / end and rate (§2.4) | – | AGPL-3.0 |
 | 11 | **Good-sounds** (Romaní Picas et al. 2015, AES 138th Conv.; CORA doi:10.34810/DATA2314) | attack quality labels | undocumented | CC BY 4.0 (CORA 2025); CC BY-NC 4.0 (Zenodo v1) |
 | 12 | **RWC Musical Instrument DB** (Goto et al.) | dynamics and styles per instrument | undocumented | research only; the 2026 Zenodo re-release (17177919) excludes it |
-| 13 | **Philharmonia Orchestra samples** (https://philharmonia.co.uk/audio-sound-samples/) | wide technique coverage, in a room | probably levelled per file [memory]: not for levels | free use, no resale or redistribution "as is" |
+| 13 | **Philharmonia Orchestra samples** (https://philharmonia.co.uk/audio-sound-samples/) | wide technique coverage, in a room | strings measured 2026-10-29 (§1.1a): not peak-normalised (violin pp → ff 19 dB), but technique files differ from arco-normal by ±3–7 dB in controls (other sessions): corroboration only; the bass clarinet was normalised | free use, no resale or redistribution "as is" |
 | 14 | MusicNet (Thickstun, Harchaoui & Kakade 2017, Zenodo 5120004), Bach10 (Duan, Pardo & Zhang 2010), TRIOS (Fritsch & Plumbley 2013) | aligned labels on mixes, small sets: timing statistics within one instrument | no | mixed |
 
 **Not useful:**
