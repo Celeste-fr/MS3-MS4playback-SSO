@@ -1697,9 +1697,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         auto rs = repeats.findRepeatSegmentFromUTick(utick);
                         if (rs == repeats.end() || pch->tick().ticks() < (*rs)->tick)
                               return nullptr;
+                        // (struck again: its note ends first, no transition; on a monophonic patch's voice lanes only on
+                        // this note's own copy: the same key ending on another voice's copy is no re-strike here, so a voice
+                        // moving onto it goes on from its own note before as any other voice does. Whence's Celli bar 16,
+                        // F#3 from Eb3 on the lowest voice while the middle voice's F#3 of bar 15 moves to A3: before, SSO's
+                        // fingered 64 instead of the other voices' bowed new bow, 2026-10-28)
                         for (const Note* pn : pch->notes())
-                              if (pn->pitch() == note->pitch())
-                                    return nullptr;     // (struck again: its note ends first, no transition)
+                              if (pn->pitch() == note->pitch() && !otherLane(note, pn, c.patch))
+                                    return nullptr;
                         std::vector<const Note*> before(pch->notes().begin(), pch->notes().end());
                         std::stable_sort(before.begin(), before.end(), [note](const Note* a, const Note* b) {
                               return std::abs(a->ppitch() - note->ppitch()) < std::abs(b->ppitch() - note->ppitch());
