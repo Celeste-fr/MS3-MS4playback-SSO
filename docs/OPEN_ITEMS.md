@@ -661,7 +661,8 @@ Update Live Set end to end (Manual values over the state, Configure slots, Contr
 derived-parameter and M-Master Vol read-back); hosted slot gain with Utility and panel values; timing overrides (hash
 stability, `get_all_notes_extended` cost); written clips (one-decimal Track Delay, Bank / Sub through the device,
 `"Timing"` restore, group delays); the plain set's plainShift / plainTiming, start-lead CC1, voice copies, divisi,
-speedFromWritten (key 113), fixedTransitions' state, fastTransitions, plainAccents' CC11; everything Ample (Create /
+speedFromWritten (key 113), fixedTransitions' state, fastTransitions, plainAccents' CC11; (2026-10-29: evenKeys and a winds' Utility confirmed, 0.06 dB; the Whence run with the Update
+Live Set live edits stopped at Live's save: to repeat, trial ends ~11-01) everything Ample (Create /
 Update / Live plays the score, Configure panel, capo, state lanes, soft rolls); the route set in 12.2, the device from
 the User Library, Add missing tracks; *Live plays the score* write speed, chase at a mid-song start, long pieces; the
 whole clip-tab chain; a tempo change while playing; Live helpers; a real Live export A/B with SSO (only simulated: run

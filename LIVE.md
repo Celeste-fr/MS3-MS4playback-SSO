@@ -798,6 +798,23 @@ Confirmed:
 - **Parameter-lane edges** (Mic 2 stepped every bar, lane score, Live 12.4.7): the six steps within −5.0 … 0.0 ms of
   MuseScore's (Live never later); the 11-52 ms late edges of 2026-10 and the silent Solo Violin 1 route did not appear.
 
+**2026-10-29 (build 491, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40833439919, Live 12.4.7; the
+trial notice: "Time remaining: 3 days", so the VM's Live stops saving and exporting about 2026-11-01):**
+- **`[levels] evenKeys` and the winds' gain-stage Utility** (a made-up score, Oboe Solo 58-91 and Bassoon Solo 41-73, a
+  quarter each at mf, Recommended; private realcheck-1029/wnd491): MuseScore's CC11 differs key by key (e.g. Oboe 47 …
+  120); Live plays every note at MuseScore's level: Oboe 34 notes median -0.00 / max 0.01 dB, onsets 0 ms, corr 0.99999,
+  null -48.5 dB; Bassoon 33 notes +0.01 / 0.06 dB, null -29.1 dB (-30.5 outside six 0.25-0.5 s windows at +-0.0 dB); the
+  Utility (-5.51 / -7.15 dB) and the technique tracks' Track Delays (-46.9 / -55.3 ms) confirmed; Live's save lost 0,
+  changed 0; the transportReset state loaded (Reset on transport: no difference to show on winds).
+- **Whence, Recommended + fixedTransitions + speedFromWritten, with `--live-edits`** (the Update Live Set end-to-end
+  run): Live 12.4.7 loaded the set (877 s, 6.1 GB, with the VM at 2.5 GB free) and exported its 17 tracks (304 s), but
+  had not written the saved set 120 s after Save As (status bar: "being saved under a new name"); the driver now waits
+  15 min. Not compared yet (the WAVs go with the failed step): to run again.
+- The driver met three things new on the VM: Live's license check failing in a network outage ("Server could not be
+  resolved … verify your trial license", 430 x 223: the run stops), Chrome over Live's dialogs (their thumbnails were
+  Chrome's: other windows are now minimised first), and Live's crash-recovery question (430 x 155) matching the trial
+  notice's thumbnail (its Yes clicked, the recovered set opened, the run stopped): told apart by size now and answered No.
+
 Differs (open):
 - **A note at the song's start that MuseScore plays early is not played at all.** MuseScore starts everything later by
   the start lead; the plain set plays such a note by its technique track's negative Track Delay, before song time 0,
