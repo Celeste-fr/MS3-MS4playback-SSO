@@ -24,13 +24,11 @@ roughly newest first, kept for its detail; `git log` has each step's measurement
   the note before's copy; section balance on SSO's every-semitone curves; Vial levels.
   Checked on the VM: heard check of Whence (export, Recommended: ARRIVAL 35 fail / 19 warn), evenKeys and the winds'
   Utility in real Live (private `realcheck-1029/wnd491`). The owner has not reported on his PC since builds 484 / 485.
-- **Newer than build 491** (no Windows build has them): Vial matched on loud1sDb (map-only: a build, or the owner copies
-  the two Vial XMLs into `share/soundlibraries/`), everything on `bowed-join`. No new build is needed for the queued VM
-  work below (kthost and realcheck run from Linux); build again only when the owner needs to hear something new.
-- **Running now:** the realcheck repeat on Whence (below, item 1), started 2026-10-29 07:36 by
-  `~/MuseScore/ms3fork/private/realcheck-1029/slot.sh` (VM lock `lrc-w491`; log `realcheck-1029/w491.3.log`; Live's load
-  ~15 min, export ~5, save up to 15, then the comparison). When it ends, slot.sh releases another session's VM queue
-  (`~/vial-sso/work/b3/ms_slot_done`). If it failed, run it again with the same command (`--resume`).
+- **Build 495** (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40939078795, 92106a9827, 2026-10-29;
+  installed on the VM in `C:\claude\vt495\b495`): everything on `bowed-join` up to then (knob rounding, UI text audit
+  pass 1, presets rewriting playback.ini, Clear Velocity and Join, runBends off). Real Live, Whence with `--live-edits`
+  (`realcheck-1029/w495`, 2026-10-29): every Live / Update row PASS, the knob kept through Live's save; audio rows as build
+  494's. Not yet sent to the owner. Newer than 495: the SIGPIPE fix (Linux / macOS only) and tools.
 - **Deadlines.** The VM's Live 12.4.7 trial stops saving / exporting about 2026-11-01. From 2026-11-01: no subagents,
   lean usage. Vial's next preset pack renames presets (memory: switch `gen_vial.py` / `vial_levels.py` only after it is
   delivered; table in `~/vial-sso/work/private_pkg/MS_PATHS.md`).
@@ -47,10 +45,8 @@ Read his answers with ArtifactData where the page has a db, else ask him.
 ## Queued VM work (one at a time, in this order; each takes the VM lock itself)
 
 Run each as a background job writing a log (`nohup … > <log> 2>&1 &`), check after ~1 min that the log grows.
-1. **realcheck repeat, Whence, Update Live Set end to end** (before ~2026-11-01; running 2026-10-29, above):
-   `python3 tools/live/realcheck/realcheck.py run ~/MuseScore/ms3fork/test-scores/Whence.mscz --build 'C:\claude\vt491\b491' --name w491 --out ~/MuseScore/ms3fork/private/realcheck-1029/w491 --load-timeout 2700 --settings "slurs/fixedTransitions=1;slurs/speedFromWritten=1" --live-edits --resume`
-   Then `realcheck.py report ~/MuseScore/ms3fork/private/realcheck-1029/w491`; record results in LIVE.md › Checked in real
-   Live and OPEN_ITEMS (11c, "Untried in real Live").
+1. ~~realcheck repeat, Whence, Update Live Set end to end~~ done 2026-10-29 (build 495, `w495`: above). The same
+   command with `--build 'C:\claude\vt495\b495' --name <new> --out <new dir>` re-checks a later build.
 2. **runBends A/B on kthost** (OPEN_ITEMS 5; ~2 x 10 min of VM):
    `S=$(cat ~/MuseScore/ms3fork/private/queued/rec491.txt); W=~/MuseScore/ms3fork/private/runbends-ab; HC_RENDER=kthost HC_KEEP=1 HC_BUILD=$PWD/build.rel HC_WORK=$W/A tools/playbackverify/heard_check.sh --takes 2 ~/MuseScore/ms3fork/test-scores/Whence.mscz "$S;slurs/runBends=0" "Violins 1,Violas,Violoncellos"`
    and the same with `slurs/runBends=1` into `$W/B`. Compare each take's report.json (quarter tones' `how`,

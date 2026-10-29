@@ -22,7 +22,7 @@ sections, not the number, is the rank. Renumber nothing; a new item takes the ne
 ### Do next (2026-10-29), in order
 | # | what | needs | item |
 |---|---|---|---|
-| 1 | ~~Finish the real-Live Whence run~~ done 2026-10-29 09:01 (LIVE.md › Checked in real Live); left: Live's save reset Update's panel value (Vibrato 0.25 -> 0; cause found and fixed on Linux 2026-10-29: the state didn't hold it; to confirm with `--live-edits`), Whence's Basses / Violins 1 nulls | VM, Live trial until ~11-01 | 11c, Untried in real Live |
+| 1 | ~~Finish the real-Live Whence run~~ done 2026-10-29 09:01 (LIVE.md › Checked in real Live); left: Whence's Basses / Violins 1 nulls | VM, Live trial until ~11-01 | 11c, Untried in real Live |
 | 2 | `[slurs] runBends` A/B on kthost, then an A/B page for the owner | VM ~20 min | 5 |
 | 3 | CC1 string techniques sweep, phase 1 then 2; offsets against RESEARCH.md 1.1a; the owner decides | VM ~3-4 h in jobs | 4 |
 | 4 | The Basses' bowed glide by interval; a bendGlide by interval if it holds | VM ~30 min | 3 |
@@ -712,7 +712,7 @@ speedFromWritten (key 113), fixedTransitions' state, fastTransitions, plainAccen
 (unchanged: nothing written; edited after Live edits: updated, 2 Live timings kept, read-back identical) except that
 **Live's save resets a panel value Update wrote** (Vibrato 0.25 -> 0 in Manual: the Kontakt's state didn't hold it,
 Live reads the state; fixed on Linux 2026-10-29, Update writes the state where a panel value changed since, and the
-plug-in's 1/127 rounding; build 494 run: knob kept, only the 1/127 rounding remained, now written rounded (`kontaktHeld`); one more real-Live run to confirm); Whence's Basses null -1.5 dB in Live (a note +16.9 dB, the re-struck accent), Violins 1
+plug-in's 1/127 rounding; build 494 run: knob kept, only the 1/127 rounding remained, now written rounded (`kontaktHeld`); confirmed in real Live, build 495 run, 2026-10-29: changed 0); Whence's Basses null -1.5 dB in Live (a note +16.9 dB, the re-struck accent), Violins 1
 -5.4 dB, while per note levels / onsets agree; LIVE.md › Checked in real Live) everything Ample (Create /
 Update / Live plays the score, Configure panel, capo, state lanes, soft rolls); the route set in 12.2, the device from
 the User Library, Add missing tracks; *Live plays the score* write speed, chase at a mid-song start, long pieces; the
