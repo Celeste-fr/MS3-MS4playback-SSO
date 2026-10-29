@@ -194,10 +194,21 @@ D, the five string sections (dB; the map's `heldOffset`; `tst_soundlibrary::leve
 - **Pizzicato**: Meyer 2009 (*Acoustics and the Performance of Music*, ch. 3), pizzicato against arco at pp and ff, by
   the written dynamic's CC (pp 32, ff 112, linear between; ppp / fff the ends'): the per-marking reading of the source
   rather than one mean. Sound power, not the perceived metric: an uncertainty of several dB. Violins 2 the violin's.
-  Independent corroboration (not used for the values): the University of Iowa Musical Instrument Samples, 5 sessions
-  with 5 players on violin, viola and bass, each pizzicato note's peak loudness (ISO 532-1) against a held arco note at
-  the same marking: pp -7.3 dB (sessions -8.7 .. -6.3), mf -6.3 (-12.1 .. -2.3), ff -4.0 (-8.4 .. -2.6); only pp agrees
-  within 3 dB across sessions: Meyer's values hold within about +-3-4 dB.
+  Checks against other data (2026-10-28; not used for the values; `technique_offsets.json` › `pizzicato` ›
+  `corroboration`):
+  - The University of Iowa Musical Instrument Samples (one solo player per session, anechoic, 5 ft): 8 sessions
+    (violin, viola, cello, bass, pre-2011 and 2012), 6 with fixed gain confirmed by the gap noise. Each pizzicato note
+    is paired with the arco note of the same pitch and marking. Median over the sessions (range): perceived peak pp
+    -1.7 (-8.6 .. +5.6), mf +0.9 (-8.3 .. +4.3), ff +0.1 (-2.1 .. +5.9); by energy (BS.1770 momentary) pp -2.4
+    (-8.5 .. -0.5), mf -1.4 (-10.2 .. +0.3), ff -1.4 (-6.6 .. +3.8). The players differ by 10-14 dB; only the
+    pre-2011 cellist lies near Meyer. Iowa does not corroborate Meyer.
+  - The Spheres dataset's ScalesAndSolos (whole sections in a studio room, their spot mics; the main mic within
+    1.5 dB): each section's pizzicato scale against its quiet and loud legato scales of the same session, perceived
+    peak: Violins 1 -10.3 / -16.5, Violas -3.6 / -8.5, Celli -8.8 / -13.9, Basses -2.6 / -7.7 dB (against quiet /
+    loud). The pizzicato's marking isn't stated; if it was at least the quiet scale's, pizz - arco is at most the
+    first figure: Meyer's order, against Iowa.
+  - An earlier note here read "pp -7.3, mf -6.3, ff -4.0 (ISO 532-1, 5 sessions), Meyer holds within +-3-4 dB". It
+    can't be reproduced: that run's sessions and script were not kept.
 - **Basses' Bartók and col legno**: SSO's own D disagrees by ~10 dB between the perceived and the 50 ms metric (the
   2026-10-15 validation), so D = 0: SSO's balance at the matched level (an assumption).
 
