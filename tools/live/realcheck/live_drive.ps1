@@ -130,16 +130,20 @@ function HandleDialogs($p) {
     $k = $KNOWN | ? { [Math]::Abs($_.w - $d.W) -le $_.tol -and [Math]::Abs($_.h - $d.Ht) -le $_.tol } | Select -First 1
     if ($k -and $k.action -eq 'ignore') { continue }
     $th = $null
-    if ($k -and $k.thumb) { $th = Thumb $d; $dist = 0; for ($i = 0; $i -lt 96; $i++) { $dist += [Math]::Abs($th[$i] - $k.thumb[$i]) }
+    if ($k -and $k.thumb) { HideOthers; Front $d.H; Start-Sleep -Milliseconds 300; $th = Thumb $d; $dist = 0; for ($i = 0; $i -lt 96; $i++) { $dist += [Math]::Abs($th[$i] - $k.thumb[$i]) }
       if ($dist / 96 -gt 15) { $k = $null } }
     # one answer per window and 8 s (an answer takes a moment; a dialog that stays after three is a failure)
     $hk = [string]$d.H
     if ($seen.ContainsKey($hk) -and ((Get-Date) - $seen[$hk].t).TotalSeconds -lt 8) { continue }
     if ($seen.ContainsKey($hk) -and $seen[$hk].n -ge 3) { Fail "a dialog ($($d.W)x$($d.Ht), '$(if ($k) { $k.name } else { 'unknown' })') stays after 3 answers"; exit 1 }
     $seen[$hk] = @{ t = (Get-Date); n = $(if ($seen.ContainsKey($hk)) { $seen[$hk].n + 1 } else { 1 }) }
-    if (-not $th) { $th = Thumb $d }
+    # another program's window over the dialog (2026-10-29: Chrome, restarted after the VM's unclean shutdown, over Live's
+    # dialogs while it loaded) makes the thumbnail that program's: minimised and the dialog brought to the front first
+    if (-not $th) { HideOthers; Front $d.H; Start-Sleep -Milliseconds 300; $th = Thumb $d }
     $entry = [ordered]@{ at = (Get-Date -Format o); w = $d.W; h = $d.Ht; thumb = ($th -join ','); known = $(if ($k) { $k.name } else { '' }) }
     if ($k -and $k.action -eq 'click') {
+      # the trial notice says "Time remaining: N days": kept as a picture before it is answered
+      if ($k.name -eq 'trial-activated') { $entry.shot = Shot 'trial-notice' }
       Click ($d.L + [int]($d.W * $k.x)) ($d.B + $k.y); $entry.action = 'clicked'
     } else {
       $entry.shot = Shot 'unknown-dialog'; Front $d.H; Key @() 0x1B; $entry.action = 'escape'; $R.unknownDialog = $true

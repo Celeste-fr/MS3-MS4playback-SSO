@@ -22,6 +22,7 @@
 #   readback  --live-set-readback of the written and the saved set (Kontakt's state as Live saved it)
 #   update0   --update-live-set on a copy of Live's saved set with the unchanged score: must write nothing
 #   update1   (variant) --update-live-set on another copy with variant.mscz (the score edited), -> upd1\RCupd.als;
+#             (liveEdits: the copy edited first as a user would in Live, alsset.py liveedit)
 #             ms2: MuseScore's export of the variant; live2: Live opens the updated set, exports, saves as; compare2
 #   cleanup   every WAV deleted (unless keepWavs), the backups put back
 # Results: results\ (result.json per step, reports, the sets, screenshots); WAVs never leave the VM.
@@ -203,6 +204,9 @@ try {
     if (-not (Done 'update1')) {
       $u = Join-Path $run 'upd1'; New-Item -ItemType Directory -Force $u | Out-Null
       $us = Join-Path $u 'RCupd.als'; Copy-Item $savedSet.FullName $us -Force
+      # (liveEdits) what a user does in Live before the update: a note moved in a technique clip, a configured knob
+      # turned (alsset.py liveedit); Update Live Set must take both back into the score and keep them in the set
+      if ($J.liveEdits) { & $PY (Join-Path $run 'alsset.py') liveedit $us $us | Set-Content -Encoding utf8 (Join-Path $res 'liveedits.json') }
       $c = DeskMS @('--update-live-set', (Q $us), (Q $variant), '--verify-library', (Q $J.library)) (Join-Path $res 'update1.txt') 1800 @{}
       if (Test-Path "$us.update.txt") { Copy-Item "$us.update.txt" (Join-Path $res 'update1.update.txt') -Force }
       Copy-Item $us (Join-Path $res 'updated.als') -Force

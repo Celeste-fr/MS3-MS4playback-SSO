@@ -7,6 +7,11 @@ Python too).
   alsset.py length <set.als> [tail s]       the arrangement's end, tempo range, bars to render (renderBars)
   alsset.py variant <in.mscz> <out.mscz>     the score with its first note a whole tone higher (Update Live Set's
                                              edit; made on the VM from the score Create Live Set saved: its liveTracks)
+  alsset.py liveedit <in.als> <out.als> [beats]  what a user does in Live, as text edits on a set Live saved (Update
+                                             Live Set's end-to-end test): one note of a technique clip (the second
+                                             part's technique track with notes, its third note) moved later by beats
+                                             (default 0.0625), one configured Kontakt panel parameter without
+                                             automation (Configure, Manual) turned by 0.25; prints the edits (json)
   alsset.py diff <written.als> <saved.als>   does what MuseScore wrote survive Live's save? Every element and attribute
                                              of the written set must come back (numbers within float32 rounding);
                                              what Live adds is listed, not judged; a known list of view / session
@@ -264,6 +269,59 @@ def variant_text(text):
     return text[:m.start()] + note2 + text[m.end():]
 
 
+# ------------------------------------------------------------------- a user's edits in Live (Update Live Set's test)
+
+def live_edit(src, out, beats=0.0625):
+    """text edits (the set's own formatting kept: Update Live Set edits the file as text) of what a user does in Live"""
+    with gzip.open(src, "rb") as f:
+        x = f.read().decode("utf-8")
+    root = ET.fromstring(x)
+    tr = tracks(root)
+    edits = []
+    # (1) a note moved in a technique clip: the first technique track (MuseScore Link on it) with 3+ notes whose part
+    # group isn't the first part's (the variant edits the first part's first note)
+    tech = [t for t in tr if t["kind"] == "MidiTrack" and any(d["type"].startswith("MxDevice") for d in t["devices"])]
+    first_group = tech[0]["group"] if tech else None
+    for t in tech:
+        if t["group"] == first_group:
+            continue
+        m = re.search(r'<MidiTrack Id="%s"' % re.escape(t["id"]), x)
+        end = x.find("</MidiTrack>", m.end())
+        notes = list(re.finditer(r'<MidiNoteEvent Time="([0-9.eE+-]+)"', x[m.end():end]))
+        if len(notes) < 3:
+            continue
+        n = notes[2]
+        at = m.end() + n.start(1)
+        old = float(n.group(1))
+        x = x[:at] + repr(round(old + beats, 6)) + x[at + len(n.group(1)):]
+        edits.append({"edit": "note moved", "track": t["name"], "key": t["key"], "noteIndex": 2, "from": old,
+                      "to": round(old + beats, 6), "beats": beats})
+        break
+    # (2) a Configure slot's knob turned (no envelope on it): Manual +-0.25
+    pointees = set(re.findall(r'<PointeeId Value="(\d+)" />', x))
+    for m in re.finditer(r'<PluginFloatParameter Id="\d+">\s*<ParameterName Value="([^"]+)" />\s*<ParameterId Value="(\d+)" />'
+                         r'(.*?)</PluginFloatParameter>', x, re.S):
+        body = m.group(3)
+        man = re.search(r'<Manual Value="([0-9.eE+-]+)" />', body)
+        tgt = re.search(r'<AutomationTarget Id="(\d+)"', body)
+        if not man or not tgt or tgt.group(1) in pointees:
+            continue
+        old = float(man.group(1))
+        new = round(old + 0.25 if old < 0.5 else old - 0.25, 6)
+        at = m.start(3) + man.start(1)
+        # the track holding it
+        tid = None
+        for t in re.finditer(r'<(?:MidiTrack|AudioTrack) Id="(\d+)"', x[:at]):
+            tid = t.group(1)
+        name = next((t["name"] for t in tr if t["id"] == tid), "?")
+        x = x[:at] + repr(new) + x[at + len(man.group(1)):]
+        edits.append({"edit": "knob turned", "track": name, "parameter": m.group(1), "from": old, "to": new})
+        break
+    with gzip.open(out, "wb") as f:
+        f.write(x.encode("utf-8"))
+    return edits
+
+
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if len(argv) >= 2 and argv[0] == "tracks":
@@ -274,6 +332,9 @@ def main(argv=None):
         return 0
     if len(argv) >= 3 and argv[0] == "variant":
         rewrite_mscz(argv[1], argv[2], variant_text)
+        return 0
+    if len(argv) >= 3 and argv[0] == "liveedit":
+        print(json.dumps(live_edit(argv[1], argv[2], float(argv[3]) if len(argv) > 3 else 0.0625), indent=1, ensure_ascii=False))
         return 0
     if len(argv) >= 3 and argv[0] == "diff":
         r = diff_report(argv[1], argv[2])

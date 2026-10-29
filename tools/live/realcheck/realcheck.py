@@ -239,7 +239,8 @@ def cmd_run(a):
         exe = a.build.rstrip("\\") + r"\bin\MuseScore3Evo.exe"
         json.dump({"exe": exe, "library": a.library, "checks": a.checks.split(","), "variant": variant,
                    "tailS": a.tail, "loadTimeoutS": a.load_timeout, "exportTimeoutS": a.export_timeout,
-                   "settleS": a.settle, "edges": edges, "keepWavs": a.keep_wavs}, open(os.path.join(job, "job.json"), "w"), indent=1)
+                   "settleS": a.settle, "edges": edges, "keepWavs": a.keep_wavs,
+                   "liveEdits": bool(getattr(a, "live_edits", False))}, open(os.path.join(job, "job.json"), "w"), indent=1)
         json.dump({"score": os.path.basename(a.score), "settings": value, "lanes": lanes, "checks": a.checks,
                    "build": a.build, "started": time.strftime("%Y-%m-%d %H:%M:%S")},
                   open(os.path.join(a.out, "run.json"), "w"), indent=1)
@@ -344,7 +345,8 @@ def features(set_path, settings):
     s = dict(i.split("=", 1) for i in (settings or "").split(";") if "=" in i)
     for k, label in (("slurs/fixedTransitions", "fixedTransitions' state (random modulators at 0) in the set"),
                      ("slurs/speedFromWritten", "speedFromWritten (CC119 carrier key 113)"),
-                     ("slurs/plainPerformance", "plain Performance")):
+                     ("slurs/plainPerformance", "plain Performance"),
+                     ("notes/transportReset", "transportReset's state (Reset on transport on) in the set")):
         if s.get(k, "0") != "0":
             perf = [t for t in kont if "Performance" in t["name"] or "Performance" in t["key"]]
             add(label + " [setting %s=%s]" % (k, s[k]), perf or kont, "")
@@ -471,6 +473,10 @@ def main(argv=None):
     r.add_argument("--settings", default="")
     r.add_argument("--checks", default="live,floor,readback,update")
     r.add_argument("--variant", default="auto", choices=["auto", "none"])
+    r.add_argument("--live-edits", action="store_true",
+                   help="before the variant's update, edit the copy of Live's saved set as a user would in Live (a note "
+                        "moved in a technique clip, a configured knob turned: alsset.py liveedit); the update reads both "
+                        "back, ms2u plays them, compare2u judges Live's render of the updated set against it")
     r.add_argument("--lanes")
     r.add_argument("--build", default=DEFAULT_BUILD)
     r.add_argument("--ample", action="store_true", help="an Ample check score (tools/ample/check_scores.py): its edits")
