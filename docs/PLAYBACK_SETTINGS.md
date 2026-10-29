@@ -2052,10 +2052,20 @@ at the same written dynamic, "measured, not by ear"): the Vial maps' 13 instrume
 default 0 / 0: Vial then plays CC11 127 and no gain, as before) play a Vial Long at SSO's Long's level at every marking.
 Made by `tools/soundlibraries/vial_levels.py` (its header is the method): `sweep` renders each preset by kthost
 (Linux, Vial c29c49e) with `sso_cc1_sweep.py`'s events at SSO's swept pitches (the winds every semitone since 2026-10-28),
-CC1 16 .. 127 (`vial_cc1_curves.json`, one take a point: Vial has no round robins); `fit` -> `vial_levels.json` -> `gen_vial.py`; `check` renders every preset
+CC1 16 .. 127 (`vial_cc1_curves.json`, one take a point: Vial has no round robins); `fit` -> `vial_levels.json` -> `gen_vial.py` (`OFFSET_MEASURE`); `check` renders every preset
 at ppp .. fff at three pitches as MuseScore sends it under Recommended from the generated map
-(`vial_levels_check.json`). **Matched on loudDb** (the loudest 50 ms; the measure the section balance put SSO's Long on
-the real scale with): the check's largest error 0.53 dB (Flute), the strings <= 0.4. **Uncertainty: other loudness
+(`vial_levels_check.json`). **Matched on loud1sDb since 2026-10-29** (the loudest 50 ms of a note's first second; the owner, 2026-10-29: "Most
+notes in real music are shorter than a second, and the start of a note largely sets how loud it seems ... It fits better
+overall (all 13 instruments matched on average; under loudDb up to 2 dB off: Basses 2.1, trumpet 1.9). It fixes the
+trumpet completely." - "sure"). Cause (debug of 2026-10-29, played notes rendered through MuseScore): loudDb takes the
+loudest 50 ms of a 3 s held note, where SSO's oboe and trumpet still swell after 1.5 s and Vial's presets hold their level,
+so a match on the peak made Vial too loud (trumpet +0.9 .. +1.3 dB, oboe +1.1 .. +1.4) at the lengths music plays. Offsets
+O (sectionLevel2, old -> new): Violins 1 -0.03 -> 0.36, Violins 2 -0.60 -> -0.69, Violas -4.05 -> -3.72, Celli 3.38 ->
+3.59, Basses 0.31 -> 1.01, Flute -0.19 -> -0.54, Oboe -5.41 -> -6.56, Clarinet -4.36 -> -4.45, Bassoon -5.45 -> -6.21,
+Horn -0.04 -> -0.63, Trumpet 4.23 -> 2.77, Tenor Trombone 2.93 -> 2.28, Tuba 8.40 -> 8.39. **Cost: on long held notes
+SSO's oboe swells, so Vial's oboe ends up quieter late in a long note** (its ~+2 dB residual in the debug was SSO's round
+robins). The test reads loud1sDb (the shipped maps within 0.5 dB); the earlier check on loudDb (largest error 0.53 dB,
+Flute, strings <= 0.4) was not rerun with the VM-free renderer. **Uncertainty: other loudness
 measures judge the winds louder on Vial**: by the sustain's power +1.8 .. +4.1 dB, LUFS +1.8 .. +3.9, phon +2.1 .. +7.1
 (the presets hold their level, SSO's solo samples peak and decay); the strings within +-1.2 dB (phon -1.8 .. -0.5). Test
 `tst_liveequivalence::vialLevels`. Since 2026-10-28 the wind presets' Long also carries the SSO Long's `keyLevels`

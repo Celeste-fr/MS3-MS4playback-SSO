@@ -5747,7 +5747,7 @@ void TestLiveEquivalence::twoLibraries()
 //    Vial Instrumental as loud as SSO at every written dynamic (gen_vial.py, vial_levels.py; docs/PLAYBACK_SETTINGS.md ›
 //    Vial levels). 1: for each of the 13 instruments at every pitch both were measured at and every marking, the level
 //    MuseScore's functions give with the shipped maps on the measured curves (sso_cc1_curves.json /
-//    sso_winds_cc1_curves.json, vial_cc1_curves.json; loudDb) - A(cc1, p) + realRangeDb(cc1, p) + sectionLevel2 -
+//    sso_winds_cc1_curves.json, vial_cc1_curves.json; loud1sDb, the fit's measure) - A(cc1, p) + realRangeDb(cc1, p) + sectionLevel2 -
 //    is SSO's within 0.5 dB. 2: rendered (realRange 2 and sectionBalance 2, Recommended's), a flute on SSO and one on
 //    Vial in one score (vial-levels.musicxml, A4 at ppp .. fff): each note's CC11 and its patch's gain stage put the two
 //    within 0.5 dB on the same curves (CC11's steps included); with both settings 0 (Library default) Vial plays CC11
@@ -5770,7 +5770,7 @@ void TestLiveEquivalence::vialLevels()
             ~Reset() { SoundLib::setEngines({}); SoundLib::setEngineAvailable(nullptr); SoundLib::setCurrent(nullptr);
                        Playback::setIniValuesForTest({}); }
             } reset;
-      // the measured loudDb by pitch and CC1, per instrument
+      // the measured loud1sDb (vial_levels.py OFFSET_MEASURE) by pitch and CC1, per instrument
       typedef std::map<int, std::map<int, double>> Curve;
       auto curves = [](const QStringList& files) {
             std::map<QString, Curve> out;
@@ -5783,8 +5783,8 @@ void TestLiveEquivalence::vialLevels()
                         const QJsonObject pts = s.value().toObject().value("points").toObject();
                         for (auto p = pts.begin(); p != pts.end(); ++p)
                               for (const QJsonValue& r : p.value().toArray())
-                                    if (r.toObject().contains("loudDb"))
-                                          out[s.key()][p.key().toInt()][r.toObject().value("cc").toInt()] = r.toObject().value("loudDb").toDouble();
+                                    if (r.toObject().contains("loud1sDb"))
+                                          out[s.key()][p.key().toInt()][r.toObject().value("cc").toInt()] = r.toObject().value("loud1sDb").toDouble();
                         }
                   }
             return out;

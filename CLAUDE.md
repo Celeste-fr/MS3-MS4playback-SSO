@@ -363,7 +363,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   `data_directory`, Vital's, `Documents/Vial`); never the presets in the repo. Levels as SSO's (branch `vial-levels`,
   2026-10-27): the SSO instrument's realSteps / realSpan / realPlay, its own longLevel and SSO's sectionLevel(2) moved by a
   measured offset (`vial_levels.py` -> `vial_levels.json` -> `gen_vial.py`), so realRange / sectionBalance play a Vial
-  Long at SSO's level on loudDb (check <= 0.53 dB; other measures: winds +2 .. +7 phon louder; docs/PLAYBACK_SETTINGS.md ›
+  Long at SSO's level on loud1sDb (the loudest 50 ms of a note's first second, the owner, 2026-10-29; test within 0.5 dB; on loudDb, the 3 s peak, check <= 0.53 dB until then; other measures: winds +2 .. +7 phon louder; docs/PLAYBACK_SETTINGS.md ›
   Vial levels); no other SSO measurement (calibration, onsets, mics). An engine as SSO is
   (the global box or a part's *Part playback*, together with SSO parts: › Several libraries; Fuse its variant). Live / MIDI out untried (LIVE.md › What still differs).
 - **Ample guitars** (branch `ample-map`, 2026-10-18; HANDOFF.md › Ample guitars): `share/soundlibraries/Ample Guitar

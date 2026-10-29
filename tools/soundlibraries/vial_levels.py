@@ -64,8 +64,8 @@ SSO_CURVES = [os.path.join(HERE, 'sso_cc1_curves.json'), os.path.join(HERE, 'sso
 CURVES = os.path.join(HERE, 'vial_cc1_curves.json')
 LEVELS = os.path.join(HERE, 'vial_levels.json')
 MARKINGS = [('ppp', 16), ('pp', 32), ('p', 48), ('mp', 64), ('mf', 80), ('f', 96), ('ff', 112), ('fff', 127)]
-MEASURES = ['rmsDb', 'loudDb', 'lufs', 'phon']
-OFFSET_MEASURE = 'loudDb'
+MEASURES = ['rmsDb', 'loudDb', 'loud1sDb', 'lufs', 'phon']
+OFFSET_MEASURE = 'loud1sDb'   # (2026-10-29: SSO's oboe / trumpet still swell after 1.5 s; music's notes are shorter than the sweep's 3 s)
 
 
 def sso_curves():
