@@ -4,7 +4,7 @@
   "level": "loudDb at CC1 64 (sso_winds_cc1_semitone.json, sso_gap_cc1_semitone.json: every semitone, median of 4 takes = the round robins' mean)",
   "deviation": "level - the Theil-Sen line through the 8 nearest other keys, at the key",
   "threshold": "T = 1.5 dB: the 80th percentile of |deviation| of the TU Berlin database's ff tones by the same estimator (Weinzierl et al. 2018; the instruments of real_range.py WINDS, pooled)",
-  "correction": "-sign(d) max(0, |d| - T), rounded to 0.01 dB; keys under 0.05 dB left out",
+  "correction": "-sign(d) max(0, |d| - T), rounded to 0.01 dB; keys under 0.05 dB left out; for the patches whose key pattern follows the real player's (REAL_SHAPE: Oboe Solo, Oboes a2; each patch's \"target\") TU's deviation at ff - d at the keys TU measured (the owner, 2026-10-28: match the real oboe's key shape; TU one take a pitch)",
   "byCc": "each CC1 point's deviations, for the record (MuseScore plays the CC1 64 one: realRange takes the rest)",
   "rr": "|A - B| of the two round robins at CC1 64 per key (rmsDbTakes A B A B): not correctable per note",
   "measures": "rms over keys and CC1 points of the deviation by loudDb against loud1sDb and rmsDb",
@@ -84,6 +84,10 @@
    },
    "rmsDeviationDb": 2.03,
    "rmsAfterDb": 1.16,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 3.66,
    "corrected": 19,
    "byCc": {
@@ -568,6 +572,10 @@
    },
    "rmsDeviationDb": 2.42,
    "rmsAfterDb": 1.08,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 5.5,
    "corrected": 12,
    "byCc": {
@@ -1035,6 +1043,10 @@
    },
    "rmsDeviationDb": 2.65,
    "rmsAfterDb": 1.17,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -4.21,
    "corrected": 18,
    "byCc": {
@@ -1497,6 +1509,10 @@
    },
    "rmsDeviationDb": 1.54,
    "rmsAfterDb": 1.04,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 1.87,
    "corrected": 14,
    "byCc": {
@@ -1957,6 +1973,10 @@
    },
    "rmsDeviationDb": 1.65,
    "rmsAfterDb": 1.09,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -2.14,
    "corrected": 15,
    "byCc": {
@@ -2419,6 +2439,10 @@
    },
    "rmsDeviationDb": 2.03,
    "rmsAfterDb": 1.14,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -4.53,
    "corrected": 15,
    "byCc": {
@@ -2880,6 +2904,10 @@
    },
    "rmsDeviationDb": 1.47,
    "rmsAfterDb": 1.09,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -1.71,
    "corrected": 16,
    "byCc": {
@@ -3343,6 +3371,10 @@
    },
    "rmsDeviationDb": 2.45,
    "rmsAfterDb": 1.2,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -4.73,
    "corrected": 21,
    "byCc": {
@@ -3774,6 +3806,10 @@
    },
    "rmsDeviationDb": 2.98,
    "rmsAfterDb": 1.28,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -4.41,
    "corrected": 19,
    "byCc": {
@@ -4155,6 +4191,10 @@
    },
    "rmsDeviationDb": 1.79,
    "rmsAfterDb": 1.11,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -2.75,
    "corrected": 13,
    "byCc": {
@@ -4579,6 +4619,10 @@
    },
    "rmsDeviationDb": 1.93,
    "rmsAfterDb": 0.91,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -4.2,
    "corrected": 7,
    "byCc": {
@@ -5016,6 +5060,10 @@
    },
    "rmsDeviationDb": 1.98,
    "rmsAfterDb": 1.17,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 2.34,
    "corrected": 19,
    "byCc": {
@@ -5482,6 +5530,10 @@
    },
    "rmsDeviationDb": 1.51,
    "rmsAfterDb": 1.11,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 2.38,
    "corrected": 13,
    "byCc": {
@@ -6000,6 +6052,10 @@
    },
    "rmsDeviationDb": 2.27,
    "rmsAfterDb": 1.14,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -4.11,
    "corrected": 19,
    "byCc": {
@@ -6402,22 +6458,37 @@
     88
    ],
    "keyLevels": {
-    "58": 0.27,
-    "59": -1.59,
-    "60": -1.41,
-    "61": 1.51,
-    "62": 1.55,
-    "63": -0.95,
-    "64": -1.92,
-    "67": 0.15,
-    "72": 0.76,
-    "75": -3.84,
-    "76": -4.14,
-    "77": -0.95,
-    "78": -0.27,
-    "79": 0.93,
-    "80": 0.08,
-    "88": -1.64
+    "58": 1.54,
+    "59": -2.8,
+    "60": -1.97,
+    "61": 1.42,
+    "62": 2.09,
+    "63": -2.13,
+    "64": -2.39,
+    "65": 0.51,
+    "66": -0.43,
+    "67": 0.2,
+    "68": 1.01,
+    "69": 0.44,
+    "70": 2.38,
+    "71": -2.19,
+    "72": -3.1,
+    "73": -1.38,
+    "74": 0.45,
+    "75": -2.38,
+    "76": -2.92,
+    "77": -0.62,
+    "78": -1.82,
+    "79": 0.46,
+    "80": 1.85,
+    "81": 2.41,
+    "82": 0.12,
+    "83": -2.23,
+    "84": -2.35,
+    "85": -0.62,
+    "86": 1.08,
+    "87": 0.69,
+    "88": -4.3
    },
    "deviation": {
     "58": -1.77,
@@ -6453,9 +6524,47 @@
     "88": 3.14
    },
    "rmsDeviationDb": 2.26,
-   "rmsAfterDb": 1.17,
-   "largestDb": -4.14,
-   "corrected": 16,
+   "rmsAfterDb": 1.88,
+   "target": {
+    "kind": "realShape",
+    "instrument": "Oboe modern",
+    "keys": [
+     58,
+     59,
+     60,
+     61,
+     62,
+     63,
+     64,
+     65,
+     66,
+     67,
+     68,
+     69,
+     70,
+     71,
+     72,
+     73,
+     74,
+     75,
+     76,
+     77,
+     78,
+     79,
+     80,
+     81,
+     82,
+     83,
+     84,
+     85,
+     86,
+     87,
+     88
+    ],
+    "why": "the line plus TU Berlin's deviation at ff at each key (the owner, 2026-10-28): SSO's key pattern follows the real player's (two independent sources agree in direction); TU is one player, one take a pitch (take noise included); keys TU lacks: the line within T"
+   },
+   "largestDb": -4.3,
+   "corrected": 31,
    "byCc": {
     "16": {
      "58": -1.25,
@@ -6766,11 +6875,16 @@
     "correlationFf": 0.62,
     "sameWayOverT": [
      61,
+     70,
+     71,
      72,
      75,
      76,
      77,
-     79
+     79,
+     83,
+     84,
+     87
     ]
    }
   },
@@ -6780,26 +6894,40 @@
     91
    ],
    "keyLevels": {
-    "63": -2.92,
-    "64": -3.29,
-    "66": 1.49,
-    "67": 1.0,
-    "69": -4.9,
-    "70": -3.81,
-    "71": 1.36,
-    "72": 5.15,
-    "73": 3.57,
-    "74": 1.48,
-    "75": -4.81,
-    "76": -7.09,
-    "77": -5.22,
-    "78": -3.56,
-    "79": 2.0,
-    "80": 1.15,
-    "83": 0.97,
-    "84": 1.81,
-    "87": -3.48,
-    "88": -3.42
+    "58": -0.05,
+    "59": -0.26,
+    "60": 0.24,
+    "61": -1.04,
+    "62": -0.51,
+    "63": -4.1,
+    "64": -3.77,
+    "65": 1.55,
+    "66": 2.38,
+    "67": 1.05,
+    "68": 0.26,
+    "69": -5.55,
+    "70": -2.9,
+    "71": -0.27,
+    "72": 1.29,
+    "73": 3.75,
+    "74": 3.07,
+    "75": -3.35,
+    "76": -5.88,
+    "77": -4.89,
+    "78": -5.11,
+    "79": 1.53,
+    "80": 2.92,
+    "81": 2.46,
+    "82": -0.51,
+    "83": -0.53,
+    "84": -0.35,
+    "85": 0.35,
+    "86": 0.14,
+    "87": -3.45,
+    "88": -6.08,
+    "89": -1.76,
+    "90": -0.58,
+    "91": 1.9
    },
    "deviation": {
     "58": -0.18,
@@ -6838,9 +6966,50 @@
     "91": -1.09
    },
    "rmsDeviationDb": 3.79,
-   "rmsAfterDb": 1.2,
-   "largestDb": -7.09,
-   "corrected": 20,
+   "rmsAfterDb": 1.85,
+   "target": {
+    "kind": "realShape",
+    "instrument": "Oboe modern",
+    "keys": [
+     58,
+     59,
+     60,
+     61,
+     62,
+     63,
+     64,
+     65,
+     66,
+     67,
+     68,
+     69,
+     70,
+     71,
+     72,
+     73,
+     74,
+     75,
+     76,
+     77,
+     78,
+     79,
+     80,
+     81,
+     82,
+     83,
+     84,
+     85,
+     86,
+     87,
+     88,
+     89,
+     90,
+     91
+    ],
+    "why": "the line plus TU Berlin's deviation at ff at each key (the owner, 2026-10-28): SSO's key pattern follows the real player's (two independent sources agree in direction); TU is one player, one take a pitch (take noise included); keys TU lacks: the line within T"
+   },
+   "largestDb": -6.08,
+   "corrected": 34,
    "byCc": {
     "16": {
      "58": 1.41,
@@ -7177,6 +7346,7 @@
     "keys": 34,
     "correlationFf": 0.73,
     "sameWayOverT": [
+     61,
      70,
      71,
      72,
@@ -7186,7 +7356,8 @@
      79,
      83,
      84,
-     87
+     87,
+     89
     ]
    }
   },
@@ -7257,6 +7428,10 @@
    },
    "rmsDeviationDb": 1.4,
    "rmsAfterDb": 1.0,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 1.47,
    "corrected": 13,
    "byCc": {
@@ -7745,6 +7920,10 @@
    },
    "rmsDeviationDb": 1.58,
    "rmsAfterDb": 1.05,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 2.31,
    "corrected": 16,
    "byCc": {
@@ -8196,6 +8375,10 @@
    },
    "rmsDeviationDb": 1.07,
    "rmsAfterDb": 0.89,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -1.13,
    "corrected": 7,
    "byCc": {
@@ -8619,6 +8802,10 @@
    },
    "rmsDeviationDb": 2.1,
    "rmsAfterDb": 1.06,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -5.04,
    "corrected": 11,
    "byCc": {
@@ -9005,6 +9192,10 @@
    },
    "rmsDeviationDb": 1.02,
    "rmsAfterDb": 0.82,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -1.16,
    "corrected": 4,
    "byCc": {
@@ -9368,6 +9559,10 @@
    },
    "rmsDeviationDb": 1.13,
    "rmsAfterDb": 0.87,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -1.62,
    "corrected": 5,
    "byCc": {
@@ -9780,6 +9975,10 @@
    },
    "rmsDeviationDb": 2.09,
    "rmsAfterDb": 1.19,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 3.09,
    "corrected": 19,
    "byCc": {
@@ -10239,6 +10438,10 @@
    },
    "rmsDeviationDb": 1.62,
    "rmsAfterDb": 1.11,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -2.17,
    "corrected": 14,
    "byCc": {
@@ -10664,6 +10867,10 @@
    },
    "rmsDeviationDb": 2.14,
    "rmsAfterDb": 1.14,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -3.53,
    "corrected": 16,
    "byCc": {
@@ -11070,6 +11277,10 @@
    },
    "rmsDeviationDb": 1.26,
    "rmsAfterDb": 1.01,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -1.47,
    "corrected": 6,
    "byCc": {
@@ -11406,6 +11617,10 @@
    },
    "rmsDeviationDb": 1.14,
    "rmsAfterDb": 0.89,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -1.29,
    "corrected": 8,
    "byCc": {
@@ -11835,6 +12050,10 @@
    },
    "rmsDeviationDb": 3.25,
    "rmsAfterDb": 1.22,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 8.87,
    "corrected": 20,
    "byCc": {
@@ -12247,6 +12466,10 @@
    },
    "rmsDeviationDb": 1.61,
    "rmsAfterDb": 1.04,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 2.35,
    "corrected": 9,
    "byCc": {
@@ -12610,6 +12833,10 @@
    },
    "rmsDeviationDb": 2.18,
    "rmsAfterDb": 1.26,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 2.69,
    "corrected": 14,
    "byCc": {
@@ -12990,6 +13217,10 @@
    },
    "rmsDeviationDb": 1.67,
    "rmsAfterDb": 1.11,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": -3.06,
    "corrected": 16,
    "byCc": {
@@ -13500,6 +13731,10 @@
    },
    "rmsDeviationDb": 1.53,
    "rmsAfterDb": 1.03,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 2.31,
    "corrected": 11,
    "byCc": {
@@ -13955,6 +14190,10 @@
    },
    "rmsDeviationDb": 1.72,
    "rmsAfterDb": 1.13,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 2.75,
    "corrected": 16,
    "byCc": {
@@ -14361,6 +14600,10 @@
    },
    "rmsDeviationDb": 2.35,
    "rmsAfterDb": 1.34,
+   "target": {
+    "kind": "line",
+    "why": "the line within T = 1.5 dB (real players' key-to-key scatter)"
+   },
    "largestDb": 2.63,
    "corrected": 22,
    "byCc": {

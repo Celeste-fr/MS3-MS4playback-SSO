@@ -239,6 +239,7 @@ class TestSoundLibrary : public QObject, public MTest
       void controllerPatchDefaults();
       void partMix();
       void chordVoices();
+      void chordVoiceCommonTone();
       void voiceLanesMemory();
       void divisiLevel();
       void evenKeys();
@@ -17238,6 +17239,90 @@ void TestSoundLibrary::chordVoices()
       }
 
 //---------------------------------------------------------
+//   chordVoiceCommonTone
+//    a voice moving onto a key another voice of its patch played in the chord before is no re-strike on its own copy
+//    (2026-10-28; Whence's Celli bars 15-16: Eb3 F#3 B3- -> F#3 A3 D4-, the lowest voice's F#3 went on SSO's fingered 64
+//    while the other voices played the bowed new bow). voice-common-tone.musicxml at 120, unslurred half-note chords
+//    D5 F#5 | F#5 A5 | F#5 A5 | rest, plainPerformance and plainAuto 1, the Performance legato mono: voices from the
+//    lowest pitch (voice 0 D5 F#5 F#5, voice 1 F#5 A5 A5); the second chord's F#5 bowed (93) from D5 on voice 0's copy,
+//    as A5 from F#5 on voice 1's; the third chord's notes struck again on their own copies: plain 64, no transition
+//---------------------------------------------------------
+
+void TestSoundLibrary::chordVoiceCommonTone()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::PLUGIN); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' mono='1'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", "1" } });
+      MasterScore* score = readScore(DIR + "voice-common-tone.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      std::vector<const Note*> notes;               // in score order, each chord from the lowest
+      for (Segment* s = score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            if (s->element(0) && s->element(0)->isChord())
+                  for (const Note* n : toChord(s->element(0))->notes())
+                        notes.push_back(n);
+      QCOMPARE(int(notes.size()), 6);               // 0 D5 1 F#5 | 2 F#5 3 A5 | 4 F#5 5 A5
+      for (bool forLive : { false, true }) {
+            score->setPlaylistDirty();
+            std::vector<MidiRenderer::LibTrace> trace;
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(forLive);
+            r.setLibraryTrace(&trace);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            std::map<const Note*, const MidiRenderer::LibTrace*> of;
+            for (const MidiRenderer::LibTrace& t : trace)
+                  if (t.note)
+                        of[t.note] = &t;
+            std::map<const Note*, int> channel;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (ev.isExternal() && !ev.librarySwitch() && ev.type() == ME_NOTEON && ev.velo() > 0 && ev.note())
+                        channel[ev.note()] = ev.extPort() * 16 + ev.extChannel();
+                  }
+            for (const Note* n : notes) {
+                  QVERIFY(of.count(n) && channel.count(n));
+                  QVERIFY(of.at(n)->choice.plain);
+                  }
+            // the voices' copies: D5, F#5 (2), F#5 (4) on one, F#5 (1), A5, A5 on the other
+            QCOMPARE(channel.at(notes[2]), channel.at(notes[0]));
+            QCOMPARE(channel.at(notes[4]), channel.at(notes[0]));
+            QCOMPARE(channel.at(notes[3]), channel.at(notes[1]));
+            QCOMPARE(channel.at(notes[5]), channel.at(notes[1]));
+            QVERIFY(channel.at(notes[0]) != channel.at(notes[1]));
+            const char* what = forLive ? "Live's clips" : "hosted";
+            // the second chord: each voice a new bow from its own note before (before the fix: F#5 64, from none)
+            QVERIFY2(of.at(notes[2])->from == notes[0], what);
+            QVERIFY2(of.at(notes[3])->from == notes[1], what);
+            QVERIFY2(of.at(notes[2])->velocity == 93, qPrintable(QString("%1: F#5 %2").arg(what).arg(of.at(notes[2])->velocity)));
+            QVERIFY2(of.at(notes[3])->velocity == 93, what);
+            // the third: the same keys struck again on their own copies, no transition
+            for (int i : { 4, 5 }) {
+                  QVERIFY2(of.at(notes[size_t(i)])->from == nullptr, what);
+                  QVERIFY2(of.at(notes[size_t(i)])->velocity == MidiRenderer::PLAIN_VELOCITY, qPrintable(QString("%1: note %2 %3").arg(what).arg(i).arg(of.at(notes[size_t(i)])->velocity)));
+                  }
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   voiceLanesMemory
 //    branch voice-determinism (2026-10-21): the copies' maximum by the free memory (memoryMaxLanes) read the memory
 //    visible now, and the Windows test VM runs on Hyper-V dynamic memory (16 GB installed, 4.9 GB visible, 1.9 GB free
@@ -17464,9 +17549,11 @@ void TestSoundLibrary::evenKeys()
                   }
             }
       QCOMPARE(patches, 34);
-      // (Oboe Solo's 71-72 zone under the curve, 75-76 over it; sso_even_keys.json)
+      // (Oboe Solo: the real oboe's key shape, TU Berlin's deviation at ff, not the line within T (the owner, 2026-10-28):
+      // 72 raised only to TU's -5.4 under the line, 76 lowered to TU's +2.7 over it; sso_even_keys.json)
       const SoundLib::Articulation* oboe = longOf(*sso, "Oboe Solo");
-      QVERIFY(oboe && oboe->keyLevelAt(72) > 4 && oboe->keyLevelAt(76) < -6 && oboe->keyLevelAt(58) == 0.0);
+      QVERIFY(oboe && std::fabs(oboe->keyLevelAt(72) - 1.29) < 1e-9 && std::fabs(oboe->keyLevelAt(76) + 5.88) < 1e-9
+              && oboe->keyLevelAt(57) == 0.0);
       QVERIFY(!longOf(*sso, "Violins 1") || longOf(*sso, "Violins 1")->keyLevels.empty());
       for (const char* name : { "Flute Solo", "Oboe Solo", "Clarinet Solo", "Bassoon Solo", "Horn Solo", "Trumpet Solo",
                                 "Tenor Trombone Solo", "Tuba Solo" }) {

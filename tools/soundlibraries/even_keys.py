@@ -52,6 +52,12 @@ PERCENTILE = 0.8
 MEASURE = 'loudDb'
 ANCHOR = 64
 MIN_DB = 0.05
+# The real player's key shape as the target (the owner, 2026-10-28): the patches whose key pattern follows TU Berlin's
+# instrument at ff (Oboe Solo r +0.73, Oboes a2 +0.62: two independent sources, Spitfire's player and TU's, agree in
+# direction): the target is the line plus TU's own deviation at ff at that key (the same estimator on TU's levels; TU's
+# MIDI pitches are the patch's keys), not the line within T. TU is one player, one take a pitch: its deviation holds take
+# noise too (real players' scatter at ff 1.1 dB robust SD). Keys TU doesn't cover: capped at T as the others
+REAL_SHAPE = {'Oboe Solo': 'Oboe modern', 'Oboes a2': 'Oboe modern'}
 
 
 def theil_sen_at(xs, ys, x0):
@@ -146,7 +152,10 @@ def main(argv=None):
         'deviation': f'level - the Theil-Sen line through the {NEIGHBOURS} nearest other keys, at the key',
         'threshold': f'T = {THRESHOLD} dB: the 80th percentile of |deviation| of the TU Berlin database\'s ff tones by '
                      'the same estimator (Weinzierl et al. 2018; the instruments of real_range.py WINDS, pooled)',
-        'correction': '-sign(d) max(0, |d| - T), rounded to 0.01 dB; keys under 0.05 dB left out',
+        'correction': '-sign(d) max(0, |d| - T), rounded to 0.01 dB; keys under 0.05 dB left out; for the patches whose '
+                      'key pattern follows the real player\'s (REAL_SHAPE: Oboe Solo, Oboes a2; each patch\'s "target") '
+                      'TU\'s deviation at ff - d at the keys TU measured (the owner, 2026-10-28: match the real oboe\'s '
+                      'key shape; TU one take a pitch)',
         'byCc': 'each CC1 point\'s deviations, for the record (MuseScore plays the CC1 64 one: realRange takes the rest)',
         'rr': '|A - B| of the two round robins at CC1 64 per key (rmsDbTakes A B A B): not correctable per note',
         'measures': 'rms over keys and CC1 points of the deviation by loudDb against loud1sDb and rmsDb',
@@ -159,6 +168,18 @@ def main(argv=None):
         lv = level_at(sec, ANCHOR)
         d = deviations(lv)
         corr = {k: round(correction(v), 2) for k, v in d.items()}
+        target = {'kind': 'line', 'why': f'the line within T = {THRESHOLD} dB (real players\' key-to-key scatter)'}
+        if name in REAL_SHAPE:
+            assert real, f'{name} takes the real player\'s key shape: --csv is needed'
+            ff = real[REAL_SHAPE[name]]['ff']
+            for k in d:
+                if k in ff:
+                    corr[k] = round(ff[k] - d[k], 2)
+            target = {'kind': 'realShape', 'instrument': REAL_SHAPE[name],
+                      'keys': sorted(k for k in d if k in ff),
+                      'why': "the line plus TU Berlin's deviation at ff at each key (the owner, 2026-10-28): SSO's key "
+                             "pattern follows the real player's (two independent sources agree in direction); TU is one "
+                             "player, one take a pitch (take noise included); keys TU lacks: the line within T"}
         after = {k: d[k] + corr[k] for k in d}
         byCc = {}
         for cc in sec['ccs']:
@@ -184,7 +205,7 @@ def main(argv=None):
              'keyLevels': {str(k): v for k, v in sorted(corr.items()) if abs(v) >= MIN_DB},
              'deviation': {str(k): round(v, 2) for k, v in sorted(d.items())},
              'rmsDeviationDb': round(rms(list(d.values())), 2), 'rmsAfterDb': round(rms(list(after.values())), 2),
-             'largestDb': round(max(corr.values(), key=abs), 2), 'corrected': sum(1 for v in corr.values() if abs(v) >= MIN_DB),
+             'target': target, 'largestDb': round(max(corr.values(), key=abs), 2), 'corrected': sum(1 for v in corr.values() if abs(v) >= MIN_DB),
              'byCc': byCc, 'rr': rr, 'rrMedianDb': round(st.median(rr.values()), 2) if rr else 0.0, 'measures': meas}
         lab = db.get(name)
         if lab and real:

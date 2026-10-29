@@ -1989,8 +1989,8 @@ the TU Berlin database's ff tones (Weinzierl et al. 2018; the twelve wind and br
 key-to-key structure. Not the pp tones ("as softly as possible": clarinet 6.7 dB rms, near the player's limit). The key
 plays c = -sign(d) max(0, |d| - T) dB more: only the part beyond real players' scatter is taken away (a key 6.6 dB under
 the line plays 1.5 under it; one 1 dB off stays). 34 patches, 4-22 keys each; rms deviation 1.0-3.8 dB before, 0.8-1.3
-after. Largest: Contrabass Clarinet 47-48 +8.4 / +8.9 (10 dB under their neighbours at mp, not at ppp), Oboe Solo 76 -7.1,
-75 -4.8, 77 -5.2, 69 -4.9, 72 +5.2, 73 +3.6, Bassoons a2 55-56 / 67-68 +4.5 .. +5.5, Trumpets a2 79-80 -4.8 / -5.0,
+after. Largest: Contrabass Clarinet 47-48 +8.4 / +8.9 (10 dB under their neighbours at mp, not at ppp), Oboe Solo (real shape,
+below) 76 -5.9, 69 -5.6, 77 -4.9, 73 +3.8, Bassoons a2 55-56 / 67-68 +4.5 .. +5.5, Trumpets a2 79-80 -4.8 / -5.0,
 Contrabassoon 49 -4.7, Clarinets a2 74 -4.5, Cor Anglais 81-82 -4.4, Bassoon Solo 73 -4.2, Flute Solo 69-70 -3.6 / -4.2,
 Horn Solo 66 -4.1; the a6 sections and Trumpet / Trombone Solo nearly even (4-7 keys, at most 1.6 dB).
 
@@ -2008,9 +2008,13 @@ patch, up to 9 dB at single keys; `rr` in the file), no per-key curve can even t
 before a slow attack (SSO's Long onsets 70-140 ms on the Oboe's 69-76) reaches less than loudDb says; the zones are the same
 by loud1sDb (first second) and rmsDb (the sustain) within 0.3-1.2 dB rms. **Real players corroborate part of the Oboe's
 pattern**: SSO's deviations correlate with TU Berlin's oboe at ff (r +0.73 Oboe Solo, +0.62 Oboes a2; one player, one take),
-whose 72 is 5.4 dB under the line (pp 3.0) and 75-76 +3; SSO's swings are about twice as large. The correction keeps their
-sign within T (72 plays 1.5 under the line, not 5.4); the other patches correlate weakly (-0.5 .. +0.46). Should the
-owner want the real oboe's keys kept, the target could be TU's deviation instead of the line (not done: one take a pitch).
+whose 72 is 5.4 dB under the line (pp 3.0) and 75-76 +3; SSO's swings are about twice as large. **So the two oboes take the
+real oboe's key shape** (the owner, 2026-10-28: two independent sources agree in direction): their target is the line plus
+TU's own deviation at ff at each key (`even_keys.py` REAL_SHAPE; each patch's `target` in `sso_even_keys.json`), not the
+line within T; keys TU lacks the line within T. Uncertainty: TU is one player, one take a pitch, its deviations carry take
+noise (real players' scatter at ff 1.1 dB robust SD). Oboe Solo 69-77: -5.55 -2.9 -0.27 +1.29 +3.75 +3.07 -3.35 -5.88 -4.89
+(capped at T they were -4.9 -3.81 +1.36 +5.15 +3.57 +1.48 -4.81 -7.09 -5.22): 72 now plays 5.4 under the line as TU's
+oboe, 76 2.7 over it. Every other patch (correlation -0.5 .. +0.46) keeps the line within T.
 
 **Vial** (› Vial levels): its presets are even over pitch (within 0.1 dB at CC1 64), so its `longLevel` is matched to SSO's
 keys as SSO plays them (every semitone) and its Long carries the SSO Long's `keyLevels`: with evenKeys on both play the
