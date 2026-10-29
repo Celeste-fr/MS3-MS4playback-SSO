@@ -703,7 +703,8 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   the skips need inputs (`MS_ROUTES_SCORE`, `SSO_NKI` / `SSO_EMPTY`, `MS_EXTRACT_PLUGIN` + `MS_EXTRACT_OUT`: the
   owner's files; `SSO_KICKSTART_NKI` extends two Kontakt tests).
 - `tst_playbackaudit`: 12 passed, 1 skipped (2026-10-28, hallFindings pinned to transitionLevels 0, plus a row with 2: only m4's fp; 2026-10-21, hallFindings, avoidedCCFindings (sso-script-fixes2: HALL, AVOIDED CC; `hall.musicxml`); 2026-10-20, chordFindings (chord-voices: CHORD); droppedFindings with `[slurs] fastTransitions`; 2026-10-14, transitionArrival, with transitionsEarly 1 / 2; 2026-10-13, droppedFindings, leapFindings; 2026-10-09, cappedArrival, swapByPitch; `auditScore` needs `MS_AUDIT_SCORE`: VERIFY.md ›
-  Playback audit). Whence (quarter tones), Recommended (2026-10-11, main cb073b6917): the same counts as Whence 12-TET
+  Playback audit). **Current** (2026-10-29, bowed-join b0de2e5f3e, today's Recommended with plainPerformance 1 and plainAuto 1): Whence ARRIVAL 147 fail (Violins 36, Violas 45, Celli 63, Basses 3: consecutive plain notes ~55-65 ms apart, the audit's model of plainAuto's bowed / smooth notes unchecked; build 489's was 148), LEVEL STEP 26 info, every other kind 0; plainAuto 0: 12 fail, both off: 2 (the Celli bar-1 pair). The counts below are older states.
+  Whence (quarter tones), Recommended (2026-10-11, main cb073b6917): the same counts as Whence 12-TET
   below (OVERLAP 0, UNMEASURED 10, CAPPED 289, ARRIVAL 19 fail / 136 warn, LEVEL STEP 0).
   Whence, Recommended, integrate-1012 (2026-10-12: transitions, smoothStart, smooth onset): OVERLAP 0, UNMEASURED 9,
   CAPPED 289, ARRIVAL 20 fail / 10 warn, LEVEL STEP 0. Branch `gaps-1012` (2026-10-14: the start lead, transitions by
