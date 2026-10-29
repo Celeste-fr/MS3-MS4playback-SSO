@@ -281,7 +281,8 @@ if ($J.saveAs) {
   $cf = WaitWin $p { $_.Class -eq '#32770' } 2
   if ($cf) { Fail "a Windows dialog stays after the file name ('$($cf.Title)')"; exit 1 }
   $f = $null
-  for ($i = 0; $i -lt 120; $i++) { Start-Sleep 1; $null = HandleDialogs $p
+  # (Whence's set, 2026-10-29, Live 12.4.7: still "being saved under a new name" after 120 s; 15 min at most now)
+  for ($i = 0; $i -lt 900; $i++) { Start-Sleep 1; $null = HandleDialogs $p
     $f = Get-ChildItem $dir -Recurse -Filter $base -ErrorAction SilentlyContinue | ? { $_.LastWriteTime -ge $before } | Select -First 1
     if ($f -and -not (Busy (Main $p).H)) { break } }
   if (-not $f) { Fail 'the set was not saved'; exit 1 }
