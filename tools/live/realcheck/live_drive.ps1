@@ -54,6 +54,11 @@ public class U {
         var c = new System.Text.StringBuilder(256); GetClassName(h, c, 256);
         res.Add(h.ToInt64() + "|" + r.L + "|" + r.T + "|" + r.R + "|" + r.B + "|" + p + "|" + c + "|" + t); }
       return true; }, IntPtr.Zero); return res; }
+  [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT p);
+  [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint f);
+  public struct POINT { public int X, Y; }
+  // the top-level window seen at a point (what covers a dialog): its handle
+  public static IntPtr RootAt(int x, int y) { POINT q; q.X = x; q.Y = y; return GetAncestor(WindowFromPoint(q), 2); }
   [DllImport("user32.dll")] public static extern bool EnumChildWindows(IntPtr p, EP f, IntPtr l);
   // a dialog's text: its child windows' (a Windows message box: the Static holding the message)
   public static string Texts(IntPtr h) { var res = new List<string>();
@@ -147,6 +152,9 @@ function HandleDialogs($p) {
     # another program's window over the dialog (2026-10-29: Chrome, restarted after the VM's unclean shutdown, over Live's
     # dialogs while it loaded) makes the thumbnail that program's: minimised and the dialog brought to the front first
     if (-not $th) { HideOthers; Front $d.H; Start-Sleep -Milliseconds 300; $th = Thumb $d }
+    $cov = Coverer $d
+    if ($cov) { $R.dialogs += [ordered]@{ at = (Get-Date -Format o); w = $d.W; h = $d.Ht; coveredBy = $cov; action = 'stop' }
+      FailIfWindowsPage; Fail "Live's dialog ($($d.W)x$($d.Ht)) is covered by $cov"; exit 1 }
     $entry = [ordered]@{ at = (Get-Date -Format o); w = $d.W; h = $d.Ht; thumb = ($th -join ','); known = $(if ($k) { $k.name } else { '' }) }
     if ($k -and $k.action -eq 'click') {
       # the trial notice says "Time remaining: N days": kept as a picture before it is answered
@@ -160,6 +168,24 @@ function HandleDialogs($p) {
   return $handled
 }
 
+# Windows' own full-screen pages over every window (2026-10-29, after the VM's reboot with auto-login: "Protect your
+# files and memories by backing up your PC" [Opt out of backup] [Continue], then "Backup is recommended" [Skip for now]
+# [Back up now]: Explorer's window of class Shell_OOBEProxy, title "Microsoft account", 1024 x 768). Live's dialogs
+# under it were thumbnailed as that page (424 x 155, the trial notice, taken for an unknown dialog and escaped three
+# times). Not answered by the run (a Microsoft account page is the owner's): the run stops and says so. Answered by
+# hand on the VM 2026-10-29 (Opt out, Skip for now) and ScoobeSystemSettingEnabled = 0 set under
+# HKCU\Software\Microsoft\Windows\CurrentVersion\UserProfileEngagement, so that it should not come back.
+function WindowsPage { Wins 0 | ? { $_.Class -eq 'Shell_OOBEProxy' -or ($_.Class -eq 'Windows.UI.Core.CoreWindow' -and $_.Title -like '*account*') } | Select -First 1 }
+function FailIfWindowsPage { $w = WindowsPage
+  if ($w) { Fail "a Windows page covers the desktop ('$($w.Title)', class $($w.Class), $($w.W)x$($w.Ht)): answer it on the VM (e.g. Opt out of backup, Skip for now), then --resume"; exit 1 } }
+# another program's window over a dialog after HideOthers: named in the failure instead of escaping a dialog never seen
+function Coverer($d) { $h = [U]::RootAt($d.L + [int]($d.W / 2), $d.T + [int]($d.Ht / 2))
+  if ($h -eq [IntPtr]::Zero -or $h -eq $d.H) { return $null }
+  $w = Wins 0 | ? { $_.H -eq $h } | Select -First 1
+  if (-not $w -or $w.Pid -eq $d.Pid) { return $null }
+  $pn = (Get-Process -Id $w.Pid -ErrorAction SilentlyContinue).ProcessName
+  return "$pn '$($w.Title)' (class $($w.Class), $($w.W)x$($w.Ht))" }
+
 # a failure: the screen kept, the Live this run started stopped (the next run must find no Live)
 function Fail($what) { $R.verdict = 'FAIL'; $R.failure = $what; $R.failShot = Shot 'fail'; Save
   if ($script:p -and -not $script:p.HasExited) { Stop-Process -Id $script:p.Id -Force -ErrorAction SilentlyContinue } }
@@ -171,6 +197,7 @@ try {
 # ---- 1: no Live of anyone else's
 $other = Get-Process | ? { $_.Path -eq $LIVE }
 if ($other) { Fail "Live already runs (pid $($other.Id -join ' ')): not ours, left alone"; exit 1 }
+FailIfWindowsPage
 Step 'preflight' $true "no Live running"
 
 # ---- 2: start
