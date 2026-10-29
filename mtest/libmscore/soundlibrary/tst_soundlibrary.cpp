@@ -253,6 +253,7 @@ class TestSoundLibrary : public QObject, public MTest
       void remoteTiming();
       void remoteParallelLoad();
       void remoteKilled();
+      void remoteKilledWrites();
       void remoteHung();
       void mixerScore();
       void liveSetTestSynth();
@@ -11128,6 +11129,48 @@ void TestSoundLibrary::remoteKilled()
       QVERIFY2(vst.plugin(0) && vst.plugin(0)->alive(), qPrintable(error));
       QVERIFY(vst.plugin(0)->hostPid() != pid);
       QVERIFY(block(0) == before0);
+#endif
+      }
+
+//---------------------------------------------------------
+//   remoteKilledWrites
+//    calls written to a helper in the moment after it was killed, before MuseScore's reader has seen its pipe close (the
+//    host's idle timer: hostCrashRecovery's "Received signal 13", 2026-10-29): no SIGPIPE ends MuseScore, the failed
+//    write makes the instance !alive() at once. MS_TEST_SIGPIPE_DEFAULT=1 puts SIGPIPE's default back after the helpers
+//    started, as before the fix: the test then ends by the signal (shows that it reaches the race)
+//---------------------------------------------------------
+
+void TestSoundLibrary::remoteKilledWrites()
+      {
+#ifdef _WIN32
+      QSKIP("SIGPIPE: Linux and macOS only");
+#else
+      HostProcesses hp(1);
+      const int rate = 48000;
+      QString error;
+      int sawDeadByWrite = 0;
+      for (int round = 0; round < 20; ++round) {
+            std::unique_ptr<Vst3Plugin> p(Vst3Plugin::load(TESTSYNTH, rate, 512, &error, QString("patch %1").arg(round)));
+            QVERIFY2(p, qPrintable(error));
+            const qint64 pid = p->hostPid();
+            QVERIFY(pid > 0);
+            if (round == 0 && qEnvironmentVariableIsSet("MS_TEST_SIGPIPE_DEFAULT"))
+                  signal(SIGPIPE, SIG_DFL);
+            QCOMPARE(::kill(pid_t(pid), SIGKILL), 0);
+            QElapsedTimer t;
+            t.start();
+            int calls = 0;
+            while (p->alive() && t.elapsed() < 5000) {
+                  p->idle();                    // (a message written to the pipe each time, not waited for)
+                  ++calls;
+                  }
+            QVERIFY(!p->alive());
+            if (calls > 1)
+                  ++sawDeadByWrite;
+            p.reset();
+            Vst3Remote::takeEnded();
+            }
+      qInfo("20 kills: %d with writes after the helper's end", sawDeadByWrite);
 #endif
       }
 

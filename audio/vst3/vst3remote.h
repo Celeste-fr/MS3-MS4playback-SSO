@@ -43,7 +43,9 @@
 //  as before, said once in load times.log (setLog).
 //
 //  A helper that dies (crash, killed) is noticed at once (its pipe closes; its process handle / waitpid): every caller
-//  waiting on it is woken, its instances play silence from then on (alive() false), MuseScore goes on.
+//  waiting on it is woken, its instances play silence from then on (alive() false), MuseScore goes on. A write to it
+//  before that (Linux / macOS: its pipe's reader gone) fails with EPIPE, not SIGPIPE (ignored process-wide from the first
+//  helper's start, the default again in the helper), and makes it dead the same way.
 //  SoundLibraryHost::checkHostProcesses says so (status bar, load times.log), stops a playback that used them, loads the
 //  lost instances again (a new helper, from their setups and prepared states) and plays on.
 //

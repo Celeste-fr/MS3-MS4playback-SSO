@@ -103,6 +103,24 @@ static bool writeAll(Pipe p, const char* data, size_t n)
       return true;
       }
 
+#ifndef _WIN32
+// A write to a pipe whose reader has ended raises SIGPIPE, which by default ends the writer: a helper that crashed or was
+// killed would take MuseScore with it (Linux, macOS; Windows has no such signal), between its end and the moment our reader
+// thread sees the pipe close (hostCrashRecovery: Received signal 13, 1 run in 2 on a loaded machine). Ignored for the
+// whole process, as Qt's own network code and most servers do: the write then fails with EPIPE, writeAll returns false
+// and send() takes the helper for dead. Set before the first helper starts; the helper itself gets the default back
+static void ignoreSigpipe()
+      {
+      static std::once_flag once;
+      std::call_once(once, []() {
+            struct sigaction sa {};
+            sa.sa_handler = SIG_IGN;
+            sigemptyset(&sa.sa_mask);
+            sigaction(SIGPIPE, &sa, nullptr);
+            });
+      }
+#endif
+
 static bool readAll(Pipe p, char* data, size_t n)
       {
       while (n > 0) {
@@ -570,6 +588,7 @@ class Process {
       ~Process();
       bool start(const QString& exe, const QString& prewarm, QString* error);
       void readerLoop();
+      void lost();
       void died(const QString& how);
       void kill()
             {
@@ -737,6 +756,7 @@ bool Process::start(const QString& exe, const QString& prewarm, QString* error)
             *error = QString("cannot make a semaphore (%1)").arg(errno);
             return false;
             }
+      ignoreSigpipe();
       int in[2], out[2];
       if (pipe2(in, O_CLOEXEC) != 0 || pipe2(out, O_CLOEXEC) != 0) {
             *error = "cannot make pipes";
@@ -755,6 +775,7 @@ bool Process::start(const QString& exe, const QString& prewarm, QString* error)
       if (p == 0) {
             // (between fork and exec: async-signal-safe calls only)
             prctl(PR_SET_PDEATHSIG, SIGKILL);
+            signal(SIGPIPE, SIG_DFL);     // (ignored in MuseScore, and an ignored signal stays ignored across exec)
             if (getppid() != parent)
                   _exit(1);
             fcntl(in[0], F_SETFD, 0);
@@ -816,6 +837,13 @@ void Process::readerLoop()
             waitCv.notify_all();
             }
       // (the pipe closed: the helper ended or is ending; the watcher says how)
+      lost();
+      }
+
+// the helper's pipe gone (closed by it, or a write to it failed): dead from now on, its waiters woken (the watcher's
+// died() follows, which says how it ended and has SoundLibraryHost reload its instances)
+void Process::lost()
+      {
       {
             std::lock_guard<std::mutex> lock(waitMutex);
             dead = true;
@@ -901,9 +929,12 @@ bool Process::send(Op op, quint32 id, const QByteArray& args, QByteArray* reply,
             written = !dead && writeMessage(toChild, m);
       }
       if (!written) {
-            std::lock_guard<std::mutex> lock(waitMutex);
-            if (waiting.erase(seq) && w->longOp)
-                  --longOps;
+            {
+                  std::lock_guard<std::mutex> lock(waitMutex);
+                  if (waiting.erase(seq) && w->longOp)
+                        --longOps;
+            }
+            lost();                       // (the write failed: EPIPE, its reader gone, before our reader saw the end)
             return false;
             }
       if (!wait)
