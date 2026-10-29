@@ -1,21 +1,92 @@
 # Handoff: start here
 
-Current state of the work and what is open. Read `CLAUDE.md` first (rules, architecture map, build and test).
-The dated work logs that used to fill this file (2026-09-25 … 2026-10-01: tuning, extracts, setups, dynamics,
-Mixer, load times, Live integration, piano fixes, playback verification) are in `docs/HISTORY.md` Part 2; read
-a section there when you need the background of that topic. Commit messages describe each step in detail.
+Read `CLAUDE.md` first (rules, architecture map, build and test), then this top part (to the line "Work log"); then
+`docs/OPEN_ITEMS.md` (ranked; its "Do next" list is the work queue). Everything below "Work log" is dated history,
+roughly newest first, kept for its detail; `git log` has each step's measurements. Older logs: `docs/HISTORY.md` Part 2.
 
-## Paused 2026-10-25 (the owner: "pause project")
+## Current state (2026-10-29)
 
-State: integrate-1017 has everything through chunk-equal (live playback's chunks = the whole render); last build for the
-owner is #484 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40230637035: helper processes, crackle fix,
-bar-17 fix; chunk-equal is NOT in it). Waiting on the owner's report of #484 (loading, crackles, bar 17, Kontakt editor,
-closing during a load). In progress when paused: branch `vial-map` (WIP d0ac45e4fe, not merged: `Vial Instrumental.xml` and `(Fuse).xml` by
-`gen_vial.py`, presets loaded from Vial's data folder, Preferences › I/O › Library; real Linux Vial loads and plays them;
-left: re-run vialHosted on all 13 when the CC11 / CC21 pack ships, the final CC21 list, Windows, Live / MIDI out; 13 Long
-presets, CC1 / CC11 / CC21 on channel 1; Linux Vial bundles in ~/MuseScore/ms3fork/private/vial-vst3; the presets answer CC11 only
-after vial sso's preset update, not shipped: paused too, its state in ~/vial-sso/HANDOFF.md; only CC1 works now). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
-targeted fixes, the owner picks what he hears.
+- **Branches.** `main` = `integrate-1017` = eb0692b32f. `bowed-join` (worktree `.claude/worktrees/integrate-1017`) is 10
+  commits ahead, tested on Linux, not merged: the audit's plain-note model, the heard check's censored transitions
+  (Kaplan-Meier), `[slurs] runBends` (0 everywhere), the CC1-techniques research, realcheck driver fixes. None changes
+  what plays by default; merge it into `main` and `integrate-1017` when picking up (CLAUDE.md › Branches).
+- **Tests (Linux, 2026-10-29, in-process):** tst_soundlibrary 162 / 6 skipped, tst_liveequivalence 87 / 5,
+  tst_playbackaudit 13 / 1 (c084876023). Build dir: `build.rel` in this worktree.
+- **What works.** MS4 playback (finished). SSO through Kontakt 8 hosted as VST 3 in helper processes (window free while
+  loading), every adjustment of CLAUDE.md › Sound libraries; quarter tones by Kontakt Tune slots; Create / Update Live
+  Set (the plain set: checked in real Live 12.4.7, notes within 0.06 dB); Vial Instrumental as a second engine; Ample
+  Guitar M map; automation lanes (resizable), Engine lane (hard switches; fades not played).
+- **Latest Windows build: build 491** (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40833439919,
+  integrate-1017 @ b0de2e5f3e, 2026-10-29). Since build 489: `[levels] transitionLevels` 2, `[notes] transportReset` 1
+  and `[slurs] fastTransitions` 1 in Recommended; a unison on a mono patch is one note; lane heights; Clear Lane on note
+  lanes; `[levels] evenKeys` (SSO's uneven wind keys evened beyond real players' scatter, the oboe in the real oboe's
+  shape); the Celli voice velocity fix (Whence bar 16); a plainAuto new bow at another quarter-tone tuning stays on
+  the note before's copy; section balance on SSO's every-semitone curves; Vial levels.
+  Checked on the VM: heard check of Whence (export, Recommended: ARRIVAL 35 fail / 19 warn), evenKeys and the winds'
+  Utility in real Live (private `realcheck-1029/wnd491`). The owner has not reported on his PC since builds 484 / 485.
+- **Newer than build 491** (no Windows build has them): Vial matched on loud1sDb (map-only: a build, or the owner copies
+  the two Vial XMLs into `share/soundlibraries/`), everything on `bowed-join`. No new build is needed for the queued VM
+  work below (kthost and realcheck run from Linux); build again only when the owner needs to hear something new.
+- **Running now:** the realcheck repeat on Whence (below, item 1), started 2026-10-29 07:36 by
+  `~/MuseScore/ms3fork/private/realcheck-1029/slot.sh` (VM lock `lrc-w491`; log `realcheck-1029/w491.3.log`; Live's load
+  ~15 min, export ~5, save up to 15, then the comparison). When it ends, slot.sh releases another session's VM queue
+  (`~/vial-sso/work/b3/ms_slot_done`). If it failed, run it again with the same command (`--resume`).
+- **Deadlines.** The VM's Live 12.4.7 trial stops saving / exporting about 2026-11-01. From 2026-11-01: no subagents,
+  lean usage. Vial's next preset pack renames presets (memory: switch `gen_vial.py` / `vial_levels.py` only after it is
+  delivered; table in `~/vial-sso/work/private_pkg/MS_PATHS.md`).
+
+## The owner's pending decisions
+
+One page lists them all with a recommendation each: **https://claude.ai/artifact/DfKwZURmPeTH4BFXBYpwUc** (Pending
+Decisions, 2026-10-29: 7 A/B listening pages, settings for his ear, data / method choices, Live questions). The same in
+the repo: `docs/OPEN_ITEMS.md` › Owner decisions pending. Not on the page yet: `[slurs] runBends` (after the VM A/B
+below) and the CC1-technique offsets (after the sweep); the page's cards "Levels for sul tasto…" and "Fast quarter-tone
+runs" predate 2026-10-29 (RESEARCH.md 1.1a has offsets now; runBends is the next step), so update them when republishing.
+Read his answers with ArtifactData where the page has a db, else ask him.
+
+## Queued VM work (one at a time, in this order; each takes the VM lock itself)
+
+Run each as a background job writing a log (`nohup … > <log> 2>&1 &`), check after ~1 min that the log grows.
+1. **realcheck repeat, Whence, Update Live Set end to end** (before ~2026-11-01; running 2026-10-29, above):
+   `python3 tools/live/realcheck/realcheck.py run ~/MuseScore/ms3fork/test-scores/Whence.mscz --build 'C:\claude\vt491\b491' --name w491 --out ~/MuseScore/ms3fork/private/realcheck-1029/w491 --load-timeout 2700 --settings "slurs/fixedTransitions=1;slurs/speedFromWritten=1" --live-edits --resume`
+   Then `realcheck.py report ~/MuseScore/ms3fork/private/realcheck-1029/w491`; record results in LIVE.md › Checked in real
+   Live and OPEN_ITEMS (11c, "Untried in real Live").
+2. **runBends A/B on kthost** (OPEN_ITEMS 5; ~2 x 10 min of VM):
+   `S=$(cat ~/MuseScore/ms3fork/private/queued/rec491.txt); W=~/MuseScore/ms3fork/private/runbends-ab; HC_RENDER=kthost HC_KEEP=1 HC_BUILD=$PWD/build.rel HC_WORK=$W/A tools/playbackverify/heard_check.sh --takes 2 ~/MuseScore/ms3fork/test-scores/Whence.mscz "$S;slurs/runBends=0" "Violins 1,Violas,Violoncellos"`
+   and the same with `slurs/runBends=1` into `$W/B`. Compare each take's report.json (quarter tones' `how`,
+   `closestCents`, the in-tune share) against the offline prediction (docs/PLAYBACK_SETTINGS.md › Run bends); refit the
+   bowed lag with `tools/soundlibraries/legato_glide/runlag.py fit` on A's routes. Then an A/B page for the owner.
+3. **CC1 string techniques sweep** (OPEN_ITEMS 4; phase 1 ~1-1.5 h, phase 2 ~1.5-2.2 h of VM): the plan is
+   `~/MuseScore/ms3fork/private/queued/cc1tech/vm_plan.sh` (`bash vm_plan.sh plan`, then per job
+   `PHASE=1 SECTION="Violins 1" bash vm_plan.sh run`, one section per background job, each ~15-45 min; then
+   `bash vm_plan.sh analyze`; results in `~/MuseScore/ms3fork/private/cc1tech/json`). Offsets = technique - Long, against
+   RESEARCH.md 1.1a's real-player offsets; the owner decides whether to play them.
+4. **Basses' bowed glide by interval** (OPEN_ITEMS 3; VERIFY.md › Plain notes: +64 ms is the interval, not noise):
+   `python3 tools/soundlibraries/legato_glide/gen.py <work> --sections=cb --iois=600,1000,2182 --steps=-6,-3,-2,-1,1,2,3,6`,
+   render `<work>/ev/*.txt` with kthost on the VM with the Basses - Performance state (as
+   `~/MuseScore/ms3fork/private/fast-microtones/tools/go.sh` did, or one `tools/vm/vmjob.py` job), then
+   `python3 tools/soundlibraries/legato_glide/glide.py <work> <out.json>`; if bendGlide depends on the interval, give the
+   map an interval-dependent glide (generator, then the audit's / heard check's residuals again).
+
+## How to work lean
+
+- **Read little.** This top part, OPEN_ITEMS' "Do next", then only the CLAUDE.md / docs section of the item at hand.
+  Read logs with `tail` / `grep`, never `cat`. `git log -5 --stat` before starting.
+- **Machine.** One VM-heavy job at a time (the tools take `C:\claude\quiet.lock` + `~/MuseScore/ms3fork/private/VM_PAUSE`
+  through `tools/vm/vmlib.py`; `python3 tools/vm/vmlib.py status` shows the holder). Builds: `build.rel` here, under
+  `flock ~/MuseScore/ms3fork/private/BUILD_LOCK nice -n 15 ninja -C build.rel -j2 <target>`, MemAvailable >= 1 GB first.
+  Long work as background jobs (each < ~30 min) writing a log; check after a minute that it grows, and look at once if it
+  stops changing for 10 min. Never wait with `pgrep -f` / `pkill -f` (the job matches itself): wait on a PID
+  (`while kill -0 <pid>`) or queue on the lock. Say what runs, since when, until about when.
+- **Deleting:** only `rm -rf /abs/path` as its own command, or `find /abs/dir … -delete` (a hook denies other forms).
+- **Before a Windows build:** `tools/check_windows_names.sh`, the playback audit and the heard check on Whence
+  (VERIFY.md); name it "build N" with its run link (a bare "#N" links to upstream PRs in chat).
+- **The owner decides what is heard; levels come from real data** (CLAUDE.md › Rules): measure, then offer A / B. Every
+  A/B page shows the excerpt's sheet music (a rendered crop, or jianpu in his ASCII format; slurs in words); a level
+  comparison alternates A and B note by note in one clip. One question per page; one section alone with a click, ~20 s
+  clips, long rests cut. New settings are 0 everywhere until he has heard them.
+- **Readings of music, legends or screenshots** go on a review page before they change code (CLAUDE.md › Rules).
+- **Say what was tested with what** (Linux stand-in, VM kthost / export, real Live, the owner).
 
 ## The knowledge base (2026-10-21): read these before starting new playback work
 
@@ -32,6 +103,22 @@ The owner's goal for October 2026: everything a later AI needs to make playback 
   item 2). Private record: `~/MuseScore/ms3fork/private/plain-timing/OWNER_EARS.txt`.
 - **How he judges timing:** one section alone with a metronome click, long rests cut out, about 20 s a clip, one
   question per page.
+
+---
+
+# Work log (dated, roughly newest first; the top part wins where they differ)
+
+## Paused 2026-10-25 (the owner: "pause project"; superseded by "Current state (2026-10-29)")
+
+State: integrate-1017 has everything through chunk-equal (live playback's chunks = the whole render); last build for the
+owner is #484 (https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40230637035: helper processes, crackle fix,
+bar-17 fix; chunk-equal is NOT in it). Waiting on the owner's report of #484 (loading, crackles, bar 17, Kontakt editor,
+closing during a load). In progress when paused: branch `vial-map` (WIP d0ac45e4fe, not merged: `Vial Instrumental.xml` and `(Fuse).xml` by
+`gen_vial.py`, presets loaded from Vial's data folder, Preferences › I/O › Library; real Linux Vial loads and plays them;
+left: re-run vialHosted on all 13 when the CC11 / CC21 pack ships, the final CC21 list, Windows, Live / MIDI out; 13 Long
+presets, CC1 / CC11 / CC21 on channel 1; Linux Vial bundles in ~/MuseScore/ms3fork/private/vial-vst3; the presets answer CC11 only
+after vial sso's preset update, not shipped: paused too, its state in ~/vial-sso/HANDOFF.md; only CC1 works now). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
+targeted fixes, the owner picks what he hears.
 
 ## Engine lane (branch `engine-lane`, 2026-10-27, from integrate-1017 4e6d877914; not merged)
 
