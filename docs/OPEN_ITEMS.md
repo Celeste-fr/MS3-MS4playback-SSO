@@ -178,7 +178,7 @@ Keep this file current: close an item by deleting it (the commit message says wh
   the owner's Ircam account; RESEARCH.md › 6 task 1); viola / cello / bass mutes.
 - **Own**: whether to play the assumed offsets (all but the violin mute are assumptions) once the sweep is in.
 
-### 5. Fast quarter-tone slurs never reach their pitch
+### 5. Fast quarter-tone slurs never reach their pitch (cause found 2026-10-29: SSO's own lag; `[slurs] runBends` built, untried)
 - **W**: Whence Violas bar 8 never within 30 cents of 61.5 / 64.5 (40-60 c off); Celli bar 1 70-180 c off; quarter-tone
   transitions reached 32/141 (kthost), 26/141 (export); 69 of 147 bending-copy quarter tones never settle; 141 notes in
   tune for less than half their length (mean 10-16 %); UNHEARD 126-142 on Whence.
@@ -200,7 +200,24 @@ Keep this file current: close an item by deleting it (the commit message says wh
   12-TET 30 -> 52 %, quarter tones 23 -> 34 %; Celli 22 -> 56 %, 11 -> 24 %; Violas unchanged), by hand until the owner has
   heard it (clips: integrate-1017/.mixedtech/next/clips). Left: another technique for fast
   quarter-tone runs (the bowed transition 30-35 %, detached tuned attacks 25 %: both measured, neither better).
-- **Own**: yes, how to play them.
+- **2026-10-29 (branch bowed-join): the cause found, `[slurs] runBends` built (0 everywhere, owner to hear).** Build 491's
+  heard check (export, today's Recommended): 98 of 197 quarter tones "pitch not reached" (Celli 52, Violas 26, Violins 1 20),
+  closest 30-100 c off (Violas bar 7 B3 -50 80-100 c, G3 +50 30-50 c); the 12-TET notes in the same runs miss too (bar 3
+  E-flat3 40-110 c). With the heard bend taken out of build 485's export f0 (`legato_glide/runlag.py`), **SSO's own pitch
+  never reaches its keys in 136 ms runs**: it is the keys sent delayed D and smoothed tau (Violas 60 / 80, Violins 1 70 / 70,
+  Celli 130 / 60 ms; median error 13-15 c; three takes agree), so the bends (correct as designed) ride on a pitch 30-100 c
+  away. Not the bend arriving late nor Kontakt's smoothing alone. `runBends` 1 makes the bend also correct that modelled lag
+  in fast runs (every 10 ms, 30 ms least-squares horizon, within ±99.6 c; map `runLag`, `sso_run_lag.json`; docs/
+  PLAYBACK_SETTINGS.md › Run bends). Predicted offline (SSO's measured pitch, bends replaced; 3 takes, Recommended without
+  plainAuto): Violas 1-14 QT 33-40 -> 49-53 %, 12-TET 50-53 -> 67-68 %; bar 7 QT 26-32 -> 55-59 %; Violins 1 QT 31-34 ->
+  38-41 %, 12-TET 51 -> 71 %; Celli QT 24-25 -> 41-42 %, 12-TET 56-58 -> 65-66 %; no slower note worse. Left: the bowed
+  transitions' lag (plainAuto's beat notes) is an assumption (`sso_run_lag.json` › bowed); Violins 2 / Basses have no runLag;
+  Violins 1's quarter tones are capped by the bend range (bound 25 % with the measured pitch at that horizon). **To confirm
+  on the VM** (kthost, no Windows build needed; ~2 x 10 min of VM, lock taken by heard_check.sh):
+  `S=<Recommended string: r491 settings.txt>; W=<work dir>; HC_RENDER=kthost HC_KEEP=1 HC_BUILD=$PWD/build.rel HC_WORK=$W/A tools/playbackverify/heard_check.sh --takes 2 ~/MuseScore/ms3fork/test-scores/Whence.mscz "$S;slurs/runBends=0" "Violins 1,Violas,Violoncellos"`,
+  the same with `runBends=1` into `$W/B`; compare each take's report.json (quarter tones' `how`, `closestCents`) and the
+  in-tune share; refit the bowed lag with `runlag.py fit` on A's routes. Then the owner by ear (A/B clips, sheet music).
+- **Own**: yes, how to play them; runBends by ear.
 
 ### 6. *Live plays the score* and the route set lack most level and timing layers
 - **W**: no Track Delay through Live's API: played timing kept, plainShift missing (Violas 95.2 ms late), start lead

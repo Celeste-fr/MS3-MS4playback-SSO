@@ -160,6 +160,13 @@ struct Articulation {
       // sso_bend_smoothing.json): with a bendGlide, the renderer sends the bend so that the bend as heard reaches the
       // note's tuning at the measured arrival (libraryPitchBends). 0: unknown (the glide is sent as the path itself)
       double bendSmoothingMs { 0 };
+      // how the patch's own pitch follows its keys in a fast legato run (<Articulation runLag="fingered:60:80 bowed:108:80">:
+      // per transition kind, D : tau, ms: SSO's f0 in Whence's sixteenths is the keys sent, delayed D after each note-on, through
+      // a one-pole low-pass tau; fitted to MuseScore's own export of Whence with the bends taken out, Kontakt 8 + SSO on the
+      // Windows VM, median error 13-15 cents: tools/soundlibraries/sso_run_lag.json). [slurs] runBends' model
+      // (libraryPitchBends). D < 0: none for that kind
+      struct RunLag { double delayMs { -1 }; double tauMs { 0 }; };
+      RunLag runLagFingered, runLagBowed;
       // a sustained note's attack: it is heard (its level 15 dB under its peak) this long after its note-on
       // (<Articulation onset>: one number or "pitch:ms" pairs by played pitch): a note that is not a legato
       // transition starts early by it (the renderer, onsetEarly()); -1: unknown / not shifted

@@ -592,6 +592,15 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             if (!ok || art.bendSmoothingMs < 0)
                   return false;
             }
+      // runLag="fingered:D:tau bowed:D:tau" (ms; [slurs] runBends' model of the patch's pitch in fast runs)
+      for (const QString& g : a.value("runLag").toString().split(' ', QString::SkipEmptyParts)) {
+            const QStringList f = g.split(':');
+            bool ok[2] = { false, false };
+            Articulation::RunLag rl { f.value(1).toDouble(&ok[0]), f.value(2).toDouble(&ok[1]) };
+            if (f.size() != 3 || !ok[0] || !ok[1] || rl.delayMs < 0 || rl.tauMs <= 0 || (f[0] != "fingered" && f[0] != "bowed"))
+                  return false;
+            (f[0] == "fingered" ? art.runLagFingered : art.runLagBowed) = rl;
+            }
       if (a.hasAttribute("octaveDown") && !readKeyedMs(a.value("octaveDown").toString(), art.octaveDownMs, art.octaveDown))
             return false;
       // (legatoLevel / legatoLevelLong: the legato level balance's, removed 2026-10-07; an older map's are ignored)

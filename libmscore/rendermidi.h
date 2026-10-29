@@ -204,6 +204,12 @@ class MidiRenderer {
       bool libStaccatoLength = false;                             // [shorts] staccatoLength (this chunk; written timing too)
       int libMicrotoneBends = 0;                                  // [slurs] microtoneBends 0-3 (this chunk)
       int libPlainAuto = 0;                                       // [slurs] plainAuto 0-2 (this chunk)
+      bool libRunBends = false;                                   // [slurs] runBends (this chunk)
+      // [slurs] runBends (libraryPitchBends): a plain note on a patch whose articulation has runLag: its written start and
+      // end (seconds), how early its patch's events go (plainShift, s: its heard start is written + this in event time), and
+      // the patch's pitch model for the transition reaching it (none: an attack)
+      struct LibRunNote { double writtenOn; double writtenOff; double shift; SoundLib::Articulation::RunLag lag; bool transition; };
+      std::map<const Note*, LibRunNote> libRunNote;
       // playback settings (libmscore/playbacksettings.h) for this chunk
       // a held note started early by its onset after a note on the same patch: that note keeps at least libKeep seconds
       // as played ([legato] keepMs); a transition's arrival after a short note (its bend's glide): libFastDelay ([legato]
@@ -321,6 +327,15 @@ class MidiRenderer {
       // (Polfreman 2013, "Comparing onset detection and perceptual attack time", ISMIR 2013: a modelled bowed string,
       // 23.5 ms, SD 22.8)
       static constexpr double HEARD_AFTER_LEAVE_MS = 23.5;
+      // [slurs] runBends (libraryPitchBends): a run's notes are written closer than this (s) and touch (the note before ends
+      // within RUN_TOUCH_S of the next start); the bend is sent every RUN_STEP_S as the value that best meets the wanted heard
+      // bend over the next RUN_HORIZON_S (chosen offline on Whence: 20 / 30 / 40 ms horizons, 5 / 10 / 20 ms steps); after a
+      // run's last note the correction runs on RUN_TAIL_S past its written end
+      static constexpr double RUN_FAST_S = 0.25;
+      static constexpr double RUN_TOUCH_S = 0.03;
+      static constexpr double RUN_STEP_S = 0.010;
+      static constexpr double RUN_HORIZON_S = 0.030;
+      static constexpr double RUN_TAIL_S = 0.3;
       // [slurs] plainPerformance (abl.py's PLAIN on branch qt-bends, the variant the owner chose by ear, 2026-10-17): every
       // plain note's velocity (the owner's "velocity 64"), and how long before a staccato's neighbour on the patch it ends
       // (and the note before it ends before it): SSO's Performance legato joins a note-on less than 40 ms after the note-off

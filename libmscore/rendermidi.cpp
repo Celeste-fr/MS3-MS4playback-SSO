@@ -2363,6 +2363,21 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libGlideFrom.erase(note);
                                     libGlide.erase(note);
                                     }
+                              // [slurs] runBends: what libraryPitchBends needs to model the patch's own pitch in a fast run
+                              libRunNote.erase(note);
+                              if (libRunBends && libChoice && libChoice.plain && libChoice.articulation
+                                  && libChoice.articulation->runLagFingered.delayMs >= 0) {
+                                    const SoundLib::LibInstrument* rp = libPatches[libChoice.patch];
+                                    const SoundLib::Articulation::Technique* ft = libChoice.articulation->transition("fingered");
+                                    const bool fingeredT = ft && libNote.velocity >= ft->low && libNote.velocity <= ft->high;
+                                    const int w0 = note->chord()->tick().ticks() + tickOffset;
+                                    LibRunNote rn { score->utick2utime(w0), score->utick2utime(w0 + note->playTicks()),
+                                                    std::isfinite(rp->plainShiftMs) && !libPlainTiming ? std::max(0.0, rp->plainShiftMs) / 1000.0 : 0.0,
+                                                    fingeredT || libChoice.articulation->runLagBowed.delayMs < 0 ? libChoice.articulation->runLagFingered
+                                                                                                                 : libChoice.articulation->runLagBowed,
+                                                    from != nullptr };
+                                    libRunNote[note] = rn;
+                                    }
                               // [levels] attackLevels (libraryNoteLevels): an attack's measured onset (a plain Performance note by
                               // its patch's plainAttack, an attack with its own onset, smooth, by that one; else the articulation's
                               // onset, the chord's latest, as its early start takes it), and every note's release
@@ -5024,7 +5039,8 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
       const bool atArrival = Playback::on("tuning/bendAtArrival", score);      // (playback settings [tuning])
       // a note-on's path to target: a glide from t0 to t1 (seconds); oneCent: a cent a tick from t1
       // tau: the patch's smoothing of a bend (seconds, bendSmoothing; 0: unknown: the glide is sent as the path)
-      struct Start { int tick; double from; double target; double t0; double t1; bool glide; bool oneCent; double range; double tau; bool uncut; };
+      struct Start { int tick; double from; double target; double t0; double t1; bool glide; bool oneCent; double range; double tau; bool uncut;
+                     const Note* note; int key; };
       std::map<std::pair<int, int>, std::vector<Start>> starts;                // (port, channel) -> note-ons' paths
       std::map<std::pair<int, int>, std::pair<int, int>> source;               // (port, channel) -> its notes' channel and staff
       std::map<std::pair<int, int>, int> patchOf;                              // (port, channel) -> its patch
@@ -5041,6 +5057,165 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
       auto laneOf = [&](const Note* n) {
             auto l = libLanes.find(n);
             return l == libLanes.end() ? 0 : l->second;
+            };
+      // [slurs] runBends (2026-10-29, OPEN_ITEMS 5): in a fast legato run the bend also corrects the patch's own pitch. SSO's
+      // fingered legato in Whence's sixteenths (136 ms) never reaches its keys: its f0 is the keys sent, each D after its
+      // note-on, through a one-pole low-pass tau (the map's runLag, fitted to MuseScore's export of Whence with the bends taken
+      // out: Violas 60 / 80, Violins 1 70 / 70, Celli 130 / 60 ms, median error 13-15 cents; Kontakt 8 + SSO, pYIN), so
+      // quarter tones and 12-TET notes alike glide through each note. Inside a run (notes on the lane, each a transition from
+      // the one before, written IOI < RUN_FAST_S, touching), from each transition's note-on to the next note-on (the run's
+      // last: its written end + 0.3 s), the bend is sent every RUN_STEP_S as the value whose heard bend (the patch's smoothing
+      // tau) best meets, over the next RUN_HORIZON_S, the written pitch from its heard start (written + the patch's plainShift)
+      // less the modelled f0; clipped to the range. Outside the runs the path above; where a run ends the value in force
+      // there is sent again. Offline on three takes of builds 465 / 485 (the same keys and timing, only the bends
+      // replaced): quarter tones in tune 24-40 -> 38-53 %, 12-TET notes 51-58 -> 65-71 % (docs/PLAYBACK_SETTINGS.md › Run bends)
+      auto runBendPath = [&](const auto& sts, double tauK, std::vector<std::pair<int, int>>& bends) {
+            struct RN { double on; int key; double total; double range; const LibRunNote* r; };
+            std::vector<RN> ns;
+            for (const auto& st : sts) {
+                  auto r = st.note ? libRunNote.find(st.note) : libRunNote.end();
+                  ns.push_back({ score->utick2utime(st.tick), st.key, st.key + st.target / 100.0, st.range,
+                                 r == libRunNote.end() ? nullptr : &r->second });
+                  }
+            const size_t n = ns.size();
+            std::vector<char> fast(n, 0);
+            for (size_t k = 1; k < n; ++k) {
+                  const LibRunNote* a = ns[k - 1].r;
+                  const LibRunNote* b = ns[k].r;
+                  if (a && b && b->transition && b->writtenOn - a->writtenOn < RUN_FAST_S && b->writtenOn - a->writtenOff < RUN_TOUCH_S)
+                        fast[k] = fast[k - 1] = 1;
+                  }
+            if (std::find(fast.begin(), fast.end(), 1) == fast.end())
+                  return;
+            auto centsOfUnit = [](int v, double range) { return (v - 8192) * range / (v < 8192 ? 8192.0 : 8191.0); };
+            auto unitOf = [](double cents, double range) {
+                  return qBound(0, int(std::lround(8192.0 + cents / range * (cents < 0 ? 8192.0 : 8191.0))), 16383);
+                  };
+            // the old path's value in force at a tick, and as heard at a time (from the lane's first value, settled)
+            auto oldAt = [&](int tick) {
+                  int v = bends.empty() ? 8192 : bends.front().second;
+                  for (const auto& b : bends) {
+                        if (b.first > tick)
+                              break;
+                        v = b.second;
+                        }
+                  return v;
+                  };
+            auto oldHeard = [&](double t, double range) {
+                  double h = bends.empty() ? 0.0 : centsOfUnit(bends.front().second, range);
+                  double c = h, at = bends.empty() ? t : score->utick2utime(bends.front().first);
+                  for (const auto& b : bends) {
+                        const double bt = score->utick2utime(b.first);
+                        if (bt > t)
+                              break;
+                        h = c + (h - c) * std::exp(-(bt - at) / tauK);
+                        at = bt;
+                        c = centsOfUnit(b.second, range);
+                        }
+                  return c + (h - c) * std::exp(-(t - at) / tauK);
+                  };
+            std::vector<std::pair<int, int>> made;
+            std::vector<std::pair<int, int>> spans;              // (tick from, tick to): the old path replaced
+            double heard = 0, model = 0, modelAt = 0;
+            double segEnd = -1;
+            for (size_t k = 1; k < n; ++k) {
+                  if (!fast[k] || !ns[k].r->transition)
+                        continue;
+                  const double a = ns[k].on;
+                  const double b = k + 1 < n ? ns[k + 1].on : ns[k].r->writtenOff + RUN_TAIL_S;
+                  if (b <= a)
+                        continue;
+                  const double range = ns[k].range;
+                  if (std::fabs(a - segEnd) > 1e-6) {
+                        // (a run starts: the heard bend the old path left, SSO's pitch settled on the note before)
+                        heard = oldHeard(a, range);
+                        model = ns[k - 1].key;
+                        modelAt = a;
+                        }
+                  // the modelled f0 and the written pitch on a 1 ms grid to b + the horizon
+                  const int steps = int(std::ceil((b + RUN_HORIZON_S - a) / 0.001)) + 1;
+                  std::vector<double> want(static_cast<size_t>(steps), 0.0);
+                  size_t j = k - 1;
+                  double modelB = model, modelAtB = modelAt;
+                  bool savedB = false;
+                  for (int q = 0; q < steps; ++q) {
+                        const double t = a + q * 0.001;
+                        if (!savedB && t >= b) {
+                              // (the model's state at b, for a run going on there; the grid runs on for the horizon)
+                              modelB = model;
+                              modelAtB = modelAt;
+                              savedB = true;
+                              }
+                        while (j + 1 < n && ns[j + 1].on + (ns[j + 1].r && ns[j + 1].r->transition ? ns[j + 1].r->lag.delayMs / 1000.0 : 0.0) <= t)
+                              ++j;
+                        const RN& in = ns[j];
+                        if (!in.r || !in.r->transition)
+                              model = in.key;               // (an attack: at its key)
+                        else if (t > modelAt)
+                              model = in.key + (model - in.key) * std::exp(-(t - modelAt) / (in.r->lag.tauMs / 1000.0));
+                        modelAt = std::max(modelAt, t);
+                        double p = ns[k - 1].total;
+                        for (size_t w = k - 1; w < n; ++w) {
+                              const double hs = ns[w].r ? ns[w].r->writtenOn + ns[w].r->shift : ns[w].on;
+                              if (hs > t)
+                                    break;
+                              p = ns[w].total;
+                              }
+                        want[size_t(q)] = (p - model) * 100.0;
+                        }
+                  const int hor = int(std::lround(RUN_HORIZON_S / 0.001));
+                  const int stride = int(std::lround(RUN_STEP_S / 0.001));
+                  for (int q = 0; a + q * 0.001 < b - 1e-9; q += stride) {
+                        double num = 0, den = 0;
+                        for (int h = 1; h <= hor && q + h < steps; ++h) {
+                              const double e = std::exp(-h * 0.001 / tauK);
+                              num += (1 - e) * (want[size_t(q + h)] - heard * e);
+                              den += (1 - e) * (1 - e);
+                              }
+                        const double u = qBound(-range, den > 0 ? num / den : heard, range);
+                        const int v = unitOf(u, range);
+                        const int tick = score->utime2utick(a + q * 0.001);
+                        if (made.empty() || made.back().first < tick)
+                              made.push_back({ tick, v });
+                        else
+                              made.back().second = v;
+                        const double dt = std::min(RUN_STEP_S, b - (a + q * 0.001));
+                        heard = centsOfUnit(v, range) + (heard - centsOfUnit(v, range)) * std::exp(-dt / tauK);
+                        }
+                  const int ta = score->utime2utick(a);
+                  const int tb = score->utime2utick(b);
+                  if (!spans.empty() && spans.back().second == ta)
+                        spans.back().second = tb;
+                  else
+                        spans.push_back({ ta, tb });
+                  segEnd = b;
+                  if (savedB) {
+                        model = modelB;
+                        modelAt = modelAtB;
+                        }
+                  }
+            if (spans.empty())
+                  return;
+            std::vector<std::pair<int, int>> kept;
+            for (const auto& sp : spans) {
+                  // (where a run ends, the old path's value in force there again, unless the old path sends one then)
+                  const bool oldThere = std::any_of(bends.begin(), bends.end(), [&](const std::pair<int, int>& x) { return x.first == sp.second; });
+                  if (!oldThere)
+                        made.push_back({ sp.second, oldAt(sp.second) });
+                  }
+            for (const auto& b : bends) {
+                  bool inside = false;
+                  for (const auto& sp : spans)
+                        if (b.first >= sp.first && b.first < sp.second) {
+                              inside = true;
+                              break;
+                              }
+                  if (!inside)
+                        kept.push_back(b);
+                  }
+            kept.insert(kept.end(), made.begin(), made.end());
+            std::stable_sort(kept.begin(), kept.end(), [](const std::pair<int, int>& x, const std::pair<int, int>& y) { return x.first < y.first; });
+            bends = kept;
             };
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
             NPlayEvent& ev = i->second;
@@ -5061,7 +5236,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             source[route] = { ev.channel(), ev.getOriginatingStaff() };
             patchOf[route] = ev.libraryPatch();
             const double on = score->utick2utime(i->first);
-            Start st { i->first, target, target, on, on, false, false, range, 0.0, false };
+            Start st { i->first, target, target, on, on, false, false, range, 0.0, false, ev.note(), ev.pitch() };
             auto g = libGlideFrom.find(ev.note());
             auto gl = libGlide.find(ev.note());
             if (g != libGlideFrom.end() && gl != libGlide.end() && laneOf(g->second) == laneOf(ev.note())) {
@@ -5225,6 +5400,8 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                   }
             for (const auto& pd : pending)                  // (the lane's last glide, uncut)
                   send(pd.first, unitOf(pd.second, sts.back().range), sts.back().range, false);
+            if (libRunBends && tau > 0)
+                  runBendPath(sts, tau, bends);
             for (const auto& bend : bends) {
                   NPlayEvent ev(ME_PITCHBEND, source[rst.first].first, bend.second & 0x7f, (bend.second >> 7) & 0x7f);
                   ev.setOriginatingStaff(source[rst.first].second);
@@ -7116,6 +7293,7 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
       libStaccatoLength = library && Playback::on("shorts/staccatoLength", score);
       libMicrotoneBends = library ? int(std::lround(Playback::value("slurs/microtoneBends", score))) : 0;
       libPlainAuto = library ? int(std::lround(Playback::value("slurs/plainAuto", score))) : 0;
+      libRunBends = library && Playback::on("slurs/runBends", score);
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();
@@ -7518,6 +7696,7 @@ void MidiRenderer::updateState()
             libBend.clear();
             libGlideFrom.clear();
             libGlide.clear();
+            libRunNote.clear();
             libAttackOnset.clear();
             libReleaseMs.clear();
             libAttackShiftMs.clear();

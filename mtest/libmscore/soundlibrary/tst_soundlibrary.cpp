@@ -296,6 +296,7 @@ class TestSoundLibrary : public QObject, public MTest
       void bendGlideMeasured();
       void bendGlideSmoothed();
       void microtoneBends();
+      void runBends();
       void plainJoinLanes();
       void transitionLevels();
       void transitionTails();
@@ -11803,6 +11804,142 @@ void TestSoundLibrary::microtoneBends()
                   if (te.second.isExternal() && te.second.type() == ME_NOTEON && te.second.velo() > 0 && !te.second.librarySwitch())
                         keys.push_back(te.second.pitch());
             QCOMPARE(keys, (std::vector<int> { 69, 70, 69, 68, 69, 70, 69, 68 }));
+      }
+
+//---------------------------------------------------------
+//   runBends
+//    [slurs] runBends (2026-10-29, OPEN_ITEMS 5): in a fast legato run on a patch with runLag the bend also corrects the
+//    patch's own lagging pitch. The setting (0 by default and in both presets), the map's runLag, and on fast-microtones'
+//    sixteenths (A4 B4-50 A4 G4+50 x2 at 110, plain Performance, microtoneBends 1): the note-ons as without it, bends
+//    within the range every ~10 ms in the run, the tuning in force again after it, and the pitch heard by the map's own
+//    model (the keys delayed D, smoothed tau, plus the bend through bendSmoothing) much closer to the written one
+//---------------------------------------------------------
+
+void TestSoundLibrary::runBends()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      const Playback::Definition* d = Playback::definition("slurs/runBends");
+      QVERIFY(d);
+      QCOMPARE(d->value, 0.0);
+      for (const Playback::Preset& p : Playback::presets()) {
+            bool listed = false;
+            for (const auto& kv : p.values)
+                  if (QString(kv.first) == "slurs/runBends") {
+                        listed = true;
+                        QCOMPARE(kv.second, 0.0);
+                        }
+            QVERIFY2(listed, p.id);
+            }
+      auto mapWith = [this](const QString& runLag) {
+            return loadMap(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+               "<Tuning method='varispeed' tolerance='3' tail='0.5'/>"
+               "<Instrument name='Violin' ids='violin'>"
+               "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+               "</Instrument>"
+               "<Instrument name='Violin - Performance' with='Violin' bend='100' plainShift='0'>"
+               "<Switch type='none'/>"
+               "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+               " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+               " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300'"
+               " bendGlide='136:-8:130 600:130:288' bendGlideFingered='136:65:180 600:150:320' bendSmoothing='73.1'" + runLag + "/>"
+               "</Instrument></SoundLibrary>");
+            };
+      auto lib = mapWith(" runLag='fingered:60:80 bowed:108:80'");
+      QVERIFY(lib);
+      const SoundLib::Articulation& legato = lib->instruments[1].articulations[0];
+      QCOMPARE(legato.runLagFingered.delayMs, 60.0);
+      QCOMPARE(legato.runLagFingered.tauMs, 80.0);
+      QCOMPARE(legato.runLagBowed.delayMs, 108.0);
+      QVERIFY(lib->instruments[0].articulations[0].runLagFingered.delayMs < 0);
+      QVERIFY(!mapWith(" runLag='fingered:60'"));
+      QVERIFY(!mapWith(" runLag='glide:60:80'"));
+      QVERIFY(!mapWith(" runLag='fingered:60:0'"));
+      auto noLag = mapWith("");
+      QVERIFY(noLag);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "fast-microtones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      struct Out { std::vector<std::pair<int, int>> ons; std::vector<std::pair<int, int>> bends; QString all; };
+      auto render = [&](std::shared_ptr<SoundLib::Library> l, int run) {
+            SoundLib::setCurrent(l);
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/transitions", "1" },
+                                            { "slurs/transitionsEarly", "0" }, { "slurs/microtoneBends", "1" },
+                                            { "slurs/runBends", QString::number(run) } });
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            Out o;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal())
+                        continue;
+                  if (ev.type() == ME_PITCHBEND)
+                        o.bends.push_back({ te.first, ev.dataA() | (ev.dataB() << 7) });
+                  else {
+                        if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch())
+                              o.ons.push_back({ te.first, ev.pitch() });
+                        o.all += QString("%1 %2 %3 %4 %5\n").arg(te.first).arg(ev.type()).arg(ev.dataA()).arg(ev.dataB()).arg(ev.extChannel());
+                        }
+                  }
+            return o;
+            };
+      const Out off = render(lib, 0);
+      const Out on = render(lib, 1);
+      const Out onNoLag = render(noLag, 1);
+      // (off, or no runLag in the map: the bends as before; on: only the bends change)
+      QVERIFY(off.bends == onNoLag.bends);
+      QCOMPARE(on.all, off.all);
+      QVERIFY(on.ons == off.ons);
+      QCOMPARE(int(on.ons.size()), 8);
+      QVERIFY(on.bends != off.bends);
+      // every 10 ms in the run (120 ticks a sixteenth at 110: 136 ms), never beyond the range (0 .. 16383 always holds)
+      int inRun = 0;
+      for (const auto& b : on.bends)
+            if (b.first >= on.ons[1].first && b.first < on.ons[7].first)
+                  ++inRun;
+      QVERIFY2(inRun >= 6 * 12, qPrintable(QString::number(inRun)));
+      // after the run the last note's tuning (G4 +50 sent on A-flat4 -50, microtoneBends 1)
+      auto cents = [](int v) { return (v - 8192) * 100.0 / (v < 8192 ? 8192.0 : 8191.0); };
+      QVERIFY(std::fabs(cents(on.bends.back().second) - cents(off.bends.back().second)) < 0.5);
+      QVERIFY(std::fabs(cents(on.bends.back().second) + 50.0) < 0.5);
+      // the pitch heard by the model: keys delayed 60 ms, one pole 80 ms; the bend through 73.1 ms; against the written
+      // pitch over each sixteenth after the first
+      const std::vector<double> sounding { 69, 70.5, 69, 67.5, 69, 70.5, 69, 67.5 };
+      auto heardError = [&](const Out& o) {
+            double sum = 0;
+            int n = 0;
+            double model = o.ons[0].second, bend = 0, sent = 0;
+            size_t bi = 0;
+            const double t0 = score->utick2utime(o.ons[0].first);
+            const double tEnd = score->utick2utime(o.ons[7].first) + 0.136;
+            for (double t = t0; t < tEnd; t += 0.001) {
+                  int key = o.ons[0].second;
+                  for (const auto& k : o.ons)
+                        if (score->utick2utime(k.first) + 0.060 <= t)
+                              key = k.second;
+                  model = key + (model - key) * std::exp(-0.001 / 0.080);
+                  while (bi < o.bends.size() && score->utick2utime(o.bends[bi].first) <= t)
+                        sent = cents(o.bends[bi++].second);
+                  bend = sent + (bend - sent) * std::exp(-0.001 / 0.0731);
+                  size_t w = 0;
+                  for (size_t i = 0; i < o.ons.size(); ++i)
+                        if (score->utick2utime(i * 120) <= t)
+                              w = i;
+                  if (w == 0)
+                        continue;
+                  sum += std::fabs((model + bend / 100.0 - sounding[w]) * 100.0);
+                  ++n;
+                  }
+            return sum / std::max(1, n);
+            };
+      const double eOff = heardError(off);
+      const double eOn = heardError(on);
+      if (std::getenv("MS_TEST_VERBOSE"))
+            qDebug("runBends: mean |error| %.1f c off, %.1f c on", eOff, eOn);
+      QVERIFY2(eOn < eOff * 0.6, qPrintable(QString("%1 / %2").arg(eOn).arg(eOff)));
+      delete score;
       }
       delete score;
       }

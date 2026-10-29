@@ -635,6 +635,13 @@ their glide's middle less plainShift (Violins 1 70 ms, Celli 61, Violas 0), for 
 and the audit's predicted.tsv cents from the key sent (the heard check had read respelled notes a semitone off).
 Private: `~/MuseScore/ms3fork/private/microtone-next/RESULT.md` (gen4.py / ana4.py: bend variants on kthost).
 
+Follow-up (branch `bowed-join`, 2026-10-29, OPEN_ITEMS 5): `[slurs] runBends` (0 everywhere, untried on the VM). Cause of the
+unreached runs: SSO's own pitch in 136 ms runs is the keys sent delayed D, smoothed tau (build 485's kept export, the bends
+taken out: `tools/soundlibraries/legato_glide/runlag.py fit`); runBends 1 bends against that model too (map `runLag`,
+`sso_run_lag.json`). Offline prediction `runlag_sim.py` (docs/PLAYBACK_SETTINGS.md › Run bends). Next: the kthost A/B in
+OPEN_ITEMS 5 (refit the bowed lag there; the prediction excludes plainAuto), then A/B clips for the owner. Work files:
+`~/MuseScore/ms3fork/private/qt-fast/`.
+
 - **Measured scans** (two takes each, quarter tones in tune within 30 c of their heard time): Violas bars 5-8 8-10 % as now,
   35-40 % with 1; the best leave scanned (90 ms, cut at the next note-on) 43-44 %; bowed (velocity 100) 30-35 %; detached
   tuned attacks 25 %; RUNS (CC119 120) and a bend at the note-on worse. Violins 1 10 -> 31 %, Celli 6 -> 19-22 %.
