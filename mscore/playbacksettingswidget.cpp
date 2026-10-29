@@ -41,8 +41,8 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       QHBoxLayout* ph = new QHBoxLayout;
       ph->addWidget(new QLabel(tr("Preset:"), this));
       _preset = new QComboBox(this);
-      _preset->setToolTip(tr("Sets the presets' keys in playback.ini (comments and other values are kept) and reads it again, "
-                             "playback going on."));
+      _preset->setToolTip(tr("Rewrites every setting in playback.ini: the preset's values, every other setting at its default; "
+                             "the old file is kept as playback.ini.bak. Then reads it again, playback going on."));
       ph->addWidget(_preset);
       _presetInfo = new QLabel(this);
       ph->addWidget(_presetInfo, 1);

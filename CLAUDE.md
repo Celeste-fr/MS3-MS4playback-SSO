@@ -274,7 +274,7 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Playback Settings) → the score (metaTag `playbackSettings`, plus the older onset-early / lanes metaTags; removed
   keys are listed in `REMOVED` and ignored silently). Read a
   setting with `Playback::value(id, score, mapValue)`; a new adjustment gets a `DEFINITIONS` entry, a row in the
-  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended: every measured technique early, each articulation by its median onset, `heldNotes/byPitch` 0 (1: by pitch), calibrated levels, `slurs/quick` 2, `slurs/quickLevel` 1 / Library default: `Playback::presets()`, a text edit of playback.ini, the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
+  inventory and a layers test. UI: Mixer › Advanced Options… › Playback adjustments (`mscore/playbacksettingswidget.*`). **Presets** (Recommended: every measured technique early, each articulation by its median onset, `heldNotes/byPitch` 0 (1: by pitch), calibrated levels, `slurs/quick` 2, `slurs/quickLevel` 1 / Library default: `Playback::presets()`, a rewrite of the whole playback.ini (preset values + every other key at its default, the old file kept as .bak), the widget's Preset box; docs/PLAYBACK_SETTINGS.md › Presets).
 - **Chunks** (branch `chunk-equal`, 2026-10-25; a fix, no setting; header comment of `MidiRenderer::renderChunk`): Seq
   plays a score rendered in chunks (`getChunkAt`, 10 measures at least), the export, Live's clips and the plain set in one
   chunk a repeat segment; the chunks play exactly the whole render's events. With library parts and `minChunkSize > 0`

@@ -2019,14 +2019,30 @@ void TestSoundLibrary::playbackPresets()
       QVERIFY(written.contains("calibrated=0\n"));
       QVERIFY(written.contains("; Presets"));
       QVERIFY(!Playback::applyPreset("nonsense", path));
-      // an existing file keeps the other edits
+      // an existing file is rewritten whole: the preset's values, every other key at its default, no comment of
+      // the owner's; the old text kept as .bak (an older .bak replaced)
+      const QString edited = text + "[legato]\nkeepMs=77\n";
       QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
-      f.write(text.toUtf8());
+      f.write(edited.toUtf8());
       f.close();
+      { QFile b(path + ".bak"); QVERIFY(b.open(QIODevice::WriteOnly)); b.write("older"); }
+      for (const Playback::Preset* p : { rec, lib }) {
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(edited.toUtf8());
+            f.close();
+            QVERIFY(Playback::applyPreset(p->id, path));
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            const QString now = QString::fromUtf8(f.readAll());
+            f.close();
+            QCOMPARE(now, Playback::applyPresetToText(Playback::iniTemplate(), *p));
+            QVERIFY(!now.contains("my comment"));
+            QVERIFY(!now.contains("keepMs=77"));
+            QVERIFY(!now.contains("staccato=44"));
+            QFile b(path + ".bak");
+            QVERIFY(b.open(QIODevice::ReadOnly));
+            QCOMPARE(QString::fromUtf8(b.readAll()), edited);
+            }
       QVERIFY(Playback::applyPreset("recommended", path));
-      QVERIFY(f.open(QIODevice::ReadOnly));
-      QCOMPARE(QString::fromUtf8(f.readAll()), withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2).arg(3).arg(1));
-      f.close();
       // detection, from the file read and from values
       Playback::setIniPath(path);
       QCOMPARE(Playback::currentPreset(), QString("recommended"));

@@ -69,9 +69,9 @@ glides, one cent a tick, are rendered and do).
 Two presets switch `playback.ini` (the owner, 2026-10-07: "library default, and recommended"; then, of Library
 default: "very late, but at least it sounds consistent": an Even early preset; 2026-10-08: "make even early the new
 recommended", so Recommended is it and the per-pitch shift is `byPitch=1` only). The Preset box in Mixer > Advanced Options... >
-Playback adjustments writes the preset's keys into the file as a text edit (comments and the other values stay; a
-missing key goes under its section's header, a missing section at the end; a missing file starts from the template)
-and then reads it as Reload Playback Settings does, playback going on. The box says "this score overrides: ..." when
+Playback adjustments rewrites the whole file (the owner, 2026-10-29): the fresh template (every setting at its default, as a missing file
+gets it) with the preset's values; nothing of the old file stays, comments included, and it is kept as `playback.ini.bak`
+(an older .bak replaced); the scores' own values are untouched. Then it reads it as Reload Playback Settings does, playback going on. The box says "this score overrides: ..." when
 the open score has its own value of a preset key (not cleared). "(Custom)" shows when the ini matches none (not
 selectable).
 

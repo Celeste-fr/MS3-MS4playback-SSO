@@ -734,17 +734,15 @@ bool applyPreset(const QString& id, const QString& pathArg)
       const QString path = pathArg.isEmpty() ? iniPath() : pathArg;
       if (!preset || path.isEmpty())
             return false;
-      QString text;
+      // every setting rewritten (the owner, 2026-10-29): the preset's values, every other key at its default, from the
+      // template; the old file kept as <path>.bak (an older .bak replaced)
+      QDir().mkpath(QFileInfo(path).absolutePath());
       if (QFileInfo::exists(path)) {
-            QFile f(path);
-            if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+            QFile::remove(path + ".bak");
+            if (!QFile::copy(path, path + ".bak"))
                   return false;
-            text = QString::fromUtf8(f.readAll());
             }
-      else {
-            QDir().mkpath(QFileInfo(path).absolutePath());
-            text = iniTemplate();
-            }
+      const QString text = iniTemplate();
       QFile f(path);
       if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
             return false;
