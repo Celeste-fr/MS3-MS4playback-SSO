@@ -16,6 +16,7 @@
 
 #include <cmath>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
@@ -175,7 +176,7 @@ void PlaybackSettingsWidget::fillPreset()
       const QString now = Playback::currentPreset();
       _preset->clear();
       for (const Playback::Preset& p : Playback::presets())
-            _preset->addItem(tr(p.name), QString(p.id));
+            _preset->addItem(QCoreApplication::translate("playbackSettings", p.name), QString(p.id));
       if (now.isEmpty()) {
             _preset->addItem(tr("(Custom)"), QString());
             QStandardItemModel* m = qobject_cast<QStandardItemModel*>(_preset->model());

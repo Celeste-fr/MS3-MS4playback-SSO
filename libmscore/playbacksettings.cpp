@@ -11,6 +11,7 @@
 #include "playbacksettings.h"
 #include "score.h"
 
+#include <QCoreApplication>
 #include <algorithm>
 #include <atomic>
 #include <cmath>
@@ -467,10 +468,10 @@ const Definition* definition(const QString& id)
 QString sourceName(Source s)
       {
       switch (s) {
-            case Source::DEFAULT: return QStringLiteral("default");
-            case Source::MAP:     return QStringLiteral("library");
-            case Source::INI:     return QStringLiteral("playback.ini");
-            case Source::SCORE:   return QStringLiteral("score");
+            case Source::DEFAULT: return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "default"));
+            case Source::MAP:     return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "library"));
+            case Source::INI:     return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "playback.ini"));
+            case Source::SCORE:   return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "score"));
             }
       return QString();
       }
@@ -667,11 +668,11 @@ const std::vector<Preset>& presets()
             // levels/micCompensation, the mics never change the balance; levels/calibrated 2, the technique balance (option
             // B'); slurs/transitionsEarly 1, the transitions sent by their modelled arrival: the owner by ear on Whence's fast
             // quarter tones)
-            { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
+            { "recommended", QT_TRANSLATE_NOOP("playbackSettings", "Recommended"), { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "slurs/runBends", 0 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "shorts/staccatoLength", 1 } } },
-            { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
+            { "library", QT_TRANSLATE_NOOP("playbackSettings", "Library default"), { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "slurs/runBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
                                               { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 0 }, { "levels/evenKeys", 0 }, { "shorts/staccatoLength", 0 },
