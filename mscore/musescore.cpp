@@ -2119,7 +2119,6 @@ MuseScore::MuseScore()
             }
 
       menuEdit->addSeparator();
-      menuEdit->addAction(getAction("reload-playback-settings"));
       pref = new QAction("", 0);
       connect(pref, SIGNAL(triggered()), this, SLOT(startPreferenceDialog()));
       menuEdit->addAction(pref);

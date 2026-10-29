@@ -38,7 +38,7 @@ the sweeps below, HANDOFF.md).
    Written at start when missing, with every key, its default and a comment (unit, range); never overwritten.
    QSettings IniFormat, comments start with `;`. An empty value (`key=`) means the default. Unknown keys, values
    that aren't numbers and values out of range are logged (`playback.ini: …`) and shown under the settings table;
-   out-of-range values are clamped. **Edit › Reload Playback Settings** (or *Reload playback.ini* in the dialog)
+   out-of-range values are clamped. **Reload playback.ini** (Mixer › Advanced Options… › Playback adjustments; the action "Reload Playback Settings" can get a shortcut in Preferences › Shortcuts)
    reads it again and renders every score again; no restart.
 3. **The score** (saved in it, undoable): metaTag `playbackSettings` (`legato/keepMs=60;shorts/staccato=40`),
    plus the two older per-score metaTags that stay where they were: `soundLibraryOnsetEarly` (heldNotes/early),

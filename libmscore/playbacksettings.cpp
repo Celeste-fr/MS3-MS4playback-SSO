@@ -592,7 +592,7 @@ QString iniTemplate()
       s << "; MuseScore 3.7 fork: playback adjustments (docs/PLAYBACK_SETTINGS.md has what each one does and why).\n"
            "; Every key is written with its built-in default; change a value to override it for every score.\n"
            "; A key left empty (key=) uses the default; a score can override any of these in\n"
-           "; Mixer > Advanced Options... > Playback adjustments. Edit > Reload Playback Settings (or the button there)\n"
+           "; Mixer > Advanced Options... > Playback adjustments. Reload playback.ini there\n"
            "; reads this file again, no restart. MuseScore writes this file only when it is missing.\n"
            "; Presets (Recommended, Library default): the Preset box there; they set only the keys listed in docs/PLAYBACK_SETTINGS.md > Presets.\n"
            "; Lines starting with ';' are comments. On/off settings: 1 or 0.\n";

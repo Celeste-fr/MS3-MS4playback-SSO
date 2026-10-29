@@ -61,7 +61,7 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       QPushButton* open = new QPushButton(tr("Open playback.ini"), this);
       open->setToolTip(Playback::iniPath());
       QPushButton* reload = new QPushButton(tr("Reload playback.ini"), this);
-      reload->setToolTip(tr("Reads playback.ini again and renders the scores again (Edit › Reload Playback Settings)"));
+      reload->setToolTip(tr("Reads playback.ini again and renders the scores again"));
       QPushButton* clear = new QPushButton(tr("Clear this score's values"), this);
       clear->setToolTip(tr("Takes all of this score's own values away: playback.ini (the preset) or the defaults apply"));
       h->addWidget(reset);
