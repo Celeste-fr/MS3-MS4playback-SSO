@@ -194,9 +194,10 @@ def make_events(dump, out, parts=None):
 # ------------------------------------------------------------------------------------------------- the export renderer
 
 def preset_values(preset, root=os.path.join(HERE, "..", "..")):
-    """a preset's values (Playback::presets() in libmscore/playbacksettings.cpp), as "id=value" items"""
+    """a preset's values (Playback::presets() in libmscore/playbacksettings.cpp), as "id=value" items (the
+    name may be wrapped in QT_TRANSLATE_NOOP)"""
     src = _read(os.path.join(root, "libmscore", "playbacksettings.cpp"))
-    m = re.search(r'\{\s*"%s",\s*"[^"]*",\s*\{(.*?)\}\s*\}\s*\}' % re.escape(preset), src, re.S)
+    m = re.search(r'\{\s*"%s",\s*(?:QT_TRANSLATE_NOOP\(\s*"[^"]*",\s*)?"[^"]*"\s*\)?,\s*\{(.*?)\}\s*\}\s*\}' % re.escape(preset), src, re.S)
     if not m:
         raise SystemExit("no preset %s in playbacksettings.cpp" % preset)
     return ["%s=%s" % kv for kv in re.findall(r'\{\s*"([^"]+)",\s*(-?[0-9.]+)', m.group(1))]
