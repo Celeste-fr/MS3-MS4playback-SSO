@@ -129,6 +129,16 @@ class Measures(unittest.TestCase):
         self.assertIsNone(got)
         self.assertEqual(why, "the note before not heard at its pitch")
 
+    def test_km_median(self):
+        """censored values (a transition not reached before the next note-on): the median of what was heard is too
+        early; Kaplan-Meier's counts them (Whence's Violas, build 491: 33 heard by 136 ms, 47 not)"""
+        self.assertEqual(H.km_median([1, 2, 3], []), 2)
+        self.assertIsNone(H.km_median([1, 2, 3], [4, 4, 4, 4]))
+        self.assertEqual(H.km_median([1, 2, 3, 6, 7], [4, 4]), 6)
+        heard = [-56 + i for i in range(33)]          # all before the next note-on, -22 against the model
+        self.assertLess(float(np.median(heard)), -20)
+        self.assertIsNone(H.km_median(heard, [-22] * 47))
+
     def test_rhythm_deviation(self):
         # Whence's Violas: written 273 / 136 / 136, heard 200 / 210 / 105
         w = [0, 272.7, 409.1, 545.5]

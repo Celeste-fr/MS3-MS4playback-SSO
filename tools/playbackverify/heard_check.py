@@ -75,6 +75,11 @@ Model drift (e): measured - predicted heard time (the audit's arrivalMs: sent + 
   transition after a transition): median and spread (10th-90th percentile); |median| > 20 ms flagged DRIFT.
   A transition's model is the bendGlide's arrival (9/10 of the way, legato_glide/glide.py) where this takes 30 cents:
   for a semitone 30 cents is 7/10 of the way, so a small negative drift there is the definitions' difference.
+  A transition not reached before the next note-on on its route (the search's end) arrives later: counted as censored
+  there (cens), the median then Kaplan-Meier's (KM median; "higher": more than half not reached, the median above every
+  value seen), which DRIFT judges. Without it the median keeps only the early arrivals when the next note-on comes
+  before most of them (Whence's Violas, build 491: 33 of 80 fingered transitions heard, a median 42 ms before the
+  model, 47 not reached 136 ms after their note-on; Kaplan-Meier: above 136, the model 158).
 """
 import argparse
 import json
@@ -433,6 +438,19 @@ def situation(row, rows_by_note):
     return "attack joined" if row["joinedBefore"] else "first after silence"
 
 
+def km_median(observed, censored):
+    """the Kaplan-Meier median of measured values with right-censored ones (each at least its value): None when more
+    than half may lie above everything measured (the median is then larger than every value, censored or not)"""
+    obs = sorted([(x, True) for x in observed] + [(x, False) for x in censored], key=lambda e: (e[0], not e[1]))
+    s, n = 1.0, len(obs)
+    for i, (x, ev) in enumerate(obs):
+        if ev:
+            s *= 1 - 1 / (n - i)
+            if s <= 0.5 + 1e-12:
+                return x
+    return None
+
+
 def pct(v, q):
     return float(np.percentile(np.asarray(v, dtype=float), q))
 
@@ -606,6 +624,10 @@ def analyse(dump, wavs, parts=None, load=None, export=False, transition_rule="ar
                 r["leave"] = lv * 1000 - base if lv is not None else None
                 r["arrive"] = t * 1000 - base if t is not None else None
                 r["arriveWhy"] = why
+                # (searched only until the next note-on on the route: a transition not reached by then arrives later,
+                # its arrival at least that note-on; the drift counts it as censored there, see (e))
+                r["censor"] = (nxt[0] - base if nxt and why == "pitch not reached" and nxt[0] < on + TRANSITION_SEARCH_S * 1000
+                               else None)
                 if t is None:
                     # (how near the sound came: the f0 closest to the target between its note-on and the next one)
                     i0, i1 = int(round(on / 1000 / fh)), int(round((nxt[0] if nxt else on + 700) / 1000 / fh))
@@ -790,17 +812,32 @@ def analyse(dump, wavs, parts=None, load=None, export=False, transition_rule="ar
                                      **where(tb)))
 
     # (e) model drift
-    drift = {}
+    drift, censored = {}, {}
     for r in rows:
-        if r.get("heard") is None or not r["hasArrival"] or r["grace"] or r["sub"]:
+        if not r["hasArrival"] or r["grace"] or r["sub"]:
+            continue
+        if r.get("heard") is None:
+            # (a transition not reached before the next note-on: measured - predicted at least censor - predicted;
+            # leaving them out keeps only the early ones where the next note-on comes before most arrivals:
+            # Whence's Violas, build 491, 33 of 80 fingered transitions heard, all before the next note-on 136 ms after
+            # theirs, a median 42 ms before bendGlideFingered's 158 ms, though 47 had not arrived by 136)
+            if transition_rule == "arrival" and r.get("censor") is not None:
+                censored.setdefault((r["patch"], situation(r, rows_by_note)), []).append(r["censor"] - r["arrivalMs"])
             continue
         r["situation"] = situation(r, rows_by_note)
         drift.setdefault((r["patch"], r["situation"]), []).append(r["heard"] - r["arrivalMs"])
     drift_out = []
     for (patch, sit), v in sorted(drift.items()):
         med = float(np.median(v))
+        c = censored.get((patch, sit), [])
+        km = km_median(v, c)
+        # (drifting by the censored median where there are censored ones: None, more than half later than measured,
+        # judged by its lower bound)
+        judged = med if not c else (km if km is not None else max(v + c))
         drift_out.append(dict(patch=patch, situation=sit, n=len(v), medianMs=round(med, 1), p10Ms=round(pct(v, 10), 1),
-                              p90Ms=round(pct(v, 90), 1), drifting=abs(med) > DRIFT_MS))
+                              p90Ms=round(pct(v, 90), 1), censored=len(c),
+                              kmMedianMs=None if km is None else round(km, 1),
+                              drifting=abs(judged) > DRIFT_MS if km is not None or not c else judged > DRIFT_MS))
     notes_out = []
     for r in sorted(rows, key=lambda r: (r["part"], r["written"], r["pitch"])):
         notes_out.append(dict(where(r), written=round(r["written"], 4), route=r["route"], sentMs=round(r["sentMs"], 1),
@@ -882,10 +919,12 @@ def report_text(res, title=""):
         out.append("  %ss: %d, %d of their %d windows measured" % (kind, len(g), sum(x["measured"] for x in g), sum(x["windows"] for x in g)))
     out.append("")
     out.append("== model drift (measured - the audit's predicted heard time, ms)")
-    out.append("  %-26s %-28s %4s %8s %8s %8s" % ("patch", "situation", "n", "median", "p10", "p90"))
+    out.append("  %-26s %-28s %4s %8s %8s %8s %5s %9s" % ("patch", "situation", "n", "median", "p10", "p90", "cens", "KM median"))
     for d in res["drift"]:
-        out.append("  %-26s %-28s %4d %+8.1f %+8.1f %+8.1f%s" % (d["patch"], d["situation"], d["n"], d["medianMs"], d["p10Ms"],
-                                                               d["p90Ms"], "  DRIFT" if d["drifting"] else ""))
+        c = d.get("censored", 0)
+        km = "" if not c else ("%+9.1f" % d["kmMedianMs"] if d.get("kmMedianMs") is not None else "   higher")
+        out.append("  %-26s %-28s %4d %+8.1f %+8.1f %+8.1f %5s %9s%s" % (d["patch"], d["situation"], d["n"], d["medianMs"], d["p10Ms"],
+                                                               d["p90Ms"], c or "", km, "  DRIFT" if d["drifting"] else ""))
     last = None
     for f in res["findings"]:
         if f["kind"] != last:

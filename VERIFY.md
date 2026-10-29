@@ -191,12 +191,26 @@ sound: whether the onsets are right is the Windows VM's job (above). Checks:
   note-on and a bowed new bow plainShift + bowedEarly (the leave + 23.5 ms reference, not the arrival the heard check
   measures): Whence, Recommended, ARRIVAL 147 fail against the heard check's 35 fail / 19 warn on the real sound (build
   491). Measured - predicted per situation, Whence, build 491's heard check (n, median ms, old -> new): fingered
-  transitions Celli 8, +100 -> -2; Violins 1 12, +108 -> -16; Violas 33, +5 -> -42 (the Violas' bendGlideFingered, 158 ms
-  at a sixteenth, is 42 ms later than heard here, where plainShift fitted); bowed transitions Celli 17, +121 -> +25,
+  transitions Celli 8, +100 -> -2; Violins 1 12, +108 -> -16; Violas 33, +5 -> -42; bowed transitions Celli 17, +121 -> +25,
   Basses 10, +247 -> +64 (wide: p10 -44, p90 +225), Violas 5, -85 -> -49 (wide), Violins 1 1, -30 -> +61; other attacks
   Violas 40, -68 -> +6, Violins 1 25, -51 -> -4, Violins 2 37, -20 -> +17, Celli 2, -35 -> +6; smooth unchanged (1-3 a
   patch, -14 .. -66). The audit then: ARRIVAL 33 fail / 7 warn (Violas 17, Violins 1 9, Celli 4, Basses 3), the heard
   check's own 35 / 19; with plainAuto 0 34 fail / 3 warn (was 12: its plain transitions now by their glides too).
+  **The Violas' -42 is the heard check's censoring, not the map** (2026-10-29): a transition's arrival is looked for
+  only until the next note-on on its route, so of Whence's 80 Violas fingered transitions (150 cents, sixteenths, the
+  next note-on 136 ms after each) the 33 heard all arrived before 136 ms (98-127, median 116 after the note-on) and 47
+  had not arrived by then (4 more: the note before not heard). Counting those as censored at 136 ms (Kaplan-Meier),
+  more than half arrive after 136 ms, so the median is above 136, as bendGlideFingered's 158 says; the isolated
+  measurement agrees (at 136 ms, 8 of its 27 arrivals by 136 ms, the heard check's 33 of 80 at 30 cents ≈ 0.8 of the
+  way). Censored the same way, Violins 1 (12 heard, 34 not) +35 ms (Kaplan-Meier median 224 after the note-on, map
+  189), Celli (8, 71) +17 (199, 182): no section's fingered glide is later than heard; bendGlideFingered unchanged.
+  The heard check's drift now counts them (`cens`, `KM median`, DRIFT judged on it; `km_median`). **The Basses' +64**
+  (bowed, whole notes, 2182 ms; plainAuto 1, so no bowedEarly: its 64.4 is another quantity, the leave + 23.5 ms
+  reference) is no noise but the interval: heard after the note-on, +3 semitones 258-268 ms (3 notes), -6 semitones
+  392-396 (2), +1.5 to a 12-TET note 337-348 (2), +1.5 to a quarter tone 530 (2, the bend's), against one bendGlide
+  value, 306 ms, measured at 600 ms note lengths and ±1 / ±2 semitones only. A model by interval and long notes needs
+  the measurement first: `legato_glide/gen.py <work> --sections=cb --iois=600,1000,2182 --steps=-6,-3,-2,-1,1,2,3,6`
+  (11 min of audio, kthost on the VM), `glide.py <work> <out.json>`; not yet run.
 - **LEVEL STEP** (values): under one slur at an unchanged written dynamic, the change of level between neighbouring
   notes in dB (the shipped dynamics calibration). Proposed threshold, not enforced, owner to approve: the intensity
   difference limen of Jesteadt, Wier & Green 1977 (JASA 61, 169-177; dI/I = 0.463 (I/I0)^-0.072 as Praat's manual
