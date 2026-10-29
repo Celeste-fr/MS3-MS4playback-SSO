@@ -438,22 +438,32 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   }
             else if (p->trace->from)
                   p->hasArrival = false;
-            // [slurs] plainPerformance: every note of the patch heard its measured latency (the map's plainShift: the median
-            // heard - written of plain notes, attacks and transitions alike) after its note-on; unmeasured: no arrival
+            // [slurs] plainPerformance: the patch's events go its plainShift early (a track delay, in sent()); unmeasured (no
+            // plainShift): no arrival. Each plain note is then heard as its own situation, as the heard check measures it
+            // (2026-10-29: before, every plain note was taken as heard plainShift after its note-on, a bowed new bow
+            // plainShift + bowedEarly: Whence, Recommended, ARRIVAL 147 fail against the heard check's 35 on the real sound,
+            // build 491; the model was 100-250 ms off for the transitions, 40-70 ms for the re-attacks: VERIFY.md › Playback
+            // audit › Plain notes):
+            //   a transition (fingered inside a slur, bowed on a new bow, portamento) arrives as every other legato
+            //     transition does, by the patch's measured glide (glideArriveMs above: bendGlideFingered at 64, bendGlide
+            //     otherwise; microtoneBends 3's midEarly and plainAuto 2's bowedEarly are in its sent time)
+            //   a slur's first note after silence on the smooth attack (plainAuto): its own onset (attackOnset)
+            //   any other attack (a re-struck key, an accent, a staccato's spiccato): the map's plainAttack, the measured
+            //     heard - sent of plain Performance attacks in context (sso_plain_performance_shift.json attackMs); without
+            //     it plainShift
             if (p->trace->choice.plain && !plainTiming) {
                   const double shift = p->trace->patch->plainShiftMs;
                   p->hasOnset = std::isfinite(shift);
                   p->onset = p->hasOnset ? shift : 0.0;
-                  // ([slurs] plainAuto: a slur's first note after silence on the smooth attack, heard its own onset after
-                  // its note-on; it went early by that less the shift)
                   if (p->hasOnset && p->trace->attack && !p->trace->from)
                         p->onset = onsetOf(p, p->pitch);
-                  // (a new bow stroke on the bowed transition, [slurs] plainAuto 1 / 2: heard the patch's bowedEarly later
-                  // than its plainShift, measured: sso_legato_glide_bowed.json; 2 sent it that much earlier)
-                  else if (p->hasOnset && p->trace->plainBowed && std::isfinite(p->trace->patch->bowedEarlyMs))
-                        p->onset = shift + p->trace->patch->bowedEarlyMs;
+                  else if (p->hasOnset && !p->trace->from && std::isfinite(p->trace->patch->plainAttackMs))
+                        p->onset = p->trace->patch->plainAttackMs;
+                  if (!p->hasOnset)
+                        p->transition = false;
                   p->hasArrival = p->hasOnset;
-                  p->arrival = sent(p) + p->onset - ms(p->written);
+                  if (!p->transition)     // (a transition: its arrival above)
+                        p->arrival = sent(p) + p->onset - ms(p->written);
                   }
             }
 

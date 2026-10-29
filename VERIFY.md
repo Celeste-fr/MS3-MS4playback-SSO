@@ -182,6 +182,21 @@ sound: whether the onsets are right is the Windows VM's job (above). Checks:
   - written (2026-10-14; before, its articulation's onset); no delay in the map, no arrival. That compares a pitch
   arrival with an attack's loudness onset. Sent times are on the score's time: the start lead
   (`EventMap::startLeadMs`) taken off.
+  **Plain notes** (`[slurs] plainPerformance`, 2026-10-29): the patch's events go its `plainShift` early (in the sent
+  time); no plainShift, no arrival (UNMEASURED). A plain transition (fingered inside a slur, bowed on a new bow,
+  portamento) arrives by its glide as above (`bendGlideFingered` at 64, `bendGlide` otherwise; microtoneBends 3's midEarly
+  and plainAuto 2's bowedEarly are in its sent time); plainAuto's first note after silence (smooth) by its own onset
+  (`attackOnset`); any other plain attack (a re-struck key, an accent, a staccato) by the map's `plainAttack` (heard -
+  sent of plain attacks in context), else plainShift. Before, every plain note was taken as heard plainShift after its
+  note-on and a bowed new bow plainShift + bowedEarly (the leave + 23.5 ms reference, not the arrival the heard check
+  measures): Whence, Recommended, ARRIVAL 147 fail against the heard check's 35 fail / 19 warn on the real sound (build
+  491). Measured - predicted per situation, Whence, build 491's heard check (n, median ms, old -> new): fingered
+  transitions Celli 8, +100 -> -2; Violins 1 12, +108 -> -16; Violas 33, +5 -> -42 (the Violas' bendGlideFingered, 158 ms
+  at a sixteenth, is 42 ms later than heard here, where plainShift fitted); bowed transitions Celli 17, +121 -> +25,
+  Basses 10, +247 -> +64 (wide: p10 -44, p90 +225), Violas 5, -85 -> -49 (wide), Violins 1 1, -30 -> +61; other attacks
+  Violas 40, -68 -> +6, Violins 1 25, -51 -> -4, Violins 2 37, -20 -> +17, Celli 2, -35 -> +6; smooth unchanged (1-3 a
+  patch, -14 .. -66). The audit then: ARRIVAL 33 fail / 7 warn (Violas 17, Violins 1 9, Celli 4, Basses 3), the heard
+  check's own 35 / 19; with plainAuto 0 34 fail / 3 warn (was 12: its plain transitions now by their glides too).
 - **LEVEL STEP** (values): under one slur at an unchanged written dynamic, the change of level between neighbouring
   notes in dB (the shipped dynamics calibration). Proposed threshold, not enforced, owner to approve: the intensity
   difference limen of Jesteadt, Wier & Green 1977 (JASA 61, 169-177; dI/I = 0.463 (I/I0)^-0.072 as Praat's manual

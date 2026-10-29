@@ -57,6 +57,7 @@ class TestPlaybackAudit : public QObject, public MTest
       void avoidedCCFindings();
       void leapFindings();
       void transitionArrival();
+      void plainAutoArrival();
       void auditScore();
       };
 
@@ -617,6 +618,77 @@ void TestPlaybackAudit::transitionArrival()
       QVERIFY(r2.transitionsFallback.count("Violin - Performance"));
       QVERIFY2(r2.text().contains("fell back to the arrival): Violin - Performance"), qPrintable(r2.text()));
       score->setMetaTag(Playback::metaTag, "");
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainAutoArrival
+//    [slurs] plainPerformance with plainAuto (Recommended as it is), the shipped SSO map's Violins 1 - Performance:
+//    plain-auto.musicxml's situations each predicted as the heard check measures them (2026-10-29; before, every plain note
+//    plainShift after its note-on, a new bow plainShift + bowedEarly: Whence ARRIVAL 147 fail against 35 heard, build 491):
+//    the slur's first note after silence (smooth) by its own onset; each transition, fingered or bowed, by its measured
+//    glide's arrival (glideArriveMs); the re-struck key by the map's plainAttack (19.5 ms). plainAuto 2: the bowed ones
+//    sent bowedEarly earlier, still by their glide
+//---------------------------------------------------------
+
+void TestPlaybackAudit::plainAutoArrival()
+      {
+      QString error;
+      std::shared_ptr<SoundLib::Library> lib = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(lib, qPrintable(error));
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-auto.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto run = [&](const char* plainAuto) {
+            std::map<QString, QString> values;
+            for (const Playback::Preset& p : Playback::presets())
+                  if (QString(p.id) == "recommended")
+                        for (const auto& v : p.values)
+                              values[v.first] = QString::number(v.second);
+            values["slurs/plainAuto"] = plainAuto;
+            Playback::setIniValuesForTest(values);
+            score->setPlaylistDirty();
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> trace;
+            PlaybackAudit::render(score, &events, &trace);
+            return PlaybackAudit::audit(score, events, trace, PlaybackAudit::Measured());
+            };
+      for (const char* mode : { "1", "2" }) {
+            const PlaybackAudit::Report r = run(mode);
+            QString rows;
+            for (const PlaybackAudit::NoteRow& row : r.rows)
+                  rows += QString("%1 %2 v%3 perf %4 tr %5 sent %6 onset %7 glide %8 arrival %9\n").arg(row.bar).arg(row.pitch)
+                          .arg(row.velocity).arg(row.performance).arg(int(row.transition)).arg(row.sentMs, 0, 'f', 1)
+                          .arg(row.onsetMs, 0, 'f', 1).arg(row.glideArriveMs, 0, 'f', 1).arg(row.arrivalMs, 0, 'f', 1);
+            const QString why = QString("plainAuto %1:\n%2%3").arg(mode, rows, r.text());
+            QCOMPARE(int(r.rows.size()), 9);
+            int smooth = 0, fingered = 0, bowed = 0, attacks = 0;
+            for (const PlaybackAudit::NoteRow& row : r.rows) {
+                  QVERIFY2(row.patch == "Violins 1 - Performance" && row.hasArrival, qPrintable(why));
+                  if (row.transition) {
+                        QVERIFY2(row.glideArriveMs > 50 && std::fabs(row.arrivalMs - (row.sentMs + row.glideArriveMs)) < 0.01, qPrintable(why));
+                        if (row.velocity >= 85) {
+                              ++bowed;
+                              // (sent its plainShift early, under 2 its bowedEarly too)
+                              const double meant = QString(mode) == "2" ? -(65.8 + 125.2) : -65.8;
+                              QVERIFY2(std::fabs(row.sentMs - meant) < 1.0, qPrintable(why));
+                              }
+                        else
+                              ++fingered;
+                        }
+                  else if (row.velocity < 10) {
+                        ++smooth;
+                        QVERIFY2(row.onsetMs > 50 && std::fabs(row.arrivalMs - (row.sentMs + row.onsetMs)) < 0.01, qPrintable(why));
+                        }
+                  else {
+                        ++attacks;
+                        QVERIFY2(std::fabs(row.arrivalMs - (row.sentMs + 19.5)) < 0.01, qPrintable(why));
+                        }
+                  }
+            QVERIFY2(smooth == 1 && fingered == 5 && bowed == 2 && attacks == 1, qPrintable(why));
+            }
       delete score;
       }
 

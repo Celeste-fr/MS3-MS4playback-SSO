@@ -60,9 +60,11 @@
 //                 after the previous note-on on its route (also a legato note) at velocity 64 or lower: SSO's legato
 //                 engine doesn't play it at all (from reading its script; behaviour only). A fault. (Notes of one chord
 //                 are not compared.) Part, bar, beat, pitch, velocity, gap
-//     ([slurs] plainPerformance: a plain note has no early start of its own; its patch's events go the map's plainShift
-//     early, its predicted arrival is sent + plainShift - written (the shift is the measured median latency of plain
-//     notes); a patch without plainShift is UNMEASURED and its notes have no ARRIVAL; Report::plainShifts)
+//     ([slurs] plainPerformance: its patch's events go the map's plainShift early (in the sent time); a plain transition
+//     arrives by its glide as any transition (glideArriveMs), plainAuto's smooth first note by its own onset, any other
+//     plain attack by the map's plainAttack (else plainShift), as the heard check measures them (2026-10-29: before,
+//     every plain note sent + plainShift, a new bow + bowedEarly too: VERIFY.md › Playback audit); a patch without
+//     plainShift is UNMEASURED and its notes have no ARRIVAL; Report::plainShifts)
 //     LEAP        a legato transition whose interval from the note before exceeds an octave (12 semitones; with
 //                 microtones 1200 cents, ScoreTuning): SSO gives it no transition, it releases the note before and
 //                 attacks afresh, so its Performance technique, legatoDelay timing and level calibration don't apply.
