@@ -202,8 +202,9 @@ for the audio, which the owner must create. (b) takes 1–2 days per score.
 
 ### 1.1a CC1 techniques: the 2026-10-29 search, the Philharmonia check and the SSO sweep plan
 
-Open item 4 (sul tasto / flautando / harmonics and the other CC1 techniques), branch `bowed-join`, 2026-10-29. No VM
-was used; the SSO sweep below is prepared, not run.
+Open item 4 (sul tasto / flautando / harmonics and the other CC1 techniques), branch `bowed-join`, 2026-10-29. The
+search and the Philharmonia check used no VM; phase 1 of the SSO sweep ran on the VM the same day (§ SSO sweep, phase 1
+measured, below); phase 2 is not run.
 
 **Searched again, nothing new with numbers** (all [read] unless marked):
 - Bow position against level: Guettler, Schoonderwaldt & Askenfelt, "Bow speed or bowing position: which one
@@ -290,6 +291,72 @@ command file around `measure_patch.py`, docs/MEASURING.md):
 - Then: heldOffset-style D for CC1 techniques = (the table's centre) − SSO's measured offset, played by the calibrated
   CC1 (`SoundLib::calibratedController`) or CC11 where CC1 can't reach it. The table's values are assumptions except the
   violin mute: the owner decides whether to use them (CLAUDE.md: a gap is marked as one).
+
+**SSO sweep, phase 1 measured** (2026-10-29, VM kthost offline renders of Kontakt 8 + SSO, the plan above, analysed on
+Linux by `vm_plan.sh analyze` and `ph1_analyze.py`; private: `~/MuseScore/ms3fork/private/cc1tech/json` (per cell) and
+`analysis/phase1_offsets.json` / `phase1.txt` (per take, offsets), backed up in ms3fork-private). All 21 plans rendered
+(exit 0, file peaks −52.6 … −11.5 dBFS: none clipped, none silent; every cell measured). Basses' Long Harmonics: the
+load probe (at the Long's probe pitch) was never heard, but its notes sound and both takes agree. Checks: the Long's
+loud50 against `sso_cc1_curves.json`'s loudDb at the same points: median 0.00 dB (Basses −0.14), 10–90 % within
+±1.5 dB, max 3.8 (Basses). The two takes are identical (median |difference| ≤ 0.05 dB): the 3.5 s gaps reset the round
+robins, so both takes play the same one; round-robin variation is not in these numbers.
+
+Offset = technique − the same section's Long, same session, same CC1, same sounding pitch (the Long interpolated in
+pitch; harmonics above the Long's range left out), perceived peak over 2.5 s (the dynamics check's measure, which
+calibrated levels match). Median over pitches × takes, [10–90 %], and CC1 16 → 64 → 127:
+
+| section | Flautando | Sul Tasto | Super Sul Tasto | Harmonics |
+|---|---|---|---|---|
+| Violins 1 | −21.4 [−27.6, −18.0]; −26 → −21 → −19 | −23.8 [−26.3, −21.5]; flat −24 | −40.4 [−47.0, −35.4]; −47 → −38 → −40 | −7.6 [−9.4, −6.7]; −9 → −7 → −7 |
+| Violins 2 | −16.5 [−19.0, −15.2]; flat −16 | – | −47.5 [−58.7, −40.1]; −58 → −44 → −45 | −7.3 [−11.3, −4.8]; −12 → −8 → −7 |
+| Violas | −22.4 [−27.4, −19.1]; −28 → −22 → −20 | – | −49.2 [−57.2, −43.8]; −57 → −47 → −48 | −11.2 [−17.4, −8.1]; −19 → −11 → −10 |
+| Celli | −21.5 [−27.6, −16.2]; −28 → −21 → −18 | – | −41.6 [−53.2, −36.2]; −50 → −39 → −40 | −13.0 [−17.0, −7.3]; −17 → −13 → −11 |
+| Basses | −27.3 [−33.3, −20.7]; −29 → −25 → −30 | – | −35.1 [−45.1, −29.1]; −38 → −34 → −40 | −22.8 [−33.7, −16.3]; −38 → −18 → −26 (*) |
+
+(*) The Basses' harmonics (sounding 60–78) lie above the Long's range (24–54): against the Long at 54, not the same pitch.
+- **CC1:** the flautandos (but Violins 2's and the Basses'), Super Sul Tasto and the harmonics (but Violins 1's) grow 6–
+  13 dB more than the Long from CC1 16 to about 64–80, then run parallel to it; Violins 1's Sul Tasto and Violins 2's
+  Flautando are flat. So one value per technique is wrong by up to ~10 dB at pp: the offset needs CC1 pairs.
+- **Pitch:** no steady slope (median −1.6 … +2.0 dB / octave, Basses' Super Sul Tasto −5.0, Celli's harmonics −3.5),
+  but the pitch-to-pitch scatter is large (adjacent measured pitches differ by up to 16 dB: Violins 2 Super Sul Tasto
+  55 −59, 60 −43): per-pitch values, as the Rachm. curves have (`DynamicsCurve::atPitch`).
+- **Measure:** loud50 (power, loudest 50 ms) reads the offsets 4–11 dB smaller (flautando −12 … −20, harmonics −4 … −9,
+  Super Sul Tasto −24 … −34), the note's mean 4–15 dB larger (the flautandos' and Super Sul Tasto's middles fall well
+  under their peaks; the Long's by 3.5). Near the hearing threshold the perceived measure expands differences (its
+  constant A = 1e-3), which matters for Super Sul Tasto (file peaks −40 … −53 dBFS). The measure is the largest SSO-side
+  uncertainty: about ±4 dB, Super Sul Tasto ±8.
+- **Against the shipped one-pitch dynamics check** (at CC1 80, above): flautando and Super Sul Tasto 3–16 dB less soft
+  here, harmonics 3–6, Sul Tasto 6 (the check's 1 s notes miss the slow attacks' later peaks).
+- **Onsets** (onset15, −15 dB under the peak, medians over pitches and CC1; the Long's 73–242 ms): Flautando 422–615 ms
+  (Basses 476), Sul Tasto 489, Super Sul Tasto 524–930, Harmonics 208–465; all 100–400 ms later at CC1 ≤ 48 than at
+  ≥ 96. Per cell in the json, for item 4's timing half.
+
+**Against real players** (the table above: sul tasto / flautando −5, harmonics −5 at mf): SSO's flautandos are 11–22 dB
+too soft at CC1 64 (Violins 2 11, the Basses 20), Violins 1's Sul Tasto 19, Super Sul Tasto 29–42 (nothing supports a
+40 dB drop: the physics bound is −9), the violins' harmonics 2–3 dB, the violas' and celli's 6–8, the Basses' about 13
+(an extrapolated reference).
+
+**Proposed correction, not applied** (the owner decides what is heard): as calibrated levels 2 does for a velocity
+technique, in two steps. (1) **Match**: play each of these CC1 techniques as loud as the part's Long at the same written
+CC1 and pitch, from this sweep's per-pitch, per-CC1 offsets (a `pitches` curve per technique in the shipped
+`.dynamics.json`, or the offset itself by pitch and CC1). (2) **D**: then the map's `<Articulation heldOffset>` = the
+real-player offset: Flautando, Sul Tasto and Super Sul Tasto **−5** (−3 … −9; physics bound, an assumption, ±4),
+Harmonics **−5** (Philharmonia's violin mf / bass p only, controls failed, ±5). Net change against today at CC1 64:
+flautandos +11 … +20 dB, Violins 1's Sul Tasto +19, Super Sul Tasto +29 … +42, harmonics +2 … +8 (Basses +13). Overall
+uncertainty: real side ±4–5, SSO side ±4 (measure; Super Sul Tasto ±8) and ±3–5 across pitches where a pitch is
+interpolated; Basses' harmonics ±8 more (reference). **How it can play:** CC1 can't do it (raising it to 127 gains at most the rest of the
+Long's 5–15 dB span from CC1 16 to 127); CC11 is at 127. The techniques share the All-techniques patch
+with its Long, so the raise is the patch's gain stage and every other note's CC11 that much lower (the track levels'
+headroom, `noteDb`), capped by CC11's useful range (about −42 dB): Super Sul Tasto's +29 … +42 would leave the Long at
+CC11 −42, and the samples' noise rises with them (not measured: the WAVs are gone). For Super Sul Tasto either a copy of
+the patch of its own (a route) or a cap (e.g. +20 dB) is the owner's choice; the owner may also keep SSO's Super Sul Tasto
+as the effect Spitfire made.
+
+**Phase 2** (not run; 33 plans, about 1.5–2.2 h of VM): Long CS, Long Sul Pont, Long CS Sul Pont, Tremolo, Trem Sul
+Pont, Trem CS, Trill (Major 2nd), against the same Long (kept: its per-take cells in the json, so phase 2 needs no new
+Long render). It is needed for the con sordino (the best-sourced real offset, the violin's −4 ± 2) and sul pont; the
+tremolos and trills have no real data (0 ± 5), so their measurement only matters if the owner wants them matched to
+the Long. Neither phase samples round robins (identical takes); a back-to-back variant (gaps under 1.5 s) would.
 
 **Value: high** (the largest level error known). **Effort:** the sweep about 3–4 h of VM time plus a day of analysis;
 real-player data still needs OrchideaSOL (§6 task 1) or a controlled recording.

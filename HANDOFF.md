@@ -52,7 +52,12 @@ Run each as a background job writing a log (`nohup … > <log> 2>&1 &`), check a
    and the same with `slurs/runBends=1` into `$W/B`. Compare each take's report.json (quarter tones' `how`,
    `closestCents`, the in-tune share) against the offline prediction (docs/PLAYBACK_SETTINGS.md › Run bends); refit the
    bowed lag with `tools/soundlibraries/legato_glide/runlag.py fit` on A's routes. Then an A/B page for the owner.
-3. **CC1 string techniques sweep** (OPEN_ITEMS 4; phase 1 ~1-1.5 h, phase 2 ~1.5-2.2 h of VM): the plan is
+3. **Phase 1 done 2026-10-29** (21 plans, ~45 min of VM; results and the proposal: docs/RESEARCH.md › 1.1a › SSO sweep,
+   phase 1; private `~/MuseScore/ms3fork/private/cc1tech/json` + `analysis/`, backed up; the WAVs were deleted by the run).
+   Left: **phase 2** (`PHASE=2`, 33 plans, ~1.5-2.2 h: mutes, sul pont., tremolos, trill; the Long's res are kept, so `run`
+   should skip it as done), then `PHASE=2 bash vm_plan.sh analyze` and `python3 -I ~/MuseScore/ms3fork/private/queued/cc1tech/ph1_analyze.py
+   <work> <out.json> tools/soundlibraries/sso_cc1_curves.json` (it reads every work folder); the owner's decision on the
+   proposal. **CC1 string techniques sweep** (OPEN_ITEMS 4; phase 1 ~1-1.5 h, phase 2 ~1.5-2.2 h of VM): the plan is
    `~/MuseScore/ms3fork/private/queued/cc1tech/vm_plan.sh` (`bash vm_plan.sh plan`, then per job
    `PHASE=1 SECTION="Violins 1" bash vm_plan.sh run`, one section per background job, each ~15-45 min; then
    `bash vm_plan.sh analyze`; results in `~/MuseScore/ms3fork/private/cc1tech/json`). Offsets = technique - Long, against

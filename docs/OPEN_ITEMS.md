@@ -86,7 +86,7 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
   music: Violas bar 7, Violins 1 bars 5-8, Celli bars 1-4 where the 12-TET beat notes got worse); runBends stays 0.
 - **Own**: yes, how to play them; runBends by ear.
 
-### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing (offsets researched 2026-10-29; the SSO sweep queued)
+### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing (offsets researched 2026-10-29; SSO sweep phase 1 measured 2026-10-29, phase 2 queued)
 - **W levels** (Mixed techniques, perceived peak against the Performance attacks at mf): sul tasto V1 −30.2, V2 −19.5,
   Va −53.5, Vc −41.8, Cb −32.7 dB; flautando −27.5/−16.0/−30.6/−23.5/−25.1; Basses harmonics −31.4. Others: pizz. −8 …
   −13, col legno −19.1 … +3.5, Bartók +0.9 … +12.2, tremolo −2 … −7, trem. sul pont. −6 … −15, con sord. −4 … −6.
@@ -114,9 +114,22 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
   Phase 1 (Long, Flautando, Sul Tasto, Super Sul Tasto, Harmonics; 21 plans, 5.0 h audio) ~1-1.5 h VM; phase 2 (mutes,
   sul pont., tremolos, trill; 33 plans, 7.5 h) ~1.5-2.2 h. It also gives every technique's onset by pitch with 2 takes
   (the timing half of this item).
+- **Measured, phase 1** (2026-10-29, VM kthost, 21 plans, all with sound, none clipped; RESEARCH.md › 1.1a › SSO sweep,
+  phase 1): offset against the same section's Long at the same CC1 and pitch (perceived peak, median, CC1 64): Flautando
+  V1 −21, V2 −15, Va −22, Vc −21, Cb −25; Sul Tasto (V1) −24; Super Sul Tasto −38 / −44 / −47 / −39 / −34; Harmonics
+  −7 / −8 / −11 / −13 / −18 (Basses' against the Long's top pitch). Most grow 6–13 dB more than the Long from CC1 16 to
+  ~64, then parallel: CC1 pairs needed; no steady pitch slope but up to 16 dB pitch-to-pitch scatter: per-pitch values.
+  Measure choice ±4 dB (loud50 4–11 dB smaller offsets). Onsets: Flautando 420–620 ms, Super Sul Tasto 520–930, Harmonics
+  210–470, Sul Tasto 490 (Long 73–242), 100–400 ms later at CC1 ≤ 48.
+- **Proposal** (not applied, the owner's): match each to the Long by these per-pitch / per-CC1 offsets, then
+  `heldOffset` −5 (real players, assumptions ±4–5): +11 … +20 dB on the flautandos, +19 Sul Tasto, +29 … +42 Super Sul
+  Tasto (beyond CC11's ~42 dB of headroom with the Long on the same patch: a route of its own or a cap), +2 … +8 harmonics
+  (Basses +13). Played by the patch's gain stage with the other notes' CC11 lower (CC1 can't reach it).
 - **Miss**: real players' levels with a known gain for sul tasto / flautando / harmonics / tremolo (OrchideaSOL needs
   the owner's Ircam account; RESEARCH.md › 6 task 1); viola / cello / bass mutes.
-- **Own**: whether to play the assumed offsets (all but the violin mute are assumptions) once the sweep is in.
+- **Own**: whether to play the assumed offsets (all but the violin mute are assumptions); Super Sul Tasto: its own route,
+  a cap, or SSO's level as the effect. **Left**: phase 2 (mutes, sul pont., tremolos, trill; HANDOFF.md › Queued VM work
+  item 3), then the implementation (match + heldOffset for CC1 techniques).
 
 ### 11c. Live doesn't play a plain set's first note when it starts early (real Live, 2026-10-22)
 - **W**: a note at the song's start that MuseScore plays early (onset, smooth attack) is played by its technique track's
