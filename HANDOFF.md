@@ -47,7 +47,7 @@ Read his answers with ArtifactData where the page has a db, else ask him.
 Run each as a background job writing a log (`nohup … > <log> 2>&1 &`), check after ~1 min that the log grows.
 1. ~~realcheck repeat, Whence, Update Live Set end to end~~ done 2026-10-29 (build 495, `w495`: above). The same
    command with `--build 'C:\claude\vt495\b495' --name <new> --out <new dir>` re-checks a later build.
-2. **runBends A/B on kthost** (OPEN_ITEMS 5; ~2 x 10 min of VM):
+2. **Done 2026-10-29** (results: docs/PLAYBACK_SETTINGS.md › Run bends › Measured; left: the owner's A/B page, a B' with bowed 40:150). **runBends A/B on kthost** (OPEN_ITEMS 5; ~2 x 10 min of VM):
    `S=$(cat ~/MuseScore/ms3fork/private/queued/rec491.txt); W=~/MuseScore/ms3fork/private/runbends-ab; HC_RENDER=kthost HC_KEEP=1 HC_BUILD=$PWD/build.rel HC_WORK=$W/A tools/playbackverify/heard_check.sh --takes 2 ~/MuseScore/ms3fork/test-scores/Whence.mscz "$S;slurs/runBends=0" "Violins 1,Violas,Violoncellos"`
    and the same with `slurs/runBends=1` into `$W/B`. Compare each take's report.json (quarter tones' `how`,
    `closestCents`, the in-tune share) against the offline prediction (docs/PLAYBACK_SETTINGS.md › Run bends); refit the
@@ -57,7 +57,7 @@ Run each as a background job writing a log (`nohup … > <log> 2>&1 &`), check a
    `PHASE=1 SECTION="Violins 1" bash vm_plan.sh run`, one section per background job, each ~15-45 min; then
    `bash vm_plan.sh analyze`; results in `~/MuseScore/ms3fork/private/cc1tech/json`). Offsets = technique - Long, against
    RESEARCH.md 1.1a's real-player offsets; the owner decides whether to play them.
-4. **Basses' bowed glide by interval** (OPEN_ITEMS 3; VERIFY.md › Plain notes: +64 ms is the interval, not noise):
+4. **Done 2026-10-29** (VERIFY.md › Plain notes: the glide depends on the interval, but a table would worsen Whence's +64; no map change). **Basses' bowed glide by interval** (OPEN_ITEMS 3):
    `python3 tools/soundlibraries/legato_glide/gen.py <work> --sections=cb --iois=600,1000,2182 --steps=-6,-3,-2,-1,1,2,3,6`,
    render `<work>/ev/*.txt` with kthost on the VM with the Basses - Performance state (as
    `~/MuseScore/ms3fork/private/fast-microtones/tools/go.sh` did, or one `tools/vm/vmjob.py` job), then

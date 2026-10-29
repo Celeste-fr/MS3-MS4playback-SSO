@@ -33,7 +33,7 @@ sections, not the number, is the rank. Renumber nothing; a new item takes the ne
 
 Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at the end of Tier 1.
 
-### 5. Fast quarter-tone slurs never reach their pitch (cause found 2026-10-29: SSO's own lag; `[slurs] runBends` built, tested on Linux, untried on the VM)
+### 5. Fast quarter-tone slurs never reach their pitch (cause found 2026-10-29: SSO's own lag; `[slurs] runBends` built, A/B on the VM 2026-10-29: quarter tones as predicted, Celli 12-TET worse; for the owner to hear)
 - **W**: Whence Violas bar 8 never within 30 cents of 61.5 / 64.5 (40-60 c off); Celli bar 1 70-180 c off; quarter-tone
   transitions reached 32/141 (kthost), 26/141 (export); 69 of 147 bending-copy quarter tones never settle; 141 notes in
   tune for less than half their length (mean 10-16 %); UNHEARD 126-142 on Whence.
@@ -75,6 +75,15 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
   `rec491.txt` is build 491's heard check's Recommended string (its run kept in private `check491/`). Built and run on
   Linux 2026-10-29 (c084876023: tst_soundlibrary 162 / 6, runBends passes); build.rel's tst_playbackaudit (the heard
   check's dump) already has it. No Windows build needed for this A/B; the owner's own listening needs one.
+- **2026-10-29, the VM A/B done** (kthost + SSO, Whence, build 491's Recommended with plainAuto 1, runBends 0 / 1, two takes;
+  private `runbends-ab/`; PLAYBACK_SETTINGS.md › Run bends › Measured): fast notes in tune A -> B, quarter tones Violas 1-14
+  41-43 -> 52 %, Violins 1 5-14 30-31 -> 60-61 %, Celli 14-17 -> 46-51 % (at or above the prediction); 12-TET Violas 44-46 ->
+  55-56 %, Violins 1 37-38 -> 49 % (less than the predicted 67-71: the bowed beat notes), **Celli 42 -> 34-35 % (worse)**:
+  its fingered 12-TET 56 -> 48, bowed 25 -> 18 %. Heard check ARRIVAL fail 28 / 25 -> 25 / 24, warn 14 / 12 -> 9 / 7, RHYTHM
+  runs warn 1 / 1 -> 5 / 3, LEVEL no fails either way. Refit on A: fingered as the map (Violas 60-70 / 70, Violins 1 70 /
+  70, Celli 120 / 60-70); **bowed D 30-50 ms, tau 70-150** (grid edge; unbounded it runs to 20 / 400) against the assumed
+  108-164 ms: proposal bowed 40:150 for the three, then a kthost B'. **For the owner to hear** (A/B clips with the sheet
+  music: Violas bar 7, Violins 1 bars 5-8, Celli bars 1-4 where the 12-TET beat notes got worse); runBends stays 0.
 - **Own**: yes, how to play them; runBends by ear.
 
 ### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing (offsets researched 2026-10-29; the SSO sweep queued)
@@ -152,6 +161,12 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
   only; VERIFY.md › Plain notes). **Next (queued, VM)**: `legato_glide/gen.py <work> --sections=cb
   --iois=600,1000,2182 --steps=-6,-3,-2,-1,1,2,3,6`, kthost renders, `glide.py <work> <out.json>`; then a bendGlide by
   interval for the Basses if it holds (HANDOFF.md › Queued VM work 4).
+- **2026-10-29, the Basses' bowed glide by interval measured** (kthost + SSO, 360 transitions, intervals -6 .. +6 x IOI 600 /
+  1000 / 2182 x 3 registers x 5; private `basses-glide/`; VERIFY.md › Plain notes): arrival (30 c, 3 frames) by interval
+  ~240 ms (±1, -6) .. 290-330 (±3, -2) .. 390 (+2) .. 490 (+6); by IOI flat (288 / 310 / 311); repeatable but bimodal by run
+  position (round robins, ~100-250 ms apart). An interval table would make Whence's residual worse (+64 -> +115 ms: its -6
+  heard 392-396 against 238 isolated); the +64 is the quarter-tone targets (+224), the transition after an attack (+267)
+  and the in-context -6. **No map change proposed**; next: those cases in context (Heard passages, plain, 2+ takes).
 
 ### 2. Plain Performance timing (default `[slurs] plainPerformance` 1 with one `plainShift` per patch)
 - **W** (Mixed techniques, build 457, export, −15 dB rule): Performance fresh attacks early (V1 −46, V2 −37, Va −74,

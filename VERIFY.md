@@ -210,7 +210,24 @@ sound: whether the onsets are right is the Windows VM's job (above). Checks:
   392-396 (2), +1.5 to a 12-TET note 337-348 (2), +1.5 to a quarter tone 530 (2, the bend's), against one bendGlide
   value, 306 ms, measured at 600 ms note lengths and ±1 / ±2 semitones only. A model by interval and long notes needs
   the measurement first: `legato_glide/gen.py <work> --sections=cb --iois=600,1000,2182 --steps=-6,-3,-2,-1,1,2,3,6`
-  (11 min of audio, kthost on the VM), `glide.py <work> <out.json>`; not yet run.
+  (11 min of audio, kthost on the VM), `glide.py <work> <out.json>`. **Run 2026-10-29** (kthost + Kontakt 8 + SSO, Basses -
+  Performance, bowed transitions at 93, CC1 64 as Whence's Basses, 360 transitions: 8 intervals x 3 IOIs x 3 registers
+  (start 30 / 39 / 51) x 5; private `basses-glide/`, `glide_cb.json`, `glide_cb_abs.json`). glide.py's 0.9 crossing per IOI
+  600 / 1000 / 2182 ms: 305 / 320 / 314 ms (the map's 306 at 600 confirmed). As the heard check reads an arrival (within 30
+  c for 3 frames, `ana/glide_abs.py`), median ms after the note-on by interval, IOI 600 / 1000 / 2182: -6 215 / 242 / 238,
+  -3 305 / 320 / 330, -2 315 / 372 / 310, -1 250 / 232 / 238, +1 230 / 258 / 272, +2 388 / 390 / 382, +3 308 / 290 / 290,
+  +6 435 / 490 / 490. So **the glide depends on the interval** (±1 and -6 fastest, ~240; +2 and +6 slowest, 390-490; not monotonic
+  in size, up slower than down for 6) **and hardly on the IOI** (all: 288 / 310 / 311). The data repeat (the five repeats
+  of a cell come back alike in every IOI), but each cell is bimodal by its position in the run (e.g. start 39, +3 at 2182:
+  472, 475, 225, 228, 222 ms; a round robin's ~100-250 ms), within-cell SD 46 ms. **It does not explain Whence's +64**:
+  Whence's bowed Basses heard after their note-on (build 491) +3 258 / 262 / 268, -6 392 / 396, +1.5 to a quarter tone 530
+  / 531, +0.5 337 / 348, +3 after the bar 5 attack 573; an interval table from this run (all registers, 2182) would predict
+  +3 at 290 (residuals -22 .. -32, better than -38 .. -48) but -6 at 238 (+154 / +158, worse than +86 / +90): the median
+  residual goes from +64 to +115 (the start-39 cells alone: +142). The 12-TET targets alone are +24 against 306 today. The
+  +64 is the quarter-tone targets (+224: the bend's arrival), the transition after an attack (+267; the run's after-attack
+  transitions are quicker, 261 against 310) and Whence's -6 arriving ~150 ms later than an isolated -6 (same CC1 64; context,
+  round robins cycling: OPEN_ITEMS 3 › Miss). **No interval-dependent bendGlide / bowedEarly proposed for the Basses**: the
+  map stays; a model would need the in-context -6 and after-attack cases measured (Heard passages, plain, 2+ takes).
 - **LEVEL STEP** (values): under one slur at an unchanged written dynamic, the change of level between neighbouring
   notes in dB (the shipped dynamics calibration). Proposed threshold, not enforced, owner to approve: the intensity
   difference limen of Jesteadt, Wier & Green 1977 (JASA 61, 169-177; dI/I = 0.463 (I/I0)^-0.072 as Praat's manual

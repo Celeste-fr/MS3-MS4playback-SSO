@@ -1595,7 +1595,7 @@ bar 7 29 % (15), Violins 1 24 % (28), Celli 13 % (15); its 12-TET figures are un
 ## Run bends
 
 2026-10-29 (branch `bowed-join`, OPEN_ITEMS 5); **`[slurs] runBends` 0 by default and in both presets** until the owner has
-heard it. Measured offline, not yet rendered with it.
+heard it, **for the owner to hear** (A/B clips). Predicted offline, then rendered on the VM (kthost, 2026-10-29: Measured below).
 
 **Why the fast quarter tones never get there.** Build 491's heard check of Whence (export, Recommended): of 197 quarter-tone
 notes, 98 "pitch not reached" (Celli 52, Violas 26, Violins 1 20). In the sixteenth runs (136 ms) the 12-TET notes miss as
@@ -1646,6 +1646,40 @@ notes; the VM render below checks the rest.
 Whence.mscz "<Recommended's string>;slurs/runBends=0" "Violins 1,Violas,Violoncellos"`, the same with `runBends=1` in
 `<dir>/B`; compare report.json's quarter-tone "pitch not reached" and the in-tune share; then refit `runLag`'s bowed values
 with `runlag.py fit` on A (HANDOFF.md / OPEN_ITEMS 5 have the exact command).
+
+**Measured** (2026-10-29: kthost + Kontakt 8 + SSO on the Windows test VM, the Linux build.rel's events, Whence, build
+491's Recommended (plainAuto 1: each beat's first note bowed) with runBends 0 (A) / 1 (B), Violins 1, Violas, Celli, two
+takes each; judged as the prediction: pYIN of the part's routes added up, fast notes, in tune within 30 c over [written,
+next written]; private `runbends-ab/`, `ana/kthcana.py`). In tune, A -> B (take 1 / take 2):
+
+| Part, bars | quarter tones in tune | median error | 12-TET in tune | median error |
+|---|---|---|---|---|
+| Violas, 1-14 (48 / 48) | 43.0 / 40.5 -> 51.8 / 51.5 % | 34 -> 24-26 c | 45.8 / 43.9 -> 56.0 / 54.5 % | 39 -> 24-25 c |
+| Violas, bar 7 (8 / 8) | 28.6 -> 48.7 % (mean of takes) | | 43.0 -> 59.6 % | |
+| Violins 1, 5-14 (29 / 28) | 31.2 / 30.0 -> 60.1 / 60.6 % | 41-44 -> 21-24 c | 37.1 / 38.1 -> 49.5 / 49.1 % | 36-41 -> 20-21 c |
+| Celli, 1-14 (59 / 60) | 17.2 / 14.1 -> 50.6 / 45.8 % | 51-56 -> 26-31 c | 41.7 / 41.8 -> **33.8 / 34.6 %** | 31-36 -> 39-41 c |
+
+By transition (mean of the takes): fingered (64) quarter tones Violas 42 -> 52, Violins 1 31 -> 60, Celli 16 -> 48 %;
+fingered 12-TET Violas 55 -> 62, Violins 1 48 -> 65, **Celli 56 -> 48**; bowed (93 / Violas 100, all 12-TET) Violas 31 ->
+45, Violins 1 23 -> 31, **Celli 25 -> 18 %**. So runBends does what was predicted for the quarter tones (every part at or
+above the prediction; Violins 1 far above: 38-41 predicted, 60 measured) and for the Violas' and Violins 1's 12-TET notes
+(less than predicted: 55 / 49 % against 67-71, A's bowed beat notes, not in the prediction, pull them down); **the Celli's
+12-TET notes got worse** (-7 to -8 points; 5 notes lose more than 0.3 of their share, all bowed C3s on beats of bars 1 and
+5). The heard check's own findings, A -> B: ARRIVAL fail 28 / 25 -> 25 / 24, warn 14 / 12 -> 9 / 7; RHYTHM runs fail 8 / 9 ->
+7 / 7, warn 1 / 1 -> 5 / 3; LEVEL fail 0 -> 0, warn 4 / 1 -> 3 / 1; "pitch not reached" (its 0.7 s arrival rule) quarter
+tones Violins 1 20 / 17 -> 15 / 15, Violas 26 / 29 -> 30 / 31, Celli 50 / 47 -> 45 / 44; the not-reached notes'
+`closestCents` median 50-80 c either way (that rule barely moves: a note in tune for part of its 136 ms is still "not
+reached" if never 3 frames in a row at its own pitch before the window ends).
+
+**Refit on A** (`runlag.py fit`, bars 1-14, the main route of each part; then `ana/runlag2.py`, fingered and bowed each their
+own D / tau): one lag for all fast notes Violas 50-60 / 70-80 ms, Violins 1 50-60 / 70-80, **Celli 90 / 90** (the map's
+fingered Celli 130 / 60); split, fingered Violas 60-70 / 70, Violins 1 70 / 70, Celli 120 / 60-70 (the map's within 10 ms:
+confirmed) and **bowed D 30-50 ms, tau 70-150 ms** (Violas 30 / 100, 40 / 70; Violins 1 30 / 150 both takes; Celli 40 / 150,
+50 / 150) against the assumed 108 / 80, 164 / 70, 145 / 60: a bowed new bow starts moving at once, then converges slowly.
+Not a clean fit: tau sits at the grid's edge, and with a wider grid it runs on to 400 ms (D 20), which also spoils the
+fingered fit; only 14-29 bowed notes a part. So A's data rules the assumption out (D <= 50 ms in every fit) but does not pin
+a value. **Proposal** (not in the map): bowed `40:150` for all three (the bounded fit), then a kthost B' with it; the Celli's
+12-TET loss is the bowed beat notes corrected for a lag that isn't there. The owner by ear first or B' first: his call.
 
 ## Plain accents
 
