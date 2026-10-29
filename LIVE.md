@@ -807,9 +807,26 @@ trial notice: "Time remaining: 3 days", so the VM's Live stops saving and export
   Utility (-5.51 / -7.15 dB) and the technique tracks' Track Delays (-46.9 / -55.3 ms) confirmed; Live's save lost 0,
   changed 0; the transportReset state loaded (Reset on transport: no difference to show on winds).
 - **Whence, Recommended + fixedTransitions + speedFromWritten, with `--live-edits`** (the Update Live Set end-to-end
-  run): Live 12.4.7 loaded the set (877 s, 6.1 GB, with the VM at 2.5 GB free) and exported its 17 tracks (304 s), but
-  had not written the saved set 120 s after Save As (status bar: "being saved under a new name"); the driver now waits
-  15 min. Not compared yet (the WAVs go with the failed step): to run again.
+  run, private realcheck-1029/w491, finished 09:01 after the fix below): both Lives opened, exported, saved and quit
+  (load 344 / 708 s, 7.8 / 7.0 GB, export 280 / 197 s). **Update Live Set end to end works**: the set Live saved keeps
+  everything written (lost 0, changed 0); Update on it with the score unchanged writes nothing (no backup); with a note
+  moved and a knob turned in Live, then the score edited, it updated the set (backup `RCupd [date time].als`), kept the
+  2 note timings set in Live as the notes' Start / End from Live, wrote Vibrato 0.25 into Violins 1 - Performance's
+  panel value and state; the read-back's panel values identical to the written ones. **Found**: Live's save of the
+  updated set put those two Manual values back to 0 (0.25 -> 0; cause not checked: perhaps Live reads the parameter
+  back from Kontakt, whose state didn't take it; OPEN_ITEMS). Audio, Live against MuseScore (MuseScore against itself nulls -43 … -98 dB with
+  fixedTransitions + transportReset): per note within 0.1-0.24 dB (medians) and onsets 0 ms (medians) in every
+  section, but the waveforms don't null as well: Violins 2 PASS (corr 0.979, null -14.0 dB), Celli corr 0.978 / -14.5 dB
+  (first 1.5 s +1.3 dB: the start-lead note sounds), Violas 0.944 / -9.6 dB (one note +2.85 dB), Violins 1 0.858 / -5.4
+  dB (max 1.15 dB, onsets up to 34 ms), Basses 0.672 / -1.5 dB (13 notes, one +16.9 dB: the re-struck accented C2 of
+  2026-10-22, above). The edited set (audio 2 / 2u) the same within 0.1 dB, but Violins 1 +1.0 dB from 26 s against the
+  edited score where the Vibrato edit is (Live plays 0 there). The feature rows (written clips, Utility, slots, voice
+  copies, plainShift, the three states) can't be told apart in one score: all "differs" by these tracks.
+- 2026-10-29 07:36 the same run had failed at Live 1: after the VM's reboot with auto-login, Windows' full-screen
+  "Protect your files … backing up your PC" page (Explorer's Shell_OOBEProxy, "Microsoft account") covered Live, so the
+  trial notice's thumbnail was that page and was escaped as unknown three times. Answered by hand (Opt out of backup,
+  Skip for now), SCOOBE off in the registry; the driver now stops by name on that page and names any window covering a
+  dialog.
 - The driver met three things new on the VM: Live's license check failing in a network outage ("Server could not be
   resolved … verify your trial license", 430 x 223: the run stops), Chrome over Live's dialogs (their thumbnails were
   Chrome's: other windows are now minimised first), and Live's crash-recovery question (430 x 155) matching the trial
