@@ -94,7 +94,7 @@ class NoteLanes : public QObject {
       void release();
       void doubleClick(const Row& r, const QPointF& p);
       void contextMenu(const Row& r, const QPointF& p, const QPoint& globalPos);
-      void resetSelected();
+      void resetSelected(bool withJoin = false);   // withJoin (the Velocity lane): the notes' own joins too
       // Ctrl+D on selected stems (Live's duplicate of a selection): their values onto the notes at the same places right
       // after them, the span from the first one's chord to the last one's end, rounded out to the lanes' grid (snap off:
       // as it is); one undo step; then those notes selected. False: none selected

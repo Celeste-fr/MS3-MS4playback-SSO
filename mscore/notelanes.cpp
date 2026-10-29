@@ -537,7 +537,7 @@ void NoteLanes::doubleClick(const Row& r, const QPointF& p)
       resetSelected();
       }
 
-void NoteLanes::resetSelected()
+void NoteLanes::resetSelected(bool withJoin)
       {
       if (_sel.empty() || !fresh())
             return;
@@ -558,6 +558,8 @@ void NoteLanes::resetSelected()
                         n->undoChangeProperty(Pid::PERFORMANCE_TRANSITION, int(PerformanceTechnique::Transition::AUTO));
                   if (n->libraryVelocity() != 0)
                         n->undoChangeProperty(Pid::LIBRARY_VELOCITY, 0);
+                  if (withJoin && n->libraryJoin() != PerformanceTechnique::JOIN_AUTO)
+                        n->undoChangeProperty(Pid::LIBRARY_JOIN, PerformanceTechnique::JOIN_AUTO);
                   }
             s->endCmd();
             if (mscore)
@@ -738,6 +740,9 @@ void NoteLanes::contextMenu(const Row& r, const QPointF& p, const QPoint& global
       // owner, 2026-10-28: "I thought the reset to option is for the whole automation lane", then no per-stem Reset to
       // Auto in the menu, Live having none: double-click or Delete still give the selected stems back)
       QAction* resetLane = menu.addAction(tr("Clear Lane"));
+      // (the Velocity lane only: a note's own join also changes what its stem shows, a joined note playing the fingered
+      // transition; the owner, 2026-10-29, after clearing Velocity left bar 1's new bows fingered by their own joins)
+      QAction* resetBoth = join ? nullptr : menu.addAction(tr("Clear Velocity and Join"));
       menu.addSeparator();
       QAction* hide = menu.addAction(tr("Hide Lane"));
       menu.addSeparator();
@@ -747,12 +752,12 @@ void NoteLanes::contextMenu(const Row& r, const QPointF& p, const QPoint& global
             return;
       if (a == hide)
             _lanes->showLane(r.part, r.target, false);
-      else if (a == resetLane) {
+      else if (a && (a == resetLane || a == resetBoth)) {
             _sel.clear();
             for (const Mark& m : partMarks(r.master))
                   _sel.insert(m.note);
             _selTarget = r.target;
-            resetSelected();
+            resetSelected(a == resetBoth);
             _sel.clear();
             _view->update();
             }
