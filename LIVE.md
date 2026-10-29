@@ -572,7 +572,14 @@ in a section collapsible at the same time".
     changes only through MuseScore. A lane that came from a knob stays when the parameter leaves Live's panel. An extra
     patch's Kontakt: a turned knob is reported, not imported. **Not read**: Kontakt's own window (its state is opaque
     here, LIVE.md › Kontakt's state from the set): a value changed there and not in Live's panel stays unknown to
-    MuseScore (and Update Live Set may write MuseScore's value over it in the state, below).
+    MuseScore (and Update Live Set may write MuseScore's value over it in the state, below). **Live plays and saves the
+    state's value, not the Manual one** (real Live 12.4.7, 2026-10-29, build 491: a Manual 0.25 over a state holding
+    Vibrato 0 opened and was saved as 0): so where a panel value changed since MuseScore wrote the set, Update Live Set
+    loads that Kontakt's state, and when it doesn't hold the value writes the state with it (a knob Live itself saved,
+    state and panel alike, is left as it is). Kontakt holds SSO's parameters in 1/127 steps (0.25 is held, and saved by
+    Live, as 32/127): Create and Update write the panel's value as the plug-in holds it after taking it, and a value
+    within half a step of Live's counts as Live's (`sameKnobValue` in livesetexport.cpp), so that rounding never
+    rewrites the set.
   - **Technique tracks**: their switch (the Sub, the switch envelope, keyswitch notes) is never a lane; another
     clip envelope there is reported as not imported.
   - **Mixer**: a Kontakt track's Volume / Pan / Track Activator is the part's Mixer when the part has only that
@@ -813,8 +820,12 @@ trial notice: "Time remaining: 3 days", so the VM's Live stops saving and export
   moved and a knob turned in Live, then the score edited, it updated the set (backup `RCupd [date time].als`), kept the
   2 note timings set in Live as the notes' Start / End from Live, wrote Vibrato 0.25 into Violins 1 - Performance's
   panel value and state; the read-back's panel values identical to the written ones. **Found**: Live's save of the
-  updated set put those two Manual values back to 0 (0.25 -> 0; cause not checked: perhaps Live reads the parameter
-  back from Kontakt, whose state didn't take it; OPEN_ITEMS). Audio, Live against MuseScore (MuseScore against itself nulls -43 … -98 dB with
+  updated set changed those two Manual values: the main Kontakt's ("Violins 1") 0.25 -> 0, the Performance one's
+  0.25 -> 0.251968503. **Cause** (the two sets' XML compared): the run's knob edit (`alsset.py liveedit`) changes the
+  Manual value only; Update saw that Manual already at the lane's 0.25 and left the Kontakt's state (Vibrato 0) as it
+  was; Live, opening the set, took the value from the state. The Performance Kontakt's state was written (0.25) and
+  Kontakt rounds to 1/127 (32/127). **Fixed** (branch bowed-join, Linux, `updateLiveSetKnobs`; not yet in real Live):
+  The plain set › Knobs turned in Live. Audio, Live against MuseScore (MuseScore against itself nulls -43 … -98 dB with
   fixedTransitions + transportReset): per note within 0.1-0.24 dB (medians) and onsets 0 ms (medians) in every
   section, but the waveforms don't null as well: Violins 2 PASS (corr 0.979, null -14.0 dB), Celli corr 0.978 / -14.5 dB
   (first 1.5 s +1.3 dB: the start-lead note sounds), Violas 0.944 / -9.6 dB (one note +2.85 dB), Violins 1 0.858 / -5.4
@@ -962,8 +973,8 @@ as Create Live Set writes them) without a message; that it keeps the inserted tr
 that the clip envelopes' ControllerTargets ids taken from the file are still the ones Live 12.4 saved; how Live names
 its backups exactly (assumed `<name> [yyyy-MM-dd hhmmss].als`); that Live saves a knob turned in its panel as the
 parameter's Manual value (as the owner's 12.2 sets showed for configured parameters), that it opens a set whose free
-panel slot MuseScore filled, and whether it sets the panel's values on Kontakt after loading its state (MuseScore writes
-both alike, so either way they agree).
+panel slot MuseScore filled. (Answered 2026-10-29: Live takes the panel's values from Kontakt after loading its state,
+so the state must hold them: The plain set › Knobs turned in Live.)
 
 ## Automation lanes in MuseScore and in Live
 

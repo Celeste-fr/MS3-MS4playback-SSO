@@ -6908,7 +6908,11 @@ void TestLiveEquivalence::liveTracksJson()
 //        Update keeps it (no edit); changed in MuseScore since, MuseScore's is written (panel and Kontakt's state);
 //        changed in both and not chosen (no dialog): Live's stays, asked again next time; a parameter Live's panel
 //        doesn't list gets a free slot; an unautomated parameter MuseScore had written goes back to the patch's own value,
-//        and turned in Live then, it becomes a lane
+//        and turned in Live then, it becomes a lane;
+//      Live plays and saves the Kontakt state's value, not the panel's (real Live 12.4.7, 2026-10-29, build 491): a knob
+//        Live saved (panel and state) is left as it is; a panel value changed without the state (realcheck's alsset.py
+//        liveedit) gets the state written, and survives Live's open and save (liveResave); the plug-in's 1/127 rounding
+//        of a value rewrites nothing
 //---------------------------------------------------------
 
 static const char* const KNOB_MAP =
@@ -7002,6 +7006,31 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             QVERIFY(LiveSetUpdate::apply(xml, { { a, b, QByteArray::number(v, 'g', 10) } }, &out));
             writeSet(path, out);
             };
+      // a knob turned in Live as Live saves it: the Manual value and the Kontakt's state holding it (Live saves the
+      // plug-in's state, and plays what the state holds)
+      auto liveTurn = [&](const QString& title, double v) {
+            const QByteArray xml = readSet(path);
+            const LiveSetUpdate::Xml x(xml);
+            const int k = setTrack(x, "Violin", "MidiTrack");
+            const int p = panelParam(x, k, title);
+            QVERIFY(p >= 0);
+            int a = 0, b = 0;
+            QVERIFY(x.attrRange(x.path(p, { "ParameterValue", "Manual" }), "Value", &a, &b));
+            const int ps = x.path(k, { "DeviceChain", "DeviceChain", "Devices", "PluginDevice", "PluginDesc", "Vst3PluginInfo",
+                                       "Preset", "Vst3Preset", "ProcessorState" });
+            QVERIFY(ps >= 0);
+            const std::map<QString, QByteArray> states = LiveSetUpdate::kontaktStates(xml);
+            QVERIFY(states.count("MuseScore: Strings / Violin / Violin"));
+            QString error;
+            const QByteArray state = SoundLibraryHost::stateWithParameters(states.at("MuseScore: Strings / Violin / Violin"),
+                                                                           TESTSYNTH, { { title, v } }, nullptr, &error);
+            QVERIFY2(!state.isEmpty(), qPrintable(error));
+            QByteArray out;
+            QVERIFY(LiveSetUpdate::apply(xml, { { a, b, QByteArray::number(v, 'g', 10) },
+                                                { x.at(ps).openEnd, x.at(ps).closeStart, "\n" + state.toHex().toUpper() + "\n" } },
+                                         &out));
+            writeSet(path, out);
+            };
       struct Seen { int param { -1 }; double value { -1 }; bool automated { false }; };
       auto seen = [&](const QString& title) {
             const QByteArray xml = readSet(path);
@@ -7015,8 +7044,8 @@ void TestLiveEquivalence::updateLiveSetKnobs()
                   }
             return s;
             };
-      // the set's Kontakt state's Tone, heard by the test synth
-      auto stateTone = [&]() {
+      // the set's Kontakt state's parameter, heard by the test synth
+      auto stateValue = [&](const QString& title) {
             const std::map<QString, QByteArray> states = LiveSetUpdate::kontaktStates(readSet(path));
             auto s = states.find("MuseScore: Strings / Violin / Violin");
             if (s == states.end())
@@ -7026,7 +7055,25 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             if (!q || !q->setState(Vst3Plugin::joinState(q->name(), s->second, QByteArray())))
                   return -1.0;
             q->settle();
-            return q->parameter(unsigned(q->parameterId("Tone")));
+            return q->parameter(unsigned(q->parameterId(title)));
+            };
+      auto stateTone = [&]() { return stateValue("Tone"); };
+      // Live opens the set and saves it: each panel value is what the plug-in holds after loading its state (real Live
+      // 12.4.7, 2026-10-29, build 491: Update Live Set's Manual 0.25 over a state holding Vibrato 0 came back as 0)
+      auto liveResave = [&](const QStringList& titles) {
+            const QByteArray xml = readSet(path);
+            const LiveSetUpdate::Xml x(xml);
+            const int k = setTrack(x, "Violin", "MidiTrack");
+            std::vector<LiveSetUpdate::Edit> edits;
+            for (const QString& title : titles) {
+                  const int p = panelParam(x, k, title);
+                  int a = 0, b = 0;
+                  if (p >= 0 && !panelAutomated(x, k, p) && x.attrRange(x.path(p, { "ParameterValue", "Manual" }), "Value", &a, &b))
+                        edits.push_back({ a, b, QByteArray::number(stateValue(title), 'g', 10) });
+                  }
+            QByteArray out;
+            QVERIFY(LiveSetUpdate::apply(xml, edits, &out));
+            writeSet(path, out);
             };
       auto update = [&](LiveIntegration::UpdateResult* res) {
             QString error;
@@ -7076,13 +7123,14 @@ void TestLiveEquivalence::updateLiveSetKnobs()
       //---------------------------------------------------------
       //   a knob turned in Live: Tone 0.75, no automation -> the lane; Update leaves it
       //---------------------------------------------------------
-      turn("Tone", 0.75);
+      liveTurn("Tone", 0.75);
       {
             LiveIntegration::UpdateResult res;
             update(&res);
             QVERIFY2(std::fabs(laneOf("tone").flatValue() - 0.75) < 1e-4, qPrintable(res.text()));
             QVERIFY2(res.importReport.contains("Tone at 0.7500"), qPrintable(res.importReport));
-            QVERIFY2(!res.written, qPrintable(res.text()));          // (the set has what the score has now)
+            QVERIFY2(!res.written, qPrintable(res.text()));          // (the set has what the score has now, its state too)
+            QVERIFY(std::fabs(stateTone() - 0.75) < 1e-6);
             QVERIFY(std::fabs(seen("Tone").value - 0.75) < 1e-6);
             QVERIFY2(!res.report.skipped.join("\n").contains("Tone"), qPrintable(res.report.skipped.join("\n")));
       }
@@ -7106,7 +7154,7 @@ void TestLiveEquivalence::updateLiveSetKnobs()
       //---------------------------------------------------------
       //   changed in both, no dialog: Live's stays (reported), MuseScore's lane too; asked again next time
       //---------------------------------------------------------
-      turn("Tone", 0.6);
+      liveTurn("Tone", 0.6);
       edit("tone", { { 0, 0.2 } });
       for (int round = 0; round < 2; ++round) {
             LiveIntegration::UpdateResult res;
@@ -7115,7 +7163,7 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             QVERIFY2(std::fabs(laneOf("tone").flatValue() - 0.2) < 1e-4, qPrintable(res.text()));
             QVERIFY2(res.report.skipped.join("\n").contains("Tone changed in Live and in MuseScore"), qPrintable(res.text()));
             QVERIFY2(res.importReport.contains("changed in MuseScore and in Live"), qPrintable(res.importReport));
-            QVERIFY(std::fabs(stateTone() - 0.3) < 1e-6);                    // (the state as it was)
+            QVERIFY(std::fabs(stateTone() - 0.6) < 1e-6);                    // (Live's state as Live saved it)
             }
       // they agree again: nothing asked, nothing skipped
       edit("tone", { { 0, 0.6 } });
@@ -7126,6 +7174,39 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             QVERIFY2(!res.importReport.contains("changed in MuseScore and in Live"), qPrintable(res.importReport));
             QVERIFY(std::fabs(seen("Tone").value - 0.6) < 1e-6);
       }
+
+      //---------------------------------------------------------
+      //   the panel value changed without the state (realcheck's alsset.py liveedit, as in the real-Live run of
+      //   2026-10-29, build 491): Update Live Set writes the state with it, so Live's open and save keep it (before:
+      //   nothing written, Live's save put the state's 0.6 back)
+      //---------------------------------------------------------
+      turn("Tone", 0.25);
+      {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(std::fabs(laneOf("tone").flatValue() - 0.25) < 1e-4, qPrintable(res.text()));
+            QVERIFY2(res.written, qPrintable(res.text()));
+            QVERIFY2(res.report.text().contains("Kontakt's state with them"), qPrintable(res.text()));
+            QVERIFY2(std::fabs(stateTone() - 0.25) < 1e-6, qPrintable(QString::number(stateTone())));
+            QVERIFY(std::fabs(seen("Tone").value - 0.25) < 1e-6);
+      }
+      liveResave({ "Tone", "Macro 1" });
+      {
+            QVERIFY2(std::fabs(seen("Tone").value - 0.25) < 1e-6, qPrintable(QString::number(seen("Tone").value)));
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(!res.written, qPrintable(res.text()));
+            QVERIFY(std::fabs(laneOf("tone").flatValue() - 0.25) < 1e-4);
+      }
+      // the plug-in's rounding (Kontakt holds SSO's parameters in 1/127 steps: 0.25 saved by Live as 32/127): the same
+      // value, nothing rewritten
+      liveTurn("Tone", 32 / 127.0);
+      for (int round = 0; round < 2; ++round) {
+            LiveIntegration::UpdateResult res;
+            update(&res);
+            QVERIFY2(!res.written, qPrintable(res.text()));
+            QVERIFY(std::fabs(seen("Tone").value - 32 / 127.0) < 1e-6);
+            }
 
       //---------------------------------------------------------
       //   Macro 1 constant now (0.5): its envelope removed, its plain value; Macro 2 a lane Live's panel didn't list: a

@@ -1632,7 +1632,8 @@ bool SoundLibraryHost::parametersOf(const SoundLib::Library& library, const Soun
 
 QByteArray SoundLibraryHost::stateWithParameters(const QByteArray& component, const QString& pluginPath,
                                                  const std::vector<std::pair<QString, double>>& values,
-                                                 std::map<QString, long>* ids, QString* error)
+                                                 std::map<QString, long>* ids, QString* error,
+                                                 std::map<QString, double>* before, std::map<QString, double>* held)
       {
       std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, 48000, 4096, error);
       if (!p)
@@ -1647,10 +1648,17 @@ QByteArray SoundLibraryHost::stateWithParameters(const QByteArray& component, co
             const long id = p->parameterId(v.first);
             if (ids)
                   (*ids)[v.first] = id;
+            if (before)
+                  (*before)[v.first] = id >= 0 ? p->parameter(unsigned(id)) : -1;
             if (id >= 0)
                   p->setParameter(unsigned(id), std::min(1.0, std::max(0.0, v.second)));
             }
       p->settle(p->secondsSinceState() + 0.25);
+      if (held)
+            for (const auto& v : values) {
+                  const long id = p->parameterId(v.first);
+                  (*held)[v.first] = id >= 0 ? p->parameter(unsigned(id)) : -1;
+                  }
       QString name;
       QByteArray out, controller;
       if (!Vst3Plugin::splitState(p->state(), &name, &out, &controller) || out.isEmpty()) {
@@ -1808,7 +1816,8 @@ QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library&, cons
       }
 
 QByteArray SoundLibraryHost::stateWithParameters(const QByteArray&, const QString&, const std::vector<std::pair<QString, double>>&,
-                                                 std::map<QString, long>*, QString* error)
+                                                 std::map<QString, long>*, QString* error, std::map<QString, double>*,
+                                                 std::map<QString, double>*)
       {
       if (error)
             *error = tr("This MuseScore was built without plug-in hosting.");

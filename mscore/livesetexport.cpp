@@ -54,6 +54,14 @@ namespace LiveIntegration {
 static const char* const DEVICE_FILE = "MuseScore Link.amxd";
 static const char* const DEVICE_PLACE = "Presets/MIDI Effects/Max MIDI Effect";   // where LIVE.md says to put it
 
+// two values of a plug-in parameter in Live's panel (0-1) the same within half of Kontakt's 1/127 step: Kontakt holds
+// SSO's parameters in 128 steps (real Live 12.4.7, 2026-10-29, build 491: Vibrato written 0.25, saved by Live as
+// 0.251968503 = 32/127), so a value that close is the plug-in's rounding of the other, not a knob turned or an edit
+static bool sameKnobValue(double a, double b)
+      {
+      return std::fabs(a - b) < 0.5 / 127.0;
+      }
+
 //---------------------------------------------------------
 //   liveUserLibrary
 //    Live's Library.cfg (newest Live version first; ProjectPath + ProjectName), else Documents/Ableton/User Library:
@@ -406,7 +414,9 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                               LiveSetWriter::Plugin::Parameter lp;
                               lp.id = a.id;
                               lp.name = a.title;
-                              lp.value = a.value / 127.0;
+                              // (Live's panel: the value as the plug-in holds it, which Live saves after loading the state:
+                              // Kontakt rounds SSO's parameters to 1/127)
+                              lp.value = a.readBack >= 0 && sameKnobValue(a.readBack, a.value / 127.0) ? a.readBack : a.value / 127.0;
                               p.parameters.push_back(lp);
                               }
                         if (!err.isEmpty())
@@ -986,11 +996,15 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                   auto rec = data.written.find(t.annotation);
                   std::vector<std::pair<QString, double>> values;
                   bool changes = false;
-                  for (const LiveSetWriter::Constant& c : t.constants) {
+                  bool check = false;
+                  for (LiveSetWriter::Constant& c : t.constants) {
                         if (c.keepLive)
                               continue;
                         auto k = knobs.find(c.name);
-                        const bool same = k != knobs.end() && std::fabs(k->second - c.value) < 0.5e-4;
+                        // (within the plug-in's rounding of Live's value: Live's, so that the set isn't rewritten for it)
+                        const bool same = k != knobs.end() && sameKnobValue(k->second, c.value);
+                        if (same)
+                              c.value = k->second;
                         if (c.unautomated) {
                               // (only where MuseScore's own earlier value is still there, as LiveSetUpdate::update writes it)
                               if (k == knobs.end() || same || rec == data.written.end() || !rec->second.params.count(c.name)
@@ -999,8 +1013,15 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                               }
                         values.push_back({ c.name, c.value });
                         changes = changes || !same || !listed.count(c.name);
+                        // Live's panel value changed since MuseScore wrote the set (a knob turned in Live, read back as the
+                        // lane above): the panel has the value, but Kontakt's state may not. Live plays and saves what
+                        // the state holds, not the Manual value (real Live 12.4.7, 2026-10-29, build 491: a Manual 0.25
+                        // over a state holding Vibrato 0 opened and saved as 0), so the state is checked
+                        if (k != knobs.end() && rec != data.written.end() && rec->second.params.count(c.name)
+                            && !sameKnobValue(rec->second.params.at(c.name), k->second))
+                              check = true;
                         }
-                  if (!changes)
+                  if (!changes && !check)
                         continue;
                   if (!statesRead) {
                         states = LiveSetUpdate::kontaktStates(xml);
@@ -1011,23 +1032,41 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                         continue;
                   QString err;
                   std::map<QString, long> ids;
+                  std::map<QString, double> before, held;
 #ifdef USE_VST3
                   const QString pluginPath = SoundLibraryHost::pluginPath(library, &err);
                   const QByteArray state = pluginPath.isEmpty() ? QByteArray()
-                                           : SoundLibraryHost::stateWithParameters(s->second, pluginPath, values, &ids, &err);
+                                           : SoundLibraryHost::stateWithParameters(s->second, pluginPath, values, &ids, &err,
+                                                                                   &before, &held);
 #else
-                  const QByteArray state = SoundLibraryHost::stateWithParameters(s->second, QString(), values, &ids, &err);
+                  const QByteArray state = SoundLibraryHost::stateWithParameters(s->second, QString(), values, &ids, &err,
+                                                                                 &before, &held);
 #endif
                   if (state.isEmpty()) {
                         stateNotes << QObject::tr("%1: Kontakt's state not changed (%2): the values are in Live's panel only")
                                       .arg(t.name, err);
                         continue;
                         }
+                  if (!changes) {
+                        // (only checked: a state Live saved with the knob holds it already, and is left as it is)
+                        bool holds = true;
+                        for (const auto& v : values) {
+                              auto b = before.find(v.first);
+                              holds = holds && (b == before.end() || b->second < 0 || sameKnobValue(b->second, v.second));
+                              }
+                        if (holds)
+                              continue;
+                        }
                   t.plugin.component = state;
                   t.parameterState = true;
-                  for (LiveSetWriter::Constant& c : t.constants)
+                  for (LiveSetWriter::Constant& c : t.constants) {
                         if (c.id < 0 && ids.count(c.name))
                               c.id = ids.at(c.name);
+                        // the panel's value as the plug-in holds it (Kontakt's 1/127 steps), which Live saves after loading
+                        auto h = held.find(c.name);
+                        if (!c.keepLive && h != held.end() && h->second >= 0 && sameKnobValue(h->second, c.value))
+                              c.value = h->second;
+                        }
                   }
             result->notes << stateNotes;
       }
