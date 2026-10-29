@@ -545,3 +545,22 @@ at 127 (silent with the Tree at 0).
 - **The bassoons.** Bassoon Solo's sectionLevel2 sits 12.5 dB under Bassoons a2's, where one against two players is 3 dB:
   SSO's own levels (the solo patch 9.6 dB over the a2 at CC1 64 in the sweep, 11.7 dB in the separate dynamics check),
   so the correction is right.
+
+## Every-semitone wind and brass curves (2026-10-28)
+
+SSO's side of the wind, brass and gap-patch balance now reads the every-semitone sweeps (`sso_winds_cc1_semitone.json`,
+`sso_gap_cc1_semitone.json`) instead of the 3-semitone files (`sso_winds_cc1_curves.json`, `sso_gap_cc1_curves.json`):
+`section_balance_winds.py` -> `sso_winds_section_balance.json`, `section_balance_cl.py` -> `sso_cl_section_balance.json`,
+`anechoic_shift.py` (its shift values are constants of the anechoic data: only the echoed sectionLevel2 field moved),
+`gen_spitfire_sso.py` -> the map. Solo Violin 2, which the new gap file lacks, keeps its curve from the old file.
+Re-running the scripts on the old files reproduced the shipped outputs exactly before the change.
+
+- Changed: `sectionLevel2` of 37 of 47 patches and `sectionLevel` of 23 of 28; the five string sections, Harp, Timpani,
+  Grand Piano, Strings Ensemble and Solo Violin 2 unchanged. Largest: Contrabass Clarinet and Contrabass Tuba
+  `sectionLevel2` +0.56 dB, Oboe Solo `sectionLevel` +0.53, Oboe Solo `sectionLevel2` +0.54, Horns a2 -0.50, Solo Cello
+  -0.49, Horns a6 -0.48, Trumpets a2 -0.47. Median |change| 0.11 dB over all patches; none beyond +-2 dB, the
+  measurement's uncertainty. The in-context shifts of Iteration 15 are unchanged (they add to the same M2).
+- The Vial maps follow SSO's (`vial_levels.py fit` -> `vial_levels.json` -> `gen_vial.py`): the 8 solo winds' sectionLevel /
+  sectionLevel2 move by at most 0.54 dB (Oboe Solo), so a Vial Long stays as loud as SSO's (`tst_liveequivalence::vialLevels`).
+- Sources and method as before; only the sampling of the SSO curves is finer. Measured on the Windows VM earlier; this
+  is a recomputation on Linux, nothing heard.

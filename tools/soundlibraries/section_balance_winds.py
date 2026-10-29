@@ -3,7 +3,9 @@
 gen_spitfire_sso.py reads its output's "strings" and "instruments").
 
     python3 -I section_balance_winds.py <3_Audio_Features.csv> <sso_sound_range.json> <sso_cc1_curves.json>
-                                        <sso_winds_cc1_curves.json> <out sso_winds_section_balance.json>
+                                        <sso_winds_cc1_semitone.json> <out sso_winds_section_balance.json>
+
+Since 2026-10-28 the winds' curves are the every-semitone sweep; sso_winds_cc1_curves.json (3 semitones) gives the old numbers.
 
 The owner, 2026-10-14: the woodwinds and brass get a section balance M from the solo data (TU Berlin sound power, with
 Meyer's levels) "until we can find better non-solo data"; then ("sure") the strings' M to Meyer's mp too, so one rule

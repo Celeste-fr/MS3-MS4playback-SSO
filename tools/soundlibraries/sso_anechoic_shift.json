@@ -70,102 +70,102 @@
   "Flute Solo": {
    "instrument": "flute",
    "shiftDb": 3.96,
-   "M2": -2.04,
-   "sectionLevel2": 1.92
+   "M2": -2.0,
+   "sectionLevel2": 1.96
   },
   "Flutes a2": {
    "instrument": "flute",
    "shiftDb": 3.96,
-   "M2": -3.87,
-   "sectionLevel2": 0.09
+   "M2": -3.98,
+   "sectionLevel2": -0.02
   },
   "Piccolo": {
    "instrument": "flute",
    "shiftDb": 3.96,
-   "M2": -4.26,
-   "sectionLevel2": -0.3,
+   "M2": -4.2,
+   "sectionLevel2": -0.24,
    "assumption": "the flute's shift: no piccolo in either recording (Mahler 1's flutes and piccolo were left out)"
   },
   "Alto Flute": {
    "instrument": "flute",
    "shiftDb": 3.96,
-   "M2": 1.93,
-   "sectionLevel2": 5.89,
+   "M2": 2.11,
+   "sectionLevel2": 6.07,
    "assumption": "the flute's shift: no alto flute in either recording"
   },
   "Bass Flute": {
    "instrument": "flute",
    "shiftDb": 3.96,
-   "M2": -2.9,
-   "sectionLevel2": 1.06,
+   "M2": -2.47,
+   "sectionLevel2": 1.49,
    "assumption": "the flute's shift: no bass flute in either recording"
   },
   "Oboe Solo": {
    "instrument": "oboe",
    "shiftDb": -4.17,
-   "M2": -6.67,
-   "sectionLevel2": -10.84
+   "M2": -6.13,
+   "sectionLevel2": -10.3
   },
   "Oboes a2": {
    "instrument": "oboe",
    "shiftDb": -4.17,
-   "M2": -9.03,
-   "sectionLevel2": -13.2
+   "M2": -8.95,
+   "sectionLevel2": -13.12
   },
   "Cor Anglais": {
    "instrument": "oboe",
    "shiftDb": -4.17,
-   "M2": -3.86,
-   "sectionLevel2": -8.03,
+   "M2": -4.27,
+   "sectionLevel2": -8.44,
    "assumption": "the oboe's shift: no cor anglais in either recording (its Clark & Luce level is its own instrument's, unchecked in context)"
   },
   "Horn Solo": {
    "instrument": "horn",
    "shiftDb": -8.29,
-   "M2": 0.57,
-   "sectionLevel2": -7.72
+   "M2": 0.46,
+   "sectionLevel2": -7.83
   },
   "Horns a2": {
    "instrument": "horn",
    "shiftDb": -8.29,
-   "M2": 7.17,
-   "sectionLevel2": -1.12
+   "M2": 6.67,
+   "sectionLevel2": -1.62
   },
   "Horns a6": {
    "instrument": "horn",
    "shiftDb": -8.29,
-   "M2": 10.95,
-   "sectionLevel2": 2.66
+   "M2": 10.47,
+   "sectionLevel2": 2.18
   },
   "Motif Horns a4": {
    "instrument": "horn",
    "shiftDb": -8.29,
-   "M2": 12.82,
-   "sectionLevel2": 4.53
+   "M2": 13.04,
+   "sectionLevel2": 4.75
   },
   "Trumpet Solo": {
    "instrument": "trumpet",
    "shiftDb": -4.59,
-   "M2": 9.04,
-   "sectionLevel2": 4.45
+   "M2": 9.22,
+   "sectionLevel2": 4.63
   },
   "Trumpets a2": {
    "instrument": "trumpet",
    "shiftDb": -4.59,
-   "M2": 14.26,
-   "sectionLevel2": 9.67
+   "M2": 13.79,
+   "sectionLevel2": 9.2
   },
   "Trumpets a6": {
    "instrument": "trumpet",
    "shiftDb": -4.59,
-   "M2": 20.45,
-   "sectionLevel2": 15.86
+   "M2": 20.44,
+   "sectionLevel2": 15.85
   },
   "Motif Trumpets a3": {
    "instrument": "trumpet",
    "shiftDb": -4.59,
-   "M2": 13.57,
-   "sectionLevel2": 8.98
+   "M2": 13.71,
+   "sectionLevel2": 9.12
   }
  }
 }

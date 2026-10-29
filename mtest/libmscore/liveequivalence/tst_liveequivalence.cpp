@@ -5789,7 +5789,7 @@ void TestLiveEquivalence::vialLevels()
                   }
             return out;
             };
-      const std::map<QString, Curve> ssoCurves = curves({ tools + "sso_cc1_curves.json", tools + "sso_winds_cc1_curves.json" });
+      const std::map<QString, Curve> ssoCurves = curves({ tools + "sso_cc1_curves.json", tools + "sso_winds_cc1_curves.json", tools + "sso_winds_cc1_semitone.json" });
       const std::map<QString, Curve> vialCurves = curves({ tools + "vial_cc1_curves.json" });
       QCOMPARE(int(vialCurves.size()), 13);
       auto mainPatch = [](const SoundLib::Library& lib, const QString& name) -> const SoundLib::LibInstrument* {

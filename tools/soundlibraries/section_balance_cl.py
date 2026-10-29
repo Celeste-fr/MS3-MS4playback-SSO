@@ -3,10 +3,14 @@
 (gen_spitfire_sso.py reads this script's output).
 
     python3 -I section_balance_cl.py <clark_luce_levels.json> <clark_luce_table2.json> <sso_cc1_curves.json>
-                                     <sso_winds_cc1_curves.json> <sso_winds_section_balance.json> <sso_sound_dynamics.json>
-                                     <sso_gap_cc1_curves.json> <3_Audio_Features.csv> <tu_directivity.json | ->
+                                     <sso_winds_cc1_semitone.json> <sso_winds_section_balance.json> <sso_sound_dynamics.json>
+                                     <sso_gap_cc1_semitone.json> <3_Audio_Features.csv> <tu_directivity.json | ->
                                      <tu_decaying.json> <sso_percussion_levels.json> <out sso_cl_section_balance.json>
                                      [<sso_strings_ensemble.json | -> [<spheres_timpani.json | ->]]
+
+Since 2026-10-28 the wind and brass curves are the every-semitone sweeps (sso_winds_cc1_semitone.json,
+sso_gap_cc1_semitone.json; a section the gap file lacks, Solo Violin 2, is taken from sso_gap_cc1_curves.json beside it);
+the 3-semitone files (sso_winds_cc1_curves.json, sso_gap_cc1_curves.json) give the old numbers: pass them instead.
 
 The owner, 2026-10-14: "I prefer all the balance levels and the dynamic levels loudness to be based on real data".
 Real side: Clark & Luce 1965, Fig. 2 (clark_luce_levels.json): each instrument's scales played pp / mf / ff as in
@@ -374,6 +378,11 @@ def main():
                          'tuMp': ratio[name]['mp']}
         ratio[name] = dict(ratio[name], mp=sourced[name]['mp'])
     gap = json.load(open(gapPath, encoding='utf-8'))['sections']
+    # the every-semitone gap file (2026-10-28) lacks Solo Violin 2: its curve comes from the 3-semitone file beside it
+    oldGap = os.path.join(os.path.dirname(os.path.abspath(gapPath)), 'sso_gap_cc1_curves.json')
+    if os.path.exists(oldGap) and os.path.abspath(gapPath) != os.path.abspath(oldGap):
+        for k, v in json.load(open(oldGap, encoding='utf-8'))['sections'].items():
+            gap.setdefault(k, v)
     dynamics = json.load(open(dynamicsPath, encoding='utf-8'))
     levels = json.load(open(levelsPath, encoding='utf-8'))['levels']
     table2 = {k: v for k, v in json.load(open(table2Path, encoding='utf-8')).items() if k in levels or k == 'playerWeight'}
