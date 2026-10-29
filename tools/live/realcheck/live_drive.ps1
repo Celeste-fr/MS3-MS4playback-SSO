@@ -101,8 +101,15 @@ $KNOWN = @(
   # (told apart by the thumbnail too: Live's crash recovery question, "Live unexpectedly quit while you were working on
   # the Live Set ... Would you like to recover your work?", is 430 x 155 and was answered as this one, 2026-10-22: Live
   # then opened the recovered set of the run before; its thumbnail differs by 42 on average, two of this one's by 1)
-  @{ name = 'trial-activated'; w = 424; h = 155; tol = 6; action = 'click'; x = 0.375; y = -34
+  @{ name = 'trial-activated'; w = 424; h = 155; tol = 3; action = 'click'; x = 0.375; y = -34
      thumb = @(198,228,235,236,236,236,236,236,236,236,236,236,236,236,233,189,171,182,182,182,182,182,182,182,182,182,182,182,182,182,182,157,153,49,93,158,149,155,155,151,153,156,155,156,157,150,163,147,154,74,97,163,153,151,158,151,152,165,165,165,165,165,165,145,156,165,165,165,159,157,152,159,149,144,149,157,165,165,165,146,143,151,152,151,150,150,149,149,149,149,150,150,151,152,147,135) },
+  # Live's crash-recovery question ("Live unexpectedly quit while you were working on the Live Set "RC.als." Would you
+  # like to recover your work?" [Yes] [No]), 430 x 155 (the trial notice 424 x 155: with tol 6 it was taken for it and
+  # its Yes clicked, at the OK's place, 2026-10-29: Live opened the recovered set of the run before). Answered No: the
+  # run's own set opens (a set this VM's Live had open was always a check's: the owner's Live projects are not opened
+  # here). Thumbnail from the VM, 2026-10-29.
+  @{ name = 'crash-recovery'; w = 430; h = 155; tol = 3; action = 'click'; x = 0.62; y = -34
+     thumb = @(148,226,234,234,234,234,234,234,234,234,234,234,234,234,230,175,128,182,182,182,182,182,182,182,182,182,182,182,182,182,182,146,116,115,124,158,139,137,140,135,143,138,134,145,133,141,156,132,114,57,65,161,150,165,165,165,165,163,165,165,165,163,165,132,116,165,165,165,160,158,154,157,160,153,158,162,165,165,165,132,86,145,161,160,159,158,158,158,158,158,158,159,160,161,148,97) },
   # the splash ("12 Trial … Initializing the application") and its lower part, left behind while Live loads
   @{ name = 'splash'; w = 358; h = 358; tol = 4; action = 'ignore' },
   @{ name = 'splash-part'; w = 358; h = 175; tol = 4; action = 'ignore' }
