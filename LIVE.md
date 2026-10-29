@@ -825,6 +825,10 @@ trial notice: "Time remaining: 3 days", so the VM's Live stops saving and export
   Manual value only; Update saw that Manual already at the lane's 0.25 and left the Kontakt's state (Vibrato 0) as it
   was; Live, opening the set, took the value from the state. The Performance Kontakt's state was written (0.25) and
   Kontakt rounds to 1/127 (32/127). **Fixed** (branch bowed-join, Linux, `updateLiveSetKnobs`; not yet in real Live):
+  **2026-10-29, build 494 run** (`w494`): Live now kept the knob (0.25 in both Kontakts, lost 0); only Kontakt's 1/127
+  rounding remained ("changed 2": Manual 0.25 -> 0.251968503, the plug-in's `parameter()` right after setting still gave
+  0.25). Now written rounded (`kontaktHeld` in livesetexport.cpp, Update and Create) - needs one more real-Live run to
+  confirm (command in HANDOFF.md's queued work).
   The plain set › Knobs turned in Live. Audio, Live against MuseScore (MuseScore against itself nulls -43 … -98 dB with
   fixedTransitions + transportReset): per note within 0.1-0.24 dB (medians) and onsets 0 ms (medians) in every
   section, but the waveforms don't null as well: Violins 2 PASS (corr 0.979, null -14.0 dB), Celli corr 0.978 / -14.5 dB

@@ -712,7 +712,7 @@ speedFromWritten (key 113), fixedTransitions' state, fastTransitions, plainAccen
 (unchanged: nothing written; edited after Live edits: updated, 2 Live timings kept, read-back identical) except that
 **Live's save resets a panel value Update wrote** (Vibrato 0.25 -> 0 in Manual: the Kontakt's state didn't hold it,
 Live reads the state; fixed on Linux 2026-10-29, Update writes the state where a panel value changed since, and the
-plug-in's 1/127 rounding; not yet confirmed in real Live); Whence's Basses null -1.5 dB in Live (a note +16.9 dB, the re-struck accent), Violins 1
+plug-in's 1/127 rounding; build 494 run: knob kept, only the 1/127 rounding remained, now written rounded (`kontaktHeld`); one more real-Live run to confirm); Whence's Basses null -1.5 dB in Live (a note +16.9 dB, the re-struck accent), Violins 1
 -5.4 dB, while per note levels / onsets agree; LIVE.md › Checked in real Live) everything Ample (Create /
 Update / Live plays the score, Configure panel, capo, state lanes, soft rolls); the route set in 12.2, the device from
 the User Library, Add missing tracks; *Live plays the score* write speed, chase at a mid-song start, long pieces; the

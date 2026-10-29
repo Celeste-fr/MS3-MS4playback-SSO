@@ -62,6 +62,14 @@ static bool sameKnobValue(double a, double b)
       return std::fabs(a - b) < 0.5 / 127.0;
       }
 
+// the value as Kontakt holds and Live saves it: the nearest 1/127 step. The plug-in's parameter() right after setParameter
+// still gives the value set (real Live 12.4.7, 2026-10-29, build 494: Manual written 0.25, saved as 32/127 = 0.251968503,
+// 2 values changed), so the rounding is done here
+static double kontaktHeld(double v)
+      {
+      return std::round(std::min(1.0, std::max(0.0, v)) * 127.0) / 127.0;
+      }
+
 //---------------------------------------------------------
 //   liveUserLibrary
 //    Live's Library.cfg (newest Live version first; ProjectPath + ProjectName), else Documents/Ableton/User Library:
@@ -417,6 +425,8 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                               // (Live's panel: the value as the plug-in holds it, which Live saves after loading the state:
                               // Kontakt rounds SSO's parameters to 1/127)
                               lp.value = a.readBack >= 0 && sameKnobValue(a.readBack, a.value / 127.0) ? a.readBack : a.value / 127.0;
+                              if (SoundLibraryHost::makesSetups(library))
+                                    lp.value = kontaktHeld(lp.value);
                               p.parameters.push_back(lp);
                               }
                         if (!err.isEmpty())
@@ -1065,7 +1075,7 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                         // the panel's value as the plug-in holds it (Kontakt's 1/127 steps), which Live saves after loading
                         auto h = held.find(c.name);
                         if (!c.keepLive && h != held.end() && h->second >= 0 && sameKnobValue(h->second, c.value))
-                              c.value = h->second;
+                              c.value = kontaktHeld(h->second);
                         }
                   }
             result->notes << stateNotes;

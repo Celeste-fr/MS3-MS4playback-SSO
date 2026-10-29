@@ -7069,7 +7069,7 @@ void TestLiveEquivalence::updateLiveSetKnobs()
                   const int p = panelParam(x, k, title);
                   int a = 0, b = 0;
                   if (p >= 0 && !panelAutomated(x, k, p) && x.attrRange(x.path(p, { "ParameterValue", "Manual" }), "Value", &a, &b))
-                        edits.push_back({ a, b, QByteArray::number(stateValue(title), 'g', 10) });
+                        edits.push_back({ a, b, QByteArray::number(std::round(stateValue(title) * 127.0) / 127.0, 'g', 10) });   // (Kontakt: 1/127 steps)
                   }
             QByteArray out;
             QVERIFY(LiveSetUpdate::apply(xml, edits, &out));
@@ -7143,9 +7143,9 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             LiveIntegration::UpdateResult res;
             update(&res);
             QVERIFY2(res.written, qPrintable(res.text()));
-            QVERIFY2(res.report.text().contains("Tone 0.3000"), qPrintable(res.text()));
+            QVERIFY2(res.report.text().contains("Tone 0.2992"), qPrintable(res.text()));
             QVERIFY2(res.report.text().contains("Kontakt's state with them"), qPrintable(res.text()));
-            QVERIFY(std::fabs(seen("Tone").value - 0.3) < 1e-6);
+            QVERIFY(std::fabs(seen("Tone").value - 38 / 127.0) < 1e-8);       // (the panel as Kontakt holds it)
             QVERIFY(!seen("Tone").automated);
             QVERIFY2(std::fabs(stateTone() - 0.3) < 1e-6, qPrintable(QString::number(stateTone())));
             QVERIFY(std::fabs(laneOf("tone").flatValue() - 0.3) < 1e-4);
@@ -7188,11 +7188,13 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             QVERIFY2(res.written, qPrintable(res.text()));
             QVERIFY2(res.report.text().contains("Kontakt's state with them"), qPrintable(res.text()));
             QVERIFY2(std::fabs(stateTone() - 0.25) < 1e-6, qPrintable(QString::number(stateTone())));
-            QVERIFY(std::fabs(seen("Tone").value - 0.25) < 1e-6);
+            // (the panel value as Kontakt holds and Live saves it, 32/127: real Live, build 494)
+            QVERIFY2(std::fabs(seen("Tone").value - 32 / 127.0) < 1e-8, qPrintable(QString::number(seen("Tone").value, 'g', 10)));
       }
+      const double beforeSave = seen("Tone").value;
       liveResave({ "Tone", "Macro 1" });
       {
-            QVERIFY2(std::fabs(seen("Tone").value - 0.25) < 1e-6, qPrintable(QString::number(seen("Tone").value)));
+            QVERIFY2(std::fabs(seen("Tone").value - beforeSave) < 1e-8, qPrintable(QString::number(seen("Tone").value, 'g', 10)));
             LiveIntegration::UpdateResult res;
             update(&res);
             QVERIFY2(!res.written, qPrintable(res.text()));
@@ -7220,10 +7222,10 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             update(&res);
             QVERIFY2(res.written, qPrintable(res.text()));
             const Seen m1 = seen("Macro 1");
-            QVERIFY2(!m1.automated && std::fabs(m1.value - 0.5) < 1e-6, qPrintable(res.text()));
+            QVERIFY2(!m1.automated && std::fabs(m1.value - 64 / 127.0) < 1e-6, qPrintable(res.text()));
             QVERIFY2(res.report.text().contains("Macro 1 automation removed"), qPrintable(res.text()));
             const Seen m2 = seen("Macro 2");
-            QVERIFY2(m2.param >= 0 && !m2.automated && std::fabs(m2.value - 0.4) < 1e-6, qPrintable(res.text()));
+            QVERIFY2(m2.param >= 0 && !m2.automated && std::fabs(m2.value - 51 / 127.0) < 1e-6, qPrintable(res.text()));
             const LiveSetUpdate::Xml x(readSet(path));
             QCOMPARE(x.childValue(m2.param, "ParameterId"), QString("101"));          // (the test synth's Macro 2)
             QVERIFY2(res.report.text().contains("Live's panel lists Macro 2"), qPrintable(res.text()));
@@ -7232,7 +7234,7 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             bool listed = false;
             for (const LiveSet::Track& t : set.tracks)
                   for (const LiveSet::Parameter& p : t.parameters)
-                        listed = listed || (p.name == "Macro 2" && p.id == 101 && !p.automated && std::fabs(p.manual - 0.4) < 1e-6);
+                        listed = listed || (p.name == "Macro 2" && p.id == 101 && !p.automated && std::fabs(p.manual - 51 / 127.0) < 1e-6);
             QVERIFY(listed);
             // a second update: nothing
             LiveIntegration::UpdateResult again;
@@ -7256,7 +7258,7 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             LiveIntegration::UpdateResult res;
             update(&res);
             QVERIFY2(std::fabs(laneOf("macro2").flatValue() - 0.9) < 1e-4, qPrintable(res.text()));
-            QVERIFY(std::fabs(seen("Macro 2").value - 0.9) < 1e-6);
+            QVERIFY(std::fabs(seen("Macro 2").value - 114 / 127.0) < 1e-6);        // (the state written, the panel as Kontakt holds it)
       }
       // a knob's parameter taken out of Live's panel: its lane stays MuseScore's (not removed with it)
       {
