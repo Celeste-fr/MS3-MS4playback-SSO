@@ -1532,6 +1532,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const bool rangeOn = li && ContextLevel::realRange(score) && plib->dynamicsCC >= 0
                                        && plib->dynamicsCC != CTRL_EXPRESSION;
                   const bool rangeSpans = rangeOn && ContextLevel::clarkLuceSpans(score);
+                  // [levels] evenKeys (the owner, 2026-10-28): a key whose Long lies off the smooth curve over pitch by more
+                  // than real players' scatter plays the map's keyLevel more (with realRange, which leaves only the key's mp
+                  // level uneven: its longLevel, every semitone, takes SSO's own change from mp away)
+                  const bool evenKeysOn = rangeOn && Playback::on("levels/evenKeys", score);
                   auto realRangeLevel = [&](const Note* note, const SoundLib::Choice& c, int velocity, const Ms4::NoteResult& r, int dynLevel) {
                         if (!rangeOn || !c)
                               return;
@@ -1548,6 +1552,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         LibLevel& l = libLevels[note];
                         l.range = t->second;
+                        l.keyDb = evenKeysOn && c.articulation ? c.articulation->keyLevelAt(note->ppitch()) : 0.0;
                         l.rangePart = st1->part();
                         auto d = libTrackDelays.find(st1->part());
                         l.rangeTop = d == libTrackDelays.end() ? 0.0 : d->second.rangeTop;
@@ -4071,7 +4076,7 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             int y = controller == l.controller && l.map ? l.map(x) : x;
             double db = l.volumeDb;
             if (volume && controller == CTRL_EXPRESSION && l.range && dynamicsCC >= 0) {
-                  const double real = (*l.range)[size_t(qBound(0, dyn, 127))] + l.realExtra;
+                  const double real = (*l.range)[size_t(qBound(0, dyn, 127))] + l.realExtra + l.keyDb;
                   db += real - l.rangeTop;
                   if (libRangeTops && l.rangePart) {
                         auto t = libRangeTops->find(l.rangePart);

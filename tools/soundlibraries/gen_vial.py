@@ -18,7 +18,9 @@ instrument's main patch carries the SSO instrument's realSteps / realSpan / real
 sectionLevel / sectionLevel2 moved by the measured offset (vial_levels.json, made by vial_levels.py from Vial's sweep
 vial_cc1_curves.json against SSO's sso_cc1_curves.json / sso_winds_cc1_curves.json), so that [levels] realRange and
 sectionBalance (Recommended 2 / 2, Library default 0 / 0) play it at SSO's level: contextlevel.h, docs/PLAYBACK_SETTINGS.md
-> Vial levels. Nothing else of SSO's (calibration, onsets, mics) applies.
+> Vial levels. Nothing else of SSO's (calibration, onsets, mics) applies, but the SSO Long's keyLevels ([levels] evenKeys,
+2026-10-28): Vial's longLevel matches SSO's keys as SSO plays them (every semitone), the keyLevels take both to the same
+evened curve.
 """
 import json
 import os
@@ -68,7 +70,12 @@ def sso_instruments():
     out = {}
     for i in root.findall('Instrument'):
         if i.get('with') is None and i.get('name') not in out:
-            out[i.get('name')] = (i.get('ids'), i.get('partName'), dict(i.attrib))
+            # (the Long's keyLevels: [levels] evenKeys; UACC 1, the swept articulation)
+            a = dict(i.attrib)
+            long = next((x for x in i.findall('Articulation') if x.get('value') == '1'), None)
+            if long is not None and long.get('keyLevels'):
+                a['keyLevels'] = long.get('keyLevels')
+            out[i.get('name')] = (i.get('ids'), i.get('partName'), a)
     return out
 
 
@@ -113,7 +120,10 @@ def write(name, plugins, folder, ext, header, sso, lv):
         attrs += ' preset="%s"' % esc('%s/%s%s' % (folder, preset, ext))
         attrs += level_attrs(inst, sso_attrs, lv)
         o.append('  <Instrument %s>' % attrs)
-        o.append('    <Articulation name="Long" value="1" techniques="%s"/>' % TECHNIQUES)
+        # (with levels: the SSO Long's keyLevels, [levels] evenKeys: Vial's longLevel matches SSO's own keys, this takes
+        # both to SSO's evened curve)
+        keys = ' keyLevels="%s"' % sso_attrs['keyLevels'] if lv.get(inst) and 'keyLevels' in sso_attrs else ''
+        o.append('    <Articulation name="Long" value="1" techniques="%s"%s/>' % (TECHNIQUES, keys))
         if vibrato:
             o.append('    <Controller id="vibrato" name="Vibrato (CC21)" cc="21" default="64">')
             o.append('      <Text match="(senza|non) vib(\\.|rato)?" value="0"/>')

@@ -1707,6 +1707,12 @@ def sectionLevelAttributes(name):
 #   pp -> ff, the markings in equal steps of S / 5 around mp (ppp / fff one step more): Clark & Luce 1965, Table I, for
 #   every instrument (one source; the Spheres dataset's sections agree within ~2 dB, a cross-check only); the bass
 #   clarinet, contrabassoon and bass trombones their family's (an assumption). real_range.py SPANS
+# - keyLevels= ("pitch:dB ..."; [levels] evenKeys, the owner 2026-10-28: SSO's uneven keys are an artefact) on the
+#   Long (UACC 1, the swept articulation) of every wind and brass patch of the every-semitone sweep: the dB that brings a
+#   key's Long at CC1 64 to within T = 1.5 dB of a smooth curve over pitch (Theil-Sen through the 8 nearest keys; T the
+#   80th percentile of real players' key-to-key deviation at ff, TU Berlin database): sso_even_keys.json (even_keys.py)
+EVEN_KEYS = {k: v['keyLevels'] for k, v in loadFit('sso_even_keys.json').get('patches', {}).items() if v['keyLevels']}
+evenKeysCount = 0
 REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
 REAL_RANGE_WINDS = loadFit('sso_real_range.json').get('instruments', {})
 # - the timpani (2026-10-15, docs/BALANCE_LOG.md › Iterations 10 and 14): realSteps from the Spheres dataset's written p and f
@@ -1838,6 +1844,11 @@ for i, line in enumerate(out):
         assert line.endswith('/>'), line
         line = out[i] = line[:-2] + f' heldOffset="{HELD_OFFSETS[current][m.group(1)]}"/>'
         heldOffsetCount += 1
+    m = re.match(r'    <Articulation name="[^"]*" value="1"', line)
+    if m and current in EVEN_KEYS:
+        assert line.endswith('/>') and ' techniques="long' in line, line
+        line = out[i] = line[:-2] + ' keyLevels="%s"/>' % ' '.join(f'{p}:{v:g}' for p, v in EVEN_KEYS[current].items())
+        evenKeysCount += 1
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:
         continue
@@ -1926,4 +1937,5 @@ assert missing <= timedValues, missing - timedValues
 assert set(LEGATO_GRID) & mapInstruments - {'Oboe Principal - Total Performance'} <= legatoGridUsed, \
     set(LEGATO_GRID) & mapInstruments - legatoGridUsed
 assert heldOffsetCount == sum(len(v) for v in HELD_OFFSETS.values()), heldOffsetCount
+assert evenKeysCount == len(EVEN_KEYS), (evenKeysCount, set(EVEN_KEYS))
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

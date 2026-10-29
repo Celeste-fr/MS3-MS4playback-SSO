@@ -235,6 +235,9 @@ class MidiRenderer {
             // realDb at the note's pitch), plus realExtra (a capped short's rest), less rangeTop (the part's R)
             std::shared_ptr<const std::vector<double>> range;
             double realExtra { 0.0 };
+            // [levels] evenKeys: the articulation's keyLevel at the note's pitch (Articulation::keyLevels), on top of realDb:
+            // in the part's R too, so a raised key has CC11 headroom
+            double keyDb { 0.0 };
             double rangeTop { 0.0 };
             const Part* rangePart { nullptr };
             };

@@ -3,6 +3,8 @@
 
     python3 -I real_range.py [--rule-d] <3_Audio_Features.csv> <sso_cc1_curves.json> <out sso_real_range.json> [<sso_winds_cc1_curves.json>
                              [<sso_gap_cc1_curves.json>]]
+    (since 2026-10-28: sso_winds_cc1_curves.json,sso_winds_cc1_semitone.json sso_gap_cc1_curves.json,sso_gap_cc1_semitone.json:
+    a comma joins files, a later one's sections win: the winds' longLevel every semitone)
 
 --rule-d: every instrument by rule D (the comparison; the map then gets no realPlay). Both rules' levels at each entry's
 middle pitch are written either way ("marksMid", "realDbMid").
@@ -305,8 +307,17 @@ def chooseK(data):
     return best, table
 
 
+def curves(path):
+    """the sections of a curves file, or of several separated by commas: a later file's section wins (2026-10-28: the
+    winds' and gap patches' every-semitone sweeps over their 3-semitone ones, sso_*_cc1_semitone.json)"""
+    out = {}
+    for p in path.split(','):
+        out.update(json.load(open(p, encoding='utf-8'))['sections'])
+    return {'sections': out}
+
+
 def sso(path, names=SECTIONS):
-    d = json.load(open(path, encoding='utf-8'))
+    d = curves(path)
     out = {}
     for s in names:
         pts = d['sections'][s]['points']
@@ -339,7 +350,7 @@ def winds(csvPath, windsPath, k):
     kOwn, cv = chooseK(data)
     smooth = {lab: {p: round(localLinear(pts, p, k), 2) for p in range(min(pts), max(pts) + 1)}
               for lab, pts in data.items()}
-    names = [n for n in WINDS if n in json.load(open(windsPath, encoding='utf-8'))['sections']]
+    names = [n for n in WINDS if n in curves(windsPath)['sections']]
     ssoRel = sso(windsPath, names)
     inst = {n: entry(WINDS[n], smooth[WINDS[n]], data[WINDS[n]], ssoRel[n]) for n in names}
     method = {
@@ -351,7 +362,9 @@ def winds(csvPath, windsPath, k):
         'k': k,
         'kOwn': kOwn,
         'cvRmsDb': {str(i): round(v, 3) for i, v in cv.items()},
-        'sso': 'sso_winds_cc1_curves.json, rmsDb (mean power 1.5-3.0 s after the note-on), each pitch less its CC1 64',
+        'sso': ' + '.join(p.split('/')[-1] for p in windsPath.split(',')) + ' (file names, a later one\'s sections win: since 2026-10-28 '
+               'every semitone, sso_winds_cc1_semitone.json), rmsDb (mean power 1.5-3.0 s after the note-on), each pitch '
+               'less its CC1 64',
         'noData': NO_DATA,
     }
     return method, inst
@@ -359,7 +372,7 @@ def winds(csvPath, windsPath, k):
 
 def gap(csvPath, gapPath, k, ruleD):
     """the gap patches (GAP_OWN as the winds, GAP_FAMILY their family's Clark & Luce span only)"""
-    swept = json.load(open(gapPath, encoding='utf-8'))['sections']
+    swept = curves(gapPath)['sections']
     names = [n for n in list(GAP_OWN) + list(GAP_FAMILY) if n in swept]
     ssoRel = sso(gapPath, names)
     data = spans(csvPath, set(GAP_OWN.values()))
@@ -388,7 +401,9 @@ def gap(csvPath, gapPath, k, ruleD):
                 'only (an assumption: plays like its family), no realSpan (realRange 1 leaves them alone)',
         'own': GAP_OWN,
         'family': GAP_FAMILY,
-        'sso': 'sso_gap_cc1_curves.json, rmsDb (mean power 1.5-3.0 s after the note-on), each pitch less its CC1 64',
+        'sso': 'sso_gap_cc1_curves.json + sso_gap_cc1_semitone.json (since 2026-10-28 every semitone, Solo Violin 2 '
+               'still every 3: the semitone sweep played Solo Violin 1\'s patch for it), rmsDb (mean power 1.5-3.0 s after '
+               'the note-on), each pitch less its CC1 64',
     }
     return method, inst
 

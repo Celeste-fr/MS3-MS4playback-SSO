@@ -95,7 +95,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
 //               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
 //               [bendGlide="136:-8:100 300:70:230 …"] [bendGlideFingered="136:60:180 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]
-//               [accentedLevel="72/100:3.4 72/150:4.2 …"]/>;
+//               [accentedLevel="72/100:3.4 72/150:4.2 …"] [keyLevels="63:-2.92 66:1.49 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -450,6 +450,16 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       std::sort(art.heldOffsets.begin(), art.heldOffsets.end());
       if (art.heldOffsets.size() > 1 && art.heldOffsets.front().first < 0)
             return false;
+      // keyLevels="pitch:dB …" ([levels] evenKeys)
+      for (const QString& t : a.value("keyLevels").toString().split(' ', QString::SkipEmptyParts)) {
+            const int colon = t.indexOf(':');
+            bool ok1 = false, ok2 = false;
+            const int p = t.left(colon).toInt(&ok1);
+            const double db = t.mid(colon + 1).toDouble(&ok2);
+            if (colon < 0 || !ok1 || !ok2 || p < 0 || p > 127 || art.keyLevels.count(p))
+                  return false;
+            art.keyLevels[p] = db;
+            }
       // contextLevel and [slurs] plainPerformance's per kind: "cc/ms/pitch:dB …"
       auto contextGrid = [&a](const char* attribute, std::vector<Articulation::ContextLevel>& out) {
             for (const QString& t : a.value(attribute).toString().split(' ', QString::SkipEmptyParts)) {

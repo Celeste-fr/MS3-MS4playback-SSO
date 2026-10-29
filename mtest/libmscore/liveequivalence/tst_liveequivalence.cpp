@@ -8501,6 +8501,18 @@ void TestLiveEquivalence::dumpEvents()
       QString error;
       std::shared_ptr<SoundLib::Library> lib = SoundLib::Library::load(qEnvironmentVariable("MS_DUMP_MAP"), &error);
       QVERIFY2(lib, qPrintable(error));
+      // MS_DUMP_ENGINES="<engine>=<map>|<engine>=<map>": several libraries (soundlibrary.h › engines), MS_DUMP_MAP the global one
+      struct ResetEngines { bool on { false }; ~ResetEngines() { if (on) SoundLib::setEngines({}); } } resetEngines;
+      if (qEnvironmentVariableIsSet("MS_DUMP_ENGINES")) {
+            std::vector<std::pair<QString, QString>> engines;
+            for (const QString& e : qEnvironmentVariable("MS_DUMP_ENGINES").split('|', QString::SkipEmptyParts))
+                  engines.push_back({ e.section('=', 0, 0), e.section('=', 1) });
+            SoundLib::setEngines(engines);
+            SoundLib::setEngineAvailable(nullptr);
+            resetEngines.on = true;
+            lib = std::const_pointer_cast<SoundLib::Library>(SoundLib::engine(engines.front().first));
+            QVERIFY(lib);
+            }
       SoundLib::setCurrent(lib);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       // MS_DUMP_CALIBRATION=<dynamics.json>: the calibration the app loads (SoundLibraryHost::loadCalibration: the
@@ -8623,13 +8635,14 @@ void TestLiveEquivalence::dumpEvents()
                   .arg(mt.atSeconds, 0, 'f', 2).arg(mt.sounding).arg(mt.fallbackDb, 0, 'f', 2).arg(shift, 0, 'f', 2)
                   .arg(mt.notes).arg(mt.uncalibrated);
             auto dB = [](double g) { return QString::number(g > 0 ? 20 * std::log10(g) : -200.0, 'f', 2); };
-            for (const SoundLib::Route& r : SoundLib::routes(score, *lib)) {
+            for (const SoundLib::Route& r : SoundLib::severalLibraries(score) ? SoundLib::allRoutes(score) : SoundLib::routes(score, *lib)) {
                   const TrackDelays::Delays d = TrackDelays::of(r.part, delays);
                   const QString patch = r.instrument->name;
-                  const LiveSetWriter::KontaktGains k = LiveSetWriter::kontaktGains(100, TrackDelays::faderGain(*lib, d, patch),
-                                                                                    TrackDelays::gainStageDb(*lib, d, patch));
-                  gl << QStringList({ r.part->partName(), patch, QString::number(r.lane), dB(TrackDelays::legacyPatchGain(*lib, d, patch)),
-                                      dB(TrackDelays::patchGain(*lib, d, patch)), dB(k.volume), k.hasUtility ? dB(k.utility) : QString("-") }).join("|");
+                  const SoundLib::Library& rlib = r.library ? *r.library : *lib;
+                  const LiveSetWriter::KontaktGains k = LiveSetWriter::kontaktGains(100, TrackDelays::faderGain(rlib, d, patch),
+                                                                                    TrackDelays::gainStageDb(rlib, d, patch));
+                  gl << QStringList({ QString("%1-%2 %3").arg(r.port).arg(r.channel + 1).arg(r.library ? r.library->name : QString()) + " " + r.part->partName(), patch, QString::number(r.lane), dB(TrackDelays::legacyPatchGain(rlib, d, patch)),
+                                      dB(TrackDelays::patchGain(rlib, d, patch)), dB(k.volume), k.hasUtility ? dB(k.utility) : QString("-") }).join("|");
                   }
             QFile gf(out + "/gains.txt");
             QVERIFY(gf.open(QIODevice::WriteOnly | QIODevice::Text));

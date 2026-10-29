@@ -185,6 +185,12 @@ struct Articulation {
       // Empty: none listed (SoundLib::techniqueOffsetDb takes the library's own loud-end difference)
       std::vector<std::pair<int, double>> heldOffsets;   // cc -> dB, sorted; one entry with cc -1: every marking
       double heldOffsetAt(int cc) const;  // (heldOffsets not empty)
+      // [levels] evenKeys (the owner, 2026-10-28): the dB a key of this articulation plays more so that its level at CC1 64
+      // lies within T = 1.5 dB of a smooth curve over pitch (<Articulation keyLevels="pitch:dB …">: SSO's woodwinds' and
+      // brass' Long, every semitone, tools/soundlibraries/sso_even_keys.json; a key not listed: 0). Played with
+      // [levels] realRange only (on its headroom: rendermidi.cpp)
+      std::map<int, double> keyLevels;
+      double keyLevelAt(int pitch) const { auto k = keyLevels.find(pitch); return k == keyLevels.end() ? 0.0 : k->second; }
       // [slurs] plainAccents 2 / 3: how much louder the accented attack plays than the spiccato attack at velocity 64 (the
       // plain note's), perceived peak in the 0.4 s after the note-on, by played pitch and the note's length as played
       // (<Articulation accentedLevel="pitch/ms:dB …">, as quickLevel; tools/soundlibraries/sso_accent_attack.json, kthost +

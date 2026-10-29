@@ -310,6 +310,14 @@ static const std::vector<Definition> DEFINITIONS = {
         "own voice copy), each plays 10 log10(n) dB softer by CC11 (2: -3.0 dB, 3: -4.8 dB), the line's note too, as a "
         "section divided into n groups adds up to one section (an assumption from player counts, not measured divisi "
         "data); a note keeps the level of its own start; 0: every voice at the whole section's level", true },
+      // (the owner, 2026-10-28: SSO's uneven keys are an artefact; every pitch at the real player's level, smoothed only
+      // beyond the key-to-key scatter real players show; approved the approach: 1 in Recommended and by default, 0 in
+      // Library default)
+      { "levels/evenKeys", 1, 0, 1, "on/off",
+        "1: with the real range on, a key of a wind or brass patch's Long whose level at mp lies more than 1.5 dB off a "
+        "smooth curve over pitch (SSO's samples come in zones with jumps of up to ~9 dB; real players' keys scatter "
+        "1.1 dB, TU Berlin database) plays the excess back by CC11 (the map's keyLevels, measured every semitone); the "
+        "round robins can't be evened per note; 0: every key at the library's own level", true },
       // (the owner, 2026-10-12: SSO's Performance legato plays some slurred notes louder than others, by context; evened
       // out by a glide of CC11 measured in place, the blind listening test's choice; 2026-10-13, MuseScore's playback
       // verified on the VM (3.6 -> 0.60 dB), the owner: "why is this not in recommended": on in Recommended and by default,
@@ -629,7 +637,8 @@ QString iniTemplate()
 //    owner has heard it; 2 in Recommended and by default, 0 in Library default, since 2026-10-28: a fix, the note before's tail
 //    lifted by the next transition's step, branch bowed-join); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
 //    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both on 2026-10-24, branch
-//    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B"). The other settings are not in the table because: legato/keepMs acts
+//    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B");
+//    levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -652,11 +661,11 @@ const std::vector<Preset>& presets()
             { "recommended", "Recommended", { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "shorts/staccatoLength", 1 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "shorts/staccatoLength", 1 } } },
             { "library", "Library default", { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
-                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 0 }, { "shorts/staccatoLength", 0 },
+                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 0 }, { "levels/evenKeys", 0 }, { "shorts/staccatoLength", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
             };
       return P;

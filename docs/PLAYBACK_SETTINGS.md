@@ -75,10 +75,10 @@ and then reads it as Reload Playback Settings does, playback going on. The box s
 the open score has its own value of a preset key (not cleared). "(Custom)" shows when the ini matches none (not
 selectable).
 
-| Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel | slurs/performance | slurs/transitions | slurs/smoothStart | levels/context | levels/sectionBalance | levels/realRange | levels/evenLevels | levels/micCompensation | levels/divisi |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 2: techniques on velocity matched to the held note plus D, real players' difference (staccatos -4.2 dB, pizzicato Meyer's), MS4's offset on top (below, Calibrated levels; the owner, 2026-10-15, option B'; 1, the match alone, Recommended 2026-10-08 to 10-15, by hand: "(Custom)") | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: Auto fingered within a slur, bowed from a slur into the next (the owner, 2026-10-12) | 1: a phrase's first note smooth (the owner, 2026-10-12) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) | 2: each section at its level from Clark & Luce's orchestral scales, `sectionLevel2` (below, Section balance; the owner, 2026-10-14: real data; 1, the TU Berlin M, by hand: "(Custom)") | 2: each note at the real player's level for its written dynamic, the markings in equal steps of the instrument's pp -> ff as orchestral players play it (below, Real range › Clark & Luce spans; the owner, 2026-10-13 on, 2026-10-14 the spans; 1, the Meyer rule, by hand: "(Custom)") | 1: slurred passages evened out by measurement (below, Even levels; the owner, 2026-10-13) | 1: a part's mics change tone and space, not its level (below, Mic compensation; the owner, 2026-10-15) | 1: a chord on a monophonic patch adds up to one section (below, Divisi level; the owner, 2026-10-20) |
-| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) | 0: on the All techniques patch | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Preset | heldNotes/early | heldNotes/byPitch | levels/calibrated | slurs/quick, slurs/quickLevel | slurs/performance | slurs/transitions | slurs/smoothStart | levels/context | levels/sectionBalance | levels/realRange | levels/evenLevels | levels/micCompensation | levels/divisi | levels/evenKeys |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Recommended | 100 (held notes and, since 2026-10-08, every technique with measured onsets: shorts on the beat as the Longs are) | 0: every note of an articulation early by the median of its measured onsets (a run as written; a note's attack off by its pitch's distance from the median: SSO's section strings -78 .. +62 ms; since 2026-10-09 slurred notes `[slurs] quick` swaps too) | 2: techniques on velocity matched to the held note plus D, real players' difference (staccatos -4.2 dB, pizzicato Meyer's), MS4's offset on top (below, Calibrated levels; the owner, 2026-10-15, option B'; 1, the match alone, Recommended 2026-10-08 to 10-15, by hand: "(Custom)") | 2, 1: short slurred notes on the espressivo long (Long (Rachm.)) as loud as the held Long (the owner, 2026-10-08: "let's make slurs quick = 2 the recommended preset"; quickLevel re-measured in the passage, 2026-10-09: "1 is the right balance, make it the recommended preset") | 1: the five string sections' slurred notes on their Performance legato (below, Performance legato; 2026-10-10) | 1: Auto fingered within a slur, bowed from a slur into the next (the owner, 2026-10-12) | 1: a phrase's first note smooth (the owner, 2026-10-12) | 1: those slurs by the level rule (below, Level rule; 2026-10-10) | 2: each section at its level from Clark & Luce's orchestral scales, `sectionLevel2` (below, Section balance; the owner, 2026-10-14: real data; 1, the TU Berlin M, by hand: "(Custom)") | 2: each note at the real player's level for its written dynamic, the markings in equal steps of the instrument's pp -> ff as orchestral players play it (below, Real range › Clark & Luce spans; the owner, 2026-10-13 on, 2026-10-14 the spans; 1, the Meyer rule, by hand: "(Custom)") | 1: slurred passages evened out by measurement (below, Even levels; the owner, 2026-10-13) | 1: a part's mics change tone and space, not its level (below, Mic compensation; the owner, 2026-10-15) | 1: a chord on a monophonic patch adds up to one section (below, Divisi level; the owner, 2026-10-20) | 1: a wind or brass key off the smooth curve by more than real players' scatter evened (below, Even keys; the owner, 2026-10-28) |
+| Library default | 0 (notes play as written, no timing adjustment of the fork; byPitch left as it is) | | 0: the library's own balance | 0: the held technique (quickLevel left as it is) | 0: on the All techniques patch | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 `byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
 run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
@@ -1967,6 +1967,61 @@ library patch, Vial's too (one master level). Even levels' measurement, the audi
 library's parts only. A score that plays one library renders byte for byte as before (Whence: `dumpEvents` identical,
 2026-10-26).
 
+## Even keys
+
+2026-10-28 (branch `bowed-join`; the owner, 2026-10-28: SSO's uneven keys are an artefact, every pitch at the real player's
+level, smoothed only beyond the scatter real players show; he approved the approach). `[levels] evenKeys` (1 by default and
+in Recommended, 0 in Library default; per score). **Why**: the woodwinds' and brass' Long swept every semitone
+(`sso_winds_cc1_semitone.json`, `sso_gap_cc1_semitone.json`: VM, Kontakt 8 + SSO, kthost, 8 CC1 points 16-127, 4 takes)
+plays in zones, mostly two semitones a sample, whose levels jump up to ~10 dB from zone to zone: Oboe Solo 69-70 and 75-76
+4-7 dB over the line through their neighbours, 71-73 and 79-80 3-7 dB under; the 3-semitone sweep (`sso_winds_cc1_curves.json`)
+fell between them, so a real export of the winds A/B (`winds_ab.mscx`) played Oboe 72 5-8 dB under what MuseScore and the
+Vial match predicted. The semitone sweep agrees with the 3-semitone one at every shared pitch (median 0.00 dB, largest 0.28
+in loudDb; some patches swept on their `- Long` patch, the same samples), except Solo Violin 2, which the sweep played on Solo
+Violin 1's patch (left out: its 3-semitone curve stays).
+
+**Method** (`tools/soundlibraries/even_keys.py` -> `sso_even_keys.json` -> `gen_spitfire_sso.py` -> `<Articulation
+keyLevels="pitch:dB …">` on each patch's Long, UACC 1): per patch a key's deviation d = its Long's loudDb at CC1 64 (the
+median of 4 takes = SSO's two round robins' mean) less the Theil-Sen line (median slope, robust to a zone of outliers)
+through the 8 nearest other keys, at the key. **Threshold T = 1.5 dB**: the 80th percentile of |d| by the same estimator over
+the TU Berlin database's ff tones (Weinzierl et al. 2018; the twelve wind and brass instruments of `real_range.py` WINDS,
+478 keys: robust SD 1.08, rms 1.33, p80 1.47, p90 2.02 dB); one take a pitch, so take noise is in it: an upper bound of real
+key-to-key structure. Not the pp tones ("as softly as possible": clarinet 6.7 dB rms, near the player's limit). The key
+plays c = -sign(d) max(0, |d| - T) dB more: only the part beyond real players' scatter is taken away (a key 6.6 dB under
+the line plays 1.5 under it; one 1 dB off stays). 34 patches, 4-22 keys each; rms deviation 1.0-3.8 dB before, 0.8-1.3
+after. Largest: Contrabass Clarinet 47-48 +8.4 / +8.9 (10 dB under their neighbours at mp, not at ppp), Oboe Solo 76 -7.1,
+75 -4.8, 77 -5.2, 69 -4.9, 72 +5.2, 73 +3.6, Bassoons a2 55-56 / 67-68 +4.5 .. +5.5, Trumpets a2 79-80 -4.8 / -5.0,
+Contrabassoon 49 -4.7, Clarinets a2 74 -4.5, Cor Anglais 81-82 -4.4, Bassoon Solo 73 -4.2, Flute Solo 69-70 -3.6 / -4.2,
+Horn Solo 66 -4.1; the a6 sections and Trumpet / Trombone Solo nearly even (4-7 keys, at most 1.6 dB).
+
+**Played with `[levels] realRange` only** (Recommended's 2), as part of its level: `realDb + c` by CC11, inside the
+part's R (`LibLevel::keyDb`, rendermidi.cpp: a raised key gets headroom, the patch's gain stage plays it), so Live's clips,
+the plain set and MIDI out carry it as every realRange level. Under realRange a note plays SSO's Long at CC1 64 at its key
+plus the player's change from mp (longLevel takes SSO's own change away, **every semitone since 2026-10-28**: `real_range.py`
+reads the semitone sweeps, a comma joining files; before, between the 3-semitone points longLevel was interpolated, up to
+2 dB off at the 90th percentile and 6-13 dB at single points), so the key's mp level is all that is left uneven: c comes
+from CC1 64 alone (each CC1 point's deviations are in `sso_even_keys.json` › byCc, for the record). Only the Long (the swept
+articulation); other techniques play SSO's own keys.
+
+**Not corrected / uncertainty**: the round robins alternate note by note (|A - B| at mp per key: median 0-2.2 dB per
+patch, up to 9 dB at single keys; `rr` in the file), no per-key curve can even them: the mean is the target. A short note
+before a slow attack (SSO's Long onsets 70-140 ms on the Oboe's 69-76) reaches less than loudDb says; the zones are the same
+by loud1sDb (first second) and rmsDb (the sustain) within 0.3-1.2 dB rms. **Real players corroborate part of the Oboe's
+pattern**: SSO's deviations correlate with TU Berlin's oboe at ff (r +0.73 Oboe Solo, +0.62 Oboes a2; one player, one take),
+whose 72 is 5.4 dB under the line (pp 3.0) and 75-76 +3; SSO's swings are about twice as large. The correction keeps their
+sign within T (72 plays 1.5 under the line, not 5.4); the other patches correlate weakly (-0.5 .. +0.46). Should the
+owner want the real oboe's keys kept, the target could be TU's deviation instead of the line (not done: one take a pitch).
+
+**Vial** (› Vial levels): its presets are even over pitch (within 0.1 dB at CC1 64), so its `longLevel` is matched to SSO's
+keys as SSO plays them (every semitone) and its Long carries the SSO Long's `keyLevels`: with evenKeys on both play the
+evened curve, off both play SSO's keys.Vial's eight wind presets swept every semitone too (`vial_levels.py sweep`, Linux kthost, 2026-10-28; their old
+3-semitone points again within 0.06 dB; Theil-Sen deviation at mp rms 0.02-0.19 dB), refitted (`fit`): the offsets
+(mean SSO - Vial at mp over every semitone) moved by -0.44 .. +0.26 dB: Flute -2.34 -> -2.15, Oboe +5.33 -> +4.89, Clarinet
+-1.48 -> -1.37, Bassoon +9.82 -> +9.59, Horn +7.53 -> +7.79, Trumpet -0.21 -> -0.40, Tenor Trombone +3.34 -> +3.13, Tuba
++9.54 -> +9.37 (the strings unchanged).
+
+Test `tst_soundlibrary::evenKeys` (parsing, realRange 1 with and without, realRange 0, a raised key in R, the shipped maps).
+
 ## Vial levels
 
 Not a setting of its own (branch `vial-levels`, 2026-10-27; the owner, 2026-10-26/27: a Vial part as loud as the SSO part
@@ -1975,14 +2030,15 @@ at the same written dynamic, "measured, not by ear"): the Vial maps' 13 instrume
 `sectionLevel2` moved by a measured offset, so `[levels] realRange` and `sectionBalance` (Recommended 2 / 2, Library
 default 0 / 0: Vial then plays CC11 127 and no gain, as before) play a Vial Long at SSO's Long's level at every marking.
 Made by `tools/soundlibraries/vial_levels.py` (its header is the method): `sweep` renders each preset by kthost
-(Linux, Vial c29c49e) with `sso_cc1_sweep.py`'s events at SSO's swept pitches, CC1 16 .. 127 (`vial_cc1_curves.json`,
-one take a point: Vial has no round robins); `fit` -> `vial_levels.json` -> `gen_vial.py`; `check` renders every preset
+(Linux, Vial c29c49e) with `sso_cc1_sweep.py`'s events at SSO's swept pitches (the winds every semitone since 2026-10-28),
+CC1 16 .. 127 (`vial_cc1_curves.json`, one take a point: Vial has no round robins); `fit` -> `vial_levels.json` -> `gen_vial.py`; `check` renders every preset
 at ppp .. fff at three pitches as MuseScore sends it under Recommended from the generated map
 (`vial_levels_check.json`). **Matched on loudDb** (the loudest 50 ms; the measure the section balance put SSO's Long on
 the real scale with): the check's largest error 0.53 dB (Flute), the strings <= 0.4. **Uncertainty: other loudness
 measures judge the winds louder on Vial**: by the sustain's power +1.8 .. +4.1 dB, LUFS +1.8 .. +3.9, phon +2.1 .. +7.1
 (the presets hold their level, SSO's solo samples peak and decay); the strings within +-1.2 dB (phon -1.8 .. -0.5). Test
-`tst_liveequivalence::vialLevels`.
+`tst_liveequivalence::vialLevels`. Since 2026-10-28 the wind presets' Long also carries the SSO Long's `keyLevels`
+([levels] evenKeys, › Even keys): longLevel matched to SSO's keys as SSO plays them, every semitone, then both evened alike.
 
 ## Inventory
 
@@ -2038,6 +2094,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Gain stage and master trim: the levels above are each patch's own gain after its Kontakt (hosted: the slot's output; Live: MuseScore's Utility, "MuseScore gain"; MIDI out: CC7), uncapped, less one master trim per score that keeps its loudest moment (calibrated levels + the map's crest, powers added) from clipping; the fader keeps the Mixer and the track levels (above, Gain stage and master trim; the owner, 2026-10-15) | with any level setting on (none in Library default); no setting | `contextlevel.cpp` (`masterTrim`), `TrackDelays::gainStageDb` / `faderGain` / `patchGain` / `midiVolumes`, `LiveSetWriter::kontaktGains` / `utilityDevice`, `livesetupdate.cpp`, `liveset.cpp`; data: map `<Dynamics crest>` from `sso_crest.json` | none (follows the level settings) |
 | Even levels: each slurred note on a Performance legato patch with a correction measured in place (Tools › Even Out Levels…, `--even-levels`) plays it by CC11 gliding in dB between the notes' nodes (halfway from each note-on to the next, since 2026-10-14), every 5 ms; a correction whose context changed is stale and not played; each patch's largest by its volume (above, Even levels; the owner, 2026-10-12, the blind test's Glide) | 1 (Recommended, the default; 0 in Library default; the owner, 2026-10-13) | `evenlevels.cpp`, `rendermidi.cpp` `libraryEvenLevels` / `trackLevel`, `TrackDelays::read` / `evenDb` / `patchGain`, `mscore/evenlevelsjob.cpp`; data: the score's metaTag `evenLevels` | `[levels] evenLevels`; score: `playbackSettings` |
 | Divisi level, `[levels] divisi` (the owner, 2026-10-20): while n voices of a monophonic patch's part (voice lanes) sound together, each note plays 10 log10(n) dB softer by CC11 (2: -3.0, 3: -4.8 dB), the line's too, so the chord adds up to one section; a note keeps its start's level; an assumption from player counts, no divisi data (above, Divisi level) | 1 (Recommended, the default; 0 in Library default) | `soundlibrary.cpp` (`lanes`: `Lanes::sounding`, `divisiDb`), `rendermidi.cpp` (`divisiLevel`, `libDivisi`, `libraryNoteLevels`) | `[levels] divisi`; score: `playbackSettings` |
+| Even keys, `[levels] evenKeys` (the owner, 2026-10-28): with the real range, a wind or brass Long's key whose level at mp lies more than T = 1.5 dB (real players' key-to-key scatter, TU Berlin) off a smooth curve over pitch plays the excess back by CC11 (map `<Articulation keyLevels>`, the every-semitone sweep; above, Even keys) | 1 (Recommended, the default; 0 in Library default) | `soundlibrary.cpp` (`keyLevels`), `rendermidi.cpp` (`realRangeLevel`: `LibLevel::keyDb`; `libraryNoteLevels`) | `[levels] evenKeys`; score: `playbackSettings` |
 | Transition levels, `[levels] transitionLevels` (branch slur-joins, 2026-10-22; 2 branch bowed-join, 2026-10-28, a fix: the owner, hall.musicxml, "the tail of the last note suddenly get louder as the next note enters"): 1 a legato transition whose CC11 level differs from the note before's on its copy keeps the note before's level to the glide's leave, then moves linear in dB to the new one by the glide's arrival (bendGlide), instead of with the note-on while SSO still plays the note before; 2 the same for every step the transition's note-on brings on its route, the dynamics CC (CC1) and CC11 from whatever sets it (above, Transition levels) | 2 (Recommended 2, Library default 0) | `rendermidi.cpp` (1: `libraryNoteLevels`' `transitionSwitch`; 2: `libraryTransitionTails`; `libGlide`) | `[levels] transitionLevels`; score: `playbackSettings` |
 | Attack levels, `[levels] attackLevels` (branch attack-levels, 2026-10-22; the owner 2026-10-23, "B better": 2): an attack whose route still rings the note before (within that note's `release`) takes its CC11 level (and even levels' glide start) 1: at its note-on + its measured onset (`plainAttack`, else the articulation's); 2: at its written time (its early start undone, plain Performance's `plainShift` too), when that stays before the route's next note or written CC11 / dynamics, instead of with the note-on (above, Attack levels) | 2 (Recommended 2, Library default 0) | `rendermidi.cpp` (`libraryNoteLevels`: `attackSwitch`; `libraryEvenLevels`: `libAttackLevelAt`) | `[levels] attackLevels`; score: `playbackSettings` |
 | Mic compensation: a part whose mic controllers (Mic 1-5, Mic Mix Distance; values or lanes) give another mix than the default plays as loud as the default mix, by its patches' volumes (lanes: the largest by the volume, each note's own at its start by CC11); measured mic levels and laws, mics as powers (above, Mic compensation; the owner, 2026-10-15) | 1 (Recommended, the default; 0 in Library default) | `contextlevel.cpp` (`micLevelDb`, `micValues`, `micTops`, `volumes`), `rendermidi.cpp` `trackLevel`, `TrackDelays::patchGain`; data: map `<Mics>`, `micLevels` / `micDefault` from `mic_levels.py` | `[levels] micCompensation`; score: `playbackSettings` |

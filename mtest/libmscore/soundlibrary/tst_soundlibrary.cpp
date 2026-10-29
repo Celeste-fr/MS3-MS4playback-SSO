@@ -241,6 +241,7 @@ class TestSoundLibrary : public QObject, public MTest
       void chordVoices();
       void voiceLanesMemory();
       void divisiLevel();
+      void evenKeys();
       void monoUnison();
 #ifdef TESTSYNTH
       void vialHosted();
@@ -1984,7 +1985,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[shorts]\n", "[shorts]\nstaccatoLength=%11\n").replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nattackLevels=%7\ntransitionLevels=%7\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nmicrotoneBends=%10\nfastTransitions=%6\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=%6\n";
+                                + "\n[levels]\nevenKeys=%6\nattackLevels=%7\ntransitionLevels=%7\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nmicrotoneBends=%10\nfastTransitions=%6\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=%6\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2).arg(3).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1993,15 +1994,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAuto=0\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nevenKeys=0\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAuto=0\nplainAccents=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n"));
+               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n\n[shorts]\nstaccatoLength=1\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n\n[shorts]\nstaccatoLength=1\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -2031,7 +2032,7 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "levels/transitionLevels", 0 }, { "shorts/staccatoLength", 0 }, { "notes/transportReset", 0 }, { "slurs/fastTransitions", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "levels/transitionLevels", 0 }, { "levels/evenKeys", 0 }, { "shorts/staccatoLength", 0 }, { "notes/transportReset", 0 }, { "slurs/fastTransitions", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // attackLevels likewise (2 by default since 2026-10-23, Recommended's)
       QCOMPARE(Playback::detectPreset({ { "levels/attackLevels", 2 } }), QString("recommended"));
@@ -2068,7 +2069,7 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                          { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
-                                         { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "levels/transitionLevels", 0 }, { "shorts/staccatoLength", 0 }, { "notes/transportReset", 0 }, { "slurs/fastTransitions", 0 } }),
+                                         { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "levels/transitionLevels", 0 }, { "levels/evenKeys", 0 }, { "shorts/staccatoLength", 0 }, { "notes/transportReset", 0 }, { "slurs/fastTransitions", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 } }), QString());
@@ -2082,6 +2083,9 @@ void TestSoundLibrary::playbackPresets()
       // divisi left out: its default 1, Recommended's; Library default needs 0 (the owner, 2026-10-20)
       QCOMPARE(Playback::detectPreset({ { "levels/divisi", 0 }, { "levels/attackLevels", 0 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/divisi", 1 } }), QString("recommended"));
+      // evenKeys likewise (1 by default since 2026-10-28, Recommended's)
+      QCOMPARE(Playback::detectPreset({ { "levels/evenKeys", 1 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "levels/evenKeys", 0 } }), QString());
       // realRange left out: its default 2, Recommended's; Library default needs 0 (the owner, 2026-10-13; 2 since
       // 2026-10-14); 1 (the Meyer rule) is neither
       QCOMPARE(Playback::detectPreset({ { "levels/realRange", 1 } }), QString());
@@ -17353,6 +17357,123 @@ void TestSoundLibrary::voiceLanesMemory()
       Playback::setIniValuesForTest({ { "tuning/maxLanes", "1" } });
       QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   evenKeys
+//    [levels] evenKeys (the owner, 2026-10-28): the Long's <Articulation keyLevels="pitch:dB …"> played on top of the
+//    real range's realDb by CC11, inside the part's R (a raised key has headroom); only on its listed keys and its own
+//    articulation; off with evenKeys 0 or realRange 0; bad attributes refused; the shipped maps: every wind and brass
+//    Long of the semitone sweep carries them within +-T of nothing larger than the sweep's deviations, the Vial maps the
+//    same keys as SSO's
+//---------------------------------------------------------
+
+void TestSoundLibrary::evenKeys()
+      {
+      auto mapWith = [this](const char* keys) {
+            return loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short'/>"
+               "<Instrument name='Violin' ids='violin' realSpan='60:28 84:28'"
+               " longLevel='16/60:-6 64/60:0 112/60:3 127/60:4 16/84:-6 64/84:0 112/84:3 127/84:4'>"
+               "<Articulation name='Long' value='1' techniques='long legato' keyLevels='%1'/>"
+               "<Articulation name='Staccato' value='40' techniques='short'/>"
+               "</Instrument></SoundLibrary>").arg(keys));
+            };
+      for (const char* bad : { "74", "x:1", "74:y", "74:1 74:2", "128:1", "-1:1" })
+            QVERIFY2(!mapWith(bad), bad);
+      // (real-range.musicxml: C5 72 ppp, D5 74 mp, E5 76 fff, A4 69 a staccato at fff; see levelRealRange)
+      auto lib = mapWith("72:-2.5 74:3 69:5");
+      QVERIFY(lib);
+      QCOMPARE(lib->instruments.front().articulations.front().keyLevelAt(74), 3.0);
+      QCOMPARE(lib->instruments.front().articulations.front().keyLevelAt(75), 0.0);
+      SoundLib::setCurrent(lib);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      QCOMPARE(Playback::definition("levels/evenKeys")->value, 1.0);
+      MasterScore* score = readScore(DIR + "real-range.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto render = [&]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            SynthesizerState ss;
+            score->renderMidi(&events, false, true, ss);
+            std::map<int, int> cc11At;          // pitch -> CC11 in force at its note-on
+            int cc11 = 127;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION)
+                        cc11 = ev.value();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0 && !cc11At.count(ev.pitch()))
+                        cc11At[ev.pitch()] = cc11;
+                  }
+            return cc11At;
+            };
+      auto cc11 = [](double db) { return qBound(1, int(std::lround(127 * std::pow(10.0, db / 20))), 127); };
+      // on (the default) with the real range: ppp -6 - 2.5, mp 0 + 3, fff 12 (R 12); the staccato's 69 not (another articulation)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" } });
+      std::map<int, int> n = render();
+      QCOMPARE(n[72], cc11(-8.5 - 12));
+      QCOMPARE(n[74], cc11(3 - 12));
+      QCOMPARE(n[76], 127);
+      QCOMPARE(n[69], 127);
+      // off: the real range alone
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" }, { "levels/evenKeys", "0" } });
+      n = render();
+      QCOMPARE(n[72], cc11(-6 - 12));
+      QCOMPARE(n[74], cc11(0 - 12));
+      // without the real range nothing (Library default's)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "0" }, { "levels/evenKeys", "1" } });
+      n = render();
+      QCOMPARE(n[72], 127);
+      QCOMPARE(n[74], 127);
+      // a raised key above the part's loudest: in R (12 + 2), its patch's volume plays it, the rest 2 lower
+      auto raised = mapWith("76:2");
+      SoundLib::setCurrent(raised);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/realRange", "1" } });
+      const std::map<const Part*, double> tops = ContextLevel::realRangeTops(score);
+      QVERIFY2(std::fabs(tops.at(score->parts()[0]) - 14) < 1e-9, qPrintable(QString::number(tops.at(score->parts()[0]))));
+      n = render();
+      QCOMPARE(n[76], 127);
+      QCOMPARE(n[74], cc11(0 - 14));
+      delete score;
+      // the shipped maps
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      auto vial = SoundLib::Library::load(root + "/../share/soundlibraries/Vial Instrumental.xml", &error);
+      QVERIFY2(vial, qPrintable(error));
+      auto longOf = [](const SoundLib::Library& l, const QString& name) -> const SoundLib::Articulation* {
+            for (const SoundLib::LibInstrument& li : l.instruments)
+                  if (li.name == name)
+                        for (const SoundLib::Articulation& a : li.articulations)
+                              if (a.value == 1)
+                                    return &a;
+            return nullptr;
+            };
+      int patches = 0;
+      for (const SoundLib::LibInstrument& li : sso->instruments) {
+            for (const SoundLib::Articulation& a : li.articulations) {
+                  if (a.keyLevels.empty())
+                        continue;
+                  ++patches;
+                  QVERIFY2(a.value == 1 && !li.longLevel.empty(), qPrintable(li.name));
+                  for (const auto& k : a.keyLevels)
+                        QVERIFY2(std::fabs(k.second) > 0.0 && std::fabs(k.second) < 10.0, qPrintable(li.name));
+                  }
+            }
+      QCOMPARE(patches, 34);
+      // (Oboe Solo's 71-72 zone under the curve, 75-76 over it; sso_even_keys.json)
+      const SoundLib::Articulation* oboe = longOf(*sso, "Oboe Solo");
+      QVERIFY(oboe && oboe->keyLevelAt(72) > 4 && oboe->keyLevelAt(76) < -6 && oboe->keyLevelAt(58) == 0.0);
+      QVERIFY(!longOf(*sso, "Violins 1") || longOf(*sso, "Violins 1")->keyLevels.empty());
+      for (const char* name : { "Flute Solo", "Oboe Solo", "Clarinet Solo", "Bassoon Solo", "Horn Solo", "Trumpet Solo",
+                                "Tenor Trombone Solo", "Tuba Solo" }) {
+            const SoundLib::Articulation* s = longOf(*sso, name);
+            const SoundLib::Articulation* v = longOf(*vial, name);
+            QVERIFY2(s && v && !s->keyLevels.empty() && s->keyLevels == v->keyLevels, name);
+            }
       }
 
 //---------------------------------------------------------

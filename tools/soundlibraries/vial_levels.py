@@ -11,7 +11,8 @@ dynamic, measured, not by ear").
                          [--map "share/soundlibraries/Vial Instrumental.xml"] [-o vial_levels_check.json]
 
 sweep: for each preset (gen_vial.py PRESETS), the events of sso_cc1_sweep.py (CC11 127, a warm-up note, then at every
-pitch SSO's sweep measured - sso_cc1_curves.json / sso_winds_cc1_curves.json - CC1 16 32 48 64 80 96 112 127, velocity =
+pitch SSO's sweep measured - sso_cc1_curves.json / sso_winds_cc1_curves.json, the winds every semitone since 2026-10-28:
+sso_winds_cc1_semitone.json - CC1 16 32 48 64 80 96 112 127, velocity =
 CC1 as MuseScore sends a Long, `repeats` notes of 3.0 s, 1.5 s apart; no UACC switch: Vial has none), rendered offline by
 kthost (MuseScore's own hosting code, 44.1 kHz, 512-frame blocks split at each event) with the preset's bytes as the
 component state, as MuseScore loads a preset library (SoundLibraryHost::savedSetupState: writeState("Vial", bytes)), then
@@ -57,7 +58,9 @@ import sso_cc1_sweep       # noqa: E402  (make_events, analyze, MEASURES)
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..'))
 SSO_MAP = os.path.join(ROOT, 'share', 'soundlibraries', 'Spitfire Symphony Orchestra.xml')
 VIAL_MAP = os.path.join(ROOT, 'share', 'soundlibraries', 'Vial Instrumental.xml')
-SSO_CURVES = [os.path.join(HERE, 'sso_cc1_curves.json'), os.path.join(HERE, 'sso_winds_cc1_curves.json')]
+# (later files win per section: the winds' every-semitone sweep of 2026-10-28 over the 3-semitone one)
+SSO_CURVES = [os.path.join(HERE, 'sso_cc1_curves.json'), os.path.join(HERE, 'sso_winds_cc1_curves.json'),
+              os.path.join(HERE, 'sso_winds_cc1_semitone.json')]
 CURVES = os.path.join(HERE, 'vial_cc1_curves.json')
 LEVELS = os.path.join(HERE, 'vial_levels.json')
 MARKINGS = [('ppp', 16), ('pp', 32), ('p', 48), ('mp', 64), ('mf', 80), ('f', 96), ('ff', 112), ('fff', 127)]
