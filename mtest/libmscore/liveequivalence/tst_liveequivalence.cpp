@@ -7530,7 +7530,7 @@ void TestLiveEquivalence::liveGuitarSoftRoll()
       {
       struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       const SoundLib::Guitar& g = *ample->instruments.front().guitar;
       // (strumLead 0 here: MuseScore's start lead, which Live's clips don't have, would shift every event; the lead itself
@@ -7686,7 +7686,7 @@ void TestLiveEquivalence::liveMasterVol()
       {
       struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       // (strumLead 0 here: MuseScore's start lead, which Live's clips don't have, would shift every event; the lead: liveGuitarSoftRoll)
       for (const auto& in : ample->instruments)
@@ -7878,7 +7878,7 @@ void TestLiveEquivalence::hostedReadBack()
       titles.write("M-Master Vol\t0\t0.5\nM-Capo\t11\t0\nM-Pan\t0\t0.5\n");
       titles.close();
       qputenv("MSTESTSYNTH_PARAMS", titles.fileName().toLocal8Bit());
-      QFile mf(root + "/../share/soundlibraries/Ample Guitar M.xml");
+      QFile mf(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml");
       QVERIFY(mf.open(QIODevice::ReadOnly));
       const QString mapText = QString::fromUtf8(mf.readAll());
       LiveHost host(this, "", {}, mapText);

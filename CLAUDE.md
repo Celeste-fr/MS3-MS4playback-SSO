@@ -366,8 +366,9 @@ from `tools/tuning/gen_tuning_tables.py`; `mscore/tuningdialog.*`; plugin API `p
   Long at SSO's level on loud1sDb (the loudest 50 ms of a note's first second, the owner, 2026-10-29; test within 0.5 dB; on loudDb, the 3 s peak, check <= 0.53 dB until then; other measures: winds +2 .. +7 phon louder; docs/PLAYBACK_SETTINGS.md ›
   Vial levels); no other SSO measurement (calibration, onsets, mics). An engine as SSO is
   (the global box or a part's *Part playback*, together with SSO parts: › Several libraries; Fuse its variant). Live / MIDI out untried (LIVE.md › What still differs).
-- **Ample guitars** (branch `ample-map`, 2026-10-18; HANDOFF.md › Ample guitars): `share/soundlibraries/Ample Guitar
-  M.xml` is generated, never hand-edited: `python3 tools/soundlibraries/gen_ample.py [--product <code>] <amphost dump>
+- **Ample guitars** (branch `ample-map`, 2026-10-18; HANDOFF.md › Ample guitars; **dormant since 2026-10-29**: the owner is
+  not buying them, so the map is no longer shipped: it is `tools/soundlibraries/ample/Ample Guitar M.xml`, kept for the tests
+  and a later purchase; to ship it again, move it back into `share/soundlibraries/`): `Ample Guitar M.xml` is generated, never hand-edited: `python3 tools/soundlibraries/gen_ample.py [--product <code>] <amphost dump>
   [out]` (the dump stays outside the repo: `~/MuseScore/ms3fork/private/ample-map/agm-info.txt`). **A new Ample guitar**
   (AGSJ, AG12, AGL, AGT, after purchase): **docs/AMPLE_PIPELINE.md** (branch `ample-pipeline`, 2026-10-21): amphost
   (`tools/soundlibraries/amphost/`) -> `tools/ample/measure_ample.py` (VM) -> `ample_<code>.json` -> `gen_ample.py

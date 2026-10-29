@@ -5574,7 +5574,7 @@ void TestSoundLibrary::chunkedEqualsWhole()
       QString error;
       auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
       QVERIFY2(sso, qPrintable(error));
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       auto cal = SoundLib::readCalibration(QString(), root + "/../share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json");
       QVERIFY(cal);
@@ -7133,7 +7133,7 @@ void TestSoundLibrary::keyShift()
 void TestSoundLibrary::ampleMap()
       {
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       QCOMPARE(ample->name, QString("Ample Guitar M"));
       QCOMPARE(ample->dynamicsCC, -1);
@@ -7224,7 +7224,7 @@ void TestSoundLibrary::ampleMap()
 void TestSoundLibrary::ampleRender()
       {
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       SoundLib::setCurrent(ample);
       MasterScore* score = readScore(DIR + "guitar.musicxml");
@@ -7582,7 +7582,7 @@ static bool guitarTapBefore(const std::vector<GuitarEvent>& v, int i, int key, i
 
 #define GUITAR_SETUP \
       QString error; \
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error); \
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error); \
       QVERIFY2(ample, qPrintable(error)); \
       QVERIFY(ample->instruments.front().guitar); \
       const SoundLib::Guitar& g = *ample->instruments.front().guitar; \
@@ -7768,7 +7768,7 @@ void TestSoundLibrary::ampleStrumLead()
                   }
       {
       QString e2;
-      auto map = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &e2);
+      auto map = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &e2);
       QVERIFY(map && map->instruments.front().guitar);
       leadMs = map->instruments.front().guitar->strumLeadMs;
       }
@@ -8538,7 +8538,7 @@ void TestSoundLibrary::controllerDisplay()
 void TestSoundLibrary::ampleStateControllers()
       {
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       const SoundLib::LibInstrument& agm = ample->instruments[0];
       auto byId = [&agm](const QString& id) -> const SoundLib::Controller* {
@@ -8660,7 +8660,7 @@ void TestSoundLibrary::ampleStateControllers()
 void TestSoundLibrary::ampleStateLoads()
       {
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       const SoundLib::LibInstrument& agm = ample->instruments[0];
       SoundLib::setCurrent(ample);
@@ -9424,7 +9424,7 @@ void TestSoundLibrary::ssoScriptFindings()
       QVERIFY(PluginState::nkaValue("not an array\n1\n", 0).isNull());
       QVERIFY(PluginState::nkaValue(QByteArray(), 0).isNull());
       // (the Ample check as before: Documents, a JUCE file, bad=)
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       QVERIFY(ample->settingsChecks[0].folder.isEmpty() && ample->settingsChecks[0].format.isEmpty());
       QVERIFY(ample->settingsChecks[0].isBad("true") && !ample->settingsChecks[0].isBad("false"));
@@ -10364,7 +10364,7 @@ void TestSoundLibrary::backgroundLoad()
       }
       // the map
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       QCOMPARE(ample->backgroundLoad, 60.0);
       auto plain = loadMap("<SoundLibrary name='t'><Plugin files='a.vst3'/><Instrument name='Violin' ids='violin'>"
@@ -16195,7 +16195,7 @@ void TestSoundLibrary::pluginStateValues()
 void TestSoundLibrary::ampleStateWritten()
       {
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       const SoundLib::LibInstrument& agm = ample->instruments[0];
       QByteArray xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\n<AAG_STATE Name=\"Default\" Ver=\"4.1.0\">"
@@ -16275,7 +16275,7 @@ void TestSoundLibrary::ampleSettingsWarning()
       QVERIFY(!PluginState::propertiesValue("<VALUE name=\"a\" val=\"\"/>", "a").isNull());
       // the map's check: the file, the name, the bad values
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       QCOMPARE(int(ample->settingsChecks.size()), 1);
       const SoundLib::Library::SettingsCheck& c = ample->settingsChecks[0];
@@ -16298,7 +16298,7 @@ void TestSoundLibrary::ampleSettingsWarning()
 void TestSoundLibrary::ampleParameters()
       {
       QString error;
-      auto ample = SoundLib::Library::load(root + "/../share/soundlibraries/Ample Guitar M.xml", &error);
+      auto ample = SoundLib::Library::load(root + "/../tools/soundlibraries/ample/Ample Guitar M.xml", &error);
       QVERIFY2(ample, qPrintable(error));
       const SoundLib::LibInstrument& agm = ample->instruments[0];
       QTemporaryFile titles;

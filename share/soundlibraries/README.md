@@ -439,7 +439,7 @@ switch value of each articulation. For example:
   capo at the score's start plays the score that much later, the parameter at 0); `pinch="partial velocity
   delayMs lengthMs"` (`[guitar] pinchHarmonics`); `fxLength` ms and `<Fx text="regex" key>` (staff text, the whole text,
   case-insensitive, that plays an FX noise key). A bad value refuses the map.
-- **Ample Guitar M** (`Ample Guitar M.xml`, generated: `python3 tools/soundlibraries/gen_ample.py <dump>`, the dump
+- **Ample Guitar M** (not shipped since 2026-10-29: `tools/soundlibraries/ample/Ample Guitar M.xml`, move it here to use it; generated: `python3 tools/soundlibraries/gen_ample.py <dump>`, the dump
   being amphost's parameter list of AGM 4.1.0, kept outside the repository): the steel-string guitars play it,
   hosted as `AGM.vst3`, an instance per part; every one of its 124 parameters is a lane (by its title), with CC7
   (Volume: the same gain as M-Master Vol, 64 = unity; hosted and in Live played as M-Master Vol, `hosted=`), CC1 (Vibrato), CC64 (Hold Pedal) and the sample set

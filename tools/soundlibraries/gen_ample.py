@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Generate an Ample guitar's map (share/soundlibraries/<name>.xml) from a parameter dump of the plug-in.
+"""Generate an Ample guitar's map (tools/soundlibraries/ample/<name>.xml) from a parameter dump of the plug-in.
 
     python3 tools/soundlibraries/gen_ample.py [--product AGM|AGSJ|AG12|AGL|AGT] [--state <default.state>]
                                               [--allow-todo] <info dump> [out]
-    python3 tools/soundlibraries/gen_ample.py <agm-info.txt> ["share/soundlibraries/Ample Guitar M.xml"]   (AGM)
+    python3 tools/soundlibraries/gen_ample.py <agm-info.txt> ["tools/soundlibraries/ample/Ample Guitar M.xml"]   (AGM)
 
 --product (default AGM) picks the product's facts (ample_products.py: name, plug-in file, instrument ids, body, slide
 guitar key) and measured numbers (ample_<code>.json, written by tools/ample/measure_ample.py merge: sample sets, strum
@@ -652,7 +652,7 @@ def main(argv):
         print(__doc__)
         return 2
     product = ample_products.get(code)
-    out_path = rest[1] if len(rest) > 1 else "share/soundlibraries/%s.xml" % product["name"]
+    out_path = rest[1] if len(rest) > 1 else "tools/soundlibraries/ample/%s.xml" % product["name"]
     names = None
     if state:
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ample"))

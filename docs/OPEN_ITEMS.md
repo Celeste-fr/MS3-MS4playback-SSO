@@ -304,7 +304,7 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
 - **Fix**: write Track Delays and a Utility per track in the route set (hand-made tracks would need them typed).
 - **Own**: whether the route set should write them. The plain set (Create Live Set) is the path that carries them.
 
-### 10. Quiet or dark Ample sounds and Ample-specific gaps
+### 10. Quiet or dark Ample sounds and Ample-specific gaps (dormant 2026-10-29: Ample not bought, map not shipped)
 - **Found (2026-10-21, branch `ample-pipeline`)**: the quiet / dark strums are **not the demo**: AGM's strummer reads its
   set-up (strum mode, Detect, the chord keys) only from an earlier process block than the strum key. In the same block
   every strum plays dark and partial (centroid ~350-600 Hz against ~1200, 2-6 dB quieter) and, at exact multiples of
@@ -524,7 +524,7 @@ last (the AGM trial has ended; they wait for the bought guitars).
 - **Miss**: whether an activated AGM crashes at all (the bought guitars: `check.py` twice, once with `--block-network`).
 - **Untried**: GUI (a GUI crash would take MuseScore down). AGM trial ends ~2026-10-25.
 
-### 13. Ample capo, state lanes and other Ample limits
+### 13. Ample capo, state lanes and other Ample limits (dormant 2026-10-29: Ample not bought, map not shipped)
 - **Real Live (2026-10-22, Live 12.4.7, #464, `tools/live/realcheck`)**: Ample's plain set opens, exports and saves; per
   note Live plays MuseScore's level and time (113 notes: median −0.07 dB, onsets 0 ms) but the Sustain track doesn't
   null (correlation 0.32; MuseScore against itself bit-identical): AGM's own variation isn't reset by Live's transport,
@@ -801,7 +801,7 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
 - **Effort**: 2-3 days (GUI automation is the risk). VM: one heavy job.
 - **Unlocks**: 6, 7, 23, the whole "Untried in real Live" list; Ample in Live (13).
 
-### 6. Ample per-guitar map pipeline (for the four guitars bought later)
+### 6. Ample per-guitar map pipeline (CLOSED 2026-10-29: the owner is not buying the guitars; dormant)
 - **Built (2026-10-21, branch `ample-pipeline`)**: docs/AMPLE_PIPELINE.md; `tools/ample/`, `tools/soundlibraries/amphost/`,
   `ample_products.py`, `ample_AGM.json`, `gen_ample.py --product`. Left: the C++ tests still count AGM's map (`ampleMap`).
 - **Spec**: `tools/soundlibraries/amphost/` (sanitized amphost `info` / `render` / multi-instance, msvc-wine) and

@@ -1008,11 +1008,13 @@ transitions / Fast transitions; LIVE.md (Create Live Set embeds the fixed state;
 
 ## Ample guitars (branch `ample-map`, 2026-10-18, from integrate-1017 c0d2f7325c; not merged)
 
+Dormant since 2026-10-29 (the owner is not buying them): the map is `tools/soundlibraries/ample/Ample Guitar M.xml`, no longer in the engine list; the tests load it from there. Move it back into `share/soundlibraries/` to ship it. The generator's output path below is that folder.
+
 The owner, 2026-10-18: "I want to be able to control all the parameters directly in MuseScore. ALL of them." Phase 1
 is Ample Guitar M (`AGM.vst3`, hosted directly, not Kontakt); the dump it is generated from stays outside the repo
 (`~/MuseScore/ms3fork/private/ample-map/agm-info.txt`, amphost).
 
-- **Generator**: `python3 tools/soundlibraries/gen_ample.py <dump> [out]` writes `share/soundlibraries/Ample Guitar M.xml`
+- **Generator**: `python3 tools/soundlibraries/gen_ample.py <dump> [out]` writes `tools/soundlibraries/ample/Ample Guitar M.xml`
   (never hand-edited); test `tools/soundlibraries/test_gen_ample.py` (in run_fork_tests.sh).
 - **The map**: all 124 real plug-in parameters as `param` controllers by title (Bypass included; MIDI CC proxies left
   out), each with its patchDefault, and steps / display where the dump gives texts (62): a linear table thinned to its

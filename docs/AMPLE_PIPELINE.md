@@ -1,7 +1,7 @@
 # Adding an Ample guitar: the pipeline
 
-For an agent adding one of the owner's Ample acoustic guitars (AGSJ, AG12, AGL, AGT; AGM is done) after he has bought
-and activated it. Everything here was run on Ample Guitar M 4.1.0 (the VM's trial, 2026-10-21) as the regression case;
+DORMANT (the owner, 2026-10-29: not buying the Ample guitars; the maps live in `tools/soundlibraries/ample/`, not shipped).
+For an agent adding one of the Ample acoustic guitars (AGSJ, AG12, AGL, AGT; AGM is done) if he ever buys and activates one. Everything here was run on Ample Guitar M 4.1.0 (the VM's trial, 2026-10-21) as the regression case;
 the four others have no trial, so their first contact is the bought copy. Read CLAUDE.md › Sound libraries › Ample
 guitars and HANDOFF.md › Ample guitars first; the private reports named below are on the owner's dev machine.
 
@@ -12,7 +12,7 @@ guitars and HANDOFF.md › Ample guitars first; the private reports named below 
 | amphost | `tools/soundlibraries/amphost/` (`amphost.cpp`, `CMakeLists.txt`, `build.sh`) | a small Windows VST 3 host: `info` (the parameter dump), `load`, `render <events> <wav>`. Only the VST 3 API; nothing of Ample's. Build on Linux with msvc-wine: `tools/soundlibraries/amphost/build.sh` -> `/tmp/amphost-build/amphost.exe` |
 | products | `tools/soundlibraries/ample_products.py` | per product: name, plug-in file, MuseScore instrument ids, body, slide guitar key, natural-harmonic range (from the manuals); every number not measured is a `TODO(<experiment>)` |
 | measured numbers | `tools/soundlibraries/ample_<code>.json` | what `measure_ample.py merge` wrote (numbers only, with each key's source) |
-| generator | `tools/soundlibraries/gen_ample.py --product <code> [--state <default.state>] [--allow-todo] <dump> [out]` | the map `share/soundlibraries/<name>.xml`; stops on a TODO (naming the experiment) unless `--allow-todo` |
+| generator | `tools/soundlibraries/gen_ample.py --product <code> [--state <default.state>] [--allow-todo] <dump> [out]` | the map `tools/soundlibraries/ample/<name>.xml`; stops on a TODO (naming the experiment) unless `--allow-todo` |
 | measurements | `tools/ample/measure_ample.py --product <code> --out <private dir> <experiments…>` | the renders on the VM and their analysis; `merge` writes `ample_<code>.json` |
 | check | `tools/ample/check.py --product <code> --build <VM build dir> --out <private dir> [--map <xml>] [--ref <results.json>]` | MuseScore's own renders of the check scores through the real plug-in, PASS / FAIL in `report.md` |
 | check scores | `tools/ample/check_scores.py <dir>` | the check's MusicXML scores, from the repo's `mtest/libmscore/soundlibrary/guitar-techniques.musicxml` + the checks' bars (no owner score) |
@@ -77,7 +77,7 @@ Keep every `--out` folder under `~/MuseScore/ms3fork/private/` (states, dumps, r
    Diff the new map against `Ample Guitar M.xml`: only the names, ids, measured numbers and product keys may differ.
 6. **Linux tests**: `tools/run_fork_tests.sh` through the wrapper (the map's own C++ tests are AGM's: `ampleMap`
    counts AGM's controllers; a new map is checked on the VM). Then `tools/check_windows_names.sh`.
-7. **Check on the VM**: `tools/ample/check.py --product <code> --build 'C:\claude\<build>\ms' --map "share/soundlibraries/<name>.xml" --out ~/MuseScore/ms3fork/private/ample-<code>/check1`.
+7. **Check on the VM**: `tools/ample/check.py --product <code> --build 'C:\claude\<build>\ms' --map "tools/soundlibraries/ample/<name>.xml" --out ~/MuseScore/ms3fork/private/ample-<code>/check1`.
    The build must be one with the current C++; `--map` puts the new map into it. Every row must be PASS; INFO rows
    go into the report. Run it twice (or `--repeat 3` on tech-on, the default): determinism is a row.
 8. **Ask the owner** (the review page with the clips, CLAUDE.md › Rules: the owner decides what is heard): the
