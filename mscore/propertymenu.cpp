@@ -219,7 +219,7 @@ void ScoreView::createElementPropertyMenu(Element* e, QMenu* popup)
       else if (e->isSlurSegment()) {
             genPropertyMenu1(e, popup);
             // a phrase mark plays no legato (libmscore/slur.h); Alt+S does the same
-            QAction* a = popup->addAction(tr("Phrase mark (no legato)"));
+            QAction* a = popup->addAction(tr("Phrase Mark (No Legato)"));
             a->setCheckable(true);
             a->setChecked(toSlurSegment(e)->slur()->phraseMark());
             a->setData("phrase-mark");

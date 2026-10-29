@@ -258,7 +258,7 @@ QString SoundLibraryHost::pluginPath(const SoundLib::Library& library, QString* 
                   }
             }
       if (error)
-            *error = QObject::tr("The plug-in of %1 (%2) was not found in %3. Choose it in Preferences › I/O › Sound library.")
+            *error = QObject::tr("The plug-in of %1 (%2) was not found in %3. Choose it in Preferences > I/O > Sound Library.")
                      .arg(library.name, library.plugins.join(", "), pluginFolders().join(", "));
       return QString();
       }
@@ -1222,7 +1222,7 @@ QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, c
             QFile f(file);                      // (a setup file of the patch's own, else the preset's absence)
             if (f.open(QIODevice::ReadOnly))
                   return f.readAll();
-            *error = preset.isEmpty() ? tr("%1: the folder of its presets was not found. Choose it in View › Sound Library… › Library folder….").arg(library.name)
+            *error = preset.isEmpty() ? tr("%1: the folder of its presets was not found. Choose it in View > Sound Library > Library folder….").arg(library.name)
                                       : tr("The preset of %1 was not found: %2").arg(patch, QDir::toNativeSeparators(preset));
             return QByteArray();
             }
@@ -1238,7 +1238,7 @@ QByteArray SoundLibraryHost::savedSetupState(const SoundLib::Library& library, c
             }
       const QString nki = nkiPath(library, patch);
       if (nki.isEmpty()) {
-            *error = tr("%1 was not found on this computer. Choose its folder in View › Sound Library… › Library folder….")
+            *error = tr("%1 was not found on this computer. Choose its folder in View > Sound Library > Library folder….")
                      .arg(library.name);
             return QByteArray();
             }
@@ -4139,7 +4139,7 @@ void SoundLibraryDialog::rebuild()
                   open.insert(_tree->topLevelItem(i)->text(0));
       _tree->clear();
       if (!_library || !score) {
-            _info->setText(!_library ? tr("No sound library is chosen (Preferences › I/O › Sound library).") : tr("No score is open."));
+            _info->setText(!_library ? tr("No sound library is chosen (Preferences > I/O > Sound Library).") : tr("No score is open."));
             return;
             }
       score = score->masterScore();
@@ -4306,7 +4306,7 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
       setWindowTitle(tr("Advanced Options: %1").arg(score->title()));
       QVBoxLayout* layout = new QVBoxLayout(this);
       if (!_library) {
-            layout->addWidget(new QLabel(tr("No sound library is chosen (Preferences › I/O › Sound library)."), this));
+            layout->addWidget(new QLabel(tr("No sound library is chosen (Preferences > I/O > Sound Library)."), this));
             QDialogButtonBox* buttons = new QDialogButtonBox(QDialogButtonBox::Close, this);
             connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
             layout->addWidget(buttons);

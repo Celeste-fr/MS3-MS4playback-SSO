@@ -380,7 +380,7 @@ static QString resultText(const QVector<Item>& items, const InstallResult& r)
       if (r.oneDrive)
             t += "\n\n" + (r.pinned ? QObject::tr("Pinned in OneDrive (Always keep on this device).")
                                     : QObject::tr("The User Library is in OneDrive, and pinning the files there didn't "
-                                                  "work: in Explorer, right-click them › Always keep on this device."));
+                                                  "work: in Explorer, right-click them > Always keep on this device."));
       bool scriptNew = false;
       bool scriptChanged = false;
       bool deviceChanged = false;
@@ -396,13 +396,13 @@ static QString resultText(const QVector<Item>& items, const InstallResult& r)
       if ((scriptNew || scriptChanged) && running)
             t += "\n\n" + QObject::tr("Live is running: restart Live to load the MuseScoreEnvelopes script.");
       if (scriptNew)
-            t += "\n\n" + QObject::tr("Then, once, in Live: Settings › Tempo & MIDI › Control Surface: choose "
+            t += "\n\n" + QObject::tr("Then, once, in Live: Settings > Tempo & MIDI > Control Surface: choose "
                                       "MuseScoreEnvelopes in a free row, Input and Output None.");
       if (deviceChanged)
             t += "\n\n" + QObject::tr("MuseScore Link: Live sets refer to the device's file in the User Library, so reopen "
                                       "your Live sets (or reload the device) to use the new version. Devices that were "
                                       "dragged in from a MuseScore build folder still point there: re-add them once from "
-                                      "Live's browser (User Library › Presets › MIDI Effects › Max MIDI Effect).");
+                                      "Live's browser (User Library > Presets > MIDI Effects > Max MIDI Effect).");
       return t;
       }
 
@@ -454,7 +454,7 @@ static void showPrompt(QWidget* parent, const QString& lib, const QVector<Item>&
       QPushButton* later = box->addButton(QObject::tr("Not now"), QDialogButtonBox::RejectRole);
       QPushButton* never = box->addButton(QObject::tr("Don't ask again"), QDialogButtonBox::DestructiveRole);
       never->setToolTip(QObject::tr("Not asked again at startup until a MuseScore comes with other versions of these files. "
-                                    "Mixer › Advanced Options… › Ableton Live › Install Live helpers… installs them any time."));
+                                    "Mixer > Advanced Options… > Ableton Live > Install Live helpers… installs them any time."));
       v->addWidget(box);
       QObject::connect(later, &QPushButton::clicked, d, &QDialog::close);
       QObject::connect(never, &QPushButton::clicked, d, [d, version]() {
@@ -548,7 +548,7 @@ void controlSurfaceHint(QWidget* parent)
             }
       QMessageBox* m = new QMessageBox(QMessageBox::Information, QObject::tr("Ableton Live: Control Surface"),
                                        QObject::tr("A clip tab's automation lanes need Live's MuseScoreEnvelopes script, "
-                                                   "and it doesn't answer.\n\nIn Live: Settings › Tempo & MIDI › Control "
+                                                   "and it doesn't answer.\n\nIn Live: Settings > Tempo & MIDI > Control "
                                                    "Surface: choose MuseScoreEnvelopes in a free row, Input and Output None. "
                                                    "(Not in the list: restart Live.)"), QMessageBox::Ok, parent);
       m->setAttribute(Qt::WA_DeleteOnClose);

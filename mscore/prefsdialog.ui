@@ -3076,7 +3076,7 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
        <item>
         <widget class="QGroupBox" name="soundLibraryGroup">
          <property name="title">
-          <string>Sound library (external MIDI)</string>
+          <string>Sound Library</string>
          </property>
          <layout class="QGridLayout" name="soundLibraryLayout">
           <item row="0" column="0">
@@ -3243,7 +3243,7 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
           <item row="4" column="0" colspan="6">
            <widget class="QLabel" name="soundLibraryInfo">
             <property name="text">
-             <string>Parts the library has an instrument for play with the articulation their notation asks for, instead of on the built-in synthesizer: through the library's plug-in, hosted by MuseScore (its setup per instrument: View › Sound Library…), or through MIDI output (A, then B, C, D: 16 parts each) to a host of its own. Needs the MuseScore 4 dynamics method (Synthesizer).</string>
+             <string>Parts the library has an instrument for play with the articulation their notation asks for, instead of on the built-in synthesizer: through the library's plug-in, hosted by MuseScore (its setup per instrument: View > Sound Library), or through MIDI output (A, then B, C, D: 16 parts each) to a host of its own. Needs the MuseScore 4 dynamics method (Synthesizer).</string>
             </property>
             <property name="wordWrap">
              <bool>true</bool>

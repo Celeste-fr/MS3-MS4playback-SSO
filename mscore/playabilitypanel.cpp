@@ -258,11 +258,11 @@ PlayabilityPanel::PlayabilityPanel(QWidget* parent)
 void PlayabilityPanel::retranslate()
       {
       setWindowTitle(tr("Playability"));
-      _table->setHorizontalHeaderLabels({ "", tr("Bar"), tr("Staff"), tr("Reason") });
+      _table->setHorizontalHeaderLabels({ "", tr("Measure"), tr("Staff"), tr("Reason") });
       _prev->setToolTip(tr("Previous instrument"));
       _next->setToolTip(tr("Next instrument"));
       _toggle->setToolTip(tr("Switch between the diagram of the selection and the list"));
-      _off->setText(tr("The playability check is off (View › Check Playability)."));
+      _off->setText(tr("The playability check is off (View > Check Playability)."));
       }
 
 void PlayabilityPanel::changeEvent(QEvent* e)
@@ -400,7 +400,7 @@ void PlayabilityPanel::fitReasonColumn()
       {
       QFontMetrics fm = _table->fontMetrics();
       QFontMetrics hm = _table->horizontalHeader()->fontMetrics();
-      int bw = hm.horizontalAdvance(tr("Bar")), sw = hm.horizontalAdvance(tr("Staff")), rw = hm.horizontalAdvance(tr("Reason"));
+      int bw = hm.horizontalAdvance(tr("Measure")), sw = hm.horizontalAdvance(tr("Staff")), rw = hm.horizontalAdvance(tr("Reason"));
       for (const PlayabilityRow& r : _rows) {
             bw = std::max(bw, fm.horizontalAdvance(QString::number(r.bar)));
             sw = std::max(sw, fm.horizontalAdvance(r.staffShort));

@@ -8181,7 +8181,7 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   cs->startCmd();
                   const int n = cs->cmdAdaptKeySigsToClefs();
                   cs->endCmd();
-                  QMessageBox::information(this, tr("Adapt key signatures to clefs"), n
+                  QMessageBox::information(this, tr("Adapt Key Signatures to Clefs"), n
                      ? tr("%n key signature(s) placed for their staff's clef.", "", n)
                      : tr("No key signature needed adapting: none on a non-treble staff is placed as a treble staff's at the same place."));
                   }

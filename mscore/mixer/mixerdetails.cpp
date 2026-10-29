@@ -421,7 +421,7 @@ void MixerDetails::updateLibrary()
       panSlider->setToolTip(tr("Pan of %1 on %2").arg(li->name, where) + note);
       panSpinBox->setToolTip(panSlider->toolTip());
       if (hosted) {
-            const QString room = tr("%1 plays in its own room (its microphones: View › Sound Library… › Controllers…); "
+            const QString room = tr("%1 plays in its own room (its microphones: the part's mic automation lanes, View > Automation Lanes); "
                                     "MuseScore's reverb and chorus don't apply to it.").arg(library->name);
             for (QWidget* w : std::initializer_list<QWidget*> { reverbSlider, reverbSpinBox, chorusSlider, chorusSpinBox }) {
                   w->setEnabled(false);
@@ -448,7 +448,7 @@ void MixerDetails::updateLibrary()
       patchCombo->setCurrentIndex(0);
       patchCombo->blockSignals(false);
       patchCombo->setEnabled(false);
-      patchCombo->setToolTip(tr("The sound library plays this part: its patch is chosen from the instrument (View › Sound Library…). "
+      patchCombo->setToolTip(tr("The sound library plays this part: its patch is chosen from the instrument (View > Sound Library). "
                                 "The General MIDI patch comes back with \"Part playback:\" set to MuseScore 3 or 4."));
       // the route: MuseScore's port and channel don't apply
       const std::vector<std::pair<int, int>> outs = seq ? seq->libraryOuts(master) : std::vector<std::pair<int, int>>();

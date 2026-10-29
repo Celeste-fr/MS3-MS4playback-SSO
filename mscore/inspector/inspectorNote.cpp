@@ -124,7 +124,7 @@ InspectorNote::InspectorNote(QWidget* parent)
       evenLevel->setSingleStep(0.1);
       evenLevel->setSuffix(tr(" dB"));
       evenLevel->setSpecialValueText(tr("None"));
-      evenLevel->setToolTip(tr("The note's even-levels correction (Tools > Even Out Levels...): CC11 at the middle of its heard "
+      evenLevel->setToolTip(tr("The note's even-levels correction (Tools > Even Out Levels…): CC11 at the middle of its heard "
                                "window, gliding to the next note's; played with the playback setting [levels] evenLevels on"));
       evenLevel->setAccessibleName(tr("Even level"));
       evenLabel->setBuddy(evenLevel);
@@ -289,7 +289,7 @@ void InspectorNote::setEvenShown()
             return;
       if (stale)
             evenState->setText(tr("Stale (%1 of %2): the music around it changed since it was measured; not played until "
-                                  "measured again (Tools > Even Out Levels...)").arg(stale).arg(set));
+                                  "measured again (Tools > Even Out Levels…)").arg(stale).arg(set));
       else if (unknown)
             evenState->setText(tr("Not checked since loading: checked when it is next played"));
       else

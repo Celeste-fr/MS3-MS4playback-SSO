@@ -192,7 +192,7 @@ bool soundEngineAvailable(const QString& engine, QString* why)
             return true;                  // (the global library: as ever)
       if (SoundLib::output() != SoundLib::Output::PLUGIN) {
             if (why)
-                  *why = QObject::tr("Over MIDI output only the global library plays (Preferences › I/O › Sound library): "
+                  *why = QObject::tr("Over MIDI output only the global library plays (Preferences > I/O > Sound Library): "
                                      "%1 plays only hosted, as a plug-in in MuseScore.").arg(engine);
             return false;
             }
@@ -391,7 +391,7 @@ void addEngineItems(QComboBox* box, int data, const QString& selectedEngine, int
                   box->setItemData(i, why, Qt::ToolTipRole);
                   }
             else if (e.maps.size() > 1)
-                  box->setItemData(i, QObject::tr("Plays %1 (Preferences › I/O › Sound library chooses which of: %2)")
+                  box->setItemData(i, QObject::tr("Plays %1 (Preferences > I/O > Sound Library chooses which of: %2)")
                                    .arg(QFileInfo(e.path).completeBaseName(), [&e]() {
                                           QStringList v;
                                           for (const QString& m : e.maps)

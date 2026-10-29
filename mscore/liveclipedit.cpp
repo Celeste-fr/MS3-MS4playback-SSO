@@ -499,7 +499,7 @@ QString LiveClipEditor::envText(const MasterScore* score, QString* details) cons
             case EnvState::NO_SCRIPT:
                   text = tr("no lanes (MuseScore Envelopes not set up)");
                   more = tr("No automation lanes: the MuseScore Envelopes control surface doesn't answer. Install it in "
-                            "Live and choose it in Settings › Tempo & MIDI › Control Surface (LIVE.md).");
+                            "Live and choose it in Settings > Tempo & MIDI > Control Surface (LIVE.md).");
                   break;
             case EnvState::FAILED:
                   text = tr("envelopes failed");

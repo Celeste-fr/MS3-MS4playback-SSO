@@ -100,7 +100,7 @@ bool setPlayThroughMidi(bool midi, QWidget* parent)
             QString message = midi ? QObject::tr("Sound library: through MIDI output (Ableton Live)")
                                    : QObject::tr("Sound library: through the library's plug-in");
             if (midi && seq && seq->driver() && !seq->driver()->canOutputMidi())
-                  message += QObject::tr(" — no MIDI output is open: set MIDI output A in Preferences › I/O");
+                  message += QObject::tr(" — no MIDI output is open: set MIDI output A in Preferences > I/O");
             mscore->showMessage(message, 6000);
             }
       return true;
@@ -370,7 +370,7 @@ bool askConflicts(QWidget* parent, const std::vector<Automation::Conflict>& conf
       v->addWidget(t);
       QLabel* note = new QLabel(QObject::tr("MuseScore's kept: in Live the MuseScore Link device plays it and overrides Live's "
                                             "own automation of that parameter while Live plays the score. Delete Live's "
-                                            "automation of it (right-click the parameter › Delete Automation) so the set shows "
+                                            "automation of it (right-click the parameter > Delete Automation) so the set shows "
                                             "what plays. Live's kept: MuseScore's lane is replaced by it (Undo brings it back)."), &d);
       note->setWordWrap(true);
       v->addWidget(note);

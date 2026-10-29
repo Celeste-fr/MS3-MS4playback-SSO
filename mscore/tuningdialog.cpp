@@ -60,7 +60,7 @@ QString TuningDialog::presetAbout(const QString& name)
             { "aaron",        QT_TR_NOOP("Each fifth tempered 5.5 cents so that major thirds are pure, leaving a 36.5-cent wolf between E♭ and G♯.") },
             { "silberman",    QT_TR_NOOP("A compromise: each fifth tempered by ⅙ of a syntonic comma. Used by high Baroque organs.") },
             { "salinas",      QT_TR_NOOP("A negative temperament: ⅓ comma makes the major thirds slightly narrow.") },
-            { "kirnberger",   QT_TR_NOOP("An irregular temperament: fifths tempered differently, so each key has its own colour.") },
+            { "kirnberger",   QT_TR_NOOP("An irregular temperament: fifths tempered differently, so each key has its own color.") },
             { "vallotti",     QT_TR_NOOP("An irregular temperament.") },
             { "werkmeister",  QT_TR_NOOP("A less symmetric irregular temperament.") },
             { "marpurg",      QT_TR_NOOP("Three fifths tempered by 8 cents, evenly spread.") },
@@ -105,7 +105,7 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
             _root->addItem(fifthNames[i]);
             _pure->addItem(fifthNames[i]);
             }
-      _root->setToolTip(tr("Turns the tuning around the circle of fifths so that it centres on this note (its pure tone too)"));
+      _root->setToolTip(tr("Turns the tuning around the circle of fifths so that it centers on this note (its pure tone too)"));
       _pure->setToolTip(tr("The note left at its equal-tempered pitch (0 cents); the others keep their relation to it"));
       form->addRow(tr("Root note:"), _root);
       form->addRow(tr("Pure tone:"), _pure);

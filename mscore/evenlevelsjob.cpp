@@ -105,7 +105,7 @@ int EvenLevelsJob::apply(MasterScore* score, const QString& resultJson, QString*
             for (const QJsonValue& pv : top.value("passages").toArray()) {
                   const QJsonObject p = pv.toObject();
                   const QJsonArray r = p.value("rangeMedian").toArray();
-                  l << QObject::tr("%1, bars %2: slur range %3 dB uncorrected, %4 dB kept (round %5)")
+                  l << QObject::tr("%1, measures %2: slur range %3 dB uncorrected, %4 dB kept (round %5)")
                        .arg(p.value("part").toString()).arg(p.value("bars").toString())
                        .arg(r.size() > 0 ? r[0].toDouble() : 0.0, 0, 'f', 2)
                        .arg(r.size() > p.value("chosen").toInt() ? r[p.value("chosen").toInt()].toDouble() : 0.0, 0, 'f', 2)
@@ -132,7 +132,7 @@ void EvenLevelsJob::runFromGui(Score* cs, QWidget* parent)
       const QString title = QObject::tr("Even Out Levels");
       if (!library || SoundLib::output() != SoundLib::Output::PLUGIN) {
             QMessageBox::information(parent, title, QObject::tr("Evening out levels measures the library's own sound: it needs "
-                                     "a sound library played by its plug-in (Preferences > I/O > Sound library)."));
+                                     "a sound library played by its plug-in (Preferences > I/O > Sound Library)."));
             return;
             }
       // the selection's parts and bars, else every library part
@@ -206,7 +206,7 @@ void EvenLevelsJob::runFromGui(Score* cs, QWidget* parent)
             if (SoundLibraryHost* host = SoundLibraryHost::instance())
                   host->applyMixer(score);          // (a patch's headroom: its volume)
       QMessageBox::information(parent, title, summary + "\n\n" + QObject::tr("Played with the playback setting [levels] evenLevels "
-                               "on (Mixer > Advanced Options > Playback adjustments; off by default). A correction turns stale "
+                               "on (Mixer > Advanced Options… > Playback adjustments; on by default). A correction turns stale "
                                "when the music around its note changes: measure again then."));
       }
 

@@ -1159,7 +1159,7 @@ void ArticulationCheckDialog::rebuild()
       {
       _table->setRowCount(0);
       if (!_library) {
-            _status->setText(tr("No sound library is chosen (Preferences › I/O › Sound library)."));
+            _status->setText(tr("No sound library is chosen (Preferences > I/O > Sound Library)."));
             _check->setEnabled(false);
             return;
             }
@@ -1215,7 +1215,7 @@ void ArticulationCheckDialog::rebuild()
       _table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
       const QString folder = SoundLibraryHost::libraryFolder(*_library);
       if (SoundLibraryHost::makesSetups(*_library) && folder.isEmpty())
-            _status->setText(tr("%1 was not found on this computer: choose its folder in View › Sound Library… › Library folder….")
+            _status->setText(tr("%1 was not found on this computer: choose its folder in View > Sound Library > Library folder….")
                              .arg(_library->name));
       else
             _status->setText(tr("%1 of %2 patches can be checked; %3 need checking (ticked).")

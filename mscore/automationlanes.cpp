@@ -752,7 +752,7 @@ bool AutomationLanes::duplicateTimeSelection()
                   mscore->endCmd();       // (the selection's views: the Inspector, the lanes …)
             }
       if (mscore)
-            mscore->showMessage(tr("Duplicated: bars %1-%2").arg(m1 ? m1->no() + 1 : 0).arg(m2 ? m2->no() + 1 : 0), 1500);
+            mscore->showMessage(tr("Duplicated: measures %1–%2").arg(m1 ? m1->no() + 1 : 0).arg(m2 ? m2->no() + 1 : 0), 1500);
       _notes->changed();
       updateSpace();
       _view->update();
@@ -1053,7 +1053,7 @@ void AutomationLanes::gridMenu(const QPoint& globalPos)
                   break;
             }
       menu.addSeparator();
-      QAction* even = menu.addAction(tr("Even beat spacing"));
+      QAction* even = menu.addAction(tr("Even Beat Spacing"));
       even->setCheckable(true);
       Score* sc = score();
       even->setChecked(sc && sc->lineEvenBeats());
