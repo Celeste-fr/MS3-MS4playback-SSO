@@ -126,14 +126,8 @@ def main(src, dst):
                       'an uncertainty of several dB)',
             'sections': {s: {'pp': MEYER_PIZZ[s][0], 'ff': MEYER_PIZZ[s][1]} for s in MAP_SECTIONS},
             'assumptions': ['Violins 2 take the violin\'s values'],
-            'corroboration': {
-                'source': 'University of Iowa Musical Instrument Samples (5 sessions, 5 players: violin, viola, double '
-                          'bass): each pizzicato note\'s peak loudness (ISO 532-1) against a held arco note at the same '
-                          'marking; measured 2026-10-15',
-                'pizzMinusArco': {'pp': [-7.3, -8.7, -6.3], 'mf': [-6.3, -12.1, -2.3], 'ff': [-4.0, -8.4, -2.6]},
-                'note': 'median and range over the sessions; only pp agrees within 3 dB across sessions; independent '
-                        'corroboration of Meyer, uncertainty about +-3-4 dB; not used for the values',
-            },
+            # measured 2026-10-28 (tools in the job's iowa_scripts / pizz_scripts; docs/PLAYBACK_SETTINGS.md › Pizzicato)
+            'corroboration': {'source': 'University of Iowa Musical Instrument Samples, re-measured 2026-10-28: 8 sessions (one player each: violin, viola, cello, double bass, pre-2011 and 2012), 6 with fixed gain confirmed by the gap-noise check; each pizzicato note paired with the arco note of the same pitch, player and marking; perceived peak (tools/playbackverify/loudness.py) and BS.1770 momentary (400 ms) maximum', 'pizzMinusArco': {'peak': {'pp': [-1.7, -8.6, 5.6], 'mf': [0.9, -8.3, 4.3], 'ff': [0.1, -2.1, 5.9]}, 'momentary': {'pp': [-2.4, -8.5, -0.5], 'mf': [-1.4, -10.2, 0.3], 'ff': [-1.4, -6.6, 3.8]}}, 'section': {'source': "Spheres dataset (Zenodo 17347681, CC BY-SA 4.0), ScalesAndSolos, measured 2026-10-28: each string section's chromatic pizzicato scale against its quiet and loud legato scales, same session, gain unchanged by the gap noise; one pizzicato dynamic, unmarked", 'pizzMinusQuietArcoPeak': {'Violins 1': -10.3, 'Violas': -3.6, 'Celli': -8.8, 'Basses': -2.6}, 'pizzMinusLoudArcoPeak': {'Violins 1': -16.5, 'Violas': -8.5, 'Celli': -13.9, 'Basses': -7.7}, 'note': "the pizzicato's marking is not stated: if it was played at the quiet scale's marking or louder, pizz - arco is at most these quiet-arco values"}, 'note': "median and range over the sessions; the solo players differ by 10-14 dB; Iowa gives about -2 dB by energy and about 0 by the perceived peak, so it does not corroborate Meyer; the section data (Spheres) puts the pizzicato at least 2.6-10.3 dB under the arco, Meyer's order; the earlier note here (pp -7.3, mf -6.3, ff -4.0, ISO 532-1, 5 unnamed sessions, 2026-10-15) could not be reproduced: its sessions and script were not kept; not used for the values"},
         },
         'zero': {
             'Basses': ['Pizzicato Bartok', 'Col Legno'],
