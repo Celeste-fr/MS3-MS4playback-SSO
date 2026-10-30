@@ -429,6 +429,30 @@ its own start lead and master trim (levels are compared within a route only, tim
   playbackVerifyShortLegato playbackVerifyQuarterTones`: the analysis on synthetic audio (each 2026-10-23 fix on its own,
   before and after).
 
+### Positive controls (2026-10-30)
+
+Every check here, and every "sound-identical" proof that lets a change through unheard, must be shown to fail on a
+planted defect and pass without it; a check that can't fail proves nothing. Where each one's control is:
+
+- **Playback audit**: OVERLAP (a moved note-off), DROPPED, LEAP, CHORD, HALL, AVOIDED CC (fixtures and moved events),
+  CAPPED / UNMEASURED (the map) in their own tests; ARRIVAL and LEVEL STEP in `tst_playbackaudit::plantedControls`: a
+  note-on 60 / 40 / 10 ms late gives FAIL / WARN / nothing (10 ms is under the 30 ms threshold by design, but the row's
+  predicted arrival moves by 10 ms); CC11 126 or 113 under one slurred note gives LEVEL STEP -0.14 / -2.03 dB and back.
+- **Sound-identical proofs**: `chunkedEqualsWhole` (one CC11 value, one note-on's tick or tuning planted in the chunked
+  render; MS_CHUNK_WINDOWS_OFF=1), `remoteNull` (one note-on at velocity + 1, in process and in a helper),
+  `liveEquivalenceByPart` (one sample 0.5 dB lower), `editLagIdentical` (each edit step changes the record; a third pass
+  writes the even level without `EvenLevels::changed()`, a stale cache input, and must differ), `preparedStates` (a
+  damaged file made again; another tuning, another state). `chunkCompare`'s comparison, `chunk_diff.py`:
+  `test_chunk_diff.py` (until 2026-10-30 it ignored a note-on's tuning: a quarter tone sent at 12-TET passed).
+- **Heard check**: `test_heard_check.py` `PlantedControls` (one staccato 60 / 40 / 10 ms late; a transition gliding to
+  50 cents short of its note is UNHEARD) and `EndToEnd`. **Blind**: an attack's pitch. The heard check times attacks by
+  the envelope only, so an attack played at the wrong tuning (a quarter tone left at 12-TET on an attack) is not
+  flagged; the verification's detector (`cents` rule, `test_verify_detector.py` `test_cents`) is what sees a missing
+  quarter tone.
+- **The verification** (`--verify-playback`): `MS_VERIFY_FAULT` plants dropped notes, truncated notes and pedal drops
+  (`try_with_testsynth.sh`, by hand: the fault switch is read once per process, no mtest runs it); no fault kind shifts
+  an onset, changes a level or retunes a note.
+
 ### Detector regression (2026-10-23)
 
 The detector's known cases on real renders: Whence's build #454 verify run (private `bars9-12/SILENT.md`, run 2), notes

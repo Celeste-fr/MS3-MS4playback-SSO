@@ -314,5 +314,90 @@ class EndToEnd(unittest.TestCase):
         self.assertEqual(H.main(["analyse", tmp, tmp]), 0)
 
 
+class PlantedControls(unittest.TestCase):
+    """positive controls: six joined staccatos (300 ms apart, each heard on its model) pass; one sounding 60 ms late fails
+    ARRIVAL, 40 ms warns, 10 ms is measured (its heard time moves by 10 ms) but under the 30 ms warning (Rasch 1979: by
+    design); a transition gliding to 50 cents short of its note (a quarter tone played at 12-TET) is not heard as
+    arriving (UNHEARD), the same glide to its note is"""
+    LEAD_MS = 100.0
+    WS = [0.5 + 0.3 * i for i in range(6)]
+
+    def staccatos(self, late_ms=None, late_index=3):
+        tmp = tempfile.mkdtemp()
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(
+            row(w, w + 0.3, 62 + 2 * i, "0-8", "Violas", "Spiccato", "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0, -1, 0.0,
+                -1, 1 if i else 0, 0, 1 + i) for i, w in enumerate(self.WS)) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % self.LEAD_MS)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        off = H.OFFSET_S + self.LEAD_MS / 1000
+        n = int((off + 3.0) * SR)
+        t = np.arange(n) / SR
+        x = np.zeros(n)
+        for i, w in enumerate(self.WS):
+            s = off + w + ((late_ms or 0.0) / 1000 if i == late_index else 0.0)
+            x += saw(hz(62 + 2 * i), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40),
+                                                       (s + 0.25, -120)])
+        res = H.analyse(tmp, tmp, load=lambda r: (x, SR) if r == "0-8" else None)
+        return res, {nn["pitch"]: nn["heardMs"] for nn in res["notes"]}
+
+    def arrivals(self, res):
+        return [(f["severity"], f["value"]) for f in res["findings"] if f["kind"] == "ARRIVAL"]
+
+    def test_clean_passes(self):
+        res, heard = self.staccatos()
+        self.assertEqual(len(heard), 6)
+        self.assertEqual(self.arrivals(res), [], res["findings"])
+        self.assertLess(max(heard.values()) - min(heard.values()), 6.0, heard)     # (the reading's bias by pitch: ~4 ms)
+
+    def test_late_attack(self):
+        _, clean = self.staccatos()
+        for late, severity in ((60.0, "FAIL"), (40.0, "WARN"), (10.0, None)):
+            res, heard = self.staccatos(late)
+            self.assertLess(abs(heard[68] - clean[68] - late), 3.0, (late, heard))
+            a = self.arrivals(res)
+            if severity is None:
+                self.assertEqual(a, [], res["findings"])
+            else:
+                # the late note against the one before, and the note after against it
+                self.assertIn(severity, [x[0] for x in a], a)
+                self.assertTrue(any(abs(v - late) < 6.0 for _, v in a), a)
+                self.assertTrue(any(abs(v + late) < 6.0 for _, v in a), a)
+
+    def glide(self, short_cents):
+        """a slurred attack + transition (57 -> 59, glide 100 ms from its note-on, the model's arrival on the written
+        time) ending short_cents under the new note"""
+        e8 = 60 / 110 / 2
+        w = [0.5, 0.5 + e8]
+        tmp = tempfile.mkdtemp()
+        rows = [row(w[0], w[1], 57, "0-11", "Violas - Performance", "Legato", "legato,long", 1, 0, -1, -1, -50.0, 50.0, -1, 0.0,
+                    0, 0, 0, 1),
+                row(w[1], w[1] + 0.5, 59, "0-11", "Violas - Performance", "Legato", "legato,long", 2, 1, w[0], 57, -100.0, -1,
+                    100.0, 0.0, 0, 1, 1, 1.5)]
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(rows) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % self.LEAD_MS)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-11|Violas|Violas - Performance|0|0.00|99.6\n")
+        off = H.OFFSET_S + self.LEAD_MS / 1000
+        n = int((off + 2.0) * SR)
+        t = np.arange(n) / SR
+        end = 59 - short_cents / 100.0
+        s0 = off + w[1] - 0.100
+        pitch = np.where(t < s0, 57.0, np.where(t < s0 + 0.100, 57 + (end - 57) * (t - s0) / 0.100, end))
+        start = off + w[0]
+        x = saw(hz(pitch), n) * gain_db(t, [(0, -120), (start - 1e-4, -120), (start, -60), (start + 0.005, 0),
+                                            (off + w[1] + 0.5, 0), (off + w[1] + 0.52, -120)])
+        res = H.analyse(tmp, tmp, load=lambda r: (x, SR) if r == "0-11" else None)
+        return res, {nn["pitch"]: nn for nn in res["notes"]}
+
+    def test_mistuned_transition(self):
+        res, notes = self.glide(0.0)
+        self.assertIsNotNone(notes[59]["heardMs"], notes)
+        self.assertLess(abs(notes[59]["heardMs"]), 25, notes[59])        # (within 30 cents: before the glide's end)
+        self.assertNotIn("UNHEARD", [f["kind"] for f in res["findings"]], res["findings"])
+        res, notes = self.glide(50.0)
+        self.assertIn(("UNHEARD", 59), [(f["kind"], f.get("pitch")) for f in res["findings"]], (res["findings"], notes[59]))
+
+
 if __name__ == "__main__":
     unittest.main()
