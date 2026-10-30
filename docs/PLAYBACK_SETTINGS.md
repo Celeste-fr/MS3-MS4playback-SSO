@@ -1681,6 +1681,26 @@ fingered fit; only 14-29 bowed notes a part. So A's data rules the assumption ou
 a value. **Proposal** (not in the map): bowed `40:150` for all three (the bounded fit), then a kthost B' with it; the Celli's
 12-TET loss is the bowed beat notes corrected for a lag that isn't there. The owner by ear first or B' first: his call.
 
+**B' for the Celli** (2026-10-30: kthost + Kontakt 8 + SSO on the VM, as B but the Celli's bowed `runLag` 40:150 from a temp
+map, the Celli only, two takes; plus `clipA`, a third take of A; private `runbends-ab/B2`, `ana/kthcana.py`, `ana/bytrans.py`,
+`ana/signed.py`). Celli 1-14 in tune, A (take 1 / take 2 / clipA) -> B (145:60) -> B' (40:150):
+
+| | A | B | B' |
+|---|---|---|---|
+| quarter tones (59, all fingered) | 17.2 / 14.1 / 15.8 % | 50.6 / 45.8 % | 53.2 / 58.1 % |
+| 12-TET (60) | 41.7 / 41.8 / 43.2 % | 33.8 / 34.6 % | **31.1 / 29.7 %** |
+| fingered 12-TET (30) | 54.3 / 57.7 / 56.3 % | 46.1 / 49.3 % | 46.6 / 45.0 % |
+| bowed 12-TET (29, the beat notes) | 26.9 / 23.8 / 27.9 % | 18.8 / 17.4 % | **12.9 / 11.6 %** |
+
+**40:150 does not fix the regression: it makes the bowed beat notes worse** (the quarter tones gain a few points). The median
+signed error of the bowed notes (+ = still towards the note before) in the first / second half of their 136 ms: A +54 / -36 c,
+B +39 / -51, B' +47..+59 / -74: in its second half SSO's bowed new bow is already past the written pitch, moving on, so a
+correction that assumes it still lags pushes it further, and the longer tau assumes more lag. The bowed notes want no lag
+correction or another model, not other D / tau of this one; a map without `bowed` falls back to the fingered lag
+(`rendermidi.cpp`), so "no correction for bowed" needs code. The fingered 12-TET loss (56 -> 46-49 %) doesn't move with the
+bowed value: not explained yet. **No map change**; runBends stays 0 everywhere. A/B page for the owner (Violins 1, Violas:
+A / B; Celli: A / B'): see OPEN_ITEMS 5.
+
 ## Plain accents
 
 2026-10-20 (branch `plain-accents`); **2 in Recommended and by default since 2026-10-21** (branch `accent-level`; the owner,

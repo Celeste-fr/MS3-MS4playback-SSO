@@ -84,6 +84,14 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
   70, Celli 120 / 60-70); **bowed D 30-50 ms, tau 70-150** (grid edge; unbounded it runs to 20 / 400) against the assumed
   108-164 ms: proposal bowed 40:150 for the three, then a kthost B'. **For the owner to hear** (A/B clips with the sheet
   music: Violas bar 7, Violins 1 bars 5-8, Celli bars 1-4 where the 12-TET beat notes got worse); runBends stays 0.
+- **2026-10-30, B' for the Celli (bowed runLag 40:150, temp map; kthost, two takes; PLAYBACK_SETTINGS.md › Run bends ›
+  B' for the Celli): no fix.** Celli 1-14 in tune A (3 takes) -> B -> B': quarter tones 14-17 -> 46-51 -> 53-58 %; 12-TET
+  42-43 -> 34-35 -> **30-31 %**; bowed beat notes 24-28 -> 17-19 -> **12-13 %**; fingered 12-TET 54-58 -> 46-49 -> 45-47 %.
+  The bowed new bow is already past its pitch in the second half of its 136 ms (median -36 c in A, -74 c in B'), so any lag
+  correction pushes it further: the bowed notes want no run correction (needs code: a missing `bowed` falls back to the
+  fingered lag) or another model. No map change. The fingered 12-TET loss is not explained yet. **For the owner to hear**:
+  https://claude.ai/artifact/EMXakwYeFBmsc6JRKnYGCi (bars 1-14 with the score; Violins 1 / Violas A vs B, Celli A vs B';
+  answers in its db collection `answers`, one doc per part: `choice` A / B / same, `A` / `B` = off / on).
 - **Own**: yes, how to play them; runBends by ear.
 
 ### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing (offsets researched 2026-10-29; SSO sweep phase 1 measured 2026-10-29, phase 2 queued)
