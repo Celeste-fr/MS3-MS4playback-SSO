@@ -1391,7 +1391,7 @@ LEGATO_GLIDE_FINGERED = {k: v for k, v in json.load(open(os.path.join(os.path.di
 BEND_SMOOTHING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_bend_smoothing.json'),
                                 encoding='utf-8'))
 # runLag= (2026-10-29, [slurs] runBends, OPEN_ITEMS 5): SSO's own pitch in fast legato runs, the keys delayed D and
-# smoothed tau per transition kind (sso_run_lag.json: fingered fitted by legato_glide/runlag.py, bowed an assumption)
+# smoothed tau per transition kind (sso_run_lag.json: fingered fitted by legato_glide/runlag.py; no bowed since 2026-10-30)
 RUN_LAG = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_run_lag.json'),
                                            encoding='utf-8')).items() if not k.startswith('_')}
 # - onset= (ms): a sustained articulation's attack, by pitch: when it is heard, its level 15 dB under the note's peak

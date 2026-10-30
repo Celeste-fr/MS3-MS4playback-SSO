@@ -207,7 +207,8 @@ class MidiRenderer {
       bool libRunBends = false;                                   // [slurs] runBends (this chunk)
       // [slurs] runBends (libraryPitchBends): a plain note on a patch whose articulation has runLag: its written start and
       // end (seconds), how early its patch's events go (plainShift, s: its heard start is written + this in event time), and
-      // the patch's pitch model for the transition reaching it (none: an attack)
+      // the patch's pitch model for the transition reaching it (an attack: none; a transition with delayMs < 0: none of its kind,
+      // its key from its heard start)
       struct LibRunNote { double writtenOn; double writtenOff; double shift; SoundLib::Articulation::RunLag lag; bool transition; };
       std::map<const Note*, LibRunNote> libRunNote;
       // playback settings (libmscore/playbacksettings.h) for this chunk
@@ -336,6 +337,10 @@ class MidiRenderer {
       static constexpr double RUN_STEP_S = 0.010;
       static constexpr double RUN_HORIZON_S = 0.030;
       static constexpr double RUN_TAIL_S = 0.3;
+      // ... and no send more than RUN_SLEW_C from the one before (2026-10-30: unbounded, a least-squares send swung between the
+      // range's ends, ±99.6 c, within 10 ms around Whence's bowed beat notes, 54-117 steps of over 100 c a part in bars 1-14;
+      // capped at 80: 1-3, the in-tune shares within a few points, runlag_sim.py SLEW)
+      static constexpr double RUN_SLEW_C = 80.0;
       // [slurs] plainPerformance (abl.py's PLAIN on branch qt-bends, the variant the owner chose by ear, 2026-10-17): every
       // plain note's velocity (the owner's "velocity 64"), and how long before a staccato's neighbour on the patch it ends
       // (and the note before it ends before it): SSO's Performance legato joins a note-on less than 40 ms after the note-off

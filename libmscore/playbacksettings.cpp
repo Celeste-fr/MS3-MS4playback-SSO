@@ -171,7 +171,8 @@ static const std::vector<Definition> DEFINITIONS = {
       // (2026-10-29, branch bowed-join, OPEN_ITEMS 5: SSO's fingered legato in sixteenths at 110 bpm never reaches its keys,
       // its f0 the keys sent delayed and smoothed (Whence's export, Kontakt 8 + SSO, pYIN, bends taken out: median error
       // 13-15 c against the map's runLag); offline on three takes of builds 465 / 485 the quarter tones in tune 24-40 -> 38-53 %,
-      // the 12-TET notes 51-58 -> 65-71 %; 0 in both presets until the owner has heard it; MidiRenderer::libraryPitchBends)
+      // the 12-TET notes 51-58 -> 65-71 %; 0 in both presets until the owner has heard it; MidiRenderer::libraryPitchBends;
+      // 2026-10-30, branch run-bends-fingered: no bowed correction, the Celli's fingered lag 90:90: docs/PLAYBACK_SETTINGS.md)
       { "slurs/runBends", 0, 0, 1, "on/off",
         "1: in a fast legato run (notes under 250 ms joined by transitions) on a patch that bends and whose map has runLag "
         "(SSO's Violins 1 / 2, Violas, Celli - Performance), the pitch bend also corrects the patch's own lagging pitch, so "

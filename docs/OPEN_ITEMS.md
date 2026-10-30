@@ -92,6 +92,23 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
   fingered lag) or another model. No map change. The fingered 12-TET loss is not explained yet. **For the owner to hear**:
   https://claude.ai/artifact/EMXakwYeFBmsc6JRKnYGCi (bars 1-14 with the score; Violins 1 / Violas A vs B, Celli A vs B';
   answers in its db collection `answers`, one doc per part: `choice` A / B / same, `A` / `B` = off / on).
+- **2026-10-30 (branch `run-bends-fingered`, analysed on Linux from the kept f0, no new render): no bowed correction, the
+  Celli's fingered runLag 90:90, a slew cap.** A bowed transition without a bowed lag (SSO's map has none now) is modelled at its key from
+  its heard start, so its own window gets no lag correction and the notes around it keep theirs (dropping its span instead
+  cost the quarter tones before each beat note: note-ons are 80-140 ms ahead). The fingered 12-TET loss: a replica of the C++'s
+  controller (`runlag_sim.py RUNLAG=…`, B's dumped bends within 0.4 c rms) shows it isn't the horizon or the smoothing: A's
+  own pitch + B's bends would have given 64 %; SSO's own pitch shifts under the correction (A vs B 14-16 c a frame, takes 9-10
+  c; no heard-bend model explains it), its second half 15-20 c further on, so 130:60 overshoots; the fit is flat along D / tau
+  (A one lag 90 / 90; B 90 / 90 and 130 / 50) and 90:90 doesn't overshoot. **Saturation**: the sends swung between ±99 c
+  within 10 ms (steps over 100 c: 54-117 a part); now no send more than 80 c from the one before (`RUN_SLEW_C`): 0-2 such
+  steps; still 17-45 % of the sends at the range's ends (the range itself: a quarter tone a key away needs 150 c; a ridge
+  halves that for 4-8 points of 12-TET, not in the code). Predicted from B's pitch, all of it (A / B measured -> C): Celli
+  12-TET 42 / 34 -> 53-54 % (bowed 24-27 / 17-19 -> 43-45, fingered 54-58 / 46-49 -> 59-64), quarter tones 14-17 / 46-51 ->
+  45-48; Violas 12-TET 44-46 / 55-56 -> 65-66, QT 41-43 / 52 -> 44-46; Violins 1 12-TET 37-38 / 49 -> 57-58, QT 30-31 / 60-61
+  -> 52-53 (PLAYBACK_SETTINGS.md › Run bends › No bowed correction). **To confirm** on the VM (kthost, one job, ~10
+  min): `nohup bash ~/MuseScore/ms3fork/private/queued/runbends_c.sh >
+  ~/MuseScore/ms3fork/private/queued/logs/runbends_c.log 2>&1 &` (into `runbends-ab/C`), then kthcana.py against A / B. Then
+  the owner by ear; runBends stays 0.
 - **Own**: yes, how to play them; runBends by ear.
 
 ### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing (offsets researched 2026-10-29; SSO sweep phase 1 measured 2026-10-29, phase 2 2026-10-30)

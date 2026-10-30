@@ -16,6 +16,7 @@
 */
 
 #include <deque>
+#include <limits>
 #include <set>
 #include <tuple>
 
@@ -2368,13 +2369,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (libRunBends && libChoice && libChoice.plain && libChoice.articulation
                                   && libChoice.articulation->runLagFingered.delayMs >= 0) {
                                     const SoundLib::LibInstrument* rp = libPatches[libChoice.patch];
-                                    const SoundLib::Articulation::Technique* ft = libChoice.articulation->transition("fingered");
-                                    const bool fingeredT = ft && libNote.velocity >= ft->low && libNote.velocity <= ft->high;
+                                    // (a bowed transition takes the map's bowed lag; none: no lag of its own, its window left to
+                                    // the old path, runBendPath; every other transition the fingered lag)
+                                    const SoundLib::Articulation::Technique* bt = libChoice.articulation->transition("bowed");
+                                    const bool bowedT = bt && libNote.velocity >= bt->low && libNote.velocity <= bt->high;
                                     const int w0 = note->chord()->tick().ticks() + tickOffset;
                                     LibRunNote rn { score->utick2utime(w0), score->utick2utime(w0 + note->playTicks()),
                                                     std::isfinite(rp->plainShiftMs) && !libPlainTiming ? std::max(0.0, rp->plainShiftMs) / 1000.0 : 0.0,
-                                                    fingeredT || libChoice.articulation->runLagBowed.delayMs < 0 ? libChoice.articulation->runLagFingered
-                                                                                                                 : libChoice.articulation->runLagBowed,
+                                                    bowedT ? libChoice.articulation->runLagBowed : libChoice.articulation->runLagFingered,
                                                     from != nullptr };
                                     libRunNote[note] = rn;
                                     }
@@ -5114,10 +5116,21 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                         }
                   return c + (h - c) * std::exp(-(t - at) / tauK);
                   };
+            // when the model takes a note's key: an attack at its note-on, a transition its lag D after it; a transition whose
+            // kind has no lag (the map's runLag without "bowed", 2026-10-30: SSO's bowed new bow in Whence's sixteenths is
+            // already past its pitch in the second half of the note, so a lag correction pushes it further off) at its heard
+            // start: its own window gets no correction (want = its written pitch - its key, the old path's tuning), the
+            // notes around it keep theirs
+            auto activeAt = [](const RN& x) {
+                  if (!x.r || !x.r->transition)
+                        return x.on;
+                  return x.r->lag.delayMs >= 0 ? x.on + x.r->lag.delayMs / 1000.0 : x.r->writtenOn + x.r->shift;
+                  };
             std::vector<std::pair<int, int>> made;
             std::vector<std::pair<int, int>> spans;              // (tick from, tick to): the old path replaced
             double heard = 0, model = 0, modelAt = 0;
             double segEnd = -1;
+            double sentC = 0;                                    // (the last value sent, cents)
             for (size_t k = 1; k < n; ++k) {
                   if (!fast[k] || !ns[k].r->transition)
                         continue;
@@ -5146,11 +5159,11 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                               modelAtB = modelAt;
                               savedB = true;
                               }
-                        while (j + 1 < n && ns[j + 1].on + (ns[j + 1].r && ns[j + 1].r->transition ? ns[j + 1].r->lag.delayMs / 1000.0 : 0.0) <= t)
+                        while (j + 1 < n && activeAt(ns[j + 1]) <= t)
                               ++j;
                         const RN& in = ns[j];
-                        if (!in.r || !in.r->transition)
-                              model = in.key;               // (an attack: at its key)
+                        if (!in.r || !in.r->transition || in.r->lag.delayMs < 0)
+                              model = in.key;               // (an attack, or a transition without a lag: at its key)
                         else if (t > modelAt)
                               model = in.key + (model - in.key) * std::exp(-(t - modelAt) / (in.r->lag.tauMs / 1000.0));
                         modelAt = std::max(modelAt, t);
@@ -5172,7 +5185,12 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                               num += (1 - e) * (want[size_t(q + h)] - heard * e);
                               den += (1 - e) * (1 - e);
                               }
-                        const double u = qBound(-range, den > 0 ? num / den : heard, range);
+                        double u = den > 0 ? num / den : heard;
+                        // (the slew cap: at most RUN_SLEW_C from the value in force, the old path's at a run's start)
+                        const double before = q == 0 && std::fabs(a - segEnd) > 1e-6 ? centsOfUnit(oldAt(score->utime2utick(a)), range)
+                                                                                   : sentC;
+                        u = qBound(-range, qBound(before - RUN_SLEW_C, u, before + RUN_SLEW_C), range);
+                        sentC = u;
                         const int v = unitOf(u, range);
                         const int tick = score->utime2utick(a + q * 0.001);
                         if (made.empty() || made.back().first < tick)
@@ -5197,10 +5215,31 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             if (spans.empty())
                   return;
             std::vector<std::pair<int, int>> kept;
-            for (const auto& sp : spans) {
-                  // (where a run ends, the old path's value in force there again, unless the old path sends one then)
+            for (size_t si = 0; si < spans.size(); ++si) {
+                  auto& sp = spans[si];
+                  const int nextStart = si + 1 < spans.size() ? spans[si + 1].first : std::numeric_limits<int>::max();
+                  // (where a run ends, the old path's value in force there again, reached in steps of at most RUN_SLEW_C every
+                  // RUN_STEP_S (the span grows by them: the old path's values inside it go), unless the old path sends one then)
+                  const double range = sts.back().range;
+                  int last = 8192, lastTick = std::numeric_limits<int>::min();
+                  for (const auto& m : made)
+                        if (m.first < sp.second && m.first >= lastTick) {
+                              last = m.second;
+                              lastTick = m.first;
+                              }
+                  double c = centsOfUnit(last, range);
+                  double t = score->utick2utime(sp.second);
+                  for (int guard = 0; guard < 64 && score->utime2utick(t) < nextStart; ++guard) {
+                        const double target = centsOfUnit(oldAt(score->utime2utick(t)), range);
+                        if (std::fabs(target - c) <= RUN_SLEW_C)
+                              break;
+                        c += target > c ? RUN_SLEW_C : -RUN_SLEW_C;
+                        made.push_back({ score->utime2utick(t), unitOf(c, range) });
+                        t += RUN_STEP_S;
+                        }
+                  sp.second = std::min(std::max(sp.second, score->utime2utick(t)), nextStart);
                   const bool oldThere = std::any_of(bends.begin(), bends.end(), [&](const std::pair<int, int>& x) { return x.first == sp.second; });
-                  if (!oldThere)
+                  if (!oldThere && sp.second < nextStart)
                         made.push_back({ sp.second, oldAt(sp.second) });
                   }
             for (const auto& b : bends) {
