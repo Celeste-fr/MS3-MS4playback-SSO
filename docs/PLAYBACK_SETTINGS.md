@@ -1794,6 +1794,12 @@ tones >= +5 and 12-TET >= -3 against Crep) fails in every section (Violas -16 / 
 notes 0.7-1.6 dB higher in Cfar, within the takes' spread; no new loudest burst. Every value stays below the assumed
 real-player band (in30 65-90 %) except Crep's Violas 12-TET at its bottom edge: no risk of a "MIDI" over-correction.
 
+**Confirmed with the branch's own render** (2026-10-30, `runbends_c.sh`: build-rb's events, kthost + Kontakt 8 + SSO on the
+Windows test VM, two takes, analysed on Linux; private `runbends-ab/C`): take 1 / take 2, Violas quarter tones 47.3 / 49.6 %,
+12-TET 69.3 / 69.1 %; Violins 1 50.1 / 50.0 %, 56.3 / 57.2 %; Celli 45.0 / 47.2 %, 48.2 / 48.3 % (bowed 12-TET 39.2 / 37.0,
+fingered 12-TET 55.2 / 57.5, below the replica's 44-45 / 59-64). Mean of the six 53.1 % against Crep's 53.4: the C++ path
+plays what the replica predicted, within the takes' spread.
+
 ## Plain accents
 
 2026-10-20 (branch `plain-accents`); **2 in Recommended and by default since 2026-10-21** (branch `accent-level`; the owner,
