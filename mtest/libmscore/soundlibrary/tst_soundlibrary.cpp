@@ -159,6 +159,7 @@ class TestSoundLibrary : public QObject, public MTest
       void dynamicsCalibration();
       void dynamicsCalibrationPitches();
       void dynamicsCalibrationUserFile();
+      void pianoCurve();
       void renderPreflightCalibration();
       void renderPreflightJobCopy();
       void heldOnPerformance();
@@ -13959,6 +13960,97 @@ void TestSoundLibrary::dynamicsCalibrationUserFile()
       QVERIFY(u && u->curve("Solo Violin 1", 1) && !u->curve("Violins 2", 1));
       QVERIFY(!SoundLib::readCalibration(none, QString()));
       QVERIFY(!SoundLib::readCalibration(QString(), none));
+      }
+
+//---------------------------------------------------------
+//   pianoCurve
+//    the shipped Grand Piano's curve (branch piano-curve, calibration_from_sound_dynamics.py -k / -K: sso_percussion_levels.json's
+//    key grid, every 6 semitones 21 .. 105 x velocity 32 .. 112, 2 takes, and sso_piano_keys.json, every key 21 .. 108 at
+//    48 / 80 / 112, the loudest 50 ms; before, one key (62, a quiet one) one take, 64 -> 80 +0.2 dB): every key's own curve,
+//    the one curve the median over every key, every curve non-decreasing (isotonic);
+//    a level asked for maps by the note's key's curve (DynamicsCurve::louder, as marcatoLevel's velocity path); the
+//    rendered mp notes and accents at keys 40 / 62 / 84 (piano-curve.musicxml). MS_PIANO_CAL=<file> prints the table for
+//    another calibration (before / after) without checking it
+//---------------------------------------------------------
+
+void TestSoundLibrary::pianoCurve()
+      {
+      const QString other = qEnvironmentVariable("MS_PIANO_CAL");
+      const QString file = other.isEmpty() ? root + "/../share/soundlibraries/Spitfire Symphony Orchestra.dynamics.json" : other;
+      auto cal = SoundLib::readCalibration(QString(), file);
+      QVERIFY(cal);
+      const SoundLib::DynamicsCurve* c = cal->curve("Grand Piano", 1);
+      QVERIFY(c);
+      if (other.isEmpty()) {
+            QCOMPARE(c->drivenBy, QString("velocity"));
+            QVERIFY(!c->byEar());                             // (the grid measured the 50 ms level only)
+            QCOMPARE(c->pitches.size(), size_t(88));               // (every key, sso_piano_keys.json)
+            QCOMPARE(c->pitches.begin()->first, 21);
+            QCOMPARE(c->pitches.rbegin()->first, 108);
+            // the one curve rises strictly (the medians over every key: 10.0 / 4.0 / 3.2 / 2.9 / 2.6 dB from 32 to 112)
+            for (size_t i = 1; i < c->points.size(); ++i)
+                  QVERIFY2(c->points[i].second > c->points[i - 1].second, qPrintable(QString::number(c->points[i].first)));
+            QCOMPARE(c->points.front().first, 16);
+            QCOMPARE(c->points.back().first, 127);
+            QVERIFY(c->at(80) - c->at(64) > 2.0);             // (was +0.2: mp = mf)
+            // every key's curve, and every pitch between, never falls
+            for (const auto& p : c->pitches)
+                  for (size_t i = 1; i < p.second.points.size(); ++i)
+                        QVERIFY2(p.second.points[i].second >= p.second.points[i - 1].second, qPrintable(QString::number(p.first)));
+            for (int pitch = 15; pitch <= 110; ++pitch) {
+                  const SoundLib::DynamicsCurve a = c->atPitch(pitch);
+                  for (int x = 2; x <= 127; ++x)
+                        QVERIFY(a.at(x) >= a.at(x - 1) - 1e-9);
+                  }
+            // a level asked for at two grid keys (both runs' points): 39 (64 -29.77, 80 -27.39, 96 -24.9, 112 -23.81, 127
+            // -22.71 dB): +3 from 64 = -26.77, 80 + 16 x 0.62 / 2.49 = 84.0 -> 84; +6 = -23.77, 112 + 15 x 0.04 / 1.10 = 112.5
+            // -> 113. 81 (48 -39.26, 64 -33.67, 80 -29.78): +3 = -30.67: 64 + 16 x 3 / 3.89 = 76.3 -> 76; -3 = -36.67:
+            // 48 + 16 x 2.59 / 5.59 = 55.4 -> 55
+            QCOMPARE(c->atPitch(39).louder(64, 3.0), 84);
+            QCOMPARE(c->atPitch(39).louder(64, 6.0), 113);
+            QCOMPARE(c->atPitch(81).louder(64, 3.0), 76);
+            QCOMPARE(c->atPitch(81).louder(64, -3.0), 55);
+            }
+
+      // rendered: mp notes, then accented, at keys 40 / 62 / 84 with the shipped map and this calibration (Recommended)
+      QString error;
+      auto sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      SoundLib::setCurrent(sso);
+      SoundLib::setDynamicsCalibration(cal);
+      struct Reset {
+            ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setDynamicsCalibration(nullptr); }
+            } reset;
+      MasterScore* score = readScore(DIR + "piano-curve.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      SynthesizerState ss;
+      score->renderMidi(&events, false, true, ss);
+      std::map<std::pair<int, int>, int> velocity;              // (bar, key) ->
+      for (const auto& te : events) {
+            const NPlayEvent& ev = te.second;
+            if (ev.type() == ME_NOTEON && ev.isExternal() && !ev.librarySwitch() && ev.velo() > 0 && ev.note())
+                  velocity[{ ev.note()->tick().ticks() >= Fraction(1, 1).ticks() ? 2 : 1, ev.pitch() }] = ev.velo();
+            }
+      delete score;
+      QStringList rows;
+      for (int key : { 40, 62, 84 }) {
+            const SoundLib::DynamicsCurve a = c->atPitch(key);
+            const int mp = velocity[{ 1, key }];
+            rows << QString("key %1: mp %2, +3 dB %3, +6 dB %4, accent %5").arg(key).arg(mp)
+                    .arg(a.louder(mp, 3.0)).arg(a.louder(mp, 6.0)).arg(velocity[{ 2, key }]);
+            }
+      qDebug("%s", qPrintable(rows.join("\n")));
+      if (!other.isEmpty())
+            return;
+      for (int key : { 40, 62, 84 })
+            QCOMPARE(velocity[std::make_pair(1, key)], 64);
+      // (before, the one-key curve by ear at every key: +3 dB 76, +6 dB 89; an accent plays the plain mp velocity, before
+      // and after: the piano's Direct is no velocity technique of its own, so no curve is asked)
+      QCOMPARE(rows, QStringList({ "key 40: mp 64, +3 dB 77, +6 dB 122, accent 64",
+                                   "key 62: mp 64, +3 dB 81, +6 dB 93, accent 64",
+                                   "key 84: mp 64, +3 dB 74, +6 dB 88, accent 64" }));
       }
 
 //---------------------------------------------------------

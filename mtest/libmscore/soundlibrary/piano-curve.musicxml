@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.1 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<!-- a piano part at mp (tst_soundlibrary::pianoCurve): E2, D4, C6 (keys 40, 62, 84) a quarter each, then the same accented -->
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1">
+      <part-name>Piano</part-name>
+      <score-instrument id="P1-I1"><instrument-name>Piano</instrument-name><instrument-sound>keyboard.piano</instrument-sound></score-instrument>
+      <midi-instrument id="P1-I1"><midi-channel>1</midi-channel><midi-program>1</midi-program></midi-instrument>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+      <direction placement="below"><direction-type><dynamics><mp/></dynamics></direction-type></direction>
+      <note><pitch><step>E</step><octave>2</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><pitch><step>C</step><octave>6</octave></pitch><duration>1</duration><type>quarter</type></note>
+      <note><rest/><duration>1</duration><type>quarter</type></note>
+    </measure>
+    <measure number="2">
+      <note><pitch><step>E</step><octave>2</octave></pitch><duration>1</duration><type>quarter</type><notations><articulations><accent/></articulations></notations></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><notations><articulations><accent/></articulations></notations></note>
+      <note><pitch><step>C</step><octave>6</octave></pitch><duration>1</duration><type>quarter</type><notations><articulations><accent/></articulations></notations></note>
+      <note><rest/><duration>1</duration><type>quarter</type></note>
+    </measure>
+  </part>
+</score-partwise>

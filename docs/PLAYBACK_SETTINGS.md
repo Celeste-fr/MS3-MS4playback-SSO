@@ -308,6 +308,20 @@ Violins 2, Violas and Celli Long (Rachm.) (`tools/soundlibraries/sso_rachm_regis
 Windows VM with the real library: CC1 16..124 step 4 and 127 at 8 / 6 / 8 / 7 pitches by rule: the old curves'
 band centres, the lowest and highest Rachm. key, the earlier sweep's points; one round robin each, repeats within
 0.001 dB; `rachm_register_sweep.py`); Basses have no Long (Rachm.).
+SSO's **Grand Piano** (Direct; branch `piano-curve`, 2026-10-30, not yet in the default): the dynamics check measured it
+at key 62 only, one take (64 -> 80 +0.2 dB in the 50 ms level), and key 62 is one of the piano's quiet two-key zones.
+`calibration_from_sound_dynamics.py -k -K` replaces that entry: a curve for every key 21 .. 108 from
+`sso_piano_keys.json` (velocity 48 / 80 / 112, VM kthost 2026-10-30, `piano_keys_from_measure.py` from a
+`measure_patch.py` run) and, at the 15 grid keys, `sso_percussion_levels.json`'s grid too (velocity 32 .. 112 step 16, 2
+takes, 2026-10-15; the two runs' mean where both measured, within ~1 dB except key 45, +4: round robins); linear in dB
+between a key's points (the zones, up to ~5 dB off their neighbours at one velocity layer, are a key or two wide, so a
+neighbour's shape says nothing about them). Each curve is made non-decreasing by isotonic regression (pool adjacent
+violators; the dips, e.g. key 63's 64 -> 80, show in the energy over 0.5 / 1 s too: the samples', not the measure's)
+and carried to 16 / 127 by the one-key check's own steps (an assumption). The one curve is the median over every key
+(steps 10.0 / 4.0 / 3.2 / 2.9 / 2.6 dB from 32 to 112). Its `perceived` is dropped: these runs measured the 50 ms level,
+and `atPitch` takes the pitches' (none), so the piano is judged by the 50 ms level everywhere (before: by ear at key 62,
+64 -> 80 +4.0 dB). The master trim reads each key's own level: keys 40-55 up to +6.9 / +10.9 / +5.7 dB over the old
+curve at velocity 48 / 80 / 112 (median +1.6 / +7.5 / +2.8), keys 100-108 13-20 dB under it. Test `tst_soundlibrary::pianoCurve`.
 
 **Levels in the Inspector** (articulation.h MarcatoLevel): every articulation sign (Inspector › Articulation ›
 *Level*) and every staff text that changes the technique (Inspector › Staff text › *Level*: pizz., col legno, sul
