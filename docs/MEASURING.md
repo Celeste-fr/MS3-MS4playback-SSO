@@ -48,6 +48,38 @@ ears), never commit Spitfire / NI files or the owner's scores, and hold the VM l
 
 `measure_patch.py all …` runs all four steps in one go: the plan and the run options together, plus `-o`.
 
+## Provenance: the commit and build next to the numbers (proposed 2026-10-30, not yet applied)
+
+A stored measurement is only as good as the code that made it: a renderer or analysis bug fixed later silently changes
+what the same command would measure. On 2026-10-30 none of the 86 JSON files in `tools/soundlibraries/` named the commit
+or build they were measured with: 24 have an `_about` (the method in words), 52 have a date somewhere in their text,
+and none has a `commit` or `build` key. The commit that added a file (`git log --diff-filter=A -- <file>`) is only a
+lower bound: the measurement may have run on an older tree, or with uncommitted changes.
+
+**Proposed convention** for a new or re-measured file (no mass edit of the old ones; add it when a file is measured
+again):
+
+```json
+"_provenance": {
+  "measured": "2026-10-30",
+  "commit": "594b1bea30",
+  "build": "kthost sha256 3f2a1b7c9d0e",
+  "renderer": "VM kthost, Kontakt 8 + SSO",
+  "analysis": "measure_patch.py analyze at 594b1bea30"
+}
+```
+
+- `commit` is `git rev-parse --short=10 HEAD` of the tree whose code produced the audio (kthost, MuseScore), with
+  `+dirty` when it had uncommitted changes; `analysis` the script and the tree that turned the audio into numbers, when
+  that was a different one (the VM renders, Linux analyses).
+- `renderer`: what made the sound (VM kthost with Kontakt + SSO, MuseScore's `--verify-playback` on the VM, the test
+  synth on Linux), with versions where known.
+- `build` names the binary itself: "MuseScore build N" with its full run link (CLAUDE.md: never a bare `#NNN`), or kthost's
+  SHA-256 (its first 12 hex digits), since the VM's kthost is often a local build.
+- `measure_patch.py analyze` is the natural place to fill it automatically (`git rev-parse`, `git status --porcelain`,
+  the kthost hash it already logs); proposed, not done yet. A hand-written JSON gets the same keys by hand.
+- The commit message keeps the same information, as it already does (method, VM / Linux, build).
+
 ## Cells, order and repeatability
 
 - **Note cells** (`--what level,onset,release`): one note after silence, for each combination of `--pitches` ×

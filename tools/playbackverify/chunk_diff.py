@@ -5,7 +5,8 @@
 
 Each file: "# chunks utick:seconds ..." then one line an event, "utick seconds route type a b tuning flags note"
 (route 0x10000 + port * 16 + channel for a library event). Compared per route:
-  notes   every note-on (with its velocity) and note-off, as a multiset of (utick, pitch, velocity)
+  notes   every note-on (with its velocity and tuning, cents) and note-off, as a multiset of (utick, pitch, velocity,
+          tuning) (before 2026-10-30 without the tuning: a note-on sent at another tuning passed; test_chunk_diff.py)
   state   each controller (CC n), the pitch bend and each plug-in parameter as the value in force over time: the
           intervals where the two renders' values differ (start, end, whole's, chunked's)
 Normalised (the only one): a controller / bend / parameter event that sets the value already in force on its route is
@@ -42,11 +43,11 @@ def streams(ev):
     redundant = collections.Counter()
     for u, s, r, t, a, b, tun, flags, note in ev:
         if t == NOTEON and b > 0:
-            notes[r][(u, 'on', a, b)] += 1
+            notes[r][(u, 'on', a, b, round(tun, 4))] += 1
             order[(r, u)].append(('on', a, b))
             continue
         if t == NOTEOFF or (t == NOTEON and b == 0):
-            notes[r][(u, 'off', a, 0)] += 1
+            notes[r][(u, 'off', a, 0, 0.0)] += 1
             order[(r, u)].append(('off', a))
             continue
         if t == CTRL:
@@ -114,13 +115,13 @@ def nearest_bound(bounds, s):
     return min((abs(s - bs) * 1000.0, bu) for bu, bs in bounds)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('whole')
     ap.add_argument('chunked')
     ap.add_argument('--detail', type=int, default=5)
     ap.add_argument('--route', type=int, default=None)
-    o = ap.parse_args()
+    o = ap.parse_args(argv)
     wb, we = read(o.whole)
     cb, ce = read(o.chunked)
     wn, ws, wo, wr = streams(we)
@@ -140,10 +141,10 @@ def main():
         if only_w or only_c:
             classes['notes'] += sum(only_w.values()) + sum(only_c.values())
             lines.append('  notes: %d only whole, %d only chunked' % (sum(only_w.values()), sum(only_c.values())))
-            for (u, kind, p, v), n in sorted(only_w.items())[:o.detail]:
-                lines.append('    whole   %8d %s %d v%d' % (u, kind, p, v))
-            for (u, kind, p, v), n in sorted(only_c.items())[:o.detail]:
-                lines.append('    chunked %8d %s %d v%d' % (u, kind, p, v))
+            for (u, kind, p, v, c), n in sorted(only_w.items())[:o.detail]:
+                lines.append('    whole   %8d %s %d v%d %+g c' % (u, kind, p, v, c))
+            for (u, kind, p, v, c), n in sorted(only_c.items())[:o.detail]:
+                lines.append('    chunked %8d %s %d v%d %+g c' % (u, kind, p, v, c))
         keys = sorted(set(k for rr, k in ws if rr == r) | set(k for rr, k in cs if rr == r))
         for k in keys:
             d = state_diffs(ws.get((r, k), []), cs.get((r, k), []))

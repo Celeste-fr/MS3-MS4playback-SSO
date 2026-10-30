@@ -6228,7 +6228,7 @@ void TestLiveEquivalence::verifyRoutesByPart()
 //    --live-equivalence loads one library part's instances at a time (every part's at once ran the 16 GB Windows VM
 //    out of memory, as --even-levels and --verify-playback did: 7f51a91979). The null test: MuseScore's render with the
 //    parts loaded one at a time is the same samples as with every part's loaded at once (Options::wholeScore, the old way),
-//    and so is Live's render and the verdict
+//    and so is Live's render and the verdict. Positive control: one sample 0.5 dB lower is seen
 //---------------------------------------------------------
 
 void TestLiveEquivalence::liveEquivalenceByPart()
@@ -6262,15 +6262,28 @@ void TestLiveEquivalence::liveEquivalenceByPart()
       // the null: sample for sample (each route renders on its own instance, the mix is added up in slot order)
       QVERIFY(byPart.museScore.size() > 48000);
       QCOMPARE(byPart.museScore.size(), whole.museScore.size());
-      float maxDiff = 0, peak = 0;
-      for (size_t i = 0; i < whole.museScore.size(); ++i) {
-            maxDiff = std::max(maxDiff, std::fabs(byPart.museScore[i] - whole.museScore[i]));
-            peak = std::max(peak, std::fabs(whole.museScore[i]));
-            }
+      float peak = 0;
+      size_t peakAt = 0;
+      auto diffOf = [&whole](const std::vector<float>& b) {
+            float d = 0;
+            for (size_t i = 0; i < whole.museScore.size(); ++i)
+                  d = std::max(d, std::fabs(b[i] - whole.museScore[i]));
+            return d;
+            };
+      for (size_t i = 0; i < whole.museScore.size(); ++i)
+            if (std::fabs(whole.museScore[i]) > peak) {
+                  peak = std::fabs(whole.museScore[i]);
+                  peakAt = i;
+                  }
+      const float maxDiff = diffOf(byPart.museScore);
       qDebug("by part against whole score: max difference %g, peak %g, %d frames", double(maxDiff), double(peak),
              int(whole.museScore.size() / 2));
       QVERIFY(peak > 1e-3f);                    // (it is not a null of silence)
       QCOMPARE(maxDiff, 0.f);
+      // the positive control: one sample (the peak's) 0.5 dB lower is seen
+      std::vector<float> planted = byPart.museScore;
+      planted[peakAt] *= float(std::pow(10.0, -0.5 / 20));
+      QVERIFY2(diffOf(planted) > 0.05f * peak, qPrintable(QString::number(double(diffOf(planted)))));
       QVERIFY(byPart.live == whole.live);
       QCOMPARE(byPart.passed, whole.passed);
       QCOMPARE(byPart.correlation, whole.correlation);
@@ -10194,7 +10207,9 @@ void TestLiveEquivalence::playbackSettingsWidget()
 //    trim, NoteLane::onPerformancePatch for every chosen note, the note preview's events and the score's chunked render
 //    (as Seq plays it) recorded with EditLag off and on, compared. MS_EDITLAG_SCORE=<score> (e.g. Whence) instead of
 //    the test's; MS_EDITLAG_SETTINGS=<metaTag>; MS_EDITLAG_TIMES=1 prints each step's Inspector + preview time in both.
-//    Also, at every step, the click's preview (its Previewer kept across the steps) equals a fresh Previewer's
+//    Also, at every step, the click's preview (its Previewer kept across the steps) equals a fresh Previewer's.
+//    Positive controls: each edit step changes the record; a third pass with a planted stale input (the even level
+//    written without EvenLevels::changed(), which the cache's tag counts) differs from the first
 //---------------------------------------------------------
 
 static QString eventsText(const EventMap& events)
@@ -10254,10 +10269,12 @@ void TestLiveEquivalence::editLagIdentical()
       const bool times = qEnvironmentVariableIsSet("MS_EDITLAG_TIMES");
 
       std::vector<std::unique_ptr<MasterScore>> keep;         // (alive to the end: no score at a freed one's address)
-      std::vector<QStringList> records(2);
-      std::vector<QStringList> timings(2);
-      for (int pass = 0; pass < 2; ++pass) {
-            EditLag::setOn(pass == 1);
+      // pass 0 EditLag off, 1 on; 2 on with a planted fault, the positive control: the even level written without
+      // EvenLevels::changed() (an input the cache's tag misses), so that an older state's kept result is stale
+      std::vector<QStringList> records(3);
+      std::vector<QStringList> timings(3);
+      for (int pass = 0; pass < 3; ++pass) {
+            EditLag::setOn(pass >= 1);
             MasterScore* score = qEnvironmentVariableIsSet("MS_EDITLAG_SCORE") ? readCreatedScore(qEnvironmentVariable("MS_EDITLAG_SCORE"))
                                                                               : readScore(DIR + "even-auto.musicxml");
             QVERIFY(score);
@@ -10314,14 +10331,19 @@ void TestLiveEquivalence::editLagIdentical()
                                     return false;
                         return true;
                         };
-                  QVERIFY2(same(pv, pf), qPrintable(step + ": the click against a fresh render"));
-                  if (evenNote)
-                        QVERIFY2(same(previewer.preview({ evenNote }, synth), NotePreview::Previewer().preview({ evenNote }, synth)),
-                                 qPrintable(step + ": the even-level note's click against a fresh render"));
+                  // (pass 2, the planted fault: a stale click is recorded, not failed)
+                  const bool clickSame = same(pv, pf);
+                  const bool evenClickSame = !evenNote || same(previewer.preview({ evenNote }, synth), NotePreview::Previewer().preview({ evenNote }, synth));
+                  if (pass != 2) {
+                        QVERIFY2(clickSame, qPrintable(step + ": the click against a fresh render"));
+                        QVERIFY2(evenClickSame, qPrintable(step + ": the even-level note's click against a fresh render"));
+                        }
                   timings[size_t(pass)] << QString("%1: warm-up %2 ms (%3), inspector %4 ms, preview %5 ms").arg(step).arg(warmMs, 0, 'f', 1)
                                            .arg(warm == 3 ? QString("all") : QString::number(warm)).arg(inspectorMs, 0, 'f', 1).arg(previewMs, 0, 'f', 1);
                   QStringList r;
                   r << "step " + step << QString("inspector %1 %2").arg(perf1.size()).arg(perf2.size());
+                  if (!clickSame || !evenClickSame)
+                        r << "click stale";
                   auto pvText = [](const NotePreview::Preview& p) {
                         QStringList t;
                         for (const NPlayEvent& e : p.on)
@@ -10388,7 +10410,8 @@ void TestLiveEquivalence::editLagIdentical()
                               toNote(l)->setEvenContext(info.context);
                               }
                   score->setPlaylistDirty();
-                  EvenLevels::changed();
+                  if (pass != 2)
+                        EvenLevels::changed();
                   const NotePreview::Preview after = NotePreview::Previewer().preview({ evenNote }, synth);
                   bool differs = before.on.size() != after.on.size();
                   for (size_t e = 0; !differs && e < before.on.size(); ++e)
@@ -10426,6 +10449,21 @@ void TestLiveEquivalence::editLagIdentical()
             undo(false); undo(false);         record("two redos");
             }
       QCOMPARE(records[0].size(), records[1].size());
+      // the edits change what is compared (else a step tests nothing)
+      for (int i = 1; i < records[0].size(); ++i) {
+            const QString step = records[0][i].section('\n', 0, 0);
+            if (step == "step pitch up" || step == "step staccato" || step == "step even level written" || step == "step setting"
+                || step.startsWith("step pitch down"))
+                  QVERIFY2(records[0][i] != records[0][i - 1], qPrintable(step + ": the same as the step before"));
+            }
+      // the planted fault is seen
+      QCOMPARE(records[2].size(), records[0].size());
+      int planted = -1;
+      for (int i = 0; i < records[0].size() && planted < 0; ++i)
+            if (records[2][i] != records[0][i])
+                  planted = i;
+      QVERIFY2(planted >= 0, "a stale result (even levels written without EvenLevels::changed) not seen");
+      qDebug("editLagIdentical: the planted stale result seen at %s", qPrintable(records[0][planted].section('\n', 0, 0)));
       for (int i = 0; i < records[0].size(); ++i) {
             if (records[0][i] != records[1][i]) {
                   const QStringList a = records[0][i].split("\n"), b = records[1][i].split("\n");

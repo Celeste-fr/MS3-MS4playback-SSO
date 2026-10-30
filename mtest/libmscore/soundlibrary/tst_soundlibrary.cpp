@@ -5565,7 +5565,8 @@ void TestSoundLibrary::chunkEndLevels()
 //    shipped SSO map and calibration (Recommended and Library default) and Ample's: slurs and plain Performance notes over
 //    chunk boundaries (joins, keepMs, early transitions, microtone bends and spelling), accents, staccatos, real range,
 //    divisi chords, even levels (values set on every Performance note, runs and held glides over the boundaries), strums.
-//    Fails with MS_CHUNK_WINDOWS_OFF=1 (each chunk alone, as before). A seek (the middle chunk rendered first, then the
+//    Fails with MS_CHUNK_WINDOWS_OFF=1 (each chunk alone, as before: checked in the test, the first case). Positive
+//    controls there too: one CC11 value, one note-on's tick or tuning planted in the chunked render is seen. A seek (the middle chunk rendered first, then the
 //    rest, then the start): every note-on and note-off as the whole render's, none twice or missing
 //---------------------------------------------------------
 
@@ -5694,6 +5695,45 @@ void TestSoundLibrary::chunkedEqualsWhole()
                         }
                   const EventMap whole = render(score, 0, false, &n);
                   const QStringList w = lines(whole);
+                  if (&c == &cases.front()) {
+                        // positive controls (each preset, the first case): the comparison fails on a planted change of
+                        // the chunked render (one CC11 value one step, one note-on one tick later, one note-on at +50
+                        // cents) and on the defect chunk-equal fixed (MS_CHUNK_WINDOWS_OFF=1: each chunk rendered alone)
+                        const EventMap chunked = render(score, 1, false, &n);
+                        QVERIFY2(lines(chunked) == w, qPrintable(QString("%1: chunks of 1 differ").arg(p.id)));
+                        auto plant = [&](int kind) {
+                              EventMap e = chunked;
+                              for (auto it = e.begin(); it != e.end(); ++it) {
+                                    NPlayEvent& ev = it->second;
+                                    if (!ev.isExternal() || ev.librarySwitch())
+                                          continue;
+                                    if (kind == 0 && ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION && ev.value() > 0) {
+                                          ev.setValue(ev.value() - 1);
+                                          return e;
+                                          }
+                                    if (kind == 1 && ev.type() == ME_NOTEON && ev.velo() > 0) {
+                                          const std::pair<const int, NPlayEvent> moved { it->first + 1, ev };
+                                          e.erase(it);
+                                          e.insert(moved);
+                                          return e;
+                                          }
+                                    if (kind == 2 && ev.type() == ME_NOTEON && ev.velo() > 0) {
+                                          ev.setTuning(ev.tuning() + 50.f);
+                                          return e;
+                                          }
+                                    }
+                              return EventMap();
+                              };
+                        for (int kind : { 0, 1, 2 }) {
+                              const EventMap planted = plant(kind);
+                              QVERIFY2(!planted.empty(), qPrintable(QString("%1: nothing to plant (%2)").arg(p.id).arg(kind)));
+                              QVERIFY2(lines(planted) != w, qPrintable(QString("%1: planted change %2 not seen").arg(p.id).arg(kind)));
+                              }
+                        qputenv("MS_CHUNK_WINDOWS_OFF", "1");
+                        const QStringList alone = lines(render(score, 1, false, &n));
+                        qunsetenv("MS_CHUNK_WINDOWS_OFF");
+                        QVERIFY2(alone != w, qPrintable(QString("%1: chunks rendered alone equal the whole render").arg(p.id)));
+                        }
                   for (int size : { 1, 10 }) {
                         const QString what = QString("%1%2, %3, chunks of %4").arg(QFileInfo(c.file).completeBaseName(),
                                                     c.settings.isEmpty() ? QString() : " (" + c.settings + ")", p.id).arg(size);
@@ -10837,13 +10877,15 @@ struct HostProcesses {
 //    the same calls give the same samples, bit for bit, in MuseScore's process and in 1 or 2 helpers: three slots (two
 //    instances, one linked to the first on its channel 1), varispeed on with tuned notes and legato glides, blocks of 1
 //    to 4096 frames, CC1, a parameter set between blocks (its processor side in the next block: vst3Settle), the Mixer
-//    changed, a transport restart, all notes off, settle, then the instances' states
+//    changed, a transport restart, all notes off, settle, then the instances' states. Positive control: one note-on at
+//    velocity + 1 differs
 //---------------------------------------------------------
 
 void TestSoundLibrary::remoteNull()
       {
       const int rate = 48000;
-      auto render = [&](int processes, QByteArray* states, int* remote) {
+      // plant: the first note-on from that step on goes at velocity + 1 (the positive control), -1 none
+      auto render = [&](int processes, QByteArray* states, int* remote, int plant = -1) {
             HostProcesses hp(processes);
             Vst3Synth vst;
             vst.init(rate);
@@ -10870,6 +10912,10 @@ void TestSoundLibrary::remoteNull()
                               const int pitch = 55 + int(rng() % 24);
                               PlayEvent on(ME_NOTEON, slot, pitch, 40 + int(rng() % 80));
                               on.setTuning(float(int(rng() % 5) * 25 - 50));
+                              if (plant >= 0 && step >= plant) {
+                                    on.setVelo(on.velo() + 1);
+                                    plant = -1;
+                                    }
                               vst.play(on);
                               if (sounding[slot] >= 0 && rng() % 2)
                                     vst.play(PlayEvent(ME_NOTEON, slot, sounding[slot], 0));
@@ -10935,6 +10981,20 @@ void TestSoundLibrary::remoteNull()
             }
       QCOMPARE(s1, s0);
       QCOMPARE(s2, s0);
+      // the positive control: one note-on's velocity one step higher (step 450 on) is seen, in process and in a helper
+      for (int processes : { 0, 1 }) {
+            QByteArray sp;
+            int rp = 0;
+            const std::vector<float> planted = render(processes, &sp, &rp, 450);
+            QCOMPARE(planted.size(), local.size());
+            size_t first = planted.size();
+            for (size_t i = 0; i < planted.size(); ++i)
+                  if (std::memcmp(&planted[i], &local[i], sizeof(float))) {
+                        first = i;
+                        break;
+                        }
+            QVERIFY2(first < planted.size() && first > 0, qPrintable(QString("%1 helpers: a velocity + 1 not seen").arg(processes)));
+            }
       }
 
 //---------------------------------------------------------

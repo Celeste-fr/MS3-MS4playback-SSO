@@ -58,6 +58,7 @@ class TestPlaybackAudit : public QObject, public MTest
       void leapFindings();
       void transitionArrival();
       void plainAutoArrival();
+      void plantedControls();
       void auditScore();
       };
 
@@ -100,6 +101,25 @@ static int moveNoteOff(EventMap& events, int pitch, int nth, int to)
                         events.insert({ to, off });
                         return from;
                         }
+                  }
+            }
+      return -1;
+      }
+
+// the nth note-on of a key moved by ticks (its note-off stays); its tick before, or -1
+static int moveNoteOn(EventMap& events, int pitch, int nth, int ticks)
+      {
+      int seen = 0;
+      for (auto it = events.begin(); it != events.end(); ++it) {
+            const NPlayEvent& e = it->second;
+            if (!e.isExternal() || e.librarySwitch() || e.pitch() != pitch || e.type() != ME_NOTEON || e.velo() == 0)
+                  continue;
+            if (seen++ == nth) {
+                  const NPlayEvent on = e;
+                  const int from = it->first;
+                  events.erase(it);
+                  events.insert({ from + ticks, on });
+                  return from;
                   }
             }
       return -1;
@@ -763,6 +783,106 @@ void TestPlaybackAudit::auditScore()
       const int overlaps = r.count(PlaybackAudit::Kind::OVERLAP);
       delete score;
       QVERIFY2(overlaps == 0, qPrintable(QString("%1 OVERLAP").arg(overlaps)));
+      }
+
+//---------------------------------------------------------
+//   plantedControls
+//    positive controls for ARRIVAL and LEVEL STEP (the other kinds plant theirs in their own tests: OVERLAP a moved
+//    note-off, DROPPED / LEAP / CHORD / HALL / AVOIDED CC events or fixtures that make them, CAPPED / UNMEASURED the map):
+//    swap-violas.musicxml as swapFindings renders it without quickLevel is clean (no ARRIVAL, no LEVEL STEP); then a
+//    known defect is planted in its events and the audit must report it, with the planted size:
+//      - the C4 sixteenth's note-on 60 ms late: ARRIVAL fail of +60 ms; 40 ms: a warning; 10 ms: under the 30 ms warning
+//        threshold (Rasch 1979: by design, not flagged), but its predicted arrival (Report::rows) moves by 10 ms
+//      - CC11 one step down (126) under the C4 sixteenth, back to 127 for the D4: LEVEL STEP -0.14 / +0.14 dB (the law,
+//        40 log10(126 / 127): no calibration here); CC11 113: -2.03 dB, above the proposed difference limen
+//---------------------------------------------------------
+
+void TestPlaybackAudit::plantedControls()
+      {
+      recommended({ { "levels/calibrated", "0" } });
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violas' ids='viola'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='30' peak='800'/>"
+         "<Articulation name='Long (Rachm.)' value='16' techniques='long legato' modifiers='espressivo' onset='150' peak='800'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "swap-violas.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      EventMap events;
+      std::vector<MidiRenderer::LibTrace> trace;
+      PlaybackAudit::render(score, &events, &trace);
+      const PlaybackAudit::Measured none;
+      const PlaybackAudit::Report clean = PlaybackAudit::audit(score, events, trace, none);
+      QVERIFY2(clean.count(PlaybackAudit::Kind::ARRIVAL) == 0, qPrintable(clean.text()));
+      QVERIFY2(clean.count(PlaybackAudit::Kind::LEVEL_STEP) == 0, qPrintable(clean.text()));
+      QVERIFY2(clean.count(PlaybackAudit::Kind::OVERLAP) == 0, qPrintable(clean.text()));
+      auto arrivalOf = [](const PlaybackAudit::Report& r, int pitch) {
+            for (const PlaybackAudit::NoteRow& n : r.rows)
+                  if (n.pitch == pitch && n.hasArrival)
+                        return n.arrivalMs;
+            return -1e9;
+            };
+      QVERIFY(arrivalOf(clean, 60) > -1e8);
+      const double tickMs = 60000.0 / 110 / DIVISION;               // (110 bpm)
+
+      // a late note-on
+      struct Late { double ms; PlaybackAudit::Severity severity; bool flagged; };
+      for (const Late& late : { Late { 60, PlaybackAudit::Severity::FAIL, true }, Late { 40, PlaybackAudit::Severity::WARN, true },
+                                Late { 10, PlaybackAudit::Severity::WARN, false } }) {
+            EventMap moved = events;
+            const int ticks = int(std::lround(late.ms / tickMs));
+            QVERIFY(moveNoteOn(moved, 60, 0, ticks) >= 0);
+            const PlaybackAudit::Report r = PlaybackAudit::audit(score, moved, trace, none);
+            const QString what = QString("C4 %1 ms late: ").arg(late.ms) + r.text();
+            QVERIFY2(std::abs(arrivalOf(r, 60) - arrivalOf(clean, 60) - ticks * tickMs) < 0.5, qPrintable(what));
+            bool found = false;
+            for (const PlaybackAudit::Finding& f : r.findings)
+                  if (f.kind == PlaybackAudit::Kind::ARRIVAL && f.pitch == 60) {
+                        found = true;
+                        QCOMPARE(f.severity, late.severity);
+                        QVERIFY2(std::abs(f.value - ticks * tickMs) < 0.5, qPrintable(what));
+                        }
+            QVERIFY2(found == late.flagged, qPrintable(what));
+            if (!late.flagged)
+                  QVERIFY2(r.count(PlaybackAudit::Kind::ARRIVAL) == 0, qPrintable(what));
+            }
+
+      // a CC11 step under the slur
+      int route = -1, onC = -1, onD = -1;
+      for (const auto& te : events)
+            if (te.second.isExternal() && !te.second.librarySwitch() && te.second.type() == ME_NOTEON && te.second.velo() > 0) {
+                  if (te.second.pitch() == 60 && onC < 0) {
+                        onC = te.first;
+                        route = te.second.extPort() * 16 + te.second.extChannel();
+                        }
+                  else if (te.second.pitch() == 62 && onD < 0)
+                        onD = te.first;
+                  }
+      QVERIFY(route >= 0 && onC > 0 && onD > onC + 1);
+      for (int value : { 126, 113 }) {
+            EventMap stepped = events;
+            NPlayEvent down(ME_CONTROLLER, 0, CTRL_EXPRESSION, value);
+            down.setExternal(route / 16, route % 16);
+            NPlayEvent up = down;
+            up.setValue(127);
+            stepped.insert({ onC - 1, down });
+            stepped.insert({ onD - 1, up });
+            const PlaybackAudit::Report r = PlaybackAudit::audit(score, stepped, trace, none);
+            const double db = 40.0 * std::log10(value / 127.0);
+            const QString what = QString("CC11 %1: ").arg(value) + r.text();
+            std::map<int, double> steps;
+            for (const PlaybackAudit::Finding& f : r.findings)
+                  if (f.kind == PlaybackAudit::Kind::LEVEL_STEP)
+                        steps[f.pitch] = f.value;
+            QVERIFY2(steps.size() == 2 && steps.count(60) && steps.count(62), qPrintable(what));
+            QVERIFY2(std::abs(steps[60] - db) < 0.01 && std::abs(steps[62] + db) < 0.01, qPrintable(what));
+            QVERIFY2(r.count(PlaybackAudit::Kind::ARRIVAL) == 0, qPrintable(what));
+            }
+      delete score;
       }
 
 //---------------------------------------------------------
