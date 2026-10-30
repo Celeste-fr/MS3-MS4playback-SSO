@@ -29,8 +29,8 @@ roughly newest first, kept for its detail; `git log` has each step's measurement
   pass 1, presets rewriting playback.ini, Clear Velocity and Join, runBends off). Real Live, Whence with `--live-edits`
   (`realcheck-1029/w495`, 2026-10-29): every Live / Update row PASS, the knob kept through Live's save; audio rows as build
   494's. Not yet sent to the owner. Newer than 495: the SIGPIPE fix (Linux / macOS only) and tools.
-- **Deadlines.** The VM's Live 12.4.7 trial stops saving / exporting about 2026-11-01. From 2026-11-01: no subagents,
-  lean usage. Vial's next preset pack renames presets (memory: switch `gen_vial.py` / `vial_levels.py` only after it is
+- **Deadlines.** The VM's Live 12.4.7 trial stops saving / exporting about 2026-11-01. Usage: the owner renewed the 20x
+  Max plan for another month (2026-10-30): subagents freely, no usage limits; machine limits still apply. Vial's next preset pack renames presets (memory: switch `gen_vial.py` / `vial_levels.py` only after it is
   delivered; table in `~/vial-sso/work/private_pkg/MS_PATHS.md`).
 
 ## The owner's pending decisions
@@ -69,7 +69,7 @@ Run each as a background job writing a log (`nohup … > <log> 2>&1 &`), check a
    `python3 tools/soundlibraries/legato_glide/glide.py <work> <out.json>`; if bendGlide depends on the interval, give the
    map an interval-dependent glide (generator, then the audit's / heard check's residuals again).
 
-## How to work lean
+## How to work
 
 - **Read little.** This top part, OPEN_ITEMS' "Do next", then only the CLAUDE.md / docs section of the item at hand.
   Read logs with `tail` / `grep`, never `cat`. `git log -5 --stat` before starting.
