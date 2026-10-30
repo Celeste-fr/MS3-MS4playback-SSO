@@ -432,6 +432,26 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
 Order (2026-10-29): owner-approvable fixes first, then measurements that need the VM, then the rest; the Ample items
 last (the AGM trial has ended; they wait for the bought guitars).
 
+### 38. SSO Grand Piano: the master trim under-protects keys 40-55; uneven two-key zones; live "feedback noise" unexplained (measured 2026-10-30)
+- **W** (VM kthost, Kontakt 8 + SSO, offline, analysed on Linux; docs/MEASURING.md › Patch facts › Grand Piano): the
+  piano's own crest (sample peak − loudest 50 ms) is at most 13.45 dB (median 8.8, 120 notes), under the map's 14.5.
+  But its dynamics calibration is one key (62, which sits in a −3.4 dB zone at v80; the curve is flat from v64 to v80),
+  so keys 40-55 play up to +10.8 dB over the calibration at v80 (+7.6 at v127) and the peak lies up to **18.7 dB** over
+  the calibrated level: the trim can be **~4.2 dB short** on a loud low-middle piano (keys 88-106 play 3-19 dB under it:
+  over-protected). Key evenness (4 repeats, repeat SD 0.5 dB, so samples, not round robins): two-key zones ±3-5 dB
+  (v80: 40-41 +4.2/+4.7, 46-47 +4.8/+5.1, 50-51 −4.6, 52-53 +4.2/+4.5; 92-93 +4.2-5.0 and 88-89 −3.4-−4.9 at every
+  velocity); key SD 1.8-2.2 dB. Tone: no faulty round robin confirmed; one lead, keys 40-41, the round robin heard on
+  attacks 1 and 4 of 4: a partial near 2.0 / 2.1 kHz +16-19 dB over the other round robin at v112 (+10-14 at v48, +3-6 at
+  v80); not checked by ear; it plays at every velocity, so an `avoid` by velocity can't steer around it (a candidate for a
+  person to check: `{"keys": [40, 41], "band": [112, 112], "velocity": 80}`, where the partial is +3-6 dB; 81-111 unmeasured). Pedal: clean (no click,
+  noise 36 dB under a v80 note).
+- **The owner's piano score sounds like "pure feedback noise" live, export clean**: nothing in these renders explains it
+  (pedal changes, sustain and samples are clean offline, two takes identical). It points at the realtime path; one link:
+  the pedal keeps every released note's voices (−49 dBFS 5.5 s after the key, a lift-and-press damps them in ~0.3 s),
+  so live voice count and CPU rise with the pedal. Next: `MS_AUDIO_TIMING` on the owner's PC while it plays.
+- **Fix**: a per-key piano calibration (from this sweep's levels) or the piano's crest set to 18.7 in the map (owner:
+  it changes the trim); keys left as SSO recorded them unless the owner wants piano key levels evened.
+
 ### 21. Basses con sord. / espressivo leave the Performance patch
 - **W**: no con sord. / Rachm. sample for the Basses: the notes fall back to All techniques Long / Spiccato
   (`choosePlain` refuses a dropped modifier). Fixed only under plainTiming 1 (12 notes in Mixed, none in Whence).

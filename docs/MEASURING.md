@@ -174,6 +174,29 @@ with its notes (a kthost event file, a `plan.json`, a verify `events.tsv`).
   Performance patches, v64 / 122, private plain-accents renders; none flagged). There is no kept render of the
   original fault (its renders and script are lost): re-finding it in real SSO needs a VM run of the command above.
 
+## Patch facts
+
+### Grand Piano (2026-10-30, VM kthost, offline, 44.1 kHz; analysed on Linux; private `piano-analysis/summary.json`)
+
+- **Round robins**: at least two per key and velocity (attacks 1 and 4 of 4 often the same recording, r 0.99); their
+  level differs by up to ~4 dB, their spectra differ (tone_check's `dark` / `bright` / `quiet` / `loud` flags are this).
+- **tone_check on a piano**: its `pop at note-off` flags (147 of 1056 notes, almost all attacks 1 and 4) are its
+  sustain model on a decaying note: the energy above 3 kHz 30 ms after the note-off against before is the same for every
+  attack (median −1.7 dB, max 6.4). Its harmonic grid misses a piano's stretched partials above ~the 15th, so a
+  `narrow tone` there needs a look at the real partial. Key 108's `click at note-on on every note` (25 dB) is the hammer
+  over a top key's short sustain. Lead: keys 40-41, one round robin, a partial near 2.0 / 2.1 kHz +16-19 dB at v112
+  (OPEN_ITEMS 38).
+- **Key levels** (4 repeats at v48 / 80 / 112, repeat SD 0.5 dB): two-key sample zones ±3-5 dB, key SD 1.8-2.2 dB
+  (OPEN_ITEMS 38 lists them).
+- **Crest** (peak − loudest 50 ms, as `sso_crest.json`; 15 keys x v48 / 80 / 112 / 127 x 2 takes): max 13.45, median
+  8.8 dB; loudest peak −6.6 dBFS (v127, at the setup's defaults). Over the shipped calibration (key 62 alone): up to 18.7 dB.
+- **Sustain pedal (CC64)**: keys 43 + 60 at v80 released after 0.5 s: pedal up, −69 dBFS 1 s after the key (notes'
+  loudest 50 ms −23.4); pedal down, still −48.7 dBFS 5.5 s after; CC64 up then cuts it (−78 at +0.5 s, −88 at +1 s).
+  A lift and press 1 ms apart damps notes held by the pedal as a pedal up does (−42 → −57 at +0.25 s → −66 at +0.5 s;
+  without it −42.5): the press doesn't catch them. Each lift plays one pedal-up noise, loudest 50 ms −60 dBFS, peak
+  −52 (pedal down's −68): ~36 dB under a v80 note; no click, no glitch; a press and lift 1 ms apart the same. Both takes
+  identical to 0.1 dB.
+
 ## kthost
 
 `kthost <plugin.vst3> <state|-> <events.txt> <out.wav> [options]` (`--help` lists them all). The source is
