@@ -52,16 +52,11 @@ Run each as a background job writing a log (`nohup … > <log> 2>&1 &`), check a
    and the same with `slurs/runBends=1` into `$W/B`. Compare each take's report.json (quarter tones' `how`,
    `closestCents`, the in-tune share) against the offline prediction (docs/PLAYBACK_SETTINGS.md › Run bends); refit the
    bowed lag with `tools/soundlibraries/legato_glide/runlag.py fit` on A's routes. Then an A/B page for the owner.
-3. **Phase 1 done 2026-10-29** (21 plans, ~45 min of VM; results and the proposal: docs/RESEARCH.md › 1.1a › SSO sweep,
-   phase 1; private `~/MuseScore/ms3fork/private/cc1tech/json` + `analysis/`, backed up; the WAVs were deleted by the run).
-   Left: **phase 2** (`PHASE=2`, 33 plans, ~1.5-2.2 h: mutes, sul pont., tremolos, trill; the Long's res are kept, so `run`
-   should skip it as done), then `PHASE=2 bash vm_plan.sh analyze` and `python3 -I ~/MuseScore/ms3fork/private/queued/cc1tech/ph1_analyze.py
-   <work> <out.json> tools/soundlibraries/sso_cc1_curves.json` (it reads every work folder); the owner's decision on the
-   proposal. **CC1 string techniques sweep** (OPEN_ITEMS 4; phase 1 ~1-1.5 h, phase 2 ~1.5-2.2 h of VM): the plan is
-   `~/MuseScore/ms3fork/private/queued/cc1tech/vm_plan.sh` (`bash vm_plan.sh plan`, then per job
-   `PHASE=1 SECTION="Violins 1" bash vm_plan.sh run`, one section per background job, each ~15-45 min; then
-   `bash vm_plan.sh analyze`; results in `~/MuseScore/ms3fork/private/cc1tech/json`). Offsets = technique - Long, against
-   RESEARCH.md 1.1a's real-player offsets; the owner decides whether to play them.
+3. **Done 2026-10-29 (phase 1) and 2026-10-30 (phase 2, 31 plans, finished 03:28)**: results and both proposals in
+   docs/RESEARCH.md › 1.1a › SSO sweep, phase 1 / phase 2; private `~/MuseScore/ms3fork/private/cc1tech/json` +
+   `analysis/phase{1,2}_offsets.json` / `.txt` (phase 2 by `~/MuseScore/ms3fork/private/queued/cc1tech/ph2_analyze.py
+   <work> <out.json> tools/soundlibraries/sso_cc1_curves.json`), backed up in ms3fork-private; WAVs deleted. Left: the
+   owner's decision on the proposals (OPEN_ITEMS 4), then the implementation (match + heldOffset for CC1 techniques).
 4. **Done 2026-10-29** (VERIFY.md › Plain notes: the glide depends on the interval, but a table would worsen Whence's +64; no map change). **Basses' bowed glide by interval** (OPEN_ITEMS 3):
    `python3 tools/soundlibraries/legato_glide/gen.py <work> --sections=cb --iois=600,1000,2182 --steps=-6,-3,-2,-1,1,2,3,6`,
    render `<work>/ev/*.txt` with kthost on the VM with the Basses - Performance state (as

@@ -204,7 +204,7 @@ for the audio, which the owner must create. (b) takes 1–2 days per score.
 
 Open item 4 (sul tasto / flautando / harmonics and the other CC1 techniques), branch `bowed-join`, 2026-10-29. The
 search and the Philharmonia check used no VM; phase 1 of the SSO sweep ran on the VM the same day (§ SSO sweep, phase 1
-measured, below); phase 2 is not run.
+measured, below); phase 2 on 2026-10-30 (§ SSO sweep, phase 2 measured).
 
 **Searched again, nothing new with numbers** (all [read] unless marked):
 - Bow position against level: Guettler, Schoonderwaldt & Askenfelt, "Bow speed or bowing position: which one
@@ -352,11 +352,65 @@ CC11 −42, and the samples' noise rises with them (not measured: the WAVs are g
 the patch of its own (a route) or a cap (e.g. +20 dB) is the owner's choice; the owner may also keep SSO's Super Sul Tasto
 as the effect Spitfire made.
 
-**Phase 2** (not run; 33 plans, about 1.5–2.2 h of VM): Long CS, Long Sul Pont, Long CS Sul Pont, Tremolo, Trem Sul
-Pont, Trem CS, Trill (Major 2nd), against the same Long (kept: its per-take cells in the json, so phase 2 needs no new
-Long render). It is needed for the con sordino (the best-sourced real offset, the violin's −4 ± 2) and sul pont; the
-tremolos and trills have no real data (0 ± 5), so their measurement only matters if the owner wants them matched to
-the Long. Neither phase samples round robins (identical takes); a back-to-back variant (gaps under 1.5 s) would.
+**SSO sweep, phase 2 measured** (2026-10-30, VM kthost offline renders of Kontakt 8 + SSO, 31 plans (the 33 planned less
+the two Long renders shared with phase 1), finished 03:28; analysed on Linux by `vm_plan.sh analyze` and `ph2_analyze.py`
+(phase 1's script restricted to phase 2's folders); private: `~/MuseScore/ms3fork/private/cc1tech/json` and
+`analysis/phase2_offsets.json` / `phase2.txt`, backed up in ms3fork-private). All 31 plans rendered (exit 0, load probe
+heard, file peaks −26.5 … −10.4 dBFS: none clipped, none silent; every cell measured). The reference is phase 1's Long
+(same patch, same VM, the day before; offline renders repeat: the two takes again identical, median |difference|
+≤ 0.01 dB, so round robins are not sampled). Same method and measure as phase 1: perceived peak over 2.5 s; median
+over pitches × takes at CC1 64, and CC1 16 → 127:
+
+| section | CS | Sul Pont | CS Sul Pont | Tremolo | Trem Sul Pont | Trem CS | Trill (M2) |
+|---|---|---|---|---|---|---|---|
+| Violins 1 | −5.1; −9 → −5 | −2.3; −12 → −2 | −4.0; −3 → −5 | −0.0; −17 → +4 | −13.6; −19 → −2 | – | −4.0; −13 → −3 |
+| Violins 2 | −5.1; −15 → −4 | −3.0; −14 → −2 | −12.8; −14 → −5 | −2.4; −26 → +4 | −16.0; −21 → −3 | −15.5; −25 → −7 | −3.0; −9 → −2 |
+| Violas | −6.0; −16 → −5 | −3.4; −16 → −2 | −19.1; −23 → −7 | −2.4; −19 → +2 | −11.5; −22 → +1 | −17.0; −30 → −9 | −4.8; −16 → −4 |
+| Celli | −7.9; −17 → −6 | −7.7; −20 → −5 | −10.4; −18 → −8 | −3.7; −23 → +2 | −14.1; −19 → 0 | −15.9; −17 → −8 | −4.6; −12 → −3 |
+| Basses | – | +5.1; −2 → +1 (+8 at CC1 80) | – | +0.4; −11 → +4 | −3.6; −7 → +3 | – | +4.3; −4 → 0 (+7 at 80) |
+
+- **CC1:** every technique but Violins 1's CS Sul Pont is far softer than the Long at CC1 16 (−9 … −30 dB) and closes
+  in towards CC1 127; the tremolos and trem. sul pont. keep closing to the top (Tremolo +2 … +4 over the Long at 127),
+  the mutes, sul pont. and trill run parallel to the Long from about CC1 64-80. The Basses' offsets peak at CC1 80
+  (Sul Pont +8, Trill +7) and fall again: the Basses' Long's own curve there (phase 1's Long cross-check: the Basses
+  the worst, max 3.8 dB). As in phase 1, one value per technique is wrong by 10-25 dB at pp: CC1 pairs needed.
+- **Pitch:** slopes −1.6 … +1.9 dB / octave (median over CC1); pitch-to-pitch scatter smaller than phase 1's, about
+  ±3 dB (Celli's Sul Pont / CS Sul Pont −4 … −12, Violins 1's Trem Sul Pont −10 … −19).
+- **Measure:** loud50 within about ±2 dB of the peak for most (Violas' CS −2.7, Basses' Sul Pont −1.2 / Trem Sul Pont
+  −9.2 against the peak's +5.1 / −3.6); the mean 1-3 dB larger offsets for the mutes. Measure uncertainty about ±2 dB,
+  the Basses ±5.
+- **Section differences** are large where both mutes combine: CS Sul Pont −4 (Violins 1) … −19 (Violas); Trem CS
+  −16 … −17 for the three sections that have it.
+- **Against the shipped one-pitch dynamics check** (CC1 80, the table above): CS, Sul Pont, Tremolo within 1-3 dB (Violas'
+  CS −10.3 there, −5 here), Trem Sul Pont 1-4 dB softer here, the Basses' Sul Pont +8 at CC1 80 against +10.4.
+- **Onsets** (onset15, medians over pitches and CC1; the Long's 73-242 ms): CS 170-312 ms, Sul Pont 113-196, CS Sul Pont
+  231-241, Tremolo 51-76 (Violins 1 93), Trem Sul Pont 60-90, Trem CS 105-216, Trill 74-108; CC1 ≤ 48 later than ≥ 96
+  by 20-200 ms (Violins 2's Tremolo 227 / 43). Per cell in the json.
+
+**Against real players** (the table of this section, at CC1 64 as phase 1): **con sordino** (violin −4, −3 … −5, the
+best-sourced value): the violins −5.1 within 1 dB; the violas −6.0 and celli −7.9 2-4 dB softer than the violin's value
+(their own mutes have no data: ±4). **Sul ponticello** (−3, −6 … 0, an assumption): the violins and violas −2.3 … −3.4
+on it; the celli −7.7 just outside the range; the Basses +5.1 (+8 at CC1 80) 8 dB louder than any real reading.
+**CS Sul Pont, tremolos, trem. sul pont. / CS and trills: no real-player data at all** (§1.1a's search found none; the
+Philharmonia's tremolo / trill files failed controls); the only reference is an assumption: tremolo and trill 0 ±5,
+the two colours added for the combined ones (CS Sul Pont −7, Trem Sul Pont −3, Trem CS −4, each ±5). Against those, SSO's
+Tremolo (−4 … 0) and Trill (−5 … −3; the Basses +4) sit inside ±5; Trem Sul Pont (−11 … −16; the Basses −4), Trem CS
+(−16 … −17) and the Violas' / Violins 2's CS Sul Pont (−19 / −13) 6-13 dB under them. At pp (CC1 16) every one of
+them is 10-25 dB softer than the Long, where no real data exists either.
+
+**Proposed correction, not applied** (the owner decides what is heard), in phase 1's form: (1) **Match** each of these
+CC1 techniques to the part's Long at the same written CC1 and pitch, from this sweep's per-pitch, per-CC1 offsets.
+(2) **D**: the map's `<Articulation heldOffset>`: Long CS **−4** (violins ±2; violas, celli as the violin, an
+assumption ±4), Long Sul Pont **−3** (an assumption, ±4), Long CS Sul Pont **−7** (the two added, an assumption ±5),
+Tremolo **0**, Trem Sul Pont **−3**, Trem CS **−4**, Trill **0** (no data: assumptions, ±5). Net change against today
+at CC1 64: CS +1 (violins) / +2 (Violas) / +4 (Celli); Sul Pont −1 … 0 (violins, Violas), +5 (Celli), −8 (Basses);
+CS Sul Pont −3 (Violins 1), +6 (Violins 2), +12 (Violas), +3 (Celli); Tremolo 0 … +4; Trem Sul Pont +9 … +13 (Basses
++1); Trem CS +12 … +13; Trill +3 … +5 (Basses −4). At CC1 16 the match adds 10-25 dB more. Within CC11's ~42 dB of
+headroom (unlike phase 1's Super Sul Tasto), so the patch's gain stage with the other notes' CC11 lower can play it;
+together with phase 1's flautandos (+11 … +20) the All-techniques patches' raise is set by the loudest. A smaller choice:
+the mutes, sul pont. (violins, violas) and tremolo at mf already lie inside the real ranges; correcting only CC1's
+dependence (the match) and the combined techniques would change the most audible errors. Uncertainty: real side ±2
+(violin mute) … ±5 (all assumptions), SSO side ±2 (measure; Basses ±5) and ±3 across pitches.
 
 **Value: high** (the largest level error known). **Effort:** the sweep about 3–4 h of VM time plus a day of analysis;
 real-player data still needs OrchideaSOL (§6 task 1) or a controlled recording.

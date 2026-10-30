@@ -24,7 +24,7 @@ sections, not the number, is the rank. Renumber nothing; a new item takes the ne
 |---|---|---|---|
 | 1 | ~~Finish the real-Live Whence run~~ done 2026-10-29 09:01 (LIVE.md › Checked in real Live); left: Whence's Basses / Violins 1 nulls | VM, Live trial until ~11-01 | 11c, Untried in real Live |
 | 2 | `[slurs] runBends` A/B on kthost, then an A/B page for the owner | VM ~20 min | 5 |
-| 3 | CC1 string techniques sweep, phase 1 then 2; offsets against RESEARCH.md 1.1a; the owner decides | VM ~3-4 h in jobs | 4 |
+| 3 | ~~CC1 string techniques sweep, phase 1 then 2~~ done 2026-10-29 / 10-30 (RESEARCH.md 1.1a); left: the owner decides on the two proposals | the owner | 4 |
 | 4 | The Basses' bowed glide by interval; a bendGlide by interval if it holds | VM ~30 min | 3 |
 | 5 | The owner's answers on the Pending Decisions page; apply what he approves (hall guard, staccato, plainAuto, Basses' modifier mapping 21, the first early note in Live 11c) | the owner | Owner decisions pending |
 | 6 | The owner's report of build 491 on his PC (loading, crackles, bar 17, closing during a load) | the owner | HANDOFF.md › Out-of-process host (28 is older) |
@@ -94,7 +94,7 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
   answers in its db collection `answers`, one doc per part: `choice` A / B / same, `A` / `B` = off / on).
 - **Own**: yes, how to play them; runBends by ear.
 
-### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing (offsets researched 2026-10-29; SSO sweep phase 1 measured 2026-10-29, phase 2 queued)
+### 4. Sul tasto / flautando / harmonics and other CC1 techniques: levels and timing (offsets researched 2026-10-29; SSO sweep phase 1 measured 2026-10-29, phase 2 2026-10-30)
 - **W levels** (Mixed techniques, perceived peak against the Performance attacks at mf): sul tasto V1 −30.2, V2 −19.5,
   Va −53.5, Vc −41.8, Cb −32.7 dB; flautando −27.5/−16.0/−30.6/−23.5/−25.1; Basses harmonics −31.4. Others: pizz. −8 …
   −13, col legno −19.1 … +3.5, Bartók +0.9 … +12.2, tremolo −2 … −7, trem. sul pont. −6 … −15, con sord. −4 … −6.
@@ -135,9 +135,20 @@ Exact commands: HANDOFF.md › Queued VM work. The closed items 1 and 8 are at t
   (Basses +13). Played by the patch's gain stage with the other notes' CC11 lower (CC1 can't reach it).
 - **Miss**: real players' levels with a known gain for sul tasto / flautando / harmonics / tremolo (OrchideaSOL needs
   the owner's Ircam account; RESEARCH.md › 6 task 1); viola / cello / bass mutes.
+- **Measured, phase 2** (2026-10-30, VM kthost, 31 plans, all with sound, none clipped; RESEARCH.md › 1.1a › SSO sweep,
+  phase 2): offset against the Long at CC1 64 (V1 / V2 / Va / Vc / Cb): CS −5.1 / −5.1 / −6.0 / −7.9 / –; Sul Pont −2.3 /
+  −3.0 / −3.4 / −7.7 / +5.1 (+8 at CC1 80); CS Sul Pont −4.0 / −12.8 / −19.1 / −10.4 / –; Tremolo 0 / −2.4 / −2.4 / −3.7 /
+  +0.4; Trem Sul Pont −13.6 / −16.0 / −11.5 / −14.1 / −3.6; Trem CS – / −15.5 / −17.0 / −15.9 / –; Trill −4.0 / −3.0 / −4.8 /
+  −4.6 / +4.3. All 9-30 dB softer at CC1 16, closing in by CC1 64-127 (CC1 pairs needed); pitch scatter about ±3 dB.
+  Real players: violins' mute and the upper strings' sul pont. already within the real ranges; Celli 2-5 dB too soft,
+  Basses' sul pont. 8 too loud; tremolos / trills / combined techniques have no real data (assumed 0 / sums, ±5).
+- **Proposal, phase 2** (not applied, the owner's): match to the Long by per-pitch / per-CC1 offsets, then `heldOffset`
+  CS −4, Sul Pont −3, CS Sul Pont −7, Tremolo 0, Trem Sul Pont −3, Trem CS −4, Trill 0 (all but the violin mute
+  assumptions): at CC1 64 CS +1 … +4, Sul Pont −1 … +5 (Basses −8), CS Sul Pont −3 … +12, Tremolo 0 … +4, Trem Sul Pont
+  +9 … +13, Trem CS +12 … +13, Trill +3 … +5 (Basses −4); +10-25 more at CC1 16. Within CC11's headroom.
 - **Own**: whether to play the assumed offsets (all but the violin mute are assumptions); Super Sul Tasto: its own route,
-  a cap, or SSO's level as the effect. **Left**: phase 2 (mutes, sul pont., tremolos, trill; HANDOFF.md › Queued VM work
-  item 3), then the implementation (match + heldOffset for CC1 techniques).
+  a cap, or SSO's level as the effect; for phase 2, the full proposal or only the match plus the combined techniques.
+  **Left**: the implementation (match + heldOffset for CC1 techniques).
 
 ### 11c. Live doesn't play a plain set's first note when it starts early (real Live, 2026-10-22)
 - **W**: a note at the song's start that MuseScore plays early (onset, smooth attack) is played by its technique track's
