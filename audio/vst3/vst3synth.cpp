@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 
 #include "audio/midi/event.h"
@@ -341,6 +342,7 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
             float* b = _scratch.data();
             std::fill(b, b + 2 * frames, 0.f);
             p->process(int(frames), b);
+            lowCut(k, (_exporting ? _exportLowCut : _lowCut)[size_t(k)].load(std::memory_order_relaxed), b, frames);
             const float gl = mix[size_t(k)].left.load(std::memory_order_relaxed);
             const float gr = mix[size_t(k)].right.load(std::memory_order_relaxed);
             if (gl == 1.f && gr == 1.f) {
@@ -424,6 +426,79 @@ void Vst3Synth::exportMix(int slot, float* left, float* right) const
             }
       *left = _exportMix[size_t(slot)].left;
       *right = _exportMix[size_t(slot)].right;
+      }
+
+//---------------------------------------------------------
+//   the low cut ([levels] lowCut)
+//---------------------------------------------------------
+
+void Vst3Synth::lowCutCoefficients(double hz, double rate, double b[2][3], double a[2][2])
+      {
+      // a 4th-order Butterworth high-pass as two 2nd-order sections (Q = 1 / (2 cos(pi/8)), 1 / (2 cos(3 pi/8))), by the
+      // bilinear transform with the cutoff prewarped (RBJ's cookbook high-pass)
+      const double pi = 3.14159265358979323846;
+      const double q[2] = { 1.0 / (2.0 * std::cos(pi / 8.0)), 1.0 / (2.0 * std::cos(3.0 * pi / 8.0)) };
+      const double w = 2.0 * pi * std::min(hz, 0.45 * rate) / rate;
+      const double cw = std::cos(w);
+      for (int s = 0; s < 2; ++s) {
+            const double alpha = std::sin(w) / (2.0 * q[s]);
+            const double a0 = 1.0 + alpha;
+            b[s][0] = (1.0 + cw) / 2.0 / a0;
+            b[s][1] = -(1.0 + cw) / a0;
+            b[s][2] = (1.0 + cw) / 2.0 / a0;
+            a[s][0] = -2.0 * cw / a0;
+            a[s][1] = (1.0 - alpha) / a0;
+            }
+      }
+
+void Vst3Synth::lowCut(int slot, float hz, float* buf, unsigned frames)
+      {
+      LowCutState& st = _lowCutState[size_t(slot)];
+      if (!(hz > 0.f)) {
+            st.hz = 0.f;
+            return;
+            }
+      const double rate = _clockRate > 0 ? _clockRate : 44100.0;
+      if (st.hz != hz || st.rate != rate) {
+            if (st.rate != rate || st.hz == 0.f)
+                  std::memset(st.z, 0, sizeof(st.z));
+            lowCutCoefficients(hz, rate, st.b, st.a);
+            st.hz = hz;
+            st.rate = rate;
+            }
+      for (int c = 0; c < 2; ++c) {
+            for (unsigned i = 0; i < frames; ++i) {
+                  double x = buf[2 * i + c];
+                  for (int s = 0; s < 2; ++s) {
+                        double* z = st.z[c][s];
+                        const double y = st.b[s][0] * x + z[0];
+                        z[0] = st.b[s][1] * x - st.a[s][0] * y + z[1];
+                        z[1] = st.b[s][2] * x - st.a[s][1] * y;
+                        x = y;
+                        }
+                  // (denormals: a tiny offset can't build up, the state is double)
+                  buf[2 * i + c] = float(x);
+                  }
+            }
+      }
+
+void Vst3Synth::setLowCut(int slot, float hz)
+      {
+      if (slot >= 0 && slot < MAX_SLOTS)
+            _lowCut[size_t(slot)] = std::max(0.f, hz);
+      }
+
+void Vst3Synth::setExportLowCut(int slot, float hz)
+      {
+      if (slot >= 0 && slot < MAX_SLOTS)
+            _exportLowCut[size_t(slot)] = std::max(0.f, hz);
+      }
+
+float Vst3Synth::lowCutAt(int slot, bool forExport) const
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return 0.f;
+      return (forExport ? _exportLowCut : _lowCut)[size_t(slot)].load();
       }
 
 void Vst3Synth::allSoundsOff(int slot)
@@ -524,6 +599,7 @@ void Vst3Synth::setPlugin(int slot, std::unique_ptr<Vst3Plugin> plugin)
             old = std::move(_slots[slot]);
             _slots[slot] = std::move(plugin);
             _sounding[size_t(slot)].fill(0);
+            _lowCutState[size_t(slot)] = LowCutState();
       }
       // old goes here, outside the lock: a plug-in can take its time to go
       }
@@ -565,6 +641,8 @@ void Vst3Synth::beginExport(float sampleRate)
       std::lock_guard<std::mutex> lock(_mutex);
       _exportThread = std::this_thread::get_id();
       _exporting = true;
+      for (LowCutState& st : _lowCutState)
+            st = LowCutState();
       _clock = 0;                   // (an export's own time, for MS_VERIFY_FAULT)
       _clockRate = sampleRate;
       _cutoffs.clear();
@@ -595,6 +673,8 @@ void Vst3Synth::endExport()
             }
       _exporting = false;
       _clockRate = _sampleRate;
+      for (LowCutState& st : _lowCutState)
+            st = LowCutState();
       _cutoffs.clear();
       }
 

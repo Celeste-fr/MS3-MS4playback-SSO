@@ -1177,6 +1177,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         }
                   li.transportResetScript = a.value("transportResetScript").toString();
                   li.hallDrop = qBound(0, a.value("hallDrop").toInt(), 127);
+                  if (a.hasAttribute("lowCut")) {
+                        bool ok = false;
+                        const double v = a.value("lowCut").toDouble(&ok);
+                        if (ok && std::isfinite(v) && v > 0)
+                              li.lowCutHz = std::min(1000.0, v);
+                        }
                   for (const QString& c : a.value("avoidCC").toString().split(' ', QString::SkipEmptyParts)) {
                         bool ok = false;
                         const int n = c.toInt(&ok);
@@ -1667,6 +1673,11 @@ static Choice choosePerformance(const std::vector<const LibInstrument*>& patches
 bool speedFromWritten(const LibInstrument* patch, const Score* score)
       {
       return patch && patch->speedCC > 0 && !patch->speedScript.isEmpty() && Playback::on("slurs/speedFromWritten", score);
+      }
+
+double lowCutHz(const LibInstrument* patch, const Score* score)
+      {
+      return patch && patch->lowCutHz > 0 && Playback::on("levels/lowCut", score) ? patch->lowCutHz : 0.0;
       }
 
 int speedValue(double ms)

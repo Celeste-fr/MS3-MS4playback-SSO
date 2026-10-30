@@ -337,6 +337,16 @@ static const std::vector<Definition> DEFINITIONS = {
         "gliding in dB between the notes' heard windows, every 5 ms, so a slur's notes sound equally loud; a correction "
         "whose note's context changed since (an edit nearby) is stale and not played; the largest correction of a patch "
         "by its volume (within Live's +6 dB); 0: as the library plays them", true },
+      // (branch string-lowcut, 2026-10-30: SSO's new-bow samples on the string sections carry a low burst, 1-15 Hz and
+      // 40-150 Hz, 150-250 ms after each new bow (bowed transition, smooth attack), heard as a kick in fast runs with a slur
+      // per beat; the owner asked why it isn't fixed: 1 in Recommended and by default, 0 in Library default. The map's
+      // <Instrument lowCut>, just under each section's lowest note: gen_spitfire_sso.py LOW_CUT; Vst3Synth::setLowCut)
+      { "levels/lowCut", 1, 0, 1, "on/off",
+        "Low cut on string sections. 1: each patch with a low cut in the map (SSO's five string sections) plays through a "
+        "4th-order high-pass just under the section's lowest note (Violins 150 Hz, Violas 100, Celli 50, Basses 25), "
+        "taking out the low bow and body noise of the new-bow samples (a kick in fast runs) and the room rumble; the "
+        "lowest note loses about 0.5 dB, a fourth higher 0.05 dB; MuseScore's playback and audio export (Live: not yet, "
+        "MIDI out: none); 0: the library's own low end", true },
       // (2026-10-21, branch sso-script-fixes2: SSO's Performance patches play an extra diminuendo release on every held key at
       // a CC1 step down of 10 or more (read from the patch's script and group data; measured on the Windows test VM); it
       // changes the sound, so 0 in both presets until the owner decides; MidiRenderer's libraryHallGuard)
@@ -648,7 +658,7 @@ QString iniTemplate()
 //    lifted by the next transition's step, branch bowed-join); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
 //    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both on 2026-10-24, branch
 //    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B");
-//    levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach). The other settings are not in the table because: legato/keepMs acts
+//    levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -671,11 +681,11 @@ const std::vector<Preset>& presets()
             { "recommended", QT_TRANSLATE_NOOP("playbackSettings", "Recommended"), { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "slurs/runBends", 0 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "shorts/staccatoLength", 1 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "levels/lowCut", 1 }, { "shorts/staccatoLength", 1 } } },
             { "library", QT_TRANSLATE_NOOP("playbackSettings", "Library default"), { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "slurs/runBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
-                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 0 }, { "levels/evenKeys", 0 }, { "shorts/staccatoLength", 0 },
+                                              { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/transitionLevels", 0 }, { "levels/attackLevels", 0 }, { "levels/evenKeys", 0 }, { "levels/lowCut", 0 }, { "shorts/staccatoLength", 0 },
                                               { "guitar/strums", 0 }, { "guitar/softStrums", 0 }, { "guitar/pinchHarmonics", 0 } } },
             };
       return P;

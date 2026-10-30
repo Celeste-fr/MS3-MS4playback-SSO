@@ -15,6 +15,7 @@
 #include <atomic>
 
 #include <cmath>
+#include <complex>
 #include <cstring>
 #include <QtEndian>
 #include <QtTest/QtTest>
@@ -249,6 +250,7 @@ class TestSoundLibrary : public QObject, public MTest
       void evenAutoTestSynth();
       void mixerSlot();
       void transportRestart();
+      void lowCut();
       void remoteNull();
       void remoteTiming();
       void remoteParallelLoad();
@@ -1988,7 +1990,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[shorts]\n", "[shorts]\nstaccatoLength=%11\n").replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nevenKeys=%6\nattackLevels=%7\ntransitionLevels=%7\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nrunBends=0\nmicrotoneBends=%10\nfastTransitions=%6\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=%6\n";
+                                + "\n[levels]\nlowCut=%6\nevenKeys=%6\nattackLevels=%7\ntransitionLevels=%7\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nrunBends=0\nmicrotoneBends=%10\nfastTransitions=%6\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=%6\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2).arg(3).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -1997,15 +1999,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nevenKeys=0\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAuto=0\nplainAccents=0\nrunBends=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nlowCut=0\nevenKeys=0\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAuto=0\nplainAccents=0\nrunBends=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=0\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n"));
+               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nlowCut=1\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=0\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=0\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n\n[shorts]\nstaccatoLength=1\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nlowCut=1\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=0\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n\n[shorts]\nstaccatoLength=1\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -2051,7 +2053,7 @@ void TestSoundLibrary::playbackPresets()
       Playback::reload();
       QCOMPARE(Playback::currentPreset(), QString("library"));
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 100 } }), QString("recommended"));
-      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "levels/transitionLevels", 0 }, { "levels/evenKeys", 0 }, { "shorts/staccatoLength", 0 }, { "notes/transportReset", 0 }, { "slurs/fastTransitions", 0 }, { "legato/keepMs", 10 } }),
+      QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 }, { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "levels/transitionLevels", 0 }, { "levels/evenKeys", 0 }, { "levels/lowCut", 0 }, { "shorts/staccatoLength", 0 }, { "notes/transportReset", 0 }, { "slurs/fastTransitions", 0 }, { "legato/keepMs", 10 } }),
                QString("library"));
       // attackLevels likewise (2 by default since 2026-10-23, Recommended's)
       QCOMPARE(Playback::detectPreset({ { "levels/attackLevels", 2 } }), QString("recommended"));
@@ -2088,7 +2090,7 @@ void TestSoundLibrary::playbackPresets()
       QCOMPARE(Playback::detectPreset({ { "heldNotes/byPitch", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "heldNotes/byPitch", 1 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                          { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "slurs/microtoneBends", 0 }, { "levels/context", 0 }, { "levels/sectionBalance", 0 },
-                                         { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "levels/transitionLevels", 0 }, { "levels/evenKeys", 0 }, { "shorts/staccatoLength", 0 }, { "notes/transportReset", 0 }, { "slurs/fastTransitions", 0 } }),
+                                         { "levels/realRange", 0 }, { "levels/evenLevels", 0 }, { "levels/micCompensation", 0 }, { "levels/divisi", 0 }, { "levels/attackLevels", 0 }, { "levels/transitionLevels", 0 }, { "levels/evenKeys", 0 }, { "levels/lowCut", 0 }, { "shorts/staccatoLength", 0 }, { "notes/transportReset", 0 }, { "slurs/fastTransitions", 0 } }),
                QString("library"));
       // context left out: its default 1, Recommended's; Library default needs 0
       QCOMPARE(Playback::detectPreset({ { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 }, { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 } }), QString());
@@ -2105,6 +2107,9 @@ void TestSoundLibrary::playbackPresets()
       // evenKeys likewise (1 by default since 2026-10-28, Recommended's)
       QCOMPARE(Playback::detectPreset({ { "levels/evenKeys", 1 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "levels/evenKeys", 0 } }), QString());
+      // lowCut likewise (1 by default since 2026-10-30, Recommended's)
+      QCOMPARE(Playback::detectPreset({ { "levels/lowCut", 1 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "levels/lowCut", 0 } }), QString());
       // realRange left out: its default 2, Recommended's; Library default needs 0 (the owner, 2026-10-13; 2 since
       // 2026-10-14); 1 (the Meyer rule) is neither
       QCOMPARE(Playback::detectPreset({ { "levels/realRange", 1 } }), QString());
@@ -10871,6 +10876,135 @@ struct HostProcesses {
                   qunsetenv("MS_VST3_HOST_PROCESSES");
             }
       };
+
+//---------------------------------------------------------
+//   lowCut
+//    [levels] lowCut (branch string-lowcut, 2026-10-30): <Instrument lowCut="Hz"> read (a bad value none); the setting on
+//    by default and in Recommended, off in Library default (SoundLib::lowCutHz 0). The hosted output of a test-synth
+//    patch at the map's cutoff (50 Hz, 4th order): a 10.3 Hz tone (key 4) loses > 40 dB (55 in theory), a 196 Hz tone (G3,
+//    key 55) keeps its level within 0.1 dB, in MuseScore's process and in a helper process, bit for bit the same;
+//    Library default's 0 leaves the output bit for bit as a synth without any low cut; an export filters by its own value
+//---------------------------------------------------------
+
+// a tone's amplitude at hz in the stereo buffer's left side, from frame from on (Hann-windowed DFT bin)
+static double toneAt(const std::vector<float>& b, double hz, int rate, size_t from)
+      {
+      const size_t n = b.size() / 2 - from;
+      double re = 0, im = 0, wsum = 0;
+      for (size_t i = 0; i < n; ++i) {
+            const double w = 0.5 - 0.5 * std::cos(2 * M_PI * double(i) / double(n - 1));
+            const double x = b[2 * (from + i)] * w;
+            const double ph = 2 * M_PI * hz * double(i) / rate;
+            re += x * std::cos(ph);
+            im -= x * std::sin(ph);
+            wsum += w;
+            }
+      return 2 * std::sqrt(re * re + im * im) / wsum;
+      }
+
+void TestSoundLibrary::lowCut()
+      {
+      // the map: read, a bad value ignored
+      auto lib = loadMap("<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                         "<Instrument name='Violin' ids='violin' lowCut='50'><Articulation name='Long' value='1' techniques='long'/></Instrument>"
+                         "<Instrument name='Flute' ids='flute' lowCut='x'><Articulation name='Long' value='1' techniques='long'/></Instrument>"
+                         "</SoundLibrary>");
+      QVERIFY(lib);
+      const SoundLib::LibInstrument* violin = &lib->instruments[0];
+      QCOMPARE(violin->lowCutHz, 50.0);
+      QCOMPARE(lib->instruments[1].lowCutHz, 0.0);
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      QCOMPARE(Playback::definition("levels/lowCut")->value, 1.0);
+      Playback::setIniValuesForTest({});
+      QCOMPARE(SoundLib::lowCutHz(violin, nullptr), 50.0);
+      QCOMPARE(SoundLib::lowCutHz(&lib->instruments[1], nullptr), 0.0);
+      QCOMPARE(SoundLib::lowCutHz(nullptr, nullptr), 0.0);
+      for (const Playback::Preset& p : Playback::presets()) {
+            std::map<QString, QString> values;
+            for (const auto& v : p.values)
+                  values[v.first] = QString::number(v.second);
+            Playback::setIniValuesForTest(values);
+            QCOMPARE(SoundLib::lowCutHz(violin, nullptr), QString(p.id) == "library" ? 0.0 : 50.0);
+            }
+
+      // the hosted output, key 4 (10.30 Hz) and key 55 (196.0 Hz) at once
+      const int rate = 48000;
+      auto render = [&](int processes, float hz, bool exporting, bool call) {
+            HostProcesses hp(processes);
+            Vst3Synth vst;
+            vst.init(rate);
+            QString error;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error);
+            if (!p)
+                  return std::vector<float>();
+            if (processes > 0 && p->hostPid() <= 0)
+                  return std::vector<float>();
+            vst.setPlugin(0, std::move(p));
+            if (call) {
+                  vst.setLowCut(0, exporting ? 0.f : hz);
+                  vst.setExportLowCut(0, exporting ? hz : 0.f);
+                  }
+            if (exporting)
+                  vst.beginExport(rate);
+            vst.play(PlayEvent(ME_CONTROLLER, 0, 1, 100));
+            vst.play(PlayEvent(ME_NOTEON, 0, 4, 100));
+            vst.play(PlayEvent(ME_NOTEON, 0, 55, 100));
+            std::vector<float> out(2 * size_t(3 * rate), 0.f);
+            for (size_t at = 0; at < out.size(); at += 2 * 512)       // (the last block shorter: 3 s isn't whole blocks)
+                  vst.process(unsigned(std::min<size_t>(512, (out.size() - at) / 2)), out.data() + at, nullptr, nullptr);
+            if (exporting)
+                  vst.endExport();
+            return out;
+            };
+      const std::vector<float> plain = render(0, 0.f, false, false);
+      QVERIFY(plain.size() == size_t(2 * 3 * rate) && peak(plain) > 0.02f);
+      const size_t from = size_t(rate);       // (the last 2 s: the filter's and the notes' starts left out)
+      const double low0 = toneAt(plain, 440.0 * std::pow(2.0, (4 - 69) / 12.0), rate, from);
+      const double high0 = toneAt(plain, 440.0 * std::pow(2.0, (55 - 69) / 12.0), rate, from);
+      QVERIFY2(low0 > 1e-3 && high0 > 1e-3, qPrintable(QString("%1 %2").arg(low0).arg(high0)));
+      const std::vector<float> local = render(0, 50.f, false, true);
+      const double lowDb = dB(toneAt(local, 440.0 * std::pow(2.0, (4 - 69) / 12.0), rate, from), low0);
+      const double highDb = dB(toneAt(local, 440.0 * std::pow(2.0, (55 - 69) / 12.0), rate, from), high0);
+      qDebug("low cut 50 Hz: 10.3 Hz %+.1f dB, 196 Hz %+.3f dB", lowDb, highDb);
+      QVERIFY2(lowDb < -40.0, qPrintable(QString::number(lowDb)));
+      QVERIFY2(std::fabs(highDb) < 0.1, qPrintable(QString::number(highDb)));
+      // in a helper process: the slot's output collected, then filtered in MuseScore's: the same samples
+      const std::vector<float> remote = render(1, 50.f, false, true);
+      QCOMPARE(remote.size(), local.size());
+      QVERIFY(!std::memcmp(remote.data(), local.data(), local.size() * sizeof(float)));
+      // an export by its own value (the live one 0), the same samples
+      const std::vector<float> exported = render(0, 50.f, true, true);
+      QCOMPARE(exported.size(), local.size());
+      QVERIFY(!std::memcmp(exported.data(), local.data(), local.size() * sizeof(float)));
+      // Library default (0): bit for bit unfiltered, in process and in a helper
+      for (int processes : { 0, 1 }) {
+            const std::vector<float> off = render(processes, 0.f, false, true);
+            QCOMPARE(off.size(), plain.size());
+            QVERIFY2(!std::memcmp(off.data(), plain.data(), plain.size() * sizeof(float)), qPrintable(QString::number(processes)));
+            }
+      // the coefficients: -3.01 dB at the cutoff (Butterworth), 0 dB at 12 kHz, -48 dB two octaves under the cutoff (24 dB / octave)
+      double b[2][3], a[2][2];
+      Vst3Synth::lowCutCoefficients(50.0, rate, b, a);
+      auto gainAt = [&](double f) {
+            std::complex<double> z = std::polar(1.0, -2 * M_PI * f / rate), h = 1.0;
+            for (int s = 0; s < 2; ++s)
+                  h *= (b[s][0] + b[s][1] * z + b[s][2] * z * z) / (1.0 + a[s][0] * z + a[s][1] * z * z);
+            return 20 * std::log10(std::abs(h));
+            };
+      QVERIFY(std::fabs(gainAt(50.0) + 3.0103) < 0.01);
+      QVERIFY(std::fabs(gainAt(12000.0)) < 0.001);
+      QVERIFY(std::fabs(gainAt(12.5) + 48.16) < 0.2);
+      // an octave under: -24.1 dB (10 log10(1 + 2^8)); 1 kHz unchanged within 0.1 dB
+      QVERIFY2(std::fabs(gainAt(25.0) + 24.10) < 0.1, qPrintable(QString::number(gainAt(25.0))));
+      QVERIFY(std::fabs(gainAt(1000.0)) < 0.1);
+      // the map's other cutoffs likewise (150 / 100 / 25 Hz)
+      for (double hz : { 150.0, 100.0, 25.0 }) {
+            Vst3Synth::lowCutCoefficients(hz, rate, b, a);
+            QVERIFY2(std::fabs(gainAt(hz) + 3.0103) < 0.01, qPrintable(QString::number(hz)));
+            QVERIFY2(std::fabs(gainAt(hz / 2) + 24.10) < 0.1, qPrintable(QString::number(hz)));
+            QVERIFY2(std::fabs(gainAt(1000.0)) < 0.1, qPrintable(QString::number(hz)));
+            }
+      }
 
 //---------------------------------------------------------
 //   remoteNull

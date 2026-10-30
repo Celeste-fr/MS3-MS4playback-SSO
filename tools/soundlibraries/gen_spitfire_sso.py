@@ -444,6 +444,20 @@ def scriptAttributes(patch):
     if patch in AVOID_CC:
         a += f' avoidCC="{AVOID_CC[patch]}"'
     return a
+# [levels] lowCut (branch string-lowcut, 2026-10-30; the owner asked why the strings' new-bow kick isn't fixed): every patch
+# of the five string sections plays through a 4th-order Butterworth high-pass at LOW_CUT Hz (<Instrument lowCut>;
+# Vst3Synth::setLowCut). SSO's new-bow samples (bowed transition, smooth attack) carry a low burst 150-250 ms after the
+# note-on, 1-15 Hz and 40-150 Hz (the Violins 1: p95 -41 dB of the clip's maximum in 40-150 Hz after a 40 Hz cut), all
+# under the section's lowest fundamental: bow / body noise, not the instrument (real strings radiate little under their
+# lowest string's fundamental; Meyer 2009, the strings' spectra). The rule: 0.77 of the section's lowest fundamental
+# (4.6 semitones under it), so the lowest note loses ~0.5 dB, a note a fourth higher 0.05 dB: Violins G3 196 -> 150,
+# Violas C3 131 -> 100, Celli C2 65.4 -> 50; the Basses 25, a compromise (C1 32.7 of the extension -0.5 dB, E1 41.2
+# -0.08 dB; 25-40 Hz of the bursts stays). Measured on the run-bends A/B clips: docs/PLAYBACK_SETTINGS.md › Low cut
+LOW_CUT = {'Violins 1': 150, 'Violins 2': 150, 'Violas': 100, 'Celli': 50, 'Basses': 25}
+LOW_CUT_PATCH = re.compile(r'^(?:Strings - )?(Violins 1|Violins 2|Violas|Celli|Basses)(?: |$)')
+def lowCut(patch):
+    m = LOW_CUT_PATCH.match(patch)
+    return LOW_CUT[m.group(1)] if m else None
 # the smooth attack's own onset (attackOnset="smooth:median;pitch:ms,…"): a lone first note at velocity 5 is heard much
 # later than the onset= measured at velocity 80 (Violas 236 against 111 ms). Measured 2026-10-12 (kthost on the test VM,
 # CC1 64, 5 pitches x 2 repeats, the onset= method; sso_smooth_onset.json): the median over the 10 notes and each
@@ -1825,6 +1839,9 @@ for i, line in enumerate(out):
             if scriptAttributes(current):
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + scriptAttributes(current) + end
+            if lowCut(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + f' lowCut="{lowCut(current):g}"' + end
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) + end

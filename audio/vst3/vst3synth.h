@@ -70,6 +70,21 @@ class Vst3Synth : public Synthesizer {
             };
       std::array<Mix, 64> _mix;
       std::array<Mix, 64> _exportMix;
+      // [levels] lowCut: a slot's high-pass (Hz, 0: none; live and for an export), a 4th-order Butterworth (two biquads,
+      // transposed direct form II in double) on the slot's output before its Mixer gains: in MuseScore's process, so an
+      // instance in a host process (vst3remote.h) is filtered the same; no latency. The state is the audio (export)
+      // thread's: made again when the cutoff or the rate changes, cleared at beginExport / endExport
+      std::array<std::atomic<float>, 64> _lowCut {};
+      std::array<std::atomic<float>, 64> _exportLowCut {};
+      struct LowCutState {
+            float hz { 0.f };
+            double rate { 0 };
+            double b[2][3] {};
+            double a[2][2] {};
+            double z[2][2][2] {};         // [channel][stage][state]
+            };
+      std::array<LowCutState, 64> _lowCutState;
+      void lowCut(int slot, float hz, float* b, unsigned frames);
       std::vector<float> _scratch;
       // what the audio thread couldn't play while the GUI thread had the slots: played with the next
       // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
@@ -153,6 +168,13 @@ class Vst3Synth : public Synthesizer {
       void setMix(int slot, int volume, int pan, bool muted, float gain = 1.f);
       void setExportMix(int slot, int volume, int pan, bool muted, float gain = 1.f);
       void exportMix(int slot, float* left, float* right) const;    // a slot's export gains, as set
+      // [levels] lowCut (any thread): a slot's output through a 4th-order Butterworth high-pass at hz (0: none; the
+      // map's <Instrument lowCut>, SoundLib::lowCutHz), live and for an export
+      void setLowCut(int slot, float hz);
+      void setExportLowCut(int slot, float hz);
+      float lowCutAt(int slot, bool forExport = false) const;
+      // the filter's coefficients (b0 b1 b2, a1 a2 per stage, a0 = 1) at hz and rate; tests and the Live writer's check
+      static void lowCutCoefficients(double hz, double rate, double b[2][3], double a[2][2]);
       static float volumeGain(int volume);
       static void panGains(int pan, float* left, float* right);
 

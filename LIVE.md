@@ -1236,6 +1236,18 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
+- **`[levels] lowCut`** (branch `string-lowcut`, 2026-10-30; docs/PLAYBACK_SETTINGS.md › Low cut; 1 in Recommended and by
+  default): MuseScore's own playback and audio export put SSO's five string sections' patches through a 4th-order
+  high-pass (Violins 150 Hz, Violas 100, Celli 50, Basses 25: the new-bow samples' low bow / body noise). **Live**: not yet;
+  the plain set, the route set and *Live plays the score* play the strings with their low end (so `--live-equivalence`
+  on SSO strings differs there). **Plan**: a stock EQ Eight named "MuseScore low cut" after the Kontakt (before the
+  Utility "MuseScore gain"), band 1 its 24 dB/oct (4th-order) high-pass at the patch's lowCut, the other bands off, written as `utilityDevice` is (element for element as Live 12.4 saves one: take the XML
+  of an EQ Eight saved in Live 12.4.7 on the VM), the plain set's multi one per Kontakt, Update Live Set editing or
+  inserting it by name as it does the Utility, read back by name; `--live-equivalence`'s Live side then filtering by
+  EQ Eight's own response (Live's 24 dB/oct high-pass is a 4th-order filter of its own design, Q per its "Q" knob:
+  measure it in real Live first, `tools/live/realcheck`, before claiming equality). Needs real Live (the VM's trial
+  ends about 2026-11-01). **MIDI out**: can't carry a filter (the receiving synth or DAW plays the low end); none planned.
+
 - An Engine lane (libmscore/enginelane.h, branch `engine-lane`): Live, Create Live Set and MIDI out ignore it; the part
   plays its own engine throughout there.
 

@@ -3107,6 +3107,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       _slotParts.fill(nullptr);
       _slotPatches.fill(QString());
       _slotLibraries.fill(nullptr);
+      _slotLowCut.fill(0.0);
       _slotScore = score->masterScore();
       for (const SoundLib::Route& r : routes) {
             if (r.instrument->kit)            // no patch of its own: its extras play
@@ -3115,6 +3116,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
             _slotParts[size_t(k)] = r.part;
             _slotPatches[size_t(k)] = r.instrument->name;
             _slotLibraries[size_t(k)] = libraryOf(r.library ? r.library : library.get());
+            _slotLowCut[size_t(k)] = r.instrument->lowCutHz;
             used[k] = true;
             _slots[k].part = r.part->partName();
             vst->setVarispeed(k, _slotLibraries[size_t(k)]->varispeed);
@@ -3408,6 +3410,7 @@ void SoundLibraryHost::release()
       _slotParts.fill(nullptr);
       _slotPatches.fill(QString());
       _slotLibraries.fill(nullptr);
+      _slotLowCut.fill(0.0);
       _slotScore = nullptr;
       _spares.clear();
       _idle.stop();
@@ -3470,6 +3473,10 @@ void SoundLibraryHost::applyMixer(const Score* score)
       MasterScore* ms = const_cast<MasterScore*>(_slotScore);
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(ms);
+      // [levels] lowCut: each slot's patch's high-pass (its map value with the setting on)
+      const bool lowCut = Playback::on("levels/lowCut", ms);
+      for (int k = 0; k < 64; ++k)
+            vst->setLowCut(k, lowCut && _slotParts[size_t(k)] ? float(_slotLowCut[size_t(k)]) : 0.f);
       for (const Part* part : ms->parts()) {
             SoundLib::PartMix m;
             TrackDelays::Delays d;
@@ -4016,8 +4023,10 @@ void SoundLibraryExport::setExportMix(Vst3Synth* vst, Score* score, bool mute)
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!vst || !score || !library)
             return;
-      for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+      for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k) {
             vst->setExportMix(k, 100, 64, false);
+            vst->setExportLowCut(k, 0.f);
+            }
       const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score->masterScore());
       for (const SoundLib::Route& r : SoundLib::severalLibraries(score->masterScore()) ? SoundLib::allRoutes(score->masterScore())
                                                                                         : SoundLib::routes(score->masterScore(), *library)) {
@@ -4025,6 +4034,7 @@ void SoundLibraryExport::setExportMix(Vst3Synth* vst, Score* score, bool mute)
             const double gain = TrackDelays::patchGain(r.library ? *r.library : *library, TrackDelays::of(r.part, delays),
                                                        r.instrument->name);
             vst->setExportMix(r.port * 16 + r.channel, m.volume, m.pan, mute && m.muted, float(gain));
+            vst->setExportLowCut(r.port * 16 + r.channel, float(SoundLib::lowCutHz(r.instrument, score->masterScore())));
             }
 #else
       Q_UNUSED(vst);

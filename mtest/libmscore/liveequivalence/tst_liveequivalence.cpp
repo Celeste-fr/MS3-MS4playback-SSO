@@ -202,6 +202,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void staccatoLengthLive();
       void speedSentLive();
       void hostedSlotsGain();
+      void lowCutHosted();
       void exportInstancesOfParts();
       void verifyRoutesByPart();
       void liveEquivalenceByPart();
@@ -6662,6 +6663,68 @@ void TestLiveEquivalence::preparedStates()
       QCOMPARE(SoundLibraryHost::tunedState(expected, two, &error, &lib), SoundLibraryHost::tunedState(expected, two, &error));
       QVERIFY(SoundLibraryHost::tunedState(expected, two, &error, &lib) != expectedTuned);
       SoundLibraryHost::forgetPrepared();
+      }
+
+//---------------------------------------------------------
+//   lowCutHosted
+//    [levels] lowCut (branch string-lowcut, 2026-10-30): a patch's <Instrument lowCut> reaches its slots' high-pass in an
+//    export (SoundLibraryExport::setExportMix: every route of the part, its tuning copies too; the other slots none) and
+//    at play (SoundLibraryHost::sync + applyMixer); Library default's 0 none in both (the filter itself:
+//    tst_soundlibrary::lowCut)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::lowCutHosted()
+      {
+      LiveHost host(this, " lowCut='50'", { "Violin" });
+      QVERIFY(host.ok);
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "quartertones.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      std::set<int> routed;
+      for (const SoundLib::Route& r : SoundLib::routes(score, *host.lib))
+            routed.insert(r.port * 16 + r.channel);
+      QVERIFY(!routed.empty());
+      std::map<QString, QString> library;
+      for (const Playback::Preset& p : Playback::presets())
+            if (QString(p.id) == "library")
+                  for (const auto& v : p.values)
+                        library[v.first] = QString::number(v.second);
+      QVERIFY(library.count("levels/lowCut"));
+      QString error;
+      std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, 48000.f, &error);
+      QVERIFY2(vst, qPrintable(error));
+      MasterSynthesizer synth;
+      for (bool on : { true, false }) {
+            Playback::setIniValuesForTest(on ? std::map<QString, QString>() : library);
+            SoundLibraryExport e(&synth, 48000.f, vst, score, false);
+            for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k) {
+                  QCOMPARE(vst->lowCutAt(k, true), on && routed.count(k) ? 50.f : 0.f);
+                  QCOMPARE(vst->lowCutAt(k, false), 0.f);
+                  }
+            }
+      vst.reset();
+      {
+            MasterSynthesizer master;
+            master.registerSynthesizer(new Vst3Synth);
+            MasterSynthesizer* was = synti;
+            synti = &master;
+            SoundLibraryHost* h = SoundLibraryHost::instance();
+            Playback::setIniValuesForTest({});
+            QVERIFY2(h->sync(score, &error), qPrintable(error));
+            Vst3Synth* s = h->synth();
+            QVERIFY(s);
+            h->applyMixer(score);
+            for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+                  QCOMPARE(s->lowCutAt(k), routed.count(k) ? 50.f : 0.f);
+            Playback::setIniValuesForTest(library);
+            h->applyMixer(score);
+            for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+                  QCOMPARE(s->lowCutAt(k), 0.f);
+            h->release();
+            synti = was;
+      }
+      delete score;
       }
 
 //---------------------------------------------------------

@@ -303,14 +303,17 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
                         }
                   ++r.partsLoaded;
                   r.mostPartsAtOnce = std::max(r.mostPartsAtOnce, int(group.size()));
-                  for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
+                  for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k) {
                         vst->setExportMix(k, 100, 64, false);
+                        vst->setExportLowCut(k, 0.f);
+                        }
                   for (const SoundLib::Route& rt : routes) {
                         if (!group.count(rt.part))
                               continue;
                         const SoundLib::PartMix m = SoundLib::partMix(rt.part, false);
                         const double gain = TrackDelays::patchGain(library, TrackDelays::of(rt.part, delays), rt.instrument->name);
                         vst->setExportMix(rt.port * 16 + rt.channel, m.volume, m.pan, m.muted, float(gain));
+                        vst->setExportLowCut(rt.port * 16 + rt.channel, float(SoundLib::lowCutHz(rt.instrument, score)));
                         }
                   // one route at a time (the same instances; Vst3Synth sums its slots, so the mix is their sum): each
                   // part's notes measured on its own, not through another part's

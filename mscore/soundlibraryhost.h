@@ -115,6 +115,7 @@ class SoundLibraryHost : public QObject {
       std::array<const Part*, 64> _slotParts {};
       std::array<QString, 64> _slotPatches;         // (and its patch: a track level's headroom, TrackDelays::patchGain)
       std::array<std::shared_ptr<const SoundLib::Library>, 64> _slotLibraries;   // (and its library: several, SoundLib::scoreLibraries)
+      std::array<double, 64> _slotLowCut {};       // (and its patch's <Instrument lowCut>, Hz: [levels] lowCut, applyMixer)
       const MasterScore* _slotScore { nullptr };
       // instances set aside by syncSome: a patch the score being loaded doesn't play in their slot
 #ifdef USE_VST3

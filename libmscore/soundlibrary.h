@@ -471,6 +471,11 @@ struct LibInstrument {
       // and script): a Dynamics controller step down of hallDrop or more in one change while a key is held plays an extra
       // release sample on every held key. The audit's HALL; [levels] hallGuard. 0: none known
       int hallDrop { 0 };
+      // [levels] lowCut (branch string-lowcut, 2026-10-30): the patch's output goes through a 4th-order Butterworth high-pass
+      // at this many Hz (<Instrument lowCut>, on the five string sections' patches: gen_spitfire_sso.py LOW_CUT; SSO's
+      // new-bow samples carry a low burst, 1-15 Hz and 40-150 Hz, 150-250 ms after each new bow, heard as a kick in fast
+      // runs). Hosted: Vst3Synth::setLowCut, on the slot's output in MuseScore's process. 0: none
+      double lowCutHz { 0 };
       // controllers never sent to this patch (<Instrument avoidCC="112 113">: SSO's Trumpet / Tenor Trombone Solo - Total
       // Performance, whose helper script takes a note's velocity from CC112 / CC113 when they are not 0, read from the
       // patch's script). MidiRenderer::libraryAvoidCC drops them; the audit's AVOIDED CC
@@ -703,6 +708,9 @@ std::map<const Part*, std::map<QString, double>> plainPerformancePatches(const S
 // [slurs] speedFromWritten (the score's value, else playback.ini's): the patch's speed controller is MuseScore's (its state
 // gets speedScript = 0, the renderer sends speedCC); false: the setting off or the patch has none
 bool speedFromWritten(const LibInstrument* patch, const Score* score);
+// [levels] lowCut (the score's value, else playback.ini's): the patch's high-pass cutoff in Hz (its lowCutHz), 0 with the
+// setting off or none in the map
+double lowCutHz(const LibInstrument* patch, const Score* score);
 // the value of the speed controller for a legato note-on ms after the note-on it follows (SSO's script's own formula:
 // 126 - min(126, floor(ms x 127 / 1000)), ms in whole ms as the script's clock counts them, rounded)
 int speedValue(double ms);
