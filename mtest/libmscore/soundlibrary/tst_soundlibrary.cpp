@@ -11873,7 +11873,9 @@ void TestSoundLibrary::microtoneBends()
 //    patch's own lagging pitch. The setting (0 by default and in both presets), the map's runLag, and on fast-microtones'
 //    sixteenths (A4 B4-50 A4 G4+50 x2 at 110, plain Performance, microtoneBends 1): the note-ons as without it, bends
 //    within the range every ~10 ms in the run, the tuning in force again after it, and the pitch heard by the map's own
-//    model (the keys delayed D, smoothed tau, plus the bend through bendSmoothing) much closer to the written one
+//    model (the keys delayed D, smoothed tau, plus the bend through bendSmoothing) much closer to the written one. 2026-10-30
+//    (branch run-bends-fingered): a bowed transition (plainAuto's new bow) on a map without a bowed lag left at its tuning,
+//    the fingered notes around it still corrected (run-bends-bowed.musicxml)
 //---------------------------------------------------------
 
 void TestSoundLibrary::runBends()
@@ -11961,6 +11963,14 @@ void TestSoundLibrary::runBends()
             if (b.first >= on.ons[1].first && b.first < on.ons[7].first)
                   ++inRun;
       QVERIFY2(inRun >= 6 * 12, qPrintable(QString::number(inRun)));
+      // no send more than RUN_SLEW_C (80 c) from the one before, inside the run and on the way back to the tuning after it
+      // (2026-10-30: unbounded, the least-squares send swung between the range's ends within 10 ms)
+      auto centsOf = [](int v) { return (v - 8192) * 100.0 / (v < 8192 ? 8192.0 : 8191.0); };
+      double maxStep = 0;
+      for (size_t i = 1; i < on.bends.size(); ++i)
+            if (on.bends[i].first >= on.ons[1].first)
+                  maxStep = std::max(maxStep, std::fabs(centsOf(on.bends[i].second) - centsOf(on.bends[i - 1].second)));
+      QVERIFY2(maxStep <= 80.5, qPrintable(QString::number(maxStep)));
       // after the run the last note's tuning (G4 +50 sent on A-flat4 -50, microtoneBends 1)
       auto cents = [](int v) { return (v - 8192) * 100.0 / (v < 8192 ? 8192.0 : 8191.0); };
       QVERIFY(std::fabs(cents(on.bends.back().second) - cents(off.bends.back().second)) < 0.5);
@@ -12001,6 +12011,91 @@ void TestSoundLibrary::runBends()
             qDebug("runBends: mean |error| %.1f c off, %.1f c on", eOff, eOn);
       QVERIFY2(eOn < eOff * 0.6, qPrintable(QString("%1 / %2").arg(eOn).arg(eOff)));
       delete score;
+
+      // a bowed transition without a bowed lag in the map (SSO's since 2026-10-30): its own window gets no correction (the model
+      // takes its key at its heard start), the fingered notes around it keep theirs. run-bends-bowed.musicxml: two slurs of four
+      // touching sixteenths (A4, B4 -50, A4, G4 +50), [slurs] plainAuto 1: the second slur's A4 a new bow (velocity 93)
+      auto noBowed = mapWith(" runLag='fingered:60:80'");
+      QVERIFY(noBowed);
+      QVERIFY(noBowed->instruments[1].articulations[0].runLagBowed.delayMs < 0);
+      MasterScore* bowedScore = readScore(DIR + "run-bends-bowed.musicxml");
+      QVERIFY(bowedScore);
+      bowedScore->rebuildMidiMapping();
+      struct OutB { std::vector<std::pair<int, int>> ons; std::vector<int> velocities; std::vector<std::pair<int, int>> bends; QString all; };
+      auto renderB = [&](std::shared_ptr<SoundLib::Library> l, int run) {
+            SoundLib::setCurrent(l);
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/transitions", "1" },
+                                            { "slurs/transitionsEarly", "0" }, { "slurs/microtoneBends", "1" }, { "slurs/plainAuto", "1" },
+                                            { "slurs/runBends", QString::number(run) } });
+            bowedScore->setPlaylistDirty();
+            EventMap events;
+            bowedScore->renderMidi(&events, false, true, SynthesizerState());
+            OutB o;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal())
+                        continue;
+                  if (ev.type() == ME_PITCHBEND)
+                        o.bends.push_back({ te.first, ev.dataA() | (ev.dataB() << 7) });
+                  else {
+                        if (ev.type() == ME_NOTEON && ev.velo() > 0 && !ev.librarySwitch()) {
+                              o.ons.push_back({ te.first, ev.pitch() });
+                              o.velocities.push_back(ev.velo());
+                              }
+                        o.all += QString("%1 %2 %3 %4 %5\n").arg(te.first).arg(ev.type()).arg(ev.dataA()).arg(ev.dataB()).arg(ev.extChannel());
+                        }
+                  }
+            return o;
+            };
+      const OutB bOff = renderB(noBowed, 0);
+      const OutB bOn = renderB(noBowed, 1);
+      const OutB bLag = renderB(lib, 1);
+      QCOMPARE(int(bOn.ons.size()), 8);
+      QCOMPARE(bOn.velocities[4], 93);
+      QCOMPARE(bOn.velocities[5], 64);
+      QCOMPARE(bOn.all, bOff.all);
+      QCOMPARE(bLag.all, bOff.all);
+      QVERIFY(bOn.bends != bOff.bends);
+      // the heard bend (73.1 ms) less the note's tuning, mean |.| over [from, to) s after its written start (tick i * 120)
+      auto heardOff = [&](const OutB& o, int i, double from, double to, double tuning) {
+            double bend = 0, sent = 0, sum = 0;
+            int n = 0;
+            size_t bi = 0;
+            const double w = bowedScore->utick2utime(i * 120);
+            for (double t = 0; t < w + to; t += 0.001) {
+                  while (bi < o.bends.size() && bowedScore->utick2utime(o.bends[bi].first) <= t)
+                        sent = cents(o.bends[bi++].second);
+                  bend = sent + (bend - sent) * std::exp(-0.001 / 0.0731);
+                  if (t >= w + from) {
+                        sum += std::fabs(bend - tuning);
+                        ++n;
+                        }
+                  }
+            return sum / std::max(1, n);
+            };
+      // the bowed A4 (note 4): left at its tuning without a bowed lag; corrected for the lag 108:80 with one
+      const double bowedNo = heardOff(bOn, 4, 0.04, 0.12, 0.0);
+      const double bowedLag = heardOff(bLag, 4, 0.04, 0.12, 0.0);
+      // the fingered B4 -50 after it (note 5): still corrected (its key's lag: the bend tens of cents off its tuning)
+      const double fingeredNo = heardOff(bOn, 5, 0.02, 0.10, -50.0);
+      const double fingeredOff = heardOff(bOff, 5, 0.02, 0.10, -50.0);
+      if (std::getenv("MS_TEST_VERBOSE"))
+            qDebug("runBends, bowed: A4 %.1f c from its tuning (no bowed lag), %.1f c (108:80); B4 -50 %.1f c (on), %.1f c (off)",
+                   bowedNo, bowedLag, fingeredNo, fingeredOff);
+      QVERIFY2(bowedNo < 8.0, qPrintable(QString::number(bowedNo)));
+      QVERIFY2(bowedLag > 3 * bowedNo + 10.0, qPrintable(QString("%1 / %2").arg(bowedLag).arg(bowedNo)));
+      QVERIFY2(fingeredNo > 10.0, qPrintable(QString::number(fingeredNo)));
+      // up to 40 ms before the bowed note-on the bends as with the bowed lag (the run before it unchanged)
+      auto upTo = [](const OutB& o, int tick) {
+            std::vector<std::pair<int, int>> v;
+            for (const auto& b : o.bends)
+                  if (b.first < tick)
+                        v.push_back(b);
+            return v;
+            };
+      const int cut = bowedScore->utime2utick(bowedScore->utick2utime(bOn.ons[4].first) - 0.04);
+      QVERIFY(upTo(bOn, cut) == upTo(bLag, cut));
+      delete bowedScore;
       }
 
 //---------------------------------------------------------
