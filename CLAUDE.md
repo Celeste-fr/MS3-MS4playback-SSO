@@ -671,12 +671,11 @@ ninja -j4 mscore                    # about 40 minutes on 4 cores
   score.h`), which resolve through the symlink's real location to the OTHER tree's headers (and ccache, keyed by real
   paths, keeps serving them): a mixed `Score` layout, every test crashing in `initTestCase` (2026-10-04). Bind-mount the
   build dir onto a real directory instead; after a mix-up, delete `*/mocs_compilation.cpp.o` and rebuild with
-  `CCACHE_RECACHE=1`. A `build.rel` copied from another
-  worktree keeps that worktree's absolute paths, so build and test **through the `ninja-<name>.sh` /
-  `run-<name>.sh` wrappers** next to the worktrees (`~/MuseScore/ms3fork/`), which bind-mount the worktree over
-  the original path, e.g. `./ninja-liveset.sh tst_soundlibrary` and `./run-liveset.sh 'cd
-  mtest/libmscore/soundlibrary && QT_QPA_PLATFORM=offscreen ./tst_soundlibrary'`. Outside the mount a test reads
-  the other worktree's files.
+  `CCACHE_RECACHE=1`. **No sudo** (the owner, 2026-10-30, prompted by a
+  build): never copy another worktree's `build.rel` and bind-mount it (the old `ninja-<name>.sh` / `run-<name>.sh` wrappers
+  next to the worktrees use `sudo unshare` and prompt the owner); give a new worktree a fresh build dir configured for its
+  own sources (a plain directory, on / when /data is tight; ccache makes it quick) and build with
+  `flock ~/MuseScore/ms3fork/private/BUILD_LOCK nice -n 15 ninja -C <dir> -j2 <target>`.
 - A MusicXML score in a test needs `score->rebuildMidiMapping()` before rendering (else channels -1 crash).
 - Linux has both `USE_ALSA` and `USE_PORTMIDI`; PortMidi wins, so the owner's Windows path compiles here.
 - Headless MuseScore: isolated `HOME`, `~/.vst3/mstestsynth.vst3` linked, `application/startup/firstStart=false`,
