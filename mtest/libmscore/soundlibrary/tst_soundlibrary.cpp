@@ -11195,9 +11195,28 @@ void TestSoundLibrary::remoteHung()
       std::vector<float> b(2 * 512, 0.f);
       vst.play(PlayEvent(ME_NOTEON, 0, 64, 100));
       vst.process(512, b.data(), nullptr, nullptr);
-      QCOMPARE(::kill(pid_t(vst.plugin(0)->hostPid()), SIGSTOP), 0);
+      const qint64 pid = vst.plugin(0)->hostPid();
+      QCOMPARE(::kill(pid_t(pid), SIGSTOP), 0);
+      // (kill returns before the stop: one of the helper's threads takes it and stops the others, so on a busy machine its
+      // audio thread could still answer the next block; wait until every thread of it is stopped, /proc's state T)
+      auto stopped = [pid]() {
+            const QStringList tasks = QDir(QString("/proc/%1/task").arg(pid)).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+            for (const QString& task : tasks) {
+                  QFile f(QString("/proc/%1/task/%2/stat").arg(pid).arg(task));
+                  if (!f.open(QIODevice::ReadOnly))
+                        continue;
+                  const QByteArray stat = f.readAll();
+                  const int close = stat.lastIndexOf(')');
+                  if (close < 0 || close + 2 >= stat.size() || (stat[close + 2] != 'T' && stat[close + 2] != 't'))
+                        return false;
+                  }
+            return !tasks.isEmpty();
+            };
       QElapsedTimer t;
-      t.start();
+      for (t.start(); !stopped() && t.elapsed() < 5000; )
+            QThread::msleep(1);
+      QVERIFY(stopped());
+      t.restart();
       vst.process(512, b.data(), nullptr, nullptr);
       const qint64 waited = t.elapsed();
       QVERIFY2(waited >= 14000 && waited < 25000, qPrintable(QString::number(waited)));

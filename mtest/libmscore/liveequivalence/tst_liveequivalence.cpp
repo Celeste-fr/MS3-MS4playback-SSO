@@ -2164,7 +2164,7 @@ void TestLiveEquivalence::backgroundLoadInstances()
 //        ms); loading() holds (Play grayed: MuseScore::updatePlayEnabled) until both are in their slots
 //      - readyToPlay during it is false at once (Play doesn't start, doesn't wait); true once loaded
 //      - a part turned to the library while loading (an edit) is loaded by the same preload (queued)
-//      - the states loaded, in order, and what each instance holds then (its getState) are byte for byte those of the
+//      - the states loaded (in order when in MuseScore's process; in parallel helpers in any order), and what each instance holds then (its getState) are byte for byte those of the
 //        blocking sync (the old Play), and a note sounds the same (rendered, compared sample for sample)
 //      - whenLoaded's function runs once, when done
 //      - an edit that needs a patch again, after the loading: scoreEdited loads it in the background
@@ -2369,13 +2369,22 @@ void TestLiveEquivalence::asyncLoadHosted()
       QVERIFY2(h->readyToPlay(score, &error), qPrintable(error));
       QTest::qWait(20);
       QCOMPARE(doneCalls, 1);
-      // the same bytes loaded, in the same order, and held the same; sounding the same
+      // the same bytes loaded, each patch once, and held the same in the same slots; sounding the same. (In which order:
+      // in MuseScore's process one after the other in the order started; in 2 or more helpers the loads run at the same
+      // time and are finished as each ends (harvest), the sync's too: no order promised, so none compared)
+      auto byPatch = [](std::vector<std::pair<QString, QByteArray>> v) { std::sort(v.begin(), v.end()); return v; };
       QCOMPARE(int(loaded.size()), int(refLoaded.size()));
-      for (size_t i = 0; i < loaded.size(); ++i) {
-            QCOMPARE(loaded[i].first, refLoaded[i].first);
-            QVERIFY(loaded[i].second == refLoaded[i].second);
-            }
+      QVERIFY(byPatch(loaded) == byPatch(refLoaded));
+      if (Vst3Remote::processes() < 2)
+            for (size_t i = 0; i < loaded.size(); ++i)
+                  QCOMPARE(loaded[i].first, refLoaded[i].first);
       QVERIFY(held() == refHeld);
+      for (int i : { 0, 1 }) {                                    // (each part's instance in its own slot)
+            const std::vector<int> s = h->slotsOf(score->parts()[size_t(i)]);
+            QCOMPARE(int(s.size()), 1);
+            QVERIFY(refHeld.count(s[0]) && held()[s[0]] == refHeld.at(s[0]));
+            }
+      QVERIFY(h->slotsOf(score->parts()[0]) != h->slotsOf(score->parts()[1]));
       QVERIFY(sound() == refSound);
 
       // an edit that leaves the viola without its patch, then one that needs it again: kept (a spare) while not playing
