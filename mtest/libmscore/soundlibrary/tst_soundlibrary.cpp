@@ -295,6 +295,7 @@ class TestSoundLibrary : public QObject, public MTest
       void tuningLanes();
       void tuningLanesLive();
       void vst3SynthLinks();
+      void slotLockStress();
       void computedLaneSettings();
       void tuningBend();
       void tuningBendAtArrival();
@@ -17923,6 +17924,143 @@ void TestSoundLibrary::vst3SynthLinks()
       vst.clearLinks();
       QCOMPARE(vst.instance(1), nullptr);
       QVERIFY(level(play(1, 0.f)) < 1e-6);
+      }
+
+//---------------------------------------------------------
+//   slotLockStress
+//    the slots' lock (vst3synth.h › The slots' lock; slot-lock, 2026-10-31): while another thread hammers the calls the GUI
+//    makes during a play (setMix, setLowCut, setLink, setParameterIds, a plug-in parameter no event sets, plugin / instance / hostOf,
+//    idle, a slot's instance taken out and put back), each with what is already in force, the audio thread plays millions
+//    of frames of events cut into sub-blocks as Seq cuts them: no block skipped and the output sample for sample the same
+//    as without the hammering. Before slot-lock process() try_locked and skipped every block it met the lock held (here
+//    the waits, lockWaits(): each one was a silent block, the plug-in a block late after it). MS_SLOTLOCK_BLOCKS (default
+//    4000 blocks of 512: 2 048 000 frames a run, two runs)
+//---------------------------------------------------------
+
+void TestSoundLibrary::slotLockStress()
+      {
+      const int rate = 48000;
+      const int BLOCK = 512;
+      const int blocks = qEnvironmentVariableIsSet("MS_SLOTLOCK_BLOCKS") ? qEnvironmentVariableIntValue("MS_SLOTLOCK_BLOCKS") : 4000;
+      const int PLAYED = 4;               // slots 0-3 an instance each; 4 linked to 0 (its MIDI channel 1); 20 a spare
+      const int LINKED = 4;
+      const int SPARE = 20;
+      const std::vector<long> ids { 2, -1, 3 };     // (controller index -> parameter id: Level, none, Tone)
+      struct Run { std::vector<float> out; unsigned skipped; unsigned waits; double maxWaitUs; QString holder; long long hammered; };
+      auto run = [&](bool hammer) {
+            Run r;
+            QString error;
+            Vst3Synth vst;
+            vst.init(rate);
+            for (int k = 0; k < PLAYED; ++k) {
+                  vst.setPlugin(k, Vst3Plugin::load(TESTSYNTH, rate, BLOCK, &error));
+                  if (!vst.plugin(k))
+                        qWarning() << error;
+                  }
+            vst.setPlugin(SPARE, Vst3Plugin::load(TESTSYNTH, rate, BLOCK, &error));
+            vst.setLink(LINKED, 0, 1, false);
+            for (int k = 0; k < PLAYED; ++k) {
+                  vst.setMix(k, 90 + 5 * k, 40 + 10 * k, false, 0.9f);
+                  vst.setLowCut(k, 60.f + 20.f * k);
+                  vst.setParameterIds(k, ids);
+                  if (Vst3Plugin* p = vst.plugin(k))
+                        p->setParameter(4, 0.5);          // (Pitch Bend, which no event here sets, before the first block;
+                                                          // the hammer sets the same)
+                  }
+            vst.restartTransport();
+            std::atomic<bool> stop { false };
+            std::atomic<long long> hammered { 0 };
+            std::thread gui;
+            if (hammer) {
+                  gui = std::thread([&]() {
+                        long long n = 0;
+                        while (!stop.load()) {
+                              const int k = int(n % PLAYED);
+                              vst.setMix(k, 90 + 5 * k, 40 + 10 * k, false, 0.9f);
+                              vst.setLowCut(k, 60.f + 20.f * k);
+                              vst.setLink(LINKED, 0, 1, false);
+                              vst.setParameterIds(k, ids);
+                              Vst3Plugin* p = vst.plugin(k);
+                              if (p && n % 8 == 0)      // (a helper's instance: each a control message too, not waited for)
+                                    p->setParameter(4, 0.5);
+                              (void)vst.instance(LINKED);
+                              (void)vst.hostOf(LINKED);
+                              if (n % 16 == 0)
+                                    vst.idle();
+                              if (n % 16 == 8) {
+                                    std::unique_ptr<Vst3Plugin> spare = vst.takePlugin(SPARE);
+                                    vst.setPlugin(SPARE, std::move(spare));
+                                    }
+                              ++n;
+                              }
+                        hammered = n;
+                        });
+                  }
+            // the events: per block one cut at a pseudo-random frame (as Seq cuts a block at an event), a note on or off,
+            // a CC1 or a parameter (controller index 0: Level, 2: Tone) on a slot 0-4; the same in every run
+            unsigned seed = 12345;
+            auto next = [&seed](unsigned m) { seed = seed * 1103515245u + 12345u; return (seed >> 8) % m; };
+            r.out.assign(size_t(2) * BLOCK * size_t(blocks), 0.f);
+            std::array<std::array<bool, 128>, 5> on {};
+            for (int b = 0; b < blocks; ++b) {
+                  float* o = r.out.data() + size_t(2) * BLOCK * size_t(b);
+                  const unsigned cut = next(BLOCK);
+                  if (cut > 0)
+                        vst.process(cut, o, nullptr, nullptr);
+                  const int slot = int(next(5));
+                  const unsigned what = next(8);
+                  if (what < 4) {
+                        const int key = 48 + int(next(24));
+                        const bool off = on[size_t(slot)][size_t(key)];
+                        PlayEvent e(ME_NOTEON, slot, key, off ? 0 : 60 + int(next(60)));
+                        if (slot == LINKED)
+                              e.setTuning(float(next(100)) - 50.f);
+                        vst.play(e);
+                        on[size_t(slot)][size_t(key)] = !off;
+                        }
+                  else if (what < 6)
+                        vst.play(PlayEvent(ME_CONTROLLER, slot, 1, int(next(128))));
+                  else {
+                        PlayEvent e(ME_PARAMETER, slot, what == 6 ? 0 : 2, 0);
+                        e.setTuning(what == 6 ? 0.7f : float(next(100)) / 100.f);
+                        vst.play(e);
+                        }
+                  vst.process(unsigned(BLOCK) - cut, o + 2 * cut, nullptr, nullptr);
+                  }
+            stop = true;
+            if (gui.joinable())
+                  gui.join();
+            r.skipped = vst.skippedBlocks();
+            r.waits = vst.lockWaits();
+            r.maxWaitUs = vst.maxLockWaitUs();
+            r.holder = vst.lastLockHolder() ? QString(vst.lastLockHolder()) : QString("-");
+            r.hammered = hammered.load();
+            return r;
+            };
+      const Run quiet = run(false);
+      const Run hammered = run(true);
+      double peak = 0;
+      for (float x : quiet.out)
+            peak = std::max(peak, double(std::fabs(x)));
+      size_t first = quiet.out.size();
+      size_t differing = 0;
+      for (size_t i = 0; i < quiet.out.size(); ++i) {
+            if (quiet.out[i] != hammered.out[i]) {
+                  first = std::min(first, i);
+                  ++differing;
+                  }
+            }
+      qInfo("slotLockStress: %d blocks (%lld frames) a run, peak %.3f; hammered %lld rounds; the audio thread waited %u times "
+            "for the lock (each a skipped block before slot-lock), longest %.1f us, last holder %s; skipped %u / %u; "
+            "%zu samples differ (first at frame %zu)",
+            blocks, (long long)blocks * BLOCK, peak, hammered.hammered, hammered.waits, hammered.maxWaitUs,
+            qPrintable(hammered.holder), quiet.skipped, hammered.skipped, differing, first / 2);
+      QVERIFY(peak > 1e-3);
+      QVERIFY(hammered.hammered > 1000);
+      QCOMPARE(quiet.skipped, 0u);
+      QCOMPARE(hammered.skipped, 0u);
+      QVERIFY2(hammered.waits > 0, "the hammering never met the audio thread: no contention exercised");
+      QCOMPARE(differing, size_t(0));
       }
 #endif
 

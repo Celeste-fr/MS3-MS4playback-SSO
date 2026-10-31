@@ -13,7 +13,7 @@
 //    editor        the plug-in's view (IPlugView), shown by mscore/vst3editor
 //
 //  Threads: midi() and process() run in the audio thread; everything else in the GUI thread,
-//  never while process() runs (Vst3Synth locks). Edits made in the plug-in's editor reach the
+//  never while process() runs (Vst3Synth locks: vst3synth.h › The slots' lock). Edits made in the plug-in's editor reach the
 //  processor through a queue.
 //
 //  This program is free software; you can redistribute it and/or modify

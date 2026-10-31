@@ -145,7 +145,7 @@ Render ahead. `[soundlibrary] renderAhead` 500 ms by default (0 = before, untouc
   plug-ins was skipped, `Vst3Synth::process`'s try_lock failing while the GUI thread held the slots (silence for that
   block, the plug-in a block late afterwards). This happens with or without render ahead (the direct run shows it): a
   separate finding, maybe audible as a click; `Vst3Synth::skippedBlocks()` now counts it (the capture's .txt reports it).
-  Not fixed here.
+  Fixed on branch `slot-lock` (2026-10-31; below › The slots' lock).
 - Stalls (`MS_AUDIO_STALL=3:<ms>`): renderAhead 500 with 300 ms: 0 underruns (1 callback over budget: the play's start);
   with 900 ms: one silence of 437 ms, 38 underruns, i.e. late, the warning's threshold passed; the direct path with 300 ms:
   5 callbacks over budget.
@@ -166,6 +166,35 @@ Preferences › I/O while stopped and after playing; MIDI out / Live sets (no le
 **For the owner**: play what made the noise with this build; if it stays clean, done; if "Playback couldn't keep up"
 appears, `load times.log` has the line with its counts (over budget, render-ahead underruns, device underflows).
 `[soundlibrary] renderAhead` in playback.ini (or `MS_RENDER_AHEAD`) changes the 500 ms; 0 is the old behaviour.
+
+## The slots' lock (branch `slot-lock`, 2026-10-31, from follow-cut 333b2f4b53; not merged)
+
+Render ahead's null test found it: `Vst3Synth::process` try_locked the slots' mutex and, when another thread held it,
+skipped the whole block (silence for it, and every hosted plug-in a block late from then on: a click at least), on the
+direct path too. The holder during a play: `Vst3Synth::idle` (SoundLibraryHost's 50 ms timer, also while playing:
+lock, push_back each loaded slot into a vector, unlock), and with helpers `plugin()` from the idle tick; their holds are
+~0.1-1 us, but the audio thread calls process many times a callback (Seq cuts each block at its events), so a collision
+came about once a play. Fix (header of vst3synth.h › The slots' lock): the audio / exporting thread waits for the lock
+(`audioLock`: try, a spin of up to 50 us, then block), every other hold is a few instructions (nothing allocated, freed or
+called on a plug-in under it), `beginExport` sets `_exporting` in a short hold first; `play`'s `_pending` is gone (an
+all-notes-off used to drop the switches put aside there). `Vst3Plugin::processDirect` waits for the editor-edit queue's
+mutex too (a GUI setParameter could slip a block). Diagnostic: `lockWaits` / `maxLockWaitUs` / `lastLockHolder`, in the
+capture's .txt ("slot lock waits").
+
+Measured (Linux, test synth, Whence, Recommended):
+- App null test, 12 plays (in-process and helpers, renderAhead 0 and 500): all identical sample for sample (each to its
+  reference and the two modes' references to each other), skipped blocks 0; the audio thread waited 0-3 times a play,
+  at most 0.5 us (each wait a skipped block before).
+- `tst_soundlibrary::slotLockStress`: 2 048 000 frames a run while another thread hammers setMix / setLowCut / setLink /
+  setParameterIds / setParameter / plugin / instance / hostOf / idle / takePlugin + setPlugin with the values in force:
+  identical to the run without, 0 skipped, in-process (89-183 waits; the longest 1.3-9.7 ms on the loaded machine: test
+  threads at normal priority, the waiter or the holder descheduled) and with helpers (5-7 waits, at most 31 us).
+- ThreadSanitizer: `tools/playbackverify/slotlock_tsan/slotlock_tsan.sh` (vst3synth.cpp unchanged, a fake plug-in): no
+  report, identical, 0 skipped; with `--old 333b2f4b53` (the code before) 786 blocks skipped, the output different.
+
+Unconfirmed: Windows (std::mutex is an SRW lock there; `_mm_pause` in the spin; a pre-empted holder delays a block by a
+scheduler slice at worst, which render ahead's 500 ms lead absorbs), Kontakt + SSO, the owner's PC. Not touched: a remote
+instance's helper side (vst3remote.cpp's `Child`) already used blocking locks.
 
 ## Engine lane (branch `engine-lane`, 2026-10-27, from integrate-1017 4e6d877914; not merged)
 

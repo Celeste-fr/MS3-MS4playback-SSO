@@ -74,11 +74,30 @@ class Session : public QObject {
       static unsigned skippedBlocks()
             {
 #ifdef USE_VST3
-            if (seq && seq->synti())
-                  if (Vst3Synth* v = dynamic_cast<Vst3Synth*>(seq->synti()->synthesizer("VST3")))
-                        return v->skippedBlocks();
+            if (Vst3Synth* v = vst())
+                  return v->skippedBlocks();
 #endif
             return 0;
+            }
+#ifdef USE_VST3
+      static Vst3Synth* vst()
+            {
+            if (seq && seq->synti())
+                  return dynamic_cast<Vst3Synth*>(seq->synti()->synthesizer("VST3"));
+            return nullptr;
+            }
+#endif
+      // (slot-lock: the audio thread's waits for the slots' lock during the play, the longest, the last holder)
+      unsigned _waitsAtPlay { 0 };
+      QString lockLine() const
+            {
+#ifdef USE_VST3
+            if (Vst3Synth* v = vst())
+                  return QString("slot lock waits %1, longest %2 us (since the process started), last holder %3\n")
+                         .arg(v->lockWaits() - _waitsAtPlay).arg(v->maxLockWaitUs(), 0, 'f', 1)
+                         .arg(v->lastLockHolder() ? v->lastLockHolder() : "-");
+#endif
+            return QString();
             }
 
       void finish(const QString& why)
@@ -93,6 +112,7 @@ class Session : public QObject {
                   t.write(QString("result %1\nrate %2\nframes %3\nrenderAhead %4\noverflow %5\nlate %6\nskipped plug-in blocks %7\n")
                           .arg(why).arg(MScore::sampleRate).arg(frames).arg(seq ? seq->renderAheadMs() : 0)
                           .arg(c && c->overflow.load() ? 1 : 0).arg(seq ? seq->lateSummary() : QString()).arg(skipped).toUtf8());
+                  t.write(lockLine().toUtf8());
                   }
             for (Score* s : mscore->scores())
                   if (!s->tmpName().isEmpty())
@@ -123,6 +143,10 @@ class Session : public QObject {
                         const int utick = ms->utime2utick(from);
                         ms->setPlayPos(Fraction::fromTicks(ms->repeatList().utick2tick(utick)));
                         _skippedAtPlay = skippedBlocks();
+#ifdef USE_VST3
+                        if (Vst3Synth* v = vst())
+                              _waitsAtPlay = v->lockWaits();
+#endif
                         if (QAction* play = getAction("play"))
                               play->trigger();
                         _step = 1;

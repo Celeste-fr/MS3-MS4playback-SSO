@@ -976,12 +976,12 @@ void Vst3Plugin::process(int frames, float* buffer)
 void Vst3Plugin::processDirect(int frames, float* buffer)
       {
       {
-            std::unique_lock<std::mutex> lock(d->handler.mutex, std::try_to_lock);
-            if (lock.owns_lock()) {
-                  for (const auto& e : d->handler.edits)
-                        d->addParam(e.first, e.second);
-                  d->handler.edits.clear();
-                  }
+            // (waited for, not try_locked: every other holder only pushes an edit or reads a flag, so a parameter set
+            // from the GUI plays at the block after the call, never one later by a lock collision; slot-lock, 2026-10-31)
+            std::lock_guard<std::mutex> lock(d->handler.mutex);
+            for (const auto& e : d->handler.edits)
+                  d->addParam(e.first, e.second);
+            d->handler.edits.clear();
       }
       if (d->restartPending.exchange(false)) {
             // the transport stops, to start again with the blocks that follow: one block with the playing
@@ -1805,12 +1805,13 @@ std::vector<std::pair<unsigned, double>> Vst3Plugin::takeReported()
                   r.emplace_back(c.first, c.second);
             d->reported.clear();
       }
+      std::vector<std::pair<ParamID, ParamValue>> edited;
       {
-            std::lock_guard<std::mutex> lock(d->handler.mutex);
-            for (const auto& c : d->handler.reported)
-                  r.emplace_back(c.first, c.second);
-            d->handler.reported.clear();
+            std::lock_guard<std::mutex> lock(d->handler.mutex);     // (only a swap under it: process() waits for it)
+            edited.swap(d->handler.reported);
       }
+      for (const auto& c : edited)
+            r.emplace_back(c.first, c.second);
       return r;
       }
 

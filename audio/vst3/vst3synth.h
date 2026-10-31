@@ -18,6 +18,21 @@
 //  Audio export uses the same instances (their instruments are loaded already): between
 //  beginExport() and endExport() they play for the exporting thread only, in offline mode.
 //
+//  The slots' lock (_mutex; branch slot-lock, 2026-10-31): the audio (or exporting) thread takes it for every event and
+//  block and WAITS for it (audioLock: a spin of up to 50 us, then blocking); it never skips a block. Before, process() only try_locked it and skipped the whole block when
+//  another thread held it (silence, and the plug-in a block late from then on: render ahead's null test, 2 blocks in one
+//  Whence play, from idle()'s 50 ms timer), and play() / allNotesOff() put events aside (_pending: an all-notes-off then
+//  dropped the switches put aside). Waiting is safe because every other holder keeps it only for a bounded, tiny critical
+//  section: pointers, links, a vector swap; nothing allocated or freed, no plug-in called (a plug-in replaced is destroyed
+//  after the lock, a parameter table made before it and its old one freed after it, idle() collects into a fixed array).
+//  The slots are changed (setPlugin, takePlugin) on one thread only, the one that calls idle() (the GUI's): idle() calls
+//  the instances it collected after the lock, so they must not go meanwhile. The Mixer, low cut and varispeed: atomics.
+//  Exceptions, none while the audio thread plays: init() (the device stopped: restartAudioEngine) and beginExport() /
+//  endExport(), which set _exporting first under a short hold, so the audio thread returns before locking (mine()) while
+//  their plug-in calls run. A holder pre-empted inside its few instructions delays a block by a scheduler slice at worst
+//  (render ahead's lead absorbs that; the direct path's callback is late, not silent). lockWaits() / maxLockWaitUs() /
+//  lastLockHolder() count the waits (a diagnostic, playcapture.h).
+//
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License version 3.
 //=============================================================================
@@ -39,8 +54,15 @@
 namespace Ms {
 
 class Vst3Synth : public Synthesizer {
-      mutable std::mutex _mutex;          // the slots: GUI thread changes, audio thread plays
-      std::atomic<unsigned> _skipped { 0 };  // blocks process() skipped (the slots held by another thread)
+      mutable std::mutex _mutex;          // the slots: GUI thread changes (tiny sections), audio thread plays (waits for it)
+      std::atomic<unsigned> _skipped { 0 };  // blocks process() skipped (none since slot-lock: kept for playcapture.h)
+      // the lock's diagnostic: who holds it (a site's name, set by SlotsLock), the audio thread's waits for it
+      mutable std::atomic<const char*> _holder { nullptr };
+      std::atomic<const char*> _lastWaitHolder { nullptr };
+      std::atomic<unsigned> _waits { 0 };
+      std::atomic<long long> _maxWaitNs { 0 };
+      class SlotsLock;                    // (another thread's hold, named)
+      std::unique_lock<std::mutex> audioLock();     // (the audio / exporting thread's: waits, counted)
       std::vector<std::unique_ptr<Vst3Plugin>> _slots;
       std::vector<std::array<unsigned char, 128>> _sounding;   // per slot, per key: notes on
       std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
@@ -100,14 +122,8 @@ class Vst3Synth : public Synthesizer {
       static void lowCutBlock(LowCutState& st, float hz, double rate, float* buf, unsigned frames);
       static void lowCutRun(LowCutState& st, float* buf, unsigned from, unsigned to);
       std::vector<float> _scratch;
-      // what the audio thread couldn't play while the GUI thread had the slots: played with the next
-      // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
-      std::mutex _pendingMutex;
-      std::vector<PlayEvent> _pending;
-      std::atomic<bool> _allOffPending { false };
-      std::atomic<bool> _transportPending { false };
       std::atomic<bool> _exporting { false };
-      std::thread::id _exportThread;
+      std::atomic<std::thread::id> _exportThread {};      // (read by mine() on the audio thread)
       QList<MidiPatch*> _patches;
 
       // fault injection for testing --verify-playback (MS_VERIFY_FAULT, see vst3synth.cpp): the
@@ -125,13 +141,17 @@ class Vst3Synth : public Synthesizer {
       void releaseDelayed(unsigned frames);
 
       bool mine() const;
-      void playPending();                 // (with _mutex held)
       void deliver(const PlayEvent&);     // (with _mutex held)
 
    public:
-      // blocks the audio thread skipped because another thread held the slots (silence for that block; a diagnostic,
-      // render-ahead 2026-10-31: playcapture.h reports it)
+      // blocks the audio thread skipped because another thread held the slots (render-ahead 2026-10-31: playcapture.h
+      // reports it); 0 since slot-lock (the audio thread waits instead), kept as the check
       unsigned skippedBlocks() const { return _skipped.load(std::memory_order_relaxed); }
+      // the audio / exporting thread's waits for the slots' lock (another thread held it), the longest (us), the holder
+      // of the last one (a site's name: "idle", "setLink" …; null: none yet)
+      unsigned lockWaits() const { return _waits.load(std::memory_order_relaxed); }
+      double maxLockWaitUs() const { return double(_maxWaitNs.load(std::memory_order_relaxed)) / 1000.0; }
+      const char* lastLockHolder() const { return _lastWaitHolder.load(std::memory_order_relaxed); }
       static constexpr int MAX_SLOTS = 64;
       static const char* NAME;
 
@@ -148,7 +168,7 @@ class Vst3Synth : public Synthesizer {
       SynthesizerGroup state() const override;
       bool setState(const SynthesizerGroup&) override         { return true; }
 
-      void play(const PlayEvent& event) override;             // channel: the slot
+      void play(const PlayEvent& event) override;             // channel: the slot (audio / exporting thread)
       void process(unsigned frames, float* out, float*, float*) override;
       void allSoundsOff(int slot) override;
       void allNotesOff(int slot) override;
