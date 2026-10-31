@@ -155,7 +155,8 @@ MixerTargets mixerTargets(Writer& w, const Track& t)
       return m;
       }
 
-void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& parameterTargets, const MixerTargets& mixer)
+void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& parameterTargets, const MixerTargets& mixer,
+                         const int* lowCutTargets)
       {
       std::vector<std::pair<int, const ParameterAutomation*>> found;      // (target id, automation)
       if (t.hasPlugin) {
@@ -176,8 +177,9 @@ void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& para
                 && std::none_of(mixed.begin(), mixed.end(), [id](const std::pair<int, const MixerAutomation*>& m) { return m.first == id; }))
                   mixed.push_back({ id, &a });
             }
+      const bool lowCut = lowCutTargets && lowCutTargets[0] && lowCutTargets[1] && !t.lowCutEnvelope.empty();
       w.open("AutomationEnvelopes");
-      if (found.empty() && mixed.empty())
+      if (found.empty() && mixed.empty() && !lowCut)
             w.empty("Envelopes");
       else {
             w.open("Envelopes");
@@ -196,6 +198,15 @@ void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& para
                   w.value("PointeeId", m.first);
                   w.close("EnvelopeTarget");
                   mixerEvents(w, *m.second);
+                  w.close("AutomationEnvelope");
+                  }
+            // [levels] lowCut 2: MuseScore's EQ Eight's band 1 and 2 frequency (Hz, as the parameter's Manual)
+            for (int band = 0; lowCut && band < 2; ++band) {
+                  w.open("AutomationEnvelope", "Id=\"" + QByteArray::number(id++) + "\"");
+                  w.open("EnvelopeTarget");
+                  w.value("PointeeId", lowCutTargets[band]);
+                  w.close("EnvelopeTarget");
+                  automationEvents(w, t.lowCutEnvelope);
                   w.close("AutomationEnvelope");
                   }
             w.close("Envelopes");

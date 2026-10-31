@@ -76,15 +76,28 @@ class Vst3Synth : public Synthesizer {
       // thread's: made again when the cutoff or the rate changes, cleared at beginExport / endExport
       std::array<std::atomic<float>, 64> _lowCut {};
       std::array<std::atomic<float>, 64> _exportLowCut {};
+      // [levels] lowCut 2, the following cut (libmscore/followcut.h): the renderer's ME_LOWCUT events give a slot's cutoff
+      // (target, Hz; the floor above stays the least), smoothed one-pole every FollowCut::STEP_FRAMES frames of the slot's
+      // own count (phase), so the output doesn't depend on how the blocks are cut; the coefficients made again at each
+      // step it moves, the state kept. A slot without such an event plays the fixed cut as before (follow false). snap: the
+      // next step takes the target at once (a playback start, all notes off: a seek)
       struct LowCutState {
             float hz { 0.f };
             double rate { 0 };
             double b[2][3] {};
             double a[2][2] {};
             double z[2][2][2] {};         // [channel][stage][state]
+            bool follow { false };
+            bool snap { false };
+            float target { 0.f };
+            double smooth { 0 };          // the smoothed cutoff, Hz (the coefficients' when follow)
+            int phase { 0 };
             };
       std::array<LowCutState, 64> _lowCutState;
+      std::atomic<bool> _lowCutSnap { false };
       void lowCut(int slot, float hz, float* b, unsigned frames);
+      static void lowCutBlock(LowCutState& st, float hz, double rate, float* buf, unsigned frames);
+      static void lowCutRun(LowCutState& st, float* buf, unsigned from, unsigned to);
       std::vector<float> _scratch;
       // what the audio thread couldn't play while the GUI thread had the slots: played with the next
       // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
@@ -175,6 +188,15 @@ class Vst3Synth : public Synthesizer {
       float lowCutAt(int slot, bool forExport = false) const;
       // the filter's coefficients (b0 b1 b2, a1 a2 per stage, a0 = 1) at hz and rate; tests and the Live writer's check
       static void lowCutCoefficients(double hz, double rate, double b[2][3], double a[2][2]);
+      // [levels] lowCut 2 (tests): the slot's smoothed cutoff now (its floor without ME_LOWCUT events), 0: none
+      double lowCutNow(int slot) const;
+      // (tests) a slot's low cut on a stereo buffer, as process() runs it: at floorHz, the following cut's targets
+      // (frame, Hz: an ME_LOWCUT there; none: the fixed cut) in blocks of block frames (cut at each target's frame, as the
+      // sequencer cuts them at an event); snapEach: every target taken at once (no smoothing: the positive control);
+      // cutoffs (optional): the smoothed cutoff at each frame
+      static void lowCutForTest(std::vector<float>* stereo, double rate, float floorHz,
+                                const std::vector<std::pair<long long, float>>& targets, unsigned block, bool snapEach = false,
+                                std::vector<double>* cutoffs = nullptr);
       static float volumeGain(int volume);
       static void panGains(int pan, float* left, float* right);
 

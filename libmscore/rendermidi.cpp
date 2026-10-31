@@ -37,6 +37,7 @@
 #include "noteevent.h"
 #include "part.h"
 #include "rendermidi.h"
+#include "followcut.h"
 #include <limits>
 #include "repeat.h"
 #include "repeatlist.h"
@@ -7420,6 +7421,105 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
             }
       libraryHostedParameters(chunk, events);
       libraryDelayLead(chunk, events);
+      libraryLowCut(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   libraryLowCut
+//    [levels] lowCut 2, the following low cut (followcut.h; branch follow-cut, 2026-10-31): each route of a patch with
+//    the map's <Instrument lowCut> gets ME_LOWCUT events, the rule's cutoff (FollowCut::steps over the notes of all the
+//    patch's routes of the part: its tuning and voice copies) wherever it changes, and one at the rendered chunk's first
+//    tick with the value there; Vst3Synth smooths and filters. Last of all: the notes' times as played (early starts,
+//    joins, track delays, the delay lead).
+//    Chunks: the events of this render only, the notes of this render only (a note-on counts when its note is written in
+//    the chunk, within 3 s of it: in the whole render a repeat segment's chunk would otherwise see the segments before),
+//    so a window (renderChunk) gives what the whole render gives from 2 s into it (the rule looks back RELEASE_S, ahead
+//    LEAD_S; WINDOW_BEFORE_S is 6 s); events from the chunk's first tick to its last (the score's last chunk: on to its
+//    last note's release), so no chunk's events reach into the next's. A repeat segment's start therefore forgets the
+//    notes of the segment before (their releases don't hold the cut down there), chunked and whole alike.
+//    Not for Live's clips (the plain set writes its own: plainliveset.cpp), not with the written timing, not for MIDI
+//    out (no events: a filter can't be sent)
+//---------------------------------------------------------
+
+void MidiRenderer::libraryLowCut(const Chunk& chunk, EventMap* events)
+      {
+      const int u1 = chunk.utick1(), u2 = chunk.utick2();
+      int end = 0;                        // (the score's last chunk's end)
+      for (const Chunk& c : chunks)
+            end = std::max(end, c.utick2());
+      const bool last = u2 >= end;
+      for (auto i = events->lower_bound(u1); i != events->end();) {
+            if (i->second.type() == ME_LOWCUT && (i->first < u2 || last))
+                  i = events->erase(i);
+            else
+                  ++i;
+            }
+      if (!library || forLiveClips || writtenTiming || libRoutes.empty() || SoundLib::output() != SoundLib::Output::PLUGIN
+          || std::lround(Playback::value("levels/lowCut", score)) != FollowCut::SETTING_VALUE)
+            return;
+      // the patches with a cut: (part, patch) -> its routes and, for each, the event to send (channel, patch, route)
+      struct Group { double floor { 0 }; std::vector<int> routes; std::vector<NPlayEvent> protos; };
+      std::map<std::pair<const Part*, const SoundLib::LibInstrument*>, Group> groups;
+      for (const auto& r : libRoutes) {
+            for (size_t p = 0; p < r.second.size(); ++p) {
+                  for (const std::pair<int, int>& lane : r.second[p]) {
+                        const int route = lane.first * 16 + lane.second;
+                        auto rp = libRoutePatches.find(route);
+                        if (rp == libRoutePatches.end() || !rp->second.second || !(rp->second.second->lowCutHz > 0))
+                              continue;
+                        Group& g = groups[rp->second];
+                        if (std::find(g.routes.begin(), g.routes.end(), route) != g.routes.end())
+                              continue;
+                        g.floor = rp->second.second->lowCutHz;
+                        g.routes.push_back(route);
+                        NPlayEvent e(ME_LOWCUT, 0, 0, 0);
+                        e.setChannel(r.first);
+                        e.setExternal(lane.first, lane.second);
+                        e.setLibraryPatch(int(p));
+                        e.setLibraryDelayed(true);          // (placed: no later pass moves it)
+                        g.protos.push_back(e);
+                        }
+                  }
+            }
+      if (groups.empty())
+            return;
+      const double t1 = score->utick2utime(u1);
+      auto own = [&](int tick, const NPlayEvent& e) {
+            if (!e.note())
+                  return tick >= u1;
+            const int written = e.note()->chord()->tick().ticks() + chunk.tickOffset();
+            return written >= u1 && written < u2 && std::fabs(score->utick2utime(tick) - score->utick2utime(written)) < 3.0;
+            };
+      for (const auto& gp : groups) {
+            const Group& g = gp.second;
+            const std::vector<FollowCut::Note> notes = FollowCut::notes(score, *events, g.routes, own);
+            const std::vector<std::pair<double, double>> steps = FollowCut::steps(notes, g.floor);
+            // the value at the chunk's first tick, then each change after it
+            double at1 = g.floor;
+            std::vector<std::pair<int, double>> out;
+            for (const auto& st : steps) {
+                  if (st.first <= t1) {
+                        at1 = st.second;
+                        continue;
+                        }
+                  const int tick = score->utime2utick(st.first);
+                  if (tick <= u1) {
+                        at1 = st.second;
+                        continue;
+                        }
+                  if (tick >= u2 && !last)
+                        break;
+                  out.push_back({ tick, st.second });
+                  }
+            out.insert(out.begin(), { u1, at1 });
+            for (const NPlayEvent& proto : g.protos) {
+                  for (const auto& o : out) {
+                        NPlayEvent e(proto);
+                        e.setTuning(float(o.second));
+                        events->insert({ o.first, e });
+                        }
+                  }
+            }
       }
 
 //---------------------------------------------------------

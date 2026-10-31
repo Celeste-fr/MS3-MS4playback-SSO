@@ -61,6 +61,9 @@ enum {
       // (a byte is too coarse); Vst3Synth only, never MIDI. dataB > 0: the MIDI controller it plays for the
       // plug-in (soundlibrary.h Controller::hosted, e.g. Ample's CC7 as M-Master Vol): a MIDI file writes that CC
       ME_PARAMETER  = 0x5,
+      // [levels] lowCut 2 (libmscore/followcut.h): a sound library route's following low cut, its cutoff in Hz from here
+      // on in tuning() (before smoothing); Vst3Synth only (on the slot's output), never a plug-in's, never MIDI
+      ME_LOWCUT     = 0x6,
       };
 
 //---------------------------------------------------------

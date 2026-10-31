@@ -735,7 +735,8 @@ void Seq::playEvent(const NPlayEvent& event, unsigned framePos)
                   }
             }
       else if (type == ME_CONTROLLER || type == ME_PITCHBEND || type == ME_AFTERTOUCH || type == ME_POLYAFTER
-               || type == ME_PARAMETER)            // (automation of a hosted plug-in's parameter)
+               || type == ME_PARAMETER             // (automation of a hosted plug-in's parameter)
+               || type == ME_LOWCUT)               // ([levels] lowCut 2: a route's following low cut, Vst3Synth's)
             putEvent(event, framePos);
       }
 
@@ -1699,7 +1700,7 @@ void Seq::swapEventsRT()
       std::map<std::tuple<int, int, int, int, int>, const NPlayEvent*> inForce;   // channel, route, type, controller
       for (auto i = events.cbegin(); i != playPos; ++i) {
             const NPlayEvent& e = i->second;
-            if (e.type() == ME_CONTROLLER || e.type() == ME_PITCHBEND)
+            if (e.type() == ME_CONTROLLER || e.type() == ME_PITCHBEND || e.type() == ME_LOWCUT)
                   inForce[std::make_tuple(e.channel(), e.extPort(), e.extChannel(), e.type(),
                                           e.type() == ME_CONTROLLER ? e.controller() : 0)] = &e;
             }
@@ -3190,7 +3191,7 @@ void Seq::updateSynthesizerState(int tick1, int tick2)
       for (; i1 != i2; ++i1) {
             // (and a hosted plug-in's parameters, ME_PARAMETER: automation, Ample's capo and its CC7 as M-Master Vol;
             // in order, the last one in force wins)
-            if (i1->second.type() == ME_CONTROLLER || i1->second.type() == ME_PARAMETER)
+            if (i1->second.type() == ME_CONTROLLER || i1->second.type() == ME_PARAMETER || i1->second.type() == ME_LOWCUT)
                   playEvent(i1->second, 0);
             }
       }

@@ -219,7 +219,14 @@ void midiTrack(Writer& w, const Spec& spec, int index)
             for (size_t i = 0; i < t.plugin.parameters.size(); ++i)
                   parameterTargets.push_back(w.id());
       const MixerTargets mixer = mixerTargets(w, t);
-      automationEnvelopes(w, t, parameterTargets, mixer);
+      // ([levels] lowCut 2: the EQ Eight's two cut bands' frequency, an envelope each)
+      int lowCutTargets[2] = { 0, 0 };
+      const bool lowCutAutomated = t.hasPlugin && t.lowCutHz > 0 && !t.lowCutEnvelope.empty();
+      if (lowCutAutomated) {
+            lowCutTargets[0] = w.id();
+            lowCutTargets[1] = w.id();
+            }
+      automationEnvelopes(w, t, parameterTargets, mixer, lowCutAutomated ? lowCutTargets : nullptr);
       w.trackLists(true, trackIdOf(t.groupIndex));
       w.value("SavedPlayingSlot", -1);
       w.value("SavedPlayingOffset", 0);
@@ -294,7 +301,7 @@ void midiTrack(Writer& w, const Spec& spec, int index)
             if (t.hasPlugin)
                   pluginDevice(w, t.plugin, n++, parameterTargets);
             if (t.hasPlugin && t.lowCutHz > 0)
-                  eqLowCutDevice(w, n++, t.lowCutHz);
+                  eqLowCutDevice(w, n++, t.lowCutHz, true, lowCutAutomated ? lowCutTargets : nullptr);
             if (t.hasPlugin && t.utility)
                   utilityDevice(w, n++, t.utilityGain, t.utilityInfo);
             w.close("Devices");
@@ -748,7 +755,7 @@ void utilityDevice(Writer& w, int listId, double gain, const QString& info)
 // default 3 and 4 are on, Bell / High Shelf at 0 dB gain: off here so nothing else is in the chain), SelectedBand 0.
 // Unconfirmed in real Live: that Live opens it (written by hand from the default, not saved by Live) and the response of
 // two Low Cut 12 bands (LIVE.md › The plain set › Low cut)
-void eqLowCutDevice(Writer& w, int listId, double hz, bool on)
+void eqLowCutDevice(Writer& w, int listId, double hz, bool on, const int* freqTargets)
       {
       w.open("Eq8", "Id=\"" + QByteArray::number(listId) + "\"");
       w.value("LomId", 0);
@@ -793,7 +800,8 @@ void eqLowCutDevice(Writer& w, int listId, double hz, bool on)
                   w.open(ab == 0 ? "ParameterA" : "ParameterB");
                   w.onOff("IsOn", cut || (ab == 1 && d.on));
                   w.paramRangeAfter("Mode", QString::number(cut ? EQ_LOW_CUT_12 : d.mode), "0", "7");
-                  w.param("Freq", cut ? Writer::num(hz) : QString(d.hz), "10", "22000");
+                  w.param("Freq", cut ? Writer::num(hz) : QString(d.hz), "10", "22000", true,
+                          cut && freqTargets ? freqTargets[i] : 0);
                   w.param("Gain", "0", "-15", "15");
                   w.param("Q", cut ? Writer::num(LOW_CUT_Q[i]) : QString("0.7071067691"), "0.1000000015", "18");
                   w.close(ab == 0 ? "ParameterA" : "ParameterB");

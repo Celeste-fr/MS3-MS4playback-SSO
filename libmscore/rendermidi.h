@@ -443,6 +443,7 @@ class MidiRenderer {
       void libraryEvenLevels(const Chunk&, EventMap* events);           // evenlevels.h
       void libraryTransitionTails(const Chunk&, EventMap* events);      // [levels] transitionLevels 2
       void libraryDelayLead(const Chunk&, EventMap* events);
+      void libraryLowCut(const Chunk&, EventMap* events);              // [levels] lowCut 2 (followcut.h)
       void libraryHostedParameters(const Chunk&, EventMap* events);    // soundlibrary.h Controller::hosted
 
    public:

@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "plainliveset.h"
+#include "followcut.h"
 #include "livetiming.h"
 
 #include <algorithm>
@@ -24,6 +25,7 @@
 #include "instrument.h"
 #include "note.h"
 #include "part.h"
+#include "playbacksettings.h"
 #include "score.h"
 #include "soundlibrary.h"
 #include "staff.h"
@@ -158,6 +160,32 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             k.cents = r.cents;
             k.voice = r.voice;
             p->kontakts.push_back(k);
+            }
+      // [levels] lowCut 2 (followcut.h): each patch's cutoff from the notes of all its routes in the part, as MuseScore's
+      // slots play it (FollowCut::smoothedPoints), on its EQ Eight's frequency. From these events (Live's clips: the times
+      // without the track delays, which Live's Track Delay adds to the track, its automation too)
+      if (std::lround(Playback::value("levels/lowCut", score)) == FollowCut::SETTING_VALUE) {
+            for (Section& s : out.sections)
+                  for (PartTracks& p : s.parts) {
+                        std::map<const SoundLib::LibInstrument*, std::vector<int>> byPatch;
+                        for (const Kontakt& k : p.kontakts)
+                              if (k.lowCutHz > 0)
+                                    byPatch[k.instrument].push_back(k.port * 16 + k.channel);
+                        for (const auto& bp : byPatch) {
+                              double floorHz = 0;
+                              for (const Kontakt& k : p.kontakts)
+                                    if (k.instrument == bp.first)
+                                          floorHz = k.lowCutHz;
+                              const std::vector<std::pair<double, double>> pts = FollowCut::smoothedPoints(
+                                    FollowCut::steps(FollowCut::notes(score, events, bp.second), floorHz), floorHz);
+                              std::vector<std::pair<double, double>> env;
+                              for (const auto& pt : pts)
+                                    env.push_back({ pt.first * tl.relTempo * tl.bpm / 60.0, pt.second });
+                              for (Kontakt& k : p.kontakts)
+                                    if (k.instrument == bp.first)
+                                          k.lowCutEnvelope = env;
+                              }
+                        }
             }
       // (pointers once every vector has its size)
       std::map<int, Builder> builders;                                      // by its route
@@ -834,6 +862,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                         kt.utilityGain = kg.utility;
                         kt.utilityInfo = LiveSetWriter::utilityInfo(k.gainStageDb, k.trimDb);
                         kt.lowCutHz = k.lowCutHz;
+                        kt.lowCutEnvelope = k.lowCutEnvelope;
                         kt.legacyVolume = LiveSetWriter::kontaktVolume(mix.volume, k.legacyGain);
                         kt.pan = LiveSetWriter::mixPan(mix.pan);
                         kt.active = !mix.muted;

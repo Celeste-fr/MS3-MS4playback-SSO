@@ -801,6 +801,9 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                               s.envelopes.push_back({ en.mixer, en.initial, en.events });
                         continue;
                         }
+                  // ([levels] lowCut 2: MuseScore's EQ Eight's frequency, the following cut: MuseScore's own, from the score)
+                  if (kontakt && en.kind == LiveSet::Envelope::Kind::OTHER && en.parameter == QLatin1String(LiveSetWriter::LOW_CUT_NAME))
+                        continue;
                   const QString cc = QString("cc%1").arg(en.cc);
                   const bool clipCC = en.kind == LiveSet::Envelope::Kind::CLIP_CC;
                   const bool written = clipCC && w.hashes.count(cc);

@@ -17,6 +17,7 @@
 #include <string>
 
 #include "audio/midi/event.h"
+#include "libmscore/followcut.h"
 
 namespace Ms {
 
@@ -122,6 +123,7 @@ void Vst3Synth::restartTransport()
       {
       if (!mine())
             return;
+      _lowCutSnap = true;           // ([levels] lowCut 2: the cutoff where the playback starts, no glide to it)
       std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
       if (!lock.owns_lock()) {
             _transportPending = true;
@@ -239,6 +241,17 @@ bool Vst3Synth::target(int slot, Vst3Plugin** plugin, int* channel) const
 void Vst3Synth::deliver(const PlayEvent& event)
       {
       const int slot = event.channel();
+      // [levels] lowCut 2: the slot's following cut (followcut.h), never the plug-in's
+      if (event.type() == ME_LOWCUT) {
+            if (slot >= 0 && slot < MAX_SLOTS) {
+                  LowCutState& st = _lowCutState[size_t(slot)];
+                  st.target = std::max(0.f, event.tuning());
+                  st.follow = true;
+                  }
+            return;
+            }
+      if (event.type() == ME_CONTROLLER && event.dataA() == CTRL_ALL_NOTES_OFF && slot >= 0 && slot < MAX_SLOTS)
+            _lowCutState[size_t(slot)].snap = true;     // (a stop or a seek: the next cutoff at once)
       Vst3Plugin* plugin = nullptr;
       int midiChannel = 0;
       if (!target(slot, &plugin, &midiChannel))
@@ -311,6 +324,9 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       if (!lock.owns_lock())
             return;
       playPending();
+      if (_lowCutSnap.exchange(false))
+            for (LowCutState& st : _lowCutState)
+                  st.snap = true;
       releaseDelayed(frames);
       // MS_VERIFY_FAULT's truncated notes: their note-off at the block they fall in
       if (!_cutoffs.empty()) {
@@ -451,23 +467,11 @@ void Vst3Synth::lowCutCoefficients(double hz, double rate, double b[2][3], doubl
             }
       }
 
-void Vst3Synth::lowCut(int slot, float hz, float* buf, unsigned frames)
+// the two biquads over frames [from, to) of buf, both channels, at the state's coefficients
+void Vst3Synth::lowCutRun(LowCutState& st, float* buf, unsigned from, unsigned to)
       {
-      LowCutState& st = _lowCutState[size_t(slot)];
-      if (!(hz > 0.f)) {
-            st.hz = 0.f;
-            return;
-            }
-      const double rate = _clockRate > 0 ? _clockRate : 44100.0;
-      if (st.hz != hz || st.rate != rate) {
-            if (st.rate != rate || st.hz == 0.f)
-                  std::memset(st.z, 0, sizeof(st.z));
-            lowCutCoefficients(hz, rate, st.b, st.a);
-            st.hz = hz;
-            st.rate = rate;
-            }
       for (int c = 0; c < 2; ++c) {
-            for (unsigned i = 0; i < frames; ++i) {
+            for (unsigned i = from; i < to; ++i) {
                   double x = buf[2 * i + c];
                   for (int s = 0; s < 2; ++s) {
                         double* z = st.z[c][s];
@@ -480,6 +484,107 @@ void Vst3Synth::lowCut(int slot, float hz, float* buf, unsigned frames)
                   buf[2 * i + c] = float(x);
                   }
             }
+      }
+
+void Vst3Synth::lowCut(int slot, float hz, float* buf, unsigned frames)
+      {
+      lowCutBlock(_lowCutState[size_t(slot)], hz, _clockRate > 0 ? _clockRate : 44100.0, buf, frames);
+      }
+
+void Vst3Synth::lowCutForTest(std::vector<float>* stereo, double rate, float floorHz,
+                              const std::vector<std::pair<long long, float>>& targets, unsigned block, bool snapEach,
+                              std::vector<double>* cutoffs)
+      {
+      LowCutState st;
+      const long long total = (long long)(stereo->size() / 2);
+      size_t next = 0;
+      if (cutoffs)
+            cutoffs->assign(size_t(total), 0.0);
+      for (long long at = 0; at < total;) {
+            while (next < targets.size() && targets[next].first <= at) {
+                  st.target = std::max(0.f, targets[next].second);
+                  st.follow = true;
+                  st.snap = st.snap || snapEach;
+                  ++next;
+                  }
+            long long n = std::min<long long>(block, total - at);
+            if (next < targets.size())
+                  n = std::min(n, targets[next].first - at);
+            if (cutoffs) {
+                  // (frame by frame: each frame's cutoff as it was when that frame was filtered)
+                  for (long long k = 0; k < n; ++k) {
+                        lowCutBlock(st, floorHz, rate, stereo->data() + 2 * (at + k), 1);
+                        (*cutoffs)[size_t(at + k)] = st.smooth;
+                        }
+                  }
+            else
+                  lowCutBlock(st, floorHz, rate, stereo->data() + 2 * at, unsigned(n));
+            at += n;
+            }
+      }
+
+void Vst3Synth::lowCutBlock(LowCutState& st, float hz, double rate, float* buf, unsigned frames)
+      {
+      if (!(hz > 0.f)) {
+            st.hz = 0.f;
+            st.smooth = 0;
+            return;
+            }
+      if (!st.follow) {
+            // the fixed cut ([levels] lowCut 1, or 2 before the slot's first ME_LOWCUT)
+            if (st.hz != hz || st.rate != rate) {
+                  if (st.rate != rate || st.hz == 0.f)
+                        std::memset(st.z, 0, sizeof(st.z));
+                  lowCutCoefficients(hz, rate, st.b, st.a);
+                  st.hz = hz;
+                  st.rate = rate;
+                  }
+            st.smooth = hz;
+            lowCutRun(st, buf, 0, frames);
+            return;
+            }
+      // [levels] lowCut 2: the following cut, its smoothed cutoff (never under the floor hz) at each step
+      if (st.rate != rate || st.hz == 0.f) {
+            std::memset(st.z, 0, sizeof(st.z));
+            st.smooth = 0;
+            st.phase = 0;
+            }
+      if (!(st.smooth > 0)) {
+            st.smooth = std::max(double(hz), double(st.target));
+            lowCutCoefficients(st.smooth, rate, st.b, st.a);
+            st.snap = false;
+            }
+      st.hz = hz;
+      st.rate = rate;
+      const double a = FollowCut::stepFactor(rate);
+      unsigned i = 0;
+      while (i < frames) {
+            if (st.phase == 0) {
+                  const double goal = std::max(double(hz), double(st.target));
+                  const double before = st.smooth;
+                  if (st.snap)
+                        st.smooth = goal;
+                  else {
+                        st.smooth = a * st.smooth + (1.0 - a) * goal;
+                        if (std::fabs(st.smooth - goal) < 0.01)
+                              st.smooth = goal;
+                        }
+                  st.snap = false;
+                  if (st.smooth != before)
+                        lowCutCoefficients(st.smooth, rate, st.b, st.a);
+                  }
+            const unsigned n = std::min(frames - i, unsigned(FollowCut::STEP_FRAMES - st.phase));
+            lowCutRun(st, buf, i, i + n);
+            i += n;
+            st.phase = (st.phase + int(n)) % FollowCut::STEP_FRAMES;
+            }
+      }
+
+double Vst3Synth::lowCutNow(int slot) const
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return 0;
+      return _lowCutState[size_t(slot)].smooth;
       }
 
 void Vst3Synth::setLowCut(int slot, float hz)

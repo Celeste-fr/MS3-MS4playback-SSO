@@ -344,7 +344,10 @@ void automationEvents(Writer& w, const std::vector<std::pair<double, double>>& p
 // a track's AutomationEnvelopes: its plug-in parameters' automation and its mixer's; parameterTargets: the AutomationTarget
 // id of each of Plugin::parameters' ParameterValue (pluginDevice writes them with these ids); mixer: its mixer's (as
 // mixerTargets gave them, mixerStart writes them)
-void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& parameterTargets, const MixerTargets& mixer);
+// lowCutTargets: the AutomationTarget ids of the EQ Eight's (eqLowCutDevice) band 1 and 2 Freq, for t.lowCutEnvelope
+// (nullptr or 0: none)
+void automationEnvelopes(Writer& w, const Track& t, const std::vector<int>& parameterTargets, const MixerTargets& mixer,
+                         const int* lowCutTargets = nullptr);
 // the ids of the mixer targets the track's mixerAutomation points at (taken from the writer now), the others 0
 MixerTargets mixerTargets(Writer& w, const Track& t);
 // the MainSequencer's ClipTimeable: the track's arrangement clips; controllerTargets: the ids of the track's
@@ -359,7 +362,8 @@ void utilityDevice(Writer& w, int listId, double gain, const QString& info);
 // [levels] lowCut on a Kontakt track (livesetwriter.h › LOW_CUT_NAME): Live's stock EQ Eight, bands 1 and 2 Low Cut 12 at
 // hz (Q LOW_CUT_Q), the others off; on: the device's On; listId: its place in the track's Devices (livesetupdate.cpp
 // inserts one too)
-void eqLowCutDevice(Writer& w, int listId, double hz, bool on = true);
+// freqTargets: the AutomationTarget ids of bands 1 and 2's Freq (an envelope points at them: [levels] lowCut 2), nullptr new
+void eqLowCutDevice(Writer& w, int listId, double hz, bool on = true, const int* freqTargets = nullptr);
 // MIDI To: the track (its Id) whose plug-in gets the MIDI
 void midiToRouting(Writer& w, int trackId, const QString& trackName, int channel = 0, const QString& deviceName = QString());
 

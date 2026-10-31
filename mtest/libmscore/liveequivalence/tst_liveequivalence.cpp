@@ -56,6 +56,7 @@
 #include "libmscore/livesetxml.h"
 #include "libmscore/liveset.h"
 #include "libmscore/livetracks.h"
+#include "libmscore/followcut.h"
 #include "libmscore/livetiming.h"
 #include "libmscore/livetimingoverride.h"
 #include "libmscore/note.h"
@@ -204,6 +205,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void hostedSlotsGain();
       void lowCutHosted();
       void lowCutLive();
+      void followingLowCutLive();
       void exportInstancesOfParts();
       void verifyRoutesByPart();
       void liveEquivalenceByPart();
@@ -7599,6 +7601,192 @@ void TestLiveEquivalence::lowCutLive()
       create(*plain, &plainPlan);
       QVERIFY(LiveSetWriter::xml(plainPlan.spec) == withMap);
       SoundLib::setCurrent(host.lib);
+      delete score;
+      }
+
+
+//---------------------------------------------------------
+//   followingLowCutLive
+//    [levels] lowCut 2 in Live (branch follow-cut, 2026-10-31): the plain set's "MuseScore low cut" EQ Eight gets an
+//    envelope on its band 1 and band 2 Freq (their AutomationTargets), the cutoff MuseScore's slot plays (FollowCut::
+//    smoothedPoints of the part's notes of the patch, in beats), from the floor up; the set validates; Update Live Set writes
+//    nothing when unchanged, removes the envelopes with lowCut 1 (the fixed cut stays), puts them back with 2, and inserts
+//    them with an EQ it inserts. The route set (Add Missing Tracks, Live plays the score: its clips change with every edit,
+//    an envelope written once wouldn't) keeps the fixed cut. Unconfirmed in real Live: that Live plays a Freq envelope in
+//    Hz as written (LIVE.md › The plain set › Low cut)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::followingLowCutLive()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
+      LiveHost host(this, "", { "Violin", "Viola" }, QString(LOW_CUT_MAP).arg(" lowCut='50'"));
+      QVERIFY(host.ok);
+      std::map<QString, QString> ini { { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "2" },
+                                       { "levels/realRange", "0" }, { "levels/lowCut", "2" } };
+      Playback::setIniValuesForTest(ini);
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const QString path = host.dir.path() + "/Follow Cut Project/Follow Cut.als";
+      LiveIntegration::LiveSetPlan plan;
+      QString error;
+      QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::PLAIN, &plan, &error), qPrintable(error));
+      const LiveSetWriter::Track* violin = nullptr;
+      for (const LiveSetWriter::Track& t : plan.spec.tracks)
+            if (t.hasPlugin && t.patch == "Violin")
+                  violin = &t;
+            else if (t.hasPlugin)
+                  QVERIFY(t.lowCutEnvelope.empty());
+      QVERIFY(violin);
+      QCOMPARE(violin->lowCutHz, 50.0);
+      QVERIFY2(violin->lowCutEnvelope.size() > 4, qPrintable(QString::number(violin->lowCutEnvelope.size())));
+      double top = 0;
+      for (const auto& p : violin->lowCutEnvelope) {
+            QVERIFY(p.second >= 50.0 - 1e-9);
+            top = std::max(top, p.second);
+            }
+      QVERIFY2(top > 100.0, qPrintable(QString::number(top)));
+      QCOMPARE(violin->lowCutEnvelope.front().first, 0.0);
+      const QString violinName = violin->name;
+      QDir().mkpath(QFileInfo(path).absolutePath());
+      QVERIFY2(LiveSetWriter::write(path, plan.spec, &error), qPrintable(error));
+      LiveIntegration::recordWritten(score, plan.spec, LiveSetWriter::xml(plan.spec), LiveSet::read(path), false);
+      // the envelopes in the set: one on each cut band's Freq, its events the envelope's
+      auto envelopes = [&](const QByteArray& xml) {
+            std::vector<std::vector<std::pair<double, double>>> out;      // (band 1, band 2): (beats, Hz), the first before all
+            LiveSetUpdate::Xml x(xml);
+            for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" }))) {
+                  int eq = -1;
+                  for (int d : x.children(x.path(t, { "DeviceChain", "DeviceChain", "Devices" }), "Eq8"))
+                        eq = d;
+                  if (eq < 0)
+                        continue;
+                  for (const char* band : { "Bands.0", "Bands.1" }) {
+                        const QByteArray id = x.rawAttr(x.path(eq, { band, "ParameterA", "Freq", "AutomationTarget" }), "Id");
+                        std::vector<std::pair<double, double>> ev;
+                        for (int e : x.children(x.path(t, { "AutomationEnvelopes", "Envelopes" }), "AutomationEnvelope")) {
+                              if (x.rawAttr(x.path(e, { "EnvelopeTarget", "PointeeId" }), "Value") != id)
+                                    continue;
+                              for (int f : x.children(x.path(e, { "Automation", "Events" }), "FloatEvent"))
+                                    ev.push_back({ x.attr(f, "Time").toDouble(), x.attr(f, "Value").toDouble() });
+                              }
+                        out.push_back(ev);
+                        }
+                  }
+            return out;
+            };
+      QByteArray xml = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      std::vector<std::vector<std::pair<double, double>>> env = envelopes(xml);
+      QCOMPARE(int(env.size()), 2);
+      for (const auto& e : env) {
+            QCOMPARE(e.size(), violin->lowCutEnvelope.size() + 1);
+            QCOMPARE(e.front().first, double(LiveSet::DEFAULT_EVENT_TIME));
+            QVERIFY(std::fabs(e.front().second - violin->lowCutEnvelope.front().second) < 1e-3);    // (as Writer::num writes it)
+            for (size_t i = 0; i < violin->lowCutEnvelope.size(); ++i)
+                  QVERIFY(std::fabs(e[i + 1].first - violin->lowCutEnvelope[i].first) < 1e-6
+                          && std::fabs(e[i + 1].second - violin->lowCutEnvelope[i].second) < 1e-3);
+            }
+      // the envelope is the slot's cutoff: the rule over the part's notes as the plain set plays them (beats at its tempo)
+      {
+            const LiveClips::Timeline tl = LiveClips::timeline(score);
+            QVERIFY(tl.bpm > 0);
+            for (const auto& p : violin->lowCutEnvelope)
+                  QVERIFY(p.first >= 0 && p.first <= tl.beats(LiveClips::playedTicks(score)) + 4.0 * tl.bpm / 60.0);
+      }
+      // read back: the EQ still MuseScore's, its cutoff the floor
+      int eqs = 0;
+      for (const LiveSet::Track& t : LiveSet::read(path).tracks)
+            if (t.hasMuseScoreLowCut) {
+                  QCOMPARE(t.name, violinName);
+                  QCOMPARE(t.museScoreLowCutHz, 50.0);
+                  ++eqs;
+                  }
+      QCOMPARE(eqs, 1);
+      {
+            LiveTracks::Data data = LiveTracks::read(score);
+            const LiveTracks::Import im = LiveTracks::import(score, LiveSet::read(path), LiveSet::partInfos(score, QStringList()),
+                                                             path, QDateTime(), data);
+            qDebug("following low cut, read back: %s", qPrintable(im.report.text()));
+            QVERIFY2(!im.report.text().contains("MuseScore low cut"), qPrintable(im.report.text()));
+      }
+      // Update Live Set: unchanged, nothing written
+      LiveIntegration::UpdateResult res;
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(!res.written, qPrintable(res.text()));
+      // lowCut 1: the envelopes removed, the EQ at 50 Hz kept
+      ini["levels/lowCut"] = "1";
+      Playback::setIniValuesForTest(ini);
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written && res.text().contains("MuseScore low cut automation removed"), qPrintable(res.text()));
+      xml = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      env = envelopes(xml);
+      QCOMPARE(int(env.size()), 2);
+      QVERIFY(env[0].empty() && env[1].empty());
+      QVERIFY(xml.contains("<UserName Value=\"MuseScore low cut\" />"));
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(!res.written, qPrintable(res.text()));
+      // lowCut 2 again: back, then unchanged
+      ini["levels/lowCut"] = "2";
+      Playback::setIniValuesForTest(ini);
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written && res.text().contains("MuseScore low cut automation"), qPrintable(res.text()));
+      xml = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      env = envelopes(xml);
+      QVERIFY(int(env.size()) == 2 && env[0].size() == violin->lowCutEnvelope.size() + 1 && env[1].size() == env[0].size());
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(!res.written, qPrintable(res.text()));
+      // the EQ (and its envelopes) removed in "Live": Update inserts both
+      {
+            const QByteArray now = readSet(path);
+            LiveSetUpdate::Xml x(now);
+            std::vector<LiveSetUpdate::Edit> e;
+            for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" }))) {
+                  for (int d : x.children(x.path(t, { "DeviceChain", "DeviceChain", "Devices" }), "Eq8")) {
+                        e.push_back({ x.lineStart(d), x.at(d).end + 2, QByteArray() });
+                        for (const char* band : { "Bands.0", "Bands.1" }) {
+                              const QByteArray id = x.rawAttr(x.path(d, { band, "ParameterA", "Freq", "AutomationTarget" }), "Id");
+                              for (int en : x.children(x.path(t, { "AutomationEnvelopes", "Envelopes" }), "AutomationEnvelope"))
+                                    if (x.rawAttr(x.path(en, { "EnvelopeTarget", "PointeeId" }), "Value") == id)
+                                          e.push_back({ x.lineStart(en), x.at(en).end + 2, QByteArray() });
+                              }
+                        }
+                  }
+            QCOMPARE(int(e.size()), 3);
+            std::sort(e.begin(), e.end(), [](const LiveSetUpdate::Edit& a, const LiveSetUpdate::Edit& b) { return a.from < b.from; });
+            QByteArray out;
+            QVERIFY(LiveSetUpdate::apply(now, e, &out));
+            QVERIFY(!out.contains("<Eq8 "));
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(LiveSetWriter::gzip(out));
+      }
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written && res.text().contains("(inserted)") && res.text().contains("MuseScore low cut automation"),
+               qPrintable(res.text()));
+      xml = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      env = envelopes(xml);
+      QVERIFY(int(env.size()) == 2 && env[0].size() == violin->lowCutEnvelope.size() + 1 && env[1].size() == env[0].size());
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(!res.written, qPrintable(res.text()));
+      // the route set: the fixed cut
+      LiveIntegration::LiveSetPlan routes;
+      QVERIFY2(LiveIntegration::planLiveSet(score, *host.lib, LiveIntegration::LiveSetKind::ROUTES, &routes, &error), qPrintable(error));
+      bool any = false;
+      for (const LiveSetWriter::Track& t : routes.spec.tracks) {
+            QVERIFY(t.lowCutEnvelope.empty());
+            any = any || t.lowCutHz == 50.0;
+            }
+      QVERIFY(any);
       delete score;
       }
 

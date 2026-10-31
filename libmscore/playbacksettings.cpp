@@ -343,12 +343,18 @@ static const std::vector<Definition> DEFINITIONS = {
       // 40-150 Hz, 150-250 ms after each new bow (bowed transition, smooth attack), heard as a kick in fast runs with a slur
       // per beat; the owner asked why it isn't fixed: 1 in Recommended and by default, 0 in Library default. The map's
       // <Instrument lowCut>, just under each section's lowest note: gen_spitfire_sso.py LOW_CUT; Vst3Synth::setLowCut)
-      { "levels/lowCut", 1, 0, 1, "on/off",
+      // (branch follow-cut, 2026-10-31: 2, the following cut, the owner approved by ear the same day: Violins 1 bars 5-6,
+      // the per-beat burst at 150-225 Hz, "yes, much better now"; 2 in Recommended and by default, 1 the fixed cut,
+      // 0 in Library default. libmscore/followcut.h)
+      { "levels/lowCut", 2, 0, 2, "",
         "Low cut on string sections. 1: each patch with a low cut in the map (SSO's five string sections) plays through a "
         "4th-order high-pass just under the section's lowest note (Violins 150 Hz, Violas 100, Celli 50, Basses 25), "
         "taking out the low bow and body noise of the new-bow samples (a kick in fast runs) and the room rumble; the "
-        "lowest note loses about 0.5 dB, a fourth higher 0.05 dB; MuseScore's playback and audio export (Live: not yet, "
-        "MIDI out: none); 0: the library's own low end", true },
+        "lowest note loses about 0.5 dB, a fourth higher 0.05 dB; 2: following, as 1 but the cut moves up with the notes, "
+        "to 0.77 x the lowest note sounding or released within the last 2 s on the patch (smoothed over 100 ms, never "
+        "under 1's), taking out the burst and thud between the fixed cut and the notes (Violins 1: the runs' burst at "
+        "150-225 Hz -25 dB); MuseScore's playback and audio export, Live's plain set (MIDI out: none); 0: the "
+        "library's own low end", true },
       // (2026-10-21, branch sso-script-fixes2: SSO's Performance patches play an extra diminuendo release on every held key at
       // a CC1 step down of 10 or more (read from the patch's script and group data; measured on the Windows test VM); it
       // changes the sound, so 0 in both presets until the owner decides; MidiRenderer's libraryHallGuard)
@@ -660,7 +666,7 @@ QString iniTemplate()
 //    lifted by the next transition's step, branch bowed-join); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
 //    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both on 2026-10-24, branch
 //    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B");
-//    levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick). The other settings are not in the table because: legato/keepMs acts
+//    levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick; 2, following, since 2026-10-31: the owner heard it, "yes, much better now"). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -683,7 +689,7 @@ const std::vector<Preset>& presets()
             { "recommended", QT_TRANSLATE_NOOP("playbackSettings", "Recommended"), { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "slurs/runBends", 1 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "levels/lowCut", 1 }, { "shorts/staccatoLength", 1 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "levels/lowCut", 2 }, { "shorts/staccatoLength", 1 } } },
             { "library", QT_TRANSLATE_NOOP("playbackSettings", "Library default"), { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "slurs/runBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
@@ -886,6 +892,9 @@ void setIniValuesForTest(const std::map<QString, QString>& values)
       // (slurs/runBends likewise, 1 by default since 2026-10-31)
       if (!values.count("slurs/runBends"))
             take(*i, "slurs", "runBends", "0");
+      // (levels/lowCut likewise: 2, following, by default since 2026-10-31; the tests before it expect the fixed cut, 1)
+      if (!values.count("levels/lowCut"))
+            take(*i, "levels", "lowCut", "1");
       install(i);
       }
 

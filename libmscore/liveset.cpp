@@ -339,6 +339,7 @@ Set parse(const QByteArray& xml)
       int lowCutDepth = -1;               // an EQ Eight (Eq8): MuseScore's low cut when named so
       bool lowCutOurs = false, lowCutOn = true;
       double lowCutHz = 0;
+      std::vector<QString> lowCutTargets;  // ([levels] lowCut 2) its band 1 / 2 Freq's AutomationTarget ids
       int paramDepth = -1;
       int clipDepth = -1;
       int envelopeDepth = -1;
@@ -471,6 +472,7 @@ Set parse(const QByteArray& xml)
                         lowCutOurs = false;
                         lowCutOn = true;
                         lowCutHz = 0;
+                        lowCutTargets.clear();
                         }
                   else if (lowCutDepth >= 0 && n == "UserName" && depth == lowCutDepth + 1)
                         lowCutOurs = value == QLatin1String(LiveSetWriter::LOW_CUT_NAME);
@@ -517,6 +519,14 @@ Set parse(const QByteArray& xml)
                               ts->targets[a.value("Id").toString()] = t;
                         else
                               ts->param = t, paramDepth = depth, ts->paramTargetId.clear();
+                        }
+                  // ([levels] lowCut 2: MuseScore's EQ Eight's cut bands' Freq, named so at the device's end when it is ours)
+                  else if (lowCutDepth >= 0 && n == "AutomationTarget" && a.hasAttribute("Id") && parent() == "Freq"
+                           && parent(2) == "ParameterA" && (parent(3) == "Bands.0" || parent(3) == "Bands.1")) {
+                        ParamTarget t;
+                        t.name = "Freq";
+                        ts->targets[a.value("Id").toString()] = t;
+                        lowCutTargets.push_back(a.value("Id").toString());
                         }
                   // any other automation target: Live's own (mixer, devices), for the report
                   else if (n == "AutomationTarget" && a.hasAttribute("Id")) {
@@ -605,6 +615,9 @@ Set parse(const QByteArray& xml)
                                     ts->track.hasMuseScoreLowCut = true;
                                     ts->track.museScoreLowCutHz = lowCutOn ? lowCutHz : 0.0;
                                     }
+                              if (lowCutOurs)
+                                    for (const QString& id : lowCutTargets)
+                                          ts->targets[id].name = LiveSetWriter::LOW_CUT_NAME;
                               lowCutDepth = -1;
                               }
                         else if (depth == utilityDepth) {

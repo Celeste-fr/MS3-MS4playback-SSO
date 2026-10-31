@@ -340,6 +340,10 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
                               const NPlayEvent& e = te.second;
                               if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != slot)
                                     continue;
+                              // ([levels] lowCut 2: the route set plays the fixed cut, LIVE.md › What still differs; compared
+                              // at it, so the check is of the set's settings)
+                              if (e.type() == ME_LOWCUT)
+                                    continue;
                               processTo(std::min(total, qint64(score->utick2utime(te.first) * rate)));
                               PlayEvent pe(e);
                               pe.setChannel(slot);

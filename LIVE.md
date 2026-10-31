@@ -561,6 +561,18 @@ in a section collapsible at the same time".
   track's renders with and without the cut; tolerance 0.5 dB where the Butterworth is above -6 dB, 1.5 dB at -6 ..
   -24 dB). Tests: `tst_liveequivalence` `lowCutLive`, `test_realcheck.py` (alsset's Eq8 entry, realcheck's feature row,
   `lowcut_response.py --selftest`).
+  - **The following cut** (`[levels] lowCut` 2, the default and Recommended's since 2026-10-31, branch `follow-cut`;
+    docs/PLAYBACK_SETTINGS.md › Low cut › The following cut): MuseScore's cut moves up with the notes (0.77 x the lowest
+    note sounding or released within 2 s, smoothed 100 ms, never under the fixed cut). The plain set writes it as an
+    arrangement envelope on the EQ's **band 1 and band 2 Freq** (their AutomationTargets; `Track::lowCutEnvelope`,
+    `automationEnvelopes`' `lowCutTargets`): the cutoff MuseScore's slot plays (`FollowCut::smoothedPoints`, straight lines
+    within 0.5 Hz of the smoothing, in beats), from the plain set's own render, the part's copies of the patch together.
+    Update Live Set writes it where it differs, removes it with lowCut 1 / 0 (the fixed cut stays), and inserts it with an EQ
+    it inserts; the read-back takes it as MuseScore's. The **route set** keeps the fixed cut (below, What still differs).
+    **Unconfirmed in real Live**: that Live plays a Freq envelope in Hz as written (the parameter's Manual is in Hz; the
+    mixer's and plug-ins' envelopes are in their Manual's units), and that a Kontakt track's Track Delay moves its
+    automation with its MIDI (the envelope is in the clips' time, before the track delays; an error of at most the delay,
+    within the rule's 2 s and 20 ms margins). Test: `tst_liveequivalence` `followingLowCutLive`.
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
@@ -1266,7 +1278,13 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   › The plain set › Low cut), **unconfirmed in real Live**: whether Live's two Low Cut 12 bands at the Butterworth's Q
   play MuseScore's 4th-order Butterworth is to measure (`lowcut_response.py`). *Live plays the score*'s route clips
   play through the route set's Kontakt tracks, so they get the EQ only where that set has it. **MIDI out**: can't carry a
-  filter (the receiving synth or DAW plays the low end); none planned.
+  filter (the receiving synth or DAW plays the low end); none planned. **The following cut** (lowCut 2, branch
+  `follow-cut`, 2026-10-31): the plain set has it as the EQ's frequency envelope (unconfirmed in real Live); the **route
+  set** (Add Missing Tracks, *Live plays the score*) keeps the fixed cut: its clips change with every edit in MuseScore and
+  an envelope written once at Create Live Set would go stale (a cut left high under a low note added later), and Live's API
+  can't write arrangement automation before 12.4's `Envelope`. So there the strings keep the noise between the fixed cut
+  and the notes that MuseScore takes out; `--live-equivalence` compares MuseScore's side at the fixed cut (it skips the
+  ME_LOWCUT events), so it checks the set's settings.
 
 - An Engine lane (libmscore/enginelane.h, branch `engine-lane`): Live, Create Live Set and MIDI out ignore it; the part
   plays its own engine throughout there.

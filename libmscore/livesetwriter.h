@@ -176,6 +176,9 @@ struct Track {
       // after the Kontakt, before the Utility, named LOW_CUT_NAME, two Low Cut 12 bands at this many Hz (eqLowCutDevice);
       // 0: none written
       double lowCutHz { 0 };
+      // [levels] lowCut 2 (followcut.h): that EQ's band 1 and 2 frequency as an automation envelope, (beats, Hz), the cutoff
+      // MuseScore's slot plays (FollowCut::smoothedPoints); empty: the fixed lowCutHz
+      std::vector<std::pair<double, double>> lowCutEnvelope;
       // (not written) the fader a set written before the gain stage (2026-10-15) has here: the Mixer's times the old
       // volume (TrackDelays::legacyPatchGain); Update Live Set moves such a set over (livesetupdate.h); -1: none
       double legacyVolume { -1 };

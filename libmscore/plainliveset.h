@@ -128,6 +128,9 @@ struct Kontakt {
       double gainStageDb { 0.0 };         // of it in MuseScore's Utility after the Kontakt (TrackDelays::gainStageDb)
       double trimDb { 0.0 };              // (in gainStageDb) the score's master trim
       double lowCutHz { 0.0 };            // [levels] lowCut: MuseScore's EQ Eight after the Kontakt (SoundLib::lowCutHz); 0 none
+      // [levels] lowCut 2: its frequency as MuseScore's slot plays it, (beats, Hz) (followcut.h: the notes of the part's
+      // copies of the patch, smoothed); empty: lowCutHz throughout
+      std::vector<std::pair<double, double>> lowCutEnvelope;
       double legacyGain { 1.0 };          // its gain as written until 2026-10-15 (TrackDelays::legacyPatchGain): on the fader
       };
 

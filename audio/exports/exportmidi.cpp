@@ -362,6 +362,9 @@ bool ExportMidi::write(QIODevice* device, bool midiExpandRepeats, bool exportRPN
                                           track.insert(pauseMap.addPauseTicks(i->first), MidiEvent(ME_CONTROLLER, channel,
                                                 event.dataB(), qBound(0, int(std::lround(event.tuning() * 127)), 127)));
                                     }
+                              else if (event.type() == ME_LOWCUT) {
+                                    // ([levels] lowCut 2: the hosted slots' following low cut, not MIDI)
+                                    }
                               else {
                                     qDebug("writeMidi: unknown midi event 0x%02x", event.type());
                                     }

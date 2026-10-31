@@ -49,7 +49,7 @@ add_library (libmscore STATIC
       page.cpp part.cpp pedal.cpp letring.cpp vibrato.cpp palmmute.cpp pitch.cpp pitchspelling.cpp
       rendermidi.cpp
       ms4playback.cpp
-      soundlibrary.cpp guitarplayback.cpp contextlevel.cpp playbacksettings.cpp partplayback.cpp partcontrollers.cpp trackdelays.cpp automation.cpp midisync.cpp liveset.cpp liveclips.cpp livetiming.cpp livetimingoverride.cpp evenlevels.cpp evenauto.cpp plainliveset.cpp livetracks.cpp livesetwriter.cpp livesetclips.cpp livesetupdate.cpp tempochange.cpp playstart.cpp notepreview.cpp playbackaudit.cpp performancetechnique.cpp notelane.cpp renderpreflight.cpp lagprobe.cpp
+      soundlibrary.cpp guitarplayback.cpp contextlevel.cpp playbacksettings.cpp partplayback.cpp partcontrollers.cpp trackdelays.cpp automation.cpp midisync.cpp liveset.cpp liveclips.cpp livetiming.cpp livetimingoverride.cpp evenlevels.cpp evenauto.cpp plainliveset.cpp livetracks.cpp livesetwriter.cpp livesetclips.cpp livesetupdate.cpp tempochange.cpp playstart.cpp followcut.cpp notepreview.cpp playbackaudit.cpp performancetechnique.cpp notelane.cpp renderpreflight.cpp lagprobe.cpp
       ms4playback.h
       soundlibrary.h playbacksettings.h
       ms4tables.h repeat.cpp repeatlist.cpp rest.cpp

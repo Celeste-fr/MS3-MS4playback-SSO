@@ -1281,6 +1281,8 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                   // setting off now, switched off (kept: Live's own devices around it keep their place)
                   const int lowCut = lowCutOf(ox, o);
                   int insertedId = -1;              // the list Id of an EQ inserted here (a Utility inserted after it: the next)
+                  QByteArray insertedFreq[2];       // ([levels] lowCut 2) its bands 1 / 2 Freq's AutomationTarget ids, renumbered
+                  const bool lowCutAutomated = t.lowCutHz > 0 && !t.lowCutEnvelope.empty();
                   if (lowCut >= 0) {
                         int a = 0, b = 0;
                         const int on = ox.path(lowCut, { "On", "Manual" });
@@ -1313,12 +1315,18 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                         for (int d : ox.children(devices))
                               listId = std::max(listId, ox.attr(d, "Id").toInt() + 1);
                         LiveSetWriter::Writer ew;
-                        LiveSetWriter::eqLowCutDevice(ew, listId, t.lowCutHz);
+                        const int freq[2] = { ew.id(), ew.id() };
+                        LiveSetWriter::eqLowCutDevice(ew, listId, t.lowCutHz, true, freq);
                         insertedId = listId;
                         const Xml ex(ew.data());
                         std::vector<Edit> ee;
                         std::map<QByteArray, QByteArray> eids;
                         renumber(ex, ex.root(), &nextPointee, &eids, &ee);
+                        for (int b = 0; b < 2 && lowCutAutomated; ++b) {
+                              auto f = eids.find(QByteArray::number(freq[b]));
+                              if (f != eids.end())
+                                    insertedFreq[b] = f->second;
+                              }
                         const QByteArray block = piece(ex, 0, ex.data().size(), ee);
                         // (before a Utility inserted below at the same place: the edits keep their order)
                         edits.push_back({ ox.at(plugin).end, ox.at(plugin).end,
@@ -1551,6 +1559,59 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                         edits.push_back({ ox.at(ps).start, ox.at(ps).end, hexElement("ProcessorState", t.plugin.component, ox.indent(ps), nl) });
                         what << QObject::tr("Kontakt's state with them (the set's own, its other settings kept)");
                         }
+                  // [levels] lowCut 2: MuseScore's EQ Eight's band 1 / 2 frequency as an envelope each (the cutoff MuseScore's
+                  // slot plays); written where it differs, inserted where missing, removed with lowCut 1 / 0 now
+                  {
+                        bool lowCutChanged = false;
+                        auto lowCutEnvelope = [&](const QByteArray& targetId, int existing) {
+                              if (lowCutAutomated) {
+                                    LiveSetWriter::Writer ew;
+                                    LiveSetWriter::automationEvents(ew, t.lowCutEnvelope);
+                                    const Xml want(ew.data());
+                                    if (existing >= 0) {
+                                          const int automation = ox.child(existing, "Automation");
+                                          if (eventsCanon(ox, automation) == eventsCanon(want, want.root()))
+                                                return;
+                                          edits.push_back({ ox.at(automation).start, ox.at(automation).end,
+                                                            withNl(placed(ew.data(), ox.indent(automation), nl), nl) });
+                                          }
+                                    else {
+                                          LiveSetWriter::Writer nw;
+                                          nw.open("AutomationEnvelope", "Id=\"" + QByteArray::number(envCount++) + "\"");
+                                          nw.open("EnvelopeTarget");
+                                          nw.value("PointeeId", QString::fromUtf8(targetId));
+                                          nw.close("EnvelopeTarget");
+                                          LiveSetWriter::automationEvents(nw, t.lowCutEnvelope);
+                                          nw.close("AutomationEnvelope");
+                                          const QByteArray ind = (envs >= 0 ? ox.indent(envs) : QByteArray()) + "\t";
+                                          inserted += ind + withNl(placed(nw.data(), ind, nl), nl) + nl;
+                                          }
+                                    lowCutChanged = true;
+                                    }
+                              else if (existing >= 0) {
+                                    int from = ox.lineStart(existing);
+                                    int to = ox.at(existing).end;
+                                    if (ox.data().mid(to, nl.size()) == nl)
+                                          to += nl.size();
+                                    edits.push_back({ from, to, QByteArray() });
+                                    lowCutChanged = true;
+                                    }
+                              };
+                        if (lowCut >= 0) {
+                              for (const char* band : { "Bands.0", "Bands.1" }) {
+                                    const int target = ox.path(lowCut, { band, "ParameterA", "Freq", "AutomationTarget" });
+                                    if (target >= 0)
+                                          lowCutEnvelope(ox.rawAttr(target, "Id"), envelopeOf(target));
+                                    }
+                              }
+                        else
+                              for (const QByteArray& id : insertedFreq)
+                                    if (!id.isEmpty())
+                                          lowCutEnvelope(id, -1);
+                        if (lowCutChanged)
+                              what << (lowCutAutomated ? QObject::tr("%1 automation").arg(LiveSetWriter::LOW_CUT_NAME)
+                                                       : QObject::tr("%1 automation removed").arg(LiveSetWriter::LOW_CUT_NAME));
+                  }
                   if (!inserted.isEmpty() && envs >= 0) {
                         if (ox.at(envs).closeStart == ox.at(envs).openEnd)           // <Envelopes />
                               edits.push_back({ ox.at(envs).start, ox.at(envs).end, "<Envelopes>" + nl + inserted + ox.indent(envs) + "</Envelopes>" });

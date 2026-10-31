@@ -45,6 +45,7 @@
 #include "libmscore/liveset.h"
 #include "libmscore/playbacksettings.h"
 #include "libmscore/playstart.h"
+#include "libmscore/followcut.h"
 #include "libmscore/playbackaudit.h"
 #include "libmscore/notepreview.h"
 #include "libmscore/partplayback.h"
@@ -251,6 +252,7 @@ class TestSoundLibrary : public QObject, public MTest
       void mixerSlot();
       void transportRestart();
       void lowCut();
+      void followingLowCut();
       void remoteNull();
       void remoteTiming();
       void remoteParallelLoad();
@@ -1990,7 +1992,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[shorts]\n", "[shorts]\nstaccatoLength=%11\n").replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nlowCut=%6\nevenKeys=%6\nattackLevels=%7\ntransitionLevels=%7\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nrunBends=%6\nmicrotoneBends=%10\nfastTransitions=%6\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=%6\n";
+                                + "\n[levels]\nlowCut=%7\nevenKeys=%6\nattackLevels=%7\ntransitionLevels=%7\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nrunBends=%6\nmicrotoneBends=%10\nfastTransitions=%6\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=%6\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2).arg(3).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -2003,11 +2005,11 @@ void TestSoundLibrary::playbackPresets()
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nlowCut=1\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=1\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n"));
+               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nlowCut=2\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=1\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nlowCut=1\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=1\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n\n[shorts]\nstaccatoLength=1\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nlowCut=2\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=1\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n\n[shorts]\nstaccatoLength=1\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -2107,8 +2109,9 @@ void TestSoundLibrary::playbackPresets()
       // evenKeys likewise (1 by default since 2026-10-28, Recommended's)
       QCOMPARE(Playback::detectPreset({ { "levels/evenKeys", 1 } }), QString("recommended"));
       QCOMPARE(Playback::detectPreset({ { "levels/evenKeys", 0 } }), QString());
-      // lowCut likewise (1 by default since 2026-10-30, Recommended's)
-      QCOMPARE(Playback::detectPreset({ { "levels/lowCut", 1 } }), QString("recommended"));
+      // lowCut likewise (1 by default since 2026-10-30, 2, following, since 2026-10-31: Recommended's; 1 neither)
+      QCOMPARE(Playback::detectPreset({ { "levels/lowCut", 2 } }), QString("recommended"));
+      QCOMPARE(Playback::detectPreset({ { "levels/lowCut", 1 } }), QString());
       QCOMPARE(Playback::detectPreset({ { "levels/lowCut", 0 } }), QString());
       // realRange left out: its default 2, Recommended's; Library default needs 0 (the owner, 2026-10-13; 2 since
       // 2026-10-14); 1 (the Meyer rule) is neither
@@ -5659,6 +5662,7 @@ void TestSoundLibrary::chunkedEqualsWhole()
             { ample, root + "/" + DIR + "guitar-techniques.musicxml", false, "guitar/strums=1;guitar/softStrums=2" },
             { ample, root + "/" + DIR + "guitar.musicxml", false } };
       int split = 0;
+      int lowCutLines = 0;          // ([levels] lowCut 2: Recommended's following cut, the SSO string sections' ME_LOWCUT)
       for (const Case& c : cases) {
             SoundLib::setCurrent(c.lib);
             SoundLib::setDynamicsCalibration(c.lib == sso ? cal : nullptr);
@@ -5700,6 +5704,9 @@ void TestSoundLibrary::chunkedEqualsWhole()
                         }
                   const EventMap whole = render(score, 0, false, &n);
                   const QStringList w = lines(whole);
+                  for (const QString& x : w)
+                        if (x.section(' ', 2, 2) == QString::number(int(ME_LOWCUT)))
+                              ++lowCutLines;
                   if (&c == &cases.front()) {
                         // positive controls (each preset, the first case): the comparison fails on a planted change of
                         // the chunked render (one CC11 value one step, one note-on one tick later, one note-on at +50
@@ -5763,6 +5770,7 @@ void TestSoundLibrary::chunkedEqualsWhole()
                   }
             }
       QVERIFY2(split >= 20, qPrintable(QString::number(split)));
+      QVERIFY2(lowCutLines > 100, qPrintable(QString::number(lowCutLines)));
       }
 
 //---------------------------------------------------------
@@ -10919,7 +10927,7 @@ void TestSoundLibrary::lowCut()
       QCOMPARE(violin->lowCutHz, 50.0);
       QCOMPARE(lib->instruments[1].lowCutHz, 0.0);
       struct Reset { ~Reset() { Playback::setIniValuesForTest({}); } } reset;
-      QCOMPARE(Playback::definition("levels/lowCut")->value, 1.0);
+      QCOMPARE(Playback::definition("levels/lowCut")->value, 2.0);
       Playback::setIniValuesForTest({});
       QCOMPARE(SoundLib::lowCutHz(violin, nullptr), 50.0);
       QCOMPARE(SoundLib::lowCutHz(&lib->instruments[1], nullptr), 0.0);
@@ -11009,6 +11017,323 @@ void TestSoundLibrary::lowCut()
             QVERIFY2(std::fabs(gainAt(hz / 2) + 24.10) < 0.1, qPrintable(QString::number(hz)));
             QVERIFY2(std::fabs(gainAt(1000.0)) < 0.1, qPrintable(QString::number(hz)));
             }
+      }
+
+//---------------------------------------------------------
+//   followingLowCut
+//    [levels] lowCut 2, the following low cut (followcut.h; branch follow-cut, 2026-10-31): the setting (2 by default and
+//    in Recommended, 0 in Library default); the rule (FollowCut::steps: 0.77 x the lowest fundamental sounding or
+//    released within 2 s, from 20 ms before a note-on, never under the floor); the renderer's ME_LOWCUT schedule from
+//    follow-cut.musicxml (a test map's violin at 150 Hz: A4, G3, then E5 alone), the same chunked by the measure as whole,
+//    none with lowCut 1, for MIDI out or Live's clips, and lowCut 2's render without them event for event lowCut 1's; the
+//    filter (Vst3Synth::lowCutForTest, process()'s own code): the Butterworth's response at the following cutoff, a sine
+//    sweep under a cutoff jumping 150 <-> 1200 Hz without clicks (energy above 8 kHz under -80 dB, at least 20 dB under
+//    the same with every jump taken at once: the positive control), stable under 25 <-> 2000 Hz jumps every 10 ms, the same samples whatever the
+//    blocks, bit for bit the fixed cut while it stays at the floor; through Vst3Synth with the test synth: in MuseScore's
+//    process, in a helper process and in an export the same samples, and an ME_LOWCUT never reaches the plug-in
+//---------------------------------------------------------
+
+void TestSoundLibrary::followingLowCut()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::PLUGIN); Playback::setIniValuesForTest({}); } } reset;
+      // the setting
+      QCOMPARE(Playback::definition("levels/lowCut")->value, 2.0);
+      QCOMPARE(Playback::definition("levels/lowCut")->max, 2.0);
+      for (const Playback::Preset& p : Playback::presets()) {
+            double v = -1;
+            for (const auto& kv : p.values)
+                  if (kv.first == "levels/lowCut")
+                        v = kv.second;
+            QCOMPARE(v, QString(p.id) == "library" ? 0.0 : 2.0);
+            }
+
+      // the rule
+      {
+            const std::vector<FollowCut::Note> ns { { 0.0, 1.0, 440.0 }, { 1.0, 2.0, 196.0 }, { 8.0, 12.0, 659.255 },
+                                                    { 20.0, 21.0, 150.0 } };     // (the last: 0.77 x 150 under the floor)
+            const std::vector<std::pair<double, double>> st = FollowCut::steps(ns, 150.0);
+            const std::vector<std::pair<double, double>> want { { -0.02, 0.77 * 440.0 }, { 0.98, 0.77 * 196.0 }, { 4.0, 150.0 },
+                                                                 { 7.98, 0.77 * 659.255 }, { 14.0, 150.0 } };
+            QCOMPARE(st.size(), want.size());
+            for (size_t i = 0; i < st.size(); ++i) {
+                  QVERIFY2(std::fabs(st[i].first - want[i].first) < 1e-9 && std::fabs(st[i].second - want[i].second) < 1e-9,
+                           qPrintable(QString("%1: %2 s %3 Hz").arg(i).arg(st[i].first).arg(st[i].second)));
+                  }
+            QVERIFY(FollowCut::steps(ns, 0.0).empty());
+            QVERIFY(std::fabs(FollowCut::frequency(69, 0) - 440.0) < 1e-9);
+            QVERIFY(std::fabs(FollowCut::frequency(69, 50) - 440.0 * std::pow(2.0, 1.0 / 24)) < 1e-9);
+            // the envelope Live gets: from the floor, within 0.5 Hz of the synth's own smoothing (lowCutForTest's cutoffs)
+            const std::vector<std::pair<double, double>> pts = FollowCut::smoothedPoints(st, 150.0, 48000.0);
+            QVERIFY(pts.size() > 5 && pts.front() == std::make_pair(0.0, 0.77 * 440.0));     // (in force at 0: at once)
+            std::vector<float> silence(2 * 48000 * 16, 0.f);
+            std::vector<std::pair<long long, float>> tg;
+            for (const auto& x : st)
+                  tg.push_back({ (long long)(std::max(0.0, x.first) * 48000), float(x.second) });
+            std::vector<double> cut;
+            Vst3Synth::lowCutForTest(&silence, 48000.0, 150.f, tg, 512, false, &cut);
+            double worst = 0;
+            for (size_t k = 1; k < pts.size(); ++k) {
+                  const auto& a = pts[k - 1];
+                  const auto& b = pts[k];
+                  for (double t = a.first; t < b.first && t < 15.9; t += 0.001) {
+                        const double v = b.first > a.first ? a.second + (b.second - a.second) * (t - a.first) / (b.first - a.first) : b.second;
+                        worst = std::max(worst, std::fabs(v - cut[size_t(t * 48000)]));
+                        }
+                  }
+            qDebug("following low cut: Live's envelope %d points, within %.2f Hz of the slot's cutoff", int(pts.size()), worst);
+            // (the lines' 0.5 Hz, and the points at a step's end where the slot holds a step's value: up to two steps of the
+            // steepest glide, 188 Hz over 100 ms, ~2.5 Hz; under 1 % of the cutoff)
+            QVERIFY2(worst < 4.0, qPrintable(QString::number(worst)));
+      }
+
+      // the renderer's schedule
+      auto lib = loadMap("<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+                         "<Instrument name='Violin' ids='violin' lowCut='150'><Articulation name='Long' value='1' techniques='long'/></Instrument>"
+                         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "follow-cut.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto render = [&](const QString& lowCut, int chunkSize, bool live = false) {
+            Playback::setIniValuesForTest({ { "levels/lowCut", lowCut } });
+            score->setPlaylistDirty();
+            MidiRenderer r(score);
+            r.setMinChunkSize(chunkSize);
+            r.setForLiveClips(live);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            EventMap events;
+            for (MidiRenderer::Chunk c = r.getChunkAt(0); c; c = r.getChunkAt(c.utick2())) {
+                  EventMap part;
+                  r.renderChunk(c, &part, ctx);
+                  events.insert(part.begin(), part.end());
+                  }
+            return events;
+            };
+      auto lines = [](const EventMap& ev, bool cutOnly, bool dropCut) {
+            QStringList l;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  if ((cutOnly && e.type() != ME_LOWCUT) || (dropCut && e.type() == ME_LOWCUT))
+                        continue;
+                  l << QString("%1 %2 %3 %4 %5 %6").arg(te.first).arg(e.isExternal() ? e.extPort() * 16 + e.extChannel() : -1)
+                       .arg(int(e.type())).arg(e.dataA()).arg(e.dataB()).arg(double(e.tuning()), 0, 'g', 9);
+                  }
+            l.sort();         // (the order at one tick across channels doesn't matter)
+            return l;
+            };
+      const EventMap whole = render("2", 0);
+      std::vector<std::pair<double, double>> got;           // (s, Hz)
+      int route = -1;
+      std::vector<double> ons, offs;
+      for (const auto& te : whole) {
+            const NPlayEvent& e = te.second;
+            if (e.type() == ME_LOWCUT) {
+                  QVERIFY(e.isExternal());
+                  route = e.extPort() * 16 + e.extChannel();
+                  got.push_back({ score->utick2utime(te.first), double(e.tuning()) });
+                  }
+            else if (e.isExternal() && !e.librarySwitch() && e.type() == ME_NOTEON)
+                  (e.velo() > 0 ? ons : offs).push_back(score->utick2utime(te.first));
+            }
+      QCOMPARE(int(ons.size()), 3);
+      QCOMPARE(int(offs.size()), 3);
+      {
+            QStringList g;
+            for (const auto& x : got)
+                  g << QString("%1 s %2 Hz").arg(x.first, 0, 'f', 3).arg(x.second, 0, 'f', 2);
+            qDebug("following low cut, follow-cut.musicxml: %s", qPrintable(g.join(", ")));
+            const std::vector<double> hz { 0.77 * 440.0, 0.77 * 196.0, 150.0, 0.77 * 659.255, 150.0 };
+            QCOMPARE(got.size(), hz.size());
+            const std::vector<double> at { 0.0, ons[1] - 0.02, offs[1] + 2.0, ons[2] - 0.02, offs[2] + 2.0 };
+            for (size_t i = 0; i < got.size(); ++i)
+                  QVERIFY2(std::fabs(got[i].second - hz[i]) < 0.05 && std::fabs(got[i].first - at[i]) < 0.002,
+                           qPrintable(g.join(", ")));
+      }
+      QVERIFY(route >= 0);
+      // the rule over the render's own notes, as played
+      {
+            const std::vector<std::pair<double, double>> st = FollowCut::steps(FollowCut::notes(score, whole, { route }), 150.0);
+            QCOMPARE(st.size(), got.size());
+      }
+      // chunked by the measure (windows) as whole, the schedule and every event
+      const EventMap chunked = render("2", 1);
+      QCOMPARE(lines(chunked, false, false), lines(whole, false, false));
+      // lowCut 1: none; lowCut 2's other events are lowCut 1's
+      const EventMap fixed = render("1", 0);
+      QVERIFY(lines(fixed, true, false).isEmpty());
+      QCOMPARE(lines(whole, false, true), lines(fixed, false, false));
+      QVERIFY(lines(render("0", 0), true, false).isEmpty());
+      // MIDI out and Live's clips: none
+      QVERIFY(lines(render("2", 0, true), true, false).isEmpty());
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      QVERIFY(lines(render("2", 0), true, false).isEmpty());
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      delete score;
+
+      // the filter
+      const int rate = 48000;
+      {
+            // the response at the following cutoff (400 Hz from frame 0, snapped there: the slot's first cutoff)
+            auto toneThrough = [&](double hz, float floorHz, const std::vector<std::pair<long long, float>>& tg) {
+                  std::vector<float> b(2 * size_t(rate), 0.f);
+                  for (size_t i = 0; i < b.size() / 2; ++i)
+                        b[2 * i] = b[2 * i + 1] = float(0.5 * std::sin(2 * M_PI * hz * double(i) / rate));
+                  Vst3Synth::lowCutForTest(&b, rate, floorHz, tg, 512);
+                  return toneAt(b, hz, rate, size_t(rate / 2)) / 0.5;
+                  };
+            double bc[2][3], ac[2][2];
+            Vst3Synth::lowCutCoefficients(400.0, rate, bc, ac);
+            auto gainAt = [&](double f) {
+                  std::complex<double> z = std::polar(1.0, -2 * M_PI * f / rate), h = 1.0;
+                  for (int s = 0; s < 2; ++s)
+                        h *= (bc[s][0] + bc[s][1] * z + bc[s][2] * z * z) / (1.0 + ac[s][0] * z + ac[s][1] * z * z);
+                  return std::abs(h);
+                  };
+            for (double f : { 200.0, 400.0, 1000.0 }) {
+                  const double g = toneThrough(f, 150.f, { { 0, 400.f } });
+                  QVERIFY2(std::fabs(20 * std::log10(g / gainAt(f))) < 0.05, qPrintable(QString("%1 Hz: %2").arg(f).arg(g)));
+                  }
+      }
+      {
+            // a sine sweep 100 Hz -> 2 kHz over 4 s, the cutoff jumping 150 <-> 1200 Hz every 0.25 s
+            const size_t n = size_t(4 * rate);
+            std::vector<float> sweep(2 * n);
+            double ph = 0;
+            for (size_t i = 0; i < n; ++i) {
+                  const double f = 100.0 * std::pow(20.0, double(i) / n);
+                  ph += 2 * M_PI * f / rate;
+                  sweep[2 * i] = sweep[2 * i + 1] = float(0.5 * std::sin(ph));
+                  }
+            std::vector<std::pair<long long, float>> tg;
+            for (int k = 0; k < 16; ++k)
+                  tg.push_back({ (long long)(k * rate / 4), k % 2 ? 1200.f : 150.f });
+            auto high = [&](std::vector<float> b) {         // the energy above 8 kHz against the whole (dB)
+                  // (three of the 4th-order high-passes at 8 kHz in a row: 12th order, the sweep's 2 kHz -144 dB)
+                  double hb[2][3], ha[2][2], z[3][2][2] {}, eh = 0, e = 0;
+                  Vst3Synth::lowCutCoefficients(8000.0, rate, hb, ha);
+                  for (size_t i = 0; i < b.size() / 2; ++i) {
+                        double x = b[2 * i];
+                        const double in = x;
+                        for (int p = 0; p < 3; ++p)
+                              for (int s = 0; s < 2; ++s) {
+                                    const double y = hb[s][0] * x + z[p][s][0];
+                                    z[p][s][0] = hb[s][1] * x - ha[s][0] * y + z[p][s][1];
+                                    z[p][s][1] = hb[s][2] * x - ha[s][1] * y;
+                                    x = y;
+                                    }
+                        if (i >= size_t(rate / 10)) {
+                              e += in * in;
+                              eh += x * x;
+                              }
+                        }
+                  return 10 * std::log10(eh / e + 1e-30);
+                  };
+            std::vector<float> smooth = sweep, snapped = sweep;
+            Vst3Synth::lowCutForTest(&smooth, rate, 150.f, tg, 512);
+            Vst3Synth::lowCutForTest(&snapped, rate, 150.f, tg, 512, true);
+            const double hIn = high(sweep), hSmooth = high(smooth), hSnap = high(snapped);
+            qDebug("following low cut, sweep: above 8 kHz %.1f dB (input %.1f), every jump at once %.1f dB", hSmooth, hIn, hSnap);
+            // (the coefficients' 32-frame steps leave a trace, 80 dB and more under the music: measured -84.7 dB with jumps
+            // of 150 <-> 1200 Hz four times a second, far steeper than notes make; every jump at once -59.9)
+            QVERIFY2(hSmooth < -80.0, qPrintable(QString("%1 %2").arg(hSmooth).arg(hIn)));
+            QVERIFY2(hSnap > hSmooth + 20.0, qPrintable(QString("%1 %2").arg(hSnap).arg(hSmooth)));
+            QVERIFY(peak(smooth) < 1.05f * peak(sweep));
+            // the same samples whatever the blocks
+            std::vector<float> odd = sweep;
+            Vst3Synth::lowCutForTest(&odd, rate, 150.f, tg, 37);
+            QVERIFY(!std::memcmp(odd.data(), smooth.data(), odd.size() * sizeof(float)));
+            // stable: white noise, 25 <-> 2000 Hz every 10 ms
+            std::vector<float> noise(2 * size_t(rate));
+            std::mt19937 rng(7);
+            std::uniform_real_distribution<float> u(-0.5f, 0.5f);
+            for (float& x : noise)
+                  x = u(rng);
+            std::vector<std::pair<long long, float>> fast;
+            for (int k = 0; k < 100; ++k)
+                  fast.push_back({ (long long)(k * rate / 100), k % 2 ? 2000.f : 25.f });
+            std::vector<float> out = noise;
+            Vst3Synth::lowCutForTest(&out, rate, 25.f, fast, 256);
+            bool finite = true;
+            for (float x : out)
+                  finite = finite && std::isfinite(x);
+            QVERIFY(finite);
+            QVERIFY2(peak(out) < 2.f * peak(noise), qPrintable(QString::number(peak(out))));
+            // at the floor (targets at or under it): bit for bit the fixed cut
+            std::vector<float> fixedCut = noise, atFloor = noise;
+            Vst3Synth::lowCutForTest(&fixedCut, rate, 150.f, {}, 512);
+            Vst3Synth::lowCutForTest(&atFloor, rate, 150.f, { { 0, 0.f }, { 9000, 100.f }, { 20000, 150.f } }, 512);
+            QVERIFY(!std::memcmp(fixedCut.data(), atFloor.data(), noise.size() * sizeof(float)));
+      }
+
+      // through Vst3Synth (the test synth): in MuseScore's process, in a helper, in an export, the same samples
+      auto synthRender = [&](int processes, bool exporting, float floorHz) {
+            HostProcesses hp(processes);
+            Vst3Synth vst;
+            vst.init(rate);
+            QString error;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error);
+            if (!p || (processes > 0 && p->hostPid() <= 0))
+                  return std::vector<float>();
+            vst.setPlugin(0, std::move(p));
+            vst.setLowCut(0, exporting ? 0.f : floorHz);
+            vst.setExportLowCut(0, exporting ? floorHz : 0.f);
+            if (exporting)
+                  vst.beginExport(rate);
+            vst.play(PlayEvent(ME_CONTROLLER, 0, 1, 100));
+            vst.play(PlayEvent(ME_NOTEON, 0, 55, 100));       // (196 Hz)
+            vst.play(PlayEvent(ME_NOTEON, 0, 69, 100));       // (440 Hz)
+            std::vector<float> out(2 * size_t(2 * rate), 0.f);
+            size_t at = 0;
+            int k = 0;
+            for (; at < out.size(); at += 2 * 512, ++k) {
+                  if (k % 60 == 0) {
+                        PlayEvent c(ME_LOWCUT, 0, 0, 0);
+                        c.setTuning((k / 60) % 2 ? 150.f : 400.f);
+                        vst.play(c);
+                        }
+                  vst.process(unsigned(std::min<size_t>(512, (out.size() - at) / 2)), out.data() + at, nullptr, nullptr);
+                  }
+            if (exporting)
+                  vst.endExport();
+            return out;
+            };
+      const std::vector<float> local = synthRender(0, false, 150.f);
+      QVERIFY(local.size() == size_t(4 * rate) && peak(local) > 0.02f);
+      const std::vector<float> remote = synthRender(1, false, 150.f);
+      QCOMPARE(remote.size(), local.size());
+      QVERIFY(!std::memcmp(remote.data(), local.data(), local.size() * sizeof(float)));
+      const std::vector<float> exported = synthRender(0, true, 150.f);
+      QCOMPARE(exported.size(), local.size());
+      QVERIFY(!std::memcmp(exported.data(), local.data(), local.size() * sizeof(float)));
+      // without a floor (a patch without lowCut, or the setting off on the slot): the events do nothing; the plug-in never
+      // sees them (the same samples as without them)
+      const std::vector<float> none = synthRender(0, false, 0.f);
+      std::vector<float> plain;
+      {
+            Vst3Synth vst;
+            vst.init(rate);
+            QString error;
+            std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(TESTSYNTH, rate, 4096, &error);
+            QVERIFY(p);
+            vst.setPlugin(0, std::move(p));
+            vst.play(PlayEvent(ME_CONTROLLER, 0, 1, 100));
+            vst.play(PlayEvent(ME_NOTEON, 0, 55, 100));
+            vst.play(PlayEvent(ME_NOTEON, 0, 69, 100));
+            plain.assign(2 * size_t(2 * rate), 0.f);
+            for (size_t at = 0; at < plain.size(); at += 2 * 512)
+                  vst.process(unsigned(std::min<size_t>(512, (plain.size() - at) / 2)), plain.data() + at, nullptr, nullptr);
+      }
+      QCOMPARE(none.size(), plain.size());
+      QVERIFY(!std::memcmp(none.data(), plain.data(), plain.size() * sizeof(float)));
+      // the 196 Hz tone through the following cut at 400 Hz (blocks 0-59): lower than at 150 (60-119, glided there by 100)
+      const double at400 = toneAt(std::vector<float>(local.begin() + 2 * 512 * 10, local.begin() + 2 * 512 * 50), 196.0, rate, 0);
+      const double at150 = toneAt(std::vector<float>(local.begin() + 2 * 512 * 100, local.begin() + 2 * 512 * 118), 196.0, rate, 0);
+      qDebug("following low cut through the test synth: 196 Hz %.1f dB at 400 Hz against 150", dB(at400, at150));
+      QVERIFY2(dB(at400, at150) < -10.0, qPrintable(QString::number(dB(at400, at150))));
       }
 
 //---------------------------------------------------------
