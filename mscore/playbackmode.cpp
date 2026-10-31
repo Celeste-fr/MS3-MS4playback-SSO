@@ -405,12 +405,12 @@ void notePlaybackModeAtOpen(MasterScore* score)
       {
       // (only noted: the metaTag is written once the score is shown, so a conversion on the command line keeps the file's)
       if (score)
-            score->setProperty(MODE_AT_OPEN, openingPlaybackMode(score));
+            score->QObject::setProperty(MODE_AT_OPEN, openingPlaybackMode(score));
       }
 
 void recordScorePlaybackMode(MasterScore* score)
       {
-      if (score && score->property(MODE_KNOWN).toBool())
+      if (score && score->QObject::property(MODE_KNOWN).toBool())
             setModeTag(score, playbackModeText());
       }
 
@@ -419,14 +419,14 @@ bool applyScorePlaybackMode(MasterScore* score, const std::function<void(Playbac
       if (!score)
             return false;
       QString want;
-      if (score->property(MODE_KNOWN).toBool()) {
+      if (score->QObject::property(MODE_KNOWN).toBool()) {
             want = score->metaTag(SCORE_PLAYBACK_MODE_TAG);
             if (want.isEmpty())
                   want = "ms4";
             }
       else {
-            want = score->property(MODE_AT_OPEN).toString();
-            score->setProperty(MODE_KNOWN, true);
+            want = score->QObject::property(MODE_AT_OPEN).toString();
+            score->QObject::setProperty(MODE_KNOWN, true);
             if (want.isEmpty()) {
                   recordScorePlaybackMode(score);     // (a new score, an import: the global mode it is first shown in)
                   return false;
