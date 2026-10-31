@@ -149,6 +149,7 @@ Layout layout(const Score* score, const SoundLib::Library& library, const EventM
             k.faderGain = TrackDelays::faderGain(library, p->delays, k.patch);
             k.gainStageDb = TrackDelays::gainStageDb(library, p->delays, k.patch);
             k.trimDb = p->delays.trim;
+            k.lowCutHz = SoundLib::lowCutHz(r.instrument, score);
             k.legacyGain = TrackDelays::legacyPatchGain(library, p->delays, k.patch);
             k.port = r.port;
             k.channel = r.channel;
@@ -832,6 +833,7 @@ std::vector<LiveSetWriter::Track> tracks(const Layout& layout, bool link)
                         kt.utility = kg.hasUtility;
                         kt.utilityGain = kg.utility;
                         kt.utilityInfo = LiveSetWriter::utilityInfo(k.gainStageDb, k.trimDb);
+                        kt.lowCutHz = k.lowCutHz;
                         kt.legacyVolume = LiveSetWriter::kontaktVolume(mix.volume, k.legacyGain);
                         kt.pan = LiveSetWriter::mixPan(mix.pan);
                         kt.active = !mix.muted;

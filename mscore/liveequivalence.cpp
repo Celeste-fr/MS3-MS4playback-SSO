@@ -401,6 +401,14 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
                   }
             if (fault.contains("no-mixer"))
                   gl = gr = 1.f;
+            // [levels] lowCut: MuseScore's EQ Eight before the Utility (livesetwriter.h › LOW_CUT_NAME), modelled as its two
+            // Low Cut 12 bands being RBJ high-pass biquads at the Q written, i.e. MuseScore's own Butterworth
+            // (Vst3Synth::lowCutCoefficients): an assumption until Live's EQ Eight is measured (LIVE.md › The plain set ›
+            // Low cut), so this compares the set's settings, not Live's filter
+            const bool eq = t.lowCutHz > 0 && !fault.contains("no-lowcut");
+            double eb[2][3] {}, ea[2][2] {}, ez[2][2][2] {};
+            if (eq)
+                  Vst3Synth::lowCutCoefficients(t.lowCutHz, rate, eb, ea);
             std::vector<float> buf(size_t(2 * 512));
             qint64 pos = 0;
             auto processTo = [&](qint64 to) {
@@ -408,6 +416,20 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
                         const unsigned n = unsigned(std::min<qint64>(512, to - pos));
                         std::fill(buf.begin(), buf.begin() + 2 * n, 0.f);
                         p->process(int(n), buf.data());
+                        if (eq) {
+                              for (int c = 0; c < 2; ++c)
+                                    for (unsigned i = 0; i < n; ++i) {
+                                          double x = buf[2 * i + c];
+                                          for (int st = 0; st < 2; ++st) {
+                                                double* z = ez[c][st];
+                                                const double y = eb[st][0] * x + z[0];
+                                                z[0] = eb[st][1] * x - ea[st][0] * y + z[1];
+                                                z[1] = eb[st][2] * x - ea[st][1] * y;
+                                                x = y;
+                                                }
+                                          buf[2 * i + c] = float(x);
+                                          }
+                              }
                         for (unsigned i = 0; i < n; ++i) {
                               out[size_t(2 * (pos + i))] += gl * buf[2 * i];
                               out[size_t(2 * (pos + i) + 1)] += gr * buf[2 * i + 1];

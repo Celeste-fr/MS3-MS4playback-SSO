@@ -94,6 +94,14 @@ def tracks(root):
                 u = d.find("UserName")
                 e["gain"] = float(g.get("Value")) if g is not None else None
                 e["name"] = u.get("Value") if u is not None else ""
+            if d.tag == "Eq8":
+                # MuseScore's low cut ([levels] lowCut): bands 1 and 2 Low Cut 12 at the cutoff
+                u = d.find("UserName")
+                on = d.find("On/Manual")
+                f = d.find("Bands.0/ParameterA/Freq/Manual")
+                e["name"] = u.get("Value") if u is not None else ""
+                e["on"] = on is None or on.get("Value") == "true"
+                e["hz"] = float(f.get("Value")) if f is not None else None
             if d.tag.startswith("MxDevice"):
                 f = d.find(".//MxPatchRef/FileRef/RelativePath")
                 p = d.find(".//MxPatchRef/FileRef/Path")

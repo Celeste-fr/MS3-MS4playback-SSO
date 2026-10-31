@@ -336,6 +336,9 @@ Set parse(const QByteArray& xml)
       int utilityDepth = -1;              // a Utility (StereoGain): MuseScore's when named so
       bool utilityOurs = false;
       double utilityGain = 1;
+      int lowCutDepth = -1;               // an EQ Eight (Eq8): MuseScore's low cut when named so
+      bool lowCutOurs = false, lowCutOn = true;
+      double lowCutHz = 0;
       int paramDepth = -1;
       int clipDepth = -1;
       int envelopeDepth = -1;
@@ -462,6 +465,20 @@ Set parse(const QByteArray& xml)
                         utilityOurs = value == QLatin1String(LiveSetWriter::UTILITY_NAME);
                   else if (utilityDepth >= 0 && n == "Manual" && parent() == "Gain" && depth == utilityDepth + 2)
                         utilityGain = num(value);
+                  // [levels] lowCut: an EQ Eight named LiveSetWriter::LOW_CUT_NAME (its band 1's frequency, its On)
+                  else if (n == "Eq8" && parent() == "Devices") {
+                        lowCutDepth = depth;
+                        lowCutOurs = false;
+                        lowCutOn = true;
+                        lowCutHz = 0;
+                        }
+                  else if (lowCutDepth >= 0 && n == "UserName" && depth == lowCutDepth + 1)
+                        lowCutOurs = value == QLatin1String(LiveSetWriter::LOW_CUT_NAME);
+                  else if (lowCutDepth >= 0 && n == "Manual" && parent() == "On" && depth == lowCutDepth + 2)
+                        lowCutOn = value == QLatin1String("true");
+                  else if (lowCutDepth >= 0 && n == "Manual" && parent() == "Freq" && parent(2) == "ParameterA"
+                           && parent(3) == "Bands.0" && depth == lowCutDepth + 4)
+                        lowCutHz = num(value);
                   // plug-ins
                   else if (n == "PluginDevice" || n == "AuPluginDevice") {
                         deviceDepth = depth;
@@ -583,6 +600,13 @@ Set parse(const QByteArray& xml)
                               }
                         else if (depth == deviceDepth)
                               deviceDepth = -1;
+                        else if (depth == lowCutDepth) {
+                              if (lowCutOurs && !ts->track.hasMuseScoreLowCut) {
+                                    ts->track.hasMuseScoreLowCut = true;
+                                    ts->track.museScoreLowCutHz = lowCutOn ? lowCutHz : 0.0;
+                                    }
+                              lowCutDepth = -1;
+                              }
                         else if (depth == utilityDepth) {
                               if (utilityOurs && !ts->track.hasMuseScoreGain) {
                                     ts->track.hasMuseScoreGain = true;

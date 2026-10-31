@@ -127,6 +127,7 @@ struct Kontakt {
       double faderGain { 1.0 };           // of it on its track's Volume (TrackDelays::faderGain: the track levels' headroom)
       double gainStageDb { 0.0 };         // of it in MuseScore's Utility after the Kontakt (TrackDelays::gainStageDb)
       double trimDb { 0.0 };              // (in gainStageDb) the score's master trim
+      double lowCutHz { 0.0 };            // [levels] lowCut: MuseScore's EQ Eight after the Kontakt (SoundLib::lowCutHz); 0 none
       double legacyGain { 1.0 };          // its gain as written until 2026-10-15 (TrackDelays::legacyPatchGain): on the fader
       };
 

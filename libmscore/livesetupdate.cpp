@@ -481,6 +481,15 @@ int utilityOf(const Xml& x, int t)
       return -1;
       }
 
+// [levels] lowCut on a Kontakt track: an EQ Eight (Eq8) named LiveSetWriter::LOW_CUT_NAME; -1 none
+int lowCutOf(const Xml& x, int t)
+      {
+      for (int d : x.children(devicesOf(x, t), "Eq8"))
+            if (x.childValue(d, "UserName") == QLatin1String(LiveSetWriter::LOW_CUT_NAME))
+                  return d;
+      return -1;
+      }
+
 // lines of a block written by LiveSetWriter's Writer at depth 0 (CRLF after each), placed where an element of indent
 // `indent` starts: the first line at the element's place, the others indented
 QByteArray placed(const QByteArray& block, const QByteArray& indent, const QByteArray& nl)
@@ -1159,6 +1168,8 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                   ++ours;
             if (kontakt && utilityOf(ox, t) >= 0)
                   ++ours;
+            if (kontakt && lowCutOf(ox, t) >= 0)
+                  ++ours;
             rep.userDevices += std::max(0, int(ox.children(devicesOf(ox, t)).size()) - ours);
             }
 
@@ -1265,6 +1276,55 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
             if (t.midiTo < 0) {
                   const int plugin = pluginDeviceOf(ox, o);
                   const int ps = ox.path(plugin, { "PluginDesc", "Vst3PluginInfo", "Preset", "Vst3Preset", "ProcessorState" });
+                  // [levels] lowCut: MuseScore's EQ Eight, its two bands' frequency and its On edited in place; inserted
+                  // right after the Kontakt (before the Utility) when the set has none and the patch has a cut; with the
+                  // setting off now, switched off (kept: Live's own devices around it keep their place)
+                  const int lowCut = lowCutOf(ox, o);
+                  int insertedId = -1;              // the list Id of an EQ inserted here (a Utility inserted after it: the next)
+                  if (lowCut >= 0) {
+                        int a = 0, b = 0;
+                        const int on = ox.path(lowCut, { "On", "Manual" });
+                        const bool wantOn = t.lowCutHz > 0;
+                        bool changed = false;
+                        if (on >= 0 && (ox.value(on) == QLatin1String("true")) != wantOn && ox.attrRange(on, "Value", &a, &b)) {
+                              edits.push_back({ a, b, wantOn ? "true" : "false" });
+                              changed = true;
+                              }
+                        if (wantOn) {
+                              for (const char* band : { "Bands.0", "Bands.1" }) {
+                                    const int f = ox.path(lowCut, { band, "ParameterA", "Freq", "Manual" });
+                                    if (f >= 0 && std::fabs(ox.value(f).toDouble() - t.lowCutHz) > 1e-6 && ox.attrRange(f, "Value", &a, &b)) {
+                                          edits.push_back({ a, b, LiveSetWriter::Writer::num(t.lowCutHz).toUtf8() });
+                                          changed = true;
+                                          }
+                                    }
+                              const int info = ox.child(lowCut, "Annotation");
+                              const QString text = LiveSetWriter::lowCutInfo(t.lowCutHz);
+                              if (info >= 0 && ox.value(info) != text && ox.attrRange(info, "Value", &a, &b))
+                                    edits.push_back({ a, b, LiveSetWriter::Writer::esc(text) });
+                              }
+                        if (changed)
+                              what << (wantOn ? QObject::tr("%1 %2 Hz").arg(LiveSetWriter::LOW_CUT_NAME).arg(t.lowCutHz, 0, 'f', 1)
+                                              : QObject::tr("%1 off").arg(LiveSetWriter::LOW_CUT_NAME));
+                        }
+                  else if (t.lowCutHz > 0 && plugin >= 0) {
+                        const int devices = devicesOf(ox, o);
+                        int listId = 0;
+                        for (int d : ox.children(devices))
+                              listId = std::max(listId, ox.attr(d, "Id").toInt() + 1);
+                        LiveSetWriter::Writer ew;
+                        LiveSetWriter::eqLowCutDevice(ew, listId, t.lowCutHz);
+                        insertedId = listId;
+                        const Xml ex(ew.data());
+                        std::vector<Edit> ee;
+                        std::map<QByteArray, QByteArray> eids;
+                        renumber(ex, ex.root(), &nextPointee, &eids, &ee);
+                        const QByteArray block = piece(ex, 0, ex.data().size(), ee);
+                        // (before a Utility inserted below at the same place: the edits keep their order)
+                        edits.push_back({ ox.at(plugin).end, ox.at(plugin).end,
+                                          nl + ox.indent(plugin) + withNl(placed(block, ox.indent(plugin), nl), nl) });
+                        what << QObject::tr("%1 %2 Hz (inserted)").arg(LiveSetWriter::LOW_CUT_NAME).arg(t.lowCutHz, 0, 'f', 1);
+                        }
                   const int utility = utilityOf(ox, o);
                   if (utility >= 0) {
                         const double want = t.utility ? t.utilityGain : 1.0;
@@ -1287,6 +1347,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                         int listId = 0;
                         for (int d : ox.children(devices))
                               listId = std::max(listId, ox.attr(d, "Id").toInt() + 1);
+                        listId = std::max(listId, insertedId + 1);
                         LiveSetWriter::Writer uw;
                         LiveSetWriter::utilityDevice(uw, listId, t.utilityGain, t.utilityInfo);
                         const Xml ux(uw.data());

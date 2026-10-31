@@ -203,6 +203,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void speedSentLive();
       void hostedSlotsGain();
       void lowCutHosted();
+      void lowCutLive();
       void exportInstancesOfParts();
       void verifyRoutesByPart();
       void liveEquivalenceByPart();
@@ -7362,6 +7363,242 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             QVERIFY(LiveIntegration::importSet(score, path, false, &report));
             QVERIFY2(std::fabs(laneOf("macro2").flatValue() - 0.9) < 1e-4, qPrintable(report));
       }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   lowCutLive
+//    [levels] lowCut in Live (branch lowcut-live, 2026-10-31): a patch with <Instrument lowCut> gets MuseScore's EQ Eight
+//    ("MuseScore low cut": bands 1 and 2 Low Cut 12 at the cutoff, Butterworth's two Q) right after its Kontakt, before
+//    the Utility; a patch without none; read back by name; Update Live Set leaves an unchanged set alone, puts a cutoff
+//    changed in Live back, inserts the EQ in a set without it, switches it off with the setting off; at lowCut 0 no EQ,
+//    the set byte for byte the one of a map without lowCut. The live-equivalence comparison with the EQ modelled as
+//    MuseScore's filter passes, and fails with the EQ left out (fault no-lowcut). The EQ's real response in Live:
+//    unmeasured (LIVE.md › The plain set › Low cut)
+//---------------------------------------------------------
+
+static const char* const LOW_CUT_MAP =
+   "<SoundLibrary name='LiveG'><Switch type='cc' number='32'/><Dynamics cc='1' crest='14.515'/>"
+   "<Instrument name='Violin' ids='violin' sectionLevel2='29.6'%1><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+   "<Instrument name='Viola' ids='viola'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+   "</SoundLibrary>";
+
+void TestLiveEquivalence::lowCutLive()
+      {
+      struct Reset { ~Reset() { Playback::setIniValuesForTest({}); qunsetenv("MS_LIVE_EQUIVALENCE_FAULT"); } } reset;
+      // the set's sound: MuseScore's slot filter against the set's EQ (as modelled)
+      {
+            qputenv("MSTESTSYNTH_INIT_MS", "40");
+            LiveHost host(this, " bend='200' lowCut='400'", { "Violin" });
+            QVERIFY(host.ok);
+            MasterScore* score = readScore(DIR + "quartertones.musicxml");
+            QVERIFY(score);
+            score->rebuildMidiMapping();
+            LiveEquivalence::Options o;
+            o.thresholds.roundRobins = false;
+            const LiveEquivalence::Result r = LiveEquivalence::compare(score, *host.lib, o);
+            QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+            QVERIFY2(r.passed, qPrintable(LiveEquivalence::reportText(r, o.thresholds)));
+            QVERIFY2(r.correlation > 0.999 && r.residualDb < -30, qPrintable(LiveEquivalence::reportText(r, o.thresholds)));
+            qputenv("MS_LIVE_EQUIVALENCE_FAULT", "no-lowcut");
+            const LiveEquivalence::Result f = LiveEquivalence::compare(score, *host.lib, o);
+            QVERIFY2(f.error.isEmpty(), qPrintable(f.error));
+            QVERIFY2(!f.passed, qPrintable(LiveEquivalence::reportText(f, o.thresholds)));
+            qDebug("no-lowcut: %s (correlation %.4f, residual %.1f dB)", qPrintable(f.failures.join("; ")), f.correlation, f.residualDb);
+            qunsetenv("MS_LIVE_EQUIVALENCE_FAULT");
+            delete score;
+      }
+
+      LiveHost host(this, "", { "Violin", "Viola" }, QString(LOW_CUT_MAP).arg(" lowCut='50'"));
+      QVERIFY(host.ok);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "2" },
+                                      { "levels/realRange", "0" } });
+      MasterScore* score = readScore(DIR + "section-balance.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const QString path = host.dir.path() + "/Low Cut Project/Low Cut.als";
+      auto create = [&](const SoundLib::Library& lib, LiveIntegration::LiveSetPlan* plan) {
+            QString error;
+            QVERIFY2(LiveIntegration::planLiveSet(score, lib, LiveIntegration::LiveSetKind::PLAIN, plan, &error), qPrintable(error));
+            QDir().mkpath(QFileInfo(path).absolutePath());
+            QVERIFY2(LiveSetWriter::write(path, plan->spec, &error), qPrintable(error));
+            LiveIntegration::recordWritten(score, plan->spec, LiveSetWriter::xml(plan->spec), LiveSet::read(path), false);
+            };
+      // the devices of each Kontakt track: (tag, user name) in order
+      auto devices = [](const QByteArray& xml) {
+            std::map<QString, QStringList> out;
+            LiveSetUpdate::Xml x(xml);
+            for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" }))) {
+                  const std::vector<int> d = x.children(x.path(t, { "DeviceChain", "DeviceChain", "Devices" }));
+                  if (d.empty() || !x.is(d[0], "PluginDevice"))
+                        continue;
+                  QStringList l;
+                  for (int e : d)
+                        l << QString::fromUtf8(x.name(e)) + ":" + x.childValue(e, "UserName");
+                  out[x.childValue(x.child(t, "Name"), "EffectiveName")] = l;
+                  }
+            return out;
+            };
+      auto lowCuts = [](const LiveSet::Set& set) {
+            std::map<QString, double> out;              // Kontakt track -> its MuseScore low cut (Hz, 0 off), -1 none
+            for (const LiveSet::Track& t : set.tracks)
+                  if (!t.devices.isEmpty())
+                        out[t.name] = t.hasMuseScoreLowCut ? t.museScoreLowCutHz : -1.0;
+            return out;
+            };
+      LiveIntegration::LiveSetPlan plan;
+      create(*host.lib, &plan);
+      QString violinTrack, violaTrack;
+      for (const LiveSetWriter::Track& t : plan.spec.tracks)
+            if (t.hasPlugin) {
+                  QCOMPARE(t.lowCutHz, t.patch == "Violin" ? 50.0 : 0.0);
+                  (t.patch == "Violin" ? violinTrack : violaTrack) = t.name;
+                  }
+      QVERIFY(!violinTrack.isEmpty() && !violaTrack.isEmpty());
+      QByteArray xml = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      QCOMPARE(xml.count("<Eq8 Id="), 1);
+      QCOMPARE(xml.count("<UserName Value=\"MuseScore low cut\" />"), 1);
+      std::map<QString, QStringList> dev = devices(xml);
+      QCOMPARE(dev[violinTrack], QStringList({ "PluginDevice:", "Eq8:MuseScore low cut", "StereoGain:MuseScore gain" }));
+      QVERIFY(!dev[violaTrack].join(" ").contains("Eq8"));
+      {
+            // the bands as written: 1 and 2 Low Cut 12 at 50 Hz, Butterworth's Q; 3-8 off
+            LiveSetUpdate::Xml x(xml);
+            int eq = -1;
+            for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" })))
+                  for (int d : x.children(x.path(t, { "DeviceChain", "DeviceChain", "Devices" }), "Eq8"))
+                        eq = d;
+            QVERIFY(eq >= 0);
+            QCOMPARE(x.value(x.path(eq, { "On", "Manual" })), QString("true"));
+            for (int i = 0; i < 8; ++i) {
+                  const QByteArray band = "Bands." + QByteArray::number(i);
+                  const auto v = [&](const char* p) { return x.value(x.path(eq, { band.constData(), "ParameterA", p, "Manual" })); };
+                  QCOMPARE(v("IsOn"), QString(i < 2 ? "true" : "false"));
+                  if (i < 2) {
+                        QCOMPARE(v("Mode").toInt(), LiveSetWriter::EQ_LOW_CUT_12);
+                        QCOMPARE(v("Freq").toDouble(), 50.0);
+                        QVERIFY(std::fabs(v("Q").toDouble() - LiveSetWriter::LOW_CUT_Q[i]) < 1e-9);
+                        }
+                  }
+      }
+      std::map<QString, double> got = lowCuts(LiveSet::read(path));
+      QCOMPARE(got[violinTrack], 50.0);
+      QCOMPARE(got[violaTrack], -1.0);
+
+      // Update Live Set, nothing changed: nothing written, the EQ counted as MuseScore's
+      LiveIntegration::UpdateResult res;
+      QString error;
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(!res.written, qPrintable(res.text()));
+      QVERIFY2(res.report.userDevices == 0, qPrintable(res.text()));
+
+      auto rewrite = [&](const std::function<void(LiveSetUpdate::Xml&, std::vector<LiveSetUpdate::Edit>&)>& edit) {
+            const QByteArray now = readSet(path);
+            LiveSetUpdate::Xml x(now);
+            QVERIFY(x.ok());
+            std::vector<LiveSetUpdate::Edit> e;
+            edit(x, e);
+            QVERIFY(!e.empty());
+            QByteArray out;
+            QVERIFY(LiveSetUpdate::apply(now, e, &out));
+            QFile f(path);
+            QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
+            f.write(LiveSetWriter::gzip(out));
+            };
+      auto eqOf = [](LiveSetUpdate::Xml& x) {
+            for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" })))
+                  for (int d : x.children(x.path(t, { "DeviceChain", "DeviceChain", "Devices" }), "Eq8"))
+                        return d;
+            return -1;
+            };
+      // its cutoff turned in "Live" (band 1 at 80 Hz): read back as not MuseScore's (reported), Update puts 50 back
+      rewrite([&](LiveSetUpdate::Xml& x, std::vector<LiveSetUpdate::Edit>& e) {
+            int a = 0, b = 0;
+            QVERIFY(x.attrRange(x.path(eqOf(x), { "Bands.0", "ParameterA", "Freq", "Manual" }), "Value", &a, &b));
+            e.push_back({ a, b, "80" });
+            });
+      QCOMPARE(lowCuts(LiveSet::read(path))[violinTrack], 80.0);
+      {
+            LiveTracks::Data data = LiveTracks::read(score);
+            const LiveTracks::Import im = LiveTracks::import(score, LiveSet::read(path), LiveSet::partInfos(score, QStringList()),
+                                                             path, QDateTime(), data);
+            QVERIFY2(im.report.text().contains("MuseScore low cut"), qPrintable(im.report.text()));
+      }
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written, qPrintable(res.text()));
+      QVERIFY2(res.text().contains("MuseScore low cut 50.0 Hz"), qPrintable(res.text()));
+      QCOMPARE(lowCuts(LiveSet::read(path))[violinTrack], 50.0);
+      QCOMPARE(LiveSetWriter::validate(readSet(path)), QString());
+
+      // a set without it (written before lowcut-live): Update inserts it after the Kontakt, before the Utility
+      rewrite([&](LiveSetUpdate::Xml& x, std::vector<LiveSetUpdate::Edit>& e) {
+            const int eq = eqOf(x);
+            e.push_back({ x.lineStart(eq), x.at(eq).end + 2, QByteArray() });        // (the element and its CRLF)
+            });
+      QVERIFY(!readSet(path).contains("<Eq8 "));
+      QCOMPARE(lowCuts(LiveSet::read(path))[violinTrack], -1.0);
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written, qPrintable(res.text()));
+      QVERIFY2(res.text().contains("(inserted)"), qPrintable(res.text()));
+      xml = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      QCOMPARE(devices(xml)[violinTrack], QStringList({ "PluginDevice:", "Eq8:MuseScore low cut", "StereoGain:MuseScore gain" }));
+      QCOMPARE(lowCuts(LiveSet::read(path))[violinTrack], 50.0);
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(!res.written, qPrintable(res.text()));
+
+      // both missing (a set from before the gain stage too): the EQ, then the Utility
+      rewrite([&](LiveSetUpdate::Xml& x, std::vector<LiveSetUpdate::Edit>& e) {
+            for (int t : x.children(x.path(x.root(), { "LiveSet", "Tracks" })))
+                  for (int d : x.children(x.path(t, { "DeviceChain", "DeviceChain", "Devices" })))
+                        if (x.is(d, "Eq8") || x.is(d, "StereoGain"))
+                              e.push_back({ x.lineStart(d), x.at(d).end + 2, QByteArray() });
+            });
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      xml = readSet(path);
+      QCOMPARE(LiveSetWriter::validate(xml), QString());
+      QCOMPARE(devices(xml)[violinTrack], QStringList({ "PluginDevice:", "Eq8:MuseScore low cut", "StereoGain:MuseScore gain" }));
+
+      // the setting off: Update switches the EQ off (kept in its place), read back as off; on again: on
+      std::map<QString, QString> off { { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "2" },
+                                       { "levels/realRange", "0" }, { "levels/lowCut", "0" } };
+      Playback::setIniValuesForTest(off);
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written && res.text().contains("MuseScore low cut off"), qPrintable(res.text()));
+      QCOMPARE(lowCuts(LiveSet::read(path))[violinTrack], 0.0);
+      QCOMPARE(devices(readSet(path))[violinTrack].size(), 3);
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(!res.written, qPrintable(res.text()));
+      off.erase("levels/lowCut");
+      Playback::setIniValuesForTest(off);
+      res = LiveIntegration::UpdateResult();
+      QVERIFY2(LiveIntegration::updateLiveSet(score, *host.lib, path, &res, &error), qPrintable(error));
+      QVERIFY2(res.written, qPrintable(res.text()));
+      QCOMPARE(lowCuts(LiveSet::read(path))[violinTrack], 50.0);
+
+      // at lowCut 0 a fresh set has no EQ, byte for byte the set of the same map without lowCut
+      off["levels/lowCut"] = "0";
+      Playback::setIniValuesForTest(off);
+      create(*host.lib, &plan);
+      const QByteArray withMap = LiveSetWriter::xml(plan.spec);
+      QVERIFY(!withMap.contains("<Eq8 "));
+      std::shared_ptr<SoundLib::Library> plain = loadMap(QString(LOW_CUT_MAP).arg(""));
+      QVERIFY(plain);
+      SoundLib::setCurrent(plain);
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/sectionBalance", "2" },
+                                      { "levels/realRange", "0" } });
+      LiveIntegration::LiveSetPlan plainPlan;
+      create(*plain, &plainPlan);
+      QVERIFY(LiveSetWriter::xml(plainPlan.spec) == withMap);
+      SoundLib::setCurrent(host.lib);
       delete score;
       }
 
