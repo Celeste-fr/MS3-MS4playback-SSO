@@ -172,8 +172,9 @@ static const std::vector<Definition> DEFINITIONS = {
       // its f0 the keys sent delayed and smoothed (Whence's export, Kontakt 8 + SSO, pYIN, bends taken out: median error
       // 13-15 c against the map's runLag); offline on three takes of builds 465 / 485 the quarter tones in tune 24-40 -> 38-53 %,
       // the 12-TET notes 51-58 -> 65-71 %; 0 in both presets until the owner has heard it; MidiRenderer::libraryPitchBends;
-      // 2026-10-30, branch run-bends-fingered: no bowed correction, the Celli's fingered lag 90:90: docs/PLAYBACK_SETTINGS.md)
-      { "slurs/runBends", 0, 0, 1, "on/off",
+      // 2026-10-30, branch run-bends-fingered: no bowed correction, the Celli's fingered lag 90:90: docs/PLAYBACK_SETTINGS.md;
+      // 2026-10-31: 1 in Recommended and by default, 0 in Library default: the owner, A/B page, off vs the fix, "the fix is obv better")
+      { "slurs/runBends", 1, 0, 1, "on/off",
         "1: in a fast legato run (notes under 250 ms joined by transitions) on a patch that bends and whose map has runLag "
         "(SSO's Violins 1 / 2, Violas, Celli - Performance), the pitch bend also corrects the patch's own lagging pitch, so "
         "each note, 12-TET or microtonal, is heard at its pitch from its written start as far as the bend's range and "
@@ -651,7 +652,7 @@ QString iniTemplate()
 //    2026-10-17: the owner flips it after the null test and listening); slurs/fixedTransitions (0 in
 //    both since 2026-10-20; the owner, 2026-10-28: "keep A"); slurs/fastTransitions (0 in both 2026-10-20, 1 in Recommended and by default,
 //    0 in Library default, since 2026-10-28: the owner's A/B); levels/hallGuard (0 in both since 2026-10-21 until the owner decides); notes/transportReset (0 in both from
-//    2026-10-21, 1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner's choice); slurs/microtoneBends (0 in both 2026-10-21, 1 in Recommended since 2026-10-22: the owner heard it); slurs/runBends (0 in both since 2026-10-29 until the owner has heard it); slurs/plainAuto (1 in Recommended and by default, 0 in Library default, since 2026-10-26: the owner, "supposed to be bowed", "smooth start"); slurs/plainAccents (0 in both from 2026-10-20 until the owner
+//    2026-10-21, 1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner's choice); slurs/microtoneBends (0 in both 2026-10-21, 1 in Recommended since 2026-10-22: the owner heard it); slurs/runBends (0 in both 2026-10-29; 1 in Recommended and by default, 0 in Library default, since 2026-10-31: the owner, A/B page, "the fix is obv better"); slurs/plainAuto (1 in Recommended and by default, 0 in Library default, since 2026-10-26: the owner, "supposed to be bowed", "smooth start"); slurs/plainAccents (0 in both from 2026-10-20 until the owner
 //    had compared its values by ear; 2 in Recommended and by default, 0 in Library default, since 2026-10-21: his choice,
 //    at real players' level); levels/divisi (1 in Recommended and by default, 0 in Library default, since
 //    2026-10-20: the owner approved the rule); levels/transitionLevels (0 in both since 2026-10-22, branch slur-joins, until the
@@ -681,7 +682,7 @@ const std::vector<Preset>& presets()
             // quarter tones)
             { "recommended", QT_TRANSLATE_NOOP("playbackSettings", "Recommended"), { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
-                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "slurs/runBends", 0 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
+                                              { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "slurs/runBends", 1 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
                                               { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "levels/lowCut", 1 }, { "shorts/staccatoLength", 1 } } },
             { "library", QT_TRANSLATE_NOOP("playbackSettings", "Library default"), { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "slurs/runBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
@@ -882,6 +883,9 @@ void setIniValuesForTest(const std::map<QString, QString>& values)
       // (shorts/staccatoLength likewise, 1 by default since 2026-10-24)
       if (!values.count("shorts/staccatoLength"))
             take(*i, "shorts", "staccatoLength", "0");
+      // (slurs/runBends likewise, 1 by default since 2026-10-31)
+      if (!values.count("slurs/runBends"))
+            take(*i, "slurs", "runBends", "0");
       install(i);
       }
 
