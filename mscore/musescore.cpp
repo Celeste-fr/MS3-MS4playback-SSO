@@ -140,6 +140,7 @@
 #include "evenautomeasurer.h"
 #include "editwarmup.h"
 #include "lagprobesession.h"
+#include "playcapture.h"
 #include "libmscore/lagprobe.h"
 #include "libmscore/renderpreflight.h"
 #include "liveintegration.h"
@@ -9464,7 +9465,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption({"L", "layout-debug"}, "Layout debug mode"));
       parser.addOption(QCommandLineOption({"s", "no-synthesizer"}, "No internal synthesizer"));
       parser.addOption(QCommandLineOption({"m", "no-midi"}, "No MIDI"));
-      parser.addOption(QCommandLineOption({"a", "use-audio"}, "Use audio driver: jack, alsa, pulse, or portaudio", "driver"));
+      parser.addOption(QCommandLineOption({"a", "use-audio"}, "Use audio driver: jack, alsa, pulse, portaudio, or null (no device, a test tool)", "driver"));
       parser.addOption(QCommandLineOption({"n", "new-score"}, "Start with new score"));
       parser.addOption(QCommandLineOption({"I", "dump-midi-in"}, "Dump midi input"));
       parser.addOption(QCommandLineOption({"O", "dump-midi-out"}, "Dump midi output"));
@@ -10347,6 +10348,7 @@ void MuseScore::init(QStringList& argv)
             loadScores(argv);
             }
       LagProbeSession::startIfRequested();      // (MS_LAG_PROBE: the scripted session, lagprobesession.h)
+      PlayCapture::startIfRequested();          // (MS_PLAY_CAPTURE: one play recorded, playcapture.h)
 
       if (mscore->hasToCheckForExtensionsUpdate())
             mscore->checkForExtensionsUpdate();

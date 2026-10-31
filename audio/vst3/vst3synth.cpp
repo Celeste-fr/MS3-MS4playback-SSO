@@ -308,8 +308,10 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       if (!mine())
             return;
       std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
-      if (!lock.owns_lock())
+      if (!lock.owns_lock()) {
+            _skipped.fetch_add(1, std::memory_order_relaxed);
             return;
+            }
       playPending();
       releaseDelayed(frames);
       // MS_VERIFY_FAULT's truncated notes: their note-off at the block they fall in

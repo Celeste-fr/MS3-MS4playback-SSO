@@ -116,6 +116,57 @@ presets, CC1 / CC11 / CC21 on channel 1; Linux Vial bundles in ~/MuseScore/ms3fo
 after vial sso's preset update, not shipped: paused too, its state in ~/vial-sso/HANDOFF.md; only CC1 works now). Owner limits: Max nearly out, then Pro (1/20 the usage): one subagent at a time, small
 targeted fixes, the owner picks what he hears.
 
+## Render ahead and the late-audio warning (branch `render-ahead`, 2026-10-31, from private/main c54b8d9043; not merged)
+
+The owner approved both (2026-10-31): his live playback sometimes turned into noise ("pure feedback noise", piano on SSO)
+while the export was clean; not reproducible now; he suspects memory / CPU load (two VMs) and won't raise the audio buffer.
+Design: `mscore/seq.h` › Render ahead / Playback couldn't keep up; engine `mscore/renderahead.h`; docs/PLAYBACK_SETTINGS.md ›
+Render ahead. `[soundlibrary] renderAhead` 500 ms by default (0 = before, untouched code path).
+
+**Tested on Linux** (test synth as SSO, `tools/lagprobe/linux/mkenv.py`; Whence, Recommended; in-process instances):
+- `tst_liveequivalence::renderAheadEngine` (the engine, a fake producer, real-time callback): lead 500 / 50 heard exactly as
+  rendered; a 300 ms producer stall: nothing late; 900 ms: 437 ms of silence inserted, 38 underruns counted, the rest exact,
+  nothing repeated; a seek while playing: nothing of the old position heard after it.
+- Suites, `MS_VST3_HOST_PROCESSES=0`, offscreen: tst_soundlibrary 164 passed / 6 skipped, tst_liveequivalence 90 / 5,
+  tst_liveintegration 70 / 0. With the default helpers: 163 / 7 (vst3UnloadModules skips with helpers, as before), 90 / 5,
+  70 / 0.
+- **With the default helpers** (MuseScoreLibraryHost, `MS_VST3_HOST_EXE`), the same null and stall runs, the clearest set:
+  renderAhead 0 against 0, against 500, against 500 with a 300 ms stall, and against 0 with a 300 ms stall: all four
+  **identical sample for sample** over the whole play; 500 with a 900 ms stall: the reference plus exactly one 469 ms
+  silence, the rest identical (nothing repeated, nothing lost); the one other 500 run differed from 13.9 s on and had 2
+  skipped plug-in blocks (the try_lock finding below), every identical run 0. Late audio per play: renderAhead 0: 39, 26
+  (and 29 with the stall), every one a callback over budget, so the warning fired ("Playback couldn't keep up" logged,
+  the line in load times.log); renderAhead 500: 0, 0, 0 with the 300 ms stall (no warning); 38 render-ahead underruns with
+  the 900 ms stall (warning, load times.log line).
+- App null test (`tools/playbackverify/render_ahead_check.sh`: `-a null`, 512-frame blocks at 48 kHz paced in real time,
+  `MS_PLAY_CAPTURE`, Xvfb; offscreen aborts without an OpenGL context): Whence's whole play, 1696768 frames (35.3 s).
+  renderAhead 0 against 0: identical; 0 against 500: **identical sample for sample**. Other runs (a second 500, stall 300,
+  the direct path's stall 300) differed from one random point on (9-16 s, not at the stall): there one block of the hosted
+  plug-ins was skipped, `Vst3Synth::process`'s try_lock failing while the GUI thread held the slots (silence for that
+  block, the plug-in a block late afterwards). This happens with or without render ahead (the direct run shows it): a
+  separate finding, maybe audible as a click; `Vst3Synth::skippedBlocks()` now counts it (the capture's .txt reports it).
+  Not fixed here.
+- Stalls (`MS_AUDIO_STALL=3:<ms>`): renderAhead 500 with 300 ms: 0 underruns (1 callback over budget: the play's start);
+  with 900 ms: one silence of 437 ms, 38 underruns, i.e. late, the warning's threshold passed; the direct path with 300 ms:
+  5 callbacks over budget.
+- Real play through PortAudio into a PulseAudio null sink (`RA_DRIVER=portaudio`, 2.18 ms callbacks, `MS_AUDIO_TIMING`, the
+  machine building at the same time; no SCHED_FIFO without privileges): renderAhead 0: 159 callbacks over budget, 18
+  underflow flags, p99 2.14 ms, max 143.6 ms; 500: 23 over budget, 7 underflow flags, median 0.013 ms, p99 0.72 ms, max 6.7
+  ms. Seq's own count (late blocks) 174 against 21. With 500 and a 900 ms stall: 185 render-ahead underruns (the gap), the
+  rest as without; 0 and a 300 ms stall: 104 late.
+- `tools/check_windows_names.sh`: none.
+
+**Unconfirmed, for the Windows VM / the owner's PC**: whether it cures the owner's noise (his PC under the VMs' load); MMCSS
+on the producer thread; Kontakt + SSO through the producer with helpers (in-process and helpers both run processDirect on
+the producer: Vst3Remote's post / collect is the same calls on another thread); the warning's text in the status bar
+(seen in the log, not on screen); Play's start delay with SSO
+(up to the time 500 ms of SSO takes to render); seeking, loops and Stop while playing by hand; a device change in
+Preferences › I/O while stopped and after playing; MIDI out / Live sets (no lead: should behave as before).
+
+**For the owner**: play what made the noise with this build; if it stays clean, done; if "Playback couldn't keep up"
+appears, `load times.log` has the line with its counts (over budget, render-ahead underruns, device underflows).
+`[soundlibrary] renderAhead` in playback.ini (or `MS_RENDER_AHEAD`) changes the 500 ms; 0 is the old behaviour.
+
 ## Engine lane (branch `engine-lane`, 2026-10-27, from integrate-1017 4e6d877914; not merged)
 
 The owner (2026-10-26/27): "make the playback engine automatable, so you can switch playback engine for just a few

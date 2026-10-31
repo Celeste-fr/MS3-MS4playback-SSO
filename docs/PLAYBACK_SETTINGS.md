@@ -2338,6 +2338,47 @@ measures judge the winds louder on Vial**: by the sustain's power +1.8 .. +4.1 d
 `tst_liveequivalence::vialLevels`. Since 2026-10-28 the wind presets' Long also carries the SSO Long's `keyLevels`
 ([levels] evenKeys, › Even keys): longLevel matched to SSO's keys as SSO plays them, every semitone, then both evened alike.
 
+## Render ahead
+
+Branch `render-ahead`, 2026-10-31 (the owner approved). The problem: the owner's live playback sometimes turned into noise
+("pure feedback noise", a piano score on SSO) while the export of the same score was clean; he thinks it comes with memory /
+CPU load (two VMs on his PC) and doesn't want a larger audio buffer. A callback that takes longer than its frames last is a gap
+the device fills, often with the last buffer again (the VM, 2026-10-24: callbacks over budget followed the recorded gaps).
+
+**What it does** (`[soundlibrary] renderAhead`, 500 ms; 0 = before; `MS_RENDER_AHEAD=<ms>` wins; read when the audio device
+starts: MuseScore's start, a change in Preferences › I/O; design: `mscore/seq.h` › Render ahead, engine `mscore/renderahead.h`):
+- One producer thread (MMCSS "Pro Audio" on Windows, SCHED_FIFO where allowed: as the helper processes' audio thread; never in
+  a kheap LoadScope, so never mimalloc) runs the old callback (`Seq::processDirect`) for every block; every synth, effect and
+  plug-in (in-process or the helpers' post / collect) is processed on it only. The callback copies finished frames.
+- Blocks are the callback's own frame count: the same events on the same frames, the same audio sample for sample.
+- **Playing**: up to renderAhead ms are kept ready. Play's first block is heard once that much is rendered (the start waits up
+  to the time that takes). A play with MIDI out, MIDI sync out, Live playing the score, a Live track or JACK plays without a
+  lead (their messages have their own timing; a lead would send them early).
+- **Stopped**: no lead: the callback asks for its block and waits for it, so a clicked or entered note and MIDI input sound
+  at the same callback as before. (While playing a click is MuseScore 3.6's click, heard renderAhead later; note input doesn't
+  run while playing.)
+- **Dropped and built again**: a seek while playing, Stop, a device change (what was rendered ahead is never heard). Not at a
+  loop's restart or the score's end: what came before them is still heard.
+- **Changes while playing** (track delays, levels, lanes, the Mixer, edits: `renderAgainPlaying`; the Play Panel's tempo):
+  heard renderAhead ms later, where the producer is; nothing more is cut than before.
+- The cursor, the marked notes, the Play Panel's time and Stop's position follow what is heard.
+- **Underrun** (the producer slower than real time for longer than renderAhead): silence, never old audio again; counted as
+  late audio; then the lead builds up again.
+- Exports and offline renders don't go through the callback: unchanged.
+
+**Playback couldn't keep up**: every driver's callback counts, while playback is heard, each callback that took longer than
+its frames last, ran out of rendered audio, or that the device says ran out (PortAudio's output underflow). **Three within one
+second** show, once per play, "Playback couldn't keep up: audio was late %n time(s). Other programs may be using the CPU or
+memory." in the status bar (15 s). Why three in a second: one late block is one click, and the VM had 1-5 scattered ones a
+minute from its own load (build 483, 60 s of Whence); the reported noise is a run of them. At the stop, when any audio was late,
+a line in the library's `load times.log` ("Playback: n late audio block(s) (over budget …, render-ahead underruns …, device
+underflows …); render ahead … ms, block … ms").
+
+**Test tools**: `-a null` (no device: 512 frames at 48 kHz paced in real time, `MS_NULL_AUDIO_FRAMES` / `_RATE`),
+`MS_PLAY_CAPTURE=<wav>` (plays the score once from the start and writes what was heard, `mscore/playcapture.h`),
+`MS_AUDIO_STALL=<s>:<ms>` (the renderer sleeps once at that time), `tools/playbackverify/render_ahead_null.py` (compares two
+captures), `tools/playbackverify/render_ahead_check.sh` (Xvfb; `RA_DRIVER=portaudio` into a PulseAudio null sink). Results (Linux, the test synth, Whence): renderAhead 0 and 500 identical sample for sample in-process and with helpers; a 300 ms stall at 500 nothing late, at 0 26-39 late callbacks; a 900 ms stall at 500 one 469 ms silence, the rest identical; HANDOFF.md › Render ahead.
+
 ## Inventory
 
 Not in the table, because they are corrections and not adjustments (no setting, the same in every preset): a percussion
@@ -2414,6 +2455,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Kontakt voices per patch | 512 | `SoundLibraryHost::kontaktMaxVoices` (also the Live Set) | `[hosting] maxVoices` (`MS_KONTAKT_MAX_VOICES` wins) |
 | Settle after setState before controllers (measured: below) | 0.047 s | `Vst3Plugin::settle` | `[hosting] settleSeconds` |
 | Helper processes for the plug-in's instances (MuseScoreLibraryHost: the window free while they load, several loading at once, a plug-in crash ends only its helper; 0: in MuseScore's process, as before; K: up to K; -1: automatic, a helper per physical core but one, at least 2 on 2+ cores with 4+ logical processors). Not a sound setting: the helper plays the same calls in the same order, sample-identical (tst_soundlibrary::remoteNull; VM: HANDOFF.md › Out-of-process host) | -1 | `Vst3Remote` (audio/vst3/vst3remote.h) | `[soundlibrary] hostProcesses` (`MS_VST3_HOST_PROCESSES` wins) |
+| Render ahead (branch render-ahead, 2026-10-31; the owner approved: live playback turned into noise under memory / CPU load while the export was clean): a producer thread renders playback's audio up to this far ahead of the audio device, the callback only copies it, so a stall shorter than it is never heard; stopped no lead (a clicked note or MIDI input at once); changes made while playing heard this much later, Play's start waits up to it; not a sound setting (the same blocks, null-tested). Also: a status-bar warning when audio was late (below, Render ahead) | 500 ms (every preset; not in Recommended / Library default: it is no adjustment) | `mscore/seq.cpp` (`Seq::process`, `processDirect`, `produceAhead`), `mscore/renderahead.*` | `[soundlibrary] renderAhead` (0-2000 ms, 0 = the callback renders, as before; `MS_RENDER_AHEAD` wins; read when the audio device starts) |
 | Mixer volume, pan and mute on library slots apply from the next audio block, no glide (the owner, 2026-10-03: no mixer smoothing; the 5 ms glide had no source, `[hosting] mixSmoothingMs` is retired) | at once | `Vst3Synth::process` | — |
 | MS3 hairpin with its own velocity change plays as in 3.6 | on | `ms3HairpinVelocity()` | Preferences (Advanced) `application/playback/ms3HairpinVelocityChange`; `MS4_STRICT` |
 | Library dynamics CC ahead of the notes at its tick; shorts' velocity on the CC1 scale (calibrated levels off, or not measured) | always | `renderMs4Dynamics`, `libVelocity` | map `<Dynamics cc velocity>` |
