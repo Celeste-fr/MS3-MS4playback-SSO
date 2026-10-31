@@ -443,6 +443,16 @@ static const std::vector<Definition> DEFINITIONS = {
         "hosted plug-in instances in up to this many helper processes, so that MuseScore's window stays free while they "
         "load, several load at once and a plug-in crash doesn't end MuseScore (0: in MuseScore's own process; -1: "
         "automatic, a helper per CPU core but one). Read when instances load", false },
+      // renderAhead (branch render-ahead, the owner approved 2026-10-31): the owner's live playback turned into noise under
+      // memory / CPU load while the export of the same score was clean; a callback over its budget is a gap the device
+      // fills (the VM, 2026-10-24: callbacks over budget followed the recorded gaps). The producer thread renders up to
+      // this much ahead, so a stall shorter than it is never heard. Not a sound setting: the same blocks, the same audio
+      // (null-tested); changes made while playing are heard this much later; Play's start waits up to it. MS_RENDER_AHEAD
+      // wins (mscore/seq.h › Render ahead)
+      { "soundlibrary/renderAhead", 500, 0, 2000, "ms",
+        "playback's audio is computed this far ahead of the audio device, so that a moment when other programs hold the "
+        "CPU or memory is not heard (0: computed as the device asks for it, as before). Changes made while playing are "
+        "heard this much later. Read when the audio device starts", false },
       };
 
 const std::vector<Definition>& definitions()

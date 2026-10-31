@@ -40,6 +40,7 @@ namespace Ms {
 
 class Vst3Synth : public Synthesizer {
       mutable std::mutex _mutex;          // the slots: GUI thread changes, audio thread plays
+      std::atomic<unsigned> _skipped { 0 };  // blocks process() skipped (the slots held by another thread)
       std::vector<std::unique_ptr<Vst3Plugin>> _slots;
       std::vector<std::array<unsigned char, 128>> _sounding;   // per slot, per key: notes on
       std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
@@ -128,6 +129,9 @@ class Vst3Synth : public Synthesizer {
       void deliver(const PlayEvent&);     // (with _mutex held)
 
    public:
+      // blocks the audio thread skipped because another thread held the slots (silence for that block; a diagnostic,
+      // render-ahead 2026-10-31: playcapture.h reports it)
+      unsigned skippedBlocks() const { return _skipped.load(std::memory_order_relaxed); }
       static constexpr int MAX_SLOTS = 64;
       static const char* NAME;
 

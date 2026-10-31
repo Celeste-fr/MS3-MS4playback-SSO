@@ -43,6 +43,7 @@
 #ifdef USE_PORTAUDIO
 #include "pa.h"
 #endif
+#include "nullaudio.h"
 
 namespace Ms {
 
@@ -81,6 +82,13 @@ Driver* driverFactory(Seq* seq, QString driverName)
                   usePulseAudioFlag = true;
             else if (driverName == "portaudio")
                   usePortaudioFlag = true;
+            }
+
+      // `-a null`: no device, a test tool (nullaudio.h)
+      if (driverName.toLower() == "null") {
+            driver = new NullAudio(seq);
+            driver->init();
+            return driver;
             }
 
       alsaIsUsed       = false;

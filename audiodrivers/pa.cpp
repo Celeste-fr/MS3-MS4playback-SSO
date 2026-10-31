@@ -78,6 +78,8 @@ int paCallback(const void*, void* out, long unsigned frames,
       CallbackTiming* t = timing;
       const qint64 t0 = t ? t->clock.nsecsElapsed() : 0;
       seq->setInitialMillisecondTimestampWithLatency();
+      if (flags & paOutputUnderflow)
+            seq->noteOutputUnderflow();     // (late audio: Seq::countLate)
       seq->process((unsigned)frames, (float*)out);
       if (t && t->playing.load(std::memory_order_relaxed)) {
             const size_t i = t->n.load(std::memory_order_relaxed);

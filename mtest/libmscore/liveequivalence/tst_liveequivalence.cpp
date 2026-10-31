@@ -17,6 +17,9 @@
 //---------------------------------------------------------
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
+#include <thread>
 #include <cmath>
 #include <cstring>
 #include <set>
@@ -82,6 +85,7 @@
 #include "libmscore/recentresults.h"
 #include "libmscore/undo.h"
 #include "mscore/liveequivalence.h"
+#include "mscore/renderahead.h"
 #include "mscore/liveintegration.h"
 #include "mscore/livesetexport.h"
 #include "mscore/preferences.h"
@@ -204,6 +208,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void speedSentLive();
       void hostedSlotsGain();
       void lowCutHosted();
+      void renderAheadEngine();
       void lowCutLive();
       void followingLowCutLive();
       void exportInstancesOfParts();
@@ -10970,6 +10975,137 @@ void TestLiveEquivalence::editLagIdentical()
       for (const QString& r : records[1])
             lines += r.count('\n') + 1;
       qDebug("editLagIdentical: %d steps, %d lines each, identical", int(records[1].size()), lines);
+      }
+
+//---------------------------------------------------------
+//   renderAheadEngine (render-ahead, 2026-10-31)
+//    RenderAhead (mscore/renderahead.h) with a producer standing in for Seq::processDirect (stopped: silence; playing:
+//    a known signal of the play position, a lead block), the callback paced in real time (512 frames at 48 kHz), what
+//    is heard captured: lead 500 heard exactly as rendered from Play's start to the score's end; a producer stall of
+//    300 ms (under the lead) nothing late; 900 ms (over it) only silence inserted (the rest exact, never a repeat) and
+//    underruns counted; a seek while playing (a flush) nothing of the old position heard after it; lead 50 exact
+//---------------------------------------------------------
+
+namespace {
+static float raSignal(int frame, int ch) { return float(std::sin(frame * 0.001 + ch) * 0.5 + 0.0001 * (frame % 97)); }
+struct RaFake {
+      std::atomic<int> play { 0 };
+      std::atomic<int> seekTo { -1 };
+      bool playing = false;
+      int playFrame = 0;
+      int stallAt = -1, stallMs = 0;
+      bool stalled = false;
+      int endFrame = 48000 * 3;
+      RenderAhead::Block produce(unsigned n, float* out)
+            {
+            RenderAhead::Block b;
+            if (!playing && play == 1) {
+                  playing = true;
+                  playFrame = 0;
+                  }
+            const int s = seekTo.exchange(-1);
+            if (s >= 0 && playing) {
+                  playFrame = s;
+                  b.flush = true;
+                  }
+            b.frame = playFrame;
+            if (playing && stallAt >= 0 && !stalled && playFrame >= stallAt) {
+                  stalled = true;
+                  std::this_thread::sleep_for(std::chrono::milliseconds(stallMs));
+                  }
+            for (unsigned i = 0; i < n; ++i) {
+                  out[2 * i] = playing ? raSignal(playFrame + int(i), 0) : 0.f;
+                  out[2 * i + 1] = playing ? raSignal(playFrame + int(i), 1) : 0.f;
+                  }
+            b.playing = b.lead = playing;
+            if (playing) {
+                  playFrame += int(n);
+                  if (playFrame >= endFrame) {
+                        playing = false;
+                        play = 0;
+                        }
+                  }
+            return b;
+            }
+      };
+struct RaResult { size_t frames; int mismatches; int zeros; int underruns; int lastRef; };
+static RaResult raRun(int lead, int stallAt, int stallMs, int seekAtHeard, int seekTo)
+      {
+      RaFake f;
+      f.stallAt = stallAt;
+      f.stallMs = stallMs;
+      RenderAhead ra;
+      AudioCapture cap;
+      cap.data.assign(size_t(48000) * 20 * 2, 0.f);
+      ra.start(lead, 48000, [&](unsigned n, float* o) { return f.produce(n, o); }, []() { return false; }, [](int, int) {});
+      std::vector<float> buf(1024);
+      auto due = std::chrono::steady_clock::now();
+      int underruns = 0, afterStop = 0;
+      bool started = false, seeked = false;
+      for (int i = 0; i < 1500; ++i) {
+            if (i == 10)
+                  f.play = 1;
+            if (ra.process(512, buf.data(), &cap))
+                  ++underruns;
+            if (ra.heardPlaying())
+                  started = true;
+            if (seekAtHeard >= 0 && !seeked && ra.heardFrame() >= seekAtHeard) {
+                  seeked = true;
+                  f.seekTo = seekTo;
+                  }
+            if (started && !ra.heardPlaying() && ++afterStop > 5)
+                  break;
+            due += std::chrono::microseconds(10667);
+            std::this_thread::sleep_until(due);
+            }
+      ra.stop();
+      RaResult r { cap.frames.load(), 0, 0, underruns, 0 };
+      int ref = 0;
+      for (size_t k = 0; k < r.frames; ++k) {
+            const float l = cap.data[2 * k], rr = cap.data[2 * k + 1];
+            if (l == 0.f && rr == 0.f && raSignal(ref, 0) != 0.f) {
+                  ++r.zeros;
+                  continue;
+                  }
+            if (l != raSignal(ref, 0) || rr != raSignal(ref, 1)) {
+                  if (seekAtHeard >= 0 && l == raSignal(seekTo, 0) && rr == raSignal(seekTo, 1))
+                        ref = seekTo;
+                  else
+                        ++r.mismatches;
+                  }
+            ++ref;
+            }
+      r.lastRef = ref;
+      qDebug("renderAheadEngine: lead %d stall %d ms at %d, seek at %d: %zu frames heard, %d differ, %d silent, %d underruns",
+             lead, stallMs, stallAt, seekAtHeard, r.frames, r.mismatches, r.zeros, r.underruns);
+      return r;
+      }
+}
+
+void TestLiveEquivalence::renderAheadEngine()
+      {
+      const int whole = 48000 * 3 + 512 * 2;    // (the score's frames, in whole blocks)
+      RaResult a = raRun(500, -1, 0, -1, 0);
+      QCOMPARE(a.mismatches, 0);
+      QCOMPARE(a.zeros, 0);
+      QCOMPARE(a.underruns, 0);
+      QVERIFY(a.lastRef >= 48000 * 3 && a.lastRef <= whole);
+      RaResult b = raRun(500, 48000, 300, -1, 0);
+      QCOMPARE(b.mismatches, 0);
+      QCOMPARE(b.zeros, 0);
+      QCOMPARE(b.underruns, 0);
+      RaResult c = raRun(500, 48000, 900, -1, 0);
+      QCOMPARE(c.mismatches, 0);
+      QVERIFY(c.zeros >= 48000 * 3 / 10);          // (at least the 400 ms the stall outlasts the lead)
+      QVERIFY(c.underruns > 0);
+      QCOMPARE(c.lastRef, a.lastRef);             // (every frame heard once: silence inserted, nothing repeated)
+      RaResult d = raRun(500, -1, 0, 60000, 10000);
+      QCOMPARE(d.mismatches, 0);
+      QCOMPARE(d.underruns, 0);
+      QVERIFY(d.frames > a.frames + 40000);        // (frames 10000-60000 heard twice: the seek back)
+      RaResult e = raRun(50, -1, 0, -1, 0);
+      QCOMPARE(e.mismatches, 0);
+      QCOMPARE(e.zeros, 0);
       }
 
 #include "tst_liveequivalence.moc"
