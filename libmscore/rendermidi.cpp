@@ -5080,13 +5080,16 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                                  r == libRunNote.end() ? nullptr : &r->second });
                   }
             const size_t n = ns.size();
-            std::vector<char> fast(n, 0);
-            for (size_t k = 1; k < n; ++k) {
+            // (k joins the run from note k - 1: a transition, written IOI < RUN_FAST_S, touching)
+            auto joins = [&](size_t k) {
                   const LibRunNote* a = ns[k - 1].r;
                   const LibRunNote* b = ns[k].r;
-                  if (a && b && b->transition && b->writtenOn - a->writtenOn < RUN_FAST_S && b->writtenOn - a->writtenOff < RUN_TOUCH_S)
+                  return a && b && b->transition && b->writtenOn - a->writtenOn < RUN_FAST_S && b->writtenOn - a->writtenOff < RUN_TOUCH_S;
+                  };
+            std::vector<char> fast(n, 0);
+            for (size_t k = 1; k < n; ++k)
+                  if (joins(k))
                         fast[k] = fast[k - 1] = 1;
-                  }
             if (std::find(fast.begin(), fast.end(), 1) == fast.end())
                   return;
             auto centsOfUnit = [](int v, double range) { return (v - 8192) * range / (v < 8192 ? 8192.0 : 8191.0); };
@@ -5135,7 +5138,13 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                   if (!fast[k] || !ns[k].r->transition)
                         continue;
                   const double a = ns[k].on;
-                  const double b = k + 1 < n ? ns[k + 1].on : ns[k].r->writtenOff + RUN_TAIL_S;
+                  // (to the next note-on; the run's last note, the next not joining it: RUN_TAIL_S past its written end, at the
+                  // latest the next note-on. Before 2026-10-31 the next note-on however far after (seconds of 10 ms sends in a
+                  // rest, to the lane's next note): a playback chunk's window ending before that note-on ended the run at the
+                  // tail instead, so the chunks sent other bends than the whole render, tst_soundlibrary::chunkedEqualsWhole)
+                  double b = ns[k].r->writtenOff + RUN_TAIL_S;
+                  if (k + 1 < n)
+                        b = joins(k + 1) ? ns[k + 1].on : std::min(b, ns[k + 1].on);
                   if (b <= a)
                         continue;
                   const double range = ns[k].range;

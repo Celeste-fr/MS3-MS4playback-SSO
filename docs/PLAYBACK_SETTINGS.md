@@ -1618,7 +1618,14 @@ also corrects the patch's own pitch: from each transition's note-on to the next 
 from its heard start (written + plainShift) less the modelled f0 (least squares, clipped to the bend range ±99.6 c). 12-TET
 notes and quarter tones alike. Keys, note-ons, velocities and every other event as without it (`tst_soundlibrary::runBends`);
 outside the runs the microtoneBends path, its value in force sent again where a run ends. MidiRenderer::libraryPitchBends
-(`runBendPath`). **A bowed transition** (plainAuto's new bow strokes, velocity 93 / Violas 100) takes the map's `bowed` lag;
+(`runBendPath`). **The run's last note** (a fix, 2026-10-31): its correction ends 0.3 s after its written end, or at the
+lane's next note-on if that comes first. Until then it ran on to the lane's next note-on however far after: through a rest,
+10 ms sends for seconds, and, the 30 ms horizon looking into the next note, the bend swung towards the range just before
+it, so that note, an attack after the rest, started 20-70 c off for its first 10 ms (Whence: 3 notes, Heard passages: 8).
+Playback's chunks, whose window often ended before that note-on, ended the run at the tail instead, unlike the whole render
+(`tst_soundlibrary::chunkedEqualsWhole`). Now every chunk sends the whole render's events (chunk_diff, Whence, chunks of 1
+and 10: 0 routes differ); the whole render changed only in pitch bends after a run's tail (in a release, at most 0.5 c)
+and at those attacks (now the microtoneBends path's value). **A bowed transition** (plainAuto's new bow strokes, velocity 93 / Violas 100) takes the map's `bowed` lag;
 **SSO's map has none since 2026-10-30** (below, No bowed correction): its own window gets no lag correction (the model takes
 its key at its heard start, so the bend there aims at its tuning alone), the notes around it keep theirs. Until 2026-10-30
 the map had an assumed bowed lag (the fingered tau with D plus the isolated leaves' difference: Violas 108, Violins 1 164,
