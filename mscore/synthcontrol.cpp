@@ -269,6 +269,7 @@ void SynthControl::dynamicsMethodChanged(int val)
       ccToUseList->setEnabled(val != 0 && val != 3);     // 3: MuseScore 4, always CC 11
       synti->setDynamicsMethod(val);
       setDirty();
+      mscore->updatePlaybackMode();       // (method 3 or another: MS4 or MS3, the boxes and the score's mode; playbackmode.h)
       }
 
 //---------------------------------------------------------

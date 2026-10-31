@@ -20,6 +20,7 @@
 #include "soundlibraryhost.h"
 
 #include <algorithm>
+#include <cstring>
 #include <mutex>
 
 #include <QJsonDocument>
@@ -334,6 +335,131 @@ void setPlaybackMode(PlaybackMode mode, const QString& engine)
                   sc->updateGui();
       mscore->updatePlaybackMode();
       mscore->showMessage(message, 5000);
+      }
+
+//---------------------------------------------------------
+//   a score's mode (playbackmode.h)
+//---------------------------------------------------------
+
+const char* const SCORE_PLAYBACK_MODE_TAG = "playbackMode";
+
+QString playbackModeText()
+      {
+      switch (playbackMode()) {
+            case PlaybackMode::MS3:
+                  return "ms3";
+            case PlaybackMode::MS4:
+                  break;
+            case PlaybackMode::LIBRARY:
+                  return "library:" + globalSoundEngine();
+            }
+      return "ms4";
+      }
+
+// programVersion 3.6.3 or later: the fork (3.6.2 was MuseScore 3's last release; scorefile.cpp writes 3.6.3)
+static bool forkVersion(const QString& programVersion)
+      {
+      const QStringList v = programVersion.split('.');
+      if (v.size() < 2)
+            return false;
+      const int major = v[0].toInt();
+      const int minor = v[1].toInt();
+      const int patch = v.size() > 2 ? v[2].toInt() : 0;
+      return major > 3 || (major == 3 && (minor > 6 || (minor == 6 && patch >= 3)));
+      }
+
+QString openingPlaybackMode(const MasterScore* score)
+      {
+      if (!score)
+            return QString();
+      const QString tag = score->metaTag(SCORE_PLAYBACK_MODE_TAG);
+      if (!tag.isEmpty())
+            return tag;
+      if (score->mscVersion() >= 400)
+            return "ms4";                 // MuseScore 4's (opened as too new)
+      if (forkVersion(score->mscoreVersion()))
+            return "ms4";                 // the fork's, saved before the metaTag
+      // (metaTags only the fork writes: a file saved by the fork, its programVersion lost)
+      static const char* const FORK_TAGS[] = { "partPlayback", "playbackSettings", "automation", "trackDelays",
+                                               "partControllers", "soundLibraryLanes", "soundLibraryOnsetEarly",
+                                               "performanceTechniques", "evenLevels", "liveTracks", "phraseMarks",
+                                               "marcatoLevels", "tempoChanges" };
+      for (const char* t : FORK_TAGS)
+            if (score->metaTags().contains(t))
+                  return "ms4";
+      return "ms3";                       // MuseScore 3.6 or older
+      }
+
+static const char* const MODE_AT_OPEN = "_msPlaybackModeAtOpen";  // (dynamic properties: the mode a file opens with,
+static const char* const MODE_KNOWN = "_msPlaybackModeKnown";      // and the score's mode recorded in its metaTag)
+
+static void setModeTag(MasterScore* score, const QString& mode)
+      {
+      if (mode.isEmpty() || mode == "ms4")
+            score->metaTags().remove(SCORE_PLAYBACK_MODE_TAG);
+      else
+            score->metaTags().insert(SCORE_PLAYBACK_MODE_TAG, mode);
+      }
+
+void notePlaybackModeAtOpen(MasterScore* score)
+      {
+      // (only noted: the metaTag is written once the score is shown, so a conversion on the command line keeps the file's)
+      if (score)
+            score->setProperty(MODE_AT_OPEN, openingPlaybackMode(score));
+      }
+
+void recordScorePlaybackMode(MasterScore* score)
+      {
+      if (score && score->property(MODE_KNOWN).toBool())
+            setModeTag(score, playbackModeText());
+      }
+
+bool applyScorePlaybackMode(MasterScore* score, const std::function<void(PlaybackMode, const QString&)>& set)
+      {
+      if (!score)
+            return false;
+      QString want;
+      if (score->property(MODE_KNOWN).toBool()) {
+            want = score->metaTag(SCORE_PLAYBACK_MODE_TAG);
+            if (want.isEmpty())
+                  want = "ms4";
+            }
+      else {
+            want = score->property(MODE_AT_OPEN).toString();
+            score->setProperty(MODE_KNOWN, true);
+            if (want.isEmpty()) {
+                  recordScorePlaybackMode(score);     // (a new score, an import: the global mode it is first shown in)
+                  return false;
+                  }
+            }
+      if (want == playbackModeText()) {
+            recordScorePlaybackMode(score);
+            return false;                 // (the same mode: nothing loaded again)
+            }
+      PlaybackMode mode;
+      QString engine;
+      if (want == "ms3")
+            mode = PlaybackMode::MS3;
+      else if (want == "ms4")
+            mode = PlaybackMode::MS4;
+      else if (want.startsWith("library:")) {
+            mode = PlaybackMode::LIBRARY;
+            engine = want.mid(int(strlen("library:")));
+            const std::vector<SoundEngine> engines = soundEngines();
+            if (std::none_of(engines.begin(), engines.end(), [&engine](const SoundEngine& e) { return e.name == engine; })) {
+                  // (kept in the metaTag as the file has it, until the mode is switched in this score)
+                  qWarning("Playback mode: the score's sound library %s isn't here; the global mode stays", qPrintable(engine));
+                  return false;
+                  }
+            }
+      else
+            return false;                 // (a mode this version doesn't know: kept, as above)
+      if (set)
+            set(mode, engine);
+      else
+            setPlaybackMode(mode, engine);
+      recordScorePlaybackMode(score);
+      return true;
       }
 
 //---------------------------------------------------------
