@@ -14,6 +14,7 @@
 #include <QtTest/QtTest>
 #include <QRegularExpression>
 #include <QTemporaryDir>
+#include <QBuffer>
 #include <QMimeData>
 #include <QTemporaryFile>
 #include <zlib.h>
@@ -73,6 +74,9 @@
 #include <QVBoxLayout>
 #include "audio/midi/event.h"
 #include "mscore/livesetexport.h"
+#include "mscore/playbackmode.h"
+#include "mscore/preferences.h"
+#include "audio/midi/msynthesizer.h"
 #include "mtest/testutils.h"
 
 #define DIR QString("libmscore/liveintegration/")
@@ -154,6 +158,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipTempoFollowLive();
       void clipTempoArrangement();
       void clipTempoLiveLists();
+      void scorePlaybackMode();
       };
 
 //---------------------------------------------------------
@@ -5374,6 +5379,155 @@ void TestLiveIntegration::clipTempoLiveLists()
       QDir().mkpath(base + "/Live Reports");
       // 12.4.6 first (its log, then its recent list), then 12.2; files that don't exist left out
       QCOMPARE(setCandidates({ base }), QStringList({ b, a }));
+      }
+
+//---------------------------------------------------------
+//   scorePlaybackMode
+//    the global playback mode a score file opens with (mscore/playbackmode.h): its metaTag "playbackMode", else
+//    MuseScore 4's file MS4, a file of the fork MS4, MuseScore 3.6's or older MS3; showing a score switches only where
+//    it differs (no load for the same mode), each score keeps its own over tab switches, opening never turns the
+//    library on by itself (the owner, 2026-10-31: "when I open an old score, it switches playback to SSO")
+//---------------------------------------------------------
+
+void TestLiveIntegration::scorePlaybackMode()
+      {
+      QTemporaryDir dir;
+      QVERIFY(dir.isValid());
+      QFile in(MTest::rootPath() + "libmscore/tuning/cases.mscx");     // (saved by MuseScore 3.6.2)
+      QVERIFY(in.open(QIODevice::ReadOnly));
+      const QString ms36 = QString::fromUtf8(in.readAll());
+      QVERIFY(ms36.contains("<programVersion>3.6.2</programVersion>"));
+      QVERIFY(!ms36.contains("metaTag"));
+      auto withTag = [](const QString& x, const QString& name, const QString& value) {
+            QString y = x;
+            return y.replace("<Score><Division>", QString("<Score><metaTag name=\"%1\">%2</metaTag><Division>").arg(name, value));
+            };
+      QString fork = ms36;
+      fork.replace("<programVersion>3.6.2</programVersion>", "<programVersion>3.6.3</programVersion>");
+      QString forkTagOnly = ms36;
+      forkTagOnly.replace("<programVersion>3.6.2</programVersion>", "");
+      forkTagOnly = withTag(forkTagOnly, "playbackSettings", "{}");
+      QString ms4 = ms36;
+      ms4.replace("<museScore version=\"3.02\"><programVersion>3.6.2</programVersion>",
+                  "<museScore version=\"4.20\"><programVersion>4.2.1</programVersion>");
+      QString ms2 = ms36;
+      ms2.replace("<programVersion>3.6.2</programVersion>", "<programVersion>2.3.2</programVersion>");
+      const QString savedMs3 = withTag(fork, "playbackMode", "ms3");
+      const QString savedLib = withTag(fork, "playbackMode", "library:No Such Library");
+      auto open = [&dir](const QString& name, const QString& text) -> MasterScore* {
+            const QString path = dir.filePath(name + ".mscx");
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly))
+                  return nullptr;
+            f.write(text.toUtf8());
+            f.close();
+            MasterScore* score = new MasterScore(MScore::baseStyle());
+            if (Ms::readScore(score, path, true) != Score::FileError::FILE_NO_ERROR) {
+                  delete score;
+                  return nullptr;
+                  }
+            notePlaybackModeAtOpen(score);      // (MuseScore::openScore)
+            return score;
+            };
+      std::unique_ptr<MasterScore> s36(open("ms36", ms36));
+      std::unique_ptr<MasterScore> sFork(open("fork", fork));
+      std::unique_ptr<MasterScore> sForkTag(open("forkTagOnly", forkTagOnly));
+      std::unique_ptr<MasterScore> s4(open("ms4", ms4));
+      std::unique_ptr<MasterScore> s2(open("ms2", ms2));
+      std::unique_ptr<MasterScore> sMs3(open("savedMs3", savedMs3));
+      std::unique_ptr<MasterScore> sLib(open("savedLib", savedLib));
+      for (MasterScore* s : { s36.get(), sFork.get(), sForkTag.get(), s4.get(), s2.get(), sMs3.get(), sLib.get() })
+            QVERIFY(s);
+      QVERIFY(s4->mscVersion() >= 400);
+
+      // the mode each opens with
+      QCOMPARE(openingPlaybackMode(s36.get()), QString("ms3"));
+      QCOMPARE(openingPlaybackMode(s2.get()), QString("ms3"));
+      QCOMPARE(openingPlaybackMode(sFork.get()), QString("ms4"));
+      QCOMPARE(openingPlaybackMode(sForkTag.get()), QString("ms4"));
+      QCOMPARE(openingPlaybackMode(s4.get()), QString("ms4"));
+      QCOMPARE(openingPlaybackMode(sMs3.get()), QString("ms3"));
+      QCOMPARE(openingPlaybackMode(sLib.get()), QString("library:No Such Library"));
+      // (opening alone writes nothing: a conversion on the command line keeps the file's metaTags)
+      QVERIFY(!s36->metaTags().contains(SCORE_PLAYBACK_MODE_TAG));
+
+      // the global mode as setPlaybackMode keeps it (the preference and the dynamics method)
+      QVERIFY(synti);
+      const QString libraryWas = preferences.getString(PREF_IO_SOUNDLIBRARY);
+      const int methodWas = synti->dynamicsMethod();
+      preferences.setPreference(PREF_IO_SOUNDLIBRARY, QString());
+      synti->setDynamicsMethod(3);
+      QCOMPARE(playbackMode(), PlaybackMode::MS4);
+      std::vector<QString> switches;
+      auto set = [&switches](PlaybackMode mode, const QString& engine) {
+            switches.push_back(mode == PlaybackMode::MS3 ? "ms3" : mode == PlaybackMode::MS4 ? "ms4" : "library:" + engine);
+            if (mode != PlaybackMode::LIBRARY) {
+                  preferences.setPreference(PREF_IO_SOUNDLIBRARY, QString());
+                  synti->setDynamicsMethod(mode == PlaybackMode::MS3 ? 1 : 3);
+                  }
+            };
+
+      // a fork score with the global mode MS4: nothing switched, never the library
+      QVERIFY(!applyScorePlaybackMode(sFork.get(), set));
+      QVERIFY(switches.empty());
+      QCOMPARE(playbackMode(), PlaybackMode::MS4);
+      QVERIFY(preferences.getString(PREF_IO_SOUNDLIBRARY).isEmpty());
+      QVERIFY(!sFork->metaTags().contains(SCORE_PLAYBACK_MODE_TAG));    // (MS4: left out)
+      // MuseScore 3.6's: MS3, and the score keeps it (saved with it)
+      QVERIFY(applyScorePlaybackMode(s36.get(), set));
+      QCOMPARE(switches, std::vector<QString>({ "ms3" }));
+      QCOMPARE(playbackMode(), PlaybackMode::MS3);
+      QCOMPARE(s36->metaTag(SCORE_PLAYBACK_MODE_TAG), QString("ms3"));
+      QVERIFY(preferences.getString(PREF_IO_SOUNDLIBRARY).isEmpty());
+      // shown again: the same mode, nothing loaded again
+      QVERIFY(!applyScorePlaybackMode(s36.get(), set));
+      QCOMPARE(switches.size(), size_t(1));
+      // MuseScore 4's: MS4
+      QVERIFY(applyScorePlaybackMode(s4.get(), set));
+      QCOMPARE(switches.back(), QString("ms4"));
+      QCOMPARE(playbackMode(), PlaybackMode::MS4);
+      // a tab switch back: each score its own
+      QVERIFY(applyScorePlaybackMode(s36.get(), set));
+      QCOMPARE(playbackMode(), PlaybackMode::MS3);
+      QVERIFY(applyScorePlaybackMode(sFork.get(), set));
+      QCOMPARE(playbackMode(), PlaybackMode::MS4);
+      // 2.x: MS3; the fork's MS3 score: MS3; a fork metaTag without programVersion: MS4
+      QVERIFY(applyScorePlaybackMode(s2.get(), set));
+      QCOMPARE(playbackMode(), PlaybackMode::MS3);
+      QVERIFY(!applyScorePlaybackMode(sMs3.get(), set));                 // (MS3 already)
+      QCOMPARE(sMs3->metaTag(SCORE_PLAYBACK_MODE_TAG), QString("ms3"));
+      QVERIFY(applyScorePlaybackMode(sForkTag.get(), set));
+      QCOMPARE(playbackMode(), PlaybackMode::MS4);
+      // the mode switched while a score is shown is the one it keeps (MuseScore::updatePlaybackMode records it)
+      set(PlaybackMode::MS3, QString());
+      recordScorePlaybackMode(sForkTag.get());
+      QCOMPARE(sForkTag->metaTag(SCORE_PLAYBACK_MODE_TAG), QString("ms3"));
+      QVERIFY(applyScorePlaybackMode(sFork.get(), set));
+      QCOMPARE(playbackMode(), PlaybackMode::MS4);
+      QVERIFY(applyScorePlaybackMode(sForkTag.get(), set));
+      QCOMPARE(playbackMode(), PlaybackMode::MS3);
+      // a library not here: the global mode stays, the score's metaTag as the file has it
+      const size_t before = switches.size();
+      QVERIFY(!applyScorePlaybackMode(sLib.get(), set));
+      QCOMPARE(switches.size(), before);
+      QCOMPARE(playbackMode(), PlaybackMode::MS3);
+      QCOMPARE(sLib->metaTag(SCORE_PLAYBACK_MODE_TAG), QString("library:No Such Library"));
+      // a new score (not a file): the global mode it is first shown in, nothing switched
+      std::unique_ptr<MasterScore> fresh(new MasterScore(MScore::baseStyle()));
+      QVERIFY(!applyScorePlaybackMode(fresh.get(), set));
+      QCOMPARE(switches.size(), before);
+      QCOMPARE(fresh->metaTag(SCORE_PLAYBACK_MODE_TAG), QString("ms3"));
+
+      // the metaTag saved: written, read back
+      {
+      QBuffer buf;
+      buf.open(QIODevice::WriteOnly);
+      QVERIFY(s36->Score::saveFile(&buf, false, false));
+      QVERIFY(QString::fromUtf8(buf.data()).contains("<metaTag name=\"playbackMode\">ms3</metaTag>"));
+      }
+
+      preferences.setPreference(PREF_IO_SOUNDLIBRARY, libraryWas);
+      synti->setDynamicsMethod(methodWas);
       }
 
 QTEST_MAIN(TestLiveIntegration)
