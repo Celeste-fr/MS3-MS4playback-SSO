@@ -79,6 +79,11 @@
 #include "audio/midi/msynthesizer.h"
 #include "mtest/testutils.h"
 
+namespace Ms {
+extern MasterSynthesizer* synti;
+extern Score::FileError readScore(MasterScore* score, QString name, bool ignoreVersionError);
+}
+
 #define DIR QString("libmscore/liveintegration/")
 #define DIR_ROOT (MTest::rootPath() + "/" + DIR)
 
