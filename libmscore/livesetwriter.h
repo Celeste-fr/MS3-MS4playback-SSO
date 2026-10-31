@@ -172,6 +172,10 @@ struct Track {
       bool utility { false };
       double utilityGain { 1 };
       QString utilityInfo;
+      // [levels] lowCut on a Kontakt track (the patch's SoundLib::lowCutHz, 0 with the setting off): Live's EQ Eight right
+      // after the Kontakt, before the Utility, named LOW_CUT_NAME, two Low Cut 12 bands at this many Hz (eqLowCutDevice);
+      // 0: none written
+      double lowCutHz { 0 };
       // (not written) the fader a set written before the gain stage (2026-10-15) has here: the Mixer's times the old
       // volume (TrackDelays::legacyPatchGain); Update Live Set moves such a set over (livesetupdate.h); -1: none
       double legacyVolume { -1 };
@@ -293,6 +297,18 @@ KontaktGains kontaktGains(int volume, double faderGain, double gainStageDb);
 QString utilityInfo(double gainStageDb, double trimDb);
 // a Utility's Gain as Live's XML holds it (its Manual), to dB
 double utilityDb(double gain);
+// [levels] lowCut in Live (branch lowcut-live, 2026-10-31; soundlibrary.h › LibInstrument::lowCutHz): Live's stock EQ
+// Eight right after the Kontakt (before the Utility), named LOW_CUT_NAME. EQ Eight has no 24 dB/oct cut (its band
+// types: Low Cut 48, Low Cut 12, Low Shelf, Bell, Notch, High Shelf, High Cut 12, High Cut 48: Mode 0-7, read from
+// an EQ Eight Live saved), so bands 1 and 2 are Low Cut 12 at the cutoff with the two Q of a 4th-order Butterworth,
+// LOW_CUT_Q (Vst3Synth::lowCutCoefficients' pair), the other bands off. The same response as MuseScore's only if Live's
+// Low Cut 12 is a textbook 2-pole high-pass whose Q is the pole's: unconfirmed, to measure in real Live (LIVE.md ›
+// The plain set › Low cut)
+extern const char* const LOW_CUT_NAME;
+constexpr double LOW_CUT_Q[2] = { 0.5411961001, 1.3065629649 };     // 1 / (2 cos(pi/8)), 1 / (2 cos(3 pi/8))
+constexpr int EQ_LOW_CUT_12 = 1;          // EQ Eight's band Mode "Low Cut 12"
+// the EQ's Info text
+QString lowCutInfo(double hz);
 // the Mixer's pan (0-127, 64 centre) as Live's Pan (-1 … 1): Vst3Synth::panGains' position. Both are constant-power
 // sine/cosine laws, 0 dB at the centre and +3 dB fully panned (Live 12 manual, Audio Fact Sheet › Panning), so the
 // same position gives the same gains

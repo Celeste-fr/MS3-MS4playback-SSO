@@ -356,6 +356,10 @@ int controllerTarget(int controller);
 // MuseScore's gain stage on a Kontakt track (livesetwriter.h › UTILITY_NAME): Live's stock Utility, Gain a linear factor
 // (0 … UTILITY_MAX), its Info text info; listId: its place in the track's Devices (livesetupdate.cpp inserts one too)
 void utilityDevice(Writer& w, int listId, double gain, const QString& info);
+// [levels] lowCut on a Kontakt track (livesetwriter.h › LOW_CUT_NAME): Live's stock EQ Eight, bands 1 and 2 Low Cut 12 at
+// hz (Q LOW_CUT_Q), the others off; on: the device's On; listId: its place in the track's Devices (livesetupdate.cpp
+// inserts one too)
+void eqLowCutDevice(Writer& w, int listId, double hz, bool on = true);
 // MIDI To: the track (its Id) whose plug-in gets the MIDI
 void midiToRouting(Writer& w, int trackId, const QString& trackName, int channel = 0, const QString& deviceName = QString());
 

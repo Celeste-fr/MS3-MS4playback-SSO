@@ -155,6 +155,10 @@ struct Track {
       // MuseScore's gain stage (LiveSetWriter::UTILITY_NAME: a Utility of that name in its devices) and its Gain (linear)
       bool hasMuseScoreGain { false };
       double museScoreGain { 1 };
+      // [levels] lowCut (LiveSetWriter::LOW_CUT_NAME: an EQ Eight of that name in its devices): its band 1's frequency, 0
+      // when the device is off
+      bool hasMuseScoreLowCut { false };
+      double museScoreLowCutHz { 0 };
       };
 
 struct Set {

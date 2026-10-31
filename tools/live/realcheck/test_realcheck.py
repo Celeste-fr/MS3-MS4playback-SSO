@@ -41,6 +41,8 @@ def track_xml(tag, tid, name, key, group="-1", devices="", delay=0.0, midi_to=""
 
 KONTAKT = '<PluginDevice Id="1"><PluginDesc><Vst3PluginInfo><Name Value="Kontakt 8"/></Vst3PluginInfo></PluginDesc></PluginDevice>'
 UTILITY = '<StereoGain Id="2"><UserName Value="MuseScore gain"/><Gain><Manual Value="%s"/></Gain></StereoGain>'
+LOWCUT = ('<Eq8 Id="4"><On><Manual Value="true"/></On><UserName Value="MuseScore low cut"/><Bands.0><ParameterA><Freq>'
+          '<Manual Value="150"/></Freq></ParameterA></Bands.0></Eq8>')
 LINK = '<MxDeviceMidiEffect Id="3"><PatchSlot><Value><MxPatchRef><FileRef><Path Value="MuseScore Link.amxd"/></FileRef></MxPatchRef></Value></PatchSlot></MxDeviceMidiEffect>'
 
 
@@ -48,7 +50,7 @@ def set_xml(extra_tracks=""):
     tracks = (track_xml("GroupTrack", 1, "Strings", "MuseScore: Strings")
               + track_xml("GroupTrack", 2, "Violin", "MuseScore: Strings / Violin", group=1)
               + track_xml("MidiTrack", 3, "Violin", "MuseScore: Strings / Violin / Violin", group=2,
-                          devices=KONTAKT + UTILITY % 1.4125375, autos="<AutomationEnvelope/>")
+                          devices=KONTAKT + LOWCUT + UTILITY % 1.4125375, autos="<AutomationEnvelope/>")
               + track_xml("MidiTrack", 4, "Violin – Long", "MuseScore: Strings / Violin / Violin / Long", group=2,
                           devices=LINK, delay=-9.8, midi_to="MidiOut/Track.3/TrackIn")
               + track_xml("MidiTrack", 5, "Violin (+50 cents)", "MuseScore: Strings / Violin / Violin (+50 cents)", group=2,
@@ -82,7 +84,8 @@ class AlsSet(unittest.TestCase):
         self.assertEqual([t["renders"] for t in tr], [True, True, True, False, False])
         self.assertAlmostEqual(tr[3]["trackDelayMs"], -9.8)
         self.assertEqual(tr[1]["children"], ["3", "4", "5"])
-        self.assertAlmostEqual(tr[2]["devices"][1]["gain"], 1.4125375)
+        self.assertAlmostEqual(tr[2]["devices"][2]["gain"], 1.4125375)
+        self.assertEqual(tr[2]["devices"][1], {"type": "Eq8", "name": "MuseScore low cut", "on": True, "hz": 150.0})
 
     def test_length(self):
         L = alsset.length(alsset.load(self.p), tail_s=6)
@@ -309,10 +312,21 @@ class RealCheck(unittest.TestCase):
             self.assertEqual(f["gain-stage Utility"]["result"], "confirmed")
             self.assertEqual(f["tuning / voice slots in a Kontakt multi"]["result"], "confirmed")
             self.assertEqual(f["Ample plug-in tracks"]["result"], "not in this set")
+            self.assertEqual(f["low cut EQ Eight"]["result"], "confirmed")
+            self.assertIn("150 Hz", f["low cut EQ Eight"]["evidence"])
             self.assertTrue(os.path.exists(os.path.join(t, "report.md")))
         finally:
             shutil.rmtree(t)
 
+
+
+class LowCutResponse(unittest.TestCase):
+    def test_selftest(self):
+        try:
+            import lowcut_response
+        except ImportError as e:          # (numpy / scipy missing)
+            self.skipTest(str(e))
+        lowcut_response.selftest()
 
 if __name__ == "__main__":
     unittest.main()

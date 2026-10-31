@@ -293,6 +293,8 @@ void midiTrack(Writer& w, const Spec& spec, int index)
                   linkDevice(w, link, n++, t);
             if (t.hasPlugin)
                   pluginDevice(w, t.plugin, n++, parameterTargets);
+            if (t.hasPlugin && t.lowCutHz > 0)
+                  eqLowCutDevice(w, n++, t.lowCutHz);
             if (t.hasPlugin && t.utility)
                   utilityDevice(w, n++, t.utilityGain, t.utilityInfo);
             w.close("Devices");
@@ -739,6 +741,90 @@ void utilityDevice(Writer& w, int listId, double gain, const QString& info)
       w.close("StereoGain");
       }
 
+// Live's stock EQ Eight (Eq8), named LOW_CUT_NAME, element for element as Live 12.4 saves one (its Core Library default,
+// "Defaults/Audio Effects/EQ Eight.adv", Creator "Ableton Live 12.4d1", the source utilityDevice's StereoGain came from;
+// its preset path left empty, as this writer's other devices'): at its defaults but bands 1 and 2 (ParameterA on,
+// Low Cut 12 at hz, Q LOW_CUT_Q; their ParameterB as Live's default bands 1 / 2 have it), bands 3-8's A off (in Live's
+// default 3 and 4 are on, Bell / High Shelf at 0 dB gain: off here so nothing else is in the chain), SelectedBand 0.
+// Unconfirmed in real Live: that Live opens it (written by hand from the default, not saved by Live) and the response of
+// two Low Cut 12 bands (LIVE.md › The plain set › Low cut)
+void eqLowCutDevice(Writer& w, int listId, double hz, bool on)
+      {
+      w.open("Eq8", "Id=\"" + QByteArray::number(listId) + "\"");
+      w.value("LomId", 0);
+      w.value("LomIdView", 0);
+      w.value("IsExpanded", true);
+      w.value("BreakoutIsExpanded", false);
+      w.onOff("On", on);
+      w.value("ModulationSourceCount", 0);
+      w.lom("ParametersListWrapper");
+      w.empty("Pointee", "Id=\"" + QByteArray::number(w.id()) + "\"");
+      w.value("LastSelectedTimeableIndex", 0);
+      w.value("LastSelectedClipEnvelopeIndex", 0);
+      w.emptyValue("LastPresetRef");
+      w.empty("LockedScripts");
+      w.value("IsFolded", false);
+      w.value("ShouldShowPresetName", true);
+      w.value("UserName", LOW_CUT_NAME);
+      w.value("Annotation", lowCutInfo(hz));
+      w.emptyValue("SourceContext");
+      w.value("MpePitchBendUsesTuning", true);
+      w.value("ViewData", "{}");
+      w.value("OverwriteProtectionNumber", OVERWRITE_PROTECTION);
+      w.value("Precision", 0);
+      w.value("Mode", 0);
+      w.value("EditMode", false);
+      w.value("SelectedBand", 0);
+      w.param("GlobalGain", "0", "-12", "12");
+      w.param("Scale", "1", "-2", "2");
+      // Live 12.4's default bands: (A on, mode, Hz), (B on, mode, Hz)
+      struct Band { bool on; int mode; const char* hz; };
+      static const Band defaults[8][2] = {
+            { { true, 2, "30" }, { false, 1, "40" } }, { { true, 3, "200" }, { false, 2, "200" } },
+            { { true, 3, "1000" }, { true, 3, "100" } }, { { true, 5, "5000" }, { true, 3, "500" } },
+            { { false, 3, "100" }, { true, 3, "2000" } }, { { false, 3, "10000" }, { true, 3, "10000" } },
+            { { false, 3, "5000" }, { false, 5, "5000" } }, { { false, 6, "18000" }, { false, 6, "18000" } } };
+      for (int i = 0; i < 8; ++i) {
+            const QByteArray band = "Bands." + QByteArray::number(i);
+            w.open(band.constData());
+            for (int ab = 0; ab < 2; ++ab) {
+                  const Band& d = defaults[i][ab];
+                  const bool cut = i < 2 && ab == 0;
+                  w.open(ab == 0 ? "ParameterA" : "ParameterB");
+                  w.onOff("IsOn", cut || (ab == 1 && d.on));
+                  w.paramRangeAfter("Mode", QString::number(cut ? EQ_LOW_CUT_12 : d.mode), "0", "7");
+                  w.param("Freq", cut ? Writer::num(hz) : QString(d.hz), "10", "22000");
+                  w.param("Gain", "0", "-15", "15");
+                  w.param("Q", cut ? Writer::num(LOW_CUT_Q[i]) : QString("0.7071067691"), "0.1000000015", "18");
+                  w.close(ab == 0 ? "ParameterA" : "ParameterB");
+                  }
+            w.close(band.constData());
+            }
+      w.open("SpectrumAnalyzer");
+      w.deviceHeader(false, true);
+      w.value("ViewData", "{}");
+      w.value("OverwriteProtectionNumber", OVERWRITE_PROTECTION);
+      w.value("ScaleYBegin", 0);
+      w.value("ScaleYRange", 80);
+      w.value("AutoScaleY", false);
+      w.value("ScaleXMode", 1);
+      w.value("ShowBins", false);
+      w.value("ShowMax", true);
+      w.value("AnalyzeOn", true);
+      w.value("Length", 2);
+      w.value("Window", 3);
+      w.value("ChannelMode", 2);
+      w.value("NumAverages", 1);
+      w.value("MinRefreshTime", 60);
+      w.close("SpectrumAnalyzer");
+      w.value("Live8ShelfScaleLegacyMode", false);
+      w.value("AuditionOnOff", false);
+      w.value("AdaptiveQFactor", "1.12");
+      w.onOff("AdaptiveQ", true);
+      w.value("AdaptiveQAffectsShelves", false);
+      w.close("Eq8");
+      }
+
 //---------------------------------------------------------
 //   xml
 //---------------------------------------------------------
@@ -1062,6 +1148,7 @@ std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, 
             t.utility = g.hasUtility;
             t.utilityGain = g.utility;
             t.utilityInfo = utilityInfo(stage, d.trim);
+            t.lowCutHz = SoundLib::lowCutHz(r.instrument, score);
             t.pan = mixPan(m.pan);
             t.active = !m.muted;
             out.push_back(t);
@@ -1122,6 +1209,14 @@ QString utilityInfo(double gainStageDb, double trimDb)
       return QString("MuseScore's gain for this patch: %1 dB (its levels %2 dB, the score's master trim %3 dB). Create Live Set "
                      "and Update Live Set write it; use the track's fader for your own changes.")
              .arg(gainStageDb, 0, 'f', 2).arg(gainStageDb + trimDb, 0, 'f', 2).arg(trimDb >= 0.005 ? -trimDb : 0.0, 0, 'f', 2);
+      }
+
+const char* const LOW_CUT_NAME = "MuseScore low cut";
+
+QString lowCutInfo(double hz)
+      {
+      return QString("MuseScore's low cut for this patch: %1 Hz, 24 dB/oct (two 12 dB/oct bands, a 4th-order Butterworth; "
+                     "[levels] lowCut). Create Live Set and Update Live Set write it.").arg(hz, 0, 'f', 1);
       }
 
 double utilityDb(double gain)

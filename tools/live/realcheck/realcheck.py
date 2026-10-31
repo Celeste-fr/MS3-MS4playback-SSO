@@ -310,6 +310,9 @@ def features(set_path, settings):
     add("gain-stage Utility (MuseScore gain)", util, "; ".join(
         "%s %+.2f dB" % (t["name"], 20 * __import__("math").log10(max(d["gain"], 1e-9)))
         for t in util for d in t["devices"] if d["type"] == "StereoGain"))
+    cut = [t for t in kont if any(d["type"] == "Eq8" and d.get("name") == "MuseScore low cut" and d.get("on") for d in t["devices"])]
+    add("low cut EQ Eight (MuseScore low cut)", cut, "; ".join(
+        "%s %.0f Hz" % (t["name"], d["hz"] or 0) for t in cut for d in t["devices"] if d["type"] == "Eq8"))
     slots = [t for t in tr if re.search(r"DeviceIn\.0\.([1-9]\d*)", t["midiTo"] or "")]
     add("tuning / voice slots in a Kontakt multi (MIDI To a channel > 1)", [k for k in (kontakt_of(t) for t in slots) if k],
         "%d tracks to a slot > 1: %s" % (len(slots), ", ".join(t["name"] for t in slots[:6])))

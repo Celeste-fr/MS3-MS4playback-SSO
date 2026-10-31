@@ -749,6 +749,22 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                               }
                         else
                               gain = TrackDelays::legacyPatchGain(*library, d, w.delayKey);
+                        // [levels] lowCut: MuseScore's EQ Eight (LOW_CUT_NAME), MuseScore's like the Utility: a change
+                        // made in Live isn't taken (the cutoff is the map's), Update Live Set writes MuseScore's again
+                        if (library && t.hasMuseScoreLowCut) {
+                              double want = 0.0;
+                              for (const SoundLib::LibInstrument& li : library->instruments)
+                                    if (li.name == w.delayKey) {
+                                          want = SoundLib::lowCutHz(&li, score);
+                                          break;
+                                          }
+                              if (std::fabs(want - t.museScoreLowCutHz) > 0.05)
+                                    notImported << QObject::tr("Track \"%1\": its \"%2\" EQ Eight at %3 (MuseScore's: %4) is MuseScore's "
+                                                               "low cut; Update Live Set writes MuseScore's again")
+                                                   .arg(t.name, LiveSetWriter::LOW_CUT_NAME)
+                                                   .arg(t.museScoreLowCutHz > 0 ? QObject::tr("%1 Hz").arg(t.museScoreLowCutHz, 0, 'f', 1) : QObject::tr("off"))
+                                                   .arg(want > 0 ? QObject::tr("%1 Hz").arg(want, 0, 'f', 1) : QObject::tr("off"));
+                              }
                         volume = LiveSetWriter::kontaktVolume(pm.volume, gain);
                         pan = LiveSetWriter::mixPan(pm.pan);
                         active = !pm.muted;

@@ -536,6 +536,31 @@ in a section collapsible at the same time".
   its old volume to the Mixer's (a fader the owner moved is kept, reported). Tests: `tst_liveequivalence` `liveGainStage`,
   `liveSectionBalance`, `liveRealRange`, `liveMicCompensation` (fader × Utility = MuseScore's slot gain), `tst_soundlibrary`
   `gainStage`.
+- **Low cut: MuseScore's EQ Eight on the string sections** (branch `lowcut-live`, 2026-10-31; `[levels] lowCut`,
+  docs/PLAYBACK_SETTINGS.md › Low cut; **unconfirmed in real Live**). Where MuseScore plays a patch through its 4th-order
+  Butterworth high-pass (the map's `<Instrument lowCut>`: SSO's five string sections, Violins 150 Hz, Violas 100, Celli
+  50, Basses 25; with the setting on), its Kontakt track (plain set and route set, so *Live plays the score*'s route set
+  too; a multi's tuning / voice copies behind the same one) has Live's stock **EQ Eight** right after the Kontakt and
+  before the Utility, named **MuseScore low cut** (`LiveSetWriter::LOW_CUT_NAME`, `eqLowCutDevice`; its Info text says
+  what it does). EQ Eight has no 24 dB/oct cut (its band types, `Mode` 0-7: Low Cut 48, Low Cut 12, Low Shelf, Bell,
+  Notch, High Shelf, High Cut 12, High Cut 48, read from Live 12.4's own presets), so **bands 1 and 2 are Low Cut 12 at
+  the cutoff with Q 0.5412 and 1.3066** (`LOW_CUT_Q`, a Butterworth's two sections, the pair `Vst3Synth::lowCutCoefficients`
+  uses), the other bands off. The device's XML is Live 12.4d1's default EQ Eight (Core Library `Defaults/Audio
+  Effects/EQ Eight.adv`, the source of the Utility's), element for element, Freq 10 .. 22000 Hz (the Basses' 25 Hz as
+  written), Adaptive Q as its default (on: it moves Q only with a band's gain, the cut bands have none). A patch without
+  lowCut, or the setting off: no EQ, the set byte for byte as before. **Read back** (`LiveSet::Track::hasMuseScoreLowCut`,
+  `museScoreLowCutHz`: band 1's frequency, 0 when the device is off): known by its name, not counted as the owner's
+  device; a cutoff changed in Live is reported, not imported (the cutoff is the map's). **Update Live Set** writes bands
+  1-2's frequency, the device's On and Info text where they differ, inserts the EQ right after the Kontakt (before the
+  Utility; the owner's devices keep their place) where a track needs one and has none, and switches it off (kept in
+  place) when the setting is off now. `--live-equivalence`'s Live side models the EQ as MuseScore's own biquads at the
+  Q written (`MS_LIVE_EQUIVALENCE_FAULT=no-lowcut` leaves it out), so it checks the set's settings, not Live's filter.
+  **To confirm in real Live** (realcheck, below): that Live 12.4 opens the hand-written device (no EQ Eight saved by
+  Live has been read back yet), and that two Low Cut 12 bands at those Q are MuseScore's Butterworth (Live's own filter
+  design, its Q definition and frequency warping: `tools/live/realcheck/lowcut_response.py` measures the response from a
+  track's renders with and without the cut; tolerance 0.5 dB where the Butterworth is above -6 dB, 1.5 dB at -6 ..
+  -24 dB). Tests: `tst_liveequivalence` `lowCutLive`, `test_realcheck.py` (alsset's Eq8 entry, realcheck's feature row,
+  `lowcut_response.py --selftest`).
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
@@ -1236,17 +1261,12 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
-- **`[levels] lowCut`** (branch `string-lowcut`, 2026-10-30; docs/PLAYBACK_SETTINGS.md › Low cut; 1 in Recommended and by
-  default): MuseScore's own playback and audio export put SSO's five string sections' patches through a 4th-order
-  high-pass (Violins 150 Hz, Violas 100, Celli 50, Basses 25: the new-bow samples' low bow / body noise). **Live**: not yet;
-  the plain set, the route set and *Live plays the score* play the strings with their low end (so `--live-equivalence`
-  on SSO strings differs there). **Plan**: a stock EQ Eight named "MuseScore low cut" after the Kontakt (before the
-  Utility "MuseScore gain"), band 1 its 24 dB/oct (4th-order) high-pass at the patch's lowCut, the other bands off, written as `utilityDevice` is (element for element as Live 12.4 saves one: take the XML
-  of an EQ Eight saved in Live 12.4.7 on the VM), the plain set's multi one per Kontakt, Update Live Set editing or
-  inserting it by name as it does the Utility, read back by name; `--live-equivalence`'s Live side then filtering by
-  EQ Eight's own response (Live's 24 dB/oct high-pass is a 4th-order filter of its own design, Q per its "Q" knob:
-  measure it in real Live first, `tools/live/realcheck`, before claiming equality). Needs real Live (the VM's trial
-  ends about 2026-11-01). **MIDI out**: can't carry a filter (the receiving synth or DAW plays the low end); none planned.
+- **`[levels] lowCut`** (branch `string-lowcut`, 2026-10-30; docs/PLAYBACK_SETTINGS.md › Low cut): since branch
+  `lowcut-live` (2026-10-31) the plain set and the route set carry it as an EQ Eight before the Utility (Create Live Set
+  › The plain set › Low cut), **unconfirmed in real Live**: whether Live's two Low Cut 12 bands at the Butterworth's Q
+  play MuseScore's 4th-order Butterworth is to measure (`lowcut_response.py`). *Live plays the score*'s route clips
+  play through the route set's Kontakt tracks, so they get the EQ only where that set has it. **MIDI out**: can't carry a
+  filter (the receiving synth or DAW plays the low end); none planned.
 
 - An Engine lane (libmscore/enginelane.h, branch `engine-lane`): Live, Create Live Set and MIDI out ignore it; the part
   plays its own engine throughout there.
