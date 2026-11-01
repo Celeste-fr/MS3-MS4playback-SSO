@@ -61,6 +61,9 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
     regression; the heard check still has none: OPEN_ITEMS).
   - A rule from performance practice needs measured data from several performers. A treatise or one recording
     is a lead, or an editorial mark in the score, never a default.
+- **Interpretation is the composer's** (the owner, 2026-11-01: "leaves choice to the composer ... the same thing with
+  phrasing"): style-dependent choices (detaching unmarked notes, phrase shaping) are marks the composer puts in the
+  score (staccato, phrase marks), played well; never an automatic default.
 - **Balance and dynamic levels come from real data** (the owner, 2026-10-14: "I don't trust my ears, I prefer all the
   balance levels and the dynamic levels loudness to be based on real data"): the balance between sections / instruments
   and how loud each marking plays are set from measurements of real players and orchestras, chosen between sources by
