@@ -537,7 +537,7 @@ in a section collapsible at the same time".
   `liveSectionBalance`, `liveRealRange`, `liveMicCompensation` (fader × Utility = MuseScore's slot gain), `tst_soundlibrary`
   `gainStage`.
 - **Low cut: MuseScore's EQ Eight on the string sections** (branch `lowcut-live`, 2026-10-31; `[levels] lowCut`,
-  docs/PLAYBACK_SETTINGS.md › Low cut; **unconfirmed in real Live**). Where MuseScore plays a patch through its 4th-order
+  docs/PLAYBACK_SETTINGS.md › Low cut; **opens and saves in real Live, response confirmed to about 1-2 dB, not to the 0.5 / 1.5 dB tolerance**: Checked in real Live › Low cut). Where MuseScore plays a patch through its 4th-order
   Butterworth high-pass (the map's `<Instrument lowCut>`: SSO's five string sections, Violins 150 Hz, Violas 100, Celli
   50, Basses 25; with the setting on), its Kontakt track (plain set and route set, so *Live plays the score*'s route set
   too; a multi's tuning / voice copies behind the same one) has Live's stock **EQ Eight** right after the Kontakt and
@@ -813,6 +813,24 @@ fixedTransitions + speedFromWritten; #464 on 12.4.6, #467 on 12.4.7: the same nu
 (`tools/ample/check_scores.py`, Library default + strums, soft strums, pinch harmonics; #464, 12.4.7). **Live updated itself to 12.4.7 on the
 VM during these runs** (its automatic update, on by default: the exe replaced at 08:40 while a run's Live was open, the
 next start showing "There is an automatic update of Live currently in progress"); nothing here needed a Live after 12.4.
+
+**Low cut (2026-10-31 / 11-01, build 512 = branch `lowcut-live` 25dd948, `[levels] lowCut` 1, the fixed cut only; Whence, Live 12.4.7).**
+Not covered: main's following cut (lowCut 2), which build 512 doesn't have. Live opened the set with "MuseScore low cut" on every string
+track (Violins 1 / 2, Violas, Celli, Basses; 150 / 150 / 100 / 50 / 25 Hz), exported, saved and quit twice (load 348 s / 677 s); the saved
+set lost 0 and changed 0 of the written values (Live added 8 of its own); Update Live Set on it, unchanged: wrote nothing, edited:
+updated, both sets re-opened and saved again (lost 0, changed 0). Audio, Live's Kontakt-track exports against MuseScore's: Violins 1 /
+2, Violas, Celli PASS on notes (levels median -0.15 .. -0.23 dB, max 0.61 .. 1.01 dB, onsets max 0 .. 5 ms); Basses DIFFERS (13 notes:
+corr 0.68, level max 17 dB), but against MuseScore's *cut* render the Basses' sum correlates 0.92 (null -8.2 dB) and against its *uncut*
+one 0.81 (-4.6 dB), and above 300 Hz 0.987 / 0.979: the DIFFERS is not the EQ (a Live run without the cut, to prove it, was
+impossible: **the Live 12.4 trial expired on 2026-11-01** ("Saving and exporting will now be deactivated"), run B stopped at
+its first export). **Response**: the designed test (Live's cut against Live's uncut export, `lowcut_response.py`) wasn't possible, so
+Live's A export was measured against MuseScore's own cut and uncut route renders (long-term spectrum, 1/3-octave bands, gain from
+4 .. 10 x the cutoff; the same analysis of MuseScore's cut against its uncut render: the Butterworth within 0.18 dB passband / 0.36 dB
+knee, the control). Live against MuseScore's cut, in the bands where the Butterworth is -24 .. -0.5 dB: max deviation Violins 2 0.17 dB,
+Violas 0.34, Basses 0.89, Violins 1 1.32 (mean -0.95), Celli 2.04 (mean -1.00); below, to -72 dB, 0.3 .. 2.9 dB with no trend:
+Live's two Low Cut 12 bands at the Butterworth's two Q give the 24 dB/oct slope and its depth. The 0.5 / 1.5 dB tolerance is **not
+demonstrated** (the method's own scatter in the flat passband is +-1 .. 2 dB, and Live's knee being ~1 dB lower on Violins 1 and Celli isn't excluded);
+`lowcut_response.py`'s coherence test sees only bins at 2 x the cutoff and up (Live and MuseScore differ in note levels by up to 1 dB).
 
 Confirmed:
 - **The set opens, exports, saves and quits unattended**; Live opens it without a message (the trial notice only). Load:
@@ -1275,8 +1293,8 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 - **`[levels] lowCut`** (branch `string-lowcut`, 2026-10-30; docs/PLAYBACK_SETTINGS.md › Low cut): since branch
   `lowcut-live` (2026-10-31) the plain set and the route set carry it as an EQ Eight before the Utility (Create Live Set
-  › The plain set › Low cut), **unconfirmed in real Live**: whether Live's two Low Cut 12 bands at the Butterworth's Q
-  play MuseScore's 4th-order Butterworth is to measure (`lowcut_response.py`). *Live plays the score*'s route clips
+  › The plain set › Low cut), **checked in real Live to about 1-2 dB** (the fixed cut, build 512, 2026-10-31 / 11-01:
+  Checked in real Live above; the 0.5 / 1.5 dB tolerance of `lowcut_response.py` not demonstrated, the Live trial having expired). *Live plays the score*'s route clips
   play through the route set's Kontakt tracks, so they get the EQ only where that set has it. **MIDI out**: can't carry a
   filter (the receiving synth or DAW plays the low end); none planned. **The following cut** (lowCut 2, branch
   `follow-cut`, 2026-10-31): the plain set has it as the EQ's frequency envelope (unconfirmed in real Live); the **route
