@@ -235,6 +235,7 @@ struct PassageRec {
       double fitRms[3] { 0, 0, 0 }, envRms[3] { 0, 0, 0 };
       double rms[3] { 0, 0, 0 };        // each round's envelope off its slurs' medians (EvenLevels::envelopeRms)
       int rejected { 0 };               // the rounds EvenLevels::chooseRound rejected (1 << r)
+      int tooBig { 0 };                 // of those, the ones whose correction was bigger than the problem (roundTooBig)
       double gain { 1.0 };              // round 1: measured / predicted change
       int chosen { 0 };
       };
@@ -673,7 +674,8 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
       // the best round per passage
       for (PassageRec& p : passages) {
             // (over every note; a round taking a note > ROUND_REJECT_DB further from its slur's median not kept)
-            p.chosen = EvenLevels::chooseRound(p.fit.slur, p.levels, p.rms, p.measured, &p.rejected);
+            // (and not one whose correction is bigger than round 0's largest deviation + ROUND_REJECT_DB: roundTooBig)
+            p.chosen = EvenLevels::chooseRound(p.fit.slur, p.levels, p.rms, p.measured, &p.rejected, p.values, &p.tooBig);
             for (size_t j = 0; j < p.notes.size(); ++j) {
                   Note* note = const_cast<Note*>(p.notes[j].info.note);
                   const bool has = p.chosen > 0;
@@ -700,6 +702,11 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
                         if (p.rejected & (1 << r))
                               rj.append(r);
                   o["rejected"] = rj;
+                  QJsonArray tb;
+                  for (int r = 1; r < 3; ++r)
+                        if (p.tooBig & (1 << r))
+                              tb.append(r);
+                  o["tooBig"] = tb;
             }
             o["gain"] = std::round(p.gain * 1000) / 1000;
             QJsonArray rm, res, rngs, lv, vals, fit, er;

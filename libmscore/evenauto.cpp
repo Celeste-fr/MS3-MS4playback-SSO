@@ -495,11 +495,13 @@ bool Session::process(const Result& r, Job* next)
 
 void Session::finish(Work& w)
       {
-      int rejected = 0;
-      const int chosen = EvenLevels::chooseRound(w.fit[0].slur, w.levels, w.rms, w.measured, &rejected);
+      int rejected = 0, tooBig = 0;
+      const int chosen = EvenLevels::chooseRound(w.fit[0].slur, w.levels, w.rms, w.measured, &rejected, w.values, &tooBig);
       if (rejected && _log)
-            _log(QString("even levels: %1: round(s)%2%3 not kept (a note > %4 dB further from its slur's median than uncorrected)")
-                 .arg(w.text).arg(rejected & 2 ? " 1" : "").arg(rejected & 4 ? " 2" : "").arg(EvenLevels::ROUND_REJECT_DB));
+            _log(QString("even levels: %1: round(s)%2%3 not kept (%4)")
+                 .arg(w.text).arg(rejected & 2 ? " 1" : "").arg(rejected & 4 ? " 2" : "")
+                 .arg(tooBig == rejected ? QString("a correction larger than the largest deviation + %1 dB").arg(EvenLevels::ROUND_REJECT_DB)
+                      : QString("a note > %1 dB further from its slur's median than uncorrected, or a correction too large").arg(EvenLevels::ROUND_REJECT_DB)));
       int count = 0;
       for (size_t j = 0; j < w.notes.size(); ++j) {
             if (w.fixed[j])

@@ -389,11 +389,25 @@ static std::vector<std::vector<double>> unitResponses(const Passage& p)
       return cols;
       }
 
-// where the fit's target ends: the last note's span, as far as the measurement covers it (the grid ends 1 s after the
-// last note-off). A window inside a longer passage: the next joined note's note-on (Passage::lastNext: from there on
-// what sounds is that note's); a passage's last note: its note-off or the end of its heard window, whichever is later
-// (even-edges, 2026-11-01: before, the target ended at the last note-on, so the last note's value was free: K. 550's
-// leap notes +12.6 .. +16.4 dB on real SSO, a long lever on the last ~120 ms of the note before)
+// the last note's part of the fit's target: from lastFrom to targetEnd. A window inside a longer passage (Passage::lastNext
+// set): from its note-on to the next joined note-on, as an inner note's span. A passage's last note: its heard window
+// alone (window start to + WINDOW_MS, the same stretch its measured level is taken over), never past its note-off
+// (even-release, 2026-11-01). Before (even-edges, the same day) it ran to the later of the note-off and the heard
+// window's end, so whatever the last note's sound did after its heard window (a long note's decay, its release) was in
+// the target against the slur's median: on real SSO K. 550 i bars 18-20 (nine repeated D's, each its own slur, the
+// last 622 ms long and decaying) every string part measured 10-17 dB off uncorrected (2-4 before) and the fit put
+// +15 .. +24 dB on the note before the last and -2 .. -14 on the last. Before that (until even-edges) the target ended
+// at the last note-on: the last note's value was free (the leap notes +12.6 .. +16.4 dB).
+double lastFrom(const Passage& p)
+      {
+      const size_t n = p.on.size();
+      if (n == 0)
+            return 0.0;
+      if (p.lastNext > p.on[n - 1] || n > p.window.size())
+            return p.on[n - 1];
+      return std::max(p.on[n - 1], p.window[n - 1]);
+      }
+
 double targetEnd(const Passage& p)
       {
       const size_t n = p.on.size();
@@ -401,16 +415,17 @@ double targetEnd(const Passage& p)
             return 0.0;
       if (p.lastNext > p.on[n - 1])
             return p.lastNext;
-      double end = n <= p.off.size() ? p.off[n - 1] : p.on[n - 1];
-      if (n <= p.window.size())
-            end = std::max(end, p.window[n - 1] + WINDOW_MS / 1000.0);
-      return std::max(end, p.on[n - 1]);
+      const double from = lastFrom(p);
+      double end = from + WINDOW_MS / 1000.0;
+      if (n <= p.off.size())
+            end = std::min(end, p.off[n - 1]);
+      return std::max(end, from);      // (a note-off before its heard window: nothing of it in the target, held: unseenNotes)
       }
 
 // the fit's target on the grid: from note 2's note-on (a passage's first note, an attack from silence, left out) to
-// targetEnd, each slur's median of env over its span (the samples whose latest note-on is one of its notes); w[i] 1
-// there, else 0. fromFirst (the rounds' measure, envelopeRms): from the first note's heard window start instead (its
-// note-on without a window), every note's sound in it
+// targetEnd, each slur's median of env over its span (the samples whose latest note-on is one of its notes; the last
+// note's only from lastFrom); w[i] 1 there, else 0. fromFirst (the rounds' measure, envelopeRms): from the first note's
+// heard window start instead (its note-on without a window), every note's sound in it
 static void targetOf(const Passage& p, const std::vector<double>& env, std::vector<double>* w, std::vector<double>* T,
                      bool fromFirst = false)
       {
@@ -422,6 +437,7 @@ static void targetOf(const Passage& p, const std::vector<double>& env, std::vect
             return;
       const double t0 = p.gridStart();
       const double from = fromFirst ? (p.window.empty() ? p.on[0] : std::min(p.window[0], p.on[1])) : p.on[1];
+      const double lastStart = lastFrom(p);
       const double to = targetEnd(p);
       std::vector<int> slurAt(size_t(m), -1);
       std::map<int, std::vector<double>> by;
@@ -430,6 +446,8 @@ static void targetOf(const Passage& p, const std::vector<double>& env, std::vect
             if (t < from || t >= to || !std::isfinite(env[size_t(i)]))
                   continue;
             const size_t k = size_t(std::max(0L, long(std::upper_bound(p.on.begin(), p.on.end(), t) - p.on.begin()) - 1));
+            if (k == n - 1 && t < lastStart)
+                  continue;            // (the last note's transition, before its heard window: neither its nor the note before's)
             slurAt[size_t(i)] = p.slur[k];
             by[p.slur[k]].push_back(env[size_t(i)]);
             }
@@ -555,15 +573,48 @@ bool roundMovesNote(const std::vector<int>& slur, const std::vector<double>& lev
       return false;
       }
 
+double largestChange(const std::vector<double>& values0, const std::vector<double>& values)
+      {
+      double big = 0.0;
+      for (size_t j = 0; j < values.size(); ++j) {
+            const double v0 = j < values0.size() && std::isfinite(values0[j]) ? values0[j] : 0.0;
+            if (std::isfinite(values[j]))
+                  big = std::max(big, std::fabs(values[j] - v0));
+            }
+      return big;
+      }
+
+bool roundTooBig(const std::vector<int>& slur, const std::vector<double>& level0, const std::vector<double>& values0,
+                 const std::vector<double>& values, double* largest, double* allowed)
+      {
+      const std::vector<double> d0 = slurDeviations(slur, level0);
+      const double problem = d0.empty() ? 0.0 : *std::max_element(d0.begin(), d0.end());
+      const double big = largestChange(values0, values);
+      if (largest)
+            *largest = big;
+      if (allowed)
+            *allowed = problem + ROUND_REJECT_DB;
+      return big > problem + ROUND_REJECT_DB + 1e-9;
+      }
+
 int chooseRound(const std::vector<int>& slur, const std::vector<double> levels[3], const double rms[3],
-                const bool measured[3], int* rejected)
+                const bool measured[3], int* rejected, const std::vector<double>* values, int* tooBig)
       {
       int chosen = 0;
       if (rejected)
             *rejected = 0;
+      if (tooBig)
+            *tooBig = 0;
       for (int r = 1; r < 3; ++r) {
             if (!measured[r])
                   continue;
+            if (measured[0] && values && roundTooBig(slur, levels[0], values[0], values[r])) {
+                  if (rejected)
+                        *rejected |= 1 << r;
+                  if (tooBig)
+                        *tooBig |= 1 << r;
+                  continue;
+                  }
             if (measured[0] && roundMovesNote(slur, levels[0], levels[r])) {
                   if (rejected)
                         *rejected |= 1 << r;

@@ -30,12 +30,15 @@
 //   delay by interval, an attack's onset; the slur statistics and the logs). fitGlide solves the per-note values (least
 //   squares, ridge RIDGE) so that the glide, smoothed as the envelope is (one pole, SMOOTH_MS) and LAG_MS late (CC11's
 //   measured lag), flattens the measured envelope to each slur's median of the envelope over the slur's span (from note
-//   2's note-on, a passage's first note, an attack from silence, left out, to the end of the last note: targetEnd);
+//   2's note-on, a passage's first note, an attack from silence, left out, to the last note's heard window, never past
+//   its note-off: lastFrom .. targetEnd);
 //   a note the target barely sees (unseenNotes: the first, any whose own span it hardly reaches) is held at 0;
 //   rendered again with the values (round 1: the fit / CC11_FACTOR), fitted once more from that measurement (round 2:
 //   + the fit / the measured gain, envelopeGain), and the round whose envelope lies closest to its slurs' medians over
 //   every note kept (envelopeRms), unless it takes a note more than ROUND_REJECT_DB further from its slur's median
-//   than uncorrected (chooseRound; none, if the passage measured flatter uncorrected). Until 2026-11-01 (even-edges)
+//   than uncorrected, or its largest value change exceeds round 0's largest deviation from a slur median +
+//   ROUND_REJECT_DB (roundTooBig: a correction never bigger than the problem) (chooseRound; none, if the passage
+//   measured flatter uncorrected). Until 2026-11-01 (even-edges)
 //   the target and the round's rms ended at the last note-on: the last note's value was free and played on the whole
 //   note (K. 550's leap notes +12.6 .. +16.4 dB), the first note's nearly so (+6 .. +12.4).
 //
@@ -194,8 +197,12 @@ std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, d
 // values play as measured before; evenauto.h)
 std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<bool>& fixed,
                              double* fitRms = nullptr, double* envRms = nullptr);
-// where the fit's target ends (seconds): the last note's span as far as it was measured: Passage::lastNext where set
-// (a window inside a longer passage), else the later of the last note-off and the end of its heard window
+// the last note's part of the fit's target (seconds): lastFrom .. targetEnd. A window inside a longer passage
+// (Passage::lastNext set): its note-on to lastNext. A passage's last note: its heard window alone (window start to
+// + WINDOW_MS), never past its note-off: its sustained part, as its measured level is taken, never its decay or release
+// (even-release, 2026-11-01; even-edges' "the later of note-off and heard window end" let a long last note's decay
+// push the fit: K. 550 bars 18-20 +15 .. +24 dB)
+double lastFrom(const Passage& p);
 double targetEnd(const Passage& p);
 // each note's weight in the fit over its own span (from its note-on to the next note-on / targetEnd): the sum over the
 // target's samples there of its unit response (smoothed, lagged) squared, in grid samples (STEP_MS each)
@@ -224,10 +231,19 @@ std::vector<double> slurDeviations(const std::vector<int>& slur, const std::vect
 constexpr double ROUND_REJECT_DB = 3.0;
 bool roundMovesNote(const std::vector<int>& slur, const std::vector<double>& level0, const std::vector<double>& level,
                     int* note = nullptr);
-// the round kept: of round 0 and the measured rounds roundMovesNote doesn't reject, the one with the least envelopeRms
-// (rms[r]); rejected: a bit per rejected round (1 << r)
+// a round's correction is never bigger than the problem it corrects (even-release, 2026-11-01): a round in which any
+// note's value changes by more than round 0's largest slurDeviations + ROUND_REJECT_DB (from round 0's values; none: 0)
+// is not kept. K. 550 bars 18-20 (nine one-note slurs, so round 0's deviations are 0): Violins 2 +21.56 / -14.41 dB,
+// the Basses +24 (the cap), the master trim 18 dB deeper. values[r] empty: 0 on every note
+double largestChange(const std::vector<double>& values0, const std::vector<double>& values);
+bool roundTooBig(const std::vector<int>& slur, const std::vector<double>& level0, const std::vector<double>& values0,
+                 const std::vector<double>& values, double* largest = nullptr, double* allowed = nullptr);
+// the round kept: of round 0 and the measured rounds neither roundMovesNote nor (values given) roundTooBig rejects, the
+// one with the least envelopeRms (rms[r]); rejected: a bit per rejected round (1 << r), tooBig: those roundTooBig
+// rejected
 int chooseRound(const std::vector<int>& slur, const std::vector<double> levels[3], const double rms[3],
-                const bool measured[3], int* rejected = nullptr);
+                const bool measured[3], int* rejected = nullptr, const std::vector<double>* values = nullptr,
+                int* tooBig = nullptr);
 // the measured change of the envelope (env1 - env0) over the predicted one of a glide of values v, on the fit's
 // weighted grid, about their means (a change of the whole passage, TrackDelays::Delays::evenAll's, is not the
 // corrections'); at least 0.5, 1 when it can't be told

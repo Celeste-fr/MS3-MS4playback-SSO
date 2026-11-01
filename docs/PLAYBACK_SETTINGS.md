@@ -912,12 +912,14 @@ the design.
   the median of the passes, for the statistics and the logs; the glide's values per note are fitted (least squares, ridge
   0.5) so that the glide, smoothed as the envelope (one pole, 35 ms) and 12 ms late (CC11's measured lag), flattens the
   measured envelope (the median of the passes) to each slur's median of it over the slur's span (a slur: from an attack
-  or a bowed transition; from the passage's second note-on to the end of its last note: below), divided by CC11's
+  or a bowed transition; from the passage's second note-on to the last note's heard window, never past its note-off:
+  below), divided by CC11's
   measured factor 1.28. Rendered and measured again with them, fitted once more (scaled by the measured / predicted
   change of the envelope in round 1: the test's first round overshot ~25 %), rendered and measured again; per passage the
   round whose envelope lies closest to its slurs' medians over every note (rms) is kept, unless it takes a note more than
-  3 dB further from its slur's median than uncorrected; none if uncorrected was closest. `result.json` lists every
-  note's levels and the rejected rounds (`rejected`).
+  3 dB further from its slur's median than uncorrected, or changes any value by more than round 0's largest deviation
+  from a slur median + 3 dB; none if uncorrected was closest. `result.json` lists every note's levels and the rejected
+  rounds (`rejected`; `tooBig` those the size guard rejected).
 - **The passage's edges and the round choice** (branch `even-edges`, 2026-11-01; bug fixes, no setting). K. 550 i on
   real SSO (the VM's `--even-levels`, Recommended) gave the leap at the end of each Violins passage +12.6 .. +16.4 dB
   (Violins 2 Bb4 bar 3 +14.01, C5 bar 26 +16.35; Violins 1 +11; the Viola +7) and the passages' first notes +6 .. +12.4,
@@ -927,9 +929,9 @@ the design.
   lever, a small droop there asked for several dB, and the value then played on the whole note. The round choice's rms
   left the last note out too, so round 2 was kept (its envelope rms 5.90 -> 2.12 dB) while the Bb's measured level went
   45.8 -> 50.5 -> 56.2 dB against its slur's D at 39.2 -> 38.3 -> 39.7. Now:
-  - the target ends at the last note's end (`EvenLevels::targetEnd`: the later of its note-off and its heard window's
-    end; in a background window inside a longer passage the next joined note-on), within the measured envelope (the grid
-    runs to 1 s after the last note-off);
+  - the target ended at the last note's end (`EvenLevels::targetEnd`: the later of its note-off and its heard window's
+    end; in a background window inside a longer passage the next joined note-on); replaced the same day by its heard
+    window alone (even-release, below);
   - a note the target barely sees is held at 0 (`unseenNotes`, through fitGlide's `fixed`): its weight in the fit over
     its own span (its unit response, smoothed and lagged, squared, summed over the target from its note-on to the next)
     under `OBSERVED_MIN` = 2 grid samples (10 ms of full response; on K. 550 the inner notes 10.0-28.0, the bowed Eb's
@@ -947,6 +949,41 @@ the design.
   job's measured levels, both passages' rounds 1 and 2 are rejected (the leap note 5.5-5.6 / 9.7-9.9 dB further from its D
   than uncorrected): round 0 kept. Not re-measured on the VM yet: the job's real values after the fix need its run.
   `tst_performancetechnique::evenLevelsEdges`.
+- **The last note's release; a correction never bigger than the problem** (branch `even-release`, 2026-11-01; bug
+  fixes, no setting). On the VM with build 522 (the fix above; K. 550 i bars 1-33, Recommended) the leap notes were fixed,
+  but passage bars 18-20 (nine repeated D's, each its own slur, the last 622 ms long) measured 10-17 dB off its slurs'
+  medians uncorrected in every string part (build 519: 2-4 dB, the same measured levels), and the fit put +12.9 .. +24
+  dB (the cap) on the note before the last and -1.9 .. -16.6 on the last (Violins 2 +21.56 / -14.41, Celli +15.18 /
+  -12.68, Basses +24.0 / -1.92); the master trim went ~18 dB deeper (mix -37.9 LUFS instead of about -20). Cause
+  (confirmed on the replica, `even_replica_release.py` on the real render): not the release after the note-off (the
+  note-off, 622 ms after the note-on, was later than the heard window's end, 246-361 ms, so the target already ended
+  there) but the **last note's own decay before its note-off**. SSO's Performance legato doesn't re-attack a key struck
+  again at velocity 64 (the side finding below), so from the third D on the passage's sound is the first notes' decay
+  (round 0: Violins 2 54.6 -> -15.0 dB over nine notes), and the target's last span, 622 ms of it, a one-note slur against
+  its own median, was mostly decay: the rms 2.9 -> 9.9 dB (replica, Violins 2) and the fit tilting the last two nodes. A
+  target "from its heard start to its note-off" would not have helped (replica: rms 9.8, +10.4 on the note before the
+  last). Now:
+  - the last note's part of the target is **its heard window alone** (`EvenLevels::lastFrom` .. `targetEnd`: window
+    start to + WINDOW_MS, the stretch its measured level is taken over), never past its note-off; the samples between
+    its note-on and its heard window (the transition into it) are in no note's span. A background window inside a
+    longer passage still ends at the next joined note-on. A last note whose note-off comes before its heard window or
+    within a few ms of it is unseen (`unseenNotes`: own weight < 2 grid samples) and held at 0; the first note still is;
+  - **the size guard** (`roundTooBig`, in `chooseRound`, the job's and the background measurer's): a round whose largest
+    value change from round 0 exceeds round 0's largest |measured level - its slur's median| (`slurDeviations`) + 3 dB
+    is not kept: a correction is never bigger than the problem it corrects. For a passage of one-note slurs (bars
+    18-20) round 0's deviations are 0, so 3 dB is the most it may change.
+  Replica, round 1 (fit / 1.28), the last two notes (b522's rule -> now): real render (stand-in envelope) Violins 1
+  +6.92 / -7.57 -> +0.88 / -3.87, Violins 2 +8.21 / -10.50 -> 0.00 / +0.12, Violas +4.17 / -7.34 -> +0.87 / +0.28,
+  Celli +5.92 / -11.78 -> +0.48 / -2.35, Basses +18.51 / -2.55 -> +2.78 / -6.61; on an envelope through the job's own
+  round-0 levels (C++ and replica agree within 0.05 dB) every value within ±3.1 dB, the last two within ±1.8.
+  Bars 1-3 and 24-26 (Violins 1 / 2, real render) change by at most 1.1 dB, the last note's included (Violins 2 bars
+  1-3 0.24 -> 0.14). The guard on build 522's own rounds would have kept corrections in 9 of the 41 passages instead of 25 (all
+  five bars 18-20 passages: round 0; build 519's: 15 instead of 41): with the target right the guard is still needed on
+  K. 550, for the one-note-slur passages (the replica's bars 18-20 round 1 still reaches 4.9 dB on Violins 1's second
+  note and 6.6 on the Basses' last, over the 3 dB allowed) and for the inner alternating values of the Violins'
+  passages (*Spans by heard time*, below), which exceed the largest deviation they correct in round 2. The master
+  trim (local dump of the job's score): build 522's values 18.56 dB (peak at 23.73 s, bars 18-20), its rounds as the guard
+  chooses them 0.18 dB, none 0.22. Not re-measured on the VM. `tst_performancetechnique::evenLevelsRelease`.
 - **Open, for the owner** (from the same diagnosis; not changed):
   - *Spans by heard time*: the slurs' spans run from note-on to note-on, but each note is heard 165-245 ms later
     (transitions; transitionsEarly sends the D's transition ~70 ms after the bowed Eb), so slur 2's span holds the quiet

@@ -180,6 +180,7 @@ class TestPerformanceTechnique : public QObject, public MTest
       void evenLevels();
       void evenLevelsPlain();
       void evenLevelsEdges();
+      void evenLevelsRelease();
       };
 
 //---------------------------------------------------------
@@ -1622,12 +1623,15 @@ void TestPerformanceTechnique::evenLevelsEdges()
       const EvenLevels::Passage k550 = edgePassage(on, off, win, slur);
       const size_t n = on.size();
 
-      // the target's end: the later of the last note-off and its heard window's end; a window's: Passage::lastNext
-      QVERIFY(std::fabs(EvenLevels::targetEnd(k550) - std::max(off[9], on[9] + (241 + EvenLevels::WINDOW_MS) / 1000.0)) < 1e-9);
+      // the last note's part of the target: its heard window, never past its note-off (even-release); a window's:
+      // its note-on to Passage::lastNext
+      QVERIFY(std::fabs(EvenLevels::lastFrom(k550) - (on[9] + 0.241)) < 1e-9);
+      QVERIFY(std::fabs(EvenLevels::targetEnd(k550) - std::min(off[9], on[9] + (241 + EvenLevels::WINDOW_MS) / 1000.0)) < 1e-9);
       {
             EvenLevels::Passage w = k550;
             w.lastNext = 2.05;
             QCOMPARE(EvenLevels::targetEnd(w), 2.05);
+            QCOMPARE(EvenLevels::lastFrom(w), on[9]);
       }
 
       // first and last notes: the first unseen (its own span outside the target), the last seen in full now, every inner
@@ -1639,7 +1643,7 @@ void TestPerformanceTechnique::evenLevelsEdges()
       QVERIFY(own[0] < EvenLevels::OBSERVED_MIN && unseen[0]);
       for (size_t k = 1; k < n; ++k)
             QVERIFY2(!unseen[k] && own[k] > 4 * EvenLevels::OBSERVED_MIN, qPrintable(QString("%1: %2").arg(k).arg(own[k])));
-      QVERIFY(own[9] > 40.0);
+      QVERIFY(own[9] > 15.0);
 
       // the regression on K. 550's shape: the first note held at 0, the leap note's value small (the job gave it
       // +6.87 in round 1 and +14.01 in round 2; the replica on the real render, round 1: +5.18 before, +0.24 with the
@@ -1766,6 +1770,205 @@ void TestPerformanceTechnique::evenLevelsEdges()
             QCOMPARE(EvenLevels::chooseRound(slur, levelsD, rms, measured), 1);
             const bool notMeasured[3] { true, true, false };
             QCOMPARE(EvenLevels::chooseRound(slur, levelsD, rms, notMeasured), 1);
+      }
+      }
+
+//---------------------------------------------------------
+//   evenLevelsRelease
+//    even-release (2026-11-01): a passage's last note can't be pushed by its own release or decay. The target covers
+//    the last note's heard window only, never past its note-off (lastFrom .. targetEnd); a last note too short for it
+//    held at 0; a round whose largest value change exceeds round 0's largest deviation from its slur's median +
+//    ROUND_REJECT_DB not kept (roundTooBig). The K. 550 rows: i bars 18-20 (nine repeated D's, each its own slur, the
+//    last 622 ms; SSO's Performance legato doesn't re-attack a key struck again at velocity 64, so the passage's sound
+//    decays from the third note on), the five string parts' times, windows, measured levels and values of the VM job on
+//    real SSO with build 522 (even-edges: rounds' values up to +24 dB, the master trim 18 dB deeper); the envelope a
+//    stand-in through the measured levels (the score is not in the repo)
+//---------------------------------------------------------
+
+// an envelope through each note's measured level at its heard window's middle (linear in dB), the last slope going on
+// to the note-off and then a release of 120 dB/s; silence (floor) before the first heard window; smoothed by the one pole
+static std::vector<double> decayEnvelope(const EvenLevels::Passage& p, const std::vector<double>& level, double floor)
+      {
+      const size_t n = p.on.size();
+      std::vector<double> c;
+      for (size_t k = 0; k < n; ++k)
+            c.push_back(p.window[k] + 0.5 * EvenLevels::WINDOW_MS / 1000.0);
+      const double slope = n > 1 ? (level[n - 1] - level[n - 2]) / (c[n - 1] - c[n - 2]) : 0.0;
+      std::vector<double> env(size_t(p.gridSize()), floor);
+      for (int i = 0; i < p.gridSize(); ++i) {
+            const double t = p.gridStart() + i * EvenLevels::STEP_MS / 1000.0;
+            double v;
+            if (t < p.window[0])
+                  v = floor;
+            else if (t <= c[0])
+                  v = level[0];
+            else if (t >= c[n - 1]) {
+                  v = level[n - 1] + slope * (std::min(t, p.off[n - 1]) - c[n - 1]);
+                  if (t > p.off[n - 1])
+                        v -= 120.0 * (t - p.off[n - 1]);
+                  }
+            else {
+                  const size_t k = size_t(std::upper_bound(c.begin(), c.end(), t) - c.begin());
+                  v = level[k - 1] + (level[k] - level[k - 1]) * (t - c[k - 1]) / (c[k] - c[k - 1]);
+                  }
+            env[size_t(i)] = std::max(floor, v);
+            }
+      const double a = 1.0 - std::exp(-EvenLevels::STEP_MS / EvenLevels::SMOOTH_MS);
+      double y = env.empty() ? 0.0 : env[0];
+      for (double& x : env) {
+            y += a * (x - y);
+            x = y;
+            }
+      return env;
+      }
+
+void TestPerformanceTechnique::evenLevelsRelease()
+      {
+      // a passage ending before a rest: eight notes 0.2 s apart in two slurs, flat (46 dB) as heard, the last note
+      // 0.6 s long, its sound decaying after its heard window (30 dB/s, a long note's bow fading) to its note-off, then
+      // released (120 dB/s) into the rest. Nothing to correct: every value ~0, the first and the last held or ~0; the
+      // target's last part ends at the heard window's end, inside the note
+      {
+            std::vector<double> o, f, wm;
+            std::vector<int> sl;
+            for (int k = 0; k < 8; ++k) {
+                  o.push_back(0.2 * k);
+                  f.push_back(k < 7 ? 0.2 * (k + 1) : 0.2 * k + 0.6);
+                  wm.push_back(k == 0 ? 100.0 : 150.0);
+                  sl.push_back(k / 4);
+                  }
+            const EvenLevels::Passage p = edgePassage(o, f, wm, sl);
+            QVERIFY(std::fabs(EvenLevels::lastFrom(p) - (o[7] + 0.150)) < 1e-9);
+            QVERIFY(std::fabs(EvenLevels::targetEnd(p) - (o[7] + 0.150 + EvenLevels::WINDOW_MS / 1000.0)) < 1e-9);
+            QVERIFY(EvenLevels::targetEnd(p) < f[7]);
+            std::vector<double> env(size_t(p.gridSize()), 0.0);
+            const double heardEnd = p.window[7] + EvenLevels::WINDOW_MS / 1000.0;
+            for (int i = 0; i < p.gridSize(); ++i) {
+                  const double t = p.gridStart() + i * EvenLevels::STEP_MS / 1000.0;
+                  double v = t < p.window[0] ? 0.0 : 46.0;
+                  if (t > heardEnd)
+                        v -= 30.0 * (std::min(t, f[7]) - heardEnd);
+                  if (t > f[7])
+                        v -= 120.0 * (t - f[7]);
+                  env[size_t(i)] = std::max(0.0, v);
+                  }
+            double fitRms = 0, envRms = 0;
+            const std::vector<double> v = EvenLevels::fitGlide(p, env, &fitRms, &envRms);
+            qDebug("a passage ending before a rest, its release in the envelope: %s (rms %.2f -> %.2f), envelopeRms %.2f",
+                   qPrintable(dbText(v)), envRms, fitRms, EvenLevels::envelopeRms(p, env));
+            QCOMPARE(v[0], 0.0);
+            for (double x : v)
+                  QVERIFY2(std::fabs(x) < 0.5, qPrintable(dbText(v)));
+            QVERIFY(EvenLevels::envelopeRms(p, env) < 0.5);
+
+            // the same passage with its last note 4 dB louder as heard: lowered, from its heard window alone
+            for (int i = 0; i < p.gridSize(); ++i) {
+                  const double t = p.gridStart() + i * EvenLevels::STEP_MS / 1000.0;
+                  if (t >= p.window[7])
+                        env[size_t(i)] += 4.0;
+                  }
+            const std::vector<double> loud = EvenLevels::fitGlide(p, env);
+            qDebug("its last note +4 dB: %s", qPrintable(dbText(loud)));
+            QVERIFY2(loud[7] < -1.5 && loud[7] > -6.0 && std::fabs(loud[2]) < 1.0, qPrintable(dbText(loud)));
+
+            // a last note ending before its heard window, or 5 ms into it: unseen, held at 0
+            EvenLevels::Passage shortLast = p;
+            shortLast.off[7] = p.window[7] - 0.01;
+            QVERIFY(EvenLevels::targetEnd(shortLast) <= EvenLevels::lastFrom(shortLast) + 1e-12);
+            QVERIFY(EvenLevels::unseenNotes(shortLast, env)[7]);
+            QCOMPARE(EvenLevels::fitGlide(shortLast, env)[7], 0.0);
+            shortLast.off[7] = p.window[7] + 0.005;
+            QVERIFY(EvenLevels::unseenNotes(shortLast, env)[7]);
+            QCOMPARE(EvenLevels::fitGlide(shortLast, env)[7], 0.0);
+      }
+
+      // K. 550 i bars 18-20, the five string parts: the job's round-0 levels as a decaying envelope. Before (even-edges)
+      // the job's values on the last two notes: +12.9 .. +24 / -1.9 .. -16.6. Now: the first note 0, every value within
+      // the passage's own spread, the last two small
+      struct Row {
+            const char* part;
+            std::vector<double> on, win, level[3], values1, values2;
+            int chosen522;
+            };
+      const std::vector<Row> rows {
+            { "Violins 1", { 0.0000, 0.1898, 0.3453, 0.6561, 0.8116, 0.9670, 1.2779, 1.4333, 1.5888 },
+              { 109, 220, 220, 220, 220, 220, 220, 220, 220 },
+              { { 58.6, 54.62, 45.72, 39.97, 32.89, 26.05, 17.4, -0.13, 0.3 },
+                { 37.2, 33.74, 25.99, 13.02, 7.02, -2.65, 6.15, -26, -49.33 },
+                { 34.34, 31.68, 24.94, 8.62, 4.11, -3.91, 8.25, -23.79, -49.34 } },
+              { 0, -4.56, 1.48, 1.16, -3.61, 1.55, -2.43, 12.9, -11.29 },
+              { 0, -7.39, 2.55, 1.34, -5.4, 1.77, -0.9, 15.78, -9.57 }, 0 },
+            { "Violins 2", { 0.0000, 0.1807, 0.3362, 0.6470, 0.8025, 0.9579, 1.2688, 1.4242, 1.5797 },
+              { 102.9, 175, 175, 175, 175, 175, 175, 175, 175 },
+              { { 54.62, 52.32, 45.61, 40.31, 31.79, 22.5, 14.56, 1.34, -15.01 },
+                { 32.58, 31.05, 25.49, 12.42, 4.09, -6.29, 0.93, -21.22, -61.03 },
+                { 29.52, 29.12, 25.92, 6.64, 1.72, -4.92, 8.55, -9.54, -47.68 } },
+              { 0, -2.66, 1.03, 0.94, -4.34, 2.6, -3.56, 14.05, -16.61 },
+              { 0, -4.45, 2.04, 1.07, -7.49, 4.7, -3.78, 21.56, -14.41 }, 2 },
+            { "Violas", { 0.0000, 0.2805, 0.4359, 0.7468, 0.9022, 1.0577, 1.3686, 1.5240, 1.6794 },
+              { 254.1, 200, 200, 200, 200, 200, 200, 200, 200 },
+              { { 49.25, 50.89, 44.29, 32.45, 25.07, 20.79, 10.03, -7.66, -17.13 },
+                { 27.03, 30.95, 23.35, 1.67, -8.73, -13.2, -14.27, -45.62, -83.09 },
+                { 26.32, 30.77, 23.44, -1.59, -11.76, -14.83, -13.92, -44.55, -81.2 } },
+              { 0, -0.82, 1.56, 0.52, -2.55, 0.03, -2.19, 8.01, -14.76 },
+              { 0, -1.2, 2.76, 0.59, -3.78, 0.04, -2.01, 9.23, -13.04 }, 0 },
+            { "Celli", { 0.0000, 0.2474, 0.4028, 0.7137, 0.8691, 1.0246, 1.3355, 1.4909, 1.6463 },
+              { 174.5, 225, 225, 225, 225, 225, 225, 225, 225 },
+              { { 56.9, 56.39, 50.94, 40.24, 34.77, 30.99, 22.4, 15.54, 13.22 },
+                { 36.37, 36.74, 31.36, 14.31, 10.11, 5.87, 5.24, -14.23, -29.33 },
+                { 34.77, 36.95, 31.98, 11.79, 9.9, 4.61, 12.34, -8.57, -30.19 } },
+              { 0, -1.1, 1.1, 1.22, -2.14, 1.61, -2.52, 8.72, -13.59 },
+              { 0, -1.79, 2.38, 1.9, -3.15, 2.66, -4.14, 15.18, -12.68 }, 2 },
+            { "Basses", { 0.0000, 0.1995, 0.3549, 0.6658, 0.8213, 0.9767, 1.2876, 1.4430, 1.5985 },
+              { 104.1, 110, 110, 110, 110, 110, 110, 110, 110 },
+              { { 43.76, 50.66, 49.33, 38.51, 32.2, 29.55, 28.01, 10.38, 6.9 },
+                { 25.06, 33.22, 32.04, 19.83, 12.59, 10.3, 16.12, 16.48, 7.01 },
+                { 23.73, 32.07, 30.9, 18.6, 11.24, 8.64, 13.7, 14.7, 1.37 } },
+              { 0, -0.86, 1.07, 0.48, 0.18, 0.85, -8.53, 24, -1.92 },
+              { 0, -1.85, 2.29, 0.8, 1.64, -1.45, -10.97, 24, -5.06 }, 1 } };
+      for (const Row& r : rows) {
+            const size_t n = r.on.size();
+            std::vector<double> off;
+            for (size_t k = 0; k + 1 < n; ++k)
+                  off.push_back(r.on[k + 1]);
+            off.push_back(r.on[n - 1] + 0.6218);          // (the last D's 622 ms, as rendered)
+            const std::vector<int> slur { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
+            const EvenLevels::Passage p = edgePassage(r.on, off, r.win, slur);
+            QVERIFY(EvenLevels::targetEnd(p) < off[n - 1]);
+            const std::vector<double> env = decayEnvelope(p, r.level[0], -60.0);
+            double fitRms = 0, envRms = 0;
+            std::vector<double> v = EvenLevels::fitGlide(p, env, &fitRms, &envRms);
+            for (double& x : v)
+                  x = EvenLevels::clampDb(x / EvenLevels::CC11_FACTOR);
+            qDebug("K. 550 bars 18-20 %s round 1: %s (envelopeRms %.2f; own %s)", r.part, qPrintable(dbText(v)),
+                   EvenLevels::envelopeRms(p, env), qPrintable(dbText(EvenLevels::ownWeights(p, env))));
+            QCOMPARE(v[0], 0.0);
+            QVERIFY2(std::fabs(v[n - 2]) < 4.0 && std::fabs(v[n - 1]) < 4.0, qPrintable(dbText(v)));
+            for (double x : v)
+                  QVERIFY2(std::fabs(x) < 6.0, qPrintable(dbText(v)));
+
+            // the guard on the job's own rounds: one-note slurs (round 0's deviations 0), so any value over 3 dB is
+            // bigger than the problem; both build-522 rounds rejected, round 0 kept
+            const std::vector<double> values[3] { {}, r.values1, r.values2 };
+            const double rms[3] { 3.0, 2.0, 1.0 };      // (rounds 1 and 2 "closer": only the guard rejects them)
+            const bool measured[3] { true, true, true };
+            int rejected = 0, tooBig = 0;
+            QCOMPARE(EvenLevels::chooseRound(slur, r.level, rms, measured, &rejected, values, &tooBig), 0);
+            QCOMPARE(tooBig, 6);
+            QCOMPARE(EvenLevels::chooseRound(slur, r.level, rms, measured), 2);   // (without values: no guard)
+            }
+
+      // the guard's threshold: round 0's largest |level - slur median| + ROUND_REJECT_DB, on the change from round 0's
+      // values (the background measurer's round 0 plays the values a note has)
+      {
+            const std::vector<int> slur { 0, 0, 0, 0 };
+            const std::vector<double> lv0 { 40.0, 44.0, 40.0, 40.0 };      // (first / last left out: median 42, max dev 2)
+            double largest = 0, allowed = 0;
+            QVERIFY(!EvenLevels::roundTooBig(slur, lv0, {}, { 0, -4.9, 0, 0 }, &largest, &allowed));
+            QVERIFY(std::fabs(allowed - (2.0 + EvenLevels::ROUND_REJECT_DB)) < 1e-9 && std::fabs(largest - 4.9) < 1e-9);
+            QVERIFY(EvenLevels::roundTooBig(slur, lv0, {}, { 0, -5.1, 0, 0 }));
+            QVERIFY(!EvenLevels::roundTooBig(slur, lv0, { 0, 3.0, 0, 0 }, { 0, 7.5, 0, 0 }));
+            QVERIFY(EvenLevels::roundTooBig(slur, lv0, { 0, 3.0, 0, 0 }, { 0, 8.5, 0, 0 }));
       }
       }
 
