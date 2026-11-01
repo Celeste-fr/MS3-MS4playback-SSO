@@ -47,6 +47,20 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
 - **Say what was tested with what**: the Linux dev machine can't hear Kontakt, SSO or Windows. Results come from
   a stand-in (test synth `mstestsynth.vst3`, sfizz), the Windows VM (VERIFY.md › With the real library) or the
   owner. Say which.
+- **Audit what goes out, test the tests** (the owner, 2026-11-01, "learn from this and apply them"; method:
+  `~/.claude/ai-eval-method.md`, scaled to playback work):
+  - **Before research numbers reach the owner or anyone outside**, run one `stats-auditor` agent over the text:
+    each number has to support its sentence (n, one source, the uncertainty, assumption / measured / computed).
+  - **Before a comparison or demo goes out**, run one `research-critic` agent on its design, with the artifact
+    only, not my conclusion. It checks that a reference (e.g. one recording) isn't used as ground truth.
+  - **Blind A/B pages**: say on the page, before listening, which answer changes which default. Store the answers
+    where I can read them back (ArtifactData), never in localStorage alone. Keep the letter → variant key off the
+    page.
+  - **A check is trusted only once it has caught a known fault**: positive controls (planted defects, a model
+    wrong by a known amount) before its results decide anything (the audit's `plantedControls`, the detector
+    regression; the heard check still has none: OPEN_ITEMS).
+  - A rule from performance practice needs measured data from several performers. A treatise or one recording
+    is a lead, or an editorial mark in the score, never a default.
 - **Balance and dynamic levels come from real data** (the owner, 2026-10-14: "I don't trust my ears, I prefer all the
   balance levels and the dynamic levels loudness to be based on real data"): the balance between sections / instruments
   and how loud each marking plays are set from measurements of real players and orchestras, chosen between sources by

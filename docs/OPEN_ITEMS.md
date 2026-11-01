@@ -954,3 +954,12 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
   patch's own median; feeds `avoid` and flags faulty samples automatically.
 - **Effort**: 1 day.
 - **Unlocks**: Stage B (tone) of the dynamics plan, bad round robins in new patches, Ample's quiet / dark strum (10).
+
+### 13. Positive control for the heard check (open, 2026-11-01)
+- **Why**: the heard check (VERIFY.md › Heard check) compares the real sound's note times with the audit's model,
+  but nothing shows it would catch a model wrong by a known amount (CLAUDE.md › Rules › Audit what goes out).
+- **Spec**: on a render already made (no new VM run needed), shift the model's predicted times for one patch by a
+  known offset (e.g. +40 / +80 ms on Violas' transitions) and a known level (+3 dB), rerun the analysis, and check
+  that ARRIVAL / LEVEL / model drift flag exactly the planted patch and situation at about the planted size; also an
+  unshifted run as the null. Kept as a test with the planted sizes and the detection margins.
+- **Effort**: half a day, Linux only, on a kept heard-check export.
