@@ -579,7 +579,7 @@ Clark & Luce 1965 Table I (`realSteps`, realRange 2), the Meyer rule (realRange 
   - Classical against modern players: about 2 dB L_A at f, under 1 dB at p.
   - A measure of how much players spread at f.
 
-**Fork now.** Clark & Luce spans (realRange 2), with the Spheres dataset as a cross-check (within ~2 dB where 3+
+**Fork now.** Clark & Luce spans (realRange 2), with the Spheres dataset as a cross-check (within 2.7 dB where 3+
 dynamics exist).
 
 **Missing.** A modern many-player per-marking study (none exists). The best a session can do:

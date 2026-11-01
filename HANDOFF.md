@@ -1697,7 +1697,7 @@ heard (data decide).
   the owner: "let's use the section data wherever it's reliable", then one source for every instrument): `[levels]
   realRange` 2 (Recommended and the default; 1 the Meyer rule by hand): each written marking one step of S / 5 from mp,
   S Clark & Luce 1965's Table I pp -> ff per instrument (map `realSteps`; docs/PLAYBACK_SETTINGS.md › Real range ›
-  Clark & Luce spans). The Spheres dataset (whole sections, arXiv 2511.21247) agrees within ~2 dB where a section
+  Clark & Luce spans). The Spheres dataset (whole sections, arXiv 2511.21247) agrees within 2.7 dB where a section
   recorded 3+ dynamics: a cross-check, not used. Its section balance is not used either (one chamber orchestra, players
   per stem partly unknown, basses against three other sources; a 5.3 dB question between its two sessions, being checked
   with the sessions' hand claps). Ask after the next build how the dynamics sound, mostly ppp (now one step under pp,

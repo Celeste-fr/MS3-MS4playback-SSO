@@ -756,7 +756,7 @@ and the patches' volumes; CC1 stays MuseScore's (the written dynamic).
   Ensemble, Pescara; arXiv 2511.21247, Zenodo 17347681, CC BY-SA 4.0), each section of a chamber orchestra recorded alone
   playing chromatic scales in a studio; a section's loudest less its quietest full scale (median note level at the main
   pair), only where its recording has 3 or more section scales; the dynamics are not labelled in the dataset (two-scale
-  sections' spans may not reach pp / ff and are not used). Where it has them it agrees with Clark & Luce within ~2 dB:
+  sections' spans may not reach pp / ff and are not used). Where it has them it agrees with Clark & Luce within 2.7 dB (the trombone; audit 2026-11-01):
   independent support, not used in the map (one source for every instrument). Since 2026-10-15 (docs/BALANCE_LOG.md ›
   Iteration 4) the 15 patches without a section level before also have a real range: their Long swept the same way
   (`sso_gap_cc1_curves.json`); the solo strings and the Motif patches with their database instrument's realSpan (both
