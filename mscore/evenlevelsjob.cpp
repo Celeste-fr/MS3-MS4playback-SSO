@@ -234,6 +234,7 @@ struct PassageRec {
       bool measured[3] { false, false, false };
       double fitRms[3] { 0, 0, 0 }, envRms[3] { 0, 0, 0 };
       double rms[3] { 0, 0, 0 };        // each round's envelope off its slurs' medians (EvenLevels::envelopeRms)
+      int rejected { 0 };               // the rounds EvenLevels::chooseRound rejected (1 << r)
       double gain { 1.0 };              // round 1: measured / predicted change
       int chosen { 0 };
       };
@@ -671,10 +672,8 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
             }
       // the best round per passage
       for (PassageRec& p : passages) {
-            p.chosen = 0;
-            for (int r = 1; r < 3; ++r)
-                  if (p.measured[r] && p.rms[r] < p.rms[p.chosen] - 1e-9)
-                        p.chosen = r;
+            // (over every note; a round taking a note > ROUND_REJECT_DB further from its slur's median not kept)
+            p.chosen = EvenLevels::chooseRound(p.fit.slur, p.levels, p.rms, p.measured, &p.rejected);
             for (size_t j = 0; j < p.notes.size(); ++j) {
                   Note* note = const_cast<Note*>(p.notes[j].info.note);
                   const bool has = p.chosen > 0;
@@ -695,6 +694,13 @@ QString EvenLevelsJob::run(const Options& options, std::function<void(const QStr
             const Measure* m1 = score->tick2measure(Fraction::fromTicks(p.notes.back().tick));
             o["bars"] = QString("%1-%2").arg(m0 ? m0->no() + 1 : 0).arg(m1 ? m1->no() + 1 : 0);
             o["chosen"] = p.chosen;
+            {
+                  QJsonArray rj;
+                  for (int r = 1; r < 3; ++r)
+                        if (p.rejected & (1 << r))
+                              rj.append(r);
+                  o["rejected"] = rj;
+            }
             o["gain"] = std::round(p.gain * 1000) / 1000;
             QJsonArray rm, res, rngs, lv, vals, fit, er;
             for (int r = 0; r < 3; ++r) {

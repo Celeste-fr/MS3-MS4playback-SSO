@@ -23,8 +23,9 @@
 //  next, nodeTime) and divided by CC11_FACTOR; rendered and measured again with the values ([levels] evenLevels on);
 //  every passage fitted once more from that measurement (the change scaled by the measured / predicted change of the
 //  envelope in the first round, envelopeGain: the test's first round overshot ~25 %), rendered and measured again; per
-//  passage the round whose envelope lies closest to its slurs' medians kept (envelopeRms; none when the uncorrected
-//  one was closest; the S of tools/soundlibraries/even_180_check.py, 2026-10-14). Each value goes on its note with the note's context (Pid::EVEN_LEVEL / _CONTEXT).
+//  passage the round whose envelope lies closest to its slurs' medians over every note kept (envelopeRms), unless it
+//  takes a note more than ROUND_REJECT_DB further from its slur's median than uncorrected (EvenLevels::chooseRound;
+//  result.json's "rejected"; none when the uncorrected one was closest; the S of tools/soundlibraries/even_180_check.py, 2026-10-14). Each value goes on its note with the note's context (Pid::EVEN_LEVEL / _CONTEXT).
 //
 //  Output (in <folder>, default Documents/MuseScore Sound Library Check/Even levels <date>): result.json (every
 //  passage's notes, their levels per round, the values, the statistics, the render preflight), "<score> even.mscz"

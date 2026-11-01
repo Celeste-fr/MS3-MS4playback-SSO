@@ -43,7 +43,8 @@
 //   full method; the fit's nodes halfway from each note-on to the next, the window's last note's to the passage's next
 //   note: Passage::lastNext); a round's events rendered with its values on the window's notes (set for the render
 //   and put back: the score is the main thread's). The round whose envelope lies closest to its slurs' medians
-//   (envelopeRms) is kept (round 0: its
+//   over every note (envelopeRms) of those taking no note > ROUND_REJECT_DB further from its slur's median than round 0
+//   (EvenLevels::chooseRound) is kept; a measured note the fit can't see (unseenNotes) gets 0 (round 0: its
 //   values, 0 dB on a note that had none: "measured, needs none", so it is current and never measured again). Values go
 //   on the notes with their contexts WITHOUT an undo step (MasterScore::setEvenLevelsWritten marks the score modified),
 //   and into the Cache.

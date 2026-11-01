@@ -449,10 +449,13 @@ bool Session::process(const Result& r, Job* next)
       if (round < 2) {
             // the fit, divided by CC11's measured factor; run-in / run-out held
             const std::vector<double> du = EvenLevels::fitGlide(w.fit[round], w.env[round], w.fixed);
+            // (a measured note the fit can't see: 0, not the value it may have had: EvenLevels::unseenNotes)
+            const std::vector<bool> unseen = EvenLevels::unseenNotes(w.fit[round], w.env[round]);
             w.values[round + 1] = w.values[round];
             for (size_t j = 0; j < n && j < du.size(); ++j)
                   if (!w.fixed[j])
-                        w.values[round + 1][j] = EvenLevels::clampDb(w.values[round][j] + du[j] / EvenLevels::CC11_FACTOR);
+                        w.values[round + 1][j] = j < unseen.size() && unseen[j]
+                              ? 0.0 : EvenLevels::clampDb(w.values[round][j] + du[j] / EvenLevels::CC11_FACTOR);
             nextRound = round + 1;
             }
       if (_log)
@@ -485,16 +488,18 @@ bool Session::process(const Result& r, Job* next)
 
 //---------------------------------------------------------
 //   finish
-//    the round whose envelope lies closest to its slurs' medians (envelopeRms): its values on the measured notes (0 dB
-//    where it is round 0 and the note had none)
+//    the round whose envelope lies closest to its slurs' medians over every note (envelopeRms), of those that take no
+//    note more than ROUND_REJECT_DB further from its slur's median than round 0 (EvenLevels::chooseRound): its values on
+//    the measured notes (0 dB where it is round 0 and the note had none)
 //---------------------------------------------------------
 
 void Session::finish(Work& w)
       {
-      int chosen = 0;
-      for (int r = 1; r < 3; ++r)
-            if (w.measured[r] && w.rms[r] < w.rms[chosen] - 1e-9)
-                  chosen = r;
+      int rejected = 0;
+      const int chosen = EvenLevels::chooseRound(w.fit[0].slur, w.levels, w.rms, w.measured, &rejected);
+      if (rejected && _log)
+            _log(QString("even levels: %1: round(s)%2%3 not kept (a note > %4 dB further from its slur's median than uncorrected)")
+                 .arg(w.text).arg(rejected & 2 ? " 1" : "").arg(rejected & 4 ? " 2" : "").arg(EvenLevels::ROUND_REJECT_DB));
       int count = 0;
       for (size_t j = 0; j < w.notes.size(); ++j) {
             if (w.fixed[j])

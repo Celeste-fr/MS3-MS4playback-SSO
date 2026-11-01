@@ -30,10 +30,14 @@
 //   delay by interval, an attack's onset; the slur statistics and the logs). fitGlide solves the per-note values (least
 //   squares, ridge RIDGE) so that the glide, smoothed as the envelope is (one pole, SMOOTH_MS) and LAG_MS late (CC11's
 //   measured lag), flattens the measured envelope to each slur's median of the envelope over the slur's span (from note
-//   2's note-on to the last note-on: a passage's first note, an attack from silence, left out); rendered again with the
-//   values (round 1: the fit / CC11_FACTOR), fitted once more from that measurement (round 2: + the fit / the measured
-//   gain, envelopeGain), and the round whose envelope lies closest to its slurs' medians kept (envelopeRms; none, if the
-//   passage measured flatter uncorrected).
+//   2's note-on, a passage's first note, an attack from silence, left out, to the end of the last note: targetEnd);
+//   a note the target barely sees (unseenNotes: the first, any whose own span it hardly reaches) is held at 0;
+//   rendered again with the values (round 1: the fit / CC11_FACTOR), fitted once more from that measurement (round 2:
+//   + the fit / the measured gain, envelopeGain), and the round whose envelope lies closest to its slurs' medians over
+//   every note kept (envelopeRms), unless it takes a note more than ROUND_REJECT_DB further from its slur's median
+//   than uncorrected (chooseRound; none, if the passage measured flatter uncorrected). Until 2026-11-01 (even-edges)
+//   the target and the round's rms ended at the last note-on: the last note's value was free and played on the whole
+//   note (K. 550's leap notes +12.6 .. +16.4 dB), the first note's nearly so (+6 .. +12.4).
 //
 //   The glide's nodes: each note's at the middle of its own span (nodeTime: halfway from its note-on to the next joined
 //   note-on). Until 2026-10-14 they were the middles of the heard windows (window start + WINDOW_MS / 2), 270-310 ms
@@ -190,8 +194,40 @@ std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, d
 // values play as measured before; evenauto.h)
 std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, const std::vector<bool>& fixed,
                              double* fitRms = nullptr, double* envRms = nullptr);
-// how far env lies from its slurs' medians (the rms over the fit's weighted grid): the rounds' measure
+// where the fit's target ends (seconds): the last note's span as far as it was measured: Passage::lastNext where set
+// (a window inside a longer passage), else the later of the last note-off and the end of its heard window
+double targetEnd(const Passage& p);
+// each note's weight in the fit over its own span (from its note-on to the next note-on / targetEnd): the sum over the
+// target's samples there of its unit response (smoothed, lagged) squared, in grid samples (STEP_MS each)
+std::vector<double> ownWeights(const Passage& p, const std::vector<double>& env);
+// a note the fit can't see (even-edges, 2026-11-01): its own weight under OBSERVED_MIN. Its value would be free (decided
+// by a few ms of the note before, against RIDGE alone) yet play on the whole note, so fitGlide holds it (0 change; a
+// new value 0). A passage's first note always (the target leaves its attack from silence out); a short note whose
+// span the smoothing never reaches. Basis (K. 550 i, Violins 2 bars 1-3 and 24-26, the replica of this fit on the
+// real SSO render): inner notes' own weight 10.0-28.0 (the bowed Eb's 83 ms span the least), the last note's 0.0
+// before the target reached it, 49.7-55.7 after, the first note's 0.0; the ridge 0.5. 2.0 = 10 ms of full response,
+// a fifth of the least inner note's, four times the ridge
+constexpr double OBSERVED_MIN = 2.0;
+std::vector<bool> unseenNotes(const Passage& p, const std::vector<double>& env);
+// how far env lies from its slurs' medians (the rms over the target from the first note's heard window start to
+// targetEnd: every note's sound; even-edges, 2026-11-01: before, the fit's target, without the first and last notes)
 double envelopeRms(const Passage& p, const std::vector<double>& env);
+// the rounds (even-edges, 2026-11-01): each note's |measured level - its slur's median| (slurStats' median, the
+// passage's first and last notes left out of it; a slur of those alone: the median of its notes), every note
+std::vector<double> slurDeviations(const std::vector<int>& slur, const std::vector<double>& level);
+// a round that takes any note more than ROUND_REJECT_DB further from its slur's median than round 0 (its note:
+// *note) is not kept, however close its envelope (K. 550's Violins 2 Bb4, bar 3: 45.8 -> 50.5 -> 56.2 dB, its slur's
+// D 39.2 -> 38.3 -> 39.7, round 2 kept on an rms that left the Bb out). 3 dB: twice the largest pass-to-pass noise of a
+// measured level (the early stop's 95th percentiles, 0.67-1.49 dB: MEASURED in evenlevels.cpp, sso_even_gap_check.json),
+// so the passes' noise alone never rejects a round, and over four times the level step the audit proposes as audible
+// (0.69 dB)
+constexpr double ROUND_REJECT_DB = 3.0;
+bool roundMovesNote(const std::vector<int>& slur, const std::vector<double>& level0, const std::vector<double>& level,
+                    int* note = nullptr);
+// the round kept: of round 0 and the measured rounds roundMovesNote doesn't reject, the one with the least envelopeRms
+// (rms[r]); rejected: a bit per rejected round (1 << r)
+int chooseRound(const std::vector<int>& slur, const std::vector<double> levels[3], const double rms[3],
+                const bool measured[3], int* rejected = nullptr);
 // the measured change of the envelope (env1 - env0) over the predicted one of a glide of values v, on the fit's
 // weighted grid, about their means (a change of the whole passage, TrackDelays::Delays::evenAll's, is not the
 // corrections'); at least 0.5, 1 when it can't be told

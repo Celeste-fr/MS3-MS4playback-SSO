@@ -389,9 +389,30 @@ static std::vector<std::vector<double>> unitResponses(const Passage& p)
       return cols;
       }
 
-// the fit's target on the grid: from note 2's note-on to the last note-on, each slur's median of env over its span
-// (the samples whose latest note-on is one of its notes); w[i] 1 there, else 0
-static void targetOf(const Passage& p, const std::vector<double>& env, std::vector<double>* w, std::vector<double>* T)
+// where the fit's target ends: the last note's span, as far as the measurement covers it (the grid ends 1 s after the
+// last note-off). A window inside a longer passage: the next joined note's note-on (Passage::lastNext: from there on
+// what sounds is that note's); a passage's last note: its note-off or the end of its heard window, whichever is later
+// (even-edges, 2026-11-01: before, the target ended at the last note-on, so the last note's value was free: K. 550's
+// leap notes +12.6 .. +16.4 dB on real SSO, a long lever on the last ~120 ms of the note before)
+double targetEnd(const Passage& p)
+      {
+      const size_t n = p.on.size();
+      if (n == 0)
+            return 0.0;
+      if (p.lastNext > p.on[n - 1])
+            return p.lastNext;
+      double end = n <= p.off.size() ? p.off[n - 1] : p.on[n - 1];
+      if (n <= p.window.size())
+            end = std::max(end, p.window[n - 1] + WINDOW_MS / 1000.0);
+      return std::max(end, p.on[n - 1]);
+      }
+
+// the fit's target on the grid: from note 2's note-on (a passage's first note, an attack from silence, left out) to
+// targetEnd, each slur's median of env over its span (the samples whose latest note-on is one of its notes); w[i] 1
+// there, else 0. fromFirst (the rounds' measure, envelopeRms): from the first note's heard window start instead (its
+// note-on without a window), every note's sound in it
+static void targetOf(const Passage& p, const std::vector<double>& env, std::vector<double>* w, std::vector<double>* T,
+                     bool fromFirst = false)
       {
       const size_t n = p.on.size();
       const int m = std::min(p.gridSize(), int(env.size()));
@@ -400,13 +421,15 @@ static void targetOf(const Passage& p, const std::vector<double>& env, std::vect
       if (n < 3 || m <= 0)
             return;
       const double t0 = p.gridStart();
+      const double from = fromFirst ? (p.window.empty() ? p.on[0] : std::min(p.window[0], p.on[1])) : p.on[1];
+      const double to = targetEnd(p);
       std::vector<int> slurAt(size_t(m), -1);
       std::map<int, std::vector<double>> by;
       for (int i = 0; i < m; ++i) {
             const double t = t0 + i * STEP_MS / 1000.0;
-            if (t < p.on[1] || t >= p.on[n - 1] || !std::isfinite(env[size_t(i)]))
+            if (t < from || t >= to || !std::isfinite(env[size_t(i)]))
                   continue;
-            const size_t k = size_t(std::upper_bound(p.on.begin(), p.on.end(), t) - p.on.begin()) - 1;
+            const size_t k = size_t(std::max(0L, long(std::upper_bound(p.on.begin(), p.on.end(), t) - p.on.begin()) - 1));
             slurAt[size_t(i)] = p.slur[k];
             by[p.slur[k]].push_back(env[size_t(i)]);
             }
@@ -424,7 +447,7 @@ static void targetOf(const Passage& p, const std::vector<double>& env, std::vect
 double envelopeRms(const Passage& p, const std::vector<double>& env)
       {
       std::vector<double> w, T;
-      targetOf(p, env, &w, &T);
+      targetOf(p, env, &w, &T, true);
       double sum = 0, cnt = 0;
       for (size_t i = 0; i < w.size(); ++i)
             if (w[i] > 0) {
@@ -465,6 +488,91 @@ double envelopeGain(const Passage& p, const std::vector<double>& env0, const std
             sxy += (x[i] - mx) * (y[i] - my);
             }
       return sxx > 1e-9 && sxy > 0 ? std::max(0.5, sxy / sxx) : 1.0;
+      }
+
+std::vector<double> ownWeights(const Passage& p, const std::vector<double>& env)
+      {
+      const size_t n = p.on.size();
+      std::vector<double> out(n, 0.0);
+      std::vector<double> w, T;
+      targetOf(p, env, &w, &T);
+      if (w.empty())
+            return out;
+      const std::vector<std::vector<double>> M = unitResponses(p);
+      const double t0 = p.gridStart();
+      for (size_t i = 0; i < w.size(); ++i) {
+            if (w[i] <= 0)
+                  continue;
+            const double t = t0 + double(i) * STEP_MS / 1000.0;
+            const long k = long(std::upper_bound(p.on.begin(), p.on.end(), t) - p.on.begin()) - 1;
+            if (k >= 0 && size_t(k) < n && i < M[size_t(k)].size())
+                  out[size_t(k)] += M[size_t(k)][i] * M[size_t(k)][i];
+            }
+      return out;
+      }
+
+std::vector<bool> unseenNotes(const Passage& p, const std::vector<double>& env)
+      {
+      const std::vector<double> own = ownWeights(p, env);
+      std::vector<bool> out(own.size(), false);
+      if (p.on.size() < 3)
+            return out;
+      for (size_t j = 0; j < own.size(); ++j)
+            out[j] = own[j] < OBSERVED_MIN;
+      return out;
+      }
+
+std::vector<double> slurDeviations(const std::vector<int>& slur, const std::vector<double>& level)
+      {
+      const size_t n = std::min(slur.size(), level.size());
+      const Stats st = slurStats(slur, level);
+      std::map<int, std::vector<double>> all;
+      for (size_t k = 0; k < n; ++k)
+            if (std::isfinite(level[k]))
+                  all[slur[k]].push_back(level[k]);
+      std::vector<double> out(n, 0.0);
+      for (size_t k = 0; k < n; ++k) {
+            if (!std::isfinite(level[k]))
+                  continue;
+            auto m = st.median.find(slur[k]);
+            const double med = m != st.median.end() ? m->second : median(all[slur[k]]);
+            out[k] = std::fabs(level[k] - med);
+            }
+      return out;
+      }
+
+bool roundMovesNote(const std::vector<int>& slur, const std::vector<double>& level0, const std::vector<double>& level,
+                    int* note)
+      {
+      const std::vector<double> d0 = slurDeviations(slur, level0);
+      const std::vector<double> d = slurDeviations(slur, level);
+      for (size_t k = 0; k < d0.size() && k < d.size(); ++k)
+            if (d[k] > d0[k] + ROUND_REJECT_DB) {
+                  if (note)
+                        *note = int(k);
+                  return true;
+                  }
+      return false;
+      }
+
+int chooseRound(const std::vector<int>& slur, const std::vector<double> levels[3], const double rms[3],
+                const bool measured[3], int* rejected)
+      {
+      int chosen = 0;
+      if (rejected)
+            *rejected = 0;
+      for (int r = 1; r < 3; ++r) {
+            if (!measured[r])
+                  continue;
+            if (measured[0] && roundMovesNote(slur, levels[0], levels[r])) {
+                  if (rejected)
+                        *rejected |= 1 << r;
+                  continue;
+                  }
+            if (rms[r] < rms[chosen] - 1e-9)
+                  chosen = r;
+            }
+      return chosen;
       }
 
 // solves A x = b (A n x n, symmetric positive definite here) by Gaussian elimination with partial pivoting
@@ -508,13 +616,15 @@ std::vector<double> fitGlide(const Passage& p, const std::vector<double>& env, c
                              double* fitRms, double* envRms)
       {
       const size_t n = p.on.size();
-      auto held = [&fixed](size_t j) { return j < fixed.size() && fixed[j]; };
       std::vector<double> du(n, 0.0);
       std::vector<double> w, T;
       targetOf(p, env, &w, &T);
       const int m = int(w.size());
       if (n < 3 || m <= 0)
             return du;
+      // a note the target barely sees is held at 0 change too (its value would be free: unseenNotes)
+      const std::vector<bool> unseen = unseenNotes(p, env);
+      auto held = [&fixed, &unseen](size_t j) { return (j < fixed.size() && fixed[j]) || (j < unseen.size() && unseen[j]); };
       std::vector<double> r(size_t(m), 0.0);
       for (int i = 0; i < m; ++i)
             if (w[size_t(i)] > 0)

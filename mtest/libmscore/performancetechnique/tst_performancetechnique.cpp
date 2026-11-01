@@ -179,6 +179,7 @@ class TestPerformanceTechnique : public QObject, public MTest
       void slurTransitions();
       void evenLevels();
       void evenLevelsPlain();
+      void evenLevelsEdges();
       };
 
 //---------------------------------------------------------
@@ -1544,6 +1545,8 @@ void TestPerformanceTechnique::evenLevels()
       QVERIFY2(envRms > 1.0 && fitRms < 0.6 * envRms, qPrintable(QString("%1 -> %2").arg(envRms).arg(fitRms)));
       QVERIFY2(v[3] < -1.0 && v[4] < -1.0 && std::fabs(v[1]) < 1.0,
                qPrintable(QString("%1 %2 %3").arg(v[1]).arg(v[3]).arg(v[4])));
+      // (the rounds' measure starts at the first note's heard window or note 2's note-on, whichever is earlier: here
+      // note 2's, as the fit's target)
       QVERIFY(std::fabs(EvenLevels::envelopeRms(p, env) - envRms) < 1e-9);
       // the measured gain: no change measured, none told (1); the envelope as flat as the fit says: closer
       QCOMPARE(EvenLevels::envelopeGain(p, env, env, v), 1.0);
@@ -1551,6 +1554,219 @@ void TestPerformanceTechnique::evenLevels()
       QVERIFY(EvenLevels::envelopeRms(p, flat) < envRms);
       const double g = EvenLevels::envelopeGain(p, env, flat, v);
       QVERIFY2(g >= 0.5 && g < 3.0, qPrintable(QString::number(g)));
+      }
+
+//---------------------------------------------------------
+//   evenLevelsEdges
+//    even-edges (2026-11-01): the fit's target reaches the last note's end (targetEnd), a note the target barely sees
+//    held at 0 (unseenNotes: the first; a note too short for the smoothing), the round kept over every note and not one
+//    that takes a note > ROUND_REJECT_DB further from its slur's median (chooseRound). Envelopes synthetic: steps at
+//    each note's heard window start (note-on + window), as SSO's lag their note-ons; the K. 550 shape from the job's
+//    measured levels (K. 550 i, Violins 2 bars 1-3, real SSO on the Windows VM; the score is not in the repo)
+//---------------------------------------------------------
+
+// a passage: note-ons, lengths (s), window starts (ms after the note-on), slurs
+static EvenLevels::Passage edgePassage(const std::vector<double>& on, const std::vector<double>& off,
+                                       const std::vector<double>& windowMs, const std::vector<int>& slur)
+      {
+      EvenLevels::Passage p;
+      p.on = on;
+      p.off = off;
+      for (size_t k = 0; k < on.size(); ++k)
+            p.window.push_back(on[k] + windowMs[k] / 1000.0);
+      p.slur = slur;
+      return p;
+      }
+
+// the envelope on p's grid: silence (floor) before the first heard window start, then each note's level from its
+// heard window start on, the last level to the last note-off + 0.15 s, silence after; smoothed by the one pole
+static std::vector<double> edgeEnvelope(const EvenLevels::Passage& p, const std::vector<double>& level, double floor = 10.0)
+      {
+      std::vector<double> env(size_t(p.gridSize()), floor);
+      const double end = p.off.back() + 0.15;
+      for (int i = 0; i < p.gridSize(); ++i) {
+            const double t = p.gridStart() + i * EvenLevels::STEP_MS / 1000.0;
+            if (t >= end)
+                  continue;
+            for (size_t k = 0; k < p.window.size(); ++k)
+                  if (t >= p.window[k])
+                        env[size_t(i)] = level[k];
+            }
+      // (smoothed as the perceived envelope is: the one pole, SMOOTH_MS)
+      const double a = 1.0 - std::exp(-EvenLevels::STEP_MS / EvenLevels::SMOOTH_MS);
+      double y = env.empty() ? 0.0 : env[0];
+      for (double& x : env) {
+            y += a * (x - y);
+            x = y;
+            }
+      return env;
+      }
+
+static QString dbText(const std::vector<double>& v)
+      {
+      QStringList out;
+      for (double x : v)
+            out << QString::number(x, 'f', 2);
+      return out.join(' ');
+      }
+
+void TestPerformanceTechnique::evenLevelsEdges()
+      {
+      // K. 550 i, Violins 2 bars 1-3 as played (Recommended): Eb D | D | Eb D | D | Eb D | D Bb (the leap, the passage's
+      // last), the smooth attack's, transitions' and attacks' window starts, round 0's measured levels (result.json)
+      const std::vector<double> on { 0.0, 0.1088, 0.3362, 0.6470, 0.7306, 0.9579, 1.2688, 1.3524, 1.5797, 1.8187 };
+      const std::vector<double> off { 0.1323, 0.3362, 0.6470, 0.7543, 0.9579, 1.2688, 1.3763, 1.5797, 1.8423, 2.2013 };
+      const std::vector<double> win { 105.2, 185, 175, 165, 185, 175, 165, 185, 175, 241 };
+      const std::vector<int> slur { 0, 0, 1, 2, 2, 3, 4, 4, 5, 5 };
+      const std::vector<double> lv0 { 44.76, 47.75, 35.76, 50.28, 50.14, 36.43, 49.99, 50.42, 39.15, 45.78 };
+      const EvenLevels::Passage k550 = edgePassage(on, off, win, slur);
+      const size_t n = on.size();
+
+      // the target's end: the later of the last note-off and its heard window's end; a window's: Passage::lastNext
+      QVERIFY(std::fabs(EvenLevels::targetEnd(k550) - std::max(off[9], on[9] + (241 + EvenLevels::WINDOW_MS) / 1000.0)) < 1e-9);
+      {
+            EvenLevels::Passage w = k550;
+            w.lastNext = 2.05;
+            QCOMPARE(EvenLevels::targetEnd(w), 2.05);
+      }
+
+      // first and last notes: the first unseen (its own span outside the target), the last seen in full now, every inner
+      // note well above OBSERVED_MIN (the bowed Eb's 83 ms span the least)
+      const std::vector<double> env0 = edgeEnvelope(k550, lv0);
+      const std::vector<double> own = EvenLevels::ownWeights(k550, env0);
+      const std::vector<bool> unseen = EvenLevels::unseenNotes(k550, env0);
+      qDebug("K. 550 own weights: %s", qPrintable(dbText(own)));
+      QVERIFY(own[0] < EvenLevels::OBSERVED_MIN && unseen[0]);
+      for (size_t k = 1; k < n; ++k)
+            QVERIFY2(!unseen[k] && own[k] > 4 * EvenLevels::OBSERVED_MIN, qPrintable(QString("%1: %2").arg(k).arg(own[k])));
+      QVERIFY(own[9] > 40.0);
+
+      // the regression on K. 550's shape: the first note held at 0, the leap note's value small (the job gave it
+      // +6.87 in round 1 and +14.01 in round 2; the replica on the real render, round 1: +5.18 before, +0.24 with the
+      // target to the note's end), the fit closer than the envelope
+      double fitRms = 0, envRms = 0;
+      const std::vector<double> v = EvenLevels::fitGlide(k550, env0, &fitRms, &envRms);
+      qDebug("K. 550 values: %s (rms %.2f -> %.2f)", qPrintable(dbText(v)), envRms, fitRms);
+      QCOMPARE(v[0], 0.0);
+      QVERIFY2(std::fabs(v[9] / EvenLevels::CC11_FACTOR) < 3.0, qPrintable(dbText(v)));
+      QVERIFY(fitRms < envRms);
+
+      // several slurs: a step between slurs stays (each slur flattened to its own median): three slurs, flat at 40, 46,
+      // 43 dB as heard, need nothing; a +3 dB note inside the middle one gets a negative value, its neighbours ~0 (heard
+      // 20 ms after the note-on: with spans from note-on to note-on a lag puts the slur before's level into a slur's
+      // first samples, docs/PLAYBACK_SETTINGS.md › Even levels › Open)
+      {
+            std::vector<double> o, f, wm, lv;
+            std::vector<int> sl;
+            for (int k = 0; k < 12; ++k) {
+                  o.push_back(0.2 * k);
+                  f.push_back(0.2 * k + 0.22);
+                  wm.push_back(20.0);              // (heard at once: the spans' lag is an open item)
+                  sl.push_back(k / 4);
+                  lv.push_back(k < 4 ? 40.0 : k < 8 ? 46.0 : 43.0);
+                  }
+            const EvenLevels::Passage p = edgePassage(o, f, wm, sl);
+            const std::vector<double> flat = EvenLevels::fitGlide(p, edgeEnvelope(p, lv));
+            qDebug("three flat slurs: %s", qPrintable(dbText(flat)));
+            // (the one pole's ramp at each slur's start leaves ~1 dB at the boundaries; levelling the 6 dB step would be ±3)
+            double mean[3] { 0, 0, 0 };
+            for (size_t k = 0; k < flat.size(); ++k) {
+                  QVERIFY2(std::fabs(flat[k]) < 1.5, qPrintable(dbText(flat)));
+                  mean[k / 4] += flat[k] / 4.0;
+                  }
+            QVERIFY2(std::fabs(mean[1] - mean[0]) < 1.0 && std::fabs(mean[2] - mean[1]) < 1.0, qPrintable(dbText(flat)));
+            lv[5] += 3.0;
+            const std::vector<double> bump = EvenLevels::fitGlide(p, edgeEnvelope(p, lv));
+            qDebug("a +3 dB note in the middle slur: %s", qPrintable(dbText(bump)));
+            QVERIFY2(bump[5] < -1.0 && std::fabs(bump[1]) < 1.0 && std::fabs(bump[10]) < 1.0, qPrintable(dbText(bump)));
+      }
+
+      // an envelope that lags its note-ons by 150-240 ms: the last note +4 dB as heard is now seen and lowered (before,
+      // its sound lay after the target: no change asked, or a free one); the first note, +4 dB, held
+      {
+            std::vector<double> lv(n, 46.0);
+            lv[9] += 4.0;
+            const std::vector<double> lastLoud = EvenLevels::fitGlide(k550, edgeEnvelope(k550, lv));
+            qDebug("lagging, the last note +4 dB: %s", qPrintable(dbText(lastLoud)));
+            QVERIFY2(lastLoud[9] < -1.5 && std::fabs(lastLoud[2]) < 1.0, qPrintable(dbText(lastLoud)));
+            lv[9] = 46.0;
+            lv[0] += 4.0;
+            const std::vector<double> firstLoud = EvenLevels::fitGlide(k550, edgeEnvelope(k550, lv));
+            QCOMPARE(firstLoud[0], 0.0);
+            for (size_t k = 1; k < n; ++k)
+                  QVERIFY2(std::fabs(firstLoud[k]) < 1.5, qPrintable(dbText(firstLoud)));
+      }
+
+      // a window inside a longer passage ends at the next joined note-on; a note too short for the smoothing is unseen
+      {
+            std::vector<double> o { 0.0, 0.2, 0.4, 0.405, 0.6, 0.8 };
+            std::vector<double> f { 0.22, 0.42, 0.42, 0.62, 0.82, 1.02 };
+            const EvenLevels::Passage p = edgePassage(o, f, { 100, 150, 150, 150, 150, 150 }, { 0, 0, 0, 0, 0, 0 });
+            const std::vector<bool> u = EvenLevels::unseenNotes(p, edgeEnvelope(p, std::vector<double>(6, 40.0)));
+            QVERIFY(u[0] && u[2] && !u[1] && !u[3] && !u[4] && !u[5]);      // (note 2: 5 ms to the next note-on)
+            std::vector<bool> fixed(6, false);
+            fixed[5] = true;
+            std::vector<double> lv(6, 40.0);
+            lv[2] = 46.0;
+            const std::vector<double> vv = EvenLevels::fitGlide(p, edgeEnvelope(p, lv), fixed);
+            QVERIFY(vv[0] == 0.0 && vv[2] == 0.0 && vv[5] == 0.0);
+      }
+
+      // the rounds' measure covers every note: a last or first note off its slur's median as heard counts (no silence
+      // around the passage here: the attack's rise from silence is in every round's rms alike)
+      {
+            std::vector<double> lv(n, 46.0);
+            const double flatRms = EvenLevels::envelopeRms(k550, edgeEnvelope(k550, lv, 46.0));
+            lv[9] += 6.0;
+            const double lastRms = EvenLevels::envelopeRms(k550, edgeEnvelope(k550, lv, 46.0));
+            lv[9] = 46.0;
+            lv[0] += 6.0;
+            const double firstRms = EvenLevels::envelopeRms(k550, edgeEnvelope(k550, lv, 46.0));
+            QVERIFY2(flatRms < 1e-9 && lastRms > 1.0 && firstRms > 0.3,
+                     qPrintable(QString("%1 %2 %3").arg(flatRms).arg(lastRms).arg(firstRms)));
+      }
+
+      // the round choice: the job's measured levels of K. 550's Violins 2 bars 1-3 (rms 5.90 -> 2.28 -> 2.12: round 2
+      // was kept): the Bb 45.78 -> 50.51 -> 56.23 against its slur's D 39.15 -> 38.25 -> 39.70, 6.6 -> 12.3 -> 16.5 dB
+      // off: both rounds rejected, round 0 kept. Bars 24-26 (the C5 49.97 -> 56.65 -> 62.32) the same
+      {
+            const std::vector<double> levels[3] {
+                  lv0,
+                  { 42.3, 42.06, 36.3, 43.1, 42.92, 37.38, 44.29, 44.66, 38.25, 50.51 },
+                  { 39.74, 38.71, 33.69, 40.09, 40.06, 35.57, 41.16, 42.13, 39.7, 56.23 } };
+            const double rms[3] { 5.90, 2.28, 2.12 };
+            const bool measured[3] { true, true, true };
+            int note = -1;
+            QVERIFY(EvenLevels::roundMovesNote(slur, levels[0], levels[2], &note));
+            QCOMPARE(note, 9);
+            int rejected = 0;
+            QCOMPARE(EvenLevels::chooseRound(slur, levels, rms, measured, &rejected), 0);
+            QCOMPARE(rejected, 6);
+            const std::vector<double> l24[3] {
+                  { 45.04, 44.17, 35.01, 48.18, 45.2, 33.1, 48.44, 45.81, 36.04, 49.97 },
+                  { 42.71, 40.16, 35.71, 41.61, 40.09, 34.69, 43.21, 42.24, 37.18, 56.65 },
+                  { 40.06, 36.24, 32.14, 37.47, 37.09, 31.79, 39.8, 40.95, 38.73, 62.32 } };
+            const double rms24[3] { 6.16, 2.73, 2.48 };
+            QCOMPARE(EvenLevels::chooseRound(slur, l24, rms24, measured), 0);
+            // a round that brings every note closer is kept by its rms; one only 2.9 dB further still kept, 3.1 not
+            std::vector<double> better = lv0;
+            for (size_t k = 0; k < n; ++k)
+                  better[k] = 0.5 * (lv0[k] + 46.0);
+            std::vector<double> further = better;
+            const std::vector<double> d0 = EvenLevels::slurDeviations(slur, lv0);
+            const std::vector<double> levelsB[3] { lv0, better, further };
+            QCOMPARE(EvenLevels::chooseRound(slur, levelsB, rms, measured), 2);
+            further[2] = lv0[2];                       // (a slur of one note: never further from itself)
+            const double med5 = EvenLevels::slurStats(slur, further).median.at(5);
+            further[9] = med5 + d0[9] + 2.9;
+            const std::vector<double> levelsC[3] { lv0, better, further };
+            QCOMPARE(EvenLevels::chooseRound(slur, levelsC, rms, measured), 2);
+            further[9] = med5 + d0[9] + 3.1;
+            const std::vector<double> levelsD[3] { lv0, better, further };
+            QCOMPARE(EvenLevels::chooseRound(slur, levelsD, rms, measured), 1);
+            const bool notMeasured[3] { true, true, false };
+            QCOMPARE(EvenLevels::chooseRound(slur, levelsD, rms, notMeasured), 1);
+      }
       }
 
 QTEST_MAIN(TestPerformanceTechnique)
