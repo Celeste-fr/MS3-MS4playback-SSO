@@ -53,7 +53,9 @@ CI history): `docs/HISTORY.md`, read only when you need the background of a topi
     each number has to support its sentence (n, one source, the uncertainty, assumption / measured / computed).
   - **Before a comparison or demo goes out**, run one `research-critic` agent on its design, with the artifact
     only, not my conclusion. It checks that a reference (e.g. one recording) isn't used as ground truth.
-  - **Blind A/B pages**: say on the page, before listening, which answer changes which default. Store the answers
+  - **Blind A/B pages**: say on the page, before listening, which answer changes which default. Include catch trials
+    (A and B the same clip: the owner, 2026-11-01, "if there are any surprising results, I would maybe doubt my hearing"),
+    the reference recording where one exists, ~8 s clips; a surprising result is re-tested before it changes anything. Store the answers
     where I can read them back (ArtifactData), never in localStorage alone. Keep the letter → variant key off the
     page.
   - **A check is trusted only once it has caught a known fault**: positive controls (planted defects, a model
