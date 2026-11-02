@@ -222,6 +222,22 @@ bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arri
       return true;
       }
 
+double LibInstrument::bowedArriveAt(double lenBeforeMs) const
+      {
+      if (bowedArrive.empty())
+            return NAN;
+      if (lenBeforeMs <= bowedArrive.front().first)
+            return bowedArrive.front().second;
+      for (size_t i = 0; i + 1 < bowedArrive.size(); ++i) {
+            const auto& lo = bowedArrive[i];
+            const auto& hi = bowedArrive[i + 1];
+            if (lenBeforeMs <= hi.first)
+                  return hi.first > lo.first ? lo.second + (hi.second - lo.second) * (lenBeforeMs - lo.first) / (hi.first - lo.first)
+                                             : hi.second;
+            }
+      return bowedArrive.back().second;
+      }
+
 double Articulation::onsetAt(int pitch) const
       {
       return keyedMsAt(onsets, onsetMs, pitch);
@@ -1175,6 +1191,16 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         if (ok && std::isfinite(v))
                               li.bowedEarlyMs = std::max(0.0, std::min(1000.0, v));
                         }
+                  li.bowedArrive.clear();
+                  for (const QString& g : a.value("bowedArrive").toString().split(' ', QString::SkipEmptyParts)) {
+                        const QStringList f = g.split(':');
+                        bool ok1 = false, ok2 = false;
+                        const double len = f.size() == 2 ? f[0].toDouble(&ok1) : 0.0;
+                        const double arrive = f.size() == 2 ? f[1].toDouble(&ok2) : 0.0;
+                        if (ok1 && ok2 && std::isfinite(len) && std::isfinite(arrive) && len >= 0 && arrive > 0)
+                              li.bowedArrive.push_back({ len, std::min(5000.0, arrive) });
+                        }
+                  std::sort(li.bowedArrive.begin(), li.bowedArrive.end());
                   li.transportResetScript = a.value("transportResetScript").toString();
                   li.hallDrop = qBound(0, a.value("hallDrop").toInt(), 127);
                   if (a.hasAttribute("lowCut")) {

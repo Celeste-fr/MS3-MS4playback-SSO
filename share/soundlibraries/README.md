@@ -341,6 +341,12 @@ switch value of each articulation. For example:
     the same file's `attackMs`; e.g. Violas 37.1); a transition starts early by its modelled arrival (`bendGlide`,
     else `legatoDelay`). Left out: the attacks play as written and the audit lists the patch
     (docs/PLAYBACK_SETTINGS.md › Plain timing).
+  - `bowedArrive` on an `Instrument` (`"lenBefore:arrive ..."`, ms; left out: not measured): with `[slurs] plainAuto` 1 a
+    plain new bow stroke on this Performance patch whose written length is shorter than the bowed transition's arrival
+    after a note before that long (linear between the listed lengths, the nearest outside) is re-attacked (the map's
+    `reattack`, the note before ending `reattackGap` early) instead of sent bowed: its pitch would never be reached. SSO:
+    the median f0 arrival of the bowed transition, `sso_legato_glide_bowed.json`'s rows without octaves, e.g. Violins 1
+    `"150:302.5 600:300"` (docs/PLAYBACK_SETTINGS.md › Plain Performance › Plain Auto › Re-attacks).
   - `mono` on an `Instrument` (`"1"`, left out: not): a monophonic patch, one line per plug-in slot (SSO's Performance
     patches: a note-on while a note is held is a legato transition that ends it). MuseScore gives a chord's other
     notes, and any note overlapping another, copies of the patch of their own ("voice lanes": `SoundLib::lanes`;

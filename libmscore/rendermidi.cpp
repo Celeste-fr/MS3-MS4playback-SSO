@@ -1746,18 +1746,19 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // where the articulation's onset=, at velocity 80, says 27-111): the note starts early by that onset
                   // the same key struck again right after a note of the chord just before on its track, on the same
                   // patch (legatoTransition's "struck again": no transition, but not after silence either)
-                  auto struckAgain = [&](const Note* note, const SoundLib::Choice& c) {
+                  // (returns that note, the first of its tie chain: the note whose note-off a re-attack moves; nullptr: none)
+                  auto struckAgain = [&](const Note* note, const SoundLib::Choice& c) -> const Note* {
                         Chord* ch = note->chord();
                         if (note->tieBack() || ch->isGrace())
-                              return false;
+                              return nullptr;
                         ChordRest* pcr = prevChordRest(ch, true);
                         if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
                             || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
-                              return false;
+                              return nullptr;
                         const RepeatList& repeats = score->repeatList();
                         auto rs = repeats.findRepeatSegmentFromUTick(ch->tick().ticks() + tickOffset);
                         if (rs == repeats.end() || pcr->tick().ticks() < (*rs)->tick)
-                              return false;
+                              return nullptr;
                         for (const Note* pn : toChord(pcr)->notes()) {
                               if (pn->pitch() != note->pitch() || !pn->play())
                                     continue;
@@ -1766,9 +1767,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (pc && pc.patch == c.patch && !otherLane(note, pn, c.patch))
-                                    return true;
+                                    return first;
                               }
-                        return false;
+                        return nullptr;
                         };
 
                   // a note of the chord just before on its track, on the same patch, ending where this note starts, on any
@@ -1916,6 +1917,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                            int velocity = -1; const Note* before = nullptr; double endMs = 0;
                                            const SoundLib::Articulation::Technique* timedAttack = nullptr;
                                            bool shortenOnly = false;
+                                           bool keepBefore = false;       // [slurs] plainAuto 3's re-attack (LibJoin::keep)
                                            bool accentAttack = false;     // [slurs] plainAccents 2 / 3: the accented attack
                                            // [slurs] plainAuto: a plain note after silence on its patch on the smooth attack
                                            // (its measured onset, less the patch's plainShift, its own early start)
@@ -2006,6 +2008,46 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // the transition branch's slurToSlur), inside a slur fingered (64); staccatos, accents and a key
                         // struck again as plain plays them
                         const bool plainAuto = c.plain && Playback::on("slurs/plainAuto", score);
+                        // [slurs] plainAuto 3 = 1 plus re-attacks (branch plain-reattack, for the owner's blind A/B; from his
+                        // blind A/B of 2026-11-01, K. 550 i bars 1-9, strings, real SSO, build 524: Recommended "wrong", the
+                        // variant re-attacking these notes "fine"; 0, 1 and 2 as before):
+                        // (a) the same key struck again right after itself on its copy (legatoTransition's "struck again",
+                        //     touching: SSO took the note-on at the note-off's instant as a same-pitch transition, no attack,
+                        //     4-12 dB under its neighbours; the violas' repeated eighths a 6 dB pulse; velocity didn't help,
+                        //     the zero gap was the cause): a re-attack, the map's reattack velocity (106), the note before
+                        //     ending the map's reattackGap (54 ms) before it, past SSO's legatoGap (39: a note-on that much
+                        //     after a note-off is a new note); a staccato's or an accent's own attack keeps its velocity and
+                        //     takes the gap (45 / reattackGap) as after a note at another pitch;
+                        // (b) a new bow stroke (a slur after a slur, a slur's first note after an unslurred one, détaché, the
+                        //     note after a slur: the bowed transition below) shorter than the bowed transition's measured
+                        //     arrival after a note before that long (<Instrument bowedArrive>, LibInstrument::bowedArriveAt):
+                        //     its pitch would never be reached (K. 550: 51 of 120 transitions; the loudest note, +3 .. +11
+                        //     dB), so the same re-attack; a longer one keeps the bowed transition
+                        // A re-attack is no transition, so even levels end a passage there (NoteInfo::joined: the gap is wider
+                        // than legatoGap) and the audit models it as a plain attack (plainAttack)
+                        const bool plainReattack = plainAuto && libPlainAuto == 3 && !ownJoin && a->reattackGapMs > 0;
+                        const int reattackVelocity = a->reattackVelocity > 0 ? a->reattackVelocity
+                                                     : a->attack("spiccato") ? a->attack("spiccato")->velocity : PLAIN_VELOCITY;
+                        const Note* again = plainReattack && !joinable ? struckAgain(note, c) : nullptr;
+                        auto bowedArrives = [&](double lenBeforeS) {
+                              const SoundLib::LibInstrument* bp = c.patch >= 0 && c.patch < int(libPatches.size()) ? libPatches[size_t(c.patch)] : nullptr;
+                              const double arrive = bp ? bp->bowedArriveAt(lenBeforeS * 1000.0) : NAN;
+                              if (!std::isfinite(arrive))
+                                    return true;
+                              const Note* last = note->lastTiedNote();
+                              const int t0 = note->chord()->tick().ticks() + tickOffset;
+                              const int t1 = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks() + tickOffset;
+                              return (score->utick2utime(t1) - score->utick2utime(t0)) * 1000.0 >= arrive;
+                              };
+                        auto reattack = [&](PerformanceNote& q, const Note* before) {
+                              q.velocity = reattackVelocity;
+                              q.before = before;
+                              q.endMs = -a->reattackGapMs;
+                              q.shortenOnly = true;
+                              q.keepBefore = true;
+                              q.from = nullptr;
+                              q.plainBowed = false;
+                              };
                         // [slurs] plainAccents 2 / 3: an accent or marcato (as `accent` above) on Auto, without a velocity of its
                         // own, that plays an attack (a staccato's, or a note outside a slur) takes the accented attack instead
                         // of 64, as [slurs] performance gives it; a note touching the one before on the patch is re-attacked
@@ -2016,7 +2058,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                                                             ? a->attack("accented") : nullptr;
                         // ([slurs] plainTiming: an attack chosen in the Inspector with its own measured onset, smooth, starts
                         // early by it: timedAttack)
-                        if (plain && (staccatoNote(note) || (joinable && staccatoNote(joinable)))) {
+                        if (plain && (staccatoNote(note) || (joinable && staccatoNote(joinable)) || (again && staccatoNote(again)))) {
                               if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at)))) {
                                     p.velocity = own > 0 ? own : t->velocity;
                                     if (libPlainTiming && t->hasOnset())
@@ -2028,10 +2070,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     }
                               else
                                     p.velocity = plainVelocity;
-                              if (joinable) {
-                                    p.before = joinable;
+                              if (joinable || again) {      // ((a): a key struck again too, plainAuto 1)
+                                    p.before = joinable ? joinable : again;
                                     p.endMs = -PLAIN_STACCATO_GAP_MS;
                                     p.shortenOnly = true;
+                                    p.keepBefore = !joinable;
                                     }
                               return p;
                               }
@@ -2048,6 +2091,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               // where the slur before ends keeps [slurs] transitions' bowed transition, its velocity (93;
                               // Violas' legatoVelocity 100), as the owner set it on 2026-10-12 ("two slurs adjacent to each
                               // other will use bowed"); before, plainPerformance's 64 made it SSO's fingered one. 0: 64)
+                              if (plainReattack && slurToSlur && own <= 0 && !explicitTechnique && !bowedArrives(lenBefore)) {
+                                    reattack(p, joinable);      // ((b): too short for the bowed transition to arrive)
+                                    p.interval = 0;
+                                    p.lenBefore = 0;
+                                    return p;
+                                    }
                               if (c.plain && !explicitTechnique && !(slurToSlur && own <= 0 && plainAuto))
                                     p.velocity = plainVelocity;
                               else if (c.plain && !explicitTechnique && own <= 0)
@@ -2058,10 +2107,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (accented) {
                                     p.velocity = accented->velocity;
                                     p.accentAttack = true;
-                                    if (joinable && a->reattackGapMs > 0) {       // (a re-attack, not SSO's transition)
-                                          p.before = joinable;
+                                    if ((joinable || again) && a->reattackGapMs > 0) {       // (a re-attack, not SSO's transition;
+                                          p.before = joinable ? joinable : again;                // (a): a key struck again too)
                                           p.endMs = -a->reattackGapMs;
                                           p.shortenOnly = true;
+                                          p.keepBefore = !joinable;
                                           }
                                     return p;
                                     }
@@ -2070,6 +2120,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     if (libPlainTiming && t->hasOnset())
                                           p.timedAttack = t;
                                     }
+                              else if (again && own <= 0 && !explicitTechnique && !accent)
+                                    p.velocity = reattackVelocity;    // ((a): a key struck again, plainAuto 1; its gap below)
                               else if (plainAuto && own <= 0 && !explicitTechnique && !accent && !joinable && !touchesPatch(note, c)
                                        && (t = a->attack("smooth"))) {
                                     // ([slurs] plainAuto 1, 2026-10-26, the owner: "slurs should have smooth start when there's
@@ -2080,6 +2132,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     p.smoothStart = t;
                                     if (libPlainTiming && t->hasOnset())
                                           p.timedAttack = t;
+                                    }
+                              else if (plainReattack && own <= 0 && !explicitTechnique && !accent && joinable && a->transition("bowed")
+                                       && !bowedArrives(lenBefore)) {
+                                    reattack(p, joinable);      // ((b): a new bow too short for the bowed transition to arrive)
+                                    return p;
                                     }
                               else if (plainAuto && own <= 0 && !explicitTechnique && !accent && joinable
                                        && (t = a->transition("bowed"))) {
@@ -2092,6 +2149,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     }
                               else
                                     p.velocity = plainVelocity;
+                              if (again) {            // ((a): its own velocity or attack too: never a same-key transition)
+                                    const int v = p.velocity;
+                                    reattack(p, again);
+                                    p.velocity = v;
+                                    return p;
+                                    }
                               if (joinable) {         // (touching: SSO's transition from it)
                                     p.from = joinable;
                                     p.interval = interval;
@@ -2320,7 +2383,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           libNote.velocity = perf.velocity;
                                     if (perf.before && !writtenTiming)      // (written timing: the note before as written)
                                           libJoins.push_back({ noteChannel, libChoice.patch, playedKey(perf.before), note,
-                                                               note->chord()->tick().ticks() + tickOffset, perf.endMs, perf.shortenOnly });
+                                                               note->chord()->tick().ticks() + tickOffset, perf.endMs, perf.shortenOnly, perf.keepBefore });
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
                                           LibTrace& t = libTrace->back();
                                           t.velocity = libNote.velocity;
@@ -3349,12 +3412,17 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                         if (i->first < on)
                               lastOn = i->first;
                         }
-                  else if (lastOn >= 0 && (off == events->end() || std::abs(i->first - on) < std::abs(off->first - on)))
-                        off = i;
+                  else if (lastOn >= 0 && (off == events->end() || std::abs(i->first - on) < std::abs(off->first - on))
+                           && !(j.keep && (i->first > on || (ev.note() && ev.note()->firstTiedNote() == j.note))))
+                        off = i;          // (keep: a re-attack's gap is the note before's, never this note's own note-off:
+                                          // after a note before that already ended earlier its own note-off was the nearest,
+                                          // and this note ended before its note-on; Heard passages' Celli bar 5)
                   }
             if (off == events->end())
                   continue;
-            const int to = std::max(lastOn + 1, score->utime2utick(score->utick2utime(on) + j.ms / 1000.0));
+            int to = std::max(lastOn + 1, score->utime2utick(score->utick2utime(on) + j.ms / 1000.0));
+            if (j.keep && lastOn >= 0)          // (the note before keeps keepMs as played)
+                  to = std::min(off->first, std::max(to, score->utime2utick(score->utick2utime(lastOn) + libKeep)));
             if (to == off->first || (j.shortenOnly && to > off->first))
                   continue;
             const NPlayEvent ev = off->second;

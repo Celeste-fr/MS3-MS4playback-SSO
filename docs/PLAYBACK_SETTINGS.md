@@ -1299,7 +1299,7 @@ and in Recommended, 0 in Library default; the owner, 2026-10-17, after hearing t
     Whence, Recommended: that note, the Basses' bars 10 / 14 and the Violas' bars 12 / 16 join, no other note changes);
   - **inside a slur**: 64, SSO's fingered transition, as before;
   - unchanged: a staccato (and a note after a staccato) a spiccato attack at 64, an accent as `[slurs] plainAccents` plays
-    it, the same key struck again right after itself 64 (an attack).
+    it, the same key struck again right after itself 64 (an attack; 3 re-attacks it, below).
   0: every such note at 64, as from 2026-10-17. Whence (quarter tones), Recommended, 1 against 0 (dumpEvents chunked): 102 of
   454 library notes change, nothing else in the trace: 10 smooth (Violins 1 2, Violins 2 1, Violas 2, Celli 3, Basses 2),
   92 bowed (Celli 45, Violas 23 at 100, Violins 1 14, Basses 10; 63 of them a slur after a slur, the rest détaché or after a
@@ -1325,6 +1325,61 @@ and in Recommended, 0 in Library default; the owner, 2026-10-17, after hearing t
     bowed model: 1 148 fails (Violas 45, Celli 64, Violins 1 36, Basses 3), 2 96 (Celli 60, Violins 1 36): what is left are
     microtoneBends 3's midEarly fingered transitions next to them, which the audit's plain model still takes as heard at
     plainShift alone. Not heard.
+  - **3: 1 plus re-attacks** (branch `plain-reattack`, 2026-11-01; **for the owner's blind A/B**: 1 stays the default
+    and Recommended's, 0 / 1 / 2 render as before, byte for byte; it changes owner-decided sound, e.g. Whence's Celli bars
+    1-2 slur starts, which he wanted bowed, 2026-10-26). From his blind A/B the same day on K. 550 i bars 1-9, strings, real
+    SSO, build 524: Recommended "wrong", "????????"; plainAuto 0 "wrong"; evenLevels 0 "wrong"; plainPerformance 0 "wrong",
+    "violin way too loud"; the variant re-attacking these notes by hand "fine". As 1, and:
+    - **(a) the same key struck again** right after itself on its copy (same pitch, touching, the same voice lane) plays
+      the map's **re-attack** (`reattack`, 106; a staccato's 64 / an accent's accented attack keep their velocity), the note
+      before ending the map's `reattackGap` (54 ms) before it (45 ms after a staccato). Before, it touched the note before at
+      64: SSO takes a note-on at the note-off's instant as a same-pitch transition (its `legatoGap` is 39 ms), so the note had
+      no attack and sat 4-12 dB under its neighbours (K. 550's violins: the slurred D eighth, then the quarter D; the
+      violas' repeated eighths a 6 dB pulse). E1 (velocity 106, no gap) kept the quarter weak: the zero gap was the cause,
+      and 54 ms clears SSO's window. Any velocity or attack of its own (the Inspector) keeps that and takes the gap too.
+    - **(b) a new bow too short for the bowed transition**: a new bow stroke above (a slur after a slur, a slur's first note
+      after an unslurred one, détaché, the note after a slur) whose written length (its tie chain's) is shorter than the
+      bowed transition's measured arrival after a note before that long plays the same re-attack instead (106, the note
+      before ending 54 ms early). The arrival is the map's **`<Instrument bowedArrive="lenBefore:arrive ...">`**: the median
+      ms after the note-on at which SSO's bowed transition (93, Violas 100) reaches nine tenths of the way to its pitch, after
+      a 150 / 600 ms note before, without the octave rows and with the file's validity rule (a transition that never
+      arrives is left out, so the figure is if anything early): `sso_legato_glide_bowed.json`'s rows (kthost build 485 +
+      Kontakt 8 + SSO, the test VM, 2026-10-27) -> `gen_spitfire_sso.py` BOWED_ARRIVE: Violins 1 302.5 / 300, Violins 2
+      330 / 365, Violas 297.5 / 320, Celli 411.2 / 338.8, Basses 202.5 / 285 ms; linear between, the nearest outside
+      (`LibInstrument::bowedArriveAt`; in the map for 3 only, unused by 1). Not `bendGlide`: measured in slurred runs of steps, it gives 100-130 ms after a
+      136 ms note, while every reading of SSO's new bows says otherwise: K. 550's violas, eighths (155 ms) after eighths,
+      mostly never reached their pitch (51 of 120 transitions in the heard check), and in Whence's build 491 heard check
+      (real SSO, Recommended) the bowed new bows on sixteenths (136 ms) reached their pitch in 3 of 63 (Violins 1 0 of 13,
+      Violas 3 of 21, Celli 0 of 29), those on half and whole notes (1.09 / 2.18 s) in 29 of 29. A longer new bow keeps the
+      bowed transition (Whence's slow ones). The re-attack goes on the copy the note was given before (its bend set at its
+      note-on, no glide). A patch without `bowedArrive`: bowed as before.
+    - Both are attacks: even levels end a passage at each (the gap is wider than `legatoGap`: `NoteInfo::joined`), the
+      audit models them as plain attacks (`plainAttack`), Live's plain set plays them through the written clips' timing
+      (`tst_liveequivalence::plainReattackLive`). Tests `tst_soundlibrary::plainReattack`.
+    - Dumps (dumpEvents chunked, Recommended with plainAuto 3 against 1): K. 550 strings bars 1-9, 180 of 246 notes change: Violins 1 /
+      2 the 12 re-struck quarters each 64 -> 106 with a 54 ms gap, slur starts on eighths bowed 93 -> 106 (Violins 1 4,
+      Violins 2 10: Violins 2's bowed quarters, 311 ms, are under its 330-365 ms arrival, Violins 1's 6 over its ~301 and
+      stay bowed; in Recommended's heard check those quarters did reach their pitch, 11 of 12), the Violas' 72 re-struck
+      eighths 64 -> 106 and 70 on-beat eighths bowed 100 -> 106; Celli and Basses unchanged. Even levels' longest joined run
+      on a route 10 / 10 / 72 notes -> 3 / 2 / 1. Whence (quarter tones), 63 of 454 change, all bowed new bows on sixteenths
+      (136 ms) -> re-attacks (Violas 21, Violins 1 13, Celli 29, 11 of them at 99 by `avoid`); its 29 slow new bows (1.09 /
+      2.18 s) stay bowed; no re-struck key there touches. In both, every note-on keeps its time and key; what changes is
+      those notes' velocity, the note before's note-off (54 ms before) and what follows from an attack in place of a
+      transition: no bend glide (Whence: 1403 pitch-bend values gone, 912 new) and the CC11 steps of `transitionLevels` /
+      `attackLevels` (K. 550: 661 CC11 values gone, 116 new). Whence's passages split (longest run 88 / 120 / 56 -> 5 / 4 / 5), so its
+      stored even levels would go stale and be measured again. Not heard.
+    - The join: a re-attack's gap is cut from the note before's note-off at or before the re-attack's note-on, never the
+      note's own (after a note before that had already ended, e.g. a staccato, the nearest note-off was the note's own and
+      it ended before its note-on: Heard passages' Celli bar 5, `chunkedEqualsWhole`), and the note before keeps
+      `[legato] keepMs` as played (`LibJoin::keep`; the gap narrows after a very short note).
+    - **Audit** (`tst_playbackaudit auditScore`, Recommended with plainAuto 3 against 1): K. 550 strings ARRIVAL 133 -> 55 fails (Violas 71 -> 1,
+      violins 62 -> 54); Whence 33 -> 159 (Violas 17 -> 59, Violins 1 9 -> 35, Celli 4 -> 62, Basses 3 -> 3). Whence's new
+      fails are the model's: a plain re-attack is heard plainAttack after its note-on, which plainShift (the median of all
+      plain notes, mostly transitions) already sends early, so it is predicted early by plainShift - plainAttack (Violins 1
+      46, Violins 2 37, Violas 74, Celli 42, Basses 22 ms) while the fingered transitions next to it arrive late (Violas
+      +47): 100-120 ms between neighbours in a sixteenth run. **Open option** (timing is the owner's to hear): send a
+      re-attack later by plainShift - plainAttack, as the smooth attack is sent earlier by its own onset; not built. The
+      K. 550 variant he called "fine" played them at plainShift, as 3 does. Not checked against the sound.
 - **Joins across tunings**, `[slurs] plainJoins` (branch `slur-joins`, 2026-10-22; **0 everywhere**: the owner heard both
   the same day, Whence's Violas bars 11-13 / 15-17 alone with a click: "violas A better for both", A being the attack on
   the note's own copy; the half note is unslurred, so a new bow stroke, which the attack plays and a transition doesn't;
@@ -2578,7 +2633,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Speed from written, `[slurs] speedFromWritten` (the owner approved, 2026-10-17): on SSO's five string-section Performance patches CC119 (the transition's speed variant: RUNS / RUNS RT / FAST LEGATO) is MuseScore's: the patch's state has the script's own writing off (`$vfm12` 0, map `speedCC` / `speedScript`), each legato note-on gets 126 - floor(written ms from the note before x 127 / 1000) right before it, so early starts keep the written band; attacks none (above, Speed from written) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`speedFromWritten`, `speedValue`, `playbackScriptValues`), `rendermidi.cpp` (`libSpeed`, `librarySpeeds`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`, `Slot::values`), `liveclips.cpp` (`EXTRA_CARRIERS`), `plainliveset.cpp` (`speedEnvelope`); data: `sso_performance_layers.json` | `[slurs] speedFromWritten`; score: `playbackSettings` |
 | Fixed transitions, `[slurs] fixedTransitions` (2026-10-20, not yet heard by the owner): on SSO's five string sections' Performance patches the modulators from Kontakt's random generator (source type 10: the transitions' envelope level, the sustains' pitch) at intensity 0 in the state loaded, so every play of a passage sounds the same, an average take (above, Fixed transitions) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`fixedTransitions`, `playbackScriptValues`), `mscore/soundlibraryhost.cpp` (`setupStateWith`, `resave`), `audio/vst3/kontaktsetup.cpp` (`randomSources`, `withRandomSources`) | `[slurs] fixedTransitions`; score: `playbackSettings` |
 | Joins across tunings, `[slurs] plainJoins` (2026-10-22; the owner: "violas A better for both", the attack): 1 an unslurred plain Performance note touching the note before at another tuning stays on that note's copy and plays as a transition; 0 it goes on its own tuning's copy with its own attack (above, Plain Performance › Joins across tunings) | 0 (Recommended 0, Library default 0) | `soundlibrary.cpp` (`SoundLib::lanes`, `plainJoin`) | `[slurs] plainJoins`; score: `playbackSettings` |
-| Plain Auto, `[slurs] plainAuto` (branch `celli-bowed`, 2026-10-26; the owner: "it's supposed to be bowed", "slurs should have smooth start when there's nothing preceding it", widened the same day): with plainPerformance, 1 "smooth after a rest, bowed on each new bow, fingered inside a slur, spiccato for staccatos": a plain note on Auto after silence on its patch the smooth attack (5), early by its smooth onset less the patch's plainShift (Violins 1 34, Violins 2 25, Violas 125, Celli 92, Basses 44 ms); a note touching the note before outside a slur going on the bowed transition (93; Violas 100); inside a slur 64; staccatos, accents, a key struck again as before; 2 (branch `bowed-early`, 2026-10-27, to compare by ear) as 1, each new bow stroke early by the map's `bowedEarly` (the bowed transition's measured heard time less plainShift: Violins 1 125, Violins 2 151, Violas 55, Celli 106, Basses 64 ms), capped as midEarly; 0 all 64, as from 2026-10-17 (above, Plain Performance › Plain Auto) | 1 (Recommended 1, Library default 0) | `rendermidi.cpp` (`performanceNote`'s `plainAuto`, `PerformanceNote::smoothStart`; collectNote's early start) | `[slurs] plainAuto`; score: `playbackSettings` |
+| Plain Auto, `[slurs] plainAuto` (branch `celli-bowed`, 2026-10-26; the owner: "it's supposed to be bowed", "slurs should have smooth start when there's nothing preceding it", widened the same day): with plainPerformance, 1 "smooth after a rest, bowed on each new bow, fingered inside a slur, spiccato for staccatos": a plain note on Auto after silence on its patch the smooth attack (5), early by its smooth onset less the patch's plainShift (Violins 1 34, Violins 2 25, Violas 125, Celli 92, Basses 44 ms); a note touching the note before outside a slur going on the bowed transition (93; Violas 100), inside a slur 64; staccatos, accents, a key struck again as before; 2 (branch `bowed-early`, 2026-10-27, to compare by ear) as 1, each new bow stroke early by the map's `bowedEarly` (the bowed transition's measured heard time less plainShift: Violins 1 125, Violins 2 151, Violas 55, Celli 106, Basses 64 ms), capped as midEarly; 3 (branch `plain-reattack`, 2026-11-01, for the owner's blind A/B) as 1, a key struck again, and a new bow shorter than the map's `bowedArrive` (the bowed transition's measured arrival), the re-attack (106, the note before ending `reattackGap` 54 ms early); 0 all 64, as from 2026-10-17 (above, Plain Performance › Plain Auto) | 1 (Recommended 1, Library default 0) | `rendermidi.cpp` (`performanceNote`'s `plainAuto`, `PerformanceNote::smoothStart`; collectNote's early start) | `[slurs] plainAuto`; score: `playbackSettings` |
 | Fast transitions, `[slurs] fastTransitions` (2026-10-20; the owner's choice 2026-10-28): a legato note-on less than 15 ms after the note-on before on its route at velocity 20-64, which SSO ignores (the audit's DROPPED), sent at 65, the lowest that plays, the same transition family (above, Fast transitions) | 1 (Recommended 1, Library default 0) | `rendermidi.cpp` (`libraryFastTransitions`) | `[slurs] fastTransitions`; score: `playbackSettings` |
 | Microtone bends, `[slurs] microtoneBends` (2026-10-21; 3 since 2026-10-22, the owner by ear): 1 a microtonal note on a bending patch joined by a legato transition on the key on the side of the note before (key and bend the same way) and a fingered transition's bend by `bendGlideFingered`, uncut past the next note-on; 2 the glide only; 3 as 1 and each plain fingered transition there early by its glide's middle less plainShift (2026-10-22, by hand) (above, Microtone bends) | 3 (Recommended 3, Library default 0) | `rendermidi.cpp` (`microtoneSpelling`, `libraryPitchBends`), `soundlibrary.cpp` (`bendGlideAt`) | `[slurs] microtoneBends`; score: `playbackSettings` |
 | Run bends, `[slurs] runBends` (2026-10-29, OPEN_ITEMS 5): 1 in a fast legato run on a patch with runLag (SSO Violins 1, Violas, Celli - Performance) the bend also corrects the patch's own lagging pitch, every 10 ms, so each note is heard at its written pitch from its written start as far as range and smoothing allow; a bowed transition without a bowed lag (SSO's map since 2026-10-30) not corrected in its own window (above, Run bends) | 1 (Recommended 1, Library default 0; since 2026-10-31) | `rendermidi.cpp` (`libraryPitchBends`' `runBendPath`), `soundlibrary.cpp` (`runLag`) | `[slurs] runBends`; score: `playbackSettings` |
