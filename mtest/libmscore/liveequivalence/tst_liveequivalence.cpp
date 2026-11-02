@@ -9763,11 +9763,11 @@ void TestLiveEquivalence::plainAutoLive()
 
 //---------------------------------------------------------
 //   plainReattackLive
-//    [slurs] plainAuto 1's re-attacks (branch plain-reattack, tst_soundlibrary::plainReattack) reach Live:
+//    [slurs] plainAuto 3's re-attacks (branch plain-reattack, tst_soundlibrary::plainReattack) reach Live:
 //    plain-reattack.musicxml on a plain Performance patch (plainShift 80, bowedArrive 300 ms). A key struck again and a new
 //    bow shorter than 300 ms play the re-attack (106), the note before ending 54 ms before it; the plain set's technique
 //    clip holds the same velocities and, with the Track Delay and the device's delays, plays every note-on / note-off
-//    MuseScore plays, the moved note-offs too (as plainWritten). plainAuto 2: no re-attack (its touching re-struck keys
+//    MuseScore plays, the moved note-offs too (as plainWritten). plainAuto 1: no re-attack (its touching re-struck keys
 //    the plain set ends a unit early: retriggerOrder)
 //---------------------------------------------------------
 
@@ -9802,7 +9802,7 @@ void TestLiveEquivalence::plainReattackLive()
             r.renderScore(&events, ctx);
             return events;
             };
-      for (int plainAuto : { 1, 2 }) {
+      for (int plainAuto : { 3, 1 }) {
             Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
                                             { "slurs/plainAuto", QString::number(plainAuto) } });
             score->setPlaylistDirty();
@@ -9824,8 +9824,8 @@ void TestLiveEquivalence::plainReattackLive()
                         }
                   want.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), on));
                   }
-            QCOMPARE(reattacks, plainAuto == 1 ? 7 : 0);
-            if (plainAuto == 1)
+            QCOMPARE(reattacks, plainAuto == 3 ? 7 : 0);
+            if (plainAuto == 3)
                   for (int tick : { 480, 960, 1200, 1680, 2880, 5760, 6240 })
                         QCOMPARE(museScore[tick], 106);
             std::multiset<int> clip;
@@ -9844,7 +9844,7 @@ void TestLiveEquivalence::plainReattackLive()
                                           got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.second)), false));
                                           }
             QCOMPARE(clip, ms);
-            if (plainAuto == 2)     // (its re-struck keys touch: the plain set ends each a unit early, RETRIGGER_MARGIN_MS)
+            if (plainAuto == 1)     // (its re-struck keys touch: the plain set ends each a unit early, RETRIGGER_MARGIN_MS)
                   continue;
             if (got != want) {
                   for (const auto& g : got)

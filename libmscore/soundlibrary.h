@@ -449,7 +449,7 @@ struct LibInstrument {
       // 23.5 ms, after its note-on less plainShift, without the octaves; sso_legato_glide_bowed.json `proposalNoOctavesMs`
       // -> gen_spitfire_sso.py BOWED_EARLY). NaN: not measured (plainShift only)
       double bowedEarlyMs { NAN };
-      // [slurs] plainAuto 1 (branch plain-reattack, the owner's A/B of 2026-11-01): when a plain new bow stroke's bowed
+      // [slurs] plainAuto 3 (branch plain-reattack, for the owner's blind A/B): when a plain new bow stroke's bowed
       // transition reaches its pitch, ms after its note-on, by the note before's length (<Instrument bowedArrive=
       // "150:302.5 600:300">: lenBeforeMs:arriveMs, the median f0 arrival (nine tenths of the way) of SSO's bowed
       // transition at velocity 93 (Violas 100) after a note that long, without the octave rows, valid readings only;

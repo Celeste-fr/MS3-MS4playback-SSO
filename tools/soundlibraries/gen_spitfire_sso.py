@@ -1381,7 +1381,7 @@ PLAIN_SHIFT = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.p
 BOWED_EARLY = {k: v['proposalNoOctavesMs'] for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                                      'sso_legato_glide_bowed.json'), encoding='utf-8')).items()
                if not k.startswith('_') and 'proposalNoOctavesMs' in v}
-# bowedArrive= ("lenBefore:arrive ..." ms; [slurs] plainAuto 1, branch plain-reattack, the owner's A/B of 2026-11-01 on
+# bowedArrive= ("lenBefore:arrive ..." ms; [slurs] plainAuto 3, branch plain-reattack, the owner's A/B of 2026-11-01 on
 # K. 550 i bars 1-9, real SSO, build 524): when the bowed transition of a plain new bow stroke reaches its pitch (f0 at nine
 # tenths of the way) after its note-on, by the note before's length: the median over sso_legato_glide_bowed.json's rows
 # (legato_glide/bowed.py: velocity 93, Violas 100; after an attack or a transition) without the octave rows (YIN's octave

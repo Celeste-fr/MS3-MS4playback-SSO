@@ -1917,7 +1917,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                            int velocity = -1; const Note* before = nullptr; double endMs = 0;
                                            const SoundLib::Articulation::Technique* timedAttack = nullptr;
                                            bool shortenOnly = false;
-                                           bool keepBefore = false;       // [slurs] plainAuto 1's re-attack (LibJoin::keep)
+                                           bool keepBefore = false;       // [slurs] plainAuto 3's re-attack (LibJoin::keep)
                                            bool accentAttack = false;     // [slurs] plainAccents 2 / 3: the accented attack
                                            // [slurs] plainAuto: a plain note after silence on its patch on the smooth attack
                                            // (its measured onset, less the patch's plainShift, its own early start)
@@ -2008,9 +2008,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // the transition branch's slurToSlur), inside a slur fingered (64); staccatos, accents and a key
                         // struck again as plain plays them
                         const bool plainAuto = c.plain && Playback::on("slurs/plainAuto", score);
-                        // [slurs] plainAuto 1's re-attacks (branch plain-reattack; the owner's blind A/B of 2026-11-01, K. 550 i
-                        // bars 1-9, strings, real SSO, build 524: Recommended "wrong", the variant re-attacking these notes
-                        // "fine"; 0 and 2 as before):
+                        // [slurs] plainAuto 3 = 1 plus re-attacks (branch plain-reattack, for the owner's blind A/B; from his
+                        // blind A/B of 2026-11-01, K. 550 i bars 1-9, strings, real SSO, build 524: Recommended "wrong", the
+                        // variant re-attacking these notes "fine"; 0, 1 and 2 as before):
                         // (a) the same key struck again right after itself on its copy (legatoTransition's "struck again",
                         //     touching: SSO took the note-on at the note-off's instant as a same-pitch transition, no attack,
                         //     4-12 dB under its neighbours; the violas' repeated eighths a 6 dB pulse; velocity didn't help,
@@ -2025,7 +2025,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         //     dB), so the same re-attack; a longer one keeps the bowed transition
                         // A re-attack is no transition, so even levels end a passage there (NoteInfo::joined: the gap is wider
                         // than legatoGap) and the audit models it as a plain attack (plainAttack)
-                        const bool plainReattack = plainAuto && libPlainAuto == 1 && !ownJoin && a->reattackGapMs > 0;
+                        const bool plainReattack = plainAuto && libPlainAuto == 3 && !ownJoin && a->reattackGapMs > 0;
                         const int reattackVelocity = a->reattackVelocity > 0 ? a->reattackVelocity
                                                      : a->attack("spiccato") ? a->attack("spiccato")->velocity : PLAIN_VELOCITY;
                         const Note* again = plainReattack && !joinable ? struckAgain(note, c) : nullptr;

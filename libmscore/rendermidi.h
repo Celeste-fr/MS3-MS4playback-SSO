@@ -228,7 +228,7 @@ class MidiRenderer {
       // a Performance note's join (rendermidi.cpp performanceNote; finishLibraryEvents): the note before on its patch
       // (key) ends ms after (overlap) or before (re-attack gap) the note's note-on as played
       // (shortenOnly: the note before ends there only if it would end later: [slurs] plainPerformance's staccato gap)
-      // (keep: [slurs] plainAuto 1's re-attacks, branch plain-reattack: the gap is taken from the note before's note-off at
+      // (keep: [slurs] plainAuto 3's re-attacks, branch plain-reattack: the gap is taken from the note before's note-off at
       // or before this note's note-on, never this note's own, and the note before keeps [legato] keepMs as played)
       struct LibJoin { int channel; int patch; int key; const Note* note; int written; double ms; bool shortenOnly = false; bool keep = false; };
       std::vector<LibJoin> libJoins;
