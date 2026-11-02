@@ -200,6 +200,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void divisiLive();
       void microtoneBendsLive();
       void plainAutoLive();
+      void plainReattackLive();
       void plainJoinsLive();
       void transitionLevelsLive();
       void transitionTailsLive();
@@ -9755,6 +9756,104 @@ void TestLiveEquivalence::plainAutoLive()
                                           got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.second)), false));
                                           }
             QCOMPARE(clip, velocity);
+            QCOMPARE(got, want);
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainReattackLive
+//    [slurs] plainAuto 1's re-attacks (branch plain-reattack, tst_soundlibrary::plainReattack) reach Live:
+//    plain-reattack.musicxml on a plain Performance patch (plainShift 80, bowedArrive 300 ms). A key struck again and a new
+//    bow shorter than 300 ms play the re-attack (106), the note before ending 54 ms before it; the plain set's technique
+//    clip holds the same velocities and, with the Track Delay and the device's delays, plays every note-on / note-off
+//    MuseScore plays, the moved note-offs too (as plainWritten). plainAuto 2: no re-attack (its touching re-struck keys
+//    the plain set ends a unit early: retriggerOrder)
+//---------------------------------------------------------
+
+void TestLiveEquivalence::plainReattackLive()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='40'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='80' bowedArrive='150:300 600:300'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-reattack.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto render = [score](bool written) {
+            EventMap events;
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            r.setWrittenTiming(written);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      for (int plainAuto : { 1, 2 }) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
+                                            { "slurs/plainAuto", QString::number(plainAuto) } });
+            score->setPlaylistDirty();
+            const EventMap played = render(false);
+            const EventMap written = render(true);
+            const LiveClips::Timeline tl = LiveClips::timeline(score);
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, played, tl, &written);
+            std::map<int, int> museScore;                     // written tick -> velocity
+            std::multiset<std::tuple<int, int, int, bool>> want;
+            int reattacks = 0;
+            for (const auto& te : played) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch() || (e.type() != ME_NOTEON && e.type() != ME_NOTEOFF))
+                        continue;
+                  const bool on = e.type() == ME_NOTEON && e.velo() > 0;
+                  if (on && e.note()) {
+                        museScore[e.note()->chord()->tick().ticks()] = e.velo();
+                        reattacks += e.velo() == 106;
+                        }
+                  want.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), on));
+                  }
+            QCOMPARE(reattacks, plainAuto == 1 ? 7 : 0);
+            if (plainAuto == 1)
+                  for (int tick : { 480, 960, 1200, 1680, 2880, 5760, 6240 })
+                        QCOMPARE(museScore[tick], 106);
+            std::multiset<int> clip;
+            std::multiset<int> ms;
+            for (const auto& kv : museScore)
+                  ms.insert(kv.second);
+            std::multiset<std::tuple<int, int, int, bool>> got;
+            for (const PlainLiveSet::Section& sec : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : sec.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts)
+                              for (const PlainLiveSet::Technique& t : k.techniques)
+                                    for (const LiveClips::Note& n : t.notes) {
+                                          clip.insert(n.velocity);
+                                          const std::pair<double, double> at = LiveTiming::playedBy(t.timing, n, tl.bpm);
+                                          got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.first)), true));
+                                          got.insert(std::make_tuple(k.port * 16 + k.channel, n.pitch, int(std::lround(at.second)), false));
+                                          }
+            QCOMPARE(clip, ms);
+            if (plainAuto == 2)     // (its re-struck keys touch: the plain set ends each a unit early, RETRIGGER_MARGIN_MS)
+                  continue;
+            if (got != want) {
+                  for (const auto& g : got)
+                        if (!want.count(g))
+                              qWarning("plainAuto %d: Live only %d %d %d %d", plainAuto, std::get<0>(g), std::get<1>(g), std::get<2>(g), int(std::get<3>(g)));
+                  for (const auto& g : want)
+                        if (!got.count(g))
+                              qWarning("plainAuto %d: MuseScore only %d %d %d %d", plainAuto, std::get<0>(g), std::get<1>(g), std::get<2>(g), int(std::get<3>(g)));
+                  }
             QCOMPARE(got, want);
             }
       delete score;

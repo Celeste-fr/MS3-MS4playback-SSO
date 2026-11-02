@@ -188,6 +188,7 @@ class TestSoundLibrary : public QObject, public MTest
       void smoothOnset();
       void transitionsEarly();
       void plainPerformance();
+      void plainReattack();
       void plainTiming();
       void speedFromWritten();
       void levelContext();
@@ -2975,6 +2976,156 @@ void TestSoundLibrary::plainPerformance()
             QVERIFY(listed);
             QVERIFY(rep.text().contains("Violin - Performance not measured (0)"));
       }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   plainReattack
+//    [slurs] plainAuto 1's re-attacks (branch plain-reattack, the owner's blind A/B of 2026-11-01, K. 550 i bars 1-9 on
+//    real SSO): (a) a key struck again right after itself plays the map's re-attack (106), the note before ending the
+//    map's reattackGap (54 ms) before it (before: touching, SSO's same-key transition); (b) a new bow stroke shorter
+//    than the bowed transition's arrival (<Instrument bowedArrive>, here 300 ms) re-attacked the same way, a longer one
+//    still bowed (93); even levels' passages end at each re-attack (NoteInfo::joined). plainAuto 2 and 0 as before.
+//    plain-reattack.musicxml, 120 bpm
+//---------------------------------------------------------
+
+void TestSoundLibrary::plainReattack()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      const QString map = "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1' velocity='short spiccato staccatissimo pizzicato'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato'/>"
+         "<Articulation name='Spiccato' value='42' techniques='spiccato staccatissimo short'/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin' plainShift='80' bowedArrive='600:300 150:300'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39'/>"
+         "</Instrument></SoundLibrary>";
+      auto lib = loadMap(map);
+      QVERIFY(lib);
+      for (const SoundLib::LibInstrument& li : lib->instruments)
+            if (li.name == "Violin - Performance") {
+                  QCOMPARE(int(li.bowedArrive.size()), 2);
+                  QCOMPARE(li.bowedArrive.front().first, 150.0);              // (sorted)
+                  QCOMPARE(li.bowedArriveAt(10.0), 300.0);
+                  QCOMPARE(li.bowedArriveAt(2000.0), 300.0);
+                  }
+            else
+                  QVERIFY(std::isnan(li.bowedArriveAt(300.0)));
+      {     // (linear between the measured lengths)
+      SoundLib::LibInstrument li;
+      li.bowedArrive = { { 150.0, 200.0 }, { 600.0, 300.0 } };
+      QCOMPARE(li.bowedArriveAt(375.0), 250.0);
+      }
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      MasterScore* score = readScore(DIR + "plain-reattack.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+
+      struct N { double on; double off; int pitch; int velo; };
+      struct R { std::map<int, N> notes; std::map<int, MidiRenderer::LibTrace> trace; std::map<int, bool> joined; };
+      auto render = [&]() {
+            R r;
+            score->setPlaylistDirty();
+            EventMap events;
+            std::vector<MidiRenderer::LibTrace> trace;
+            std::vector<EvenLevels::NoteInfo> info;
+            MidiRenderer midi(score);
+            midi.setLibraryTrace(&trace);
+            midi.setEvenLevelsInfo(&info);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            midi.renderScore(&events, ctx);
+            for (const MidiRenderer::LibTrace& t : trace)
+                  if (t.note)
+                        r.trace[t.note->chord()->tick().ticks()] = t;
+            for (const EvenLevels::NoteInfo& in : info)
+                  if (in.note)
+                        r.joined[in.note->chord()->tick().ticks()] = in.joined;
+            std::map<int, int> open;          // pitch -> tick of the sounding note
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch())
+                        continue;
+                  const double t = score->utick2utime(te.first) * 1000.0;
+                  if (e.type() == ME_NOTEON && e.velo() > 0 && e.note()) {
+                        const int tick = e.note()->chord()->tick().ticks();
+                        r.notes[tick] = { t, -1, e.pitch(), e.velo() };
+                        open[e.pitch()] = tick;
+                        }
+                  else if ((e.type() == ME_NOTEOFF || (e.type() == ME_NOTEON && e.velo() == 0)) && open.count(e.pitch())) {
+                        N& n = r.notes[open[e.pitch()]];
+                        if (n.off < 0 && t > n.on)
+                              n.off = t;
+                        }
+                  }
+            return r;
+            };
+      // the gap before the note at tick (its note-on less the note before's note-off, ms)
+      auto gap = [](const R& r, int before, int tick) { return r.notes.at(tick).on - r.notes.at(before).off; };
+      const std::vector<int> ticks = { 0, 480, 960, 1200, 1440, 1680, 1920, 2880, 3840, 4320, 4800, 5280, 5760, 6000, 6240, 6480 };
+
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", "1" } });
+      const R one = render();
+      for (int tick : ticks)
+            QVERIFY2(one.notes.count(tick) && one.trace.count(tick), qPrintable(QString::number(tick)));
+      // velocity, attack / transition, and the note before (-1: after silence)
+      struct W { int tick; int velo; bool transition; int before; };
+      const std::vector<W> want = {
+            { 0, 5, false, -1 },          // smooth after silence
+            { 480, 106, false, 0 },       // (a) C5 struck again
+            { 960, 106, false, 480 },     // (b) D5, 250 ms < 300
+            { 1200, 106, false, 960 },    // (b) a slur's first eighth after an unslurred one
+            { 1440, 64, true, 1200 },     // inside the slur: fingered
+            { 1680, 106, false, 1440 },   // (b) the eighth after the slur
+            { 1920, 93, true, 1680 },     // a half note: the bowed transition arrives (1000 ms >= 300)
+            { 2880, 106, false, 1920 },   // (a) A5 struck again after a long note
+            { 3840, 5, false, -1 },
+            { 4320, 64, true, 3840 },
+            { 4800, 93, true, 4320 },     // a slur after a slur, a quarter (500 ms): bowed, as before
+            { 5280, 64, true, 4800 },
+            { 5760, 106, false, 5280 },   // (b) a slur after a slur on an eighth
+            { 6000, 64, true, 5760 },
+            { 6240, 106, false, 6000 },
+            { 6480, 64, true, 6240 } };
+      for (const W& w : want) {
+            const MidiRenderer::LibTrace& t = one.trace.at(w.tick);
+            const N& n = one.notes.at(w.tick);
+            QVERIFY2(n.velo == w.velo, qPrintable(QString("%1: velocity %2, want %3").arg(w.tick).arg(n.velo).arg(w.velo)));
+            QVERIFY2((t.performance == MidiRenderer::LibPerformance::TRANSITION) == w.transition && bool(t.from) == w.transition,
+                     qPrintable(QString::number(w.tick)));
+            QVERIFY(!t.plainBowed || w.velo == 93);
+            if (w.before < 0)
+                  continue;
+            const double g = gap(one, w.before, w.tick);
+            if (w.transition)       // (the note before overlapping by the slur's 24 ms, or touching: a détaché bowed)
+                  QVERIFY2(g <= 0.5, qPrintable(QString("%1: gap %2").arg(w.tick).arg(g)));
+            else {                  // (a re-attack: 54 ms, past legatoGap's 39: SSO plays a new note)
+                  QVERIFY2(g >= 54.0 - 0.01 && g <= 54.0 + 1.1, qPrintable(QString("%1: gap %2").arg(w.tick).arg(g)));
+                  QCOMPARE(t.joinMs, -54);
+                  }
+            // (c) even levels: joined only across a transition, so a passage ends at every re-attack
+            QVERIFY2(one.joined.count(w.tick) && one.joined.at(w.tick) == w.transition, qPrintable(QString::number(w.tick)));
+            }
+      // the longest run of joined notes: C5 D5 E5 F5 (m3, slow) and G5 A5 (m1-m2); never m1's figure as one passage
+      QVERIFY(!one.joined.at(480) && !one.joined.at(960) && !one.joined.at(1200) && !one.joined.at(1680));
+
+      // plainAuto 2 and 0: as before (struck again touching at 64; 2 every new bow bowed, 0 every note 64)
+      for (int plainAuto : { 2, 0 }) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", QString::number(plainAuto) } });
+            const R r = render();
+            QCOMPARE(r.notes.at(480).velo, MidiRenderer::PLAIN_VELOCITY);
+            QVERIFY(r.trace.at(480).joinMs == PerformanceTechnique::JOIN_AUTO);
+            QCOMPARE(r.notes.at(2880).velo, MidiRenderer::PLAIN_VELOCITY);
+            for (int tick : { 960, 1200, 1680, 5760, 6240 }) {
+                  QCOMPARE(r.notes.at(tick).velo, plainAuto == 2 ? 93 : MidiRenderer::PLAIN_VELOCITY);
+                  QVERIFY(r.trace.at(tick).from);
+                  }
+            }
       delete score;
       }
 
@@ -18224,7 +18375,8 @@ void TestSoundLibrary::chordVoices()
 //    while the other voices played the bowed new bow). voice-common-tone.musicxml at 120, unslurred half-note chords
 //    D5 F#5 | F#5 A5 | F#5 A5 | rest, plainPerformance and plainAuto 1, the Performance legato mono: voices from the
 //    lowest pitch (voice 0 D5 F#5 F#5, voice 1 F#5 A5 A5); the second chord's F#5 bowed (93) from D5 on voice 0's copy,
-//    as A5 from F#5 on voice 1's; the third chord's notes struck again on their own copies: plain 64, no transition
+//    as A5 from F#5 on voice 1's; the third chord's notes struck again on their own copies: no transition, plainAuto 1's
+//    re-attack (106, 54 ms gap; branch plain-reattack)
 //---------------------------------------------------------
 
 void TestSoundLibrary::chordVoiceCommonTone()
@@ -18292,10 +18444,12 @@ void TestSoundLibrary::chordVoiceCommonTone()
             QVERIFY2(of.at(notes[3])->from == notes[1], what);
             QVERIFY2(of.at(notes[2])->velocity == 93, qPrintable(QString("%1: F#5 %2").arg(what).arg(of.at(notes[2])->velocity)));
             QVERIFY2(of.at(notes[3])->velocity == 93, what);
-            // the third: the same keys struck again on their own copies, no transition
+            // the third: the same keys struck again on their own copies, no transition: plainAuto 1's re-attack (106, the
+            // note before on its copy ending reattackGap before it; branch plain-reattack, 2026-11-01; before, 64 touching)
             for (int i : { 4, 5 }) {
                   QVERIFY2(of.at(notes[size_t(i)])->from == nullptr, what);
-                  QVERIFY2(of.at(notes[size_t(i)])->velocity == MidiRenderer::PLAIN_VELOCITY, qPrintable(QString("%1: note %2 %3").arg(what).arg(i).arg(of.at(notes[size_t(i)])->velocity)));
+                  QVERIFY2(of.at(notes[size_t(i)])->velocity == 106, qPrintable(QString("%1: note %2 %3").arg(what).arg(i).arg(of.at(notes[size_t(i)])->velocity)));
+                  QVERIFY2(of.at(notes[size_t(i)])->joinMs == -54, what);
                   }
             }
       delete score;

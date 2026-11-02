@@ -449,6 +449,16 @@ struct LibInstrument {
       // 23.5 ms, after its note-on less plainShift, without the octaves; sso_legato_glide_bowed.json `proposalNoOctavesMs`
       // -> gen_spitfire_sso.py BOWED_EARLY). NaN: not measured (plainShift only)
       double bowedEarlyMs { NAN };
+      // [slurs] plainAuto 1 (branch plain-reattack, the owner's A/B of 2026-11-01): when a plain new bow stroke's bowed
+      // transition reaches its pitch, ms after its note-on, by the note before's length (<Instrument bowedArrive=
+      // "150:302.5 600:300">: lenBeforeMs:arriveMs, the median f0 arrival (nine tenths of the way) of SSO's bowed
+      // transition at velocity 93 (Violas 100) after a note that long, without the octave rows, valid readings only;
+      // sso_legato_glide_bowed.json rows -> gen_spitfire_sso.py BOWED_ARRIVE). A new bow shorter than that never gets there
+      // (K. 550's eighths, Whence's sixteenths on real SSO): rendermidi's performanceNote re-attacks it. Sorted by length
+      std::vector<std::pair<double, double>> bowedArrive;
+      // the arrival after a note before lenBeforeMs long: linear between the measured lengths, the nearest one's outside
+      // them; NaN: not measured
+      double bowedArriveAt(double lenBeforeMs) const;
       // a monophonic patch (<Instrument mono="1">: SSO's Performance patches, whose script plays ONE legato line: a note-on
       // while a note is held is a transition that ends it, one < 15 ms after the note-on before at velocity <= 64 is
       // dropped; read from the patch's script, ownlegato-study): two notes sounding together on one of its slots lose one.

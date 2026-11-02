@@ -1381,6 +1381,30 @@ PLAIN_SHIFT = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.p
 BOWED_EARLY = {k: v['proposalNoOctavesMs'] for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                                      'sso_legato_glide_bowed.json'), encoding='utf-8')).items()
                if not k.startswith('_') and 'proposalNoOctavesMs' in v}
+# bowedArrive= ("lenBefore:arrive ..." ms; [slurs] plainAuto 1, branch plain-reattack, the owner's A/B of 2026-11-01 on
+# K. 550 i bars 1-9, real SSO, build 524): when the bowed transition of a plain new bow stroke reaches its pitch (f0 at nine
+# tenths of the way) after its note-on, by the note before's length: the median over sso_legato_glide_bowed.json's rows
+# (legato_glide/bowed.py: velocity 93, Violas 100; after an attack or a transition) without the octave rows (YIN's octave
+# confusion) and with the file's own validity rule (leave > -5, arrive < 550; a transition that never arrives is left out,
+# so the median is if anything early). rendermidi's performanceNote re-attacks a new bow shorter than this instead
+def _bowed_arrive():
+    out = {}
+    data = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide_bowed.json'),
+                          encoding='utf-8'))
+    for patch, v in data.items():
+        if patch.startswith('_') or 'rows' not in v:
+            continue
+        points = []
+        for length in sorted({r[0] for r in v['rows']}):
+            arr = sorted(r[7] for r in v['rows'] if r[0] == length and abs(r[2]) != 12 and r[5] is not None
+                         and r[5] > -5 and r[7] is not None and r[7] < 550)
+            if arr:
+                n = len(arr)
+                points.append((length, round(arr[n // 2] if n % 2 else (arr[n // 2 - 1] + arr[n // 2]) / 2, 1)))
+        if points:
+            out[patch] = points
+    return out
+BOWED_ARRIVE = _bowed_arrive()
 LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
                               encoding='utf-8'))
 # bendGlideFingered= (2026-10-21, branch fast-microtones): the same for the fingered transition, velocity 64 as [slurs]
@@ -1830,6 +1854,8 @@ for i, line in enumerate(out):
                     out[i] = out[i][:-len(end)] + f' plainAttack="{PLAIN_SHIFT[current]["attackMs"]:g}"' + end
                 if current in BOWED_EARLY:
                     out[i] = out[i][:-len(end)] + f' bowedEarly="{BOWED_EARLY[current]:g}"' + end
+                if current in BOWED_ARRIVE:
+                    out[i] = out[i][:-len(end)] + ' bowedArrive="%s"' % ' '.join(f'{l:g}:{a:g}' for l, a in BOWED_ARRIVE[current]) + end
             if staccatoAttributes(current):
                 end = '/>' if out[i].endswith('/>') else '>'
                 out[i] = out[i][:-len(end)] + staccatoAttributes(current) + end
