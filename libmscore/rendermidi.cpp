@@ -2008,9 +2008,11 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         // the transition branch's slurToSlur), inside a slur fingered (64); staccatos, accents and a key
                         // struck again as plain plays them
                         const bool plainAuto = c.plain && Playback::on("slurs/plainAuto", score);
-                        // [slurs] plainAuto 3 = 1 plus re-attacks (branch plain-reattack, for the owner's blind A/B; from his
-                        // blind A/B of 2026-11-01, K. 550 i bars 1-9, strings, real SSO, build 524: Recommended "wrong", the
-                        // variant re-attacking these notes "fine"; 0, 1 and 2 as before):
+                        // [slurs] plainAuto 3 = 1 plus re-attack (a), 4 = 1 plus (a) and (b) (branch plain-reattack, for the
+                        // owner's blind A/B; from his blind A/B of 2026-11-01, K. 550 i bars 1-9, strings, real SSO, build 524:
+                        // Recommended "wrong", the variant re-attacking these notes "fine"; then on Whence, (a) and (b): "the
+                        // bowed transitions don't come through", so (b) went to its own value, branch reattack-split; 0, 1 and
+                        // 2 as before):
                         // (a) the same key struck again right after itself on its copy (legatoTransition's "struck again",
                         //     touching: SSO took the note-on at the note-off's instant as a same-pitch transition, no attack,
                         //     4-12 dB under its neighbours; the violas' repeated eighths a 6 dB pulse; velocity didn't help,
@@ -2025,7 +2027,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         //     dB), so the same re-attack; a longer one keeps the bowed transition
                         // A re-attack is no transition, so even levels end a passage there (NoteInfo::joined: the gap is wider
                         // than legatoGap) and the audit models it as a plain attack (plainAttack)
-                        const bool plainReattack = plainAuto && libPlainAuto == 3 && !ownJoin && a->reattackGapMs > 0;
+                        const bool plainReattack = plainAuto && libPlainAuto >= 3 && !ownJoin && a->reattackGapMs > 0;
+                        const bool plainShortBows = plainReattack && libPlainAuto == 4;        // ((b): 4 only)
                         const int reattackVelocity = a->reattackVelocity > 0 ? a->reattackVelocity
                                                      : a->attack("spiccato") ? a->attack("spiccato")->velocity : PLAIN_VELOCITY;
                         const Note* again = plainReattack && !joinable ? struckAgain(note, c) : nullptr;
@@ -2091,7 +2094,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               // where the slur before ends keeps [slurs] transitions' bowed transition, its velocity (93;
                               // Violas' legatoVelocity 100), as the owner set it on 2026-10-12 ("two slurs adjacent to each
                               // other will use bowed"); before, plainPerformance's 64 made it SSO's fingered one. 0: 64)
-                              if (plainReattack && slurToSlur && own <= 0 && !explicitTechnique && !bowedArrives(lenBefore)) {
+                              if (plainShortBows && slurToSlur && own <= 0 && !explicitTechnique && !bowedArrives(lenBefore)) {
                                     reattack(p, joinable);      // ((b): too short for the bowed transition to arrive)
                                     p.interval = 0;
                                     p.lenBefore = 0;
@@ -2133,7 +2136,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     if (libPlainTiming && t->hasOnset())
                                           p.timedAttack = t;
                                     }
-                              else if (plainReattack && own <= 0 && !explicitTechnique && !accent && joinable && a->transition("bowed")
+                              else if (plainShortBows && own <= 0 && !explicitTechnique && !accent && joinable && a->transition("bowed")
                                        && !bowedArrives(lenBefore)) {
                                     reattack(p, joinable);      // ((b): a new bow too short for the bowed transition to arrive)
                                     return p;

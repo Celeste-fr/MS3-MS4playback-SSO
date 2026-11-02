@@ -2982,11 +2982,13 @@ void TestSoundLibrary::plainPerformance()
 
 //---------------------------------------------------------
 //   plainReattack
-//    [slurs] plainAuto 3 = 1 plus re-attacks (branch plain-reattack, for the owner's blind A/B; from his A/B of 2026-11-01,
+//    [slurs] plainAuto 4 = 1 plus re-attacks (branch plain-reattack, for the owner's blind A/B; from his A/B of 2026-11-01,
 //    K. 550 i bars 1-9 on real SSO): (a) a key struck again right after itself plays the map's re-attack (106), the note before ending the
 //    map's reattackGap (54 ms) before it (before: touching, SSO's same-key transition); (b) a new bow stroke shorter
 //    than the bowed transition's arrival (<Instrument bowedArrive>, here 300 ms) re-attacked the same way, a longer one
-//    still bowed (93); even levels' passages end at each re-attack (NoteInfo::joined). plainAuto 1, 2 and 0 as before.
+//    still bowed (93); even levels' passages end at each re-attack (NoteInfo::joined). 3 (branch reattack-split; the
+//    owner on Whence: "the bowed transitions don't come through"): (a) only, every new bow bowed as 1, every other note
+//    as 4. plainAuto 1, 2 and 0 as before.
 //    plain-reattack.musicxml, 120 bpm
 //---------------------------------------------------------
 
@@ -3070,7 +3072,7 @@ void TestSoundLibrary::plainReattack()
       auto gap = [](const R& r, int before, int tick) { return r.notes.at(tick).on - r.notes.at(before).off; };
       const std::vector<int> ticks = { 0, 480, 960, 1200, 1440, 1680, 1920, 2880, 3840, 4320, 4800, 5280, 5760, 6000, 6240, 6480 };
 
-      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", "3" } });
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", "4" } });
       const R one = render();
       for (int tick : ticks)
             QVERIFY2(one.notes.count(tick) && one.trace.count(tick), qPrintable(QString::number(tick)));
@@ -3114,6 +3116,33 @@ void TestSoundLibrary::plainReattack()
             }
       // the longest run of joined notes: C5 D5 E5 F5 (m3, slow) and G5 A5 (m1-m2); never m1's figure as one passage
       QVERIFY(!one.joined.at(480) && !one.joined.at(960) && !one.joined.at(1200) && !one.joined.at(1680));
+
+      // plainAuto 3: (a) as 4, (b) not: the short new bows on the bowed transition (93), touching, as 1; every other note as 4
+      {
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" }, { "slurs/plainAuto", "3" } });
+      const R three = render();
+      const std::set<int> shortBows = { 960, 1200, 1680, 5760, 6240 };
+      for (const W& w : want) {
+            const MidiRenderer::LibTrace& t = three.trace.at(w.tick);
+            const N& n = three.notes.at(w.tick);
+            if (shortBows.count(w.tick)) {
+                  QVERIFY2(n.velo == 93, qPrintable(QString("%1: velocity %2").arg(w.tick).arg(n.velo)));
+                  QVERIFY(t.performance == MidiRenderer::LibPerformance::TRANSITION && t.from && t.plainBowed);
+                  QVERIFY2(gap(three, w.before, w.tick) <= 0.5, qPrintable(QString::number(w.tick)));
+                  QVERIFY(three.joined.at(w.tick));
+                  continue;
+                  }
+            QVERIFY2(n.velo == w.velo, qPrintable(QString("3, %1: velocity %2, want %3").arg(w.tick).arg(n.velo).arg(w.velo)));
+            QVERIFY((t.performance == MidiRenderer::LibPerformance::TRANSITION) == w.transition && bool(t.from) == w.transition);
+            if (w.before >= 0 && !w.transition) {
+                  const double g = gap(three, w.before, w.tick);
+                  QVERIFY2(g >= 54.0 - 0.01 && g <= 54.0 + 1.1, qPrintable(QString("3, %1: gap %2").arg(w.tick).arg(g)));
+                  QCOMPARE(t.joinMs, -54);
+                  }
+            }
+      QCOMPARE(three.notes.at(480).velo, 106);       // (a)
+      QCOMPARE(three.notes.at(2880).velo, 106);
+      }
 
       // plainAuto 1, 2 and 0: as before (struck again touching at 64; 1 / 2 every new bow bowed, 0 every note 64)
       for (int plainAuto : { 1, 2, 0 }) {
