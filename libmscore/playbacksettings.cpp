@@ -206,16 +206,19 @@ static const std::vector<Definition> DEFINITIONS = {
       // 3 (branch plain-reattack, 2026-11-01, for the owner's blind A/B; 1 stays the default and Recommended's until he
       // decides; from his blind A/B of K. 550 i bars 1-9 on real SSO, Recommended "wrong", the re-attacked variant "fine"):
       // as 1, a key struck again, and a new bow shorter than the bowed transition's measured arrival (map bowedArrive),
-      // play the map's re-attack (106), the note before ending reattackGap (54 ms) before it
-      { "slurs/plainAuto", 1, 0, 3, "",
+      // play the map's re-attack (106), the note before ending reattackGap (54 ms) before it. Split 2026-11-01 (branch
+      // reattack-split; the owner on Whence with both: "the bowed transitions don't come through"): 3 the key struck again
+      // only, 4 both (the old 3)
+      { "slurs/plainAuto", 1, 0, 4, "",
         "with [slurs] plainPerformance: 1 smooth after a rest, bowed on each new bow, fingered inside a slur, spiccato for "
         "staccatos: a plain note (no velocity or technique of its own) after silence on its patch plays the smooth attack "
         "(velocity 5), early by its measured onset less the patch's plainShift; a note touching the note before outside a "
         "slur going on the bowed transition (SSO: 93, Violas 100); inside a slur 64, SSO's fingered; staccatos, accents and a "
         "key struck again as before. 2: as 1, and each new bow stroke (the bowed transition) sent early by its patch's "
         "measured bowedEarly beyond plainShift (Violins 1 125, Violins 2 151, Violas 55, Celli 106, Basses 64 ms), capped so the "
-        "note before keeps keepMs. 3: as 1, and a key struck again, or a new bow shorter than the bowed transition takes to "
-        "arrive, re-attacked (106, the note before ending 54 ms early). 0: every such note at 64", true },
+        "note before keeps keepMs. 3: as 1, and a key struck again (same pitch, touching) re-attacked (106, the note before "
+        "ending 54 ms early). 4: as 3, and also a new bow shorter than the bowed transition takes to arrive re-attacked. "
+        "0: every such note at 64", true },
       // (2026-10-20, branch sso-legato-fixes: measured on the Windows test VM; 1 in Recommended and by default, 0 in
       // Library default, since 2026-10-28: the owner, A/B, "the last 3 notes sound slightly more in time";
       // MidiRenderer::libraryFastTransitions)

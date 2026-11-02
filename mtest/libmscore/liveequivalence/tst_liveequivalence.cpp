@@ -9763,12 +9763,12 @@ void TestLiveEquivalence::plainAutoLive()
 
 //---------------------------------------------------------
 //   plainReattackLive
-//    [slurs] plainAuto 3's re-attacks (branch plain-reattack, tst_soundlibrary::plainReattack) reach Live:
-//    plain-reattack.musicxml on a plain Performance patch (plainShift 80, bowedArrive 300 ms). A key struck again and a new
-//    bow shorter than 300 ms play the re-attack (106), the note before ending 54 ms before it; the plain set's technique
-//    clip holds the same velocities and, with the Track Delay and the device's delays, plays every note-on / note-off
-//    MuseScore plays, the moved note-offs too (as plainWritten). plainAuto 1: no re-attack (its touching re-struck keys
-//    the plain set ends a unit early: retriggerOrder)
+//    [slurs] plainAuto 3's and 4's re-attacks (branches plain-reattack, reattack-split; tst_soundlibrary::plainReattack)
+//    reach Live: plain-reattack.musicxml on a plain Performance patch (plainShift 80, bowedArrive 300 ms). 4: a key struck
+//    again and a new bow shorter than 300 ms play the re-attack (106), the note before ending 54 ms before it; 3: the key
+//    struck again only, the short new bows bowed (93); the plain set's technique clip holds the same velocities and, with
+//    the Track Delay and the device's delays, plays every note-on / note-off MuseScore plays, the moved note-offs too (as
+//    plainWritten). plainAuto 1: no re-attack (its touching re-struck keys the plain set ends a unit early: retriggerOrder)
 //---------------------------------------------------------
 
 void TestLiveEquivalence::plainReattackLive()
@@ -9802,7 +9802,7 @@ void TestLiveEquivalence::plainReattackLive()
             r.renderScore(&events, ctx);
             return events;
             };
-      for (int plainAuto : { 3, 1 }) {
+      for (int plainAuto : { 4, 3, 1 }) {
             Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "slurs/plainPerformance", "1" },
                                             { "slurs/plainAuto", QString::number(plainAuto) } });
             score->setPlaylistDirty();
@@ -9824,10 +9824,16 @@ void TestLiveEquivalence::plainReattackLive()
                         }
                   want.insert(std::make_tuple(e.extPort() * 16 + e.extChannel(), e.pitch(), tl.units(te.first), on));
                   }
-            QCOMPARE(reattacks, plainAuto == 3 ? 7 : 0);
-            if (plainAuto == 3)
-                  for (int tick : { 480, 960, 1200, 1680, 2880, 5760, 6240 })
+            QCOMPARE(reattacks, plainAuto == 4 ? 7 : plainAuto == 3 ? 2 : 0);
+            if (plainAuto >= 3)
+                  for (int tick : { 480, 2880 })                              // ((a): a key struck again)
                         QCOMPARE(museScore[tick], 106);
+            if (plainAuto == 4)
+                  for (int tick : { 960, 1200, 1680, 5760, 6240 })            // ((b): a short new bow)
+                        QCOMPARE(museScore[tick], 106);
+            if (plainAuto == 3)
+                  for (int tick : { 960, 1200, 1680, 5760, 6240 })            // (3: bowed, as 1)
+                        QCOMPARE(museScore[tick], 93);
             std::multiset<int> clip;
             std::multiset<int> ms;
             for (const auto& kv : museScore)

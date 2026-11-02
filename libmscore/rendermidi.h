@@ -203,7 +203,7 @@ class MidiRenderer {
       bool libPlainTiming = false;
       bool libStaccatoLength = false;                             // [shorts] staccatoLength (this chunk; written timing too)
       int libMicrotoneBends = 0;                                  // [slurs] microtoneBends 0-3 (this chunk)
-      int libPlainAuto = 0;                                       // [slurs] plainAuto 0-2 (this chunk)
+      int libPlainAuto = 0;                                       // [slurs] plainAuto 0-4 (this chunk)
       bool libRunBends = false;                                   // [slurs] runBends (this chunk)
       // [slurs] runBends (libraryPitchBends): a plain note on a patch whose articulation has runLag: its written start and
       // end (seconds), how early its patch's events go (plainShift, s: its heard start is written + this in event time), and
