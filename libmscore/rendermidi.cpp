@@ -1586,8 +1586,13 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
                         if (c)
                               putLibrarySwitch(events, *libPatches[c.patch], libChannel, c, start + tickOffset, st1->idx());
-                        if (c && libTrace)
+                        if (c && libTrace) {
                               libTrace->push_back({ note, start + tickOffset, c, libPatches[c.patch] });
+                              if (libOnsetModel) {    // ([notes] onsetModel 1: what its onset is read at, as collect's onsetCC1 / onsetLenMs)
+                                    libTrace->back().onsetCC1 = Ms4::expressionLevel(ctx.dynamics.levelAt(note->chord()->track(), note->chord()->tick().ticks() + tickOffset));
+                                    libTrace->back().onsetLenMs = SoundLib::noteSeconds(note) * 1000.0;
+                                    }
+                              }
                         return c;
                         };
                   // a kit: the drum sound's patch and key (rolled: its roll key, else its hit); none: the
@@ -2228,6 +2233,14 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         return earliest;
                         };
 
+                  // [notes] onsetModel 1: what a note's onset is read at (Articulation::startOnset): the written dynamic's CC1
+                  // at its chord's start, its written length (ms; SoundLib::noteSeconds); -1: by pitch alone
+                  auto onsetCC1 = [&](const Note* n) {
+                        return libOnsetModel ? Ms4::expressionLevel(ctx.dynamics.levelAt(n->chord()->track(), n->chord()->tick().ticks() + tickOffset)) : -1;
+                        };
+                  auto onsetLenMs = [&](const Note* n) {
+                        return libOnsetModel ? SoundLib::noteSeconds(n) * 1000.0 : -1.0;
+                        };
                   int libShiftOn = -1;          // a held note started early: where it starts, as played and as written
                   int libShiftWritten = -1;
                   std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
@@ -2467,7 +2480,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           if (!libChoice.plain || attackT)
                                                 for (const Note* n : note->chord()->notes())
                                                       if (n->play())
-                                                            onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(attackT, n->ppitch(), libOnsetByPitch));
+                                                            onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(attackT, n->ppitch(), libOnsetByPitch, onsetCC1(n), onsetLenMs(n)));
                                           if (onsetMs > 0)
                                                 libAttackOnset[note] = onsetMs;
                                           }
@@ -2490,7 +2503,12 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // transitions' slurs play, by its own measured glide, bendGlideFingered)
                                     const SoundLib::Articulation::Technique* fingered = libMicrotoneBends > 0 ? libChoice.articulation->transition("fingered") : nullptr;
                                     const bool glideFingered = fingered && libNote.velocity >= fingered->low && libNote.velocity <= fingered->high;
-                                    const bool glideMeasured = libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs, glideFingered);
+                                    // ([notes] onsetModel 1: a transition right after an attack, the note before no transition
+                                    // itself, by the map's transitionGlide for its velocity's band, measured in that situation)
+                                    const bool afterAttack = libOnsetModel && libGlideFrom.find(from) == libGlideFrom.end()
+                                                             && libChoice.articulation->transitionGlideAt(lenBefore * 1000.0, libNote.velocity, &g.leaveMs, &g.arriveMs);
+                                    const bool glideMeasured = afterAttack
+                                                               || libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs, glideFingered);
                                     if (glideMeasured) {
                                           g.smoothingMs = libChoice.articulation->bendSmoothingMs;
                                           g.uncut = glideFingered && !libChoice.articulation->bendGlidesFingered.empty();
@@ -2600,7 +2618,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     for (const Note* n : note->chord()->notes())
                                           if (n->play())
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset", pi->name, libChoice.articulation->name,
-                                                                   n->ppitch(), libChoice.articulation->startOnset(perf.smoothStart, n->ppitch(), libOnsetByPitch)));
+                                                                   n->ppitch(), libChoice.articulation->startOnset(perf.smoothStart, n->ppitch(), libOnsetByPitch, onsetCC1(n), onsetLenMs(n))));
                                     const double shiftMs = std::isfinite(pi->plainShiftMs) ? std::max(0.0, pi->plainShiftMs) : 0.0;
                                     const double earlyMs = onsetMs * libOnsetEarly / 100.0 - shiftMs;
                                     const int earliest = earlyMs > 0 ? onsetEarliest(note, libChoice, 0.0) : -1;
@@ -2627,7 +2645,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     if (perf.timedAttack)
                                           for (const Note* n : note->chord()->notes())
                                                 if (n->play())
-                                                      onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(perf.timedAttack, n->ppitch(), libOnsetByPitch));
+                                                      onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(perf.timedAttack, n->ppitch(), libOnsetByPitch, onsetCC1(n), onsetLenMs(n)));
                                     const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
                                     const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice, gapMs) : -1;
                                     const double earlyMs = onsetMs * libOnsetEarly / 100.0;
@@ -2659,7 +2677,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           if (n->play())
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
                                                                    libPatches[libChoice.patch]->name, oa->name,
-                                                                   n->ppitch(), oa->startOnset(perf.timedAttack, n->ppitch(), byPitch)));
+                                                                   n->ppitch(), oa->startOnset(perf.timedAttack, n->ppitch(), byPitch, onsetCC1(n), onsetLenMs(n))));
                                     // (a Performance re-attack: the note before ends its gap before this note-on,
                                     // so it keeps keepMs after that gap)
                                     const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
@@ -2687,7 +2705,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     for (const Note* n : note->chord()->notes())
                                           if (n->play())
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset", libPatches[libChoice.plainFromPatch]->name,
-                                                                                             oa->name, n->ppitch(), oa->startOnset(nullptr, n->ppitch(), libOnsetByPitch)));
+                                                                                             oa->name, n->ppitch(), oa->startOnset(nullptr, n->ppitch(), libOnsetByPitch, onsetCC1(n), onsetLenMs(n))));
                                     const int ticks = note->chord()->actualTicks().ticks();
                                     const int t0 = note->chord()->tick().ticks() + tickOffset;
                                     const int extra = score->utime2utick(score->utick2utime(t0) + onsetMs * libOnsetEarly / 100.0 / 1000.0) - t0;
@@ -7406,6 +7424,7 @@ void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Cont
       // (written timing, Live's clips: no early start; LiveTiming moves the notes in Live instead)
       libOnsetEarly = library && !writtenTiming ? SoundLib::onsetEarly(score, *library) : 0;
       libOnsetByPitch = Playback::on("heldNotes/byPitch", score);
+      libOnsetModel = library && Playback::on("notes/onsetModel", score);
       libAvoidBad = Playback::on("notes/avoidBadSamples", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
       libTransitionsEarly = library && !writtenTiming ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;

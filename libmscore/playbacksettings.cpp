@@ -372,6 +372,14 @@ static const std::vector<Definition> DEFINITIONS = {
         "(a subito dynamic inside a slur, fp) is sent as smaller steps 1 ms apart ending at its time, so no release plays; "
         "0: sent in one step, as the notation gives it (the playback audit's HALL)", true },
       // [notes]
+      // (branch onset-model, 2026-11-01: the strings' onsets re-measured by CC1 and length, for the "marks" hybrid's timing;
+      // 0 by default and in both presets until the owner decides: the new values differ from the ones Recommended plays;
+      // soundlibrary.h › OnsetGrid, docs/PLAYBACK_SETTINGS.md › Onset model)
+      { "notes/onsetModel", 0, 0, 1, "on/off",
+        "1: a note's early start takes its measured onset by pitch, the written dynamic and the note's length where the "
+        "map has them (SSO's string sections' Long and smooth attack: onsetGrid, attackOnsetGrid), and a legato transition "
+        "right after an attack its measured arrival after an attack (transitionGlide); 0: the onsets by pitch alone, as "
+        "before", true },
       { "notes/sameKeyEndsFirst", 1, 0, 1, "on/off",
         "1: a key struck again on the same patch while its last note still sounds ends that note just before (a sampler ends a key at its first note-off)", true },
       // (the owner, 2026-10-10: "the weird square wave-y noise problem" in Whence's Celli; measured: one round robin of

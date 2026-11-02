@@ -405,7 +405,8 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             if (plainTiming && c.plain && !p->trace->attack)
                   return std::isfinite(p->trace->patch->plainAttackMs) ? p->trace->patch->plainAttackMs : 0.0;
             return Playback::adjust("heldNotes.onset", p->trace->patch->name, a->name, pitch,
-                                    a->startOnset(p->trace->attack, pitch, byPitchAll));   // (a smooth attack: its own)
+                                    a->startOnset(p->trace->attack, pitch, byPitchAll,     // (a smooth attack: its own; [notes]
+                                                  p->trace->onsetCC1, p->trace->onsetLenMs));   // onsetModel 1: by CC1 and length)
             };
       std::map<const Note*, std::vector<int>> writtenOf;         // a note's rendered starts (sub-notes after the first)
       for (const auto& up : played)

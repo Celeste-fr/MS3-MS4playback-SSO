@@ -247,6 +247,20 @@ switch value of each articulation. For example:
     on, a note on that attack starts early by it (`[heldNotes] byPitch`: by pitch, else the median) instead of the
     articulation's `onset`. SSO (`gen_spitfire_sso.py` from `sso_smooth_onset.json`): the smooth attack of the five
     string sections' Performance Legato, e.g. Violas `attackOnset="smooth:236.2;50:198.3,59:259.5,…"`.
+  - `onsetGrid="cc1/lengthMs/pitch:ms …"` on an `Articulation`, `attackOnsetGrid="name:cc1/lengthMs/pitch:ms,… …"` beside
+    an `attackOnset` (read with `[notes] onsetModel` 1 only; 0, the default, plays `onset` / `attackOnset` as before): the
+    onset (as `onset`) by the written dynamic's CC1 at the note's start, the note's written length and its played pitch.
+    Linear in CC1, linear in log length, linear in pitch (`[heldNotes] byPitch` 0: the median over the listed pitches at
+    each CC1 x length), the nearest end's beyond each; a dimension listed with one value is constant there (SSO: written
+    so where the measurement showed no dependence over 15 ms). SSO (`gen_spitfire_sso.py` from `sso_onset_grid.json`,
+    `onset_grid.py`, lone notes on the VM, 2026-11-01): the All techniques Long of Violins 1 / 2, Celli, Basses, the
+    smooth attack of the five string sections' Performance Legato.
+  - `transitionGlide="fingered/lenBefore:leave:arrive … bowed/…"` on an `Articulation` with `transitions` (read with
+    `[notes] onsetModel` 1 only): a legato transition right after an attack (the note before no transition itself) in
+    the band its velocity falls in leaves the note before / reaches the new one this long after its note-on, by the
+    note before's length (as `bendGlide`, linear between the lengths, the nearest one's beyond); it replaces `bendGlide`
+    / `bendGlideFingered` for such a transition (its bend's glide and `[slurs] transitionsEarly`'s model). SSO: Violins 1
+    / 2, Violas, Basses - Performance (a smooth attack then the transition at 69 / 93, CC1 64, `sso_onset_grid.json`).
   - `avoid="keys:low-high:velocity …"` on such an `Articulation`: an attack (not a legato transition) at those keys
     (one key or `low-high`) with a velocity in the band plays at `velocity` instead, the nearest velocity measured
     clean: a faulty recording (a round robin with its own narrow tone). Not a note's own velocity; `[notes]

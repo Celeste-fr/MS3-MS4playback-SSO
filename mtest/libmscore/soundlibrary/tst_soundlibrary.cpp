@@ -186,6 +186,7 @@ class TestSoundLibrary : public QObject, public MTest
       void playbackSettingsLayers();
       void slurPerformance();
       void smoothOnset();
+      void onsetGrid();
       void transitionsEarly();
       void plainPerformance();
       void plainReattack();
@@ -2230,6 +2231,90 @@ void TestSoundLibrary::playbackSettingsLayers()
       QCOMPARE(Playback::value("hosting/maxVoices", score), 512.0);
       score->setMetaTag(Playback::metaTag, "");
       Playback::setIniValuesForTest({});
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   onsetGrid
+//    [notes] onsetModel 1 (branch onset-model): onsetGrid= / attackOnsetGrid= by CC1 (linear), length (linear in log)
+//    and pitch (linear; byPitch 0: the median over the pitches), the nearest end's beyond each; transitionGlide= by the
+//    note before's length for the band of the transition's velocity; malformed ones rejected; the renderer's attack
+//    early by the grid only with the setting on
+//---------------------------------------------------------
+
+void TestSoundLibrary::onsetGrid()
+      {
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      const QString map = "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/><Onset early='100'/>"
+         "<Instrument name='Violin' ids='violin'>"
+         "<Articulation name='Long' value='1' techniques='long legato' onset='60' %1/>"
+         "</Instrument>"
+         "<Instrument name='Violin - Performance' with='Violin'>"
+         "<Switch type='none'/>"
+         "<Articulation name='Legato' value='20' techniques='legato long' modifiers='performance' prefer='long' onset='60'"
+         " attacks='smooth:1-9:5 spiccato:10-116:112 accented:117-127:122' transitions='portamento:1-19:10 fingered:20-84:69 bowed:85-127:93'"
+         " reattack='106' reattackGap='54' overlap='24' legatoGap='39' attackOnset='smooth:300' %2/>"
+         "</Instrument></SoundLibrary>";
+      QVERIFY(!loadMap(map.arg("onsetGrid='48/155/60'", "")));
+      QVERIFY(!loadMap(map.arg("onsetGrid='48/155:60'", "")));
+      QVERIFY(!loadMap(map.arg("onsetGrid='200/155/60:50'", "")));
+      QVERIFY(!loadMap(map.arg("", "attackOnsetGrid='spiccato:64/500/60:100'")));       // (no attackOnset of its own)
+      QVERIFY(!loadMap(map.arg("", "transitionGlide='legato/136:10:200'")));
+      QVERIFY(!loadMap(map.arg("", "transitionGlide='fingered/136:210:200'")));         // (arrives before it leaves)
+      const QString grid = "onsetGrid='48/100/60:100 48/100/72:200 96/100/60:50 96/100/72:150 "
+                           "48/1000/60:300 48/1000/72:400 96/1000/60:250 96/1000/72:350'";
+      auto lib = loadMap(map.arg(grid, "attackOnsetGrid='smooth:64/273/60:80,64/1000/60:180,64/273/72:120,64/1000/72:220'"
+                                       " transitionGlide='fingered/136:70:260 fingered/500:110:290 bowed/136:60:250'"));
+      QVERIFY(lib);
+      const SoundLib::Articulation& lng = lib->instruments[0].articulations[0];
+      const SoundLib::Articulation::OnsetGrid& g = lng.onsetGrid;
+      QCOMPARE(g.at(60, 48, 100, true), 100.0);
+      QCOMPARE(g.at(66, 48, 100, true), 150.0);                       // (pitch: linear)
+      QCOMPARE(g.at(60, 72, 100, true), 75.0);                        // (CC1: linear)
+      QCOMPARE(g.at(60, 48, std::sqrt(100.0 * 1000.0), true), 200.0); // (length: linear in log)
+      QCOMPARE(g.at(40, 10, 50, true), 100.0);                        // (below every end: the nearest)
+      QCOMPARE(g.at(90, 127, 5000, true), 350.0);                     // (above every end)
+      QCOMPARE(g.at(60, 48, 100, false), 150.0);                      // (byPitch 0: the median over the pitches)
+      QCOMPARE(lng.startOnset(nullptr, 60, true, 48, 100), 100.0);
+      QCOMPARE(lng.startOnset(nullptr, 60, true, -1, -1), 60.0);      // (cc1 < 0: the old onset)
+      QCOMPARE(lng.startOnset(nullptr, 60, true), 60.0);
+      const SoundLib::Articulation& legato = lib->instruments[1].articulations[0];
+      QCOMPARE(legato.startOnset(legato.attack("smooth"), 66, true, 64, 273), 100.0);
+      QCOMPARE(legato.startOnset(legato.attack("smooth"), 66, false, 64, 1000), 200.0);
+      QCOMPARE(legato.startOnset(legato.attack("smooth"), 66, false, -1, -1), 300.0);
+      QCOMPARE(legato.startOnset(legato.attack("spiccato"), 66, false, 64, 1000), 60.0);   // (no grid: the articulation's)
+      double leave = 0, arrive = 0;
+      QVERIFY(legato.transitionGlideAt(318, 69, &leave, &arrive));
+      QCOMPARE(leave, 90.0);
+      QCOMPARE(arrive, 275.0);
+      QVERIFY(legato.transitionGlideAt(700, 93, &leave, &arrive));
+      QCOMPARE(arrive, 250.0);
+      QVERIFY(!legato.transitionGlideAt(136, 5, &leave, &arrive));    // (portamento: none)
+      // rendered: the first smooth attack early by attackOnset= (300 ms) with the setting off, by the grid (200 ms) with it on
+      auto lib2 = loadMap(map.arg("", "attackOnsetGrid='smooth:48/100/60:200,96/100/60:200,48/2000/80:200,96/2000/80:200'"));
+      QVERIFY(lib2);
+      SoundLib::setCurrent(lib2);
+      MasterScore* score = readScore(DIR + "legato-early.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      auto first69 = [score]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            score->renderMidi(&events, false, true, SynthesizerState());
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (e.isExternal() && !e.librarySwitch() && e.type() == ME_NOTEON && e.velo() > 0 && e.pitch() == 69)
+                        return unlead(score, events, te.first);
+                  }
+            return -1;
+            };
+      auto within = [](int tick, int want) { return std::abs(tick - want) <= 1; };
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" } });
+      int on = first69();
+      QVERIFY2(within(on, 2400 - 144), qPrintable(QString::number(on)));     // (300 ms)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "heldNotes/byPitch", "0" }, { "notes/onsetModel", "1" } });
+      on = first69();
+      QVERIFY2(within(on, 2400 - 96), qPrintable(QString::number(on)));      // (200 ms)
       delete score;
       }
 

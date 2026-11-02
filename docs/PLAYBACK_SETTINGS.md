@@ -1224,6 +1224,51 @@ the calibration and the crest, never a boost; the fallback; Library default; MID
 `Volumes::shift`), `tst_liveequivalence::liveGainStage` (fader × Utility = MuseScore's slot gain; read back; Update Live
 Set unchanged, changed and from a set written before the Utility) and the live tests' route-set checks.
 
+## Onset model
+
+`[notes] onsetModel` (branch `onset-model`, 2026-11-01; **0 by default and in both presets**, the owner decides; 1 only in
+the "marks" hybrid's test variant, retest2 Deviation 2): with 1 a note's early start takes its onset by pitch, the
+written dynamic's CC1 at its start and its written length where the map has them, and a legato transition right after an
+attack its measured leave / arrival after an attack. 0 plays exactly as before (dumps of K. 550 bars 1-19 and Whence,
+Recommended and Library default, identical to main's; with 1 the values Recommended already uses would change, hence
+the setting).
+
+Measured 2026-11-01 on the Windows VM (kthost + Kontakt 8 + SSO, `measure_patch.py`, lone notes, ABBA takes; the
+private onset-remeasure folder), read by `tools/soundlibraries/onset_grid.py` into `sso_onset_grid.json` (rules in its
+docstring: a cell is the median of its takes' onset15; a dimension is kept only if its main effect spans > 15 ms and
+more than twice its bootstrap SE over pitches, else collapsed; transitions: valid readings only, leave > -5, arrive <
+550 ms), written into the map by `gen_spitfire_sso.py`:
+
+| Map | Patches | Grid | Kept (range of the main effect) |
+|---|---|---|---|
+| `onsetGrid` (Long) | Violins 1 / 2, Celli, Basses (All techniques; not Violas: not measured) | CC1 48 / 64 / 96 x 155 / 311 / 622 / 2000 ms x every 3rd semitone, 8 takes | length all four (Basses 197, Violins 2 96, Celli 40, Violins 1 17 ms); CC1 Violins 2 (18), Celli (17); Violins 1 (12), Basses (14) collapsed |
+| `attackOnsetGrid` (smooth, velocity 5) | the five sections' Performance Legato | CC1 x 273 / 500 / 1000 ms x every 3rd semitone, 4 takes | Violas, Celli both (CC1 34 / 44, length 56 / 57); Violins 2, Basses length (21 / 16); Violins 1 none (by pitch only) |
+| `transitionGlide` | Violins 1 / 2, Violas, Basses - Performance (not Celli: not measured) | a smooth attack 136 / 273 / 500 ms long, then the transition +-1 / +-2 semitones at 69 (fingered) / 93 (bowed), 5 pitches, 4 takes | by the note before's length, pooled over intervals (they differ by up to ~115 ms, mostly in leave) |
+
+Quality: every note cell has all its takes but the smooth attack's top pitch on Violas / Violins 2 (silent, left out);
+the same round robin repeats within ~3 ms, SSO's two round robins of a Long differ by a median 19-31 ms (the cell's
+median sits between them); the Basses' 155 ms Longs barely grow (their peak 10-15 loudness units under the longer notes'), so their
+onset is relative to a weak peak; 75-92 % of the transition takes are valid (Basses bowed the fewest) (the semitone-down leaves read before the
+note-on are dropped). Differences from the values Recommended plays: the Long's median by pitch (byPitch 0) Violins 2
+152 ms against 73-167 by length, Basses 171 against 78-294, Celli 117.5 against 67-124; the smooth attack Violas 236
+against 101-193; a transition after an attack arrives later than `bendGlideFingered` says after a short note (Violins 1
+259 against 189 ms after 136 ms).
+
+Used where the onsets are (`Articulation::startOnset(…, cc1, lenMs)`: a held note's early start, the smooth start,
+plainAuto's smooth start, plainTiming's attacks, a plain staccato's length, attackLevels' onset; `transitionGlideAt`:
+the glide and `[slurs] transitionsEarly`'s model of a transition whose note before is no transition); the audit reads
+the same (`LibTrace::onsetCC1` / `onsetLenMs`, `glideArriveMs`). The length is the written one (`SoundLib::noteSeconds`),
+the CC1 the written dynamic's (`Ms4::expressionLevel`), not what calibration or the level rule send. Not in even levels'
+measuring windows (`windowStartMs`).
+
+Predicted for the hybrid (Linux dumps of retest2's even scores, build 534's heard values with masked readings and
+transitions heard before their note-on left out, shifted by each note's change of send time; a prediction, the real
+check is a new render): Performance minus other notes, median heard - written, K. 550 Violins I 22.9 -> 17.0, Violins
+II 56.3 -> 20.7, Violas -23.4 -> -7.8, Celli -2.1 -> -60.3, Basses 58.5 -> 17.1 ms; Whence Violas -36.6 -> -15.5,
+Violins 1 -18.8 -> -4.6, Celli -0.6 -> 2.4. K. 550's Celli get worse: their Longs (311 ms, bars 1-9) were heard on time
+with the old 117.5 ms and go 44 ms later with the lone-note 74 ms; the lone notes were rendered without the string low
+cut (`[levels] lowCut`) MuseScore's renders have, one difference between the contexts (not tested).
+
 ## Transitions early
 
 The owner's rule since 2026-10-07 sends a legato transition on its beat; SSO's Performance legato then reaches the new
@@ -2621,6 +2666,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Legato glide of a tuning copy. Pitch bend: one cent a tick, the bend value nearest each step (a glide of d cents: ceil(d) ticks; a quarter tone ~52 ms at 120 bpm): the owner's criterion (2026-10-03) "as short as possible without audible steps: each step at most one cent" on the renderer's tick grid; no setting. Varispeed: the same criterion per output frame (it changes its speed every frame): a glide of d cents takes ceil(d × the larger ratio / the smaller) frames, each within a cent (a quarter tone 51 frames, ~1.2 ms at 44.1 kHz; `Vst3Plugin::GLIDE_CENT_STEP`); `[legato] glideMs` (30 ms, no source) retired 2026-10-03 | computed | `libraryPitchBends`, `Vst3Plugin::setPitch` | — |
 | Held notes, and since 2026-10-08 every technique with measured onsets (shorts, marcato, tremolos, trills, falls; not rips, effects, harp, keyboards, percussion; the owner: "is there a reason not to make this the recommended?" after slurred shorts stayed on the beat while Longs moved), start early by their measured onset. Medians across patches (latency removed): pizzicato / Bartók / col legno 3, staccato / spiccato 8, Short CS 26, Marcato / Tenuto 33, Short 0.5 61, Short 1.0 113, Long 86 ms | 100 % (map `<Onset early>`; 0 from 2026-10-06 to 2026-10-07; the owner: plain Long for every slurred note, lined up between sections; 0 plays them as written, to compare) | `collect` / `onsetEarliest`, `finishLibraryEvents` | `[heldNotes] early`; score: old metaTag |
 | Onset per patch and pitch (-15 dB perceived; swells per semitone) | map `onset` | `Articulation::onsetAt` | `[heldNotes.onset]` table; definition: generator |
+| Onset model: onsets by pitch, written dynamic (CC1) and written length, a transition right after an attack by its own measured glide (above, Onset model) | 0 (both presets 0) | `Articulation::startOnset(…, cc1, lenMs)`, `OnsetGrid`, `transitionGlideAt`; map `onsetGrid`, `attackOnsetGrid`, `transitionGlide` | `[notes] onsetModel`; score: `playbackSettings` |
 | Notes early by their articulation's median onset, or each by its pitch's onset (2026-10-07: even runs; the default since 2026-10-08; notes `[slurs] quick` swaps too since 2026-10-09) | 0 (median) | `collect` (`libOnsetByPitch`), `Articulation::onsetMedian` | `[heldNotes] byPitch`; score: `playbackSettings` |
 | Shorts chosen by meant sounding length | on | `SoundLib::want`, `choose` | `[shorts] byMeantLength` |
 | Meant length factors | staccato 50, staccatissimo 25, tenuto 99, portato 74.5 % (MS4's) | `want` (`Want::soundSeconds`) | `[shorts] staccato` … `portato` |

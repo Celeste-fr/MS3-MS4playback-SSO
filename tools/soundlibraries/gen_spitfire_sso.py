@@ -1405,6 +1405,7 @@ def _bowed_arrive():
             out[patch] = points
     return out
 BOWED_ARRIVE = _bowed_arrive()
+ONSET_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_onset_grid.json'), encoding='utf-8'))
 LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
                               encoding='utf-8'))
 # bendGlideFingered= (2026-10-21, branch fast-microtones): the same for the fingered transition, velocity 64 as [slurs]
@@ -1970,6 +1971,20 @@ for i, line in enumerate(out):
         if q:
             extra += f' quickLevel="{q}"'
             quickLevelCount += 1
+    # [notes] onsetModel 1 (branch onset-model, 2026-11-01): the strings' onsets re-measured by CC1 and length (onsetGrid=
+    # on the All techniques Long, attackOnsetGrid= on the Performance smooth attack) and a transition's leave / arrival
+    # right after an attack (transitionGlide=): sso_onset_grid.json, onset_grid.py (its docstring has the rules)
+    og = ONSET_GRID['long'].get(current) if sound == 'Long' else None
+    if og:
+        extra += ' onsetGrid="%s"' % ' '.join(f'{c}/{l}/{p}:{ms:g}' for c, l, p, ms in og['grid'])
+    if t.get('legato') and current in PERFORMANCE_TECHNIQUE_PATCHES:
+        sg = ONSET_GRID['smooth'].get(current)
+        if sg and attackOnset(current):
+            extra += ' attackOnsetGrid="smooth:%s"' % ','.join(f'{c}/{l}/{p}:{ms:g}' for c, l, p, ms in sg['grid'])
+        tg = ONSET_GRID['transitions'].get(current, {})
+        tg = ' '.join(f'{k}/{g[0]}:{g[1]:g}:{g[2]:g}' for k in ('fingered', 'bowed') if k in tg for g in tg[k]['glide'])
+        if tg:
+            extra += f' transitionGlide="{tg}"'
     if extra:
         assert line.endswith('/>'), line
         out[i] = line[:-2] + extra + '/>'

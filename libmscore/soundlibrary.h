@@ -113,10 +113,26 @@ struct Articulation {
       // sso_smooth_onset.json): with [slurs] smoothStart a held note on that attack starts early by it, not by the
       // articulation's onset= (measured at velocity 80, it arrived late: Violas smooth 236 ms, onset= 111;
       // startOnset()). -1: none (the articulation's onset)
+      // [notes] onsetModel 1 (branch onset-model, 2026-11-01): an onset by played pitch, the written dynamic's CC1 at the
+      // note's start and its written length (<Articulation onsetGrid="cc1/lengthMs/pitch:ms …"> for the articulation,
+      // attackOnsetGrid="name:cc1/lengthMs/pitch:ms,… …" for an attack; SSO's strings' Long and smooth attack, measured
+      // lone notes, tools/soundlibraries/sso_onset_grid.json by onset_grid.py). at(): linear in CC1, linear in log length,
+      // linear in pitch (byPitch; else the median over the measured pitches at each CC1 x length), the nearest end's
+      // beyond each; a dimension the data showed no real dependence on is written with one value (constant there)
+      struct OnsetGrid {
+            std::vector<int> ccs;
+            std::vector<double> lens;
+            std::vector<int> pitches;
+            std::vector<double> ms;       // [cc][len][pitch], NAN: not measured
+            bool empty() const { return ms.empty(); }
+            double at(int pitch, int cc1, double lenMs, bool byPitch) const;
+            bool read(const QString& text);     // false: malformed
+            };
       struct Technique {
             QString name; int low; int high; int velocity;
             double onsetMs { -1 };
             std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
+            OnsetGrid grid;                               // attackOnsetGrid= ([notes] onsetModel 1); empty: none
             bool hasOnset() const { return onsetMs >= 0; }
             double onsetAt(int pitch) const;
             };
@@ -155,6 +171,13 @@ struct Articulation {
       // the leave and arrival (ms after the note-on) after a note lenBeforeMs long: linear between the measured
       // lengths, the nearest one's outside them; fingered: bendGlideFingered where measured; false: none measured
       bool bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs, bool fingered = false) const;
+      // [notes] onsetModel 1: a transition right after an attack (the note before no transition itself), its leave and
+      // arrival by the note before's length, for the transition band its velocity falls in (<Articulation transitionGlide=
+      // "fingered/136:70:258.8 … bowed/136:67.5:260 …">: lenBefore:leave:arrive ms after its note-on, a smooth attack then
+      // the transition at the band's velocity, CC1 64, medians over pitches, intervals +-1 / +-2 and takes, valid readings
+      // only; sso_onset_grid.json). false: none for that band (bendGlideAt then)
+      std::vector<BendGlide> afterAttackFingered, afterAttackBowed;
+      bool transitionGlideAt(double lenBeforeMs, int velocity, double* leaveMs, double* arriveMs) const;
       // how the patch smooths a pitch bend (<Articulation bendSmoothing="73.1">: a one-pole low-pass's time constant,
       // ms, fitted to the f0 of a held note under bend steps, Kontakt 8 + SSO, tools/soundlibraries/
       // sso_bend_smoothing.json): with a bendGlide, the renderer sends the bend so that the bend as heard reaches the
@@ -176,10 +199,14 @@ struct Articulation {
       std::vector<std::pair<int, double>> onsets;   // pitch -> ms, sorted; empty: onsetMs for every pitch
       double onsetAt(int pitch) const;    // interpolated linearly between pitches, the nearest end's beyond
       double onsetMedian() const;         // the median of the measured onsets (onsetMs without a table)
+      OnsetGrid onsetGrid;                // onsetGrid= ([notes] onsetModel 1); empty: none
       // the onset that times a held note's early start: the attack's own (Technique::onsetAt / its median) where
       // attack has one (the renderer passes the Performance attack it chose with [slurs] smoothStart on), else onsetAt /
       // onsetMedian; byPitch: by pitch ([heldNotes] byPitch, a swap), else the median
       double startOnset(const Technique* attack, int pitch, bool byPitch) const;
+      // the same with [notes] onsetModel 1: cc1 the written dynamic's CC1 at the note's start, lenMs its written length;
+      // the attack's / articulation's grid where it has one, else as above. cc1 < 0: as above
+      double startOnset(const Technique* attack, int pitch, bool byPitch, int cc1, double lenMs) const;
       // a held note is loudest this long after its note-on (<Articulation peak>, ms, the median of the measured
       // semitones); a slurred note shorter than it is all swell ([slurs] quick: choose); -1: unknown
       double peakMs { -1 };

@@ -195,6 +195,7 @@ class MidiRenderer {
       int libChunkStart = 0;                                      // the chunk being rendered: its first utick
       int libOnsetEarly = 0;                                      // SoundLib::onsetEarly, percent (this chunk)
       bool libOnsetByPitch = false;                               // [heldNotes] byPitch (0: the patch's median onset)
+      bool libOnsetModel = false;                                 // [notes] onsetModel (1: onsets by CC1 and length too)
       bool libAvoidBad = true;                                    // [notes] avoidBadSamples (the map's avoid)
       int libTransitionsEarly = 0;                                // [slurs] transitionsEarly 0-3 (this chunk; not written timing)
       // [slurs] plainTiming (this chunk; not written timing): plain Performance notes start early each by its own model (an
@@ -321,6 +322,10 @@ class MidiRenderer {
             // [slurs] plainAuto: a plain new bow stroke on the bowed transition (heard the patch's plainShift + bowedEarly
             // after its note-on: the audit)
             bool plainBowed { false };
+            // [notes] onsetModel 1: what its onset was read at (the written dynamic's CC1 at its start, its written length,
+            // ms); -1: by pitch alone (Articulation::startOnset)
+            int onsetCC1 { -1 };
+            double onsetLenMs { -1 };
             };
       // SSO's Performance legato doesn't play a legato note-on less than this after the legato note-on before on its
       // route (at velocity 64 or lower; from reading its script, behaviour only): the audit's DROPPED, and the least a

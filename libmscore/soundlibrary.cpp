@@ -21,6 +21,7 @@
 #include <limits>
 #include <mutex>
 #include <set>
+#include <tuple>
 
 #include <QFile>
 #include <QJsonArray>
@@ -95,6 +96,7 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
 //               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
 //               [bendGlide="136:-8:100 300:70:230 …"] [bendGlideFingered="136:60:180 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]
+//               [onsetGrid="48/155/55:54 …"] [attackOnsetGrid="smooth:48/273/55:97,… …"] [transitionGlide="fingered/136:70:258.8 … bowed/…"]
 //               [accentedLevel="72/100:3.4 72/150:4.2 …"] [keyLevels="63:-2.92 66:1.49 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
@@ -195,9 +197,16 @@ double Articulation::legatoDelayAt(int interval, int fromPitch) const
       return keyedMsAt(legatoDelays, legatoDelayMs, interval);
       }
 
+static bool glideAt(const std::vector<Articulation::BendGlide>& bendGlides, double lenBeforeMs, double* leaveMs, double* arriveMs);
+
 bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs, bool fingered) const
       {
-      const std::vector<BendGlide>& bendGlides = fingered && !bendGlidesFingered.empty() ? bendGlidesFingered : this->bendGlides;
+      return glideAt(fingered && !bendGlidesFingered.empty() ? bendGlidesFingered : bendGlides, lenBeforeMs, leaveMs, arriveMs);
+      }
+
+static bool glideAt(const std::vector<Articulation::BendGlide>& bendGlides, double lenBeforeMs, double* leaveMs, double* arriveMs)
+      {
+      using BendGlide = Articulation::BendGlide;
       if (bendGlides.empty())
             return false;
       const BendGlide* lo = &bendGlides.front();
@@ -253,6 +262,134 @@ double Articulation::startOnset(const Technique* attack, int pitch, bool byPitch
       if (attack && attack->hasOnset())
             return byPitch ? attack->onsetAt(pitch) : attack->onsetMs;
       return byPitch ? onsetAt(pitch) : onsetMedian();
+      }
+
+double Articulation::startOnset(const Technique* attack, int pitch, bool byPitch, int cc1, double lenMs) const
+      {
+      if (cc1 >= 0) {
+            if (attack && attack->hasOnset()) {
+                  if (!attack->grid.empty())
+                        return attack->grid.at(pitch, cc1, lenMs, byPitch);
+                  }
+            else if (!onsetGrid.empty())
+                  return onsetGrid.at(pitch, cc1, lenMs, byPitch);
+            }
+      return startOnset(attack, pitch, byPitch);
+      }
+
+// "cc1/lengthMs/pitch:ms …" (separated by spaces or commas): every CC1 x length x pitch listed fills a cell
+bool Articulation::OnsetGrid::read(const QString& text)
+      {
+      struct E { int cc; double len; int pitch; double ms; };
+      std::vector<E> es;
+      for (const QString& t : QString(text).replace(',', ' ').split(' ', QString::SkipEmptyParts)) {
+            const QStringList f = t.split(':');
+            const QStringList k = f.value(0).split('/');
+            bool ok[4] = { false, false, false, false };
+            E e { k.value(0).toInt(&ok[0]), k.value(1).toDouble(&ok[1]), k.value(2).toInt(&ok[2]), f.value(1).toDouble(&ok[3]) };
+            if (f.size() != 2 || k.size() != 3 || !ok[0] || !ok[1] || !ok[2] || !ok[3] || e.cc < 0 || e.cc > 127 || e.len <= 0
+                || e.pitch < 0 || e.pitch > 127 || e.ms < 0)
+                  return false;
+            es.push_back(e);
+            }
+      if (es.empty())
+            return false;
+      ccs.clear(); lens.clear(); pitches.clear();
+      for (const E& e : es) {
+            ccs.push_back(e.cc); lens.push_back(e.len); pitches.push_back(e.pitch);
+            }
+      for (auto* v : { &ccs, &pitches }) {
+            std::sort(v->begin(), v->end());
+            v->erase(std::unique(v->begin(), v->end()), v->end());
+            }
+      std::sort(lens.begin(), lens.end());
+      lens.erase(std::unique(lens.begin(), lens.end()), lens.end());
+      ms.assign(ccs.size() * lens.size() * pitches.size(), NAN);
+      for (const E& e : es) {
+            const size_t c = std::lower_bound(ccs.begin(), ccs.end(), e.cc) - ccs.begin();
+            const size_t l = std::lower_bound(lens.begin(), lens.end(), e.len) - lens.begin();
+            const size_t p = std::lower_bound(pitches.begin(), pitches.end(), e.pitch) - pitches.begin();
+            ms[(c * lens.size() + l) * pitches.size() + p] = e.ms;
+            }
+      return true;
+      }
+
+double Articulation::OnsetGrid::at(int pitch, int cc1, double lenMs, bool byPitch) const
+      {
+      if (ms.empty())
+            return -1;
+      // one CC1 x length cell over pitch: linear between the measured pitches, the nearest end's beyond (byPitch), else
+      // the median of the measured ones
+      auto cell = [&](size_t c, size_t l) {
+            std::vector<std::pair<int, double>> v;
+            for (size_t p = 0; p < pitches.size(); ++p) {
+                  const double x = ms[(c * lens.size() + l) * pitches.size() + p];
+                  if (std::isfinite(x))
+                        v.push_back({ pitches[p], x });
+                  }
+            if (v.empty())
+                  return double(NAN);
+            if (!byPitch) {
+                  std::vector<double> y;
+                  for (const auto& e : v)
+                        y.push_back(e.second);
+                  std::sort(y.begin(), y.end());
+                  const size_t n = y.size();
+                  return n % 2 ? y[n / 2] : (y[n / 2 - 1] + y[n / 2]) / 2;
+                  }
+            if (pitch <= v.front().first)
+                  return v.front().second;
+            for (size_t i = 0; i + 1 < v.size(); ++i)
+                  if (pitch <= v[i + 1].first)
+                        return v[i].second + (v[i + 1].second - v[i].second) * (pitch - v[i].first) / double(v[i + 1].first - v[i].first);
+            return v.back().second;
+            };
+      // the two neighbours and the share of the upper one (the nearest end's beyond)
+      auto bracket = [](const auto& axis, double x, double (*f)(double), size_t* lo, size_t* hi, double* w) {
+            *lo = 0; *hi = 0; *w = 0;
+            if (axis.size() < 2 || x <= axis.front())
+                  return;
+            if (x >= axis.back()) {
+                  *lo = *hi = axis.size() - 1;
+                  return;
+                  }
+            size_t i = 0;
+            while (i + 2 < axis.size() && x > axis[i + 1])
+                  ++i;
+            *lo = i; *hi = i + 1;
+            *w = (f(x) - f(double(axis[i]))) / (f(double(axis[i + 1])) - f(double(axis[i])));
+            };
+      size_t c0, c1, l0, l1;
+      double wc, wl;
+      bracket(ccs, double(cc1), [](double x) { return x; }, &c0, &c1, &wc);
+      bracket(lens, lenMs > 0 ? lenMs : lens.front(), [](double x) { return std::log(x); }, &l0, &l1, &wl);
+      double sum = 0, weight = 0;
+      for (const auto& q : { std::make_tuple(c0, l0, (1 - wc) * (1 - wl)), std::make_tuple(c1, l0, wc * (1 - wl)),
+                             std::make_tuple(c0, l1, (1 - wc) * wl), std::make_tuple(c1, l1, wc * wl) }) {
+            const double w = std::get<2>(q);
+            if (w <= 0)
+                  continue;
+            const double x = cell(std::get<0>(q), std::get<1>(q));
+            if (std::isfinite(x)) {
+                  sum += w * x;
+                  weight += w;
+                  }
+            }
+      return weight > 0 ? sum / weight : -1;
+      }
+
+bool Articulation::transitionGlideAt(double lenBeforeMs, int velocity, double* leaveMs, double* arriveMs) const
+      {
+      const Technique* f = transition("fingered");
+      const Technique* b = transition("bowed");
+      const std::vector<BendGlide>* g = nullptr;
+      if (f && velocity >= f->low && velocity <= f->high)
+            g = &afterAttackFingered;
+      else if (b && velocity >= b->low && velocity <= b->high)
+            g = &afterAttackBowed;
+      if (!g || g->empty())
+            return false;
+      return glideAt(*g, lenBeforeMs, leaveMs, arriveMs);
       }
 
 double Articulation::onsetMedian() const
@@ -538,6 +675,16 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
                   tq->onsetMs = median;
                   }
             }
+      // attackOnsetGrid="name:cc1/lengthMs/pitch:ms,… …" ([notes] onsetModel 1), an attack with its attackOnset=
+      for (const QString& t : a.value("attackOnsetGrid").toString().split(' ', QString::SkipEmptyParts)) {
+            const int colon = t.indexOf(':');
+            Articulation::Technique* tq = nullptr;
+            for (Articulation::Technique& x : art.attacks)
+                  if (colon > 0 && x.name == t.left(colon))
+                        tq = &x;
+            if (!tq || !tq->hasOnset() || !tq->grid.read(t.mid(colon + 1)))
+                  return false;
+            }
       // accentedLevel="pitch/ms:dB …" (as quickLevel), with an accented attack listed in attacks=
       if (a.hasAttribute("accentedLevel")) {
             if (!art.attack("accented"))
@@ -583,6 +730,26 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             return false;
       if (a.hasAttribute("onset") && !readKeyedMs(a.value("onset").toString(), art.onsetMs, art.onsets))
             return false;
+      // onsetGrid="cc1/lengthMs/pitch:ms …" ([notes] onsetModel 1)
+      if (a.hasAttribute("onsetGrid") && !art.onsetGrid.read(a.value("onsetGrid").toString()))
+            return false;
+      // transitionGlide="fingered/lenBefore:leave:arrive … bowed/…" ([notes] onsetModel 1: a transition right after an
+      // attack), with the band listed in transitions=
+      for (const QString& g : a.value("transitionGlide").toString().split(' ', QString::SkipEmptyParts)) {
+            const int slash = g.indexOf('/');
+            const QString kind = g.left(slash);
+            const QStringList f = g.mid(slash + 1).split(':');
+            bool ok[3] = { false, false, false };
+            Articulation::BendGlide bg { f.value(0).toDouble(&ok[0]), f.value(1).toDouble(&ok[1]), f.value(2).toDouble(&ok[2]) };
+            if (slash <= 0 || (kind != "fingered" && kind != "bowed") || !art.transition(kind) || f.size() != 3
+                || !ok[0] || !ok[1] || !ok[2] || bg.lenBeforeMs < 0 || bg.arriveMs < bg.leaveMs)
+                  return false;
+            (kind == "fingered" ? art.afterAttackFingered : art.afterAttackBowed).push_back(bg);
+            }
+      for (auto* glides : { &art.afterAttackFingered, &art.afterAttackBowed })
+            std::sort(glides->begin(), glides->end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
+                  return x.lenBeforeMs < y.lenBeforeMs;
+                  });
       if (a.hasAttribute("octaveUp") && !readKeyedMs(a.value("octaveUp").toString(), art.octaveUpMs, art.octaveUp))
             return false;
       // bendGlide="lenBefore:leave:arrive …" (ms; leave may be negative: the f0 already on its way); bendGlideFingered the
