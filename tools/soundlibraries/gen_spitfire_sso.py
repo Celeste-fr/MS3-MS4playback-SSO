@@ -1406,6 +1406,10 @@ def _bowed_arrive():
     return out
 BOWED_ARRIVE = _bowed_arrive()
 ONSET_GRID = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_onset_grid.json'), encoding='utf-8'))
+# Celli / Basses Long re-measured 2026-11-02 with the string low cut MuseScore plays applied to the lone notes (retest2's
+# Deviation 4; onset_grid.py on the cut renders): sso_onset_grid_lowcut.json replaces those sections' 'long' entries
+ONSET_GRID['long'].update(json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_onset_grid_lowcut.json'),
+                                         encoding='utf-8'))['long'])
 LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
                               encoding='utf-8'))
 # bendGlideFingered= (2026-10-21, branch fast-microtones): the same for the fingered transition, velocity 64 as [slurs]

@@ -1269,6 +1269,18 @@ Violins 1 -18.8 -> -4.6, Celli -0.6 -> 2.4. K. 550's Celli get worse: their Long
 with the old 117.5 ms and go 44 ms later with the lone-note 74 ms; the lone notes were rendered without the string low
 cut (`[levels] lowCut`) MuseScore's renders have, one difference between the contexts (not tested).
 
+**Celli / Basses with the low cut** (2026-11-02, retest2 Deviation 4, after the hybrid failed its pre-check on K. 550 Celli
+-34.6 / Basses +38.1 ms): their All techniques Long re-measured on the VM as above, 24 takes at 155 / 311 ms and 8 at 622 /
+2000 ms, each render then put through the string low cut offline (Vst3Synth::lowCutBlock replicated, checked against the
+C++ to 3e-8: 4th-order Butterworth at max(lowCut, 0.77 x f0), constant per note) and measured by the same onset15 rule:
+`sso_onset_grid_lowcut.json` (onset_grid.py, unchanged rules), whose entries replace sso_onset_grid.json's for those two
+sections in `gen_spitfire_sso.py`. The cut moves the onsets by +1 to +3 ms (mean of paired takes; -1 to +2.5 with the
+renderer's smoothed rise from the floor for a note after silence), so it doesn't explain the gaps; the grids moved by a few
+ms (Celli 155 / 311: 68 / 75 ms, now one value over CC1; Basses CC1 now kept: 155 ms 86 / 84 / 75, 311 ms 127 / 127 / 112
+at CC1 48 / 64 / 96, against 78 / 123 at every CC1 before). The Basses' 155 ms peak is still 10-13 loudness units under the
+longer notes' at CC1 48 / 64: the patch's attack doesn't reach its level in 155 ms, a property of the sound, not of the
+takes.
+
 ## Transitions early
 
 The owner's rule since 2026-10-07 sends a legato transition on its beat; SSO's Performance legato then reaches the new
