@@ -10,6 +10,9 @@ A fork of the MuseScore 3.7 community fork (Jojo-Schmitz/MuseScore 3.x @ 29e066c
 
 Around them: built-in tuning, the playability checker, gradual tempo changes, phrase marks, scale-degree input.
 
+**The owner's principles** (interpretation is the composer's, rules read the marks, levels from multi-source data,
+blind tests decide): **docs/PRINCIPLES.md**. Check every playback change against it.
+
 Keep this file a **current-state guide**: update it when architecture, build steps, rules or known issues change.
 What was done and measured goes in commit messages (detailed on purpose: read `git log` first). **Picking up the
 work? Read `HANDOFF.md`.** Background (why a number is what it is, the owner's runs, measurement narratives,
