@@ -125,7 +125,12 @@ HC_RUN=<WRAP> tools/playbackverify/heard_check.sh [--takes N] <score> [recommend
   than export (trust export); slow techniques (sul tasto, flautando, harmonics) read −580 … +870 ms (no rule for
   them); split runs compare levels only within a route; from 7f51a91979 to 74155f2b0c every export run measured 0 of 0.
 - Tests: `tools/playbackverify/test_heard_check.py` (synthetic sawtooths, needs librosa, run without `-I`; the leave
-  reading and the leave rule too).
+  reading and the leave rule too; `KnownAnswer` / `KeptRun`: the positive controls below).
+- **Positive controls** (`tools/playbackverify/heard_control.py <dump> <wavs> [--export]`, 2026-11-01): plants a known
+  model error (+40 / +80 ms on one patch's transitions in predicted.tsv) and a -3 dB level step in one route's sound in a
+  run already on disk, reruns the analysis and checks that drift / LEVEL move by the planted size there and nothing
+  else changes; exit 0 all pass, 1 one fails, 2 nothing to plant on (~1 min on K. 550's 246 notes). VERIFY.md ›
+  Positive controls.
 - Feeds: the go/no-go before any build goes to the owner; `plainAttack` (`sso_plain_performance_shift.json`
   `attackMs`); every timing finding since 2026-10-16.
 
