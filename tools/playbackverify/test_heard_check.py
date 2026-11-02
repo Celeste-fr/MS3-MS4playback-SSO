@@ -14,6 +14,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import heard_check as H  # noqa: E402
+import heard_control as HC  # noqa: E402
 from loudness import perceived_envelope  # noqa: E402
 
 SR = 44100
@@ -397,6 +398,151 @@ class PlantedControls(unittest.TestCase):
         self.assertNotIn("UNHEARD", [f["kind"] for f in res["findings"]], res["findings"])
         res, notes = self.glide(50.0)
         self.assertIn(("UNHEARD", 59), [(f["kind"], f.get("pitch")) for f in res["findings"]], (res["findings"], notes[59]))
+
+
+def row2(part, track, written, end, pitch, route, patch, trans, fromw, fromp, sent, glide, arrival, slur, jb, sb, beat,
+         art="Legato", tech="legato,long", perf=2, onset=-1):
+    return "\t".join(str(v) for v in [part, track, 1, beat, "%.6f" % written, "%.6f" % end, pitch, "0.00", route, patch, art, tech,
+                                      64, perf, trans, "%.6f" % fromw, fromp, sent, onset, glide, 1, arrival, 0, 0, slur, jb, sb, 0])
+
+
+class KnownAnswer(unittest.TestCase):
+    """heard_control.py's plants on a synthetic two-part run whose model is right (its null flags nothing): Violas and
+    Celli on their Performance patches, each two slurs of five notes 300 ms apart (a hard attack heard on its model, then
+    four transitions gliding 100 ms from their note-on to within 30 cents on the written time). Planted: the model of
+    Violas' transitions +40 / +80 ms (drift moves by exactly that there and nowhere else, DRIFT flagged there only, the
+    findings unchanged), one Violas transition sounding 60 / 40 ms late (ARRIVAL FAIL / WARN on it and the note after,
+    nothing else), a route 3 / 6 dB quieter from one transition on (one LEVEL step of that size, there only)"""
+    LEAD_MS = 100.0
+    IOI = 0.3
+    PARTS = (("Violas", 8, "0-11", "Violas - Performance", (57, 59, 60, 62, 64)),
+             ("Celli", 12, "0-12", "Celli - Performance", (45, 47, 48, 50, 52)))
+    SLURS = (0.5, 2.3)
+
+    def make(self, late=None):
+        """the dump and the audio; late: (part, slur, note, ms) a transition arriving ms later than its model"""
+        tmp = tempfile.mkdtemp()
+        rows, audio = [], {}
+        off = H.OFFSET_S + self.LEAD_MS / 1000
+        n = int((off + 4.5) * SR)
+        t = np.arange(n) / SR
+        for part, track, route, patch, ps in self.PARTS:
+            pitch = np.full(n, float(ps[0]))
+            gain = [(0, -120)]
+            for si, w0 in enumerate(self.SLURS):
+                ws = [w0 + self.IOI * k for k in range(len(ps))]
+                for k, (w, p) in enumerate(zip(ws, ps)):
+                    end = ws[k + 1] if k + 1 < len(ps) else w + self.IOI
+                    if k == 0:
+                        rows.append(row2(part, track, w, end, p, route, patch, 0, -1, -1, -50.0, -1, -HARD_BIAS_MS, si, 0, 0,
+                                         1 + k, perf=1, onset=50.0))
+                        continue
+                    rows.append(row2(part, track, w, end, p, route, patch, 1, ws[k - 1], ps[k - 1], -100.0, 100.0, 0.0, si, 1, 1,
+                                     1 + k))
+                    a = ps[k - 1]
+                    # (late: the glide starts that much after its note-on, the same glide: heard that much later)
+                    extra = late[3] / 1000 if late and late[:3] == (part, si, k) else 0.0
+                    s0 = off + w - 0.100 + extra                # its note-on: the glide's start
+                    dur = 0.100 * (abs(p - a) * 100) / (abs(p - a) * 100 - H.CENTS_TOL)
+                    m = t >= s0
+                    pitch[m] = np.where(t[m] < s0 + dur, a + (p - a) * (t[m] - s0) / dur, p)
+                if si + 1 < len(self.SLURS):
+                    m = t >= off + ws[-1] + self.IOI
+                    pitch[m] = ps[0]                            # (the next slur's first pitch, in the rest)
+                # (the slur's attack 0.5 dB over the rest, under the 0.69 dB threshold: its loudest value, as on real
+                # renders, so the -15 dB rule's peak lies in it)
+                st, en = off + w0, off + ws[-1] + self.IOI
+                gain += [(st - 1e-4, -120), (st, -60), (st + 0.005, 0.5), (st + self.IOI - 0.13, 0.5), (st + self.IOI - 0.08, 0),
+                         (en - 0.02, 0), (en, -120)]
+            audio[route] = saw(hz(pitch), n) * gain_db(t, gain)
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(rows) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % self.LEAD_MS)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "".join("%s|%s|%s|0|0.00|99.6\n" % (r, pt, pa) for pt, _, r, pa, _ in self.PARTS))
+        import soundfile as sf
+        for r, x in audio.items():
+            sf.write(os.path.join(tmp, r + ".wav"), x, SR, subtype="FLOAT")
+        return tmp
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dump = cls.make(cls)
+        cls.null = HC.analyse(cls.dump, cls.dump, False)
+
+    def drifting(self, res):
+        return sorted((d["patch"], d["situation"]) for d in res["drift"] if d["drifting"])
+
+    def test_null(self):
+        notes = self.null["notes"]
+        self.assertEqual(sum(1 for x in notes if x["heardMs"] is not None), 20, [(x["pitch"], x["how"]) for x in notes])
+        self.assertEqual(self.null["findings"], [])
+        self.assertEqual(self.drifting(self.null), [])
+        for d in self.null["drift"]:
+            self.assertLess(abs(d["medianMs"]), 12.0, d)
+
+    def test_model_shift(self):
+        for shift in HC.MODEL_SHIFTS_MS:
+            d = tempfile.mkdtemp()
+            self.assertEqual(HC.plant_model(self.dump, os.path.join(d, "dump"), "Violas - Performance", shift), 8)
+            res = HC.analyse(os.path.join(d, "dump"), self.dump, False)
+            bad, hit = HC.check_model(self.null, res, "Violas - Performance", shift)
+            self.assertEqual(bad, [])
+            self.assertEqual(hit, 2)
+            self.assertEqual(self.drifting(res), [("Violas - Performance", s) for s in HC.TRANSITION_SITUATIONS])
+            self.assertEqual(res["findings"], [])
+        # (the control's own control: an unplanted run doesn't pass as planted)
+        self.assertNotEqual(HC.check_model(self.null, self.null, "Violas - Performance", 40.0)[0], [])
+
+    def test_late_transition(self):
+        for late, severity in ((60.0, "FAIL"), (40.0, "WARN")):
+            res = HC.analyse(*([self.make(("Violas", 1, 2, late))] * 2), False)
+            a = [(f["severity"], f["part"], f["pitch"], f["value"]) for f in res["findings"] if f["kind"] == "ARRIVAL"]
+            self.assertEqual(sorted(x[:3] for x in a), [(severity, "Violas", 60), (severity, "Violas", 62)], res["findings"])
+            for s, _, p, v in a:
+                self.assertLess(abs(v - (late if p == 60 else -late)), 10.0, a)
+            self.assertEqual({f["kind"] for f in res["findings"]} - {"ARRIVAL", "RHYTHM"}, set(), res["findings"])
+            self.assertTrue(all(f["part"] == "Violas" for f in res["findings"]), res["findings"])
+
+    def test_level(self):
+        with self.assertRaises(ValueError):
+            HC.pick_level_note(self.dump, self.null, 3.0)
+        for db in (-3.0, -6.0):
+            pick = HC.pick_level_note(self.dump, self.null, db)
+            self.assertIsNotNone(pick)
+            note, before, cut = pick
+            res = HC.analyse(self.dump, self.dump, False, HC.gain_plant(note["route"], cut, db))
+            bad, step0, step = HC.check_level(self.dump, self.null, res, note, before, cut, db)
+            self.assertEqual(bad, [])
+            self.assertLess(abs(step - step0 - db), HC.LEVEL_TOL_DB, (step0, step))
+            lv = [f for f in res["findings"] if f["kind"] == "LEVEL"]
+            self.assertEqual([(f["part"], f["pitch"]) for f in lv], [(note["part"], note["pitch"])], res["findings"])
+            self.assertLess(abs(lv[0]["value"] - db), HC.LEVEL_TOL_DB, lv)
+            self.assertEqual([f for f in res["findings"] if f["kind"] != "LEVEL"], [])
+            # (the control's own control: an unplanted run doesn't pass as planted)
+            self.assertNotEqual(HC.check_level(self.dump, self.null, self.null, note, before, cut, db)[0], [])
+
+    def test_combined(self):
+        """the model of Violas +40 ms and a level step of -3 dB on the other part's route in one run: drift only at Violas' transitions, LEVEL only
+        at the Celli note; the script's own report passes"""
+        d = tempfile.mkdtemp()
+        HC.plant_model(self.dump, os.path.join(d, "dump"), "Violas - Performance", 40.0)
+        null = dict(self.null, notes=[x for x in self.null["notes"] if x["part"] == "Celli"])
+        note, before, cut = HC.pick_level_note(self.dump, null, -3.0)
+        self.assertEqual(note["part"], "Celli")
+        res = HC.analyse(os.path.join(d, "dump"), self.dump, False, HC.gain_plant(note["route"], cut, -3.0))
+        self.assertEqual(self.drifting(res), [("Violas - Performance", s) for s in HC.TRANSITION_SITUATIONS])
+        self.assertEqual([(f["kind"], f["part"]) for f in res["findings"]], [("LEVEL", note["part"])])
+        out = HC.run(self.dump, self.dump, False, "Violas - Performance", null=self.null)
+        self.assertTrue(out["passed"], HC.text(out))
+
+
+@unittest.skipUnless(os.environ.get("HC_CONTROL_DUMP") and os.environ.get("HC_CONTROL_WAVS"),
+                     "HC_CONTROL_DUMP / HC_CONTROL_WAVS: a kept heard-check run (VERIFY.md › Positive controls)")
+class KeptRun(unittest.TestCase):
+    """heard_control.py on a kept real run (HC_CONTROL_EXPORT=1: MuseScore's export folder)"""
+    def test_controls(self):
+        out = HC.run(os.environ["HC_CONTROL_DUMP"], os.environ["HC_CONTROL_WAVS"], os.environ.get("HC_CONTROL_EXPORT") == "1")
+        self.assertTrue(out["passed"], HC.text(out))
 
 
 if __name__ == "__main__":

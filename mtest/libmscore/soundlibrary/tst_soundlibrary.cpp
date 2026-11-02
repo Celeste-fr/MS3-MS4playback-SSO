@@ -205,6 +205,7 @@ class TestSoundLibrary : public QObject, public MTest
       void engineLane();
       void startLead();
       void evenLevelsGlide();
+      void evenLevelsPlanted();
       void evenAutoWindows();
       void evenAutoSession();
       void evenAutoSlow();
@@ -6018,6 +6019,209 @@ void TestSoundLibrary::startLead()
       QVERIFY(first != inOrder.first.end());
       QVERIFY(first->second < 1e-6);
       delete score;
+      }
+
+//---------------------------------------------------------
+//   evenLevelsPlanted
+//    a positive control for even levels (VERIFY.md › Positive controls; CLAUDE.md › Rules: a check is trusted only after
+//    it caught a known fault): the method closed on a synthetic library whose levels are planted. The "library" is a
+//    tone whose level (dB) is planted per note from its heard window start (note-on + 20 ms) and which hears CC11 as SSO
+//    does: the glide of the values (glideAt through the nodes), CC11_FACTOR (1.28) times as large, LAG_MS (12 ms) late.
+//    Each round is rendered as audio and measured by the job's own measurement (EvenMeasure::measure: the perceived
+//    envelope, each note's mean over WINDOW_MS); rounds as the background measurer's (evenauto.h: round 1 = fit /
+//    CC11_FACTOR, round 2 = round 1 + its fit / CC11_FACTOR), the round kept by EvenLevels::chooseRound with its values.
+//    Planted, each against the same passage unplanted (a perfect correction gives that sound back):
+//      flat         six slurred notes 250 ms apart at one level (the null): every value within NULL_DB
+//      swell        note 3 of 6 +4 dB
+//      last dip     the last note of 6 -3 dB (a passage's last note: its value was free before even-edges, 325904770b)
+//      into silence eight notes 200 ms apart in two slurs, flat as heard, the last 0.6 s long, its sound decaying 30 dB/s
+//                   after its heard window and released 120 dB/s after its note-off (before even-release, 7ed94c6688,
+//                   the target ran over the decay and the last notes' values blew up): the null
+//      dip, silence the same with its last note -3 dB as heard
+//    Checked on each planted case: the plant measures at least half its size (a step at the heard window's start reads
+//    smaller over the window: the envelope's 22 / 50 ms attack and release); the planted note's measured level within
+//    UNDO_DB of the unplanted one; no value beyond the planted size + OVER_DB; the notes two or more away from it within
+//    FAR_DB; every other note within max(OTHER_DB, its deviation before); and on every case the corrected envelope
+//    within RESIDUAL_DB of the unplanted one from note 2's heard window to the last note-off. "dip, silence" fails the
+//    last two on main (2026-11-01, the control's own finding, marked known: the test fails when it stops failing):
+//    the last note's value +4.56 dB is the glide's at the note's node, the middle of its 0.6 s, while the fit sees only
+//    its heard window (even-release), so its rest plays +3.09 dB over the unplanted sound at its note-off.
+//    On the code before the fixes (even_levels_bugmode.patch here, applied by hand: MS_EVEN_BUG=1 / 2; VERIFY.md ›
+//    Positive controls) the test fails: with 1 "last dip" (the last note left uncorrected: the target ended at its
+//    note-on), with 2 "into silence" (+5.09 dB on a passage with nothing planted: the target ran over the decay).
+//---------------------------------------------------------
+
+namespace {
+struct Planted {
+      const char* name;
+      EvenLevels::Passage p;
+      std::vector<double> level;       // planted, dB, from each heard window start
+      double decay { 0 };              // dB/s after the last note's heard window, to its note-off
+      int planted { -1 };              // the planted note (-1: none)
+      double size { 0 };               // its planted deviation, dB
+      const char* known { nullptr };   // a finding of this control the method still has (the case must fail, or the mark go)
+      };
+}
+
+// the synthetic library's mono render of p with values (dB per note; empty: none); score time 0 at LEAD seconds
+static std::vector<float> plantedRender(const Planted& c, const std::vector<double>& values, int rate, double lead)
+      {
+      const EvenLevels::Passage& p = c.p;
+      const size_t n = p.on.size();
+      const double last = p.off.back();
+      const size_t len = size_t((lead + last + 1.5) * rate);
+      const std::vector<double> centres = p.centres();
+      const double heardEnd = p.window[n - 1] + EvenLevels::WINDOW_MS / 1000.0;
+      std::vector<float> out(len, 0.0f);
+      double phase = 0.0;
+      for (size_t i = 0; i < len; ++i) {
+            const double t = double(i) / rate - lead;
+            double db;
+            if (t < p.window[0])
+                  db = -120.0;                              // (silence until the first note is heard: an attack)
+            else {
+                  size_t k = 0;
+                  while (k + 1 < n && t >= p.window[k + 1])
+                        ++k;
+                  db = c.level[k];
+                  if (k == n - 1 && t > heardEnd)
+                        db -= c.decay * (std::min(t, last) - heardEnd);
+                  if (t > last)
+                        db -= 120.0 * (t - last);
+                  }
+            if (!values.empty() && t >= p.on[0])
+                  db += EvenLevels::CC11_FACTOR * EvenLevels::glideAt(centres, values, t - EvenLevels::LAG_MS / 1000.0);
+            phase += 220.0 / rate;
+            double x = 0;
+            for (int h = 1; h <= 6; ++h)
+                  x += std::sin(2 * M_PI * h * phase) / h;
+            out[i] = float(0.05 * x * std::pow(10.0, std::max(db, -140.0) / 20.0));
+            }
+      return out;
+      }
+
+void TestSoundLibrary::evenLevelsPlanted()
+      {
+      const double NULL_DB = 0.5, UNDO_DB = 1.0, OTHER_DB = 1.0, OVER_DB = 1.0, FAR_DB = 0.75, RESIDUAL_DB = 1.5;
+      const int rate = 44100;
+      const double lead = 0.5;
+      auto passage = [](int count, double ioi, double lastLen, double windowMs, std::vector<int> slur) {
+            EvenLevels::Passage p;
+            for (int k = 0; k < count; ++k) {
+                  p.on.push_back(k * ioi);
+                  p.off.push_back(k + 1 < count ? (k + 1) * ioi : k * ioi + lastLen);
+                  p.window.push_back(k * ioi + windowMs / 1000.0);
+                  }
+            p.slur = slur;
+            return p;
+            };
+      const EvenLevels::Passage six = passage(6, 0.25, 0.25, 20.0, { 0, 0, 0, 0, 0, 0 });
+      const EvenLevels::Passage eight = passage(8, 0.2, 0.6, 20.0, { 0, 0, 0, 0, 1, 1, 1, 1 });
+      const std::vector<Planted> cases {
+            { "flat", six, std::vector<double>(6, 0.0), 0.0, -1, 0.0, nullptr },
+            { "swell", six, { 0, 0, 4, 0, 0, 0 }, 0.0, 2, 4.0, nullptr },
+            { "last dip", six, { 0, 0, 0, 0, 0, -3 }, 0.0, 5, -3.0, nullptr },
+            { "into silence", eight, std::vector<double>(8, 0.0), 30.0, -1, 0.0, nullptr },
+            { "dip, silence", eight, { 0, 0, 0, 0, 0, 0, 0, -3 }, 30.0, 7, -3.0,
+              // (2026-11-01, this control's finding on main 6f245ab1cb: the last note's heard window measures the dip
+              // back to 0, but its value, +4.56 dB, is the glide's at the note's node, the middle of its 0.6 s, so its
+              // rest, past the window, plays ~+3 dB over the unplanted sound; docs/PLAYBACK_SETTINGS.md › Even levels › Open)
+              "a long last note's rest over-corrected" } };
+      QStringList failed, knownSeen;
+      for (const Planted& c : cases) {
+            const EvenLevels::Passage& p = c.p;
+            const size_t n = p.on.size();
+            // (the same passage unplanted and uncorrected: what a perfect correction gives back)
+            Planted flat = c;
+            flat.level.assign(n, 0.0);
+            std::vector<double> flatLevels, flatEnv;
+            EvenMeasure::measure(plantedRender(flat, {}, rate, lead), rate, { lead }, 0.0, p, &flatLevels, &flatEnv);
+            std::vector<double> values[3], levels[3], env[3];
+            double rms[3];
+            for (int r = 0; r < 3; ++r) {
+                  if (r == 0)
+                        values[0].assign(n, 0.0);
+                  else {
+                        const std::vector<double> fit = EvenLevels::fitGlide(p, env[r - 1]);
+                        values[r] = values[r - 1];
+                        for (size_t j = 0; j < n; ++j)
+                              values[r][j] += fit[j] / EvenLevels::CC11_FACTOR;
+                        }
+                  EvenMeasure::measure(plantedRender(c, values[r], rate, lead), rate, { lead }, 0.0, p, &levels[r], &env[r]);
+                  rms[r] = EvenLevels::envelopeRms(p, env[r]);
+                  }
+            const bool measured[3] { true, true, true };
+            int rejected = 0;
+            const int kept = EvenLevels::chooseRound(p.slur, levels, rms, measured, &rejected, values);
+            const std::vector<double>& v = values[kept];
+            // a note's deviation from the unplanted passage's level (flatLevels: the first note's attack from silence and a
+            // decaying last note measure their own level, not the slur's)
+            auto dev = [&flatLevels](const std::vector<double>& lv, size_t j) { return lv[j] - flatLevels[j]; };
+            // the corrected sound against the unplanted one: the largest |difference| of the envelopes from note 2's
+            // heard window to the last note-off (the first note's attack is held: unseenNotes)
+            double residual = 0, residualSigned = 0, residualAt = 0;
+            for (int i = 0; i < p.gridSize() && size_t(i) < env[kept].size(); ++i) {
+                  const double t = p.gridStart() + i * EvenLevels::STEP_MS / 1000.0;
+                  const double d = env[kept][size_t(i)] - flatEnv[size_t(i)];
+                  if (t >= p.window[1] && t <= p.off.back() && std::fabs(d) > residual) {
+                        residual = std::fabs(d);
+                        residualSigned = d;
+                        residualAt = t;
+                        }
+                  }
+            QStringList lv0, lvk, vv;
+            for (size_t j = 0; j < n; ++j) {
+                  lv0 << QString::number(dev(levels[0], j), 'f', 2);
+                  lvk << QString::number(dev(levels[kept], j), 'f', 2);
+                  vv << QString::number(v[j], 'f', 2);
+                  }
+            QStringList bad;
+            double big = 0;
+            for (double x : v)
+                  big = std::max(big, std::fabs(x));
+            if (c.planted < 0) {
+                  if (big > NULL_DB)
+                        bad << QString("a value %1 dB with nothing planted (at most %2)").arg(big, 0, 'f', 2).arg(NULL_DB);
+                  }
+            else {
+                  const double d0 = dev(levels[0], size_t(c.planted));
+                  // (the plant as measured: a level step at the heard window's start reads smaller over the window, the
+                  // envelope's 22 / 50 ms attack and release in it)
+                  if (d0 * c.size <= 0 || std::fabs(d0) < 0.5 * std::fabs(c.size))
+                        bad << QString("the plant measured %1 dB, planted %2").arg(d0, 0, 'f', 2).arg(c.size);
+                  if (std::fabs(dev(levels[kept], size_t(c.planted))) > UNDO_DB)
+                        bad << QString("the planted note still %1 dB off (at most %2)").arg(dev(levels[kept], size_t(c.planted)), 0, 'f', 2).arg(UNDO_DB);
+                  if (big > std::fabs(c.size) + OVER_DB)
+                        bad << QString("a value %1 dB, over the planted %2 + %3").arg(big, 0, 'f', 2).arg(std::fabs(c.size)).arg(OVER_DB);
+                  for (size_t j = 0; j < n; ++j) {
+                        if (int(j) == c.planted)
+                              continue;
+                        if (std::abs(int(j) - c.planted) >= 2 && std::fabs(v[j]) > FAR_DB)
+                              bad << QString("note %1, %2 from the planted one: value %3 dB (at most %4)").arg(j + 1)
+                                     .arg(std::abs(int(j) - c.planted)).arg(v[j], 0, 'f', 2).arg(FAR_DB);
+                        if (std::fabs(dev(levels[kept], j)) > std::max(OTHER_DB, std::fabs(dev(levels[0], j))))
+                              bad << QString("note %1 %2 dB off (was %3, at most %4)").arg(j + 1).arg(dev(levels[kept], j), 0, 'f', 2)
+                                     .arg(dev(levels[0], j), 0, 'f', 2).arg(OTHER_DB);
+                        }
+                  }
+            if (residual > RESIDUAL_DB)
+                  bad << QString("the corrected sound %1 dB off the unplanted at most (at most %2)").arg(residual, 0, 'f', 2).arg(RESIDUAL_DB);
+            qDebug("planted %-13s round %d kept (rejected %d; rms %.2f %.2f %.2f) values %s | levels off the unplanted %s -> %s | "
+                   "sound off the unplanted %+.2f dB at most (%.3f s)%s", c.name, kept, rejected, rms[0], rms[1], rms[2],
+                   qPrintable(vv.join(' ')), qPrintable(lv0.join(' ')), qPrintable(lvk.join(' ')), residualSigned, residualAt,
+                   bad.isEmpty() ? "" : qPrintable(" | FAIL: " + bad.join("; ")));
+            if (c.known) {
+                  if (bad.isEmpty())
+                        failed << QString("%1 now passes: drop its known mark (%2)").arg(c.name).arg(c.known);
+                  else
+                        knownSeen << c.name;
+                  }
+            else if (!bad.isEmpty())
+                  failed << c.name;
+            }
+      if (!knownSeen.isEmpty())
+            qWarning("evenLevelsPlanted: known findings still there: %s", qPrintable(knownSeen.join(", ")));
+      QVERIFY2(failed.isEmpty(), qPrintable(failed.join(", ")));
       }
 
 //---------------------------------------------------------

@@ -1004,6 +1004,13 @@ the design.
     velocity 64: a unison "transition") measures 10-15 dB under the slurred pair before any correction (the job's round
     0: 35.8 against 50.3 dB; Violins 1 the same). It may not re-articulate on SSO's Performance legato; worth a look of
     its own (`plainJoins`, `reattack`).
+  - *A long last note's rest over-corrected* (2026-11-01, found by the positive control
+    `tst_soundlibrary::evenLevelsPlanted`, synthetic library, not measured on SSO): since even-release the fit sees a
+    passage's last note through its heard window only (note-on + window .. + 136 ms), but its value is the glide's at its
+    node, halfway to its note-off, and is held to the end. A last note 0.6 s long planted 3 dB quiet as heard (measured
+    -1.92 dB over its window) gets +4.56 dB: its window comes back to -0.04, its rest plays +3.09 dB over the unplanted
+    sound at its note-off. Shorter last notes (250 ms, window to 156 ms) come back within 1.21 dB. A fix (the last node at
+    the heard window's middle, or the value capped by what the window needs) changes what plays: for the owner.
 - **The glide's nodes** (the owner, 2026-10-14, "do 1"): each note's in the middle of its own span, halfway from its
   note-on to the next joined note-on (`EvenLevels::nodeTime`; a passage's last note: halfway to its note-off). Until
   then they were the middles of the heard windows, 270-310 ms after the note-on at 180 ms notes, inside the next note:

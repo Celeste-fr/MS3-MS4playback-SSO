@@ -527,6 +527,10 @@ last (the AGM trial has ended; they wait for the bought guitars).
   per part and patch, ~85-90 MB plus samples), threaded setState, the countdown, a whole score at open; only 4 patches
   have a measured gap (rest 3 s, 3 passes); it doesn't wait for a plug-in's background load (item 12); Whence ships no
   stored values, so it plays no glide until measured; passages with a repeated note play uncorrected.
+- **W last note** (2026-11-01, the positive control `tst_soundlibrary::evenLevelsPlanted`, synthetic): a long last note
+  (0.6 s) planted 3 dB quiet gets +4.56 dB: its heard window comes back, its rest plays +3.09 dB too loud (the value is
+  the glide's at the node, halfway to the note-off, the fit sees only the window). docs/PLAYBACK_SETTINGS.md › Even
+  levels › Open; a fix changes what plays.
 - **Src**: HANDOFF.md › Even levels; private `sso-legato-fixes/RESULT.md`.
 - **Own**: whether even levels stays on (it is 1 in Recommended).
 
@@ -955,7 +959,7 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
 - **Effort**: 1 day.
 - **Unlocks**: Stage B (tone) of the dynamics plan, bad round robins in new patches, Ample's quiet / dark strum (10).
 
-### 13. Positive control for the heard check (open, 2026-11-01)
+### 13. Positive control for the heard check: BUILT (branch `positive-controls`, 2026-11-01)
 - **Why**: the heard check (VERIFY.md › Heard check) compares the real sound's note times with the audit's model,
   but nothing shows it would catch a model wrong by a known amount (CLAUDE.md › Rules › Audit what goes out).
 - **Spec**: on a render already made (no new VM run needed), shift the model's predicted times for one patch by a
@@ -963,3 +967,8 @@ test on synthetic input, a row in TOOLS.md, outputs as JSON plus a short text re
   that ARRIVAL / LEVEL / model drift flag exactly the planted patch and situation at about the planted size; also an
   unshifted run as the null. Kept as a test with the planted sizes and the detection margins.
 - **Effort**: half a day, Linux only, on a kept heard-check export.
+- **Built**: `tools/playbackverify/heard_control.py` (model +40 / +80 ms on one patch's transitions, a -3 dB level step
+  on one route), `test_heard_check.py` `KnownAnswer` (synthetic, always run) and `KeptRun` (a kept real run: K. 550
+  bars 1-9, build 524, private); results and tolerances in VERIFY.md › Positive controls. A model error shows only as
+  drift by design (ARRIVAL / RHYTHM / LEVEL read the sound); ARRIVAL's own control (a sound late) is synthetic. With
+  it, even levels' fit got its control: `tst_soundlibrary::evenLevelsPlanted` (VERIFY.md › Positive controls).

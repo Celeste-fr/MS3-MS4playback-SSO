@@ -1,0 +1,81 @@
+Positive-control proof only (VERIFY.md › Positive controls › Even levels): switches the even-levels fixes off in
+libmscore/evenlevels.cpp at run time. MS_EVEN_BUG=1: the behaviour before even-edges (325904770b), 2: before
+even-release (7ed94c6688). Apply, build tst_soundlibrary, run `MS_EVEN_BUG=<n> ./tst_soundlibrary evenLevelsPlanted`,
+then `git checkout libmscore/evenlevels.cpp`. Never commit the patched file.
+
+diff --git a/libmscore/evenlevels.cpp b/libmscore/evenlevels.cpp
+index 71230d8aff..8520a46e5c 100644
+--- a/libmscore/evenlevels.cpp
++++ b/libmscore/evenlevels.cpp
+@@ -33,6 +33,10 @@
+ #include "segment.h"
+ #include "soundlibrary.h"
+ 
++// POSITIVE-CONTROL PROOF ONLY, never committed: MS_EVEN_BUG=1 the behaviour before even-edges (325904770b), 2 before
++// even-release (7ed94c6688)
++static int bugMode() { static const int m = qEnvironmentVariableIntValue("MS_EVEN_BUG"); return m; }
++
+ namespace Ms {
+ namespace EvenLevels {
+ 
+@@ -403,6 +407,8 @@ double lastFrom(const Passage& p)
+       const size_t n = p.on.size();
+       if (n == 0)
+             return 0.0;
++      if (bugMode())
++            return p.on[n - 1];
+       if (p.lastNext > p.on[n - 1] || n > p.window.size())
+             return p.on[n - 1];
+       return std::max(p.on[n - 1], p.window[n - 1]);
+@@ -413,8 +419,16 @@ double targetEnd(const Passage& p)
+       const size_t n = p.on.size();
+       if (n == 0)
+             return 0.0;
++      if (bugMode() == 1)
++            return p.on[n - 1];
+       if (p.lastNext > p.on[n - 1])
+             return p.lastNext;
++      if (bugMode() == 2) {
++            double end = n <= p.off.size() ? p.off[n - 1] : p.on[n - 1];
++            if (n <= p.window.size())
++                  end = std::max(end, p.window[n - 1] + WINDOW_MS / 1000.0);
++            return std::max(end, p.on[n - 1]);
++            }
+       const double from = lastFrom(p);
+       double end = from + WINDOW_MS / 1000.0;
+       if (n <= p.off.size())
+@@ -436,6 +450,8 @@ static void targetOf(const Passage& p, const std::vector<double>& env, std::vect
+       if (n < 3 || m <= 0)
+             return;
+       const double t0 = p.gridStart();
++      if (bugMode() == 1)
++            fromFirst = false;
+       const double from = fromFirst ? (p.window.empty() ? p.on[0] : std::min(p.window[0], p.on[1])) : p.on[1];
+       const double lastStart = lastFrom(p);
+       const double to = targetEnd(p);
+@@ -533,7 +549,7 @@ std::vector<bool> unseenNotes(const Passage& p, const std::vector<double>& env)
+       {
+       const std::vector<double> own = ownWeights(p, env);
+       std::vector<bool> out(own.size(), false);
+-      if (p.on.size() < 3)
++      if (p.on.size() < 3 || bugMode() == 1)
+             return out;
+       for (size_t j = 0; j < own.size(); ++j)
+             out[j] = own[j] < OBSERVED_MIN;
+@@ -608,14 +624,14 @@ int chooseRound(const std::vector<int>& slur, const std::vector<double> levels[3
+       for (int r = 1; r < 3; ++r) {
+             if (!measured[r])
+                   continue;
+-            if (measured[0] && values && roundTooBig(slur, levels[0], values[0], values[r])) {
++            if (measured[0] && values && !bugMode() && roundTooBig(slur, levels[0], values[0], values[r])) {
+                   if (rejected)
+                         *rejected |= 1 << r;
+                   if (tooBig)
+                         *tooBig |= 1 << r;
+                   continue;
+                   }
+-            if (measured[0] && roundMovesNote(slur, levels[0], levels[r])) {
++            if (measured[0] && bugMode() != 1 && roundMovesNote(slur, levels[0], levels[r])) {
+                   if (rejected)
+                         *rejected |= 1 << r;
+                   continue;

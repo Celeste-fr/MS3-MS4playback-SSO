@@ -445,10 +445,57 @@ planted defect and pass without it; a check that can't fail proves nothing. Wher
   damaged file made again; another tuning, another state). `chunkCompare`'s comparison, `chunk_diff.py`:
   `test_chunk_diff.py` (until 2026-10-30 it ignored a note-on's tuning: a quarter tone sent at 12-TET passed).
 - **Heard check**: `test_heard_check.py` `PlantedControls` (one staccato 60 / 40 / 10 ms late; a transition gliding to
-  50 cents short of its note is UNHEARD) and `EndToEnd`. **Blind**: an attack's pitch. The heard check times attacks by
+  50 cents short of its note is UNHEARD) and `EndToEnd`. **The model and the levels** (2026-11-01, OPEN_ITEMS Tier 4 13):
+  `heard_control.py <dump> <wavs> [--export]` on a run already on disk, against the same run unplanted:
+  - *model*: the audit's predicted heard time (`arrivalMs`) of every transition of one patch (the one with the most
+    transitions measured) +40, then +80 ms, the sound untouched. Expected and checked: that patch's two transition
+    situations' drift median, p10, p90 and Kaplan-Meier median move by exactly -40 / -80 (0.15 ms: the rounding), n and
+    the censored counts the same; every other drift row, every heard time and every finding (ARRIVAL, RHYTHM, LEVEL,
+    UNHEARD) unchanged (none reads the model: a model error shows ONLY as drift).
+  - *level*: one route's sound 3 dB quieter from 120 ms before one note's heard time to its end (a step down, inside
+    the note's glide; a step up, or a bump, moves readings before it: a level is a span's loudest value and an attack is
+    read against its slur's peak), the note a transition read by pitch whose step from the note before is judged.
+    Expected and checked: that step -3 dB off within 1 dB, flagged LEVEL where it then lies clearly over 0.69 dB; every
+    note after the cut on that route -3 within 1 dB, all others within 0.05 dB (the note before within 1 dB: its span's
+    end sees the cut through the envelope's 46 ms window and 50 ms release), heard times within 0.5 ms (the planted note
+    and the one before within 10 ms); every other finding the same (ARRIVAL within 20 ms).
+  - *ARRIVAL* (the sound late, not the model): synthetic only (a real render can't be retimed in one place without a
+    seam): `KnownAnswer.test_late_transition`, one transition's glide starting 60 / 40 ms late: ARRIVAL FAIL / WARN on it
+    and the note after (read +54 / +34 ms, -53 / -33; the test allows 10 ms off the planted size), at 60 ms also
+    the slur's RHYTHM WARN (0.066), nothing on the other part.
+  Known answers: `KnownAnswer` (synthetic, two parts x two slurs of five, a model that is right: the null flags nothing,
+  every drift median within 4.1 ms (the test allows 12); the plants above flag DRIFT only on Violas' two transition situations, -40.0 / -80.0
+  exactly; -3 / -6 dB steps read -2.80 / -5.66 dB, one LEVEL finding each, on the planted note) and the kept run of
+  K. 550 i bars 1-9 (the five string sections, build 524's export on real SSO, Recommended, 2026-11-01; 92 findings
+  already in the null; private: `~/MuseScore/ms3fork/private/positive-controls/k550A`, `HC_CONTROL_DUMP` /
+  `HC_CONTROL_WAVS` / `HC_CONTROL_EXPORT=1` run it as `KeptRun`): Violins 1 - Performance's transitions after an attack
+  +19.6 -> -20.4 / -60.4 ms, after a transition +59.6 -> +19.6 / -20.4 (n 7 / 9, KM +76.5 -> +36.5 / -3.5), nothing else
+  moved; the -3 dB step on Violins 1 bar 9 beat 2.75 (the passage's last note) read -3.68 -> -6.26 dB (-2.58), its LEVEL
+  WARN at -6.26, nothing else. The controls fail when the check is broken (mutations, 2026-11-01): LEVEL's threshold
+  at 10 dB fails the level tests, drift measured against the note-on instead of the model fails the model tests,
+  ARRIVAL switched off fails the late transition. Each control also fails an unplanted run passed off as planted. **Blind**: an attack's pitch. The heard check times attacks by
   the envelope only, so an attack played at the wrong tuning (a quarter tone left at 12-TET on an attack) is not
   flagged; the verification's detector (`cents` rule, `test_verify_detector.py` `test_cents`) is what sees a missing
   quarter tone.
+- **Even levels** (2026-11-01, after two bugs no test caught: 325904770b, 7ed94c6688): `tst_soundlibrary::
+  evenLevelsPlanted` closes the method on a synthetic library: a tone whose level is planted per note from its heard
+  window (note-on + 20 ms) and which hears CC11 as SSO does (the glide, 1.28 x, 12 ms late); each round rendered and
+  measured by the job's own measurement (`EvenMeasure::measure`), rounds as the background measurer's, the round kept
+  by `chooseRound`. Cases: flat six notes (the null), note 3 of 6 +4 dB, the last of 6 -3 dB, eight notes in two slurs
+  ending into silence (the last 0.6 s, decaying 30 dB/s after its window, released 120 dB/s) flat (the null) and with
+  its last note -3 dB. Tolerances: nulls every value within 0.5 dB; planted: the note back within 1 dB of the unplanted
+  passage, no value beyond the planted size + 1 dB, notes two or more away within 0.75 dB, the others within 1 dB (or
+  their deviation before), and on every case the corrected envelope within 1.5 dB of the unplanted one. Main
+  (6f245ab1cb): values null 0.00; swell -4.08 on the note (+0.31 / +0.12 beside), it comes back to +0.17 dB, the sound
+  1.33 dB off at most; last dip +2.35, back to -0.02, 1.21 dB. **Its finding**: "dip, silence" gets +4.56 dB, its window
+  back to -0.04 dB but its rest +3.09 dB over the unplanted sound (the value is the glide's at the node, halfway to the
+  note-off; docs/PLAYBACK_SETTINGS.md › Even levels › Open), marked known in the test (it fails when the case stops
+  failing). **On the buggy code** (the fixes' behaviour switched back at run time by
+  `mtest/libmscore/soundlibrary/even_levels_bugmode.patch`, MS_EVEN_BUG=1 / 2, applied by hand and never committed): before even-edges (the target to the last
+  note-on, no unseen notes, every round's rms without the edges, no round rejected) "last dip" fails, its value 0 and
+  the note left -1.92 dB (sound 3.10 dB off); before even-release (the target to the later of note-off and heard window
+  end, no roundTooBig) "into silence", with nothing planted, gets +5.09 dB on its last note and -1.87 on the one before
+  (sound +7.03 dB off) and "dip, silence" +7.73. Both fail the test; main passes it.
 - **The verification** (`--verify-playback`): `MS_VERIFY_FAULT` plants dropped notes, truncated notes and pedal drops
   (`try_with_testsynth.sh`, by hand: the fault switch is read once per process, no mtest runs it); no fault kind shifts
   an onset, changes a level or retunes a note.
