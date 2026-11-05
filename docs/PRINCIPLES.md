@@ -53,6 +53,10 @@ Draft of 2026-11-01, collected from the owner's statements; **the owner corrects
   trials (identical pairs), the reference recording where one exists, short clips (about 8 s), answers stored where
   they can be read back; a surprising result re-tested before it changes anything.
 - **In:** for the owner's own pieces (no recording), judging against the intended dynamics and balance in the score.
+
+> "real score recording comparison always more reliable than whence stuff" (2026-11-05)
+
+- **In:** decisions ride on pieces with a reference recording; the owner's own pieces (Whence) are a secondary check.
 - **Out:** a default changed on one unblinded listen of one passage.
 
 ## 5. Readings of printed music are checked by the owner
