@@ -553,7 +553,7 @@ void controlSurfaceHint(QWidget* parent)
                                                    "(Not in the list: restart Live.)"), QMessageBox::Ok, parent);
       m->setAttribute(Qt::WA_DeleteOnClose);
       m->setModal(false);
-      QCheckBox* off = new QCheckBox(QObject::tr("Don't show again"), m);
+      QCheckBox* off = new QCheckBox(QObject::tr("Remember my choice and don't ask again"), m);
       m->setCheckBox(off);
       QObject::connect(off, &QCheckBox::toggled, [](bool on) { QSettings().setValue(KEY_HINT_OFF, on); });
       m->show();

@@ -321,7 +321,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                         ++allIns;
             }
       if (allIns)
-            plan->notes << QObject::tr("%n track(s) listen to All Ins: their MIDI output (Preferences › I/O) isn't set. Live plays the "
+            plan->notes << QObject::tr("%n track(s) listen to All Ins: their MIDI output (Preferences > I/O) isn't set. Live plays the "
                                        "score either way (the device finds tracks by name); for Play through Live set MIDI From.",
                                        "", allIns);
 
@@ -370,7 +370,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   QString err;
                   QByteArray state;
                   if (!SoundLibraryHost::hasSetup(library, patch))
-                        err = QObject::tr("no setup (its .nki was not found: View › Sound Library… › Library folder…)");
+                        err = QObject::tr("no setup (its .nki was not found: View > Sound Library > Library folder)");
                   else
                         state = SoundLibraryHost::setupState(library, patch, pluginPath, &err, score, t.partRef);
                   LiveSetWriter::Plugin p;
@@ -598,7 +598,7 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
             text += QObject::tr("Tracks in Live found from %1.").arg(plan.source) + "\n";
       text += QObject::tr("%1: %n track(s)", "", int(plan.spec.tracks.size())).arg(QDir::toNativeSeparators(path));
       if (onlyMissing)
-            text += " " + QObject::tr("(of %n route(s))", "", plan.routes);
+            text += " " + QObject::tr("(of %n track(s) the score needs)", "", plan.routes);
       text += QString(", %1 bpm, %2/%3.").arg(plan.spec.tempo, 0, 'f', 2).arg(plan.spec.numerator).arg(plan.spec.denominator) + "\n";
       for (const LiveSetWriter::Track& t : plan.spec.tracks) {
             QString line = "  ";
@@ -755,7 +755,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       const QString title = onlyMissing ? QObject::tr("Add Missing Tracks") : QObject::tr("Create Live Set");
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!score || !library) {
-            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences › I/O › Sound library)."));
+            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences > I/O > Sound Library)."));
             return;
             }
       if (!otherEnginesLeftOut(score, *library, parent, title))
@@ -770,7 +770,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
             return;
             }
       if (onlyMissing && plan.spec.tracks.empty()) {
-            QMessageBox::information(parent, title, QObject::tr("Every route of this score has a track in Live (found from %1).")
+            QMessageBox::information(parent, title, QObject::tr("Every sound library patch of this score has a track in Live (found from %1).")
                                      .arg(plan.source));
             return;
             }
@@ -831,8 +831,8 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       if (!plan.notes.isEmpty())
             info += "\n\n" + plan.notes.join("\n");
       info += "\n\n" + (onlyMissing ? QObject::tr("In Live's browser, unfold this set and drag its tracks into your set.")
-                                    : QObject::tr("Open it in Live 12 (File › Open Live Set…)."))
-              + " " + QObject::tr("Only Live can tell whether it opens as intended: see LIVE.md › Create Live Set.");
+                                    : QObject::tr("Open it in Live 12 (File > Open Live Set…)."))
+              + " " + QObject::tr("Whether it opens as intended can only be checked in Live.");
       box.setInformativeText(info);
       box.setDetailedText(reportText(plan, path, onlyMissing));
       box.exec();
@@ -1125,7 +1125,7 @@ void updateLiveSetDialog(MasterScore* score, QWidget* parent)
       const QString title = QObject::tr("Update Live Set");
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!score || !library) {
-            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences › I/O › Sound library)."));
+            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences > I/O > Sound Library)."));
             return;
             }
       if (!otherEnginesLeftOut(score, *library, parent, title))
@@ -1174,9 +1174,9 @@ void updateLiveSetDialog(MasterScore* score, QWidget* parent)
                      + QObject::tr("Kept: %n device(s) you added", "", r.userDevices) + ", "
                      + QObject::tr("%n other track(s)", "", r.otherTracks) + ", " + QObject::tr("%n return track(s)", "", r.returnTracks) + ".";
       if (!r.skipped.isEmpty() || !r.removedParts.isEmpty())
-            info += "\n\n" + QObject::tr("See the details for what was skipped.");
+            info += "\n\n" + QObject::tr("Show Details lists what was skipped.");
       if (result.written)
-            info += "\n\n" + QObject::tr("Open it in Live 12. Only Live can tell whether it opens as intended: see LIVE.md › Update Live Set.");
+            info += "\n\n" + QObject::tr("Open it in Live 12. Whether it opens as intended can only be checked in Live.");
       box.setInformativeText(info);
       box.setDetailedText(result.text());
       box.exec();

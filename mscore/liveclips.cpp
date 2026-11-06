@@ -508,7 +508,7 @@ void LiveClipsLink::takeEdit(const QString& key, const Report& r)
             return;
       auto k = _known.find(key);
       if (k == _known.end()) {
-            _lastEdit = tr("A clip (route %1) was edited in Live, but this MuseScore doesn't know what it wrote there: "
+            _lastEdit = tr("A clip (%1) was edited in Live, but this MuseScore doesn't know what it wrote there: "
                            "MuseScore's clip replaces it at the next change.").arg(key);
             log(QString("edited in Live: %1, not known").arg(key));
             emit statusChanged();
@@ -1004,7 +1004,7 @@ QString LiveClipsLink::statusText() const
       if (!playingThroughMidi())
             return tr("Waiting: set Preferences > I/O > Play through to MIDI output (Live hosts the library).");
       if (!connected())
-            return tr("Waiting for the MuseScore Link device in Live (UDP port %1).").arg(_port);
+            return tr("Waiting for the MuseScore Link device in Live (network port %1).").arg(_port);
       int ok = 0, waiting = 0, dropped = 0, high = 0;
       QStringList problems;
       for (const auto& s : _sent) {

@@ -481,15 +481,15 @@ QString LiveClipEditor::envText(const MasterScore* score, QString* details) cons
                         }
                   break;
             case EnvState::READING:
-                  text = tr("reading envelopes…");
+                  text = tr("reading automation…");
                   break;
             case EnvState::READY:
                   if (!TrackParams::instance()->params(s->clip.key))
                         text = tr("waiting for the track's parameters");
                   else if (s->envInFlight)
-                        text = tr("writing envelopes…");
+                        text = tr("writing automation…");
                   else if (s->envWrites)
-                        text = tr("envelopes in sync");
+                        text = tr("automation in sync");
                   break;
             case EnvState::ARRANGEMENT:
                   text = tr("no lanes (arrangement clip)");
@@ -499,7 +499,7 @@ QString LiveClipEditor::envText(const MasterScore* score, QString* details) cons
             case EnvState::NO_SCRIPT:
                   text = tr("no lanes (MuseScore Envelopes not set up)");
                   more = tr("No automation lanes: the MuseScore Envelopes control surface doesn't answer. Install it in "
-                            "Live and choose it in Settings > Tempo & MIDI > Control Surface (LIVE.md).");
+                            "Live and choose it in Settings > Tempo & MIDI > Control Surface.");
                   break;
             case EnvState::FAILED:
                   text = tr("envelopes failed");
@@ -631,7 +631,7 @@ bool LiveClipEditor::confirmVelocityWrite(QWidget* parent)
                       QMessageBox::Cancel, parent);
       QPushButton* write = box.addButton(tr("Write"), QMessageBox::AcceptRole);
       box.setDefaultButton(write);
-      QCheckBox* again = new QCheckBox(tr("Don't ask again"));
+      QCheckBox* again = new QCheckBox(tr("Remember my choice and don't ask again"));
       box.setCheckBox(again);
       box.exec();
       if (box.clickedButton() != write)

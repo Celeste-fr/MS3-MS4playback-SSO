@@ -2266,8 +2266,8 @@ bool AutomationLanes::engineMenu(const Row& r, const QPointF& p, const QPoint& g
       else if (a == fade) {
             bool ok = false;
             const int ms = QInputDialog::getInt(_view, tr("Engine switch"),
-                                                tr("Fade (ms; 0: a hard switch): the notes there play on both engines, "
-                                                   "the old one fading out and the new one in"),
+                                                tr("Fade length (ms). It is kept with the switch for a later version; "
+                                                   "for now the engine always changes at once at the switch."),
                                                 EngineLane::fadeMs(l, tick), 0, 60000, 10, &ok);
             if (!ok)
                   return true;

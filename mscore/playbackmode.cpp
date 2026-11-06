@@ -309,7 +309,7 @@ void setPlaybackMode(PlaybackMode mode, const QString& engine)
             if (ms3 && fonts == QStringList(MS4_SOUNDFONT)) {
                   const QString general = ms3SoundFont();
                   if (general.isEmpty())
-                        message += QObject::tr(" (MuseScore_General not found: playing %1)").arg(MS4_SOUNDFONT);
+                        message += QObject::tr(" (the sounds for MuseScore 3 were not found: playing the MuseScore 4 sounds)");
                   else
                         wanted = QStringList(general);
                   }

@@ -3621,6 +3621,7 @@ void MuseScore::showMessage(const QString& s, int timeout)
       // where the stretching spacers leave no room. Shown at once, also before a long task
       // that holds the event loop (the sound library loading its instances)
       _messageLabel->setText(s);
+      _messageLabel->setToolTip(QString());
       if (timeout > 0)
             _messageTimer->start(timeout);
       else
@@ -7699,8 +7700,9 @@ void MuseScore::reloadPlaybackSettings()
             ms->setPlaylistDirty();
       SoundLibraryHost::logPreflight("playback.ini reloaded");     // (render preflight.log: the ini's hash and preset)
       const QStringList warn = Playback::warnings();
-      showMessage(warn.isEmpty() ? tr("Playback settings read from %1").arg(Playback::iniPath())
+      showMessage(warn.isEmpty() ? tr("Playback settings read")
                                  : tr("Playback settings read, %1 warning(s): %2").arg(warn.size()).arg(warn.join("; ")), 8000);
+      _messageLabel->setToolTip(QDir::toNativeSeparators(Playback::iniPath()));
       }
 
 //---------------------------------------------------------
@@ -7711,7 +7713,10 @@ void MuseScore::reloadPlaybackSettings()
 void MuseScore::applyPlaybackPreset(const QString& id)
       {
       if (!Playback::applyPreset(id))
-            showMessage(tr("Could not write %1").arg(Playback::iniPath()), 8000);
+            {
+            showMessage(tr("Could not save the playback settings"), 8000);
+            _messageLabel->setToolTip(QDir::toNativeSeparators(Playback::iniPath()));
+            }
       reloadPlaybackSettings();
       }
 
@@ -8186,7 +8191,7 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   cs->endCmd();
                   QMessageBox::information(this, tr("Adapt Key Signatures to Clefs"), n
                      ? tr("%n key signature(s) placed for their staff's clef.", "", n)
-                     : tr("No key signature needed adapting: none on a non-treble staff is placed as a treble staff's at the same place."));
+                     : tr("No key signature needed adapting."));
                   }
             }
       else if (cmd == "playback-ms3")
