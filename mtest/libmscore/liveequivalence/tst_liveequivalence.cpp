@@ -10454,8 +10454,8 @@ void TestLiveEquivalence::attackLevelsLive()
 //---------------------------------------------------------
 //   leadingLive
 //    [levels] leading (leadinglane.h) reaches Live and MIDI out: leading.musicxml's violin with its Leading lane On in bar 2
-//    (L the setting's 3 dB) and the cello's from bar 3 (its map's leadingLevel 6). Live's clips carry MuseScore's CC11
-//    route for route (the carrier notes: 90 / 64 off the lane, 127 on it); the plain set's Kontakts carry L in MuseScore's
+//    (L the setting's 3.5 dB) and the cello's from bar 3 (its map's leadingLevel 6). Live's clips carry MuseScore's CC11
+//    route for route (the carrier notes: 85 / 64 off the lane, 127 on it); the plain set's Kontakts carry L in MuseScore's
 //    Utility (gainStageDb) and their CC11 lanes the same values; MIDI out's CC7 carries the gain stage
 //    (TrackDelays::midiVolumes). With the setting 0 none of it: no Utility gain, no such CC11, no CC7
 //---------------------------------------------------------
@@ -10513,11 +10513,11 @@ void TestLiveEquivalence::leadingLive()
                         }
                   }
             if (on) {
-                  QVERIFY(values.count(90) && values.count(64) && values.count(127));
-                  QCOMPARE(fromEvents[0].first(), QString("90"));
+                  QVERIFY(values.count(85) && values.count(64) && values.count(127));
+                  QCOMPARE(fromEvents[0].first(), QString("85"));
                   }
             else
-                  QVERIFY(!values.count(90) && !values.count(64));
+                  QVERIFY(!values.count(85) && !values.count(64));
             for (const LiveClips::Track& c : LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl)) {
                   std::vector<LiveClips::Note> notes = c.notes;
                   std::sort(notes.begin(), notes.end());
@@ -10546,7 +10546,7 @@ void TestLiveEquivalence::leadingLive()
                                     if (ln.cc == CTRL_EXPRESSION)
                                           for (const auto& pt : ln.points)
                                                 lane.insert(pt.second);
-                              const int off = k.patch == "Cello" ? 64 : 90;
+                              const int off = k.patch == "Cello" ? 64 : 85;
                               QVERIFY2(on == (lane.count(off) > 0), qPrintable(QString("%1: CC11 %2").arg(k.patch).arg(off)));
                               }
             QCOMPARE(kontakts, 2);
