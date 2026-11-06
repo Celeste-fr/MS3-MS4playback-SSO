@@ -3329,7 +3329,7 @@ void Seq::heartBeatTimeout()
       if (_late.warn.exchange(false)) {
             const int n = int(_late.blocks.load());
             qDebug("Playback couldn't keep up: %d late audio block(s) so far", n);
-            mscore->showMessage(tr("Playback couldn't keep up: audio was late %n time(s). Other programs may be using the CPU or memory.",
+            mscore->showMessage(tr("Playback couldn't keep up: audio was late %n time(s)",
                                    nullptr, n), 15000);
             }
 

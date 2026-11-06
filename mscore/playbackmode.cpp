@@ -192,20 +192,19 @@ bool soundEngineAvailable(const QString& engine, QString* why)
             return true;                  // (the global library: as ever)
       if (SoundLib::output() != SoundLib::Output::PLUGIN) {
             if (why)
-                  *why = QObject::tr("Over MIDI output only the global library plays (Preferences > I/O > Sound Library): "
-                                     "%1 plays only hosted, as a plug-in in MuseScore.").arg(engine);
+                  *why = QObject::tr("%1 needs its plug-in in MuseScore and cannot play over MIDI output.").arg(engine);
             return false;
             }
       const std::shared_ptr<const SoundLib::Library> lib = SoundLib::engine(engine);
       if (!lib) {
             if (why)
-                  *why = QObject::tr("The map of %1 could not be read.").arg(engine);
+                  *why = QObject::tr("Cannot read the sound library %1.").arg(engine);
             return false;
             }
       QString error;
       if (SoundLibraryHost::pluginPath(*lib, &error).isEmpty()) {
             if (why)
-                  *why = QObject::tr("%1 is not installed: its plug-in (%2) was not found in %3.")
+                  *why = QObject::tr("%1 is not installed: plug-in %2 not found in %3.")
                          .arg(engine, lib->plugins.join(", "), SoundLibraryHost::pluginFolders().join(", "));
             return false;
             }
@@ -309,7 +308,7 @@ void setPlaybackMode(PlaybackMode mode, const QString& engine)
             if (ms3 && fonts == QStringList(MS4_SOUNDFONT)) {
                   const QString general = ms3SoundFont();
                   if (general.isEmpty())
-                        message += QObject::tr(" (the sounds for MuseScore 3 were not found: playing the MuseScore 4 sounds)");
+                        message += QObject::tr(" (MuseScore 3 sounds not found, using MuseScore 4)");
                   else
                         wanted = QStringList(general);
                   }
@@ -345,7 +344,7 @@ QList<QPointer<PlaybackModeBox>> PlaybackModeBox::_boxes;
 PlaybackModeBox::PlaybackModeBox(QWidget* parent)
    : QComboBox(parent)
       {
-      setToolTip(tr("Playback mode: MuseScore 3, MuseScore 4, or MuseScore 4 with a sound library"));
+      setToolTip(tr("Playback mode"));
       setSizeAdjustPolicy(QComboBox::AdjustToContents);
       refresh();
       connect(this, QOverload<int>::of(&QComboBox::activated), this, [this](int index) {
@@ -391,7 +390,7 @@ void addEngineItems(QComboBox* box, int data, const QString& selectedEngine, int
                   box->setItemData(i, why, Qt::ToolTipRole);
                   }
             else if (e.maps.size() > 1)
-                  box->setItemData(i, QObject::tr("Plays %1 (Preferences > I/O > Sound Library chooses which of: %2)")
+                  box->setItemData(i, QObject::tr("%1: variant set in Preferences (%2)")
                                    .arg(QFileInfo(e.path).completeBaseName(), [&e]() {
                                           QStringList v;
                                           for (const QString& m : e.maps)

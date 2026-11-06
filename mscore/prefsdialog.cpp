@@ -84,7 +84,7 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
       connect(soundLibraryPluginBrowse, &QToolButton::clicked, this, &PreferenceDialog::selectSoundLibraryPlugin);
       soundLibraryOutput->clear();
       if (SoundLibraryHost::available())
-            soundLibraryOutput->addItem(tr("Its plug-in, in MuseScore"), "plugin");
+            soundLibraryOutput->addItem(tr("Plug-in in MuseScore"), "plugin");
       soundLibraryOutput->addItem(tr("MIDI output"), "midi");
       auto updateOutput = [this]() {
             const bool plugin = soundLibraryOutput->currentData().toString() == "plugin";
@@ -98,11 +98,11 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
             if (e.maps.size() < 2)
                   continue;
             const int row = soundLibraryLayout->rowCount();
-            QLabel* label = new QLabel(tr("%1 plays:").arg(e.name), soundLibraryGroup);
+            QLabel* label = new QLabel(tr("Variant:"), soundLibraryGroup);
             QComboBox* box = new QComboBox(soundLibraryGroup);
             for (const QString& m : e.maps)
                   box->addItem(soundEngineVariantName(m), m);
-            box->setToolTip(tr("Which of %1's plug-ins plays it: the global library and every part set to play %1").arg(e.name));
+            box->setToolTip(tr("Which %1 plug-in to use").arg(e.name));
             label->setBuddy(box);
             soundLibraryLayout->addWidget(label, row, 0);
             soundLibraryLayout->addWidget(box, row, 1, 1, 3);
@@ -831,7 +831,7 @@ void PreferenceDialog::updateValues(bool useDefaultValues, bool setup)
       {
             const QString current = preferences.getString(PREF_IO_SOUNDLIBRARY);
             soundLibrary->clear();
-            soundLibrary->addItem(tr("None (built-in synthesizer only)"), QString());
+            soundLibrary->addItem(tr("None"), QString());
             // (each engine once, by its name, playing its variant: playbackmode.h)
             for (const SoundEngine& e : soundEngines()) {
                   soundLibrary->addItem(e.name, e.path);
@@ -893,7 +893,7 @@ void PreferenceDialog::selectSoundLibrary()
             return;
       QString error;
       if (!SoundLib::Library::load(path, &error)) {
-            QMessageBox::warning(this, tr("Sound Library"), tr("This file cannot be used as a sound library map:") + "\n" + error);
+            QMessageBox::warning(this, tr("Sound Library"), tr("Cannot use this file as a sound library map:") + "\n" + error);
             return;
             }
       int idx = soundLibrary->findData(path);

@@ -62,7 +62,7 @@ MixerDetails::MixerDetails(QWidget *parent) :
       // the part's playback mode: the global one, or its own (kept in the score)
       labelPlayback = new QLabel(tr("Part playback:"), this);
       playbackCombo = new QComboBox(this);
-      playbackCombo->setToolTip(tr("How this part plays: \"Global default\" plays it as \"Global playback\" at the top says, or MuseScore 3, MuseScore 4 or the sound library for this part only (saved in the score)"));
+      playbackCombo->setToolTip(tr("Play this part with MuseScore 3, MuseScore 4 or the sound library, or as set by Global playback"));
       labelPlayback->setBuddy(playbackCombo);
       const int row = gridLayout_2->rowCount();
       gridLayout_2->addWidget(labelPlayback, row, 0);
@@ -77,12 +77,10 @@ MixerDetails::MixerDetails(QWidget *parent) :
       delaySpinBox->setSingleStep(1.0);
       delaySpinBox->setSuffix(tr(" ms"));
       delaySpinBox->setKeyboardTracking(false);
-      delaySpinBox->setToolTip(tr("The part plays this much later (negative: earlier), as Live's Track Delay: on its group "
-                                  "track in the Live set Create Live Set writes (saved in the score)"));
+      delaySpinBox->setToolTip(tr("Delay of this part (negative: earlier), like Live's Track Delay"));
       labelDelay->setBuddy(delaySpinBox);
       delayTracksButton = new QPushButton(tr("Tracks…"), this);
-      delayTracksButton->setToolTip(tr("Each patch's and each technique's own delay, added to the part's, and own level "
-                                       "(the Live set's Kontakt and technique tracks)"));
+      delayTracksButton->setToolTip(tr("Delay and level for each patch and technique"));
       const int delayRow = gridLayout_2->rowCount();
       gridLayout_2->addWidget(labelDelay, delayRow, 0);
       QHBoxLayout* delayBox = new QHBoxLayout();
@@ -408,21 +406,20 @@ void MixerDetails::updateLibrary()
             return;
       updateTrackDelay(true);
       const bool hosted = SoundLib::output() == SoundLib::Output::PLUGIN;
-      const QString where = hosted ? tr("its instance of the library's plug-in, in MuseScore")
-                                   : tr("its MIDI route (port and channel set by the library)");
+      const QString where = hosted ? tr("the library's plug-in")
+                                   : tr("its MIDI output");
       Channel* chan = _mti->focusedChan();
       const Instrument* first = master->instruments()->begin()->second;
       const bool firstChannel = !first->channel().empty()
                                 && part->masterScore()->playbackChannel(first->channel(0)) == chan;
       const QString note = firstChannel ? QString()
-            : QString("\n") + tr("A sound library part plays all its notes with its first channel's volume and pan (the part's row sets all its channels).");
+            : QString("\n") + tr("The part's row sets the volume and pan of all its channels.");
       volumeSlider->setToolTip(tr("Volume of %1 on %2").arg(li->name, where) + note);
       volumeSpinBox->setToolTip(volumeSlider->toolTip());
       panSlider->setToolTip(tr("Pan of %1 on %2").arg(li->name, where) + note);
       panSpinBox->setToolTip(panSlider->toolTip());
       if (hosted) {
-            const QString room = tr("%1 plays in its own room (its microphones: the part's mic automation lanes, View > Automation Lanes); "
-                                    "MuseScore's reverb and chorus don't apply to it.").arg(library->name);
+            const QString room = tr("%1 has its own room sound; MuseScore's reverb and chorus don't apply.").arg(library->name);
             for (QWidget* w : std::initializer_list<QWidget*> { reverbSlider, reverbSpinBox, chorusSlider, chorusSpinBox }) {
                   w->setEnabled(false);
                   w->setToolTip(room);
@@ -431,13 +428,13 @@ void MixerDetails::updateLibrary()
             labelChorus->setEnabled(false);
             }
       else {
-            reverbSlider->setToolTip(tr("Sent as CC91 on %1").arg(where));
+            reverbSlider->setToolTip(tr("Reverb of %1").arg(li->name));
             reverbSpinBox->setToolTip(reverbSlider->toolTip());
-            chorusSlider->setToolTip(tr("Sent as CC93 on %1").arg(where));
+            chorusSlider->setToolTip(tr("Chorus of %1").arg(li->name));
             chorusSpinBox->setToolTip(chorusSlider->toolTip());
             }
       if (li->kit) {
-            const QString kit = tr("A drum sound %1 has no key for plays this General MIDI patch.").arg(library->name);
+            const QString kit = tr("%1 has no key for this drum sound; it plays on a General MIDI patch.").arg(library->name);
             patchCombo->setToolTip(kit);
             return;
             }
@@ -448,16 +445,15 @@ void MixerDetails::updateLibrary()
       patchCombo->setCurrentIndex(0);
       patchCombo->blockSignals(false);
       patchCombo->setEnabled(false);
-      patchCombo->setToolTip(tr("The sound library plays this part: its patch is chosen from the instrument (View > Sound Library). "
-                                "The General MIDI patch comes back with \"Part playback:\" set to MuseScore 3 or 4."));
+      patchCombo->setToolTip(tr("The sound library plays this part. Set Part playback to MuseScore 3 or 4 to choose a General MIDI patch."));
       // the route: MuseScore's port and channel don't apply
       const std::vector<std::pair<int, int>> outs = seq ? seq->libraryOuts(master) : std::vector<std::pair<int, int>>();
       portSpinBox->setEnabled(false);
       channelSpinBox->setEnabled(false);
       labelPort->setEnabled(false);
       labelChannel_2->setEnabled(false);
-      QString route = hosted ? tr("Plays on its own instance of the library's plug-in: MIDI port and channel don't apply.")
-                             : tr("The sound library sends this part on its own port and channel (in score order).");
+      QString route = hosted ? tr("Played by the library's plug-in: port and channel don't apply.")
+                             : tr("The sound library chooses the port and channel.");
       if (!hosted && !outs.empty()) {
             const QSignalBlocker b1(portSpinBox);
             const QSignalBlocker b2(channelSpinBox);
@@ -653,13 +649,9 @@ void MixerDetails::editTrackDelays()
                   patches.push_back(r.instrument);
 
       QDialog dialog(this);
-      dialog.setWindowTitle(tr("Track delays and levels: %1").arg(part->partName()));
+      dialog.setWindowTitle(tr("Track Delays and Levels: %1").arg(part->partName()));
       QVBoxLayout* top = new QVBoxLayout(&dialog);
-      QLabel* intro = new QLabel(tr("Delay: added to the part's %1 ms, as Live adds a Kontakt track's and a technique "
-                                    "track's delays to their group's (-1000 to 1000 ms). Level: a patch's and a "
-                                    "technique's, added up, played by CC11 (expression) on the technique's notes, in "
-                                    "Live's clips too; %2 to +%3 dB. Above 0 dB the patch's volume (its Kontakt track's "
-                                    "in Live) plays louder by its loudest level and CC11 the rest.")
+      QLabel* intro = new QLabel(tr("Delay is added to the part's %1 ms (-1000 to 1000 ms). Level is added up per patch and technique (%2 to +%3 dB).")
                                  .arg(d.ms).arg(TrackDelays::MIN_DB).arg(TrackDelays::MAX_DB), &dialog);
       intro->setWordWrap(true);
       top->addWidget(intro);
