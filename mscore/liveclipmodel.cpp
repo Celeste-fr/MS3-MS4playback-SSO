@@ -1771,7 +1771,7 @@ QString LinkWatch::lostText(const Uses& u)
             what << tr("Live plays the score: MuseScore's Play plays only its own parts meanwhile (the library parts are silent)");
       if (u.playThroughLive)
             what << tr("Play through Live: MuseScore keeps sending to the MIDI ports, but can't tell whether Live hears them");
-      QString text = tr("Lost the connection to Live (the MuseScore Link device, UDP port %1)").arg(u.port);
+      QString text = tr("Lost the connection to Live (the MuseScore Link device, network port %1)").arg(u.port);
       if (!what.isEmpty())
             text += ": " + what.join("; ");
       return text + ". " + tr("MuseScore reconnects by itself when the device answers again (Live open, the set with the "

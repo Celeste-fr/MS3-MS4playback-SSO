@@ -147,12 +147,12 @@ AboutBoxDialog::AboutBoxDialog()
             ":/data/musescore-logo-transbg-m.png" : ":/data/musescore_logo_full.png"));
 
       if (MuseScore::unstable())
-            versionLabel->setText(tr("Unstable Prerelease for Version: %1").arg(VERSION) + tr(" Evolution"));
+            versionLabel->setText(tr("Unstable Prerelease for Version: %1 Evolution").arg(VERSION));
       else {
             auto msVersion = QString(VERSION);
             if (strlen(BUILD_NUMBER))
                   msVersion += QString("-") + QString(BUILD_NUMBER); // + QString(" Beta");
-            versionLabel->setText(tr("Version: %1").arg(msVersion) + tr(" Evolution"));
+            versionLabel->setText(tr("Version: %1 Evolution").arg(msVersion));
       }
 
       // this fork's builds: the commit and run they came from (BUILD.txt, written by the Windows build;
@@ -160,7 +160,7 @@ AboutBoxDialog::AboutBoxDialog()
       QFile buildFile(QCoreApplication::applicationDirPath() + "/BUILD.txt");
       const QStringList build = buildFile.open(QIODevice::ReadOnly) ? QString::fromUtf8(buildFile.readLine()).trimmed().split(' ') : QStringList();
       if (build.size() >= 5) {
-            versionLabel->setText(tr("Version: %1").arg(VERSION) + tr(" Evolution") + QString(" — build %1 (%2 %3)").arg(build[0], build[1], build[2]));
+            versionLabel->setText(tr("Version: %1 Evolution — build %2 (%3 %4)").arg(VERSION, build[0], build[1], build[2]));
             revisionLabel->setText(tr("Revision: %1").arg(QString("<a href=\"%1\">%2</a>").arg(build.last(), build[0])));
             _shownRevision = build[0];
             }

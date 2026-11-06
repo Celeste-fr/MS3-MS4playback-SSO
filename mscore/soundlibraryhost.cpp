@@ -1091,7 +1091,7 @@ QByteArray SoundLibraryHost::defaultState(const QString& pluginPath, QString* er
       const QByteArray state = p ? p->state() : QByteArray();
       if (state.isEmpty()) {
             if (error && error->isEmpty())
-                  *error = tr("The plug-in gave no state.");
+                  *error = tr("The plug-in could not provide its current setup.");
             return state;
             }
       states[pluginPath] = state;
@@ -1602,7 +1602,7 @@ QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library& libra
             }
       const QByteArray state = p->state();
       if (state.isEmpty() && error)
-            *error = tr("The plug-in gave no state for %1.").arg(r.instrument->name);
+            *error = tr("The plug-in could not provide the setup of %1.").arg(r.instrument->name);
       return state;
       }
 
@@ -1663,7 +1663,7 @@ QByteArray SoundLibraryHost::stateWithParameters(const QByteArray& component, co
       QByteArray out, controller;
       if (!Vst3Plugin::splitState(p->state(), &name, &out, &controller) || out.isEmpty()) {
             if (error)
-                  *error = tr("The plug-in gave no state.");
+                  *error = tr("The plug-in could not provide its current setup.");
             return QByteArray();
             }
       return out;
@@ -1718,7 +1718,7 @@ void SoundLibraryHost::forgetPrepared(int* made)
 QByteArray SoundLibraryHost::tunedState(const QByteArray&, const std::vector<double>&, QString* error, const SoundLib::Library*)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return QByteArray();
       }
 
@@ -1750,7 +1750,7 @@ QString SoundLibraryHost::pluginSettingsFile(const QString&, const QString&)
 QByteArray SoundLibraryHost::defaultState(const QString&, QString* error)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return QByteArray();
       }
 
@@ -1758,14 +1758,14 @@ QByteArray SoundLibraryHost::setupStateWith(const SoundLib::Library&, const QStr
                                             const std::map<QString, QByteArray>&, QString* error)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return QByteArray();
       }
 
 QByteArray SoundLibraryHost::maxVoicesState(const SoundLib::Library&, const QString&, const QString&, QString* error)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return QByteArray();
       }
 
@@ -1773,7 +1773,7 @@ bool SoundLibraryHost::loadInstanceSetup(Vst3Plugin*, const SoundLib::Library&, 
                                          const QString&, QString* error, bool*, const Score*, const Part*)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return false;
       }
 
@@ -1781,7 +1781,7 @@ QByteArray SoundLibraryHost::setupState(const SoundLib::Library&, const QString&
                                         const Part*)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return QByteArray();
       }
 
@@ -1789,7 +1789,7 @@ bool SoundLibraryHost::loadSetup(Vst3Plugin*, const SoundLib::Library&, const QS
                                  const Part*)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return false;
       }
 
@@ -1802,7 +1802,7 @@ bool SoundLibraryHost::parametersOf(const SoundLib::Library&, const SoundLib::Ro
                                     std::vector<AppliedParameter>*, QString* error)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return false;
       }
 
@@ -1811,7 +1811,7 @@ QByteArray SoundLibraryHost::stateWithControllers(const SoundLib::Library&, cons
                                                   std::vector<AppliedParameter>*, QString* error)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return QByteArray();
       }
 
@@ -1820,7 +1820,7 @@ QByteArray SoundLibraryHost::stateWithParameters(const QByteArray&, const QStrin
                                                  std::map<QString, double>*)
       {
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return QByteArray();
       }
 #endif
@@ -2107,8 +2107,8 @@ void SoundLibraryHost::checkHostProcesses()
       if (library)
             logTime(*library, line);
       if (mscore)
-            mscore->showMessage(given.isEmpty() ? tr("The sound library's helper process ended (%1): loading again…").arg(lost.join(", "))
-                                                : tr("The sound library's helper process ended again: %1 not loaded").arg(given.join(", ")), 15000);
+            mscore->showMessage(given.isEmpty() ? tr("The program that runs the sound library's plug-ins stopped (%1): loading again…").arg(lost.join(", "))
+                                                : tr("The program that runs the sound library's plug-ins stopped again: %1 not loaded").arg(given.join(", ")), 15000);
       // (a playback stops, its instances load again in the background, and it plays on from where it was: as after a change
       // that needs patches, GoOnPlaying)
       const GoOnPlaying goOn;
@@ -3337,7 +3337,7 @@ bool SoundLibraryHost::syncSome(Score* score, QString* error, int maxLoads, int*
       Q_UNUSED(score);
       Q_UNUSED(maxLoads);
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return !SoundLib::current() || SoundLib::output() != SoundLib::Output::PLUGIN;
 #endif
       }
@@ -3575,7 +3575,7 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
                   return false;
                   }
             if (later && mscore)
-                  mscore->showMessage(tr("The window of %1 opens once its helper process has loaded what it is loading.").arg(s.instrument), 5000);
+                  mscore->showMessage(tr("The window of %1 opens once the plug-in has finished loading.").arg(s.instrument), 5000);
             return true;
             }
       if (s.editor) {
@@ -3597,7 +3597,7 @@ bool SoundLibraryHost::showEditor(int slot, QString* error)
 #else
       Q_UNUSED(slot);
       if (error)
-            *error = tr("This MuseScore was built without plug-in hosting.");
+            *error = tr("This version of MuseScore can't host plug-ins.");
       return false;
 #endif
       }
@@ -3934,7 +3934,7 @@ std::unique_ptr<SoundLibraryExport::InstanceLoad, void(*)(SoundLibraryExport::In
 SoundLibraryExport::beginInstance(Score*, const SoundLib::Route&, float, QString* error)
       {
       if (error)
-            *error = QObject::tr("This MuseScore was built without plug-in hosting.");
+            *error = QObject::tr("This version of MuseScore can't host plug-ins.");
       return std::unique_ptr<InstanceLoad, void(*)(InstanceLoad*)>(nullptr, deleteInstanceLoad);
       }
 
@@ -3951,14 +3951,14 @@ std::shared_ptr<Vst3Synth> SoundLibraryExport::finishInstance(InstanceLoad*, Sco
 std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstance(Score*, const SoundLib::Route&, float, QString* error)
       {
       if (error)
-            *error = QObject::tr("This MuseScore was built without plug-in hosting.");
+            *error = QObject::tr("This version of MuseScore can't host plug-ins.");
       return nullptr;
       }
 std::shared_ptr<Vst3Synth> SoundLibraryExport::loadInstances(Score*, float, QString* error, std::map<int, QString>*,
                                                              const std::set<const Part*>*)
       {
       if (error)
-            *error = QObject::tr("This MuseScore was built without plug-in hosting.");
+            *error = QObject::tr("This version of MuseScore can't host plug-ins.");
       return nullptr;
       }
 #endif
@@ -4230,7 +4230,7 @@ void SoundLibraryDialog::rebuild()
                   _tree->setItemWidget(item, SHOW, show);
                   if (host->loaded(slot) && host->memory(slot) >= 0) {
                         item->setText(MEMORY, tr("%1 MB").arg(host->memory(slot) >> 20));
-                        item->setToolTip(MEMORY, tr("What MuseScore's memory grew by as this patch loaded (and in the 3 s after)"));
+                        item->setToolTip(MEMORY, tr("How much more memory MuseScore used after loading this patch (measured until 3 seconds after it loaded)"));
                         partMemory += host->memory(slot);
                         ++measured;
                         }
@@ -4253,7 +4253,7 @@ void SoundLibraryDialog::rebuild()
                   const QString patchName = r.instrument->name;
                   connect(show, &QWidget::customContextMenuRequested, this, [this, host, slot, show, patchName](const QPoint& at) {
                         QMenu menu;
-                        QAction* save = menu.addAction(tr("Save Kontakt's state for diagnosis"));
+                        QAction* save = menu.addAction(tr("Save Plug-in State for Support"));
                         if (menu.exec(show->mapToGlobal(at)) != save)
                               return;
 #ifdef USE_VST3
@@ -4354,7 +4354,7 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             v->addLayout(h);
             // Live plays the score (liveclips.h; a setting of this computer, for the score in front)
             _liveClips = new QCheckBox(tr("Live plays the score (its notes as clips in Live; Live is the clock)"), liveBox);
-            _liveClips->setToolTip(tr("With the MuseScore Link device on each library track in Live (see LIVE.md): each part's "
+            _liveClips->setToolTip(tr("With the MuseScore Link device on each library track in Live: each part's "
                                       "notes, articulation switches, dynamics and pedal become a clip in Live's arrangement, "
                                       "kept up to date with every edit, and Live plays them. MuseScore sends the library "
                                       "nothing and follows Live's transport; its own sounds play along.\n"
@@ -4389,10 +4389,11 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             // the set itself (livesetexport.h): one track per route, the device and the patch on each
             QHBoxLayout* sets = new QHBoxLayout;
             QPushButton* create = new QPushButton(tr("Create Live Set…"), liveBox);
-            create->setToolTip(tr("Writes a Live Set (.als) for this score: one MIDI track per sound-library route (each part's "
-                                  "patch, its extra patches and copies for other tunings), named as the MuseScore Link device "
-                                  "finds them, MIDI From = the route's port and channel, with the MuseScore Link device and "
-                                  "the library's plug-in holding the patch as MuseScore sets it up (UACC & UI only, 512 voices). "
+            create->setToolTip(tr("Writes a Live Set (.als) for this score: one MIDI track for each sound library patch used "
+                                  "(each part's patch, its extra patches and copies for other tunings), named as the MuseScore "
+                                  "Link device finds them, receiving MIDI on the patch's own port and channel, with the "
+                                  "MuseScore Link device and the library's plug-in holding the patch as MuseScore sets it up "
+                                  "(articulations switched by MIDI notes, 512 voices). "
                                   "Tempo and time signature: the score's first."));
             // Update Live Set (livesetexport.h, LIVE.md › Update Live Set): a set Create Live Set wrote, brought up to date
             // in place, keeping what was done in Live
@@ -4404,7 +4405,7 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
                                   "techniques and parts. Your devices, return tracks, sends, other tracks and mixer stay; "
                                   "the set as it was goes to its Backup folder."));
             QPushButton* missing = new QPushButton(tr("Add missing tracks…"), liveBox);
-            missing->setToolTip(tr("Writes a small Live Set with only the routes that have no track in Live yet (from the "
+            missing->setToolTip(tr("Writes a small Live Set with only the patches that have no track in Live yet (from the "
                                    "MuseScore Link device's report when it answers, else from the linked set): drag its tracks "
                                    "into your set from Live's browser."));
             sets->addWidget(create);

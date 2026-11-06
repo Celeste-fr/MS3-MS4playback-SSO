@@ -271,7 +271,7 @@ QString NoteLanes::describe(const Mark& m, bool join, int v) const
       {
       if (join) {
             const bool transition = performanceAt(m, v) == MidiRenderer::LibPerformance::TRANSITION;
-            return transition ? tr("%1 ms · transition").arg(v) : tr("%1 ms · re-attack").arg(v);
+            return transition ? tr("%1 ms · joined").arg(v) : tr("%1 ms · new attack").arg(v);
             }
       const std::vector<Band> bands = velocityBands(m, joinOf(m));
       const Band* b = bandAt(bands, v);

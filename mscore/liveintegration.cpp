@@ -81,7 +81,7 @@ bool setPlayThroughMidi(bool midi, QWidget* parent)
                                  : QObject::tr("The sound library's parts will play through the library's plug-in in MuseScore "
                                                "again. Its patches are loaded again, which can take a while."),
                             QMessageBox::Ok | QMessageBox::Cancel, parent);
-            QCheckBox* dontAsk = new QCheckBox(QObject::tr("Don't ask again"), &box);
+            QCheckBox* dontAsk = new QCheckBox(QObject::tr("Remember my choice and don't ask again"), &box);
             box.setCheckBox(dontAsk);
             if (box.exec() != QMessageBox::Ok)
                   return false;

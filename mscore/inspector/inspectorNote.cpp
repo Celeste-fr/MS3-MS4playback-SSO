@@ -124,8 +124,8 @@ InspectorNote::InspectorNote(QWidget* parent)
       evenLevel->setSingleStep(0.1);
       evenLevel->setSuffix(tr(" dB"));
       evenLevel->setSpecialValueText(tr("None"));
-      evenLevel->setToolTip(tr("The note's even-levels correction (Tools > Even Out Levels…): CC11 at the middle of its heard "
-                               "window, gliding to the next note's; played with the playback setting [levels] evenLevels on"));
+      evenLevel->setToolTip(tr("The note's even-levels correction (Tools > Even Out Levels…): its loudness change at the middle of "
+                               "the note as heard, gliding to the next note's; played when Even levels is on in the playback adjustments"));
       evenLevel->setAccessibleName(tr("Even level"));
       evenLabel->setBuddy(evenLevel);
       resetEvenLevel = new ResetButton(n.playWidget);
@@ -293,7 +293,7 @@ void InspectorNote::setEvenShown()
       else if (unknown)
             evenState->setText(tr("Not checked since loading: checked when it is next played"));
       else
-            evenState->setText(tr("Current: plays with the playback setting [levels] evenLevels on"));
+            evenState->setText(tr("Current: played when Even levels is on in the playback adjustments"));
       }
 
 //---------------------------------------------------------
@@ -431,12 +431,12 @@ void InspectorNote::setTuningParts(const Note* note)
             return qAbs(c) < 0.0005 ? tr("0 ¢") : tr("%1 ¢").arg(QString::asprintf("%+.1f", c).replace('-', QChar(0x2212)));
             };
       n.tuningTemperament->setText(cents(t.temperament));
-      n.tuningAccidental->setText(t.unvalued ? tr("none (a symbol MuseScore gives no pitch)") : cents(t.accidental));
+      n.tuningAccidental->setText(t.unvalued ? tr("none (this symbol has no pitch of its own)") : cents(t.accidental));
       QString result = tr("%1 from equal temperament").arg(cents(t.total()));
       if (t.tied)
             result += "\n" + tr("(as the note its tie starts from)");
       else if (qAbs(note->tuning()) > 0.0005 && qAbs(t.manual) < 0.0005)
-            result += "\n" + tr("(Tuning holds the Microtonal Tuner plugin's value: not added again)");
+            result += "\n" + tr("(the note's Tuning is the Microtonal Tuner plugin's value, so it is not added again)");
       n.tuningResult->setText(result);
       }
 

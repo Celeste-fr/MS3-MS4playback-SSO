@@ -205,9 +205,9 @@ void EvenLevelsJob::runFromGui(Score* cs, QWidget* parent)
       if (n > 0)
             if (SoundLibraryHost* host = SoundLibraryHost::instance())
                   host->applyMixer(score);          // (a patch's headroom: its volume)
-      QMessageBox::information(parent, title, summary + "\n\n" + QObject::tr("Played with the playback setting [levels] evenLevels "
-                               "on (Mixer > Advanced Options… > Playback adjustments; on by default). A correction turns stale "
-                               "when the music around its note changes: measure again then."));
+      QMessageBox::information(parent, title, summary + "\n\n" + QObject::tr("Played when Even levels is on "
+                               "in the playback adjustments (Mixer > Advanced Options… > Playback adjustments; on by default). A correction "
+                               "turns stale when the music around its note changes: measure again then."));
       }
 
 #ifdef USE_VST3

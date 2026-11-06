@@ -332,7 +332,7 @@
             </sizepolicy>
            </property>
            <property name="toolTip">
-            <string>How much louder or softer the notes with this articulation play (sound library parts: than the technique it chooses; the built-in synthesizer by its velocity). The levels of a chord's articulations add up. Library default: no change</string>
+            <string>How much louder or softer the notes with this articulation play, in dB. With a sound library, relative to the playing technique chosen for the note; with the built-in sounds, relative to the note's velocity. The levels of a chord's articulations add up. The default is no change</string>
            </property>
            <property name="accessibleName">
             <string>Level</string>

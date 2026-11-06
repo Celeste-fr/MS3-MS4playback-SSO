@@ -3178,7 +3178,7 @@ Shortcut Shortcut::_sc[] = {
          "reload-playback-settings",
          QT_TRANSLATE_NOOP("action","Reload Playback Settings"),
          0,
-         QT_TRANSLATE_NOOP("action","Read playback.ini again (the playback adjustments) and render the scores again"),
+         QT_TRANSLATE_NOOP("action","Read the playback adjustments again and render the scores again"),
          Icons::Invalid_ICON,
          Qt::ApplicationShortcut
          },
@@ -3208,7 +3208,7 @@ Shortcut Shortcut::_sc[] = {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
          "playback-library",
-         QT_TRANSLATE_NOOP("action","Sound library"),
+         QT_TRANSLATE_NOOP("action","Playback: sound library"),
          QT_TRANSLATE_NOOP("action","Playback mode: sound library"),
          QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 4 with the sound library"),
          Icons::Invalid_ICON,
