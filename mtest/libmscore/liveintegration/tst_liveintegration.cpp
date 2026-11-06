@@ -3813,8 +3813,8 @@ void TestLiveIntegration::leadingBands()
       QCOMPARE(score->parts().size(), 3);
       Part* violin = score->parts()[0];
       Part* flute = score->parts()[1];
-      const int bar = 4 * MScore::division;
-      const int answer = 3 * bar + 2 * MScore::division;
+      const int bar = 4 * DIVISION;
+      const int answer = 3 * bar + 2 * DIVISION;
       Automation::Lane vl, fl;
       vl.target = fl.target = LeadingLane::TARGET;
       vl.points = { Automation::Point(0, 1, Automation::Curve::STEP), Automation::Point(answer, 0, Automation::Curve::STEP) };
