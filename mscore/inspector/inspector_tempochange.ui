@@ -87,10 +87,10 @@
          </sizepolicy>
         </property>
         <property name="accessibleName">
-         <string>Tempo at end, in percent of the tempo at the start</string>
+         <string>Tempo at end</string>
         </property>
         <property name="toolTip">
-         <string>The tempo at the line's end, in % of the tempo at its start. Auto: rit., rall. 75 %, accel. 133 %, string. 150 % … (as MuseScore 4). A tempo marking at the end takes over there.</string>
+         <string>Tempo at the end of the line, in percent of the tempo at its start</string>
         </property>
         <property name="specialValueText">
          <string>Auto</string>

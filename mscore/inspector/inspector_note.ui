@@ -627,7 +627,7 @@
          <item row="2" column="1" colspan="2">
           <widget class="QLabel" name="tuningTemperament">
            <property name="toolTip">
-            <string>The score's temperament for this note (Tools > Tuning…), in cents</string>
+            <string>Temperament of the score, in cents</string>
            </property>
            <property name="textInteractionFlags">
             <set>Qt::TextSelectableByMouse</set>
@@ -647,7 +647,7 @@
          <item row="3" column="1" colspan="2">
           <widget class="QLabel" name="tuningAccidental">
            <property name="toolTip">
-            <string>Microtonal accidental, from the note, earlier in the measure or the key signature, in cents</string>
+            <string>Microtonal accidental, in cents</string>
            </property>
            <property name="textInteractionFlags">
             <set>Qt::TextSelectableByMouse</set>
@@ -667,7 +667,7 @@
          <item row="4" column="1" colspan="2">
           <widget class="QLabel" name="tuningResult">
            <property name="toolTip">
-            <string>What playback plays: temperament + accidental + tuning, in cents from equal temperament</string>
+            <string>Total tuning of the note, in cents from equal temperament</string>
            </property>
            <property name="textInteractionFlags">
             <set>Qt::TextSelectableByMouse</set>
@@ -696,7 +696,7 @@
             </sizepolicy>
            </property>
            <property name="toolTip">
-            <string>On a Performance legato patch: how the note starts after silence or when it is played anew. Auto: from the notation</string>
+            <string>How the note starts. Auto: from the notation</string>
            </property>
            <property name="accessibleName">
             <string>Performance attack</string>
@@ -764,7 +764,7 @@
             </sizepolicy>
            </property>
            <property name="toolTip">
-            <string>On a Performance legato patch: how the note joins the note before. Auto: from the notation (slurred notes bowed, after a glissando portamento)</string>
+            <string>How the note joins the note before. Auto: from the notation</string>
            </property>
            <property name="accessibleName">
             <string>Performance transition</string>
@@ -829,7 +829,7 @@
             </sizepolicy>
            </property>
            <property name="toolTip">
-            <string>A library note's start as set in its clip in Live (Live plays the score): ms after its written start. Auto: as MuseScore plays it. Reset (on every selected note: one undo step) to clear</string>
+            <string>Start of the note as set in Live, in ms after its written start. Auto: as MuseScore plays it</string>
            </property>
            <property name="accessibleName">
             <string>Start from Live</string>
@@ -892,7 +892,7 @@
             </sizepolicy>
            </property>
            <property name="toolTip">
-            <string>A library note's end as set in its clip in Live: ms after its written end. Auto: as MuseScore plays it</string>
+            <string>End of the note as set in Live, in ms after its written end. Auto: as MuseScore plays it</string>
            </property>
            <property name="accessibleName">
             <string>End from Live</string>

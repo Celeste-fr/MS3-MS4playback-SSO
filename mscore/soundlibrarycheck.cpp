@@ -325,11 +325,14 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       _table->setSelectionMode(QAbstractItemView::NoSelection);
       layout->addWidget(_table);
       _scan = new QCheckBox(tr("Scan every value (0–127)"), this);
+      _scan->setToolTip(tr("Also find articulations the map lacks (about a minute more per patch)"));
       layout->addWidget(_scan);
       _tryAll = new QCheckBox(tr("Try every controller"), this);
+      _tryAll->setToolTip(tr("With Extract Plug-in Data, also try every MIDI controller and parameter"));
       layout->addWidget(_tryAll);
       // (the owner, 2026-09-27: a faster way than searching each controller's value in the patch)
       _quick = new QCheckBox(tr("Quick"), this);
+      _quick->setToolTip(tr("Reload the patch instead of restoring each controller (about 5 minutes per patch instead of 15-20)"));
       _quick->setChecked(true);
       _quick->setEnabled(false);
       connect(_tryAll, &QCheckBox::toggled, _quick, &QCheckBox::setEnabled);
@@ -337,11 +340,14 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       // (off by default: about 25 s a patch, and most likely the same across a library; the owner,
       // 2026-09-27: measure it on one patch per family, not on all 700)
       _pitchBend = new QCheckBox(tr("Measure pitch bend"), this);
+      _pitchBend->setToolTip(tr("With Extract Plug-in Data, measure how far pitch bend bends each ticked patch"));
       layout->addWidget(_pitchBend);
       // (the owner, 2026-09-28: "verify that dynamics is consistent across all techniques")
       _dynamics = new QCheckBox(tr("Measure dynamics"), this);
+      _dynamics->setToolTip(tr("Measure each articulation's loudness from soft to loud (about 20 s more per articulation)"));
       layout->addWidget(_dynamics);
       _dynamicsOnly = new QCheckBox(tr("Dynamics only"), this);
+      _dynamicsOnly->setToolTip(tr("Skip the articulation check"));
       _dynamicsOnly->setEnabled(false);
       connect(_dynamics, &QCheckBox::toggled, _dynamicsOnly, &QCheckBox::setEnabled);
       layout->addWidget(_dynamicsOnly);

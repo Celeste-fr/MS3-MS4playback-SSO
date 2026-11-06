@@ -105,8 +105,8 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
             _root->addItem(fifthNames[i]);
             _pure->addItem(fifthNames[i]);
             }
-      _root->setToolTip(tr("Turns the tuning around the circle of fifths so that it centers on this note (its pure tone too)"));
-      _pure->setToolTip(tr("The note left at its equal-tempered pitch (0 cents); the others keep their relation to it"));
+      _root->setToolTip(tr("Center the tuning on this note"));
+      _pure->setToolTip(tr("Note kept at its equal-tempered pitch"));
       form->addRow(tr("Root note:"), _root);
       form->addRow(tr("Pure tone:"), _pure);
 
@@ -119,28 +119,23 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       form->addRow(tr("Tweak:"), _tweak);
 
       _just = new QComboBox;
-      _just->addItem(tr("12 keys, as a keyboard has them (the Tuning plugin's)"), int(Temperament::Just::KEYS));
-      _just->addItem(tr("By spelling: Ben Johnston (unmarked notes a pure major scale)"), int(Temperament::Just::JOHNSTON));
-      _just->addItem(tr("By spelling: Helmholtz-Ellis, HEJI (unmarked notes Pythagorean)"), int(Temperament::Just::HEJI));
-      _just->setToolTip(tr("12 keys: C♯ and D♭ are one key, as on a keyboard.\n"
-                           "Ben Johnston: the root's major scale is pure (1/1 9/8 5/4 4/3 3/2 5/3 15/8), a sharp or "
-                           "flat is 25/24; a Sagittal 5-comma accidental moves a note by a syntonic comma (81/80).\n"
-                           "Helmholtz-Ellis: unmarked notes are pure fifths from the root; HEJI's arrow accidentals "
-                           "move a note by a syntonic comma each (E with one arrow down is 5/4 above C)."));
+      _just->addItem(tr("12 keys, as on a keyboard"), int(Temperament::Just::KEYS));
+      _just->addItem(tr("By spelling: Ben Johnston"), int(Temperament::Just::JOHNSTON));
+      _just->addItem(tr("By spelling: Helmholtz-Ellis (HEJI)"), int(Temperament::Just::HEJI));
+      _just->setToolTip(tr("How sharps and flats are tuned in just intonation"));
       _justLabel = new QLabel(tr("Just intonation:"));
       form->addRow(_justLabel, _just);
 
       // accidental families whose size is a matter of convention: the most common one first
       _quarter = new QComboBox;
-      _quarter->addItem(tr("50 cents, as in 24-EDO (the most common)"), int(Temperament::Quarter::FIXED));
-      _quarter->addItem(tr("Half the tuning's sharp or flat (meantone, 31-EDO)"), int(Temperament::Quarter::HALF));
-      _quarter->addItem(tr("33/32, the just quarter tone (53.3 cents)"), int(Temperament::Quarter::JUST));
-      _quarter->setToolTip(tr("Stein-Zimmermann and Gould (arrow) quarter-tone accidentals. In equal temperament the "
-                              "first two are the same."));
+      _quarter->addItem(tr("50 cents (24-EDO)"), int(Temperament::Quarter::FIXED));
+      _quarter->addItem(tr("Half a sharp or flat (31-EDO)"), int(Temperament::Quarter::HALF));
+      _quarter->addItem(tr("33/32 (53.3 cents)"), int(Temperament::Quarter::JUST));
+      _quarter->setToolTip(tr("Size of quarter-tone accidentals"));
       form->addRow(tr("Quarter tones:"), _quarter);
       _persian = new QComboBox;
-      _persian->addItem(tr("Vaziri's quarter tones: koron −50, sori +50 (the most common)"), int(Temperament::Persian::VAZIRI));
-      _persian->addItem(tr("As the Microtonal Tuner plugin played them in 3.6: −67, +33"), int(Temperament::Persian::MS36));
+      _persian->addItem(tr("Vaziri: koron −50, sori +50"), int(Temperament::Persian::VAZIRI));
+      _persian->addItem(tr("Microtonal Tuner plugin: −67, +33"), int(Temperament::Persian::MS36));
       form->addRow(tr("Koron and sori:"), _persian);
 
       QGridLayout* grid = new QGridLayout;
@@ -155,22 +150,19 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
             grid->addWidget(l, r, c, Qt::AlignHCenter);
             grid->addWidget(_final[i], r + 1, c);
             }
-      QGroupBox* finals = new QGroupBox(tr("Final values (cents from equal temperament)"));
+      QGroupBox* finals = new QGroupBox(tr("Final values in cents"));
       finals->setLayout(grid);
       top->addWidget(finals);
 
-      _spelled = new QCheckBox(tr("Enharmonic spellings sound apart (C♯ is not D♭)"));
-      _spelled->setToolTip(tr("For a tuning built from a chain of equal fifths (Pythagorean, meantones), notes spelled "
-                              "past its 12 go on along the chain, as the tuning defines them.\n"
-                              "Keyboard temperaments have one value per key and ignore this; Just intonation has "
-                              "its own choice above."));
+      _spelled = new QCheckBox(tr("Distinguish enharmonic spellings"));
+      _spelled->setToolTip(tr("C♯ and D♭ sound different, for tunings built from a chain of fifths"));
       top->addWidget(_spelled);
 
       _oldNotes = new QLabel;
       _oldNotes->setWordWrap(true);
       _clearOld = new QCheckBox;
       _useOld = new QPushButton(tr("Use Their Values"));
-      _useOld->setToolTip(tr("Takes these notes' values as the score's temperament and clears them from the notes"));
+      _useOld->setToolTip(tr("Use these notes' values as the temperament of the score"));
       QHBoxLayout* oldRow = new QHBoxLayout;
       oldRow->addWidget(_clearOld, 1);
       oldRow->addWidget(_useOld);
@@ -182,8 +174,8 @@ TuningDialog::TuningDialog(Score* score, QWidget* parent)
       bb->button(QDialogButtonBox::Reset)->setText(tr("Equal Temperament"));
       QPushButton* loadButton = bb->addButton(tr("Load…"), QDialogButtonBox::ActionRole);
       QPushButton* saveButton = bb->addButton(tr("Save…"), QDialogButtonBox::ActionRole);
-      loadButton->setToolTip(tr("Loads a file saved by the Tuning plugin or by this dialog"));
-      saveButton->setToolTip(tr("Saves these settings in the Tuning plugin's file format"));
+      loadButton->setToolTip(tr("Load a tuning file"));
+      saveButton->setToolTip(tr("Save these settings as a tuning file"));
       top->addWidget(bb);
 
       connect(_preset, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this] { presetChanged(); });
@@ -285,9 +277,8 @@ void TuningDialog::findPluginNotes()
       _clearOld->setVisible(any);
       _useOld->setVisible(any);
       if (any) {
-            _oldNotes->setText(tr("%n note(s) have one tuning per pitch class, as the Tuning plugin writes them. "
-                                  "Playback adds a note's own tuning on top of the temperament.", "", _pluginNotes.size()));
-            _clearOld->setText(tr("Clear those notes' tunings"));
+            _oldNotes->setText(tr("%n note(s) have tunings from the Tuning plugin.", "", _pluginNotes.size()));
+            _clearOld->setText(tr("Clear their tunings"));
             }
       }
 
@@ -332,15 +323,11 @@ void TuningDialog::showTemperament(const Temperament& t)
       _persian->setCurrentIndex(_persian->findData(int(_t.persian)));
       QString about = presetAbout(_t.name);
       if (just && _t.just == Temperament::Just::JOHNSTON)
-            about += " " + tr("By spelling (Ben Johnston): the root's major scale is pure, and a sharp or flat is 25/24, "
-                              "so enharmonic spellings differ (from C: C♯ 25/24, D♭ 27/25). D–A is 40/27, as in any "
-                              "fixed just scale; a Sagittal 5-comma accidental moves a note by 81/80.");
+            about += " " + tr("By spelling: the root's major scale is pure, and a sharp or flat is 25/24, so C♯ and D♭ differ.");
       else if (just && _t.just == Temperament::Just::HEJI)
-            about += " " + tr("By spelling (Helmholtz-Ellis): unmarked notes are pure fifths from the root (from C: E "
-                              "81/64, C♯ 2187/2048, D♭ 256/243); each HEJI arrow on an accidental moves the note by a "
-                              "syntonic comma (81/80), so E with one arrow down is 5/4.");
+            about += " " + tr("By spelling: unmarked notes are pure fifths from the root; each HEJI arrow moves a note by 81/80.");
       else if (just)
-            about += " " + tr("12 keys, as the Tuning plugin and a keyboard have it: C♯ and D♭ are the same.");
+            about += " " + tr("12 keys: C♯ and D♭ are the same.");
       if (preset && !presetValues)
             about += " " + tr("Final values edited.");
       if (chain && qAbs(step) > 0.05)
@@ -455,7 +442,7 @@ void TuningDialog::load()
       bool ok = f.open(QIODevice::ReadOnly);
       const Temperament t = ok ? Temperament::fromJson(QString::fromUtf8(f.readAll()), &ok) : Temperament();
       if (!ok) {
-            QMessageBox::warning(this, tr("Load Tuning"), tr("This file is not a tuning saved by the Tuning plugin."));
+            QMessageBox::warning(this, tr("Load Tuning"), tr("This is not a tuning file."));
             return;
             }
       showTemperament(t);
