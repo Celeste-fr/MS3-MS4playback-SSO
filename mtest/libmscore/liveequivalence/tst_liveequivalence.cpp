@@ -10886,6 +10886,14 @@ void TestLiveEquivalence::playbackSettingsWidget()
                   }
             }
       QCOMPARE(rows, int(Playback::definitions().size()));
+      // (every setting has its panel texts: a label and a group of displayGroups(); a mode's names one per value)
+      for (const Playback::Definition& d : Playback::definitions()) {
+            const Playback::Display* disp = Playback::display(d.id);
+            QVERIFY2(disp && disp->label && disp->tooltip, d.id);
+            QVERIFY2(std::any_of(Playback::displayGroups().begin(), Playback::displayGroups().end(),
+                                 [&](const char* g) { return std::strcmp(g, disp->group) == 0; }), d.id);
+            QVERIFY2(disp->values.empty() || int(disp->values.size()) == int(std::lround(d.max - d.min)) + 1, d.id);
+            }
       QCOMPARE(boxes["heldNotes/early"]->value(), 100.0);         // (the map's)
       QVERIFY(!boxes["hosting/maxVoices"]->isEnabled());
       boxes["legato/keepMs"]->setValue(60);

@@ -27,11 +27,12 @@ namespace SoundLib { class Library; }
 
 //---------------------------------------------------------
 //   PlaybackSettingsWidget
-//    Mixer › Advanced Options… › Playback adjustments: every setting of libmscore/playbacksettings.h, grouped as
-//    in playback.ini, its effective value for the score and where it comes from (default, library, playback.ini,
-//    score); editing a value sets it for this score (metaTag, through setMetaTag: undoable), Reset takes the
-//    score's own value away; Open playback.ini, Reload playback.ini; the Preset box (Recommended / Library default)
-//    edits playback.ini and reloads
+//    Mixer › Advanced Options… › Playback adjustments: every setting of libmscore/playbacksettings.h by its
+//    Playback::display() (group, label, named values in a combo box, else a spin box; the ini name at the end of the
+//    tooltip), its effective value for the score and where it comes from (Default, Sound library, Your settings
+//    = playback.ini, This score); editing a value sets it for this score (metaTag, through setMetaTag: undoable),
+//    Reset / Reset All take the score's own values away; Open / Reload Settings File (playback.ini); the Preset box
+//    (Recommended / Library default) edits playback.ini and reloads
 //---------------------------------------------------------
 
 class PlaybackSettingsWidget : public QWidget {
