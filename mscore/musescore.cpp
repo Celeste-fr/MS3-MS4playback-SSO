@@ -2266,11 +2266,10 @@ MuseScore::MuseScore()
       menuView->addAction(getAction("mark-irregular"));
       menuView->addSeparator();
       // the playability checker (libmscore/playability.h)
-      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings" }) {
-            a = getAction(name);
-            a->setCheckable(true);
-            menuView->addAction(a);
-            }
+      // the panel in the View menu; its two switches (check on/off, open strings) sit in the panel itself (owner 2026-11-06)
+      for (const char* name : { "toggle-playability-panel", "toggle-playability", "toggle-playability-open-strings" })
+            getAction(name)->setCheckable(true);
+      menuView->addAction(getAction("toggle-playability-panel"));
       getAction("toggle-playability")->setChecked(Playability::enabled);
       getAction("toggle-playability-open-strings")->setChecked(Playability::openStringMarks);
       // the automation editor (automationlanes.h)

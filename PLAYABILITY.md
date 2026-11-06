@@ -58,8 +58,9 @@ headless test scores and their checked results are the parity tests.
   (impossible red, out of reach / risky dark yellow, darker when selected; open strings slate grey
   #7d8791, the owner's choice, left to the selection colour when selected; never when printing).
   Preferences `score/playability/check`, `…/openStrings`, `…/openStringColor` (Advanced list), and
-  *View › Check Playability* / *Mark Open Strings* (`toggle-playability`,
-  `toggle-playability-open-strings`). `tst_playability` 6/6: the plugin's rows and every note's
+  the *Check Playability* / *Mark Open Strings* boxes at the top of the Playability panel (`toggle-playability`,
+  `toggle-playability-open-strings`; in the View menu until 2026-11-06, the owner moved them to the panel; the
+  shortcuts still work). `tst_playability` 6/6: the plugin's rows and every note's
   mark on `test-strings.mscx`, its harmonic rows (`harm-tests.mscx`, 3.6.2), microtones
   (`micro-tests.mscx`). A pass on the plugin's 16-staff, 300-bar big-strings score: 21 ms
   (`PLAYABILITY_BIG=<score> ./tst_playability speed`).

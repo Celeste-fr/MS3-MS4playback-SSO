@@ -28,6 +28,7 @@
 #include <QDockWidget>
 #include <functional>
 
+class QCheckBox;
 class QLabel;
 class QPushButton;
 class QScrollArea;
@@ -81,6 +82,8 @@ class PlayabilityPanel : public QDockWidget {
 
       Score* _score { nullptr };
       std::vector<PlayabilityRow> _rows;
+      QCheckBox* _checkOn;          // View's "Check Playability", moved here (owner 2026-11-06)
+      QCheckBox* _openStrings;      // View's "Mark Open Strings", moved here
       QLabel* _off;
       QLabel* _summary;             // the rows counted: impossible · risky · notation
       QStackedWidget* _stack;

@@ -19,6 +19,8 @@
 #include "libmscore/select.h"
 #include "libmscore/staff.h"
 
+#include <QAction>
+#include <QCheckBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -163,6 +165,24 @@ PlayabilityPanel::PlayabilityPanel(QWidget* parent)
       vl->setContentsMargins(10, 10, 10, 10);
       vl->setSpacing(8);
 
+      // the two switches that were in the View menu (owner 2026-11-06): each box mirrors its action, so the
+      // shortcuts and the saved preference keep working
+      QHBoxLayout* switches = new QHBoxLayout;
+      auto mirror = [this, switches](const char* name) {
+            QAction* a = getAction(name);
+            a->setCheckable(true);
+            QCheckBox* box = new QCheckBox(a->text());
+            box->setChecked(a->isChecked());
+            connect(box, &QCheckBox::toggled, a, [a](bool on) { if (a->isChecked() != on) a->trigger(); });
+            connect(a, &QAction::toggled, box, &QCheckBox::setChecked);
+            switches->addWidget(box);
+            return box;
+            };
+      _checkOn = mirror("toggle-playability");
+      _openStrings = mirror("toggle-playability-open-strings");
+      switches->addStretch(1);
+      vl->addLayout(switches);
+
       _off = new QLabel;
       _off->setWordWrap(true);
       vl->addWidget(_off);
@@ -272,7 +292,9 @@ void PlayabilityPanel::retranslate()
       _prev->setToolTip(tr("Previous instrument"));
       _next->setToolTip(tr("Next instrument"));
       _toggle->setToolTip(tr("Switch between the diagram of the selection and the list"));
-      _off->setText(tr("The playability check is off (View > Check Playability)."));
+      _off->setText(tr("The playability check is off (tick Check Playability above)."));
+      _checkOn->setText(getAction("toggle-playability")->text());
+      _openStrings->setText(getAction("toggle-playability-open-strings")->text());
       }
 
 void PlayabilityPanel::changeEvent(QEvent* e)
