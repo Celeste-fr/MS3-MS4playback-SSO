@@ -770,14 +770,13 @@ std::vector<PartInfo> partInfos(const MasterScore* score, const QStringList& por
 QString Report::text() const
       {
       QStringList l;
-      l << QObject::tr("%n lane(s) of automation imported.", "", lanes);
+      l << QObject::tr("%n automation lane(s) imported.", "", lanes);
       if (!matched.isEmpty())
             l << QString() << matched;
       if (!unmatched.isEmpty())
             l << QString() << QObject::tr("Not imported:") << unmatched;
       if (repeatedPoints)
-            l << QString() << QObject::tr("%n point(s) in repeats' later passes left out (a lane follows the score, "
-                                          "not the repeats).", "", repeatedPoints);
+            l << QString() << QObject::tr("%n point(s) in later repeats left out.", "", repeatedPoints);
       return l.join("\n");
       }
 
@@ -808,15 +807,14 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
       std::map<const Part*, Automation::PartLanes> out;
       Report rep;
       if (parts.empty())
-            rep.unmatched << QObject::tr("No part of this score plays the sound library (Mixer: Global playback \"Sound library\", or a "
-                                         "part's \"Part playback\"), so no track has a part to go to.");
+            rep.unmatched << QObject::tr("No part of this score plays the sound library, so there is no part for the tracks to go to.");
       std::set<const Part*> taken;
       // a set where Live plays the score as clips: its beats at its one tempo, the score's real times
       LiveClips::Timeline clipTimeline;
       if (set.museScoreClips && set.tempo > 0) {
             clipTimeline = LiveClips::timeline(score);
             clipTimeline.bpm = set.tempo;
-            rep.matched << QObject::tr("Live played the score as clips: its beats read at %1 bpm.").arg(set.tempo);
+            rep.matched << QObject::tr("Live played the score as clips; beats read at %1 bpm.").arg(set.tempo);
             }
       for (size_t ti = 0; ti < set.tracks.size(); ++ti) {
             const Track& t = set.tracks[ti];
@@ -840,7 +838,7 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
                         if (p.part == b->second.part)
                               pi = &p, how = QObject::tr("its key");
                   if (!pi) {
-                        rep.unmatched << QObject::tr("Track \"%1\": its part doesn't play the sound library").arg(t.name);
+                        rep.unmatched << QObject::tr("Track \"%1\": its part doesn't use the sound library").arg(t.name);
                         continue;
                         }
                   }
@@ -854,7 +852,7 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
                                                      || looseTitle(p.part->longName()) == looseTitle(t.name)))
                               pi = &p, how = QObject::tr("name");
             if (!pi) {
-                  rep.unmatched << QObject::tr("Track \"%1\" (input %2): no part plays on that port and channel or has that name")
+                  rep.unmatched << QObject::tr("Track \"%1\" (input %2): no part uses that port and channel or has that name")
                                    .arg(t.name, t.inputDevice.isEmpty() ? QObject::tr("none") : QString("%1 / %2").arg(t.inputDevice).arg(t.inputChannel));
                   continue;
                   }
@@ -879,7 +877,7 @@ std::map<const Part*, Automation::PartLanes> lanes(const MasterScore* score, con
                         scale = 1.0 / 127;
                         }
                   if (target.isEmpty()) {
-                        rep.unmatched << QObject::tr("Track \"%1\", %2: no controller of %3 by that name")
+                        rep.unmatched << QObject::tr("Track \"%1\", %2: %3 has no controller with that name")
                                          .arg(t.name, e->kind == Envelope::Kind::PARAMETER ? QString("%1 \"%2\"").arg(e->device, e->parameter)
                                                                                             : e->parameter, pi->part->partName());
                         continue;

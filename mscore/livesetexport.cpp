@@ -124,24 +124,22 @@ LiveSetWriter::LinkDevice findLinkDevice(QString* note)
       if (!inLibrary.isEmpty()) {
             LiveSetWriter::LinkDevice d = deviceAt(inLibrary, lib);
             if (note) {
-                  *note = QObject::tr("MuseScore Link: the device in Live's User Library (%1).").arg(QDir::toNativeSeparators(inLibrary));
+                  *note = QObject::tr("MuseScore Link device: %1").arg(QDir::toNativeSeparators(inLibrary));
                   QFile b(bin);
                   QFile l(inLibrary);
                   if (b.open(QIODevice::ReadOnly) && l.open(QIODevice::ReadOnly) && b.readAll() != l.readAll())
-                        *note += " " + QObject::tr("It differs from the one that comes with this MuseScore (%1): copy that one over it "
-                                                   "if the device is older.").arg(QDir::toNativeSeparators(bin));
+                        *note += " " + QObject::tr("It differs from the one installed with MuseScore (%1).").arg(QDir::toNativeSeparators(bin));
                   }
             return d;
             }
       if (QFileInfo::exists(bin)) {
             if (note)
-                  *note = QObject::tr("MuseScore Link: the device next to MuseScore (%1); it is not in Live's User Library%2.")
+                  *note = QObject::tr("MuseScore Link device: %1, not in Live's User Library%2")
                           .arg(QDir::toNativeSeparators(bin), lib.isEmpty() ? QString() : QString(" (%1)").arg(QDir::toNativeSeparators(lib)));
             return deviceAt(bin, lib);
             }
       if (note)
-            *note = QObject::tr("MuseScore Link: the device was not found (neither in Live's User Library nor next to MuseScore): "
-                                "the tracks have no device; drag it in before Kontakt.");
+            *note = QObject::tr("MuseScore Link device not found. Drag it in before Kontakt.");
       return LiveSetWriter::LinkDevice();
       }
 
@@ -159,16 +157,14 @@ static std::vector<LiveSetWriter::Track> plainTracks(MasterScore* score, const S
       LiveClipsLink::renderEvents(score, &written, true);
       const PlainLiveSet::Layout layout = PlainLiveSet::layout(score, library, events, LiveClips::timeline(score), &written);
       for (const PlainLiveSet::Clash& c : layout.clashes)
-            plan->notes << QObject::tr("%1 – %2, beat %3: %4 start together; one switch can't play both (Live sends both "
-                                       "switches, then both notes): move one to the other's track")
+            plan->notes << QObject::tr("%1, %2, beat %3: %4 start together and can't use the same switch. Move one to another track.")
                            .arg(c.part, c.patch).arg(double(c.at) / LiveClips::UNITS_PER_BEAT + 1, 0, 'f', 2)
                            .arg(c.techniques.join(", "));
       for (const PlainLiveSet::Section& s : layout.sections)
             for (const PlainLiveSet::PartTracks& p : s.parts)
                   for (const PlainLiveSet::Kontakt& k : p.kontakts) {
                         if (k.instrument && k.instrument->switchType == SoundLib::SwitchType::PROGRAM && k.techniques.size() > 1)
-                              plan->notes << QObject::tr("%1 – %2: switches by program change, which the technique tracks don't "
-                                                         "send yet: choose each technique in Kontakt").arg(p.name, k.patch);
+                              plan->notes << QObject::tr("%1, %2: switches by program change, which the technique tracks don't send. Choose each technique in Kontakt.").arg(p.name, k.patch);
                         }
       std::vector<LiveSetWriter::Track> tracks = PlainLiveSet::tracks(layout, link);
       // what the score keeps of Live's tracks (livetracks.h): their mixer and its automation
@@ -283,7 +279,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
             const QStringList without = LiveClipsLink::instance()->keysWithoutTrack(score, &known);
             const QString linked = linkedSet(score);
             if (known) {
-                  plan->source = QObject::tr("the MuseScore Link device's report of Live's tracks");
+                  plan->source = QObject::tr("the MuseScore Link device");
                   tracks.erase(std::remove_if(tracks.begin(), tracks.end(), [&without](const LiveSetWriter::Track& t) {
                         return !without.contains(t.routeKey);
                         }), tracks.end());
@@ -294,14 +290,13 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                         *error = QObject::tr("The linked Live Set %1 could not be read: %2").arg(QDir::toNativeSeparators(linked), set.error);
                         return false;
                         }
-                  plan->source = QObject::tr("the linked Live Set %1 (as last saved)").arg(QDir::toNativeSeparators(linked));
+                  plan->source = QObject::tr("the linked Live Set %1").arg(QDir::toNativeSeparators(linked));
                   tracks.erase(std::remove_if(tracks.begin(), tracks.end(), [&set](const LiveSetWriter::Track& t) {
                         return LiveSetWriter::hasTrack(set, t);
                         }), tracks.end());
                   }
             else
-                  plan->source = QObject::tr("nothing (the device doesn't answer for this score and no Live Set is linked): "
-                                             "all of them");
+                  plan->source = QObject::tr("nothing, so all tracks are added");
             }
       else if (plain)
             tracks = plainTracks(score, library, plan, kind == LiveSetKind::PLAIN_LINKED);
@@ -321,8 +316,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                         ++allIns;
             }
       if (allIns)
-            plan->notes << QObject::tr("%n track(s) listen to All Ins: their MIDI output (Preferences > I/O) isn't set. Live plays the "
-                                       "score either way (the device finds tracks by name); for Play through Live set MIDI From.",
+            plan->notes << QObject::tr("%n track(s) listen to All Ins because no MIDI output is set in Preferences. For Play through Live, set MIDI From.",
                                        "", allIns);
 
 #ifdef USE_VST3
@@ -332,8 +326,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
       quint32 uid[4] = { 0, 0, 0, 0 };
       bool plugin = !pluginPath.isEmpty() && Vst3Plugin::classInfo(pluginPath, &pluginName, uid, &pluginError);
       if (!plugin)
-            plan->notes << QObject::tr("No plug-in on the tracks: %1").arg(pluginError.isEmpty() ? QObject::tr("the library's plug-in "
-                                                                                                          "was not found") : pluginError);
+            plan->notes << QObject::tr("No plug-in on the tracks: %1").arg(pluginError.isEmpty() ? QObject::tr("plug-in not found") : pluginError);
       // by patch and the part's state settings (a non-Kontakt plug-in's load-time values, e.g. Ample's DBName: their flat
       // lanes, SoundLibraryHost::stateValuesFor, as hosted playback loads them; copies for other tunings share it)
       std::map<QString, LiveSetWriter::Plugin> made;
@@ -355,7 +348,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
             if (plan->skipPlugin && plan->skipPlugin(t))
                   continue;
             if (!t.instrument || t.instrument->kit) {
-                  plan->left << QObject::tr("%1: a kit has no patch of its own (its drums play on their own tracks)").arg(t.name);
+                  plan->left << QObject::tr("%1: a kit has no patch of its own; its drums play on their own tracks").arg(t.name);
                   continue;
                   }
             const QString patch = t.instrument->name;
@@ -370,13 +363,13 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   QString err;
                   QByteArray state;
                   if (!SoundLibraryHost::hasSetup(library, patch))
-                        err = QObject::tr("no setup (its .nki was not found: View > Sound Library > Library folder)");
+                        err = QObject::tr("no setup (its .nki was not found; check the library folder in View > Sound Library)");
                   else
                         state = SoundLibraryHost::setupState(library, patch, pluginPath, &err, score, t.partRef);
                   LiveSetWriter::Plugin p;
                   QString stateName;
                   if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))
-                        err = QObject::tr("its setup could not be read");
+                        err = QObject::tr("setup could not be read");
                   if (!err.isEmpty()) {
                         failed[patch] = err;
                         plan->left << QString("%1: %2").arg(t.name, err);
@@ -409,7 +402,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                         LiveSetWriter::Plugin p = made[madeKey];
                         QString stateName;
                         if (err.isEmpty() && (state.isEmpty() || !Vst3Plugin::splitState(state, &stateName, &p.component, &p.controller)))
-                              err = QObject::tr("the plug-in's state could not be read");
+                              err = QObject::tr("plug-in state could not be read");
                         QStringList set;
                         for (const SoundLibraryHost::AppliedParameter& a : applied) {
                               if (a.id < 0) {
@@ -430,11 +423,11 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                               p.parameters.push_back(lp);
                               }
                         if (!err.isEmpty())
-                              controllerNotes[key] = QObject::tr("%1 – %2: its settings (flat automation lanes) could not be set (%3): the patch's own values")
+                              controllerNotes[key] = QObject::tr("%1, %2: settings could not be applied (%3); the patch keeps its own values")
                                                      .arg(t.part, patch, err);
                         else {
                               withControllers[key] = p;
-                              controllerNotes[key] = QObject::tr("%1 – %2: settings (flat automation lanes) in the plug-in's state: %3").arg(t.part, patch, set.join(", "));
+                              controllerNotes[key] = QObject::tr("%1, %2: settings in the plug-in state: %3").arg(t.part, patch, set.join(", "));
                               }
                         }
                   if (withControllers.count(key))
@@ -457,11 +450,11 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                                        : QObject::tr("bent"));
                         }
                   if (multi.isEmpty() || !err.isEmpty())
-                        plan->notes << QObject::tr("%1: its tuning copies could not be set as slots (%2): they play at the key's pitch")
+                        plan->notes << QObject::tr("%1: tuning copies could not be set (%2); they play at the key's pitch")
                                        .arg(t.name, err);
                   else {
                         t.plugin.component = multi;
-                        tunedTracks << QObject::tr("%1 (one Kontakt, a slot per tuning, by MIDI channel: %2)")
+                        tunedTracks << QObject::tr("%1 (one Kontakt, one slot per tuning: %2)")
                                        .arg(t.name, slotNames.join(", "));
                         }
                   }
@@ -470,7 +463,7 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                   double before = 0;
                   const QByteArray tuned = KontaktSetup::withTune(t.plugin.component, t.cents, &err, &before);
                   if (tuned.isEmpty() || !err.isEmpty())
-                        plan->notes << QObject::tr("%1: its tuning (%2 cents) could not be set (%3): it plays at the key's pitch")
+                        plan->notes << QObject::tr("%1: tuning (%2 cents) could not be set (%3); it plays at the key's pitch")
                                        .arg(t.name).arg(t.cents, 0, 'f', 2).arg(err);
                   else {
                         t.plugin.component = tuned;
@@ -508,12 +501,10 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                         for (const SoundLibraryHost::AppliedParameter& f : found)
                               names << (f.id >= 0 ? f.title : QObject::tr("%1: not in this patch").arg(f.title));
                         const QString lanesText = plain
-                              ? QObject::tr("%1 – %2: automation lanes as the Kontakt track's automation, in Live's panel: %3")
-                              : QObject::tr("%1 – %2: automation lanes MuseScore plays in Live (the MuseScore Link device), in "
-                                            "Live's panel: %3");
+                              ? QObject::tr("%1, %2: automation lanes as Kontakt automation: %3")
+                              : QObject::tr("%1, %2: automation lanes played by the MuseScore Link device: %3");
                         plan->controllers << (err.isEmpty() ? lanesText.arg(t.part, patch, names.join(", "))
-                                                            : QObject::tr("%1 – %2: the automation lanes' parameters could not be "
-                                                                          "found (%3)").arg(t.part, patch, err));
+                                                            : QObject::tr("%1, %2: automation parameters not found (%3)").arg(t.part, patch, err));
                         }
                   for (const SoundLibraryHost::AppliedParameter& f : laneParameters[key]) {
                         if (f.id < 0)
@@ -534,14 +525,13 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
       for (const auto& n : controllerNotes)
             plan->controllers << n.second;
       if (!tunedTracks.isEmpty())
-            plan->notes << QObject::tr("%n Kontakt(s) for other tunings, tuned by Kontakt's Tune (cents): %1", "", tunedTracks.size())
+            plan->notes << QObject::tr("%n Kontakt(s) for other tunings: %1", "", tunedTracks.size())
                            .arg(tunedTracks.join(", "));
       if (slow)
-            plan->notes << QObject::tr("%n patch(es) were never loaded in MuseScore: their setup is made from the .nki, which Kontakt "
-                                       "loads slowly the first time (play the score once in MuseScore first to have Kontakt's own "
-                                       "state, then create the set again).", "", slow);
+            plan->notes << QObject::tr("%n patch(es) were never loaded in MuseScore, so Kontakt loads them slowly the first time. "
+                                       "Play the score once, then create the set again.", "", slow);
 #else
-      plan->notes << QObject::tr("This MuseScore was built without plug-in hosting: the tracks have no plug-in.");
+      plan->notes << QObject::tr("This MuseScore has no plug-in hosting, so the tracks have no plug-in.");
 #endif
       // the lanes MuseScore plays in Live, kept in each track's MuseScore Link device (its "Lanes" stores): the set plays
       // them without MuseScore (MuseScore's own, once it connects, replace them). Lanes now marked as Live's (from a
@@ -563,15 +553,13 @@ bool planLiveSet(MasterScore* score, const SoundLib::Library& library, LiveSetKi
                         if (fits)
                               ++kept;
                         else {
-                              plan->notes << QObject::tr("%1: its automation lanes have too many points to keep in the set "
-                                                         "(they play while MuseScore runs).").arg(t.name);
+                              plan->notes << QObject::tr("%1: too many automation points for the set; they play only while MuseScore runs.").arg(t.name);
                               t.linkLanes.clear();
                               }
                         }
                   }
             if (kept)
-                  plan->notes << QObject::tr("%n track(s) keep their automation lanes in the MuseScore Link device: the set plays "
-                                             "them without MuseScore.", "", kept);
+                  plan->notes << QObject::tr("%n track(s) keep their automation lanes in the MuseScore Link device.", "", kept);
             }
       plan->spec.tracks = tracks;
       return true;
@@ -587,7 +575,7 @@ static QString mixerText(const LiveSetWriter::Track& t)
             pan = QObject::tr("pan %1%2").arg(std::lround(std::fabs(t.pan) * 50)).arg(t.pan < 0 ? "L" : "R");
       QString text = QObject::tr("volume %1 dB, %2").arg(20 * std::log10(t.volume), 0, 'f', 1).arg(pan);
       if (!t.active)
-            text += ", " + QObject::tr("muted (Track Activator off)");
+            text += ", " + QObject::tr("muted");
       return text;
       }
 
@@ -595,7 +583,7 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
       {
       QString text;
       if (onlyMissing)
-            text += QObject::tr("Tracks in Live found from %1.").arg(plan.source) + "\n";
+            text += QObject::tr("Tracks in Live found from %1").arg(plan.source) + "\n";
       text += QObject::tr("%1: %n track(s)", "", int(plan.spec.tracks.size())).arg(QDir::toNativeSeparators(path));
       if (onlyMissing)
             text += " " + QObject::tr("(of %n track(s) the score needs)", "", plan.routes);
@@ -606,12 +594,12 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
                   line += "  ";
             line += t.name;
             if (t.group) {
-                  text += line + " — " + QObject::tr("group") + "\n";
+                  text += line + ", " + QObject::tr("group") + "\n";
                   continue;
                   }
             if (t.midiTo >= 0) {
                   const QString to = plan.spec.tracks[size_t(t.midiTo)].name;
-                  text += line + " — " + (t.midiToChannel > 0 ? QObject::tr("MIDI To %1, channel %2").arg(to).arg(t.midiToChannel)
+                  text += line + ", " + (t.midiToChannel > 0 ? QObject::tr("MIDI To %1, channel %2").arg(to).arg(t.midiToChannel)
                                                               : QObject::tr("MIDI To %1").arg(to)) + "\n";
                   continue;
                   }
@@ -620,20 +608,19 @@ QString reportText(const LiveSetPlan& plan, const QString& path, bool onlyMissin
                   devices << "MuseScore Link";
             if (t.hasPlugin)
                   devices << QString("%1 (%2)").arg(t.plugin.name, t.patch);
-            line += " — " + (devices.isEmpty() ? QObject::tr("no devices") : devices.join(" → "));
-            line += " — " + (t.portName.isEmpty() ? QObject::tr("All Ins") : QString("%1, Ch. %2").arg(t.portName).arg(t.channel));
-            line += " — " + mixerText(t);
+            line += ", " + (devices.isEmpty() ? QObject::tr("no devices") : devices.join(" → "));
+            line += ", " + (t.portName.isEmpty() ? QObject::tr("All Ins") : QString("%1, Ch. %2").arg(t.portName).arg(t.channel));
+            line += ", " + mixerText(t);
             text += line + "\n";
             }
-      text += "\n" + QObject::tr("Controllers (plug-in parameters) in each patch's state, as MuseScore plays them:") + "\n  "
-              + (plan.controllers.isEmpty() ? QObject::tr("none set: every patch at its own values") : plan.controllers.join("\n  ")) + "\n";
+      text += "\n" + QObject::tr("Controllers set in each patch:") + "\n  "
+              + (plan.controllers.isEmpty() ? QObject::tr("none; every patch keeps its own values") : plan.controllers.join("\n  ")) + "\n";
       if (!plan.left.isEmpty())
             text += "\n" + QObject::tr("Left out:") + "\n  " + plan.left.join("\n  ") + "\n";
       if (!plan.notes.isEmpty())
             text += "\n" + plan.notes.join("\n") + "\n";
       if (onlyMissing && !plan.spec.tracks.empty())
-            text += "\n" + QObject::tr("In Live: open the browser at this set (or drag the file into Live's browser), unfold it and drag "
-                                       "its tracks into your set.") + "\n";
+            text += "\n" + QObject::tr("In Live's browser, unfold this set and drag its tracks into your set.") + "\n";
       return text;
       }
 
@@ -744,8 +731,8 @@ static bool otherEnginesLeftOut(MasterScore* score, const SoundLib::Library& lib
       QStringList lines;
       for (const auto& o : others)
             lines << QString("%1 (%2)").arg(o.first->partName(), o.second);
-      return QMessageBox::information(parent, title, QObject::tr("Live plays only the global sound library, %1. These parts play "
-                                                                 "another library in MuseScore and are left out of the set:\n\n%2")
+      return QMessageBox::information(parent, title, QObject::tr("Live plays only the global sound library, %1. These parts use another library "
+                                                                 "and are left out of the set:\n\n%2")
                                       .arg(library.name, lines.join("\n")), QMessageBox::Ok | QMessageBox::Cancel)
              == QMessageBox::Ok;
       }
@@ -755,7 +742,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       const QString title = onlyMissing ? QObject::tr("Add Missing Tracks") : QObject::tr("Create Live Set");
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!score || !library) {
-            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences > I/O > Sound Library)."));
+            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen. Choose one in Preferences > I/O."));
             return;
             }
       if (!otherEnginesLeftOut(score, *library, parent, title))
@@ -770,7 +757,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
             return;
             }
       if (onlyMissing && plan.spec.tracks.empty()) {
-            QMessageBox::information(parent, title, QObject::tr("Every sound library patch of this score has a track in Live (found from %1).")
+            QMessageBox::information(parent, title, QObject::tr("Every patch of this score already has a track in Live (found from %1).")
                                      .arg(plan.source));
             return;
             }
@@ -819,8 +806,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       if (!onlyMissing)
             fromLive = recordWritten(score, plan.spec, LiveSetWriter::xml(plan.spec), LiveSet::read(path), false);
       if (fromLive)
-            plan.notes << QObject::tr("%n automation lane(s) from a Live Set are MuseScore's now: the new set has them as track "
-                                      "automation.", "", fromLive);
+            plan.notes << QObject::tr("%n automation lane(s) from a Live Set now belong to MuseScore and are written as track automation.", "", fromLive);
       QMessageBox box(QMessageBox::Information, title, onlyMissing ? QObject::tr("The missing tracks were written.")
                                                                    : QObject::tr("The Live Set was written."),
                       QMessageBox::Ok, parent);
@@ -831,8 +817,7 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
       if (!plan.notes.isEmpty())
             info += "\n\n" + plan.notes.join("\n");
       info += "\n\n" + (onlyMissing ? QObject::tr("In Live's browser, unfold this set and drag its tracks into your set.")
-                                    : QObject::tr("Open it in Live 12 (File > Open Live Set…)."))
-              + " " + QObject::tr("Whether it opens as intended can only be checked in Live.");
+                                    : QObject::tr("Open it in Live 12 (File > Open Live Set…)."));
       box.setInformativeText(info);
       box.setDetailedText(reportText(plan, path, onlyMissing));
       box.exec();
@@ -845,16 +830,16 @@ void createLiveSetDialog(MasterScore* score, QWidget* parent, bool onlyMissing)
 QString UpdateResult::text() const
       {
       QString s;
-      s += written ? QObject::tr("The set was updated; the set as it was is in %1.").arg(QDir::toNativeSeparators(backup))
-                   : QObject::tr("Nothing in the set needed updating: the file is unchanged.");
+      s += written ? QObject::tr("The set was updated. The previous version is saved as %1.").arg(QDir::toNativeSeparators(backup))
+                   : QObject::tr("The set was already up to date.");
       s += "\n";
       if (overrides)
-            s += QObject::tr("%n note timing(s) set in Live kept as the notes' Start / End from Live.", "", overrides) + "\n";
+            s += QObject::tr("%n note timing(s) set in Live kept.", "", overrides) + "\n";
       s += "\n" + report.text();
       if (!notes.isEmpty())
             s += "\n" + notes.join("\n") + "\n";
       if (!importReport.isEmpty())
-            s += "\n" + QObject::tr("Read back first:") + "\n" + importReport + "\n";
+            s += "\n" + QObject::tr("Read from Live first:") + "\n" + importReport + "\n";
       return s;
       }
 
@@ -882,8 +867,7 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                   }
             }
       if (!xml.contains(QByteArray("<Annotation Value=\"") + PlainLiveSet::KEY_PREFIX)) {
-            *error = QObject::tr("%1 has no track MuseScore wrote (Create Live Set marks its tracks in their Info text): only "
-                                 "a set made by Create Live Set can be updated.").arg(QDir::toNativeSeparators(path));
+            *error = QObject::tr("%1 has no track written by MuseScore. Only a set made by Create Live Set can be updated.").arg(QDir::toNativeSeparators(path));
             return false;
             }
 
@@ -984,15 +968,13 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                                     }
                               if (LiveTracks::automationHash(a.points) == d->planned) {
                                     a.keepLive = true;
-                                    a.keepNote = QObject::tr("%1 %2 in Live: Live's left as it is (MuseScore writes it from %3, which "
-                                                             "hasn't changed since; it can't be taken back as a lane)")
+                                    a.keepNote = QObject::tr("%1 %2 in Live: kept as in Live (MuseScore writes it from %3, which hasn't changed)")
                                                  .arg(a.name, le ? QObject::tr("changed") : QObject::tr("deleted"),
                                                       d->target.isEmpty() ? QObject::tr("the notation")
                                                                           : QObject::tr("the \"%1\" lane").arg(d->target));
                                     }
                               else
-                                    result->notes << QObject::tr("%1: %2 %3 in Live, replaced by MuseScore's (its \"%4\" changed in the "
-                                                                 "score since the set was written)")
+                                    result->notes << QObject::tr("%1: %2 %3 in Live, replaced by MuseScore's (\"%4\" changed in the score)")
                                                      .arg(t.name, a.name, le ? QObject::tr("changed") : QObject::tr("deleted"),
                                                           d->target.isEmpty() ? QObject::tr("notation") : d->target);
                               }
@@ -1053,7 +1035,7 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
                                                                                  &before, &held);
 #endif
                   if (state.isEmpty()) {
-                        stateNotes << QObject::tr("%1: Kontakt's state not changed (%2): the values are in Live's panel only")
+                        stateNotes << QObject::tr("%1: Kontakt state not changed (%2); the values are in Live's panel only")
                                       .arg(t.name, err);
                         continue;
                         }
@@ -1089,7 +1071,7 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
             if (LiveSetWriter::validate(xml).isEmpty()) {            // (Live's own bookkeeping, as Create Live Set checks it)
                   const QString problem = LiveSetWriter::validate(out);
                   if (!problem.isEmpty()) {
-                        *error = QObject::tr("The updated set failed its check (%1): nothing written.").arg(problem);
+                        *error = QObject::tr("The updated set failed its check (%1). Nothing was written.").arg(problem);
                         return false;
                         }
                   }
@@ -1099,12 +1081,12 @@ bool updateLiveSet(MasterScore* score, const SoundLib::Library& library, const Q
             for (int n = 2; QFileInfo::exists(backup) && n < 100; ++n)
                   backup = LiveSetUpdate::backupPath(path, QDateTime::currentDateTime()).replace("].als", QString("] %1.als").arg(n));
             if (!QFile::copy(path, backup)) {
-                  *error = QObject::tr("The backup %1 could not be written: nothing changed.").arg(QDir::toNativeSeparators(backup));
+                  *error = QObject::tr("The backup %1 could not be written. Nothing was changed.").arg(QDir::toNativeSeparators(backup));
                   return false;
                   }
             QSaveFile sf(path);
             if (!sf.open(QIODevice::WriteOnly) || sf.write(LiveSetWriter::gzip(out)) < 0 || !sf.commit()) {
-                  *error = QObject::tr("%1 could not be written (%2); the set is as it was.").arg(QDir::toNativeSeparators(path),
+                  *error = QObject::tr("%1 could not be written (%2). The set is unchanged.").arg(QDir::toNativeSeparators(path),
                                                                                                  sf.errorString());
                   return false;
                   }
@@ -1125,7 +1107,7 @@ void updateLiveSetDialog(MasterScore* score, QWidget* parent)
       const QString title = QObject::tr("Update Live Set");
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       if (!score || !library) {
-            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen (Preferences > I/O > Sound Library)."));
+            QMessageBox::information(parent, title, QObject::tr("No sound library is chosen. Choose one in Preferences > I/O."));
             return;
             }
       if (!otherEnginesLeftOut(score, *library, parent, title))
@@ -1143,14 +1125,11 @@ void updateLiveSetDialog(MasterScore* score, QWidget* parent)
       if (QFileInfo(start).isFile())
             d.selectFile(start);
       if (QMessageBox::information(parent, title,
-                                   QObject::tr("Choose a Live Set made by Create Live Set. MuseScore first reads back what you "
-                                               "changed in Live that the score keeps (automation, mixer, track delays, note "
-                                               "timings), then replaces only what it wrote there (the technique clips, the "
-                                               "Controllers clips, track delays, the MuseScore Link devices' timing) and adds "
-                                               "tracks for new techniques and parts. Your devices, return tracks, sends, other "
-                                               "tracks and mixer stay. The set as it was is kept in its Backup folder.\n\n"
-                                               "Close the set in Live first (save it there): Live would save its own copy over "
-                                               "the update."),
+                                   QObject::tr("Choose a Live Set made by Create Live Set. MuseScore keeps your changes to automation, mixer, "
+                                               "track delays and note timings, updates the clips it wrote, and adds tracks for new "
+                                               "techniques and parts. Your devices, return tracks, sends, other tracks and mixer are not touched. "
+                                               "The previous version is saved in the Backup folder.\n\n"
+                                               "Save and close the set in Live first."),
                                    QMessageBox::Ok | QMessageBox::Cancel) != QMessageBox::Ok)
             return;
       if (!d.exec() || d.selectedFiles().isEmpty())
@@ -1171,12 +1150,12 @@ void updateLiveSetDialog(MasterScore* score, QWidget* parent)
       const LiveSetUpdate::Report& r = result.report;
       QString info = QObject::tr("%n track(s) updated", "", r.updated.size()) + ", " + QObject::tr("%n added", "", r.added.size())
                      + ", " + QObject::tr("%n cleared", "", r.cleared.size()) + ". "
-                     + QObject::tr("Kept: %n device(s) you added", "", r.userDevices) + ", "
+                     + QObject::tr("%n device(s) of yours kept", "", r.userDevices) + ", "
                      + QObject::tr("%n other track(s)", "", r.otherTracks) + ", " + QObject::tr("%n return track(s)", "", r.returnTracks) + ".";
       if (!r.skipped.isEmpty() || !r.removedParts.isEmpty())
             info += "\n\n" + QObject::tr("Show Details lists what was skipped.");
       if (result.written)
-            info += "\n\n" + QObject::tr("Open it in Live 12. Whether it opens as intended can only be checked in Live.");
+            info += "\n\n" + QObject::tr("Open it in Live 12.");
       box.setInformativeText(info);
       box.setDetailedText(result.text());
       box.exec();

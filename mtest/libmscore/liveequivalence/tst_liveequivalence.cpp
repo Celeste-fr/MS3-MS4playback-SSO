@@ -8615,7 +8615,7 @@ void TestLiveEquivalence::hostedReadBack()
             QCOMPARE(targets(), QString("m-pan,volume"));
             QCOMPARE(Automation::pointsHash(volumeLane().points), laneBefore);
             QVERIFY2(res.importReport.contains("strum levels"), qPrintable(res.importReport));
-            QVERIFY2(res.report.skipped.join("\n").contains("M-Master Vol changed in Live: Live's left as it is"), qPrintable(res.text()));
+            QVERIFY2(res.report.skipped.join("\n").contains("M-Master Vol changed in Live: kept as in Live"), qPrintable(res.text()));
             }
       setVolume(90 / 127.0);
       {
