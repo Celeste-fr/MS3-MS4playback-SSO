@@ -83,8 +83,8 @@ selectable).
 `byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
 run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
 
-`levels/leading` (the Leading lane, below) is 0 in both presets (and by default) until measurements of several
-orchestras give the amount (the owner, 2026-11-05).
+`levels/leading` (the Leading lane, below) is 1 in Recommended and by default, 0 in Library default (the owner,
+2026-11-06: "let's do the simple 3.5 dB now, we'll refine as we go"); it acts only where a part's Leading lane is On.
 
 `levels/calibrated` 1 (as loud as the held note) is in neither preset since 2026-10-15 (Recommended plays 2, the
 match plus D, real players' difference: option B'): set by hand it shows "(Custom)".
@@ -2124,16 +2124,18 @@ researched separately). Header comment of `libmscore/leadinglane.h` has the desi
   lines, the range selection and the lanes' time-selection band stay on top). Black at 11 % with a hairline at its top
   and bottom on a light paper, white at 12 % on a dark one; never printed or exported (export draws through
   `Score::print`, not the view). The lane's own row shades its On spans in the same way.
-- **`[levels] leading`** (0 by default and in both presets; per score): 1 plays every library note of the part starting
+- **`[levels] leading`** (1 by default and in Recommended, 0 in Library default since 2026-11-06; per score): 1 plays every library note of the part starting
   while the lane is On **L dB louder**. L: the patch's map value `<Instrument leadingLevel>` (none in any shipped map
-  yet), else **`[levels] leadingDb`** (default 3 dB: **a placeholder, an assumption pending measured data**; nobody has
-  heard it). How: the patch's gain stage carries L (`TrackDelays::Delays::leading`, `gainStageDb`: hosted the slot's
+  yet), else **`[levels] leadingDb`** (default 3.5 dB since 2026-11-06, the owner: "let's do the simple 3.5 dB now, we'll refine as we go": a measured lead,
+  not yet multi-source, the median leading-line lift in 9 passages from 2 ensembles (Spheres K. 550 / Colibri Ensemble,
+  TU Berlin anechoic Beethoven 8), honest 90 % range about 1-6 dB, 1-3 dB of it possibly articulation rather than
+  level; private research notes leading-lift/ and AUDIT.md). How: the patch's gain stage carries L (`TrackDelays::Delays::leading`, `gainStageDb`: hosted the slot's
   gain, Live MuseScore's Utility, MIDI out CC7), every note of the patch plays L lower by CC11 and a leading note at 0
   (`trackLevel` in rendermidi.cpp, `libLevels` volumeDb, adding up with the other levels), so Live's clips and the plain
   set's CC11 lanes carry it as every note level; the master trim counts the gain. A library whose dynamics are CC11:
   nothing (no CC11 headroom, as divisi). MuseScore 3 / 4 (built-in) parts: `leadingDb` by velocity on SoundFont 2's law
   (`MarcatoLevel::velocity`, as an articulation's level; `MidiRenderer::leadingDb`). A note's state is its chord's tick.
-- **0 changes nothing**: no lane read for playback, no gain, no CC11 (tests `leadingLevels`, `leadingLive`; dumps of
+- **0 (and a score without a Leading lane) changes nothing**: no lane read for playback, no gain, no CC11 (tests `leadingLevels`, `leadingLive`; dumps of
   Whence and the test scores identical to main's, branch commit message).
 
 ## Divisi level

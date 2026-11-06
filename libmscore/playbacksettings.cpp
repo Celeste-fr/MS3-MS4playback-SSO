@@ -332,16 +332,18 @@ static const std::vector<Definition> DEFINITIONS = {
         "section divided into n groups adds up to one section (an assumption from player counts, not measured divisi "
         "data); a note keeps the level of its own start; 0: every voice at the whole section's level", true },
       // (the owner, 2026-11-05: which line leads is the composer's choice, marked by the Leading lane, leadinglane.h; the
-      // amount will come from measurements of several orchestras, being researched: 0 by default and in both presets, the
-      // lane shown and saved but playing nothing; leadingDb a placeholder, an assumption pending that data)
-      { "levels/leading", 0, 0, 1, "on/off",
+      // amount a measured lead; the owner, 2026-11-06, "let's do the simple 3.5 dB now, we'll refine as we go": 1 by default
+      // and in Recommended, 0 in Library default; it acts only where a part's Leading lane is On)
+      { "levels/leading", 1, 0, 1, "on/off",
         "1: while a part's Leading lane is on, each of its notes plays louder: a library note by the map's leadingLevel "
         "(else levels/leadingDb) through the patch's gain stage and CC11, a MuseScore 3 / 4 note by levels/leadingDb by "
-        "velocity; 0: the lane is shown and saved but changes nothing (until measured data gives the amount)", true },
+        "velocity; 0: the lane is shown and saved but changes nothing", true },
       { "levels/leadingDb", LeadingLane::DEFAULT_DB, 0, 24, "dB",
         "how much louder a leading note plays where the sound library map gives no leadingLevel, and for MuseScore 3 / 4 "
-        "parts (with levels/leading 1); the default 3 dB is a PLACEHOLDER, an assumption pending measurements of several "
-        "orchestras", true },
+        "parts (with levels/leading 1); the default 3.5 dB is a measured lead, not yet multi-source: the median leading-line "
+        "lift in 9 passages from 2 ensembles (Spheres K. 550 / Colibri Ensemble, TU Berlin anechoic Beethoven 8), honest "
+        "90 % range about 1-6 dB, 1-3 dB of it possibly articulation rather than level; private research notes "
+        "leading-lift/ and AUDIT.md", true },
       // (the owner, 2026-10-28: SSO's uneven keys are an artefact; every pitch at the real player's level, smoothed only
       // beyond the key-to-key scatter real players show; approved the approach: 1 in Recommended and by default, 0 in
       // Library default)
@@ -696,7 +698,7 @@ QString iniTemplate()
 //    lifted by the next transition's step, branch bowed-join); levels/attackLevels (0 in both on 2026-10-22, branch attack-levels; 2 in Recommended and by default, 0 in Library
 //    default, since 2026-10-23: the owner heard it, "B better"); shorts/staccatoLength (0 in both on 2026-10-24, branch
 //    staccato-length; 1 in Recommended and by default, 0 in Library default, since the same day: the owner heard the clips, "B");
-//    levels/leading (0 in both since 2026-11-05: the amount awaits measurements of several orchestras); levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick; 2, following, since 2026-10-31: the owner heard it, "yes, much better now"). The other settings are not in the table because: legato/keepMs acts
+//    levels/leading (1 in Recommended and by default, 0 in Library default, since 2026-11-06: the owner, the simple 3.5 dB now); levels/evenKeys (1 in Recommended and by default, 0 in Library default, since 2026-10-28: the owner approved the approach); levels/lowCut (1 in Recommended and by default, 0 in Library default, since 2026-10-30: the owner, the strings' new-bow kick; 2, following, since 2026-10-31: the owner heard it, "yes, much better now"). The other settings are not in the table because: legato/keepMs acts
 //    only with early starts (so it follows heldNotes/early); the shorts' lengths are MuseScore 4's note model (not a
 //    timing adjustment of this fork); tuning and hosting are mechanics (how microtones and plug-ins work), not a
 //    choice of sound.
@@ -719,7 +721,7 @@ const std::vector<Preset>& presets()
             { "recommended", QT_TRANSLATE_NOOP("playbackSettings", "Recommended"), { { "heldNotes/early", 100 }, { "heldNotes/byPitch", 0 }, { "levels/calibrated", 2 },
                                               { "slurs/quick", 2 }, { "slurs/quickLevel", 1 }, { "slurs/performance", 1 }, { "slurs/transitions", 1 }, { "slurs/smoothStart", 1 }, { "slurs/transitionsEarly", 1 },
                                               { "slurs/plainPerformance", 1 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 1 }, { "slurs/microtoneBends", 3 }, { "slurs/runBends", 1 }, { "notes/transportReset", 1 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 2 }, { "slurs/plainAuto", 1 }, { "levels/context", 1 }, { "levels/sectionBalance", 2 }, { "levels/realRange", 2 },
-                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "levels/lowCut", 2 }, { "shorts/staccatoLength", 1 }, { "levels/leading", 0 } } },
+                                              { "levels/evenLevels", 1 }, { "levels/micCompensation", 1 }, { "levels/divisi", 1 }, { "levels/transitionLevels", 2 }, { "levels/attackLevels", 2 }, { "levels/evenKeys", 1 }, { "levels/lowCut", 2 }, { "shorts/staccatoLength", 1 }, { "levels/leading", 1 } } },
             { "library", QT_TRANSLATE_NOOP("playbackSettings", "Library default"), { { "heldNotes/early", 0 }, { "levels/calibrated", 0 }, { "slurs/quick", 0 },
                                               { "slurs/performance", 0 }, { "slurs/transitions", 0 }, { "slurs/smoothStart", 0 }, { "slurs/transitionsEarly", 0 }, { "slurs/plainPerformance", 0 }, { "slurs/plainTiming", 0 }, { "slurs/speedFromWritten", 0 }, { "slurs/fixedTransitions", 0 }, { "slurs/fastTransitions", 0 }, { "slurs/microtoneBends", 0 }, { "slurs/runBends", 0 }, { "notes/transportReset", 0 }, { "levels/hallGuard", 0 }, { "slurs/plainAccents", 0 }, { "slurs/plainAuto", 0 }, { "levels/context", 0 },
                                               { "levels/sectionBalance", 0 }, { "levels/realRange", 0 },
