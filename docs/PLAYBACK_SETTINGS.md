@@ -38,17 +38,20 @@ the sweeps below, HANDOFF.md).
    Written at start when missing, with every key, its default and a comment (unit, range); never overwritten.
    QSettings IniFormat, comments start with `;`. An empty value (`key=`) means the default. Unknown keys, values
    that aren't numbers and values out of range are logged (`playback.ini: …`) and shown under the settings table;
-   out-of-range values are clamped. **Reload playback.ini** (Mixer › Advanced Options… › Playback adjustments; the action "Reload Playback Settings" can get a shortcut in Preferences › Shortcuts)
+   out-of-range values are clamped. **Reload Settings File** (Mixer › Advanced Options… › Playback adjustments; the action "Reload Playback Settings" can get a shortcut in Preferences › Shortcuts)
    reads it again and renders every score again; no restart.
 3. **The score** (saved in it, undoable): metaTag `playbackSettings` (`legato/keepMs=60;shorts/staccato=40`),
    plus the two older per-score metaTags that stay where they were: `soundLibraryOnsetEarly` (heldNotes/early),
    `soundLibraryLanes` (tuning tolerance / tail / maxLanes). A score
    without overrides has none of them, so its file is unchanged; MuseScore 3.6 keeps metaTags (round trip).
 
-**UI**: *Mixer › Advanced Options… › Playback adjustments*: every setting, grouped as in the ini, with its
-effective value for the score and where it comes from (default, library, playback.ini, score; bold: this score's).
-Editing a value sets it for the score; *Reset to ini/default* takes the score's value away (a whole group when a
-group is selected); *Open playback.ini*; *Reload playback.ini*. Hosting settings are global (the plug-in instances
+**UI**: *Mixer › Advanced Options… › Playback adjustments*: every setting by its plain name (`Playback::display()` in
+playbacksettings.cpp: group, label, named values for modes and on/off in a combo box, numbers in a spin box with the
+unit; the tooltip ends with the ini name), grouped by meaning (Notes, Note lengths, Slurs, Loudness, Tuning, Guitar,
+Ableton Live, Sound library), with its effective value for the score and where it comes from (Default, Sound library,
+Your settings = playback.ini, This score; bold: this score's). Editing a value sets it for the score; *Reset* takes
+the selected settings' score values away (a whole group when a group is selected), *Reset All* all of them; *Open
+Settings File*, *Reload Settings File* (playback.ini). A new setting gets a `DISPLAY` entry too. Hosting settings are global (the plug-in instances
 serve every score): playback.ini only.
 
 **Per-patch tables** (the map's measured data) are overridden in playback.ini only, by the patch's name in the map,
