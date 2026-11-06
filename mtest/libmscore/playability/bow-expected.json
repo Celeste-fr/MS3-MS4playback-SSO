@@ -3,10 +3,10 @@
   {
    "staff": "Contrabass",
    "bar": 1,
-   "verdict": "impossible",
-   "reason": "slur 8 s at p (longer than one bow; Forsyth p. 445: 4 s)"
+   "verdict": "outOfReach",
+   "reason": "slur 8 s at p (over Forsyth p. 445: 4 s; break up the bowing or mark \"change bow at will\": Forsyth p. 445, Adler p. 87)"
   }
  ],
  "timed": 23,
- "note": "S11 sourced 2026-11-06 (playabilityrules.h above BowSource): the plugin's rows went with the old table. Solo Violin's slurs (at most 13 s) are under a single player's 15 s, the Viola's 4 s too, the Violoncello is not timed; the Contrabass is a section (the score has a double bass: orchestra layout) and red over 4 s at p."
+ "note": "S11 sourced 2026-11-06 (playabilityrules.h above BowSource): the plugin's rows went with the old table. Solo Violin's slurs (at most 13 s) are under a single player's 15 s, the Viola's 4 s too, the Violoncello is not timed; the Contrabass is a section (the score has a double bass: orchestra layout) dark yellow over 4 s at p (never red: Blatter p. 68, Adler p. 87; owner 2026-11-06)."
 }

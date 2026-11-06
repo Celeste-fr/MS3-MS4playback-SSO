@@ -480,9 +480,22 @@ single player apart). Evidence and the critics' rounds: `~/MuseScore/orchestrati
   from his Fig. I-15). Never red.
 - Violin and viola, single player: Sevsay p. 10 and 15 s (Flesch p. 64, Askenfelt 1986 p. 1011); in practice "over 15 s".
   Never red (Flesch: longer is "used less in playing", not impossible).
-- Cello: not timed (no source prints a cello number; Wagner's counts are for violins and violas). Double bass section:
-  red over 4 s at p, mp, mf, f (Forsyth pp. 445-446); pp and ff not timed; a single bass not timed.
+- Cello: not timed (no source prints a cello number; Wagner's counts are for violins and violas). Double bass section: dark
+  yellow over 4 s at p, mp, mf, f (Forsyth pp. 445-446), the message giving the remedy (break up the bowing, or "change
+  bow at will": Adler p. 87); pp and ff not timed. Single bass: over 4 s at mf and f only, our inference from Forsyth
+  (his reason is the bow, his passage a section's), Widor p. 186 (at p a change goes unnoticed, in a forte every attack
+  is heard) and Blatter p. 68 (one performer needs "considerable skill"). Never red for any bass (owner 2026-11-06,
+  section and single player apart): Blatter p. 68 and Adler p. 87 show such slurs played.
 - Not timed either: a slur with a staff text "change bow(s) at will", "free bowing", "bowing ad lib.", "staggered
   bowing" inside it (Adler p. 87); a phrase slur (one note alone over the limits); a tremolo slur.
 - `falsealarm-strings.mscx` bars 3-10 now play at ♩ = 30 so the phrase-slur and tremolo exemptions are tested against
   slurs that would otherwise be marked.
+
+## Divisi on a single string player (2026-11-06)
+
+"div." splits a section's players (Kennan & Grantham p. 31; Adler p. 12: the two players of a stand take the upper and
+lower notes). Before, a "div." text also took a single player's chords out of the stop check. Now only a section's
+notes are taken out; a part named as one player keeps its chords checked as multiple stops, capped at dark yellow
+(the name may be wrong: "soli", or a string group without bass or winds, which counts as chamber music; a section
+would split the chord, Adler p. 12), and the text gets a notation row ("div. in a part named as one player ...").
+Test `soloDivisi` (`solodiv-tests.mscx`, `solodiv-orch-tests.mscx` from `tools/playability/gen_solodiv_tests.py`).

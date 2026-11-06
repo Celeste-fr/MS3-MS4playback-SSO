@@ -739,6 +739,7 @@ BowRules bowRules(const StringInstrument& in)
                                         72, { { "pp", 16 }, { "p", 16 }, { "mf", 16 }, { "f", 8 }, { "ff", 8 } } };
       static const BowSource FLESCH = { "Flesch p. 64", false, { { "pp", 15 }, { "p", 15 }, { "mf", 15 }, { "f", 15 }, { "ff", 15 } } };
       static const BowSource FORSYTH = { "Forsyth p. 445", false, { { "p", 4 }, { "mf", 4 }, { "f", 4 } } };
+      static const BowSource FORSYTH_ONE = { "Forsyth p. 445", false, { { "mf", 4 }, { "f", 4 } } };
       BowRules r;
       if (!in.valid())
             return r;
@@ -746,10 +747,11 @@ BowRules bowRules(const StringInstrument& in)
             r.valid = true;
             r.warn = { &SEVSAY, in.section ? &WAGNER : &FLESCH };
             }
-      else if (in.name == "Double bass" && in.section) {
+      else if (in.name == "Double bass") {
             r.valid = true;
-            r.warn = { &FORSYTH };
-            r.red = { &FORSYTH };
+            r.warn = { in.section ? &FORSYTH : &FORSYTH_ONE };
+            r.note = in.section ? "break up the bowing or mark \"change bow at will\": Forsyth p. 445, Adler p. 87"
+                                : "one player must hide the bow changes, considerable skill: Blatter p. 68";
             }
       return r;
       }

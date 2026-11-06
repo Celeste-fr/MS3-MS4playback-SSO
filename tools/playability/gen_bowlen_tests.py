@@ -4,28 +4,28 @@
 tst_playability::bowLengths.
 
 Five staves play the same slurs (alternating notes, 4/4): Violins (section), Solo Violin, Violoncelli (section:
-never timed), Contrabasses (section), Solo Contrabass (single: never timed; a plain "Contrabass" would be a section in a score laid out as an orchestra). Section violins warn only over BOTH Sevsay
+never timed), Contrabasses (section), Solo Contrabass (single player; a plain "Contrabass" would be a section in a score laid out as an orchestra). Section violins warn only over BOTH Sevsay
 (12 / 6 / 3 / 1 / 0.5 s) and Wagner (at ♩ <= 72: 8 quarters pp-mf, 4 at f/ff; faster: 16 / 8); the soloist over
-Sevsay and 15 s; the section basses are red over 4 s at p, mf, f.
-  bars 1-2    ♩ = 54, p, halves, 8 q = 8.9 s    Wagner Fig. I-14 (2 bars per bow): violins clean; basses red
-  bars 4-8    p, 20 q = 22.2 s                  violins warn (Wagner 8); solo warn (> 15 s); basses red
-  bars 9-12   p, 16 q = 17.8 s                  violins warn (one bow for 4 bars only above ♩ = 72); solo warn; basses red
-  bar 14      ♩ = 44, f, 4 q = 5.5 s            Wagner's "a bow for each measure" at f: violins clean; basses red
-  bars 16-18  ♩ = 120, f, 12 q = 6 s            violins warn (Wagner fast 8); solo clean; basses red
+Sevsay and 15 s; every bass (section or single) dark yellow over 4 s at p, mf, f (Forsyth; never red: Blatter p. 68).
+  bars 1-2    ♩ = 54, p, halves, 8 q = 8.9 s    Wagner Fig. I-14 (2 bars per bow): violins clean; basses warn
+  bars 4-8    p, 20 q = 22.2 s                  violins warn (Wagner 8); solo warn (> 15 s); basses warn
+  bars 9-12   p, 16 q = 17.8 s                  violins warn (one bow for 4 bars only above ♩ = 72); solo warn; basses warn
+  bar 14      ♩ = 44, f, 4 q = 5.5 s            Wagner's "a bow for each measure" at f: violins clean; basses warn
+  bars 16-18  ♩ = 120, f, 12 q = 6 s            violins warn (Wagner fast 8); solo clean; basses warn
   bar 20      p, 4 q = 2 s                      clean everywhere (basses under 4 s)
   bars 21-23  pp, 12 q = 6 s                    under Sevsay's 12 s: clean; basses: no pp limit
   bars 25-26  ff, 8 q = 4 s                     exactly Wagner's fast 8: clean; basses: no ff limit
   bars 28-31  p then f at bar 30: 4 s + 4 s     violins 4/6 + 4/1 = 467% Sevsay, 8/16 + 8/8 = 150% Wagner: warn;
-                                                solo 8/15: clean; basses 4/4 + 4/4 = 200%: red
+                                                solo 8/15: clean; basses 4/4 + 4/4 = 200%: warn
   bars 33-36  ♩ = 40, pp, 16 q = 24 s           violins warn; solo warn; basses: no pp limit
-  bars 38-39  ♩ = 54, f, 8 q = 8.9 s            violins warn (Wagner slow f 4); solo clean; basses red
-  bar 41      ♩ = 40, p, 3 quarters = 4.5 s     basses red (Forsyth); violins clean (under 6 s)
+  bars 38-39  ♩ = 54, f, 8 q = 8.9 s            violins warn (Wagner slow f 4); solo clean; basses warn
+  bar 41      ♩ = 40, p, 3 quarters = 4.5 s     basses warn (Forsyth); violins clean (under 6 s)
   bars 43-46  pp as bars 33-36 + "change bow at will"   clean everywhere (Adler p. 87)
   bar 48      p as bar 41 + "free bowing"       clean everywhere
   bars 50-51  ♩ = 60, p < (hairpin over bar 50) f at bar 51, 8 q = 8 s. The level rises 49 -> 96 (MuseScore's p, f
               velocities) over bar 50, read at the middle of each 16th of the bar: 8 at p (<= 72, 2 s), 5 at mf (<= 88,
               1.25 s), 3 at f (0.75 s), then bar 51 at f (4 s). Violins: Sevsay 2/6 + 1.25/3 + 4.75/1 = 550%, Wagner
-              (♩ <= 72) 2/8 + 1.25/8 + 4.75/4 = 159%: warn; solo 8/15: clean; basses 8/4 = 200%: red
+              (♩ <= 72) 2/8 + 1.25/8 + 4.75/4 = 159%: warn; solo 8/15: clean; basses 8/4 = 200%: warn
 Run: python3 tools/playability/gen_bowlen_tests.py
 """
 import os

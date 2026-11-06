@@ -101,6 +101,7 @@ class TestPlayability : public QObject, public MTest
       void clefs();
       void tempoMarks();
       void bowLengths();
+      void soloDivisi();
       void slurRepeats();
       void c1c3OnOldFixtures();
       void falseAlarms();
@@ -2145,10 +2146,15 @@ void TestPlayability::bowLengths()
       auto vln = [&](int bar, const char* staff, const QString& reason, int n) {
             return rowText(bar, staff, "outOfReach", reason, notes("A4", "B4", n)); };
       auto cb = [&](int bar, const QString& reason, int n, bool q3 = false) {
-            return rowText(bar, "Contrabasses", "impossible", reason, q3 ? notes("A2", "A2", 3) : notes("A2", "B2", n)); };
+            return rowText(bar, "Contrabasses", "outOfReach", reason, q3 ? notes("A2", "A2", 3) : notes("A2", "B2", n)); };
+      auto sb = [&](int bar, const QString& reason, int n, bool q3 = false) {
+            return rowText(bar, "Solo Contrabass", "outOfReach", reason, q3 ? notes("A2", "A2", 3) : notes("A2", "B2", n)); };
       const QString sevW = " (over Sevsay p. 10: %1 s, and Wagner p. 30: %2 quarter notes)";
       const QString sevF = " (over Sevsay p. 10: %1 s, and Flesch p. 64: 15 s)";
-      const QString fors = " (longer than one bow; Forsyth p. 445: 4 s)";
+      const QString stag = "break up the bowing or mark \"change bow at will\": Forsyth p. 445, Adler p. 87";
+      const QString skill = "one player must hide the bow changes, considerable skill: Blatter p. 68";
+      const QString fors = " (over Forsyth p. 445: 4 s; " + stag + ")";
+      const QString forsOne = " (over Forsyth p. 445: 4 s; " + skill + ")";
       QStringList want = {
             // section violins: over Sevsay AND Wagner (8 / 4 quarters at or under 72 bpm, 16 / 8 above)
             vln(4, "Violins", "slur 22.2 s, 20 quarter notes, at p" + sevW.arg(6).arg(8), 10),
@@ -2163,16 +2169,22 @@ void TestPlayability::bowLengths()
             vln(4, "Solo Violin", "slur 22.2 s at p" + sevF.arg(6), 10),
             vln(9, "Solo Violin", "slur 17.8 s at p" + sevF.arg(6), 8),
             vln(33, "Solo Violin", "slur 24 s at pp" + sevF.arg(12), 8),
-            // section basses: red over 4 s at p, mf, f; none at pp, ff; the celli and the single bass never
+            // basses: over 4 s at p, mf, f, dark yellow (section and single player told apart); none at pp, ff; celli never
             cb(1, "slur 8.9 s at p" + fors, 4),
             cb(4, "slur 22.2 s at p" + fors, 10),
             cb(9, "slur 17.8 s at p" + fors, 8),
             cb(14, "slur 5.5 s at f" + fors, 2),
             cb(16, "slur 6 s at f" + fors, 6),
-            cb(28, "slur 8 s, p" + D + "f (longer than one bow; uses 200% of Forsyth p. 445)", 8),
+            cb(28, "slur 8 s, p" + D + "f (uses 200% of Forsyth p. 445; " + stag + ")", 8),
             cb(38, "slur 8.9 s at f" + fors, 4),
             cb(41, "slur 4.5 s at p" + fors, 3, true),
-            cb(50, "slur 8 s, p" + D + "f (longer than one bow; uses 200% of Forsyth p. 445)", 4),
+            cb(50, "slur 8 s, p" + D + "f (uses 200% of Forsyth p. 445; " + stag + ")", 4),
+            // the single bass at mf and f only (Widor p. 186: at p a change goes unnoticed): bar 28's f half is
+            // 4 s, exactly the limit; the hairpin's mf 1.25 s + f 4.75 s = 150%
+            sb(14, "slur 5.5 s at f" + forsOne, 2),
+            sb(16, "slur 6 s at f" + forsOne, 6),
+            sb(38, "slur 8.9 s at f" + forsOne, 4),
+            sb(50, "slur 8 s, p" + D + "f (uses 150% of Forsyth p. 445; " + skill + ")", 4),
             };
       want.sort();
       QStringList got;
@@ -2184,18 +2196,65 @@ void TestPlayability::bowLengths()
 
       // the rules themselves
       QCOMPARE(bowRules(lookup("strings.cello", "Violoncelli", 48)).valid, false);
-      QCOMPARE(bowRules(lookup("strings.contrabass", "Contrabass", 43)).valid, false);
+      QVERIFY(bowRules(lookup("strings.contrabass", "Contrabass", 43)).valid);          // a single bass: timed too
+      QVERIFY(bowRules(lookup("strings.contrabass", "Contrabass", 43)).red.empty());     // never red
       BowRules vs = bowRules(lookup("strings.viola", "Violas", 48));
       QVERIFY(vs.valid && vs.warn.size() == 2 && vs.red.empty());
       QCOMPARE(vs.warn[1]->limit("p", 72), 8.0);           // ♩ = 72 is still Wagner's andante
       QCOMPARE(vs.warn[1]->limit("p", 73), 16.0);
       QCOMPARE(vs.warn[1]->limit("ff", 40), 4.0);
       BowRules cbs = bowRules(lookup("strings.contrabass", "Contrabasses", 48));
+      QVERIFY(cbs.red.empty());
       QCOMPARE(cbs.warn[0]->limit("pp", 60), 0.0);         // no pp / ff limit for the basses
       QCOMPARE(cbs.warn[0]->limit("ff", 60), 0.0);
       QVERIFY(freeBowText("Change bows at will"));
       QVERIFY(freeBowText("free bowing"));
       QVERIFY(!freeBowText("bowing as marked"));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   soloDivisi: "div." splits a section's players only (Kennan & Grantham p. 31; Adler p. 12); a single
+//   player's notes stay a multiple stop and the text is marked. solodiv-tests.mscx, gen_solodiv_tests.py
+//---------------------------------------------------------
+
+void TestPlayability::soloDivisi()
+      {
+      const QString divWhy = "div. in a part named as one player: one player cannot divide; name the part as a section, "
+                             "or the notes are a multiple stop (solo) (Kennan & Grantham p. 31; Adler p. 12)";
+      // strings only (no bass, no wind): every singular name is one player, "soli" too (owner 2026-10-13)
+      MasterScore* score = readScore(DIR + "solodiv-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      QStringList single;
+      for (const PlayabilityRow& row : r.rows) {
+            QVERIFY2(row.staff != "Violins", qPrintable(row.reason));          // the section divides: clean
+            QVERIFY2(row.verdict != "impossible", qPrintable(row.reason));     // never red under div.
+            if (row.kind == "divisi") {
+                  QCOMPARE(row.reason, divWhy);
+                  QCOMPARE(row.verdict, QString("notation"));
+                  single << row.staff + " divisi";
+                  }
+            if (row.kind == "stop" && row.bar == 1) {                          // G3 + G#3: both on the G string only
+                  QCOMPARE(row.verdict, QString("outOfReach"));
+                  QVERIFY(row.reason.endsWith(" (under div.: impossible for one player, a section would split it)"));
+                  single << row.staff + " stop";
+                  }
+            }
+      single.sort();
+      QCOMPARE(single, QStringList({ "Solo Violin divisi", "Solo Violin stop", "Violin I divisi", "Violin I stop",
+                                     "Violin soli divisi", "Violin soli stop" }));
+      delete score;
+      // laid out as an orchestra (a double bass): a singular "Violin" is a section, its div. clean; "Solo Violin" not
+      score = readScore(DIR + "solodiv-orch-tests.mscx");
+      QVERIFY(score);
+      r = Playability::analyse(score);
+      QStringList got;
+      for (const PlayabilityRow& row : r.rows)
+            if (row.kind == "divisi" || row.kind == "stop")
+                  got << row.staff + " " + row.kind;
+      got.sort();
+      QCOMPARE(got, QStringList({ "Solo Violin divisi", "Solo Violin stop" }));
       delete score;
       }
 

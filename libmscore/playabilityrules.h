@@ -197,9 +197,16 @@ QString inspectNatural(const StringInstrument& in, const std::vector<HarmonicNot
 //     "varies between 1 and 15 seconds"; Askenfelt 1986 p. 1011: slowest steady bow about 15 s). Never red.
 //   Viola as violin: Sevsay and Forsyth say shorter but print no number (a miss, never a false alarm).
 //   Cello: not timed (no source prints a cello number; Widor p. 181 is about strokes, not lengths).
-//   Double bass, section: red over 4 s at p (mp), mf, f (Forsyth p. 445: "even in the p the bow must be
-//     changed every three or four seconds"; p. 446: at f and mf "still more pressing"); pp, ff (no source
-//     brackets them) and a single bass player: not timed.
+//   Double bass section: over 4 s at p (mp), mf, f (Forsyth p. 445: "even in the p the bow must be changed
+//     every three or four seconds"; p. 446: at f and mf "still more pressing"); pp, ff: not timed (no source
+//     brackets them). The message gives the books' remedy: break up the bowing (Forsyth p. 445) or "change
+//     the bow at will" (Adler p. 87; such a text exempts the slur).
+//   Single bass: over 4 s at mf, f only. OUR INFERENCE: Forsyth's reason is the bow's shortness, but his
+//     passage is about a section; Widor p. 186: at p "the performer is at liberty to change" bow "without
+//     attracting undue notice", in a forte "each attack of the bow is distinctly audible"; Blatter p. 68: one
+//     performer needs "considerable skill" to change bows unheard.
+//   Never red for any bass (owner 2026-11-06, section and single player apart): Blatter p. 68 (a section
+//     staggers its bow changes; one player with skill) and Adler p. 87 show such slurs played.
 //   A slur whose one note alone is over the limits is a phrase slur (the bow changes inside): not timed.
 // Without any dynamic a passage counts as mp (velocity 64, the p tier): MS4's "natural" level, owner 2026-10-11.
 struct BowSource {
@@ -214,6 +221,7 @@ struct BowRules {
       bool valid { false };                     // this instrument's slurs are timed at all
       std::vector<const BowSource*> warn;       // over every one of these: dark yellow
       std::vector<const BowSource*> red;        // over every one of these: red (empty: never red)
+      const char* note { nullptr };             // added to the message: how players cope (a source)
       };
 BowRules bowRules(const StringInstrument& in);
 // No dynamic in force = MS4's "natural" level (Ms4::NATURAL, 0.5 dB above mp), counted as mp:

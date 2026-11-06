@@ -189,7 +189,7 @@ class Pass {
       StringInstrument standardAt(Part* part, const Fraction& tick);
       StaffTexts staffTexts(int staffIdx) const;
       double microCents(const Note* note);
-      void handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths);
+      void handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths, bool divSingle = false);
       void mark(const Note* n, PlayMark m) { _res.marks[n] = m; }
       // a later check never takes a note's red away
       void markOver(const Note* n, PlayMark m) {
@@ -632,6 +632,8 @@ static QString bowReason(const BowUse& use, bool red)
                   over << QString("%1% of %2").arg(qRound(shares[i] * 100)).arg(srcs[i]->cite);
             }
       QString list = (use.tiers.size() == 1 ? "" : "uses ") + (over.size() == 2 ? over[0] + ", and " + over[1] : over.join(", "));
+      if (use.rules.note)
+            list += QString("; ") + use.rules.note;
       if (red)
             return r + " (longer than one bow; " + list + ")";
       return r + (use.tiers.size() == 1 ? " (over " : " (") + list + ")";
@@ -673,7 +675,7 @@ static bool isHarmonicCircle(SymId id)
 //    an open string, then a multiple stop unless div. is in force
 //---------------------------------------------------------
 
-void Pass::handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths)
+void Pass::handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths, bool divSingle)
       {
       struct Item { Note* note; int pitch; double sound; bool diamond; bool circle; };
       std::vector<Item> list;
@@ -766,11 +768,16 @@ void Pass::handle(Chord* chord, int grace, const QString& staffName, const Strin
                         }
             return;
             }
-      bool bad = res.verdict == Verdict::IMPOSSIBLE;
+      // under "div." in a part named as one player the name may be wrong ("soli", a string group laid out as
+      // chamber music) and a section would split the chord (Adler p. 12): never red there
+      bool bad = res.verdict == Verdict::IMPOSSIBLE && !divSingle;
       (bad ? _res.impossible : _res.outOfReach)++;
       for (const Item& i : list)
             mark(i.note, bad ? PlayMark::IMPOSSIBLE : PlayMark::OUT_OF_REACH);
-      addRow("stop", bad ? "impossible" : "outOfReach", res.reason, describe(in, pitches, res, sp));
+      QString reason = res.reason;
+      if (divSingle)
+            reason += QString(" (under div.: impossible for one player, a section would split it)");
+      addRow("stop", bad ? "impossible" : "outOfReach", reason, describe(in, pitches, res, sp));
       }
 
 //---------------------------------------------------------
@@ -1257,11 +1264,21 @@ void Pass::checkWindDivisi(Part* part, const QString& staffName)
                   if (st < 0 || _score->staff(st)->part() != part)
                         continue;
                   int tick = s->tick().ticks();
-                  if (windAt(part, tick).isEmpty())
-                        continue;
                   QString text = plainText(toTextBase(e)->xmlText()).simplified();
-                  if (!DIV.match(text).hasMatch())
-                        continue;
+                  QString reason;
+                  if (!windAt(part, tick).isEmpty()) {
+                        if (!DIV.match(text).hasMatch())
+                              continue;
+                        reason = "divisi is for strings; use a 2 / 1. / 2. (solo and section) (Adler p. 179)";
+                        }
+                  else {
+                        // a single string player: divisi splits a section's players (Kennan & Grantham p. 31; Adler p. 12)
+                        const StringInstrument& in = instrumentAt(part, Fraction::fromTicks(tick));
+                        if (!in.valid() || in.section || divState(text) != 1)
+                              continue;
+                        reason = "div. in a part named as one player: one player cannot divide; name the part as a section, "
+                                 "or the notes are a multiple stop (solo) (Kennan & Grantham p. 31; Adler p. 12)";
+                        }
                   Chord* chord = nullptr;
                   for (Segment* t = s; t && !chord; t = t->next1(SegmentType::ChordRest))
                         for (int v = 0; v < VOICES && !chord; ++v) {
@@ -1272,8 +1289,7 @@ void Pass::checkWindDivisi(Part* part, const QString& staffName)
                   if (chord)
                         for (Note* n : chord->notes())
                               warnNote(n, "divisi");
-                  addRow(tick, tick, chord ? chord->track() : st * VOICES, staffName, "divisi", "risky",
-                         "divisi is for strings; use a 2 / 1. / 2. (solo and section) (Adler p. 179)", "\"" + text + "\"");
+                  addRow(tick, tick, chord ? chord->track() : st * VOICES, staffName, "divisi", "risky", reason, "\"" + text + "\"");
                   countLast();
                   }
             }
@@ -4046,11 +4062,13 @@ void Pass::run()
                         if (!in.valid())
                               continue;               // a non-string instrument here
                         int fifths = int(staff->key(tick));
-                        bool div = tx.div.on(tick.ticks());
+                        bool divOn = tx.div.on(tick.ticks());
+                        bool div = divOn && in.section;            // one player cannot divide: checked as a multiple stop,
+                        bool divSingle = divOn && !in.section;     // capped at dark yellow (the part may really be a section)
                         const QVector<Chord*>& graces = c->graceNotes();
                         for (int g = 0; g < graces.size(); ++g)
-                              handle(graces[g], g, staffName, in, div, fifths);
-                        handle(c, -1, staffName, in, div, fifths);
+                              handle(graces[g], g, staffName, in, div, fifths, divSingle);
+                        handle(c, -1, staffName, in, div, fifths, divSingle);
                         }
                   }
             checkSlurs(st, part, staffName, tx, walked);
