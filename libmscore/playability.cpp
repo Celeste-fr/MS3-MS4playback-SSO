@@ -95,6 +95,7 @@ struct StateList {
 
 struct StaffTexts {
       StateList div, jete, pizz, dyn;
+      std::vector<int> freeBow;     // ticks of "change bow at will" texts (freeBowText)
       std::vector<std::pair<int, ScordaturaText>> scord;      // tick, retuning (or back to the String Data)
       std::vector<std::pair<int, QString>> sul;               // tick, "G" / "IV" (a string to play on), or "" (off)
       };
@@ -113,8 +114,14 @@ struct HairpinSpan {
 struct BowUse {
       bool valid { false };
       double secs { 0 };
-      double warn { 0 };
-      double red { 0 };
+      double quarters { 0 };
+      BowRules rules;
+      std::vector<double> warnUse;  // per rules.warn source: the share of its limit the stroke uses
+      std::vector<double> redUse;
+      std::vector<double> warnLimit;  // per source: its limit where the stroke starts (for the message)
+      std::vector<double> redLimit;
+      double warn { 0 };            // the smallest share over the warning sources (0: none)
+      double red { 0 };             // the smallest share over the red sources (0: none)
       QStringList tiers;            // soft to loud
       };
 
@@ -392,6 +399,8 @@ StaffTexts Pass::staffTexts(int staffIdx) const
                         tx.jete.changes.push_back({ tick, v });
                   if ((v = pizzState(text)) >= 0)
                         tx.pizz.changes.push_back({ tick, v });
+                  if (freeBowText(text))
+                        tx.freeBow.push_back(tick);
                   ScordaturaText st;
                   if (scordaturaText(text, &st))
                         tx.scord.push_back({ tick, st });
@@ -485,9 +494,10 @@ static int strokeLastTick(const Chord* last)
 
 //---------------------------------------------------------
 //   bowUse
-//    How much bow a stroke uses: t seconds at a tier with limit L use t / L of a bow (Sevsay p. 10
-//    works his example this way), summed over the stroke against the warn and the red limits;
-//    above 1 = more than one bow. Inside a hairpin the level moves in a straight line from its
+//    How much bow a stroke uses, per source (bowRules): t seconds (or q quarter notes) at a tier with
+//    limit L use t / L of that source's bow (Sevsay p. 10 works his example this way), summed over the
+//    stroke; a source with no limit at a tier adds nothing. warn / red = the smallest share over the
+//    warning / red sources: above 1 = over every one of them. Inside a hairpin the level moves in a straight line from its
 //    start to its target: the first dynamic at or after its end if that lies the right way, else
 //    the start plus the hairpin's own velocity change; a dynamic inside the hairpin takes over.
 //    Cut at every chord, dynamic and hairpin end; a stretch in a hairpin is sampled in 8 parts.
@@ -526,8 +536,14 @@ BowUse Pass::bowUse(const StringInstrument& in, const StateList& dyn, const std:
                     int t0, int t1, const std::vector<int>& cuts) const
       {
       BowUse res;
-      if (!bowLimit(in, "mf").valid)
+      res.rules = bowRules(in);
+      if (!res.rules.valid)
             return res;
+      res.warnUse.assign(res.rules.warn.size(), 0.0);
+      res.redUse.assign(res.rules.red.size(), 0.0);
+      res.warnLimit.assign(res.rules.warn.size(), 0.0);
+      res.redLimit.assign(res.rules.red.size(), 0.0);
+      const double quarterTicks = Fraction(1, 4).ticks();
       std::vector<double> pts = { double(t0), double(t1) };
       std::vector<HairpinSpan> hairpins;
       auto addCut = [&](double t) { if (t > t0 && t < t1) pts.push_back(t); };
@@ -556,19 +572,69 @@ BowUse Pass::bowUse(const StringInstrument& in, const StateList& dyn, const std:
             for (int m = 0; m < parts; ++m) {
                   double s0 = a0 + (a1 - a0) * m / parts, s1 = a0 + (a1 - a0) * (m + 1) / parts;
                   QString tier = dynamicTier(levelAt(dyn, hairpins, (s0 + s1) / 2));
-                  BowLimit bl = bowLimit(in, tier);
-                  double secs = secondsBetween(s0, s1);
+                  double secs = secondsBetween(s0, s1), quarters = (s1 - s0) / quarterTicks;
                   res.secs += secs;
-                  res.warn += secs / bl.warn;
-                  res.red += secs / bl.red;
+                  res.quarters += quarters;
+                  // a source with no limit at this tier adds nothing (a miss, never a false alarm)
+                  double bpm = _score->masterScore()->tempomap()->tempo(int(std::lround((s0 + s1) / 2))) * 60;
+                  auto add = [&](const std::vector<const BowSource*>& srcs, std::vector<double>& use, std::vector<double>& shown) {
+                        for (size_t i = 0; i < srcs.size(); ++i) {
+                              double lim = srcs[i]->limit(tier, bpm);
+                              if (lim > 0) {
+                                    use[i] += (srcs[i]->quarters ? quarters : secs) / lim;
+                                    if (shown[i] == 0)
+                                          shown[i] = lim;
+                                    }
+                              }
+                        };
+                  add(res.rules.warn, res.warnUse, res.warnLimit);
+                  add(res.rules.red, res.redUse, res.redLimit);
                   seen.insert(tier);
                   }
             }
       for (const QString& t : { "pp", "p", "mf", "f", "ff" })
             if (seen.contains(t))
                   res.tiers << t;
+      auto smallest = [](const std::vector<double>& v) { return v.empty() ? 0.0 : *std::min_element(v.begin(), v.end()); };
+      res.warn = smallest(res.warnUse);
+      res.red = smallest(res.redUse);
       res.valid = true;
       return res;
+      }
+
+// "slur 9 s, 18 quarter notes, at p (over Sevsay p. 10: 6 s, and Wagner p. 30: 8 quarter notes)"; a stroke
+// over several tiers: "slur 8 s, 16 quarter notes, p–f (uses 467% of Sevsay p. 10, and 150% of Wagner p. 30)";
+// red: "slur 5 s at p (longer than one bow; Forsyth p. 445: 4 s)"
+static QString bowReason(const BowUse& use, bool red)
+      {
+      const std::vector<const BowSource*>& srcs = red ? use.rules.red : use.rules.warn;
+      const std::vector<double>& shares = red ? use.redUse : use.warnUse;
+      auto num = [](double x) { return QString::number(std::floor(x * 10 + 1e-6 + 0.5) / 10, 'g', 12); };
+      bool anyQuarters = false;
+      for (const BowSource* b : srcs)
+            anyQuarters |= b->quarters;
+      QString r = "slur " + fmtSeconds(use.secs);
+      if (anyQuarters)
+            r += ", " + num(use.quarters) + " quarter notes";
+      QStringList over;
+      if (use.tiers.size() == 1) {
+            r += (anyQuarters ? ", at " : " at ") + use.tiers[0];
+            const std::vector<double>& limits = red ? use.redLimit : use.warnLimit;
+            for (size_t i = 0; i < srcs.size(); ++i) {
+                  const BowSource* b = srcs[i];
+                  double lim = limits[i];
+                  over << QString(b->cite) + ": " + (b->quarters ? num(lim) + " quarter notes" : fmtSeconds(lim));
+                  }
+            }
+      else {
+            r += QString(", ") + use.tiers.front() + QChar(0x2013) + use.tiers.back();
+            for (size_t i = 0; i < srcs.size(); ++i)
+                  over << QString("%1% of %2").arg(qRound(shares[i] * 100)).arg(srcs[i]->cite);
+            }
+      QString list = (use.tiers.size() == 1 ? "" : "uses ") + (over.size() == 2 ? over[0] + ", and " + over[1] : over.join(", "));
+      if (red)
+            return r + " (longer than one bow; " + list + ")";
+      return r + (use.tiers.size() == 1 ? " (over " : " (") + list + ")";
       }
 
 void Pass::addRow(int tick, int tickEnd, int track, const QString& staff, const QString& kind, const QString& verdict,
@@ -752,7 +818,7 @@ void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffT
                   for (const Chord* c : chords) {
                         tremolo |= c->tremolo() != nullptr;
                         BowUse one = bowUse(in, tx.dyn, allHairpins, c->tick().ticks(), strokeEnd(c), {});
-                        phrase |= one.valid && one.red > 1 + 1e-9;
+                        phrase |= one.valid && std::max(one.warn, one.red) > 1 + 1e-9;
                         }
                   if (tremolo)
                         continue;
@@ -782,17 +848,10 @@ void Pass::checkSlurs(int st, Part* part, const QString& staffName, const StaffT
                         for (const Chord* c : chords)
                               cuts.push_back(c->tick().ticks());
                         BowUse use = bowUse(in, tx.dyn, allHairpins, from, endTick, cuts);
-                        if (use.valid && !phrase && use.warn > 1 + 1e-9) {
+                        bool freeBow = std::any_of(tx.freeBow.begin(), tx.freeBow.end(), [&](int t) { return t >= from && t <= to; });
+                        if (use.valid && !phrase && !freeBow && use.warn > 1 + 1e-9) {
                               bool red = use.red > 1 + 1e-9;
-                              if (use.tiers.size() == 1) {
-                                    BowLimit bl = bowLimit(in, use.tiers[0]);
-                                    timedReason = "slur " + fmtSeconds(use.secs) + " at " + use.tiers[0] + " ("
-                                                  + (red ? "longest one bow can last " + fmtSeconds(bl.red) : "max " + fmtSeconds(bl.warn)) + ")";
-                                    }
-                              else
-                                    timedReason = "slur " + fmtSeconds(use.secs) + ", " + use.tiers.front() + QChar(0x2013) + use.tiers.back()
-                                                  + QString(" (needs %1% of ").arg(qRound((red ? use.red : use.warn) * 100))
-                                                  + (red ? "the longest bow" : "a comfortable bow") + ")";
+                              timedReason = bowReason(use, red);
                               timedVerdict = red ? "impossible" : "outOfReach";
                               }
                         if (groupVerdict.isEmpty() && timedVerdict.isEmpty())

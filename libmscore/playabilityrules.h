@@ -183,19 +183,39 @@ QString inspectNatural(const StringInstrument& in, const std::vector<HarmonicNot
 //   Bowing (S10–S13)
 //---------------------------------------------------------
 
-// S11: the longest slur, in seconds, on one bow, per dynamic tier (violin; viola as violin, cello
-// and bass × 0.6). Sevsay p. 10's scale 12 / 6 / 3 / 1 / 0.5 s for pp … ff; warn / red values set
-// inside the range the other sources give: pp 12 / 15 (Widor p. 163, Forsyth p. 343 ≈ 10–13 s;
-// Askenfelt 1986 p. 1011, Flesch p. 64 ≈ 15 s), p 6 / 12 (Wagner p. 30), mf 3 / 6 (Russo), f 2.5 /
-// 4.5 (Forsyth p. 390, Schoonderwaldt 2009 p. 2715, Wagner p. 30), ff 1.5 / 3 (Sevsay, Russo).
-// Cello and bass × 0.6 derived from Forsyth p. 445 (bass bow changed every 3–4 s at p). Without any
-// dynamic a passage counts as mp (velocity 64): MS4's "natural" level, owner 2026-10-11.
-struct BowLimit {
-      bool valid { false };
-      double warn { 0 };
-      double red { 0 };
+// S11: how long one slur may last on one bow (decision: orchestration-checker/research/bow-table-decision.md).
+// Each source keeps its own unit: seconds, or quarter notes at the score's tempo. A slur is dark yellow
+// only when it is longer than EVERY warning source's limit (a warning never falls on what another source
+// shows as normal), red only when longer than every red source's limit (a source that calls it impossible).
+//   Violin and viola, section: Sevsay p. 10 (12 / 6 / 3 / 1 / 0.5 s for pp p mf f ff) and Wagner p. 30
+//     (violins and violas; his safe cases, not ceilings): up to a moderate andante "possible in two bows"
+//     over 4 bars (8 quarters) at pp–mf, "a bow for each measure" (4 quarters) at f, ff; "in faster tempos
+//     these four measures could be played in one bow" (16 quarters) at pp–mf, "in rapid tempos two bows"
+//     (8 quarters) at f, ff. Faster = above ♩ = 72, his printed andante (Fig. I-15): our reading. Never red.
+//     Forsyth p. 343 and Widor p. 163 (4 bars at pp in "moderato") print no tempo and agree with Wagner.
+//   Violin and viola, single player: Sevsay p. 10 and 15 s at every tier (Flesch p. 64: a spun note
+//     "varies between 1 and 15 seconds"; Askenfelt 1986 p. 1011: slowest steady bow about 15 s). Never red.
+//   Viola as violin: Sevsay and Forsyth say shorter but print no number (a miss, never a false alarm).
+//   Cello: not timed (no source prints a cello number; Widor p. 181 is about strokes, not lengths).
+//   Double bass, section: red over 4 s at p (mp), mf, f (Forsyth p. 445: "even in the p the bow must be
+//     changed every three or four seconds"; p. 446: at f and mf "still more pressing"); pp, ff (no source
+//     brackets them) and a single bass player: not timed.
+//   A slur whose one note alone is over the limits is a phrase slur (the bow changes inside): not timed.
+// Without any dynamic a passage counts as mp (velocity 64, the p tier): MS4's "natural" level, owner 2026-10-11.
+struct BowSource {
+      const char* cite;                         // "Sevsay p. 10"
+      bool quarters;                            // the limit counts quarter notes, not seconds
+      std::map<QString, double> perTier;        // a tier the source does not name: no limit from it there
+      double fastAbove { 0 };                   // > 0: above this many quarters a minute, fastTier instead
+      std::map<QString, double> fastTier;
+      double limit(const QString& tier, double bpm) const;   // 0: none
       };
-BowLimit bowLimit(const StringInstrument& in, const QString& tier);
+struct BowRules {
+      bool valid { false };                     // this instrument's slurs are timed at all
+      std::vector<const BowSource*> warn;       // over every one of these: dark yellow
+      std::vector<const BowSource*> red;        // over every one of these: red (empty: never red)
+      };
+BowRules bowRules(const StringInstrument& in);
 // No dynamic in force = MS4's "natural" level (Ms4::NATURAL, 0.5 dB above mp), counted as mp:
 // MuseScore's mp velocity 64 (owner decision 2026-10-11). Every level lookup falls back to it.
 constexpr int NO_DYNAMIC_VELOCITY = 64;
@@ -245,6 +265,9 @@ QString fmtSeconds(double x);
 //---------------------------------------------------------
 
 int jeteState(const QString& text);
+// "change bow(s) at will", "free bowing", "bowing ad lib.", "staggered bowing": the players change bow where
+// they like (Adler p. 87, for long bass slurs; Forsyth p. 445 "at discretion"), so a slur over it is not timed
+bool freeBowText(const QString& text);
 
 //---------------------------------------------------------
 //   Scordatura: the strings' tuning. A part's String Data (Staff/Part Properties › Edit String

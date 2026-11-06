@@ -4,10 +4,11 @@
 
 falsealarm-strings.mscx (bar: what it holds, W = a row is expected)
   Violin     1-2   eight slurred quarters under two tempo texts at one tick (30 and 240 qpm): the last one plays, 2 s, clean
-             3-6   slur A4 .. B4 held over three tied wholes (7.5 s alone): a phrase slur, clean
-             7-8   slur over two wholes with single-note tremolos: clean
-             9-10  the same wholes without tremolos W (4 s at mf)
-             11    A4 A4 B4 slurred W (C3 control)
+             3-6   ♩ = 30: slur A4 .. B4 held over three tied wholes (30 s alone, over a single player's 15 s): a phrase
+                   slur, clean
+             7-8   slur over two wholes with single-note tremolos (16 s): clean
+             9-10  the same wholes without tremolos W (16 s at mf: over Sevsay's 3 s and 15 s)
+             11    ♩ = 120 again; A4 A4 B4 slurred W (C3 control)
              12    A4 staccato, A4 B4 slurred: clean       13  inner slur begins at the repeated B4: clean
              14    inner slur ends on the B4 before the repeated B4: clean
              15    grace note before the repeated A4: clean   16  after-grace on the first A4: clean
@@ -149,14 +150,14 @@ violin = [
     measure(head('G') + tempo('Largo', 0.5) + tempo('Presto', 4) + q('A4', slur_start(1, '3/4')) + q('B4') + q('C5') + q('D5')),
     measure(q('A4') + q('B4') + q('C5') + q('D5', slur_end(-1, '-3/4'))),
 ]
-# 3-6: A4 quarter, B4 dotted half tied over three wholes; the slur spans all of it (8 s)
+# 3-6: A4 quarter, B4 dotted half tied over three wholes; the slur spans all of it (32 s at ♩ = 30)
 violin += [
-    measure(tempo('Tempo', 2) + q('A4', slur_start(3)) + '<Chord><durationType>half</durationType><dots>1</dots>' + note('B4', tie_start(1, '-1/4')) + '</Chord>'),
+    measure(tempo('Adagio', 0.5) + q('A4', slur_start(3)) + '<Chord><durationType>half</durationType><dots>1</dots>' + note('B4', tie_start(1, '-1/4')) + '</Chord>'),
     measure(w(['B4'], '', [tie_end(-1, '1/4') + tie_start(1)])),
     measure(w(['B4'], '', [tie_end(-1) + tie_start(1)])),
     measure(w(['B4'], slur_end(-3), [tie_end(-1)])),
 ]
-# 7-8: two wholes with single-note tremolos under a slur (4 s)
+# 7-8: two wholes with single-note tremolos under a slur (16 s)
 violin += [
     measure(w(['A4'], slur_start(1) + TREM)),
     measure(w(['B4'], slur_end(-1) + TREM)),
@@ -167,7 +168,7 @@ violin += [
     measure(w(['B4'], slur_end(-1))),
 ]
 # 11: C3 control
-violin.append(measure(q('A4', slur_start(frac='1/2')) + q('A4') + q('B4', slur_end(frac='-1/2')) + rest('quarter')))
+violin.append(measure(tempo('Tempo', 2) + q('A4', slur_start(frac='1/2')) + q('A4') + q('B4', slur_end(frac='-1/2')) + rest('quarter')))
 # 12: the previous chord has a staccato
 violin.append(measure(q('A4', slur_start(frac='1/2') + STAC) + q('A4') + q('B4', slur_end(frac='-1/2')) + rest('quarter')))
 # 13: an inner slur begins at the repeated B4 (outer A4 .. C5)

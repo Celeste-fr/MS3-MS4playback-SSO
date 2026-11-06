@@ -724,19 +724,34 @@ QString inspectNatural(const StringInstrument& in, const std::vector<HarmonicNot
 //   bowing
 //---------------------------------------------------------
 
-BowLimit bowLimit(const StringInstrument& in, const QString& tier)
+double BowSource::limit(const QString& tier, double bpm) const
       {
-      static const std::map<QString, std::pair<double, double>> BOW_SECONDS = {
-            { "pp", { 12, 15 } }, { "p", { 6, 12 } }, { "mf", { 3, 6 } }, { "f", { 2.5, 4.5 } }, { "ff", { 1.5, 3 } } };
-      BowLimit b;
-      auto t = BOW_SECONDS.find(tier);
-      if (!in.valid() || t == BOW_SECONDS.end())
-            return b;
-      double f = (in.name == "Cello" || in.name == "Double bass") ? 0.6 : 1.0;
-      b.valid = true;
-      b.warn = t->second.first * f;
-      b.red = t->second.second * f;
-      return b;
+      const std::map<QString, double>& m = fastAbove > 0 && bpm > fastAbove + 1e-9 ? fastTier : perTier;
+      auto t = m.find(tier);
+      return t == m.end() ? 0.0 : t->second;
+      }
+
+BowRules bowRules(const StringInstrument& in)
+      {
+      // the sources and their wording: playabilityrules.h above BowSource
+      static const BowSource SEVSAY = { "Sevsay p. 10", false, { { "pp", 12 }, { "p", 6 }, { "mf", 3 }, { "f", 1 }, { "ff", 0.5 } } };
+      static const BowSource WAGNER = { "Wagner p. 30", true, { { "pp", 8 }, { "p", 8 }, { "mf", 8 }, { "f", 4 }, { "ff", 4 } },
+                                        72, { { "pp", 16 }, { "p", 16 }, { "mf", 16 }, { "f", 8 }, { "ff", 8 } } };
+      static const BowSource FLESCH = { "Flesch p. 64", false, { { "pp", 15 }, { "p", 15 }, { "mf", 15 }, { "f", 15 }, { "ff", 15 } } };
+      static const BowSource FORSYTH = { "Forsyth p. 445", false, { { "p", 4 }, { "mf", 4 }, { "f", 4 } } };
+      BowRules r;
+      if (!in.valid())
+            return r;
+      if (in.name == "Violin" || in.name == "Viola") {
+            r.valid = true;
+            r.warn = { &SEVSAY, in.section ? &WAGNER : &FLESCH };
+            }
+      else if (in.name == "Double bass" && in.section) {
+            r.valid = true;
+            r.warn = { &FORSYTH };
+            r.red = { &FORSYTH };
+            }
+      return r;
       }
 
 int dynamicVelocity(const QString& text, int elVelocity, int elChange)
@@ -863,6 +878,15 @@ int jeteState(const QString& text)
       if (OFF.match(text).hasMatch())
             return 0;
       return -1;
+      }
+
+bool freeBowText(const QString& text)
+      {
+      static const QRegularExpression FREE(QString::fromUtf8(
+            "(change|changing)\\s+(the\\s+)?bows?\\s+(at\\s+will|freely|at\\s+discretion|ad\\s*lib)|bows?\\s+changes?\\s+(at\\s+will|freely|ad\\s*lib)|"
+            "free\\s+bow(ing)?|bowing\\s+ad\\s*lib|(staggered|stagger)\\s+bow(ing|s)?|bow\\s+at\\s+will"),
+            QRegularExpression::CaseInsensitiveOption);
+      return FREE.match(text).hasMatch();
       }
 
 int pizzState(const QString& text)

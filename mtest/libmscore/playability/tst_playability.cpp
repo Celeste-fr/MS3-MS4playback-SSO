@@ -100,6 +100,7 @@ class TestPlayability : public QObject, public MTest
       void r1r4OnOldFixtures();
       void clefs();
       void tempoMarks();
+      void bowLengths();
       void slurRepeats();
       void c1c3OnOldFixtures();
       void falseAlarms();
@@ -2128,6 +2129,76 @@ void TestPlayability::tempoMarks()
       delete score;
       }
 
+//---------------------------------------------------------
+//   bowLengths: S11's sourced limits (playabilityrules.h above BowSource); bowlen-tests.mscx from
+//   tools/playability/gen_bowlen_tests.py, whose docstring has the arithmetic of every bar
+//---------------------------------------------------------
+
+void TestPlayability::bowLengths()
+      {
+      using namespace Playability;
+      MasterScore* score = readScore(DIR + "bowlen-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      const QString E = QString(QChar(0x2026)), D = QString(QChar(0x2013));
+      auto notes = [&](const char* a, const char* b, int n) { return QString("%1 %2 %3 (%4 notes)").arg(a, E, b).arg(n); };
+      auto vln = [&](int bar, const char* staff, const QString& reason, int n) {
+            return rowText(bar, staff, "outOfReach", reason, notes("A4", "B4", n)); };
+      auto cb = [&](int bar, const QString& reason, int n, bool q3 = false) {
+            return rowText(bar, "Contrabasses", "impossible", reason, q3 ? notes("A2", "A2", 3) : notes("A2", "B2", n)); };
+      const QString sevW = " (over Sevsay p. 10: %1 s, and Wagner p. 30: %2 quarter notes)";
+      const QString sevF = " (over Sevsay p. 10: %1 s, and Flesch p. 64: 15 s)";
+      const QString fors = " (longer than one bow; Forsyth p. 445: 4 s)";
+      QStringList want = {
+            // section violins: over Sevsay AND Wagner (8 / 4 quarters at or under 72 bpm, 16 / 8 above)
+            vln(4, "Violins", "slur 22.2 s, 20 quarter notes, at p" + sevW.arg(6).arg(8), 10),
+            vln(9, "Violins", "slur 17.8 s, 16 quarter notes, at p" + sevW.arg(6).arg(8), 8),
+            vln(16, "Violins", "slur 6 s, 12 quarter notes, at f" + sevW.arg(1).arg(8), 6),
+            vln(28, "Violins", "slur 8 s, 16 quarter notes, p" + D + "f (uses 467% of Sevsay p. 10, and 150% of Wagner p. 30)", 8),
+            vln(33, "Violins", "slur 24 s, 16 quarter notes, at pp" + sevW.arg(12).arg(8), 8),
+            vln(38, "Violins", "slur 8.9 s, 8 quarter notes, at f" + sevW.arg(1).arg(4), 4),
+            // a crescendo hairpin p -> f over bar 50 (the generator's docstring has the shares)
+            vln(50, "Violins", "slur 8 s, 8 quarter notes, p" + D + "f (uses 550% of Sevsay p. 10, and 159% of Wagner p. 30)", 4),
+            // the soloist: over Sevsay AND 15 s
+            vln(4, "Solo Violin", "slur 22.2 s at p" + sevF.arg(6), 10),
+            vln(9, "Solo Violin", "slur 17.8 s at p" + sevF.arg(6), 8),
+            vln(33, "Solo Violin", "slur 24 s at pp" + sevF.arg(12), 8),
+            // section basses: red over 4 s at p, mf, f; none at pp, ff; the celli and the single bass never
+            cb(1, "slur 8.9 s at p" + fors, 4),
+            cb(4, "slur 22.2 s at p" + fors, 10),
+            cb(9, "slur 17.8 s at p" + fors, 8),
+            cb(14, "slur 5.5 s at f" + fors, 2),
+            cb(16, "slur 6 s at f" + fors, 6),
+            cb(28, "slur 8 s, p" + D + "f (longer than one bow; uses 200% of Forsyth p. 445)", 8),
+            cb(38, "slur 8.9 s at f" + fors, 4),
+            cb(41, "slur 4.5 s at p" + fors, 3, true),
+            cb(50, "slur 8 s, p" + D + "f (longer than one bow; uses 200% of Forsyth p. 445)", 4),
+            };
+      want.sort();
+      QStringList got;
+      for (const PlayabilityRow& row : r.rows)
+            if (row.kind == "slur" || row.kind == "group")
+                  got << rowText(row.bar, row.staff, row.verdict, row.reason, row.notes);
+      got.sort();
+      compare(got, want);
+
+      // the rules themselves
+      QCOMPARE(bowRules(lookup("strings.cello", "Violoncelli", 48)).valid, false);
+      QCOMPARE(bowRules(lookup("strings.contrabass", "Contrabass", 43)).valid, false);
+      BowRules vs = bowRules(lookup("strings.viola", "Violas", 48));
+      QVERIFY(vs.valid && vs.warn.size() == 2 && vs.red.empty());
+      QCOMPARE(vs.warn[1]->limit("p", 72), 8.0);           // ♩ = 72 is still Wagner's andante
+      QCOMPARE(vs.warn[1]->limit("p", 73), 16.0);
+      QCOMPARE(vs.warn[1]->limit("ff", 40), 4.0);
+      BowRules cbs = bowRules(lookup("strings.contrabass", "Contrabasses", 48));
+      QCOMPARE(cbs.warn[0]->limit("pp", 60), 0.0);         // no pp / ff limit for the basses
+      QCOMPARE(cbs.warn[0]->limit("ff", 60), 0.0);
+      QVERIFY(freeBowText("Change bows at will"));
+      QVERIFY(freeBowText("free bowing"));
+      QVERIFY(!freeBowText("bowing as marked"));
+      delete score;
+      }
+
 void TestPlayability::slurRepeats()
       {
       MasterScore* score = readScore(DIR + "c1c3-tests.mscx");
@@ -2212,7 +2283,7 @@ void TestPlayability::falseAlarms()
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
       QStringList want = {
-            // a slur over two untremolo'd wholes (4 s at mf): the control of the tremolo slur
+            // a slur over two untremolo'd wholes (16 s at mf, a single player): the control of the tremolo slur
             "9 | Violin | slur | outOfReach | A4 \u2026 B4 (2 notes)",
             // A4 A4 B4, and E4+B4 E4+B4 (every note repeats); the staccato, nested-slur, grace-note and common-tone bars are clean
             "11 | Violin | slurRepeat | notation | A4",
@@ -2352,9 +2423,8 @@ void TestPlayability::noDynamic()
             // the oboe: entrance warning, and the unmarked Bb3 is judged at mp (W2-OB-LOW-A is the p/mp rule)
             rowText(1, "Oboe", "notation", entrance, "Bb3"),
             rowText(1, "Oboe", "risky", QString(w->text) + " (" + w->source + ")", "Bb3"),
-            // the violin: entrance warning; the 7 s slur is at the p tier (max 6 s; at mf it would be red)
+            // the violin: entrance warning; its 7 s slur at the p tier is under a single player's 15 s (S11)
             rowText(1, "Violin", "notation", entrance, "A4"),
-            rowText(1, "Violin", "outOfReach", "slur 7 s at p (max 6 s)", "A4 … A4 (3 notes)"),
             // the flute: its dynamic comes after the first note
             rowText(1, "Flute", "notation", entrance, "C5"),
             // C3: the violin's three slurred A4s

@@ -464,4 +464,25 @@ gave these fixes; tests `falseAlarms` (falsealarm-strings/-keys/-bars.mscx from 
   2026-10-13).
 - S10: a section's slur counts as slurred staccato only when every note under it is dotted (owner 2026-10-13); one
   dotted note at the end of a legato slur is a lifted ending, not staccato.
-- Left as it was (owner decision pending, sources being searched): the x0.6 bow factor of cello and bass.
+- (The x0.6 bow factor of cello and bass, left here pending sources, went with the sourced S11 below.)
+
+## S11 slur lengths from the sources (2026-11-06)
+
+The owner: "yes obv" to rebuilding S11 from sources under the standing rules (no made-up numbers; no printed number,
+no check; red only where a source says impossible; a warning never on what another source shows as normal; section and
+single player apart). Evidence and the critics' rounds: `~/MuseScore/orchestration-checker/research/bow-table-decision.md`,
+`violin-bow-audit.md`, `cello-bow-notes.md`. Design in `playabilityrules.h` above `BowSource`; tests `bowLengths`
+(`bowlen-tests.mscx` from `tools/playability/gen_bowlen_tests.py`, every bar's arithmetic in its docstring).
+- Each source keeps its unit (seconds, or quarter notes at the score's tempo); a stroke over several dynamics adds up
+  its share of each source's limit. Dark yellow only when over EVERY warning source, red only over every red source.
+- Violin and viola, section: Sevsay p. 10 (12 / 6 / 3 / 1 / 0.5 s at pp p mf f ff) and Wagner p. 30 (his safe cases:
+  8 quarters at pp-mf, 4 at f/ff up to ♩ = 72; 16 / 8 faster; the ♩ = 72 gate is our reading of "a moderate andante"
+  from his Fig. I-15). Never red.
+- Violin and viola, single player: Sevsay p. 10 and 15 s (Flesch p. 64, Askenfelt 1986 p. 1011); in practice "over 15 s".
+  Never red (Flesch: longer is "used less in playing", not impossible).
+- Cello: not timed (no source prints a cello number; Wagner's counts are for violins and violas). Double bass section:
+  red over 4 s at p, mp, mf, f (Forsyth pp. 445-446); pp and ff not timed; a single bass not timed.
+- Not timed either: a slur with a staff text "change bow(s) at will", "free bowing", "bowing ad lib.", "staggered
+  bowing" inside it (Adler p. 87); a phrase slur (one note alone over the limits); a tremolo slur.
+- `falsealarm-strings.mscx` bars 3-10 now play at ♩ = 30 so the phrase-slur and tremolo exemptions are tested against
+  slurs that would otherwise be marked.
