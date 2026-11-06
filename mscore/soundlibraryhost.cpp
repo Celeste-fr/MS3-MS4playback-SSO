@@ -4324,7 +4324,8 @@ SoundLibraryOptions::SoundLibraryOptions(MasterScore* score, QWidget* parent)
             }
 
       // every playback adjustment (libmscore/playbacksettings.h): default, playback.ini, this score
-      QGroupBox* adjustBox = new QGroupBox(tr("Playback adjustments (this score over playback.ini over the defaults)"), this);
+      QGroupBox* adjustBox = new QGroupBox(tr("Playback adjustments"), this);
+      adjustBox->setToolTip(tr("A value set for this score is used first, then your own settings, then the defaults"));
       QVBoxLayout* adjust = new QVBoxLayout(adjustBox);
       PlaybackSettingsWidget* adjustments = new PlaybackSettingsWidget(score, _library,
             [this](const char* tag, const QString& value) { setMetaTag(tag, value); }, adjustBox);
