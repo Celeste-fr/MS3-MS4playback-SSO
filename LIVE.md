@@ -536,6 +536,11 @@ in a section collapsible at the same time".
   its old volume to the Mixer's (a fader the owner moved is kept, reported). Tests: `tst_liveequivalence` `liveGainStage`,
   `liveSectionBalance`, `liveRealRange`, `liveMicCompensation` (fader × Utility = MuseScore's slot gain), `tst_soundlibrary`
   `gainStage`.
+- **Leading lane** (branch `leading-lane`, 2026-11-05; `[levels] leading`, 0 by default and in both presets;
+  docs/PLAYBACK_SETTINGS.md › Leading lane): nothing of its own in Live. With the setting 1 a leading part's L is in its
+  Kontakts' gain stage (the Utility above) and every note not leading plays L lower by CC11 (Live's clips, the plain set's
+  CC11 lanes), as MuseScore plays it (`tst_liveequivalence::leadingLive`; MIDI out: CC7). The lane itself is MuseScore's:
+  not written into the set, not read back (its target is no controller). Untried in real Live.
 - **Low cut: MuseScore's EQ Eight on the string sections** (branch `lowcut-live`, 2026-10-31; `[levels] lowCut`,
   docs/PLAYBACK_SETTINGS.md › Low cut; **opens and saves in real Live, response confirmed to about 1-2 dB, not to the 0.5 / 1.5 dB tolerance**: Checked in real Live › Low cut). Where MuseScore plays a patch through its 4th-order
   Butterworth high-pass (the map's `<Instrument lowCut>`: SSO's five string sections, Violins 150 Hz, Violas 100, Celli

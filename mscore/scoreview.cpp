@@ -28,6 +28,8 @@
 #include "scoreview.h"
 #include "soundlibraryhost.h"
 #include "libmscore/lagprobe.h"
+#include "libmscore/leadinglane.h"
+#include "libmscore/automation.h"
 #include "seq.h"
 #include "splitstaff.h"
 #include "textcursor.h"
@@ -1156,6 +1158,41 @@ void ScoreView::drawBackground(QPainter* p, const QRectF& r) const
       }
 
 //---------------------------------------------------------
+//   paintLeadingBands
+//    Leading bands (leadinglane.h): wherever a part's Leading lane is On, its staves get a slightly darker band behind
+//    the music (a lighter one on a dark paper), its top and bottom edges a little stronger, as MuseScore marks a range;
+//    drawn before the elements, so notes, ledger lines and the selection stay on top; never printed or exported (those
+//    don't paint through the view, and printing() is checked)
+//---------------------------------------------------------
+
+void ScoreView::paintLeadingBands(QPainter& p, Page* page)
+      {
+      // (keyed by the score and its parts too: the bands hold part pointers)
+      const MasterScore* ms = _score->masterScore();
+      QString tag = ms->metaTag(Automation::metaTag);
+      if (!tag.isEmpty()) {
+            tag += QString("|%1").arg(quintptr(ms));
+            for (const Part* pt : ms->parts())
+                  tag += QString(",%1").arg(quintptr(pt));
+            }
+      if (tag != _leadingTag) {
+            _leadingTag = tag;
+            _leadingBands = LeadingLane::bands(_score->masterScore());
+            }
+      if (_leadingBands.empty())
+            return;
+      QColor paper = _fgColor;
+      if (_fgPixmap && !_fgPixmap->isNull()) {          // (a paper texture: its average colour, once per texture)
+            if (_fgPixmap->cacheKey() != _leadingPaperKey) {
+                  _leadingPaperKey = _fgPixmap->cacheKey();
+                  _leadingPaper = _fgPixmap->toImage().scaled(1, 1, Qt::IgnoreAspectRatio, Qt::SmoothTransformation).pixelColor(0, 0);
+                  }
+            paper = _leadingPaper;
+            }
+      LeadingLane::paintBands(p, LeadingLane::bandRects(_score, page, _leadingBands), paper);
+      }
+
+//---------------------------------------------------------
 //   paintPageBorder
 //---------------------------------------------------------
 
@@ -1342,6 +1379,8 @@ void ScoreView::paint(const QRect& r, QPainter& p)
 #endif
                   // ------------
 
+                  if (!score()->printing())
+                        paintLeadingBands(p, page);
                   drawElements(p, ell, editElement);
                   }
             }
@@ -1382,6 +1421,8 @@ void ScoreView::paint(const QRect& r, QPainter& p)
 #endif
                   // ------------
 
+                  if (!score()->printing())
+                        paintLeadingBands(p, page);
                   drawElements(p, ell, editElement);
 
                   if (!score()->printing()) {

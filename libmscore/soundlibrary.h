@@ -465,6 +465,10 @@ struct LibInstrument {
       // So its notes are spread over voices (lanes(): a chord's or an overlapping voice's extra notes each on a copy of
       // the patch of their own, "voice lanes"; the owner, 2026-10-20: "of course it should play every note")
       bool mono { false };
+      // [levels] leading (leadinglane.h): how many dB a note of this patch plays louder while its part's Leading lane is On
+      // (<Instrument leadingLevel>; NaN: the setting [levels] leadingDb). No map has one yet: pending measurements of
+      // several orchestras
+      double leadingLevel { NAN };
       // [slurs] speedFromWritten (the owner approved, 2026-10-17): the controller this patch's script writes at each legato
       // note-on from the note-on spacing it measures (SSO's Performance: "Leg. Speed CC", CC119 = 126 - floor(ms since the
       // voice's previous note-on x 127 / 1000); the groups pick RUNS / RUNS RT / FAST LEGATO ... by it) and the script value

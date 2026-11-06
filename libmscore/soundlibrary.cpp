@@ -1161,6 +1161,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.keyScan = a.value("keyScan").toString() == "1";
                   li.bendCents = std::max(0.0, a.value("bend").toDouble());
                   li.mono = a.value("mono").toString() == "1";
+                  if (a.hasAttribute("leadingLevel")) {
+                        bool ok = false;
+                        const double v = a.value("leadingLevel").toDouble(&ok);
+                        if (ok && std::isfinite(v))
+                              li.leadingLevel = std::max(0.0, std::min(24.0, v));
+                        }
                   if (a.hasAttribute("keyShift"))
                         li.keyShift = qBound(-48, a.value("keyShift").toInt(), 48);
                   if (a.hasAttribute("maxVelocity"))

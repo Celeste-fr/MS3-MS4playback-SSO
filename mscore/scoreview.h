@@ -25,12 +25,17 @@
 #include "libmscore/pos.h"
 #include "libmscore/property.h"
 
+#include <map>
+#include <utility>
+#include <vector>
+
 namespace Ms {
 
 class ChordRest;
 class Rest;
 class Element;
 class Page;
+class Part;
 class XmlWriter;
 class Note;
 class Lasso;
@@ -327,6 +332,13 @@ class ScoreView : public QWidget, public MuseScoreView {
       void genPropertyMenuText(Element* e, QMenu* popup);
       void elementPropertyAction(const QString&, Element* e);
       void paintPageBorder(QPainter& p, Page* page);
+      // the Leading lanes' bands behind the music (leadinglane.h; view only): the page's, in page coordinates; the bands
+      // cached by the metaTag's text
+      void paintLeadingBands(QPainter& p, Page* page);
+      QString _leadingTag;
+      std::map<const Part*, std::vector<std::pair<int, int>>> _leadingBands;
+      qint64 _leadingPaperKey { 0 };
+      QColor _leadingPaper;
       bool dropCanvas(Element*);
       void editCmd(const QString&);
       void setLoopCursor(PositionCursor* curLoop, const Fraction& tick, bool isInPos);

@@ -37,6 +37,9 @@
 #include "libmscore/part.h"
 #include "libmscore/automation.h"
 #include "libmscore/enginelane.h"
+#include "libmscore/leadinglane.h"
+#include "libmscore/page.h"
+#include "libmscore/system.h"
 #include "libmscore/partcontrollers.h"
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
@@ -204,6 +207,8 @@ class TestSoundLibrary : public QObject, public MTest
       void chunkEndLevels();
       void chunkedEqualsWhole();
       void engineLane();
+      void leadingLane();
+      void leadingLevels();
       void startLead();
       void evenLevelsGlide();
       void evenLevelsPlanted();
@@ -1995,7 +2000,7 @@ void TestSoundLibrary::playbackPresets()
       // (byPitch, missing: added under the section's header)
       // (and [levels] calibrated, missing: the section added at the end; context after it, under the header)
       const QString withPitch = QString(text).replace("[shorts]\n", "[shorts]\nstaccatoLength=%11\n").replace("[heldNotes]\n", "[heldNotes]\nbyPitch=%2\n").replace("early=30", "early=%1")
-                                + "\n[levels]\nlowCut=%7\nevenKeys=%6\nattackLevels=%7\ntransitionLevels=%7\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nrunBends=%6\nmicrotoneBends=%10\nfastTransitions=%6\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=%6\n";
+                                + "\n[levels]\nleading=0\nlowCut=%7\nevenKeys=%6\nattackLevels=%7\ntransitionLevels=%7\ndivisi=%6\nmicCompensation=%6\nevenLevels=%6\nrealRange=%7\nsectionBalance=%7\ncontext=%6\nhallGuard=0\ncalibrated=%3\n\n[slurs]\nplainAuto=%8\nplainAccents=%9\nrunBends=%6\nmicrotoneBends=%10\nfastTransitions=%6\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=%8\ntransitionsEarly=%5\nsmoothStart=%5\ntransitions=%5\nperformance=%5\nquickLevel=1\nquick=%4\n\n[notes]\ntransportReset=%6\n";
       QCOMPARE(out, withPitch.arg(100).arg(0).arg(2).arg(2).arg(1).arg(1).arg(2).arg(1).arg(2).arg(3).arg(1));
       // (Library default leaves quickLevel as it is: quick 0 swaps nothing)
       // (Library default also sets [guitar]'s three: off; Recommended leaves them, the owner decides)
@@ -2004,15 +2009,15 @@ void TestSoundLibrary::playbackPresets()
       // a missing key: added under its section; the rest unchanged
       const QString noKey = "; c\n[heldNotes]\n; early note\n\n[shorts]\nstaccato=44\n";
       QCOMPARE(Playback::applyPresetToText(noKey, *lib),
-               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nlowCut=0\nevenKeys=0\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAuto=0\nplainAccents=0\nrunBends=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
+               QString("; c\n[heldNotes]\nearly=0\n; early note\n\n[shorts]\nstaccatoLength=0\nstaccato=44\n\n[levels]\nleading=0\nlowCut=0\nevenKeys=0\nattackLevels=0\ntransitionLevels=0\ndivisi=0\nmicCompensation=0\nevenLevels=0\nrealRange=0\nsectionBalance=0\ncontext=0\nhallGuard=0\ncalibrated=0\n\n[slurs]\nplainAuto=0\nplainAccents=0\nrunBends=0\nmicrotoneBends=0\nfastTransitions=0\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=0\ntransitionsEarly=0\nsmoothStart=0\ntransitions=0\nperformance=0\nquick=0\n\n[notes]\ntransportReset=0\n") + guitarOff);
       // a missing section: added at the end
       const QString noSection = "[shorts]\nstaccato=44";
       QCOMPARE(Playback::applyPresetToText(noSection, *rec),
-               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nlowCut=2\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=1\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n"));
+               QString("[shorts]\nstaccatoLength=1\nstaccato=44\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nleading=0\nlowCut=2\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=1\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n"));
       // another section's key of the same name is not touched
       const QString other = "[x]\nearly=5\n";
       QCOMPARE(Playback::applyPresetToText(other, *rec),
-               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nlowCut=2\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=1\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n\n[shorts]\nstaccatoLength=1\n"));
+               QString("[x]\nearly=5\n\n[heldNotes]\nbyPitch=0\nearly=100\n\n[levels]\nleading=0\nlowCut=2\nevenKeys=1\nattackLevels=2\ntransitionLevels=2\ndivisi=1\nmicCompensation=1\nevenLevels=1\nrealRange=2\nsectionBalance=2\ncontext=1\nhallGuard=0\ncalibrated=2\n\n[slurs]\nplainAuto=1\nplainAccents=2\nrunBends=1\nmicrotoneBends=3\nfastTransitions=1\nfixedTransitions=0\nspeedFromWritten=0\nplainTiming=0\nplainPerformance=1\ntransitionsEarly=1\nsmoothStart=1\ntransitions=1\nperformance=1\nquickLevel=1\nquick=2\n\n[notes]\ntransportReset=1\n\n[shorts]\nstaccatoLength=1\n"));
       // the file: missing starts from the template, then only the key differs
       QTemporaryDir dir;
       QVERIFY(dir.isValid());
@@ -5953,6 +5958,306 @@ void TestSoundLibrary::chunkedEqualsWhole()
             }
       QVERIFY2(split >= 20, qPrintable(QString::number(split)));
       QVERIFY2(lowCutLines > 100, qPrintable(QString::number(lowCutLines)));
+      }
+
+//---------------------------------------------------------
+//   leadingLane
+//    the Leading lane's model (leadinglane.h): points snapped to Off / On steps, On at a tick, its spans (a jump: the later
+//    point; the last span open to the score's end), the metaTag round trip (an empty lane not written: a score without one
+//    keeps no "automation" metaTag; through a save), one undo step per write, bands() per part, and the score view's band
+//    rectangles (bandRects) over the leading part's staves only, page and continuous view, bar lines at bar ticks
+//---------------------------------------------------------
+
+void TestSoundLibrary::leadingLane()
+      {
+      using namespace Automation;
+      Lane l;
+      l.target = LeadingLane::TARGET;
+      l.points = { Point(0, 0.2, Curve::LINEAR), Point(1920, 0.7, Curve::LINEAR), Point(3840, 0.4, Curve::STEP),
+                   Point(5760, 0.9, Curve::STEP), Point(5760, 0.1, Curve::STEP) };
+      LeadingLane::normalize(l);
+      for (const Point& p : l.points) {
+            QVERIFY(p.value == 0.0 || p.value == 1.0);
+            QVERIFY(p.curve == Curve::STEP);
+            }
+      QVERIFY(!LeadingLane::on(l, 0));
+      QVERIFY(!LeadingLane::on(l, 1919));
+      QVERIFY(LeadingLane::on(l, 1920));
+      QVERIFY(LeadingLane::on(l, 3839));
+      QVERIFY(!LeadingLane::on(l, 3840));
+      QVERIFY(!LeadingLane::on(l, 6000));       // (the jump at 5760: the later point, Off)
+      QCOMPARE(LeadingLane::spans(l, 7680), (std::vector<std::pair<int, int>>({ { 1920, 3840 } })));
+      Lane open;
+      open.target = LeadingLane::TARGET;
+      open.points = { Point(960, 1, Curve::STEP), Point(1920, 1, Curve::STEP), Point(2880, 0, Curve::STEP), Point(4800, 1, Curve::STEP) };
+      QCOMPARE(LeadingLane::spans(open, 7680), (std::vector<std::pair<int, int>>({ { 960, 2880 }, { 4800, 7680 } })));
+      Lane before;                              // (before the first point: not leading)
+      QVERIFY(!LeadingLane::on(before, 0));
+      QVERIFY(LeadingLane::spans(before, 7680).empty());
+
+      MasterScore* score = readScore(DIR + "leading.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      QCOMPARE(score->parts().size(), 2);
+      Part* violin = score->parts()[0];
+      Part* cello = score->parts()[1];
+      const int bar = 4 * DIVISION;
+      QVERIFY(score->metaTag(metaTag).isEmpty());
+      QVERIFY(LeadingLane::bands(score).empty());
+      // an empty lane isn't written: no metaTag at all
+      Lane empty;
+      empty.target = LeadingLane::TARGET;
+      QCOMPARE(write(score, { { violin, { empty } } }), QString());
+      QVERIFY(!undoWrite(score, { { violin, { empty } } }));
+      // one undo step
+      Lane lead;
+      lead.target = LeadingLane::TARGET;
+      lead.points = { Point(bar, 1, Curve::STEP), Point(2 * bar, 0, Curve::STEP) };
+      QVERIFY(undoWrite(score, { { violin, { lead } } }));
+      const QString tag = score->metaTag(metaTag);
+      QVERIFY(tag.contains("\"target\":\"leading\""));
+      const std::map<const Part*, PartLanes> back = read(score);
+      QVERIFY(LeadingLane::laneOf(back.at(violin)));
+      QCOMPARE(LeadingLane::laneOf(back.at(violin))->points.size(), size_t(2));
+      QCOMPARE(write(score, back), tag);
+      auto bands = LeadingLane::bands(score);
+      QCOMPARE(int(bands.size()), 1);
+      QCOMPARE(bands.at(violin), (std::vector<std::pair<int, int>>({ { bar, 2 * bar } })));
+      score->undoRedo(true, nullptr);
+      QCOMPARE(score->metaTag(metaTag), QString());
+      QVERIFY(LeadingLane::bands(score).empty());
+      score->undoRedo(false, nullptr);
+      QCOMPARE(score->metaTag(metaTag), tag);
+      // through a save
+      QVERIFY(saveScore(score, "leading-saved.mscx"));
+      MasterScore* saved = readCreatedScore("leading-saved.mscx");
+      QVERIFY(saved);
+      QCOMPARE(saved->metaTag(metaTag), tag);
+      QCOMPARE(LeadingLane::bands(saved).at(saved->parts()[0]), (std::vector<std::pair<int, int>>({ { bar, 2 * bar } })));
+      delete saved;
+
+      // the bands' rectangles: the violin's staff only, from bar 2's bar line to bar 3's
+      auto staffBox = [](const System* sys, int staff) {
+            const SysStaff* ss = sys->staff(staff);
+            const double top = sys->pagePos().y() + ss->y();
+            return std::make_pair(top, top + ss->bbox().height());
+            };
+      for (LayoutMode mode : { LayoutMode::PAGE, LayoutMode::LINE }) {
+            score->setLayoutMode(mode);
+            score->doLayout();
+            bands = LeadingLane::bands(score);
+            const Page* page = score->pages().front();
+            const std::vector<QRectF> rects = LeadingLane::bandRects(score, page, bands);
+            QCOMPARE(int(rects.size()), 1);
+            const Measure* m2 = score->firstMeasure()->nextMeasure();
+            const System* sys = m2->system();
+            QVERIFY(sys);
+            const double x2 = sys->pagePos().x() + m2->pos().x();
+            const double x3 = x2 + m2->width();
+            QVERIFY2(std::fabs(rects[0].left() - x2) < 1e-6, qPrintable(QString("%1 %2").arg(rects[0].left()).arg(x2)));
+            QVERIFY2(std::fabs(rects[0].right() - x3) < 1e-6, qPrintable(QString("%1 %2").arg(rects[0].right()).arg(x3)));
+            const auto v = staffBox(sys, 0);
+            const auto c = staffBox(sys, 1);
+            QVERIFY(rects[0].top() < v.first && rects[0].bottom() > v.second);
+            QVERIFY(rects[0].bottom() <= 0.5 * (v.second + c.first) + 1e-6);      // (never into the cello's half of the gap)
+            }
+      // two parts, a span to the score's end and one inside a bar (half a space before the beat's note)
+      score->setLayoutMode(LayoutMode::PAGE);
+      score->doLayout();
+      Lane end;
+      end.target = LeadingLane::TARGET;
+      end.points = { Point(2 * bar + DIVISION, 1, Curve::STEP) };
+      score->setMetaTag(metaTag, write(score, { { violin, { lead } }, { cello, { end } } }));
+      bands = LeadingLane::bands(score);
+      QCOMPARE(int(bands.size()), 2);
+      QCOMPARE(bands.at(cello), (std::vector<std::pair<int, int>>({ { 2 * bar + DIVISION, 4 * bar } })));
+      std::vector<QRectF> all;
+      for (const Page* page : score->pages()) {
+            const std::vector<QRectF> r = LeadingLane::bandRects(score, page, bands);
+            all.insert(all.end(), r.begin(), r.end());
+            }
+      QVERIFY(all.size() >= 2);
+      const Measure* m3 = score->firstMeasure()->nextMeasure()->nextMeasure();
+      const Segment* beat2 = m3->first(SegmentType::ChordRest)->next(SegmentType::ChordRest);
+      const System* s3 = m3->system();
+      bool cellos = false;
+      for (const QRectF& r : all)
+            if (r.top() > staffBox(s3, 0).second) {
+                  if (!cellos)
+                        QVERIFY2(std::fabs(r.left() - (s3->pagePos().x() + m3->pos().x() + beat2->x() - 0.5 * s3->spatium())) < 1e-6,
+                                 qPrintable(QString::number(r.left())));
+                  cellos = true;
+                  }
+      QVERIFY(cellos);
+      // the band's colours: darker on a light paper, lighter on a dark one
+      QVERIFY(LeadingLane::bandColor(QColor(Qt::white)).lightness() < 128 && LeadingLane::bandColor(QColor(Qt::white)).alpha() < 64);
+      QVERIFY(LeadingLane::bandColor(QColor(30, 30, 30)).lightness() > 128);
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   leadingLevels
+//    [levels] leading (leadinglane.h) on leading.musicxml: the violin's lane On in bar 2, the cello's in bars 3-4 (its map
+//    leadingLevel 6; the violin the setting's L, 3 dB). With the setting 1 each patch's gain stage carries its L
+//    (TrackDelays::Delays::leading, gainStageDb) and each note not leading plays L lower by CC11 (the violin 90, the cello
+//    64 of 127), a leading one at 127. With the setting 0 (its default) the render is identical to the score without
+//    lanes; a library whose dynamics are CC11 nothing; a part on MuseScore 4 (built in) its leading notes L louder by
+//    velocity (MarcatoLevel::velocity)
+//---------------------------------------------------------
+
+void TestSoundLibrary::leadingLevels()
+      {
+      using namespace Automation;
+      QCOMPARE(Playback::definition("levels/leading")->value, 0.0);
+      QCOMPARE(Playback::definition("levels/leadingDb")->value, LeadingLane::DEFAULT_DB);
+      for (const Playback::Preset& p : Playback::presets()) {
+            bool listed = false;
+            for (const auto& kv : p.values)
+                  if (QString(kv.first) == "levels/leading") {
+                        listed = true;
+                        QCOMPARE(kv.second, 0.0);
+                        }
+            QVERIFY2(listed, p.id);
+            }
+      auto mapOf = [this](const char* dyn) {
+            return loadMap(QString(
+               "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='%1'/>"
+               "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+               "<Instrument name='Cello' ids='violoncello' leadingLevel='6'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+               "</SoundLibrary>").arg(dyn));
+            };
+      auto lib = mapOf("1");
+      QVERIFY(lib);
+      QCOMPARE(int(lib->instruments.size()), 2);
+      QVERIFY(std::isnan(lib->instruments[0].leadingLevel));
+      QCOMPARE(lib->instruments[1].leadingLevel, 6.0);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "leading.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      Part* violin = score->parts()[0];
+      Part* cello = score->parts()[1];
+      const int bar = 4 * DIVISION;
+      QCOMPARE(int(SoundLib::routes(score, *lib).size()), 2);
+      auto settings = [&](const char* on) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },
+                                            { "levels/sectionBalance", "0" }, { "levels/evenLevels", "0" }, { "levels/leading", on } });
+            score->setPlaylistDirty();
+            };
+      auto render = [&]() {
+            score->setPlaylistDirty();
+            EventMap events;
+            MidiRenderer r(score);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            r.renderScore(&events, ctx);
+            return events;
+            };
+      auto lines = [](const EventMap& ev) {
+            QStringList l;
+            for (const auto& te : ev) {
+                  const NPlayEvent& e = te.second;
+                  l << QString("%1 %2 %3 %4 %5 %6 %7").arg(te.first).arg(e.isExternal() ? e.extPort() * 16 + e.extChannel() : e.channel())
+                       .arg(int(e.type())).arg(e.dataA()).arg(e.dataB()).arg(e.librarySwitch() ? "s" : "-").arg(e.isExternal() ? "x" : "i");
+                  }
+            return l;
+            };
+      // each library note's CC11 in force at its note-on on its route, by part and tick
+      auto levels = [&](const EventMap& events) {
+            std::map<int, int> cc11;
+            std::map<std::pair<const Part*, int>, int> at;
+            for (const auto& te : events) {
+                  const NPlayEvent& ev = te.second;
+                  if (!ev.isExternal() || ev.librarySwitch())
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (ev.type() == ME_CONTROLLER && ev.controller() == CTRL_EXPRESSION)
+                        cc11[route] = ev.value();
+                  else if (ev.type() == ME_NOTEON && ev.velo() > 0 && ev.note())
+                        at[{ ev.note()->part(), ev.note()->tick().ticks() }] = cc11.count(route) ? cc11.at(route) : 127;
+                  }
+            return at;
+            };
+      settings("0");
+      const QStringList plain = lines(render());
+      Lane vl, cl;
+      vl.target = cl.target = LeadingLane::TARGET;
+      vl.points = { Point(bar, 1, Curve::STEP), Point(2 * bar, 0, Curve::STEP) };
+      cl.points = { Point(2 * bar, 1, Curve::STEP) };
+      score->setMetaTag(metaTag, write(score, { { violin, { vl } }, { cello, { cl } } }));
+      // the setting 0: the lanes play nothing
+      QCOMPARE(lines(render()), plain);
+      for (const auto& d : TrackDelays::read(score))
+            QVERIFY(d.second.leading.empty());
+      // the setting 1
+      settings("1");
+      const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
+      QCOMPARE(TrackDelays::leadingDb(TrackDelays::of(violin, delays), "Violin"), LeadingLane::DEFAULT_DB);
+      QCOMPARE(TrackDelays::leadingDb(TrackDelays::of(cello, delays), "Cello"), 6.0);
+      QCOMPARE(TrackDelays::gainStageDb(*lib, TrackDelays::of(violin, delays), "Violin"), LeadingLane::DEFAULT_DB);
+      QCOMPARE(TrackDelays::gainStageDb(*lib, TrackDelays::of(cello, delays), "Cello"), 6.0);
+      const int vOff = int(std::lround(127 * std::pow(10.0, -LeadingLane::DEFAULT_DB / 20)));
+      const int cOff = int(std::lround(127 * std::pow(10.0, -6.0 / 20)));
+      QCOMPARE(vOff, 90);
+      QCOMPARE(cOff, 64);
+      const auto at = levels(render());
+      int n = 0;
+      for (int t = 0; t < 4 * bar; t += DIVISION) {
+            const bool vLead = t >= bar && t < 2 * bar;
+            const bool cLead = t >= 2 * bar;
+            QVERIFY2(at.count({ violin, t }) && at.count({ cello, t }), qPrintable(QString::number(t)));
+            QVERIFY2(at.at({ violin, t }) == (vLead ? 127 : vOff), qPrintable(QString("violin %1: %2").arg(t).arg(at.at({ violin, t }))));
+            QVERIFY2(at.at({ cello, t }) == (cLead ? 127 : cOff), qPrintable(QString("cello %1: %2").arg(t).arg(at.at({ cello, t }))));
+            n += 2;
+            }
+      QCOMPARE(n, 32);
+      // the setting's own L (the violin, no map value)
+      Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },
+                                      { "levels/sectionBalance", "0" }, { "levels/evenLevels", "0" }, { "levels/leading", "1" },
+                                      { "levels/leadingDb", "6" } });
+      QCOMPARE(TrackDelays::leadingDb(TrackDelays::of(violin, TrackDelays::read(score)), "Violin"), 6.0);
+      QCOMPARE(levels(render()).at({ violin, 0 }), cOff);
+      // a library whose dynamics are CC11: nothing
+      auto cc11Lib = mapOf("11");
+      QVERIFY(cc11Lib);
+      SoundLib::setCurrent(cc11Lib);
+      settings("0");
+      const QStringList cc11Plain = lines(render());
+      settings("1");
+      for (const auto& d : TrackDelays::read(score))
+            QVERIFY(d.second.leading.empty());
+      QCOMPARE(lines(render()), cc11Plain);
+      // a part on MuseScore 4 (built in): its leading notes by velocity
+      SoundLib::setCurrent(lib);
+      score->setMetaTag(PartPlaybackModes::metaTag, PartPlaybackModes::write(score, { { violin, PartPlayback::MS4 }, { cello, PartPlayback::MS4 } }));
+      auto velocities = [&]() {
+            std::map<std::pair<const Part*, int>, int> v;
+            for (const auto& te : render()) {
+                  const NPlayEvent& e = te.second;
+                  if (e.type() == ME_NOTEON && e.velo() > 0 && e.note() && !e.isExternal())
+                        v[{ e.note()->part(), e.note()->tick().ticks() }] = e.velo();
+                  }
+            return v;
+            };
+      settings("0");
+      const auto v0 = velocities();
+      QCOMPARE(int(v0.size()), 32);
+      settings("1");
+      const auto v1 = velocities();
+      QCOMPARE(int(v1.size()), 32);
+      for (const auto& x : v0) {
+            const int t = x.first.second;
+            const bool leads = x.first.first == violin ? (t >= bar && t < 2 * bar) : t >= 2 * bar;
+            const int want = leads ? MarcatoLevel::velocity(x.second, LeadingLane::DEFAULT_DB) : x.second;
+            QVERIFY2(v1.at(x.first) == want, qPrintable(QString("%1 at %2: %3, expected %4").arg(x.first.first->partName()).arg(t)
+                                                        .arg(v1.at(x.first)).arg(want)));
+            if (leads)
+                  QVERIFY(want > x.second);
+            }
+      delete score;
       }
 
 //---------------------------------------------------------

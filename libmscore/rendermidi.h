@@ -157,6 +157,13 @@ class MidiRenderer {
       // each part's Velocity lane (automation.h VELOCITY_TARGET: an Edit-in-MuseScore clip tab's), with points: every
       // note of MuseScore 3's playback shaped by it (playNote), as the MuseScore Link device or the clip's notes do in Live
       std::map<const Part*, Automation::Lane> velocityLanes;
+      // [levels] leading (leadinglane.h): each part's Leading lane with points, while the setting is on (empty: off); a
+      // library note of such a part plays its patch's L lower by CC11 unless its chord's tick is On (trackLevel), a
+      // built-in note (MuseScore 3 / 4) leadingBuiltInDb louder by velocity where On (leadingDb)
+      std::map<const Part*, Automation::Lane> leadingLanes;
+      double leadingBuiltInDb { 0.0 };
+      bool leadingAt(const Chord* chord) const;   // its part's Leading lane On at its tick (and the setting on)
+      double leadingDb(const Chord* chord) const; // a built-in note's: leadingBuiltInDb where leadingAt, else 0
       // channel -> MIDI out port and channel per patch, per lane (SoundLib::Lanes: copies of a patch by tuning)
       std::map<int, std::vector<std::vector<std::pair<int, int>>>> libRoutes;
       std::map<const Note*, int> libLanes;                        // a note's lane, when not 0
