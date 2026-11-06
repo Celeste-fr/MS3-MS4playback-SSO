@@ -59,9 +59,9 @@ namespace SoundLib { struct LibInstrument; }
 namespace LeadingLane {
 
 extern const char* const TARGET;          // "leading"
-// L where the map gives none and the setting [levels] leadingDb isn't set: a PLACEHOLDER, an assumption pending the
-// measurements of several orchestras (being researched separately); never heard by the owner
-constexpr double DEFAULT_DB = 3.0;
+// L where the map gives none and the setting [levels] leadingDb isn't set: the measured lead, not yet multi-source: the median
+// lift in 9 passages from 2 ensembles, honest 90 % range about 1-6 dB (the owner, 2026-11-06: the simple 3.5 dB now)
+constexpr double DEFAULT_DB = 3.5;
 
 // every point on Off (0) or On (1) and a STEP
 void normalize(Automation::Lane& lane);
