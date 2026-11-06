@@ -105,13 +105,12 @@ int EvenLevelsJob::apply(MasterScore* score, const QString& resultJson, QString*
             for (const QJsonValue& pv : top.value("passages").toArray()) {
                   const QJsonObject p = pv.toObject();
                   const QJsonArray r = p.value("rangeMedian").toArray();
-                  l << QObject::tr("%1, measures %2: slur range %3 dB uncorrected, %4 dB kept (round %5)")
+                  l << QObject::tr("%1, measures %2: slur range %3 dB before, %4 dB after")
                        .arg(p.value("part").toString()).arg(p.value("bars").toString())
                        .arg(r.size() > 0 ? r[0].toDouble() : 0.0, 0, 'f', 2)
-                       .arg(r.size() > p.value("chosen").toInt() ? r[p.value("chosen").toInt()].toDouble() : 0.0, 0, 'f', 2)
-                       .arg(p.value("chosen").toInt());
+                       .arg(r.size() > p.value("chosen").toInt() ? r[p.value("chosen").toInt()].toDouble() : 0.0, 0, 'f', 2);
                   }
-            *summary = QObject::tr("%1 passage(s) measured, %2 corrected; %3 note(s) changed.").arg(passages).arg(kept).arg(changed)
+            *summary = QObject::tr("%1 passage(s) measured, %2 corrected, %3 note(s) changed.").arg(passages).arg(kept).arg(changed)
                        + (l.isEmpty() ? QString() : "\n\n" + l.join("\n"));
             }
       return changed;
@@ -131,8 +130,7 @@ void EvenLevelsJob::runFromGui(Score* cs, QWidget* parent)
       std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       const QString title = QObject::tr("Even Out Levels");
       if (!library || SoundLib::output() != SoundLib::Output::PLUGIN) {
-            QMessageBox::information(parent, title, QObject::tr("Evening out levels measures the library's own sound: it needs "
-                                     "a sound library played by its plug-in (Preferences > I/O > Sound Library)."));
+            QMessageBox::information(parent, title, QObject::tr("Even Out Levels needs a sound library played by its plug-in (Preferences > I/O > Sound Library)."));
             return;
             }
       // the selection's parts and bars, else every library part
@@ -163,7 +161,7 @@ void EvenLevelsJob::runFromGui(Score* cs, QWidget* parent)
       const QString base = score->fileInfo()->completeBaseName().isEmpty() ? QString("score") : score->fileInfo()->completeBaseName();
       QFileInfo copy(tmp.path() + "/" + base + ".mscz");
       if (!score->Score::saveCompressedFile(copy, false, false)) {
-            QMessageBox::warning(parent, title, QObject::tr("Could not save a copy of the score to measure: %1").arg(MScore::lastError));
+            QMessageBox::warning(parent, title, QObject::tr("Cannot save a copy of the score to measure: %1").arg(MScore::lastError));
             return;
             }
       const QString out = tmp.path() + "/result";
@@ -192,7 +190,7 @@ void EvenLevelsJob::runFromGui(Score* cs, QWidget* parent)
       QObject::connect(&progress, &QProgressDialog::canceled, &loop, [&]() { child.kill(); });
       child.start(QCoreApplication::applicationFilePath(), args);
       if (!child.waitForStarted(30000)) {
-            QMessageBox::warning(parent, title, QObject::tr("Could not start the measurement."));
+            QMessageBox::warning(parent, title, QObject::tr("Cannot start the measurement."));
             return;
             }
       progress.show();
@@ -205,9 +203,8 @@ void EvenLevelsJob::runFromGui(Score* cs, QWidget* parent)
       if (n > 0)
             if (SoundLibraryHost* host = SoundLibraryHost::instance())
                   host->applyMixer(score);          // (a patch's headroom: its volume)
-      QMessageBox::information(parent, title, summary + "\n\n" + QObject::tr("Played when Even levels is on "
-                               "in the playback adjustments (Mixer > Advanced Options… > Playback adjustments; on by default). A correction "
-                               "turns stale when the music around its note changes: measure again then."));
+      QMessageBox::information(parent, title, summary + "\n\n" + QObject::tr("The corrections play while Even levels is on in the playback adjustments. "
+                               "Measure again after changing the music around a note."));
       }
 
 #ifdef USE_VST3

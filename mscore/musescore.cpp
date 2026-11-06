@@ -7700,8 +7700,8 @@ void MuseScore::reloadPlaybackSettings()
             ms->setPlaylistDirty();
       SoundLibraryHost::logPreflight("playback.ini reloaded");     // (render preflight.log: the ini's hash and preset)
       const QStringList warn = Playback::warnings();
-      showMessage(warn.isEmpty() ? tr("Playback settings read")
-                                 : tr("Playback settings read, %1 warning(s): %2").arg(warn.size()).arg(warn.join("; ")), 8000);
+      showMessage(warn.isEmpty() ? tr("Playback settings reloaded")
+                                 : tr("Playback settings reloaded with %1 warning(s): %2").arg(warn.size()).arg(warn.join("; ")), 8000);
       _messageLabel->setToolTip(QDir::toNativeSeparators(Playback::iniPath()));
       }
 

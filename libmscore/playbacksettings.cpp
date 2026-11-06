@@ -487,6 +487,181 @@ bool Definition::mapDefault() const
       return std::isnan(value);
       }
 
+//---------------------------------------------------------
+//   how the playback adjustments panel shows the settings (Mixer › Advanced Options…): a group, a label, named values
+//   and a tooltip per setting, all translatable (written out as QT_TRANSLATE_NOOP: lupdate expands no macros); the ids,
+//   the ini and the values are the definitions' above
+//---------------------------------------------------------
+
+static const std::vector<const char*> DISPLAY_GROUPS = {
+      QT_TRANSLATE_NOOP("playbackSettings", "Notes"),
+      QT_TRANSLATE_NOOP("playbackSettings", "Note lengths"),
+      QT_TRANSLATE_NOOP("playbackSettings", "Slurs"),
+      QT_TRANSLATE_NOOP("playbackSettings", "Loudness"),
+      QT_TRANSLATE_NOOP("playbackSettings", "Tuning"),
+      QT_TRANSLATE_NOOP("playbackSettings", "Guitar"),
+      QT_TRANSLATE_NOOP("playbackSettings", "Ableton Live"),
+      QT_TRANSLATE_NOOP("playbackSettings", "Sound library"),
+      };
+
+static const std::vector<Display> DISPLAY = {
+      // Notes
+      { "heldNotes/early", QT_TRANSLATE_NOOP("playbackSettings", "Notes"), QT_TRANSLATE_NOOP("playbackSettings", "Early start"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How much of its measured onset a note starts early, so that its attack is heard on the beat"), {} },
+      { "heldNotes/byPitch", QT_TRANSLATE_NOOP("playbackSettings", "Notes"), QT_TRANSLATE_NOOP("playbackSettings", "Early start by pitch"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Each note starts early by its own pitch's onset instead of one shift for the whole articulation"), {} },
+      { "notes/sameKeyEndsFirst", QT_TRANSLATE_NOOP("playbackSettings", "Notes"), QT_TRANSLATE_NOOP("playbackSettings", "End a repeated note first"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A key struck again while its note still sounds ends that note just before"), {} },
+      { "notes/avoidBadSamples", QT_TRANSLATE_NOOP("playbackSettings", "Notes"), QT_TRANSLATE_NOOP("playbackSettings", "Avoid faulty samples"),
+        QT_TRANSLATE_NOOP("playbackSettings", "An attack whose recording is faulty plays at the nearest clean velocity"), {} },
+      { "notes/transportReset", QT_TRANSLATE_NOOP("playbackSettings", "Notes"), QT_TRANSLATE_NOOP("playbackSettings", "Same takes on every play"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Every play from the same place uses the same round robin takes"), {} },
+      // Note lengths
+      { "shorts/byMeantLength", QT_TRANSLATE_NOOP("playbackSettings", "Note lengths"), QT_TRANSLATE_NOOP("playbackSettings", "Short technique by sounding length"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A short technique is chosen by how long the note sounds, not by its written length"), {} },
+      { "shorts/staccato", QT_TRANSLATE_NOOP("playbackSettings", "Note lengths"), QT_TRANSLATE_NOOP("playbackSettings", "Staccato"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How much of its written length a staccato note sounds"), {} },
+      { "shorts/staccatissimo", QT_TRANSLATE_NOOP("playbackSettings", "Note lengths"), QT_TRANSLATE_NOOP("playbackSettings", "Staccatissimo"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How much of its written length a staccatissimo note sounds"), {} },
+      { "shorts/tenuto", QT_TRANSLATE_NOOP("playbackSettings", "Note lengths"), QT_TRANSLATE_NOOP("playbackSettings", "Tenuto"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How much of its written length a tenuto note sounds"), {} },
+      { "shorts/portato", QT_TRANSLATE_NOOP("playbackSettings", "Note lengths"), QT_TRANSLATE_NOOP("playbackSettings", "Portato"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How much of its written length a portato note sounds"), {} },
+      { "shorts/staccatoLength", QT_TRANSLATE_NOOP("playbackSettings", "Note lengths"), QT_TRANSLATE_NOOP("playbackSettings", "Limit staccato length"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A staccato note on a sound library sounds no longer than real players play one"), {} },
+      // Slurs
+      { "legato/keepMs", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Shortest note before an early start"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A note followed by an early start on the same sound keeps at least this much of its length"), {} },
+      { "legato/fastShare", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Transition delay after short notes"),
+        QT_TRANSLATE_NOOP("playbackSettings", "After a very short note, a legato transition takes this share of its measured delay"), {} },
+      { "legato/fastFullMs", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Full transition delay after"),
+        QT_TRANSLATE_NOOP("playbackSettings", "After a note this long, a legato transition takes all of its measured delay"), {}, QT_TRANSLATE_NOOP("playbackSettings", "Always") },
+      { "slurs/quick", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Quick slurred notes"),
+        QT_TRANSLATE_NOOP("playbackSettings", "What a slurred note too short for its held technique plays"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Held technique"), QT_TRANSLATE_NOOP("playbackSettings", "Short"), QT_TRANSLATE_NOOP("playbackSettings", "Espressivo long") } },
+      { "slurs/quickLevel", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Quick slurred notes at held level"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A quick slurred note plays as loud as its held technique would"), {} },
+      { "slurs/performance", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Performance legato for slurs"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Slurred notes of the string sections play on the Performance legato"), {} },
+      { "slurs/transitions", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Fingered and bowed transitions"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Slurred notes play fingered transitions, and a slur right after another starts with a bowed transition"), {} },
+      { "slurs/smoothStart", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Smooth start after rests"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A note after a rest starts with the smooth attack instead of spiccato"), {} },
+      { "slurs/transitionsEarly", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Early transitions"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Which part of a legato transition is placed on the beat"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Off"), QT_TRANSLATE_NOOP("playbackSettings", "Arrival"), QT_TRANSLATE_NOOP("playbackSettings", "Heard change"), QT_TRANSLATE_NOOP("playbackSettings", "Middle of the glide") } },
+      { "slurs/plainPerformance", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Performance legato for all notes"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Every note of the string sections plays on the Performance legato"), {} },
+      { "slurs/plainTiming", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Early start per note"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Each Performance legato note starts early by its own timing instead of one shift for the whole sound"), {} },
+      { "slurs/speedFromWritten", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Transition speed from written notes"),
+        QT_TRANSLATE_NOOP("playbackSettings", "The speed of a legato transition follows the written note spacing, not the played one"), {} },
+      { "slurs/microtoneBends", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Microtonal transitions"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How a microtonal note reached by a legato transition is played"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "As written"), QT_TRANSLATE_NOOP("playbackSettings", "Key and glide"), QT_TRANSLATE_NOOP("playbackSettings", "Glide only"), QT_TRANSLATE_NOOP("playbackSettings", "Key, glide and early start") } },
+      { "slurs/runBends", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Pitch correction in fast runs"),
+        QT_TRANSLATE_NOOP("playbackSettings", "In fast legato runs, pitch bend corrects the sound's lagging pitch"), {} },
+      { "slurs/fixedTransitions", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Same transitions on every play"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Legato transitions play without random variation, so every play sounds the same"), {} },
+      { "slurs/plainJoins", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Join notes at other tunings"),
+        QT_TRANSLATE_NOOP("playbackSettings", "An unslurred note touching the note before at another tuning plays as a transition, not as a new bow"), {} },
+      { "slurs/plainAuto", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Automatic bowing"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How a Performance legato note starts when it has no technique of its own"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Off"), QT_TRANSLATE_NOOP("playbackSettings", "Standard"), QT_TRANSLATE_NOOP("playbackSettings", "New bows early"), QT_TRANSLATE_NOOP("playbackSettings", "Repeated notes re-attacked"),
+          QT_TRANSLATE_NOOP("playbackSettings", "Repeated notes and short bows re-attacked") } },
+      { "slurs/fastTransitions", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Keep very fast transitions"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A legato note right after the note before is sent at a velocity the sound library plays"), {} },
+      { "slurs/plainAccents", QT_TRANSLATE_NOOP("playbackSettings", "Slurs"), QT_TRANSLATE_NOOP("playbackSettings", "Accents on Performance legato"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How an accented note on the Performance legato plays"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Off"), QT_TRANSLATE_NOOP("playbackSettings", "Louder"), QT_TRANSLATE_NOOP("playbackSettings", "Accented attack"), QT_TRANSLATE_NOOP("playbackSettings", "Both") } },
+      // Loudness
+      { "levels/calibrated", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Technique levels"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Short techniques play as loud as the part's held notes at the same dynamic"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Off"), QT_TRANSLATE_NOOP("playbackSettings", "Matched"), QT_TRANSLATE_NOOP("playbackSettings", "As real players") } },
+      { "levels/context", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Slur levels"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Each slur on the Performance legato plays as loud as held notes at the same dynamic"), {} },
+      { "levels/sectionBalance", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Section balance"),
+        QT_TRANSLATE_NOOP("playbackSettings", "The sections play at the balance of a real orchestra"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Off"), QT_TRANSLATE_NOOP("playbackSettings", "Single notes"), QT_TRANSLATE_NOOP("playbackSettings", "Orchestral playing") } },
+      { "levels/realRange", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Dynamic range"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Each dynamic plays as loud as a real player plays it"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Sound library"), QT_TRANSLATE_NOOP("playbackSettings", "Single notes"), QT_TRANSLATE_NOOP("playbackSettings", "Orchestral playing") } },
+      { "levels/micCompensation", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Mic compensation"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Changing a part's mics changes its tone and space, not its loudness"), {} },
+      { "levels/transitionLevels", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Level change at transitions"),
+        QT_TRANSLATE_NOOP("playbackSettings", "When a legato transition's change of level is heard"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "At the note-on"), QT_TRANSLATE_NOOP("playbackSettings", "During the glide"), QT_TRANSLATE_NOOP("playbackSettings", "During the glide, dynamics too") } },
+      { "levels/attackLevels", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Level change at attacks"),
+        QT_TRANSLATE_NOOP("playbackSettings", "When an attack's change of level is heard while the note before still rings"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "At the note-on"), QT_TRANSLATE_NOOP("playbackSettings", "At the onset"), QT_TRANSLATE_NOOP("playbackSettings", "At the written time") } },
+      { "levels/divisi", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Divisi level"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Notes played together on a divided section are softer, so the chord sounds as one section"), {} },
+      { "levels/leading", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Leading parts louder"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Notes play louder where a part's Leading lane is on"), {} },
+      { "levels/leadingDb", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Leading level"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How much louder a leading note plays when the sound library gives no level"), {} },
+      { "levels/evenKeys", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Even out keys"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Wind and brass notes louder or softer than their neighbours in the sound library play at an even level"), {} },
+      { "levels/evenLevels", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Even levels"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Slurred notes play the corrections measured by Even Out Levels"), {} },
+      { "levels/lowCut", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Low cut on strings"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Filters out bow and body noise below the string sections' notes"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Off"), QT_TRANSLATE_NOOP("playbackSettings", "Fixed"), QT_TRANSLATE_NOOP("playbackSettings", "Following") } },
+      { "levels/hallGuard", QT_TRANSLATE_NOOP("playbackSettings", "Loudness"), QT_TRANSLATE_NOOP("playbackSettings", "Smooth sudden drops"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A sudden drop in dynamics inside a slur is sent in small steps, so no release sample plays"), {} },
+      // Tuning
+      { "tuning/tolerance", QT_TRANSLATE_NOOP("playbackSettings", "Tuning"), QT_TRANSLATE_NOOP("playbackSettings", "Tuning tolerance"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A note this close to a copy's tuning plays on that copy"), {} },
+      { "tuning/tail", QT_TRANSLATE_NOOP("playbackSettings", "Tuning"), QT_TRANSLATE_NOOP("playbackSettings", "Retune after"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How long a copy rings after its last note before it is retuned"), {} },
+      { "tuning/maxLanes", QT_TRANSLATE_NOOP("playbackSettings", "Tuning"), QT_TRANSLATE_NOOP("playbackSettings", "Maximum copies"),
+        QT_TRANSLATE_NOOP("playbackSettings", "The most copies of a sound for other tunings"), {} },
+      { "tuning/waitForRelease", QT_TRANSLATE_NOOP("playbackSettings", "Tuning"), QT_TRANSLATE_NOOP("playbackSettings", "Wait for release"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A copy waits for its notes' release before it is retuned"), {} },
+      { "tuning/pitchBend", QT_TRANSLATE_NOOP("playbackSettings", "Tuning"), QT_TRANSLATE_NOOP("playbackSettings", "Tuning method"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How sounds that bend cleanly are tuned"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Varispeed"), QT_TRANSLATE_NOOP("playbackSettings", "Pitch bend") } },
+      { "tuning/bendAtArrival", QT_TRANSLATE_NOOP("playbackSettings", "Tuning"), QT_TRANSLATE_NOOP("playbackSettings", "Bend with the transition"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A legato transition's pitch bend follows the transition instead of starting at the note-on"), {} },
+      { "tuning/hostedTuning", QT_TRANSLATE_NOOP("playbackSettings", "Tuning"), QT_TRANSLATE_NOOP("playbackSettings", "Tuning copies"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How Kontakt plays copies for other tunings: by varispeed, or as slots of one instance"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Varispeed"), QT_TRANSLATE_NOOP("playbackSettings", "Slots") } },
+      // Guitar
+      { "guitar/strums", QT_TRANSLATE_NOOP("playbackSettings", "Guitar"), QT_TRANSLATE_NOOP("playbackSettings", "Strums"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A chord with an arpeggio plays the guitar's strummer"), {} },
+      { "guitar/softStrums", QT_TRANSLATE_NOOP("playbackSettings", "Guitar"), QT_TRANSLATE_NOOP("playbackSettings", "Soft strums"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How a soft strum plays"),
+        { QT_TRANSLATE_NOOP("playbackSettings", "Quieter strum"), QT_TRANSLATE_NOOP("playbackSettings", "Rolled notes"), QT_TRANSLATE_NOOP("playbackSettings", "Rolled strings") } },
+      { "guitar/pinchHarmonics", QT_TRANSLATE_NOOP("playbackSettings", "Guitar"), QT_TRANSLATE_NOOP("playbackSettings", "Pinch harmonics"),
+        QT_TRANSLATE_NOOP("playbackSettings", "A note under the text P.H. plays as a pinch harmonic"), {} },
+      // Ableton Live
+      { "live/carrierEpsilon", QT_TRANSLATE_NOOP("playbackSettings", "Ableton Live"), QT_TRANSLATE_NOOP("playbackSettings", "Controller note offset"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How far before its note a controller note sits in Live clips"), {} },
+      // Sound library
+      { "hosting/maxVoices", QT_TRANSLATE_NOOP("playbackSettings", "Sound library"), QT_TRANSLATE_NOOP("playbackSettings", "Voice limit"),
+        QT_TRANSLATE_NOOP("playbackSettings", "The voice limit of every Kontakt instrument MuseScore sets up"), {}, QT_TRANSLATE_NOOP("playbackSettings", "Instrument's own") },
+      { "hosting/settleSeconds", QT_TRANSLATE_NOOP("playbackSettings", "Sound library"), QT_TRANSLATE_NOOP("playbackSettings", "Settling time"),
+        QT_TRANSLATE_NOOP("playbackSettings", "How long a sound runs after loading before its controllers are set"), {} },
+      { "soundlibrary/hostProcesses", QT_TRANSLATE_NOOP("playbackSettings", "Sound library"), QT_TRANSLATE_NOOP("playbackSettings", "Helper processes"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Plug-ins run in up to this many separate processes, so MuseScore stays responsive while they load"), {},
+        QT_TRANSLATE_NOOP("playbackSettings", "Automatic") },
+      { "soundlibrary/renderAhead", QT_TRANSLATE_NOOP("playbackSettings", "Sound library"), QT_TRANSLATE_NOOP("playbackSettings", "Render ahead"),
+        QT_TRANSLATE_NOOP("playbackSettings", "Playback is computed this far ahead to prevent dropouts"), {}, QT_TRANSLATE_NOOP("playbackSettings", "Off") },
+      };
+
+const std::vector<const char*>& displayGroups()
+      {
+      return DISPLAY_GROUPS;
+      }
+
+const Display* display(const char* id)
+      {
+      for (const Display& d : DISPLAY)
+            if (std::strcmp(d.id, id) == 0)
+                  return &d;
+      return nullptr;
+      }
+
 // (the lookups below ran 100 string compares, and a QString made of the id, per read; an index of the same ids, the first
 // of a duplicate winning as the loop did)
 static const std::unordered_map<std::string_view, const Definition*>& definitionIndex()
@@ -518,10 +693,10 @@ const Definition* definition(const QString& id)
 QString sourceName(Source s)
       {
       switch (s) {
-            case Source::DEFAULT: return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "default"));
-            case Source::MAP:     return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "library"));
-            case Source::INI:     return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "playback.ini"));
-            case Source::SCORE:   return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "score"));
+            case Source::DEFAULT: return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "Default"));
+            case Source::MAP:     return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "Sound library"));
+            case Source::INI:     return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "Your settings"));
+            case Source::SCORE:   return QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "This score"));
             }
       return QString();
       }

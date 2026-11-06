@@ -291,8 +291,8 @@ void PlayabilityPanel::retranslate()
       _table->setHorizontalHeaderLabels({ "", tr("Measure"), tr("Staff"), tr("Reason") });
       _prev->setToolTip(tr("Previous instrument"));
       _next->setToolTip(tr("Next instrument"));
-      _toggle->setToolTip(tr("Switch between the diagram of the selection and the list"));
-      _off->setText(tr("The playability check is off (tick Check Playability above)."));
+      _toggle->setToolTip(tr("Switch between diagram and list"));
+      _off->setText(tr("The playability check is off. Turn on Check Playability above."));
       _checkOn->setText(getAction("toggle-playability")->text());
       _openStrings->setText(getAction("toggle-playability-open-strings")->text());
       }
@@ -411,8 +411,8 @@ void PlayabilityPanel::rebuildTable()
             }
             QTableWidgetItem* mark = new QTableWidgetItem(QIcon(px), "");
             mark->setData(ROLE_ROW, i);
-            mark->setToolTip(r.error() ? tr("Cannot be played") : r.notation() ? tr("Notation: how it is written, not whether it can be played")
-                                                                         : tr("Hard to play, or over a limit"));
+            mark->setToolTip(r.error() ? tr("Cannot be played") : r.notation() ? tr("Notation issue")
+                                                                         : tr("Hard to play"));
             _table->setItem(i, 0, mark);
             QTableWidgetItem* bar = new QTableWidgetItem(QString::number(r.bar));
             _table->setItem(i, 1, bar);
@@ -641,7 +641,7 @@ void PlayabilityPanel::rowClicked(int row)
       const PlayabilityRow r = _rows[row];
       Chord* c = findChord(_score, r.track, r.tick, r.grace);
       if (!c) {
-            _selected->setText(tr("That chord has changed since the check."));
+            _selected->setText(tr("That chord has changed."));
             _selected->setVisible(true);
             return;
             }

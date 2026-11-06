@@ -103,7 +103,7 @@ Mixer::Mixer(QWidget* parent)
             // (no Play through Live button: the owner, 2026-10-07, never plays through Live; the output stays
             // in Preferences › I/O › Play through, LIVE.md)
             QPushButton* options = new QPushButton(tr("Advanced Options…"), top);
-            options->setToolTip(tr("This score's sound library settings (copies for other tunings, short notes' balance) and the library's"));
+            options->setToolTip(tr("Sound library settings for this score"));
             connect(options, &QPushButton::clicked, this, [this]() { SoundLibraryOptions::showFor(this); });
             h->addWidget(options);
             verticalLayout->insertWidget(1, top);

@@ -7224,7 +7224,7 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             LiveIntegration::UpdateResult res;
             update(&res);
             QVERIFY2(std::fabs(laneOf("tone").flatValue() - 0.75) < 1e-4, qPrintable(res.text()));
-            QVERIFY2(res.importReport.contains("Tone at 0.7500"), qPrintable(res.importReport));
+            QVERIFY2(res.importReport.contains("Tone set to 0.7500"), qPrintable(res.importReport));
             QVERIFY2(!res.written, qPrintable(res.text()));          // (the set has what the score has now, its state too)
             QVERIFY(std::fabs(stateTone() - 0.75) < 1e-6);
             QVERIFY(std::fabs(seen("Tone").value - 0.75) < 1e-6);
@@ -7240,7 +7240,7 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             update(&res);
             QVERIFY2(res.written, qPrintable(res.text()));
             QVERIFY2(res.report.text().contains("Tone 0.2992"), qPrintable(res.text()));
-            QVERIFY2(res.report.text().contains("Kontakt's state with them"), qPrintable(res.text()));
+            QVERIFY2(res.report.text().contains("Kontakt state with them"), qPrintable(res.text()));
             QVERIFY(std::fabs(seen("Tone").value - 38 / 127.0) < 1e-8);       // (the panel as Kontakt holds it)
             QVERIFY(!seen("Tone").automated);
             QVERIFY2(std::fabs(stateTone() - 0.3) < 1e-6, qPrintable(QString::number(stateTone())));
@@ -7282,7 +7282,7 @@ void TestLiveEquivalence::updateLiveSetKnobs()
             update(&res);
             QVERIFY2(std::fabs(laneOf("tone").flatValue() - 0.25) < 1e-4, qPrintable(res.text()));
             QVERIFY2(res.written, qPrintable(res.text()));
-            QVERIFY2(res.report.text().contains("Kontakt's state with them"), qPrintable(res.text()));
+            QVERIFY2(res.report.text().contains("Kontakt state with them"), qPrintable(res.text()));
             QVERIFY2(std::fabs(stateTone() - 0.25) < 1e-6, qPrintable(QString::number(stateTone())));
             // (the panel value as Kontakt holds and Live saves it, 32/127: real Live, build 494)
             QVERIFY2(std::fabs(seen("Tone").value - 32 / 127.0) < 1e-8, qPrintable(QString::number(seen("Tone").value, 'g', 10)));
@@ -8615,7 +8615,7 @@ void TestLiveEquivalence::hostedReadBack()
             QCOMPARE(targets(), QString("m-pan,volume"));
             QCOMPARE(Automation::pointsHash(volumeLane().points), laneBefore);
             QVERIFY2(res.importReport.contains("strum levels"), qPrintable(res.importReport));
-            QVERIFY2(res.report.skipped.join("\n").contains("M-Master Vol changed in Live: Live's left as it is"), qPrintable(res.text()));
+            QVERIFY2(res.report.skipped.join("\n").contains("M-Master Vol changed in Live: kept as in Live"), qPrintable(res.text()));
             }
       setVolume(90 / 127.0);
       {
@@ -8649,7 +8649,7 @@ void TestLiveEquivalence::hostedReadBack()
             editInLive(kk, 0.2);
             LiveIntegration::UpdateResult res;
             update(&res);
-            QVERIFY2(res.importReport.contains("changed in Live: the \"volume\" lane"), qPrintable(res.importReport));
+            QVERIFY2(res.importReport.contains("changed in Live; imported as the \"volume\" lane"), qPrintable(res.importReport));
             QCOMPARE(targets(), QString("m-pan,volume"));
             bool has = false;
             for (const Automation::Point& p : volumeLane().points)
@@ -10886,6 +10886,14 @@ void TestLiveEquivalence::playbackSettingsWidget()
                   }
             }
       QCOMPARE(rows, int(Playback::definitions().size()));
+      // (every setting has its panel texts: a label and a group of displayGroups(); a mode's names one per value)
+      for (const Playback::Definition& d : Playback::definitions()) {
+            const Playback::Display* disp = Playback::display(d.id);
+            QVERIFY2(disp && disp->label && disp->tooltip, d.id);
+            QVERIFY2(std::any_of(Playback::displayGroups().begin(), Playback::displayGroups().end(),
+                                 [&](const char* g) { return std::strcmp(g, disp->group) == 0; }), d.id);
+            QVERIFY2(disp->values.empty() || int(disp->values.size()) == int(std::lround(d.max - d.min)) + 1, d.id);
+            }
       QCOMPARE(boxes["heldNotes/early"]->value(), 100.0);         // (the map's)
       QVERIFY(!boxes["hosting/maxVoices"]->isEnabled());
       boxes["legato/keepMs"]->setValue(60);

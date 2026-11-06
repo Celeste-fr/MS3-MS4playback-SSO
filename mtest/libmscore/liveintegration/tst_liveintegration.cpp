@@ -1133,7 +1133,7 @@ void TestLiveIntegration::clipsTimingFromLive()
 
       // a report MuseScore can't pair (it knows nothing of the route): no change
       link->receivedForTest("/live/edited", { "0:9", 3333, 0, 0 });
-      QVERIFY(link->lastEdit().contains("doesn't know"));
+      QVERIFY(link->lastEdit().contains("was edited in Live"));
       QCOMPARE(LiveTimingOverride::count(score), 0);
       link->setScore(nullptr);
       SoundLib::setCurrent(nullptr);
@@ -2725,7 +2725,7 @@ void TestLiveIntegration::clipTabClean()
       QCOMPARE(int(ed->state(score)), int(LiveClipEditor::State::SYNC));
       QVERIFY(ed->inSync(score));
       QVERIFY(!score->dirty());
-      QVERIFY2(ed->statusText(score).startsWith("Live clip Violin › Idea: in sync"), qPrintable(ed->statusText(score)));
+      QVERIFY2(ed->statusText(score).startsWith("Live clip Idea (track Violin): in sync"), qPrintable(ed->statusText(score)));
 
       // undo: dirty, written, clean; the undone pitch is in Live
       QVERIFY(score->undoStack()->canUndo());
@@ -3190,7 +3190,7 @@ void TestLiveIntegration::clipVelocityRecord()
       ed->received("/live/clip/written", { "c902", w2, "ok", 4322 });          // (the originals written back)
       a = last["/ms/vel/set"];
       ed->received("/live/vel/set", { "c902", a.value(1).toInt(), "ok", 0 });
-      QVERIFY2(ed->statusDetails(score).contains("not kept with the set"), qPrintable(ed->statusDetails(score)));
+      QVERIFY2(ed->statusDetails(score).contains("keep it with the set"), qPrintable(ed->statusDetails(score)));
 
       ed->scoreClosed(score);
       LiveClipEditor::setSendHook(nullptr);
@@ -4499,13 +4499,13 @@ void TestLiveIntegration::linkWatch()
       QVERIFY(lost.startsWith("Lost the connection to Live"));
       QVERIFY(lost.contains("9101"));
       QVERIFY(lost.contains("2 Live clip tab"));
-      QVERIFY(lost.contains("own sounds meanwhile"));
+      QVERIFY(lost.contains("clip tabs play MuseScore's own sounds"));
       QVERIFY(lost.contains("Live plays the score"));
       QVERIFY(lost.contains("Play through Live"));
-      QVERIFY(lost.contains("reconnects by itself"));
+      QVERIFY(lost.contains("reconnects automatically"));
       u.clipTabsThroughLive = 0;
       u.livePlaysScore = false;
-      QVERIFY(!LinkWatch::lostText(u).contains("own sounds meanwhile"));
+      QVERIFY(!LinkWatch::lostText(u).contains("clip tabs play MuseScore's own sounds"));
       QVERIFY(!LinkWatch::lostText(u).contains("Live plays the score"));
       QVERIFY(LinkWatch::backText(u).contains("clip tabs are linked again"));
       }

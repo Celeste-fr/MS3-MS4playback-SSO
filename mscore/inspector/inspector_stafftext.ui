@@ -195,7 +195,7 @@
          </sizepolicy>
         </property>
         <property name="toolTip">
-         <string>How much louder or softer the notes play whose technique this text sets (pizz., col legno, sul tasto…), in dB, until the next text that changes the technique. With a sound library, relative to the playing technique; with the built-in sounds, relative to the note's velocity. Adds up with the levels of the notes' articulations. The default is no change</string>
+         <string>Loudness change of the notes this text applies to, in dB</string>
         </property>
         <property name="accessibleName">
          <string>Level</string>

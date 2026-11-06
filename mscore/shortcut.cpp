@@ -1470,7 +1470,7 @@ Shortcut Shortcut::_sc[] = {
          STATE_NORMAL | STATE_NOTE_ENTRY,
          "add-phrase-mark",
          QT_TRANSLATE_NOOP("action","Phrase mark"),
-         QT_TRANSLATE_NOOP("action","Add phrase mark (a slur that plays no legato), or toggle the selected slurs")
+         QT_TRANSLATE_NOOP("action","Add phrase mark: drawn as a slur, played without legato")
          },
       {
          MsWidget::SCORE_TAB,
@@ -2428,7 +2428,7 @@ Shortcut Shortcut::_sc[] = {
          "toggle-scordatura-view",
          QT_TRANSLATE_NOOP("action","Scordatura Fingering"),
          QT_TRANSLATE_NOOP("action","Toggle 'Scordatura Fingering'"),
-         QT_TRANSLATE_NOOP("action","Show notes on retuned strings where they are fingered (scordatura notation); they still sound as written"),
+         QT_TRANSLATE_NOOP("action","Show notes on retuned strings where they are fingered"),
          Icons::Invalid_ICON,
          Qt::WindowShortcut,
          ShortcutFlags::A_SCORE
@@ -2444,15 +2444,15 @@ Shortcut Shortcut::_sc[] = {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "toggle-bar-ruler",
-         QT_TRANSLATE_NOOP("action","Bar Ruler"),
-         QT_TRANSLATE_NOOP("action","Toggle 'Bar Ruler' (Continuous View: every bar's number along the top)")
+         QT_TRANSLATE_NOOP("action","Measure Ruler"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Measure Ruler'")
          },
       {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "toggle-automation-lanes",
          QT_TRANSLATE_NOOP("action","Automation Lanes"),
-         QT_TRANSLATE_NOOP("action","Toggle 'Automation Lanes' (Continuous View: a selected part's automation under its staves)")
+         QT_TRANSLATE_NOOP("action","Toggle 'Automation Lanes'")
          },
       {
          MsWidget::MAIN_WINDOW,
@@ -3168,7 +3168,7 @@ Shortcut Shortcut::_sc[] = {
          "sound-library",
          QT_TRANSLATE_NOOP("action","Sound Library"),
          0,
-         QT_TRANSLATE_NOOP("action","Sound library: where each part plays, and the setup of its plug-in"),
+         QT_TRANSLATE_NOOP("action","Sound library settings for each part"),
          Icons::Invalid_ICON,
          Qt::ApplicationShortcut
          },
@@ -3178,7 +3178,7 @@ Shortcut Shortcut::_sc[] = {
          "reload-playback-settings",
          QT_TRANSLATE_NOOP("action","Reload Playback Settings"),
          0,
-         QT_TRANSLATE_NOOP("action","Read the playback adjustments again and render the scores again"),
+         QT_TRANSLATE_NOOP("action","Reload the playback adjustments"),
          Icons::Invalid_ICON,
          Qt::ApplicationShortcut
          },
@@ -3188,7 +3188,7 @@ Shortcut Shortcut::_sc[] = {
          "playback-ms3",
          QT_TRANSLATE_NOOP("action","MuseScore 3"),
          QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 3"),
-         QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 3 (its dynamics, reverb and SoundFont)"),
+         QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 3"),
          Icons::Invalid_ICON,
          Qt::ApplicationShortcut,
          ShortcutFlags::A_CHECKABLE
@@ -3210,7 +3210,7 @@ Shortcut Shortcut::_sc[] = {
          "playback-library",
          QT_TRANSLATE_NOOP("action","Playback: sound library"),
          QT_TRANSLATE_NOOP("action","Playback mode: sound library"),
-         QT_TRANSLATE_NOOP("action","Playback mode: MuseScore 4 with the sound library"),
+         QT_TRANSLATE_NOOP("action","Playback mode: sound library"),
          Icons::Invalid_ICON,
          Qt::ApplicationShortcut,
          ShortcutFlags::A_CHECKABLE
@@ -3221,7 +3221,7 @@ Shortcut Shortcut::_sc[] = {
          "tuning",
          QT_TRANSLATE_NOOP("action","Tuning…"),
          0,
-         QT_TRANSLATE_NOOP("action","Tuning: the score's temperament (historical tunings)"),
+         QT_TRANSLATE_NOOP("action","Set the score's temperament"),
          Icons::Invalid_ICON,
          Qt::WindowShortcut
          },
@@ -3231,7 +3231,7 @@ Shortcut Shortcut::_sc[] = {
          "even-levels",
          QT_TRANSLATE_NOOP("action","Even Out Levels…"),
          0,
-         QT_TRANSLATE_NOOP("action","Even out levels: measure the slurred passages of the selection (or the score) with the sound library's plug-in, and even out their notes' levels"),
+         QT_TRANSLATE_NOOP("action","Even out the levels of slurred passages played by a sound library"),
          Icons::Invalid_ICON,
          Qt::WindowShortcut
          },
@@ -3241,7 +3241,7 @@ Shortcut Shortcut::_sc[] = {
          "adapt-keysigs-to-clefs",
          QT_TRANSLATE_NOOP("action","Adapt Key Signatures to Clefs"),
          QT_TRANSLATE_NOOP("action","Adapt key signatures to clefs"),
-         QT_TRANSLATE_NOOP("action","Custom key signatures copied from a treble staff as placed: place them for each staff's clef"),
+         QT_TRANSLATE_NOOP("action","Place custom key signatures for each staff's clef"),
          Icons::Invalid_ICON,
          Qt::WindowShortcut
          },

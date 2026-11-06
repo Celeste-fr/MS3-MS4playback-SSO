@@ -1100,7 +1100,7 @@ bool write(const QString& path, const Spec& spec, QString* error)
       const QString problem = validate(data);
       if (!problem.isEmpty()) {
             if (error)
-                  *error = QObject::tr("The set came out wrong (%1); nothing was written.").arg(problem);
+                  *error = QObject::tr("The set is not valid (%1). Nothing was written.").arg(problem);
             return false;
             }
       const QByteArray gz = gzip(data);

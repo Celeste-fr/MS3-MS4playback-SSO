@@ -192,13 +192,13 @@
       <item row="3" column="0" colspan="2">
        <widget class="QCheckBox" name="phraseMark">
         <property name="toolTip">
-         <string>A phrase mark: drawn as a slur, played without legato</string>
+         <string>Drawn as a slur, played without legato</string>
         </property>
         <property name="accessibleName">
-         <string>Phrase mark (no legato)</string>
+         <string>Phrase mark</string>
         </property>
         <property name="text">
-         <string>Phrase mark (no legato)</string>
+         <string>Phrase mark</string>
         </property>
        </widget>
       </item>

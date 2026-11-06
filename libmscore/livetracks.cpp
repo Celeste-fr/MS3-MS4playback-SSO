@@ -583,7 +583,7 @@ static void knobLanes(const LiveSet::Track& t, const Written& w, const LiveSet::
             k.extra["pointsHash"] = Automation::pointsHash(k.points);
             out->push_back(k);
             if (taken && !(lane && lane->extra.value("liveHash").toString() == knobHash(p.manual)))
-                  *taken << QObject::tr("Track \"%1\": %2 at %3 in Live's panel (no automation)").arg(t.name, p.name)
+                  *taken << QObject::tr("Track \"%1\": %2 set to %3 in Live's panel").arg(t.name, p.name)
                             .arg(p.manual, 0, 'f', 4);
             }
       }
@@ -679,11 +679,10 @@ static bool within(double a, double b, double tol)
 static QString derivedNote(const QString& track, const QString& what, const Derived& d, bool mainKontakt, bool deleted = false)
       {
       const QString from = d.target.isEmpty() ? QObject::tr("from the notation")
-                           : !mainKontakt ? QObject::tr("from the part's \"%1\" lane (an extra patch's Kontakt)").arg(d.target)
+                           : !mainKontakt ? QObject::tr("from the part's \"%1\" lane").arg(d.target)
                            : d.plain ? QObject::tr("from the \"%1\" lane").arg(d.target)
-                           : QObject::tr("from the \"%1\" lane with the strum levels in it").arg(d.target);
-      return QObject::tr("Track \"%1\", %2: %3 in Live, but MuseScore writes it %4: not taken back as a lane (Update Live "
-                         "Set leaves Live's while MuseScore's is unchanged; to change it, edit the lane in MuseScore)")
+                           : QObject::tr("from the \"%1\" lane and the strum levels").arg(d.target);
+      return QObject::tr("Track \"%1\", %2: %3 in Live, but MuseScore writes it %4. To change it, edit the lane in MuseScore.")
              .arg(track, what, deleted ? QObject::tr("deleted") : QObject::tr("changed"), from);
       }
 
@@ -742,9 +741,7 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                               const double want = LiveSetWriter::utilityDb(g.utility);
                               const double got = LiveSetWriter::utilityDb(t.museScoreGain);
                               if (std::fabs(want - got) > 0.01)
-                                    notImported << QObject::tr("Track \"%1\": its \"%2\" Utility at %3 dB (MuseScore's: %4 dB) is "
-                                                               "MuseScore's gain stage; Update Live Set writes MuseScore's again (use "
-                                                               "the track's fader)").arg(t.name, LiveSetWriter::UTILITY_NAME)
+                                    notImported << QObject::tr("Track \"%1\": the \"%2\" Utility at %3 dB (MuseScore's: %4 dB) is set by MuseScore. Use the track's fader instead.").arg(t.name, LiveSetWriter::UTILITY_NAME)
                                                    .arg(got, 0, 'f', 2).arg(want, 0, 'f', 2);
                               }
                         else
@@ -759,8 +756,7 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                                           break;
                                           }
                               if (std::fabs(want - t.museScoreLowCutHz) > 0.05)
-                                    notImported << QObject::tr("Track \"%1\": its \"%2\" EQ Eight at %3 (MuseScore's: %4) is MuseScore's "
-                                                               "low cut; Update Live Set writes MuseScore's again")
+                                    notImported << QObject::tr("Track \"%1\": the \"%2\" EQ Eight at %3 (MuseScore's: %4) is MuseScore's low cut and is written again on update")
                                                    .arg(t.name, LiveSetWriter::LOW_CUT_NAME)
                                                    .arg(t.museScoreLowCutHz > 0 ? QObject::tr("%1 Hz").arg(t.museScoreLowCutHz, 0, 'f', 1) : QObject::tr("off"))
                                                    .arg(want > 0 ? QObject::tr("%1 Hz").arg(want, 0, 'f', 1) : QObject::tr("off"));
@@ -836,19 +832,19 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   else if (kontakt) {
                         if (written && hashes.count(cc) && hashes.at(cc) == w.hashes.at(cc))
                               continue;
-                        notImported << QObject::tr("Track \"%1\", %2: an extra patch's Kontakt (no lane plays it)").arg(t.name, what);
+                        notImported << QObject::tr("Track \"%1\", %2: not played by MuseScore (extra patch)").arg(t.name, what);
                         continue;
                         }
                   else if (w.kind == "copy") {
                         // a tuning copy's Controllers (its slot's channel of the patch's Kontakt): MuseScore's render
                         if (written && hashes.count(cc) && hashes.at(cc) == w.hashes.at(cc))
                               continue;
-                        notImported << QObject::tr("Track \"%1\", %2: a tuning copy's Controllers (no lane plays it)").arg(t.name, what);
+                        notImported << QObject::tr("Track \"%1\", %2: not played by MuseScore (tuning copy)").arg(t.name, what);
                         continue;
                         }
                   else if (w.kind == "technique" && written)
                         continue;               // its switch
-                  notImported << QObject::tr("Track \"%1\", %2: MuseScore doesn't play it").arg(t.name, what);
+                  notImported << QObject::tr("Track \"%1\", %2: not played by MuseScore").arg(t.name, what);
                   }
             // a derived envelope MuseScore wrote that Live's set no longer has (deleted in Live)
             if (kontakt)
@@ -873,8 +869,7 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   for (const auto& kv : knobs(t)) {
                         auto rec = w.params.find(kv.first);
                         if (rec != w.params.end() && !sameKnob(rec->second, kv.second))
-                              notImported << QObject::tr("Track \"%1\", \"%2\" turned to %3 in Live: an extra patch's Kontakt (no lane "
-                                                         "plays it)").arg(t.name, kv.first).arg(kv.second, 0, 'f', 4);
+                              notImported << QObject::tr("Track \"%1\", \"%2\" set to %3 in Live: not played by MuseScore (extra patch)").arg(t.name, kv.first).arg(kv.second, 0, 'f', 4);
                         }
                   }
             // the track delay
@@ -884,7 +879,7 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                         im.delays[part] = TrackDelays::of(part, TrackDelays::read(score));
                   TrackDelays::Delays& d = im.delays[part];
                   if (t.delayInSamples && t.delay != 0)
-                        notImported << QObject::tr("Track \"%1\": its Track Delay is in samples (MuseScore's are in ms)").arg(t.name);
+                        notImported << QObject::tr("Track \"%1\": Track Delay is in samples; MuseScore uses ms").arg(t.name);
                   else if (w.kind == "part")
                         d.ms = TrackDelays::clampMs(t.delay);
                   else if (t.delay + w.lookahead != 0)     // (written notes: the lookahead was taken off, livetiming.h)
@@ -914,8 +909,7 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   l.extra.remove("paramId");
                   l.extra["hosted"] = title;
                   l.extra["basePoints"] = r->second.points;
-                  im.report.matched << QObject::tr("Track \"%1\": \"%2\" changed in Live: the \"%3\" lane (its values as they "
-                                                   "are)").arg(l.extra.value("track").toString(), title, l.target);
+                  im.report.matched << QObject::tr("Track \"%1\": \"%2\" changed in Live; imported as the \"%3\" lane").arg(l.extra.value("track").toString(), title, l.target);
                   }
             }
       for (const auto& pk : knobOut)
@@ -924,8 +918,7 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   ++im.report.lanes;
                   }
       if (!knobsTaken.isEmpty())
-            im.report.matched << QObject::tr("Plug-in parameters set in Live's panel, without automation (each a lane with "
-                                             "one value):") << knobsTaken;
+            im.report.matched << QObject::tr("Plug-in parameters set in Live's panel (each imported as a lane with one value):") << knobsTaken;
       im.report.unmatched << notImported;
       return im;
       }

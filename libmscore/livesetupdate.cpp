@@ -895,8 +895,7 @@ LiveTimingOverride::Result timingFromSet(const Score* score, const QByteArray& x
             auto wi = recorded.written.find(t.annotation);
             if (wi == recorded.written.end() || wi->second.notes.isEmpty()) {
                   if (notes && !file.empty())
-                        notes->append(QObject::tr("%1: the set has no record of the notes MuseScore wrote there (made before "
-                                                  "Update Live Set): timing edits in Live not taken").arg(nameOf(x, o)));
+                        notes->append(QObject::tr("%1: the set has no record of the notes MuseScore wrote, so timing edits in Live were not taken").arg(nameOf(x, o)));
                   continue;
                   }
             std::multiset<quint32> rec = notesFromRecord(wi->second.notes);
@@ -985,7 +984,7 @@ LiveTimingOverride::Result timingFromSet(const Score* score, const QByteArray& x
                   other += sUsed[j] ? 0 : 1;
             r.other += other;
             if (notes && other)
-                  notes->append(QObject::tr("%1: %n note edit(s) in Live that aren't timing (velocity, notes added or deleted)", "", other)
+                  notes->append(QObject::tr("%1: %n note edit(s) in Live other than timing (velocity, added or deleted notes) not taken", "", other)
                                 .arg(nameOf(x, o)));
             }
       return r;
@@ -1064,12 +1063,12 @@ QString Report::text() const
             };
       list(QObject::tr("Updated:"), updated);
       list(QObject::tr("Added:"), added);
-      list(QObject::tr("Cleared (no longer played; the tracks kept):"), cleared);
-      list(QObject::tr("Kept as edited in Live (the score's notes there unchanged):"), keptLive);
-      list(QObject::tr("Edited in Live, replaced by the score's (changed there too):"), replacedLive);
-      list(QObject::tr("Parts no longer in the score (their tracks untouched):"), removedParts);
+      list(QObject::tr("Cleared (tracks kept):"), cleared);
+      list(QObject::tr("Kept as edited in Live:"), keptLive);
+      list(QObject::tr("Replaced by the score's (changed in both):"), replacedLive);
+      list(QObject::tr("Parts no longer in the score (tracks untouched):"), removedParts);
       list(QObject::tr("Skipped:"), skipped);
-      s += QObject::tr("Kept: %n device(s) you added", "", userDevices) + ", "
+      s += QObject::tr("%n device(s) of yours kept", "", userDevices) + ", "
            + QObject::tr("%n other track(s)", "", otherTracks) + ", " + QObject::tr("%n return track(s)", "", returnTracks) + ".\n";
       return s;
       }
@@ -1091,8 +1090,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
             }
       const Keyed k = keyed(ox, old, recorded);
       if (k.byKey.empty()) {
-            *error = QObject::tr("This set has no track MuseScore wrote (Create Live Set marks its tracks in their Info text): "
-                                 "nothing to update.");
+            *error = QObject::tr("This set has no track written by MuseScore. Nothing to update.");
             return QByteArray();
             }
       const std::vector<int> ftracks = trackList(fx);
@@ -1101,7 +1099,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
             return QByteArray();
             }
       for (const QString& d : k.duplicates)
-            rep.skipped << QObject::tr("%1: another track has its Info text (duplicated in Live?): left as it is").arg(d);
+            rep.skipped << QObject::tr("%1: another track has the same Info text (duplicated in Live?); left as it is").arg(d);
       const QByteArray nl = ox.nl();
 
       std::vector<Edit> edits;
@@ -1200,7 +1198,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
             const int tdv = ox.child(td, "Value");
             if (tdv >= 0 && std::fabs(ox.value(tdv).toDouble() - t.delayMs) > 0.005) {
                   if (ox.childValue(td, "IsValueSampleBased") == "true")
-                        rep.skipped << QObject::tr("%1: its Track Delay is in samples in Live: not set to %2 ms").arg(name).arg(t.delayMs);
+                        rep.skipped << QObject::tr("%1: Track Delay is in samples in Live; not set to %2 ms").arg(name).arg(t.delayMs);
                   else {
                         int a = 0, b = 0;
                         if (ox.attrRange(tdv, "Value", &a, &b)) {
@@ -1257,8 +1255,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                   const int blob = link < 0 ? -1 : ox.path(link, { "BlobSlot", "Value", "MxDBlob", "Blob" });
                   if (blob < 0) {
                         if (!t.linkTiming.empty())
-                              rep.skipped << QObject::tr("%1: no MuseScore Link on the track: its notes play as written (no "
-                                                         "timing)").arg(name);
+                              rep.skipped << QObject::tr("%1: no MuseScore Link on the track; its notes play as written").arg(name);
                         }
                   else {
                         bool same = true;
@@ -1377,13 +1374,12 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                               if (std::fabs(now - t.legacyVolume) <= std::max(1e-6, t.legacyVolume * 1e-4)) {
                                     if (std::fabs(now - t.volume) > std::max(1e-6, t.volume * 1e-4) && ox.attrRange(vm, "Value", &a, &b)) {
                                           edits.push_back({ a, b, LiveSetWriter::Writer::num(t.volume).toUtf8() });
-                                          what << QObject::tr("fader %1 dB (its old volume moved to the Utility)")
+                                          what << QObject::tr("fader %1 dB (old volume moved to the Utility)")
                                                   .arg(LiveSetWriter::utilityDb(t.volume), 0, 'f', 2);
                                           }
                                     }
                               else if (std::fabs(now - t.volume) > std::max(1e-6, t.volume * 1e-4))
-                                    rep.skipped << QObject::tr("%1: its fader (%2 dB) is yours, kept; it may still hold the level "
-                                                               "MuseScore's Utility now plays (%3 dB before)")
+                                    rep.skipped << QObject::tr("%1: fader (%2 dB) kept as yours; it may still include the level MuseScore's Utility now sets (%3 dB before)")
                                                    .arg(name).arg(LiveSetWriter::utilityDb(now), 0, 'f', 2)
                                                    .arg(LiveSetWriter::utilityDb(t.legacyVolume), 0, 'f', 2);
                               }
@@ -1395,12 +1391,10 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                               edits.push_back({ ox.at(ps).start, ox.at(ps).end, hexElement("ProcessorState", t.plugin.component,
                                                                                            ox.indent(ps), nl) });
                               stateReplaced = true;
-                              what << QObject::tr("Kontakt's state (its slots' tunings changed: %1; settings changed in Kontakt's "
-                                                  "window there are reset)").arg(tunings.isEmpty() ? QObject::tr("one slot") : tunings);
+                              what << QObject::tr("Kontakt state (tunings changed: %1; settings changed in Kontakt's window are reset)").arg(tunings.isEmpty() ? QObject::tr("one slot") : tunings);
                               }
                         else
-                              rep.skipped << QObject::tr("%1: its slots' tunings changed (%2), but no Kontakt state was made: create "
-                                                         "the set again for it").arg(name, tunings);
+                              rep.skipped << QObject::tr("%1: tunings changed (%2), but no Kontakt state was made. Create the set again.").arg(name, tunings);
                         }
                   // Live's panel of the plug-in (Configure): its parameters by title, and its free slots (the writer's 128,
                   // Live's own: no name, ParameterId -1)
@@ -1457,7 +1451,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                               continue;
                         if (a.keepLive) {
                               rep.skipped << (a.keepNote.isEmpty()
-                                              ? QObject::tr("%1: %2 changed in Live and in MuseScore (not chosen): Live's left as it is")
+                                              ? QObject::tr("%1: %2 changed in Live and in MuseScore; kept as in Live")
                                                 .arg(name, a.name)
                                               : QString("%1: %2").arg(name, a.keepNote));
                               continue;
@@ -1470,8 +1464,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                               }
                         const int target = p >= 0 ? ox.path(p, { "ParameterValue", "AutomationTarget" }) : -1;
                         if (target < 0) {
-                              rep.skipped << QObject::tr("%1: Kontakt doesn't list %2 in Live's panel (Configure): its automation "
-                                                         "not written").arg(name, a.name);
+                              rep.skipped << QObject::tr("%1: %2 is not in Live's Kontakt panel (Configure); its automation was not written").arg(name, a.name);
                               continue;
                               }
                         const QByteArray id = ox.rawAttr(target, "Id");
@@ -1507,8 +1500,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                         int p = findParam(c.name);
                         if (c.keepLive) {
                               if (p >= 0)
-                                    rep.skipped << QObject::tr("%1: %2 changed in Live and in MuseScore (not chosen): Live's left "
-                                                               "as it is").arg(name, c.name);
+                                    rep.skipped << QObject::tr("%1: %2 changed in Live and in MuseScore; kept as in Live").arg(name, c.name);
                               continue;
                               }
                         if (p < 0) {
@@ -1519,9 +1511,8 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                                     values << QString("%1 %2").arg(c.name).arg(c.value, 0, 'f', 4);
                                     }
                               else
-                                    rep.skipped << QObject::tr("%1: Kontakt doesn't list %2 in Live's panel (Configure)%3: its value "
-                                                               "%4 is in Kontakt's state only").arg(name, c.name)
-                                                   .arg(c.id < 0 ? QObject::tr(" and its id isn't known") : QObject::tr(", no free slot"))
+                                    rep.skipped << QObject::tr("%1: %2 is not in Live's Kontakt panel (Configure)%3; its value %4 is in Kontakt's state only").arg(name, c.name)
+                                                   .arg(c.id < 0 ? QObject::tr(", id unknown") : QObject::tr(", no free slot"))
                                                    .arg(c.value, 0, 'f', 4);
                               continue;
                               }
@@ -1557,7 +1548,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
                   // the state agree, whether Live sets the panel's values again when it opens the set or not)
                   if (t.parameterState && !stateReplaced && ps >= 0 && !t.plugin.component.isEmpty()) {
                         edits.push_back({ ox.at(ps).start, ox.at(ps).end, hexElement("ProcessorState", t.plugin.component, ox.indent(ps), nl) });
-                        what << QObject::tr("Kontakt's state with them (the set's own, its other settings kept)");
+                        what << QObject::tr("Kontakt state with them");
                         }
                   // [levels] lowCut 2: MuseScore's EQ Eight's band 1 / 2 frequency as an envelope each (the cutoff MuseScore's
                   // slot plays); written where it differs, inserted where missing, removed with lowCut 1 / 0 now
@@ -1843,7 +1834,7 @@ QByteArray update(const QByteArray& old, const LiveSetWriter::Spec& fresh, const
             }
       const Xml check(out);
       if (!check.ok()) {
-            *error = QObject::tr("The updated set would not be well formed (%1): nothing written.").arg(check.error());
+            *error = QObject::tr("The updated set is not valid (%1). Nothing was written.").arg(check.error());
             return QByteArray();
             }
       rep.changed = out != old;

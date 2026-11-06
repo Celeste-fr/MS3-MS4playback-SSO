@@ -508,8 +508,7 @@ void LiveClipsLink::takeEdit(const QString& key, const Report& r)
             return;
       auto k = _known.find(key);
       if (k == _known.end()) {
-            _lastEdit = tr("A clip (%1) was edited in Live, but this MuseScore doesn't know what it wrote there: "
-                           "MuseScore's clip replaces it at the next change.").arg(key);
+            _lastEdit = tr("Clip %1 was edited in Live. MuseScore's version replaces it at the next change.").arg(key);
             log(QString("edited in Live: %1, not known").arg(key));
             emit statusChanged();
             return;
@@ -539,7 +538,7 @@ void LiveClipsLink::takeEdit(const QString& key, const Report& r)
       const QString clip = k->second.track.clip.mid(QString("MuseScore: ").size());
       _lastEdit = tr("%1, edited in Live: the timing of %n note(s) kept", "", int(res.edits.size())).arg(clip);
       if (res.other)
-            _lastEdit += "; " + tr("%n other edit(s) (velocity, pitch, notes added or deleted) replaced at the next change",
+            _lastEdit += "; " + tr("%n other edit(s) will be replaced at the next change",
                                    "", res.other);
       log(QString("edited in Live: %1: %2 timing edits (%3 values changed), %4 unchanged, %5 other")
           .arg(key).arg(res.edits.size()).arg(changed).arg(res.unchanged).arg(res.other));
@@ -1000,11 +999,11 @@ QStringList LiveClipsLink::keysWithoutTrack(const MasterScore* score, bool* know
 QString LiveClipsLink::statusText() const
       {
       if (!_on)
-            return tr("Off: MuseScore plays through Live (Preferences > I/O > Play through: MIDI output) and is the clock.");
+            return tr("Off: MuseScore plays through Live and leads the timing.");
       if (!playingThroughMidi())
-            return tr("Waiting: set Preferences > I/O > Play through to MIDI output (Live hosts the library).");
+            return tr("Waiting: set Play through to MIDI output in Preferences > I/O.");
       if (!connected())
-            return tr("Waiting for the MuseScore Link device in Live (network port %1).").arg(_port);
+            return tr("Waiting for MuseScore Link in Live (port %1).").arg(_port);
       int ok = 0, waiting = 0, dropped = 0, high = 0;
       QStringList problems;
       for (const auto& s : _sent) {
@@ -1018,7 +1017,7 @@ QString LiveClipsLink::statusText() const
                   problems << QString("%1: %2").arg(s.second.track.clip.mid(QString("MuseScore: ").size()), s.second.status);
             if (!s.second.track.params.empty()) {
                   if (_deviceProtocol < 3)
-                        problems << tr("%1: automation of plug-in parameters needs the MuseScore Link device of this MuseScore")
+                        problems << tr("%1: update MuseScore Link for plug-in parameter automation")
                                     .arg(s.second.track.clip.mid(QString("MuseScore: ").size()));
                   else if (s.second.paramsConfirmed && s.second.paramsStatus != "ok")
                         problems << QString("%1: %2").arg(s.second.track.clip.mid(QString("MuseScore: ").size()), s.second.paramsStatus);
@@ -1031,8 +1030,7 @@ QString LiveClipsLink::statusText() const
       if (_lastSync)
             text += " " + tr("Last update: %1.").arg(QDateTime::fromMSecsSinceEpoch(_lastSync).toString("HH:mm:ss"));
       if (_timeline.score && _liveBpm > 0 && std::fabs(_liveBpm - _timeline.bpm) > 0.01)
-            text += "\n" + tr("Live's tempo is %1, the clips are at %2 bpm: set Live's tempo back (and leave its tempo "
-                              "automation empty).").arg(_liveBpm, 0, 'f', 2).arg(_timeline.bpm, 0, 'f', 2);
+            text += "\n" + tr("Live's tempo is %1 but the clips are at %2 bpm. Set Live's tempo back and leave its tempo automation empty.").arg(_liveBpm, 0, 'f', 2).arg(_timeline.bpm, 0, 'f', 2);
       if (_songConfirmed && _songStatus != "ok")
             text += "\n" + tr("Tempo and locators: %1").arg(_songStatus);
       if (!problems.isEmpty())
@@ -1040,16 +1038,16 @@ QString LiveClipsLink::statusText() const
       if (_score) {
             const int overrides = LiveTimingOverride::count(_score);
             if (overrides)
-                  text += "\n" + tr("%n note(s) play the timing set in Live (Inspector › Note › Start / End from Live).", "",
+                  text += "\n" + tr("%n note(s) use timing set in Live.", "",
                                     overrides);
             }
       if (!_lastEdit.isEmpty())
             text += "\n" + _lastEdit;
       if (dropped)
-            text += "\n" + tr("%n event(s) a clip can't hold were left out (other controllers).",
+            text += "\n" + tr("%n event(s) were left out: clips can't hold other controllers.",
                               "", dropped);
       if (high)
-            text += "\n" + tr("%n note(s) at F#8 or above were left out (those keys carry the controllers and the pitch bend).", "", high);
+            text += "\n" + tr("%n note(s) at F#8 or above were left out: those keys carry controllers and pitch bend.", "", high);
       return text;
       }
 

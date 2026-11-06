@@ -14,6 +14,7 @@
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 
+#include <algorithm>
 #include <cmath>
 #include <QComboBox>
 #include <QCoreApplication>
@@ -33,6 +34,35 @@
 
 namespace Ms {
 
+// the panel's texts: Playback::display()'s, translated (a setting without them shows its ini name)
+static QString tx(const char* s)
+      {
+      return QCoreApplication::translate("playbackSettings", s);
+      }
+
+static QString labelOf(const QString& id)
+      {
+      const Playback::Display* disp = Playback::display(id.toUtf8().constData());
+      return disp ? tx(disp->label) : id;
+      }
+
+// names of the values d.min, d.min + 1 … d.max; empty: the setting is a number
+static QStringList valueNames(const Playback::Definition& d)
+      {
+      QStringList names;
+      const Playback::Display* disp = Playback::display(d.id);
+      if (disp && !disp->values.empty()) {
+            for (const char* n : disp->values)
+                  names << tx(n);
+            }
+      else if (QString(d.unit) == "on/off")
+            names << QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "Off"))
+                  << QCoreApplication::translate("playbackSettings", QT_TRANSLATE_NOOP("playbackSettings", "On"));
+      if (names.size() != int(std::lround(d.max - d.min)) + 1)
+            return QStringList();
+      return names;
+      }
+
 PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_ptr<const SoundLib::Library> library,
                                                std::function<void(const char*, const QString&)> setMetaTag, QWidget* parent)
    : QWidget(parent), _score(score), _library(library), _setMetaTag(setMetaTag)
@@ -42,8 +72,7 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       QHBoxLayout* ph = new QHBoxLayout;
       ph->addWidget(new QLabel(tr("Preset:"), this));
       _preset = new QComboBox(this);
-      _preset->setToolTip(tr("Rewrites every setting in playback.ini: the preset's values, every other setting at its default; "
-                             "the old file is kept as playback.ini.bak. Then reads it again, playback going on."));
+      _preset->setToolTip(tr("Replaces your settings with the preset's values and keeps the old file as playback.ini.bak"));
       ph->addWidget(_preset);
       _presetInfo = new QLabel(this);
       ph->addWidget(_presetInfo, 1);
@@ -56,14 +85,14 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       _tree->header()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
       v->addWidget(_tree);
       QHBoxLayout* h = new QHBoxLayout;
-      QPushButton* reset = new QPushButton(tr("Reset to ini/default"), this);
-      reset->setToolTip(tr("Takes this score's own value of the selected setting away (all of a selected group's)"));
-      QPushButton* open = new QPushButton(tr("Open playback.ini"), this);
+      QPushButton* reset = new QPushButton(tr("Reset"), this);
+      reset->setToolTip(tr("Use your settings or the defaults for the selected settings in this score"));
+      QPushButton* open = new QPushButton(tr("Open Settings File"), this);
       open->setToolTip(Playback::iniPath());
-      QPushButton* reload = new QPushButton(tr("Reload playback.ini"), this);
-      reload->setToolTip(tr("Reads playback.ini again and renders the scores again"));
-      QPushButton* clear = new QPushButton(tr("Clear this score's values"), this);
-      clear->setToolTip(tr("Takes all of this score's own values away: playback.ini (the preset) or the defaults apply"));
+      QPushButton* reload = new QPushButton(tr("Reload Settings File"), this);
+      reload->setToolTip(tr("Reads your settings file again"));
+      QPushButton* clear = new QPushButton(tr("Reset All"), this);
+      clear->setToolTip(tr("Use your settings or the defaults for every setting in this score"));
       h->addWidget(reset);
       h->addWidget(clear);
       h->addStretch();
@@ -170,7 +199,7 @@ void PlaybackSettingsWidget::setScoreValue(const char* id, double value, bool re
       _setMetaTag(Playback::metaTag, Playback::writeScoreValues(values));
       }
 
-// the Preset box: both presets, and (Custom), not selectable, only when the ini matches neither
+// the Preset box: both presets, and Custom, not selectable, only when the ini matches neither
 void PlaybackSettingsWidget::fillPreset()
       {
       const QString now = Playback::currentPreset();
@@ -178,14 +207,16 @@ void PlaybackSettingsWidget::fillPreset()
       for (const Playback::Preset& p : Playback::presets())
             _preset->addItem(QCoreApplication::translate("playbackSettings", p.name), QString(p.id));
       if (now.isEmpty()) {
-            _preset->addItem(tr("(Custom)"), QString());
+            _preset->addItem(tr("Custom"), QString());
             QStandardItemModel* m = qobject_cast<QStandardItemModel*>(_preset->model());
             if (m)
                   m->item(_preset->count() - 1)->setFlags(Qt::NoItemFlags);
             }
       _preset->setCurrentIndex(now.isEmpty() ? _preset->count() - 1 : _preset->findData(now));
-      const QStringList over = Playback::presetKeysOverriddenBy(_score.data());
-      _presetInfo->setText(over.isEmpty() ? QString() : tr("this score overrides: %1").arg(over.join(", ")));
+      QStringList over;
+      for (const QString& id : Playback::presetKeysOverriddenBy(_score.data()))
+            over << labelOf(id);
+      _presetInfo->setText(over.isEmpty() ? QString() : tr("Set in this score: %1").arg(over.join(", ")));
       }
 
 void PlaybackSettingsWidget::refresh()
@@ -204,61 +235,110 @@ void PlaybackSettingsWidget::refresh()
                         focused = (*i)->data(0, Qt::UserRole).toString();
       QWidget* focusBox = nullptr;
       _tree->clear();
-      std::map<QString, QTreeWidgetItem*> groups;
+      // the groups in displayGroups()' order (a setting without display data last, under its ini section), each
+      // group's settings in the definitions' order
+      std::vector<std::pair<QString, std::vector<const Playback::Definition*>>> groups;
+      for (const char* g : Playback::displayGroups())
+            groups.push_back({ QString(g), {} });
       for (const Playback::Definition& d : Playback::definitions()) {
-            const QString id = d.id;
-            const QString group = id.section('/', 0, 0);
-            QTreeWidgetItem*& g = groups[group];
-            if (!g) {
-                  g = new QTreeWidgetItem(_tree, { "[" + group + "]" });
-                  g->setFirstColumnSpanned(false);
-                  g->setExpanded(true);
+            const Playback::Display* disp = Playback::display(d.id);
+            const QString group = disp ? QString(disp->group) : QString(d.id).section('/', 0, 0);
+            auto g = std::find_if(groups.begin(), groups.end(), [&](const auto& x) { return x.first == group; });
+            if (g == groups.end()) {
+                  groups.push_back({ group, {} });
+                  g = groups.end() - 1;
                   }
-            const double map = mapValue(d.id);
-            const double v = Playback::value(d.id, d.perScore ? _score.data() : nullptr, map);
-            const Playback::Source src = Playback::source(d.id, d.perScore ? _score.data() : nullptr, map);
-            QTreeWidgetItem* it = new QTreeWidgetItem(g, { id.section('/', 1), QString(), Playback::sourceName(src) });
-            it->setData(0, Qt::UserRole, id);
-            for (int c = 0; c < 3; ++c)
-                  it->setToolTip(c, QString("%1: %2").arg(id, d.comment));
-            if (id == selected)
-                  it->setSelected(true);
-            QDoubleSpinBox* box = new QDoubleSpinBox(_tree);
-            box->setRange(d.min, d.max);
-            const bool integral = d.min == std::floor(d.min) && d.max == std::floor(d.max)
-                                  && QString(d.unit) != "s" && QString(d.unit) != "cents" && id != "shorts/portato";
-            box->setDecimals(id == "tuning/tolerance" ? 3 : integral ? 0 : 2);
-            box->setValue(v);
-            if (*d.unit && QString(d.unit) != "on/off")
-                  box->setSuffix(QString(" ") + d.unit);
-            // (computed when the map gives none: tuning tail per note; copies: no maximum, as the music needs; the map's
-            // maxLanes is 0 when it gives none)
-            if ((id == "tuning/tail" ? map < 0 : map <= 0) && src != Playback::Source::SCORE && src != Playback::Source::INI
-                && (id == "tuning/tail" || id == "tuning/maxLanes")) {
-                  box->setMinimum(d.min - 1);
-                  box->setSpecialValueText(id == "tuning/tail" ? tr("measured release") : tr("as the music needs"));
-                  box->setValue(d.min - 1);
+            g->second.push_back(&d);
+            }
+      for (const auto& group : groups) {
+            if (group.second.empty())
+                  continue;
+            QTreeWidgetItem* g = new QTreeWidgetItem(_tree, { tx(group.first.toUtf8().constData()) });
+            g->setFirstColumnSpanned(false);
+            g->setExpanded(true);
+            for (const Playback::Definition* dp : group.second) {
+                  const Playback::Definition& d = *dp;
+                  const QString id = d.id;
+                  const Playback::Display* disp = Playback::display(d.id);
+                  const double map = mapValue(d.id);
+                  const double v = Playback::value(d.id, d.perScore ? _score.data() : nullptr, map);
+                  const Playback::Source src = Playback::source(d.id, d.perScore ? _score.data() : nullptr, map);
+                  QTreeWidgetItem* it = new QTreeWidgetItem(g, { labelOf(id), QString(), Playback::sourceName(src) });
+                  it->setData(0, Qt::UserRole, id);
+                  // (the ini name ends the tooltip, to find the setting in playback.ini)
+                  const QString tip = disp ? QString("%1 (%2)").arg(tx(disp->tooltip), id) : QString("%1: %2").arg(id, d.comment);
+                  for (int c = 0; c < 3; ++c)
+                        it->setToolTip(c, tip);
+                  if (id == selected)
+                        it->setSelected(true);
+                  QFont f = _tree->font();
+                  f.setBold(src == Playback::Source::SCORE);
+                  const QByteArray key = id.toUtf8();
+                  QWidget* editor = nullptr;
+                  const QStringList names = valueNames(d);
+                  if (!names.isEmpty()) {
+                        // a mode or on/off: its named values
+                        QComboBox* combo = new QComboBox(_tree);
+                        for (int i = 0; i < names.size(); ++i)
+                              combo->addItem(names[i], d.min + i);
+                        const int index = int(std::lround(v - d.min));
+                        if (index >= 0 && index < names.size())
+                              combo->setCurrentIndex(index);
+                        else {
+                              combo->addItem(QString::number(v), v);    // (a value between the named ones: shown as is)
+                              combo->setCurrentIndex(combo->count() - 1);
+                              }
+                        connect(combo, QOverload<int>::of(&QComboBox::activated), this, [this, key, combo](int i) {
+                              if (_filling)
+                                    return;
+                              setScoreValue(key.constData(), combo->itemData(i).toDouble(), false);
+                              // (after the box's signal: refresh deletes the box)
+                              QTimer::singleShot(0, this, [this]() {
+                                    refresh();
+                                    emit changed();
+                                    });
+                              });
+                        editor = combo;
+                        }
+                  else {
+                        QDoubleSpinBox* box = new QDoubleSpinBox(_tree);
+                        box->setRange(d.min, d.max);
+                        const bool integral = d.min == std::floor(d.min) && d.max == std::floor(d.max)
+                                              && QString(d.unit) != "s" && QString(d.unit) != "cents" && id != "shorts/portato";
+                        box->setDecimals(id == "tuning/tolerance" ? 3 : integral ? 0 : 2);
+                        box->setValue(v);
+                        if (*d.unit && QString(d.unit) != "on/off")
+                              box->setSuffix(QString(" ") + d.unit);
+                        if (disp && disp->special)
+                              box->setSpecialValueText(tx(disp->special));
+                        // (computed when the map gives none: tuning tail per note; copies: no maximum, as the music needs; the map's
+                        // maxLanes is 0 when it gives none)
+                        if ((id == "tuning/tail" ? map < 0 : map <= 0) && src != Playback::Source::SCORE && src != Playback::Source::INI
+                            && (id == "tuning/tail" || id == "tuning/maxLanes")) {
+                              box->setMinimum(d.min - 1);
+                              box->setSpecialValueText(id == "tuning/tail" ? tr("Measured release") : tr("No maximum"));
+                              box->setValue(d.min - 1);
+                              }
+                        box->setKeyboardTracking(false);
+                        connect(box, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this, key](double x) {
+                              if (_filling)
+                                    return;
+                              setScoreValue(key.constData(), x, false);
+                              // (after the box's signal: refresh deletes the box)
+                              QTimer::singleShot(0, this, [this]() {
+                                    refresh();
+                                    emit changed();
+                                    });
+                              });
+                        editor = box;
+                        }
+                  editor->setEnabled(d.perScore && _score);
+                  editor->setToolTip(tip);
+                  editor->setFont(f);
+                  _tree->setItemWidget(it, 1, editor);
+                  if (id == focused)
+                        focusBox = editor;
                   }
-            box->setKeyboardTracking(false);
-            box->setEnabled(d.perScore && _score);
-            box->setToolTip(it->toolTip(0));
-            QFont f = box->font();
-            f.setBold(src == Playback::Source::SCORE);
-            box->setFont(f);
-            const QByteArray key = id.toUtf8();
-            connect(box, QOverload<double>::of(&QDoubleSpinBox::valueChanged), this, [this, key](double x) {
-                  if (_filling)
-                        return;
-                  setScoreValue(key.constData(), x, false);
-                  // (after the box's signal: refresh deletes the box)
-                  QTimer::singleShot(0, this, [this]() {
-                        refresh();
-                        emit changed();
-                        });
-                  });
-            _tree->setItemWidget(it, 1, box);
-            if (id == focused)
-                  focusBox = box;
             }
       _tree->doItemsLayout();
       _tree->verticalScrollBar()->setValue(scrolled);
@@ -266,7 +346,7 @@ void PlaybackSettingsWidget::refresh()
             focusBox->setFocus();
       QStringList warn = Playback::warnings();
       // (one line: the details on hover)
-      _info->setText(warn.isEmpty() ? QString() : tr("playback.ini: %n line(s) ignored or corrected (hover for details)", "", warn.size()));
+      _info->setText(warn.isEmpty() ? QString() : tr("%n line(s) of playback.ini ignored or corrected", "", warn.size()));
       _info->setToolTip(warn.join("\n"));
       _info->setVisible(!warn.isEmpty());
       _filling = false;

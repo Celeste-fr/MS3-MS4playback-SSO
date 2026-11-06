@@ -55,6 +55,19 @@ struct Definition {
 const std::vector<Definition>& definitions();
 const Definition* definition(const QString& id);
 
+// how the playback adjustments panel (Mixer › Advanced Options…) shows a setting; every text is the source text of a
+// translation in context "playbackSettings" (QCoreApplication::translate). Display only: ids, ini and values unchanged
+struct Display {
+      const char* id;                     // the Definition's
+      const char* group;                  // group title, one of displayGroups()
+      const char* label;
+      const char* tooltip;                // one plain line (the panel adds the ini name)
+      std::vector<const char*> values;    // names of the values min, min + 1 … (empty: a number; on/off settings: Off / On)
+      const char* special = nullptr;      // shown in place of the minimum ("Automatic", "Off" …); nullptr: the number
+      };
+const std::vector<const char*>& displayGroups();      // the panel's groups, in order
+const Display* display(const char* id);               // nullptr: none (the panel shows the id)
+
 enum class Source : signed char { DEFAULT, MAP, INI, SCORE };
 QString sourceName(Source s);
 

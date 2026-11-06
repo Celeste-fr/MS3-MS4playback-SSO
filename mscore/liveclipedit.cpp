@@ -476,8 +476,8 @@ QString LiveClipEditor::envText(const MasterScore* score, QString* details) cons
       switch (s->env) {
             case EnvState::NONE:
                   if (LiveClipsLink::instance()->deviceProtocol() < PARAMS_PROTOCOL) {
-                        text = tr("no lanes (update MuseScore Link)");
-                        more = tr("Automation lanes need a newer MuseScore Link device in Live: update it.");
+                        text = tr("automation: update MuseScore Link");
+                        more = tr("Automation lanes need a newer MuseScore Link device in Live.");
                         }
                   break;
             case EnvState::READING:
@@ -485,25 +485,23 @@ QString LiveClipEditor::envText(const MasterScore* score, QString* details) cons
                   break;
             case EnvState::READY:
                   if (!TrackParams::instance()->params(s->clip.key))
-                        text = tr("waiting for the track's parameters");
+                        text = tr("waiting for track parameters");
                   else if (s->envInFlight)
                         text = tr("writing automation…");
                   else if (s->envWrites)
                         text = tr("automation in sync");
                   break;
             case EnvState::ARRANGEMENT:
-                  text = tr("no lanes (arrangement clip)");
-                  more = tr("No automation lanes: an arrangement clip has no envelopes Live's API can reach (a session "
-                            "clip has).");
+                  text = tr("no automation in arrangement clips");
+                  more = tr("Live's API cannot reach the envelopes of an arrangement clip. Session clips have them.");
                   break;
             case EnvState::NO_SCRIPT:
-                  text = tr("no lanes (MuseScore Envelopes not set up)");
-                  more = tr("No automation lanes: the MuseScore Envelopes control surface doesn't answer. Install it in "
-                            "Live and choose it in Settings > Tempo & MIDI > Control Surface.");
+                  text = tr("automation: MuseScoreEnvelopes not set up");
+                  more = tr("The MuseScoreEnvelopes control surface isn't responding. Install it in Live and choose it in Settings > Tempo & MIDI > Control Surface.");
                   break;
             case EnvState::FAILED:
-                  text = tr("envelopes failed");
-                  more = tr("Envelopes: %1").arg(s->envError);
+                  text = tr("automation failed");
+                  more = tr("Automation: %1").arg(s->envError);
                   break;
             }
       if (details)
@@ -624,10 +622,9 @@ bool LiveClipEditor::confirmVelocityWrite(QWidget* parent)
       QSettings st;
       if (st.value(NO_ASK, false).toBool())
             return true;
-      QMessageBox box(QMessageBox::Question, tr("Write velocities into the Live clip"),
+      QMessageBox box(QMessageBox::Question, tr("Write Velocities to Live Clip"),
                       tr("The Velocity lane's curve will be written into the velocities of the clip's notes in Live.\n\n"
-                         "Their velocities now are kept (in MuseScore Link, with the Live set), so the curve can be changed "
-                         "or set back to \"Shape while playing\" later: the notes then get them back."),
+                         "The current velocities are kept, so you can change the curve or set it back to \"Shape Playback Only\": the notes then get them back."),
                       QMessageBox::Cancel, parent);
       QPushButton* write = box.addButton(tr("Write"), QMessageBox::AcceptRole);
       box.setDefaultButton(write);
@@ -654,17 +651,14 @@ QString LiveClipEditor::velocityText(const MasterScore* score, QString* details)
       if (v.output == VelOutput::WRITE) {
             text = tr("velocity written");
             if (old)
-                  more = tr("Velocity: written into the notes; the notes' velocities before the curve are not kept (the "
-                            "MuseScore Link device in Live is older: update it).");
+                  more = tr("Velocity: written into the notes. Their earlier velocities are not kept: update the MuseScore Link device in Live.");
             else if (!s->velKept)
-                  more = tr("Velocity: written into the notes; the notes' velocities before the curve are kept only while "
-                            "Live runs (set up the MuseScore Envelopes control surface to keep them with the set).");
+                  more = tr("Velocity: written into the notes. Their earlier velocities are kept only while Live runs: set up MuseScoreEnvelopes to keep them with the set.");
             }
       else {
             if (old) {
-                  text = tr("velocity: MuseScore only (update MuseScore Link)");
-                  more = tr("Velocity: only MuseScore's own playback follows the curve: the MuseScore Link device in Live is "
-                            "older (update it).");
+                  text = tr("velocity: update MuseScore Link");
+                  more = tr("Velocity: only MuseScore's playback follows the curve. Update the MuseScore Link device in Live.");
                   }
             else if (!s->velStatus.isEmpty() && s->velStatus != "ok") {
                   text = tr("velocity not shaped in Live");
@@ -673,8 +667,7 @@ QString LiveClipEditor::velocityText(const MasterScore* score, QString* details)
             else {
                   text = tr("velocity shaped in Live");
                   if (!s->velKept && !s->velSent.isEmpty())
-                        more = tr("Velocity: shaped while Live runs, not kept with the set (set up the MuseScore Envelopes "
-                                  "control surface).");
+                        more = tr("Velocity: shaped only while Live runs. Set up MuseScoreEnvelopes to keep it with the set.");
                   }
             }
       if (s->velInFlight)
@@ -763,8 +756,7 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
             auto it = _sessions.find(key);
             if (it != _sessions.end()) {
                   if (it->second.state != State::GONE)
-                        LiveClipsLink::instance()->notice(tr("The Live clip %1 › %2 is gone (deleted in Live): its tab is no "
-                                                             "longer linked; Save As keeps it as a score.")
+                        LiveClipsLink::instance()->notice(tr("Live clip %2 (track %1) was deleted in Live. Its tab is no longer linked: use Save As to keep it as a score.")
                                                           .arg(it->second.clip.track, it->second.clip.name));
                   it->second.state = State::GONE;
                   it->second.inFlight = false;
@@ -849,7 +841,7 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
             else if (status == "arrangement")
                   s.env = EnvState::ARRANGEMENT;
             else if (status == "gone")
-                  s.env = EnvState::FAILED, s.envError = tr("the clip isn't in that slot any more");
+                  s.env = EnvState::FAILED, s.envError = tr("the clip is no longer in that slot");
             else
                   s.env = EnvState::FAILED, s.envError = status;
             updateStatus();
@@ -927,11 +919,10 @@ void LiveClipEditor::received(const QString& address, const QVariantList& args)
             if (!args.value(3).toString().isEmpty())
                   s.clip.track = args.value(3).toString();
             if (s.copyWas && !copy && playLiveSetting())
-                  LiveClipsLink::instance()->notice(tr("MuseScore Link was removed from the Live track %1: the clip tab %2 plays "
-                                                       "MuseScore's own sounds until the device is on that track again.")
+                  LiveClipsLink::instance()->notice(tr("MuseScore Link was removed from Live track %1. Clip tab %2 plays MuseScore's own sounds until it is added again.")
                                                     .arg(s.clip.track, s.clip.name));
             else if (!s.copyWas && copy && s.trackId == trackId && s.trackId && playLiveSetting())
-                  LiveClipsLink::instance()->notice(tr("The clip tab %1 now plays through the Live track %2.")
+                  LiveClipsLink::instance()->notice(tr("Clip tab %1 now plays through Live track %2.")
                                                     .arg(s.clip.name, s.clip.track), true);
             s.trackId = trackId;
             s.copy = copy;
@@ -965,7 +956,7 @@ void LiveClipEditor::opened(Clip clip)
       QString error;
       MasterScore* score = importClip(clip, &error);
       if (!score) {
-            mscore->showMessage(tr("Live clip %1 could not be opened: %2").arg(clip.name, error), 5000);
+            mscore->showMessage(tr("Cannot open Live clip %1: %2").arg(clip.name, error), 5000);
             send(LiveClips::osc("/ms/clip/close", { clip.key }));
             return;
             }
@@ -1155,7 +1146,7 @@ void LiveClipEditor::written(const QString& key, int writeNo, const QString& sta
       if (status == "ok") {
             if (!setAddedIds(s.pending, ids)) {
                   s.state = State::FAILED;
-                  s.error = tr("Live gave %1 id(s) for %2 added note(s): reload the clip").arg(ids.size()).arg(s.pending.added.size());
+                  s.error = tr("Live confirmed %1 of %2 added note(s). Reload the clip.").arg(ids.size()).arg(s.pending.added.size());
                   updateStatus();
                   return;
                   }
@@ -1203,7 +1194,7 @@ void LiveClipEditor::poll()
                   if (s.envTries >= MAX_TRIES) {
                         s.envInFlight = false;
                         s.env = EnvState::FAILED;
-                        s.envError = tr("the MuseScore Envelopes script stopped answering (reload the clip)");
+                        s.envError = tr("MuseScoreEnvelopes stopped responding. Reload the clip.");
                         updateStatus();
                         }
                   else {
@@ -1219,7 +1210,7 @@ void LiveClipEditor::poll()
             if (s.velAsked && !s.velRead && now - s.velSentAt >= CONFIRM_MS) {
                   if (s.velTries >= MAX_TRIES) {
                         s.velRead = true;       // (none read: the lane as it is here)
-                        s.velStatus = tr("MuseScore Link didn't answer");
+                        s.velStatus = tr("MuseScore Link isn't responding");
                         updateStatus();
                         }
                   else {
@@ -1231,7 +1222,7 @@ void LiveClipEditor::poll()
             else if (s.velInFlight && now - s.velSentAt >= CONFIRM_MS) {
                   if (s.velTries >= MAX_TRIES) {
                         s.velInFlight = false;
-                        s.velStatus = tr("MuseScore Link didn't answer");
+                        s.velStatus = tr("MuseScore Link isn't responding");
                         updateStatus();
                         }
                   else {
@@ -1446,9 +1437,8 @@ void LiveClipEditor::setFound(const QString& key, int serial, const QString& pat
             if (!s.asked && mscore && !MScore::noGui) {
                   s.asked = true;
                   QPointer<MasterScore> score = s.score;
-                  LiveClipsLink::instance()->notice(tr("The Live clip %1 › %2 plays at Live's current tempo: its Live Set wasn't "
-                                                       "found, so the song's tempo automation can't be read. Save the set in "
-                                                       "Live to use its tempo automation, or choose its file.")
+                  LiveClipsLink::instance()->notice(tr("Live clip %2 (track %1) plays at Live's current tempo because its Live Set wasn't found. "
+                                                       "Save the set in Live, or choose its file.")
                                                     .arg(s.clip.track, clipLabel(s.clip, s.place)), false,
                                                     tr("Choose Live Set…"), [this, score]() { if (score) chooseSet(score); });
                   }
@@ -1487,7 +1477,7 @@ void LiveClipEditor::chooseSet(MasterScore* score)
             return;
       const QStringList remembered = rememberedSets();
       const QString start = !s->setPath.isEmpty() ? s->setPath : (remembered.isEmpty() ? QString() : QFileInfo(remembered.first()).path());
-      const QString path = QFileDialog::getOpenFileName(mscore, tr("The Live Set of the clip %1").arg(clipLabel(s->clip, s->place)),
+      const QString path = QFileDialog::getOpenFileName(mscore, tr("Choose Live Set for %1").arg(clipLabel(s->clip, s->place)),
                                                         start, tr("Ableton Live Set") + " (*.als)");
       if (path.isEmpty())
             return;
@@ -1495,8 +1485,7 @@ void LiveClipEditor::chooseSet(MasterScore* score)
       useSet(score, path);
       auto it = _sessions.find(key);
       if (it != _sessions.end() && !it->second.searching && it->second.setPath != path)
-            LiveClipsLink::instance()->notice(tr("%1 has no clip of the track %2 at its place in the song: is the set saved "
-                                                 "in Live?").arg(QFileInfo(path).fileName(), it->second.clip.track));
+            LiveClipsLink::instance()->notice(tr("%1 has no clip on track %2 at this position. Save the set in Live and try again.").arg(QFileInfo(path).fileName(), it->second.clip.track));
       }
 
 void LiveClipEditor::watchSets()
@@ -1628,7 +1617,7 @@ QString LiveClipEditor::tempoText(const MasterScore* score, QString* details) co
       switch (s->tempoFrom) {
             case TempoFrom::LIVE:
                   text = tr("tempo: Live's (%1)").arg(bpm);
-                  more = tr("Tempo: Live's song tempo, followed as it changes.");
+                  more = tr("Follows Live's song tempo.");
                   break;
             case TempoFrom::SEARCHING:
                   text = tr("tempo: looking for the Live Set…");
@@ -1636,24 +1625,24 @@ QString LiveClipEditor::tempoText(const MasterScore* score, QString* details) co
             case TempoFrom::SET:
                   if (s->setAutomated) {
                         text = tr("tempo: the song's automation");
-                        more = tr("Tempo: the song's tempo automation under the clip, from %1 (read again when Live saves it). "
-                                  "A looping clip shows each beat at its tempo in its first pass.").arg(QDir::toNativeSeparators(s->setPath));
+                        more = tr("Follows the song's tempo automation under the clip, read from %1 and updated when Live saves it. "
+                                  "A looping clip shows its first pass.").arg(QDir::toNativeSeparators(s->setPath));
                         }
                   else {
                         text = tr("tempo: Live's (%1)").arg(bpm);
-                        more = tr("Tempo: Live's song tempo, followed as it changes (%1 has no tempo automation).")
+                        more = tr("Follows Live's song tempo. %1 has no tempo automation.")
                                .arg(QFileInfo(s->setPath).fileName());
                         }
                   break;
             case TempoFrom::NO_SET:
                   text = tr("tempo: Live's (%1), set not found").arg(bpm);
-                  more = tr("Tempo: Live's current song tempo. The clip's Live Set wasn't found: save the set in Live to use its "
-                            "tempo automation, or choose its file (Choose Live Set…).");
+                  more = tr("Follows Live's current tempo. The clip's Live Set wasn't found: save the set in Live, "
+                            "or use Choose Live Set…");
                   break;
             case TempoFrom::OLD_DEVICE:
                   text = tr("tempo: Live's (%1)").arg(bpm);
-                  more = tr("Tempo: Live's current song tempo. Update the MuseScore Link device in Live to follow the song's "
-                            "tempo automation under an arrangement clip.");
+                  more = tr("Follows Live's current tempo. Update the MuseScore Link device in Live to follow tempo automation "
+                            "under an arrangement clip.");
                   break;
             }
       if (details)
@@ -1677,7 +1666,7 @@ void LiveClipEditor::statusParts(const MasterScore* score, QStringList* parts, Q
       const Session* s = const_cast<LiveClipEditor*>(this)->sessionOf(score);
       if (!s)
             return;
-      const QString what = tr("Live clip %1 › %2").arg(s->clip.track, clipLabel(s->clip, s->place));
+      const QString what = tr("Live clip %2 (track %1)").arg(s->clip.track, clipLabel(s->clip, s->place));
       QString state;
       switch (s->state) {
             case State::SYNC:
@@ -1690,19 +1679,18 @@ void LiveClipEditor::statusParts(const MasterScore* score, QStringList* parts, Q
                   break;
             case State::CONFLICT:
                   state = tr("conflict: changed in Live");
-                  *details << tr("Conflict: the clip changed in Live; nothing more is written until you reload it "
-                                 "(Reload from Live).");
+                  *details << tr("The clip was changed in Live. Nothing is written until you use Reload from Live.");
                   break;
             case State::RELOADING:
                   state = tr("reading from Live…");
                   break;
             case State::GONE:
                   state = tr("gone from Live");
-                  *details << tr("The clip is gone from Live (deleted there): edits here are no longer written.");
+                  *details << tr("The clip was deleted in Live. Edits here are no longer written.");
                   break;
             case State::NO_ANSWER:
-                  state = tr("Live doesn't answer");
-                  *details << tr("Live doesn't answer: is the MuseScore Link device loaded?");
+                  state = tr("Live isn't responding");
+                  *details << tr("Is the MuseScore Link device loaded in Live?");
                   break;
             case State::FAILED:
                   state = tr("failed");
@@ -1731,28 +1719,27 @@ void LiveClipEditor::statusParts(const MasterScore* score, QStringList* parts, Q
       if (s->base.unmatched || s->base.outside) {
             const int n = s->base.unmatched + s->base.outside;
             *parts << tr("%n Live note(s) not shown", "", n);
-            *details << tr("%n Live note(s) not shown here are left as they are.", "", n);
+            *details << tr("%n Live note(s) not shown are left unchanged.", "", n);
             }
       // playback
       const LiveClipsLink* link = LiveClipsLink::instance();
       if (!playLiveSetting())
             return;                             // (MuseScore's own sounds, as asked)
       if (!link->deviceAnswers()) {
-            *parts << tr("Live link lost: own sounds");
-            *details << tr("The connection to Live is lost: MuseScore's own sounds play (it reconnects by itself).");
+            *parts << tr("Live link lost");
+            *details << tr("The connection to Live is lost. MuseScore's own sounds play until it reconnects.");
             }
       else if (liveTrack(score)) {
             *parts << tr("plays through Live");
-            *details << tr("Plays through Live's track %1.").arg(s->clip.track);
+            *details << tr("Plays through Live track %1.").arg(s->clip.track);
             }
       else if (link->deviceProtocol() < MIDI_PROTOCOL || !s->trackId) {
-            *parts << tr("own sounds (update MuseScore Link)");
-            *details << tr("MuseScore's own sounds: the MuseScore Link device in Live is older (update it to play "
-                           "through the track).");
+            *parts << tr("own sounds: update MuseScore Link");
+            *details << tr("Plays MuseScore's own sounds. Update the MuseScore Link device in Live to play through the track.");
             }
       else if (!s->copy) {
-            *parts << tr("own sounds (no MuseScore Link on the track)");
-            *details << tr("Add MuseScore Link to the Live track %1 to hear it there (MuseScore's own sounds meanwhile).")
+            *parts << tr("own sounds: no MuseScore Link on the track");
+            *details << tr("Plays MuseScore's own sounds. Add MuseScore Link to Live track %1 to hear it there.")
                         .arg(s->clip.track);
             }
       }
@@ -1792,11 +1779,9 @@ void LiveClipEditor::updateStatus()
             h->setContentsMargins(4, 0, 4, 0);
             _statusLabel = new ElidedLabel(_status);    // (cut to its room: never widens the window; the owner, 2026-10-03)
             _reload = new QPushButton(tr("Reload from Live"), _status);
-            _reload->setToolTip(tr("Read the clip from Live again, as it is there now. Edits made here and not yet in "
-                                   "Live are lost."));
+            _reload->setToolTip(tr("Read the clip from Live again. Edits not yet sent to Live are lost."));
             _chooseSet = new QPushButton(tr("Choose Live Set…"), _status);
-            _chooseSet->setToolTip(tr("The Live Set this arrangement clip is in, for the song's tempo automation (Live doesn't "
-                                      "say which file it is; save the set in Live first)."));
+            _chooseSet->setToolTip(tr("Choose the Live Set that contains this clip, to read the song's tempo automation. Save the set in Live first."));
             h->addWidget(_statusLabel);
             h->addWidget(_reload);
             h->addWidget(_chooseSet);

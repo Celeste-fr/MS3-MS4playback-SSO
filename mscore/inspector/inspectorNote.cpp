@@ -124,8 +124,7 @@ InspectorNote::InspectorNote(QWidget* parent)
       evenLevel->setSingleStep(0.1);
       evenLevel->setSuffix(tr(" dB"));
       evenLevel->setSpecialValueText(tr("None"));
-      evenLevel->setToolTip(tr("The note's even-levels correction (Tools > Even Out Levels…): its loudness change at the middle of "
-                               "the note as heard, gliding to the next note's; played when Even levels is on in the playback adjustments"));
+      evenLevel->setToolTip(tr("Loudness correction of the note from Tools > Even Out Levels…, in dB"));
       evenLevel->setAccessibleName(tr("Even level"));
       evenLabel->setBuddy(evenLevel);
       resetEvenLevel = new ResetButton(n.playWidget);
@@ -175,7 +174,7 @@ InspectorNote::InspectorNote(QWidget* parent)
       technique->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
       technique->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
       technique->setMinimumContentsLength(6);
-      technique->setToolTip(tr("The library's technique the note plays. Auto: what the notation and the playback settings choose"));
+      technique->setToolTip(tr("Playing technique of the note. Auto: from the notation"));
       technique->setAccessibleName(tr("Technique"));
       techniqueLabel->setBuddy(technique);
       resetTechnique = new ResetButton(n.playWidget);
@@ -288,12 +287,11 @@ void InspectorNote::setEvenShown()
       if (!set)
             return;
       if (stale)
-            evenState->setText(tr("Stale (%1 of %2): the music around it changed since it was measured; not played until "
-                                  "measured again (Tools > Even Out Levels…)").arg(stale).arg(set));
+            evenState->setText(tr("Out of date (%1 of %2): use Tools > Even Out Levels…").arg(stale).arg(set));
       else if (unknown)
-            evenState->setText(tr("Not checked since loading: checked when it is next played"));
+            evenState->setText(tr("Not checked yet"));
       else
-            evenState->setText(tr("Current: played when Even levels is on in the playback adjustments"));
+            evenState->setText(tr("Up to date"));
       }
 
 //---------------------------------------------------------
@@ -356,7 +354,7 @@ void InspectorNote::setTechniques()
             const QString value = notes.front()->libraryTechnique();
             index = technique->findData(value);
             if (index < 0) {        // (a technique its patches don't have: plays Auto)
-                  technique->addItem(tr("%1 (not on this part: plays Auto)").arg(value.section('|', 1)), value);
+                  technique->addItem(tr("%1 (not on this part)").arg(value.section('|', 1)), value);
                   index = technique->count() - 1;
                   }
             }
@@ -431,12 +429,12 @@ void InspectorNote::setTuningParts(const Note* note)
             return qAbs(c) < 0.0005 ? tr("0 ¢") : tr("%1 ¢").arg(QString::asprintf("%+.1f", c).replace('-', QChar(0x2212)));
             };
       n.tuningTemperament->setText(cents(t.temperament));
-      n.tuningAccidental->setText(t.unvalued ? tr("none (this symbol has no pitch of its own)") : cents(t.accidental));
+      n.tuningAccidental->setText(t.unvalued ? tr("none") : cents(t.accidental));
       QString result = tr("%1 from equal temperament").arg(cents(t.total()));
       if (t.tied)
-            result += "\n" + tr("(as the note its tie starts from)");
+            result += "\n" + tr("(from the tied note)");
       else if (qAbs(note->tuning()) > 0.0005 && qAbs(t.manual) < 0.0005)
-            result += "\n" + tr("(the note's Tuning is the Microtonal Tuner plugin's value, so it is not added again)");
+            result += "\n" + tr("(Tuning is the Microtonal Tuner plugin's value, not added again)");
       n.tuningResult->setText(result);
       }
 

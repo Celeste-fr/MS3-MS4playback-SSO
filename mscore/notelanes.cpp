@@ -271,7 +271,7 @@ QString NoteLanes::describe(const Mark& m, bool join, int v) const
       {
       if (join) {
             const bool transition = performanceAt(m, v) == MidiRenderer::LibPerformance::TRANSITION;
-            return transition ? tr("%1 ms · joined").arg(v) : tr("%1 ms · new attack").arg(v);
+            return transition ? tr("%1 ms, joined").arg(v) : tr("%1 ms, new attack").arg(v);
             }
       const std::vector<Band> bands = velocityBands(m, joinOf(m));
       const Band* b = bandAt(bands, v);
@@ -517,7 +517,7 @@ void NoteLanes::release()
       if (d == Drag::MOVE || d == Drag::DRAW) {
             std::map<const Note*, int> values;
             values.swap(_work);
-            commit(values, _selTarget == JOIN, d == Drag::DRAW ? tr("Notes: drawn") : tr("Notes: moved"));
+            commit(values, _selTarget == JOIN, d == Drag::DRAW ? tr("Draw Note Values") : tr("Move Note Values"));
             }
       _work.clear();
       _base.clear();
@@ -563,7 +563,7 @@ void NoteLanes::resetSelected(bool withJoin)
                   }
             s->endCmd();
             if (mscore)
-                  mscore->showMessage(tr("Notes: Auto"), 1500);
+                  mscore->showMessage(tr("Reset Note Values"), 1500);
             render();
             _view->update();
             return;
@@ -571,7 +571,7 @@ void NoteLanes::resetSelected(bool withJoin)
       std::map<const Note*, int> values;
       for (const Note* n : _sel)
             values[n] = PerformanceTechnique::JOIN_AUTO;
-      commit(values, join, tr("Notes: Auto"));
+      commit(values, join, tr("Reset Note Values"));
       }
 
 bool NoteLanes::duplicateSelected()
@@ -610,15 +610,15 @@ bool NoteLanes::duplicateSelected()
       s->endCmd();
       if (to.empty()) {
             if (mscore)
-                  mscore->showMessage(end >= s->endTick().ticks() ? tr("Duplicate: the score ends here")
-                                                                  : tr("Duplicate: no notes at the same places after them"), 1500);
+                  mscore->showMessage(end >= s->endTick().ticks() ? tr("Cannot duplicate: end of score")
+                                                                  : tr("Cannot duplicate: no matching notes after"), 1500);
             return true;
             }
       _sel.clear();
       for (Note* n : to)
             _sel.insert(n);
       if (mscore)
-            mscore->showMessage(tr("Notes: %n duplicated", "", int(to.size())), 1500);
+            mscore->showMessage(tr("%n note(s) duplicated", "", int(to.size())), 1500);
       render();
       _view->update();
       return true;
@@ -646,8 +646,8 @@ bool NoteLanes::copySelected()
             if (_sel.count(m.note))
                   _clipEnd = std::max(_clipEnd, m.tick + 1);
       if (mscore)
-            mscore->showMessage(join ? tr("Join: %n value(s) copied", "", int(c.items.size()))
-                                     : tr("Velocity: %n value(s) copied", "", int(c.items.size())), 1500);
+            mscore->showMessage(join ? tr("%n Join value(s) copied", "", int(c.items.size()))
+                                     : tr("%n Velocity value(s) copied", "", int(c.items.size())), 1500);
       return true;
       }
 
@@ -659,8 +659,8 @@ bool NoteLanes::pasteCopied(const QPointF& hover)
       if (!view || !fresh())
             return true;
       const QString lane = _clip.join ? JOIN : VELOCITY;
-      const QString wrong = _clip.join ? tr("Paste: these are Join values, not for the Velocity lane")
-                                       : tr("Paste: these are Velocity values, not for the Join lane");
+      const QString wrong = _clip.join ? tr("Cannot paste Join values into the Velocity lane")
+                                       : tr("Cannot paste Velocity values into the Join lane");
       const Part* master = _clipPart;
       int at = _clipEnd;
       const Row* hr = hover.x() >= 0 ? _lanes->rowAt(hover) : nullptr;
@@ -696,7 +696,7 @@ bool NoteLanes::pasteCopied(const QPointF& hover)
       s->endCmd();
       if (to.empty()) {
             if (mscore)
-                  mscore->showMessage(tr("Paste: no notes there"), 1500);
+                  mscore->showMessage(tr("Cannot paste: no notes there"), 1500);
             return true;
             }
       _selTarget = lane;
@@ -705,8 +705,8 @@ bool NoteLanes::pasteCopied(const QPointF& hover)
             _sel.insert(n);
       if (mscore)
             mscore->showMessage(to.size() < _clip.items.size()
-                                ? tr("Notes: %1 of %2 pasted (no more notes)").arg(to.size()).arg(_clip.items.size())
-                                : tr("Notes: %n pasted", "", int(to.size())), 1500);
+                                ? tr("%1 of %2 values pasted").arg(to.size()).arg(_clip.items.size())
+                                : tr("%n value(s) pasted", "", int(to.size())), 1500);
       render();
       _view->update();
       return true;
@@ -769,7 +769,7 @@ void NoteLanes::contextMenu(const Row& r, const QPointF& p, const QPoint& global
                         break;
                         }
             bool ok = false;
-            const int v = join ? QInputDialog::getInt(_view, tr("Join"), tr("ms (> 0: the note before overlaps; < 0: a gap):"),
+            const int v = join ? QInputDialog::getInt(_view, tr("Join"), tr("Join (ms; negative for a gap):"),
                                                       start, -PerformanceTechnique::JOIN_MAX, PerformanceTechnique::JOIN_MAX, 1, &ok)
                                : QInputDialog::getInt(_view, tr("Velocity"), tr("Velocity (1-127):"), start, 1, 127, 1, &ok);
             if (!ok)
@@ -778,7 +778,7 @@ void NoteLanes::contextMenu(const Row& r, const QPointF& p, const QPoint& global
             for (const Mark& m : partMarks(r.master))
                   if (_sel.count(m.note) && (!join || m.joinable()))
                         values[m.note] = v;
-            commit(values, join, tr("Notes: value"));
+            commit(values, join, tr("Change Note Value"));
             }
       }
 

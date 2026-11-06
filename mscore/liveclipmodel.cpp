@@ -1763,19 +1763,18 @@ QString LinkWatch::lostText(const Uses& u)
       auto tr = [](const char* s, int n = -1) { return QCoreApplication::translate("LiveClipsLink", s, nullptr, n); };
       QStringList what;
       if (u.clipTabs) {
-            what << tr("%n Live clip tab(s): edits stay here and are written to Live when it is back", u.clipTabs);
+            what << tr("%n Live clip tab(s): edits are sent when Live is back", u.clipTabs);
             if (u.clipTabsThroughLive)
-                  what << tr("clip tabs play MuseScore's own sounds meanwhile");
+                  what << tr("clip tabs play MuseScore's own sounds");
             }
       if (u.livePlaysScore)
-            what << tr("Live plays the score: MuseScore's Play plays only its own parts meanwhile (the library parts are silent)");
+            what << tr("Live plays the score: Play in MuseScore plays only its own parts, library parts are silent");
       if (u.playThroughLive)
-            what << tr("Play through Live: MuseScore keeps sending to the MIDI ports, but can't tell whether Live hears them");
-      QString text = tr("Lost the connection to Live (the MuseScore Link device, network port %1)").arg(u.port);
+            what << tr("Play through Live: MuseScore keeps sending MIDI but can't tell whether Live receives it");
+      QString text = tr("Lost the connection to Live (MuseScore Link, port %1)").arg(u.port);
       if (!what.isEmpty())
             text += ": " + what.join("; ");
-      return text + ". " + tr("MuseScore reconnects by itself when the device answers again (Live open, the set with the "
-                              "device loaded, the same port).");
+      return text + ". " + tr("MuseScore reconnects automatically when MuseScore Link answers again.");
       }
 
 QString LinkWatch::backText(const Uses& u)
