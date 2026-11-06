@@ -24,6 +24,7 @@
 #include "libmscore/part.h"
 #include "libmscore/partplayback.h"
 #include "libmscore/enginelane.h"
+#include "libmscore/leadinglane.h"
 #include "playbackmode.h"
 #include "libmscore/score.h"
 #include "libmscore/segment.h"
@@ -347,6 +348,7 @@ std::vector<AutomationLanes::Target> AutomationLanes::computeTargets(const Part*
             }
       // the part's Engine lane (enginelane.h) first, then the notes' Velocity and Join lanes, then the library's controls
       out = _notes->targets(PartPlaybackModes::masterPart(part));
+      out.insert(out.begin(), Target { LeadingLane::TARGET, tr("Leading"), false, false });     // (leadinglane.h)
       out.insert(out.begin(), Target { EngineLane::TARGET, tr("Engine"), false, false });
       for (const Target& t : libraryTargets(part))
             out.push_back(t);
@@ -443,6 +445,8 @@ void AutomationLanes::setLane(const Part* master, const Lane& lane)
       Lane l = lane;
       if (l.target == EngineLane::TARGET)
             EngineLane::normalize(l, engineChoices());      // (its engines' steps, every point a step)
+      if (l.target == LeadingLane::TARGET)
+            LeadingLane::normalize(l);                      // (Off / On, every point a step)
       if (!_working) {
             _work = lanes();
             _working = true;
@@ -850,6 +854,8 @@ QString AutomationLanes::valueText(const QString& target, const Part* master, do
       {
       if (target == EngineLane::TARGET)
             return engineName(EngineLane::engineAt(EngineLane::engines(lane(master, target), engineChoices()), v));
+      if (target == LeadingLane::TARGET)
+            return v >= 0.5 ? tr("On") : tr("Off");
       if (target == LiveClipEdit::VELOCITY_TARGET) {
             const Score* s = score();
             const Part* p = s && !s->masterScore()->parts().empty() ? s->masterScore()->parts().front() : nullptr;
@@ -1216,6 +1222,18 @@ void AutomationLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible
       p.setPen(Qt::NoPen);
       p.setBrush(rowColor(r));
       p.drawRect(r.rect);
+      if (r.target == LeadingLane::TARGET && !l.points.empty()) {
+            // (where it is On, the same band as behind the part's staves: scoreview.cpp › Leading bands)
+            const Score* s = score();
+            const Measure* last = s ? s->lastMeasure() : nullptr;
+            p.setBrush(LeadingLane::bandColor(rowColor(r)));
+            for (const std::pair<int, int>& sp : LeadingLane::spans(l, last ? last->endTick().ticks() : 0)) {
+                  const double x1 = std::max(r.rect.left(), pointX(sp.first));
+                  const double x2 = std::min(r.rect.right(), pointX(sp.second));
+                  if (x2 > x1)
+                        p.drawRect(QRectF(x1, r.rect.top(), x2 - x1, r.rect.height()));
+                  }
+            }
       paintGrid(p, r, visible);
       p.setPen(QPen(QColor(200, 200, 200), px));
       p.setBrush(Qt::NoBrush);
@@ -1351,6 +1369,8 @@ double AutomationLanes::unautomatedValue(const Row& r) const
       {
       if (r.target == EngineLane::TARGET)
             return EngineLane::valueOf(EngineLane::engines(lane(r.master, r.target), engineChoices()), ownEngine(r.master));
+      if (r.target == LeadingLane::TARGET)
+            return 0.0;                 // (before its first point the part isn't leading)
       for (const SoundLib::Route& rt : libraryRoutes()) {
             if (PartPlaybackModes::masterPart(rt.part) != r.master || rt.patch != 0 || rt.lane != 0 || !rt.instrument)
                   continue;
@@ -2023,6 +2043,8 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
             }
       if (r.target == EngineLane::TARGET)
             return engineMenu(r, p, globalPos);
+      if (r.target == LeadingLane::TARGET)
+            return leadingMenu(r, p, globalPos);
       Lane l = lane(r.master, r.target);
       const int pt = pointAt(r, l, p);
       const int tick = xToTick(p.x());
@@ -2264,6 +2286,63 @@ bool AutomationLanes::engineMenu(const Row& r, const QPointF& p, const QPoint& g
             setLane(r.master, l);
             select(r, {});
             commit(tr("Engine: lane cleared"));
+            }
+      else if (a == hide)
+            showLane(r.part, r.target, false);
+      return true;
+      }
+
+//---------------------------------------------------------
+//   leadingMenu
+//    the Leading lane's right-click menu (leadinglane.h): on a point On / Off (checked: its state) and Delete; elsewhere
+//    On from Here / Off from Here at the mouse's time (snapped to the grid); Clear Lane, Hide Lane
+//---------------------------------------------------------
+
+bool AutomationLanes::leadingMenu(const Row& r, const QPointF& p, const QPoint& globalPos)
+      {
+      Lane l = lane(r.master, r.target);
+      LeadingLane::normalize(l);
+      const int pt = pointAt(r, l, p);
+      const int tick = pt >= 0 ? l.points[size_t(pt)].tick : snap(xToTick(p.x()), false);
+      QMenu menu;
+      QAction* on = menu.addAction(pt >= 0 ? tr("On") : tr("On from Here"));
+      QAction* off = menu.addAction(pt >= 0 ? tr("Off") : tr("Off from Here"));
+      if (pt >= 0) {
+            on->setCheckable(true);
+            off->setCheckable(true);
+            const bool isOn = l.points[size_t(pt)].value >= 0.5;
+            on->setChecked(isOn);
+            off->setChecked(!isOn);
+            }
+      QAction* del = pt >= 0 ? menu.addAction(tr("Delete")) : nullptr;
+      menu.addSeparator();
+      QAction* clear = l.points.empty() ? nullptr : menu.addAction(tr("Clear Lane"));
+      QAction* hide = menu.addAction(tr("Hide Lane"));
+      menu.addSeparator();
+      const HeightActions heights = addHeightActions(menu, r);
+      QAction* a = menu.exec(globalPos);
+      if (!a || heightAction(a, heights, r))
+            return true;
+      if (a == on || a == off) {
+            const double v = a == on ? 1.0 : 0.0;
+            if (pt >= 0)
+                  l.points[size_t(pt)].value = v;
+            else
+                  Edit::addPoint(l, tick, v);
+            setLane(r.master, l);
+            commit(a == on ? tr("Leading: on") : tr("Leading: off"));
+            }
+      else if (a == del) {
+            Edit::removePoints(l, { pt });
+            setLane(r.master, l);
+            select(r, {});
+            commit(tr("Leading: point removed"));
+            }
+      else if (a == clear) {
+            l.points.clear();
+            setLane(r.master, l);
+            select(r, {});
+            commit(tr("Leading: lane cleared"));
             }
       else if (a == hide)
             showLane(r.part, r.target, false);

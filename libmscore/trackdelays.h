@@ -92,6 +92,10 @@ struct Delays {
       // largest one (EvenLevels::tops): its notes' CC11 that much lower, its gain stage that much louder (uncapped since
       // 2026-10-15, the master trim keeps the score from clipping)
       std::map<QString, double> even;
+      // [levels] leading (leadinglane.h; never in the metaTag): a part with a Leading lane On somewhere, each patch's L (the
+      // map's leadingLevel, else the setting's): its gain stage that much louder, its notes' CC11 that much lower, a note
+      // starting while the lane is On at 0 (MidiRenderer's trackLevel)
+      std::map<QString, double> leading;
       // (the old volumes only, legacyPatchGain: until 2026-10-15 the rest of `even` that didn't fit under MAX_DB lowered
       // every library patch of the score alike, <= 0)
       double evenAll { 0.0 };
@@ -138,14 +142,16 @@ double patchGain(const SoundLib::Library& library, const Delays& d, const QStrin
 // what stays on the Kontakt track's fader with the Mixer's (as before the gain stage): the track levels' headroom (0 .. MAX_DB)
 double faderGain(const SoundLib::Library& library, const Delays& d, const QString& patch);
 // the patch's gain stage in dB (contextlevel.h › Gain stage and master trim; Live: MuseScore's Utility after its Kontakt):
-// the level rule's, the section balance's, the real range's and the mics' volume (rule), the even levels' headroom, less the
-// score's master trim; uncapped; 0 for a library whose dynamics are CC11
+// the level rule's, the section balance's, the real range's and the mics' volume (rule), the even levels' headroom, the
+// Leading lane's L, less the score's master trim; uncapped; 0 for a library whose dynamics are CC11
 double gainStageDb(const SoundLib::Library& library, const Delays& d, const QString& patch);
 // the patch's gain as it was until 2026-10-15 (everything S' lower so the loudest fit Live's +6 dB fader, evenAll's rest):
 // what a set written then has on its Kontakt track's fader (livetracks.h, livesetupdate.h read such a set back)
 double legacyPatchGain(const SoundLib::Library& library, const Delays& d, const QString& patch);
 // [levels] evenLevels' headroom of the patch (0: none): its notes' CC11 that much lower, its gain stage that much louder
 double evenDb(const Delays& d, const QString& patch);
+// [levels] leading's L of the patch (0: none): its gain stage that much louder, its notes not leading that much lower by CC11
+double leadingDb(const Delays& d, const QString& patch);
 // MIDI out (no host: Seq::libraryMixerChanged; contextlevel.h › Gain stage and master trim): each route's CC7 (port × 16 +
 // channel -> 0-127), the part's Mixer volume times its patch's gain (patchGain) on the host's law (gain = (CC7 / 100)²,
 // Vst3Synth::volumeGain); CC7's top, 127, is +4.15 dB, so where a route would go over it every route plays lower together

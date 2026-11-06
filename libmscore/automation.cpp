@@ -10,6 +10,9 @@
 
 #include "automation.h"
 #include "enginelane.h"
+#include "leadinglane.h"
+#include "playbacksettings.h"
+#include "soundlibrary.h"
 #include "partplayback.h"
 #include "performancetechnique.h"
 #include "part.h"
@@ -18,6 +21,9 @@
 #include "barline.h"
 #include "measure.h"
 #include "segment.h"
+#include "page.h"
+#include "staff.h"
+#include "system.h"
 
 #include <algorithm>
 #include <functional>
@@ -1344,4 +1350,231 @@ QString libraryOf(const Automation::Lane& lane)
       }
 
 }     // namespace EngineLane
+}     // namespace Ms
+
+//---------------------------------------------------------
+//   LeadingLane (leadinglane.h)
+//---------------------------------------------------------
+
+namespace Ms {
+namespace LeadingLane {
+
+const char* const TARGET = "leading";
+
+void normalize(Automation::Lane& lane)
+      {
+      for (Automation::Point& p : lane.points) {
+            p.value = p.value >= 0.5 ? 1.0 : 0.0;
+            p.curve = Automation::Curve::STEP;
+            p.straighten();
+            }
+      }
+
+bool on(const Automation::Lane& lane, int tick)
+      {
+      return lane.valueAt(tick) >= 0.5;
+      }
+
+std::vector<std::pair<int, int>> spans(const Automation::Lane& lane, int endTick)
+      {
+      std::vector<std::pair<int, int>> out;
+      int from = -1;
+      for (size_t i = 0; i < lane.points.size(); ++i) {
+            const Automation::Point& p = lane.points[i];
+            // (two points at one tick: the later one holds from it, automation.h)
+            if (i + 1 < lane.points.size() && lane.points[i + 1].tick == p.tick)
+                  continue;
+            const bool isOn = p.value >= 0.5;
+            if (isOn && from < 0)
+                  from = p.tick;
+            else if (!isOn && from >= 0) {
+                  if (p.tick > from)
+                        out.push_back({ from, p.tick });
+                  from = -1;
+                  }
+            }
+      if (from >= 0 && endTick > from)
+            out.push_back({ from, endTick });
+      return out;
+      }
+
+const Automation::Lane* laneOf(const Automation::PartLanes& lanes)
+      {
+      for (const Automation::Lane& l : lanes)
+            if (l.target == TARGET && !l.points.empty())
+                  return &l;
+      return nullptr;
+      }
+
+std::map<const Part*, std::vector<std::pair<int, int>>> bands(const MasterScore* score)
+      {
+      std::map<const Part*, std::vector<std::pair<int, int>>> out;
+      if (!score || score->metaTag(Automation::metaTag).indexOf(QString("\"%1\"").arg(TARGET)) < 0)
+            return out;
+      const Measure* last = score->lastMeasure();
+      const int end = last ? last->endTick().ticks() : 0;
+      for (const auto& pl : Automation::read(score)) {
+            const Automation::Lane* l = laneOf(pl.second);
+            if (!l)
+                  continue;
+            std::vector<std::pair<int, int>> s = spans(*l, end);
+            if (!s.empty())
+                  out[pl.first] = s;
+            }
+      return out;
+      }
+
+// x (page coordinates) of tick inside the system's measures (sysStart <= tick <= sysEnd)
+static double bandX(const System* system, int tick, bool isEnd)
+      {
+      const double sp = system->spatium();
+      const Measure* first = system->firstMeasure();
+      for (const MeasureBase* mb : system->measures()) {
+            if (!mb->isMeasure())
+                  continue;
+            const Measure* m = toMeasure(mb);
+            const int t0 = m->tick().ticks();
+            const int t1 = m->endTick().ticks();
+            const double mx = system->pagePos().x() + m->pos().x();
+            if (tick == t1 && (isEnd || m == system->lastMeasure()))
+                  return mx + m->width();                     // (its end bar line)
+            if (tick < t0 || tick >= t1)
+                  continue;
+            if (tick == t0 && m != first)
+                  return mx;                                  // (its start bar line)
+            // between the chords and rests: half a space before the one at tick, in proportion to the ticks between two
+            double x1 = 0.0, x2 = m->width();
+            int k1 = t0, k2 = t1;
+            bool before = true;
+            for (const Segment* s = m->first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest)) {
+                  const int st = s->tick().ticks();
+                  if (st <= tick) {
+                        x1 = s->x();
+                        k1 = st;
+                        before = false;
+                        }
+                  else {
+                        x2 = s->x();
+                        k2 = st;
+                        break;
+                        }
+                  }
+            if (before)                     // (no chord or rest before it: the measure's first one)
+                  return mx + std::max(0.0, x2 - 0.5 * sp);
+            if (k1 == tick)
+                  return mx + std::max(0.0, x1 - 0.5 * sp);
+            return mx + x1 - 0.5 * sp + (x2 - x1) * double(tick - k1) / double(std::max(1, k2 - k1));
+            }
+      return system->pagePos().x();
+      }
+
+std::vector<QRectF> bandRects(const Score* score, const Page* page,
+                              const std::map<const Part*, std::vector<std::pair<int, int>>>& all)
+      {
+      std::vector<QRectF> out;
+      if (!score || !page || all.empty())
+            return out;
+      const int nstaves = score->nstaves();
+      for (const System* system : page->systems()) {
+            const Measure* fm = system->firstMeasure();
+            const Measure* lm = system->lastMeasure();
+            if (!fm || !lm || int(system->staves()->size()) < nstaves)
+                  continue;
+            const int sysStart = fm->tick().ticks();
+            const int sysEnd = lm->endTick().ticks();
+            const double sp = system->spatium();
+            // every shown staff's top and bottom (page coordinates), by staff index
+            std::vector<std::pair<double, double>> ys(size_t(nstaves), { -1.0, -1.0 });
+            for (int i = 0; i < nstaves; ++i) {
+                  const SysStaff* ss = system->staff(i);
+                  if (!ss || !ss->show() || !score->staff(i)->show())
+                        continue;
+                  const double top = system->pagePos().y() + ss->y();
+                  ys[size_t(i)] = { top, top + ss->bbox().height() };
+                  }
+            for (const Part* part : score->parts()) {
+                  auto b = all.find(PartPlaybackModes::masterPart(part));
+                  if (b == all.end())
+                        continue;
+                  const int s0 = score->staffIdx(part);
+                  const int s1 = s0 + part->nstaves();
+                  double top = 1e300, bottom = -1e300;
+                  for (int i = s0; i < s1 && i < nstaves; ++i)
+                        if (ys[size_t(i)].first >= 0) {
+                              top = std::min(top, ys[size_t(i)].first);
+                              bottom = std::max(bottom, ys[size_t(i)].second);
+                              }
+                  if (top > bottom)
+                        continue;
+                  // 1.5 spaces, no more than half way to another part's staff
+                  double up = 1.5 * sp, down = 1.5 * sp;
+                  for (int i = 0; i < nstaves; ++i) {
+                        if ((i >= s0 && i < s1) || ys[size_t(i)].first < 0)
+                              continue;
+                        if (ys[size_t(i)].second <= top)
+                              up = std::min(up, 0.5 * (top - ys[size_t(i)].second));
+                        if (ys[size_t(i)].first >= bottom)
+                              down = std::min(down, 0.5 * (ys[size_t(i)].first - bottom));
+                        }
+                  for (const std::pair<int, int>& span : b->second) {
+                        const int t1 = std::max(span.first, sysStart);
+                        const int t2 = std::min(span.second, sysEnd);
+                        if (t2 <= t1)
+                              continue;
+                        const double x1 = bandX(system, t1, false);
+                        const double x2 = bandX(system, t2, true);
+                        if (x2 > x1)
+                              out.push_back(QRectF(x1, top - up, x2 - x1, bottom - top + up + down));
+                        }
+                  }
+            }
+      return out;
+      }
+
+QColor bandColor(const QColor& paper)
+      {
+      return paper.lightness() >= 128 ? QColor(0, 0, 0, 28) : QColor(255, 255, 255, 31);
+      }
+
+QColor bandEdgeColor(const QColor& paper)
+      {
+      return paper.lightness() >= 128 ? QColor(0, 0, 0, 56) : QColor(255, 255, 255, 64);
+      }
+
+void paintBands(QPainter& p, const std::vector<QRectF>& rects, const QColor& paper)
+      {
+      if (rects.empty())
+            return;
+      p.save();
+      p.setPen(Qt::NoPen);
+      p.setBrush(bandColor(paper));
+      for (const QRectF& r : rects)
+            p.drawRect(r);
+      QPen edge(bandEdgeColor(paper));
+      edge.setWidthF(0);                  // (a cosmetic hairline: one device pixel at any zoom)
+      p.setPen(edge);
+      for (const QRectF& r : rects) {
+            p.drawLine(QLineF(r.topLeft(), r.topRight()));
+            p.drawLine(QLineF(r.bottomLeft(), r.bottomRight()));
+            }
+      p.restore();
+      }
+
+bool playing(const Score* score)
+      {
+      return Playback::on("levels/leading", score);
+      }
+
+double levelDb(const Score* score)
+      {
+      const double v = Playback::value("levels/leadingDb", score);
+      return std::isfinite(v) ? v : DEFAULT_DB;
+      }
+
+double levelDb(const SoundLib::LibInstrument& patch, const Score* score)
+      {
+      return std::isfinite(patch.leadingLevel) ? patch.leadingLevel : levelDb(score);
+      }
+
+}     // namespace LeadingLane
 }     // namespace Ms

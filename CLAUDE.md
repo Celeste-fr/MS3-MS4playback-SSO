@@ -113,7 +113,13 @@ method 3 is the default), `thirdparty/fluidsynth`, `effects/musereverb`, `synthe
 difference: an MS3 hairpin with its own velocity change plays as in 3.6 (`ms3HairpinVelocity()`, preference
 `application/playback/ms3HairpinVelocityChange`; `MS4_STRICT=1` disables, `ab/trace/regress.sh` sets it).
 `mscore/playbackmode.h` (MS3 / MS4 / each library engine by name, all parts) and `libmscore/partplayback.h` (per part,
-metaTag `partPlayback`: "library:<engine>" a part's own library, an old "library" the global one). **Engine lane** (`libmscore/enginelane.h`, branch `engine-lane`; HANDOFF.md › Engine lane): an automation lane "engine" per part (MS3 / MS4 / a library, steps), each note on the engine at its tick, legato never across a switch, a lane's library loaded for the whole score (`playingModes` in soundlibrary.cpp), rendermidi.cpp › Engine lanes; fades stored, not yet played; ignored for Live / MIDI out. `tempochange.h` (rit./accel. lines, metaTag `tempoChanges`). `slur.h` › Phrase marks (non-legato
+metaTag `partPlayback`: "library:<engine>" a part's own library, an old "library" the global one). **Engine lane** (`libmscore/enginelane.h`, branch `engine-lane`; HANDOFF.md › Engine lane): an automation lane "engine" per part (MS3 / MS4 / a library, steps), each note on the engine at its tick, legato never across a switch, a lane's library loaded for the whole score (`playingModes` in soundlibrary.cpp), rendermidi.cpp › Engine lanes; fades stored, not yet played; ignored for Live / MIDI out. **Leading lane** (`libmscore/leadinglane.h`, branch `leading-lane`, 2026-11-05; the owner: which line leads is the
+composer's choice): an automation lane "Leading" per part (Off / On steps, metaTag `automation`); where On, the part's
+staves get a darker band in the score view (view only: `LeadingLane::bandRects` / `paintBands` from `ScoreView::paint`);
+`[levels] leading` (0 by default and in both presets until measured data gives the amount) plays a leading part's library
+notes L louder (map `<Instrument leadingLevel>`, else `[levels] leadingDb`, 3 dB a placeholder) by its gain stage and
+CC11 on the others (`TrackDelays::Delays::leading`, rendermidi's `trackLevel`), built-in parts by velocity
+(docs/PLAYBACK_SETTINGS.md › Leading lane). `tempochange.h` (rit./accel. lines, metaTag `tempoChanges`). `slur.h` › Phrase marks (non-legato
 slurs, Alt+S, metaTag `phraseMarks`). `articulation.h` › MarcatoLevel (every articulation sign's and technique staff text's level in dB,
 Inspector › *Level*, ±35.5; a chord's add up, `MidiRenderer::levelOf`; metaTag `marcatoLevels`; library: velocity by the
 measured curve or CC11 / CC1 per note, `libraryNoteLevels`; built-in: SoundFont 2's law).

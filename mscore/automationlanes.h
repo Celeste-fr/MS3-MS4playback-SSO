@@ -29,6 +29,9 @@
 //   What a lane shows and edits: libmscore/automation.h (Automation::Lane, Automation::Edit), stored in
 //   the score's metaTag "automation", one undoable step per gesture.
 //
+//   Every part's first lanes: Engine (enginelane.h: the playback engine, steps) and Leading (leadinglane.h: Off / On steps,
+//   the composer's mark of the line that leads; its On spans shaded in its row as behind the part's staves, right-click On /
+//   Off), both added with "+" as any lane.
 //   Lanes (Automation::Lane::target): Dynamics (the library's dynamics CC: it takes the notation's place
 //   from its first point) and Expression (CC11), then every controller of the part's patches (the map's:
 //   SSO's named controls, Vibrato, Release, Tightness, Mic 1-5 … as Kontakt parameters or CCs). The lanes are the only
@@ -355,6 +358,8 @@ class AutomationLanes : public QObject {
       QString ownEngine(const Part* master) const;
       static QString engineName(const QString& engine);
       bool engineMenu(const Row& r, const QPointF& p, const QPoint& globalPos);
+      // the Leading lane (leadinglane.h): On / Off at a point or from the mouse's time
+      bool leadingMenu(const Row& r, const QPointF& p, const QPoint& globalPos);
       void select(const Row& r, const std::vector<int>& sel);
       void dropFocus();
       void addLaneMenu(const Row& r, const QPoint& globalPos);

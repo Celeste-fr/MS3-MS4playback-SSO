@@ -20,6 +20,7 @@
 
 #include "audio/midi/event.h"
 #include "libmscore/automation.h"
+#include "libmscore/leadinglane.h"
 #include "libmscore/instrument.h"
 #include "libmscore/liveclips.h"
 #include "libmscore/liveset.h"
@@ -134,6 +135,7 @@ class TestLiveIntegration : public QObject, public MTest
       void laneTimeAxis();
       void laneFolds();
       void laneHeights();
+      void leadingBands();
       void laneDashedLine();
       void lanePointsOnBarLines();
       void noteLaneRubber();
@@ -3789,6 +3791,147 @@ void TestLiveIntegration::laneFolds()
       f.keepOnly(score, parts(score));
       QVERIFY(f.isOpen(score, violin) && !f.isOpen(score, flute));
       delete other;
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   leadingBands
+//    the Leading lane's bands in the score view (leadinglane.h; scoreview.cpp › Leading bands) on leading-bands.musicxml:
+//    the violin leading bars 1-4 up to beat 3, the flute from there to bar 7: page and continuous view, a band per part and
+//    system over its staff only, the flute's starting half a space before its first eighth (bar 4, beat 3), none on the
+//    cello; the score's own printing (score->print: PDF / PNG export) draws none (the bands are the view's).
+//    MS_LEADING_PNG=<folder>: the view's paint composed offscreen (the paper, the bands by LeadingLane::paintBands as the view
+//    paints them, then the score as MuseScore draws it), page and continuous view, with and without the bands
+//    (leading-page-off/on.png, leading-continuous-off/on.png; the continuous one with the flute's Leading lane under the
+//    system as the lanes paint it: its On span in the band's colour, the envelope)
+//---------------------------------------------------------
+
+void TestLiveIntegration::leadingBands()
+      {
+      MasterScore* score = readScore(DIR + "leading-bands.musicxml");
+      QVERIFY(score);
+      QCOMPARE(score->parts().size(), 3);
+      Part* violin = score->parts()[0];
+      Part* flute = score->parts()[1];
+      const int bar = 4 * MScore::division;
+      const int answer = 3 * bar + 2 * MScore::division;
+      Automation::Lane vl, fl;
+      vl.target = fl.target = LeadingLane::TARGET;
+      vl.points = { Automation::Point(0, 1, Automation::Curve::STEP), Automation::Point(answer, 0, Automation::Curve::STEP) };
+      fl.points = { Automation::Point(answer, 1, Automation::Curve::STEP), Automation::Point(6 * bar, 0, Automation::Curve::STEP) };
+      const QColor paper(0xf9f9f9);             // (MuseScore's default paper colour, PREF_UI_CANVAS_FG_COLOR)
+      auto picture = [&](bool on, LayoutMode mode, const QString& file) {
+            score->setLayoutMode(mode);
+            score->doLayout();
+            const std::map<const Part*, std::vector<std::pair<int, int>>> bands = LeadingLane::bands(score);
+            const Page* page = score->pages().front();
+            const double sp = score->spatium();
+            QRectF area = page->canvasBoundingRect();
+            if (mode == LayoutMode::LINE) {
+                  const System* sys = page->systems().front();
+                  area = sys->canvasBoundingRect();
+                  area.setRight(std::min(area.right(), sys->pagePos().x() + 140 * sp));
+                  area.adjust(-2 * sp, -2 * sp, 0, 9 * sp);
+                  }
+            else
+                  area.setBottom(std::min(area.bottom(), page->systems().back()->canvasBoundingRect().bottom() + 6 * sp));
+            const double scale = mode == LayoutMode::LINE ? 0.5 : 0.36;
+            QImage img(int(area.width() * scale), int(area.height() * scale), QImage::Format_ARGB32);
+            img.fill(QColor(0xdddddd));
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.scale(scale, scale);
+            p.translate(-area.topLeft());
+            p.fillRect(page->canvasBoundingRect(), paper);
+            if (on)
+                  LeadingLane::paintBands(p, LeadingLane::bandRects(score, page, bands), paper);
+            score->print(&p, 0);
+            if (mode == LayoutMode::LINE && on) {
+                  // the flute's Leading lane under the system, as AutomationLanes::paintLane draws it
+                  const System* sys = page->systems().front();
+                  const QRectF lane(sys->pagePos().x(), sys->canvasBoundingRect().bottom() + 2 * sp, area.right() - sys->pagePos().x(), 5 * sp);
+                  const std::vector<std::pair<int, double>> anchors = Automation::timeAxis(score);
+                  auto x = [&](int t) { return Automation::pointX(score, anchors, t); };
+                  const QColor row(242, 246, 251);
+                  p.fillRect(lane, row);
+                  p.setPen(Qt::NoPen);
+                  p.setBrush(LeadingLane::bandColor(row));
+                  for (const auto& span : LeadingLane::spans(fl, score->lastMeasure()->endTick().ticks()))
+                        p.drawRect(QRectF(x(span.first), lane.top(), x(span.second) - x(span.first), lane.height()));
+                  AutomationLanes::paintEnvelope(p, lane, lane.adjusted(0, 0.45 * sp, 0, -0.45 * sp), fl, 0.0, x, 1.0 / scale,
+                                                 QColor(47, 109, 181), {}, lane);
+                  p.setPen(QPen(QColor(200, 200, 200), 1.0 / scale));
+                  p.setBrush(Qt::NoBrush);
+                  p.drawRect(lane);
+                  p.setPen(QColor(29, 31, 34));
+                  QFont f = p.font();
+                  f.setPixelSize(int(1.4 * sp));
+                  p.setFont(f);
+                  p.drawText(QRectF(lane.left() + 0.5 * sp, lane.top(), 20 * sp, lane.height()), Qt::AlignVCenter | Qt::AlignLeft,
+                             "Flute · Leading");
+                  }
+            p.end();
+            QVERIFY(img.save(file));
+            };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, { { violin, { vl } }, { flute, { fl } } }));
+      for (LayoutMode mode : { LayoutMode::PAGE, LayoutMode::LINE }) {
+            score->setLayoutMode(mode);
+            score->doLayout();
+            const auto bands = LeadingLane::bands(score);
+            QCOMPARE(int(bands.size()), 2);
+            std::vector<QRectF> all;
+            for (const Page* page : score->pages()) {
+                  const std::vector<QRectF> r = LeadingLane::bandRects(score, page, bands);
+                  all.insert(all.end(), r.begin(), r.end());
+                  }
+            QVERIFY(!all.empty());
+            // the flute's first band starts half a space before its first eighth (bar 4, beat 3)
+            Measure* m4 = score->firstMeasure();
+            for (int i = 0; i < 3; ++i)
+                  m4 = m4->nextMeasure();
+            const Segment* s = m4->findSegment(SegmentType::ChordRest, Fraction::fromTicks(answer));
+            QVERIFY(s);
+            const System* sys = m4->system();
+            const double fx = sys->pagePos().x() + m4->pos().x() + s->x() - 0.5 * sys->spatium();
+            const SysStaff* fs = sys->staff(1);
+            const SysStaff* cs = sys->staff(2);
+            const double fluteTop = sys->pagePos().y() + fs->y();
+            const double celloTop = sys->pagePos().y() + cs->y();
+            bool fluteStart = false;
+            for (const QRectF& r : all) {
+                  QVERIFY2(r.top() < celloTop, "a band on the cello");
+                  if (r.top() < fluteTop && r.bottom() > fluteTop && std::fabs(r.left() - fx) < 1e-6)
+                        fluteStart = true;
+                  }
+            QVERIFY(fluteStart);
+            }
+      // the score's own printing (export) draws no band: the same picture with the lanes as without
+      auto printed = [&]() {
+            score->setLayoutMode(LayoutMode::PAGE);
+            score->doLayout();
+            const QRectF r = score->pages().front()->canvasBoundingRect();
+            QImage img(int(r.width() * 0.2), int(r.height() * 0.2), QImage::Format_ARGB32);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            p.scale(0.2, 0.2);
+            score->print(&p, 0);
+            p.end();
+            return img;
+            };
+      const QImage withLanes = printed();
+      const QString tag = score->metaTag(Automation::metaTag);
+      score->setMetaTag(Automation::metaTag, QString());
+      const QImage without = printed();
+      QVERIFY(withLanes == without);
+      score->setMetaTag(Automation::metaTag, tag);
+      if (qEnvironmentVariableIsSet("MS_LEADING_PNG")) {
+            const QString dir = qEnvironmentVariable("MS_LEADING_PNG");
+            QDir().mkpath(dir);
+            picture(false, LayoutMode::PAGE, dir + "/leading-page-off.png");
+            picture(true, LayoutMode::PAGE, dir + "/leading-page-on.png");
+            picture(false, LayoutMode::LINE, dir + "/leading-continuous-off.png");
+            picture(true, LayoutMode::LINE, dir + "/leading-continuous-on.png");
+            }
       delete score;
       }
 

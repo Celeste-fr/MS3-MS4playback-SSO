@@ -389,6 +389,9 @@ switch value of each articulation. For example:
     since 2026-10-14) instead of `sectionLevel`; a section without it plays its `sectionLevel`. SSO: the real side from
     Clark & Luce 1965's orchestral scales at mp as sound power (TU Berlin's directivity), against the same SSO levels
     (`tools/soundlibraries/section_balance_cl.py` -> `sso_cl_section_balance.json` -> `gen_spitfire_sso.py`).
+  - `leadingLevel` on an `Instrument` (dB, 0-24): how much louder a note of the patch plays while its part's Leading lane
+    is On, with `[levels] leading` 1 (libmscore/leadinglane.h); without it the setting `[levels] leadingDb`. No shipped
+    map has one yet (pending measurements of several orchestras)
   - `realSpan`, `longLevel` and `realPlay` on an `Instrument` (the main patch; its `with` patches take them): with
     playback setting `[levels] realRange` each note plays, by CC11 and the patches' volumes, a real player's level at
     its written dynamic less what the patch's held Long already changes with CC1 (`libmscore/contextlevel.h` › Real

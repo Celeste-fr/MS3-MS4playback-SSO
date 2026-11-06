@@ -793,7 +793,7 @@ static bool trimNeedsRender(const SoundLib::Library& library, const std::map<con
       {
       bool any = false;
       for (const auto& d : delays)
-            any = any || !d.second.rule.empty() || !d.second.even.empty();
+            any = any || !d.second.rule.empty() || !d.second.even.empty() || !d.second.leading.empty();
       if (!any || library.dynamicsCC == CTRL_EXPRESSION)
             return false;
       const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = SoundLib::calibrationFor(&library);
@@ -808,7 +808,7 @@ static MasterTrim computeTrim(const MasterScore* score, const SoundLib::Library&
       MasterTrim t;
       bool any = false;             // (a level setting gives a patch a gain: else nothing to trim, Library default)
       for (const auto& d : delays)
-            any = any || !d.second.rule.empty() || !d.second.even.empty();
+            any = any || !d.second.rule.empty() || !d.second.even.empty() || !d.second.leading.empty();
       if (!any || library.dynamicsCC == CTRL_EXPRESSION)
             return t;
       const std::vector<SoundLib::Route> routes = SoundLib::routes(score, library, SoundLib::output() == SoundLib::Output::MIDI);
@@ -1007,9 +1007,9 @@ static bool trimCall(const MasterScore* score, const SoundLib::Library& library,
       bool gains = false;
       for (const auto& pd : *delays) {
             const TrackDelays::Delays& d = pd.second;
-            gains = gains || !d.rule.empty() || !d.even.empty();
+            gains = gains || !d.rule.empty() || !d.even.empty() || !d.leading.empty();
             *key += QString("|%1").arg(quintptr(pd.first));
-            for (const std::map<QString, double>* m : { &d.rule, &d.even, &d.levels })
+            for (const std::map<QString, double>* m : { &d.rule, &d.even, &d.levels, &d.leading })
                   for (const auto& v : *m)
                         *key += QString(",%1=%2").arg(v.first).arg(v.second, 0, 'g', 12);
             }

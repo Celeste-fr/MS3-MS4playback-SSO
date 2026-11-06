@@ -59,6 +59,7 @@
 #include "partcontrollers.h"
 #include "partplayback.h"
 #include "enginelane.h"
+#include "leadinglane.h"
 #include "playbacksettings.h"
 #include "tuning.h"
 #include "volta.h"
@@ -983,7 +984,7 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                         }
 
                   SndConfig config;       // dummy
-                  config.textLevel = textLevel(chord);
+                  config.textLevel = textLevel(chord) + leadingDb(chord);     // ([levels] leading: by velocity)
 
                   if (!graceNotesMerged(chord))
                         for (Chord*& c : chord->graceNotesBefore())
@@ -1082,7 +1083,7 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                   SndConfig config = SndConfig(useSND, controller, sctx.method);
                   auto vl = velocityLanes.find(st1->part());
                   config.velocityLane = vl != velocityLanes.end() ? &vl->second : nullptr;
-                  config.textLevel = textLevel(chord);
+                  config.textLevel = textLevel(chord) + leadingDb(chord);     // ([levels] leading: by velocity)
 
                   //
                   // Add normal note events
@@ -1507,6 +1508,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const double even = TrackDelays::evenDb(d->second, patch->name);
                         if (even > 0.0)
                               libLevels[note].volumeDb -= even;
+                        // [levels] leading (leadinglane.h): the patch's L on its gain stage; a note not leading that much lower
+                        const double lead = TrackDelays::leadingDb(d->second, patch->name);
+                        if (lead > 0.0 && !leadingAt(note->chord()))
+                              libLevels[note].volumeDb -= lead;
                         if (d->second.levels.empty())
                               return;
                         const double db = TrackDelays::noteDb(d->second, patch->name,
@@ -2354,7 +2359,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4 = true;
                         config.method = DynamicsRenderMethod::MS4;
                         // (the built-in synthesizer: the level by SoundFont 2's law, MarcatoLevel::velocity)
-                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note));
+                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note) + leadingDb(note->chord()));
                         config.ms4Dur = r.dur;
                         config.ms4Ts = r.ts;
                         config.ms4Offset = offset;
@@ -2804,7 +2809,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         playNote(events, note, noteChannel, libNote.key >= 0 ? libNote.key : qBound(0, note->ppitch() + pitchOffset, 127),
                                  qBound(1, libNote.velocity > 0 ? libNote.velocity
-                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note)), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
+                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note) + leadingDb(note->chord())), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
                         };
 
                   renderAtFn = [&](const Note* n, const std::vector<Ms4::ArtRef>& a, int st, int len, int po, int) { renderAt(n, a, st, len, po); };
@@ -7853,6 +7858,19 @@ double MidiRenderer::levelOf(const Note* note) const
       return MarcatoLevel::of(note->chord()) + textLevel(note->chord());
       }
 
+bool MidiRenderer::leadingAt(const Chord* chord) const
+      {
+      if (leadingLanes.empty())
+            return false;
+      auto l = leadingLanes.find(PartPlaybackModes::masterPart(chord->part()));
+      return l != leadingLanes.end() && LeadingLane::on(l->second, chord->tick().ticks());
+      }
+
+double MidiRenderer::leadingDb(const Chord* chord) const
+      {
+      return leadingBuiltInDb > 0.0 && leadingAt(chord) ? leadingBuiltInDb : 0.0;
+      }
+
 void MidiRenderer::updateState()
       {
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
@@ -7878,12 +7896,17 @@ void MidiRenderer::updateState()
 
             velocityLanes.clear();
             engineSwitches.clear();
+            leadingLanes.clear();
+            const bool leading = LeadingLane::playing(score);
+            leadingBuiltInDb = leading ? LeadingLane::levelDb(score) : 0.0;
             // (Engine lanes: not for Live's clips, nor over MIDI out to a library: the parts play their own engines there)
             const bool engineLanes = !forLiveClips && !(SoundLib::output() == SoundLib::Output::MIDI && SoundLib::current());
             for (const auto& pl : Automation::read(score->masterScore())) {
                   for (const Automation::Lane& l : pl.second)
                         if (l.target == Automation::VELOCITY_TARGET && !l.points.empty())
                               velocityLanes[pl.first] = l;
+                  if (const Automation::Lane* ll = leading ? LeadingLane::laneOf(pl.second) : nullptr)
+                        leadingLanes[pl.first] = *ll;
                   const Automation::Lane* el = engineLanes ? EngineLane::laneOf(pl.second) : nullptr;
                   if (el)
                         for (const EngineLane::Switch& sw : EngineLane::switches(*el))
@@ -7943,7 +7966,7 @@ void MidiRenderer::updateState()
                         libSlotLibrary[r.port * 16 + r.channel] = r.library ? r.library : library.get();
                         libRoutePatches[r.port * 16 + r.channel] = { r.part, r.instrument };
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
-                        if (d.empty() && d.rule.empty() && d.even.empty() && d.evenAll == 0.0 && d.plain.empty())
+                        if (d.empty() && d.rule.empty() && d.even.empty() && d.evenAll == 0.0 && d.plain.empty() && d.leading.empty())
                               continue;
                         libTrackDelays[r.part] = d;
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };

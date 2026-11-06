@@ -83,6 +83,9 @@ selectable).
 `byPitch=1` (by hand, either layer) starts each note early by its own pitch's onset instead: attacks on the beat, a
 run's spacing following the onsets (Recommended until 2026-10-08); the Preset box then shows "(Custom)".
 
+`levels/leading` (the Leading lane, below) is 0 in both presets (and by default) until measurements of several
+orchestras give the amount (the owner, 2026-11-05).
+
 `levels/calibrated` 1 (as loud as the held note) is in neither preset since 2026-10-15 (Recommended plays 2, the
 match plus D, real players' difference: option B'): set by hand it shows "(Custom)".
 
@@ -2103,6 +2106,35 @@ the others share the Violas script, an assumption checked on Celli).
   other copy played 3 dB under a lone note (divisi n = 2) while the same sample on two copies in phase adds +3 dB.
   `sameKeyEndsFirst` now keys by lane too, so one copy's note-off never ends another copy's note. A quarter tone
   apart is no unison. Test: `tst_soundlibrary::monoUnison` (`unison.musicxml`).
+
+## Leading lane
+
+2026-11-05 (branch `leading-lane`; the owner: which line leads, a melody or the winds' answer, is the composer's choice,
+"not a staff text and not a guess"; the amount it is lifted "will come from measurements of several orchestras", being
+researched separately). Header comment of `libmscore/leadinglane.h` has the design.
+
+- **The lane**: an automation lane "Leading" per part (target `leading`, metaTag `automation` as every lane; an empty lane
+  isn't written, so a score without one is byte for byte as before and keeps the metaTag through MuseScore 3.6). Two
+  steps, Off and On (every point snapped, a step); before its first point the part is not leading. Under the part's
+  header in Continuous View with the other lanes (added with "+"), drawn and edited with their gestures; its right-click
+  menu: On / Off on a point, On from Here / Off from Here elsewhere, Delete, Clear Lane, Hide Lane. Undo: one step per
+  gesture, as every lane.
+- **Shown** (view only): wherever a part's lane is On, a slightly darker band behind that part's staves, page and
+  continuous view (`LeadingLane::bandRects` / `paintBands`, from `ScoreView::paint` before the elements: notes, ledger
+  lines, the range selection and the lanes' time-selection band stay on top). Black at 11 % with a hairline at its top
+  and bottom on a light paper, white at 12 % on a dark one; never printed or exported (export draws through
+  `Score::print`, not the view). The lane's own row shades its On spans in the same way.
+- **`[levels] leading`** (0 by default and in both presets; per score): 1 plays every library note of the part starting
+  while the lane is On **L dB louder**. L: the patch's map value `<Instrument leadingLevel>` (none in any shipped map
+  yet), else **`[levels] leadingDb`** (default 3 dB: **a placeholder, an assumption pending measured data**; nobody has
+  heard it). How: the patch's gain stage carries L (`TrackDelays::Delays::leading`, `gainStageDb`: hosted the slot's
+  gain, Live MuseScore's Utility, MIDI out CC7), every note of the patch plays L lower by CC11 and a leading note at 0
+  (`trackLevel` in rendermidi.cpp, `libLevels` volumeDb, adding up with the other levels), so Live's clips and the plain
+  set's CC11 lanes carry it as every note level; the master trim counts the gain. A library whose dynamics are CC11:
+  nothing (no CC11 headroom, as divisi). MuseScore 3 / 4 (built-in) parts: `leadingDb` by velocity on SoundFont 2's law
+  (`MarcatoLevel::velocity`, as an articulation's level; `MidiRenderer::leadingDb`). A note's state is its chord's tick.
+- **0 changes nothing**: no lane read for playback, no gain, no CC11 (tests `leadingLevels`, `leadingLive`; dumps of
+  Whence and the test scores identical to main's, branch commit message).
 
 ## Divisi level
 

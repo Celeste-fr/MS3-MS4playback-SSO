@@ -11,19 +11,23 @@
 #include "trackdelays.h"
 #include "contextlevel.h"
 #include "evenlevels.h"
+#include "leadinglane.h"
 #include "playbacksettings.h"
 #include "partplayback.h"
 #include "part.h"
 #include "score.h"
 #include "soundlibrary.h"
+#include "undo.h"
 #include "audio/midi/event.h"
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 
 namespace Ms {
 namespace TrackDelays {
@@ -105,6 +109,54 @@ static std::map<const Part*, Delays> readTag(const MasterScore* score)
       return delays;
       }
 
+// [levels] leading: each leading part's patches' L (cached per score by what it depends on: read() is called often, the
+// routes are not cheap)
+static QMutex leadingMutex;
+static std::map<const MasterScore*, std::pair<QString, std::map<const Part*, std::map<QString, double>>>> leadingCache;
+
+static std::map<const Part*, std::map<QString, double>> leadingLevels(const MasterScore* score,
+                                                                     const std::shared_ptr<const SoundLib::Library>& library)
+      {
+      std::map<const Part*, std::map<QString, double>> out;
+      const QString lanes = score->metaTag(Automation::metaTag);
+      if (lanes.indexOf(QString("\"%1\"").arg(LeadingLane::TARGET)) < 0)
+            return out;
+      const UndoStack* undo = score->undoStack();
+      const QString key = QString("%1|%2|%3|%4|%5|%6|").arg(quintptr(library.get())).arg(SoundLib::routesGeneration())
+                          .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
+                          .arg(int(SoundLib::output()))
+                          + lanes + "|" + score->metaTag(Playback::metaTag) + "|" + score->metaTag(PartPlaybackModes::metaTag)
+                          + QString("|%1|%2").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves());
+      {
+            QMutexLocker lock(&leadingMutex);
+            auto c = leadingCache.find(score);
+            if (c != leadingCache.end() && c->second.first == key && !(undo && undo->active()))
+                  return c->second.second;
+      }
+      std::set<const Part*> leadParts;
+      for (const auto& b : LeadingLane::bands(score))
+            leadParts.insert(b.first);
+      if (!leadParts.empty()) {
+            const std::vector<SoundLib::Route> routes = SoundLib::severalLibraries(score) ? SoundLib::allRoutes(score)
+                                                                                           : SoundLib::routes(score, *library);
+            for (const SoundLib::Route& r : routes) {
+                  if (r.lane != 0 || !r.instrument || !leadParts.count(r.part))
+                        continue;
+                  const SoundLib::Library& lib = r.library ? *r.library : *library;
+                  if (lib.dynamicsCC < 0 || lib.dynamicsCC == CTRL_EXPRESSION)
+                        continue;
+                  const double l = LeadingLane::levelDb(*r.instrument, score);
+                  if (l > 0.0)
+                        out[r.part][r.instrument->name] = l;
+                  }
+            }
+      QMutexLocker lock(&leadingMutex);
+      if (leadingCache.size() > 16)
+            leadingCache.clear();
+      leadingCache[score] = { key, out };
+      return out;
+      }
+
 std::map<const Part*, Delays> read(const MasterScore* score)
       {
       std::map<const Part*, Delays> delays = readTag(score);
@@ -137,6 +189,12 @@ std::map<const Part*, Delays> read(const MasterScore* score)
                         delays[part].evenAll = -rest;
                   }
             }
+      // [levels] leading (leadinglane.h): a part whose Leading lane is On somewhere, each of its patches' L on its gain stage
+      // (its notes L lower by CC11, a leading note at 0: MidiRenderer's trackLevel); not for a library whose dynamics are
+      // CC11 (no CC11 headroom), as the other levels
+      if (library && LeadingLane::playing(score))
+            for (const auto& pl : leadingLevels(score, library))
+                  delays[pl.first].leading = pl.second;
       // [slurs] plainPerformance: each plain Performance patch's measured shift (the map's plainShift), early; not with
       // [slurs] plainTiming, whose notes start early each by its own model (the renderer's early starts)
       if (library && !Playback::on("slurs/plainTiming", score)) {
@@ -269,7 +327,7 @@ double gainStageDb(const SoundLib::Library& library, const Delays& d, const QStr
       {
       if (library.dynamicsCC == CTRL_EXPRESSION)
             return 0.0;
-      return ruleDb(d, patch) + evenDb(d, patch) - d.trim;
+      return ruleDb(d, patch) + evenDb(d, patch) + leadingDb(d, patch) - d.trim;
       }
 
 double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
@@ -289,6 +347,12 @@ double evenDb(const Delays& d, const QString& patch)
       {
       auto e = d.even.find(patch);
       return e == d.even.end() ? 0.0 : e->second;
+      }
+
+double leadingDb(const Delays& d, const QString& patch)
+      {
+      auto e = d.leading.find(patch);
+      return e == d.leading.end() ? 0.0 : e->second;
       }
 
 std::map<int, int> midiVolumes(const MasterScore* score, const SoundLib::Library& library, bool withSolo)

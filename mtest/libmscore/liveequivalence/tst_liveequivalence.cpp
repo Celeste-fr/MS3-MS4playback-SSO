@@ -52,6 +52,7 @@
 #include "libmscore/liveclips.h"
 #include "libmscore/ms4playback.h"
 #include "libmscore/automation.h"
+#include "libmscore/leadinglane.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/livesetwriter.h"
 #include "libmscore/livesetupdate.h"
@@ -198,6 +199,7 @@ class TestLiveEquivalence : public QObject, public MTest
       void chordVoicesHosted();
       void chordVoicesLive();
       void divisiLive();
+      void leadingLive();
       void microtoneBendsLive();
       void plainAutoLive();
       void plainReattackLive();
@@ -10446,6 +10448,113 @@ void TestLiveEquivalence::attackLevelsLive()
                                           }
             QCOMPARE(lanes, 1);
             }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   leadingLive
+//    [levels] leading (leadinglane.h) reaches Live and MIDI out: leading.musicxml's violin with its Leading lane On in bar 2
+//    (L the setting's 3 dB) and the cello's from bar 3 (its map's leadingLevel 6). Live's clips carry MuseScore's CC11
+//    route for route (the carrier notes: 90 / 64 off the lane, 127 on it); the plain set's Kontakts carry L in MuseScore's
+//    Utility (gainStageDb) and their CC11 lanes the same values; MIDI out's CC7 carries the gain stage
+//    (TrackDelays::midiVolumes). With the setting 0 none of it: no Utility gain, no such CC11, no CC7
+//---------------------------------------------------------
+
+void TestLiveEquivalence::leadingLive()
+      {
+      auto lib = loadMap(
+         "<SoundLibrary name='t'><Switch type='cc' number='32'/><Dynamics cc='1'/>"
+         "<Instrument name='Violin' ids='violin'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "<Instrument name='Cello' ids='violoncello' leadingLevel='6'><Articulation name='Long' value='1' techniques='long legato'/></Instrument>"
+         "</SoundLibrary>");
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); Playback::setIniValuesForTest({}); } } reset;
+      MasterScore* score = readScore(DIR + "leading.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      const int bar = 4 * DIVISION;
+      Automation::Lane vl, cl;
+      vl.target = cl.target = LeadingLane::TARGET;
+      vl.points = { Automation::Point(bar, 1, Automation::Curve::STEP), Automation::Point(2 * bar, 0, Automation::Curve::STEP) };
+      cl.points = { Automation::Point(2 * bar, 1, Automation::Curve::STEP) };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, { { score->parts()[0], { vl } }, { score->parts()[1], { cl } } }));
+      auto run = [&](bool on) {
+            Playback::setIniValuesForTest({ { "levels/calibrated", "0" }, { "levels/context", "0" }, { "levels/realRange", "0" },
+                                            { "levels/sectionBalance", "0" }, { "levels/evenLevels", "0" },
+                                            { "levels/leading", on ? "1" : "0" } });
+            score->setPlaylistDirty();
+            MidiRenderer r(score);
+            r.setForLiveClips(true);
+            SynthesizerState ss;
+            MidiRenderer::Context ctx(ss);
+            ctx.metronome = false;
+            EventMap events;
+            for (int utick = 0;;) {
+                  const MidiRenderer::Chunk c = r.getChunkAt(utick);
+                  if (!c)
+                        break;
+                  r.renderChunk(c, &events, ctx);
+                  utick = c.utick2();
+                  }
+            const LiveClips::Timeline tl = LiveClips::timeline(score);
+            std::map<int, QStringList> fromEvents, fromClips;
+            std::set<int> values;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal() || e.librarySwitch())
+                        continue;
+                  if (e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION) {
+                        QStringList& l = fromEvents[e.extChannel()];
+                        if (l.isEmpty() || l.last() != QString::number(e.value()))
+                              l << QString::number(e.value());
+                        values.insert(e.value());
+                        }
+                  }
+            if (on) {
+                  QVERIFY(values.count(90) && values.count(64) && values.count(127));
+                  QCOMPARE(fromEvents[0].first(), QString("90"));
+                  }
+            else
+                  QVERIFY(!values.count(90) && !values.count(64));
+            for (const LiveClips::Track& c : LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl)) {
+                  std::vector<LiveClips::Note> notes = c.notes;
+                  std::sort(notes.begin(), notes.end());
+                  const int route = c.key.section(':', 1).toInt() - 1;
+                  for (const LiveClips::Note& n : notes)
+                        if (n.pitch == LiveClips::carrierPitch(CTRL_EXPRESSION)) {
+                              const QString v = QString::number(LiveClips::carrierValue(n.pitch, n.velocity));
+                              if (fromClips[route].isEmpty() || fromClips[route].last() != v)
+                                    fromClips[route] << v;
+                              }
+                  }
+            for (const auto& r : fromEvents)
+                  QVERIFY2(fromClips[r.first] == r.second, qPrintable(QString("route %1: MuseScore %2 / Live %3").arg(r.first)
+                                                                     .arg(r.second.join(' ')).arg(fromClips[r.first].join(' '))));
+            // the plain set: L in each Kontakt's Utility, the CC11 lanes as MuseScore's
+            const PlainLiveSet::Layout l = PlainLiveSet::layout(score, *lib, events, tl);
+            int kontakts = 0;
+            for (const PlainLiveSet::Section& sec : l.sections)
+                  for (const PlainLiveSet::PartTracks& p : sec.parts)
+                        for (const PlainLiveSet::Kontakt& k : p.kontakts) {
+                              ++kontakts;
+                              const double want = !on ? 0.0 : k.patch == "Cello" ? 6.0 : LeadingLane::DEFAULT_DB;
+                              QVERIFY2(std::fabs(k.gainStageDb - want) < 1e-9, qPrintable(QString("%1: %2").arg(k.patch).arg(k.gainStageDb)));
+                              std::set<int> lane;
+                              for (const PlainLiveSet::Lane& ln : k.lanes)
+                                    if (ln.cc == CTRL_EXPRESSION)
+                                          for (const auto& pt : ln.points)
+                                                lane.insert(pt.second);
+                              const int off = k.patch == "Cello" ? 64 : 90;
+                              QVERIFY2(on == (lane.count(off) > 0), qPrintable(QString("%1: CC11 %2").arg(k.patch).arg(off)));
+                              }
+            QCOMPARE(kontakts, 2);
+            // MIDI out: the gain stage on CC7
+            QCOMPARE(TrackDelays::midiVolumes(score, *lib, false).empty(), !on);
+            };
+      run(false);
+      run(true);
       delete score;
       }
 
