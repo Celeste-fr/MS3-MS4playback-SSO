@@ -1,0 +1,677 @@
+//=============================================================================
+//  MuseScore
+//  Music Composition & Notation
+//
+//  EvenAutoMeasurer (evenautomeasurer.h)
+//
+//  This program is free software; you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License version 3.
+//=============================================================================
+
+#include "evenautomeasurer.h"
+#include "libmscore/lagprobe.h"
+
+#include <chrono>
+#include <condition_variable>
+#include <thread>
+
+#include <cmath>
+
+#include "libmscore/repeatlist.h"
+#include "libmscore/score.h"
+#include "libmscore/soundlibrary.h"
+#include "libmscore/undo.h"
+#include "libmscore/recentresults.h"
+#include "musescore.h"
+#include "soundlibrarycheck.h"
+#include "soundlibraryhost.h"
+
+#ifdef USE_VST3
+#include "audio/vst3/evenmeasure.h"
+#include "audio/vst3/vst3plugin.h"
+#include "audio/vst3/vst3synth.h"
+#endif
+
+namespace Ms {
+
+//---------------------------------------------------------
+//   Instance
+//---------------------------------------------------------
+
+struct EvenAutoMeasurer::Instance {
+      QString key;
+      QString patch;
+#ifdef USE_VST3
+      std::shared_ptr<Vst3Synth> vst;
+#endif
+      std::thread thread;
+      std::mutex mutex;
+      std::condition_variable cv;
+      std::vector<EvenAuto::Job> queue;           // (taken by EvenAuto::next: the focus first)
+      std::atomic<bool> sounding { false };       // past its test note: rendering jobs
+      bool stop { false };
+      };
+
+EvenAutoMeasurer::EvenAutoMeasurer()
+      {
+      _debounce.setSingleShot(true);
+      connect(&_debounce, &QTimer::timeout, this, [this]() { detect(); });
+      _loadTimer.setSingleShot(true);
+      _loadTimer.setInterval(0);
+      connect(&_loadTimer, &QTimer::timeout, this, [this]() { loadStep(); });
+      _countdown.setInterval(250);
+      connect(&_countdown, &QTimer::timeout, this, [this]() { countdownStep(); });
+      _saveTimer.setSingleShot(true);
+      _saveTimer.setInterval(5000);
+      connect(&_saveTimer, &QTimer::timeout, this, [this]() { _cache.save(); });
+      }
+
+EvenAutoMeasurer::~EvenAutoMeasurer()
+      {
+      shutdown();
+      }
+
+EvenAutoMeasurer* EvenAutoMeasurer::instance()
+      {
+      static EvenAutoMeasurer* m = new EvenAutoMeasurer;
+      return m;
+      }
+
+static void logLine(const QString& line)
+      {
+      qDebug("%s", qPrintable(line));
+      }
+
+//---------------------------------------------------------
+//   ready
+//---------------------------------------------------------
+
+bool EvenAutoMeasurer::ready(Score* cs)
+      {
+#ifdef USE_VST3
+      MasterScore* ms = cs ? cs->masterScore() : nullptr;
+      if (!ms || !EvenAuto::active(ms)) {
+            if (_session && (!ms || _session->score() == ms)) {
+                  cancelHold();
+                  _session.reset();
+                  releaseInstances();
+                  }
+            return false;
+            }
+      if (_session && _session->score() == ms)
+            return true;
+      cancelHold();
+      _session.reset();
+      releaseInstances();
+      _failed.clear();
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (library->name != _cacheLibrary) {
+            _cache.save();
+            _cacheLibrary = library->name;
+            _cache.load(SoundLibraryHost::setupsFolder(*library) + "/even cache.json");
+            }
+      _score = ms;
+      _session.reset(new EvenAuto::Session(ms, &_cache));
+      _session->setLog(logLine);
+      if (mscore)
+            _session->setSynthesizerState(mscore->synthesizerState());
+      _undoState = ms->undoStack()->state();
+      return true;
+#else
+      Q_UNUSED(cs);
+      return false;
+#endif
+      }
+
+//---------------------------------------------------------
+//   setScore / edited / playing / prepare
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::setScore(Score* cs)
+      {
+      MasterScore* ms = cs ? cs->masterScore() : nullptr;
+      if (_session && _session->score() == ms)
+            return;
+      if (!ready(cs))
+            return;
+      _session->edited();
+      _debounce.start(OPEN_DELAY_MS);
+      }
+
+void EvenAutoMeasurer::edited(Score* cs)
+      {
+      if (!cs)
+            return;
+      MasterScore* ms = cs->masterScore();
+      if (_session && _session->score() == ms && ms->undoStack()->state() == _undoState)
+            return;                       // (a command that changed nothing: a selection)
+      if (_probePaused)
+            return;
+      if (!ready(cs))
+            return;
+      _undoState = ms->undoStack()->state();
+      _session->edited();
+      _debounce.start(DEBOUNCE_MS);
+      }
+
+void EvenAutoMeasurer::playing(bool on)
+      {
+      _paused = on;
+      if (!on && _detectAfterPlay) {
+            _detectAfterPlay = false;
+            _debounce.start(DEBOUNCE_MS);
+            }
+      }
+
+void EvenAutoMeasurer::prepare(Score* cs)
+      {
+      if (_probePaused)
+            return;
+      LagProbe::Scope probe("EvenAutoMeasurer::prepare");
+      if (!ready(cs))
+            return;
+      if (_session->needsDetect() || cs->masterScore()->playlistDirty()) {
+            _session->edited();
+            _debounce.stop();
+            detect();
+            }
+      }
+
+//---------------------------------------------------------
+//   detect
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::detect()
+      {
+      if (!_session || !_score || _probePaused)
+            return;
+      LagProbe::Scope probe("EvenAutoMeasurer::detect");
+      if (_paused) {
+            _detectAfterPlay = true;      // (measured once playback stops)
+            return;
+            }
+      if (!EvenAuto::active(_score)) {
+            ready(_score);
+            return;
+            }
+      if (mscore)
+            _session->setSynthesizerState(mscore->synthesizerState());
+      if (!_holding)
+            _focus = playSeconds();       // (the windows from the play position on first)
+      const bool wasWritten = _score->evenLevelsWritten();
+      const std::vector<EvenAuto::Job> jobs = _session->detect();
+      updateLive();
+      for (const EvenAuto::Job& j : jobs)
+            dispatch(j);
+      if (!wasWritten && _score->evenLevelsWritten() && mscore)
+            mscore->dirtyChanged(_score);
+      if (_session->fromCache() || !jobs.empty())
+            _saveTimer.start();
+      checkHold();
+      }
+
+void EvenAutoMeasurer::updateLive()
+      {
+      std::set<int> live;
+      if (_session)
+            for (int id : _session->workIds())
+                  live.insert(id);
+      std::lock_guard<std::mutex> lock(_liveMutex);
+      _live.swap(live);
+      }
+
+//---------------------------------------------------------
+//   dispatch / loadStep
+//    a job to its instance's worker; an instance not loaded yet is loaded on the main thread, one per event-loop turn
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::dispatch(const EvenAuto::Job& job)
+      {
+      if (_failed.count(job.instance)) {
+            EvenAuto::Result r;
+            r.id = job.id;
+            r.round = job.round;
+            r.error = "the plug-in instance could not be loaded";
+            QTimer::singleShot(0, this, [this, r]() { onResult(r); });
+            return;
+            }
+      auto i = _instances.find(job.instance);
+      if (i == _instances.end()) {
+            _toLoad.push_back(job);
+            _loadTimer.start();
+            return;
+            }
+      Instance* in = i->second.get();
+      {
+            std::lock_guard<std::mutex> lock(in->mutex);
+            in->queue.push_back(job);
+      }
+      in->cv.notify_one();
+      }
+
+void EvenAutoMeasurer::loadStep()
+      {
+#ifdef USE_VST3
+      // (a load in steps still to finish counts too: its job left _toLoad when it began. Returning here then left it
+      // pending for ever, the measurer busy and its notes unmeasured, whenever no other job was waiting to load; seen
+      // with helpers, the lag probe stuck after phase l, 2 of 5 runs)
+      if ((_toLoad.empty() && !_pendingLoad) || !_score)
+            return;
+      // the playback's own instances first (the load profile, 2026-10-16: at score open both loaded on the main thread,
+      // one each in turn, so the last of the score's instances came in a measurer's load later each time). What is
+      // measured doesn't change: the same states, rendered offline once each sounds. (Play loads the rest at once,
+      // SoundLibraryHost::sync, and then these go on)
+      if (SoundLibraryHost::instance()->preloading()) {
+            _loadTimer.start(200);
+            return;
+            }
+      _loadTimer.setInterval(0);
+      // a load in steps (EditLag: its setState on a worker, the window free): when done, finished here
+      if (_pendingLoad) {
+            if (!SoundLibraryExport::instanceReady(_pendingLoad.get())) {
+                  _loadTimer.start(LOAD_POLL_MS);
+                  return;
+                  }
+            const EvenAuto::Job job = _pendingJob;
+            QString error;
+            std::shared_ptr<Vst3Synth> vst;
+            if (!_score)
+                  error = tr("the score was closed");
+            else {
+                  LagProbe::Scope probe("EvenAutoMeasurer: finish instance");
+                  probe.setDetail(job.patch);
+                  vst = SoundLibraryExport::finishInstance(_pendingLoad.get(), _score, &error);
+            }
+            _pendingLoad.reset();
+            logLine(QString("even levels: %1 loaded in %2 ms, its setState on a worker thread").arg(job.patch)
+                    .arg(_pendingClock.nsecsElapsed() / 1e6, 0, 'f', 0));
+            loaded(job, vst, error);
+            dispatch(job);
+            if (!_toLoad.empty())
+                  _loadTimer.start(0);
+            return;
+            }
+      const int k = EvenAuto::next(_toLoad, _focus);      // (the instance the focus needs first)
+      const EvenAuto::Job job = _toLoad[size_t(k)];
+      _toLoad.erase(_toLoad.begin() + k);
+      if (!_instances.count(job.instance) && !_failed.count(job.instance)) {
+            std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+            const SoundLib::Route* route = nullptr;
+            std::vector<SoundLib::Route> routes;
+            QElapsedTimer clock;
+            clock.start();
+            if (library)
+                  routes = SoundLib::routes(_score, *library);
+            const double routesMs = clock.nsecsElapsed() / 1e6;
+            for (const SoundLib::Route& r : routes)
+                  if (r.port * 16 + r.channel == job.route)
+                        route = &r;
+            QString error;
+            clock.restart();
+            if (route && EditLag::on()) {
+                  LagProbe::Scope probe("EvenAutoMeasurer: begin instance");
+                  probe.setDetail(job.patch);
+                  _pendingClock.start();
+                  _pendingLoad = SoundLibraryExport::beginInstance(_score, *route, float(RATE), &error);
+                  _pendingJob = job;
+                  _loadTimer.start(LOAD_POLL_MS);
+                  return;
+                  }
+            LagProbe::Scope probe("EvenAutoMeasurer: load instance");
+            probe.setDetail(job.patch);
+            std::shared_ptr<Vst3Synth> vst = route ? SoundLibraryExport::loadInstance(_score, *route, float(RATE), &error) : nullptr;
+            // (the load profile: these instances load on the main thread, between and after the playback's own)
+            logLine(QString("even levels: %1 loaded in %2 ms on the main thread (the routes worked out %3 ms)")
+                    .arg(job.patch).arg(clock.nsecsElapsed() / 1e6, 0, 'f', 0).arg(routesMs, 0, 'f', 0));
+            loaded(job, vst, error);
+            }
+      dispatch(job);
+      if (!_toLoad.empty())
+            _loadTimer.start();
+#endif
+      }
+
+//---------------------------------------------------------
+//   loaded
+//    an instance loaded (vst) or not: its worker started, or the instance marked failed
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::loaded(const EvenAuto::Job& job, std::shared_ptr<Vst3Synth> vst, const QString& error)
+      {
+#ifdef USE_VST3
+      if (!vst) {
+            _failed.insert(job.instance);
+            logLine(QString("even levels: could not load %1: %2").arg(job.patch, error));
+            if (mscore)
+                  mscore->showMessage(tr("Even levels: could not load %1 for measuring: %2").arg(job.patch, error), 10000);
+            }
+      else {
+            std::unique_ptr<Instance> in(new Instance);
+            in->key = job.instance;
+            in->patch = job.patch;
+            in->vst = vst;
+            Instance* p = in.get();
+            _instances[job.instance] = std::move(in);
+            p->thread = std::thread([this, p]() { worker(p); });
+            }
+#else
+      Q_UNUSED(job);
+      Q_UNUSED(vst);
+      Q_UNUSED(error);
+#endif
+      }
+
+//---------------------------------------------------------
+//   worker
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::worker(Instance* in)
+      {
+#ifdef USE_VST3
+      LagProbe::nameThread(QString("even levels: %1").arg(in->patch).toUtf8().constData());
+      SoundLibraryHost::workerThread(true);
+      // until it sounds: a test note in real time, as PlaybackVerifier::waitUntilSounding plays it (Kontakt goes on
+      // loading samples after its state is set), here given up when the instance is released
+      std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
+      const SoundLib::LibInstrument* li = lib ? SoundLibraryHost::findPatch(*lib, in->patch) : nullptr;
+      if (li && !li->kit) {
+            const int waitLimit = qEnvironmentVariableIsSet("MS_VERIFY_LOAD_WAIT") ? qEnvironmentVariableIntValue("MS_VERIFY_LOAD_WAIT") : 300;
+            const int pitch = ArticulationCheckDialog::testPitch(*li);
+            const unsigned block = 512;
+            std::vector<float> buf(2 * block);
+            QElapsedTimer waited;
+            waited.start();
+            bool sounded = false;
+            while (!sounded && !in->stop && waited.elapsed() < waitLimit * 1000) {
+                  if (li->switchType == SoundLib::SwitchType::CC && !li->articulations.empty())
+                        in->vst->play(PlayEvent(ME_CONTROLLER, 0, li->switchNumber, li->articulations.front().value));
+                  if (lib->dynamicsCC >= 0)
+                        in->vst->play(PlayEvent(ME_CONTROLLER, 0, lib->dynamicsCC, 100));
+                  in->vst->play(PlayEvent(ME_NOTEON, 0, pitch, 100));
+                  for (int b = 0; b < int(1.6 * RATE / block) && !sounded && !in->stop; ++b) {
+                        if (b == int(1.2 * RATE / block))
+                              in->vst->play(PlayEvent(ME_NOTEON, 0, pitch, 0));
+                        std::fill(buf.begin(), buf.end(), 0.f);
+                        in->vst->process(block, buf.data(), nullptr, nullptr);
+                        for (float x : buf)
+                              sounded = sounded || std::fabs(x) > 1e-4f;
+                        std::this_thread::sleep_for(std::chrono::microseconds(long(1e6 * block / RATE)));
+                        }
+                  in->vst->play(PlayEvent(ME_NOTEON, 0, pitch, 0));
+                  }
+            in->vst->allNotesOff(-1);
+            for (int b = 0; b < int(2 * RATE / block) && !in->stop; ++b)
+                  in->vst->process(block, buf.data(), nullptr, nullptr);       // (what rings of the test notes: gone)
+            logLine(QString("even levels: %1 %2 after %3 s").arg(in->patch, sounded ? "sounds" : "never sounded")
+                    .arg(waited.elapsed() / 1000.0, 0, 'f', 1));
+            }
+      in->vst->beginExport(float(RATE));
+      in->sounding = true;
+      for (;;) {
+            EvenAuto::Job job;
+            {
+                  std::unique_lock<std::mutex> lock(in->mutex);
+                  in->cv.wait(lock, [in]() { return in->stop || !in->queue.empty(); });
+                  if (in->stop)
+                        break;
+                  const int k = EvenAuto::next(in->queue, _focus);     // the focus first (the wait as short as can be)
+                  job = in->queue[size_t(k)];
+                  in->queue.erase(in->queue.begin() + k);
+            }
+            auto wanted = [this, &job]() {
+                  std::lock_guard<std::mutex> lock(_liveMutex);
+                  return _live.count(job.id) > 0;
+                  };
+            if (!wanted())
+                  continue;
+            in->vst->idle();              // (the plug-in's parameter changes and MIDI mapping, between renders)
+            const EvenAuto::Result r = EvenMeasure::run(in->vst.get(), job, RATE, [this, in, &wanted]() {
+                  while ((_paused || _probePaused) && !in->stop)
+                        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                  return !in->stop && wanted();
+                  });
+            if (in->stop)
+                  break;
+            // a helper that ended meanwhile (vst3remote.h) rendered silence: not a measurement. The job goes back and the
+            // instance is loaded again (lost() on the main thread: this worker ends, its queue with it)
+            bool dead = false;
+            for (int k = 0; k < in->vst->slotCount(); ++k)
+                  if (in->vst->plugin(k) && !in->vst->plugin(k)->alive())
+                        dead = true;
+            if (dead) {
+                  std::vector<EvenAuto::Job> jobs;
+                  {
+                        std::lock_guard<std::mutex> lock(in->mutex);
+                        jobs.swap(in->queue);
+                        in->stop = true;
+                  }
+                  jobs.insert(jobs.begin(), job);
+                  const QString key = in->key;
+                  QMetaObject::invokeMethod(this, [this, key, jobs]() { lost(key, jobs); }, Qt::QueuedConnection);
+                  break;
+                  }
+            QMetaObject::invokeMethod(this, [this, r]() { onResult(r); }, Qt::QueuedConnection);
+            }
+      in->vst->endExport();
+      SoundLibraryHost::workerThread(false);
+#else
+      Q_UNUSED(in);
+#endif
+      }
+
+//---------------------------------------------------------
+//   lost
+//    an instance whose helper ended: dropped (its worker has stopped), its jobs loaded for again, at most
+//    MAX_LOST times a session per instance (a patch that crashes its helper each time is marked failed)
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::lost(const QString& key, const std::vector<EvenAuto::Job>& jobs)
+      {
+      auto i = _instances.find(key);
+      if (i != _instances.end()) {
+            if (i->second->thread.joinable())
+                  i->second->thread.join();
+            _instances.erase(i);
+            }
+      const int n = ++_lost[key];
+      logLine(QString("even levels: %1's helper ended (%2 time(s)), %3 job(s) loaded for again").arg(key).arg(n).arg(jobs.size()));
+      if (n > MAX_LOST)
+            _failed.insert(key);
+      for (const EvenAuto::Job& job : jobs)
+            dispatch(job);
+      updateLive();
+      }
+
+//---------------------------------------------------------
+//   onResult
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::onResult(const EvenAuto::Result& r)
+      {
+      if (!_session || !_score)
+            return;
+      LagProbe::Scope probe("EvenAutoMeasurer::onResult");
+      const bool wasWritten = _score->evenLevelsWritten();
+      EvenAuto::Job next;
+      if (_session->result(r, &next))
+            dispatch(next);
+      updateLive();
+      if (r.ok && r.renderSeconds > 0.05) {
+            const double s = r.audioSeconds / r.renderSeconds;
+            _speed = _speed > 0 ? 0.7 * _speed + 0.3 * s : s;
+            }
+      if (!wasWritten && _score->evenLevelsWritten() && mscore)
+            mscore->dirtyChanged(_score);
+      if (!_session->busy()) {
+            _saveTimer.start();
+            if (mscore && !_holding)
+                  mscore->showMessage(tr("Even levels: measured"), 3000);
+            }
+      checkHold();
+      }
+
+//---------------------------------------------------------
+//   holdPlay / checkHold / countdown / cancelHold
+//---------------------------------------------------------
+
+bool EvenAutoMeasurer::probeBusy() const
+      {
+      return _session && (_session->busy() || !_toLoad.empty() || _pendingLoad);
+      }
+
+QString EvenAutoMeasurer::probeState() const
+      {
+      int queued = 0;
+      int dead = 0;
+      for (const auto& i : _instances) {
+            queued += int(i.second->queue.size());
+#ifdef USE_VST3
+            if (i.second->stop)
+                  ++dead;
+#endif
+            }
+      return QString("session %1 (%2), to load %3, pending load %4, instances %5 (stopped %6), queued %7, failed %8")
+             .arg(_session ? 1 : 0).arg(_session ? _session->pendingText().join("; ") : QString())
+             .arg(_toLoad.size()).arg(_pendingLoad ? 1 : 0).arg(_instances.size()).arg(dead).arg(queued).arg(_failed.size());
+      }
+
+void EvenAutoMeasurer::setProbePaused(bool on)
+      {
+      _probePaused = on;
+      if (!on && _session) {
+            _session->edited();
+            _debounce.start(DEBOUNCE_MS);
+            }
+      }
+
+void EvenAutoMeasurer::probeRefresh(Score* cs)
+      {
+      if (ready(cs)) {
+            _undoState = cs->masterScore()->undoStack()->state();
+            _session->edited();
+            _debounce.start(DEBOUNCE_MS);
+            }
+      }
+
+bool EvenAutoMeasurer::holdPlay(Score* cs, double from, double to, std::function<void()> resume)
+      {
+      if (!_session || !cs || cs->masterScore() != _session->score() || _probePaused)
+            return false;
+      if (!_session->mustWait(from, to))
+            return false;
+      _holding = true;
+      _holdFrom = from;
+      _holdTo = to;
+      _focus = from;                // (what Play waits for first, from its start forward)
+      _resume = resume;
+      _holdClock.start();
+      logLine(QString("even levels: Play waits for %1").arg(_session->pendingText(from, to).join("; ")));
+      _paused = false;
+      countdownStep();
+      _countdown.start();
+      return true;
+      }
+
+void EvenAutoMeasurer::checkHold()
+      {
+      if (!_holding)
+            return;
+      if (_session && _session->mustWait(_holdFrom, _holdTo))
+            return;
+      _holding = false;
+      _countdown.stop();
+      if (mscore)
+            mscore->showMessage(QString(), 1);
+      logLine(QString("even levels: Play waited %1 s").arg(_holdClock.elapsed() / 1000.0, 0, 'f', 1));
+      std::function<void()> f = _resume;
+      _resume = nullptr;
+      if (f)
+            QTimer::singleShot(0, this, f);
+      }
+
+void EvenAutoMeasurer::countdownStep()
+      {
+      if (!_holding || !_session || !mscore)
+            return;
+      const QStringList what = _session->pendingText(_holdFrom, _holdTo);
+      const double audio = _session->pendingAudioSeconds(_holdFrom, _holdTo);
+      // (until a render here is timed: the VM's speed, EvenLevels::RENDER_SPEED)
+      const double speed = _speed > 0 ? _speed : EvenLevels::RENDER_SPEED;
+      QString when = tr("playing in ~%1 s").arg(std::max(1, int(std::ceil(audio / speed))));
+      if (loading(_session->pendingInstances(_holdFrom, _holdTo)))
+            when = tr("loading the plug-in, then ~%1 s").arg(std::max(1, int(std::ceil(audio / speed))));
+      mscore->showMessage(tr("Even levels: measuring %1 … %2 (Stop cancels)").arg(what.join("; "), when), 0);
+      }
+
+void EvenAutoMeasurer::cancelHold()
+      {
+      if (!_holding)
+            return;
+      _holding = false;
+      _resume = nullptr;
+      _countdown.stop();
+      if (mscore)
+            mscore->showMessage(QString(), 1);
+      }
+
+//---------------------------------------------------------
+//   playSeconds / loading
+//---------------------------------------------------------
+
+double EvenAutoMeasurer::playSeconds() const
+      {
+      if (!_score)
+            return 0;
+      MasterScore* ms = _score.data();
+      return ms->utick2utime(ms->repeatList().tick2utick(ms->playPos().ticks()));
+      }
+
+bool EvenAutoMeasurer::loading(const std::vector<QString>& instances) const
+      {
+      for (const QString& key : instances) {
+            auto i = _instances.find(key);
+            if (i == _instances.end()) {
+                  if (!_failed.count(key))
+                        return true;
+                  continue;
+                  }
+            if (!i->second->sounding)
+                  return true;
+            }
+      return false;
+      }
+
+//---------------------------------------------------------
+//   releaseInstances / shutdown
+//---------------------------------------------------------
+
+void EvenAutoMeasurer::releaseInstances()
+      {
+      _toLoad.clear();
+      _pendingLoad.reset();               // (after its setState: InstanceLoad waits)
+      for (auto& i : _instances) {
+            Instance* in = i.second.get();
+            {
+                  std::lock_guard<std::mutex> lock(in->mutex);
+                  in->stop = true;
+                  in->queue.clear();
+            }
+            in->cv.notify_all();
+            }
+      for (auto& i : _instances)
+            if (i.second->thread.joinable())
+                  i.second->thread.join();
+      _instances.clear();               // (the plug-ins go on the main thread)
+      updateLive();
+      }
+
+void EvenAutoMeasurer::shutdown()
+      {
+      cancelHold();
+      _debounce.stop();
+      _session.reset();
+      releaseInstances();
+      _cache.save();
+      }
+
+} // namespace Ms

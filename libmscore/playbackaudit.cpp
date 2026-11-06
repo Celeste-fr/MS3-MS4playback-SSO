@@ -10,6 +10,7 @@
 
 #include "playbackaudit.h"
 
+#include <QDir>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -31,6 +32,7 @@
 #include "slur.h"
 #include "staff.h"
 #include "synthesizerstate.h"
+#include "tuning.h"
 
 namespace Ms {
 namespace PlaybackAudit {
@@ -43,6 +45,11 @@ const char* kindName(Kind k)
             case Kind::CAPPED:     return "CAPPED";
             case Kind::ARRIVAL:    return "ARRIVAL";
             case Kind::LEVEL_STEP: return "LEVEL STEP";
+            case Kind::DROPPED:    return "DROPPED";
+            case Kind::LEAP:       return "LEAP";
+            case Kind::CHORD:      return "CHORD";
+            case Kind::HALL:       return "HALL";
+            case Kind::AVOIDED_CC: return "AVOIDED CC";
             }
       return "";
       }
@@ -62,6 +69,12 @@ const char* severityName(Severity s)
 // the upper end fails, between the two it is at the edge
 static const double TIMING_WARN_MS = 30.0;
 static const double TIMING_FAIL_MS = 50.0;
+
+// SSO's legato engine (read privately, behaviour only): a legato note-on less than 15 ms after the previous legato
+// note-on on its channel, at velocity 64 or lower, isn't played; a step beyond an octave gets no transition
+static const double DROP_GAP_MS = MidiRenderer::TRANSITION_MIN_GAP_MS;
+static const int DROP_MAX_VELOCITY = 64;
+static const double LEAP_MAX_CENTS = 1200.0;
 
 // Jesteadt, Wier & Green 1977 (JASA 61, 169-177), as Praat's manual (phonToDifferenceLimens) quotes it:
 // dI / I = 0.463 (I / I0)^-0.072; in dB: 10 log10(1 + dI / I)
@@ -119,6 +132,9 @@ void render(MasterScore* score, EventMap* events, std::vector<MidiRenderer::LibT
             EventMap part;
             midi.renderChunk(chunk, &part, ctx);
             events->insert(part.begin(), part.end());
+            events->startLeadMs = part.startLeadMs;               // (the start lead: the same in every chunk)
+            events->delayLeadMs = part.delayLeadMs;               // (the track delays' lead: likewise)
+            events->startEarlyMs.insert(part.startEarlyMs.begin(), part.startEarlyMs.end());
             }
       }
 
@@ -145,9 +161,31 @@ QString Report::text(const QString& title) const
                      "Rasch 1979, warn > %3 ms, fail > %4 ms; level steps: values, proposed threshold (not enforced, owner to "
                      "approve) the difference limen at 60 dB SL, Jesteadt, Wier & Green 1977: %5 dB, marked \"> DL\"")
                      .arg(notes).arg(keepMs).arg(TIMING_WARN_MS).arg(TIMING_FAIL_MS).arg(differenceLimenDb(), 0, 'f', 2);
-      for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP })
+      for (Kind k : { Kind::OVERLAP, Kind::UNMEASURED, Kind::CAPPED, Kind::ARRIVAL, Kind::LEVEL_STEP, Kind::DROPPED, Kind::LEAP, Kind::CHORD,
+                      Kind::HALL, Kind::AVOIDED_CC })
             out << QString("  %1: %2 fail, %3 warn, %4 info").arg(kindName(k), -12).arg(count(k, Severity::FAIL))
                    .arg(count(k, Severity::WARN)).arg(count(k, Severity::INFO));
+      if (!plainShifts.empty()) {
+            QStringList ps;
+            for (const auto& p : plainShifts)
+                  ps << (std::isfinite(p.second) ? QString("%1 %2 ms early").arg(p.first).arg(p.second, 0, 'f', 1)
+                                                 : QString("%1 not measured (0)").arg(p.first));
+            out << QString("  [slurs] plainPerformance, each patch's shift (the map's plainShift): %1").arg(ps.join(", "));
+            }
+      if (!transitionShiftsMs.empty()) {
+            std::vector<double> v = transitionShiftsMs;
+            std::sort(v.begin(), v.end());
+            const double median = v.size() % 2 ? v[v.size() / 2] : (v[v.size() / 2 - 1] + v[v.size() / 2]) / 2;
+            out << QString("  [slurs] transitionsEarly %6: %1 transitions started early, median %2 ms (%3 - %4), %5 capped")
+                   .arg(v.size()).arg(median, 0, 'f', 1).arg(v.front(), 0, 'f', 1).arg(v.back(), 0, 'f', 1).arg(transitionsCapped)
+                   .arg(transitionsEarlyMode);
+            if (!transitionsFallback.empty()) {
+                  QStringList names;
+                  for (const QString& n : transitionsFallback)
+                        names << n;
+                  out << QString("    no measured glide (mode 2 / 3 fell back to the arrival): %1").arg(names.join(", "));
+                  }
+            }
       std::vector<const Finding*> sorted;
       for (const Finding& f : findings)
             sorted.push_back(&f);
@@ -193,7 +231,9 @@ struct Played {
       bool sub { false };           // an ornament's (or glissando's) later sub-note: never started early
       bool hasOnset { false };      // its technique has an onset in the map
       double onset { 0 };           // ms, the map's for this note, as the renderer takes it
-      double arrival { 0 };         // ms, predicted: sent + onset - written
+      double arrival { 0 };         // ms, predicted: sent + onset - written (a transition: + its arrival instead)
+      bool transition { false };    // played as a legato transition with a known arrival (LibTrace::glideArriveMs)
+      bool hasArrival { false };    // arrival is known: an onset, or a transition's arrival
       };
 
 struct Group {                      // a chord's notes attacked together on a line (track)
@@ -218,6 +258,10 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
       report.keepMs = Playback::value("legato/keepMs", score);
       const double keepMs = report.keepMs;
       auto ms = [score](int utick) { return score->utick2utime(utick) * 1000.0; };
+      // a note's note-on, ms on the score's time: without the start lead everything plays later by
+      // (MidiRenderer::libraryDelayLead; a first note started its whole onset early comes out before its written time)
+      // (and without the track delays' lead, libraryDelayLead: a plain Performance patch's shift shows as its early start)
+      auto sent = [&](const auto* p) { return ms(p->on) - events.startLeadMs - events.delayLeadMs; };
 
       std::map<const Note*, std::vector<const MidiRenderer::LibTrace*>> traces;
       for (const MidiRenderer::LibTrace& t : trace)
@@ -350,11 +394,18 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
       std::shared_ptr<const SoundLib::Library> lib = SoundLib::current();
       const bool byPitchAll = Playback::on("heldNotes/byPitch", score);
       const int onsetEarlyPct = lib ? SoundLib::onsetEarly(score, *lib) : 0;
+      const bool transitionsEarly = Playback::value("slurs/transitionsEarly", score) >= 0.5;
+      report.transitionsEarlyMode = int(std::lround(Playback::value("slurs/transitionsEarly", score)));
+      // ([slurs] plainTiming: a plain note's own early starts; an attack by the patch's plainAttack, a transition by its
+      // modelled arrival, transitionsEarly's mode, at least 1)
+      const bool plainTiming = Playback::on("slurs/plainPerformance", score) && Playback::on("slurs/plainTiming", score);
       auto onsetOf = [&](const Played* p, int pitch) {
             const SoundLib::Choice& c = p->trace->choice;
             const SoundLib::Articulation* a = c.articulation;
+            if (plainTiming && c.plain && !p->trace->attack)
+                  return std::isfinite(p->trace->patch->plainAttackMs) ? p->trace->patch->plainAttackMs : 0.0;
             return Playback::adjust("heldNotes.onset", p->trace->patch->name, a->name, pitch,
-                                    byPitchAll ? a->onsetAt(pitch) : a->onsetMedian());
+                                    a->startOnset(p->trace->attack, pitch, byPitchAll));   // (a smooth attack: its own)
             };
       std::map<const Note*, std::vector<int>> writtenOf;         // a note's rendered starts (sub-notes after the first)
       for (const auto& up : played)
@@ -368,10 +419,51 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const int len = p->note->chord()->actualTicks().ticks();
             p->sub = std::any_of(w.begin(), w.end(), [&](int x) { return x < p->written && p->written - x < len; });
             const SoundLib::Articulation* a = p->trace->choice.articulation;
-            p->hasOnset = a->onsetMs > 0 || !a->onsets.empty();
+            p->hasOnset = a->onsetMs > 0 || !a->onsets.empty() || p->trace->attack;
+            if (plainTiming && p->trace->choice.plain)
+                  p->hasOnset = std::isfinite(p->trace->patch->plainAttackMs) || p->trace->attack;
             if (p->hasOnset) {
                   p->onset = onsetOf(p, p->pitch);
-                  p->arrival = ms(p->on) + p->onset - ms(p->written);
+                  p->arrival = sent(p) + p->onset - ms(p->written);
+                  p->hasArrival = true;
+                  }
+            // a legato transition isn't an attack: it arrives when the transition reaches the new pitch, as the renderer
+            // models it for the note's bend (LibTrace::glideArriveMs: the patch's measured bendGlide by the note before's
+            // length, else its legatoDelay by interval, an octave by its start pitch, quicker after a short note:
+            // libFastDelay; playback.ini [legato.delay]); unknown (no delay in the map): no arrival
+            if (p->trace->from && p->trace->glideArriveMs >= 0) {
+                  p->transition = true;
+                  p->hasArrival = true;
+                  p->arrival = sent(p) + p->trace->glideArriveMs - ms(p->written);
+                  }
+            else if (p->trace->from)
+                  p->hasArrival = false;
+            // [slurs] plainPerformance: the patch's events go its plainShift early (a track delay, in sent()); unmeasured (no
+            // plainShift): no arrival. Each plain note is then heard as its own situation, as the heard check measures it
+            // (2026-10-29: before, every plain note was taken as heard plainShift after its note-on, a bowed new bow
+            // plainShift + bowedEarly: Whence, Recommended, ARRIVAL 147 fail against the heard check's 35 on the real sound,
+            // build 491; the model was 100-250 ms off for the transitions, 40-70 ms for the re-attacks: VERIFY.md › Playback
+            // audit › Plain notes):
+            //   a transition (fingered inside a slur, bowed on a new bow, portamento) arrives as every other legato
+            //     transition does, by the patch's measured glide (glideArriveMs above: bendGlideFingered at 64, bendGlide
+            //     otherwise; microtoneBends 3's midEarly and plainAuto 2's bowedEarly are in its sent time)
+            //   a slur's first note after silence on the smooth attack (plainAuto): its own onset (attackOnset)
+            //   any other attack (a re-struck key, an accent, a staccato's spiccato): the map's plainAttack, the measured
+            //     heard - sent of plain Performance attacks in context (sso_plain_performance_shift.json attackMs); without
+            //     it plainShift
+            if (p->trace->choice.plain && !plainTiming) {
+                  const double shift = p->trace->patch->plainShiftMs;
+                  p->hasOnset = std::isfinite(shift);
+                  p->onset = p->hasOnset ? shift : 0.0;
+                  if (p->hasOnset && p->trace->attack && !p->trace->from)
+                        p->onset = onsetOf(p, p->pitch);
+                  else if (p->hasOnset && !p->trace->from && std::isfinite(p->trace->patch->plainAttackMs))
+                        p->onset = p->trace->patch->plainAttackMs;
+                  if (!p->hasOnset)
+                        p->transition = false;
+                  p->hasArrival = p->hasOnset;
+                  if (!p->transition)     // (a transition: its arrival above)
+                        p->arrival = sent(p) + p->onset - ms(p->written);
                   }
             }
 
@@ -382,11 +474,49 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             const Played* p = up.get();
             if (!p->trace || !p->note || p->written < 0)
                   continue;
-            const double early = ms(p->written) - ms(p->on);
+            const double early = ms(p->written) - sent(p);
             const SoundLib::Choice& c = p->trace->choice;
             const QString inst = p->trace->patch->name;
             const QString art = c.articulation->name;
-            if (p->hasOnset && !p->sub && !p->note->tieBack() && onsetEarlyPct > 0) {
+            // ([slurs] plainPerformance: no early start of its own, its patch's shift; listed when the map has none)
+            if (c.plain && plainTiming && !p->transition && !std::isfinite(p->trace->patch->plainAttackMs) && !p->trace->attack) {
+                  Missing& mm = missing[{ inst, art }];
+                  ++mm.notes;
+                  mm.maxEarly = std::max(mm.maxEarly, early);
+                  mm.bars.insert(p->note->chord()->measure()->no() + 1);
+                  mm.what = "plain attack ([slurs] plainTiming): no measured plainAttack in the map "
+                            "(sso_plain_performance_shift.json attackMs), sent as written";
+                  continue;
+                  }
+            if (c.plain && !plainTiming) {
+                  report.plainShifts[inst] = p->trace->patch->plainShiftMs;
+                  if (!std::isfinite(p->trace->patch->plainShiftMs)) {
+                        Missing& mm = missing[{ inst, art }];
+                        ++mm.notes;
+                        mm.maxEarly = std::max(mm.maxEarly, early);
+                        mm.bars.insert(p->note->chord()->measure()->no() + 1);
+                        mm.what = "plain ([slurs] plainPerformance): no measured shift in the map (plainShift, "
+                                  "sso_plain_performance_shift.json), sent as written";
+                        }
+                  continue;
+                  }
+            // ([slurs] transitionsEarly: a transition is meant its modelled arrival early, not its onset: capped when the
+            // note before keeps keepMs (or SSO's 15 ms) as played, TRANSITION_MIN_GAP_MS; its shift is listed in the report)
+            if ((transitionsEarly || (plainTiming && c.plain)) && p->transition && !p->sub && p->trace->earlyMeantMs >= 0) {
+                  const double meant = p->trace->earlyMeantMs;
+                  if (p->trace->earlyFallback)
+                        report.transitionsFallback.insert(p->trace->patch->name);
+                  const double cut = meant - std::max(0.0, early);
+                  const double tickMs = p->written > 0 ? ms(p->written) - ms(p->written - 1) : ms(1) - ms(0);
+                  report.transitionShiftsMs.push_back(std::max(0.0, early));
+                  if (cut > tickMs) {
+                        ++report.transitionsCapped;
+                        finding(Kind::CAPPED, Severity::INFO, p, QString("transition started %1 ms early, meant %2 ([slurs] transitionsEarly): "
+                                                                         "cut by %3 ms, the note before on its patch keeps [legato] keepMs")
+                                .arg(std::max(0.0, early), 0, 'f', 1).arg(meant, 0, 'f', 1).arg(cut, 0, 'f', 1), cut);
+                        }
+                  }
+            else if (p->hasOnset && !p->sub && !p->note->tieBack() && onsetEarlyPct > 0) {
                   double chordOnset = 0;
                   for (const Note* n : p->note->chord()->notes())
                         if (n->play())
@@ -415,6 +545,10 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   }
             if (!c.swapped && early <= 0.5 && p->hasOnset)
                   continue;
+            if ((transitionsEarly || (plainTiming && c.plain)) && p->transition && !c.swapped)
+                  continue;         // (early by the transition's modelled arrival, not by an onset)
+            if (plainTiming && c.plain && !p->transition)
+                  continue;         // (a plain attack: early by the map's measured plainAttack, in context)
             QStringList what;
             if (!p->hasOnset)
                   what << "no onset in the map (arrival unknown)";
@@ -440,8 +574,13 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             report.findings.push_back(f);
             }
 
-      // (d) predicted arrival: a chord's earliest arriving note (with an onset in the map) against the note before it in
-      // its line, joined without a rest
+      // (d) predicted arrival: a chord's earliest arriving note (with an onset in the map, or a legato transition with
+      // its modelled arrival) against the note before it in its line, joined without a rest
+      auto how = [&](const Played* p) {
+            return p->transition ? QString("sent %1, transition arrives %2 after its note-on")
+                                   .arg(sent(p) - ms(p->written), 0, 'f', 1).arg(p->trace->glideArriveMs, 0, 'f', 1)
+                                 : QString("sent %1, onset %2").arg(sent(p) - ms(p->written), 0, 'f', 1).arg(p->onset, 0, 'f', 1);
+            };
       for (auto& line : lines) {
             std::vector<Group*> gs;
             for (auto& g : line.second)
@@ -449,7 +588,7 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
             auto first = [](const Group* g) -> const Played* {
                   const Played* f = nullptr;
                   for (const Played* p : g->notes)
-                        if (p->hasOnset && (!f || p->arrival < f->arrival))
+                        if (p->hasArrival && (!f || p->arrival < f->arrival))
                               f = p;
                   return f;
                   };
@@ -464,10 +603,9 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                   if (std::abs(d) <= TIMING_WARN_MS)
                         continue;
                   finding(Kind::ARRIVAL, std::abs(d) > TIMING_FAIL_MS ? Severity::FAIL : Severity::WARN, p,
-                          QString("%1 ms against the note before (arrives %2 ms off its written time: sent %3, onset %4; the note "
-                                  "before, pitch %5 %6, %7 ms)").arg(d, 0, 'f', 1).arg(p->arrival, 0, 'f', 1)
-                          .arg(ms(p->on) - ms(p->written), 0, 'f', 1).arg(p->onset, 0, 'f', 1).arg(q->pitch)
-                          .arg(techniqueOf(*q)).arg(q->arrival, 0, 'f', 1)
+                          QString("%1 ms against the note before (arrives %2 ms off its written time: %3; the note "
+                                  "before, pitch %4 %5, %6 ms: %7)").arg(d, 0, 'f', 1).arg(p->arrival, 0, 'f', 1)
+                          .arg(how(p)).arg(q->pitch).arg(techniqueOf(*q)).arg(q->arrival, 0, 'f', 1).arg(how(q))
                           + QString("; onsets fitted in context: %1").arg(onsetFitted(p) ? (onsetFitted(q) ? "both" : "this only")
                                                                           : (onsetFitted(q) ? "the note before only" : "neither")), d);
                   }
@@ -562,7 +700,290 @@ Report audit(const Score* score, const EventMap& events, const std::vector<MidiR
                           .arg(std::abs(step) > differenceLimenDb() ? " (> DL)" : ""), step);
                   }
             }
+      // (f) legato transitions SSO doesn't play: dropped (a note-on within 15 ms of the legato note-on before on its route,
+      // velocity <= 64) and leaps (beyond an octave: a fresh attack)
+      ScoreTuning tuning(score);
+      std::map<int, const Played*> lastOn;                // route -> the previous note-on
+      for (const auto& up : played) {
+            const Played* p = up.get();
+            const Played* before = lastOn[p->route];
+            lastOn[p->route] = p;
+            if (!p->trace || !p->note || !p->trace->from || !p->trace->choice || !p->trace->choice.articulation->playsTransitions())
+                  continue;
+            if (before && before->trace && before->trace->choice && before->trace->choice.articulation->playsTransitions()
+                && before->note && before->note->chord() != p->note->chord()) {
+                  const double gap = ms(p->on) - ms(before->on);
+                  if (gap < DROP_GAP_MS && p->velocity <= DROP_MAX_VELOCITY)
+                        finding(Kind::DROPPED, Severity::FAIL, p, QString("velocity %1, %2 ms after the note-on before on its route "
+                                "(pitch %3): SSO's legato drops a note under %4 ms at velocity %5 or lower")
+                                .arg(p->velocity).arg(gap, 0, 'f', 1).arg(before->pitch).arg(DROP_GAP_MS).arg(DROP_MAX_VELOCITY), gap);
+                  }
+            const Note* from = p->trace->from;
+            const double cents = 100.0 * (p->note->ppitch() - from->ppitch()) + tuning.cents(p->note) - tuning.cents(from);
+            if (std::abs(cents) > LEAP_MAX_CENTS + 0.01)
+                  finding(Kind::LEAP, Severity::WARN, p, QString("transition from pitch %1: %2 semitones (%3 cents) beyond an octave, SSO "
+                          "attacks afresh (velocity %4); its Performance technique, legato delay and level calibration don't apply")
+                          .arg(from->ppitch()).arg(cents / 100.0, 0, 'f', 2).arg(cents, 0, 'f', 0).arg(p->velocity), cents);
+            }
+
+      // (f2) notes sounding together on one route of a monophonic patch (LibInstrument::mono: SSO's Performance legato
+      // plays one line per slot): a note-on less than 15 ms after the note-on before on its route while that one still
+      // sounds, a chord's notes too: SSO drops the second (velocity <= 64) or plays it as a transition that ends the first.
+      // Voice lanes (SoundLib::Lanes::voice) give such notes a copy each
+      std::map<int, const Played*> lastOnRoute;           // route -> the previous note-on
+      for (const auto& up : played) {
+            const Played* p = up.get();
+            const Played* before = lastOnRoute[p->route];
+            lastOnRoute[p->route] = p;
+            if (!before || !p->trace || !p->trace->patch || !p->trace->patch->mono)
+                  continue;
+            const double gap = ms(p->on) - ms(before->on);
+            if (gap < DROP_GAP_MS && (before->off < 0 || before->off > p->on))
+                  finding(Kind::CHORD, Severity::FAIL, p, QString("%1 ms after the note-on of pitch %2 on its route (%3-%4), which still "
+                          "sounds: %5 plays one line per slot (velocity %6: %7)").arg(gap, 0, 'f', 1).arg(before->pitch)
+                          .arg(p->route / 16).arg(p->route % 16 + 1).arg(p->trace->patch->name).arg(p->velocity)
+                          .arg(p->velocity <= DROP_MAX_VELOCITY ? "dropped" : "a transition ending it"), gap);
+            }
+
+      // (f3) the patch's diminuendo-release trigger (LibInstrument::hallDrop, SSO's Hall trigger: read from the patch's script
+      // and group data): a Dynamics controller step down of hallDrop or more in one change, while a key is held on the
+      // route, plays an extra release sample on every held key; armed again only by a rise (the script's own state, as
+      // read). And (f4) a controller the patch must never get (LibInstrument::avoidCC: SSO's Trumpet / Tenor Trombone Solo -
+      // Total Performance take a note's velocity from CC112 / CC113)
+      {
+            std::map<int, const SoundLib::LibInstrument*> patchOf;      // route -> its patch (by its notes' choices)
+            for (const auto& up : played)
+                  if (up->trace && up->trace->patch && !patchOf.count(up->route))
+                        patchOf[up->route] = up->trace->patch;
+            std::map<std::tuple<int, int, int>, const Played*> byOn;    // (route, pitch, on) -> the note
+            for (const auto& up : played)
+                  byOn[std::make_tuple(up->route, up->pitch, up->on)] = up.get();
+            const int dynamicsCC = lib ? lib->dynamicsCC : 1;
+            struct RouteState {
+                  std::map<int, std::vector<const Played*>> held;     // key -> notes on
+                  int last { -1 };                                     // the controller's value before
+                  int base { -1 };                                     // its value before this event's tick (values at one
+                  int baseTick { -1 };                                 // sample reach the patch as one change: measured)
+                  int armed { -1 };                                    // -1 not armed, -2 fired, else the value armed at
+                  };
+            std::map<int, RouteState> st;
+            for (const auto& te : events) {
+                  const NPlayEvent& e = te.second;
+                  if (!e.isExternal())
+                        continue;
+                  const int route = e.extPort() * 16 + e.extChannel();
+                  auto pp = patchOf.find(route);
+                  if (pp == patchOf.end())
+                        continue;
+                  const SoundLib::LibInstrument* li = pp->second;
+                  RouteState& rs = st[route];
+                  const bool on = e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch();
+                  const bool off = ((e.type() == ME_NOTEON && e.velo() == 0) || e.type() == ME_NOTEOFF) && !e.librarySwitch();
+                  if (on) {
+                        auto p = byOn.find(std::make_tuple(route, e.pitch(), te.first));
+                        rs.held[e.pitch()].push_back(p != byOn.end() ? p->second : nullptr);
+                        continue;
+                        }
+                  if (off) {
+                        auto k = rs.held.find(e.pitch());
+                        if (k != rs.held.end()) {
+                              k->second.erase(k->second.begin());
+                              if (k->second.empty())
+                                    rs.held.erase(k);
+                              }
+                        continue;
+                        }
+                  if (e.type() != ME_CONTROLLER)
+                        continue;
+                  const Played* sounding = nullptr;           // the latest note held (for the finding's place)
+                  for (const auto& k : rs.held)
+                        for (const Played* p : k.second)
+                              if (p && (!sounding || p->on > sounding->on))
+                                    sounding = p;
+                  if (li->avoidCC.count(e.controller()))
+                        finding(Kind::AVOIDED_CC, Severity::FAIL, sounding, QString("CC%1 = %2 sent to %3 at %4 s: its script takes a "
+                                "note's velocity from it when it is not 0").arg(e.controller()).arg(e.value()).arg(li->name)
+                                .arg(ms(te.first) / 1000, 0, 'f', 3), e.controller());
+                  if (li->hallDrop <= 0 || e.controller() != dynamicsCC)
+                        continue;
+                  const int v = e.value();
+                  if (te.first != rs.baseTick) {
+                        rs.base = rs.last;
+                        rs.baseTick = te.first;
+                        }
+                  const int drop = rs.base >= 0 ? rs.base - v : 0;
+                  if (rs.armed == -2 && drop < 0)
+                        rs.armed = -1;
+                  if (rs.armed == -1 || drop < 0)
+                        rs.armed = v;
+                  else if (rs.armed != -2 && drop >= li->hallDrop) {
+                        if (!rs.held.empty())
+                              finding(Kind::HALL, Severity::FAIL, sounding, QString("CC%1 %2 -> %3 in one step (%4 >= %5) at %6 s while %7 key(s) "
+                                      "are held on %8: SSO plays a diminuendo release on each held key")
+                                      .arg(dynamicsCC).arg(rs.base).arg(v).arg(drop).arg(li->hallDrop).arg(ms(te.first) / 1000, 0, 'f', 3)
+                                      .arg(rs.held.size()).arg(li->name), drop);
+                        rs.armed = -2;
+                        }
+                  rs.last = v;
+                  }
+      }
+
+      // (g) the rows for the heard check: every note-on with a choice, its prediction and its place in its line and slur
+      std::vector<const Slur*> slurs;
+      for (const auto& sp : score->spanner())
+            if (sp.second->isSlur() && !toSlur(sp.second)->phraseMark())
+                  slurs.push_back(toSlur(sp.second));
+      std::sort(slurs.begin(), slurs.end(), [](const Slur* a, const Slur* b) {
+            return a->tick() != b->tick() ? a->tick() < b->tick() : a->track() < b->track();
+            });
+      std::map<const Played*, const Played*> before;            // the top note of the chord before in its line, joined
+      std::map<const Played*, bool> slurredBefore, dynamicBefore;
+      for (auto& line : lines) {
+            std::vector<Group*> gs;
+            for (auto& g : line.second)
+                  gs.push_back(&g.second);
+            for (size_t i = 1; i < gs.size(); ++i) {
+                  if (gs[i - 1]->writtenEnd != gs[i]->written)
+                        continue;
+                  const Played* a = *std::max_element(gs[i - 1]->notes.begin(), gs[i - 1]->notes.end(),
+                                                      [](const Played* x, const Played* y) { return x->pitch < y->pitch; });
+                  for (const Played* b : gs[i]->notes) {
+                        before[b] = a;
+                        slurredBefore[b] = slurBoth(a->note->lastTiedNote(), b->note);
+                        dynamicBefore[b] = dynamicChanges(a->note->lastTiedNote(), b->note);
+                        }
+                  }
+            }
+      // a row's pitch is the key it is sent on and its cents are from that key: [slurs] microtoneBends 1 may send a
+      // microtonal note on the key a semitone beside its own (B3 -50 on B-flat3 +50, microtoneSpelling in rendermidi.cpp);
+      // before 2026-10-22 the cents stayed the note's own, so pitch + cents was a semitone off for those notes (the heard
+      // check's and hcana's targets with them). A key shift (an octave: the Timpani) keeps the note's own cents
+      std::map<const Note*, int> sentKey;
+      for (const auto& up : played)
+            if (up->note && !sentKey.count(up->note))
+                  sentKey[up->note] = up->pitch;
+      auto keyCents = [&](const Note* n, int key) {
+            const int d = n->ppitch() - key;
+            return tuning.cents(n) + (std::abs(d) == 1 ? 100.0 * d : 0.0);
+            };
+      for (const auto& up : played) {
+            const Played* p = up.get();
+            if (!p->trace || !p->note || !p->trace->choice || p->written < 0)
+                  continue;
+            const Note* n = p->note;
+            NoteRow r;
+            r.part = n->part()->partName();
+            r.track = n->track();
+            const Measure* m = n->chord()->measure();
+            r.bar = m->no() + 1;
+            const int beatTicks = DIVISION * 4 / std::max(1, m->timesig().denominator());
+            r.beat = 1 + double(n->chord()->tick().ticks() - m->tick().ticks()) / beatTicks;
+            r.written = ms(p->written) / 1000;
+            const Note* last = n->lastTiedNote();
+            r.writtenEnd = ms(p->written + (last->chord()->tick() + last->chord()->actualTicks() - n->chord()->tick()).ticks()) / 1000;
+            r.pitch = p->pitch;
+            r.cents = keyCents(n, p->pitch);
+            r.route = p->route;
+            r.patch = p->trace->patch->name;
+            r.articulation = p->trace->choice.articulation->name;
+            r.techniques = p->trace->choice.articulation->techniques.join(",");
+            r.velocity = p->velocity;
+            r.performance = int(p->trace->performance);
+            if (p->trace->from) {
+                  r.transition = true;
+                  auto fk = sentKey.find(p->trace->from);
+                  r.fromPitch = fk != sentKey.end() && std::abs(p->trace->from->ppitch() - fk->second) == 1 ? fk->second : p->trace->from->ppitch();
+                  r.fromWritten = score->utick2utime(p->trace->from->chord()->tick().ticks());
+                  }
+            r.sentMs = sent(p) - ms(p->written);
+            r.onsetMs = p->hasOnset ? p->onset : -1.0;
+            r.glideArriveMs = p->trace->glideArriveMs;
+            r.hasArrival = p->hasArrival;
+            r.arrivalMs = p->arrival;
+            r.sub = p->sub;
+            r.grace = n->chord()->isGrace();
+            const int tick = n->chord()->tick().ticks();
+            for (size_t i = 0; i < slurs.size(); ++i)
+                  if (slurs[i]->track() == n->track() && slurs[i]->tick().ticks() <= tick && tick <= slurs[i]->tick2().ticks())
+                        r.slur = int(i);          // (sorted by start: the latest one that covers it)
+            r.joinedBefore = before.count(p);
+            r.slurredBefore = r.joinedBefore && slurredBefore[p];
+            r.dynamicBefore = r.joinedBefore && dynamicBefore[p];
+            report.rows.push_back(r);
+            }
       return report;
+      }
+
+//---------------------------------------------------------
+//   Report::rowsText
+//---------------------------------------------------------
+
+QString Report::rowsText() const
+      {
+      QStringList out;
+      out << "part\ttrack\tbar\tbeat\twritten\twrittenEnd\tpitch\tcents\troute\tpatch\tarticulation\ttechniques\tvelocity\t"
+             "performance\ttransition\tfromWritten\tfromPitch\tsentMs\tonsetMs\tglideArriveMs\thasArrival\tarrivalMs\tsub\tgrace\t"
+             "slur\tjoinedBefore\tslurredBefore\tdynamicBefore";
+      for (const NoteRow& r : rows)
+            out << QStringList({ r.part, QString::number(r.track), QString::number(r.bar), QString::number(r.beat, 'f', 4),
+                                 QString::number(r.written, 'f', 6), QString::number(r.writtenEnd, 'f', 6), QString::number(r.pitch),
+                                 QString::number(r.cents, 'f', 2), QString("%1-%2").arg(r.route / 16).arg(r.route % 16 + 1), r.patch,
+                                 r.articulation, r.techniques, QString::number(r.velocity), QString::number(r.performance),
+                                 QString::number(int(r.transition)), QString::number(r.fromWritten, 'f', 6), QString::number(r.fromPitch),
+                                 QString::number(r.sentMs, 'f', 2), QString::number(r.onsetMs, 'f', 2), QString::number(r.glideArriveMs, 'f', 2),
+                                 QString::number(int(r.hasArrival)), QString::number(r.arrivalMs, 'f', 2), QString::number(int(r.sub)),
+                                 QString::number(int(r.grace)), QString::number(r.slur), QString::number(int(r.joinedBefore)),
+                                 QString::number(int(r.slurredBefore)), QString::number(int(r.dynamicBefore)) }).join("\t");
+      return out.join("\n") + "\n";
+      }
+
+//---------------------------------------------------------
+//   writeHeardInputs
+//---------------------------------------------------------
+
+bool writeHeardInputs(const Score* score, const EventMap& events, const Report& report, const QString& folder)
+      {
+      QDir().mkpath(folder);
+      auto write = [&folder](const QString& name, const QString& text) {
+            QFile f(folder + "/" + name);
+            if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+                  return false;
+            f.write(text.toUtf8());
+            return true;
+            };
+      bool ok = true;
+      std::map<QString, QStringList> ev;
+      for (const auto& te : events) {
+            const NPlayEvent& e = te.second;
+            if (!e.isExternal())
+                  continue;
+            const QString key = QString("%1-%2").arg(e.extPort()).arg(e.extChannel() + 1);
+            const double t = score->utick2utime(te.first);
+            if (e.type() == ME_NOTEON)
+                  ev[key] << QString("%1 %2 %3 %4").arg(t, 0, 'f', 6).arg(e.velo() > 0 ? "on" : "off").arg(e.pitch()).arg(e.velo());
+            else if (e.type() == ME_NOTEOFF)
+                  ev[key] << QString("%1 off %2 0").arg(t, 0, 'f', 6).arg(e.pitch());
+            else if (e.type() == ME_CONTROLLER)
+                  ev[key] << QString("%1 cc %2 %3").arg(t, 0, 'f', 6).arg(e.controller()).arg(e.value());
+            else if (e.type() == ME_PITCHBEND)
+                  ev[key] << QString("%1 pb %2 0").arg(t, 0, 'f', 6).arg(e.dataA() | (e.dataB() << 7));
+            }
+      for (const auto& m : ev)
+            ok = write(m.first + " museScore.txt", m.second.join("\n") + "\n") && ok;
+      QStringList rm;
+      if (std::shared_ptr<const SoundLib::Library> lib = SoundLib::current())
+            for (const SoundLib::Route& r : SoundLib::routes(score, *lib))
+                  rm << QString("%1-%2|%3|%4|%5|%6|%7").arg(r.port).arg(r.channel + 1).arg(r.part ? r.part->partName() : QString(),
+                           r.instrument ? r.instrument->name : QString()).arg(r.lane).arg(r.cents, 0, 'f', 2)
+                           .arg(r.instrument ? r.instrument->bendCents : 0.0, 0, 'f', 1);
+      ok = write("routemap.txt", rm.join("\n") + "\n") && ok;
+      ok = write("predicted.tsv", report.rowsText()) && ok;
+      ok = write("lead.txt", QString::number(events.startLeadMs + events.delayLeadMs, 'f', 3) + "\n") && ok;
+      QStringList bars;
+      for (const Measure* m = score->firstMeasure(); m; m = m->nextMeasure())
+            bars << QString::number(score->utick2utime(m->tick().ticks()), 'f', 6);
+      ok = write("bars.txt", bars.join("\n") + "\n") && ok;
+      return ok;
       }
 
 }     // namespace PlaybackAudit

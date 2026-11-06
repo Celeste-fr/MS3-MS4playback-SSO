@@ -1332,6 +1332,7 @@ class MasterScore : public Score {
       RepeatList* _repeatList2;
       bool _expandRepeats     { MScore::playRepeats };
       bool _playlistDirty     { true };
+      bool _evenLevelsWritten { false };
       QList<Excerpt*> _excerpts;
       std::vector<PartChannelSettingsLink> _playbackSettingsLinks;
       Score* _playbackScore = nullptr;
@@ -1389,6 +1390,10 @@ class MasterScore : public Score {
       virtual bool playlistDirty() const override                     { return _playlistDirty; }
       virtual void setPlaylistDirty() override;
       void setPlaylistClean()                                         { _playlistDirty = false; }
+      // even levels measured in the background (evenauto.h) written on notes without an undo step: the score is
+      // modified (dirty()) until it is saved
+      bool evenLevelsWritten() const                                  { return _evenLevelsWritten; }
+      void setEvenLevelsWritten(bool v)                               { _evenLevelsWritten = v; }
 
       void setExpandRepeats(bool expandRepeats);
       bool expandRepeats() const { return _expandRepeats; }

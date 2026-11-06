@@ -149,12 +149,18 @@ struct Result {
       bool passed { false };
       std::vector<float> museScore;       // stereo, interleaved
       std::vector<float> live;
+      int partsLoaded { 0 };              // MuseScore's render: the loads made (one per library part, or 1 with wholeScore)
+      int mostPartsAtOnce { 0 };          // ... and the most parts' instances loaded at the same time (1: one part at a time)
       };
 
 struct Options {
       int rate { 48000 };
       Thresholds thresholds;
       SynthesizerState state;             // the rendering's (the working MuseScore's synthesizer settings)
+      // MuseScore's render loads one library part's instances at a time (the part before's released first; every part's at
+      // once ran the 16 GB Windows VM out of memory on big scores, 2026-10-16: the same as --even-levels and
+      // --verify-playback); true: every part's at once, as before (the null test's reference)
+      bool wholeScore { false };
       };
 
 //---------------------------------------------------------

@@ -9,6 +9,7 @@
 //=============================================================================
 
 #include "notelanes.h"
+#include "libmscore/lagprobe.h"
 #include "musescore.h"
 #include "scoreview.h"
 #include "seq.h"
@@ -16,6 +17,8 @@
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
 #include "libmscore/part.h"
+#include "libmscore/partplayback.h"
+#include "libmscore/performancetechnique.h"
 #include "libmscore/score.h"
 
 #include <algorithm>
@@ -57,8 +60,8 @@ NoteLanes::NoteLanes(AutomationLanes* lanes, ScoreView* view)
       _timer->setSingleShot(true);
       _timer->setInterval(RENDER_DELAY_MS);
       connect(_timer, &QTimer::timeout, this, [this]() {
-            // (rendered when lanes show: else when a part's lanes open, AutomationLanes::selectionChanged)
-            if (!_lanes->enabled() || !_lanes->score() || !_lanes->score()->lineMode() || _lanes->_unfolded.empty())
+            // (rendered when some part's lanes are open: else when one opens, AutomationLanes::unfold; once for the score, all parts)
+            if (!_lanes->enabled() || !_lanes->score() || !_lanes->score()->lineMode() || !_lanes->_folds.anyOpen(_lanes->score()))
                   return;
             if (seq && seq->isPlaying()) {
                   _timer->start();
@@ -80,7 +83,7 @@ NoteLanes::NoteLanes(AutomationLanes* lanes, ScoreView* view)
                         perfAfter |= m.joinable();
                   }
             if (before != after || perfBefore != perfAfter) {        // (lanes come or go)
-                  _lanes->_targets.clear();
+                  _lanes->clearTargets();
                   _lanes->updateSpace();
                   }
             _view->update();
@@ -288,7 +291,7 @@ QString NoteLanes::valueText(const Row& r, int tick) const
       const bool join = isJoin(r);
       QString s = describe(*m, join, value(*m, join));
       if (own(*m, join))
-            s += "  " + tr("own");
+            s += QString::fromUtf8(" · ") + tr("manual");
       return s;
       }
 
@@ -304,6 +307,7 @@ QString NoteLanes::hoverText(const Row& r, const QPointF& p) const
 
 void NoteLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible) const
       {
+      LagProbe::Scope probe("NoteLanes::paintLane");
       const double px = _lanes->pixel();
       const bool join = isJoin(r);
       const int rng = range(r);
@@ -397,6 +401,15 @@ void NoteLanes::paintLane(QPainter& p, const Row& r, const QRectF& visible) cons
       p.setPen(QPen(QColor(200, 200, 200), px));
       p.setBrush(Qt::NoBrush);
       p.drawRect(r.rect);
+      if (_drag == Drag::RUBBER && !_rubber.isEmpty() && _row.master == r.master && _row.target == r.target)
+            paintRubber(p, _rubber, px);
+      }
+
+void NoteLanes::paintRubber(QPainter& p, const QRectF& band, double px)
+      {
+      p.setPen(QPen(QColor(47, 109, 181), 1.0 * px, Qt::DashLine));
+      p.setBrush(QColor(47, 109, 181, 30));
+      p.drawRect(band);
       }
 
 //---------------------------------------------------------
@@ -468,6 +481,7 @@ void NoteLanes::move(const QPointF& p, Qt::KeyboardModifiers mods)
                   // fall through
             case Drag::RUBBER: {
                   const QRectF band = QRectF(_pressPos, p).normalized();
+                  _rubber = band.intersected(r.rect);
                   if (!(mods & Qt::ControlModifier))
                         _sel.clear();
                   for (const Stem& s : stems(r))
@@ -499,6 +513,7 @@ void NoteLanes::release()
       {
       const Drag d = _drag;
       _drag = Drag::NONE;
+      _rubber = QRectF();
       if (d == Drag::MOVE || d == Drag::DRAW) {
             std::map<const Note*, int> values;
             values.swap(_work);
@@ -522,15 +537,179 @@ void NoteLanes::doubleClick(const Row& r, const QPointF& p)
       resetSelected();
       }
 
-void NoteLanes::resetSelected()
+void NoteLanes::resetSelected(bool withJoin)
       {
       if (_sel.empty() || !fresh())
             return;
       const bool join = _selTarget == JOIN;
+      if (!join) {
+            // (the Velocity lane shows what the note plays: an attack or transition chosen in the Inspector sets its
+            // velocity as much as the lane's own value does, so Auto resets all three; before, only the own value went,
+            // and a note set to spiccato in the Inspector stayed spiccato)
+            Score* s = _lanes->score();
+            if (!s)
+                  return;
+            s->startCmd();
+            for (const Note* c : _sel) {
+                  Note* n = const_cast<Note*>(c);
+                  if (n->performanceAttack() != PerformanceTechnique::Attack::AUTO)
+                        n->undoChangeProperty(Pid::PERFORMANCE_ATTACK, int(PerformanceTechnique::Attack::AUTO));
+                  if (n->performanceTransition() != PerformanceTechnique::Transition::AUTO)
+                        n->undoChangeProperty(Pid::PERFORMANCE_TRANSITION, int(PerformanceTechnique::Transition::AUTO));
+                  if (n->libraryVelocity() != 0)
+                        n->undoChangeProperty(Pid::LIBRARY_VELOCITY, 0);
+                  if (withJoin && n->libraryJoin() != PerformanceTechnique::JOIN_AUTO)
+                        n->undoChangeProperty(Pid::LIBRARY_JOIN, PerformanceTechnique::JOIN_AUTO);
+                  }
+            s->endCmd();
+            if (mscore)
+                  mscore->showMessage(tr("Notes: Auto"), 1500);
+            render();
+            _view->update();
+            return;
+            }
       std::map<const Note*, int> values;
       for (const Note* n : _sel)
-            values[n] = join ? PerformanceTechnique::JOIN_AUTO : 0;
+            values[n] = PerformanceTechnique::JOIN_AUTO;
       commit(values, join, tr("Notes: Auto"));
+      }
+
+bool NoteLanes::duplicateSelected()
+      {
+      if (_sel.empty())
+            return false;
+      Score* view = _lanes->score();
+      if (!view || !fresh())
+            return true;
+      MasterScore* s = view->masterScore();
+      int first = INT_MAX;
+      int last = -1;
+      for (const Note* n : _sel) {
+            const Chord* c = n->chord();
+            first = std::min(first, c->tick().ticks());
+            last = std::max(last, (c->tick() + c->actualTicks()).ticks());
+            }
+      if (last <= first)
+            return true;
+      int start = first;
+      int end = last;
+      if (_lanes->_snapOn) {
+            const std::pair<int, int> a = _lanes->gridCell(first, false);
+            const std::pair<int, int> b = _lanes->gridCell(last - 1, false);
+            if (a.first >= 0 && b.second > a.first) {
+                  start = a.first;
+                  end = b.second;
+                  }
+            }
+      const Part* part = PartPlaybackModes::masterPart(_row.master ? _row.master : (*_sel.begin())->part());
+      if (seq)
+            seq->waitForRendering();      // (the background renderer reads the notes)
+      std::vector<Note*> to;
+      s->startCmd();
+      PerformanceTechnique::duplicateNoteValues(s, part, start, end, s->endTick().ticks(), &_sel, &to);
+      s->endCmd();
+      if (to.empty()) {
+            if (mscore)
+                  mscore->showMessage(end >= s->endTick().ticks() ? tr("Duplicate: the score ends here")
+                                                                  : tr("Duplicate: no notes at the same places after them"), 1500);
+            return true;
+            }
+      _sel.clear();
+      for (Note* n : to)
+            _sel.insert(n);
+      if (mscore)
+            mscore->showMessage(tr("Notes: %n duplicated", "", int(to.size())), 1500);
+      render();
+      _view->update();
+      return true;
+      }
+
+NoteLane::Clip NoteLanes::_clip;
+const Part* NoteLanes::_clipPart { nullptr };
+int NoteLanes::_clipEnd { 0 };
+
+bool NoteLanes::copySelected()
+      {
+      if (_sel.empty())
+            return false;
+      if (!fresh())
+            return true;
+      const Part* master = PartPlaybackModes::masterPart(_row.master ? _row.master : (*_sel.begin())->part());
+      const bool join = _selTarget == JOIN;
+      const NoteLane::Clip c = NoteLane::copyClip(partMarks(master), _sel, join);
+      if (c.items.empty())
+            return true;
+      _clip = c;
+      _clipPart = master;
+      _clipEnd = 0;
+      for (const Mark& m : partMarks(master))
+            if (_sel.count(m.note))
+                  _clipEnd = std::max(_clipEnd, m.tick + 1);
+      if (mscore)
+            mscore->showMessage(join ? tr("Join: %n value(s) copied", "", int(c.items.size()))
+                                     : tr("Velocity: %n value(s) copied", "", int(c.items.size())), 1500);
+      return true;
+      }
+
+bool NoteLanes::pasteCopied(const QPointF& hover)
+      {
+      if (_clip.items.empty())
+            return false;
+      Score* view = _lanes->score();
+      if (!view || !fresh())
+            return true;
+      const QString lane = _clip.join ? JOIN : VELOCITY;
+      const QString wrong = _clip.join ? tr("Paste: these are Join values, not for the Velocity lane")
+                                       : tr("Paste: these are Velocity values, not for the Join lane");
+      const Part* master = _clipPart;
+      int at = _clipEnd;
+      const Row* hr = hover.x() >= 0 ? _lanes->rowAt(hover) : nullptr;
+      if (hr && NoteLane::isTarget(hr->target)) {
+            if (hr->target != lane) {
+                  if (mscore)
+                        mscore->showMessage(wrong, 2500);
+                  return true;
+                  }
+            master = hr->master;
+            at = _lanes->xToTick(hover.x());
+            }
+      else if (!_sel.empty() && _selTarget == lane) {
+            master = PartPlaybackModes::masterPart(_row.master ? _row.master : (*_sel.begin())->part());
+            at = INT_MAX;
+            for (const Mark& m : partMarks(master))
+                  if (_sel.count(m.note))
+                        at = std::min(at, m.tick);
+            }
+      else if (_selTarget != lane && NoteLane::isTarget(_selTarget)) {
+            if (mscore)
+                  mscore->showMessage(wrong, 2500);
+            return true;
+            }
+      if (!master)
+            return true;
+      MasterScore* s = view->masterScore();
+      if (seq)
+            seq->waitForRendering();
+      std::vector<Note*> to;
+      s->startCmd();
+      to = NoteLane::pasteClip(partMarks(master), _clip, at);
+      s->endCmd();
+      if (to.empty()) {
+            if (mscore)
+                  mscore->showMessage(tr("Paste: no notes there"), 1500);
+            return true;
+            }
+      _selTarget = lane;
+      _sel.clear();
+      for (Note* n : to)
+            _sel.insert(n);
+      if (mscore)
+            mscore->showMessage(to.size() < _clip.items.size()
+                                ? tr("Notes: %1 of %2 pasted (no more notes)").arg(to.size()).arg(_clip.items.size())
+                                : tr("Notes: %n pasted", "", int(to.size())), 1500);
+      render();
+      _view->update();
+      return true;
       }
 
 void NoteLanes::clearSelection()
@@ -556,16 +735,32 @@ void NoteLanes::contextMenu(const Row& r, const QPointF& p, const QPoint& global
       _view->update();
       QMenu menu;
       QAction* edit = menu.addAction(tr("Edit Value…"));
-      QAction* reset = menu.addAction(tr("Reset to Auto"));
       edit->setEnabled(!_sel.empty());
-      reset->setEnabled(!_sel.empty());
+      // (every note of the part in this lane back to Auto, as the value lanes' Clear Lane and Live's Clear Envelope; the
+      // owner, 2026-10-28: "I thought the reset to option is for the whole automation lane", then no per-stem Reset to
+      // Auto in the menu, Live having none: double-click or Delete still give the selected stems back)
+      QAction* resetLane = menu.addAction(tr("Clear Lane"));
+      // (the Velocity lane only: a note's own join also changes what its stem shows, a joined note playing the fingered
+      // transition; the owner, 2026-10-29, after clearing Velocity left bar 1's new bows fingered by their own joins)
+      QAction* resetBoth = join ? nullptr : menu.addAction(tr("Clear Velocity and Join"));
       menu.addSeparator();
       QAction* hide = menu.addAction(tr("Hide Lane"));
+      menu.addSeparator();
+      const AutomationLanes::HeightActions heights = _lanes->addHeightActions(menu, r);       // (laneheights.h)
       QAction* a = menu.exec(globalPos);
+      if (_lanes->heightAction(a, heights, r))
+            return;
       if (a == hide)
             _lanes->showLane(r.part, r.target, false);
-      else if (a == reset)
-            resetSelected();
+      else if (a && (a == resetLane || a == resetBoth)) {
+            _sel.clear();
+            for (const Mark& m : partMarks(r.master))
+                  _sel.insert(m.note);
+            _selTarget = r.target;
+            resetSelected(a == resetBoth);
+            _sel.clear();
+            _view->update();
+            }
       else if (a == edit) {
             int start = join ? 0 : 64;
             for (const Mark& m : partMarks(r.master))

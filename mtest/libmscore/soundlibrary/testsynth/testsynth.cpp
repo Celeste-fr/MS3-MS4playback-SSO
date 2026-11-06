@@ -7,7 +7,8 @@
 //  CC32 -> "articulation" (what UACC switches), CC1 -> "level" (the dynamics). Both are in its
 //  state. No editor. Like Kontakt's host automation, parameters no CC is mapped to: "Tone"
 //  (the output's level: 0 is 20 %; in its state since 2026-09-30, as Kontakt keeps a script's controls) and twelve placeholders "Macro 1" …
-//  "Macro 12" that do nothing (Extract: tst_soundlibrary::pluginExtract).
+//  "Macro 12" that do nothing (Extract: tst_soundlibrary::pluginExtract), and with MSTESTSYNTH_PARAMS=<file> more that do
+//  nothing, by title (another plug-in's set: tst_soundlibrary::ampleParameters).
 //
 //  Each held note plays at velocity * level, with a timbre of the articulation that was
 //  current at its note on (the articulation check listens for it), like a UACC patch:
@@ -31,6 +32,7 @@
 
 #define _USE_MATH_DEFINES           // M_PI with MSVC
 #include <cstring>
+#include <cstdio>
 #include <vector>
 #include <cmath>
 #include <map>
@@ -57,7 +59,7 @@
 using namespace Steinberg;
 using namespace Steinberg::Vst;
 
-enum : ParamID { kArticulation = 1, kLevel = 2, kTone = 3, kBend = 4, kMacro = 100 };
+enum : ParamID { kArticulation = 1, kLevel = 2, kTone = 3, kBend = 4, kMacro = 100, kExtra = 1000 };
 
 static const FUID ProcessorUID(0x6d737473, 0x796e7468, 0x70726f63, 0x00000001);
 static const FUID ControllerUID(0x6d737473, 0x796e7468, 0x6374726c, 0x00000001);
@@ -197,6 +199,9 @@ class Processor : public AudioEffect {
                   streaming = false;
                   });
             }
+      bool transportLogRead { false };
+      bool wasPlaying { false };
+      std::string transportLog;
       long releaseSamples() const { return std::max(1L, long(processSetup.sampleRate * 0.01)); }
 
    public:
@@ -226,6 +231,24 @@ class Processor : public AudioEffect {
 
       tresult PLUGIN_API process(ProcessData& data) override
             {
+            // MSTESTSYNTH_TRANSPORT_LOG=<file>: a line "start" / "stop" appended at each change of the host's
+            // playing flag (a block without a process context counts as stopped), as SSO's scripts see the
+            // transport (they reset their round robins at a start)
+            if (!transportLogRead) {
+                  transportLogRead = true;
+                  if (const char* f = std::getenv("MSTESTSYNTH_TRANSPORT_LOG"))
+                        transportLog = f;
+                  }
+            if (!transportLog.empty()) {
+                  const bool playing = data.processContext && (data.processContext->state & ProcessContext::kPlaying);
+                  if (playing != wasPlaying) {
+                        wasPlaying = playing;
+                        if (FILE* f = std::fopen(transportLog.c_str(), "a")) {
+                              std::fputs(playing ? "start\n" : "stop\n", f);
+                              std::fclose(f);
+                              }
+                        }
+                  }
             if (IParameterChanges* changes = data.inputParameterChanges) {
                   for (int32 i = 0; i < changes->getParameterCount(); ++i) {
                         IParamValueQueue* q = changes->getParameterData(i);
@@ -420,6 +443,32 @@ class Controller : public EditController, public IMidiMapping, public IUnitInfo,
                   for (size_t k = 0; k <= t.size(); ++k)
                         title[k] = char16_t(t.c_str()[k]);
                   parameters.addParameter(reinterpret_cast<const TChar*>(title), nullptr, 0, 0.0, ParameterInfo::kCanAutomate, kMacro + i);
+                  }
+            // MSTESTSYNTH_PARAMS=<file>: more parameters that do nothing, one a line, "title<TAB>steps<TAB>default" (another
+            // plug-in's set, e.g. Ample Guitar M's 124: tst_soundlibrary::ampleParameters)
+            if (const char* file = std::getenv("MSTESTSYNTH_PARAMS")) {
+                  if (FILE* f = std::fopen(file, "r")) {
+                        char line[512];
+                        ParamID id = kExtra;
+                        while (std::fgets(line, sizeof(line), f)) {
+                              std::string l(line);
+                              while (!l.empty() && (l.back() == '\n' || l.back() == '\r'))
+                                    l.pop_back();
+                              const size_t t1 = l.find('\t');
+                              const size_t t2 = t1 == std::string::npos ? t1 : l.find('\t', t1 + 1);
+                              if (t2 == std::string::npos)
+                                    continue;
+                              const std::string t = l.substr(0, std::min<size_t>(t1, 120));
+                              char16_t title[128];
+                              for (size_t k = 0; k <= t.size(); ++k)
+                                    title[k] = char16_t(t.c_str()[k]);
+                              const int32 steps = std::atoi(l.substr(t1 + 1, t2 - t1 - 1).c_str());
+                              const double def = std::atof(l.substr(t2 + 1).c_str());
+                              parameters.addParameter(reinterpret_cast<const TChar*>(title), nullptr, steps, def,
+                                                      ParameterInfo::kCanAutomate, id++);
+                              }
+                        std::fclose(f);
+                        }
                   }
             return kResultOk;
             }

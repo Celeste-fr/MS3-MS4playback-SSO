@@ -11,12 +11,15 @@
 #include "livetracks.h"
 
 #include <cmath>
+#include <set>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
 
 #include "part.h"
+#include "partplayback.h"
+#include "partcontrollers.h"
 #include "plainliveset.h"
 #include "score.h"
 #include "soundlibrary.h"
@@ -83,9 +86,27 @@ Data fromJson(const QString& json)
             w.part = t.value("part").toInt(-1);
             w.patch = t.value("patch").toInt(0);
             w.delayKey = t.value("delayKey").toString();
+            w.lookahead = t.value("lookahead").toDouble(0);
+            w.clips = t.value("clips").toString();
+            w.notes = t.value("notes").toString();
+            w.slotTunings = t.value("slots").toString();
             const QJsonObject h = t.value("hashes").toObject();
             for (auto hi = h.begin(); hi != h.end(); ++hi)
                   w.hashes[hi.key()] = hi.value().toString();
+            const QJsonObject pv = t.value("params").toObject();
+            for (auto pi = pv.begin(); pi != pv.end(); ++pi)
+                  w.params[pi.key()] = pi.value().toDouble();
+            const QJsonObject dv = t.value("derived").toObject();
+            for (auto di = dv.begin(); di != dv.end(); ++di) {
+                  const QJsonObject x = di.value().toObject();
+                  Derived dr;
+                  dr.hash = x.value("hash").toString();
+                  dr.target = x.value("target").toString();
+                  dr.points = x.value("points").toString();
+                  dr.plain = x.value("plain").toBool(false);
+                  dr.planned = x.value("planned").toString();
+                  w.derived[di.key()] = dr;
+                  }
             d.written[it.key()] = w;
             }
       return d;
@@ -137,11 +158,42 @@ QString toJson(const Data& data)
                   w["patch"] = ws.second.patch;
             if (!ws.second.delayKey.isEmpty())
                   w["delayKey"] = ws.second.delayKey;
+            if (ws.second.lookahead != 0)
+                  w["lookahead"] = ws.second.lookahead;
+            if (!ws.second.clips.isEmpty())
+                  w["clips"] = ws.second.clips;
+            if (!ws.second.notes.isEmpty())
+                  w["notes"] = ws.second.notes;
+            if (!ws.second.slotTunings.isEmpty())
+                  w["slots"] = ws.second.slotTunings;
             if (!ws.second.hashes.empty()) {
                   QJsonObject h;
                   for (const auto& hs : ws.second.hashes)
                         h[hs.first] = hs.second;
                   w["hashes"] = h;
+                  }
+            if (!ws.second.params.empty()) {
+                  QJsonObject pv;
+                  for (const auto& p : ws.second.params)
+                        pv[p.first] = rounded(p.second);
+                  w["params"] = pv;
+                  }
+            if (!ws.second.derived.empty()) {
+                  QJsonObject dv;
+                  for (const auto& dr : ws.second.derived) {
+                        QJsonObject x;
+                        x["hash"] = dr.second.hash;
+                        if (!dr.second.target.isEmpty())
+                              x["target"] = dr.second.target;
+                        if (!dr.second.points.isEmpty())
+                              x["points"] = dr.second.points;
+                        if (dr.second.plain)
+                              x["plain"] = true;
+                        if (!dr.second.planned.isEmpty())
+                              x["planned"] = dr.second.planned;
+                        dv[dr.first] = x;
+                        }
+                  w["derived"] = dv;
                   }
             written[ws.first] = w;
             }
@@ -249,13 +301,159 @@ static std::map<QString, QString> ccHashes(const LiveSet::Track& t)
       return h;
       }
 
+//---------------------------------------------------------
+//   derived parameters (livetracks.h)
+//---------------------------------------------------------
+
+std::vector<DerivedParameter> derivedParameters(const SoundLib::LibInstrument* li, const Automation::PartLanes& lanes)
+      {
+      std::vector<DerivedParameter> out;
+      if (!li)
+            return out;
+      auto hasLane = [&lanes](const QString& id) {
+            for (const Automation::Lane& l : lanes)
+                  if (l.target == id && !l.points.empty())
+                        return true;
+            return false;
+            };
+      auto add = [&](const SoundLib::Controller& p, const QString& target) {
+            if (p.param.isEmpty() || hasLane(p.id))
+                  return;
+            for (const DerivedParameter& d : out)
+                  if (LiveSet::looseTitle(d.title) == LiveSet::looseTitle(p.param))
+                        return;
+            out.push_back({ p.param, target, p.id });
+            };
+      for (const SoundLib::Controller& c : li->allControllers) {
+            if (c.hosted.isEmpty() || c.cc < 0)
+                  continue;
+            const int index = SoundLib::hostedParameter(*li, c.cc);
+            if (index >= 0)
+                  add(li->allControllers[size_t(index)], c.id);
+            }
+      if (li->guitar && !li->guitar->capo.isEmpty())
+            for (const SoundLib::Controller& c : li->allControllers)
+                  if (c.id == li->guitar->capo)
+                        add(c, QString());
+      return out;
+      }
+
+QString automationHash(const std::vector<std::pair<double, double>>& points)
+      {
+      quint32 h = 2166136261u;
+      auto mix = [&h](qint64 v) {
+            for (int i = 0; i < 8; ++i) {
+                  h ^= quint32((v >> (8 * i)) & 0xff);
+                  h *= 16777619u;
+                  }
+            };
+      for (const auto& p : points) {
+            mix(std::llround(p.first / 1e-4));
+            mix(std::llround(p.second / 1e-5));
+            }
+      return QString::number(h, 16);
+      }
+
+const Derived* derivedOf(const Written& w, const QString& title)
+      {
+      auto it = w.derived.find(title);
+      if (it != w.derived.end())
+            return &it->second;
+      for (const auto& d : w.derived)
+            if (LiveSet::looseTitle(d.first) == LiveSet::looseTitle(title))
+                  return &d.second;
+      return nullptr;
+      }
+
+// a parameter envelope of the track by title (loose), nullptr none
+static const LiveSet::Envelope* parameterEnvelope(const LiveSet::Track& t, const QString& title)
+      {
+      for (const LiveSet::Envelope& e : t.envelopes)
+            if (e.kind == LiveSet::Envelope::Kind::PARAMETER && LiveSet::looseTitle(e.parameter) == LiveSet::looseTitle(title))
+                  return &e;
+      return nullptr;
+      }
+
+// the derived envelopes of a Kontakt track as written (readBack: the file MuseScore wrote, read back); plain: the
+// envelope taken back as the import would take it (LiveSet::lanes, the same time axis) holds the source lane's value at
+// every point (within half a MIDI step), or, without a lane, one value throughout
+std::map<QString, Derived> writtenDerived(const Score* score, const LiveSetWriter::Track& t, const LiveSet::Set& readBack,
+                                          size_t readIndex)
+      {
+      std::map<QString, Derived> out;
+      if (!score || !t.instrument || !t.partRef)
+            return out;
+      const MasterScore* ms = score->masterScore();
+      const Automation::PartLanes lanes = Automation::lanes(t.partRef, Automation::read(ms));
+      const LiveSet::Track& rt = readBack.tracks[readIndex];
+      std::vector<LiveSet::PartInfo> infos;
+      bool infosRead = false;
+      for (const DerivedParameter& dp : derivedParameters(t.instrument, lanes)) {
+            const LiveSet::Envelope* e = parameterEnvelope(rt, dp.title);
+            if (!e)
+                  continue;
+            Derived d;
+            d.hash = LiveSet::eventsHash(e->initial, e->events);
+            d.target = dp.target;
+            const Automation::Lane* source = nullptr;
+            for (const Automation::Lane& l : lanes)
+                  if (!dp.target.isEmpty() && l.target == dp.target && !l.points.empty())
+                        source = &l;
+            if (source)
+                  d.points = Automation::pointsHash(source->points);
+            if (!dp.target.isEmpty() && t.mainPatch) {
+                  if (!infosRead) {
+                        infos = LiveSet::partInfos(ms, QStringList());
+                        infosRead = true;
+                        }
+                  std::map<size_t, LiveSet::Bound> bound;
+                  for (size_t i = 0; i < readBack.tracks.size(); ++i)
+                        bound[i] = LiveSet::Bound();
+                  LiveSet::Bound& b = bound[readIndex];
+                  b.part = PartPlaybackModes::masterPart(t.partRef);
+                  b.take.assign(rt.envelopes.size(), false);
+                  b.take[size_t(e - rt.envelopes.data())] = true;
+                  const auto got = LiveSet::lanes(ms, readBack, infos, QString(), QDateTime(), nullptr, &bound);
+                  const Automation::Lane* back = nullptr;
+                  for (const auto& pl : got)
+                        for (const Automation::Lane& l : pl.second)
+                              if (l.target == dp.paramId)
+                                    back = &l;
+                  if (back && !back->points.empty()) {
+                        // (a step's two points at its tick hold the value before and after it, and the time axis
+                        // may move a tick: the lane's values a few ticks around)
+                        bool plain = true;
+                        for (const Automation::Point& p : back->points) {
+                              bool inReach = false;
+                              for (int dt = -2; dt <= 2 && !inReach; ++dt) {
+                                    const double want = source ? source->valueAt(std::max(0, p.tick + dt)) : back->points.front().value;
+                                    inReach = want >= 0 && std::fabs(p.value - want) <= 0.5 / 127 + 1e-4;
+                                    }
+                              plain = plain && inReach;
+                              }
+                        d.plain = plain;
+                        }
+                  }
+            for (const LiveSetWriter::ParameterAutomation& a : t.automation)
+                  if (LiveSet::looseTitle(a.name) == LiveSet::looseTitle(dp.title))
+                        d.planned = automationHash(a.points);
+            out[dp.title] = d;
+            }
+      return out;
+      }
+
 std::map<QString, Written> written(const Score* score, const std::vector<LiveSetWriter::Track>& tracks, const LiveSet::Set& readBack)
       {
       std::map<QString, Written> out;
       std::map<QString, const LiveSet::Track*> read;
-      for (const LiveSet::Track& t : readBack.tracks)
-            if (!t.annotation.isEmpty())
+      std::map<QString, size_t> readIndex;
+      for (size_t i = 0; i < readBack.tracks.size(); ++i) {
+            const LiveSet::Track& t = readBack.tracks[i];
+            if (!t.annotation.isEmpty() && !read.count(t.annotation)) {
                   read[t.annotation] = &t;
+                  readIndex[t.annotation] = i;
+                  }
+            }
       for (const LiveSetWriter::Track& t : tracks) {
             if (t.annotation.isEmpty())
                   continue;
@@ -271,6 +469,7 @@ std::map<QString, Written> written(const Score* score, const std::vector<LiveSet
                               w.part = i;
                   }
             w.delayKey = t.delayKey;
+            w.lookahead = t.lookaheadMs;
             if (w.kind == "kontakt")
                   w.patch = t.routePatch;
             else if ((w.kind == "technique" || w.kind == "copy") && t.midiTo < int(tracks.size()))
@@ -278,9 +477,115 @@ std::map<QString, Written> written(const Score* score, const std::vector<LiveSet
             auto r = read.find(t.annotation);
             if (r != read.end() && !t.group)
                   w.hashes = ccHashes(*r->second);
+            if (r != read.end() && w.kind == "kontakt") {
+                  w.params = knobs(*r->second);
+                  w.derived = writtenDerived(score, t, readBack, readIndex.at(t.annotation));
+                  }
             out[t.annotation] = w;
             }
       return out;
+      }
+
+//---------------------------------------------------------
+//   knobs
+//---------------------------------------------------------
+
+QString knobHash(double value)
+      {
+      return QString("knob:%1").arg(std::lround(std::min(1.0, std::max(0.0, value)) * 1e4));
+      }
+
+bool isKnobHash(const QString& liveHash)
+      {
+      return liveHash.startsWith("knob:");
+      }
+
+std::map<QString, double> knobs(const LiveSet::Track& track)
+      {
+      std::map<QString, double> out;
+      for (const LiveSet::Parameter& p : track.parameters)
+            if (!p.automated && p.manual >= 0 && !p.name.isEmpty() && !out.count(p.name) && !isEmptySlotValue(p.manual))
+                  out[p.name] = p.manual;
+      return out;
+      }
+
+// the value Live gives an empty slot of its panel (LiveSetWriter writes it so): Live 12.4.7 fills such a slot with a
+// parameter of its own choosing (Ample's AGM: S-Strum Toggle, S-Chord Mode) and keeps the value, which is no knob
+// anyone turned (real Live, 2026-10-22, tools/live/realcheck: Update Live Set read "S-Chord Mode at 0.1235" from an
+// unchanged set and wrote it into the state)
+bool isEmptySlotValue(double manual)
+      {
+      return std::fabs(manual - 0.1234567687) < 1e-6;
+      }
+
+// a map controller of the patch by Live's parameter title (Vst3Plugin::parameterId's loose rule)
+static const SoundLib::Controller* paramController(const SoundLib::LibInstrument* li, const QString& title)
+      {
+      if (!li)
+            return nullptr;
+      for (const SoundLib::Controller& c : li->allControllers)
+            if (c.cc < 0 && !c.param.isEmpty() && LiveSet::looseTitle(c.param) == LiveSet::looseTitle(title))
+                  return &c;
+      return nullptr;
+      }
+
+static bool sameKnob(double a, double b)
+      {
+      return knobHash(a) == knobHash(b);
+      }
+
+// the main Kontakt track's knobs as lanes (Knobs, livetracks.h): mine, the score's lanes of the part
+static void knobLanes(const LiveSet::Track& t, const Written& w, const LiveSet::PartInfo* pi, const Automation::PartLanes& mine,
+                      const QString& path, const QDateTime& modified, Automation::PartLanes* out, QStringList* taken)
+      {
+      if (!pi || !pi->instrument)
+            return;
+      std::set<QString> seen;
+      for (const LiveSet::Parameter& p : t.parameters) {
+            if (p.automated || p.manual < 0)
+                  continue;
+            const SoundLib::Controller* c = paramController(pi->instrument, p.name);
+            if (!c || !seen.insert(c->id).second)
+                  continue;
+            const Automation::Lane* lane = nullptr;
+            for (const Automation::Lane& l : mine)
+                  if (l.target == c->id && !l.points.empty())
+                        lane = &l;
+            bool take = false;
+            if (lane) {
+                  if (!lane->extra.value("liveHash").toString().isEmpty())
+                        take = true;            // written to the set (as this value, or as automation since removed in Live)
+                  else if (lane->flatValue() >= 0)
+                        take = !sameKnob(lane->flatValue(), p.manual);      // (never agreed: Automation::merge asks)
+                  }
+            else {
+                  auto rec = w.params.find(p.name);
+                  if (rec != w.params.end())
+                        take = !sameKnob(rec->second, p.manual);            // turned in Live since it was written
+                  else {
+                        const double u = PartControllers::unautomatedValue(*pi->instrument, *c);
+                        take = u >= 0 && !sameKnob(u, p.manual);
+                        }
+                  }
+            if (!take)
+                  continue;
+            Automation::Lane k;
+            k.target = c->id;
+            k.points.push_back(Automation::Point(0, std::min(1.0, std::max(0.0, p.manual)), Automation::Curve::STEP));
+            k.extra["source"] = Automation::SOURCE_LIVE;
+            k.extra["set"] = path;
+            k.extra["setTime"] = modified.toUTC().toString(Qt::ISODate);
+            k.extra["track"] = t.name;
+            k.extra["param"] = p.name;
+            k.extra["paramId"] = p.id;
+            k.extra["knob"] = true;
+            k.extra["liveHash"] = knobHash(p.manual);
+            k.extra["pointsHash"] = Automation::pointsHash(k.points);
+            out->push_back(k);
+            if (taken && !(lane && lane->extra.value("liveHash").toString() == knobHash(p.manual)))
+                  *taken << QObject::tr("Track \"%1\": %2 at %3 in Live's panel (no automation)").arg(t.name, p.name)
+                            .arg(p.manual, 0, 'f', 4);
+            }
       }
 
 int markWrittenLanes(const std::vector<LiveSetWriter::Track>& tracks, const LiveSet::Set& readBack,
@@ -307,6 +612,20 @@ int markWrittenLanes(const std::vector<LiveSetWriter::Track>& tracks, const Live
                                     l.extra["pointsHash"] = Automation::pointsHash(l.points);
                                     ++n;
                                     }
+                  }
+            // a flat lane: the parameter's plain value in Live's panel (no automation; option B, the owner 2026-10-15)
+            for (const LiveSet::Parameter& p : read.at(t.annotation)->parameters) {
+                  if (p.automated || p.manual < 0)
+                        continue;
+                  const SoundLib::Controller* c = paramController(t.instrument, p.name);
+                  if (!c)
+                        continue;
+                  for (Automation::Lane& l : pl->second)
+                        if (l.target == c->id && l.flatValue() >= 0) {
+                              l.extra["liveHash"] = knobHash(p.manual);
+                              l.extra["pointsHash"] = Automation::pointsHash(l.points);
+                              ++n;
+                              }
                   }
             }
       return n;
@@ -356,6 +675,18 @@ static bool within(double a, double b, double tol)
       return std::fabs(a - b) <= tol;
       }
 
+// the report's line for a derived envelope changed (or deleted) in Live that isn't taken back as a lane
+static QString derivedNote(const QString& track, const QString& what, const Derived& d, bool mainKontakt, bool deleted = false)
+      {
+      const QString from = d.target.isEmpty() ? QObject::tr("from the notation")
+                           : !mainKontakt ? QObject::tr("from the part's \"%1\" lane (an extra patch's Kontakt)").arg(d.target)
+                           : d.plain ? QObject::tr("from the \"%1\" lane").arg(d.target)
+                           : QObject::tr("from the \"%1\" lane with the strum levels in it").arg(d.target);
+      return QObject::tr("Track \"%1\", %2: %3 in Live, but MuseScore writes it %4: not taken back as a lane (Update Live "
+                         "Set leaves Live's while MuseScore's is unchanged; to change it, edit the lane in MuseScore)")
+             .arg(track, what, deleted ? QObject::tr("deleted") : QObject::tr("changed"), from);
+      }
+
 Import import(const MasterScore* score, const LiveSet::Set& set, const std::vector<LiveSet::PartInfo>& parts,
               const QString& path, const QDateTime& modified, const Data& data)
       {
@@ -366,6 +697,13 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
       const QList<Part*> scoreParts = score ? score->parts() : QList<Part*>();
       const std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
       const std::map<const Part*, TrackDelays::Delays> delays = score ? TrackDelays::read(score) : std::map<const Part*, TrackDelays::Delays>();
+      // the knobs turned in Live (Knobs above): against the score's lanes
+      const std::map<const Part*, Automation::PartLanes> scoreLanes = score ? Automation::read(score)
+                                                                            : std::map<const Part*, Automation::PartLanes>();
+      std::map<const Part*, Automation::PartLanes> knobOut;
+      QStringList knobsTaken;
+      // the derived envelopes taken back as their lane's edit: by part, the parameter's loose title
+      std::map<const Part*, std::map<QString, Derived>> retarget;
       // the parts with one Kontakt track: its mixer is the part's Mixer
       std::map<int, int> kontakts;
       for (const auto& w : data.written)
@@ -391,8 +729,42 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   bool active = true;
                   if (kontakt && part) {
                         const SoundLib::PartMix pm = SoundLib::partMix(part, false);
-                        // (its Volume carries the patch's track-level headroom too: not the Mixer's)
-                        gain = library ? TrackDelays::patchGain(*library, TrackDelays::of(part, delays), w.delayKey) : 1.0;
+                        // (its Volume carries the patch's track-level headroom too, and what of the gain stage is over the
+                        // Utility's top: not the Mixer's. A set written before the gain stage, no MuseScore Utility on the
+                        // track: its fader has the volume as it was then, TrackDelays::legacyPatchGain)
+                        const TrackDelays::Delays d = TrackDelays::of(part, delays);
+                        if (!library)
+                              gain = 1.0;
+                        else if (t.hasMuseScoreGain) {
+                              const LiveSetWriter::KontaktGains g = LiveSetWriter::kontaktGains(
+                                    100, TrackDelays::faderGain(*library, d, w.delayKey), TrackDelays::gainStageDb(*library, d, w.delayKey));
+                              gain = g.volume;
+                              const double want = LiveSetWriter::utilityDb(g.utility);
+                              const double got = LiveSetWriter::utilityDb(t.museScoreGain);
+                              if (std::fabs(want - got) > 0.01)
+                                    notImported << QObject::tr("Track \"%1\": its \"%2\" Utility at %3 dB (MuseScore's: %4 dB) is "
+                                                               "MuseScore's gain stage; Update Live Set writes MuseScore's again (use "
+                                                               "the track's fader)").arg(t.name, LiveSetWriter::UTILITY_NAME)
+                                                   .arg(got, 0, 'f', 2).arg(want, 0, 'f', 2);
+                              }
+                        else
+                              gain = TrackDelays::legacyPatchGain(*library, d, w.delayKey);
+                        // [levels] lowCut: MuseScore's EQ Eight (LOW_CUT_NAME), MuseScore's like the Utility: a change
+                        // made in Live isn't taken (the cutoff is the map's), Update Live Set writes MuseScore's again
+                        if (library && t.hasMuseScoreLowCut) {
+                              double want = 0.0;
+                              for (const SoundLib::LibInstrument& li : library->instruments)
+                                    if (li.name == w.delayKey) {
+                                          want = SoundLib::lowCutHz(&li, score);
+                                          break;
+                                          }
+                              if (std::fabs(want - t.museScoreLowCutHz) > 0.05)
+                                    notImported << QObject::tr("Track \"%1\": its \"%2\" EQ Eight at %3 (MuseScore's: %4) is MuseScore's "
+                                                               "low cut; Update Live Set writes MuseScore's again")
+                                                   .arg(t.name, LiveSetWriter::LOW_CUT_NAME)
+                                                   .arg(t.museScoreLowCutHz > 0 ? QObject::tr("%1 Hz").arg(t.museScoreLowCutHz, 0, 'f', 1) : QObject::tr("off"))
+                                                   .arg(want > 0 ? QObject::tr("%1 Hz").arg(want, 0, 'f', 1) : QObject::tr("off"));
+                              }
                         volume = LiveSetWriter::kontaktVolume(pm.volume, gain);
                         pan = LiveSetWriter::mixPan(pm.pan);
                         active = !pm.muted;
@@ -429,11 +801,29 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                               s.envelopes.push_back({ en.mixer, en.initial, en.events });
                         continue;
                         }
+                  // ([levels] lowCut 2: MuseScore's EQ Eight's frequency, the following cut: MuseScore's own, from the score)
+                  if (kontakt && en.kind == LiveSet::Envelope::Kind::OTHER && en.parameter == QLatin1String(LiveSetWriter::LOW_CUT_NAME))
+                        continue;
                   const QString cc = QString("cc%1").arg(en.cc);
                   const bool clipCC = en.kind == LiveSet::Envelope::Kind::CLIP_CC;
                   const bool written = clipCC && w.hashes.count(cc);
                   QString what = en.kind == LiveSet::Envelope::Kind::PARAMETER ? QString("\"%1\"").arg(en.parameter)
                                  : (clipCC ? QString("CC%1").arg(en.cc) : en.parameter);
+                  // a parameter MuseScore derives (Derived parameters, livetracks.h): unchanged its own render; changed in
+                  // Live an edit of its lane when that is its plain value, else not a lane (reported)
+                  if (en.kind == LiveSet::Envelope::Kind::PARAMETER && kontakt) {
+                        if (const Derived* d = derivedOf(w, en.parameter)) {
+                              if (LiveSet::eventsHash(en.initial, en.events) == d->hash)
+                                    continue;
+                              if (mainKontakt && part && d->plain && !d->target.isEmpty()) {
+                                    b.take[e] = true;
+                                    retarget[part][LiveSet::looseTitle(en.parameter)] = *d;
+                                    continue;
+                                    }
+                              notImported << derivedNote(t.name, what, *d, mainKontakt);
+                              continue;
+                              }
+                        }
                   if (mainKontakt) {
                         // MuseScore's own render, unchanged: not a lane
                         if (written && hashes.count(cc) && hashes.at(cc) == w.hashes.at(cc))
@@ -460,6 +850,33 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                         continue;               // its switch
                   notImported << QObject::tr("Track \"%1\", %2: MuseScore doesn't play it").arg(t.name, what);
                   }
+            // a derived envelope MuseScore wrote that Live's set no longer has (deleted in Live)
+            if (kontakt)
+                  for (const auto& dr : w.derived) {
+                        bool there = false;
+                        for (const LiveSet::Envelope& en : t.envelopes)
+                              there = there || (en.kind == LiveSet::Envelope::Kind::PARAMETER
+                                                && LiveSet::looseTitle(en.parameter) == LiveSet::looseTitle(dr.first));
+                        if (!there)
+                              notImported << derivedNote(t.name, QString("\"%1\"").arg(dr.first), dr.second, mainKontakt, true);
+                        }
+            // its knobs: Live's panel values without automation
+            if (mainKontakt && part) {
+                  const LiveSet::PartInfo* pi = nullptr;
+                  for (const LiveSet::PartInfo& p : parts)
+                        if (p.part == part)
+                              pi = &p;
+                  knobLanes(t, w, pi, Automation::lanes(part, scoreLanes), path, modified, &knobOut[part], &knobsTaken);
+                  }
+            else if (kontakt) {
+                  // (an extra patch's Kontakt: its knobs are not lanes, as its envelopes aren't)
+                  for (const auto& kv : knobs(t)) {
+                        auto rec = w.params.find(kv.first);
+                        if (rec != w.params.end() && !sameKnob(rec->second, kv.second))
+                              notImported << QObject::tr("Track \"%1\", \"%2\" turned to %3 in Live: an extra patch's Kontakt (no lane "
+                                                         "plays it)").arg(t.name, kv.first).arg(kv.second, 0, 'f', 4);
+                        }
+                  }
             // the track delay
             // (from the score's: a track the set hasn't, a technique no note plays, keeps its value)
             if (part && (w.kind == "part" || !w.delayKey.isEmpty())) {
@@ -470,8 +887,8 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                         notImported << QObject::tr("Track \"%1\": its Track Delay is in samples (MuseScore's are in ms)").arg(t.name);
                   else if (w.kind == "part")
                         d.ms = TrackDelays::clampMs(t.delay);
-                  else if (t.delay != 0)
-                        d.tracks[w.delayKey] = TrackDelays::clampMs(t.delay);
+                  else if (t.delay + w.lookahead != 0)     // (written notes: the lookahead was taken off, livetiming.h)
+                        d.tracks[w.delayKey] = TrackDelays::clampMs(t.delay + w.lookahead);
                   else
                         d.tracks.erase(w.delayKey);
                   }
@@ -482,6 +899,33 @@ Import import(const MasterScore* score, const LiveSet::Set& set, const std::vect
                   im.data.tracks[k] = s;
             }
       im.lanes = LiveSet::lanes(score, set, parts, path, modified, &im.report, &bound);
+      // a derived parameter's envelope edited in Live, its lane's plain value: an edit of that lane (Derived parameters)
+      for (const auto& rp : retarget) {
+            auto pl = im.lanes.find(rp.first);
+            if (pl == im.lanes.end())
+                  continue;
+            for (Automation::Lane& l : pl->second) {
+                  const QString title = l.extra.value("param").toString();
+                  auto r = rp.second.find(LiveSet::looseTitle(title));
+                  if (title.isEmpty() || r == rp.second.end())
+                        continue;
+                  l.target = r->second.target;
+                  l.extra.remove("param");
+                  l.extra.remove("paramId");
+                  l.extra["hosted"] = title;
+                  l.extra["basePoints"] = r->second.points;
+                  im.report.matched << QObject::tr("Track \"%1\": \"%2\" changed in Live: the \"%3\" lane (its values as they "
+                                                   "are)").arg(l.extra.value("track").toString(), title, l.target);
+                  }
+            }
+      for (const auto& pk : knobOut)
+            for (const Automation::Lane& l : pk.second) {
+                  im.lanes[pk.first].push_back(l);
+                  ++im.report.lanes;
+                  }
+      if (!knobsTaken.isEmpty())
+            im.report.matched << QObject::tr("Plug-in parameters set in Live's panel, without automation (each a lane with "
+                                             "one value):") << knobsTaken;
       im.report.unmatched << notImported;
       return im;
       }

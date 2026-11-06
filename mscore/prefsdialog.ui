@@ -2969,6 +2969,39 @@
             </property>
            </widget>
           </item>
+          <item row="0" column="6">
+           <layout class="QHBoxLayout" name="portaudioLatencyLayout">
+            <item>
+             <widget class="QLabel" name="portaudioLatencyLabel">
+              <property name="text">
+               <string>Audio buffer:</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QSpinBox" name="portaudioLatency">
+              <property name="toolTip">
+               <string>How far ahead MuseScore renders the sound, in milliseconds. If playback crackles (sound libraries such as Kontakt need time), raise it, e.g. to 100 or 200 ms; playback then responds that much later. Default: the device's own low latency.</string>
+              </property>
+              <property name="accessibleName">
+               <string>Audio buffer</string>
+              </property>
+              <property name="specialValueText">
+               <string>Default</string>
+              </property>
+              <property name="suffix">
+               <string extracomment="milliseconds">ms</string>
+              </property>
+              <property name="maximum">
+               <number>1000</number>
+              </property>
+              <property name="singleStep">
+               <number>10</number>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
           <item row="2" column="2">
            <widget class="QLabel" name="portMidiOutputLabel">
             <property name="text">
@@ -3043,7 +3076,7 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
        <item>
         <widget class="QGroupBox" name="soundLibraryGroup">
          <property name="title">
-          <string>Sound library (external MIDI)</string>
+          <string>Sound Library</string>
          </property>
          <layout class="QGridLayout" name="soundLibraryLayout">
           <item row="0" column="0">
@@ -3210,7 +3243,7 @@ Adjusting latency can help synchronize your MIDI hardware with MuseScore's inter
           <item row="4" column="0" colspan="6">
            <widget class="QLabel" name="soundLibraryInfo">
             <property name="text">
-             <string>Parts the library has an instrument for play with the articulation their notation asks for, instead of on the built-in synthesizer: through the library's plug-in, hosted by MuseScore (its setup per instrument: View › Sound Library…), or through MIDI output (A, then B, C, D: 16 parts each) to a host of its own. Needs the MuseScore 4 dynamics method (Synthesizer).</string>
+             <string>Parts the library has an instrument for play with the articulation their notation asks for, instead of on the built-in synthesizer: through the library's plug-in, hosted by MuseScore (its setup per instrument: View > Sound Library), or through MIDI output (A, then B, C, D: 16 parts each) to a host of its own. Needs the MuseScore 4 dynamics method (Synthesizer).</string>
             </property>
             <property name="wordWrap">
              <bool>true</bool>

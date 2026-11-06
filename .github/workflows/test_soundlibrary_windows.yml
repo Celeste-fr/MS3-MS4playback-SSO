@@ -76,6 +76,26 @@ jobs:
         SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;C:\Program Files (x86)\Jack;%PATH%"
         CALL msvc_build.bat relwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
         CALL msvc_build.bat installrelwithdebinfo 64 %GITHUB_RUN_ID% || exit /b 1
+    # (kthost, the measurement host: tools/soundlibraries/kthost, docs/MEASURING.md; installed into bin/ with MuseScore,
+    # so the artifact carries it; it must start and print its usage)
+    - name: Check kthost is installed
+      shell: cmd
+      run: |
+        SET "PATH=C:\Qt\5.15.2\msvc2019_64\bin;%CD%\msvc.install_x64\bin;%PATH%"
+        IF NOT EXIST msvc.install_x64\bin\kthost.exe (ECHO kthost.exe is not in the install & exit /b 1)
+        msvc.install_x64\bin\kthost.exe --help || exit /b 1
+    # (kheap.dll, MuseScore's allocator: tools/soundlibraries/kheap, audio/vst3/processallocator.h; next to
+    # MuseScore3Evo.exe, which loads it first thing in main())
+    - name: Check kheap is installed
+      shell: cmd
+      run: |
+        IF NOT EXIST msvc.install_x64\bin\kheap.dll (ECHO kheap.dll is not in the install & exit /b 1)
+    # (MuseScoreLibraryHost.exe, the helper that hosts the library's plug-ins outside MuseScore's process: audio/vst3/vst3remote.h;
+    # next to MuseScore3Evo.exe, which starts it)
+    - name: Check the library host is installed
+      shell: cmd
+      run: |
+        IF NOT EXIST msvc.install_x64\bin\MuseScoreLibraryHost.exe (ECHO MuseScoreLibraryHost.exe is not in the install & exit /b 1)
     # (on MSVC mtest/ is a project of its own, not in MuseScore's solution: its vcxproj is
     # built with MSBuild, which builds the projects it references too)
     - name: Build the sound library tests
@@ -166,6 +186,23 @@ jobs:
       with:
         name: MuseScore-soundlibrary-win64-${{ env.SHORT_SHA }}
         path: msvc.install_x64\
+    # (the program's symbols, apart: a crash dump from the VM read with them; 2026-10-16 the crashes had none)
+    - name: Find the program's symbols
+      if: ${{ always() }}
+      continue-on-error: true
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force pdb | Out-Null
+        Get-ChildItem msvc.build_x64 -Recurse -Filter MuseScore3Evo.pdb | Select-Object -First 1 | Copy-Item -Destination pdb\
+        Get-ChildItem pdb
+    - name: Upload the symbols
+      if: ${{ always() }}
+      continue-on-error: true
+      uses: actions/upload-artifact@v7
+      with:
+        name: MuseScore-soundlibrary-win64-pdb-${{ env.SHORT_SHA }}
+        path: pdb\
+        retention-days: 14
     - name: Fail if the tuning or playability tests failed
       if: ${{ steps.tuning.outcome == 'failure' || steps.playability.outcome == 'failure' }}
       shell: cmd

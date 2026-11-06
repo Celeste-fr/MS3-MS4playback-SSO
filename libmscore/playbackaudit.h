@@ -36,7 +36,8 @@
 //                 transition): it arrives late by the cut. A report with the cut, ms (the note before then started
 //                 earlier than its own length: the old EARLY > NOTE)
 //     ARRIVAL     predicted arrival = sent time + the onset the map says for that note (as the renderer takes it:
-//                 onsetAt(pitch) for a swap or [heldNotes] byPitch, onsetMedian() otherwise, playback.ini's
+//                 onsetAt(pitch) for a swap or [heldNotes] byPitch, onsetMedian() otherwise, a smooth attack's own
+//                 onset under [slurs] smoothStart (LibTrace::attack, Articulation::startOnset), playback.ini's
 //                 [heldNotes.onset] applied) - written time; a chord's earliest arriving note against the note before
 //                 in its line (joined without a rest): more than 50 ms a fault, 30-50 ms a warning. Rasch (1979,
 //                 "Synchronization in performed ensemble music", Acustica 43) measured 30-50 ms asynchrony between the
@@ -51,6 +52,35 @@
 //                 level", JASA 61, 169-177), dI/I = 0.463 (I/I0)^-0.072 (as quoted by Praat's manual,
 //                 phonToDifferenceLimens): at 60 dB sensation level 10 log10(1 + 0.463 * 10^(-0.072 * 6)) = 0.69 dB
 //                 (40 dB SL: 0.93, 80 dB SL: 0.50). Pure tones heard one after the other; the level is the owner's
+//                 With [slurs] transitionsEarly a legato transition is meant its mode's shift early instead (CAPPED
+//                 when the note before keeps keepMs; Report::transitionShiftsMs, transitionsCapped) and is not
+//                 UNMEASURED for that early start (the transition's delay is the measured legato grid / bendGlide).
+//                 ARRIVAL still compares the modelled arrival: ~0 in mode 1, arrive - shift late in modes 2 / 3 (by design)
+//     DROPPED     a legato transition (LibTrace::from) on an articulation that plays transitions, sent less than 15 ms
+//                 after the previous note-on on its route (also a legato note) at velocity 64 or lower: SSO's legato
+//                 engine doesn't play it at all (from reading its script; behaviour only). A fault. (Notes of one chord
+//                 are not compared.) Part, bar, beat, pitch, velocity, gap
+//     ([slurs] plainPerformance: its patch's events go the map's plainShift early (in the sent time); a plain transition
+//     arrives by its glide as any transition (glideArriveMs), plainAuto's smooth first note by its own onset, any other
+//     plain attack by the map's plainAttack (else plainShift), as the heard check measures them (2026-10-29: before,
+//     every plain note sent + plainShift, a new bow + bowedEarly too: VERIFY.md › Playback audit); a patch without
+//     plainShift is UNMEASURED and its notes have no ARRIVAL; Report::plainShifts)
+//     LEAP        a legato transition whose interval from the note before exceeds an octave (12 semitones; with
+//                 microtones 1200 cents, ScoreTuning): SSO gives it no transition, it releases the note before and
+//                 attacks afresh, so its Performance technique, legatoDelay timing and level calibration don't apply.
+//                 A warning, with the interval
+//     CHORD       notes sounding together on one route of a monophonic patch (<Instrument mono="1">, SSO's Performance
+//                 patches: one legato line per slot): a note-on less than 15 ms after the note-on before on its route while
+//                 that one still sounds (a chord's notes on one copy): SSO drops it (velocity <= 64) or plays it as a
+//                 transition that ends the other. A fault (voice lanes, SoundLib::lanes, give each its own copy)
+//     HALL        on a route whose patch has a diminuendo-release trigger (<Instrument hallDrop>: SSO's string sections'
+//                 Performance patches, "Hall trigger", read from the patch's script and group data), the Dynamics
+//                 controller (CC1) stepping down by hallDrop (10) or more in one change while a key is held there: SSO plays
+//                 an extra diminuendo release sample on every held key (once, until the controller rises again). A fault;
+//                 [levels] hallGuard splits such steps
+//     AVOIDED CC  a controller the route's patch must never get (<Instrument avoidCC>: SSO's Trumpet / Tenor Trombone Solo
+//                 - Total Performance, whose helper script takes a note's velocity from CC112 / CC113 when not 0: read
+//                 from the patch's script). A fault (MidiRenderer::libraryAvoidCC drops them)
 //   Run: tst_playbackaudit (fixtures; MS_AUDIT_SCORE for any score, VERIFY.md › Playback audit)
 //---------------------------------------------------------
 
@@ -69,7 +99,7 @@ class Score;
 
 namespace PlaybackAudit {
 
-enum class Kind : signed char { OVERLAP, UNMEASURED, CAPPED, ARRIVAL, LEVEL_STEP };
+enum class Kind : signed char { OVERLAP, UNMEASURED, CAPPED, ARRIVAL, LEVEL_STEP, DROPPED, LEAP, CHORD, HALL, AVOIDED_CC };
 // LEVEL_STEP's proposed threshold (not enforced; owner to approve): Jesteadt, Wier & Green 1977 at sensationLevel dB
 double differenceLimenDb(double sensationLevel = 60.0);
 enum class Severity : signed char { FAIL, WARN, INFO };
@@ -103,10 +133,52 @@ Measured measuredFrom(const QString& folder);           // tools/soundlibraries
 // note's choice in trace
 void render(MasterScore* score, EventMap* events, std::vector<MidiRenderer::LibTrace>* trace);
 
+// every library note-on with a choice as the audit saw it, with its predicted heard time (the heard check,
+// tools/playbackverify/heard_check.py, measures the real sound against these: VERIFY.md › Heard check)
+struct NoteRow {
+      QString part;
+      int track { -1 };
+      int bar { 0 };                // 1-based
+      double beat { 1 };
+      double written { 0 };         // s, score time
+      double writtenEnd { 0 };      // s, the end of its tie chain
+      int pitch { -1 };
+      double cents { 0 };           // its playback tuning (ScoreTuning), from the key it is sent on (pitch; [slurs] microtoneBends 1)
+      int route { -1 };             // port * 16 + channel
+      QString patch;
+      QString articulation;
+      QString techniques;           // the articulation's bases, comma-separated
+      int velocity { 0 };
+      int performance { 0 };        // LibPerformance: 0 none, 1 attack, 2 transition
+      bool transition { false };    // played as a legato transition (LibTrace::from)
+      double fromWritten { -1 };    // the note it transitions from: its written start, s (-1: none)
+      int fromPitch { -1 };         // the key that note is sent on
+      double sentMs { 0 };          // note-on - written, ms (the start lead taken off)
+      double onsetMs { -1 };        // the onset the renderer took (-1: none)
+      double glideArriveMs { -1 };  // LibTrace::glideArriveMs
+      bool hasArrival { false };
+      double arrivalMs { 0 };       // predicted heard - written, ms (ARRIVAL's)
+      bool sub { false };           // an ornament's later sub-note
+      bool grace { false };
+      int slur { -1 };              // the (non-phrase-mark) slur it lies under: an index per score, -1 none
+      bool joinedBefore { false };  // its line's chord before ends where it starts (no rest)
+      bool slurredBefore { false }; // ... and both lie under one slur (LEVEL_STEP's slurBoth)
+      bool dynamicBefore { false }; // a dynamic or hairpin between them (LEVEL_STEP's dynamicChanges)
+      };
+
 struct Report {
       std::vector<Finding> findings;
+      std::vector<NoteRow> rows;    // (every note-on with a trace, in the order played)
+      QString rowsText() const;     // a header line, then one tab-separated line per row
       double keepMs { 0 };
       int notes { 0 };              // library note-ons looked at
+      // [slurs] transitionsEarly: each legato transition's early start as sent (ms), and how many were capped
+      std::vector<double> transitionShiftsMs;
+      int transitionsCapped { 0 };
+      int transitionsEarlyMode { 0 };
+      std::set<QString> transitionsFallback;      // patches without a measured glide (modes 2 / 3: the arrival instead)
+      // [slurs] plainPerformance: each patch whose notes played plain and its shift, ms (the map's plainShift; NaN: none)
+      std::map<QString, double> plainShifts;
       int count(Kind k, Severity s) const;
       int count(Kind k) const;
       QString text(const QString& title = QString()) const;
@@ -115,6 +187,12 @@ struct Report {
 // the checks over rendered events (render()'s, or any EventMap with its trace)
 Report audit(const Score* score, const EventMap& events, const std::vector<MidiRenderer::LibTrace>& trace,
              const Measured& measured);
+
+// the heard check's inputs (tools/playbackverify/heard_check.py): per route its events ("<port>-<channel> museScore.txt",
+// "seconds on|off|cc|pb a b" as tst_liveequivalence's dumpEvents writes them: the start lead included), routemap.txt
+// ("port-channel|part|patch|lane|cents|bendCents"), predicted.tsv (Report::rowsText), lead.txt (the start lead, ms),
+// bars.txt (each bar's start, s). False: a file couldn't be written
+bool writeHeardInputs(const Score* score, const EventMap& events, const Report& report, const QString& folder);
 
 }     // namespace PlaybackAudit
 }     // namespace Ms

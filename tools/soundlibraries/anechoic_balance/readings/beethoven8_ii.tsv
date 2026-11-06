@@ -1,0 +1,539 @@
+# piece: Beethoven, Symphony No. 8 in F major, Op. 93, movement II, Allegretto scherzando (B-flat major), bars 1-55
+# edition: Breitkopf & Härtel, Beethovens Werke Serie 1 No. 8 (IMSLP #61814), pdf <work>/dl/scores/b8.pdf
+# page 25: bars 1-12 (system 1: 1-6, system 2: 7-12)
+# page 26: bars 13-23 (13-17, 18-23)
+# page 27: bars 24-35 (24-29, 30-35)
+# page 28: bars 36-47 (36-42, 43-47)
+# page 29: bars 48-59 (48-53, 54-59; transcribed to bar 55)
+# time signature 2/4 throughout; beat unit = quarter (beats 1-2; x:3 = end of bar x). Positions to the nearest 16th (.25), read from the engraving.
+# Bars counted from bar 1 (full first bar, no upbeat bar). Scoring: 2 fl, 2 ob, 2 cl in B-flat, 2 bsn, 2 hn in B-flat basso, strings; no trumpets or timpani in this movement.
+# Voices: a staff with one line and a whole-bar rest for the other voice is given to player 1 only; two-note chords / two stems to both.
+# Flute: single-line passages show a second-voice rest, read as fl1 alone; bars 25 and 53-55 (a2) both.
+# Doubts: beat positions of dynamics placed under 32nd/16th figures are approximate (+-0.25 beat); the ff in bar 56 (just after the range) is not transcribed.
+# Dynamic in bar 1 for winds is printed "pp sempre staccato" under each wind staff.
+# part	type	start	end	value	comment
+fl1	notes	9:1.75	10:2.5		single line, second-voice rest
+fl1	dyn	9:1.75		ff	
+fl1	accent	9:2		sf	
+fl1	dyn	9:2.75		p	
+fl1	notes	15:1.75	15:2.25		single line, second-voice rest
+fl1	dyn	15:1.75		p	
+fl1	notes	25:1.75	25:2.5		chord, read as both, uncertain
+fl1	dyn	25:1.75		p	uncertain: small p before the ff chord
+fl1	dyn	25:2		ff	
+fl1	notes	28:1.75	29:1.75		single line, second-voice rest
+fl1	dyn	28:1.75		pp	
+fl1	notes	32:1.75	36:2.25		single line, second-voice rest
+fl1	cresc	32:1.75	32:2.25	text	"cresc. p"
+fl1	dyn	32:2.25		p	
+fl1	notes	37:2.75	40:1.5		single line
+fl1	cresc	37:2.75	38:1	text	cresc.
+fl1	dim	39:1	39:2	text	dimin.
+fl1	dyn	39:2		pp	
+fl1	notes	53:1	55:3		a2
+fl1	text	53:1		a2	
+fl1	accent	53:1		sf	
+fl1	accent	53:2		sf	
+fl1	accent	55:1		sf	
+fl1	accent	55:2		sf	viola's second sf in 55 not seen
+fl2	notes	25:1.75	25:2.5		chord, read as both, uncertain
+fl2	dyn	25:1.75		p	uncertain: small p before the ff chord
+fl2	dyn	25:2		ff	
+fl2	notes	53:1	55:3		a2
+fl2	text	53:1		a2	
+fl2	accent	53:1		sf	
+fl2	accent	53:2		sf	
+fl2	accent	55:1		sf	
+fl2	accent	55:2		sf	viola's second sf in 55 not seen
+ob1	notes	1:1	51:2.5		ob1 alone (ob2 rests) in 24, 26-27, 31, 34-39
+ob1	dyn	1:1		pp	printed "pp sempre staccato"
+ob1	text	1:1		sempre staccato	
+ob1	dyn	9:1.75		ff	on the tied chord; flutes: fl1 only (fl2 rests)
+ob1	dyn	9:2.75		p	
+ob1	dyn	13:2.75		f	
+ob1	accent	14:1		sf	
+ob1	accent	14:1.5		sf	
+ob1	dyn	15:1.75		p	
+ob1	dyn	15:2.75		f	
+ob1	accent	16:1		sf	
+ob1	accent	16:1.5		sf	
+ob1	dim	16:2.75	17:2.5	text	dimin.
+ob1	dyn	17:2.75		pp	
+ob1	cresc	18:1	20:1	text	cresc. to f
+ob1	dyn	20:1		f	
+ob1	dyn	23:2		ff	
+ob1	dyn	24:1.75		p	
+ob1	dyn	25:1.25		p	upper voice only
+ob1	dyn	25:2		ff	
+ob1	dyn	26:1.75		p	
+ob1	dim	27:1.25	28:1.75	text	dimin. to pp
+ob1	dyn	28:1.75		pp	
+ob1	cresc	29:2.75	30:2.5	text	cresc. (continues in 30), uncertain whether lower voices included
+ob1	cresc	30:1.75	31:1	text	cresc. (again in 30)
+ob1	cresc	31:2.5	32:2	text	cresc. to p
+ob1	dyn	32:2		p	printed under the lower voice; read as both, uncertain
+ob1	cresc	37:2.75	38:1	text	cresc.
+ob1	dim	39:1	39:2	text	dimin.
+ob1	dyn	39:2.75		pp	
+ob1	cresc	48:2	50:1	text	"cresc. - - -" to f
+ob1	dyn	50:1		f	
+ob1	notes	53:1	55:3		a2
+ob1	text	53:1		a2	
+ob1	accent	53:1		sf	
+ob1	accent	53:2		sf	
+ob1	accent	55:1		sf	
+ob1	accent	55:2		sf	viola's second sf in 55 not seen
+ob2	notes	1:1	23:2.5		rests 14:2.5-15:2.25
+ob2	dyn	1:1		pp	printed "pp sempre staccato"
+ob2	text	1:1		sempre staccato	
+ob2	dyn	9:1.75		ff	on the tied chord; flutes: fl1 only (fl2 rests)
+ob2	dyn	9:2.75		p	
+ob2	dyn	13:2.75		f	
+ob2	accent	14:1		sf	
+ob2	accent	14:1.5		sf	
+ob2	dyn	15:2.25		p	
+ob2	dyn	15:2.75		f	
+ob2	accent	16:1		sf	
+ob2	accent	16:1.5		sf	
+ob2	dim	16:2.75	17:2.5	text	dimin.
+ob2	dyn	17:2.75		pp	
+ob2	cresc	18:1	20:1	text	cresc. to f
+ob2	dyn	20:1		f	
+ob2	dyn	23:2		ff	
+ob2	notes	25:2	25:2.5		lower voice enters on the ff chord
+ob2	dyn	25:2		ff	
+ob2	notes	28:1.75	30:2.5		
+ob2	dyn	28:1.75		pp	
+ob2	cresc	29:2.75	30:2.5	text	cresc. (continues in 30), uncertain whether lower voices included
+ob2	cresc	30:1.75	31:1	text	cresc. (again in 30)
+ob2	notes	32:2	33:2.5		
+ob2	dyn	32:2		p	printed under the lower voice; read as both, uncertain
+ob2	notes	40:1	51:2.5		
+ob2	dyn	40:1		pp	
+ob2	cresc	48:2	50:1	text	"cresc. - - -" to f
+ob2	dyn	50:1		f	
+ob2	notes	53:1	55:3		a2
+ob2	text	53:1		a2	
+ob2	accent	53:1		sf	
+ob2	accent	53:2		sf	
+ob2	accent	55:1		sf	
+ob2	accent	55:2		sf	viola's second sf in 55 not seen
+cl1	notes	1:1	23:2.5		
+cl1	dyn	1:1		pp	printed "pp sempre staccato"
+cl1	text	1:1		sempre staccato	
+cl1	dyn	9:1.75		ff	on the tied chord; flutes: fl1 only (fl2 rests)
+cl1	dyn	9:2.75		p	
+cl1	dyn	13:2.75		f	
+cl1	accent	14:1		sf	
+cl1	accent	14:1.5		sf	
+cl1	dyn	15:2.25		p	
+cl1	dyn	15:2.75		f	
+cl1	accent	16:1		sf	
+cl1	accent	16:1.5		sf	
+cl1	dim	16:2.75	17:2.5	text	dimin.
+cl1	dyn	17:2.75		pp	
+cl1	cresc	18:1	20:1	text	cresc. to f
+cl1	dyn	20:1		f	
+cl1	dyn	23:2		ff	
+cl1	notes	25:1.25	25:2.5		upper voice
+cl1	dyn	25:1.25		p	upper voice only
+cl1	dyn	25:2		ff	
+cl1	notes	27:2.25	55:3		single voice in 27 and 31 read as cl1 (uncertain in 27); a2 from 51:2.25
+cl1	dyn	27:2.25		p	
+cl1	dim	27:2.25	28:1.75	text	"p dimin."
+cl1	dyn	28:1.75		pp	
+cl1	cresc	29:2.75	30:2.5	text	cresc. (continues in 30), uncertain whether lower voices included
+cl1	cresc	30:1.75	31:1	text	cresc. (again in 30)
+cl1	cresc	31:2.5	32:2	text	cresc. to p
+cl1	dyn	32:2.5		p	
+cl1	cresc	37:1	38:1	text	cresc.
+cl1	dim	38:1	39:2	text	dimin. to pp
+cl1	dyn	39:2		pp	
+cl1	cresc	48:2	50:1	text	"cresc. - - -" to f
+cl1	dyn	50:1		f	
+cl1	text	51:2.25		a2	
+cl1	accent	52:1		sf	
+cl1	accent	52:2		sf	
+cl1	accent	54:1		sf	
+cl1	accent	54:2		sf	
+cl2	notes	1:1	23:2.5		
+cl2	dyn	1:1		pp	printed "pp sempre staccato"
+cl2	text	1:1		sempre staccato	
+cl2	dyn	9:1.75		ff	on the tied chord; flutes: fl1 only (fl2 rests)
+cl2	dyn	9:2.75		p	
+cl2	dyn	13:2.75		f	
+cl2	accent	14:1		sf	
+cl2	accent	14:1.5		sf	
+cl2	dyn	15:2.25		p	
+cl2	dyn	15:2.75		f	
+cl2	accent	16:1		sf	
+cl2	accent	16:1.5		sf	
+cl2	dim	16:2.75	17:2.5	text	dimin.
+cl2	dyn	17:2.75		pp	
+cl2	cresc	18:1	20:1	text	cresc. to f
+cl2	dyn	20:1		f	
+cl2	dyn	23:2		ff	
+cl2	notes	25:2	25:2.5		lower voice enters on the ff chord
+cl2	dyn	25:2		ff	
+cl2	notes	28:1.75	30:2.5		
+cl2	dyn	28:1.75		pp	
+cl2	cresc	29:2.75	30:2.5	text	cresc. (continues in 30), uncertain whether lower voices included
+cl2	cresc	30:1.75	31:1	text	cresc. (again in 30)
+cl2	notes	32:1.5	55:3		a2 from 51:2.25
+cl2	dyn	32:2.5		p	
+cl2	cresc	37:1	38:1	text	cresc.
+cl2	dim	38:1	39:2	text	dimin. to pp
+cl2	dyn	39:2		pp	
+cl2	cresc	48:2	50:1	text	"cresc. - - -" to f
+cl2	dyn	50:1		f	
+cl2	text	51:2.25		a2	
+cl2	accent	52:1		sf	
+cl2	accent	52:2		sf	
+cl2	accent	54:1		sf	
+cl2	accent	54:2		sf	
+bsn1	notes	1:1	55:3		bsn1 alone in 24-27, 31; a2 from 51:2.25
+bsn1	dyn	1:1		pp	printed "pp sempre staccato"
+bsn1	text	1:1		sempre staccato	
+bsn1	dyn	9:1.75		ff	on the tied chord; flutes: fl1 only (fl2 rests)
+bsn1	dyn	9:2.75		p	
+bsn1	dyn	13:2.75		f	
+bsn1	accent	14:1		sf	
+bsn1	accent	14:1.5		sf	
+bsn1	dyn	15:2.25		p	
+bsn1	dyn	15:2.75		f	
+bsn1	accent	16:1		sf	
+bsn1	accent	16:1.5		sf	
+bsn1	dim	16:2.75	17:2.5	text	dimin.
+bsn1	dyn	17:2.75		pp	
+bsn1	cresc	18:1	20:1	text	cresc. to f
+bsn1	dyn	20:1		f	
+bsn1	dyn	23:2		ff	
+bsn1	dyn	24:1.75		p	
+bsn1	dyn	25:1.25		p	upper voice only
+bsn1	dyn	25:2		ff	
+bsn1	dyn	26:1.75		p	
+bsn1	dim	27:1.25	28:1.75	text	dimin. to pp
+bsn1	dyn	28:2		pp	
+bsn1	cresc	29:2.75	30:2.5	text	cresc. (continues in 30), uncertain whether lower voices included
+bsn1	cresc	30:1.75	31:1	text	cresc. (again in 30)
+bsn1	cresc	31:2.5	32:2	text	cresc. to p
+bsn1	cresc	32:1.75	32:2.25	text	"cresc. p"
+bsn1	dyn	32:2.25		p	
+bsn1	cresc	37:1	38:1	text	cresc.
+bsn1	dim	38:1	39:2	text	dimin. to pp
+bsn1	dyn	39:2		pp	
+bsn1	cresc	48:2	50:1	text	"cresc. - - -" to f
+bsn1	dyn	50:1		f	
+bsn1	text	51:2.25		a2	
+bsn1	accent	52:1		sf	
+bsn1	accent	52:2		sf	
+bsn1	accent	54:1		sf	
+bsn1	accent	54:2		sf	
+bsn2	notes	1:1	23:2.5		
+bsn2	dyn	1:1		pp	printed "pp sempre staccato"
+bsn2	text	1:1		sempre staccato	
+bsn2	dyn	9:1.75		ff	on the tied chord; flutes: fl1 only (fl2 rests)
+bsn2	dyn	9:2.75		p	
+bsn2	dyn	13:2.75		f	
+bsn2	accent	14:1		sf	
+bsn2	accent	14:1.5		sf	
+bsn2	dyn	15:2.25		p	
+bsn2	dyn	15:2.75		f	
+bsn2	accent	16:1		sf	
+bsn2	accent	16:1.5		sf	
+bsn2	dim	16:2.75	17:2.5	text	dimin.
+bsn2	dyn	17:2.75		pp	
+bsn2	cresc	18:1	20:1	text	cresc. to f
+bsn2	dyn	20:1		f	
+bsn2	dyn	23:2		ff	
+bsn2	notes	25:2	25:2.5		lower voice enters on the ff chord
+bsn2	dyn	25:2		ff	
+bsn2	notes	28:1.75	30:2.5		
+bsn2	dyn	28:2		pp	
+bsn2	cresc	29:2.75	30:2.5	text	cresc. (continues in 30), uncertain whether lower voices included
+bsn2	cresc	30:1.75	31:1	text	cresc. (again in 30)
+bsn2	notes	32:1.75	55:3		a2 from 51:2.25
+bsn2	cresc	32:1.75	32:2.25	text	"cresc. p"
+bsn2	dyn	32:2.25		p	
+bsn2	cresc	37:1	38:1	text	cresc.
+bsn2	dim	38:1	39:2	text	dimin. to pp
+bsn2	dyn	39:2		pp	
+bsn2	cresc	48:2	50:1	text	"cresc. - - -" to f
+bsn2	dyn	50:1		f	
+bsn2	text	51:2.25		a2	
+bsn2	accent	52:1		sf	
+bsn2	accent	52:2		sf	
+bsn2	accent	54:1		sf	
+bsn2	accent	54:2		sf	
+hn1	notes	1:1	23:2.5		
+hn1	dyn	1:1		pp	printed "pp sempre staccato"
+hn1	text	1:1		sempre staccato	
+hn1	dyn	9:1.75		ff	on the tied chord; flutes: fl1 only (fl2 rests)
+hn1	dyn	9:2.75		p	
+hn1	dyn	13:2.75		f	
+hn1	accent	14:1		sf	
+hn1	accent	14:1.5		sf	
+hn1	dyn	14:2.75		p	
+hn1	dyn	15:2.75		f	
+hn1	accent	16:1		sf	
+hn1	accent	16:1.5		sf	
+hn1	dim	16:2.75	17:2.5	text	dimin.
+hn1	dyn	17:2.75		pp	
+hn1	cresc	18:1.25	20:1	text	cresc. to f
+hn1	dyn	20:1		f	
+hn1	dyn	23:2		ff	
+hn1	notes	25:2	25:2.5		
+hn1	dyn	25:2		ff	
+hn1	notes	28:1.75	29:1.75		
+hn1	dyn	28:1.75		pp	
+hn1	notes	30:1.75	30:2.5		
+hn1	cresc	30:1.75	30:2.25	text	"cresc. p"
+hn1	dyn	30:2.25		p	
+hn1	notes	32:1.75	49:2.5		
+hn1	cresc	32:1.75	32:2.25	text	"cresc. p"
+hn1	dyn	32:2.25		p	
+hn1	cresc	37:1	38:1	text	cresc.
+hn1	dim	38:1	39:2	text	dimin. to pp
+hn1	dyn	39:2		pp	
+hn1	cresc	48:2	50:1	text	"cresc. - - -" to f
+hn1	notes	51:2.75	55:3		
+hn1	dyn	51:2.75		f	
+hn2	notes	1:1	23:2.5		
+hn2	dyn	1:1		pp	printed "pp sempre staccato"
+hn2	text	1:1		sempre staccato	
+hn2	dyn	9:1.75		ff	on the tied chord; flutes: fl1 only (fl2 rests)
+hn2	dyn	9:2.75		p	
+hn2	dyn	13:2.75		f	
+hn2	accent	14:1		sf	
+hn2	accent	14:1.5		sf	
+hn2	dyn	14:2.75		p	
+hn2	dyn	15:2.75		f	
+hn2	accent	16:1		sf	
+hn2	accent	16:1.5		sf	
+hn2	dim	16:2.75	17:2.5	text	dimin.
+hn2	dyn	17:2.75		pp	
+hn2	cresc	18:1.25	20:1	text	cresc. to f
+hn2	dyn	20:1		f	
+hn2	dyn	23:2		ff	
+hn2	notes	25:2	25:2.5		
+hn2	dyn	25:2		ff	
+hn2	notes	28:1.75	29:1.75		
+hn2	dyn	28:1.75		pp	
+hn2	notes	30:1.75	30:2.5		
+hn2	cresc	30:1.75	30:2.25	text	"cresc. p"
+hn2	dyn	30:2.25		p	
+hn2	notes	32:1.75	49:2.5		
+hn2	cresc	32:1.75	32:2.25	text	"cresc. p"
+hn2	dyn	32:2.25		p	
+hn2	cresc	37:1	38:1	text	cresc.
+hn2	dim	38:1	39:2	text	dimin. to pp
+hn2	dyn	39:2		pp	
+hn2	cresc	48:2	50:1	text	"cresc. - - -" to f
+hn2	notes	51:2.75	55:3		
+hn2	dyn	51:2.75		f	
+vl1	notes	1:2.75	3:2.5		
+vl1	dyn	1:2.75		pp	
+vl1	notes	5:1.5	7:1.5		
+vl1	notes	8:2.75	17:2.5		
+vl1	dyn	9:1.75		ff	
+vl1	accent	9:2		sf	
+vl1	dyn	9:2.75		p	
+vl1	dyn	13:2.75		f	
+vl1	accent	14:1		sf	
+vl1	accent	14:1.5		sf	
+vl1	dyn	14:2.75		p	
+vl1	dyn	15:2.75		f	
+vl1	accent	16:1		sf	
+vl1	accent	16:1.5		sf	
+vl1	dim	16:2.75	17:2.5	text	dimin.
+vl1	notes	18:2.75	36:2.5		
+vl1	cresc	18:2.75	20:1	text	cresc. to f
+vl1	dyn	20:1		f	
+vl1	accent	20:2		sf	vl2/vla's sf under the 16th after the dotted 8th (about 20:1.75), uncertain
+vl1	accent	22:1		sf	
+vl1	accent	22:2		sf	
+vl1	dyn	23:2		ff	
+vl1	dyn	24:1.75		p	
+vl1	dyn	25:2		ff	
+vl1	dyn	26:1.75		p	
+vl1	dim	26:2.75	28:1.75	text	dimin. to pp
+vl1	dyn	28:1.75		pp	
+vl1	cresc	29:2	30:2.5	text	cresc. to p
+vl1	dyn	30:2.5		p	
+vl1	cresc	31:2.75	33:1.25	text	cresc. to p
+vl1	dyn	33:1.25		p	
+vl1	notes	39:1.75	42:2.5		
+vl1	dyn	39:1.75		pp	
+vl1	notes	44:1.75	51:2.5		
+vl1	dim	47:1	47:2	hairpin	> under the tied figure
+vl1	dim	48:1	48:2	hairpin	> under the tied figure
+vl1	cresc	48:2	50:1	text	"cresc. - - -" to f
+vl1	dyn	50:1		f	
+vl1	accent	50:2		sf	
+vl1	notes	53:1	55:3		
+vl1	accent	53:1		sf	
+vl1	accent	53:2		sf	
+vl1	accent	55:1		sf	
+vl1	accent	55:2		sf	viola's second sf in 55 not seen
+vl2	notes	2:1	3:2.5		pizz.
+vl2	text	2:1		pizz.	no dynamic printed for vl2 (vl1's pp at 1:2.75 the nearest)
+vl2	notes	5:2	7:1.5		pizz.
+vl2	notes	9:1	23:2.75		arco from 9
+vl2	text	9:1		arco	
+vl2	dyn	9:1.75		ff	
+vl2	accent	9:2		sf	
+vl2	dyn	9:2.75		p	
+vl2	dyn	13:2.75		f	
+vl2	accent	14:1		sf	
+vl2	accent	14:1.5		sf	
+vl2	dyn	14:2.75		p	
+vl2	dyn	15:2.75		f	
+vl2	accent	16:1		sf	
+vl2	accent	16:1.5		sf	
+vl2	dim	16:2.75	17:2.5	text	dimin.
+vl2	cresc	18:1.75	20:1	text	cresc. to f
+vl2	dyn	20:1		f	
+vl2	accent	20:2		sf	vl2/vla's sf under the 16th after the dotted 8th (about 20:1.75), uncertain
+vl2	accent	22:1		sf	
+vl2	accent	22:2		sf	
+vl2	dyn	23:2		ff	
+vl2	notes	24:2.75	25:2.75		
+vl2	dyn	24:2.75		p	
+vl2	dyn	25:2		ff	
+vl2	notes	27:1.75	36:3		
+vl2	dyn	27:1.75		p	
+vl2	dim	27:1.75	28:1.75	text	"p dimin."
+vl2	dyn	28:1.75		pp	
+vl2	cresc	29:2	30:2.5	text	cresc. to p
+vl2	dyn	30:2.5		p	
+vl2	cresc	31:2.75	33:1.25	text	cresc. to p
+vl2	dyn	33:1.25		p	
+vl2	notes	39:1.75	42:2.5		pizz. from 41
+vl2	dyn	39:1.75		pp	
+vl2	text	41:1		pizz.	
+vl2	notes	44:2.25	51:2.5		pizz. until 48:2
+vl2	cresc	48:2	50:1	text	"cresc. - - -" to f
+vl2	text	48:2		arco	
+vl2	dyn	50:1		f	
+vl2	accent	50:2		sf	
+vl2	notes	53:1	55:3		
+vl2	accent	53:1		sf	
+vl2	accent	53:2		sf	
+vl2	accent	55:1		sf	
+vl2	accent	55:2		sf	viola's second sf in 55 not seen
+vla	notes	3:1.5	3:2.5		pizz.
+vla	text	3:1.5		pizz.	no dynamic printed
+vla	notes	5:2	7:1.5		pizz.
+vla	notes	9:1	36:3		arco from 9
+vla	text	9:1		arco	
+vla	dyn	9:1.75		ff	
+vla	accent	9:2		sf	
+vla	dyn	9:2.75		p	
+vla	dyn	13:2.75		f	
+vla	accent	14:1		sf	
+vla	accent	14:1.5		sf	
+vla	dyn	14:2.75		p	
+vla	dyn	15:2.75		f	
+vla	accent	16:1		sf	
+vla	accent	16:1.5		sf	
+vla	dim	16:2.75	17:2.5	text	dimin.
+vla	cresc	18:1.75	20:1	text	cresc. to f
+vla	dyn	20:1		f	
+vla	accent	20:2		sf	vl2/vla's sf under the 16th after the dotted 8th (about 20:1.75), uncertain
+vla	accent	22:1		sf	
+vla	accent	22:2		sf	
+vla	dyn	23:2		ff	
+vla	dyn	24:1.75		p	
+vla	dyn	25:2		ff	
+vla	dyn	26:1.75		p	
+vla	dim	26:2.75	28:1.75	text	dimin. to pp
+vla	dyn	28:1.75		pp	
+vla	cresc	29:2	30:2.25	text	cresc. printed above the cello staff, read as viola's, uncertain
+vla	dyn	30:2.25		p	
+vla	cresc	31:2.75	33:1.25	text	cresc. to p
+vla	dyn	33:1.25		p	
+vla	notes	39:1.75	40:1.5		
+vla	dyn	39:1.75		pp	
+vla	notes	42:1.5	42:2.5		pizz.
+vla	text	42:1.5		pizz.	
+vla	notes	44:2	51:2.5		pizz. until 48:2
+vla	cresc	48:2	50:1	text	"cresc. - - -" to f
+vla	text	48:2		arco	
+vla	dyn	50:1		f	
+vla	accent	50:2		sf	
+vla	notes	53:1	55:3		
+vla	accent	53:1		sf	
+vla	accent	53:2		sf	
+vla	accent	55:1		sf	
+vc	notes	3:2	4:2.5		
+vc	dyn	3:2		pp	
+vc	notes	7:1	8:1.5		
+vc	notes	9:1.75	14:2.5		
+vc	dyn	9:1.75		ff	
+vc	dyn	9:2.75		p	
+vc	dyn	13:2.75		f	
+vc	accent	14:1		sf	
+vc	accent	14:1.5		sf	
+vc	notes	15:2.75	36:3		pizz. from 33
+vc	dyn	15:2.75		f	
+vc	accent	16:1		sf	
+vc	accent	16:1.5		sf	
+vc	dim	16:2.75	17:2.5	text	dimin.
+vc	cresc	18:1.25	20:1	text	cresc. to f
+vc	dyn	20:1		f	
+vc	dyn	23:2		ff	
+vc	dyn	23:2.75		p	
+vc	dyn	25:2		ff	
+vc	dyn	25:2.75		p	
+vc	dim	26:2.25	28:1.75	text	dimin. to pp
+vc	dyn	28:1.75		pp	
+vc	cresc	30:1.75	30:2.25	text	"cresc. p"
+vc	dyn	30:2.25		p	
+vc	cresc	32:1	33:1.25	text	cresc. to p
+vc	dyn	33:1.25		p	
+vc	text	33:1.25		pizz.	
+vc	notes	39:1.75	40:1.5		arco
+vc	dyn	39:1.75		pp	
+vc	text	39:1.75		arco	
+vc	notes	42:2	43:2.5		
+vc	dyn	42:2		pp	
+vc	notes	46:1	55:3		
+vc	cresc	48:2	50:1	text	"cresc. - - -" to f
+vc	dyn	50:1		f	
+vc	accent	50:2		sf	
+kb	notes	3:2	4:2.5		
+kb	dyn	3:2		pp	
+kb	notes	7:1	8:1.5		
+kb	notes	9:1.75	14:2.5		
+kb	dyn	9:1.75		ff	
+kb	dyn	9:2.75		p	
+kb	dyn	13:2.75		f	
+kb	accent	14:1		sf	
+kb	accent	14:1.5		sf	
+kb	notes	15:2.75	36:3		pizz. from 33
+kb	dyn	15:2.75		f	
+kb	accent	16:1		sf	
+kb	accent	16:1.5		sf	
+kb	dim	16:2.75	17:2.5	text	dimin.
+kb	cresc	18:1.25	20:1	text	cresc. to f
+kb	dyn	20:1		f	
+kb	dyn	23:2		ff	
+kb	dyn	23:2.75		p	
+kb	dyn	25:2		ff	
+kb	dyn	25:2.75		p	
+kb	dim	26:2.25	28:1.75	text	dimin. to pp
+kb	dyn	28:1.75		pp	
+kb	cresc	30:1.75	30:2.25	text	"cresc. p"
+kb	dyn	30:2.25		p	
+kb	cresc	32:1	33:1.25	text	cresc. to p
+kb	dyn	33:1.25		p	
+kb	text	33:1.25		pizz.	
+kb	notes	39:1.75	40:1.5		arco
+kb	dyn	39:1.75		pp	
+kb	text	39:1.75		arco	
+kb	notes	42:2	43:2.5		
+kb	dyn	42:2		pp	
+kb	notes	46:1	55:3		
+kb	cresc	48:2	50:1	text	"cresc. - - -" to f
+kb	dyn	50:1		f	
+kb	accent	50:2		sf	

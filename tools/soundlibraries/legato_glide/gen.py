@@ -6,19 +6,32 @@
 #   map's legatoVelocity; 93 is the bowed transition, performancetechnique.h), the note before off 24 ms after the
 #   next note-on (the map's overlap), CC1 64, CC11 127, no pitch bend. A run: p, p+i, p, p+i, p, p+i at IOI 136 ms
 #   (Whence's sixteenths at 110 bpm), 300 and 600 ms, i in -2 -1 +1 +2, p three registers per section (the
-#   performance-context study's, ../performance_context/gen.py), 1.5 s between runs.
+#   performance-context study's, performance_context/gen.py of commit c10734850d), 1.5 s between runs.
 # - probe_<sec>: one held note; the bend stepped 0 -> +50 -> 0 -> -50 -> 0 cents 1.5 s apart, then six full-range
 #   moves (full range until a one pole of 71.35 ms, the 2026-10-10 measurement, would reach the target, then the
 #   target), for the patch's bend smoothing (fit.py).
+# --velocity N (2026-10-21, fast-microtones): every transition at velocity N instead of the section's (64: the fingered
+# transition [slurs] plainPerformance plays; the map's bendGlideFingered, glide.py <work> ../sso_legato_glide_fingered.json)
+# --iois=a,b,... (ms) --steps=i,j,... (semitones) --sections=cb,va,... (2026-10-29, the heard check's Basses): other
+# note lengths, intervals and sections than the defaults, e.g. Whence's bowed Basses (whole notes at 110 bpm, 2182 ms;
+# +3 / -6 / +1.5 semitones, heard 258-268 / 392-396 / 337-348 ms after the note-on against bendGlide's 306 at 600 ms):
+#   gen.py <work> --sections=cb --iois=600,1000,2182 --steps=-6,-3,-2,-1,1,2,3,6   (then glide.py <work> <out.json>)
+# 12-TET steps only (no bend: a quarter tone's glide is the bend's, libraryPitchBends)
 import json, math, os, sys
 
-W = sys.argv[1] if len(sys.argv) > 1 else '.'
+OPTS = {a.split('=')[0]: a.split('=', 1)[1] for a in sys.argv[1:] if a.startswith('--') and '=' in a}
+ARGS = [a for a in sys.argv[1:] if not a.startswith('--')]
+VELOCITY = int(OPTS.get('--velocity', 0))
+W = ARGS[0] if ARGS else '.'
 SEC = {'vn1': ('Violins 1 - Performance', 93, (57, 76, 88), 69, 99.1),
        'vn2': ('Violins 2 - Performance', 93, (57, 74, 86), 69, 99.7),
        'va': ('Violas - Performance', 100, (50, 67, 79), 57, 99.6),
        'vc': ('Celli - Performance', 93, (38, 59, 71), 48, 99.8),
        'cb': ('Basses - Performance', 93, (30, 39, 51), 40, 99.1)}
-IOIS = (0.136, 0.300, 0.600)
+IOIS = tuple(int(x) / 1000 for x in OPTS['--iois'].split(',')) if '--iois' in OPTS else (0.136, 0.300, 0.600)
+STEPS = tuple(int(x) for x in OPTS['--steps'].split(',')) if '--steps' in OPTS else (-2, -1, 1, 2)
+if '--sections' in OPTS:
+    SEC = {k: v for k, v in SEC.items() if k in OPTS['--sections'].split(',')}
 PROBE_RANGE = 99.6          # (the probes' bend values were made with the Violas' range for every patch; fit.py reads
                             # each with its own patch's range)
 os.makedirs(f'{W}/ev', exist_ok=True)
@@ -30,10 +43,11 @@ def bend(c, R=PROBE_RANGE):
 
 idx = {}
 for s, (patch, tv, regs, probePitch, rng) in SEC.items():
+    tv = VELOCITY or tv
     t = 0.5; ev = [(0, '0.000000 cc 1 64'), (0, '0.000000 cc 11 127')]; notes = []
     for ioi in IOIS:
         for r in regs:
-            for i in (-2, -1, 1, 2):
+            for i in STEPS:
                 ps = [r, r + i, r, r + i, r, r + i]
                 for k, p in enumerate(ps):
                     on = t + k * ioi

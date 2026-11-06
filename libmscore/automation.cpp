@@ -9,18 +9,27 @@
 //=============================================================================
 
 #include "automation.h"
+#include "enginelane.h"
+#include "leadinglane.h"
+#include "playbacksettings.h"
+#include "soundlibrary.h"
 #include "partplayback.h"
+#include "performancetechnique.h"
 #include "part.h"
 #include "score.h"
 #include "undo.h"
 #include "barline.h"
 #include "measure.h"
 #include "segment.h"
+#include "page.h"
+#include "staff.h"
+#include "system.h"
 
 #include <algorithm>
 #include <functional>
 #include <set>
 #include <cmath>
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -128,6 +137,18 @@ double Lane::valueAt(int tick) const
       return p.value + (next->value - p.value) * y;
       }
 
+double Lane::flatValue() const
+      {
+      if (points.empty() || points.front().tick > 0)
+            return -1;
+      // (a jump at the start: the later point's value from it, as valueAt; the points before it at tick 0 never play)
+      const double v = valueAt(0);
+      for (const Point& p : points)
+            if (p.tick > 0 && std::fabs(p.value - v) > 1e-9)
+                  return -1;
+      return v;
+      }
+
 const char* const VELOCITY_TARGET = "velocity";
 
 bool velocityAbsolute(const Lane& lane)
@@ -212,8 +233,13 @@ std::vector<std::pair<int, double>> Lane::events(int tick1, int tick2, double re
             const Point& p = points[i];
             if (p.tick >= tick2)
                   break;
-            if (p.tick >= tick1 && p.tick > (out.empty() ? tick1 - 1 : out.back().first)) {
-                  out.push_back({ p.tick, p.value });
+            // (a jump, two points at one tick, as Live writes and reads one: the later one holds from it, as valueAt; one
+            // value a tick, the renderer inserting each ahead of the tick's other events)
+            if (p.tick >= tick1) {
+                  if (!out.empty() && out.back().first == p.tick)
+                        out.back().second = p.value;
+                  else
+                        out.push_back({ p.tick, p.value });
                   last = p.value;
                   }
             // along a ramp to the next point, inside [tick1, tick2): at each tick where it reaches another step
@@ -375,6 +401,9 @@ static Side classify(const Lane& m, const Lane& l)
             return Side::MINE;                    // Live's as it was: MuseScore's (edited here or not) goes on
       if (!base.isEmpty() && m.playedByLive())
             return Side::LIVE;                    // unedited here: Live's newer one
+      // (an envelope MuseScore derives from this lane, livetracks.h › Derived parameters: the lane as it was when written)
+      if (base.isEmpty() && l.extra.contains("basePoints") && l.extra.value("basePoints").toString() == pointsHash(m.points))
+            return Side::LIVE;                    // unedited here since it was written: Live's newer one
       if (pointsHash(m.points) == pointsHash(l.points))
             return Side::LIVE;                    // the same envelope: they agree (Live's marks taken)
       return Side::CONFLICT;
@@ -409,7 +438,9 @@ std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& a
             const PartLanes live = with.count(part) ? with.at(part) : PartLanes();
             PartLanes res;
             std::set<QString> taken;
-            for (const Lane& l : live) {
+            for (const Lane& lv : live) {
+                  Lane l = lv;
+                  l.extra.remove("basePoints");     // (classify's, not kept)
                   const Lane* m = nullptr;
                   for (const Lane& x : mine)
                         if (x.target == l.target)
@@ -419,7 +450,7 @@ std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& a
                         res.push_back(l);
                         continue;
                         }
-                  Side side = classify(*m, l);
+                  Side side = classify(*m, lv);
                   if (side == Side::CONFLICT) {
                         auto c = choices.find({ part, l.target });
                         const Keep k = c == choices.end() ? Keep::MUSESCORE : c->second;
@@ -442,7 +473,9 @@ std::map<const Part*, PartLanes> merge(const std::map<const Part*, PartLanes>& a
                   if (taken.count(m.target))
                         continue;
                   const bool fromLive = m.source() == SOURCE_LIVE || m.extra.contains("liveHash");
-                  if (fromLive && m.playedByLive())
+                  // (a knob's value, livetracks.h › Knobs: the parameter left Live's panel, its value stays MuseScore's)
+                  const bool knob = m.extra.value("liveHash").toString().startsWith("knob:");
+                  if (fromLive && m.playedByLive() && !knob)
                         continue;                     // gone from Live, unedited here
                   Lane k = m;
                   if (fromLive) {
@@ -517,6 +550,39 @@ double barLineX(const Measure* m)
           && middle(next->findSegment(SegmentType::StartRepeatBarLine, next->tick()), &x))
             return x;
       return m->canvasPos().x() + m->width();
+      }
+
+int tickAtX(const std::vector<std::pair<int, double>>& anchors, double x)
+      {
+      if (anchors.empty())
+            return 0;
+      if (x <= anchors.front().second)
+            return anchors.front().first;
+      if (x >= anchors.back().second)
+            return anchors.back().first;
+      for (size_t i = 1; i < anchors.size(); ++i) {
+            const auto& a = anchors[i - 1];
+            const auto& b = anchors[i];
+            if (x >= a.second && x <= b.second) {
+                  if (b.second - a.second < 1e-9 || b.first == a.first)
+                        return b.first;
+                  return a.first + int(std::lround(double(b.first - a.first) * (x - a.second) / (b.second - a.second)));
+                  }
+            }
+      return anchors.back().first;
+      }
+
+double pointX(Score* score, const std::vector<std::pair<int, double>>& anchors, int tick)
+      {
+      if (score && tick > 0) {
+            Measure* m = score->tick2measureMM(Fraction::fromTicks(tick));
+            if (m && m->tick().ticks() == tick) {
+                  const Measure* prev = m->prevMeasureMM();
+                  if (prev && prev->system() && prev->system() == m->system())
+                        return barLineX(prev);
+                  }
+            }
+      return xAtTick(anchors, tick);
       }
 
 double xAtTick(const std::vector<std::pair<int, double>>& anchors, int tick)
@@ -1055,7 +1121,460 @@ std::vector<int> pastePoints(Lane& lane, int tick, const std::vector<Point>& cli
       return out;
       }
 
+bool duplicateSpan(Lane& lane, int start, int end, int limit)
+      {
+      const int len = end - start;
+      const int to = std::min(end + len, limit);
+      if (start < 0 || len <= 0 || to <= end)
+            return false;
+      const int cut = start + (to - end);         // the source's end: end, earlier at the score's end
+      auto any = [&lane](int a, int b) {          // a point in [a, b)
+            return std::any_of(lane.points.begin(), lane.points.end(), [a, b](const Point& p) { return p.tick >= a && p.tick < b; });
+            };
+      if (!any(start, cut) && !any(end, to))
+            return false;                         // (the same value through both, or nothing)
+      Lane w = lane;
+      auto split = [&w](int tick) {
+            const bool at = std::any_of(w.points.begin(), w.points.end(), [tick](const Point& p) { return p.tick == tick; });
+            if (!at && !w.points.empty() && w.points.front().tick < tick)
+                  addPoint(w, tick, w.valueAt(tick));
+            };
+      const bool before = !w.points.empty() && w.points.front().tick < start;
+      split(start);
+      split(cut);
+      std::vector<Point> pts;
+      for (size_t i = 0; i < w.points.size(); ++i) {
+            const Point& p = w.points[i];
+            if (p.tick < start || p.tick >= cut)
+                  continue;
+            if (p.tick == start && i + 1 < w.points.size() && w.points[i + 1].tick == start)
+                  continue;                       // (a jump at start: the value it jumps to)
+            Point q = p;
+            q.tick += len;
+            pts.push_back(q);
+            }
+      // before the lane's first point: its value (as the lane draws it)
+      if (!before && !w.points.empty() && (pts.empty() || pts.front().tick > end))
+            pts.insert(pts.begin(), Point(end, pts.empty() ? w.points.front().value : pts.front().value, Curve::STEP));
+      // a ramp arriving at the cut: as it arrives
+      if (!pts.empty() && pts.back().curve == Curve::LINEAR) {
+            auto a = std::find_if(w.points.begin(), w.points.end(), [cut](const Point& p) { return p.tick == cut; });
+            if (a != w.points.end()) {
+                  Point q = *a;
+                  q.tick = to;
+                  pts.push_back(q);
+                  }
+            }
+      const QString old = pointsHash(lane.points);
+      replaceSpan(lane, end, to, pts);
+      // (a step to the value already held in the copy changes nothing: left out)
+      for (size_t i = lane.points.size(); i-- > 1; ) {
+            const Point& p = lane.points[i];
+            const Point& q = lane.points[i - 1];
+            if (p.tick >= end && p.tick <= to && p.curve == Curve::STEP && q.curve == Curve::STEP
+                && std::fabs(p.value - q.value) < 1e-9)
+                  lane.points.erase(lane.points.begin() + long(i));
+            }
+      return pointsHash(lane.points) != old;
+      }
+
 }     // namespace Edit
 
+//---------------------------------------------------------
+//   duplicateTimeSelection
+//---------------------------------------------------------
+
+std::pair<int, int> duplicateTimeSelection(MasterScore* score, const Part* part, int start, int end)
+      {
+      if (!score || !part || start < 0 || end <= start)
+            return { -1, -1 };
+      const Part* master = PartPlaybackModes::masterPart(part);
+      const int limit = score->endTick().ticks();
+      const int to = std::min(end + (end - start), limit);
+      if (to <= end)
+            return { -1, -1 };
+      std::map<const Part*, PartLanes> all = read(score);
+      bool changed = false;
+      auto it = all.find(master);
+      if (it != all.end()) {
+            const QString now = QDateTime::currentDateTimeUtc().toString(Qt::ISODate);
+            for (Lane& l : it->second)
+                  if (Edit::duplicateSpan(l, start, end, limit)) {
+                        l.extra["edited"] = now;            // (as the editor's edits: the Live conflict dialog shows it)
+                        changed = true;
+                        }
+            }
+      score->startCmd();
+      if (changed) {
+            const QString tag = write(score, all);
+            QMap<QString, QString> tags = score->metaTags();
+            if (tag.isEmpty())
+                  tags.remove(metaTag);
+            else
+                  tags.insert(metaTag, tag);
+            score->undo(new ChangeMetaTags(score, tags));
+            }
+      PerformanceTechnique::duplicateNoteValues(score, master, start, end, limit);
+      score->endCmd();
+      score->setPlaylistDirty();
+      return { end, to };
+      }
+
 }     // namespace Automation
+}     // namespace Ms
+
+//---------------------------------------------------------
+//   EngineLane (enginelane.h)
+//---------------------------------------------------------
+
+namespace Ms {
+namespace EngineLane {
+
+const char* const TARGET = "engine";
+
+QStringList engines(const Automation::Lane& lane, const QStringList& defaults)
+      {
+      QStringList out;
+      for (const QJsonValue& v : lane.extra.value("engines").toArray())
+            if (!v.toString().isEmpty())
+                  out << v.toString();
+      return out.isEmpty() ? defaults : out;
+      }
+
+double valueOf(const QStringList& engines, const QString& engine)
+      {
+      const int i = engines.indexOf(engine);
+      if (i < 0)
+            return -1;
+      return engines.size() < 2 ? 0.0 : double(i) / (engines.size() - 1);
+      }
+
+QString engineAt(const QStringList& engines, double value)
+      {
+      if (engines.isEmpty())
+            return QString();
+      const int i = engines.size() < 2 ? 0 : int(std::lround(qBound(0.0, value, 1.0) * (engines.size() - 1)));
+      return engines.at(qBound(0, i, engines.size() - 1));
+      }
+
+void setEngines(Automation::Lane& lane, const QStringList& list)
+      {
+      const QStringList old = engines(lane);
+      for (Automation::Point& p : lane.points) {
+            const QString e = engineAt(old.isEmpty() ? list : old, p.value);
+            const double v = valueOf(list, e);
+            p.value = v >= 0 ? v : qBound(0.0, p.value, 1.0);
+            }
+      QJsonArray a;
+      for (const QString& e : list)
+            a.append(e);
+      lane.extra["engines"] = a;
+      }
+
+void normalize(Automation::Lane& lane, const QStringList& defaults)
+      {
+      if (!lane.extra.contains("engines"))
+            setEngines(lane, defaults);
+      const QStringList list = engines(lane);
+      for (Automation::Point& p : lane.points) {
+            p.value = std::max(0.0, valueOf(list, engineAt(list, p.value)));
+            p.curve = Automation::Curve::STEP;
+            p.straighten();
+            }
+      if (lane.extra.contains("fades")) {
+            QJsonObject fades = lane.extra.value("fades").toObject();
+            for (const QString& k : fades.keys()) {
+                  const int t = k.toInt();
+                  if (std::none_of(lane.points.begin(), lane.points.end(), [t](const Automation::Point& p) { return p.tick == t; })
+                      || fades.value(k).toInt() <= 0)
+                        fades.remove(k);
+                  }
+            if (fades.isEmpty())
+                  lane.extra.remove("fades");
+            else
+                  lane.extra["fades"] = fades;
+            }
+      }
+
+int fadeMs(const Automation::Lane& lane, int tick)
+      {
+      return std::max(0, lane.extra.value("fades").toObject().value(QString::number(tick)).toInt());
+      }
+
+void setFadeMs(Automation::Lane& lane, int tick, int ms)
+      {
+      QJsonObject fades = lane.extra.value("fades").toObject();
+      if (ms > 0)
+            fades[QString::number(tick)] = ms;
+      else
+            fades.remove(QString::number(tick));
+      if (fades.isEmpty())
+            lane.extra.remove("fades");
+      else
+            lane.extra["fades"] = fades;
+      }
+
+const Automation::Lane* laneOf(const Automation::PartLanes& lanes)
+      {
+      for (const Automation::Lane& l : lanes)
+            if (l.target == TARGET && !l.points.empty())
+                  return &l;
+      return nullptr;
+      }
+
+std::vector<Switch> switches(const Automation::Lane& lane)
+      {
+      std::vector<Switch> out;
+      const QStringList list = engines(lane);
+      if (list.isEmpty())
+            return out;
+      for (size_t i = 0; i < lane.points.size(); ++i) {
+            const Automation::Point& p = lane.points[i];
+            // (two points at one tick: the later one holds from it, automation.h)
+            if (i + 1 < lane.points.size() && lane.points[i + 1].tick == p.tick)
+                  continue;
+            const QString e = engineAt(list, p.value);
+            if (!out.empty() && out.back().engine == e)
+                  continue;
+            out.push_back({ p.tick, e, fadeMs(lane, p.tick) });
+            }
+      return out;
+      }
+
+QString libraryOf(const Automation::Lane& lane)
+      {
+      for (const Switch& s : switches(lane))
+            if (s.engine.startsWith("library:"))
+                  return s.engine.mid(8);
+      return QString();
+      }
+
+}     // namespace EngineLane
+}     // namespace Ms
+
+//---------------------------------------------------------
+//   LeadingLane (leadinglane.h)
+//---------------------------------------------------------
+
+namespace Ms {
+namespace LeadingLane {
+
+const char* const TARGET = "leading";
+
+void normalize(Automation::Lane& lane)
+      {
+      for (Automation::Point& p : lane.points) {
+            p.value = p.value >= 0.5 ? 1.0 : 0.0;
+            p.curve = Automation::Curve::STEP;
+            p.straighten();
+            }
+      }
+
+bool on(const Automation::Lane& lane, int tick)
+      {
+      return lane.valueAt(tick) >= 0.5;
+      }
+
+std::vector<std::pair<int, int>> spans(const Automation::Lane& lane, int endTick)
+      {
+      std::vector<std::pair<int, int>> out;
+      int from = -1;
+      for (size_t i = 0; i < lane.points.size(); ++i) {
+            const Automation::Point& p = lane.points[i];
+            // (two points at one tick: the later one holds from it, automation.h)
+            if (i + 1 < lane.points.size() && lane.points[i + 1].tick == p.tick)
+                  continue;
+            const bool isOn = p.value >= 0.5;
+            if (isOn && from < 0)
+                  from = p.tick;
+            else if (!isOn && from >= 0) {
+                  if (p.tick > from)
+                        out.push_back({ from, p.tick });
+                  from = -1;
+                  }
+            }
+      if (from >= 0 && endTick > from)
+            out.push_back({ from, endTick });
+      return out;
+      }
+
+const Automation::Lane* laneOf(const Automation::PartLanes& lanes)
+      {
+      for (const Automation::Lane& l : lanes)
+            if (l.target == TARGET && !l.points.empty())
+                  return &l;
+      return nullptr;
+      }
+
+std::map<const Part*, std::vector<std::pair<int, int>>> bands(const MasterScore* score)
+      {
+      std::map<const Part*, std::vector<std::pair<int, int>>> out;
+      if (!score || score->metaTag(Automation::metaTag).indexOf(QString("\"%1\"").arg(TARGET)) < 0)
+            return out;
+      const Measure* last = score->lastMeasure();
+      const int end = last ? last->endTick().ticks() : 0;
+      for (const auto& pl : Automation::read(score)) {
+            const Automation::Lane* l = laneOf(pl.second);
+            if (!l)
+                  continue;
+            std::vector<std::pair<int, int>> s = spans(*l, end);
+            if (!s.empty())
+                  out[pl.first] = s;
+            }
+      return out;
+      }
+
+// x (page coordinates) of tick inside the system's measures (sysStart <= tick <= sysEnd)
+static double bandX(const System* system, int tick, bool isEnd)
+      {
+      const double sp = system->spatium();
+      const Measure* first = system->firstMeasure();
+      for (const MeasureBase* mb : system->measures()) {
+            if (!mb->isMeasure())
+                  continue;
+            const Measure* m = toMeasure(mb);
+            const int t0 = m->tick().ticks();
+            const int t1 = m->endTick().ticks();
+            const double mx = system->pagePos().x() + m->pos().x();
+            if (tick == t1 && (isEnd || m == system->lastMeasure()))
+                  return mx + m->width();                     // (its end bar line)
+            if (tick < t0 || tick >= t1)
+                  continue;
+            if (tick == t0 && m != first)
+                  return mx;                                  // (its start bar line)
+            // between the chords and rests: half a space before the one at tick, in proportion to the ticks between two
+            double x1 = 0.0, x2 = m->width();
+            int k1 = t0, k2 = t1;
+            bool before = true;
+            for (const Segment* s = m->first(SegmentType::ChordRest); s; s = s->next(SegmentType::ChordRest)) {
+                  const int st = s->tick().ticks();
+                  if (st <= tick) {
+                        x1 = s->x();
+                        k1 = st;
+                        before = false;
+                        }
+                  else {
+                        x2 = s->x();
+                        k2 = st;
+                        break;
+                        }
+                  }
+            if (before)                     // (no chord or rest before it: the measure's first one)
+                  return mx + std::max(0.0, x2 - 0.5 * sp);
+            if (k1 == tick)
+                  return mx + std::max(0.0, x1 - 0.5 * sp);
+            return mx + x1 - 0.5 * sp + (x2 - x1) * double(tick - k1) / double(std::max(1, k2 - k1));
+            }
+      return system->pagePos().x();
+      }
+
+std::vector<QRectF> bandRects(const Score* score, const Page* page,
+                              const std::map<const Part*, std::vector<std::pair<int, int>>>& all)
+      {
+      std::vector<QRectF> out;
+      if (!score || !page || all.empty())
+            return out;
+      const int nstaves = score->nstaves();
+      for (const System* system : page->systems()) {
+            const Measure* fm = system->firstMeasure();
+            const Measure* lm = system->lastMeasure();
+            if (!fm || !lm || int(system->staves()->size()) < nstaves)
+                  continue;
+            const int sysStart = fm->tick().ticks();
+            const int sysEnd = lm->endTick().ticks();
+            const double sp = system->spatium();
+            // every shown staff's top and bottom (page coordinates), by staff index
+            std::vector<std::pair<double, double>> ys(size_t(nstaves), { -1.0, -1.0 });
+            for (int i = 0; i < nstaves; ++i) {
+                  const SysStaff* ss = system->staff(i);
+                  if (!ss || !ss->show() || !score->staff(i)->show())
+                        continue;
+                  const double top = system->pagePos().y() + ss->y();
+                  ys[size_t(i)] = { top, top + ss->bbox().height() };
+                  }
+            for (const Part* part : score->parts()) {
+                  auto b = all.find(PartPlaybackModes::masterPart(part));
+                  if (b == all.end())
+                        continue;
+                  const int s0 = score->staffIdx(part);
+                  const int s1 = s0 + part->nstaves();
+                  double top = 1e300, bottom = -1e300;
+                  for (int i = s0; i < s1 && i < nstaves; ++i)
+                        if (ys[size_t(i)].first >= 0) {
+                              top = std::min(top, ys[size_t(i)].first);
+                              bottom = std::max(bottom, ys[size_t(i)].second);
+                              }
+                  if (top > bottom)
+                        continue;
+                  // 1.5 spaces, no more than half way to another part's staff
+                  double up = 1.5 * sp, down = 1.5 * sp;
+                  for (int i = 0; i < nstaves; ++i) {
+                        if ((i >= s0 && i < s1) || ys[size_t(i)].first < 0)
+                              continue;
+                        if (ys[size_t(i)].second <= top)
+                              up = std::min(up, 0.5 * (top - ys[size_t(i)].second));
+                        if (ys[size_t(i)].first >= bottom)
+                              down = std::min(down, 0.5 * (ys[size_t(i)].first - bottom));
+                        }
+                  for (const std::pair<int, int>& span : b->second) {
+                        const int t1 = std::max(span.first, sysStart);
+                        const int t2 = std::min(span.second, sysEnd);
+                        if (t2 <= t1)
+                              continue;
+                        const double x1 = bandX(system, t1, false);
+                        const double x2 = bandX(system, t2, true);
+                        if (x2 > x1)
+                              out.push_back(QRectF(x1, top - up, x2 - x1, bottom - top + up + down));
+                        }
+                  }
+            }
+      return out;
+      }
+
+QColor bandColor(const QColor& paper)
+      {
+      return paper.lightness() >= 128 ? QColor(0, 0, 0, 28) : QColor(255, 255, 255, 31);
+      }
+
+QColor bandEdgeColor(const QColor& paper)
+      {
+      return paper.lightness() >= 128 ? QColor(0, 0, 0, 56) : QColor(255, 255, 255, 64);
+      }
+
+void paintBands(QPainter& p, const std::vector<QRectF>& rects, const QColor& paper)
+      {
+      if (rects.empty())
+            return;
+      p.save();
+      p.setPen(Qt::NoPen);
+      p.setBrush(bandColor(paper));
+      for (const QRectF& r : rects)
+            p.drawRect(r);
+      QPen edge(bandEdgeColor(paper));
+      edge.setWidthF(0);                  // (a cosmetic hairline: one device pixel at any zoom)
+      p.setPen(edge);
+      for (const QRectF& r : rects) {
+            p.drawLine(QLineF(r.topLeft(), r.topRight()));
+            p.drawLine(QLineF(r.bottomLeft(), r.bottomRight()));
+            }
+      p.restore();
+      }
+
+bool playing(const Score* score)
+      {
+      return Playback::on("levels/leading", score);
+      }
+
+double levelDb(const Score* score)
+      {
+      const double v = Playback::value("levels/leadingDb", score);
+      return std::isfinite(v) ? v : DEFAULT_DB;
+      }
+
+double levelDb(const SoundLib::LibInstrument& patch, const Score* score)
+      {
+      return std::isfinite(patch.leadingLevel) ? patch.leadingLevel : levelDb(score);
+      }
+
+}     // namespace LeadingLane
 }     // namespace Ms

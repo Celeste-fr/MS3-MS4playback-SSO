@@ -49,6 +49,7 @@
 #include <QStringList>
 
 namespace Ms {
+class Note;
 class Part;
 class Score;
 namespace LiveSet {
@@ -122,6 +123,23 @@ constexpr int PITCH_BEND_ENVELOPE = -1;
 struct ParameterAutomation {
       QString name;
       std::vector<std::pair<double, double>> points;
+      long id { -1 };                     // (Update Live Set) the plug-in's id of it, when known: a parameter Live's panel
+                                          // doesn't list yet gets a free slot of the panel
+      bool keepLive { false };            // (Update Live Set) changed in Live and in MuseScore, not chosen: Live's left
+      QString keepNote;                   // (keepLive) the report's reason, "": changed in both, not chosen
+      };
+
+// (Update Live Set, livesetupdate.h; not written by Create Live Set, whose Kontakt state and Plugin::parameters carry the
+// same) a plug-in parameter MuseScore holds at one value on a Kontakt track: the owner's option B (2026-10-15), a lane
+// that never changes is the Live parameter's plain value (its Manual value in Live's panel), not an automation envelope
+struct Constant {
+      QString name;                       // the parameter's title
+      long id { -1 };                     // the plug-in's id of it, when known
+      double value { 0 };                 // 0-1
+      // not a lane: the value the patch plays unautomated (the map's patchDefault, the setup's own); written only over a
+      // value MuseScore itself wrote there (the record: livetracks.h Written::params), never over Live's
+      bool unautomated { false };
+      bool keepLive { false };            // changed in Live and in MuseScore, not chosen (no dialog): Live's left as it is
       };
 
 // an envelope of the track's own mixer as Live keeps it (the owner's, read back from a saved set: livetracks.h): its
@@ -149,6 +167,21 @@ struct Track {
       Plugin plugin;
       // Live's mixer (the part's Mixer values as MuseScore's host plays them: SoundLib::partMix, mixGain / mixPan)
       double volume { 1 };                // a linear gain (1 = 0 dB), Live's range 0.000316 (-70 dB) … 1.995 (+6 dB)
+      // MuseScore's gain stage on a Kontakt track (kontaktGains): Live's Utility right after the Kontakt, named UTILITY_NAME,
+      // its Gain a linear factor (0 … UTILITY_MAX), its Info text utilityInfo; utility false: none written (0 dB)
+      bool utility { false };
+      double utilityGain { 1 };
+      QString utilityInfo;
+      // [levels] lowCut on a Kontakt track (the patch's SoundLib::lowCutHz, 0 with the setting off): Live's EQ Eight right
+      // after the Kontakt, before the Utility, named LOW_CUT_NAME, two Low Cut 12 bands at this many Hz (eqLowCutDevice);
+      // 0: none written
+      double lowCutHz { 0 };
+      // [levels] lowCut 2 (followcut.h): that EQ's band 1 and 2 frequency as an automation envelope, (beats, Hz), the cutoff
+      // MuseScore's slot plays (FollowCut::smoothedPoints); empty: the fixed lowCutHz
+      std::vector<std::pair<double, double>> lowCutEnvelope;
+      // (not written) the fader a set written before the gain stage (2026-10-15) has here: the Mixer's times the old
+      // volume (TrackDelays::legacyPatchGain); Update Live Set moves such a set over (livesetupdate.h); -1: none
+      double legacyVolume { -1 };
       double pan { 0 };                   // -1 (left) … 1 (right)
       bool active { true };               // the Track Activator: off for a muted part
       // the route's plug-in parameter lanes as the MuseScore Link device keeps them in the set (its "Lanes" stores), so
@@ -172,9 +205,29 @@ struct Track {
                                           // by the export); empty: one slot, as made
       std::vector<Clip> clips;            // arrangement clips, by start, not overlapping
       std::vector<ParameterAutomation> automation;
+      std::vector<Constant> constants;    // (not written: Update Live Set) the Kontakt's parameters held at one value
+      bool parameterState { false };      // (not written: Update Live Set) plugin.component is the set's own Kontakt state
+                                          // with the constants set (SoundLibraryHost::stateWithParameters): it replaces it
       std::vector<MixerAutomation> mixerAutomation;   // (a group's too)
       QString annotation;                 // the track's Info text (Name/Annotation): the plain set's track key
       double delayMs { 0 };               // Track Delay, ms (trackdelays.h; the plain set's tracks)
+      // the written notes' timing for the MuseScore Link copy on the track (livetiming.h: LiveTiming::record), kept in its
+      // "Timing" store; empty: none
+      std::vector<double> linkTiming;
+      double lookaheadMs { 0 };           // (not written) that timing's lookahead: delayMs is this much earlier than the
+                                          // technique's own delay (livetracks.h adds it back when the set is read)
+      // (not written) a technique track's notes as the score has them (not keyswitches; Update Live Set: a note moved in
+      // Live becomes its timing override, livesetupdate.h): pitch, start and length in song units, velocity, as its clips
+      // hold them, each with the score's note and its note-on's utick (LiveClips::Note::source, utick)
+      struct SourceNote {
+            int pitch { 60 };
+            int start { 0 };
+            int length { 0 };
+            int velocity { 100 };
+            const Note* note { nullptr };
+            int utick { 0 };
+            };
+      std::vector<SourceNote> sourceNotes;
       // (not written)
       QString routeKey;                   // "<port>:<channel 1-16>", as LiveClips::Track::key
       QString part;                       // the part's name
@@ -228,6 +281,37 @@ double mixGain(int volume);
 // within Live's top (MAX_VOLUME, +6 dB: livesetxml.h's Volume range; above it Live plays the patch softer than MuseScore)
 constexpr double MAX_VOLUME = 1.99526238;
 double kontaktVolume(int volume, double patchGain);
+// MuseScore's gain stage in Live (contextlevel.h › Gain stage and master trim; the owner, 2026-10-15): Live's stock Utility
+// right after the Kontakt, named UTILITY_NAME; its Gain a linear factor, 0 (-inf dB) … UTILITY_MAX (+35 dB: the Gain's
+// MidiControllerRange as Live 12.4 saves it, 10^(35/20))
+extern const char* const UTILITY_NAME;
+constexpr double UTILITY_MAX = 56.2341309;
+constexpr double UTILITY_MAX_DB = 35.0;
+struct KontaktGains {
+      double volume { 1 };                // the Kontakt track's fader
+      double utility { 1 };               // its Utility's Gain
+      bool hasUtility { false };          // the gain stage isn't 0 dB: a Utility written
+      };
+// a Kontakt track's fader and Utility: the fader the Mixer's (mixGain) times faderGain (the track levels' headroom,
+// TrackDelays::faderGain, as before the gain stage) times what of the gain stage is over UTILITY_MAX_DB, within MAX_VOLUME;
+// the Utility the gain stage (TrackDelays::gainStageDb) within UTILITY_MAX_DB
+KontaktGains kontaktGains(int volume, double faderGain, double gainStageDb);
+// the Utility's Info text: what it holds (gainStageDb, of which the master trim trimDb)
+QString utilityInfo(double gainStageDb, double trimDb);
+// a Utility's Gain as Live's XML holds it (its Manual), to dB
+double utilityDb(double gain);
+// [levels] lowCut in Live (branch lowcut-live, 2026-10-31; soundlibrary.h › LibInstrument::lowCutHz): Live's stock EQ
+// Eight right after the Kontakt (before the Utility), named LOW_CUT_NAME. EQ Eight has no 24 dB/oct cut (its band
+// types: Low Cut 48, Low Cut 12, Low Shelf, Bell, Notch, High Shelf, High Cut 12, High Cut 48: Mode 0-7, read from
+// an EQ Eight Live saved), so bands 1 and 2 are Low Cut 12 at the cutoff with the two Q of a 4th-order Butterworth,
+// LOW_CUT_Q (Vst3Synth::lowCutCoefficients' pair), the other bands off. The same response as MuseScore's only if Live's
+// Low Cut 12 is a textbook 2-pole high-pass whose Q is the pole's: unconfirmed, to measure in real Live (LIVE.md ›
+// The plain set › Low cut)
+extern const char* const LOW_CUT_NAME;
+constexpr double LOW_CUT_Q[2] = { 0.5411961001, 1.3065629649 };     // 1 / (2 cos(pi/8)), 1 / (2 cos(3 pi/8))
+constexpr int EQ_LOW_CUT_12 = 1;          // EQ Eight's band Mode "Low Cut 12"
+// the EQ's Info text
+QString lowCutInfo(double hz);
 // the Mixer's pan (0-127, 64 centre) as Live's Pan (-1 … 1): Vst3Synth::panGains' position. Both are constant-power
 // sine/cosine laws, 0 dB at the centre and +3 dB fully panned (Live 12 manual, Audio Fact Sheet › Panning), so the
 // same position gives the same gains

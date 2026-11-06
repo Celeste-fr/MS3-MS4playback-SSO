@@ -58,8 +58,12 @@ enum {
       ME_TICK2      = 0x4,  // metronome tick
       // a hosted plug-in's parameter (automation.h): dataA the index of the sound library controller
       // in the part's main patch (SoundLib::LibInstrument::allControllers), the value 0-1 in tuning()
-      // (a byte is too coarse); Vst3Synth only, never MIDI
+      // (a byte is too coarse); Vst3Synth only, never MIDI. dataB > 0: the MIDI controller it plays for the
+      // plug-in (soundlibrary.h Controller::hosted, e.g. Ample's CC7 as M-Master Vol): a MIDI file writes that CC
       ME_PARAMETER  = 0x5,
+      // [levels] lowCut 2 (libmscore/followcut.h): a sound library route's following low cut, its cutoff in Hz from here
+      // on in tuning() (before smoothing); Vst3Synth only (on the slot's output), never a plug-in's, never MIDI
+      ME_LOWCUT     = 0x6,
       };
 
 //---------------------------------------------------------
@@ -263,6 +267,8 @@ class NPlayEvent : public PlayEvent {
       bool _libSwitch = false;            // the library's articulation switch
       signed char _libPatch = 0;          // which of the part's library patches plays it
       bool _libDelayed = false;           // moved by its track's delay already (trackdelays.h)
+      bool _libLevel = false;             // a value a note's level set (rendermidi.cpp libraryNoteLevels), not as written
+      bool _libSpeed = false;             // a legato note-on's speed controller ([slurs] speedFromWritten: librarySpeeds)
 
    public:
       NPlayEvent() : PlayEvent() {}
@@ -291,6 +297,10 @@ class NPlayEvent : public PlayEvent {
       int libraryPatch() const { return _libPatch; }
       void setLibraryDelayed(bool v) { _libDelayed = v; }
       bool libraryDelayed() const { return _libDelayed; }
+      void setLibraryLevel(bool v) { _libLevel = v; }
+      bool libraryLevel() const { return _libLevel; }
+      void setLibrarySpeed(bool v) { _libSpeed = v; }
+      bool librarySpeed() const { return _libSpeed; }
       void setPortamento(bool p) { _portamento = p; }
       bool portamento() const { 
             return (_portamento == true || 
@@ -367,6 +377,13 @@ class EventList : public QList<Event> {
 class EventMap : public std::multimap<int, NPlayEvent> {
       int _highestChannel = 15;
    public:
+      // a library note whose early start (its onset) the score's start cut off: the ms it should have started before
+      // its note-on at tick 0 (MidiRenderer: the start lead; Live's clips, the plain set: livetiming.h)
+      std::map<const Note*, double> startEarlyMs;
+      double startLeadMs { 0 };     // what everything plays later by for them (the start lead; 0 in Live's clips)
+      // what every event without a track delay plays later by (MidiRenderer::libraryDelayLead: the earliest negative track
+      // delay, [slurs] plainPerformance's shift among them; 0 in Live's clips): the playback audit takes it off with the start lead
+      double delayLeadMs { 0 };
       void fixupMIDI();
       void registerChannel(int c) { if (c > _highestChannel) _highestChannel = c; }
       };

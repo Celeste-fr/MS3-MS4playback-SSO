@@ -11,11 +11,13 @@
 #include "soundlibrary.h"
 #include "calibrationfile.h"
 #include "partplayback.h"
+#include "enginelane.h"
 #include "playbacksettings.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <mutex>
 #include <set>
@@ -24,7 +26,9 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDir>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QRegularExpression>
 #include <QXmlStreamReader>
 
@@ -44,6 +48,8 @@
 #include "tempo.h"
 #include "trill.h"
 #include "tuning.h"
+#include "automation.h"
+#include "partcontrollers.h"
 
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
@@ -87,8 +93,9 @@ static bool readSwitch(const QXmlStreamAttributes& a, SwitchType& type, int& num
 // <Articulation name="Long" value="1" [techniques="…"] [modifiers="…"] [expect="silent|ignored|unclear"]
 //               [prefer="…"] [length="0.5" [from="0.43"]] [release="885"] [legatoDelay="210" | legatoDelay="-12:210 -7:230 … +12:360"]
 //               [legatoVelocity="100"] [attacks="smooth:1-9:7 …" transitions="portamento:1-19:10 …" reattack="106"
-//               reattackGap="54" overlap="24"] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
-//               [bendGlide="136:-8:100 300:70:230 …"]/>;
+//               reattackGap="54" overlap="24" [attackOnset="smooth:100.2;57:86.1,66:127.3 …"]] [avoid="48:100-116:90 …"] [onset="40" | onset="55:60 67:40 …"] [octaveUp="36:180 37:140 …"] [octaveDown="48:150 …"]
+//               [bendGlide="136:-8:100 300:70:230 …"] [bendGlideFingered="136:60:180 …"] [heldOffset="-3.4" | heldOffset="32:-7 112:-9"]
+//               [accentedLevel="72/100:3.4 72/150:4.2 …"] [keyLevels="63:-2.92 66:1.49 …"]/>;
 // no techniques: listed for reference and checked, never chosen by notation
 
 // legatoDelay / onset: one number (ms, for every interval / pitch) or "key:ms" pairs (an interval in signed
@@ -142,6 +149,8 @@ static double keyedMsAt(const std::vector<std::pair<int, double>>& table, double
       return table.back().second;
       }
 
+static double levelGridAt(const std::vector<Articulation::QuickLevel>& grid, int pitch, double ms);
+
 double octaveDelayAt(const std::vector<std::pair<int, double>>& table, double fallback, int fromPitch)
       {
       if (table.empty() || fromPitch < 0)
@@ -186,8 +195,9 @@ double Articulation::legatoDelayAt(int interval, int fromPitch) const
       return keyedMsAt(legatoDelays, legatoDelayMs, interval);
       }
 
-bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs) const
+bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arriveMs, bool fingered) const
       {
+      const std::vector<BendGlide>& bendGlides = fingered && !bendGlidesFingered.empty() ? bendGlidesFingered : this->bendGlides;
       if (bendGlides.empty())
             return false;
       const BendGlide* lo = &bendGlides.front();
@@ -212,9 +222,37 @@ bool Articulation::bendGlideAt(double lenBeforeMs, double* leaveMs, double* arri
       return true;
       }
 
+double LibInstrument::bowedArriveAt(double lenBeforeMs) const
+      {
+      if (bowedArrive.empty())
+            return NAN;
+      if (lenBeforeMs <= bowedArrive.front().first)
+            return bowedArrive.front().second;
+      for (size_t i = 0; i + 1 < bowedArrive.size(); ++i) {
+            const auto& lo = bowedArrive[i];
+            const auto& hi = bowedArrive[i + 1];
+            if (lenBeforeMs <= hi.first)
+                  return hi.first > lo.first ? lo.second + (hi.second - lo.second) * (lenBeforeMs - lo.first) / (hi.first - lo.first)
+                                             : hi.second;
+            }
+      return bowedArrive.back().second;
+      }
+
 double Articulation::onsetAt(int pitch) const
       {
       return keyedMsAt(onsets, onsetMs, pitch);
+      }
+
+double Articulation::Technique::onsetAt(int pitch) const
+      {
+      return keyedMsAt(onsets, onsetMs, pitch);
+      }
+
+double Articulation::startOnset(const Technique* attack, int pitch, bool byPitch) const
+      {
+      if (attack && attack->hasOnset())
+            return byPitch ? attack->onsetAt(pitch) : attack->onsetMs;
+      return byPitch ? onsetAt(pitch) : onsetMedian();
       }
 
 double Articulation::onsetMedian() const
@@ -253,8 +291,17 @@ const Articulation::Technique* Articulation::transition(const QString& name) con
       return nullptr;
       }
 
-double Articulation::contextLevelAt(double cc, double ms, double pitch) const
+const std::vector<Articulation::ContextLevel>& Articulation::contextGrid(ContextKind kind) const
       {
+      if (kind == ContextKind::SLUR)
+            return contextLevels;
+      const std::vector<ContextLevel>& g = plainContextLevels[int(kind) - 1];
+      return g.empty() ? contextLevels : g;
+      }
+
+double Articulation::contextLevelAt(double cc, double ms, double pitch, ContextKind kind) const
+      {
+      const std::vector<ContextLevel>& contextLevels = contextGrid(kind);
       if (contextLevels.empty())
             return 0.0;
       std::vector<double> ccs, mss, pitches;
@@ -295,7 +342,32 @@ double Articulation::contextLevelAt(double cc, double ms, double pitch) const
       return db;
       }
 
+double Articulation::accentedLevelAt(int pitch, double ms) const
+      {
+      return levelGridAt(accentedLevels, pitch, ms);
+      }
+
+double Articulation::heldOffsetAt(int cc) const
+      {
+      if (heldOffsets.empty())
+            return 0.0;
+      if (heldOffsets.size() == 1 || cc <= heldOffsets.front().first)
+            return heldOffsets.front().second;
+      if (cc >= heldOffsets.back().first)
+            return heldOffsets.back().second;
+      auto hi = std::lower_bound(heldOffsets.begin(), heldOffsets.end(), cc,
+                                 [](const std::pair<int, double>& x, int c) { return x.first < c; });
+      auto lo = hi - 1;
+      return lo->second + (hi->second - lo->second) * double(cc - lo->first) / double(hi->first - lo->first);
+      }
+
 double Articulation::quickLevelAt(int pitch, double ms) const
+      {
+      return levelGridAt(quickLevels, pitch, ms);
+      }
+
+// a pitch/ms:dB grid's value (quickLevel, accentedLevel): log-linear in ms, linear in pitch, the nearest end's beyond; 0: none
+static double levelGridAt(const std::vector<Articulation::QuickLevel>& quickLevels, int pitch, double ms)
       {
       // each measured pitch's level at ms, then between the two pitches around the note
       std::vector<std::pair<int, double>> byPitch;
@@ -381,20 +453,50 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       std::sort(art.quickLevels.begin(), art.quickLevels.end(), [](const Articulation::QuickLevel& x, const Articulation::QuickLevel& y) {
             return x.pitch != y.pitch ? x.pitch < y.pitch : x.ms < y.ms;
             });
-      for (const QString& t : a.value("contextLevel").toString().split(' ', QString::SkipEmptyParts)) {
-            const QStringList f = t.left(t.indexOf(':')).split('/');
-            bool ok[4] = { false, false, false, false };
-            if (f.size() != 3 || t.indexOf(':') < 0)
+      // heldOffset="dB" or "cc:dB …" ([levels] calibrated 2, option B')
+      for (const QString& t : a.value("heldOffset").toString().split(' ', QString::SkipEmptyParts)) {
+            const int colon = t.indexOf(':');
+            bool ok1 = true, ok2 = false;
+            const int cc = colon < 0 ? -1 : t.left(colon).toInt(&ok1);
+            const double db = t.mid(colon + 1).toDouble(&ok2);
+            if (!ok1 || !ok2 || (colon < 0 && !art.heldOffsets.empty()) || (colon >= 0 && cc < 0))
                   return false;
-            const Articulation::ContextLevel l { f[0].toInt(&ok[0]), f[1].toDouble(&ok[1]), f[2].toInt(&ok[2]),
-                                                 t.mid(t.indexOf(':') + 1).toDouble(&ok[3]) };
-            if (!ok[0] || !ok[1] || !ok[2] || !ok[3] || l.ms <= 0)
-                  return false;
-            art.contextLevels.push_back(l);
+            art.heldOffsets.push_back({ cc, db });
             }
-      std::sort(art.contextLevels.begin(), art.contextLevels.end(), [](const Articulation::ContextLevel& x, const Articulation::ContextLevel& y) {
-            return x.cc != y.cc ? x.cc < y.cc : x.ms != y.ms ? x.ms < y.ms : x.pitch < y.pitch;
-            });
+      std::sort(art.heldOffsets.begin(), art.heldOffsets.end());
+      if (art.heldOffsets.size() > 1 && art.heldOffsets.front().first < 0)
+            return false;
+      // keyLevels="pitch:dB …" ([levels] evenKeys)
+      for (const QString& t : a.value("keyLevels").toString().split(' ', QString::SkipEmptyParts)) {
+            const int colon = t.indexOf(':');
+            bool ok1 = false, ok2 = false;
+            const int p = t.left(colon).toInt(&ok1);
+            const double db = t.mid(colon + 1).toDouble(&ok2);
+            if (colon < 0 || !ok1 || !ok2 || p < 0 || p > 127 || art.keyLevels.count(p))
+                  return false;
+            art.keyLevels[p] = db;
+            }
+      // contextLevel and [slurs] plainPerformance's per kind: "cc/ms/pitch:dB …"
+      auto contextGrid = [&a](const char* attribute, std::vector<Articulation::ContextLevel>& out) {
+            for (const QString& t : a.value(attribute).toString().split(' ', QString::SkipEmptyParts)) {
+                  const QStringList f = t.left(t.indexOf(':')).split('/');
+                  bool ok[4] = { false, false, false, false };
+                  if (f.size() != 3 || t.indexOf(':') < 0)
+                        return false;
+                  const Articulation::ContextLevel l { f[0].toInt(&ok[0]), f[1].toDouble(&ok[1]), f[2].toInt(&ok[2]),
+                                                       t.mid(t.indexOf(':') + 1).toDouble(&ok[3]) };
+                  if (!ok[0] || !ok[1] || !ok[2] || !ok[3] || l.ms <= 0)
+                        return false;
+                  out.push_back(l);
+                  }
+            std::sort(out.begin(), out.end(), [](const Articulation::ContextLevel& x, const Articulation::ContextLevel& y) {
+                  return x.cc != y.cc ? x.cc < y.cc : x.ms != y.ms ? x.ms < y.ms : x.pitch < y.pitch;
+                  });
+            return true;
+            };
+      if (!contextGrid("contextLevel", art.contextLevels) || !contextGrid("contextLevelPlain", art.plainContextLevels[0])
+          || !contextGrid("contextLevelStaccato", art.plainContextLevels[1]) || !contextGrid("contextLevelSingle", art.plainContextLevels[2]))
+            return false;
       art.legatoVelocity = a.hasAttribute("legatoVelocity") ? a.value("legatoVelocity").toInt() : -1;
       if (a.hasAttribute("legatoVelocity") && (art.legatoVelocity < 1 || art.legatoVelocity > 127))
             return false;
@@ -416,6 +518,45 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             };
       if (!readTechniques("attacks", art.attacks) || !readTechniques("transitions", art.transitions))
             return false;
+      // attackOnset="name:median[;pitch:ms,…] …": an attack's own onset (ms >= 0), the attack listed in attacks=
+      if (a.hasAttribute("attackOnset")) {
+            for (const QString& t : a.value("attackOnset").toString().split(' ', QString::SkipEmptyParts)) {
+                  const int colon = t.indexOf(':');
+                  const QStringList parts = t.mid(colon + 1).split(';');
+                  Articulation::Technique* tq = nullptr;
+                  for (Articulation::Technique& x : art.attacks)
+                        if (x.name == t.left(colon))
+                              tq = &x;
+                  bool ok = false;
+                  const double median = parts.value(0).toDouble(&ok);
+                  if (colon <= 0 || !tq || !ok || median < 0 || parts.size() > 2)
+                        return false;
+                  double tableMedian = 0;
+                  if (parts.size() == 2 && (!parts[1].contains(':')
+                                            || !readKeyedMs(QString(parts[1]).replace(',', ' '), tableMedian, tq->onsets)))
+                        return false;
+                  tq->onsetMs = median;
+                  }
+            }
+      // accentedLevel="pitch/ms:dB …" (as quickLevel), with an accented attack listed in attacks=
+      if (a.hasAttribute("accentedLevel")) {
+            if (!art.attack("accented"))
+                  return false;
+            for (const QString& t : a.value("accentedLevel").toString().split(' ', QString::SkipEmptyParts)) {
+                  const int slash = t.indexOf('/'), colon = t.indexOf(':');
+                  bool ok1 = false, ok2 = false, ok3 = false;
+                  const Articulation::QuickLevel l { t.left(slash).toInt(&ok1), t.mid(slash + 1, colon - slash - 1).toDouble(&ok2),
+                                                      t.mid(colon + 1).toDouble(&ok3) };
+                  if (slash < 0 || colon < slash || !ok1 || !ok2 || !ok3 || l.ms <= 0 || l.pitch < 0 || l.pitch > 127)
+                        return false;
+                  art.accentedLevels.push_back(l);
+                  }
+            if (art.accentedLevels.empty())
+                  return false;
+            std::sort(art.accentedLevels.begin(), art.accentedLevels.end(), [](const Articulation::QuickLevel& x, const Articulation::QuickLevel& y) {
+                  return x.pitch != y.pitch ? x.pitch < y.pitch : x.ms < y.ms;
+                  });
+            }
       // key[-key]:low-high:velocity …, the velocity outside its band
       if (a.hasAttribute("avoid")) {
             for (const QString& t : a.value("avoid").toString().split(' ', QString::SkipEmptyParts)) {
@@ -444,18 +585,22 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             return false;
       if (a.hasAttribute("octaveUp") && !readKeyedMs(a.value("octaveUp").toString(), art.octaveUpMs, art.octaveUp))
             return false;
-      // bendGlide="lenBefore:leave:arrive …" (ms; leave may be negative: the f0 already on its way)
-      for (const QString& g : a.value("bendGlide").toString().split(' ', QString::SkipEmptyParts)) {
-            const QStringList f = g.split(':');
-            bool ok[3] = { false, false, false };
-            Articulation::BendGlide bg { f.value(0).toDouble(&ok[0]), f.value(1).toDouble(&ok[1]), f.value(2).toDouble(&ok[2]) };
-            if (f.size() != 3 || !ok[0] || !ok[1] || !ok[2] || bg.lenBeforeMs < 0 || bg.arriveMs < bg.leaveMs)
-                  return false;
-            art.bendGlides.push_back(bg);
+      // bendGlide="lenBefore:leave:arrive …" (ms; leave may be negative: the f0 already on its way); bendGlideFingered the
+      // fingered transition's
+      for (const char* attr : { "bendGlide", "bendGlideFingered" }) {
+            std::vector<Articulation::BendGlide>& glides = strcmp(attr, "bendGlide") ? art.bendGlidesFingered : art.bendGlides;
+            for (const QString& g : a.value(attr).toString().split(' ', QString::SkipEmptyParts)) {
+                  const QStringList f = g.split(':');
+                  bool ok[3] = { false, false, false };
+                  Articulation::BendGlide bg { f.value(0).toDouble(&ok[0]), f.value(1).toDouble(&ok[1]), f.value(2).toDouble(&ok[2]) };
+                  if (f.size() != 3 || !ok[0] || !ok[1] || !ok[2] || bg.lenBeforeMs < 0 || bg.arriveMs < bg.leaveMs)
+                        return false;
+                  glides.push_back(bg);
+                  }
+            std::sort(glides.begin(), glides.end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
+                  return x.lenBeforeMs < y.lenBeforeMs;
+                  });
             }
-      std::sort(art.bendGlides.begin(), art.bendGlides.end(), [](const Articulation::BendGlide& x, const Articulation::BendGlide& y) {
-            return x.lenBeforeMs < y.lenBeforeMs;
-            });
       // bendSmoothing="tau" (ms, the patch's one-pole smoothing of a bend; negative: malformed)
       if (a.hasAttribute("bendSmoothing")) {
             bool ok = false;
@@ -463,9 +608,25 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
             if (!ok || art.bendSmoothingMs < 0)
                   return false;
             }
+      // runLag="fingered:D:tau bowed:D:tau" (ms; [slurs] runBends' model of the patch's pitch in fast runs)
+      for (const QString& g : a.value("runLag").toString().split(' ', QString::SkipEmptyParts)) {
+            const QStringList f = g.split(':');
+            bool ok[2] = { false, false };
+            Articulation::RunLag rl { f.value(1).toDouble(&ok[0]), f.value(2).toDouble(&ok[1]) };
+            if (f.size() != 3 || !ok[0] || !ok[1] || rl.delayMs < 0 || rl.tauMs <= 0 || (f[0] != "fingered" && f[0] != "bowed"))
+                  return false;
+            (f[0] == "fingered" ? art.runLagFingered : art.runLagBowed) = rl;
+            }
       if (a.hasAttribute("octaveDown") && !readKeyedMs(a.value("octaveDown").toString(), art.octaveDownMs, art.octaveDown))
             return false;
       // (legatoLevel / legatoLevelLong: the legato level balance's, removed 2026-10-07; an older map's are ignored)
+      // keyShift="-12": the key sent for its notes (Ample's natural harmonics: the sounding pitch - 12)
+      if (a.hasAttribute("keyShift")) {
+            bool okk = false;
+            art.keyShift = a.value("keyShift").toInt(&okk);
+            if (!okk || art.keyShift < -48 || art.keyShift > 48)
+                  return false;
+            }
       bool ok = false;
       art.value = a.value("value").toInt(&ok);
       if (!art.expect.isEmpty() && art.expect != "silent" && art.expect != "ignored" && art.expect != "unclear")
@@ -476,10 +637,177 @@ static bool readArticulation(const QXmlStreamAttributes& a, LibInstrument& li)
       return true;
       }
 
+// <Guitar stringKeys="36 35 34 33 32 31" harmonic="25" … strumKeys="72 76 79 83" artificial="12:12 7:19" pinch="19 60 2 45" …>
+//   <StrumLevel set="AGMSt" levels="20:8 40:16 …"/>  <Fx text="slap" key="90"/>
+// </Guitar> (soundlibrary.h Guitar); the reader is on the element and reads it to its end
+static bool readGuitar(QXmlStreamReader& r, Guitar& g)
+      {
+      const QXmlStreamAttributes a = r.attributes();
+      bool good = true;
+      auto key = [&](const char* name, int& v, int low = 0, int high = 127) {
+            if (!a.hasAttribute(name))
+                  return;
+            bool ok = false;
+            v = a.value(name).toInt(&ok);
+            good = good && ok && v >= low && v <= high;
+            };
+      auto number = [&](const char* name, double& v) {
+            if (!a.hasAttribute(name))
+                  return;
+            bool ok = false;
+            v = a.value(name).toDouble(&ok);
+            good = good && ok && v >= 0.0 && v <= 10000.0;
+            };
+      auto ints = [&](const char* name, int n) {
+            std::vector<int> v;
+            for (const QString& t : a.value(name).toString().split(' ', QString::SkipEmptyParts)) {
+                  bool ok = false;
+                  v.push_back(t.toInt(&ok));
+                  good = good && ok && v.back() >= 0 && v.back() <= 127;
+                  }
+            if (a.hasAttribute(name) && int(v.size()) != n)
+                  good = false;
+            return v;
+            };
+      auto pairs = [&](const QString& text) {
+            std::vector<std::pair<int, int>> v;
+            for (const QString& t : text.split(' ', QString::SkipEmptyParts)) {
+                  bool ok1 = false, ok2 = false;
+                  v.push_back({ t.section(':', 0, 0).toInt(&ok1), t.section(':', 1).toInt(&ok2) });
+                  good = good && ok1 && ok2 && t.count(':') == 1 && (v.size() < 2 || v.back().first > v[v.size() - 2].first);
+                  }
+            return v;
+            };
+      const std::vector<int> strings = ints("stringKeys", 6);
+      for (size_t i = 0; i < strings.size() && i < 6; ++i)
+            g.stringKeys[i] = strings[i];
+      const std::vector<int> rolls = ints("rollKeys", 6);
+      for (size_t i = 0; i < rolls.size() && i < 6; ++i)
+            g.rollKeys[i] = rolls[i];
+      const std::vector<int> strums = ints("strumKeys", 4);          // down, up, down muted, up muted
+      if (strums.size() == 4) {
+            g.strumDown = strums[0];
+            g.strumUp = strums[1];
+            g.strumDownMuted = strums[2];
+            g.strumUpMuted = strums[3];
+            }
+      key("stringVelocity", g.stringVelocity, 1);
+      key("harmonic", g.harmonic);
+      key("harmonicShift", g.harmonicShift, -48, 48);
+      key("palmMute", g.palmMute);
+      key("slide", g.slide);
+      key("legatoSlide", g.legatoSlide);
+      key("hammer", g.hammer);
+      key("strumMode", g.strumMode);
+      key("strumOn", g.strumOn, 1);
+      key("strumOff", g.strumOff, 1);
+      key("detect", g.detect);
+      key("detectVelocity", g.detectVelocity, 1);
+      key("chordLow", g.chordLow, 0, 104);
+      key("strumVelocity", g.strumVelocity, 1);
+      key("softStrum", g.softStrum, 0);
+      number("rollGap", g.rollGapMs);
+      key("capoMax", g.capoMax, 1, 24);
+      number("capoLead", g.capoLeadMs);
+      number("strumLead", g.strumLeadMs);
+      number("overlap", g.overlapMs);
+      number("slideOut", g.slideOutMs);
+      number("fxLength", g.fxMs);
+      g.sampleSet = a.value("sampleSet").toString();
+      g.capo = a.value("capo").toString();
+      g.artificial = pairs(a.value("artificial").toString());
+      g.softRoll = pairs(a.value("softRoll").toString());
+      for (const auto& p : g.softRoll)
+            good = good && p.first >= 1 && p.first <= 127 && p.second >= 1 && p.second <= 200;
+      if (a.hasAttribute("pinch")) {                                  // partial, velocity, delay ms, length ms
+            const QStringList p = a.value("pinch").toString().split(' ', QString::SkipEmptyParts);
+            bool ok[4] = { false, false, false, false };
+            if (p.size() == 4) {
+                  g.pinchPartial = p[0].toInt(&ok[0]);
+                  g.pinchVelocity = p[1].toInt(&ok[1]);
+                  g.pinchDelayMs = p[2].toDouble(&ok[2]);
+                  g.pinchOffMs = p[3].toDouble(&ok[3]);
+                  }
+            good = good && ok[0] && ok[1] && ok[2] && ok[3] && g.pinchPartial > 0 && g.pinchPartial <= 48
+                   && g.pinchVelocity >= 1 && g.pinchVelocity <= 127 && g.pinchDelayMs >= 0 && g.pinchOffMs > 0;
+            }
+      while (r.readNextStartElement()) {
+            const QXmlStreamAttributes aa = r.attributes();
+            if (r.name() == "StrumLevel") {
+                  const QString set = aa.value("set").toString();
+                  const auto levels = pairs(aa.value("levels").toString());
+                  good = good && !set.isEmpty() && !levels.empty();
+                  for (const auto& l : levels)
+                        good = good && l.first >= 1 && l.first <= 127 && l.second >= 1 && l.second <= 127;
+                  g.strumLevels[set] = levels;
+                  }
+            else if (r.name() == "Fx") {
+                  Guitar::Fx f;
+                  bool ok = false;
+                  f.key = aa.value("key").toInt(&ok);
+                  f.text = QRegularExpression("^(?:" + aa.value("text").toString() + ")$", QRegularExpression::CaseInsensitiveOption);
+                  good = good && ok && f.key >= 0 && f.key <= 127 && f.text.isValid() && !aa.value("text").isEmpty();
+                  g.fx.push_back(f);
+                  }
+            r.skipCurrentElement();
+            }
+      return good;
+      }
+
+int Guitar::strumLevel(const QString& set, int velocity) const
+      {
+      auto t = strumLevels.find(set);
+      if (t == strumLevels.end() || t->second.empty())
+            return 64;
+      const auto& v = t->second;
+      if (velocity <= v.front().first)
+            return v.front().second;
+      if (velocity >= v.back().first)
+            return v.back().second;
+      for (size_t i = 1; i < v.size(); ++i) {
+            if (velocity > v[i].first)
+                  continue;
+            const double f = double(velocity - v[i - 1].first) / (v[i].first - v[i - 1].first);
+            const double db = (1.0 - f) * std::log10(v[i - 1].second) + f * std::log10(v[i].second);
+            return qBound(1, int(std::lround(std::pow(10.0, db))), 127);
+            }
+      return v.back().second;
+      }
+
+int Guitar::softRollVelocity(int velocity) const
+      {
+      if (softRoll.empty())
+            return qBound(1, velocity, 127);
+      return qBound(softRoll.front().first, velocity, softRoll.back().first);
+      }
+
+double Guitar::softRollGapMs(int velocity) const
+      {
+      if (softRoll.empty())
+            return rollGapMs;
+      const int v = softRollVelocity(velocity);
+      for (size_t i = 1; i < softRoll.size(); ++i) {
+            if (v > softRoll[i].first)
+                  continue;
+            const double f = double(v - softRoll[i - 1].first) / (softRoll[i].first - softRoll[i - 1].first);
+            return (1.0 - f) * softRoll[i - 1].second + f * softRoll[i].second;
+            }
+      return softRoll.back().second;
+      }
+
+int Guitar::artificialShift(int frets) const
+      {
+      for (const auto& p : artificial)
+            if (p.first == frets)
+                  return p.second;
+      return 0;
+      }
+
 // <Controller id="vibrato" name="Vibrato" cc="21" default="64">
 //   <Text match="senza vib\.?" value="0"/>
 // </Controller>
-// or param="<the plug-in parameter's title>" instead of cc; the reader is on the element
+// or param="<the plug-in parameter's title>" instead of cc (patchDefault="0-1": its measured own value, Controller::
+// patchDefault); the reader is on the element
 static bool readController(QXmlStreamReader& r, Controller& c)
       {
       const QXmlStreamAttributes a = r.attributes();
@@ -491,12 +819,55 @@ static bool readController(QXmlStreamReader& r, Controller& c)
       if (a.hasAttribute("cc"))
             c.cc = a.value("cc").toInt(&ok);
       c.param = a.value("param").toString();
+      // hosted="m-master-vol": the parameter controller that plays it when hosted (Controller::hosted; checked at the end)
+      c.hosted = a.value("hosted").toString();
+      ok = ok && (c.hosted.isEmpty() || c.cc >= 0);
+      // state="DBName" values="AGMFg AGMPk AGMSt": a load-time setting of the plug-in's state (Controller::state)
+      c.state = a.value("state").toString();
+      c.stateValues = a.value("values").toString().split(' ', QString::SkipEmptyParts);
+      // range="0 100" decimals="1": a number (Controller::stateRange)
+      if (a.hasAttribute("range")) {
+            const QStringList r = a.value("range").toString().split(' ', QString::SkipEmptyParts);
+            bool ok1 = false, ok2 = false;
+            c.stateRange = true;
+            c.stateMin = r.size() == 2 ? r[0].toDouble(&ok1) : 0;
+            c.stateMax = r.size() == 2 ? r[1].toDouble(&ok2) : 0;
+            ok = ok && ok1 && ok2 && c.stateMax > c.stateMin;
+            }
+      if (a.hasAttribute("decimals")) {
+            bool okd = false;
+            c.stateDecimals = a.value("decimals").toInt(&okd);
+            ok = ok && okd && c.stateDecimals >= 0 && c.stateDecimals <= 6 && c.stateRange;
+            }
       if (a.hasAttribute("default")) {
             bool okd = false;
             c.defaultValue = a.value("default").toInt(&okd);
             ok = ok && okd && c.defaultValue >= 0 && c.defaultValue <= 127;
             }
-      if (!ok || c.id.isEmpty() || (c.cc < 0) == c.param.isEmpty() || c.cc > 119)
+      if (a.hasAttribute("patchDefault")) {
+            bool okp = false;
+            c.patchDefault = a.value("patchDefault").toDouble(&okp);
+            ok = ok && okp && c.patchDefault >= 0 && c.patchDefault <= 1 && (!c.param.isEmpty() || c.isState());
+            }
+      // steps="N" display="0:Off 1:On" (how the plug-in shows the value: the lane editor's text)
+      if (a.hasAttribute("steps")) {
+            bool oks = false;
+            c.steps = a.value("steps").toInt(&oks);
+            ok = ok && oks && c.steps >= 1 && c.steps <= 1000;
+            }
+      double last = -1;
+      for (const QString& t : a.value("display").toString().split(' ', QString::SkipEmptyParts)) {
+            const int colon = t.indexOf(':');
+            bool okv = false;
+            const double v = colon > 0 ? t.left(colon).toDouble(&okv) : -1;
+            if (!okv || v < 0 || v > 1 || v <= last)
+                  return false;
+            last = v;
+            c.display.emplace_back(v, t.mid(colon + 1));
+            }
+      const int kinds = (c.cc >= 0 ? 1 : 0) + (c.param.isEmpty() ? 0 : 1) + (c.isState() ? 1 : 0);
+      if (!ok || c.id.isEmpty() || kinds != 1 || c.cc > 119 || c.isState() != (!c.stateValues.isEmpty() || c.stateRange)
+          || (c.stateRange && !c.stateValues.isEmpty()))
             return false;
       while (r.readNextStartElement()) {
             if (r.name() == "Text") {
@@ -512,6 +883,75 @@ static bool readController(QXmlStreamReader& r, Controller& c)
             r.skipCurrentElement();
             }
       return true;
+      }
+
+//---------------------------------------------------------
+//   controllerText
+//    a stepped controller: the text of its position nearest the value (the display entry nearest k / steps); a
+//    continuous one: numeric texts linear between the two entries around the value, to the decimals of the nearer, else
+//    the nearer entry's text
+//---------------------------------------------------------
+
+QString Controller::stateText(double value) const
+      {
+      const double v = std::min(1.0, std::max(0.0, value));
+      if (!stateRange) {
+            const int n = stateValues.size();
+            return n ? stateValues[std::min(n - 1, std::max(0, int(std::lround(v * (n - 1)))))] : QString();
+            }
+      const double scale = std::pow(10.0, stateDecimals);
+      const double x = std::round((stateMin + v * (stateMax - stateMin)) * scale) / scale;
+      QString t = QString::number(x, 'f', stateDecimals);
+      if (t.contains('.')) {
+            while (t.endsWith('0'))
+                  t.chop(1);
+            if (t.endsWith('.'))
+                  t.chop(1);
+            }
+      return t == "-0" ? QString("0") : t;
+      }
+
+int hostedParameter(const LibInstrument& li, int cc)
+      {
+      for (const Controller& c : li.allControllers) {
+            if (c.cc != cc || c.hosted.isEmpty())
+                  continue;
+            for (int i = 0; i < int(li.allControllers.size()); ++i)
+                  if (li.allControllers[size_t(i)].id == c.hosted && !li.allControllers[size_t(i)].param.isEmpty())
+                        return i;
+            }
+      return -1;
+      }
+
+QString controllerText(const Controller& controller, double value)
+      {
+      const auto& d = controller.display;
+      if (d.empty())
+            return QString();
+      double v = std::min(1.0, std::max(0.0, value));
+      if (controller.steps > 0)
+            v = std::round(v * controller.steps) / controller.steps;
+      auto hi = std::lower_bound(d.begin(), d.end(), v, [](const std::pair<double, QString>& p, double x) { return p.first < x; });
+      if (hi == d.end())
+            return d.back().second;
+      if (hi == d.begin() || hi->first == v)
+            return hi->second;
+      auto lo = std::prev(hi);
+      const bool nearLo = v - lo->first <= hi->first - v;
+      // (a stepped controller listing every position: the nearest's text; one listing its ends only, a state range's
+      // "0:1 1:127", linear between them like a continuous one)
+      if (controller.steps > 0 && int(d.size()) > controller.steps)
+            return (nearLo ? lo : hi)->second;
+      bool ok1 = false, ok2 = false;
+      const double y1 = lo->second.toDouble(&ok1);
+      const double y2 = hi->second.toDouble(&ok2);
+      if (!ok1 || !ok2)
+            return (nearLo ? lo : hi)->second;
+      const QString& n = (nearLo ? lo : hi)->second;
+      const int dot = n.indexOf('.');
+      const int decimals = dot < 0 ? 0 : n.size() - dot - 1;
+      const double y = y1 + (y2 - y1) * (v - lo->first) / (hi->first - lo->first);
+      return QString::number(y, 'f', decimals);
       }
 
 // the library's controllers, then the instrument's own: one of the same id replaces it
@@ -567,10 +1007,12 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Plugin") {
-                  // <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3"/>
+                  // <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3" [backgroundLoad="60"]/>
                   for (const QString& f : a.value("files").toString().split(';'))
                         if (!f.trimmed().isEmpty())
                               lib->plugins.append(f.trimmed());
+                  if (a.hasAttribute("backgroundLoad"))
+                        lib->backgroundLoad = std::max(0.0, a.value("backgroundLoad").toDouble());
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Tuning") {
@@ -595,6 +1037,33 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   lib->onsetEarly = qBound(0, a.value("early").toInt(), 200);
                   r.skipCurrentElement();
                   }
+            else if (r.name() == "Mics") {
+                  // <Mics fader="16:-30.27 ... 127:0" mix="0:-/-/0 ... 127:0/-/-"/> ([levels] micCompensation)
+                  for (const QString& t : a.value("fader").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok1 = false, ok2 = false;
+                        const int v = t.section(':', 0, 0).toInt(&ok1);
+                        const double db = t.section(':', 1).toDouble(&ok2);
+                        if (!ok1 || !ok2 || v < 1 || v > 127 || db > 0.0)
+                              return fail(QString("%1:%2: bad Mics fader \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        lib->micFader[v] = db;
+                        }
+                  for (const QString& t : a.value("mix").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const int v = t.section(':', 0, 0).toInt(&ok);
+                        const QStringList dbs = t.section(':', 1).split('/');
+                        if (!ok || v < 0 || v > 127 || dbs.size() != 3)
+                              return fail(QString("%1:%2: bad Mics mix \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        std::array<double, 3> m;
+                        for (int i = 0; i < 3; ++i) {
+                              bool okd = false;
+                              m[size_t(i)] = dbs[i] == "-" ? -INFINITY : dbs[i].toDouble(&okd);
+                              if (dbs[i] != "-" && !okd)
+                                    return fail(QString("%1:%2: bad Mics mix \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                              }
+                        lib->micMix[v] = m;
+                        }
+                  r.skipCurrentElement();
+                  }
             else if (r.name() == "Dynamics") {
                   if (a.hasAttribute("cc"))
                         lib->dynamicsCC = a.value("cc").toInt();
@@ -602,6 +1071,8 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         lib->expressionValue = a.value("expression").toInt();
                   if (a.hasAttribute("velocity"))
                         lib->velocityDynamics = a.value("velocity").toString().split(' ', QString::SkipEmptyParts);
+                  if (a.hasAttribute("crest"))
+                        lib->crestDb = a.value("crest").toDouble();
                   // (heard=: the short notes' balance's references, removed 2026-10-07; ignored)
                   r.skipCurrentElement();
                   }
@@ -611,9 +1082,40 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                         return fail(QString("%1:%2: bad Controller").arg(path).arg(r.lineNumber()));
                   lib->controllers.push_back(c);
                   }
+            else if (r.name() == "State") {
+                  // <State name="Control[ID=12]@Parameter" value="M-Master Vol"/> (Library::fixedState)
+                  if (a.value("name").isEmpty() || !a.hasAttribute("value"))
+                        return fail(QString("%1:%2: bad State").arg(path).arg(r.lineNumber()));
+                  lib->fixedState[a.value("name").toString()] = a.value("value").toString().toUtf8();
+                  r.skipCurrentElement();
+                  }
+            else if (r.name() == "PluginSettings") {
+                  // <PluginSettings file="…" name="…" bad="…" text="…"/> (Library::settingsChecks)
+                  // (folder="local", format="nka", good="…": SSO's shared settings)
+                  Library::SettingsCheck check { a.value("file").toString(), a.value("name").toString(),
+                                                 a.value("bad").toString().split(' ', QString::SkipEmptyParts),
+                                                 a.value("text").toString(), a.value("folder").toString(),
+                                                 a.value("format").toString(),
+                                                 a.value("good").toString().split(' ', QString::SkipEmptyParts) };
+                  if (check.file.isEmpty() || check.name.isEmpty() || (check.bad.isEmpty() && check.good.isEmpty())
+                      || check.text.isEmpty() || !(check.folder.isEmpty() || check.folder == "local")
+                      || !(check.format.isEmpty() || check.format == "nka"))
+                        return fail(QString("%1:%2: bad PluginSettings").arg(path).arg(r.lineNumber()));
+                  lib->settingsChecks.push_back(check);
+                  r.skipCurrentElement();
+                  }
             else if (r.name() == "Files") {
                   // <Files registry="Spitfire Symphony Orchestra"/>: where the library is installed
                   lib->registryName = a.value("registry").toString();
+                  // <Files presets="Vial" presetsHome=".local/share/vital" presetConfig="…;…" presetKey="data_directory"/>:
+                  // where a preset library's presets are (Vial's data folder)
+                  lib->presets.documents = a.value("presets").toString();
+                  lib->presets.home = a.value("presetsHome").toString();
+                  lib->presets.configs = a.value("presetConfig").toString().split(';', QString::SkipEmptyParts);
+                  lib->presets.key = a.value("presetKey").toString();
+                  lib->presets.header = a.value("presetHeader").toString();
+                  if (!lib->presets.configs.isEmpty() && lib->presets.key.isEmpty())
+                        return fail(QString("%1:%2: Files: presetConfig without presetKey").arg(path).arg(r.lineNumber()));
                   r.skipCurrentElement();
                   }
             else if (r.name() == "Patch") {
@@ -650,6 +1152,7 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   LibInstrument li;
                   li.name = a.value("name").toString();
                   li.nki = a.value("nki").toString();
+                  li.preset = a.value("preset").toString();
                   li.testPitch = a.hasAttribute("pitch") ? a.value("pitch").toInt() : -1;
                   li.setupValues = readSetupValues(a.value("setup").toString());
                   li.ids = words(a.value("ids").toString().toLower());
@@ -657,7 +1160,131 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.kit = a.value("kit").toString() == "1";
                   li.keyScan = a.value("keyScan").toString() == "1";
                   li.bendCents = std::max(0.0, a.value("bend").toDouble());
+                  li.mono = a.value("mono").toString() == "1";
+                  if (a.hasAttribute("leadingLevel")) {
+                        bool ok = false;
+                        const double v = a.value("leadingLevel").toDouble(&ok);
+                        if (ok && std::isfinite(v))
+                              li.leadingLevel = std::max(0.0, std::min(24.0, v));
+                        }
+                  if (a.hasAttribute("keyShift"))
+                        li.keyShift = qBound(-48, a.value("keyShift").toInt(), 48);
+                  if (a.hasAttribute("maxVelocity"))
+                        li.maxVelocity = qBound(1, a.value("maxVelocity").toInt(), 127);
+                  if (a.hasAttribute("plainShift")) {
+                        bool ok = false;
+                        const double v = a.value("plainShift").toDouble(&ok);
+                        if (ok && std::isfinite(v))
+                              li.plainShiftMs = std::max(0.0, std::min(1000.0, v));   // (TrackDelays' range)
+                        }
+                  for (const char* key : { "staccatoLength", "staccatissimoLength" }) {
+                        if (!a.hasAttribute(key))
+                              continue;
+                        bool ok = false;
+                        const double v = a.value(key).toDouble(&ok);
+                        if (ok && std::isfinite(v) && v > 0)
+                              (QString(key) == "staccatoLength" ? li.staccatoSeconds : li.staccatissimoSeconds) = std::min(10.0, v);
+                        }
+                  if (a.hasAttribute("plainAttack")) {
+                        bool ok = false;
+                        const double v = a.value("plainAttack").toDouble(&ok);
+                        if (ok && std::isfinite(v))
+                              li.plainAttackMs = std::max(0.0, std::min(1000.0, v));
+                        }
+                  if (a.hasAttribute("bowedEarly")) {
+                        bool ok = false;
+                        const double v = a.value("bowedEarly").toDouble(&ok);
+                        if (ok && std::isfinite(v))
+                              li.bowedEarlyMs = std::max(0.0, std::min(1000.0, v));
+                        }
+                  li.bowedArrive.clear();
+                  for (const QString& g : a.value("bowedArrive").toString().split(' ', QString::SkipEmptyParts)) {
+                        const QStringList f = g.split(':');
+                        bool ok1 = false, ok2 = false;
+                        const double len = f.size() == 2 ? f[0].toDouble(&ok1) : 0.0;
+                        const double arrive = f.size() == 2 ? f[1].toDouble(&ok2) : 0.0;
+                        if (ok1 && ok2 && std::isfinite(len) && std::isfinite(arrive) && len >= 0 && arrive > 0)
+                              li.bowedArrive.push_back({ len, std::min(5000.0, arrive) });
+                        }
+                  std::sort(li.bowedArrive.begin(), li.bowedArrive.end());
+                  li.transportResetScript = a.value("transportResetScript").toString();
+                  li.hallDrop = qBound(0, a.value("hallDrop").toInt(), 127);
+                  if (a.hasAttribute("lowCut")) {
+                        bool ok = false;
+                        const double v = a.value("lowCut").toDouble(&ok);
+                        if (ok && std::isfinite(v) && v > 0)
+                              li.lowCutHz = std::min(1000.0, v);
+                        }
+                  for (const QString& c : a.value("avoidCC").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const int n = c.toInt(&ok);
+                        if (!ok || n < 0 || n > 127)
+                              return fail(QString("%1:%2: bad avoidCC \"%3\"").arg(path).arg(r.lineNumber()).arg(c));
+                        li.avoidCC.insert(n);
+                        }
+                  if (a.hasAttribute("speedCC") && a.hasAttribute("speedScript")) {
+                        li.speedCC = qBound(0, a.value("speedCC").toInt(), 127);
+                        li.speedScript = a.value("speedScript").toString();
+                        if (li.speedScript.isEmpty())
+                              li.speedCC = 0;
+                        }
                   li.sectionLevelDb = a.value("sectionLevel").toDouble();
+                  li.hasSectionLevel2 = a.hasAttribute("sectionLevel2");
+                  li.sectionLevel2Db = a.value("sectionLevel2").toDouble();
+                  // realSpan="pitch:dB ...", longLevel="cc/pitch:dB ..." ([levels] realRange)
+                  for (const QString& t : a.value("realSpan").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok1 = false, ok2 = false;
+                        const int p = t.section(':', 0, 0).toInt(&ok1);
+                        const double db = t.section(':', 1).toDouble(&ok2);
+                        if (!ok1 || !ok2)
+                              return fail(QString("%1:%2: bad realSpan \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        li.realSpan[p] = db;
+                        }
+                  for (const QString& t : a.value("longLevel").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok1 = false, ok2 = false, ok3 = false;
+                        const QString key = t.section(':', 0, 0);
+                        const int cc = key.section('/', 0, 0).toInt(&ok1);
+                        const int p = key.section('/', 1).toInt(&ok2);
+                        const double db = t.section(':', 1).toDouble(&ok3);
+                        if (!ok1 || !ok2 || !ok3 || !key.contains('/'))
+                              return fail(QString("%1:%2: bad longLevel \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        li.longLevel[p][cc] = db;
+                        }
+                  if (a.hasAttribute("realPlay")) {
+                        const QStringList ab = a.value("realPlay").toString().split(' ', QString::SkipEmptyParts);
+                        bool ok1 = false, ok2 = false;
+                        const double pp = ab.size() == 2 ? ab[0].toDouble(&ok1) : 0.0;
+                        const double ff = ab.size() == 2 ? ab[1].toDouble(&ok2) : 0.0;
+                        if (!ok1 || !ok2 || !(pp >= 0.0 && pp < ff && ff <= 1.0))
+                              return fail(QString("%1:%2: bad realPlay \"%3\"").arg(path).arg(r.lineNumber()).arg(a.value("realPlay").toString()));
+                        li.realPlayPp = pp;
+                        li.realPlayFf = ff;
+                        }
+                  if (a.hasAttribute("realSteps")) {
+                        bool ok = false;
+                        li.realStepsDb = a.value("realSteps").toDouble(&ok);
+                        if (!ok || !(li.realStepsDb > 0.0))
+                              return fail(QString("%1:%2: bad realSteps \"%3\"").arg(path).arg(r.lineNumber()).arg(a.value("realSteps").toString()));
+                        }
+                  // micLevels="Close:dB Tree:dB ...", micDefault="Tree:127" ([levels] micCompensation)
+                  static const QStringList micNames { "Close", "Tree", "Ambient", "Outrigger", "Leader" };
+                  for (const QString& t : a.value("micLevels").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const int i = micNames.indexOf(t.section(':', 0, 0));
+                        const double db = t.section(':', 1).toDouble(&ok);
+                        if (i < 0 || !ok)
+                              return fail(QString("%1:%2: bad micLevels \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        li.micLevelDb[size_t(i)] = db;
+                        li.hasMicLevels = true;
+                        }
+                  for (const QString& t : a.value("micDefault").toString().split(' ', QString::SkipEmptyParts)) {
+                        bool ok = false;
+                        const int i = micNames.indexOf(t.section(':', 0, 0));
+                        const int v = t.section(':', 1).toInt(&ok);
+                        if (i < 0 || !ok || v < 0 || v > 127)
+                              return fail(QString("%1:%2: bad micDefault \"%3\"").arg(path).arg(r.lineNumber()).arg(t));
+                        li.micDefault[size_t(i)] = v;
+                        }
                   if (a.hasAttribute("partName"))
                         li.partName = QRegularExpression(a.value("partName").toString(), QRegularExpression::CaseInsensitiveOption);
                   li.switchType = defType;
@@ -685,6 +1312,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                               li.controllers.push_back(c);
                               continue;         // (readController read the element to its end)
                               }
+                        else if (r.name() == "Guitar") {
+                              auto g = std::make_shared<Guitar>();
+                              if (!readGuitar(r, *g))
+                                    return fail(QString("%1:%2: bad Guitar").arg(path).arg(r.lineNumber()));
+                              li.guitar = g;
+                              continue;         // (readGuitar read the element to its end)
+                              }
                         r.skipCurrentElement();
                         }
                   // (an extra patch has no ids, and may hold only articulations listed for reference,
@@ -704,8 +1338,13 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
       if (lib->name.isEmpty())
             lib->name = QFileInfo(path).completeBaseName();
       // (a <Controller> of the library may come after the instruments)
-      for (LibInstrument& li : lib->instruments)
+      for (LibInstrument& li : lib->instruments) {
             li.allControllers = mergeControllers(lib->controllers, li.controllers);
+            for (const Controller& c : li.allControllers)
+                  if (!c.hosted.isEmpty() && hostedParameter(li, c.cc) < 0)
+                        return fail(QString("%1: \"%2\": controller \"%3\" is hosted by \"%4\", not a parameter controller of the patch")
+                                    .arg(path, li.name, c.id, c.hosted));
+            }
       // extra patches to their main patch (the vector is complete: the pointers stay valid);
       // they take its instrument ids (the articulation check's test pitch; match() skips them)
       for (LibInstrument& li : lib->instruments) {
@@ -719,8 +1358,28 @@ std::shared_ptr<Library> Library::load(const QString& path, QString* error)
                   li.ids = main->ids;
             if (li.sectionLevelDb == 0.0)
                   li.sectionLevelDb = main->sectionLevelDb;
+            if (!li.hasSectionLevel2) {
+                  li.hasSectionLevel2 = main->hasSectionLevel2;
+                  li.sectionLevel2Db = main->sectionLevel2Db;
+                  }
+            if (li.realSpan.empty() && li.longLevel.empty()) {
+                  li.realSpan = main->realSpan;
+                  li.longLevel = main->longLevel;
+                  li.realPlayPp = main->realPlayPp;
+                  li.realPlayFf = main->realPlayFf;
+                  li.realStepsDb = main->realStepsDb;
+                  }
+            if (!li.hasMicLevels) {
+                  li.hasMicLevels = main->hasMicLevels;
+                  li.micLevelDb = main->micLevelDb;
+                  li.micDefault = main->micDefault;
+                  }
             main->extras.push_back(&li);
             }
+      for (LibInstrument& li : lib->instruments)
+            li.library = lib.get();
+      for (LibInstrument& li : lib->otherPatches)
+            li.library = lib.get();
       return lib;
       }
 
@@ -760,6 +1419,88 @@ const LibInstrument* Library::match(const Instrument* instrument, const Part* pa
 //---------------------------------------------------------
 //   choose
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   presetFolder, presetFile
+//    a preset library's folder (<Files presets>: Vial's data folder, its rule as Vial's LoadSave::getDataDirectory has
+//    it: its own config's data_directory, else official Vital's, else Documents/Vial on Windows, ~/.local/share/vital
+//    or $XDG_DATA_HOME/vial elsewhere)
+//---------------------------------------------------------
+
+static QString configFolder(const QString& config, const QString& key)
+      {
+#ifdef Q_OS_WIN
+      const QString base = qEnvironmentVariable("APPDATA");
+      const QString file = base.isEmpty() ? QString() : base + "/" + config;
+#else
+      const QString file = QDir::homePath() + "/." + config;
+#endif
+      QFile f(file);
+      if (file.isEmpty() || !f.open(QIODevice::ReadOnly))
+            return QString();
+      const QJsonValue v = QJsonDocument::fromJson(f.readAll()).object().value(key);
+      const QString dir = v.isString() ? QDir::fromNativeSeparators(v.toString()) : QString();
+      return !dir.isEmpty() && QDir::isAbsolutePath(dir) && QFileInfo(dir).isDir() ? QDir::cleanPath(dir) : QString();
+      }
+
+QString presetFolder(const Library& library)
+      {
+      if (library.presets.empty())
+            return QString();
+      const QString env = qEnvironmentVariable("MS_PRESET_FOLDER");
+      if (!env.isEmpty())
+            return QDir::fromNativeSeparators(env);
+#ifdef Q_OS_WIN
+      const QString docs = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+      const QString def = QDir::cleanPath(docs + "/" + library.presets.documents);
+#else
+      const QString xdg = qEnvironmentVariable("XDG_DATA_HOME").trimmed();
+      const QString def = QDir::cleanPath(!xdg.isEmpty() ? xdg + "/" + library.presets.documents.toLower()
+                                                         : QDir::homePath() + "/" + library.presets.home);
+#endif
+      QStringList named;
+      for (const QString& c : library.presets.configs)
+            named << configFolder(c, library.presets.key);
+      if (!named.isEmpty() && !named.front().isEmpty()) {
+            if (named.front() != def)
+                  return named.front();
+            for (int i = 1; i < named.size(); ++i)
+                  if (!named[i].isEmpty())
+                        return named[i];
+            return named.front();
+            }
+      for (const QString& n : named)
+            if (!n.isEmpty())
+                  return n;
+      return def;
+      }
+
+QString presetFile(const LibInstrument& patch, const QString& folder)
+      {
+      if (patch.preset.isEmpty() || folder.isEmpty())
+            return QString();
+      return QDir::cleanPath(folder + "/" + patch.preset);
+      }
+
+QByteArray presetComponent(const Library& library, const QString& file, const QByteArray& bytes)
+      {
+      // (Vial Fuse shows the name of "fuse_preset" in its header, which a .vialfuse file doesn't carry; the file's bytes
+      // otherwise as they are)
+      const int open = bytes.indexOf('{');
+      if (library.presets.header.isEmpty() || open < 0 || bytes.contains("\"" + library.presets.header.toUtf8() + "\""))
+            return bytes;
+      QJsonObject h;
+      h["name"] = QFileInfo(file).completeBaseName();
+      h["path"] = QDir::toNativeSeparators(file);
+      const QByteArray header = QJsonDocument(QJsonObject { { library.presets.header, h } }).toJson(QJsonDocument::Compact);
+      QByteArray insert = header.left(header.size() - 1);       // ({"fuse_preset":{…} and the file's keys after it)
+      int next = open + 1;
+      while (next < bytes.size() && QChar(bytes[next]).isSpace())
+            ++next;
+      if (next < bytes.size() && bytes[next] != '}')
+            insert += ',';
+      return bytes.left(open) + insert + bytes.mid(open + 1);
+      }
 
 bool Choice::sampledOrnament() const
       {
@@ -867,7 +1608,15 @@ static Choice chooseBases(const std::vector<const LibInstrument*>& patches, cons
                         // (playback.ini [shorts.from] by patch|articulation: an offset or its own number)
                         const double from = a.fromSeconds > 0
                               ? Playback::adjust("shorts.from", patches[p]->name, a.name, 0, a.fromSeconds) : -1;
-                        const double meant = want.byMeantLength ? want.soundSeconds : want.seconds;
+                        double meant = want.byMeantLength ? want.soundSeconds : want.seconds;
+                        // ([shorts] staccatoLength: a staccato meant no longer than real players sound one, the patch's own
+                        // cap, else the main patch's)
+                        if (want.staccatoLength && want.staccatoKind && meant > 0) {
+                              const double cap = patches[p]->staccatoCap(want.staccatoKind) > 0 ? patches[p]->staccatoCap(want.staccatoKind)
+                                                 : patches[0]->staccatoCap(want.staccatoKind);
+                              if (cap > 0)
+                                    meant = std::min(meant, cap);
+                              }
                         if (from > 0 && meant > 0 && meant < from)
                               continue;
                         bool fits = true;
@@ -943,11 +1692,201 @@ static Choice choosePerformance(const std::vector<const LibInstrument*>& patches
       return c;
       }
 
+//---------------------------------------------------------
+//   speedFromWritten
+//    [slurs] speedFromWritten (the owner approved, 2026-10-17; private design: the Performance script's "Leg. Speed CC"):
+//    SSO's Performance script writes CC119 at each legato note-on from the spacing it measures (ms since the voice's
+//    previous note-on), and the string sections' transition groups pick their speed variant by it (RUNS 114-127, RUNS RT
+//    95-113, FAST LEGATO 0-94 on 1-3 semitone steps). Notes started early by their onset or modelled arrival moved
+//    that spacing and so the band; with the setting the script's own writing is off (speedScript = 0 in the patch's
+//    state) and the renderer sends the controller from the written spacing, by the same formula
+//---------------------------------------------------------
+
+bool speedFromWritten(const LibInstrument* patch, const Score* score)
+      {
+      return patch && patch->speedCC > 0 && !patch->speedScript.isEmpty() && Playback::on("slurs/speedFromWritten", score);
+      }
+
+double lowCutHz(const LibInstrument* patch, const Score* score)
+      {
+      return patch && patch->lowCutHz > 0 && Playback::on("levels/lowCut", score) ? patch->lowCutHz : 0.0;
+      }
+
+int speedValue(double ms)
+      {
+      const long whole = std::max(0L, std::lround(ms));
+      return 126 - int(std::min(126L, whole * 127 / 1000));
+      }
+
+//---------------------------------------------------------
+//   [slurs] fixedTransitions (2026-10-20, branch sso-legato-fixes; 0 by default and in both presets until the owner has
+//   heard it): on the patches with a speed script (SSO's five string sections' Performance patches, the ones measured:
+//   each has 100-130 modulators from Kontakt's random generator, 90 of them on its PORTAMENTO FAST / RUNS / RUNS RT
+//   groups' envelope level, read from the patches' group data) those modulators' intensity is 0 in the state loaded, so
+//   every play of a passage sounds the same (Windows test VM, kthost: two renders of Whence null at -71..-97 dB, -7..-21 dB
+//   as shipped; per note as loud as the shipped takes' mean, median within 0.15 dB; RESULT of sso-legato-fixes). The
+//   script has no setting for it (its "random detune" switch acts on LFO_RAND modulators, which these patches don't
+//   have, and is read back from the groups at load). Carried as the pseudo script value "@randomSources" = the intensity
+//   ("0"): SoundLibraryHost::setupStateWith sets it by KontaktSetup::withRandomSources, never in the setup file (resave
+//   puts the made intensities back)
+//---------------------------------------------------------
+
+//---------------------------------------------------------
+//   [notes] transportReset (branch sso-script-fixes2, 2026-10-21; 0 by default and in both presets until the owner has
+//   decided): a patch with transportResetScript (SSO's "Reset on transport", saved off in the string sections' Performance
+//   patches and Tuba Solo - Performance: read from the patch's script) loads with it at 1, so its round robins start from
+//   the first take at every playback / export / verification pass, as the library's other patches do. Without it they
+//   reset only after 1.5 s without a note-on (read from the patch's script): a play started sooner, or a pass rendered
+//   after another, picks other takes. It changes which take plays: a setting
+//---------------------------------------------------------
+
+static bool transportReset(const LibInstrument* patch, const Score* score)
+      {
+      return patch && !patch->transportResetScript.isEmpty() && Playback::on("notes/transportReset", score);
+      }
+
+std::vector<QString> playbackScriptKeys(const LibInstrument& patch)
+      {
+      std::vector<QString> keys;
+      if (patch.speedCC > 0 && !patch.speedScript.isEmpty())
+            keys.push_back(patch.speedScript);
+      if (!patch.transportResetScript.isEmpty())
+            keys.push_back(patch.transportResetScript);
+      return keys;
+      }
+
+bool Library::SettingsCheck::isBad(const QString& value) const
+      {
+      if (bad.contains(value, Qt::CaseInsensitive))
+            return true;
+      return !good.isEmpty() && !good.contains(value, Qt::CaseInsensitive);
+      }
+
+static bool fixedTransitions(const LibInstrument* patch, const Score* score)
+      {
+      return patch && !patch->speedScript.isEmpty() && Playback::on("slurs/fixedTransitions", score);
+      }
+
+std::map<QString, QByteArray> playbackScriptValues(const LibInstrument& patch, const Score* score)
+      {
+      std::map<QString, QByteArray> out;
+      if (speedFromWritten(&patch, score))
+            out[patch.speedScript] = "0";
+      if (fixedTransitions(&patch, score))
+            out["@randomSources"] = "0";
+      if (transportReset(&patch, score))
+            out[patch.transportResetScript] = "1";
+      return out;
+      }
+
+const Articulation* plainPerformanceArticulation(const LibInstrument& patch)
+      {
+      for (const Articulation& a : patch.articulations)
+            if (a.playsTransitions() && a.modifiers == QStringList { "performance" } && !a.attacks.empty())
+                  return &a;
+      return nullptr;
+      }
+
+std::map<const Part*, std::map<QString, double>> plainPerformancePatches(const Score* score, const Library& library)
+      {
+      std::map<const Part*, std::map<QString, double>> out;
+      if (!score || !Playback::on("slurs/plainPerformance", score))
+            return out;
+      const bool several = severalLibraries(score);
+      for (const Part* part : score->masterScore()->parts()) {
+            // (several libraries: the part's own library's patches; libraryOf)
+            std::shared_ptr<const Library> own = several ? libraryOf(part) : nullptr;
+            const Library& lib = own ? *own : library;
+            for (const auto& ip : *part->instruments()) {
+                  const LibInstrument* li = lib.match(ip.second, part);
+                  if (!li)
+                        continue;
+                  for (const LibInstrument* p : li->patches())
+                        if (plainPerformanceArticulation(*p))
+                              out[part][p->name] = p->plainShiftMs;
+                  }
+            }
+      return out;
+      }
+
+// [slurs] plainPerformance (the owner's "C", 2026-10-17, by ear on Whence's Violas bars 8-13, against Recommended): every
+// note of the part on its Performance legato, as SSO's patch plays a plain MIDI part (abl.py's PLAIN on branch qt-bends,
+// tools/soundlibraries/qt_bends/abl.py). A technique the Performance legato doesn't play (pizzicato, col legno, tremolo,
+// trills, falls, harmonics, mutes, sul pont. / tasto, espressivo, ... : a base outside BOWED or any modifier) keeps the
+// choice made otherwise. Under staff text "performance" the note is already there (held): plain too
+static Choice choosePlain(const std::vector<const LibInstrument*>& patches, const Want& want, const Choice& held)
+      {
+      static const QStringList BOWED = { "long", "legato", "longmarcato", "marcato", "tenuto", "short", "spiccato", "staccatissimo" };
+      if (!want.plainPerformance || !held)
+            return Choice();
+      // (a modifier asked for: the note keeps its technique; with [slurs] plainTiming only a modifier the choice kept, its
+      // articulation's own, below: one the patches can't play (SSO's Basses have no con sord. or espressivo sample, their
+      // choice the plain Long) stays on the plain Performance legato with the rest of the line)
+      if (!want.plainTiming)
+            for (const QString& m : want.modifiers)
+                  if (m != "performance")
+                        return Choice();
+      for (int p = 0; p < int(patches.size()); ++p) {
+            const Articulation* a = plainPerformanceArticulation(*patches[size_t(p)]);
+            if (!a)
+                  continue;
+            if (held.articulation == a) {
+                  Choice c = held;
+                  c.plain = true;
+                  return c;
+                  }
+            if (!BOWED.contains(held.base) || !held.articulation->modifiers.isEmpty())
+                  return Choice();
+            // (its base among the articulation's: "legato" for a slurred note, a slur's transitions; else "long", so that
+            // no short's velocity dynamics apply: the Performance legato's level is CC1's)
+            Choice c { a, held.base == "legato" ? QString("legato") : QString("long"), p };
+            c.plain = true;
+            c.plainFrom = held.articulation;
+            c.plainFromPatch = held.patch;
+            return c;
+            }
+      return Choice();
+      }
+
 Choice choose(const std::vector<const LibInstrument*>& patches, const Want& want)
       {
       const Choice held = chooseBases(patches, want);
+      const Choice plain = choosePlain(patches, want, held);
+      if (plain)
+            return plain;
       const Choice performance = choosePerformance(patches, want, held);
       return performance ? performance : chooseSlurred(patches, want, held);
+      }
+
+QString ownTechniqueKey(const LibInstrument& patch, const Articulation& articulation)
+      {
+      return patch.name + "|" + articulation.name;
+      }
+
+Choice chooseOwn(const std::vector<const LibInstrument*>& patches, const QString& key)
+      {
+      if (key.isEmpty())
+            return Choice();
+      const int bar = key.indexOf('|');
+      const QString patch = key.left(bar);
+      const QString name = key.mid(bar + 1);
+      for (int p = 0; p < int(patches.size()); ++p) {
+            if (patches[size_t(p)]->name != patch)
+                  continue;
+            for (const Articulation& a : patches[size_t(p)]->articulations)
+                  if (a.name == name)
+                        return Choice { &a, a.techniques.value(0), p };
+            }
+      return Choice();
+      }
+
+Choice chooseNote(const std::vector<const LibInstrument*>& patches, const Want& want, const Note* note)
+      {
+      Choice own = note ? chooseOwn(patches, note->firstTiedNote()->libraryTechnique()) : Choice();
+      // (its own technique the plain Performance legato: plain as the others, its patch's events going early together)
+      if (own && want.plainPerformance && own.articulation == plainPerformanceArticulation(*patches[size_t(own.patch)]))
+            own.plain = true;
+      return own ? own : choose(patches, want);
       }
 
 //---------------------------------------------------------
@@ -1272,11 +2211,27 @@ bool DynamicsCalibration::write(const QString& file) const
 static std::mutex calibrationMutex;
 static std::shared_ptr<const DynamicsCalibration> calibration;
 
+// (another engine's calibration, calibrationFor: the application's loader, once per library until the next
+// setDynamicsCalibration)
+static std::function<std::shared_ptr<const DynamicsCalibration>(const Library&)> calibrationLoader;
+static std::map<const Library*, std::shared_ptr<const DynamicsCalibration>> otherCalibrations;
+
 void setDynamicsCalibration(std::shared_ptr<const DynamicsCalibration> c)
       {
       {
             std::lock_guard<std::mutex> lock(calibrationMutex);
             calibration = c;
+            otherCalibrations.clear();
+      }
+      ++generation;
+      }
+
+void setCalibrationLoader(std::function<std::shared_ptr<const DynamicsCalibration>(const Library&)> loader)
+      {
+      {
+            std::lock_guard<std::mutex> lock(calibrationMutex);
+            calibrationLoader = loader;
+            otherCalibrations.clear();
       }
       ++generation;
       }
@@ -1319,6 +2274,51 @@ int calibratedVelocity(const DynamicsCalibration& cal, const QString& patch, int
       return c.inverse(ref.at(cc) + db);
       }
 
+double loudEndDb(const DynamicsCalibration& cal, const QString& patch, int value, const QString& refPatch, int refValue, int pitch)
+      {
+      const DynamicsCurve* cp = cal.curve(patch, value);
+      const DynamicsCurve* rp = cal.curve(refPatch, refValue);
+      if (!cp || !rp || (cp->drivenBy != "velocity" && cp->drivenBy != "both"))
+            return NAN;
+      const DynamicsCurve c = cp->atPitch(pitch);
+      const DynamicsCurve ref = rp->atPitch(pitch);
+      if (c.points.size() < 2 || ref.points.size() < 2)
+            return NAN;
+      if (c.byEar() && ref.byEar())
+            return c.perceivedAt(127) - ref.perceivedAt(127);
+      return c.at(127) - ref.at(127);
+      }
+
+double techniqueOffsetDb(const DynamicsCalibration& cal, const QString& patch, const Articulation& a, const QString& refPatch,
+                         int refValue, int pitch, int cc)
+      {
+      if (!a.heldOffsets.empty())
+            return a.heldOffsetAt(cc);
+      return loudEndDb(cal, patch, a.value, refPatch, refValue, pitch);
+      }
+
+int calibratedVelocityFloored(const DynamicsCalibration& cal, const QString& patch, int value,
+                              const QString& refPatch, int refValue, int cc, double db, int pitch, double* under)
+      {
+      if (under)
+            *under = 0.0;
+      const int v = calibratedVelocity(cal, patch, value, refPatch, refValue, cc, db, pitch);
+      if (v < 0)
+            return v;
+      const DynamicsCurve c = cal.curve(patch, value)->atPitch(pitch);
+      const DynamicsCurve ref = cal.curve(refPatch, refValue)->atPitch(pitch);
+      const bool byEar = c.byEar() && ref.byEar();
+      const std::vector<std::pair<int, double>>& pts = byEar ? c.perceived : c.points;
+      const double target = (byEar ? ref.perceivedAt(cc) : ref.at(cc)) + db;
+      auto lowest = std::min_element(pts.begin(), pts.end());       // (the lowest velocity measured)
+      if (lowest != pts.end() && target < lowest->second && v <= lowest->first) {
+            if (under)
+                  *under = target - lowest->second;
+            return std::max(1, lowest->first);
+            }
+      return v;
+      }
+
 const DynamicsCurve* heldCurve(const DynamicsCalibration& cal, const std::vector<const LibInstrument*>& patches)
       {
       const Choice held = choose(patches, Want { { "long" }, {} });
@@ -1336,6 +2336,26 @@ static bool available(const LibInstrument& li)
       return !availableFn || availableFn(li);
       }
 
+std::vector<std::pair<QString, QString>> ownTechniques(const Note* note)
+      {
+      std::vector<std::pair<QString, QString>> out;
+      const Part* part = note ? note->part() : nullptr;
+      const std::shared_ptr<const Library> library = libraryOf(part);     // (none: its mode, or its engine can't play here)
+      if (!library || !part)
+            return out;
+      const LibInstrument* li = library->match(part->instrument(note->chord()->tick()), part);
+      if (!li || li->kit)
+            return out;
+      for (const LibInstrument* p : li->patches()) {
+            if (p != li && !available(*p))
+                  continue;
+            for (const Articulation& a : p->articulations)
+                  if (a.expect != "silent")
+                        out.push_back({ ownTechniqueKey(*p, a), p == li ? a.name : QString("%1 (%2)").arg(a.name, p->name) });
+            }
+      return out;
+      }
+
 std::shared_ptr<const Library> current()
       {
       std::lock_guard<std::mutex> lock(currentMutex);
@@ -1345,6 +2365,209 @@ std::shared_ptr<const Library> current()
 bool active()
       {
       return currentActive;
+      }
+
+//---------------------------------------------------------
+//   engines
+//---------------------------------------------------------
+
+static std::mutex engineMutex;
+static std::vector<std::pair<QString, QString>> engineList;                    // name -> map path
+static std::map<QString, std::shared_ptr<const Library>> engineLoaded;          // map path -> its library
+static std::function<bool(const Library&)> engineAvailableFn;
+
+void setEngines(const std::vector<std::pair<QString, QString>>& engines)
+      {
+      bool changed = false;
+      {
+            std::lock_guard<std::mutex> lock(engineMutex);
+            changed = engines != engineList;
+            engineList = engines;
+      }
+      if (changed)
+            routesChanged();
+      }
+
+std::vector<QString> engineNames()
+      {
+      std::lock_guard<std::mutex> lock(engineMutex);
+      std::vector<QString> out;
+      for (const auto& e : engineList)
+            out.push_back(e.first);
+      return out;
+      }
+
+QString engineOf(const Library& library)
+      {
+      static const QRegularExpression variant("^(.*) \\([^()]*\\)$");
+      const QRegularExpressionMatch m = variant.match(library.name);
+      if (m.hasMatch()) {
+            std::lock_guard<std::mutex> lock(engineMutex);
+            for (const auto& e : engineList)
+                  if (e.first == m.captured(1))
+                        return e.first;
+            }
+      return library.name;
+      }
+
+std::shared_ptr<const Library> engine(const QString& name)
+      {
+      if (name.isEmpty())
+            return nullptr;
+      const std::shared_ptr<const Library> cur = current();
+      if (cur && engineOf(*cur) == name)
+            return cur;
+      std::lock_guard<std::mutex> lock(engineMutex);
+      for (const auto& e : engineList) {
+            if (e.first != name)
+                  continue;
+            auto it = engineLoaded.find(e.second);
+            if (it != engineLoaded.end())
+                  return it->second;
+            QString error;
+            std::shared_ptr<const Library> lib = Library::load(e.second, &error);
+            if (!lib)
+                  qWarning("Sound library %s: %s", qPrintable(name), qPrintable(error));
+            engineLoaded[e.second] = lib;
+            return lib;
+            }
+      return nullptr;
+      }
+
+void setEngineAvailable(std::function<bool(const Library&)> available)
+      {
+      std::lock_guard<std::mutex> lock(engineMutex);
+      engineAvailableFn = available;
+      }
+
+bool engineAvailable(const Library& library)
+      {
+      if (current().get() == &library)
+            return true;
+      std::function<bool(const Library&)> fn;
+      {
+            std::lock_guard<std::mutex> lock(engineMutex);
+            fn = engineAvailableFn;
+      }
+      return !fn || fn(library);
+      }
+
+//---------------------------------------------------------
+//   playingModes
+//    the parts' modes and library names as they play: partplayback.h's, and a part whose own engine plays no library
+//    but whose Engine lane names one (enginelane.h) plays that library too (its routes loaded for the whole score; the
+//    renderer plays each note on the engine in force at it). With MIDI out and for Live: partplayback.h's alone
+//---------------------------------------------------------
+
+static void playingModes(const MasterScore* ms, bool forLive, std::map<const Part*, PartPlayback>& modes,
+                         std::map<const Part*, QString>& names)
+      {
+      modes = PartPlaybackModes::read(ms);
+      names = PartPlaybackModes::libraries(ms);
+      if (forLive || output() != Output::PLUGIN || !ms)
+            return;
+      const QString tag = ms->metaTag(Automation::metaTag);
+      if (!tag.contains(QString("\"%1\"").arg(EngineLane::TARGET)))
+            return;
+      for (const auto& pl : Automation::read(ms)) {
+            const Automation::Lane* lane = EngineLane::laneOf(pl.second);
+            if (!lane || PartPlaybackModes::playsLibrary(pl.first, modes))
+                  continue;
+            const QString name = EngineLane::libraryOf(*lane);
+            if (name.isEmpty())
+                  continue;
+            modes[pl.first] = PartPlayback::LIBRARY;
+            names[pl.first] = name;
+            }
+      }
+
+std::shared_ptr<const Library> libraryOf(const Part* part, const std::map<const Part*, PartPlayback>& modes,
+                                         const std::map<const Part*, QString>& names, bool forLive)
+      {
+      if (!part || !PartPlaybackModes::playsLibrary(part, modes))
+            return nullptr;
+      const QString name = PartPlaybackModes::libraryOf(part, names);
+      const std::shared_ptr<const Library> cur = current();
+      if (name.isEmpty() || (cur && engineOf(*cur) == name))
+            return cur;
+      if (forLive || output() != Output::PLUGIN)
+            return nullptr;
+      const std::shared_ptr<const Library> lib = engine(name);
+      return lib && engineAvailable(*lib) ? lib : nullptr;
+      }
+
+std::shared_ptr<const Library> libraryOf(const Part* part)
+      {
+      if (!part || !part->score())
+            return nullptr;
+      const MasterScore* ms = part->score()->masterScore();
+      std::map<const Part*, PartPlayback> modes;
+      std::map<const Part*, QString> names;
+      playingModes(ms, false, modes, names);
+      return libraryOf(PartPlaybackModes::masterPart(part), modes, names);
+      }
+
+std::vector<std::shared_ptr<const Library>> scoreLibraries(const Score* score, bool forLive)
+      {
+      std::vector<std::shared_ptr<const Library>> out;
+      if (const std::shared_ptr<const Library> cur = current())
+            out.push_back(cur);
+      if (!score || forLive || output() != Output::PLUGIN)
+            return out;
+      const MasterScore* ms = score->masterScore();
+      std::map<const Part*, PartPlayback> modes;
+      std::map<const Part*, QString> names;
+      playingModes(ms, forLive, modes, names);
+      if (names.empty())
+            return out;
+      std::map<QString, std::shared_ptr<const Library>> others;
+      for (const Part* part : score->parts()) {
+            const std::shared_ptr<const Library> lib = libraryOf(part, modes, names);
+            if (lib && (out.empty() || lib != out.front()))
+                  others[engineOf(*lib)] = lib;
+            }
+      for (const auto& o : others)
+            out.push_back(o.second);
+      return out;
+      }
+
+bool severalLibraries(const Score* score)
+      {
+      return scoreLibraries(score).size() > 1;
+      }
+
+std::vector<std::pair<const Part*, QString>> otherEngineParts(const Score* score)
+      {
+      std::vector<std::pair<const Part*, QString>> out;
+      if (!score)
+            return out;
+      const MasterScore* ms = score->masterScore();
+      const std::map<const Part*, QString> names = PartPlaybackModes::libraries(ms);
+      if (names.empty())
+            return out;
+      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(ms);
+      const std::shared_ptr<const Library> cur = current();
+      for (const Part* part : ms->parts()) {
+            const QString name = PartPlaybackModes::libraryOf(part, names);
+            if (!name.isEmpty() && PartPlaybackModes::playsLibrary(part, modes) && !(cur && engineOf(*cur) == name))
+                  out.push_back({ part, name });
+            }
+      return out;
+      }
+
+std::shared_ptr<const DynamicsCalibration> calibrationFor(const Library* library)
+      {
+      if (!library)
+            return nullptr;
+      if (library == current().get())
+            return dynamicsCalibration();
+      std::lock_guard<std::mutex> lock(calibrationMutex);
+      auto it = otherCalibrations.find(library);
+      if (it != otherCalibrations.end())
+            return it->second;
+      std::shared_ptr<const DynamicsCalibration> c = calibrationLoader ? calibrationLoader(*library) : nullptr;
+      otherCalibrations[library] = c;
+      return c;
       }
 
 //---------------------------------------------------------
@@ -1385,14 +2608,34 @@ PartMix partMix(const Part* part, bool withSolo)
 //   routes
 //---------------------------------------------------------
 
-std::vector<Route> routes(const Score* score, const Library& library, bool forLive)
+bool anyMono(const std::vector<const LibInstrument*>& patches)
+      {
+      return std::any_of(patches.begin(), patches.end(), [](const LibInstrument* p) { return p && p->mono; });
+      }
+
+// library's routes from slot k on (k: past them, as far as MAX_PORTS); asDefault: library plays the parts that play the
+// current library (the current one, or a map in its place: the tests'), else the parts naming its engine
+static std::vector<Route> routesFrom(const Score* score, const Library& library, bool forLive, int& k, bool asDefault,
+                                     const std::map<const Part*, PartPlayback>& modes, const std::map<const Part*, QString>& names)
       {
       std::vector<Route> result;
-      int k = 0;
-      // a part plays the library by its own playback mode, else by the global one (partplayback.h)
-      const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(score->masterScore());
+      const std::shared_ptr<const Library> cur = current();
+      const QString own = engineOf(library);
       for (const Part* part : score->parts()) {
+            // a part plays the library by its own playback mode, else by the global one (partplayback.h); of several
+            // libraries, the one it names (libraryOf: the current one where it names none or its engine can't play)
             if (!PartPlaybackModes::playsLibrary(part, modes))
+                  continue;
+            if (!names.empty()) {
+                  const QString name = PartPlaybackModes::libraryOf(part, names);
+                  if (asDefault) {
+                        if (!name.isEmpty() && name != own && !(cur && engineOf(*cur) == name))
+                              continue;
+                        }
+                  else if (name != own)
+                        continue;
+                  }
+            else if (!asDefault)
                   continue;
             const LibInstrument* li = library.match(part->instrument(), part);
             if (!li)
@@ -1415,13 +2658,20 @@ std::vector<Route> routes(const Score* score, const Library& library, bool forLi
                   continue;
             std::vector<int> laneCount(patches.size(), 1);
             std::vector<std::vector<double>> fixed(patches.size());
-            const bool laned = library.varispeed && !li->kit;
+            std::vector<std::vector<int>> voices(patches.size());
+            // (lanes: copies by tuning where the library plays tunings by varispeed; a monophonic patch's voices in any
+            // library, without varispeed one copy per voice, untuned)
+            const bool laned = (library.varispeed || anyMono(patches)) && !li->kit;
             if (laned) {
                   const LaneSettings ls = laneSettings(score, library);
-                  const Lanes l = lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes, forLive);
+                  const Lanes l = library.varispeed
+                                  ? lanes(score, part, patches, ls.tolerance, ls.tail, ls.maxLanes, fixedLanes(score, library, forLive))
+                                  : lanes(score, part, patches, std::numeric_limits<double>::infinity(), ls.tail, 1, false);
                   laneCount = l.count;
                   fixed = l.fixed;
                   fixed.resize(patches.size());
+                  voices = l.voice;
+                  voices.resize(patches.size());
                   }
             for (int p = 0; p < int(patches.size()); ++p) {
                   if (p > 0 && (!used[p] || !available(*patches[p])))
@@ -1432,13 +2682,136 @@ std::vector<Route> routes(const Score* score, const Library& library, bool forLi
                               return result;
                         // (a lane's tuning: fixed; untuned without lanes; else it may vary)
                         const double cents = lane < int(fixed[size_t(p)].size()) ? fixed[size_t(p)][size_t(lane)]
-                                             : !laned ? 0.0 : std::numeric_limits<double>::quiet_NaN();
-                        result.push_back(Route { part, patches[p], k / 16, k % 16, p, lane, cents });
+                                             : !laned || !library.varispeed ? 0.0 : std::numeric_limits<double>::quiet_NaN();
+                        const int voice = lane < int(voices[size_t(p)].size()) ? voices[size_t(p)][size_t(lane)] : 0;
+                        result.push_back(Route { part, patches[p], &library, k / 16, k % 16, p, lane, cents, voice });
                         ++k;
                         }
                   }
             }
       return result;
+      }
+
+std::vector<Route> routes(const Score* score, const Library& library, bool forLive)
+      {
+      const MasterScore* ms = score->masterScore();
+      std::map<const Part*, PartPlayback> modes;
+      std::map<const Part*, QString> names;
+      playingModes(ms, forLive, modes, names);
+      int k = 0;
+      const std::shared_ptr<const Library> cur = current();
+      // (the current library, or a map in its place: from slot 0, as when it was the only one)
+      if (names.empty() || (cur && (cur.get() == &library || engineOf(*cur) == engineOf(library))))
+            return routesFrom(score, library, forLive, k, true, modes, names);
+      for (const std::shared_ptr<const Library>& lib : scoreLibraries(score, forLive)) {
+            if (lib.get() == &library)
+                  return routesFrom(score, library, forLive, k, lib == cur, modes, names);
+            routesFrom(score, *lib, forLive, k, lib == cur, modes, names);
+            }
+      // (a map no part names: in the current library's place)
+      k = 0;
+      return routesFrom(score, library, forLive, k, true, modes, names);
+      }
+
+std::vector<Route> allRoutes(const Score* score, bool forLive)
+      {
+      std::vector<Route> out;
+      if (!score)
+            return out;
+      const MasterScore* ms = score->masterScore();
+      std::map<const Part*, PartPlayback> modes;
+      std::map<const Part*, QString> names;
+      playingModes(ms, forLive, modes, names);
+      const std::shared_ptr<const Library> cur = current();
+      int k = 0;
+      for (const std::shared_ptr<const Library>& lib : scoreLibraries(score, forLive)) {
+            std::vector<Route> r = routesFrom(score, *lib, forLive, k, lib == cur, modes, names);
+            out.insert(out.end(), r.begin(), r.end());
+            }
+      return out;
+      }
+
+//---------------------------------------------------------
+//   hostedSlots / fixedLanes / instances
+//---------------------------------------------------------
+
+bool hostedSlots(const Score* score, const Library& library)
+      {
+      return output() == Output::PLUGIN && library.varispeed && !library.registryName.isEmpty()
+             && Playback::value("tuning/hostedTuning", score) >= 0.5;
+      }
+
+bool fixedLanes(const Score* score, const Library& library, bool forLive)
+      {
+      return forLive || output() == Output::MIDI || hostedSlots(score, library);
+      }
+
+// a note of the part tuned beyond the patch's bend range (the renderer plays it by varispeed: libraryPitchBends)
+static bool beyondBend(const Score* score, const Part* part, double bendCents)
+      {
+      Score* sc = const_cast<Score*>(score);
+      const ScoreTuningScope tuningScope(sc);
+      for (Segment* seg = sc->firstSegment(SegmentType::ChordRest); seg; seg = seg->next1(SegmentType::ChordRest)) {
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* e = seg->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  const Chord* chord = toChord(e);
+                  for (const Chord* g : chord->graceNotes())
+                        for (const Note* n : g->notes())
+                              if (bendValue(playbackTuning(n), bendCents) < 0)
+                                    return true;
+                  for (const Note* n : chord->notes())
+                        if (bendValue(playbackTuning(n), bendCents) < 0)
+                              return true;
+                  }
+            }
+      return false;
+      }
+
+std::vector<Instance> instances(const Score* score, const Library& library, const std::vector<Route>& routes)
+      {
+      std::vector<Instance> out;
+      const bool bySlots = hostedSlots(score, library);
+      const bool bend = Playback::on("tuning/pitchBend", score);
+      std::map<std::pair<const Part*, int>, bool> shares;        // (part, patch) -> its copies share an instance
+      for (const Route& r : routes) {
+            if (!r.instrument || r.instrument->kit)
+                  continue;
+            const int slot = r.port * 16 + r.channel;
+            Instance* host = nullptr;
+            if (bySlots && r.lane > 0 && !out.empty()) {
+                  Instance& last = out.back();
+                  auto s = shares.find({ r.part, r.patch });
+                  if (last.part == r.part && last.instrument == r.instrument && s != shares.end() && s->second
+                      && last.routes.size() < 16)
+                        host = &last;
+                  }
+            if (host) {
+                  host->routes.push_back(slot);
+                  host->cents.push_back(r.cents);
+                  continue;
+                  }
+            Instance in;
+            in.slot = slot;
+            in.part = r.part;
+            in.instrument = r.instrument;
+            in.routes.push_back(slot);
+            if (bySlots) {
+                  const bool bends = bend && r.instrument->bendCents > 0;
+                  if (r.lane == 0 && !shares.count({ r.part, r.patch }))
+                        shares[{ r.part, r.patch }] = !(bends && beyondBend(score, r.part, r.instrument->bendCents));
+                  // (a copy alone: by its Tune when it has a fixed tuning; a bending copy alone plays as before)
+                  if (std::isfinite(r.cents) || shares[{ r.part, r.patch }])
+                        in.cents.push_back(r.cents);
+                  }
+            out.push_back(in);
+            }
+      // (a lone copy that bends, or a patch with one copy at 0 cents: nothing to tune, plain as before)
+      for (Instance& in : out)
+            if (in.routes.size() == 1 && !in.cents.empty() && (!std::isfinite(in.cents[0]) || std::fabs(in.cents[0]) < 0.005))
+                  in.cents.clear();
+      return out;
       }
 
 //---------------------------------------------------------
@@ -1471,82 +2844,87 @@ double laneRing(const LibInstrument& patch, const Articulation* articulation, co
       return ms > 0 ? 2 * ms / 1000.0 : 0.0;          // (T30 extrapolated to 60 dB)
       }
 
+// the memory the copies may take (the copies' warning, copiesMemory): what is free now plus what the system can still be
+// given (installed beyond what is visible, past a 2 GB allowance for hardware reservations). Branch voice-determinism,
+// 2026-10-21: the Windows test VM runs on Hyper-V dynamic memory (16 GB installed, 4.9 GB visible and 1.9 GB free when
+// idle, more added as programs ask for it); when the free memory still capped the copies, it alone gave each run its own
+// copies (Whence's Violins 1 - Performance on 1, 2 or 4 routes between runs of one score). Since branch all-copies the
+// copies are as the music needs, and this figure only decides the warning
+qint64 memoryForCopies(qint64 available, qint64 visible, qint64 installed)
+      {
+      if (available < 0)
+            return -1;
+      const qint64 reserve = qint64(2) * 1024 * 1024 * 1024;
+      const qint64 more = visible > 0 && installed > visible + reserve ? installed - visible - reserve : 0;
+      return available + more;
+      }
+
+static qint64 testAvailable = -2, testVisible = -1, testInstalled = -1;
+
+void setMemoryForTest(qint64 available, qint64 visible, qint64 installed)
+      {
+      testAvailable = available;
+      testVisible = visible;
+      testInstalled = installed;
+      }
+
 qint64 freeMemoryBytes()
       {
-      static const qint64 bytes = [] {
+      if (testAvailable > -2)
+            return memoryForCopies(testAvailable, testVisible, testInstalled);
+      // MS_FREE_MEMORY_MB: the tools' pin (the warning's figure in tests and dumps). Read each time: it decides nothing a
+      // render plays any more (branch all-copies, 2026-10-21), only whether the copies' memory warning is given
+      bool ok = false;
+      const qint64 pinned = qEnvironmentVariable("MS_FREE_MEMORY_MB").toLongLong(&ok);
+      if (ok && pinned >= 0)
+            return pinned * 1024 * 1024;
 #if defined(Q_OS_WIN)
-            MEMORYSTATUSEX m;
-            m.dwLength = sizeof(m);
-            return GlobalMemoryStatusEx(&m) ? qint64(m.ullAvailPhys) : qint64(-1);
+      MEMORYSTATUSEX m;
+      m.dwLength = sizeof(m);
+      if (!GlobalMemoryStatusEx(&m))
+            return qint64(-1);
+      ULONGLONG installedKb = 0;
+      const qint64 installed = GetPhysicallyInstalledSystemMemory(&installedKb) ? qint64(installedKb) * 1024 : qint64(-1);
+      return memoryForCopies(qint64(m.ullAvailPhys), qint64(m.ullTotalPhys), installed);
 #elif defined(Q_OS_LINUX)
-            QFile f("/proc/meminfo");                 // MemAvailable: the kernel's estimate of memory available to start applications
-            if (f.open(QIODevice::ReadOnly))
-                  for (const QByteArray& line : f.readAll().split('\n'))
-                        if (line.startsWith("MemAvailable:"))
-                              return line.mid(13).trimmed().split(' ').value(0).toLongLong() * 1024;
-            return qint64(-1);
+      QFile f("/proc/meminfo");                 // MemAvailable: the kernel's estimate of memory available to start applications
+      if (f.open(QIODevice::ReadOnly))          // (no installed size for an unprivileged process: as visible)
+            for (const QByteArray& line : f.readAll().split('\n'))
+                  if (line.startsWith("MemAvailable:"))
+                        return line.mid(13).trimmed().split(' ').value(0).toLongLong() * 1024;
+      return qint64(-1);
 #else
-            return qint64(-1);
+      return qint64(-1);
 #endif
-            }();
-      return bytes;
       }
 
-int memoryMaxLanes(qint64 freeBytes, int parts)
+int routeCopies(const std::vector<Route>& routes)
       {
-      if (freeBytes < 0)
-            return 1;                                 // (unknown: no copies beyond the patch itself)
-      return 1 + int(freeBytes / (LANE_COPY_BYTES * std::max(1, parts)));
+      std::set<std::pair<const Part*, const LibInstrument*>> patches;
+      for (const Route& r : routes)
+            patches.insert({ r.part, r.instrument });
+      return int(routes.size()) - int(patches.size());
       }
 
-// the parts whose notes play at more than one tuning (beyond the tolerance, cents): only they need copies (a part's
-// first copy takes any tuning). Needs a ScoreTuningScope (playbackTuning). A part MuseScore's own sounds play counts
-// too when it has microtones (an overcount: its share of the memory goes unused)
-int partsNeedingCopies(const Score* score, double toleranceCents)
+CopiesMemory copiesMemory(int copies, int loaded)
       {
-      if (!score)
-            return 0;
-      const Score* ms = score->masterScore();
-      int count = 0;
-      for (const Part* part : ms->parts()) {
-            bool first = true;
-            double cents0 = 0;
-            bool needs = false;
-            for (const Segment* s = ms->firstSegment(SegmentType::ChordRest); s && !needs; s = s->next1(SegmentType::ChordRest)) {
-                  for (int t = part->startTrack(); t < part->endTrack() && !needs; ++t) {
-                        const Element* e = s->element(t);
-                        if (!e || !e->isChord())
-                              continue;
-                        const Chord* ch = toChord(e);
-                        std::vector<const Chord*> chords { ch };
-                        for (const Chord* g : ch->graceNotes())
-                              chords.push_back(g);
-                        for (const Chord* c : chords) {
-                              for (const Note* n : c->notes()) {
-                                    if (!n->play())
-                                          continue;
-                                    const double cents = playbackTuning(n);
-                                    if (first) {
-                                          cents0 = cents;
-                                          first = false;
-                                          }
-                                    else if (std::fabs(cents - cents0) > toleranceCents)
-                                          needs = true;
-                                    }
-                              }
-                        }
-                  }
-            if (needs)
-                  ++count;
-            }
-      return count;
+      CopiesMemory m;
+      m.copies = std::max(0, copies);
+      m.toLoad = std::max(0, m.copies - std::max(0, loaded));
+      m.needBytes = qint64(m.toLoad) * LANE_COPY_BYTES;
+      m.availableBytes = freeMemoryBytes();
+      return m;
       }
 
-// the free memory split evenly between the parts that need copies (the owner, 2026-10-04: not between all the score's
-// parts; a part with one tuning needs none), at least one share
-int memoryMaxLanes(const Score* score, double toleranceCents)
+QString CopiesMemory::text() const
       {
-      return memoryMaxLanes(freeMemoryBytes(), std::max(1, partsNeedingCopies(score, toleranceCents)));
+      const QString avail = availableBytes >= 0 ? QString("%1 MB available").arg(availableBytes >> 20)
+                                                : QString("the available memory unknown");
+      if (toLoad == copies)
+            return QString("%1 tuning / voice copies need about %2 MB (%3 MB a copy), %4")
+                   .arg(copies).arg(needBytes >> 20).arg(LANE_COPY_BYTES >> 20).arg(avail);
+      return QString("%1 tuning / voice copies, %2 more to load: about %3 MB (%4 MB a copy), %5")
+             .arg(copies).arg(toLoad).arg(needBytes >> 20).arg(LANE_COPY_BYTES >> 20).arg(avail);
       }
 
 LaneSettings libraryLaneSettings(const Library& library)
@@ -1651,7 +3029,7 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
                         for (const Ms4::ArtRef& a : arts)
                               if (a.art == Ms4::Art::Trill || a.art == Ms4::Art::TrillBaroque)
                                     trill = trillSemitones(note);
-                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill, score));
+                        const Choice c = chooseNote(patches, want(arts, text.at(tick), seconds, trill, score), note);
                         if (c)
                               used[c.patch] = true;
                         }
@@ -1664,6 +3042,14 @@ std::vector<bool> usedPatches(const Score* score, const Part* part, const std::v
 //   lanes
 //---------------------------------------------------------
 
+double divisiDb(int voices)
+      {
+      return voices > 1 ? -10.0 * std::log10(double(voices)) : 0.0;
+      }
+
+// (a unison on a monophonic patch: the same key and a tuning within a cent; a quarter tone apart is no unison)
+static const double UNISON_CENTS = 1.0;
+
 Lanes lanes(const Score* score, const Part* part, const std::vector<const LibInstrument*>& patches,
             double toleranceCents, double tailSeconds, int maxLanes, bool fixedTuning)
       {
@@ -1673,9 +3059,14 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             return out;
       Score* sc = const_cast<Score*>(score);
       const ScoreTuningScope tuningScope(sc);
-      if (maxLanes <= 0)
-            maxLanes = memoryMaxLanes(score, toleranceCents);
+      if (maxLanes <= 0)                        // (no maximum: as many copies as the music needs; the owner, 2026-10-21)
+            maxLanes = std::numeric_limits<int>::max();
       const bool waitForRelease = Playback::on("tuning/waitForRelease", score);   // (playback.ini [tuning])
+      const int plainAccents = int(std::lround(Playback::value("slurs/plainAccents", score)));
+      const bool plainJoins = Playback::on("slurs/plainJoins", score);
+      // ([slurs] plainAuto: a new bow stroke touching the note before plays SSO's bowed transition from it, which needs the
+      // note before's copy: the join below, at another tuning too)
+      const bool plainAuto = Playback::on("slurs/plainAuto", score);
       Ms4::Dynamics dynamics;
       dynamics.build(sc, const_cast<Part*>(part));
       TextTechniques text;
@@ -1690,6 +3081,14 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             double cents;
             bool slurred;                 // under a slur: legato from the note before on its track
             int track;
+            const Chord* grace { nullptr };     // a grace note's: the chord it belongs to (no voice of its own)
+            int voice { 0 };              // a monophonic patch's voice (0 the line)
+            bool plain { false };         // [slurs] plainPerformance's (Choice::plain): touching the note before, a transition
+            int chordNotes { 1 };         // its chord's notes on its patch (a monophonic patch's chord: > 1)
+            const Note* unisonOf { nullptr };   // a monophonic patch's unison duplicate: the note that plays it (Lanes::unison)
+            bool attacks { false };       // a plain note attacked afresh even right after a note of its patch (rendermidi's
+                                          // performanceNote: a staccato, an accented re-attack under [slurs] plainAccents 2 / 3,
+                                          // a join of its own wider than the map's legatoGap)
             };
       std::vector<Item> items;
       std::map<const Note*, const Note*> tiedTo;     // a tied note -> the note it continues
@@ -1706,7 +3105,7 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   const Chord* chord = toChord(e);
                   const std::vector<Ms4::ArtRef> chordArts = Ms4::chordArticulations(chord, dynamics);
                   const int tick = chord->tick().ticks();
-                  auto add = [&](const Note* note, double on, double off) {
+                  auto add = [&](const Note* note, double on, double off, const Chord* graceOf) {
                         const double seconds = noteSeconds(note);
                         if (note->tieBack() && note->firstTiedNote() && note->firstTiedNote() != note) {
                               tiedTo[note] = note->firstTiedNote();
@@ -1721,22 +3120,151 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                               if (a.art == Ms4::Art::Legato)
                                     slurred = true;
                               }
-                        const Choice c = choose(patches, want(arts, text.at(tick), seconds, trill, score));
+                        const Choice c = chooseNote(patches, want(arts, text.at(tick), seconds, trill, score), note);
                         const double measured = c && c.articulation->releaseMs > 0 ? c.articulation->releaseMs / 1000.0 : 0.0;
                         // (the ring: a fixed tail with the release waited for, else the release to 60 dB under)
                         const double ring = tailSeconds < 0 ? laneRing(*patches[size_t(c ? c.patch : 0)], c ? c.articulation : nullptr, patches)
                                                             : std::max(tailSeconds, waitForRelease ? measured : 0.0);
                         items.push_back({ note, c ? c.patch : 0, on, off, ring,
-                                          playbackTuning(note), slurred, track });
+                                          playbackTuning(note), slurred, track, graceOf, 0, c && c.plain });
+                        if (c && c.plain) {
+                              bool staccato = false;
+                              bool accent = false;
+                              for (const Ms4::ArtRef& a : arts) {
+                                    staccato |= a.art == Ms4::Art::Staccato || a.art == Ms4::Art::Staccatissimo;
+                                    accent |= a.art == Ms4::Art::Accent || a.art == Ms4::Art::Marcato;
+                                    }
+                              const int join = note->libraryJoin();
+                              const bool ownJoin = join != PerformanceTechnique::JOIN_AUTO;
+                              items.back().attacks = staccato
+                                    || (ownJoin && join < -std::max(0.0, c.articulation->legatoGapMs))
+                                    || (!ownJoin && accent && (plainAccents & 2) && note->libraryVelocity() <= 0
+                                        && note->performanceAttack() == PerformanceTechnique::Attack::AUTO
+                                        && note->performanceTransition() == PerformanceTechnique::Transition::AUTO);
+                              }
                         };
                   for (const Chord* g : chord->graceNotes())
                         for (const Note* n : g->notes())
-                              add(n, tm->tick2time(tick), tm->tick2time(tick) + 0.1);
+                              add(n, tm->tick2time(tick), tm->tick2time(tick) + 0.1, chord);
                   for (const Note* n : chord->notes())
-                        add(n, tm->tick2time(tick), end(n));
+                        add(n, tm->tick2time(tick), end(n), nullptr);
                   }
             }
       std::stable_sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.on < b.on; });
+
+      {                                                 // (a chord's notes on each patch)
+      std::map<std::pair<const Chord*, int>, int> perChord;
+      for (const Item& it : items)
+            if (!it.grace)
+                  ++perChord[{ it.note->chord(), it.patch }];
+      for (Item& it : items)
+            if (!it.grace)
+                  it.chordNotes = perChord[{ it.note->chord(), it.patch }];
+      }
+      // voices (a monophonic patch: LibInstrument::mono): the notes starting together from the lowest pitch up, each
+      // the lowest voice free by its start as written; a grace note its chord's lowest note's voice
+      int voiceCount = 1;
+      {
+      std::map<const Note*, int> voiceOfNote;
+      for (size_t p = 0; p < patches.size(); ++p) {
+            if (!patches[p]->mono)
+                  continue;
+            std::vector<double> voiceEnd;                // per voice: its last note's written end
+            std::vector<size_t> group;
+            auto place = [&]() {
+                  std::stable_sort(group.begin(), group.end(), [&](size_t a, size_t b) {
+                        const Note* na = items[a].note;
+                        const Note* nb = items[b].note;
+                        if (na->ppitch() != nb->ppitch())
+                              return na->ppitch() < nb->ppitch();
+                        if (std::fabs(items[a].cents - items[b].cents) > UNISON_CENTS)
+                              return items[a].cents < items[b].cents;
+                        return items[a].off > items[b].off;           // (a unison: the longer note first, kept)
+                        });
+                  const Item* kept = nullptr;
+                  for (size_t i : group) {
+                        Item& it = items[i];
+                        // (a unison with the note placed just before: one note, the kept one's voice; Lanes::unison)
+                        if (kept && kept->note->ppitch() == it.note->ppitch() && std::fabs(kept->cents - it.cents) <= UNISON_CENTS) {
+                              it.voice = kept->voice;
+                              it.unisonOf = kept->note;
+                              out.unison[it.note] = kept->note;
+                              voiceOfNote[it.note] = kept->voice;
+                              continue;
+                              }
+                        kept = &it;
+                        int v = 0;
+                        while (v < int(voiceEnd.size()) && voiceEnd[size_t(v)] > it.on + 1e-6)
+                              ++v;
+                        if (v == int(voiceEnd.size()))
+                              voiceEnd.push_back(-1);
+                        voiceEnd[size_t(v)] = it.off;
+                        it.voice = v;
+                        voiceOfNote[it.note] = v;
+                        voiceCount = std::max(voiceCount, v + 1);
+                        }
+                  group.clear();
+                  };
+            for (size_t i = 0; i < items.size(); ++i) {
+                  if (items[i].patch != int(p) || items[i].grace)
+                        continue;
+                  if (!group.empty() && std::fabs(items[group.front()].on - items[i].on) > 1e-9)
+                        place();
+                  group.push_back(i);
+                  }
+            place();
+            }
+      for (Item& it : items) {
+            if (!it.grace || !patches[size_t(it.patch)]->mono)
+                  continue;
+            int v = -1;
+            for (const Note* n : it.grace->notes()) {                    // (its lowest note on the patch)
+                  auto f = voiceOfNote.find(n->tieBack() && n->firstTiedNote() ? n->firstTiedNote() : n);
+                  if (f != voiceOfNote.end()) {
+                        v = f->second;
+                        break;
+                        }
+                  }
+            it.voice = std::max(0, v);
+            }
+      }
+
+      // [levels] divisi: each monophonic patch's voices sounding at each note's start, as written (the notes starting
+      // together all counted; a grace note its chord's count)
+      for (size_t p = 0; p < patches.size(); ++p) {
+            if (!patches[p]->mono)
+                  continue;
+            std::vector<double> ends;                     // the started notes' written ends
+            std::map<double, int> atStart;                // a start (seconds) -> the voices sounding then
+            for (size_t i = 0; i < items.size();) {
+                  if (items[i].patch != int(p) || items[i].grace) {
+                        ++i;
+                        continue;
+                        }
+                  const double on = items[i].on;
+                  ends.erase(std::remove_if(ends.begin(), ends.end(), [on](double e) { return e <= on + 1e-6; }), ends.end());
+                  std::vector<size_t> group;
+                  for (; i < items.size() && (items[i].patch != int(p) || items[i].grace || std::fabs(items[i].on - on) <= 1e-9); ++i) {
+                        if (items[i].patch != int(p) || items[i].grace)
+                              continue;
+                        group.push_back(i);
+                        if (items[i].off > on + 1e-6 && !items[i].unisonOf)     // (a unison: one voice)
+                              ends.push_back(items[i].off);
+                        }
+                  const int n = std::max(int(ends.size()), 1);
+                  atStart[on] = n;
+                  if (n > 1)
+                        for (size_t g : group)
+                              out.sounding[items[g].note] = n;
+                  }
+            for (const Item& it : items) {
+                  if (it.patch != int(p) || !it.grace)
+                        continue;
+                  auto a = atStart.find(it.on);
+                  if (a != atStart.end() && a->second > 1)
+                        out.sounding[it.note] = a->second;
+                  }
+            }
 
       struct Lane {
             double cents { 0 };
@@ -1745,8 +3273,13 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             double lastOn { -1 };         // its last note's start and end
             double lastEnd { -1 };
             int lastTrack { -1 };
+            int lastChordNotes { 1 };
+            int lastPitch { -1 };
+            bool lastPlain { false };
+            bool lastAttacks { false };
             };
-      std::vector<std::vector<Lane>> byPatch(patches.size());
+      // per patch, per voice: its lanes (a voice's lanes take only its own notes: the lanes by tuning, as ever)
+      std::vector<std::vector<std::vector<Lane>>> byPool(patches.size(), std::vector<std::vector<Lane>>(size_t(voiceCount)));
       // (fixedTuning: the patches whose lanes keep their tuning: those that don't bend)
       std::vector<bool> fixed(patches.size(), false);
       if (fixedTuning) {
@@ -1755,7 +3288,9 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   fixed[p] = !(bend && patches[p]->bendCents > 0);
             }
       for (const Item& it : items) {
-            std::vector<Lane>& lanes = byPatch[size_t(it.patch)];
+            if (it.unisonOf)                    // (a unison duplicate: no lane of its own; the kept note's, below)
+                  continue;
+            std::vector<Lane>& lanes = byPool[size_t(it.patch)][size_t(it.voice)];
             if (lanes.empty())
                   lanes.emplace_back();
             int chosen = -1;
@@ -1777,10 +3312,24 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   out.cents[it.note] = lane.cents;
                   continue;
                   }
-            if (it.slurred) {                                                // legato: its lane, which glides
-                  for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)
-                        if (lanes[l].lastTrack == it.track && lanes[l].lastOn < it.on && std::fabs(lanes[l].lastEnd - it.on) <= 0.1)
-                              chosen = l;
+            // (a monophonic patch's chord, or a note after one, played plain: touching the note before on its voice, SSO
+            // plays a transition, which glides on the lane as a slur's does)
+            const bool mono = patches[size_t(it.patch)]->mono;
+            for (int l = 0; l < int(lanes.size()) && chosen < 0 && (it.slurred || mono); ++l) {     // legato: its lane, which glides
+                  // ([slurs] plainPerformance, a lone note right after a lone plain note of its patch at another pitch, neither
+                  // attacked afresh: SSO's transition, rendermidi's performanceNote joins them; on another copy, chosen by
+                  // tuning, the note was attacked after silence there while the note before released on its own copy:
+                  // Whence's Violas bars 12 / 16, F#4 into a quarter-sharp G4 half note, the owner 2026-10-22: "sounds
+                  // disjointed from the note before")
+                  // ([slurs] plainJoins, 0 everywhere: the owner preferred the attack, 2026-10-22; with [slurs] plainAuto the
+                  // note plays the bowed transition, so it joins: Whence's Violins 1 bar 16, F#5 into the quarter-sharp G5
+                  // outside the slur, sent bowed on a copy with nothing to go on from, the owner 2026-10-28: "the transition
+                  // between the last note and the penultimate note is wrong")
+                  const bool plainJoin = (plainJoins || plainAuto) && it.plain && lanes[l].lastPlain && !it.attacks && !lanes[l].lastAttacks
+                                         && lanes[l].lastPitch >= 0 && lanes[l].lastPitch != it.note->pitch();
+                  const bool legato = it.slurred || (it.plain && (it.chordNotes > 1 || lanes[l].lastChordNotes > 1)) || plainJoin;
+                  if (legato && lanes[l].lastTrack == it.track && lanes[l].lastOn < it.on && std::fabs(lanes[l].lastEnd - it.on) <= 0.1)
+                        chosen = l;
                   }
             for (int l = 0; l < int(lanes.size()) && chosen < 0; ++l)       // already at its tuning
                   if (!lanes[l].tuned || std::fabs(lanes[l].cents - it.cents) <= toleranceCents)
@@ -1808,36 +3357,67 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
             lane.lastOn = it.on;
             lane.lastEnd = it.off;
             lane.lastTrack = it.track;
+            lane.lastChordNotes = it.chordNotes;
+            lane.lastPitch = it.note->pitch();
+            lane.lastPlain = it.plain;
+            lane.lastAttacks = it.attacks;
             out.lane[it.note] = chosen;
             out.cents[it.note] = cents;
             }
-      // (fixed: lane 0 the tuning nearest 0, then by distance, below first)
+      // (fixed: within each voice, lane 0 the tuning nearest 0, then by distance, below first)
       out.fixed.assign(patches.size(), std::vector<double>());
+      out.voice.assign(patches.size(), std::vector<int>());
+      std::vector<std::vector<int>> offset(patches.size(), std::vector<int>(size_t(voiceCount), 0));
       for (size_t p = 0; p < patches.size(); ++p) {
-            if (!fixed[p])
-                  continue;
-            if (byPatch[p].empty()) {                       // (no notes: its one lane untuned)
-                  out.fixed[p].push_back(0.0);
-                  continue;
-                  }
-            std::vector<int> order(byPatch[p].size());
-            for (size_t l = 0; l < order.size(); ++l)
-                  order[l] = int(l);
-            std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
-                  const double ca = byPatch[p][size_t(a)].cents, cb = byPatch[p][size_t(b)].cents;
-                  return std::fabs(ca) != std::fabs(cb) ? std::fabs(ca) < std::fabs(cb) : ca < cb;
-                  });
-            std::vector<int> newIndex(order.size());
-            for (size_t l = 0; l < order.size(); ++l) {
-                  newIndex[size_t(order[l])] = int(l);
-                  out.fixed[p].push_back(byPatch[p][size_t(order[l])].cents);
-                  }
-            for (const Item& it : items)
-                  if (it.patch == int(p)) {
-                        auto nl = out.lane.find(it.note);
-                        if (nl != out.lane.end())
-                              nl->second = newIndex[size_t(nl->second)];
+            int at = 0;
+            for (int v = 0; v < voiceCount; ++v) {
+                  std::vector<Lane>& pool = byPool[p][size_t(v)];
+                  offset[p][size_t(v)] = at;
+                  if (v == 0 && pool.empty()) {           // (no notes: its one lane, untuned)
+                        if (fixed[p])
+                              out.fixed[p].push_back(0.0);
+                        out.voice[p].push_back(0);
+                        ++at;
+                        continue;
                         }
+                  at += int(pool.size());
+                  for (size_t l = 0; l < pool.size(); ++l)
+                        out.voice[p].push_back(v);
+                  if (!fixed[p])
+                        continue;
+                  std::vector<int> order(pool.size());
+                  for (size_t l = 0; l < order.size(); ++l)
+                        order[l] = int(l);
+                  std::stable_sort(order.begin(), order.end(), [&](int a, int b) {
+                        const double ca = pool[size_t(a)].cents, cb = pool[size_t(b)].cents;
+                        return std::fabs(ca) != std::fabs(cb) ? std::fabs(ca) < std::fabs(cb) : ca < cb;
+                        });
+                  std::vector<int> newIndex(order.size());
+                  for (size_t l = 0; l < order.size(); ++l) {
+                        newIndex[size_t(order[l])] = int(l);
+                        out.fixed[p].push_back(pool[size_t(order[l])].cents);
+                        }
+                  for (const Item& it : items)
+                        if (it.patch == int(p) && it.voice == v) {
+                              auto nl = out.lane.find(it.note);
+                              if (nl != out.lane.end())
+                                    nl->second = newIndex[size_t(nl->second)];
+                              }
+                  }
+            out.count[p] = std::max(1, at);
+            }
+      for (const Item& it : items) {                  // (a voice's lanes after the voices before)
+            auto nl = out.lane.find(it.note);
+            if (nl != out.lane.end())
+                  nl->second += offset[size_t(it.patch)][size_t(it.voice)];
+            }
+      for (const auto& u : out.unison) {              // (a unison duplicate: the kept note's lane and tuning)
+            auto l = out.lane.find(u.second);
+            if (l != out.lane.end())
+                  out.lane[u.first] = l->second;
+            auto c = out.cents.find(u.second);
+            if (c != out.cents.end())
+                  out.cents[u.first] = c->second;
             }
       for (const auto& t : tiedTo) {
             auto l = out.lane.find(t.second);
@@ -1846,8 +3426,6 @@ Lanes lanes(const Score* score, const Part* part, const std::vector<const LibIns
                   out.cents[t.first] = out.cents[t.second];
                   }
             }
-      for (size_t p = 0; p < patches.size(); ++p)
-            out.count[p] = std::max(1, int(byPatch[p].size()));
       return out;
       }
 
@@ -1880,6 +3458,20 @@ void TextTechniques::apply(const QString& text, TextState& s)
             s.modifiers.removeAll("muted");
       else if (has("\\b(con\\s+sord|sord\\.|sordin|mute|muted|harmon|stopped|gestopft|bouche|copert[oi]|muffled|damped)"))
             addModifier(s, "muted");
+      // a guitar's sample set (Ample's Finger / Pick / Strum: an extra patch per set, guitarplayback.cpp; the whole text,
+      // so "strum mute" stays an FX noise)
+      if (has("^\\s*(pick|picked|plectrum|with pick)\\.?\\s*$")) {
+            s.modifiers.removeAll("strum");
+            addModifier(s, "pick");
+            }
+      else if (has("^\\s*(strum|strums|strummed|strumming)\\.?\\s*$")) {
+            s.modifiers.removeAll("pick");
+            addModifier(s, "strum");
+            }
+      else if (has("^\\s*(finger|fingers|fingerstyle|fingerpicking|fingerpicked)\\.?\\s*$")) {
+            s.modifiers.removeAll("pick");
+            s.modifiers.removeAll("strum");
+            }
       if (has("\\bpizz"))
             s.pizzicato = true, s.colLegno = false;
       if (has("\\barco\\b"))
@@ -1940,7 +3532,7 @@ void TextTechniques::apply(const QString& text, TextState& s)
             s.tremolo = true;
       }
 
-void TextTechniques::build(Score* score, const Part* part)
+void TextTechniques::build(Score* score, const Part* part, const Guitar* guitar)
       {
       _states.clear();
       const int strack = part->startTrack();
@@ -1950,8 +3542,15 @@ void TextTechniques::build(Score* score, const Part* part)
             for (Element* e : seg->annotations()) {
                   if (!e->isStaffText() || e->track() < strack || e->track() >= etrack)
                         continue;
+                  const QString plain = toStaffText(e)->plainText();
+                  if (guitar) {
+                        const QString simple = plain.simplified();
+                        if (std::any_of(guitar->fx.begin(), guitar->fx.end(),
+                                        [&](const Guitar::Fx& f) { return f.text.match(simple).hasMatch(); }))
+                              continue;
+                        }
                   const TextState before = state;
-                  apply(toStaffText(e)->plainText(), state);
+                  apply(plain, state);
                   if (!state.sameTechnique(before))
                         state.db = toStaffText(e)->level();
                   _states[seg->tick().ticks()] = state;
@@ -1995,6 +3594,23 @@ std::map<int, int> controllerTexts(Score* score, const Part* part, const Control
       }
 
 //---------------------------------------------------------
+//   staccatoKind
+//    [shorts] staccatoLength: 1 a staccato, 2 a staccatissimo, 0 neither (a portato, staccato and tenuto, is no staccato)
+//---------------------------------------------------------
+
+int staccatoKind(const std::vector<Ms4::ArtRef>& arts)
+      {
+      bool stacc = false, stacciss = false;
+      for (const Ms4::ArtRef& r : arts) {
+            if (r.art == Ms4::Art::Tenuto)
+                  return 0;
+            stacc |= r.art == Ms4::Art::Staccato;
+            stacciss |= r.art == Ms4::Art::Staccatissimo;
+            }
+      return stacciss ? 2 : stacc ? 1 : 0;
+      }
+
+//---------------------------------------------------------
 //   want
 //---------------------------------------------------------
 
@@ -2022,12 +3638,24 @@ Want want(const std::vector<Ms4::ArtRef>& arts, const TextState& text, double se
                   factor = Playback::value(id, score) / 100.0;
             w.soundSeconds = seconds * factor;
             }
+      w.staccatoKind = staccatoKind(arts);
+      w.staccatoLength = Playback::on("shorts/staccatoLength", score);
       w.modifiers = text.modifiers;
+      w.plainPerformance = !text.performanceOff && Playback::on("slurs/plainPerformance", score);
+      w.plainTiming = w.plainPerformance && Playback::on("slurs/plainTiming", score);
+      w.staccato = has(Art::Staccato) || has(Art::Staccatissimo);
       if (has(Art::Mute) || has(Art::PalmMute)) {
             if (!w.modifiers.contains("muted"))
                   w.modifiers.append("muted");
             }
-      if (has(Art::Open))
+      // "open" ends a mute. MS4 keeps a staff text "open" in force as its technique Art::Open until "natural" /
+      // "mute" … (Dynamics::addTechnique), so it would also end a later text "muted" (which isn't in MS4's table):
+      // for the library the text state decides, as it holds the newest of the two texts (TextTechniques::apply
+      // drops "muted" at "open"); only an "open" articulation on the note itself ends it here
+      bool openArt = false;
+      for (const Ms4::ArtRef& r : arts)
+            openArt |= r.art == Art::Open && !r.technique;
+      if (openArt)
             w.modifiers.removeAll("muted");
       if (has(Art::Harmonic) || has(Art::DiamondNote) || text.harmonics)
             w.modifiers.append("harmonics");

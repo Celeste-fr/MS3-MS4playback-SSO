@@ -1,0 +1,22 @@
+{
+ "about": "The verify detector's regression set (OPEN_ITEMS.md item 32, Missing tools #8): notes of Whence's build #454 verify run (2026-10-20, run 2 of private bars9-12/SILENT.md: --verify-playback --verify-wav on the VM, Recommended, every part's library and built-in render) whose truth is known from the audio. truth: present (heard / seen in the audio: a flag is a false positive) or dropped (SSO didn't play it: two chord notes on one Performance slot, fixed since by chord voices). before / now: what the detector must say before the fixes (every Settings switch off) and now (the defaults): missing, clear (not flagged) or any. The renders stay private (the owner's score, SSO's sound); tst_soundlibrary::playbackVerifyRegression reads them with MS_VERIFY_REGRESSION, test_verify_detector.py the features in whence_features.json.",
+ "parts": {
+  "Violins 1": [
+   {"time": 16.273, "key": 86, "note": "bar 8 beat 2.75, D quarter-flat 6, 91 ms slur end: peaks ~225 ms after its note-on (run 1's false positive, 20 dB)", "truth": "present", "before": "any", "now": "clear"},
+   {"time": 16.409, "key": 84, "note": "bar 8 beat 3, C6 staccato after it", "truth": "present", "before": "clear", "now": "clear"},
+   {"time": 27.727, "key": 75, "note": "bar 13 beat 3.75, Eb5, 91 ms: peaks ~300 ms after its note-on (run 2's false positive, 21 dB)", "truth": "present", "before": "missing", "now": "clear"}
+  ],
+  "Violins 2": [
+   {"time": 16.409, "key": 84, "note": "bar 8 beat 3, C6: the offset read 335 ms instead of ~60 (one note late), 24 dB", "truth": "present", "before": "missing", "now": "clear"}
+  ],
+  "Violoncellos": [
+   {"time": 26.212, "key": 51, "note": "bar 13, Eb3 on C3's slot: dropped, reads ~13 dB under (a known miss)", "truth": "dropped", "before": "any", "now": "any"},
+   {"time": 28.394, "key": 57, "note": "bar 14, A3 on D3's slot: dropped", "truth": "dropped", "before": "any", "now": "missing"},
+   {"time": 30.576, "key": 54, "note": "bar 15, F#3 on Eb3's slot: dropped", "truth": "dropped", "before": "missing", "now": "missing"},
+   {"time": 32.758, "key": 57, "note": "bar 16, A3 on F#3's slot: dropped", "truth": "dropped", "before": "missing", "now": "missing"},
+   {"time": 28.394, "key": 50, "note": "bar 14, D3 quarter-flat: kept", "truth": "present", "before": "clear", "now": "clear"},
+   {"time": 30.576, "key": 51, "note": "bar 15, Eb3: kept", "truth": "present", "before": "clear", "now": "clear"},
+   {"time": 32.758, "key": 54, "note": "bar 16, F#3: kept (read 21 dB under at a vibrato dip by two points, before heldmean)", "truth": "present", "before": "clear", "now": "clear"}
+  ]
+ }
+}

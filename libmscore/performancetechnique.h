@@ -24,7 +24,7 @@
 //    Note::performanceAttack / performanceTransition (Pid::PERFORMANCE_ATTACK / _TRANSITION, the Inspector's
 //    Note › Performance attack / transition, every selected note at once); a tie chain plays its first note's.
 //    The score's metaTag "performanceTechniques" (kept by MuseScore 3.6 through a round trip) holds JSON
-//    [{"tick", "track", "grace", "pitch", "attack", "transition", "velocity", "join"}] ("grace": the grace chord's
+//    [{"tick", "track", "grace", "pitch", "attack", "transition", "velocity", "join", "technique"}] ("grace": the grace chord's
 //    index, left out for the chord itself; the others left out when Auto), written on save from the notes
 //    (each score of the file its own: the master score and each part), left out when every note is Auto;
 //    read after loading and applied to the notes found (and their linked copies). Copy / paste keeps them
@@ -35,12 +35,26 @@
 //    library patch, the join on a Performance patch, where it also decides attack or transition: the note before
 //    overlapping it, or a gap up to the map's legatoGap ms (SSO: 39, measured), goes on by transition, a longer gap
 //    re-attacks (HANDOFF.md › How the Performance patches work). An Inspector technique sets them back to Auto.
+//
+//    A note's own technique (Note::libraryTechnique, Pid::LIBRARY_TECHNIQUE; the Inspector's Note › Technique, every
+//    selected note at once; the owner, 2026-10-12): "<patch>|<articulation>", the map's names, replacing what the
+//    notation chooses (SoundLib::chooseNote: the renderer, the routes, the tuning lanes; so Live's clips and the plain
+//    set too); everything else then applies as for that technique (levels, onset, a Performance patch's attack and
+//    transition). A tie chain plays its first note's; a grace note its own. In the same metaTag ("technique"); a
+//    technique the part's patches don't have plays Auto. Auto: empty.
+//    Ctrl+D over a time selection of bars (mscore/automationlanes.h › Time selection) copies a note's technique, attack,
+//    transition, velocity, join and Live timing override (livetimingoverride.h) to the notes at the same places in the
+//    bars after (duplicateNoteValues).
 //---------------------------------------------------------
 
+#include <set>
+#include <vector>
 #include <QString>
 
 namespace Ms {
 
+class Note;
+class Part;
 class Score;
 
 namespace PerformanceTechnique {
@@ -62,6 +76,16 @@ Transition transitionFromName(const QString& s);
 // the metaTag: to the notes after loading (and out of the tags), from them on saving; empty: none
 void read(Score* score);
 QString write(const Score* score);
+
+// Ctrl+D over a time selection (automation.h duplicateTimeSelection): each note's attack, transition, own velocity and
+// join in [start, end) on the part's tracks onto the note at its tick + (end - start) (before limit), same track, same
+// grace chord, same index in its chord from the bottom. A note found gets the source's values, Auto included (an attack
+// or transition first: Note::undoChangeProperty resets the own values, then they are set); none found, or either note
+// tied from the one before (a tie chain plays its first note's), left as it is. Undoable changes in the caller's
+// command (each note's linked ones too). Returns the notes changed. only: just these source notes (the Velocity and
+// Join lanes' Ctrl+D on selected stems, mscore/notelanes.h); copiedTo: the notes found for them, changed or not
+int duplicateNoteValues(Score* score, const Part* part, int start, int end, int limit,
+                        const std::set<const Note*>* only = nullptr, std::vector<Note*>* copiedTo = nullptr);
 
 }     // namespace PerformanceTechnique
 }     // namespace Ms

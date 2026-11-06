@@ -229,6 +229,8 @@ void Preferences::init(bool storeInMemoryOnly)
             {PREF_IO_LIVE_CLIPSPORT,                               new IntPreference(9001)},
       #ifdef USE_PORTAUDIO
             {PREF_IO_PORTAUDIO_DEVICE,                             new IntPreference(-1, false)},
+            {PREF_IO_PORTAUDIO_DEVICENAME,                         new StringPreference("", false)},
+            {PREF_IO_PORTAUDIO_LATENCY,                            new IntPreference(0, false)},
             {PREF_IO_PORTAUDIO_USEPORTAUDIO,                       new BoolPreference(defaultUsePortAudio, false)},
       #endif
       #ifdef USE_PORTMIDI
@@ -248,6 +250,7 @@ void Preferences::init(bool storeInMemoryOnly)
 #endif
             {PREF_IO_SOUNDLIBRARY_PLUGIN,                          new StringPreference("")},
             {PREF_IO_SOUNDLIBRARY_LAST,                            new StringPreference("", false)},
+            {PREF_IO_SOUNDLIBRARY_VARIANTS,                        new StringPreference("", false)},
             // worker threads that set the sound library's setups (SoundLibraryHost::loadThreads): 0, the GUI thread
             {"io/soundLibraryLoadThreads",                         new IntPreference(0)},
             {PREF_IO_PORTMIDI_OUTPUTLATENCYMILLISECONDS,           new IntPreference(0)},

@@ -121,6 +121,13 @@ constexpr double PARAM_RESOLUTION = 1e-4;
 std::vector<std::pair<int, double>> timeAxis(Score* score);
 double xAtTick(const std::vector<std::pair<int, double>>& anchors, int tick);
 double barLineX(const Measure* m);
+// the tick at x (the anchors' inverse; between two anchors of one tick, as between a bar line and its bar's first note:
+// that tick)
+int tickAtX(const std::vector<std::pair<int, double>>& anchors, double x);
+// where a lane's point at tick is drawn and hit (the owner, 2026-10-15: "points on automation lane don't always snap to
+// grid correctly"): on a bar's tick the bar line, as the lanes' grid draws it (the measure before in the same system;
+// a system's first bar has none: xAtTick), else xAtTick. The note lanes' stems stay under their notes (xAtTick)
+double pointX(Score* score, const std::vector<std::pair<int, double>>& anchors, int tick);
 
 extern const char* const SOURCE_LIVE;     // "live"
 
@@ -134,8 +141,12 @@ struct Lane {
       int cc() const;                     // "cc<n>": n (0-127); else -1
       // the value at tick: -1 before the first point
       double valueAt(int tick) const;
+      // a flat lane: its first point at the score's start and every point at one value (a jump at tick 0: every later point
+      // at the value it jumps to); that value (else -1). A flat lane
+      // on a map controller is the controller's setting (partcontrollers.h): played as the part's value once was
+      double flatValue() const;
       // what to send in [tick1, tick2): the value in force at tick1 (when there is one), then each
-      // point, and along a ramp each tick at which the value, counted in steps of resolution (rounded), changes:
+      // point (one value a tick: of a jump, two points at one tick, the later one's), and along a ramp each tick at which the value, counted in steps of resolution (rounded), changes:
       // a MIDI controller gets every one of its 128 values a ramp passes, at the tick it reaches it (the
       // owner's criterion, 2026-10-03: a step whenever the value changes by one MIDI step), no fixed step
       std::vector<std::pair<int, double>> events(int tick1, int tick2, double resolution) const;
@@ -165,7 +176,8 @@ std::map<const Part*, PartLanes> replaceSource(const std::map<const Part*, PartL
 // a Live Set imported again (`with`: its lanes, each with liveHash / pointsHash) over the score's lanes, per part and
 // target: Live's where Live's events changed since the score's lane came from Live and it is unedited here, or the
 // two are the same; the score's where Live's are as they were (an edit here is newer); a lane that came from Live and
-// is no longer in the set: removed if unedited here, else kept as MuseScore's own. Both changed since they last
+// is no longer in the set: removed if unedited here, else kept as MuseScore's own (a knob's value, liveHash "knob:…",
+// livetracks.h › Knobs: kept as MuseScore's own either way: its parameter left Live's panel). Both changed since they last
 // agreed (or they never agreed and differ): a conflict (the owner, 2026-10-01: "whenever there's conflict, it asks
 // the user to preserve one"), resolved by `choices` (none given: MuseScore's kept, now against Live's latest, so it
 // is asked again only when Live's changes again). `report`: a line per conflict and what was kept
@@ -237,8 +249,27 @@ double shapeAt(Shape shape, double x);
 // (the points there replaced), the envelope after it as before
 std::vector<Point> copyPoints(const Lane& lane, const std::vector<int>& indices);
 std::vector<int> pastePoints(Lane& lane, int tick, const std::vector<Point>& clip);
+// Ctrl+D over a time selection (Live's Duplicate; duplicateTimeSelection below): the envelope in [start, end) copied to
+// [end, end + (end - start)), cut at limit (the score's end), as drawn: a ramp across start or the cut split (its shape
+// kept: addPoint), of a jump at start only the value it jumps to, before the lane's first point the first point's value
+// (the dashed line), the ramp arriving at the cut as it arrives there. The target span's points replaced, the envelope
+// before it arriving and after it going on as before, jumps where they differ (replaceSpan, as pastePoints). False:
+// nothing changed (no point in either span, or no room before limit)
+bool duplicateSpan(Lane& lane, int start, int end, int limit);
 
 }     // namespace Edit
+
+//---------------------------------------------------------
+//   duplicateTimeSelection
+//    Ctrl+D over a time selection (the owner, 2026-10-12: "select all the automations in a bar, like I'm able to do in
+//    ableton, and just spam Ctrl+D to copy it over bars"; mscore/automationlanes.h › Time selection): whole bars
+//    [start, end) of a part copied to [end, end + len), cut at the score's end (no measures added): every lane the part
+//    has (shown or not: Edit::duplicateSpan; a changed lane gets "edited" now, as the editor's edits) and its notes' own
+//    values (PerformanceTechnique::duplicateNoteValues), one undo step. Returns the next time selection: [end, cut)
+//    ({-1, -1}: nothing fits, nothing done)
+//---------------------------------------------------------
+
+std::pair<int, int> duplicateTimeSelection(MasterScore* score, const Part* part, int start, int end);
 
 }     // namespace Automation
 }     // namespace Ms

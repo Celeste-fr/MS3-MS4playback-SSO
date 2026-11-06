@@ -62,6 +62,7 @@
 #include "scoretab.h"
 #include "scoreview.h"
 #include "automationlanes.h"
+#include "barruler.h"
 #include "searchComboBox.h"
 #include "selectdialog.h"
 #include "selectionwindow.h"
@@ -136,6 +137,11 @@
 #include "libmscore/soundlibrary.h"
 #include "libmscore/playbacksettings.h"
 #include "soundlibraryhost.h"
+#include "evenautomeasurer.h"
+#include "editwarmup.h"
+#include "lagprobesession.h"
+#include "playcapture.h"
+#include "libmscore/lagprobe.h"
 #include "libmscore/renderpreflight.h"
 #include "liveintegration.h"
 #include "liveclips.h"
@@ -143,10 +149,12 @@
 #include "soundlibrarycheck.h"
 #include "soundlibraryloadtimes.h"
 #include "playbackverify.h"
+#include "evenlevelsjob.h"
 #include "liveequivalence.h"
 #include "livesetexport.h"
 #include "livehelpers.h"
 #include "libmscore/livesetwriter.h"
+#include "libmscore/liveset.h"
 #include <QLockFile>
 #include <atomic>
 #include <map>
@@ -155,6 +163,7 @@
 #include "libmscore/partplayback.h"
 #include "playbackmode.h"
 #ifdef USE_VST3
+#include "audio/vst3/vst3plugin.h"
 #include "audio/vst3/vst3synth.h"
 #endif
 #include "libmscore/sym.h"
@@ -286,10 +295,13 @@ static QString verifyAudio;                // --verify-audio
 static QString verifyLibrary;              // --verify-library
 static bool verifyWav = false;             // --verify-wav
 static bool verifyShareable = false;       // --verify-shareable
+static bool evenLevelsMode = false;        // --even-levels: measure a score's even-levels corrections (evenlevelsjob.h)
+static EvenLevelsJob::Options evenLevelsOptions;
 static bool liveSetMode = false;           // --create-live-set / --live-equivalence (a score's Live Set, headless)
 static QString liveSetOut;                 // --create-live-set <file.als>
 static QString liveEquivalenceOut;         // --live-equivalence <folder>
 static QString liveSetReadback;            // --live-set-readback <file.als>
+static QString liveSetUpdate;              // --update-live-set <file.als>
 static bool liveEquivalenceWav = false;    // --live-equivalence-wav
 static bool liveEquivalenceStrict = false; // --live-equivalence-strict: a deterministic plug-in's thresholds
 static bool startWithNewScore = false;
@@ -574,6 +586,15 @@ void MuseScore::closeEvent(QCloseEvent* ev)
             }
 
       writeSettings();
+#ifdef USE_VST3
+      // the hosted plug-ins' instances go now (the sequencer stopped in writeSettings), so main unloads their modules
+      // with ExitDll before the process ends (Vst3Plugin::unloadModules: left to the loader, Kontakt 8's teardown ended
+      // MuseScore with 0xC000000D)
+      // (instances in helpers, vst3remote.h: the helpers end now; nothing they hold is kept, so neither a load in flight nor
+      // Kontakt's teardown is waited for)
+      Vst3Plugin::shutdownHosts(true);
+      SoundLibraryHost::instance()->release();
+#endif
 
       ev->accept();
 
@@ -660,6 +681,9 @@ void updateExternalValuesFromPreferences() {
             // patch plays its notes)
             if (output == SoundLib::Output::PLUGIN)
                   SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+                        // (the patch's own library: several, SoundLib::scoreLibraries)
+                        if (li.library)
+                              return SoundLibraryHost::hasSetup(*li.library, li.name);
                         std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
                         return library && SoundLibraryHost::hasSetup(*library, li.name);
                         });
@@ -668,6 +692,12 @@ void updateExternalValuesFromPreferences() {
             if (mscore)
                   for (MasterScore* s : mscore->scores())
                         s->setPlaylistDirty();
+            }
+      // the other engines a part may play (soundlibrary.h › engines: Vial Instrumental next to SSO), each one's variant
+      if (updateSoundEngines() && mscore) {
+            for (MasterScore* s : mscore->scores())
+                  s->setPlaylistDirty();
+            mscore->updatePlaybackMode();
             }
 
       MScore::selectColor[0] = preferences.getColor(PREF_UI_SCORE_VOICE1_COLOR);
@@ -2090,7 +2120,6 @@ MuseScore::MuseScore()
             }
 
       menuEdit->addSeparator();
-      menuEdit->addAction(getAction("reload-playback-settings"));
       pref = new QAction("", 0);
       connect(pref, SIGNAL(triggered()), this, SLOT(startPreferenceDialog()));
       menuEdit->addAction(pref);
@@ -2248,6 +2277,11 @@ MuseScore::MuseScore()
       a = getAction("toggle-automation-lanes");
       a->setCheckable(true);
       a->setChecked(AutomationLanes::enabled());
+      menuView->addAction(a);
+      // every bar's number in Continuous View (barruler.h)
+      a = getAction("toggle-bar-ruler");
+      a->setCheckable(true);
+      a->setChecked(BarRuler::enabled());
       menuView->addAction(a);
       menuView->addSeparator();
 
@@ -2420,6 +2454,7 @@ MuseScore::MuseScore()
       menuTools->addAction(getAction("transpose"));
       menuTools->addAction(getAction("tuning"));
       menuTools->addAction(getAction("adapt-keysigs-to-clefs"));
+      menuTools->addAction(getAction("even-levels"));
       menuTools->addSeparator();
       menuTools->addAction(getAction("explode"));
       menuTools->addAction(getAction("implode"));
@@ -2651,7 +2686,7 @@ MuseScore::MuseScore()
       Workspace::addMenuAndString(menuHelp,        "menu-help");
       Workspace::addMenuAndString(menuTours,       "menu-tours");
 
-      if (!extractMode && !verifyMode && !liveSetMode)    // (the background extract writes nothing of the working MuseScore's)
+      if (!extractMode && !verifyMode && !liveSetMode && !evenLevelsMode)    // (the background extract writes nothing of the working MuseScore's)
             Workspace::writeGlobalMenuBar(mb);
 
       if (!MScore::noGui) {
@@ -2671,7 +2706,12 @@ MuseScore::MuseScore()
       if (seq) {
             connect(seq, SIGNAL(started()), SLOT(seqStarted()));
             connect(seq, SIGNAL(stopped()), SLOT(seqStopped()));
+            // even levels measured in the background pause while MuseScore plays (evenautomeasurer.h)
+            connect(seq, &Seq::started, EvenAutoMeasurer::instance(), []() { EvenAutoMeasurer::instance()->playing(true); });
+            connect(seq, &Seq::stopped, EvenAutoMeasurer::instance(), []() { EvenAutoMeasurer::instance()->playing(false); });
             }
+      // Play grayed while the score's sound library patches load (soundlibraryhost.h)
+      connect(SoundLibraryHost::instance(), &SoundLibraryHost::loadingChanged, this, []() { SoundLibraryHost::updatePlayAction(); });
       loadScoreList();
 
       QClipboard* cb = QApplication::clipboard();
@@ -3169,6 +3209,7 @@ void MuseScore::updatePaletteBeamMode()
 
 void MuseScore::updateInspector()
       {
+      LagProbe::Scope probe("MuseScore::updateInspector");
       // skip update if no inspector, or if inspector is hidden and there is a GUI
       // (important not to skip when running test scripts)
       if (_inspector && (_inspector->isVisible() || MScore::testMode || scriptTestMode))
@@ -3443,6 +3484,7 @@ void MuseScore::setCurrentScoreView(ScoreView* view)
       if (seq)
             seq->setScoreView(cv);
       SoundLibraryHost::instance()->preloadSoon(cs);    // the sound library's instances, ahead of play
+      EvenAutoMeasurer::instance()->setScore(cs);       // even levels measured in the background (evenautomeasurer.h)
       LiveIntegration::Watcher::instance()->update();   // a linked Live Set, re-imported when Live saves it
       LiveIntegration::LiveClipsLink::instance()->setScore(cs ? cs->masterScore() : nullptr);  // Live plays the score
       LiveIntegration::LiveClipEditor::instance()->setCurrentScore(cs ? cs->masterScore() : nullptr);  // a Live clip edited here
@@ -3863,7 +3905,11 @@ void MuseScore::restartAudioEngine()
       if (seq) {
             Driver* driver = driverFactory(seq, "");
             if (driver) {
-                  // Updating synthesizer's sample rate
+                  // the new device's sample rate everywhere, as at startup: the sequencer's frames and the metronome
+                  // (MScore::sampleRate; before 2026-10-29 it kept the old device's, so a device at another rate played
+                  // at the wrong speed), FluidSynth, the effects and the hosted plug-ins (Vst3Synth::init: each
+                  // instance's setupProcessing again, in a helper process too)
+                  MScore::sampleRate = driver->sampleRate();
                   if (seq->synti()) {
                         seq->synti()->setSampleRate(driver->sampleRate());
                         seq->synti()->init();
@@ -5155,6 +5201,8 @@ static bool verifyInBackground(const QStringList& argv)
             log(line);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            if (li.library)             // (the patch's own library: several, SoundLib::scoreLibraries)
+                  return SoundLibraryHost::hasSetup(*li.library, li.name);
             std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
             return l && SoundLibraryHost::hasSetup(*l, li.name);
             });
@@ -5172,10 +5220,102 @@ static bool verifyInBackground(const QStringList& argv)
 #ifdef Q_OS_WIN
             DialogWatch watch;
 #endif
-            folder = PlaybackVerifier::run(options, log);
+            // (out of memory: said in the log, the process ends with a failure instead of std::terminate's fail-fast; the
+            // report folder keeps what was written)
+            try {
+                  folder = PlaybackVerifier::run(options, log);
+                  }
+            catch (const std::bad_alloc&) {
+                  log("out of memory: the playback verification stops (the plug-in's instances and the renders need more "
+                      "memory than this computer has free)");
+                  folder.clear();
+                  }
       }
       if (!folder.isEmpty() && verifyOut.isEmpty())
             QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(folder).absolutePath()));
+      return !folder.isEmpty();
+      }
+
+//---------------------------------------------------------
+//   evenLevelsInBackground
+//    MuseScore --even-levels <score> [--even-levels-out <folder>] [--even-levels-parts …] [--even-levels-bars a-b]
+//    [--even-levels-play] [--verify-library <library>]: EvenLevelsJob (evenlevelsjob.h) as a process of its own, like the
+//    background verification (its setups copy and lock: one of them at a time), log "background even levels.log" and
+//    stderr (Tools › Even Out Levels… shows the last line)
+//---------------------------------------------------------
+
+static bool evenLevelsInBackground(const QStringList&)
+      {
+#ifdef Q_OS_WIN
+      SetPriorityClass(GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS);
+#endif
+      ArticulationCheckDialog::setBackgroundLog("background even levels.log");
+      auto log = [](const QString& line) {
+            ArticulationCheckDialog::logBackground(line);
+            fprintf(stderr, "%s\n", qPrintable(line));
+            fflush(stderr);
+            };
+      QString path = verifyLibrary;
+      if (!path.isEmpty() && !QFileInfo::exists(path))
+            path = mscoreGlobalShare + "soundlibraries/" + verifyLibrary + ".xml";
+      if (path.isEmpty()) {
+            path = preferences.getString(PREF_IO_SOUNDLIBRARY);
+            if (path.isEmpty())
+                  path = soundLibraryPath();
+            }
+      if (path.isEmpty() || !QFileInfo::exists(path)) {
+            log(QString("no sound library \"%1\" (share/soundlibraries has its maps)").arg(verifyLibrary));
+            return false;
+            }
+      QString error;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::Library::load(path, &error);
+      if (!library) {
+            log(error);
+            return false;
+            }
+      SoundLib::setCurrent(library);
+      const QString mine = SoundLibraryHost::setupsFolder(*library);
+      SoundLibraryHost::setDataFolder(QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                                      + "/MuseScore Sound Library Check/background verify setups");
+      const QString copy = SoundLibraryHost::setupsFolder(*library);
+      QDir().mkpath(copy);
+      QLockFile lock(copy + "/background playback verify.lock");
+      if (!lock.tryLock(0)) {
+            log("a playback verification or measurement is already running with these setups; this one waits");
+            if (!lock.lock()) {
+                  log("could not take the setups' lock");
+                  return false;
+                  }
+            }
+      const RenderPreflight::Setups synced = RenderPreflight::syncJobCopy(mine, copy, RenderPreflight::CopyMode::VERIFY,
+                                                                          SoundLibraryHost::makesSetups(*library));
+      RenderPreflight::setSetups(synced);
+      log(QString("even-levels measurement started; setups in %1 (%2 copied from %3)")
+          .arg(QDir::toNativeSeparators(copy)).arg(synced.copied).arg(QDir::toNativeSeparators(mine)));
+      SoundLibraryHost::loadCalibration();
+      for (const QString& line : RenderPreflight::lines("even-levels measurement"))
+            log(line);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            if (li.library)             // (the patch's own library: several, SoundLib::scoreLibraries)
+                  return SoundLibraryHost::hasSetup(*li.library, li.name);
+            std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
+            return l && SoundLibraryHost::hasSetup(*l, li.name);
+            });
+      QString folder;
+      {
+#ifdef Q_OS_WIN
+            DialogWatch watch;
+#endif
+            try {
+                  folder = EvenLevelsJob::run(evenLevelsOptions, log);
+                  }
+            catch (const std::bad_alloc&) {
+                  log("out of memory: the even-levels measurement stops (the plug-in's instances and the renders need more "
+                      "memory than this computer has free); nothing written");
+                  folder.clear();
+                  }
+      }
       return !folder.isEmpty();
       }
 
@@ -5218,11 +5358,13 @@ static bool liveSetInBackground(const QStringList& argv)
             log(line);
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
       SoundLib::setAvailable([](const SoundLib::LibInstrument& li) {
+            if (li.library)             // (the patch's own library: several, SoundLib::scoreLibraries)
+                  return SoundLibraryHost::hasSetup(*li.library, li.name);
             std::shared_ptr<const SoundLib::Library> l = SoundLib::current();
             return l && SoundLibraryHost::hasSetup(*l, li.name);
             });
       std::unique_ptr<MasterScore> score(argv.isEmpty() ? nullptr : mscore->readScore(argv[0]));
-      if (!score && (!liveSetOut.isEmpty() || !liveEquivalenceOut.isEmpty())) {
+      if (!score && (!liveSetOut.isEmpty() || !liveEquivalenceOut.isEmpty() || !liveSetUpdate.isEmpty())) {
             log("cannot read " + (argv.isEmpty() ? QString("the score") : argv[0]));
             return false;
             }
@@ -5240,11 +5382,44 @@ static bool liveSetInBackground(const QStringList& argv)
                   ok = false;
                   }
             else {
-                  const QString report = LiveIntegration::reportText(plan, liveSetOut, false);
+                  // what was written, recorded in the score as the window's Create Live Set records it (recordWritten:
+                  // an unchanged envelope MuseScore wrote, e.g. a hosted M-Master Vol, then comes back as nothing), and
+                  // the score saved when that changed it, as Update Live Set below saves it
+                  LiveIntegration::recordWritten(score.get(), plan.spec, LiveSetWriter::xml(plan.spec), LiveSet::read(liveSetOut), false);
+                  QString report = LiveIntegration::reportText(plan, liveSetOut, false);
+                  if (!score->undoStack()->isClean()) {
+                        if (score->saveFile(false))
+                              report += "\n" + QString("The score was saved (%1).").arg(score->masterScore()->fileInfo()->absoluteFilePath());
+                        else
+                              report += "\n" + QString("The score could not be saved: %1").arg(MScore::lastError);
+                        }
                   log(report);
                   QFile f(liveSetOut + ".txt");       // (the console isn't seen on Windows)
                   if (f.open(QIODevice::WriteOnly | QIODevice::Text))
                         f.write((report + "\n\n" + preflight.join("\n") + "\n").toUtf8());
+                  }
+            }
+      // Update Live Set (livesetexport.h): the set edited in place, its backup, the report (also "<set>.update.txt"); the
+      // score saved when the update changed it (what the set has of MuseScore's, timings taken from Live), as the owner
+      // would save it after Update Live Set in the window
+      if (!liveSetUpdate.isEmpty()) {
+            LiveIntegration::UpdateResult r;
+            if (!LiveIntegration::updateLiveSet(score.get(), *library, liveSetUpdate, &r, &error)) {
+                  log(error);
+                  ok = false;
+                  }
+            else {
+                  QString text = r.text();
+                  if (!score->undoStack()->isClean()) {
+                        if (score->saveFile(false))
+                              text += "\n" + QString("The score was saved (%1).").arg(score->masterScore()->fileInfo()->absoluteFilePath());
+                        else
+                              text += "\n" + QString("The score could not be saved: %1").arg(MScore::lastError);
+                        }
+                  log(text);
+                  QFile f(liveSetUpdate + ".update.txt");
+                  if (f.open(QIODevice::WriteOnly | QIODevice::Text))
+                        f.write((text + "\n\n" + preflight.join("\n") + "\n").toUtf8());
                   }
             }
       if (!liveSetReadback.isEmpty()) {
@@ -5281,6 +5456,8 @@ static bool processNonGui(const QStringList& argv)
             return liveSetInBackground(argv);
       if (verifyMode)
             return verifyInBackground(argv);
+      if (evenLevelsMode)
+            return evenLevelsInBackground(argv);
       if (extractMode)
             return extractInBackground(argv);
       if (cliSaveOnline)
@@ -6011,6 +6188,7 @@ void MuseScore::changeState(ScoreState val)
       bool noteEntry = val & STATE_NOTE_ENTRY;
       a->setChecked(noteEntry);
       _sstate = val;
+      SoundLibraryHost::updatePlayAction();     // (grayed while the score's sound library patches load)
 
       emit scoreStateChanged(_sstate);
 
@@ -6147,6 +6325,7 @@ void MuseScore::writeSettings()
             synthControl->writeSettings();
       settings.setValue("synthControlVisible", synthControl && synthControl->isVisible());
       settings.setValue("mixerVisible", mixer && mixer->isVisible());
+      EvenAutoMeasurer::instance()->shutdown();      // (its plug-in instances and workers, before the audio goes)
       if (seq) {
             seq->exit();
             }
@@ -6284,6 +6463,7 @@ void MuseScore::readSettings()
 
 void MuseScore::play(Element* e) const
       {
+      LagProbe::Scope probe("MuseScore::play (note preview)");
       if (noSeq || !(seq && seq->isRunning()) || !preferences.getBool(PREF_SCORE_NOTE_PLAYONCLICK))
             return;
 
@@ -6292,8 +6472,13 @@ void MuseScore::play(Element* e) const
             play(e, note->ppitch());
             }
       else if (e->isChord()) {
-            seq->stopNotes();
             Chord* c   = toChord(e);
+            // as playback plays it: the sound library's parts on their routes, MS4's on the built-in synthesizer
+            // (Seq::playNotes, libmscore/notepreview.h); else MuseScore 3.6's click
+            std::vector<const Note*> notes(c->notes().begin(), c->notes().end());
+            if (seq->playNotes(notes, MScore::defaultPlayDuration))
+                  return;
+            seq->stopNotes();
             Part* part = c->staff()->part();
             Fraction tick   = c->segment() ? c->segment()->tick() : Fraction(0,1);
             Instrument* instr = part->instrument(tick);
@@ -6335,6 +6520,9 @@ void MuseScore::play(Element* e, int pitch) const
             return;
       if (preferences.getBool(PREF_SCORE_NOTE_PLAYONCLICK) && e->isNote()) {
             Note* note = static_cast<Note*>(e);
+            // as playback plays it (Seq::playNotes, libmscore/notepreview.h); else MuseScore 3.6's click
+            if (pitch == note->ppitch() && seq->playNotes({ note }, MScore::defaultPlayDuration))
+                  return;
 
             Note* masterNote = note;
             if (note->linkList().size() > 1) {
@@ -7540,6 +7728,8 @@ void MuseScore::cmd(QAction* a)
       MScore::setError(MS_NO_ERROR);
 
       QString cmdn(a->data().toString());
+      LagProbe::Scope probe("MuseScore::cmd");
+      probe.setDetail(cmdn);
 
       if (MScore::debugMode)
             qDebug("MuseScore::cmd <%s>", qPrintable(cmdn));
@@ -7612,6 +7802,7 @@ void MuseScore::cmd(QAction* a)
 
 void MuseScore::endCmd(bool undoRedo)
       {
+      LagProbe::Scope probe("MuseScore::endCmd");
 #ifdef SCRIPT_INTERFACE
       getPluginEngine()->beginEndCmd(this, undoRedo);
 #endif
@@ -7620,6 +7811,12 @@ void MuseScore::endCmd(bool undoRedo)
       if (MScore::_error != MS_NO_ERROR)
             showError();
       if (cs) {
+            {
+                  LagProbe::Scope evenProbe("EvenAutoMeasurer::edited");
+                  EvenAutoMeasurer::instance()->edited(cs);    // (an edit: even levels near it measured in the background)
+                  SoundLibraryHost::instance()->scoreEdited(cs);  // (new patches it needs: loaded in the background)
+                  EditWarmup::instance()->edited(cs);          // (its renders for the next sound, between events: editwarmup.h)
+            }
             setPos(cs->inputState().tick());
             updateInputState(cs);
             updateUndoRedo();
@@ -7653,6 +7850,7 @@ void MuseScore::endCmd(bool undoRedo)
             if (e && (cs->playNote() || cs->playChord())
                         && entryMethod != NoteEntryMethod::REALTIME_AUTO
                         && entryMethod != NoteEntryMethod::REALTIME_MANUAL) {
+                  LagProbe::Scope playProbe("endCmd: note preview");
                   if (cs->playChord() && preferences.getBool(PREF_SCORE_CHORD_PLAYONADDNOTE) &&  e->type() == ElementType::NOTE)
                         play(static_cast<Note*>(e)->chord());
                   else
@@ -7779,8 +7977,15 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   seq->seek(tick.ticks());
                   if (cv) {
                         Measure* m = cs->tick2measureMM(tick);
+                        // (on the staff selected: the selection and the automation lanes stay on its part)
+                        const Selection& sel = cs->selection();
+                        int staff = -1;
+                        if (sel.isRange())
+                              staff = sel.staffStart();
+                        else if (sel.element())
+                              staff = sel.element()->staffIdx();
                         if (m)
-                              cv->gotoMeasure(m);
+                              cv->gotoMeasure(m, staff);
                         }
                   if (playPanel)
                         playPanel->heartBeat(0, 0, 0);
@@ -7906,6 +8111,11 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                         }
                   a->setChecked(cs && cs->scordaturaView());
                   }
+            else if (cmd == "toggle-bar-ruler") {
+                  BarRuler::setEnabled(a->isChecked());
+                  if (cv)
+                        cv->update();
+                  }
             else if (cmd == "toggle-automation-lanes") {
                   AutomationLanes::setEnabled(a->isChecked());
                   if (cv && cv->automationLanes()) {
@@ -7968,12 +8178,14 @@ void MuseScore::cmd(QAction* a, const QString& cmd)
                   d.exec();
                   }
             }
+      else if (cmd == "even-levels")
+            EvenLevelsJob::runFromGui(cs, this);
       else if (cmd == "adapt-keysigs-to-clefs") {
             if (cs) {
                   cs->startCmd();
                   const int n = cs->cmdAdaptKeySigsToClefs();
                   cs->endCmd();
-                  QMessageBox::information(this, tr("Adapt key signatures to clefs"), n
+                  QMessageBox::information(this, tr("Adapt Key Signatures to Clefs"), n
                      ? tr("%n key signature(s) placed for their staff's clef.", "", n)
                      : tr("No key signature needed adapting: none on a non-treble staff is placed as a treble staff's at the same place."));
                   }
@@ -8469,11 +8681,9 @@ void MuseScore::switchLayoutMode(int val)
 
 void MuseScore::switchLayoutMode(LayoutMode mode)
       {
-      // find a measure to use as reference, if possible
-      QRectF view = cv->toLogical(QRect(0.0, 0.0, width(), height()));
-      Measure* m = cs->firstMeasureMM();
-      while (m && !view.intersects(m->canvasBoundingRect()))
-            m = m->nextMeasureMM();
+      // the measure to keep in view: the selection's if it is visible, else the one at the view's centre;
+      // it is centred horizontally after the switch, its staff at the same height (ScoreView::viewAnchor)
+      const ViewAnchor anchor = cv->viewAnchor();
 
       cv->loopUpdate(getAction("loop")->isChecked());
 
@@ -8507,8 +8717,7 @@ void MuseScore::switchLayoutMode(LayoutMode mode)
                   }
             }
 
-      if (m && m != cs->firstMeasureMM())
-            cv->adjustCanvasPosition(m, false);
+      cv->showViewAnchor(anchor);
       if (cv->noteEntryMode())
             cv->moveCursor();
       }
@@ -9256,7 +9465,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption({"L", "layout-debug"}, "Layout debug mode"));
       parser.addOption(QCommandLineOption({"s", "no-synthesizer"}, "No internal synthesizer"));
       parser.addOption(QCommandLineOption({"m", "no-midi"}, "No MIDI"));
-      parser.addOption(QCommandLineOption({"a", "use-audio"}, "Use audio driver: jack, alsa, pulse, or portaudio", "driver"));
+      parser.addOption(QCommandLineOption({"a", "use-audio"}, "Use audio driver: jack, alsa, pulse, portaudio, or null (no device, a test tool)", "driver"));
       parser.addOption(QCommandLineOption({"n", "new-score"}, "Start with new score"));
       parser.addOption(QCommandLineOption({"I", "dump-midi-in"}, "Dump midi input"));
       parser.addOption(QCommandLineOption({"O", "dump-midi-out"}, "Dump midi output"));
@@ -9336,11 +9545,25 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
       parser.addOption(QCommandLineOption("verify-wav", "Use with --verify-playback: also keep the full renders"));
       parser.addOption(QCommandLineOption("verify-shareable", "Use with --verify-playback: only report.json and summary.txt, no "
                                           "audio clips and no lists of every note (a report on your own scores to post)"));
+      parser.addOption(QCommandLineOption("even-levels", "Measure the score's slurred passages on Performance legato patches with "
+                                          "the sound library's plug-in and fit each note's even-levels correction (evenlevelsjob.h), "
+                                          "without a window: result.json and the score with them in Documents/MuseScore Sound "
+                                          "Library Check", "score"));
+      parser.addOption(QCommandLineOption("even-levels-out", "Use with --even-levels: the folder for the result", "folder"));
+      parser.addOption(QCommandLineOption("even-levels-parts", "Use with --even-levels: the parts (numbers from 1, or names, "
+                                          "comma separated); default: every library part", "parts"));
+      parser.addOption(QCommandLineOption("even-levels-bars", "Use with --even-levels: the bars, e.g. 1-8", "first-last"));
+      parser.addOption(QCommandLineOption("even-levels-ticks", "Use with --even-levels: the ticks, e.g. 0-7680", "from-to"));
+      parser.addOption(QCommandLineOption("even-levels-play", "Use with --even-levels: also a copy of the score with "
+                                          "[levels] evenLevels on in its playback settings"));
       parser.addOption(QCommandLineOption("create-live-set", "Write the score's Ableton Live Set (Create Live Set) without a "
                                           "window; the score follows (LIVE.md)", "file.als"));
       parser.addOption(QCommandLineOption("live-equivalence", "Compare the score's playback through the Live Set and its clips "
                                           "with MuseScore's own (liveequivalence.h); the score follows; the report goes to the "
                                           "folder", "folder"));
+      parser.addOption(QCommandLineOption("update-live-set", "Update a Live Set made by Create Live Set with the score, in place "
+                                          "(LIVE.md: Update Live Set; a backup in its Backup folder; the score saved when the "
+                                          "update changed it); the score follows", "file.als"));
       parser.addOption(QCommandLineOption("live-set-readback", "Load each plug-in state of a Live Set into the library's "
                                           "plug-in and read back the parameters Live's panel lists (with --create-live-set: "
                                           "the set it wrote)", "file.als"));
@@ -9455,10 +9678,33 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
             verifyWav = parser.isSet("verify-wav");
             verifyShareable = parser.isSet("verify-shareable");
             }
-      if ((liveSetMode = parser.isSet("create-live-set") || parser.isSet("live-equivalence") || parser.isSet("live-set-readback"))) {
+      if ((evenLevelsMode = parser.isSet("even-levels"))) {
+            MScore::noGui = true;
+            evenLevelsOptions.score = parser.value("even-levels");
+            evenLevelsOptions.out = parser.value("even-levels-out");
+            if (parser.isSet("even-levels-parts"))
+                  for (const QString& p : parser.value("even-levels-parts").split(','))
+                        if (!p.trimmed().isEmpty())
+                              evenLevelsOptions.parts << p.trimmed();
+            const QStringList bars = parser.value("even-levels-bars").split('-');
+            if (bars.size() == 2) {
+                  evenLevelsOptions.firstBar = bars[0].toInt();
+                  evenLevelsOptions.lastBar = bars[1].toInt();
+                  }
+            const QStringList ticks = parser.value("even-levels-ticks").split('-');
+            if (ticks.size() == 2) {
+                  evenLevelsOptions.fromTick = ticks[0].toInt();
+                  evenLevelsOptions.toTick = ticks[1].toInt();
+                  }
+            evenLevelsOptions.playCopy = parser.isSet("even-levels-play");
+            verifyLibrary = parser.value("verify-library");
+            }
+      if ((liveSetMode = parser.isSet("create-live-set") || parser.isSet("live-equivalence") || parser.isSet("live-set-readback")
+                         || parser.isSet("update-live-set"))) {
             MScore::noGui = true;
             liveSetOut = parser.value("create-live-set");
             liveSetReadback = parser.value("live-set-readback");
+            liveSetUpdate = parser.value("update-live-set");
             liveEquivalenceOut = parser.value("live-equivalence");
             liveEquivalenceWav = parser.isSet("live-equivalence-wav");
             liveEquivalenceStrict = parser.isSet("live-equivalence-strict");
@@ -9625,7 +9871,7 @@ MuseScoreApplication::CommandLineParseResult MuseScoreApplication::parseCommandL
 
       QStringList argv = parser.positionalArguments();
 
-      if (app && !converterMode && !pluginMode && !extractMode && !verifyMode && !liveSetMode) {
+      if (app && !converterMode && !pluginMode && !extractMode && !verifyMode && !liveSetMode && !evenLevelsMode) {
             if (!argv.isEmpty()) {
                   int ok = true;
                   for (const QString& message : qAsConst(argv)) {
@@ -9738,12 +9984,23 @@ int runApplication(int& argc, char** av)
             qApp->processEvents();
 #endif
             const bool ok = processNonGui(cmdLineParseResult.argv);
+#ifdef USE_VST3
+            // the background jobs' instances are gone: their modules unloaded as the SDK unloads them (ExitDll), not by
+            // the loader at exit (Vst3Plugin::unloadModules: Kontakt's teardown then crashed every job, 0xC000000D)
+            Vst3Plugin::shutdownHosts();      // (host processes: their instances and modules, in each)
+            Vst3Plugin::unloadModules();
+#endif
             return ok ? EXIT_SUCCESS : EXIT_FAILURE;
             }
 
       QDir::setCurrent(app->applicationDirPath());
 
-      return qApp->exec();
+      const int rc = qApp->exec();
+#ifdef USE_VST3
+      Vst3Plugin::shutdownHosts();        // (host processes: their instances and modules, in each)
+      Vst3Plugin::unloadModules();        // (the modules no instance holds any more)
+#endif
+      return rc;
       }
 
 //---------------------------------------------------------
@@ -10090,6 +10347,8 @@ void MuseScore::init(QStringList& argv)
             showSplashMessage(sc, tr("Loading scores…"));
             loadScores(argv);
             }
+      LagProbeSession::startIfRequested();      // (MS_LAG_PROBE: the scripted session, lagprobesession.h)
+      PlayCapture::startIfRequested();          // (MS_PLAY_CAPTURE: one play recorded, playcapture.h)
 
       if (mscore->hasToCheckForExtensionsUpdate())
             mscore->checkForExtensionsUpdate();

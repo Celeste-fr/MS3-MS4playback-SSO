@@ -15,6 +15,7 @@
 #include <complex>
 #include <iterator>
 #include <map>
+#include <tuple>
 #include <cstdio>
 #include <numeric>
 #include <set>
@@ -157,10 +158,10 @@ double Spectrogram::timeOf(int frame) const
       return (double(frame) * _hop + _size / 2.0 - _pad) / _rate;
       }
 
-std::vector<int> Spectrogram::partialBins(const std::vector<int>& pitches, int harmonics, int spread) const
+std::vector<int> Spectrogram::partialBins(const std::vector<double>& pitches, int harmonics, int spread) const
       {
       std::set<int> bins;
-      for (int p : pitches) {
+      for (double p : pitches) {
             const double f0 = 440.0 * std::pow(2.0, (p - 69) / 12.0);
             for (int k = 1; k <= harmonics; ++k) {
                   const double f = k * f0;
@@ -215,11 +216,11 @@ double Spectrogram::power(const std::vector<int>& bins, int from, int to, bool m
       return maximum ? best : sum / (to - from);
       }
 
-std::vector<int> Spectrogram::finePartialBins(const std::vector<int>& pitches, int harmonics, int spread) const
+std::vector<int> Spectrogram::finePartialBins(const std::vector<double>& pitches, int harmonics, int spread) const
       {
       const int n = fineSize();
       std::set<int> bins;
-      for (int p : pitches) {
+      for (double p : pitches) {
             const double f0 = 440.0 * std::pow(2.0, (p - 69) / 12.0);
             for (int k = 1; k <= harmonics; ++k) {
                   const double f = k * f0;
@@ -259,7 +260,7 @@ double Spectrogram::finePower(const std::vector<int>& bins, double seconds) cons
 //   strikes
 //---------------------------------------------------------
 
-std::vector<Strike> strikes(const std::vector<Note>& notes, double tolerance)
+std::vector<Strike> strikes(const std::vector<Note>& notes, double tolerance, bool tuned)
       {
       std::vector<int> order(notes.size());
       std::iota(order.begin(), order.end(), 0);
@@ -272,9 +273,15 @@ std::vector<Strike> strikes(const std::vector<Note>& notes, double tolerance)
                   s.time = n.on;
                   result.push_back(s);
                   }
-            result.back().notes.push_back(i);
-            if (std::find(result.back().pitches.begin(), result.back().pitches.end(), n.pitch) == result.back().pitches.end())
-                  result.back().pitches.push_back(n.pitch);
+            Strike& k = result.back();
+            k.notes.push_back(i);
+            if (std::find(k.pitches.begin(), k.pitches.end(), n.pitch) == k.pitches.end())
+                  k.pitches.push_back(n.pitch);
+            const double p = n.pitch + (tuned ? n.cents / 100.0 : 0.0);
+            if (std::find(k.tuned.begin(), k.tuned.end(), p) == k.tuned.end())
+                  k.tuned.push_back(p);
+            if (n.expected >= 0 && (k.expected < 0 || n.expected < k.expected))
+                  k.expected = n.expected;
             }
       return result;
       }
@@ -308,6 +315,35 @@ double bestOffset(const Spectrogram& s, const std::vector<Strike>& strikes, doub
       return best;
       }
 
+OffsetCurve offsetCurve(const Spectrogram& s, const std::vector<Strike>& strikes, double from, double to, double step,
+                        double distance)
+      {
+      OffsetCurve c;
+      c.bestSum = -1;
+      // (k * step from `from`, as bestOffset steps: the same offsets to within rounding)
+      const int n = int(std::floor((to - from) / step + 1e-6));
+      for (int k = 0; k <= n; ++k) {
+            const double o = from + k * step;
+            const double sum = onsetFlux(s, strikes, o);
+            c.sums.push_back({ o, sum });
+            if (sum > c.bestSum) {
+                  c.bestSum = sum;
+                  c.best = o;
+                  }
+            }
+      c.rival = c.best;
+      c.rivalSum = -1;
+      for (const auto& x : c.sums)
+            if (std::fabs(x.first - c.best) >= distance - 1e-9 && x.second > c.rivalSum) {
+                  c.rivalSum = x.second;
+                  c.rival = x.first;
+                  }
+      c.margin = c.rivalSum > 0 ? c.bestSum / c.rivalSum - 1 : 1e9;
+      if (c.rivalSum < 0)
+            c.rivalSum = 0;
+      return c;
+      }
+
 //---------------------------------------------------------
 //   measure
 //    a strike's attack features at the offset
@@ -329,7 +365,7 @@ static void measure(const Spectrogram& s, Strike& k, double offset, const Settin
       const float bg = medianF(ctx);
       k.broad = peak;
       k.local = bg > 0 ? peak / bg : 0;
-      const std::vector<int> bins = s.partialBins(k.pitches);
+      const std::vector<int> bins = s.partialBins(k.tuned);
       const int from = std::max(1, c - around);
       const std::vector<float> pf = s.pitchFlux(bins, from, c + around);
       float pp = 0;
@@ -356,12 +392,36 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
       {
       Result r;
       r.peakDb = s.peak() > 0 ? 20 * std::log10(s.peak()) : -200;
-      r.strikeList = strikes(notes, settings.chordTolerance);
+      r.strikeList = strikes(notes, settings.chordTolerance, settings.tunedBins);
       std::vector<Strike>& ks = r.strikeList;
       r.strikes = int(ks.size());
       if (ks.empty() || s.frames() < 2)
             return r;
-      r.offset = bestOffset(s, ks, settings.offsetFrom, settings.offsetTo);
+      // the offset: the wide search, its margin; with the notes' expected latencies, a residual search around them
+      {
+            const OffsetCurve wide = offsetCurve(s, ks, settings.offsetFrom, settings.offsetTo, 0.005, settings.rivalDistance);
+            r.searchOffset = r.offset = wide.best;
+            r.offsetRival = wide.rival;
+            r.offsetMargin = wide.margin;
+            std::vector<double> known;
+            for (const Strike& k : ks)
+                  if (k.expected >= 0)
+                        known.push_back(k.expected);
+            if (settings.expectedOnsets && !known.empty() && known.size() * 2 >= ks.size()) {
+                  const double e = median(known);
+                  std::vector<Strike> shifted = ks;
+                  for (Strike& k : shifted)
+                        k.time += (k.expected >= 0 ? k.expected : e) - e;
+                  const OffsetCurve residual = offsetCurve(s, shifted, e - settings.expectedWindow, e + settings.expectedWindow, 0.005,
+                                                       settings.rivalDistance);
+                  r.offset = residual.best;
+                  r.expectedOffset = true;
+                  r.expectedLatency = e;
+                  r.offsetAtEdge = std::fabs(residual.best - e) >= settings.expectedWindow - 0.005 - 1e-9;
+                  }
+            else
+                  r.offsetAmbiguous = settings.offsetMargin && wide.margin < settings.ambiguousMargin;
+      }
 
       // attacks
       std::vector<double> peaks;
@@ -425,16 +485,18 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
       // each note on its own partials (needs the reference: what this note should give)
       if (reference && ref) {
             std::vector<bool> inFlagged(notes.size(), false);
+            // a note's pitch for its partials: the key with its cents
+            auto tunedOf = [&](size_t i) { return notes[i].pitch + (settings.tunedBins ? notes[i].cents / 100.0 : 0.0); };
             // the note's partials (fine bins) that no other note sounding from `from` to `to` has: its
             // harmonics 1-4, each with a bin either side, none within 2 bins of another's harmonic 1-8
             auto ownBins = [&](const Spectrogram& sp, size_t i, double from, double to) {
-                  std::vector<int> others;
+                  std::vector<double> others;
                   for (size_t j = 0; j < notes.size(); ++j)
-                        if (j != i && notes[j].on <= to && notes[j].off + 0.3 >= from && notes[j].pitch != notes[i].pitch)
-                              others.push_back(notes[j].pitch);
+                        if (j != i && notes[j].on <= to && notes[j].off + 0.3 >= from && tunedOf(j) != tunedOf(i))
+                              others.push_back(tunedOf(j));
                   const std::vector<int> shared = sp.finePartialBins(others, 8, 2);
                   std::vector<int> own;
-                  for (int b : sp.finePartialBins({ notes[i].pitch }, 4, 0)) {
+                  for (int b : sp.finePartialBins({ tunedOf(i) }, 4, 0)) {
                         bool clear = true;
                         for (int d = -1; d <= 1; ++d)
                               clear = clear && !std::binary_search(shared.begin(), shared.end(), b + d);
@@ -470,15 +532,15 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   const Note& n = notes[i];
                   // its fundamental and 2nd harmonic, those another note sounding then has (within 2
                   // bins of its harmonics 1-8) left out, unless both are (an octave above another note)
-                  std::vector<int> others;
+                  std::vector<double> others;
                   for (size_t j = 0; j < notes.size(); ++j)
-                        if (j != i && notes[j].on <= n.on + 0.15 && notes[j].off + 0.3 >= n.on - 0.1 && notes[j].pitch != n.pitch)
-                              others.push_back(notes[j].pitch);
+                        if (j != i && notes[j].on <= n.on + 0.15 && notes[j].off + 0.3 >= n.on - 0.1 && tunedOf(j) != tunedOf(i))
+                              others.push_back(tunedOf(j));
                   const std::vector<int> shared = s.finePartialBins(others, 8, 2);
                   std::vector<int> bins;
                   for (int h = 1; h <= 2; ++h) {
-                        const std::vector<int> hb = s.finePartialBins({ n.pitch }, h, 1);
-                        const std::vector<int> prev = h > 1 ? s.finePartialBins({ n.pitch }, h - 1, 1) : std::vector<int>();
+                        const std::vector<int> hb = s.finePartialBins({ tunedOf(i) }, h, 1);
+                        const std::vector<int> prev = h > 1 ? s.finePartialBins({ tunedOf(i) }, h - 1, 1) : std::vector<int>();
                         std::vector<int> only;
                         std::set_difference(hb.begin(), hb.end(), prev.begin(), prev.end(), std::back_inserter(only));
                         bool clear = true;
@@ -490,24 +552,46 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                               }
                         }
                   if (bins.empty())
-                        bins = s.finePartialBins({ n.pitch }, 2, 1);
+                        bins = s.finePartialBins({ tunedOf(i) }, 2, 1);
                   double la = 0, ra = 0;
                   const bool legato = r.noteChecks[i].legato;
                   auto rise = [&](const Spectrogram& sp, double offset, double* level) {
                         const double before = sp.finePower(bins, n.on + offset - 0.06);
                         const double after = std::max(sp.finePower(bins, n.on + offset + 0.05), sp.finePower(bins, n.on + offset + 0.1));
-                        if (legato) {
-                              // held: the mean at 40 and 70 % of it (not before 0.2 s: a legato builds up)
-                              const double len = n.off - n.on;
+                        const double len = n.off - n.on;
+                        if (legato && settings.shortPeak && len < settings.legatoShort) {
+                              // short: its peak over [onset + 0.05, end + 0.25] (SSO's Performance transition lands ~130-210
+                              // ms after its note-on: after a 16th's end at q = 110; Whence bar 8's Violins 1 D6, 91 ms,
+                              // peaked 225 ms after its note-on, private bars9-12/SILENT.md)
+                              double peak = 0;
+                              const int steps = int(std::floor((len + settings.shortAfter - settings.shortFrom) / 0.01 + 1e-6));
+                              for (int k = 0; k <= steps; ++k)
+                                    peak = std::max(peak, sp.finePower(bins, n.on + offset + settings.shortFrom + 0.01 * k));
+                              *level = db(peak);
+                              }
+                        else if (legato) {
+                              // held: from 40 to 70 % of it (not before 0.2 s: a legato builds up); the mean power every
+                              // 20 ms (heldMean), or the mean of the two ends
                               const double t1 = std::min(std::max(0.2, 0.4 * len), std::max(0.05, len - 0.02));
                               const double t2 = std::min(std::max(0.3, 0.7 * len), std::max(0.05, len - 0.02));
-                              *level = db(0.5 * (sp.finePower(bins, n.on + offset + t1) + sp.finePower(bins, n.on + offset + t2)));
+                              if (settings.heldMean) {
+                                    const int k = std::max(1, int(std::lround((t2 - t1) / settings.heldStep)));
+                                    double sum = 0;
+                                    for (int j = 0; j <= k; ++j)
+                                          sum += sp.finePower(bins, n.on + offset + t1 + (t2 - t1) * j / k);
+                                    *level = db(sum / (k + 1));
+                                    }
+                              else
+                                    *level = db(0.5 * (sp.finePower(bins, n.on + offset + t1) + sp.finePower(bins, n.on + offset + t2)));
                               }
                         else
                               *level = db(after);
                         return db(after) - db(before);
                         };
                   NoteCheck& c = r.noteChecks[i];
+                  c.method = !legato ? NoteCheck::Method::Attack
+                             : settings.shortPeak && n.off - n.on < settings.legatoShort ? NoteCheck::Method::Peak
+                             : NoteCheck::Method::Held;
                   c.rise = std::max(-99.0, std::min(99.0, rise(s, r.offset, &la)));
                   c.refRise = std::max(-99.0, std::min(99.0, rise(*ref, reference->offset, &ra)));
                   c.after = std::max(-120.0, la);       // (-120: nothing at all)
@@ -520,20 +604,32 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
             // harmonic differs too; at least 12 notes: the window widens where the register has fewer)
             // (per group and legato or not: a patch has its own level, SSO's Performance legato is
             // 15-20 dB under the solo patch's shorts against the built-in synth; a group with fewer
-            // than 6 such notes takes all groups')
-            auto key = [&](size_t i, bool pooled) {
-                  return ((pooled ? 0 : notes[i].group + 1) * 2 + (r.noteChecks[i].legato ? 1 : 0)) * 4 + kind[i];
+            // than 6 such notes takes its patch's (Note::patch: a voice or tuning copy's slot plays its patch),
+            // then all groups'. With levelGroups the level's method too: a short legato note's peak and a held
+            // note's mean are different measures, 12-18 dB apart on SSO's Performance legato against the built-in
+            // synth; until 2026-10-24 a voice copy's chord note (Whence's Celli bar 13 Ab3, build #474, its copy with
+            // 4 notes) was held against the main slot's short notes' peaks, "21 dB under", heard the loudest)
+            // key: (level 0 group / 1 patch / 2 all, its id, the method or legato, kind)
+            using Key = std::tuple<int, int, int, int>;
+            auto key = [&](size_t i, int level) {
+                  const int id = level == 0 ? notes[i].group : level == 1 ? notes[i].patch : 0;
+                  const int how = settings.levelGroups ? int(r.noteChecks[i].method) : int(r.noteChecks[i].legato);
+                  return Key(level, id, how, kind[i]);
                   };
-            std::map<int, std::map<int, std::vector<double>>> byPitch;    // key -> pitch -> diffs
-            for (size_t i = 0; i < notes.size(); ++i) {
-                  byPitch[key(i, false)][notes[i].pitch].push_back(diff[i]);
-                  byPitch[key(i, true)][notes[i].pitch].push_back(diff[i]);
-                  }
-            std::map<int, size_t> count;
+            const int levels = settings.levelGroups ? 3 : 2;      // (before: the group, then all)
+            auto levelOf = [&](int k) { return settings.levelGroups ? k : (k == 0 ? 0 : 2); };
+            std::map<Key, std::map<int, std::vector<double>>> byPitch;    // key -> pitch -> diffs
+            for (size_t i = 0; i < notes.size(); ++i)
+                  for (int k = 0; k < levels; ++k) {
+                        if (levelOf(k) == 1 && notes[i].patch < 0)
+                              continue;
+                        byPitch[key(i, levelOf(k))][notes[i].pitch].push_back(diff[i]);
+                        }
+            std::map<Key, size_t> count;
             for (const auto& bk : byPitch)
                   for (const auto& bp : bk.second)
                         count[bk.first] += bp.second.size();
-            std::map<int, std::map<int, double>> base;
+            std::map<Key, std::map<int, double>> base;
             for (auto& bk : byPitch) {
                   for (const auto& bp : bk.second) {
                         std::vector<double> nearby;
@@ -550,8 +646,19 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   }
             for (size_t i = 0; i < notes.size(); ++i) {
                   NoteCheck& c = r.noteChecks[i];
-                  const int k = count[key(i, false)] >= 6 ? key(i, false) : key(i, true);
-                  c.deficit = diff[i] - base[k][notes[i].pitch];
+                  Key k = key(i, 2);            // (the finest level with 6 such notes: its group, its patch, all)
+                  for (int l = 0; l < levels - 1; ++l) {
+                        const int level = levelOf(l);
+                        if (level == 1 && notes[i].patch < 0)
+                              continue;
+                        if (count[key(i, level)] >= 6) {
+                              k = key(i, level);
+                              break;
+                              }
+                        }
+                  c.base = base[k][notes[i].pitch];
+                  c.baseLevel = std::get<0>(k);
+                  c.deficit = diff[i] - c.base;
                   // (nothing at all where the reference sounds: missing, whatever its register does,
                   // e.g. when most notes like it are missing too)
                   if (c.after <= -100 && c.refAfter > -60)
@@ -573,8 +680,17 @@ Result analyse(const Spectrogram& s, const std::vector<Note>& notes, const Setti
                   // note ringing on under its pedal)
                   const bool absent = c.deficit <= -settings.absentDb;
                   // (a legato note has no attack of its own to rise: its held level decides)
-                  const bool under = c.deficit <= -settings.missingNoteDb
+                  // (a held legato note, against held notes only (levelGroups): heldMissingDb)
+                  const double limit = settings.levelGroups && c.method == NoteCheck::Method::Held ? settings.heldMissingDb
+                                                                                                  : settings.missingNoteDb;
+                  const bool under = c.deficit <= -limit
                                      && (c.legato || (noRise && c.refRise >= settings.refRiseMin));
+                  if ((under || absent) && c.legato && r.offsetAmbiguous) {
+                        // (on an ambiguous offset a legato note's held level may be read a note late: not flagged)
+                        c.unclear = true;
+                        ++r.offsetUnclear;
+                        continue;
+                        }
                   if (under || absent) {
                         inFlagged[i] = true;
                         Finding fd;

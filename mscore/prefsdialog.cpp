@@ -33,6 +33,7 @@
 #include "libmscore/score.h"
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
+#include "playbackmode.h"
 
 #include "audiodrivers/pa.h"
 #ifdef USE_PORTMIDI
@@ -91,6 +92,29 @@ PreferenceDialog::PreferenceDialog(QWidget* parent)
             soundLibraryPluginBrowse->setEnabled(plugin);
             };
       connect(soundLibraryOutput, QOverload<int>::of(&QComboBox::currentIndexChanged), this, updateOutput);
+      // an engine with variants (Vial Instrumental: Vial.vst3 or Vial Fuse.vst3's mic mixers): which plays, for the global
+      // library and the parts that play it as their own (the Mixer's "Part playback:"); playbackmode.h
+      for (const SoundEngine& e : soundEngines()) {
+            if (e.maps.size() < 2)
+                  continue;
+            const int row = soundLibraryLayout->rowCount();
+            QLabel* label = new QLabel(tr("%1 plays:").arg(e.name), soundLibraryGroup);
+            QComboBox* box = new QComboBox(soundLibraryGroup);
+            for (const QString& m : e.maps)
+                  box->addItem(soundEngineVariantName(m), m);
+            box->setToolTip(tr("Which of %1's plug-ins plays it: the global library and every part set to play %1").arg(e.name));
+            label->setBuddy(box);
+            soundLibraryLayout->addWidget(label, row, 0);
+            soundLibraryLayout->addWidget(box, row, 1, 1, 3);
+            engineVariantBoxes[e.name] = box;
+            const QString engine = e.name;
+            connect(box, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, engine, box]() {
+                  // (the library box's item of the engine plays the variant chosen)
+                  for (int i = 0; i < soundLibrary->count(); ++i)
+                        if (soundLibrary->itemData(i, Qt::UserRole + 1).toString() == engine)
+                              soundLibrary->setItemData(i, box->currentData());
+                  });
+            }
 
       styleName->clear();
       styleName->addItem(tr("Light"));
@@ -555,6 +579,7 @@ void PreferenceDialog::start()
 #ifdef USE_PORTAUDIO
                   new IntPreferenceItem(PREF_IO_PORTAUDIO_DEVICE, portaudioApi, doNothing, doNothing),
                   new IntPreferenceItem(PREF_IO_PORTAUDIO_DEVICE, portaudioDevice, doNothing, doNothing),
+                  new IntPreferenceItem(PREF_IO_PORTAUDIO_LATENCY, portaudioLatency, doNothing),
 #endif
 #ifdef USE_PORTMIDI
                   new StringPreferenceItem(PREF_IO_PORTMIDI_INPUTDEVICE, portMidiInput, doNothing, doNothing),
@@ -807,9 +832,16 @@ void PreferenceDialog::updateValues(bool useDefaultValues, bool setup)
             const QString current = preferences.getString(PREF_IO_SOUNDLIBRARY);
             soundLibrary->clear();
             soundLibrary->addItem(tr("None (built-in synthesizer only)"), QString());
-            QDir dir(mscoreGlobalShare + "soundlibraries");
-            for (const QFileInfo& fi : dir.entryInfoList({ "*.xml" }, QDir::Files, QDir::Name))
-                  soundLibrary->addItem(fi.completeBaseName(), fi.absoluteFilePath());
+            // (each engine once, by its name, playing its variant: playbackmode.h)
+            for (const SoundEngine& e : soundEngines()) {
+                  soundLibrary->addItem(e.name, e.path);
+                  soundLibrary->setItemData(soundLibrary->count() - 1, e.name, Qt::UserRole + 1);
+                  auto b = engineVariantBoxes.find(e.name);
+                  if (b != engineVariantBoxes.end()) {
+                        const QSignalBlocker block(b->second);
+                        b->second->setCurrentIndex(qMax(0, b->second->findData(e.path)));
+                        }
+                  }
             int idx = soundLibrary->findData(current);
             if (idx < 0 && !current.isEmpty()) {
                   soundLibrary->addItem(QFileInfo(current).completeBaseName(), current);
@@ -1614,6 +1646,24 @@ void PreferenceDialog::apply()
             preferences.setPreference(PREF_IO_JACK_REMEMBERLASTCONNECTIONS, rememberLastMidiConnections->isChecked());
             preferences.setPreference(PREF_IO_JACK_USEJACKTRANSPORT, jackDriver->isChecked() && useJackTransport->isChecked());
 
+            // the PortAudio device: saved before the engine restarts, so that the restart opens it (until 2026-10-29 it was
+            // saved after: a new device alone restarted nothing, with the audio buffer the restart reopened the old one, and
+            // the new device played only after MuseScore was started again). Only a device the user chose: while the saved
+            // device is absent (Voicemeeter not running) the boxes show the default, and OK must not replace the saved
+            // device with it. The box indices are the running PortAudio's, so they are read before the restart.
+            bool portaudioDeviceChanged = false;
+#ifdef USE_PORTAUDIO
+            if (portAudioIsUsed && !noSeq && seq && seq->driver()) {
+                  Portaudio* audio = static_cast<Portaudio*>(seq->driver());
+                  const int api = portaudioApi->currentIndex();
+                  const int device = portaudioDevice->currentIndex();
+                  if (api != audio->currentApi() || device != audio->currentDevice()) {
+                        audio->saveDevice(api, device);
+                        portaudioDeviceChanged = portaudioDriver->isChecked();
+                        }
+                  }
+#endif
+
             if (jackParametersChanged) {
                   // Change parameters of JACK driver without unload
                   if (seq) {
@@ -1628,11 +1678,15 @@ void PreferenceDialog::apply()
                   }
             else if (
                (wasJack != nowJack)
+               || portaudioDeviceChanged
                || (preferences.getBool(PREF_IO_ALSA_USEALSAAUDIO) != alsaDriver->isChecked())
 #ifdef USE_PORTAUDIO
                || (preferences.getBool(PREF_IO_PORTAUDIO_USEPORTAUDIO) != portaudioDriver->isChecked())
 #endif
                || (preferences.getBool(PREF_IO_PULSEAUDIO_USEPULSEAUDIO) != pulseaudioDriver->isChecked())
+#ifdef USE_PORTAUDIO
+               || (preferences.getInt(PREF_IO_PORTAUDIO_LATENCY) != portaudioLatency->value())
+#endif
 #ifdef USE_ALSA
                || (preferences.getString(PREF_IO_ALSA_DEVICE) != alsaDevice->text())
                || (preferences.getInt(PREF_IO_ALSA_SAMPLERATE) != alsaSampleRate->currentData().toInt())
@@ -1643,6 +1697,7 @@ void PreferenceDialog::apply()
                   preferences.setPreference(PREF_IO_ALSA_USEALSAAUDIO, alsaDriver->isChecked());
 #ifdef USE_PORTAUDIO
                   preferences.setPreference(PREF_IO_PORTAUDIO_USEPORTAUDIO, portaudioDriver->isChecked());
+                  preferences.setPreference(PREF_IO_PORTAUDIO_LATENCY, portaudioLatency->value());
 #endif
                   preferences.setPreference(PREF_IO_PULSEAUDIO_USEPULSEAUDIO, pulseaudioDriver->isChecked());
 #ifdef USE_ALSA
@@ -1654,13 +1709,6 @@ void PreferenceDialog::apply()
 
                   restartAudioEngine();
                   }
-#ifdef USE_PORTAUDIO
-            if (portAudioIsUsed && !noSeq) {
-                  Portaudio* audio = static_cast<Portaudio*>(seq->driver());
-                  preferences.setPreference(PREF_IO_PORTAUDIO_DEVICE, audio->deviceIndex(portaudioApi->currentIndex(), portaudioDevice->currentIndex()));
-                  }
-#endif
-
 #ifdef USE_PORTMIDI
             // a new MIDI output (A … D) is opened by a restart of the audio engine
             const bool midiOutputsChanged = preferences.getString(PREF_IO_PORTMIDI_OUTPUTDEVICE) != portMidiOutput->currentText()
@@ -1685,6 +1733,13 @@ void PreferenceDialog::apply()
             if (midiOutputsChanged && portAudioIsUsed && !noSeq)
                   restartAudioEngine();
 #endif
+            {
+                  std::map<QString, QString> variants;
+                  for (const auto& b : engineVariantBoxes)
+                        variants[b.first] = b.second->currentData().toString();
+                  if (!variants.empty())
+                        setSoundEngineVariants(variants);
+            }
             preferences.setPreference(PREF_IO_SOUNDLIBRARY, soundLibrary->currentData().toString());
             preferences.setPreference(PREF_IO_SOUNDLIBRARY_OUTPUT, soundLibraryOutput->currentData().toString());
             preferences.setPreference(PREF_IO_SOUNDLIBRARY_PLUGIN, QDir::fromNativeSeparators(soundLibraryPlugin->text().trimmed()));

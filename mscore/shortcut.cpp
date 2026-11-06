@@ -2443,6 +2443,13 @@ Shortcut Shortcut::_sc[] = {
       {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
+         "toggle-bar-ruler",
+         QT_TRANSLATE_NOOP("action","Bar Ruler"),
+         QT_TRANSLATE_NOOP("action","Toggle 'Bar Ruler' (Continuous View: every bar's number along the top)")
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL | STATE_NOTE_ENTRY | STATE_EDIT ,
          "toggle-automation-lanes",
          QT_TRANSLATE_NOOP("action","Automation Lanes"),
          QT_TRANSLATE_NOOP("action","Toggle 'Automation Lanes' (Continuous View: a selected part's automation under its staves)")
@@ -3159,7 +3166,7 @@ Shortcut Shortcut::_sc[] = {
          MsWidget::MAIN_WINDOW,
          STATE_NORMAL | STATE_NOTE_ENTRY | STATE_PLAY,
          "sound-library",
-         QT_TRANSLATE_NOOP("action","Sound Library…"),
+         QT_TRANSLATE_NOOP("action","Sound Library"),
          0,
          QT_TRANSLATE_NOOP("action","Sound library: where each part plays, and the setup of its plug-in"),
          Icons::Invalid_ICON,
@@ -3215,6 +3222,16 @@ Shortcut Shortcut::_sc[] = {
          QT_TRANSLATE_NOOP("action","Tuning…"),
          0,
          QT_TRANSLATE_NOOP("action","Tuning: the score's temperament (historical tunings)"),
+         Icons::Invalid_ICON,
+         Qt::WindowShortcut
+         },
+      {
+         MsWidget::MAIN_WINDOW,
+         STATE_NORMAL,
+         "even-levels",
+         QT_TRANSLATE_NOOP("action","Even Out Levels…"),
+         0,
+         QT_TRANSLATE_NOOP("action","Even out levels: measure the slurred passages of the selection (or the score) with the sound library's plug-in, and even out their notes' levels"),
          Icons::Invalid_ICON,
          Qt::WindowShortcut
          },

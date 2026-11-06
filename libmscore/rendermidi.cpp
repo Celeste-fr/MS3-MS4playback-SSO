@@ -16,6 +16,7 @@
 */
 
 #include <deque>
+#include <limits>
 #include <set>
 #include <tuple>
 
@@ -36,6 +37,8 @@
 #include "noteevent.h"
 #include "part.h"
 #include "rendermidi.h"
+#include "followcut.h"
+#include <limits>
 #include "repeat.h"
 #include "repeatlist.h"
 #include "score.h"
@@ -55,6 +58,8 @@
 #include "vibrato.h"
 #include "partcontrollers.h"
 #include "partplayback.h"
+#include "enginelane.h"
+#include "leadinglane.h"
 #include "playbacksettings.h"
 #include "tuning.h"
 #include "volta.h"
@@ -66,6 +71,7 @@
 #include "global/log.h"
 
 #include "audio/midi/event.h"
+#include "lagprobe.h"
 
 namespace Ms {
 
@@ -108,6 +114,7 @@ struct SndConfig {
       int libPatch = 0;           // a sound library part: the patch that plays the note
       double libEarly = 0;        // seconds a held note starts early (its onset)
       int libEarliest = 0;        // … but not before this utick
+      std::map<const Note*, double>* libLost = nullptr;   // where the score's start cuts that: the ms cut (the start lead)
       int* libOn = nullptr;       // where the note starts, as written and as played (libEarly)
       int* libWrittenOn = nullptr;
       int* libPlayed = nullptr;   // where a library note starts as played (any note, early or not)
@@ -128,6 +135,19 @@ bool glissandoPitchOffsets(const Spanner* spanner, std::vector<int>& pitchOffset
 //    notesInSameRepeat: whether a tied-to note plays in the same pass of the unrolled score as
 //    the note the tie comes from (a tie into a first ending does not carry on into the second)
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   libKeyShift
+//    semitones from a library note's pitch to the key sent: its patch's keyShift plus its articulation's
+//---------------------------------------------------------
+
+static int libKeyShift(const std::vector<const SoundLib::LibInstrument*>& patches, const SoundLib::Choice& c)
+      {
+      int shift = c.patch >= 0 && c.patch < int(patches.size()) ? patches[size_t(c.patch)]->keyShift : 0;
+      if (c.articulation)
+            shift += c.articulation->keyShift;
+      return shift;
+      }
 
 static bool ms4SameRepeat(const Score* score, const Note* first, const Note* second, int tickOffset)
       {
@@ -550,8 +570,13 @@ static void collectNote(EventMap* events, int channel, const Note* note, qreal v
             if (config.libEarly > 0) {
                   // a held note: early by its onset in time, at the tempo there (the note-off stays)
                   Score* sc = note->score();
+                  const double lost = config.libEarly - sc->utick2utime(on);
                   const int early = sc->utime2utick(sc->utick2utime(on) - config.libEarly);
                   on = qMin(on, qMax(config.libEarliest, early));
+                  // (the earliest 0: the score's start, no chunk, repeat or note before to keep; the note-on there, the
+                  // rest of its early start the start lead's: MidiRenderer::libraryDelayLead)
+                  if (config.libLost && config.libEarliest == 0 && lost > 0)
+                        (*config.libLost)[note] = lost * 1000.0;
                   }
             if (config.libOn)
                   *config.libOn = on;
@@ -944,6 +969,8 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                         continue;
 
                   Chord* chord = toChord(cr);
+                  if (sctx.engine >= 0 && engineAt(chord->part(), chord->tick().ticks()) != sctx.engine)
+                        continue;         // (an Engine lane's other engine plays it)
                   Staff* st1   = chord->staff();
                   Instrument* instr = chord->part()->instrument(Fraction::fromTicks(tick));
                   int channel = instr->channel(chord->upNote()->subchannel())->channel();
@@ -957,7 +984,7 @@ void MidiRenderer::collectMeasureEventsSimple(EventMap* events, Measure const * 
                         }
 
                   SndConfig config;       // dummy
-                  config.textLevel = textLevel(chord);
+                  config.textLevel = textLevel(chord) + leadingDb(chord);     // ([levels] leading: by velocity)
 
                   if (!graceNotesMerged(chord))
                         for (Chord*& c : chord->graceNotesBefore())
@@ -1035,6 +1062,8 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                         continue;
 
                   Chord* chord = toChord(cr);
+                  if (sctx.engine >= 0 && engineAt(st1->part(), chord->tick().ticks()) != sctx.engine)
+                        continue;         // (an Engine lane's other engine plays it)
 
                   Instrument* instr = st1->part()->instrument(tick);
                   int subchannel = chord->upNote()->subchannel();
@@ -1054,7 +1083,7 @@ void MidiRenderer::collectMeasureEventsDefault(EventMap* events, Measure const *
                   SndConfig config = SndConfig(useSND, controller, sctx.method);
                   auto vl = velocityLanes.find(st1->part());
                   config.velocityLane = vl != velocityLanes.end() ? &vl->second : nullptr;
-                  config.textLevel = textLevel(chord);
+                  config.textLevel = textLevel(chord) + leadingDb(chord);     // ([levels] leading: by velocity)
 
                   //
                   // Add normal note events
@@ -1209,6 +1238,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   if (!cr || !cr->isChord())
                         continue;
                   Chord* chord = toChord(cr);
+                  if (sctx.engine >= 0 && engineAt(st1->part(), chord->tick().ticks()) != sctx.engine)
+                        continue;         // (an Engine lane's other engine plays it)
                   Instrument* instr = st1->part()->instrument(tick);
                   int channel = instr->channel(chord->upNote()->subchannel())->channel();
                   events->registerChannel(channel);
@@ -1227,7 +1258,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const LibPart* lp = nullptr;
                   const SoundLib::LibInstrument* li = nullptr;
                   {
-                        auto lpit = libParts.find(st1->part());
+                        auto lpit = st1->part() == libSuppress ? libParts.end() : libParts.find(st1->part());
                         if (lpit != libParts.end()) {
                               auto iit = lpit->second.instruments.find(instr);
                               if (iit != lpit->second.instruments.end() && iit->second) {
@@ -1242,23 +1273,46 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   const std::vector<const SoundLib::LibInstrument*> libPatches = li ? lp->patchesFor(li)
                                                                                      : std::vector<const SoundLib::LibInstrument*>();
                   // a technique on velocity (Spitfire's shorts, pizzicato ...: velocity, not CC1, sets its dynamics),
-                  // listed in <Dynamics velocity>. With [levels] calibrated and both measured (dynamics.json): the
+                  // listed in <Dynamics velocity>. With [levels] calibrated 1 and both measured (dynamics.json): the
                   // velocity at which it is as loud as the part's held note at this dynamic, plus MS4's offset for its
                   // articulations (marcato's too: SoundFont 2's law, 40 log10 of MS4's velocity over a plain note's).
-                  // Else its level on the CC's scale, an accent's share included (levelVelocity). -1: MS4's velocity
-                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::dynamicsCalibration() : nullptr;
-                  const bool calibrated = cal && Playback::on("levels/calibrated", score);
-                  const SoundLib::Choice libHeld = calibrated ? SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} })
-                                                              : SoundLib::Choice();
+                  // With 2 (option B', the owner 2026-10-15): 1's match plus D, real players' difference against the held
+                  // note (<Articulation heldOffset>), else its level at velocity 127 less the held note's at 127
+                  // (SoundLib::techniqueOffsetDb, loudEndDb: an assumption), then MS4's offset; not
+                  // extrapolated under its lowest measured point: the rest by CC11 (*under; calibratedVelocityFloored).
+                  // Else (0, or a curve missing) its level on the CC's scale, an accent's share included (levelVelocity).
+                  // -1: MS4's velocity
+                  // (the part's own library: its calibration and its map's measurements only, SoundLib::calibrationFor)
+                  const SoundLib::Library* plib = lp && lp->library ? lp->library : library.get();
+                  const std::shared_ptr<const SoundLib::DynamicsCalibration> cal = li ? SoundLib::calibrationFor(plib) : nullptr;
+                  const int calibratedMode = cal ? int(std::lround(Playback::value("levels/calibrated", score))) : 0;
+                  // the held note: what 1 and 2 match a velocity technique and a Performance legato note to
+                  // (performanceLevel), and what a capped short's rest by CC11 is measured against (realRangeLevel)
+                  const SoundLib::Choice libHeld = calibratedMode >= 1 ? SoundLib::choose(libPatches, SoundLib::Want { { "long" }, {} })
+                                                                       : SoundLib::Choice();
                   // (a technique measured at several pitches: the note's pitch's curve, DynamicsCurve::atPitch)
-                  auto libVelocity = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel) {
+                  // [levels] calibrated 2's D for the note's technique at the written dynamic's CC (option B': real
+                  // players' where the map lists heldOffset, else the library's loud-end difference; 0: not 2, or neither)
+                  auto loudEnd = [&](const Note* note, const SoundLib::Choice& c, int cc) {
+                        if (calibratedMode != 2 || !libHeld || !c)
+                              return 0.0;
+                        const double d = SoundLib::techniqueOffsetDb(*cal, libPatches[c.patch]->name, *c.articulation,
+                                                                     libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                     note->ppitch(), cc);
+                        return std::isnan(d) ? 0.0 : d;
+                        };
+                  auto libVelocity = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r, int dynLevel,
+                                         double* under = nullptr) {
+                        if (under)
+                              *under = 0.0;
                         if (!c || !lp->velocityDynamics.contains(c.base))
                               return -1;
                         const int level = Ms4::expressionLevel(dynLevel);
                         if (libHeld && level > 0) {
-                              const int v = SoundLib::calibratedVelocity(*cal, libPatches[c.patch]->name, c.articulation->value,
-                                                                         libPatches[libHeld.patch]->name, libHeld.articulation->value,
-                                                                         level, 40.0 * std::log10(r.share), note->ppitch());
+                              const int v = SoundLib::calibratedVelocityFloored(*cal, libPatches[c.patch]->name, c.articulation->value,
+                                                                                libPatches[libHeld.patch]->name, libHeld.articulation->value,
+                                                                                level, loudEnd(note, c, level) + 40.0 * std::log10(r.share),
+                                                                                note->ppitch(), calibratedMode == 2 ? under : nullptr);
                               if (v > 0)
                                     return qBound(1, v, 127);
                               }
@@ -1287,8 +1341,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   std::map<std::pair<const SoundLib::Articulation*, int>, std::shared_ptr<const std::vector<int>>> performanceMaps;
                   auto performanceLevel = [&](const Note* note, const SoundLib::Choice& c) {
                         std::shared_ptr<const std::vector<int>> none;
-                        if (!c || !libHeld || c.articulation->attacks.empty() || library->dynamicsCC < 0
-                            || library->dynamicsCC == CTRL_EXPRESSION)
+                        if (!c || !libHeld || c.articulation->attacks.empty() || plib->dynamicsCC < 0
+                            || plib->dynamicsCC == CTRL_EXPRESSION)
                               return none;
                         const std::pair<const SoundLib::Articulation*, int> key { c.articulation, note->ppitch() };
                         auto m = performanceMaps.find(key);
@@ -1309,21 +1363,46 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // [levels] context (contextlevel.h): a note on an articulation with a measured context level plays its
                   // dynamics CC at the written dynamic's value, its phrase's gain less the score's largest by CC11 (the
                   // patches' volumes play the rest: TrackDelays::patchGain); NAN: not such a note
-                  const bool contextOn = li && ContextLevel::on(score) && library->dynamicsCC >= 0
-                                         && library->dynamicsCC != CTRL_EXPRESSION;
+                  const bool contextOn = li && ContextLevel::on(score) && plib->dynamicsCC >= 0
+                                         && plib->dynamicsCC != CTRL_EXPRESSION;
                   auto contextDb = [&](const Note* note, const SoundLib::Choice& c) {
                         if (!contextOn || !c || !ContextLevel::has(c.articulation) || c.articulation->attacks.empty())
                               return double(NAN);
-                        const std::pair<const Chord*, int> key { note->chord(), tickOffset };
+                        // ([slurs] plainPerformance: the plain note's own grid, ContextLevel::plainKind; a staccato also
+                        // [levels] calibrated 2's D of the technique it would play otherwise, as that technique would: the
+                        // cells are measured against the held Long, as D is)
+                        using Kind = SoundLib::Articulation::ContextKind;
+                        const Kind kind = c.plain ? ContextLevel::plainKind(note, ctx.dynamics, tickOffset) : Kind::SLUR;
+                        const std::tuple<const Chord*, int, int> key { note->chord(), tickOffset, int(kind) };
                         auto g = libContextGain.find(key);
                         if (g == libContextGain.end())
-                              g = libContextGain.insert({ key, ContextLevel::gain(*c.articulation, note->chord(), ctx.dynamics, tickOffset) }).first;
+                              g = libContextGain.insert({ key, ContextLevel::gain(*c.articulation, note->chord(), ctx.dynamics, tickOffset, kind) }).first;
                         auto d = libTrackDelays.find(st1->part());
                         const double top = d == libTrackDelays.end() ? 0.0 : d->second.ruleTop;
-                        return std::max(TrackDelays::MIN_DB, std::min(0.0, g->second - top));
+                        double db = std::min(0.0, g->second - top);
+                        if (kind == Kind::STACCATO && c.plainFrom) {
+                              const int cc = Ms4::expressionLevel(ctx.dynamics.levelAt(note->chord()->track(), note->chord()->tick().ticks() + tickOffset));
+                              db += loudEnd(note, SoundLib::Choice { c.plainFrom, QString(), c.plainFromPatch }, cc);
+                              }
+                        return std::max(TrackDelays::MIN_DB, db);
                         };
-                  auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel) {
-                        const double db = levelOf(note) + quickDb(note, c);
+                  // [slurs] plainAccents (1 / 3): a plain Performance note (Choice::plain) with an accent-like articulation
+                  // (accent, marcato, soft accent: the ones MS4.7.5's tables give a louder curve) plays MS4's offset for its
+                  // articulations, 40 log10(share), as [levels] calibrated gives a technique on velocity (libVelocity); the
+                  // plain note's base "long" is no velocity technique, so without this it plays none (private/bars9-12/ACCENT.md).
+                  // Its own level on top below: louder by the dynamics CC along the patch's own curve, slurred notes too
+                  const int plainAccents = li ? int(std::lround(Playback::value("slurs/plainAccents", score))) : 0;
+                  auto accentLike = [](const Ms4::NoteResult& r) {
+                        for (Ms4::Art art : r.arts)
+                              if (art == Ms4::Art::Accent || art == Ms4::Art::Marcato || art == Ms4::Art::SoftAccent)
+                                    return true;
+                        return false;
+                        };
+                  auto plainAccentDb = [&](const SoundLib::Choice& c, const Ms4::NoteResult& r) {
+                        return (plainAccents & 1) && c && c.plain && accentLike(r) && r.share > 0 ? 40.0 * std::log10(r.share) : 0.0;
+                        };
+                  auto marcatoLevel = [&](const Note* note, const SoundLib::Choice& c, int& velocity, int dynLevel, const Ms4::NoteResult& r) {
+                        const double db = levelOf(note) + quickDb(note, c) + (velocity > 0 ? 0.0 : plainAccentDb(c, r));
                         const double context = velocity > 0 ? double(NAN) : contextDb(note, c);
                         if (!std::isnan(context)) {
                               // its own level on top: louder along its own curve from the written dynamic's value, softer
@@ -1333,7 +1412,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const double up = db > 0 ? db : 0.0;
                               LibLevel l;
                               if (up > 0) {
-                                    l.controller = library->dynamicsCC;
+                                    l.controller = plib->dynamicsCC;
                                     l.fallback = Ms4::expressionLevel(dynLevel);
                                     l.map = [own, up](int x) {
                                           if (x <= 0)
@@ -1354,7 +1433,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               SoundLib::DynamicsCurve own = ownCurve ? ownCurve->atPitch(note->ppitch()) : SoundLib::DynamicsCurve();
                               const double up = db > 0 ? db : 0.0;
                               LibLevel l;
-                              l.controller = library->dynamicsCC;
+                              l.controller = plib->dynamicsCC;
                               l.fallback = Ms4::expressionLevel(dynLevel);
                               l.map = [performance, own, up](int x) {
                                     if (x <= 0)
@@ -1387,15 +1466,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         LibLevel l;
                         if (db < 0) {
                               l.controller = CTRL_EXPRESSION;
-                              l.fallback = library->dynamicsCC == CTRL_EXPRESSION ? Ms4::expressionLevel(dynLevel) : library->expressionValue;
+                              l.fallback = plib->dynamicsCC == CTRL_EXPRESSION ? Ms4::expressionLevel(dynLevel) : plib->expressionValue;
                               const SoundLib::DynamicsCurve* held = cal ? SoundLib::heldCurve(*cal, libPatches) : nullptr;
-                              if (held && library->dynamicsCC != CTRL_EXPRESSION)
+                              if (held && plib->dynamicsCC != CTRL_EXPRESSION)
                                     curve.points = held->expression;
                               }
                         else {
-                              if (library->dynamicsCC < 0)
+                              if (plib->dynamicsCC < 0)
                                     return;
-                              l.controller = library->dynamicsCC;
+                              l.controller = plib->dynamicsCC;
                               l.fallback = Ms4::expressionLevel(dynLevel);
                               if (own && (own->drivenBy == "controller" || own->drivenBy == "both"))
                                     curve.points = own->points;
@@ -1411,16 +1490,102 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         libLevels[note] = l;
                         };
                   // the track levels of the note's patch and technique (trackdelays.h; after marcatoLevel: they add up),
-                  // less the patch's headroom (its volume plays that: TrackDelays::patchGain)
+                  // less the patch's headroom (its volume plays that: TrackDelays::patchGain); [levels] micCompensation with
+                  // automated mics: the note's C at its start less the patch's largest (its volume plays that)
                   auto trackLevel = [&](const Note* note, const SoundLib::Choice& c) {
                         auto d = c ? libTrackDelays.find(st1->part()) : libTrackDelays.end();
-                        if (d == libTrackDelays.end() || d->second.levels.empty())
+                        if (d == libTrackDelays.end())
                               return;
                         const SoundLib::LibInstrument* patch = libPatches[c.patch];
+                        auto mt = d->second.micTop.find(patch->name);
+                        if (mt != d->second.micTop.end()) {
+                              auto m = libMics.find({ st1->part(), patch });
+                              if (m != libMics.end())
+                                    libLevels[note].volumeDb += ContextLevel::micOffsetDb(*patch, *plib, m->second->at(note->chord()->tick().ticks()))
+                                                                - mt->second;
+                              }
+                        // [levels] evenLevels' headroom (evenlevels.h): the patch's volume plays it, its notes that much lower
+                        const double even = TrackDelays::evenDb(d->second, patch->name);
+                        if (even > 0.0)
+                              libLevels[note].volumeDb -= even;
+                        // [levels] leading (leadinglane.h): the patch's L on its gain stage; a note not leading that much lower
+                        const double lead = TrackDelays::leadingDb(d->second, patch->name);
+                        if (lead > 0.0 && !leadingAt(note->chord()))
+                              libLevels[note].volumeDb -= lead;
+                        if (d->second.levels.empty())
+                              return;
                         const double db = TrackDelays::noteDb(d->second, patch->name,
                                                           PlainLiveSet::techniqueName(patch, c.articulation->value));
                         if (db != 0.0)
                               libLevels[note].volumeDb += db;
+                        };
+                  // [levels] divisi (SoundLib::divisiDb; the owner, 2026-10-20): a note of a monophonic patch's chord (its
+                  // voices sounding at its start as written: SoundLib::Lanes::sounding, n > 1) plays 10 log10(n) dB softer
+                  // by CC11 (a volume on top of the others: dB add up), every voice the line's too, so the chord adds up to
+                  // one section; the level at the note's own start for as long as it sounds (a held note keeps it under a
+                  // chord change: no CC11 move inside a note). An assumption from player counts, not measured divisi data
+                  const bool divisiOn = li && Playback::on("levels/divisi", score) && plib->dynamicsCC != CTRL_EXPRESSION;
+                  auto divisiLevel = [&](const Note* note, const SoundLib::Choice& c) {
+                        if (!divisiOn || !c || c.patch < 0 || c.patch >= int(libPatches.size()) || !libPatches[size_t(c.patch)]->mono)
+                              return;
+                        auto d = libDivisi.find(note);
+                        if (d != libDivisi.end() && d->second > 1)
+                              libLevels[note].volumeDb += SoundLib::divisiDb(d->second);
+                        };
+                  // [levels] realRange (contextlevel.h › Real range): the note's CC11 by the dynamics CC in force as written
+                  // (realDb at its pitch), less its part's R (the patches' volumes play it: TrackDelays::patchGain); a
+                  // short whose calibrated velocity is capped (127 and still under the level it should have, or 1 and still
+                  // over it) gets the rest by CC11 (realExtra; not with the note's own velocity, the Velocity lane)
+                  const bool rangeOn = li && ContextLevel::realRange(score) && plib->dynamicsCC >= 0
+                                       && plib->dynamicsCC != CTRL_EXPRESSION;
+                  const bool rangeSpans = rangeOn && ContextLevel::clarkLuceSpans(score);
+                  // [levels] evenKeys (the owner, 2026-10-28): a key whose Long lies off the smooth curve over pitch by more
+                  // than real players' scatter plays the map's keyLevel more (with realRange, which leaves only the key's mp
+                  // level uneven: its longLevel, every semitone, takes SSO's own change from mp away)
+                  const bool evenKeysOn = rangeOn && Playback::on("levels/evenKeys", score);
+                  auto realRangeLevel = [&](const Note* note, const SoundLib::Choice& c, int velocity, const Ms4::NoteResult& r, int dynLevel) {
+                        if (!rangeOn || !c)
+                              return;
+                        const SoundLib::LibInstrument* patch = libPatches[c.patch];
+                        if (!ContextLevel::hasRealRange(patch))
+                              return;
+                        const std::pair<const SoundLib::LibInstrument*, int> key { patch, note->ppitch() };
+                        auto t = libRangeTables.find(key);
+                        if (t == libRangeTables.end()) {
+                              auto table = std::make_shared<std::vector<double>>(128, 0.0);
+                              for (int x = 0; x < 128; ++x)
+                                    (*table)[size_t(x)] = ContextLevel::realRangeDb(*patch, x, note->ppitch(), rangeSpans);
+                              t = libRangeTables.insert({ key, table }).first;
+                              }
+                        LibLevel& l = libLevels[note];
+                        l.range = t->second;
+                        l.keyDb = evenKeysOn && c.articulation ? c.articulation->keyLevelAt(note->ppitch()) : 0.0;
+                        l.rangePart = st1->part();
+                        auto d = libTrackDelays.find(st1->part());
+                        l.rangeTop = d == libTrackDelays.end() ? 0.0 : d->second.rangeTop;
+                        l.realExtra = 0.0;
+                        if (velocity <= 0 || note->libraryVelocity() > 0 || !lp->velocityDynamics.contains(c.base))
+                              return;
+                        // (the note takes the Long's realDb, the table's: with 1 and 2 it is tied to the Long at every marking)
+                        if (!libHeld)
+                              return;
+                        const SoundLib::DynamicsCurve* cp = cal->curve(patch->name, c.articulation->value);
+                        const SoundLib::DynamicsCurve* rp = cal->curve(libPatches[libHeld.patch]->name, libHeld.articulation->value);
+                        if (!cp || !rp || (cp->drivenBy != "velocity" && cp->drivenBy != "both"))
+                              return;
+                        const SoundLib::DynamicsCurve own = cp->atPitch(note->ppitch());
+                        const SoundLib::DynamicsCurve ref = rp->atPitch(note->ppitch());
+                        if (own.points.size() < 2 || ref.points.size() < 2)
+                              return;
+                        const bool byEar = own.byEar() && ref.byEar();
+                        const int cc = Ms4::expressionLevel(dynLevel);
+                        // (what libVelocity and marcatoLevel aimed at: the held note at the dynamic, 2's D, MS4's offset, the levels)
+                        const double target = (byEar ? ref.perceivedAt(cc) : ref.at(cc)) + loudEnd(note, c, cc) + 40.0 * std::log10(r.share)
+                                              + levelOf(note) + quickDb(note, c);
+                        const double reached = byEar ? own.perceivedAt(velocity) : own.at(velocity);
+                        const double miss = target - reached;
+                        if ((velocity >= 127 && miss > 0) || (velocity <= 1 && miss < 0))
+                              l.realExtra = miss;
                         };
                   auto librarySwitch =[&](const Note* note, const std::vector<Ms4::ArtRef>& noteArts, int start, int length) {
                         const SoundLib::Choice c = libraryChoice(*lp, *li, note, noteArts, start, length);
@@ -1473,11 +1638,46 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         return false;
                         };
+                  // a slur (not a phrase mark) on the note's staff: one starting at its chord (startsAt) or, for the
+                  // end of its tie chain, one ending there (endsAt: under a slur that doesn't go on past it); [slurs]
+                  // transitions joins two such slurs (performanceNote)
+                  auto slurAt = [&](const Note* note, bool startsAt) {
+                        const Note* last = note;
+                        for (int guard = 0; !startsAt && last->tieFor() && last->tieFor()->endNote() && guard < 1000; ++guard) {
+                              const Note* next = last->tieFor()->endNote();
+                              if (next == last)
+                                    break;
+                              last = next;
+                              }
+                        const Chord* c = last->chord();
+                        const int t = c->tick().ticks();
+                        for (const auto& iv : score->spannerMap().findOverlapping(t, t)) {
+                              const Spanner* sp = iv.value;
+                              if (!sp->isSlur() || toSlur(sp)->phraseMark() || sp->staffIdx() != c->staffIdx())
+                                    continue;
+                              const int stop = ctx.dynamics.spannerStop(sp);
+                              if (startsAt ? (sp->tick().ticks() == t && stop > t) : (sp->tick().ticks() < t && stop <= t && stop >= t - c->actualTicks().ticks()))
+                                    return true;
+                              }
+                        return false;
+                        };
                   // where a note before (the first of its tie chain) starts as played: early or not (libPlayedOn),
                   // else as written
                   auto playedOn = [&](const Note* first) {
                         auto it = libPlayedOn.find({ first, tickOffset });
                         return it != libPlayedOn.end() ? it->second : first->chord()->tick().ticks() + tickOffset;
+                        };
+                  // a monophonic patch's voice lanes (SoundLib::Lanes::voice: a chord's notes each on a copy of the patch of
+                  // their own): where a chord of several notes comes before or is this note's, only the note before on
+                  // this note's own lane (the copy it plays on) joins it; a lone note after a lone note as ever
+                  auto otherLane = [&](const Note* note, const Note* before, int patch) {
+                        if (patch < 0 || patch >= int(libPatches.size()) || !libPatches[size_t(patch)]->mono)
+                              return false;
+                        if (note->chord()->notes().size() < 2 && before->chord()->notes().size() < 2)
+                              return false;
+                        auto la = libLanes.find(note);
+                        auto lb = libLanes.find(before);
+                        return (la == libLanes.end() ? 0 : la->second) != (lb == libLanes.end() ? 0 : lb->second);
                         };
                   // a legato transition: a note whose note before on its track (the chord just before, ending
                   // where it starts, in this pass) overlaps into it (a slur goes on past it, legato on the same
@@ -1495,17 +1695,23 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         if (note->tieBack() || ch->isGrace() || !ch->graceNotesBefore().empty())
                               return nullptr;
                         ChordRest* pcr = prevChordRest(ch, true);
-                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick())
-                              return nullptr;
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
+                            || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
+                              return nullptr;       // (on another engine before an Engine lane's switch: the line starts afresh)
                         const Chord* pch = toChord(pcr);
                         const int utick = ch->tick().ticks() + tickOffset;
                         const RepeatList& repeats = score->repeatList();
                         auto rs = repeats.findRepeatSegmentFromUTick(utick);
                         if (rs == repeats.end() || pch->tick().ticks() < (*rs)->tick)
                               return nullptr;
+                        // (struck again: its note ends first, no transition; on a monophonic patch's voice lanes only on
+                        // this note's own copy: the same key ending on another voice's copy is no re-strike here, so a voice
+                        // moving onto it goes on from its own note before as any other voice does. Whence's Celli bar 16,
+                        // F#3 from Eb3 on the lowest voice while the middle voice's F#3 of bar 15 moves to A3: before, SSO's
+                        // fingered 64 instead of the other voices' bowed new bow, 2026-10-28)
                         for (const Note* pn : pch->notes())
-                              if (pn->pitch() == note->pitch())
-                                    return nullptr;     // (struck again: its note ends first, no transition)
+                              if (pn->pitch() == note->pitch() && !otherLane(note, pn, c.patch))
+                                    return nullptr;
                         std::vector<const Note*> before(pch->notes().begin(), pch->notes().end());
                         std::stable_sort(before.begin(), before.end(), [note](const Note* a, const Note* b) {
                               return std::abs(a->ppitch() - note->ppitch()) < std::abs(b->ppitch() - note->ppitch());
@@ -1517,7 +1723,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const Chord* fc = first->chord();
                               const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
-                              if (!pc || (pc.base != "legato" && !joinable) || pc.patch != c.patch || !pc.articulation->playsTransitions())
+                              if (!pc || (pc.base != "legato" && !joinable) || pc.patch != c.patch || !pc.articulation->playsTransitions()
+                                  || otherLane(note, pn, c.patch))
                                     continue;
                               const int start = fc->tick().ticks() + tickOffset;
                               *interval = note->ppitch() - pn->ppitch();
@@ -1533,19 +1740,214 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // 40 ms or more being a new attack on SSO; a transition: overlap ms after it). The note's own
                   // choice (the Inspector) first: a transition where a note of the patch comes just before, else
                   // an attack; Auto: a slurred note goes on by transition (after a glissando line portamento,
-                  // else bowed: the map's legatoVelocity where measured), else an attack: accented under an accent
-                  // or marcato, a re-attack right after a note of its patch, spiccato after silence. A note's own join
+                  // else with [slurs] transitions fingered, without bowed: the map's legatoVelocity where measured);
+                  // with [slurs] transitions a slur's first note right after the slur before ends on its patch, without
+                  // an accent, by a bowed transition from it; else an attack: accented under an accent
+                  // or marcato, a re-attack right after a note of its patch, after silence spiccato (with [slurs] smoothStart smooth). A note's own join
                   // (the Join lane, Note::libraryJoin) right after a note of its patch: a transition up to legatoGap ms
                   // apart (none listed: overlapping or touching), else a re-attack; the note before ends that far from
-                  // it. Its own velocity (Note::libraryVelocity) replaces the technique's
+                  // it. Its own velocity (Note::libraryVelocity) replaces the technique's. timedAttack: with [slurs]
+                  // smoothStart, an attack with its own measured onset (<Articulation attackOnset>: SSO's smooth, 91-236 ms
+                  // where the articulation's onset=, at velocity 80, says 27-111): the note starts early by that onset
+                  // the same key struck again right after a note of the chord just before on its track, on the same
+                  // patch (legatoTransition's "struck again": no transition, but not after silence either)
+                  // (returns that note, the first of its tie chain: the note whose note-off a re-attack moves; nullptr: none)
+                  auto struckAgain = [&](const Note* note, const SoundLib::Choice& c) -> const Note* {
+                        Chord* ch = note->chord();
+                        if (note->tieBack() || ch->isGrace())
+                              return nullptr;
+                        ChordRest* pcr = prevChordRest(ch, true);
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
+                            || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
+                              return nullptr;
+                        const RepeatList& repeats = score->repeatList();
+                        auto rs = repeats.findRepeatSegmentFromUTick(ch->tick().ticks() + tickOffset);
+                        if (rs == repeats.end() || pcr->tick().ticks() < (*rs)->tick)
+                              return nullptr;
+                        for (const Note* pn : toChord(pcr)->notes()) {
+                              if (pn->pitch() != note->pitch() || !pn->play())
+                                    continue;
+                              const Note* first = pn->firstTiedNote();
+                              const Chord* fc = first->chord();
+                              const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
+                              const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
+                              if (pc && pc.patch == c.patch && !otherLane(note, pn, c.patch))
+                                    return first;
+                              }
+                        return nullptr;
+                        };
+
+                  // a note of the chord just before on its track, on the same patch, ending where this note starts, on any
+                  // voice lane ([slurs] plainAuto: not after silence, so no smooth attack, though a chord's voices may keep
+                  // it from a transition)
+                  auto touchesPatch = [&](const Note* note, const SoundLib::Choice& c) {
+                        Chord* ch = note->chord();
+                        if (ch->isGrace())
+                              return false;
+                        ChordRest* pcr = prevChordRest(ch, true);
+                        if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
+                            || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
+                              return false;
+                        const RepeatList& repeats = score->repeatList();
+                        auto rs = repeats.findRepeatSegmentFromUTick(ch->tick().ticks() + tickOffset);
+                        if (rs == repeats.end() || pcr->tick().ticks() < (*rs)->tick)
+                              return false;
+                        for (const Note* pn : toChord(pcr)->notes()) {
+                              if (!pn->play())
+                                    continue;
+                              const Note* first = pn->firstTiedNote();
+                              const Chord* fc = first->chord();
+                              const std::vector<Ms4::ArtRef> pArts = Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset));
+                              const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
+                              if (pc && pc.patch == c.patch)
+                                    return true;
+                              }
+                        return false;
+                        };
+
+                  // a note's key and tuning as sent ([slurs] microtoneBends 1 may move a microtonal note to another key,
+                  // microtoneSpelling): the key without a key shift, the tuning its lane's (cents from that key)
+                  auto playedKey = [&](const Note* n) {
+                        auto k = libSpellKey.find(n);
+                        return k == libSpellKey.end() ? n->ppitch() : k->second;
+                        };
+                  auto playedCents = [&](const Note* n) {
+                        auto k = libSpellCents.find(n);
+                        if (k != libSpellCents.end())
+                              return k->second;
+                        auto c = libLaneCents.find(n);
+                        return c == libLaneCents.end() ? 0.0 : c->second;
+                        };
+                  // the note a legato transition goes on to from this one: the chord just after its tie chain on its
+                  // track, touching it, its note nearest in pitch, on the same patch and lane, an articulation that plays
+                  // transitions (a slur or a plain note touching it: as legatoTransition's joinable). nullptr: none
+                  auto nextLegato = [&](const Note* note, const SoundLib::Choice& c) -> const Note* {
+                        const Note* last = note->lastTiedNote();
+                        Chord* ch = last->chord();
+                        ChordRest* ncr = nextChordRest(ch, true);
+                        if (!ncr || !ncr->isChord() || ncr->track() != ch->track() || ch->tick() + ch->actualTicks() != ncr->tick()
+                            || engineCrosses(ch->part(), ch->tick().ticks(), ncr->tick().ticks()))
+                              return nullptr;
+                        const Chord* nch = toChord(ncr);
+                        if (!nch->graceNotesBefore().empty())
+                              return nullptr;
+                        std::vector<const Note*> after(nch->notes().begin(), nch->notes().end());
+                        std::stable_sort(after.begin(), after.end(), [note](const Note* a, const Note* b) {
+                              return std::abs(a->ppitch() - note->ppitch()) < std::abs(b->ppitch() - note->ppitch());
+                              });
+                        for (const Note* nn : after) {
+                              if (!nn->play() || nn->pitch() == note->pitch())
+                                    continue;
+                              const std::vector<Ms4::ArtRef> nArts = Ms4::noteArticulations(nn, Ms4::chordArticulations(nch, ctx.dynamics, tickOffset));
+                              const SoundLib::Choice nc = libraryChoice(*lp, *li, nn, nArts, nch->tick().ticks(), nch->actualTicks().ticks());
+                              if (!nc || nc.patch != c.patch || !nc.articulation->playsTransitions() || otherLane(nn, note, c.patch))
+                                    continue;
+                              return nn;
+                              }
+                        return nullptr;
+                        };
+                  // [slurs] microtoneBends 1 (2026-10-21, branch fast-microtones; the owner on Whence's Violas bar 7, A3 / B3 -50 /
+                  // A3 / G3 +50 sixteenths on SSO's Violas - Performance: "the pitch bending sounds weird"): a microtonal note
+                  // on a lane that bends, reached by a legato transition or going on by one, is sent on the key on the side of
+                  // the note before, so that the key's step (SSO's own transition) and the bend move the same way: B3 -50 after
+                  // A3 goes on B-flat3 +50 (a semitone up, the bend up), G3 +50 after A3 on A-flat3 -50. As written, the bend
+                  // (sent with the transition, the patch's smoothing compensated) retuned the note still sounding against the
+                  // step: a quarter tone the wrong way for ~100 ms, then a glide through (pYIN on kthost + Kontakt 8 + SSO
+                  // renders, the test VM: B3 -50 heard first near A-flat3 +45). Each candidate key (the written one, the keys
+                  // either side of the sounding pitch) whose bend fits the range and whose step from the note before and to the
+                  // note after isn't 0 (SSO plays no same-key transition) scores a point per transition (in, out) where key and
+                  // bend move the same way (or the bend not at all); the best wins, the written key on a tie. The note after is
+                  // judged as written (it decides its own key in turn)
+                  auto microtoneSpelling = [&](const Note* note, const SoundLib::Choice& c, const Note* from, int channel, int* key) {
+                        libSpellKey.erase(note);
+                        libSpellCents.erase(note);
+                        // (playback's chunks render a note in more than one window, renderChunk: its first spelling stays, made
+                        // with the notes before it rendered as the whole score renders them; a whole render spells each once)
+                        const auto memo = libSpelled.find({ note, tickOffset });
+                        if (memo != libSpelled.end()) {
+                              if (memo->second.first >= 0) {
+                                    *key = memo->second.first;
+                                    libSpellKey[note] = memo->second.first;
+                                    libSpellCents[note] = memo->second.second;
+                                    }
+                              return;
+                              }
+                        struct Remember {
+                              std::map<std::pair<const Note*, int>, std::pair<int, double>>& m;
+                              std::pair<const Note*, int> k;
+                              std::map<const Note*, int>& keys;
+                              std::map<const Note*, double>& cents;
+                              ~Remember() {
+                                    auto sk = keys.find(k.first);
+                                    m[k] = sk == keys.end() ? std::make_pair(-1, 0.0) : std::make_pair(sk->second, cents[k.first]);
+                                    }
+                              } remember { libSpelled, { note, tickOffset }, libSpellKey, libSpellCents };
+                        auto b = libBend.find(channel);
+                        if (!c || c.patch < 0 || b == libBend.end() || size_t(c.patch) >= b->second.size() || b->second[size_t(c.patch)] <= 0)
+                              return;
+                        const double range = b->second[size_t(c.patch)];
+                        auto lc = libLaneCents.find(note);
+                        if (lc == libLaneCents.end() || std::fabs(lc->second) < MICROTONE_MIN_CENTS || SoundLib::bendValue(lc->second, range) < 0)
+                              return;
+                        const int written = *key >= 0 ? *key : note->ppitch();
+                        const double x = written + lc->second / 100.0;           // (the sounding pitch, semitones)
+                        const int fk = from ? playedKey(from) : -1;
+                        const double fc = from ? playedCents(from) : 0.0;
+                        const Note* next = nextLegato(note, c);
+                        const int nk = next ? next->ppitch() : -1;
+                        const double nc = next ? playedCents(next) : 0.0;
+                        if (fk < 0 && nk < 0)
+                              return;
+                        auto sameWay = [](int dk, double dc) { return std::fabs(dc) < 0.5 || (dk > 0) == (dc > 0); };
+                        int best = written;
+                        int bestScore = -1;
+                        for (int k : { written, int(std::floor(x)), int(std::ceil(x)) }) {
+                              const double cents = (x - k) * 100.0;
+                              if (SoundLib::bendValue(cents, range) < 0 || k == fk || k == nk || k < 0 || k > 127)
+                                    continue;
+                              const int score = int(fk >= 0 && sameWay(k - fk, cents - fc)) + int(nk >= 0 && sameWay(nk - k, nc - cents));
+                              if (score > bestScore) {
+                                    bestScore = score;
+                                    best = k;
+                                    }
+                              }
+                        if (bestScore < 0 || best == written)
+                              return;
+                        *key = best;
+                        libSpellKey[note] = best;
+                        libSpellCents[note] = (x - best) * 100.0;
+                        };
+
                   struct PerformanceNote { bool on = false; const Note* from = nullptr; int interval = 0; double lenBefore = 0;
-                                           int velocity = -1; const Note* before = nullptr; double endMs = 0; };
+                                           int velocity = -1; const Note* before = nullptr; double endMs = 0;
+                                           const SoundLib::Articulation::Technique* timedAttack = nullptr;
+                                           bool shortenOnly = false;
+                                           bool keepBefore = false;       // [slurs] plainAuto 3's re-attack (LibJoin::keep)
+                                           bool accentAttack = false;     // [slurs] plainAccents 2 / 3: the accented attack
+                                           // [slurs] plainAuto: a plain note after silence on its patch on the smooth attack
+                                           // (its measured onset, less the patch's plainShift, its own early start)
+                                           const SoundLib::Articulation::Technique* smoothStart = nullptr;
+                                           // [slurs] plainAuto: a new bow stroke on the bowed transition (2: early by the
+                                           // patch's bowedEarly beyond its plainShift, collectNote)
+                                           bool plainBowed = false; };
+                  // a staccato as written (staccato, staccatissimo; the first of its tie chain's): [slurs] plainPerformance
+                  // plays it as a spiccato attack
+                  auto staccatoNote = [&](const Note* n) {
+                        const Note* first = n->firstTiedNote();
+                        const Chord* fc = first->chord();
+                        for (const Ms4::ArtRef& a : Ms4::noteArticulations(first, Ms4::chordArticulations(fc, ctx.dynamics, tickOffset)))
+                              if (a.art == Ms4::Art::Staccato || a.art == Ms4::Art::Staccatissimo)
+                                    return true;
+                        return false;
+                        };
                   auto performanceNote = [&](const Note* note, const SoundLib::Choice& c, const Ms4::NoteResult& r) {
                         PerformanceNote p;
                         const SoundLib::Articulation* a = c ? c.articulation : nullptr;
                         if (!a || a->attacks.empty() || note->tieBack())
                               return p;
                         p.on = true;
+                        if (c.plain)
+                              libPlainNotes.insert(note);
                         int interval = 0;
                         double lenBefore = 0;
                         const Note* slurred = legatoTransition(note, c, &p.interval, &p.lenBefore);
@@ -1555,30 +1957,135 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         const PerformanceTechnique::Attack at = note->performanceAttack();
                         const int join = joinable ? note->libraryJoin() : PerformanceTechnique::JOIN_AUTO;
                         const bool ownJoin = join != PerformanceTechnique::JOIN_AUTO;
-                        auto autoTransition = [&]() {
+                        // Auto: after a glissando line portamento; with [slurs] transitions (the owner, 2026-10-12, by ear
+                        // in Whence: "notes within a slur use fingered and two slurs adjacent to each other will use
+                        // bowed") fingered under a slur, bowed from a slur into the next; without, bowed
+                        const bool slurTransitions = Playback::on("slurs/transitions", score);
+                        auto autoTransition = [&](bool betweenSlurs = false) {
                               bool glissando = false;
                               for (const Spanner* sp : note->spannerBack())
                                     glissando |= sp->isGlissando();
-                              return a->transition(glissando ? "portamento" : "bowed");
+                              return a->transition(glissando ? "portamento" : (slurTransitions && !betweenSlurs) ? "fingered" : "bowed");
                               };
+                        bool accent = false;
+                        for (Ms4::Art art : r.arts)
+                              accent |= art == Ms4::Art::Accent || art == Ms4::Art::Marcato;
                         bool transition = false;
+                        bool slurToSlur = false;          // (Auto's bowed transition from a slur into the next: below)
                         if (ownJoin) {
                               if (join >= -std::max(0.0, a->legatoGapMs)) {
                                     if (tr != PerformanceTechnique::Transition::AUTO)
                                           t = a->transition(PerformanceTechnique::transitionName(tr));
                                     if (!t)
-                                          t = autoTransition();
+                                          t = autoTransition(!slurred);       // (joined by hand from outside a slur: bowed)
                                     transition = t;
                                     }
                               }
                         else if (tr != PerformanceTechnique::Transition::AUTO && joinable
                             && (t = a->transition(PerformanceTechnique::transitionName(tr))))
                               transition = true;
-                        else if (at == PerformanceTechnique::Attack::AUTO && slurred) {
+                        else if (at == PerformanceTechnique::Attack::AUTO && (slurred || (joinable && slurGoesOn(joinable)))) {
+                              // (a slur going on from the note before on this patch: a transition, also after a slur's
+                              // first note chosen otherwise than "legato", e.g. accented)
                               t = autoTransition();
                               transition = t;
                               }
+                        else if (slurTransitions && at == PerformanceTechnique::Attack::AUTO && joinable && !accent
+                                 && slurAt(note, true) && slurAt(joinable, false)) {
+                              t = autoTransition(true);           // (a slur right after a slur: no re-attack)
+                              transition = t;
+                              slurToSlur = t && t->name == "bowed";
+                              }
                         const int own = note->libraryVelocity();
+                        // [slurs] plainPerformance (Choice::plain; abl.py's PLAIN, the owner's "C", 2026-10-17): velocity 64
+                        // (a note's own velocity, or a technique chosen for it in the Inspector, still its own); a staccato,
+                        // or a note after a staccato, a spiccato attack: the note before on the patch ends at least
+                        // PLAIN_STACCATO_GAP_MS before it (SSO joins a smaller gap as a transition); a slurred note's
+                        // transition as below (the note before overlapping it); any other note right after a note of the
+                        // patch, both at their written length, touches it: SSO plays a transition (its bend glides), no
+                        // re-attack gap; no smooth attack's own onset (no early start: the patch's shift, TrackDelays)
+                        const bool plain = c.plain && !ownJoin;
+                        const bool explicitTechnique = tr != PerformanceTechnique::Transition::AUTO || at != PerformanceTechnique::Attack::AUTO;
+                        const int plainVelocity = own > 0 ? own : PLAIN_VELOCITY;
+                        // [slurs] plainAuto (the owner, 2026-10-26: "smooth after a rest, bowed on each new bow, fingered inside
+                        // a slur, spiccato for staccatos"): on Auto without a velocity of its own, a note after silence on its
+                        // patch smooth, a note touching the note before outside a slur going on bowed (a slur after a slur:
+                        // the transition branch's slurToSlur), inside a slur fingered (64); staccatos, accents and a key
+                        // struck again as plain plays them
+                        const bool plainAuto = c.plain && Playback::on("slurs/plainAuto", score);
+                        // [slurs] plainAuto 3 = 1 plus re-attack (a), 4 = 1 plus (a) and (b) (branch plain-reattack, for the
+                        // owner's blind A/B; from his blind A/B of 2026-11-01, K. 550 i bars 1-9, strings, real SSO, build 524:
+                        // Recommended "wrong", the variant re-attacking these notes "fine"; then on Whence, (a) and (b): "the
+                        // bowed transitions don't come through", so (b) went to its own value, branch reattack-split; 0, 1 and
+                        // 2 as before):
+                        // (a) the same key struck again right after itself on its copy (legatoTransition's "struck again",
+                        //     touching: SSO took the note-on at the note-off's instant as a same-pitch transition, no attack,
+                        //     4-12 dB under its neighbours; the violas' repeated eighths a 6 dB pulse; velocity didn't help,
+                        //     the zero gap was the cause): a re-attack, the map's reattack velocity (106), the note before
+                        //     ending the map's reattackGap (54 ms) before it, past SSO's legatoGap (39: a note-on that much
+                        //     after a note-off is a new note); a staccato's or an accent's own attack keeps its velocity and
+                        //     takes the gap (45 / reattackGap) as after a note at another pitch;
+                        // (b) a new bow stroke (a slur after a slur, a slur's first note after an unslurred one, détaché, the
+                        //     note after a slur: the bowed transition below) shorter than the bowed transition's measured
+                        //     arrival after a note before that long (<Instrument bowedArrive>, LibInstrument::bowedArriveAt):
+                        //     its pitch would never be reached (K. 550: 51 of 120 transitions; the loudest note, +3 .. +11
+                        //     dB), so the same re-attack; a longer one keeps the bowed transition
+                        // A re-attack is no transition, so even levels end a passage there (NoteInfo::joined: the gap is wider
+                        // than legatoGap) and the audit models it as a plain attack (plainAttack)
+                        const bool plainReattack = plainAuto && libPlainAuto >= 3 && !ownJoin && a->reattackGapMs > 0;
+                        const bool plainShortBows = plainReattack && libPlainAuto == 4;        // ((b): 4 only)
+                        const int reattackVelocity = a->reattackVelocity > 0 ? a->reattackVelocity
+                                                     : a->attack("spiccato") ? a->attack("spiccato")->velocity : PLAIN_VELOCITY;
+                        const Note* again = plainReattack && !joinable ? struckAgain(note, c) : nullptr;
+                        auto bowedArrives = [&](double lenBeforeS) {
+                              const SoundLib::LibInstrument* bp = c.patch >= 0 && c.patch < int(libPatches.size()) ? libPatches[size_t(c.patch)] : nullptr;
+                              const double arrive = bp ? bp->bowedArriveAt(lenBeforeS * 1000.0) : NAN;
+                              if (!std::isfinite(arrive))
+                                    return true;
+                              const Note* last = note->lastTiedNote();
+                              const int t0 = note->chord()->tick().ticks() + tickOffset;
+                              const int t1 = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks() + tickOffset;
+                              return (score->utick2utime(t1) - score->utick2utime(t0)) * 1000.0 >= arrive;
+                              };
+                        auto reattack = [&](PerformanceNote& q, const Note* before) {
+                              q.velocity = reattackVelocity;
+                              q.before = before;
+                              q.endMs = -a->reattackGapMs;
+                              q.shortenOnly = true;
+                              q.keepBefore = true;
+                              q.from = nullptr;
+                              q.plainBowed = false;
+                              };
+                        // [slurs] plainAccents 2 / 3: an accent or marcato (as `accent` above) on Auto, without a velocity of its
+                        // own, that plays an attack (a staccato's, or a note outside a slur) takes the accented attack instead
+                        // of 64, as [slurs] performance gives it; a note touching the one before on the patch is re-attacked
+                        // (the note before ends the map's reattackGap before it) instead of SSO's transition from it. A slur's
+                        // transition stays one (as under [slurs] performance)
+                        const SoundLib::Articulation::Technique* accented = (plainAccents & 2) && plain && accent && own <= 0
+                                                                            && at == PerformanceTechnique::Attack::AUTO
+                                                                            ? a->attack("accented") : nullptr;
+                        // ([slurs] plainTiming: an attack chosen in the Inspector with its own measured onset, smooth, starts
+                        // early by it: timedAttack)
+                        if (plain && (staccatoNote(note) || (joinable && staccatoNote(joinable)) || (again && staccatoNote(again)))) {
+                              if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at)))) {
+                                    p.velocity = own > 0 ? own : t->velocity;
+                                    if (libPlainTiming && t->hasOnset())
+                                          p.timedAttack = t;
+                                    }
+                              else if (accented) {
+                                    p.velocity = accented->velocity;
+                                    p.accentAttack = true;
+                                    }
+                              else
+                                    p.velocity = plainVelocity;
+                              if (joinable || again) {      // ((a): a key struck again too, plainAuto 1)
+                                    p.before = joinable ? joinable : again;
+                                    p.endMs = -PLAIN_STACCATO_GAP_MS;
+                                    p.shortenOnly = true;
+                                    p.keepBefore = !joinable;
+                                    }
+                              return p;
+                              }
                         if (transition) {
                               if (!slurred) {
                                     p.interval = interval;
@@ -1588,24 +2095,100 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               p.velocity = own > 0 ? own : (t->name == "bowed" && a->legatoVelocity > 0) ? a->legatoVelocity : t->velocity;
                               p.before = joinable;
                               p.endMs = ownJoin ? join : a->overlapMs > 0 ? a->overlapMs : 0;
+                              // ([slurs] plainAuto 1, branch celli-bowed, 2026-10-26: with plainPerformance a slur that starts
+                              // where the slur before ends keeps [slurs] transitions' bowed transition, its velocity (93;
+                              // Violas' legatoVelocity 100), as the owner set it on 2026-10-12 ("two slurs adjacent to each
+                              // other will use bowed"); before, plainPerformance's 64 made it SSO's fingered one. 0: 64)
+                              if (plainShortBows && slurToSlur && own <= 0 && !explicitTechnique && !bowedArrives(lenBefore)) {
+                                    reattack(p, joinable);      // ((b): too short for the bowed transition to arrive)
+                                    p.interval = 0;
+                                    p.lenBefore = 0;
+                                    return p;
+                                    }
+                              if (c.plain && !explicitTechnique && !(slurToSlur && own <= 0 && plainAuto))
+                                    p.velocity = plainVelocity;
+                              else if (c.plain && !explicitTechnique && own <= 0)
+                                    p.plainBowed = t->name == "bowed";
+                              return p;
+                              }
+                        if (plain) {
+                              if (accented) {
+                                    p.velocity = accented->velocity;
+                                    p.accentAttack = true;
+                                    if ((joinable || again) && a->reattackGapMs > 0) {       // (a re-attack, not SSO's transition;
+                                          p.before = joinable ? joinable : again;                // (a): a key struck again too)
+                                          p.endMs = -a->reattackGapMs;
+                                          p.shortenOnly = true;
+                                          p.keepBefore = !joinable;
+                                          }
+                                    return p;
+                                    }
+                              if (at != PerformanceTechnique::Attack::AUTO && (t = a->attack(PerformanceTechnique::attackName(at)))) {
+                                    p.velocity = own > 0 ? own : t->velocity;
+                                    if (libPlainTiming && t->hasOnset())
+                                          p.timedAttack = t;
+                                    }
+                              else if (again && own <= 0 && !explicitTechnique && !accent)
+                                    p.velocity = reattackVelocity;    // ((a): a key struck again, plainAuto 1; its gap below)
+                              else if (plainAuto && own <= 0 && !explicitTechnique && !accent && !joinable && !touchesPatch(note, c)
+                                       && (t = a->attack("smooth"))) {
+                                    // ([slurs] plainAuto 1, 2026-10-26, the owner: "slurs should have smooth start when there's
+                                    // nothing preceding it", then every note after silence on its patch, slurred or not: the
+                                    // smooth attack instead of 64; early by its own onset less the patch's plainShift:
+                                    // smoothStart below, collectNote; with [slurs] plainTiming by its own onset)
+                                    p.velocity = t->velocity;
+                                    p.smoothStart = t;
+                                    if (libPlainTiming && t->hasOnset())
+                                          p.timedAttack = t;
+                                    }
+                              else if (plainShortBows && own <= 0 && !explicitTechnique && !accent && joinable && a->transition("bowed")
+                                       && !bowedArrives(lenBefore)) {
+                                    reattack(p, joinable);      // ((b): a new bow too short for the bowed transition to arrive)
+                                    return p;
+                                    }
+                              else if (plainAuto && own <= 0 && !explicitTechnique && !accent && joinable
+                                       && (t = a->transition("bowed"))) {
+                                    // ([slurs] plainAuto 1: a new bow stroke, a note touching the note before on its patch
+                                    // outside a slur going on (détaché, a slur's first note after an unslurred one, the note
+                                    // after a slur), the bowed transition instead of 64, SSO's fingered: as a slur after a
+                                    // slur, above)
+                                    p.velocity = a->legatoVelocity > 0 ? a->legatoVelocity : t->velocity;
+                                    p.plainBowed = true;
+                                    }
+                              else
+                                    p.velocity = plainVelocity;
+                              if (again) {            // ((a): its own velocity or attack too: never a same-key transition)
+                                    const int v = p.velocity;
+                                    reattack(p, again);
+                                    p.velocity = v;
+                                    return p;
+                                    }
+                              if (joinable) {         // (touching: SSO's transition from it)
+                                    p.from = joinable;
+                                    p.interval = interval;
+                                    p.lenBefore = lenBefore;
+                                    }
                               return p;
                               }
                         if (at != PerformanceTechnique::Attack::AUTO)
                               t = a->attack(PerformanceTechnique::attackName(at));
-                        else {
-                              bool accent = false;
-                              for (Ms4::Art art : r.arts)
-                                    accent |= art == Ms4::Art::Accent || art == Ms4::Art::Marcato;
-                              t = a->attack(accent ? "accented" : "spiccato");
-                              }
+                        else      // (after silence on this patch, [slurs] smoothStart: smooth; the owner, 2026-10-12)
+                              t = a->attack(accent ? "accented" : (!joinable && !struckAgain(note, c)
+                                                                    && Playback::on("slurs/smoothStart", score)) ? "smooth" : "spiccato");
                         if (t)
                               p.velocity = (t->name == "spiccato" && joinable && a->reattackVelocity > 0) ? a->reattackVelocity : t->velocity;
+                        // (its own onset: a measured timing of an approved setting, so only with smoothStart on, the
+                        // Recommended preset; the owner, 2026-10-12)
+                        if (t && t->hasOnset() && Playback::on("slurs/smoothStart", score))
+                              p.timedAttack = t;
                         if (own > 0)
                               p.velocity = own;
                         if (ownJoin || (joinable && a->reattackGapMs > 0)) {
                               p.before = joinable;
                               p.endMs = ownJoin ? join : -a->reattackGapMs;
                               }
+                        if (c.plain && !explicitTechnique)      // ([slurs] plainPerformance with a join of its own)
+                              p.velocity = plainVelocity;
                         return p;
                         };
 
@@ -1616,7 +2199,9 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // this note's note-on the note before ends (a Performance re-attack's reattackGap, performanceNote):
                   // it keeps keepMs after that (without, Whence's slurs' last sixteenths on Violas - Performance
                   // sounded 1 ms: 136 ms written, the next attack 87.5 ms early, the gap 54 ms)
-                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c, double gapMs) -> int {
+                  // (atLeast: the cap rounded up to a whole tick, so the note before keeps at least that time: a transition's
+                  // 15 ms, TRANSITION_MIN_GAP_MS; utime2utick rounds down)
+                  auto onsetEarliest = [&](const Note* note, const SoundLib::Choice& c, double gapMs, bool atLeast = false) -> int {
                         Chord* ch = note->chord();
                         if (ch->isGrace() || !ch->graceNotesBefore().empty() || ch->arpeggio())
                               return -1;
@@ -1628,7 +2213,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         int earliest = std::max(libChunkStart, (*rs)->utick);
                         ChordRest* pcr = prevChordRest(ch, true);
                         if (!pcr || !pcr->isChord() || pcr->track() != ch->track() || pcr->tick() + pcr->actualTicks() != ch->tick()
-                            || pcr->tick().ticks() < (*rs)->tick)
+                            || pcr->tick().ticks() < (*rs)->tick || engineCrosses(ch->part(), pcr->tick().ticks(), ch->tick().ticks()))
                               return earliest;
                         for (const Note* pn : toChord(pcr)->notes()) {
                               if (!pn->play())
@@ -1639,7 +2224,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               const SoundLib::Choice pc = libraryChoice(*lp, *li, first, pArts, fc->tick().ticks(), fc->actualTicks().ticks());
                               if (!pc || pc.patch != c.patch)
                                     continue;
-                              const int cap = score->utime2utick(score->utick2utime(playedOn(first)) + libKeep + gapMs / 1000.0);
+                              const double keepTo = score->utick2utime(playedOn(first)) + libKeep + gapMs / 1000.0;
+                              int cap = score->utime2utick(keepTo);
+                              if (atLeast && score->utick2utime(cap) < keepTo - 1e-9)
+                                    ++cap;
                               return std::max(earliest, cap);
                               }
                         return earliest;
@@ -1649,6 +2237,10 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   int libShiftWritten = -1;
                   std::function<void(const Note*, const std::vector<Ms4::ArtRef>&, int, int, int, int)> renderAtFn;
                   auto collect = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int offset = 0, int cut = 0, bool once = false) {
+                        // a mono patch's unison duplicate (SoundLib::Lanes::unison): the kept note plays the unison, one
+                        // section on one copy; this one sends nothing (two copies on one key in phase: +3 dB, combing)
+                        if (li && libUnison.count(note))
+                              return;
                         // a discrete glissando: its steps over the note's length, each a note of its own at the
                         // dynamic of its time; tied into, the first step is left out (the tie took it)
                         const std::vector<int> steps = ms4DiscreteGlissando(note);
@@ -1733,11 +2325,20 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               if (!li->kit && !note->tieBack()) {
                                     const Chord* ch = note->chord();
                                     libChoice = librarySwitch(note, noteArts, ch->tick().ticks() + offset, ch->actualTicks().ticks() - offset - cut);
-                                    libNote.velocity = libVelocity(note, libChoice, r, level);
-                                    marcatoLevel(note, libChoice, libNote.velocity, level);
+                                    double under = 0.0;
+                                    libNote.velocity = libVelocity(note, libChoice, r, level, &under);
+                                    marcatoLevel(note, libChoice, libNote.velocity, level, r);
                                     trackLevel(note, libChoice);
+                                    divisiLevel(note, libChoice);
+                                    if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
+                                          libLevels[note].volumeDb += under;
+                                    realRangeLevel(note, libChoice, libNote.velocity, r, level);
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
+                                    // a patch whose keys sound an octave off (SSO's timpani), an articulation played a key away
+                                    // from its sound (Ample's natural harmonics, -12): the key sent is shifted
+                                    if (const int shift = libKeyShift(libPatches, libChoice))
+                                          libNote.key = qBound(0, note->ppitch() + shift, 127);
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
                                           LibTrace& t = libTrace->back();
                                           t.velocity = libNote.velocity;
@@ -1758,7 +2359,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4 = true;
                         config.method = DynamicsRenderMethod::MS4;
                         // (the built-in synthesizer: the level by SoundFont 2's law, MarcatoLevel::velocity)
-                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note));
+                        config.ms4Velocity = (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note) + leadingDb(note->chord()));
                         config.ms4Dur = r.dur;
                         config.ms4Ts = r.ts;
                         config.ms4Offset = offset;
@@ -1767,6 +2368,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                         config.ms4TiedTicks = tiedTicks;
                         config.ms4Once = once;
                         config.libPatch = libChoice.patch;
+                        bool accentAttack = false;
                         if (li && !libNote.builtIn && !li->kit) {
                               // a legato transition (SSO's Performance patches reach the new pitch 60-690 ms after the
                               // note-on, median 190, by patch and interval: the legato grid): its tuning lane glides
@@ -1774,20 +2376,46 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               int interval = 0;
                               double lenBefore = 0;
                               const PerformanceNote perf = offset == 0 ? performanceNote(note, libChoice, r) : PerformanceNote();
+                              accentAttack = perf.on && perf.accentAttack;
                               const Note* from = perf.on ? perf.from : legatoTransition(note, libChoice, &interval, &lenBefore);
+                              if (libMicrotoneBends == 1 || libMicrotoneBends == 3)     // (3: as 1, the fingered transitions early)
+                                    microtoneSpelling(note, libChoice, from, noteChannel, &libNote.key);
+                              else if (!libSpellKey.empty()) {
+                                    libSpellKey.erase(note);
+                                    libSpellCents.erase(note);
+                                    }
                               if (perf.on) {
                                     interval = perf.interval;
                                     lenBefore = perf.lenBefore;
                                     if (perf.velocity > 0)
                                           libNote.velocity = perf.velocity;
-                                    if (perf.before)
-                                          libJoins.push_back({ noteChannel, libChoice.patch, perf.before->ppitch(), note,
-                                                               note->chord()->tick().ticks() + tickOffset, perf.endMs });
+                                    if (perf.before && !writtenTiming)      // (written timing: the note before as written)
+                                          libJoins.push_back({ noteChannel, libChoice.patch, playedKey(perf.before), note,
+                                                               note->chord()->tick().ticks() + tickOffset, perf.endMs, perf.shortenOnly, perf.keepBefore });
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
                                           LibTrace& t = libTrace->back();
                                           t.velocity = libNote.velocity;
                                           t.performance = perf.from ? LibPerformance::TRANSITION : LibPerformance::ATTACK;
                                           t.joinMs = perf.before ? int(std::lround(perf.endMs)) : PerformanceTechnique::JOIN_AUTO;
+                                          t.attack = perf.timedAttack ? perf.timedAttack : perf.smoothStart;
+                                          t.plainBowed = perf.plainBowed;
+                                          }
+                                    }
+                              // [slurs] speedFromWritten (the owner approved, 2026-10-17): a legato note-on (a transition from the
+                              // note before on the patch: slurred, joined, a plain note touching it) gets the patch's speed
+                              // controller from the WRITTEN spacing, the script's own formula (126 - ms x 127 / 1000), so an
+                              // early start can't move it into another band; an attack none, as the script writes none at a
+                              // note-on it doesn't play legato (the value before stays). The note-on it follows: the first of the
+                              // note before's tie chain (the script counts from the voice's previous note-on)
+                              libSpeed.erase(note);
+                              if (perf.on && perf.from && SoundLib::speedFromWritten(libPatches[libChoice.patch], score)) {
+                                    const int t0 = perf.from->firstTiedNote()->chord()->tick().ticks() + tickOffset;
+                                    const int t1 = note->chord()->tick().ticks() + tickOffset;
+                                    if (t0 < t1) {
+                                          const int v = SoundLib::speedValue((score->utick2utime(t1) - score->utick2utime(t0)) * 1000.0);
+                                          libSpeed[note] = v;
+                                          if (libTrace && !libTrace->empty() && libTrace->back().note == note)
+                                                libTrace->back().speed = v;
                                           }
                                     }
                               // an attack at a velocity whose recording at this key is faulty (the map's avoid: SSO's
@@ -1808,6 +2436,47 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     libGlideFrom.erase(note);
                                     libGlide.erase(note);
                                     }
+                              // [slurs] runBends: what libraryPitchBends needs to model the patch's own pitch in a fast run
+                              libRunNote.erase(note);
+                              if (libRunBends && libChoice && libChoice.plain && libChoice.articulation
+                                  && libChoice.articulation->runLagFingered.delayMs >= 0) {
+                                    const SoundLib::LibInstrument* rp = libPatches[libChoice.patch];
+                                    // (a bowed transition takes the map's bowed lag; none: no lag of its own, its window left to
+                                    // the old path, runBendPath; every other transition the fingered lag)
+                                    const SoundLib::Articulation::Technique* bt = libChoice.articulation->transition("bowed");
+                                    const bool bowedT = bt && libNote.velocity >= bt->low && libNote.velocity <= bt->high;
+                                    const int w0 = note->chord()->tick().ticks() + tickOffset;
+                                    LibRunNote rn { score->utick2utime(w0), score->utick2utime(w0 + note->playTicks()),
+                                                    std::isfinite(rp->plainShiftMs) && !libPlainTiming ? std::max(0.0, rp->plainShiftMs) / 1000.0 : 0.0,
+                                                    bowedT ? libChoice.articulation->runLagBowed : libChoice.articulation->runLagFingered,
+                                                    from != nullptr };
+                                    libRunNote[note] = rn;
+                                    }
+                              // [levels] attackLevels (libraryNoteLevels): an attack's measured onset (a plain Performance note by
+                              // its patch's plainAttack, an attack with its own onset, smooth, by that one; else the articulation's
+                              // onset, the chord's latest, as its early start takes it), and every note's release
+                              libAttackOnset.erase(note);
+                              libReleaseMs.erase(note);
+                              libAttackShiftMs.erase(note);
+                              if (libChoice && libChoice.articulation) {
+                                    const SoundLib::LibInstrument* ap = libPatches[libChoice.patch];
+                                    libReleaseMs[note] = SoundLib::laneRing(*ap, libChoice.articulation, {}) * 1000.0 / 2.0;
+                                    // (2: the patch's events go early by its plainShift, a track delay after the levels:
+                                    // TrackDelays, not with [slurs] plainTiming)
+                                    if (!from && !note->tieBack() && libChoice.plain && std::isfinite(ap->plainShiftMs) && ap->plainShiftMs > 0
+                                        && !Playback::on("slurs/plainTiming", score))
+                                          libAttackShiftMs[note] = ap->plainShiftMs;
+                                    if (!from && !note->tieBack()) {
+                                          double onsetMs = libChoice.plain && std::isfinite(ap->plainAttackMs) ? ap->plainAttackMs : 0.0;
+                                          const SoundLib::Articulation::Technique* attackT = perf.timedAttack ? perf.timedAttack : perf.smoothStart;
+                                          if (!libChoice.plain || attackT)
+                                                for (const Note* n : note->chord()->notes())
+                                                      if (n->play())
+                                                            onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(attackT, n->ppitch(), libOnsetByPitch));
+                                          if (onsetMs > 0)
+                                                libAttackOnset[note] = onsetMs;
+                                          }
+                                    }
                               if (from) {
                                     libGlideFrom[note] = from;
                                     // its velocity (the map's legatoVelocity, else the note's own): Spitfire's Performance
@@ -1822,8 +2491,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // octaveDown; playback.ini [legato.delay] by patch: an offset or its own table); after
                                     // a short note SSO's transition is quicker ([legato] fastShare, fastFullMs)
                                     LibGlide g;
-                                    if (libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs))
+                                    // ([slurs] microtoneBends 1 / 2: a fingered transition, as plainPerformance's 64 and [slurs]
+                                    // transitions' slurs play, by its own measured glide, bendGlideFingered)
+                                    const SoundLib::Articulation::Technique* fingered = libMicrotoneBends > 0 ? libChoice.articulation->transition("fingered") : nullptr;
+                                    const bool glideFingered = fingered && libNote.velocity >= fingered->low && libNote.velocity <= fingered->high;
+                                    const bool glideMeasured = libChoice.articulation->bendGlideAt(lenBefore * 1000.0, &g.leaveMs, &g.arriveMs, glideFingered);
+                                    if (glideMeasured) {
                                           g.smoothingMs = libChoice.articulation->bendSmoothingMs;
+                                          g.uncut = glideFingered && !libChoice.articulation->bendGlidesFingered.empty();
+                                          }
                                     else {
                                           g.arriveMs = libFastDelay(Playback::adjust("legato.delay", libPatches[libChoice.patch]->name,
                                                                                      libChoice.articulation->name, interval,
@@ -1833,12 +2509,145 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           }
                                     libGlide[note] = g;
                                     if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
+                                          libTrace->back().from = from;
+                                          libTrace->back().interval = interval;
                                           libTrace->back().glideLeaveMs = g.leaveMs;
                                           libTrace->back().glideArriveMs = g.arriveMs;
                                           }
+                                    // [slurs] transitionsEarly (the owner, 2026-10-14: "sure let's hear them started early"; 0, off, in
+                                    // every preset until approved by ear): a Performance legato transition is sent early by
+                                    //   1: its modelled arrival (g.arriveMs: the patch's measured bendGlide by the note before's
+                                    //      length, else its legatoDelay by interval, libFastDelay after a short note; the audit's
+                                    //      model): its new pitch ARRIVES on the beat;
+                                    //   2: the measured leave (bendGlide: when SSO's f0 leaves the note before) + 23.5 ms: the
+                                    //      change is HEARD on the beat. A legato note on a bowed string is perceived about 23.5 ms
+                                    //      after its pitch change starts (Polfreman 2013, "Comparing onset detection and perceptual
+                                    //      attack time", ISMIR 2013: a modelled bowed string, SD 22.8 ms); players time that moment;
+                                    //   3: the middle of the measured glide (leave to arrival) on the beat.
+                                    //   A patch without a measured glide (no bendGlide): 2 and 3 fall back to 1's model
+                                    //   (LibTrace::earlyFallback; the audit lists them).
+                                    // By the same mechanism as an early attack (collectNote's libEarly, libShifts): its switch and
+                                    // the chord's controllers move with it, the note before ends at the new note-on and its join
+                                    // (overlap ms after it, libJoins) still makes it a transition. Capped in every mode
+                                    // (onsetEarliest): the note before on its patch keeps [legato] keepMs as played, never less
+                                    // than SSO's 15 ms (TRANSITION_MIN_GAP_MS: a legato note-on closer to the one before isn't
+                                    // played, the audit's DROPPED); not before the chunk or the pass. The bend's glide (ms after
+                                    // the note-on as played) moves with it. Written timing (Live's clips): as written, LiveTiming
+                                    // puts it back at playback
+                                    // ([slurs] plainPerformance: none, its patch's events go early together, TrackDelays; with
+                                    // [slurs] plainTiming each plain transition by this model, mode 1 where transitionsEarly is 0)
+                                    // ([slurs] microtoneBends 3, 2026-10-22, branch microtone-next: a plain fingered transition
+                                    // on a patch that bends, by its glide's middle less the plainShift its patch already goes
+                                    // early, so that the glide's middle comes on the beat, as the Violas' already did: SSO's
+                                    // fingered transitions in Whence's sixteenths reached their pitch 100-110 ms after the
+                                    // written start on Violins 1 / Celli, 40 ms on the Violas (kthost + Kontakt 8 + SSO, pYIN);
+                                    // with 1's full bends the 12-TET notes between the quarter tones were heard late, in tune
+                                    // 24 % / 19 % of their time (Violas 50 %); this early 49 % / 53 %, the quarter tones 17 -> 22 %
+                                    // / 11 -> 24 %: microtone-next's RESULT.md)
+                                    // ([slurs] plainAuto 2, branch bowed-early, 2026-10-27: a plain new bow stroke on the bowed
+                                    // transition (performanceNote's plainBowed) early by its patch's bowedEarly, the bowed
+                                    // transition's measured heard time (f0 leave + 23.5 ms, Polfreman 2013) after its note-on less
+                                    // the plainShift the patch already goes early: Violins 1 125, Violins 2 151, Violas 55, Celli
+                                    // 106, Basses 64 ms (kthost + Kontakt 8 + SSO, sso_legato_glide_bowed.json); by midEarly's
+                                    // mechanism and caps; 1: as written, plainShift only)
+                                    const SoundLib::LibInstrument* tpi = libPatches[libChoice.patch];
+                                    const bool bowedEarly = libChoice.plain && !libPlainTiming && libPlainAuto == 2 && perf.plainBowed
+                                                            && std::isfinite(tpi->bowedEarlyMs) && tpi->bowedEarlyMs > 0;
+                                    const bool midEarly = libChoice.plain && !libPlainTiming && libMicrotoneBends == 3 && glideFingered
+                                                          && glideMeasured && !libChoice.articulation->bendGlidesFingered.empty()
+                                                          && std::isfinite(tpi->plainShiftMs);
+                                    const int transitionsMode = (midEarly || bowedEarly) ? 3 : libChoice.plain ? (libPlainTiming ? std::max(1, libTransitionsEarly) : 0)
+                                                                                           : libTransitionsEarly;
+                                    if (transitionsMode > 0 && perf.on && perf.from && offset == 0 && (g.arriveMs > 0 || bowedEarly)) {
+                                          double shiftMs = g.arriveMs;
+                                          const bool fallback = transitionsMode >= 2 && !glideMeasured && !bowedEarly;
+                                          if (bowedEarly)
+                                                shiftMs = tpi->bowedEarlyMs;
+                                          else if (midEarly) {
+                                                // (at most the middle after the shortest measured note, Whence's sixteenths: the
+                                                // slower glides' middles weren't checked against the sound, and one shift keeps
+                                                // a part's transitions evenly spaced where its notes change speed)
+                                                double l0 = 0, a0 = 0;
+                                                libChoice.articulation->bendGlideAt(0.0, &l0, &a0, true);
+                                                shiftMs = std::max(0.0, std::min(g.leaveMs + g.arriveMs, l0 + a0) / 2.0 - tpi->plainShiftMs);
+                                                }
+                                          else if (transitionsMode == 2 && glideMeasured)
+                                                shiftMs = g.leaveMs + HEARD_AFTER_LEAVE_MS;
+                                          else if (transitionsMode == 3 && glideMeasured)
+                                                shiftMs = (g.leaveMs + g.arriveMs) / 2.0;
+                                          if (libTrace && !libTrace->empty() && libTrace->back().note == note) {
+                                                libTrace->back().earlyMeantMs = shiftMs;
+                                                libTrace->back().earlyFallback = fallback;
+                                                }
+                                          const double gapMs = std::max(0.0, TRANSITION_MIN_GAP_MS - libKeep * 1000.0);
+                                          const int earliest = onsetEarliest(note, libChoice, gapMs, true);
+                                          if (earliest >= 0 && shiftMs > 0) {
+                                                config.libEarly = shiftMs / 1000.0;
+                                                config.libEarliest = earliest;
+                                                config.libLost = &libStartLost;
+                                                config.libOn = &libShiftOn;
+                                                config.libWrittenOn = &libShiftWritten;
+                                                libShiftOn = libShiftWritten = -1;
+                                                }
+                                          }
                                     }
-                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack()
-                                       && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty())) {
+                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && libChoice.plain && !libPlainTiming && perf.on
+                                       && perf.smoothStart && perf.smoothStart->hasOnset() && !note->tieBack()) {
+                                    // [slurs] plainAuto: a plain note after silence on its patch on the smooth attack, whose
+                                    // measured onset (<Articulation attackOnset>: SSO's 91-236 ms) is longer than the patch's
+                                    // plainShift, the whole patch's early start (TrackDelays): early by the difference, times
+                                    // heldNotes/early %, when positive, so that it is heard on the beat as the plain notes are;
+                                    // capped as an attack (the note before on its patch keeps keepMs; the start lead at the
+                                    // score's start), as microtoneBends 3's midEarly. Written timing (Live's clips): as written,
+                                    // LiveTiming puts it back at playback
+                                    const SoundLib::LibInstrument* pi = libPatches[libChoice.patch];
+                                    double onsetMs = 0;
+                                    for (const Note* n : note->chord()->notes())
+                                          if (n->play())
+                                                onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset", pi->name, libChoice.articulation->name,
+                                                                   n->ppitch(), libChoice.articulation->startOnset(perf.smoothStart, n->ppitch(), libOnsetByPitch)));
+                                    const double shiftMs = std::isfinite(pi->plainShiftMs) ? std::max(0.0, pi->plainShiftMs) : 0.0;
+                                    const double earlyMs = onsetMs * libOnsetEarly / 100.0 - shiftMs;
+                                    const int earliest = earlyMs > 0 ? onsetEarliest(note, libChoice, 0.0) : -1;
+                                    if (libTrace && !libTrace->empty() && libTrace->back().note == note)
+                                          libTrace->back().earlyMeantMs = std::max(0.0, earlyMs);
+                                    if (earliest >= 0 && earlyMs > 0) {
+                                          config.libEarly = earlyMs / 1000.0;
+                                          config.libEarliest = earliest;
+                                          config.libLost = &libStartLost;
+                                          config.libOn = &libShiftOn;
+                                          config.libWrittenOn = &libShiftWritten;
+                                          libShiftOn = libShiftWritten = -1;
+                                          }
+                                    }
+                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && libChoice.plain && libPlainTiming && perf.on
+                                       && !note->tieBack()) {
+                                    // [slurs] plainTiming: a plain Performance note that is no transition (an attack after silence,
+                                    // a staccato's spiccato attack, an accented re-attack) early by its patch's measured plain
+                                    // attack (<Instrument plainAttack>: heard - sent of plain attacks at velocity 64 in context, by
+                                    // the onset rule the map's onsets use, 15 dB under the peak: Vos & Rasch 1981), times
+                                    // heldNotes/early %; an attack chosen in the Inspector with its own onset (smooth) by that one
+                                    const SoundLib::LibInstrument* pi = libPatches[libChoice.patch];
+                                    double onsetMs = std::isfinite(pi->plainAttackMs) ? pi->plainAttackMs : 0.0;
+                                    if (perf.timedAttack)
+                                          for (const Note* n : note->chord()->notes())
+                                                if (n->play())
+                                                      onsetMs = std::max(onsetMs, libChoice.articulation->startOnset(perf.timedAttack, n->ppitch(), libOnsetByPitch));
+                                    const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
+                                    const int earliest = onsetMs > 0 ? onsetEarliest(note, libChoice, gapMs) : -1;
+                                    const double earlyMs = onsetMs * libOnsetEarly / 100.0;
+                                    if (earliest >= 0 && earlyMs > 0) {
+                                          config.libEarly = earlyMs / 1000.0;
+                                          config.libEarliest = earliest;
+                                          config.libLost = &libStartLost;
+                                          config.libOn = &libShiftOn;
+                                          config.libWrittenOn = &libShiftWritten;
+                                          libShiftOn = libShiftWritten = -1;
+                                          }
+                                    }
+                              else if (offset == 0 && libOnsetEarly > 0 && libChoice && !note->tieBack() && !libChoice.plain
+                                       && (libChoice.articulation->onsetMs > 0 || !libChoice.articulation->onsets.empty()
+                                           || perf.timedAttack)) {
                                     // a note's attack (SSO's longs are heard -- 15 dB under their peak -- 10-60 ms after
                                     // the note-on, sul tasto / flautando / harmonics 175-440 ms; since 2026-10-08 every
                                     // measured technique, shorts too: pizzicato 3, staccato 8, marcato 33, Short 1.0 113 ms
@@ -1846,7 +2655,8 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     // chord's latest so that its notes start together; [heldNotes] byPitch 0: the patch's
                                     // median onset for every pitch (one shift, a run's spacing as written), a [slurs]
                                     // quick swap (Choice::swapped) too (the owner, 2026-10-09: per-pitch Rachm. made
-                                    // Whence's first bars uneven); 1: each by its pitch's
+                                    // Whence's first bars uneven); 1: each by its pitch's. A Performance attack with its
+                                    // own onset (perf.timedAttack: smooth, [slurs] smoothStart) by that one
                                     const SoundLib::Articulation* oa = libChoice.articulation;
                                     const bool byPitch = libOnsetByPitch;
                                     double onsetMs = 0;
@@ -1854,8 +2664,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                           if (n->play())
                                                 onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset",   // (playback.ini)
                                                                    libPatches[libChoice.patch]->name, oa->name,
-                                                                   n->ppitch(), byPitch ? oa->onsetAt(n->ppitch())
-                                                                                                : oa->onsetMedian()));
+                                                                   n->ppitch(), oa->startOnset(perf.timedAttack, n->ppitch(), byPitch)));
                                     // (a Performance re-attack: the note before ends its gap before this note-on,
                                     // so it keeps keepMs after that gap)
                                     const double gapMs = perf.before && perf.endMs < 0 ? -perf.endMs : 0;
@@ -1864,11 +2673,57 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                                     if (earliest >= 0 && earlyMs > 0) {
                                           config.libEarly = earlyMs / 1000.0;
                                           config.libEarliest = earliest;
+                                          config.libLost = &libStartLost;
                                           config.libOn = &libShiftOn;
                                           config.libWrittenOn = &libShiftWritten;
                                           libShiftOn = libShiftWritten = -1;
                                           }
                                     }
+                              }
+                        // ([slurs] plainPerformance: a note at its written length; a staccato as long as it plays today: MS4's
+                        // note model's length plus the early start its technique (plainFrom) had, the note-off staying)
+                        if (li && !libNote.builtIn && libChoice.plain && offset == 0) {
+                              if (!staccatoNote(note))
+                                    config.ms4Dur = Ms4::HUNDRED;
+                              else if (libChoice.plainFrom && libOnsetEarly > 0 && !note->tieBack() && !libPlainTiming
+                                       && (libChoice.plainFrom->onsetMs > 0 || !libChoice.plainFrom->onsets.empty())) {
+                                    const SoundLib::Articulation* oa = libChoice.plainFrom;
+                                    double onsetMs = 0;
+                                    for (const Note* n : note->chord()->notes())
+                                          if (n->play())
+                                                onsetMs = std::max(onsetMs, Playback::adjust("heldNotes.onset", libPatches[libChoice.plainFromPatch]->name,
+                                                                                             oa->name, n->ppitch(), oa->startOnset(nullptr, n->ppitch(), libOnsetByPitch)));
+                                    const int ticks = note->chord()->actualTicks().ticks();
+                                    const int t0 = note->chord()->tick().ticks() + tickOffset;
+                                    const int extra = score->utime2utick(score->utick2utime(t0) + onsetMs * libOnsetEarly / 100.0 / 1000.0) - t0;
+                                    if (ticks > 0 && extra > 0)
+                                          config.ms4Dur = r.dur + int(qint64(extra) * Ms4::HUNDRED / ticks);
+                                    }
+                              }
+                        // [shorts] staccatoLength: a staccato (staccatissimo) held no longer than real players sound one, the
+                        // patch's staccatoLength (staccatissimoLength) seconds from its written start (the shorter of that and
+                        // the length just set; an early start by its onset leaves the note-off where it is, so it sounds about
+                        // that long; plain Performance's plainShift moves the whole patch alike). Live's clips and the plain set
+                        // take the same note-off (both renders)
+                        if (libStaccatoLength && li && !libNote.builtIn && libChoice && offset == 0) {
+                              const int kind = SoundLib::staccatoKind(noteArts);
+                              const SoundLib::LibInstrument* cp = libPatches[libChoice.patch];
+                              const double cap = cp->staccatoCap(kind) > 0 ? cp->staccatoCap(kind) : li->staccatoCap(kind);
+                              const double written = SoundLib::noteSeconds(note);
+                              if (kind && cap > 0 && written > 0) {
+                                    const int dur = int(cap / written * Ms4::HUNDRED);
+                                    if (dur < config.ms4Dur)
+                                          config.ms4Dur = std::max(1, dur);
+                                    }
+                              }
+                        // [slurs] plainAccents 2 / 3 (performanceNote's accentAttack) at real players' level: PLAIN_ACCENT_DB over
+                        // the spiccato attack it replaces, which SSO's accented attack plays the map's accentedLevel over at the
+                        // note's pitch and length as played (written x the length factor just set; a join to the next note
+                        // may shorten it a little more), the rest by CC11 (dB add up; louder only as far as CC11 reaches 127,
+                        // libraryNoteLevels; not by CC1, which would change the tone too)
+                        if (accentAttack && libChoice && !libChoice.articulation->accentedLevels.empty()) {
+                              const double ms = SoundLib::noteSeconds(note) * 1000.0 * config.ms4Dur / double(Ms4::HUNDRED);
+                              libLevels[note].volumeDb += PLAIN_ACCENT_DB - libChoice.articulation->accentedLevelAt(note->ppitch(), ms);
                               }
                         config.libKey = libNote.key;
                         if (libNote.velocity > 0)
@@ -1901,7 +2756,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                   // a note of its own at a given start, length and pitch offset
                   auto renderAt = [&](const Note* note, const std::vector<Ms4::ArtRef>& arts, int start, int length, int pitchOffset = 0) {
                         // (glissando notes need the tieBack exemption: they play their later steps)
-                        if (!note->play())
+                        if (!note->play() || (li && libUnison.count(note)))      // (a unison duplicate: collect)
                               return;
                         const std::vector<Ms4::ArtRef> noteArts = Ms4::noteArticulations(note, arts);
                         Ms4::NoteResult r = Ms4::note(ctx.family, noteArts, ctx.dynamics.levelAt(note->track(), start + tickOffset), ctx.snd);
@@ -1915,11 +2770,22 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               noteChannel = libChannel;
                               if (!li->kit) {
                                     libChoice = librarySwitch(note, noteArts, start, length);
-                                    libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
-                                    marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset));
+                                    double under = 0.0;
+                                    libNote.velocity = libVelocity(note, libChoice, r, ctx.dynamics.levelAt(note->track(), start + tickOffset), &under);
+                                    marcatoLevel(note, libChoice, libNote.velocity, ctx.dynamics.levelAt(note->track(), start + tickOffset), r);
                                     trackLevel(note, libChoice);
+                                    divisiLevel(note, libChoice);
+                                    if (under < 0.0 && note->libraryVelocity() <= 0)  // (2 under the curve's lowest point: CC11)
+                                          libLevels[note].volumeDb += under;
+                                    realRangeLevel(note, libChoice, libNote.velocity, r, ctx.dynamics.levelAt(note->track(), start + tickOffset));
+                                    if (libChoice.plain)                // ([slurs] plainPerformance)
+                                          libNote.velocity = PLAIN_VELOCITY;
                                     if (note->libraryVelocity() > 0)    // its own (the Velocity lane)
                                           libNote.velocity = note->libraryVelocity();
+                                    // a patch whose keys sound an octave off (SSO's timpani), an articulation played a key away
+                                    // from its sound (Ample's natural harmonics, -12): the key sent is shifted
+                                    if (const int shift = libKeyShift(libPatches, libChoice))
+                                          libNote.key = qBound(0, note->ppitch() + pitchOffset + shift, 127);
                                     }
                               }
                         else if (sit != ctx.sounds.end()) {
@@ -1943,7 +2809,7 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
                               }
                         playNote(events, note, noteChannel, libNote.key >= 0 ? libNote.key : qBound(0, note->ppitch() + pitchOffset, 127),
                                  qBound(1, libNote.velocity > 0 ? libNote.velocity
-                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note)), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
+                                           : (li && !libNote.builtIn) ? r.velocity : MarcatoLevel::velocity(r.velocity, levelOf(note) + leadingDb(note->chord())), 127), on, qMax(on, off), st1->idx(), layer, libChoice.patch);
                         };
 
                   renderAtFn = [&](const Note* n, const std::vector<Ms4::ArtRef>& a, int st, int len, int po, int) { renderAt(n, a, st, len, po); };
@@ -2199,13 +3065,15 @@ void MidiRenderer::collectMeasureEventsMs4(EventMap* events, Measure const * m, 
 //    to its whole synth), and the level in force at the chunk's start
 //---------------------------------------------------------
 
-void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
+void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events, const Part* only)
       {
       const int tick1 = chunk.tick1();
       const int tick2 = chunk.tick2();
       const int tickOffset = chunk.tickOffset();
       // in the score's order, not the map's (keyed by pointer): same-tick events come out the same every run
       for (const Part* part : score->parts()) {
+            if (only ? part != only : (engineSegs.count(part) && !libParts.count(part)))
+                  continue;         // (a part switching engines without a library: its own pass, renderEngineParts)
             auto pc = ms4Parts.find(part);
             if (pc == ms4Parts.end())
                   continue;
@@ -2227,7 +3095,7 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
             // a sound library part: its dynamics on the library's controller, on the channel it
             // plays on; no presets (a program change would reach the library)
-            auto lpit = libParts.find(part);
+            auto lpit = part == libSuppress ? libParts.end() : libParts.find(part);
             const LibPart* lp = lpit != libParts.end() ? &lpit->second : nullptr;
             auto libraryPlays = [lp](const Instrument* instr) {
                   if (!lp)
@@ -2313,16 +3181,17 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
                                     }
                               }
                         }
-                  if (library->dynamicsCC < 0 || library->dynamicsCC > 127)
+                  const SoundLib::Library* plib = lp->library ? lp->library : library.get();
+                  if (plib->dynamicsCC < 0 || plib->dynamicsCC > 127)
                         continue;
-                  controller = library->dynamicsCC;
+                  controller = plib->dynamicsCC;
                   for (const auto& ip : *part->instruments()) {
                         if (!libraryPlays(ip.second))
                               continue;
                         const int ch = ip.second->channel(0)->channel();
                         channels.push_back(ch);
                         if (controller != CTRL_EXPRESSION) {
-                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, library->expressionValue, 127));
+                              NPlayEvent ev(ME_CONTROLLER, ch, CTRL_EXPRESSION, qBound(0, plib->expressionValue, 127));
                               ev.setOriginatingStaff(part->staff(0)->idx());
                               events->insert(std::make_pair(tick1 + tickOffset, ev));
                               }
@@ -2401,8 +3270,8 @@ void MidiRenderer::renderMs4Dynamics(const Chunk& chunk, EventMap* events)
 
 //---------------------------------------------------------
 //   libraryChoice
-//    the library's articulation for a note: what its articulations and the staff text in
-//    force ask for (SoundLib::want)
+//    the library's articulation for a note: its own technique (the Inspector's Note › Technique), else what its
+//    articulations and the staff text in force ask for (SoundLib::want)
 //---------------------------------------------------------
 
 SoundLib::Choice MidiRenderer::libraryChoice(const LibPart& lp, const SoundLib::LibInstrument& li, const Note* note,
@@ -2415,7 +3284,7 @@ SoundLib::Choice MidiRenderer::libraryChoice(const LibPart& lp, const SoundLib::
       // its written length (not the Play Panel's speed), with the notes tied to it
       const int tied = note->tieFor() && !note->tieBack() ? note->playTicks() - note->chord()->actualTicks().ticks() : 0;
       const double seconds = score->tempomap()->writtenTime(tick, tick + qMax(0, ticks) + qMax(0, tied));
-      return SoundLib::choose(lp.patchesFor(&li), SoundLib::want(noteArts, lp.text.at(tick), seconds, trill, score));
+      return SoundLib::chooseNote(lp.patchesFor(&li), SoundLib::want(noteArts, lp.text.at(tick), seconds, trill, score), note);
       }
 
 //---------------------------------------------------------
@@ -2448,6 +3317,18 @@ void MidiRenderer::putLibrarySwitch(EventMap* events, const SoundLib::LibInstrum
                   break;
             }
       }
+
+// ([slurs] fastTransitions, below)
+static void libraryFastTransitions(const Score* score,
+                                   const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                                   int chunkUtick1, EventMap* events);
+// ([levels] hallGuard, below)
+static void libraryHallGuard(const Score* score, int dynamicsCC,
+                             const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                             int chunkUtick1, EventMap* events);
+// (a patch's avoidCC, below)
+static void libraryAvoidCC(const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                           int chunkUtick1, EventMap* events);
 
 //---------------------------------------------------------
 //   finishLibraryEvents
@@ -2492,7 +3373,8 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                                           move = false;       // (its note started after the new start)
                                     }
                               }
-                        else if (ev.type() == ME_CONTROLLER && i->first == s.chordTick) {
+                        else if (ev.type() == ME_CONTROLLER && i->first == s.chordTick
+                                 && !(ev.libraryPatch() < 0 && !engineSegs.empty())) {     // (not an Engine lane's built-in)
                               move = true;
                               for (auto j = events->upper_bound(s.on); j != i; ++j) {
                                     const NPlayEvent& o = j->second;
@@ -2538,13 +3420,18 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                         if (i->first < on)
                               lastOn = i->first;
                         }
-                  else if (lastOn >= 0 && (off == events->end() || std::abs(i->first - on) < std::abs(off->first - on)))
-                        off = i;
+                  else if (lastOn >= 0 && (off == events->end() || std::abs(i->first - on) < std::abs(off->first - on))
+                           && !(j.keep && (i->first > on || (ev.note() && ev.note()->firstTiedNote() == j.note))))
+                        off = i;          // (keep: a re-attack's gap is the note before's, never this note's own note-off:
+                                          // after a note before that already ended earlier its own note-off was the nearest,
+                                          // and this note ended before its note-on; Heard passages' Celli bar 5)
                   }
             if (off == events->end())
                   continue;
-            const int to = std::max(lastOn + 1, score->utime2utick(score->utick2utime(on) + j.ms / 1000.0));
-            if (to == off->first)
+            int to = std::max(lastOn + 1, score->utime2utick(score->utick2utime(on) + j.ms / 1000.0));
+            if (j.keep && lastOn >= 0)          // (the note before keeps keepMs as played)
+                  to = std::min(off->first, std::max(to, score->utime2utick(score->utick2utime(lastOn) + libKeep)));
+            if (to == off->first || (j.shortenOnly && to > off->first))
                   continue;
             const NPlayEvent ev = off->second;
             events->erase(off);
@@ -2558,12 +3445,21 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
       // last one's note off, cut at once; 164 such keys in the piece). From a little before the chunk: a note
       // of the chunk before may still sound into it
       if (Playback::on("notes/sameKeyEndsFirst", score)) {           // (playback settings [notes])
-            std::map<std::tuple<int, int, int>, int> sounding;      // channel, patch, key -> notes on
+            // (by lane too: a patch's tuning / voice copies are routes of their own, a key on one copy doesn't end the
+            // same key on another; keyed by channel alone, two voices' unison lost one note to a zero length, or, its
+            // starts apart, the moved note-off landed before the later note-on, which then hung: unison.musicxml)
+            auto laneOf = [&](const NPlayEvent& e) {
+                  if (!e.note())
+                        return 0;
+                  auto l = libLanes.find(e.note());
+                  return l == libLanes.end() ? 0 : l->second;
+                  };
+            std::map<std::tuple<int, int, int, int>, int> sounding;      // channel, patch, lane, key -> notes on
             for (auto i = events->lower_bound(std::max(0, chunk.utick1() - 8 * DIVISION)); i != events->end(); ++i) {
                   const NPlayEvent& ev = i->second;
                   if (ev.type() != ME_NOTEON || ev.librarySwitch() || !libRoutes.count(ev.channel()) || ev.libraryPatch() < 0)
                         continue;
-                  const auto key = std::make_tuple(ev.channel(), ev.libraryPatch(), ev.pitch());
+                  const auto key = std::make_tuple(ev.channel(), ev.libraryPatch(), laneOf(ev), ev.pitch());
                   if (ev.velo() == 0) {
                         auto s = sounding.find(key);
                         if (s != sounding.end() && s->second > 0)
@@ -2576,7 +3472,7 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                         for (auto j = std::next(i); j != events->end(); ++j) {
                               const NPlayEvent& o = j->second;
                               if (o.type() == ME_NOTEON && o.velo() == 0 && !o.librarySwitch() && o.channel() == ev.channel()
-                                  && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch()) {
+                                  && o.libraryPatch() == ev.libraryPatch() && o.pitch() == ev.pitch() && laneOf(o) == laneOf(ev)) {
                                     // (the earliest note off of the key after it: the overlapping note's, or of a
                                     // shorter note inside a held one, whose key then stays down until the held
                                     // one's note off; right before the strike, after a unison at the same tick)
@@ -2674,9 +3570,355 @@ void MidiRenderer::finishLibraryEvents(const Chunk& chunk, EventMap* events)
                   ++at;
             events->insert(at, c);
             }
+      librarySpeeds(chunk, events);
       libraryNoteLevels(chunk, events);
       libraryPitchBends(chunk, events);
+      libraryTimingOverrides(chunk, events);
+      libraryEvenLevels(chunk, events);
+      libraryTransitionTails(chunk, events);
       libraryTrackDelays(chunk, events);
+      libraryFastTransitions(score, libRoutePatches, chunk.utick1(), events);
+      libraryMaxVelocity(chunk, events);
+      libraryGuitar(chunk, events);       // (guitarplayback.cpp: last, its keys' velocities exact)
+      libraryHallGuard(score, library ? library->dynamicsCC : -1, libRoutePatches, chunk.utick1(), events);
+      libraryAvoidCC(libRoutePatches, chunk.utick1(), events);
+      }
+
+//---------------------------------------------------------
+//   libraryFastTransitions
+//    [slurs] fastTransitions (2026-10-20, branch sso-legato-fixes; 0 by default and in both presets until the owner has
+//    heard it): SSO's legato ignores a note-on less than 15 ms after the note-on before at velocity 64 or less (its chord
+//    guard, read from the patch's script; the audit's DROPPED). Measured (Windows test VM, kthost, Violas / Violins 1 -
+//    Performance, a whole step 10 / 14 ms after the note before: silent at 64; 16 ms plays): velocities 65-84 at 10 ms play
+//    the same family as 64 sent 16-20 ms after (FING + PORTAMENTO FAST; third-octave spectrum within 0.3-1.0 dB, the same
+//    arrival), 85 another (DETACHED: 3.7-4.7 dB, arrival 60-90 ms against 160-210). So such a note-on (on a route whose
+//    patch has a legato articulation, a note of another chord than the note-on before, velocity 20-64) is sent at 65, the
+//    lowest that plays. 1-19 (portamento) have no velocity of their family above 64 and stay (the audit still lists them).
+//    After the track delays: the times as played (Live's written clips: as written)
+//---------------------------------------------------------
+
+static const int FAST_TRANSITION_VELOCITY = 65;
+static const int FAST_TRANSITION_LOWEST = 20;
+
+static void libraryFastTransitions(const Score* score,
+                                   const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                                   int chunkUtick1, EventMap* events)
+      {
+      if (!Playback::on("slurs/fastTransitions", score))
+            return;
+      std::set<int> legato;                                       // the routes whose patch plays transitions
+      for (const auto& r : libRoutePatches) {
+            if (!r.second.second)
+                  continue;
+            for (const SoundLib::Articulation& a : r.second.second->articulations)
+                  if (a.playsTransitions())
+                        legato.insert(r.first);
+            }
+      if (legato.empty())
+            return;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunkUtick1) - 2.0));
+      std::map<int, std::pair<double, const Chord*>> before;     // route -> the note-on before (s, its chord)
+      for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+            NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.type() != ME_NOTEON || ev.librarySwitch() || ev.velo() == 0)
+                  continue;
+            const int route = ev.extPort() * 16 + ev.extChannel();
+            if (!legato.count(route))
+                  continue;
+            const double t = score->utick2utime(i->first);
+            const Chord* chord = ev.note() ? ev.note()->chord() : nullptr;
+            auto b = before.find(route);
+            if (b != before.end() && chord && b->second.second && b->second.second != chord
+                && (t - b->second.first) * 1000.0 < MidiRenderer::TRANSITION_MIN_GAP_MS && ev.velo() >= FAST_TRANSITION_LOWEST
+                && ev.velo() <= FAST_TRANSITION_VELOCITY - 1)
+                  ev.setDataB(FAST_TRANSITION_VELOCITY);
+            before[route] = { t, chord };
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryHallGuard
+//    [levels] hallGuard (branch sso-script-fixes2, 2026-10-21; 0 by default and in both presets until the owner decides):
+//    a patch with a diminuendo-release trigger (LibInstrument::hallDrop: SSO's string sections' Performance patches, the
+//    Hall trigger, read from the patch's script and group data) plays an extra release sample on every held key when its
+//    dynamics controller steps down by hallDrop (10) or more in one change while a key is held. Measured (Windows test VM,
+//    kthost, Violas / Celli - Performance, a held note, CC1 64 -> 50): one step, or two values at the same sample, adds a
+//    layer 14 / 25 dB under the note for about a second; 64 -> 57 -> 50 one ms or more apart doesn't (as a slow ramp,
+//    within 34-50 dB). So such a step, on a route where a key is held, is sent as steps of hallDrop - 1, a tick (at least
+//    1 ms) apart, ending at the step's own time (or starting there, when an earlier event of the controller leaves no room).
+//    After the track delays (the times as played). MuseScore makes such steps at a subito dynamic inside a slur (the
+//    Performance legato's overlap holds the note before), fp, and a dynamic where a slurred note starts; the audit's HALL
+//---------------------------------------------------------
+
+static void libraryHallGuard(const Score* score, int dynamicsCC,
+                             const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                             int chunkUtick1, EventMap* events)
+      {
+      if (dynamicsCC < 0 || dynamicsCC > 127 || !Playback::on("levels/hallGuard", score))
+            return;
+      std::map<int, int> drop;                                    // route -> its patch's hallDrop
+      for (const auto& r : libRoutePatches)
+            if (r.second.second && r.second.second->hallDrop > 1)
+                  drop[r.first] = r.second.second->hallDrop;
+      if (drop.empty())
+            return;
+      struct State {
+            std::map<int, int> held;                              // key -> notes on
+            int last { -1 };                                      // the controller's value now
+            int base { -1 };                                      // its value before this tick (values at one sample
+            int baseTick { -1 };                                  // reach the patch as one change: measured)
+            };
+      std::map<int, State> st;
+      struct Split { int tick; int route; int from; int to; EventMap::iterator at; };
+      std::vector<Split> splits;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunkUtick1) - 2.0));
+      for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!ev.isExternal())
+                  continue;
+            const int route = ev.extPort() * 16 + ev.extChannel();
+            auto d = drop.find(route);
+            if (d == drop.end())
+                  continue;
+            State& s = st[route];
+            if (ev.type() == ME_NOTEON && !ev.librarySwitch()) {
+                  if (ev.velo() > 0)
+                        ++s.held[ev.pitch()];
+                  else if (s.held.count(ev.pitch()) && --s.held[ev.pitch()] <= 0)
+                        s.held.erase(ev.pitch());
+                  continue;
+                  }
+            if (ev.type() == ME_NOTEOFF && !ev.librarySwitch()) {
+                  if (s.held.count(ev.pitch()) && --s.held[ev.pitch()] <= 0)
+                        s.held.erase(ev.pitch());
+                  continue;
+                  }
+            if (ev.type() != ME_CONTROLLER || ev.controller() != dynamicsCC)
+                  continue;
+            if (i->first != s.baseTick) {
+                  s.base = s.last;
+                  s.baseTick = i->first;
+                  }
+            if (s.base >= 0 && !s.held.empty() && s.base - ev.value() >= d->second)
+                  splits.push_back({ i->first, route, s.base, ev.value(), i });
+            s.last = ev.value();
+            }
+      if (splits.empty())
+            return;
+      // (the room before each: the route's previous event of the controller)
+      std::map<std::pair<int, int>, int> before;                  // (route, tick) -> the controller's tick before it
+      {
+            std::map<int, int> lastAt;
+            for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (!ev.isExternal() || ev.type() != ME_CONTROLLER || ev.controller() != dynamicsCC)
+                        continue;
+                  const int route = ev.extPort() * 16 + ev.extChannel();
+                  if (!drop.count(route))
+                        continue;
+                  auto l = lastAt.find(route);
+                  if (!before.count({ route, i->first }))
+                        before[{ route, i->first }] = l != lastAt.end() ? l->second : -1;
+                  lastAt[route] = i->first;
+                  }
+      }
+      for (const Split& sp : splits) {
+            const int step = drop[sp.route] - 1;
+            std::vector<int> values;                              // the steps after from, the last = to
+            for (int v = sp.from - step; v > sp.to; v -= step)
+                  values.push_back(v);
+            values.push_back(sp.to);
+            const int n = int(values.size());
+            const double t = score->utick2utime(sp.tick);
+            int delta = std::max(1, score->utime2utick(t + 0.001) - sp.tick);
+            while (score->utick2utime(sp.tick + delta) - t < 0.001)
+                  ++delta;
+            const int prev = before.count({ sp.route, sp.tick }) ? before[{ sp.route, sp.tick }] : -1;
+            const int earliest = sp.tick - (n - 1) * delta;
+            const bool room = earliest > prev && earliest >= 0;
+            NPlayEvent proto = sp.at->second;
+            if (room) {
+                  // the earlier steps before it, the step itself at its own time
+                  for (int k = 0; k < n - 1; ++k) {
+                        NPlayEvent e = proto;
+                        e.setDataB(values[size_t(k)]);
+                        events->insert({ sp.tick - (n - 1 - k) * delta, e });
+                        }
+                  }
+            else {
+                  // from its time on: the first step there, the others after
+                  sp.at->second.setDataB(values[0]);
+                  for (int k = 1; k < n; ++k) {
+                        NPlayEvent e = proto;
+                        e.setDataB(values[size_t(k)]);
+                        events->insert({ sp.tick + k * delta, e });
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryAvoidCC
+//    a controller the route's patch must never get (SoundLib::LibInstrument::avoidCC: SSO's Trumpet / Tenor Trombone Solo -
+//    Total Performance, whose helper script replaces a note's velocity by CC112 / CC113 when they are not 0, read from the
+//    patch's script) is dropped, whatever sent it (a "cc<n>" automation lane, Live's read back). Last of all. A correctness
+//    fix, no setting; the audit's AVOIDED CC checks the result
+//---------------------------------------------------------
+
+static void libraryAvoidCC(const std::map<int, std::pair<const Part*, const SoundLib::LibInstrument*>>& libRoutePatches,
+                           int chunkUtick1, EventMap* events)
+      {
+      std::map<int, const std::set<int>*> avoid;                  // route -> its patch's controllers to drop
+      for (const auto& r : libRoutePatches)
+            if (r.second.second && !r.second.second->avoidCC.empty())
+                  avoid[r.first] = &r.second.second->avoidCC;
+      if (avoid.empty())
+            return;
+      for (auto i = events->lower_bound(std::max(0, chunkUtick1 - 8 * DIVISION)); i != events->end();) {
+            const NPlayEvent& ev = i->second;
+            if (ev.isExternal() && ev.type() == ME_CONTROLLER) {
+                  auto a = avoid.find(ev.extPort() * 16 + ev.extChannel());
+                  if (a != avoid.end() && a->second->count(ev.controller())) {
+                        i = events->erase(i);
+                        continue;
+                        }
+                  }
+            ++i;
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryMaxVelocity
+//    a patch's loudest velocity (SoundLib::LibInstrument::maxVelocity): a note-on above it on its route is
+//    sent at it. Last, after every level and delay has had its say, so nothing raises a hit above it again
+//---------------------------------------------------------
+
+void MidiRenderer::libraryMaxVelocity(const Chunk& chunk, EventMap* events)
+      {
+      std::map<int, int> limit;                                   // route -> its patch's loudest velocity
+      for (const auto& r : libRoutePatches)
+            if (r.second.second && r.second.second->maxVelocity < 127)
+                  limit[r.first] = r.second.second->maxVelocity;
+      if (limit.empty())
+            return;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
+      for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+            NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.type() != ME_NOTEON || ev.librarySwitch() || ev.velo() == 0)
+                  continue;
+            auto l = limit.find(ev.extPort() * 16 + ev.extChannel());
+            if (l != limit.end() && ev.velo() > l->second)
+                  ev.setDataB(l->second);
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryTimingOverrides
+//    a note whose timing the owner set in Live (livetimingoverride.h: ms after its written start / end) plays there:
+//    its note-on and / or note-off moved after everything automatic (onset early, keepMs, the note before cut, joins,
+//    the same-key rule, levels, bends) is done, before the track delays (which Live's tracks add in Live). The switch,
+//    controllers and pitch bend at its old note-on on its route, before it, are copied to the new one (a chord's other
+//    notes keep theirs). The chunk's own notes (their chord in its measures, their note-on within the window the
+//    renderer starts notes in: 4 beats early … 1 late); not a grace note, nor a note with more than one note-on
+//---------------------------------------------------------
+
+void MidiRenderer::libraryTimingOverrides(const Chunk& chunk, EventMap* events)
+      {
+      if (writtenTiming || libRoutes.empty())
+            return;
+      struct Item {
+            const Note* first;
+            int on;
+            int pitch;
+            int port;
+            int channel;
+            };
+      std::vector<Item> items;
+      std::map<std::tuple<const Note*, int, int>, int> ons;       // (note, port, channel) -> its note-ons here
+      const int tick1 = chunk.tick1();
+      const int tick2 = chunk.tick2();
+      for (auto i = events->lower_bound(std::max(0, chunk.utick1() - 4 * DIVISION));
+           i != events->end() && i->first < chunk.utick2() + DIVISION; ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.librarySwitch() || ev.type() != ME_NOTEON || ev.velo() == 0 || !ev.note())
+                  continue;
+            const Note* first = ev.note()->firstTiedNote();
+            if (!LiveTimingOverride::isSet(first->liveStart()) && !LiveTimingOverride::isSet(first->liveEnd()))
+                  continue;
+            const int tick = first->chord()->tick().ticks();
+            if (first->chord()->isGrace() || tick < tick1 || tick >= tick2)
+                  continue;
+            const int written = tick + chunk.tickOffset();
+            if (i->first < written - 4 * DIVISION || i->first > written + DIVISION)
+                  continue;
+            ++ons[std::make_tuple(first, ev.extPort(), ev.extChannel())];
+            items.push_back({ first, i->first, ev.pitch(), ev.extPort(), ev.extChannel() });
+            }
+      auto sameRoute = [](const NPlayEvent& e, const Item& it) {
+            return e.isExternal() && e.extPort() == it.port && e.extChannel() == it.channel;
+            };
+      for (const Item& it : items) {
+            if (ons[std::make_tuple(it.first, it.port, it.channel)] != 1)
+                  continue;
+            auto on = events->end();
+            for (auto i = events->lower_bound(it.on); i != events->end() && i->first == it.on; ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (sameRoute(ev, it) && !ev.librarySwitch() && ev.type() == ME_NOTEON && ev.velo() > 0 && ev.pitch() == it.pitch
+                      && ev.note() && ev.note()->firstTiedNote() == it.first) {
+                        on = i;
+                        break;
+                        }
+                  }
+            if (on == events->end())
+                  continue;
+            auto off = events->end();
+            for (auto i = std::next(on); i != events->end(); ++i) {
+                  const NPlayEvent& ev = i->second;
+                  if (sameRoute(ev, it) && !ev.librarySwitch() && ev.pitch() == it.pitch
+                      && (ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && ev.velo() == 0))
+                      && (!ev.note() || ev.note()->firstTiedNote() == it.first)) {
+                        off = i;
+                        break;
+                        }
+                  }
+            const Note* last = it.first->lastTiedNote();
+            const int writtenOn = it.first->chord()->tick().ticks() + chunk.tickOffset();
+            const int writtenOff = last->chord()->tick().ticks() + last->chord()->actualTicks().ticks() + chunk.tickOffset();
+            const double startMs = it.first->liveStart();
+            const double endMs = it.first->liveEnd();
+            const int newOn = LiveTimingOverride::isSet(startMs)
+                              ? std::max(0, score->utime2utick(score->utick2utime(writtenOn) + startMs / 1000.0)) : it.on;
+            int newOff = off == events->end() ? -1 : off->first;
+            if (newOff >= 0 && LiveTimingOverride::isSet(endMs))
+                  newOff = score->utime2utick(score->utick2utime(writtenOff) + endMs / 1000.0);
+            if (newOff >= 0)
+                  newOff = std::max(newOff, newOn + 1);
+            const NPlayEvent onEv = on->second;
+            if (newOn != it.on) {
+                  std::vector<NPlayEvent> with;
+                  for (auto i = events->lower_bound(it.on); i != on; ++i) {
+                        const NPlayEvent& ev = i->second;
+                        if (sameRoute(ev, it) && (ev.librarySwitch() || ev.type() == ME_CONTROLLER || ev.type() == ME_PITCHBEND))
+                              with.push_back(ev);
+                        }
+                  if (off != events->end() && newOff != off->first) {
+                        const NPlayEvent offEv = off->second;
+                        events->erase(off);
+                        events->insert(events->lower_bound(newOff), std::make_pair(newOff, offEv));
+                        off = events->end();
+                        }
+                  events->erase(on);
+                  const auto at = events->lower_bound(newOn);
+                  for (const NPlayEvent& c : with)
+                        events->insert(at, std::make_pair(newOn, c));
+                  events->insert(std::make_pair(newOn, onEv));
+                  }
+            if (off != events->end() && newOff != off->first) {
+                  const NPlayEvent offEv = off->second;
+                  events->erase(off);
+                  events->insert(events->lower_bound(newOff), std::make_pair(newOff, offEv));
+                  }
+            }
       }
 
 //---------------------------------------------------------
@@ -2701,6 +3943,7 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
       const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
       std::map<int, int> value;                                     // route -> the switch in force
       std::map<std::pair<int, int>, std::deque<double>> sounding;   // (route, pitch) -> the delays of its note-ons
+      const std::map<int, double> lost = startLostByRoute(events);
       std::vector<std::pair<int, NPlayEvent>> moved;
       // (the switches in force: from the start, as a technique set long before still holds)
       for (auto i = events->begin(); i != events->end();) {
@@ -2772,7 +4015,12 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
                   ms = TrackDelays::ms(d->second, patch, noteTechnique());
             else
                   ms = TrackDelays::ms(d->second, patch);
-            ms += libDelayLead;
+            ms += libDelayLead + libStartLead;
+            if (i->first == 0) {
+                  auto l = lost.find(route);
+                  if (l != lost.end())
+                        ms -= l->second;
+                  }
             ev.setLibraryDelayed(true);
             if (std::fabs(ms) < 1e-6) {
                   ++i;
@@ -2792,13 +4040,38 @@ void MidiRenderer::libraryTrackDelays(const Chunk& chunk, EventMap* events)
 //    with a negative track delay everything else plays later by the earliest one (libDelayLead), as a negative
 //    delay can't go before the start: the delayed track's first notes are early too (the owner, 2026-10-07: at
 //    -40 ms the first note "doesn't have a negative delay"). libraryTrackDelays adds it to the delayed routes'
-//    events; here every other event of the chunk (other parts, routes without delays, the metronome), each once
+//    events; here every other event of the chunk (other parts, routes without delays, the metronome), each once.
+//    Plus the start lead (libStartLead): a note that starts early by its onset can't start before the score's start
+//    either (Whence's first note, Celli, smooth, 172 ms: sent at 0, heard 172 ms late), so everything plays later by
+//    the most the start cut off such a note, and that note's route's events at tick 0 (its switch, controllers,
+//    note-on) by that much less: each of those notes starts its whole onset early. Not for Live's clips: the plain
+//    set plays such a note before its written place by Live's Track Delay (EventMap::startEarlyMs, livetiming.h)
 //---------------------------------------------------------
+
+std::map<int, double> MidiRenderer::startLostByRoute(const EventMap* events) const
+      {
+      std::map<int, double> lost;
+      if (libStartLost.empty())
+            return lost;
+      for (auto i = events->lower_bound(0); i != events->end() && i->first == 0; ++i) {
+            const NPlayEvent& e = i->second;
+            if (!e.isExternal() || e.type() != ME_NOTEON || e.velo() == 0 || !e.note())
+                  continue;
+            auto l = libStartLost.find(e.note());
+            if (l == libStartLost.end())
+                  continue;
+            double& v = lost[e.extPort() * 16 + e.extChannel()];
+            v = std::max(v, l->second);
+            }
+      return lost;
+      }
 
 void MidiRenderer::libraryDelayLead(const Chunk& chunk, EventMap* events)
       {
-      if (libDelayLead <= 0.0 || forLiveClips)
+      const double lead = libDelayLead + libStartLead;
+      if (lead <= 0.0 || forLiveClips)
             return;
+      const std::map<int, double> lost = startLostByRoute(events);
       const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
       std::vector<std::pair<int, NPlayEvent>> moved;
       for (auto i = events->lower_bound(from); i != events->end();) {
@@ -2808,7 +4081,13 @@ void MidiRenderer::libraryDelayLead(const Chunk& chunk, EventMap* events)
                   }
             NPlayEvent ev = i->second;
             ev.setLibraryDelayed(true);
-            moved.emplace_back(score->utime2utick(score->utick2utime(i->first) + libDelayLead / 1000.0), ev);
+            double ms = lead;
+            if (i->first == 0 && ev.isExternal()) {
+                  auto l = lost.find(ev.extPort() * 16 + ev.extChannel());
+                  if (l != lost.end())
+                        ms -= l->second;
+                  }
+            moved.emplace_back(score->utime2utick(score->utick2utime(i->first) + ms / 1000.0), ev);
             i = events->erase(i);
             }
       for (const auto& m : moved)
@@ -2825,38 +4104,93 @@ void MidiRenderer::libraryDelayLead(const Chunk& chunk, EventMap* events)
 //    the note-on (its release) takes the note's level, and the note's own release the next note's. A chord's
 //    notes at one tick on one route: the first one's level. volumeDb is CC11 on top of what CC11 has (the value in
 //    force, or the note's CC11 map): one CC11 schedule per route whatever sets it. The one place that schedules
-//    such per-note controller values (a merge point for other per-note levels)
+//    such per-note controller values (a merge point for other per-note levels).
+//    A chunk's end undoes nothing (branch chunk-end-levels, 2026-10-25): the level in force on a route at the end stays
+//    until the route's next note-on, in a later chunk too (libCarry: the next chunk maps its controllers by it, the
+//    values it restates at its start among them, and its first note-on on the route switches as any other). Before, the
+//    end put the values in force back (or the next chunk's start restated them unmapped) while the last note's release
+//    still rang: the owner's Whence with empty bars after bar 16, every SSO route's CC11 from 24-59 to 127 at bar 17
+//    (the chunk boundary), +7 .. +14 dB on the tails, "suddenly gets really loud before stopping"
 //---------------------------------------------------------
+
+struct MidiRenderer::LibCarry {
+      struct Level {
+            LibLevel level;
+            NPlayEvent like;
+            int tick;
+            std::map<int, int> written;         // controller -> its value in force as written at the chunk's end
+            };
+      struct Even {
+            std::vector<double> centres, dbs;   // the glide of the route's last run (held at its end)
+            int base;                           // the CC11 under it (unscaled) at the chunk's end
+            NPlayEvent like;
+            };
+      std::map<int, Level> levels;            // route -> the note level in force
+      std::map<int, Even> even;               // route -> the even levels' glide in force
+      // (playback's chunks, a window's start: route -> the run going on there, its steps' grid (seconds) and its last
+      // note-on in the window before)
+      std::map<int, std::pair<double, int>> evenRuns;
+      };
 
 void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
       {
-      if (libLevels.empty())
-            return;
       const int utick1 = chunk.utick1();
       const int utick2 = chunk.utick2();
-      // (a library whose dynamics are CC11: no plain volume to add volumeDb to)
+      auto carryAt = [&](int u) -> LibCarry& {
+            std::shared_ptr<LibCarry>& c = libCarry[u];
+            if (!c)
+                  c = std::make_shared<LibCarry>();
+            return *c;
+            };
+      auto carried = libCarry.find(utick1);
+      const std::shared_ptr<LibCarry> from = carried == libCarry.end() ? nullptr : carried->second;
+      carryAt(utick2).levels.clear();
+      // (playback's chunks: the levels in force at the next chunk's window's start, renderChunk)
+      const int snapAt = libSnapshotAt > utick1 && libSnapshotAt < utick2 ? libSnapshotAt : -1;
+      if (snapAt >= 0)
+            carryAt(snapAt).levels.clear();
+      if (libLevels.empty() && (!from || from->levels.empty()))
+            return;
+      // (a library whose dynamics are CC11: no plain volume to add volumeDb to. Of several libraries the current one's
+      // dynamics controller here: every map MuseScore has sends CC11 as the expression, none its dynamics on it, and
+      // realRange's levels are the measured library's alone)
       const bool volume = library && library->dynamicsCC != CTRL_EXPRESSION;
+      // [levels] realRange: CC11 follows the dynamics CC in force (as written)
+      const int dynamicsCC = library && library->dynamicsCC >= 0 && library->dynamicsCC != CTRL_EXPRESSION ? library->dynamicsCC : -1;
       auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
       // the controllers a level sets
       auto controllersOf = [&](const LibLevel& l) {
             std::vector<int> cs;
             if (l.controller >= 0)
                   cs.push_back(l.controller);
-            if (volume && l.volumeDb != 0.0 && l.controller != CTRL_EXPRESSION)
+            if (volume && (l.volumeDb != 0.0 || (l.range && dynamicsCC >= 0)) && l.controller != CTRL_EXPRESSION)
                   cs.push_back(CTRL_EXPRESSION);
             return cs;
             };
       auto fallbackOf = [&](const LibLevel& l, int controller) {
             return controller == l.controller ? l.fallback : (library ? qBound(0, library->expressionValue, 127) : 127);
             };
-      auto mapOf = [&](const LibLevel& l, int controller, int x) {
+      // x the controller's value in force, dyn the dynamics CC's (as written: realRange)
+      auto mapOf = [&](const LibLevel& l, int controller, int x, int dyn) {
             int y = controller == l.controller && l.map ? l.map(x) : x;
-            if (volume && controller == CTRL_EXPRESSION && l.volumeDb != 0.0 && y > 0)
-                  y = qBound(1, int(std::lround(y * std::pow(10.0, l.volumeDb / 20.0))), 127);
+            double db = l.volumeDb;
+            if (volume && controller == CTRL_EXPRESSION && l.range && dynamicsCC >= 0) {
+                  const double real = (*l.range)[size_t(qBound(0, dyn, 127))] + l.realExtra + l.keyDb;
+                  db += real - l.rangeTop;
+                  if (libRangeTops && l.rangePart) {
+                        auto t = libRangeTops->find(l.rangePart);
+                        if (t == libRangeTops->end())
+                              (*libRangeTops)[l.rangePart] = real;
+                        else
+                              t->second = std::max(t->second, real);
+                        }
+                  }
+            if (volume && controller == CTRL_EXPRESSION && db != 0.0 && y > 0)
+                  y = qBound(1, int(std::lround(y * std::pow(10.0, db / 20.0))), 127);
             return y;
             };
       std::map<std::pair<int, int>, int> inForce;           // route, controller -> the value in force (as written)
-      // the value in force at it (from before the chunk, or fallback)
+      // the value in force at it (from before the chunk, or fallback; not a value a level set)
       auto valueAt = [&](EventMap::iterator it, int route, int controller, int fallback) {
             auto f = inForce.find({ route, controller });
             if (f != inForce.end())
@@ -2865,14 +4199,17 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             while (it != events->begin()) {
                   --it;
                   const NPlayEvent& e = it->second;
-                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && e.controller() == controller
-                      && routeOf(e) == route) {
+                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && !e.libraryLevel()
+                      && e.controller() == controller && routeOf(e) == route) {
                         v = e.value();
                         break;
                         }
                   }
             inForce[{ route, controller }] = v;
             return v;
+            };
+      auto dynAt = [&](EventMap::iterator it, int route) {
+            return dynamicsCC >= 0 ? valueAt(it, route, dynamicsCC, 64) : 64;
             };
       auto controllerEvent = [](const NPlayEvent& like, int controller, int value) {
             NPlayEvent c(ME_CONTROLLER, like.channel(), controller, value);
@@ -2881,57 +4218,851 @@ void MidiRenderer::libraryNoteLevels(const Chunk& chunk, EventMap* events)
             c.setOriginatingStaff(like.getOriginatingStaff());
             return c;
             };
+      // a mapped CC11 value (flagged: valueAt and a later chunk take the value as written from before it)
+      auto levelEvent = [&](const NPlayEvent& like, int controller, int value) {
+            NPlayEvent c = controllerEvent(like, controller, value);
+            c.setLibraryLevel(controller == CTRL_EXPRESSION);
+            return c;
+            };
       struct Active { const LibLevel* level; int tick; NPlayEvent like; };
       std::map<int, Active> active;                         // route -> the note level in force
+      // the chunk before's levels in force at its end (its routes' last notes and what still rings of them)
+      if (from) {
+            for (const auto& c : from->levels) {
+                  active[c.first] = { &c.second.level, c.second.tick, c.second.like };
+                  for (const auto& w : c.second.written)
+                        inForce[{ c.first, w.first }] = w.second;
+                  }
+            }
       // at it (tick t, inserted before it): the level in force on the route goes (the values in force again), the
-      // note's comes (nullptr: none)
+      // note's comes (nullptr: none). A controller the note's level sets too is not put back first: at the same tick
+      // the value in force would last no time and only reach a MIDI port or Live's clip as a spike (CC11 14, 127, 15)
       auto switchTo = [&](EventMap::iterator it, int t, int route, const LibLevel* level, int tick, const NPlayEvent& like) {
             auto a = active.find(route);
             if (a != active.end()) {
+                  const std::vector<int> next = level ? controllersOf(*level) : std::vector<int>();
                   for (int controller : controllersOf(*a->second.level))
-                        events->insert(it, std::make_pair(t, controllerEvent(like, controller, inForce[{ route, controller }])));
+                        if (std::find(next.begin(), next.end(), controller) == next.end())
+                              events->insert(it, std::make_pair(t, controllerEvent(like, controller, inForce[{ route, controller }])));
                   active.erase(a);
                   }
             if (!level)
                   return;
             for (int controller : controllersOf(*level)) {
                   const int v = valueAt(it, route, controller, fallbackOf(*level, controller));
-                  events->insert(it, std::make_pair(t, controllerEvent(like, controller, mapOf(*level, controller, v))));
+                  events->insert(it, std::make_pair(t, levelEvent(like, controller, mapOf(*level, controller, v, dynAt(it, route)))));
                   }
             active[route] = { level, tick, like };
             };
+      // a note-on follows it on the route at its tick (that note switches the level: switchTo)
+      auto levelNoteFollows = [&](EventMap::iterator it, int route) {
+            for (auto j = std::next(it); j != events->end() && j->first == it->first; ++j) {
+                  const NPlayEvent& e = j->second;
+                  if (e.isExternal() && !e.librarySwitch() && routeOf(e) == route && e.type() == ME_NOTEON && e.velo() > 0)
+                        return true;
+                  }
+            return false;
+            };
+      // [levels] transitionLevels (branch slur-joins, 2026-10-22): a legato transition (libGlide: its glide measured or
+      // modelled, leave / arrive ms after its note-on) whose level differs from the note before's on its route: the note
+      // before keeps its own level to the glide's leave, then CC11 moves to the new note's linear in dB, a value every
+      // EvenLevels::STEP_MS, reaching it at the arrival (at the latest by the route's next note-on). At the note-on, as
+      // before, the note before's last sound (SSO's transition leaves it 25-140 ms after the note-on) took the new
+      // level: Whence's Violas bars 12 / 16, a slur's F#4 (the level rule's slur gain, CC11 110) into the G4 half note
+      // (a single note's, 47) dropped 6-7 dB over its last 100 ms. CC11 levels only (a level on another controller, a
+      // marcato's CC1, switches at the note-on as before); a CC11 the score writes between note-on and arrival is mapped
+      // by the new level
+      const bool transitionLevels = volume && score && int(std::lround(Playback::value("levels/transitionLevels", score))) == 1;     // (2: libraryTransitionTails)
+      auto cc11Only = [&](const LibLevel* l) {
+            if (!l)
+                  return true;
+            for (int c : controllersOf(*l))
+                  if (c != CTRL_EXPRESSION)
+                        return false;
+            return true;
+            };
+      // the CC11 value the route plays at it (as sent, a level's too; else the library's expression value)
+      auto sentAt = [&](EventMap::iterator it, int route) {
+            while (it != events->begin()) {
+                  --it;
+                  const NPlayEvent& e = it->second;
+                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && e.controller() == CTRL_EXPRESSION
+                      && routeOf(e) == route)
+                        return e.value();
+                  }
+            return library ? qBound(0, libAt(route)->expressionValue, 127) : 127;
+            };
+      auto transitionSwitch = [&](EventMap::iterator i, int route, const LibLevel* level, const NPlayEvent& ev) {
+            auto g = ev.note() ? libGlide.find(ev.note()) : libGlide.end();
+            if (g == libGlide.end())
+                  return false;
+            auto a = active.find(route);
+            if (!cc11Only(level) || (a != active.end() && !cc11Only(a->second.level)))
+                  return false;
+            const double tOn = score->utick2utime(i->first);
+            double tArrive = tOn + std::max(g->second.leaveMs, g->second.arriveMs) / 1000.0;
+            for (auto j = std::next(i); j != events->end() && j->first < score->utime2utick(tArrive) + 1; ++j) {
+                  const NPlayEvent& e = j->second;
+                  if (j->first > i->first && e.isExternal() && !e.librarySwitch() && routeOf(e) == route && e.type() == ME_NOTEON && e.velo() > 0) {
+                        tArrive = std::min(tArrive, score->utick2utime(j->first));
+                        break;
+                        }
+                  }
+            const double tLeave = std::min(tArrive, tOn + std::max(0.0, g->second.leaveMs) / 1000.0);
+            const int uArrive = score->utime2utick(tArrive);
+            if (uArrive <= i->first)
+                  return false;
+            const int from = sentAt(i, route);
+            auto at = events->lower_bound(uArrive);
+            const int to = level ? mapOf(*level, CTRL_EXPRESSION, valueAt(at, route, CTRL_EXPRESSION, fallbackOf(*level, CTRL_EXPRESSION)),
+                                         dynAt(at, route))
+                                 : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, libAt(route)->expressionValue, 127) : 127);
+            if (from == to)
+                  return false;
+            // the ramp between leave and arrival (the values in between; the arrival's own by switchTo)
+            int last = from;
+            const double span = tArrive - tLeave;
+            for (double t = tLeave; span > 0 && t < tArrive - 1e-9; t += EvenLevels::STEP_MS / 1000.0) {
+                  const double f = (t - tLeave) / span;
+                  const int v = from > 0 && to > 0 ? int(std::lround(from * std::pow(double(to) / from, f)))
+                                                   : int(std::lround(from + (to - from) * f));
+                  if (v == last)
+                        continue;
+                  last = v;
+                  const int u = std::max(i->first + 1, score->utime2utick(t));
+                  events->insert(events->lower_bound(u), std::make_pair(u, levelEvent(ev, CTRL_EXPRESSION, qBound(0, v, 127))));
+                  }
+            switchTo(events->lower_bound(uArrive), uArrive, route, level, i->first, ev);
+            return true;
+            };
+      // [levels] attackLevels (branch attack-levels, 2026-10-22): an attack (a note-on that is no legato transition,
+      // libGlideFrom) with a measured onset (libAttackOnset: a plain Performance note's plainAttack, else its articulation's)
+      // whose route still rings the note before (that note's note-off less than its release ago, libReleaseMs: the map's
+      // release= to 30 dB under, else its patch's longest; or not ended yet) takes its CC11 level at its note-on + that
+      // onset, not with the note-on: before the attack is heard, the new level only lifts (or drops) what still sounds of
+      // the note before. Whence's Violas bar 12: the slur's first note (an attack after a staccato G4+50 on the same key,
+      // 116 ms gap) went from CC11 86 to 110 (the level rule's slur gain) with its note-on, 111 ms before the beat
+      // (plainShift), and raised the staccato's release +3.4 dB (+6.6 with even levels) before the beat: a level rise with
+      // no note under it (violas-slurstart's RESULT.md). Only when the moved level stays before the route's next note-on /
+      // note-off and before any CC11 or dynamics CC the score writes there (those map by the level in force), inside the
+      // chunk; CC11 levels only (a marcato's CC1 switches at the note-on, as transitionLevels). Even levels' glide starts
+      // there too (libAttackLevelAt)
+      // 2 (the owner, 2026-10-23, "B better": Whence's Violas bars 11-13 alone with a click, even levels on, kthost renders,
+      // against 0): at the note's WRITTEN time instead, where its attack is meant to be heard: the note-on's early start
+      // (onset early: written - played) plus, for a plain Performance note, its patch's plainShift (libAttackShiftMs: the
+      // track delay that moves its events early after this pass); the same conditions. The attack's first part (SSO's
+      // Violas sound from 37 ms after the note-on, 74 ms before the beat) plays at the note before's level, growing into
+      // its own at the beat. Rises only (check471, 2026-10-23: a drop held to the beat after an accent at 122 played the
+      // new attack's start at the accent's level, Whence's Violas bar 8 beat 4.5 +4.7 dB and Celli bar 9 beat 1 +5.9 dB
+      // before the beat over #470's; a drop goes with the note-on, as 0 plays it and as the owner heard it, "perfect")
+      const int attackLevels = volume && score ? int(Playback::value("levels/attackLevels", score)) : 0;
+      // the written start of the note whose note-on is at utick (its chord's tick in the pass it plays in: the nearest
+      // at or after the note-on; -1 none)
+      auto writtenUtick = [&](const Note* note, int utick) {
+            const int t = note->chord()->tick().ticks();
+            int best = -1;
+            for (const RepeatSegment* rs : score->repeatList()) {
+                  if (t < rs->tick || t >= rs->tick + rs->len())
+                        continue;
+                  const int u = t + rs->utick - rs->tick;
+                  if (u >= utick && (best < 0 || u < best))
+                        best = u;
+                  }
+            return best;
+            };
+      auto attackSwitch = [&](EventMap::iterator i, int route, const LibLevel* level, const NPlayEvent& ev) {
+            const Note* note = ev.note();
+            if (!note || libGlideFrom.count(note))
+                  return false;
+            double delayMs = 0;
+            if (attackLevels == 1) {
+                  auto o = libAttackOnset.find(note);
+                  delayMs = o == libAttackOnset.end() ? 0.0 : o->second;
+                  }
+            else {
+                  const int w = writtenUtick(note, i->first);
+                  if (w >= 0)
+                        delayMs = (score->utick2utime(w) - score->utick2utime(i->first)) * 1000.0;
+                  auto sh = libAttackShiftMs.find(note);
+                  if (sh != libAttackShiftMs.end())
+                        delayMs += sh->second;
+                  }
+            if (!(delayMs > 0))
+                  return false;
+            auto a = active.find(route);
+            if (!cc11Only(level) || (a != active.end() && !cc11Only(a->second.level)))
+                  return false;
+            const double tOn = score->utick2utime(i->first);
+            // the note before on the route: its note-off (or still sounding: a note-on first)
+            const Note* before = nullptr;
+            double offT = -1;
+            for (auto j = i; j != events->begin();) {
+                  --j;
+                  if (tOn - score->utick2utime(j->first) > 30.0)
+                        break;
+                  const NPlayEvent& e = j->second;
+                  if (!e.isExternal() || e.librarySwitch() || routeOf(e) != route || e.type() != ME_NOTEON)
+                        continue;
+                  if (e.velo() == 0) {
+                        before = e.note();
+                        offT = score->utick2utime(j->first);
+                        break;
+                        }
+                  if (j->first < i->first) {             // (a note-on before it without its note-off: still sounding)
+                        before = e.note();
+                        offT = tOn;
+                        break;
+                        }
+                  }
+            if (!before)
+                  return false;
+            auto rel = libReleaseMs.find(before);
+            if (rel == libReleaseMs.end() || (tOn - offT) * 1000.0 >= rel->second)
+                  return false;
+            const int uAt = score->utime2utick(tOn + delayMs / 1000.0);
+            if (uAt <= i->first || uAt >= utick2)
+                  return false;
+            for (auto j = std::next(i); j != events->end() && j->first <= uAt; ++j) {
+                  const NPlayEvent& e = j->second;
+                  if (j->first == i->first || !e.isExternal() || e.librarySwitch() || routeOf(e) != route)
+                        continue;
+                  if (e.type() == ME_NOTEON || e.type() == ME_NOTEOFF)
+                        return false;
+                  if (e.type() == ME_CONTROLLER && (e.controller() == CTRL_EXPRESSION || (dynamicsCC >= 0 && e.controller() == dynamicsCC)))
+                        return false;
+                  }
+            const int from = sentAt(i, route);
+            auto at = events->lower_bound(uAt);
+            const int to = level ? mapOf(*level, CTRL_EXPRESSION, valueAt(at, route, CTRL_EXPRESSION, fallbackOf(*level, CTRL_EXPRESSION)),
+                                         dynAt(at, route))
+                                 : valueAt(at, route, CTRL_EXPRESSION, library ? qBound(0, libAt(route)->expressionValue, 127) : 127);
+            if (from == to || (attackLevels == 2 && to < from))
+                  return false;
+            switchTo(events->lower_bound(uAt), uAt, route, level, i->first, ev);
+            libAttackLevelAt[{ note, i->first }] = uAt;
+            return true;
+            };
+      // the levels in force at tick t (the chunk's end, the next window's start): what a later chunk takes up
+      auto carryOut = [&](int t) {
+            LibCarry& out = carryAt(t);
+            for (const auto& a : active) {
+                  LibCarry::Level c { *a.second.level, a.second.like, a.second.tick, {} };
+                  auto end = events->lower_bound(t);
+                  for (int controller : controllersOf(c.level))
+                        c.written[controller] = valueAt(end, a.first, controller, fallbackOf(c.level, controller));
+                  if (dynamicsCC >= 0)
+                        c.written[dynamicsCC] = dynAt(end, a.first);
+                  out.levels.emplace(a.first, c);
+                  }
+            };
+      bool snapped = snapAt < 0;
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
+            if (!snapped && i->first >= snapAt) {
+                  carryOut(snapAt);
+                  snapped = true;
+                  }
             NPlayEvent& ev = i->second;
-            if (!ev.isExternal() || ev.librarySwitch())
+            if (!ev.isExternal() || ev.librarySwitch() || ev.libraryLevel())
                   continue;
             const int route = routeOf(ev);
             if (ev.type() == ME_CONTROLLER) {
-                  inForce[{ route, ev.controller() }] = ev.value();
+                  const int written = ev.value();
+                  inForce[{ route, ev.controller() }] = written;
                   auto a = active.find(route);
                   if (a != active.end()) {
-                        const std::vector<int> cs = controllersOf(*a->second.level);
-                        if (std::find(cs.begin(), cs.end(), ev.controller()) != cs.end())
-                              ev.setValue(mapOf(*a->second.level, ev.controller(), ev.value()));
+                        const LibLevel& level = *a->second.level;
+                        const std::vector<int> cs = controllersOf(level);
+                        if (std::find(cs.begin(), cs.end(), ev.controller()) != cs.end()) {
+                              ev.setValue(mapOf(level, ev.controller(), written, dynAt(i, route)));
+                              ev.setLibraryLevel(ev.controller() == CTRL_EXPRESSION);
+                              }
+                        // [levels] realRange: a new dynamics value (a hairpin's step) moves the note's CC11 with it;
+                        // not when a note-on with a level of its own follows on the route at this tick (a new dynamic at a
+                        // note: its CC11 comes with it, the note before's would last no time)
+                        if (level.range && volume && dynamicsCC >= 0 && ev.controller() == dynamicsCC
+                            && !levelNoteFollows(i, route)) {
+                              const int v = valueAt(i, route, CTRL_EXPRESSION, fallbackOf(level, CTRL_EXPRESSION));
+                              const NPlayEvent c = levelEvent(ev, CTRL_EXPRESSION, mapOf(level, CTRL_EXPRESSION, v, written));
+                              i = events->insert(std::next(i), std::make_pair(i->first, c));
+                              }
                         }
                   continue;
                   }
             if (ev.type() != ME_NOTEON || ev.velo() == 0)
                   continue;
+            if (!libAttackLevelAt.empty() && ev.note())
+                  libAttackLevelAt.erase({ ev.note(), i->first });
             auto a = active.find(route);
             if (a != active.end() && i->first == a->second.tick)
                   continue;                               // (a chord's note: the first one's level)
             auto l = ev.note() ? libLevels.find(ev.note()) : libLevels.end();
-            if (l == libLevels.end()) {
-                  if (active.count(route))
-                        switchTo(i, i->first, route, nullptr, i->first, ev);
+            const LibLevel* level = l == libLevels.end() ? nullptr : &l->second;
+            if (!level && !active.count(route))
+                  continue;
+            if (transitionLevels && transitionSwitch(i, route, level, ev))
+                  continue;
+            if (attackLevels > 0 && attackSwitch(i, route, level, ev))
+                  continue;
+            switchTo(i, i->first, route, level, i->first, ev);
+            }
+      if (!snapped)
+            carryOut(snapAt);
+      // the chunk's end: nothing undone (what still sounds keeps its level); the next chunk takes the levels in force up
+      carryOut(utick2);
+      }
+
+//---------------------------------------------------------
+//   libraryEvenLevels
+//    [levels] evenLevels (evenlevels.h): every note-on on a Performance legato patch (one whose articulation has
+//    transitions) gets its context (EvenLevels::contextOf: its patch, pitch, tuning, velocity, whether joined, length,
+//    the joined neighbours, the dynamics CC in force), reported to the measurement (setEvenLevelsInfo) and, for a note
+//    with a value, to EvenLevels::rendered (stale or current). With the setting on, each run of joined notes on a route
+//    whose values are current plays the glide: CC11 times 10^(glide / 20) (the glide linear in dB between the notes' nodes,
+//    EvenLevels::nodeTime: halfway from each note-on to the next joined one; held at the ends), on every CC11 the route gets there (the per-note levels' schedule) and a
+//    message every STEP_MS where the value changes; the CC11 in force again at the next note-on on the route (in a later
+//    chunk too: the glide at a chunk's end is held, libCarry, on the next chunk's CC11s up to the route's first note-on
+//    there, branch chunk-end-levels; before, the chunk's end put it back while the last note's release rang). Flagged as a
+//    level (valueAt takes the value as written from before them). The chunk's own notes; a note-off after the chunk's end
+//    is looked for after it
+//---------------------------------------------------------
+
+void MidiRenderer::libraryEvenLevels(const Chunk& chunk, EventMap* events)
+      {
+      if (!library || libRoutePatches.empty())
+            return;
+      const int utick1 = chunk.utick1();
+      const int utick2 = chunk.utick2();
+      const int dynamicsCC = library->dynamicsCC >= 0 && library->dynamicsCC != CTRL_EXPRESSION ? library->dynamicsCC : -1;
+      // (a library whose dynamics are CC11: no plain volume for the glide)
+      const bool volume = library->dynamicsCC != CTRL_EXPRESSION;
+      // the glides in force at the chunk before's end (from), at this one's (carry)
+      auto carried = libCarry.find(utick1);
+      const std::shared_ptr<LibCarry> from = carried == libCarry.end() || !libEvenOn || !volume ? nullptr : carried->second;
+      std::shared_ptr<LibCarry>& carryPtr = libCarry[utick2];
+      if (!carryPtr)
+            carryPtr = std::make_shared<LibCarry>();
+      const std::shared_ptr<LibCarry> carry = carryPtr;
+      carry->even.clear();
+      // (playback's chunks: the glides in force at the next chunk's window's start, renderChunk)
+      const int snapAt = libSnapshotAt > utick1 && libSnapshotAt < utick2 ? libSnapshotAt : -1;
+      std::shared_ptr<LibCarry> snap;
+      if (snapAt >= 0) {
+            std::shared_ptr<LibCarry>& sp = libCarry[snapAt];
+            if (!sp)
+                  sp = std::make_shared<LibCarry>();
+            snap = sp;
+            snap->even.clear();
+            }
+      const bool fromEven = from && !from->even.empty();
+      if (snap)
+            snap->evenRuns.clear();
+      auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
+      struct On {
+            EventMap::iterator it;
+            int tick;
+            const Note* note;
+            int pitch;
+            int velocity;
+            double on;
+            double off { -1 };
+            int dyn { -1 };
+            bool joined { false };
+            };
+      std::map<int, std::vector<On>> byRoute;
+      std::map<int, int> dynNow;                      // route -> the dynamics CC as sent last
+      // the value of a controller in force on the route before it (any event, as sent); fallback when none
+      auto valueBefore = [&](EventMap::iterator it, int route, int controller, int fallback) {
+            while (it != events->begin()) {
+                  --it;
+                  const NPlayEvent& e = it->second;
+                  if (e.isExternal() && e.type() == ME_CONTROLLER && !e.librarySwitch() && e.controller() == controller
+                      && routeOf(e) == route)
+                        return e.value();
+                  }
+            return fallback;
+            };
+      bool any = false;
+      auto legato = [&](int route) -> const SoundLib::Articulation* {
+            auto rp = libRoutePatches.find(route);
+            return rp == libRoutePatches.end() ? nullptr : EvenLevels::legatoOf(rp->second.second);
+            };
+      std::map<int, bool> isLegato;
+      auto legatoRoute = [&](int route) {
+            auto l = isLegato.find(route);
+            if (l == isLegato.end())
+                  l = isLegato.insert({ route, legato(route) != nullptr }).first;
+            return l->second;
+            };
+      int pending = 0;                                 // note-ons without their note-off yet
+      for (auto i = events->lower_bound(utick1); i != events->end() && (i->first < utick2 || pending > 0); ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.librarySwitch())
+                  continue;
+            const int route = routeOf(ev);
+            if (!legatoRoute(route))
+                  continue;
+            const bool inChunk = i->first < utick2;
+            if (ev.type() == ME_CONTROLLER && dynamicsCC >= 0 && ev.controller() == dynamicsCC) {
+                  if (inChunk)
+                        dynNow[route] = ev.value();
                   continue;
                   }
-            switchTo(i, i->first, route, &l->second, i->first, ev);
+            if (ev.type() == ME_NOTEON && ev.velo() > 0) {
+                  if (!inChunk || !ev.note())
+                        continue;
+                  On o { i, i->first, ev.note(), ev.pitch(), ev.velo(), score->utick2utime(i->first) };
+                  if (dynamicsCC >= 0) {
+                        auto d = dynNow.find(route);
+                        o.dyn = d != dynNow.end() ? d->second : (dynNow[route] = valueBefore(i, route, dynamicsCC, -1));
+                        }
+                  byRoute[route].push_back(o);
+                  ++pending;
+                  any = any || EvenLevels::isSet(ev.note()->evenLevel());
+                  continue;
+                  }
+            if (ev.type() == ME_NOTEOFF || (ev.type() == ME_NOTEON && ev.velo() == 0)) {
+                  auto r = byRoute.find(route);
+                  if (r == byRoute.end())
+                        continue;
+                  for (auto o = r->second.begin(); o != r->second.end(); ++o)
+                        if (o->pitch == ev.pitch() && o->off < 0 && o->tick <= i->first) {
+                              o->off = score->utick2utime(i->first);
+                              --pending;
+                              break;
+                              }
+                  }
             }
-      for (const auto& a : active) {
-            for (int controller : controllersOf(*a.second.level))
-                  events->insert(events->lower_bound(utick2),
-                                 std::make_pair(utick2, controllerEvent(a.second.like, controller, inForce[{ a.first, controller }])));
+      if (!any && !evenInfo && !fromEven)
+            return;
+      auto scaled = [](int base, double db) {
+            return base <= 0 ? base : qBound(1, int(std::lround(base * std::pow(10.0, db / 20.0))), 127);
+            };
+      auto glideEvent = [&](const NPlayEvent& like, int value) {
+            NPlayEvent c(ME_CONTROLLER, like.channel(), CTRL_EXPRESSION, value);
+            c.setExternal(like.extPort(), like.extChannel());
+            c.setLibraryPatch(like.libraryPatch());
+            c.setOriginatingStaff(like.getOriginatingStaff());
+            c.setLibraryLevel(true);
+            return c;
+            };
+      // where a note's level goes (its note-on; [levels] attackLevels: libAttackLevelAt)
+      auto levelTickOf = [&](const On& n) {
+            auto at = libAttackLevelAt.find({ n.note, n.tick });
+            return at == libAttackLevelAt.end() ? n.tick : at->second;
+            };
+      // the chunk before's glides: held on the route's CC11s up to its first note-on here, the CC11 in force again there
+      // (no note-on on the route: held on, into the next chunk)
+      if (fromEven) {
+            for (const auto& fe : from->even) {
+                  const int route = fe.first;
+                  const LibCarry::Even& c = fe.second;
+                  auto r = byRoute.find(route);
+                  const int endTick = r != byRoute.end() && !r->second.empty() ? levelTickOf(r->second.front()) : utick2;
+                  int base = c.base;
+                  int baseAtSnap = -1;                    // (the CC11 as written in force at the snapshot)
+                  for (auto i = events->lower_bound(utick1); i != events->end() && i->first < endTick; ++i) {
+                        NPlayEvent& ev = i->second;
+                        if (!ev.isExternal() || ev.type() != ME_CONTROLLER || ev.librarySwitch() || ev.controller() != CTRL_EXPRESSION
+                            || routeOf(ev) != route)
+                              continue;
+                        if (snap && baseAtSnap < 0 && i->first >= snapAt)
+                              baseAtSnap = base;
+                        base = ev.value();
+                        ev.setValue(scaled(base, EvenLevels::glideAt(c.centres, c.dbs, score->utick2utime(i->first))));
+                        ev.setLibraryLevel(true);
+                        }
+                  if (snap && endTick > snapAt)            // (held on past the snapshot)
+                        snap->even[route] = { c.centres, c.dbs, baseAtSnap >= 0 ? baseAtSnap : base, c.like };
+                  if (endTick >= utick2) {
+                        carry->even[route] = { c.centres, c.dbs, base, c.like };
+                        continue;
+                        }
+                  if (scaled(base, EvenLevels::glideAt(c.centres, c.dbs, score->utick2utime(endTick))) != base)
+                        events->insert(events->lower_bound(endTick), std::make_pair(endTick, glideEvent(c.like, base)));
+                  }
+            }
+      for (auto& br : byRoute) {
+            const int route = br.first;
+            std::vector<On>& ns = br.second;
+            const SoundLib::LibInstrument* patch = libRoutePatches[route].second;
+            const SoundLib::Articulation* a = legato(route);
+            if (!a || ns.empty())
+                  continue;
+            // joined: the note before on the route still sounds at the note-on, or ended at most legatoGap before it
+            for (size_t k = 1; k < ns.size(); ++k) {
+                  const On& p = ns[k - 1];
+                  ns[k].joined = p.off >= 0 && (ns[k].on - p.off) * 1000.0 <= std::max(0.0, a->legatoGapMs) + 1e-6;
+                  }
+            std::vector<EvenLevels::NoteInfo> infos(ns.size());
+            std::vector<bool> applies(ns.size(), false);
+            bool anyHere = false;
+            for (size_t k = 0; k < ns.size(); ++k) {
+                  const On& o = ns[k];
+                  EvenLevels::ContextParts c;
+                  c.patch = patch->name;
+                  c.pitch = o.pitch;
+                  auto lc = libLaneCents.find(o.note);
+                  auto sc = libSpellCents.find(o.note);           // ([slurs] microtoneBends 1: from the key it is sent on)
+                  c.cents = sc != libSpellCents.end() ? sc->second : lc == libLaneCents.end() ? 0.0 : lc->second;
+                  c.velocity = o.velocity;
+                  c.joined = o.joined;
+                  c.lengthMs = o.off >= 0 ? (o.off - o.on) * 1000.0 : -1.0;
+                  c.dynamics = o.dyn;
+                  if (o.joined) {
+                        const On& p = ns[k - 1];
+                        c.prevPitch = p.pitch;
+                        c.prevVelocity = p.velocity;
+                        c.prevOnMs = (o.on - p.on) * 1000.0;
+                        c.prevLengthMs = p.off >= 0 ? (p.off - p.on) * 1000.0 : -1.0;
+                        }
+                  if (k + 1 < ns.size() && ns[k + 1].joined) {
+                        const On& n = ns[k + 1];
+                        c.nextPitch = n.pitch;
+                        c.nextVelocity = n.velocity;
+                        c.nextOnMs = (n.on - o.on) * 1000.0;
+                        }
+                  EvenLevels::NoteInfo& in = infos[k];
+                  in.note = o.note;
+                  in.route = route;
+                  in.utick = o.tick;
+                  in.on = o.on;
+                  in.off = o.off;
+                  {
+                        // (the written start: the note's tick in the pass it plays in)
+                        const int t = o.note->chord()->tick().ticks();
+                        const RepeatList& repeats = score->repeatList();
+                        auto it = repeats.findRepeatSegmentFromUTick(o.tick);
+                        if (it != repeats.end() && (*it)->tick <= t && t < (*it)->tick + (*it)->len())
+                              in.written = score->utick2utime(t + (*it)->utick - (*it)->tick);
+                        else if (repeats.size() == 1)
+                              in.written = score->utick2utime(t);
+                        }
+                  in.pitch = o.pitch;
+                  in.velocity = o.velocity;
+                  in.joined = o.joined;
+                  in.newSlur = !o.joined;
+                  if (o.joined) {
+                        for (const SoundLib::Articulation::Technique& t : a->transitions)
+                              if (o.velocity >= t.low && o.velocity <= t.high) {
+                                    in.newSlur = t.name == PerformanceTechnique::transitionName(PerformanceTechnique::Transition::BOWED);
+                                    break;
+                                    }
+                        // [slurs] plainPerformance: every transition at velocity 64 (fingered), so a written slur's start
+                        // and a note outside a slur start a slur of their own: one level per phrase, as the level rule
+                        // gives it (ContextLevel::phraseSlur; without, the glide flattened a passage of several slurs to
+                        // one median, undoing the rule's step between them)
+                        if (!in.newSlur && libPlainNotes.count(o.note)) {
+                              const Slur* here = ContextLevel::phraseSlur(o.note->chord());
+                              in.newSlur = !here || here != ContextLevel::phraseSlur(ns[k - 1].note->chord());
+                              }
+                        }
+                  in.windowMs = EvenLevels::windowStartMs(*a, o.pitch, o.velocity, o.joined, o.joined ? ns[k - 1].pitch : -1);
+                  in.context = EvenLevels::contextOf(c);
+                  if (EvenLevels::isSet(o.note->evenLevel())) {
+                        EvenLevels::rendered(o.note, in.context);
+                        applies[k] = o.note->evenContext() == in.context;
+                        anyHere = anyHere || applies[k];
+                        }
+                  }
+            if (evenInfo)
+                  evenInfo->insert(evenInfo->end(), infos.begin(), infos.end());
+            if (!libEvenOn || !volume || !anyHere)
+                  continue;
+            const int fallback = qBound(0, library->expressionValue, 127);
+            for (size_t s = 0; s < ns.size();) {
+                  if (!applies[s]) {
+                        ++s;
+                        continue;
+                        }
+                  size_t e = s;
+                  while (e + 1 < ns.size() && applies[e + 1] && ns[e + 1].joined)
+                        ++e;
+                  std::vector<double> centres, dbs;
+                  for (size_t k = s; k <= e; ++k) {
+                        centres.push_back(EvenLevels::nodeTime(ns[k].on, ns[k].off,
+                                                               k + 1 < ns.size() && ns[k + 1].joined ? ns[k + 1].on : -1.0));
+                        dbs.push_back(ns[k].note->evenLevel());
+                        }
+                  // ([levels] attackLevels: a note whose level went at its onset, libAttackLevelAt: the glide starts there, and
+                  // the run before ends there)
+                  const int startTick = levelTickOf(ns[s]);
+                  const double tStart = startTick == ns[s].tick ? ns[s].on : score->utick2utime(startTick);
+                  // (playback's chunks: a run going on from before this window keeps its steps' grid, the run's own start in
+                  // the window before, renderChunk; its first steps here from this run's start)
+                  double grid = tStart;
+                  int firstStep = 0;
+                  if (from) {
+                        auto fr = from->evenRuns.find(route);
+                        if (fr != from->evenRuns.end() && ns[s].tick <= fr->second.second && fr->second.first < tStart) {
+                              grid = fr->second.first;
+                              firstStep = int(std::ceil((tStart - grid) * 1000.0 / EvenLevels::STEP_MS - 1e-9));
+                              }
+                        }
+                  if (snap && ns[s].tick < snapAt && ns[e].tick >= snapAt)
+                        snap->evenRuns[route] = { grid, ns[e].tick };
+                  const int endTick = e + 1 < ns.size() ? levelTickOf(ns[e + 1]) : utick2;
+                  const NPlayEvent like = ns[s].it->second;
+                  // the CC11s the route gets in the span (the per-note levels' schedule), and the value before it
+                  std::vector<EventMap::iterator> existing;
+                  for (auto i = events->lower_bound(startTick); i != events->end() && i->first < endTick; ++i) {
+                        const NPlayEvent& ev = i->second;
+                        if (ev.isExternal() && ev.type() == ME_CONTROLLER && !ev.librarySwitch() && ev.controller() == CTRL_EXPRESSION
+                            && routeOf(ev) == route)
+                              existing.push_back(i);
+                        }
+                  int base = valueBefore(events->lower_bound(startTick), route, CTRL_EXPRESSION, fallback);
+                  // (playback's chunks: the run's glide held past its last note-on into the next chunk's window's start:
+                  // taken there, with the CC11 as written in force there)
+                  if (snap && ns[e].tick < snapAt && endTick > snapAt) {
+                        int b = base;
+                        for (const auto& it : existing)
+                              if (it->first < snapAt)
+                                    b = it->second.value();
+                        snap->even[route] = { centres, dbs, b, like };
+                        }
+                  int out = -1;
+                  std::vector<std::pair<int, int>> inserts;          // (tick, value)
+                  const double tEnd = score->utick2utime(endTick);
+                  // (a step closer than this to a CC11 of the span's own is left out: theirs need not lie on the steps'
+                  // grid, e.g. at a transition sent early, [slurs] transitionsEarly; the messages stay ~STEP_MS apart)
+                  const double minGap = 0.7 * EvenLevels::STEP_MS / 1000.0;
+                  double lastT = -1;
+                  size_t x = 0;
+                  for (int step = firstStep;; ++step) {
+                        const double t = grid + step * EvenLevels::STEP_MS / 1000.0;
+                        const int tick = t < tEnd ? std::max(startTick, score->utime2utick(t)) : endTick;
+                        // the span's own CC11s up to here: the base, mapped by the glide at their time
+                        while (x < existing.size() && existing[x]->first <= tick && existing[x]->first < endTick) {
+                              NPlayEvent& ev = existing[x]->second;
+                              base = ev.value();
+                              lastT = score->utick2utime(existing[x]->first);
+                              out = scaled(base, EvenLevels::glideAt(centres, dbs, lastT));
+                              ev.setValue(out);
+                              ev.setLibraryLevel(true);
+                              ++x;
+                              }
+                        if (tick >= endTick)
+                              break;
+                        if (x > 0 && existing[x - 1]->first == tick)
+                              continue;               // (a CC11 of the span's own at this tick: it plays)
+                        const double at = score->utick2utime(tick);
+                        if ((lastT >= 0 && at - lastT < minGap)
+                            || (x < existing.size() && existing[x]->first < endTick && score->utick2utime(existing[x]->first) - at < minGap))
+                              continue;
+                        const int v = scaled(base, EvenLevels::glideAt(centres, dbs, t));
+                        if (v != out) {
+                              inserts.push_back({ tick, v });
+                              out = v;
+                              lastT = at;
+                              }
+                        }
+                  // (the route's last run: its glide held into the next chunk, up to the route's next note-on: libCarry)
+                  if (e + 1 >= ns.size())
+                        carry->even[route] = { centres, dbs, base, like };
+                  else if (out != base)
+                        inserts.push_back({ endTick, base });
+                  for (const auto& in : inserts)
+                        events->insert(events->lower_bound(in.first), std::make_pair(in.first, glideEvent(like, in.second)));
+                  s = e + 1;
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   libraryTransitionTails
+//    [levels] transitionLevels 2 (branch bowed-join, 2026-10-28; the owner on the Hall Guard A/B page, hall.musicxml:
+//    "both have the problem of the tail of the last note suddenly get louder as the next note enters"). The dynamics CC
+//    (SSO: CC1) and CC11 are the route's, every voice of the channel follows them, and a legato transition's note-on
+//    carries the new note's values: the written dynamic it starts on (moved with the note-on, finishLibraryEvents'
+//    libShifts) and its CC11 level (level rule, real range, track and note levels, divisi, even levels' switch). SSO's
+//    transition still plays the note before until it leaves it (the map's bendGlide, 25-140 ms after the note-on; a
+//    bowed new bow stroke heard ~190 ms after it, Violins 1's plainShift + bowedEarly), so the step lifted (or dropped)
+//    what still sounds of the note before and its tail: hall.musicxml bar 2 / bar 5, p into f, CC1 48 -> 96 (+8.5 dB on
+//    Violins 1 - Performance's measured curve) and CC11 54 / 56 -> 82 (+3.8 dB) with the bowed note-on, 66 ms before
+//    the beat, ~+12 dB on the p note's end before the f note is heard.
+//    With 2, at each legato transition (libGlideFrom, its glide libGlide) whose note-on steps the dynamics CC or CC11
+//    on its route (the value at the note-on's tick against the one before it), that step alone is held back: the
+//    controller keeps the note before's value to the glide's leave, then the step comes in linearly (CC11 linear in dB,
+//    the dynamics CC in value), a value every EvenLevels::STEP_MS where it changes, complete at the glide's arrival (at
+//    the latest at the route's next note-on). What moves on the route after the note-on (a hairpin's steps, even
+//    levels' glide) moves as before, the step's remainder on top of it; from the arrival everything as rendered before.
+//    Both directions (a drop at a subito p in a slur too: the note before keeps its level while it sounds; as a ramp it
+//    is no Hall trigger either, libraryHallGuard). Attacks are attackLevels' (no transition: no glide). Run after the
+//    levels and even levels, before the track delays (render ticks; a track delay moves the patch's events together)
+//---------------------------------------------------------
+
+void MidiRenderer::libraryTransitionTails(const Chunk& chunk, EventMap* events)
+      {
+      if (!library || libRoutePatches.empty() || libGlideFrom.empty() || !score)
+            return;
+      if (int(std::lround(Playback::value("levels/transitionLevels", score))) != 2)
+            return;
+      const int utick1 = chunk.utick1();
+      const int utick2 = chunk.utick2();
+      const int dynamicsCC = library->dynamicsCC >= 0 && library->dynamicsCC != CTRL_EXPRESSION ? library->dynamicsCC : -1;
+      auto routeOf = [](const NPlayEvent& e) { return e.extPort() * 16 + e.extChannel(); };
+      auto isNoteOn = [](const NPlayEvent& e) {
+            return e.isExternal() && !e.librarySwitch() && e.type() == ME_NOTEON && e.velo() > 0;
+            };
+      auto isCC = [&](const NPlayEvent& e, int route, int controller) {
+            return e.isExternal() && !e.librarySwitch() && e.type() == ME_CONTROLLER && e.controller() == controller
+                   && routeOf(e) == route;
+            };
+      struct Transition { int tick; int route; const Note* note; };
+      std::vector<Transition> transitions;
+      for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
+            const NPlayEvent& ev = i->second;
+            if (!isNoteOn(ev) || ev.libraryDelayed() || !ev.note() || !libGlideFrom.count(ev.note()) || !libGlide.count(ev.note()))
+                  continue;
+            const int route = routeOf(ev);
+            if (!transitions.empty() && transitions.back().tick == i->first && transitions.back().route == route)
+                  continue;                         // (a chord's note: one step per route and tick)
+            transitions.push_back({ i->first, route, ev.note() });
+            }
+      std::vector<int> controllers;
+      if (dynamicsCC >= 0)
+            controllers.push_back(dynamicsCC);
+      controllers.push_back(CTRL_EXPRESSION);
+      for (const Transition& tr : transitions) {
+            const LibGlide& g = libGlide.at(tr.note);
+            const double tOn = score->utick2utime(tr.tick);
+            double tArrive = tOn + std::max(0.0, std::max(g.leaveMs, g.arriveMs)) / 1000.0;
+            // (at the latest the route's next note-on)
+            for (auto j = events->upper_bound(tr.tick); j != events->end() && j->first <= score->utime2utick(tArrive); ++j) {
+                  if (isNoteOn(j->second) && routeOf(j->second) == tr.route) {
+                        tArrive = std::min(tArrive, score->utick2utime(j->first));
+                        break;
+                        }
+                  }
+            const double tLeave = std::min(tArrive, tOn + std::max(0.0, g.leaveMs) / 1000.0);
+            const int uArrive = score->utime2utick(tArrive);
+            if (uArrive <= tr.tick)
+                  continue;
+            for (int controller : controllers) {
+                  // the value before the note-on's tick (none: nothing to keep)
+                  int old = -1;
+                  NPlayEvent like;
+                  for (auto j = events->lower_bound(tr.tick); j != events->begin();) {
+                        --j;
+                        if (isCC(j->second, tr.route, controller)) {
+                              old = j->second.value();
+                              like = j->second;
+                              break;
+                              }
+                        }
+                  if (old < 0)
+                        continue;
+                  // the controller's events from the note-on's tick to the arrival, and its value just after the tick
+                  std::vector<std::pair<int, NPlayEvent>> span;
+                  int stepTo = old;
+                  for (auto j = events->lower_bound(tr.tick); j != events->end() && j->first < uArrive; ++j) {
+                        if (!isCC(j->second, tr.route, controller))
+                              continue;
+                        span.push_back(*j);
+                        if (j->first == tr.tick)
+                              stepTo = j->second.value();
+                        }
+                  if (stepTo == old)
+                        continue;                   // (no step at the note-on)
+                  const bool ratio = controller == CTRL_EXPRESSION && old > 0 && stepTo > 0;
+                  // the value as rendered at time t (span's, from the tick on), with the step's remainder (1 - f) taken out
+                  auto renderedAt = [&](double t) {
+                        int v = old;
+                        for (const auto& e : span)
+                              if (score->utick2utime(e.first) <= t + 1e-9)
+                                    v = e.second.value();
+                        return v;
+                        };
+                  auto heldAt = [&](double t) {
+                        const double f = t <= tLeave ? 0.0 : tArrive > tLeave ? std::min(1.0, (t - tLeave) / (tArrive - tLeave)) : 1.0;
+                        const int v = renderedAt(t);
+                        double y;
+                        if (ratio)
+                              y = v > 0 ? v * std::pow(double(old) / stepTo, 1.0 - f) : 0.0;
+                        else
+                              y = v + (old - stepTo) * (1.0 - f);
+                        int r = int(std::lround(y));
+                        return qBound(ratio && v > 0 ? 1 : 0, r, 127);
+                        };
+                  // the moments to send: the span's own events and a grid from the leave
+                  std::vector<double> times;
+                  for (const auto& e : span)
+                        times.push_back(score->utick2utime(e.first));
+                  for (double t = tLeave; t < tArrive - 1e-9; t += EvenLevels::STEP_MS / 1000.0)
+                        times.push_back(t);
+                  std::sort(times.begin(), times.end());
+                  // out with the span's events, in with the held ones
+                  for (auto j = events->lower_bound(tr.tick); j != events->end() && j->first < uArrive;) {
+                        if (isCC(j->second, tr.route, controller))
+                              j = events->erase(j);
+                        else
+                              ++j;
+                        }
+                  if (!span.empty())
+                        like = span.front().second;
+                  int last = old;
+                  for (double t : times) {
+                        const int v = heldAt(t);
+                        if (v == last)
+                              continue;
+                        last = v;
+                        const int u = std::max(tr.tick, std::min(uArrive - 1, score->utime2utick(t)));
+                        NPlayEvent c(like);
+                        for (const auto& e : span)
+                              if (e.first <= u)
+                                    c = e.second;
+                        c.setValue(v);
+                        // (after what the tick already holds of the route: before a note-on at a later tick)
+                        auto at = events->upper_bound(u);
+                        events->insert(at, std::make_pair(u, c));
+                        }
+                  // from the arrival as rendered (unless an event of its own takes over there; at the route's next
+                  // note-on, before it: what is left of the step goes there)
+                  const int full = renderedAt(tArrive - 1e-9);
+                  bool own = false;
+                  for (auto j = events->lower_bound(uArrive); j != events->end() && j->first == uArrive; ++j)
+                        if (isCC(j->second, tr.route, controller))
+                              own = true;
+                  if (!own && full != last) {
+                        NPlayEvent c(span.empty() ? like : span.back().second);
+                        c.setValue(full);
+                        events->insert(events->lower_bound(uArrive), std::make_pair(uArrive, c));
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   librarySpeeds
+//    [slurs] speedFromWritten: each legato note-on with a speed value (libSpeed) gets its patch's speed controller (SSO's
+//    Performance: CC119, the script's "Leg. Speed CC", its own writing off in the patch's state) right before it on its
+//    route, at its tick, as played (an early start included: the value is the written spacing's). One value a transition,
+//    at the transition, as the script sets it: the interval sample still sounding has CC119 modulators, so a value sent
+//    earlier would reshape it. Before the passes that move a note with the controllers right before it (timing overrides,
+//    track delays) and before the levels' CC11, which go between it and the note
+//---------------------------------------------------------
+
+void MidiRenderer::librarySpeeds(const Chunk& chunk, EventMap* events)
+      {
+      if (libSpeed.empty())
+            return;
+      for (auto i = events->lower_bound(chunk.utick1()); i != events->end() && i->first < chunk.utick2(); ++i) {
+            const NPlayEvent& ev = i->second;
+            if (ev.type() != ME_NOTEON || ev.velo() == 0 || ev.librarySwitch() || !ev.isExternal() || !ev.note())
+                  continue;
+            auto s = libSpeed.find(ev.note());
+            if (s == libSpeed.end())
+                  continue;
+            auto rp = libRoutePatches.find(ev.extPort() * 16 + ev.extChannel());
+            const SoundLib::LibInstrument* li = rp == libRoutePatches.end() ? nullptr : rp->second.second;
+            if (!li || li->speedCC <= 0)
+                  continue;
+            NPlayEvent c(ME_CONTROLLER, ev.channel(), li->speedCC, s->second);
+            c.setLibraryPatch(ev.libraryPatch());
+            c.setOriginatingStaff(ev.getOriginatingStaff());
+            c.setExternal(ev.extPort(), ev.extChannel());
+            c.setLibrarySpeed(true);
+            events->insert(i, std::make_pair(i->first, c));         // (just before it)
             }
       }
 
@@ -2987,7 +5118,8 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
       const bool atArrival = Playback::on("tuning/bendAtArrival", score);      // (playback settings [tuning])
       // a note-on's path to target: a glide from t0 to t1 (seconds); oneCent: a cent a tick from t1
       // tau: the patch's smoothing of a bend (seconds, bendSmoothing; 0: unknown: the glide is sent as the path)
-      struct Start { int tick; double from; double target; double t0; double t1; bool glide; bool oneCent; double range; double tau; };
+      struct Start { int tick; double from; double target; double t0; double t1; bool glide; bool oneCent; double range; double tau; bool uncut;
+                     const Note* note; int key; };
       std::map<std::pair<int, int>, std::vector<Start>> starts;                // (port, channel) -> note-ons' paths
       std::map<std::pair<int, int>, std::pair<int, int>> source;               // (port, channel) -> its notes' channel and staff
       std::map<std::pair<int, int>, int> patchOf;                              // (port, channel) -> its patch
@@ -2995,12 +5127,220 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             return SoundLib::bendValue(cents, range) < 0 ? 0.0 : cents;
             };
       auto centsOf = [&](const Note* n) {
+            auto s = libSpellCents.find(n);           // ([slurs] microtoneBends 1: sent on another key, microtoneSpelling)
+            if (s != libSpellCents.end())
+                  return s->second;
             auto c = libLaneCents.find(n);
             return c == libLaneCents.end() ? 0.0 : c->second;
             };
       auto laneOf = [&](const Note* n) {
             auto l = libLanes.find(n);
             return l == libLanes.end() ? 0 : l->second;
+            };
+      // [slurs] runBends (2026-10-29, OPEN_ITEMS 5): in a fast legato run the bend also corrects the patch's own pitch. SSO's
+      // fingered legato in Whence's sixteenths (136 ms) never reaches its keys: its f0 is the keys sent, each D after its
+      // note-on, through a one-pole low-pass tau (the map's runLag, fitted to MuseScore's export of Whence with the bends taken
+      // out: Violas 60 / 80, Violins 1 70 / 70, Celli 130 / 60 ms, median error 13-15 cents; Kontakt 8 + SSO, pYIN), so
+      // quarter tones and 12-TET notes alike glide through each note. Inside a run (notes on the lane, each a transition from
+      // the one before, written IOI < RUN_FAST_S, touching), from each transition's note-on to the next note-on (the run's
+      // last: its written end + 0.3 s), the bend is sent every RUN_STEP_S as the value whose heard bend (the patch's smoothing
+      // tau) best meets, over the next RUN_HORIZON_S, the written pitch from its heard start (written + the patch's plainShift)
+      // less the modelled f0; clipped to the range. Outside the runs the path above; where a run ends the value in force
+      // there is sent again. Offline on three takes of builds 465 / 485 (the same keys and timing, only the bends
+      // replaced): quarter tones in tune 24-40 -> 38-53 %, 12-TET notes 51-58 -> 65-71 % (docs/PLAYBACK_SETTINGS.md › Run bends)
+      auto runBendPath = [&](const auto& sts, double tauK, std::vector<std::pair<int, int>>& bends) {
+            struct RN { double on; int key; double total; double range; const LibRunNote* r; };
+            std::vector<RN> ns;
+            for (const auto& st : sts) {
+                  auto r = st.note ? libRunNote.find(st.note) : libRunNote.end();
+                  ns.push_back({ score->utick2utime(st.tick), st.key, st.key + st.target / 100.0, st.range,
+                                 r == libRunNote.end() ? nullptr : &r->second });
+                  }
+            const size_t n = ns.size();
+            // (k joins the run from note k - 1: a transition, written IOI < RUN_FAST_S, touching)
+            auto joins = [&](size_t k) {
+                  const LibRunNote* a = ns[k - 1].r;
+                  const LibRunNote* b = ns[k].r;
+                  return a && b && b->transition && b->writtenOn - a->writtenOn < RUN_FAST_S && b->writtenOn - a->writtenOff < RUN_TOUCH_S;
+                  };
+            std::vector<char> fast(n, 0);
+            for (size_t k = 1; k < n; ++k)
+                  if (joins(k))
+                        fast[k] = fast[k - 1] = 1;
+            if (std::find(fast.begin(), fast.end(), 1) == fast.end())
+                  return;
+            auto centsOfUnit = [](int v, double range) { return (v - 8192) * range / (v < 8192 ? 8192.0 : 8191.0); };
+            auto unitOf = [](double cents, double range) {
+                  return qBound(0, int(std::lround(8192.0 + cents / range * (cents < 0 ? 8192.0 : 8191.0))), 16383);
+                  };
+            // the old path's value in force at a tick, and as heard at a time (from the lane's first value, settled)
+            auto oldAt = [&](int tick) {
+                  int v = bends.empty() ? 8192 : bends.front().second;
+                  for (const auto& b : bends) {
+                        if (b.first > tick)
+                              break;
+                        v = b.second;
+                        }
+                  return v;
+                  };
+            auto oldHeard = [&](double t, double range) {
+                  double h = bends.empty() ? 0.0 : centsOfUnit(bends.front().second, range);
+                  double c = h, at = bends.empty() ? t : score->utick2utime(bends.front().first);
+                  for (const auto& b : bends) {
+                        const double bt = score->utick2utime(b.first);
+                        if (bt > t)
+                              break;
+                        h = c + (h - c) * std::exp(-(bt - at) / tauK);
+                        at = bt;
+                        c = centsOfUnit(b.second, range);
+                        }
+                  return c + (h - c) * std::exp(-(t - at) / tauK);
+                  };
+            // when the model takes a note's key: an attack at its note-on, a transition its lag D after it; a transition whose
+            // kind has no lag (the map's runLag without "bowed", 2026-10-30: SSO's bowed new bow in Whence's sixteenths is
+            // already past its pitch in the second half of the note, so a lag correction pushes it further off) at its heard
+            // start: its own window gets no correction (want = its written pitch - its key, the old path's tuning), the
+            // notes around it keep theirs
+            auto activeAt = [](const RN& x) {
+                  if (!x.r || !x.r->transition)
+                        return x.on;
+                  return x.r->lag.delayMs >= 0 ? x.on + x.r->lag.delayMs / 1000.0 : x.r->writtenOn + x.r->shift;
+                  };
+            std::vector<std::pair<int, int>> made;
+            std::vector<std::pair<int, int>> spans;              // (tick from, tick to): the old path replaced
+            double heard = 0, model = 0, modelAt = 0;
+            double segEnd = -1;
+            double sentC = 0;                                    // (the last value sent, cents)
+            for (size_t k = 1; k < n; ++k) {
+                  if (!fast[k] || !ns[k].r->transition)
+                        continue;
+                  const double a = ns[k].on;
+                  // (to the next note-on; the run's last note, the next not joining it: RUN_TAIL_S past its written end, at the
+                  // latest the next note-on. Before 2026-10-31 the next note-on however far after (seconds of 10 ms sends in a
+                  // rest, to the lane's next note): a playback chunk's window ending before that note-on ended the run at the
+                  // tail instead, so the chunks sent other bends than the whole render, tst_soundlibrary::chunkedEqualsWhole)
+                  double b = ns[k].r->writtenOff + RUN_TAIL_S;
+                  if (k + 1 < n)
+                        b = joins(k + 1) ? ns[k + 1].on : std::min(b, ns[k + 1].on);
+                  if (b <= a)
+                        continue;
+                  const double range = ns[k].range;
+                  if (std::fabs(a - segEnd) > 1e-6) {
+                        // (a run starts: the heard bend the old path left, SSO's pitch settled on the note before)
+                        heard = oldHeard(a, range);
+                        model = ns[k - 1].key;
+                        modelAt = a;
+                        }
+                  // the modelled f0 and the written pitch on a 1 ms grid to b + the horizon
+                  const int steps = int(std::ceil((b + RUN_HORIZON_S - a) / 0.001)) + 1;
+                  std::vector<double> want(static_cast<size_t>(steps), 0.0);
+                  size_t j = k - 1;
+                  double modelB = model, modelAtB = modelAt;
+                  bool savedB = false;
+                  for (int q = 0; q < steps; ++q) {
+                        const double t = a + q * 0.001;
+                        if (!savedB && t >= b) {
+                              // (the model's state at b, for a run going on there; the grid runs on for the horizon)
+                              modelB = model;
+                              modelAtB = modelAt;
+                              savedB = true;
+                              }
+                        while (j + 1 < n && activeAt(ns[j + 1]) <= t)
+                              ++j;
+                        const RN& in = ns[j];
+                        if (!in.r || !in.r->transition || in.r->lag.delayMs < 0)
+                              model = in.key;               // (an attack, or a transition without a lag: at its key)
+                        else if (t > modelAt)
+                              model = in.key + (model - in.key) * std::exp(-(t - modelAt) / (in.r->lag.tauMs / 1000.0));
+                        modelAt = std::max(modelAt, t);
+                        double p = ns[k - 1].total;
+                        for (size_t w = k - 1; w < n; ++w) {
+                              const double hs = ns[w].r ? ns[w].r->writtenOn + ns[w].r->shift : ns[w].on;
+                              if (hs > t)
+                                    break;
+                              p = ns[w].total;
+                              }
+                        want[size_t(q)] = (p - model) * 100.0;
+                        }
+                  const int hor = int(std::lround(RUN_HORIZON_S / 0.001));
+                  const int stride = int(std::lround(RUN_STEP_S / 0.001));
+                  for (int q = 0; a + q * 0.001 < b - 1e-9; q += stride) {
+                        double num = 0, den = 0;
+                        for (int h = 1; h <= hor && q + h < steps; ++h) {
+                              const double e = std::exp(-h * 0.001 / tauK);
+                              num += (1 - e) * (want[size_t(q + h)] - heard * e);
+                              den += (1 - e) * (1 - e);
+                              }
+                        double u = den > 0 ? num / den : heard;
+                        // (the slew cap: at most RUN_SLEW_C from the value in force, the old path's at a run's start)
+                        const double before = q == 0 && std::fabs(a - segEnd) > 1e-6 ? centsOfUnit(oldAt(score->utime2utick(a)), range)
+                                                                                   : sentC;
+                        u = qBound(-range, qBound(before - RUN_SLEW_C, u, before + RUN_SLEW_C), range);
+                        sentC = u;
+                        const int v = unitOf(u, range);
+                        const int tick = score->utime2utick(a + q * 0.001);
+                        if (made.empty() || made.back().first < tick)
+                              made.push_back({ tick, v });
+                        else
+                              made.back().second = v;
+                        const double dt = std::min(RUN_STEP_S, b - (a + q * 0.001));
+                        heard = centsOfUnit(v, range) + (heard - centsOfUnit(v, range)) * std::exp(-dt / tauK);
+                        }
+                  const int ta = score->utime2utick(a);
+                  const int tb = score->utime2utick(b);
+                  if (!spans.empty() && spans.back().second == ta)
+                        spans.back().second = tb;
+                  else
+                        spans.push_back({ ta, tb });
+                  segEnd = b;
+                  if (savedB) {
+                        model = modelB;
+                        modelAt = modelAtB;
+                        }
+                  }
+            if (spans.empty())
+                  return;
+            std::vector<std::pair<int, int>> kept;
+            for (size_t si = 0; si < spans.size(); ++si) {
+                  auto& sp = spans[si];
+                  const int nextStart = si + 1 < spans.size() ? spans[si + 1].first : std::numeric_limits<int>::max();
+                  // (where a run ends, the old path's value in force there again, reached in steps of at most RUN_SLEW_C every
+                  // RUN_STEP_S (the span grows by them: the old path's values inside it go), unless the old path sends one then)
+                  const double range = sts.back().range;
+                  int last = 8192, lastTick = std::numeric_limits<int>::min();
+                  for (const auto& m : made)
+                        if (m.first < sp.second && m.first >= lastTick) {
+                              last = m.second;
+                              lastTick = m.first;
+                              }
+                  double c = centsOfUnit(last, range);
+                  double t = score->utick2utime(sp.second);
+                  for (int guard = 0; guard < 64 && score->utime2utick(t) < nextStart; ++guard) {
+                        const double target = centsOfUnit(oldAt(score->utime2utick(t)), range);
+                        if (std::fabs(target - c) <= RUN_SLEW_C)
+                              break;
+                        c += target > c ? RUN_SLEW_C : -RUN_SLEW_C;
+                        made.push_back({ score->utime2utick(t), unitOf(c, range) });
+                        t += RUN_STEP_S;
+                        }
+                  sp.second = std::min(std::max(sp.second, score->utime2utick(t)), nextStart);
+                  const bool oldThere = std::any_of(bends.begin(), bends.end(), [&](const std::pair<int, int>& x) { return x.first == sp.second; });
+                  if (!oldThere && sp.second < nextStart)
+                        made.push_back({ sp.second, oldAt(sp.second) });
+                  }
+            for (const auto& b : bends) {
+                  bool inside = false;
+                  for (const auto& sp : spans)
+                        if (b.first >= sp.first && b.first < sp.second) {
+                              inside = true;
+                              break;
+                              }
+                  if (!inside)
+                        kept.push_back(b);
+                  }
+            kept.insert(kept.end(), made.begin(), made.end());
+            std::stable_sort(kept.begin(), kept.end(), [](const std::pair<int, int>& x, const std::pair<int, int>& y) { return x.first < y.first; });
+            bends = kept;
             };
       for (auto i = events->lower_bound(utick1); i != events->end() && i->first < utick2; ++i) {
             NPlayEvent& ev = i->second;
@@ -3021,7 +5361,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
             source[route] = { ev.channel(), ev.getOriginatingStaff() };
             patchOf[route] = ev.libraryPatch();
             const double on = score->utick2utime(i->first);
-            Start st { i->first, target, target, on, on, false, false, range, 0.0 };
+            Start st { i->first, target, target, on, on, false, false, range, 0.0, false, ev.note(), ev.pitch() };
             auto g = libGlideFrom.find(ev.note());
             auto gl = libGlide.find(ev.note());
             if (g != libGlideFrom.end() && gl != libGlide.end() && laneOf(g->second) == laneOf(ev.note())) {
@@ -3034,6 +5374,7 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                   st.t0 = on + std::max(0.0, leave) / 1000.0;
                   st.t1 = on + std::max(0.0, arrive) / 1000.0;
                   st.tau = atArrival ? gl->second.smoothingMs / 1000.0 : 0.0;
+                  st.uncut = atArrival && gl->second.uncut;
                   }
             std::vector<Start>& rs = starts[route];
             if (!rs.empty() && rs.back().tick == i->first) {
@@ -3078,9 +5419,55 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                         }
                   sent = v;
                   };
+            // an uncut glide's arrival still to send when the next note-on comes (tick, cents): after that note-on's bend
+            std::vector<std::pair<int, double>> pending;
             for (size_t k = 0; k < sts.size(); ++k) {
                   const Start& st = sts[k];
                   const int nextTick = k + 1 < sts.size() ? sts[k + 1].tick : -1;
+                  if (!pending.empty()) {
+                        // (the glide before still runs at this note-on: the bend in force there, then the rest of it)
+                        send(st.tick, unitOf(at, st.range), st.range, true);
+                        for (const auto& pd : pending) {
+                              send(std::max(st.tick, pd.first), unitOf(pd.second, st.range), st.range, false);
+                              at = pd.second;
+                              }
+                        pending.clear();
+                        }
+                  if (st.glide && !st.oneCent && st.tau > 0 && st.uncut) {
+                        // [slurs] microtoneBends 1 / 2, a fingered transition (bendGlideFingered: SSO's fingered transitions
+                        // reach the new pitch 130-200 ms after their note-on, after the next note-on in sixteenths at 110):
+                        // as below, but the glide runs to its arrival past the next note-on, up to the next transition's
+                        // leave (the next note's own sound comes as late), the next note-on getting the bend in force there
+                        tau = st.tau;
+                        const int t0Tick = std::max(st.tick, score->utime2utick(st.t0));
+                        int limit = INT_MAX;
+                        if (k + 1 < sts.size()) {
+                              const Start& nx = sts[k + 1];
+                              limit = (nx.glide && !nx.oneCent && nx.tau > 0 && nx.uncut) ? std::max(nx.tick, score->utime2utick(nx.t0)) : nx.tick;
+                              }
+                        if (t0Tick > st.tick && (bends.empty() || bends.back().first != st.tick))
+                              send(st.tick, unitOf(at, st.range), st.range, true);    // (the bend in force, absolute)
+                        if (t0Tick >= limit)
+                              continue;               // (no time to glide before the next one leaves: held)
+                        const int t1Tick = std::min(limit, std::max(t0Tick + 1, score->utime2utick(st.t1)));
+                        hear(score->utick2utime(t0Tick));
+                        const double e = std::exp(-(score->utick2utime(t1Tick) - score->utick2utime(t0Tick)) / st.tau);
+                        const double u = qBound(-st.range, (st.target - heard * e) / (1.0 - e), st.range);
+                        if (nextTick >= 0 && t0Tick >= nextTick) {
+                              // (leaving after the next note-on: the kick and the arrival sent after its bend, in order)
+                              pending = { { t0Tick, u }, { t1Tick, st.target } };
+                              continue;
+                              }
+                        send(t0Tick, unitOf(u, st.range), st.range, t0Tick == st.tick);
+                        at = u;
+                        if (nextTick >= 0 && t1Tick >= nextTick)
+                              pending = { { t1Tick, st.target } };
+                        else {
+                              send(t1Tick, unitOf(st.target, st.range), st.range, false);
+                              at = st.target;
+                              }
+                        continue;
+                        }
                   if (st.glide && !st.oneCent && st.tau > 0) {
                         // a measured glide on a patch whose smoothing is measured: the note before's tuning until the
                         // transition leaves it (t0), then one value until the arrival (t1) such that the bend as heard
@@ -3136,6 +5523,10 @@ void MidiRenderer::libraryPitchBends(const Chunk& chunk, EventMap* events)
                               break;            // (played: held to the next note-on)
                         }
                   }
+            for (const auto& pd : pending)                  // (the lane's last glide, uncut)
+                  send(pd.first, unitOf(pd.second, sts.back().range), sts.back().range, false);
+            if (libRunBends && tau > 0)
+                  runBendPath(sts, tau, bends);
             for (const auto& bend : bends) {
                   NPlayEvent ev(ME_PITCHBEND, source[rst.first].first, bend.second & 0x7f, (bend.second >> 7) & 0x7f);
                   ev.setOriginatingStaff(source[rst.first].second);
@@ -3170,7 +5561,8 @@ void MidiRenderer::collectMeasureEvents(EventMap* events, Measure const * m, con
                   break;
             }
 
-      collectProgramChanges(events, m, sctx.staff, tickOffset);
+      if (!sctx.extra)
+            collectProgramChanges(events, m, sctx.staff, tickOffset);
       }
 
 //---------------------------------------------------------
@@ -4766,8 +7158,186 @@ void MidiRenderer::renderScore(EventMap* events, const Context& ctx)
             }
       }
 
+//---------------------------------------------------------
+//   renderChunk
+//    Playback's chunks (minChunkSize > 0: Seq, the audit, the even-levels and real-range renders, a clicked note) on a
+//    score with sound library parts play as the whole score renders (one chunk a repeat segment: the export, Live's
+//    clips, the plain set): every chunk is rendered inside a window of the measures around it (libWindow: from
+//    WINDOW_BEFORE_S before it, and the start of every note still sounding at its start, to WINDOW_AFTER_S after it, in
+//    its repeat segment), and the window's events from the chunk's start to its end are kept (libCut). Its notes' early
+//    starts, joins, bends, levels, strums and track delays then come out as they do in the whole render, whatever falls
+//    on the chunk's first tick (branch chunk-equal, 2026-10-25). Before, each chunk was rendered alone: a note on the
+//    chunk's first tick couldn't start early (a transition early by its modelled arrival or glide's middle played 40-70
+//    ms late, its bend glide lost), the note before kept its note-off (no join, no keepMs cut), and a chunk's end put
+//    strum levels back (guitarplayback.cpp). The ownership of a chunk boundary b: the chunk before owns events up to b
+//    when it is rendered first (playback going on); the chunk after b, rendered first (a seek, a start from b), takes
+//    its own notes' early events before b too (a pre-roll, from its earliest note-on of a note written from b on), and
+//    the chunk before rendered later stops there. Only the chunk's own notes go into the trace and the even-levels
+//    information. Without library parts, or a chunk alone in its segment: rendered as before
+//---------------------------------------------------------
+
+MidiRenderer::Chunk MidiRenderer::libWindow(const Chunk& chunk, bool* segmentStart, bool* segmentEnd, bool* windowStart, bool* windowEnd) const
+      {
+      *segmentStart = *segmentEnd = *windowStart = *windowEnd = true;
+      auto it = std::find_if(chunks.begin(), chunks.end(), [&](const Chunk& c) {
+            return c.startMeasure() == chunk.startMeasure() && c.tickOffset() == chunk.tickOffset(); });
+      if (it == chunks.end() || it->lastMeasure() != chunk.lastMeasure())
+            return Chunk();
+      auto contiguous = [](const Chunk& a, const Chunk& b) {
+            return a.tickOffset() == b.tickOffset() && a.endMeasure() == b.startMeasure(); };
+      auto first = it, last = it;
+      while (first != chunks.begin() && contiguous(*std::prev(first), *first))
+            --first;
+      while (std::next(last) != chunks.end() && contiguous(*last, *std::next(last)))
+            ++last;
+      *segmentStart = first == it;
+      *segmentEnd = last == it;
+      if (*segmentStart && *segmentEnd)
+            return Chunk();
+      const int offset = chunk.tickOffset();
+      const Measure* from = chunk.startMeasure();
+      if (!*segmentStart) {
+            const Measure* segFirst = first->startMeasure();
+            // (every note still sounding at the chunk's start: from its tie chain's first note)
+            int earliest = chunk.tick1();
+            if (const Measure* before = from->prevMeasure()) {
+                  for (const Segment* seg = before->first(SegmentType::ChordRest); seg; seg = seg->next(SegmentType::ChordRest))
+                        for (int track = 0; track < score->ntracks(); ++track) {
+                              const Element* e = seg->element(track);
+                              if (!e || !e->isChord())
+                                    continue;
+                              for (const Note* n : toChord(e)->notes())
+                                    if (n->tieFor())
+                                          earliest = std::min(earliest, n->firstTiedNote()->chord()->tick().ticks());
+                              }
+                  }
+            const double target = score->utick2utime(chunk.utick1()) - WINDOW_BEFORE_S - libDelayLead / 1000.0;
+            while (from != segFirst && from->prevMeasure()
+                   && (from->tick().ticks() > earliest || score->utick2utime(from->tick().ticks() + offset) > target))
+                  from = from->prevMeasure();
+            *windowStart = from == segFirst;
+            }
+      const Measure* to = chunk.lastMeasure();
+      if (!*segmentEnd) {
+            const Measure* segLast = last->lastMeasure();
+            const double target = score->utick2utime(chunk.utick2()) + WINDOW_AFTER_S + (libDelayLead + libStartLead) / 1000.0;
+            while (to != segLast && to->nextMeasure() && score->utick2utime(to->endTick().ticks() + offset) < target)
+                  to = to->nextMeasure();
+            *windowEnd = to == segLast;
+            }
+      return Chunk(offset, from, to);
+      }
+
 void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Context& ctx)
       {
+      bool segmentStart = true, segmentEnd = true, windowStart = true, windowEnd = true;
+      // (MS_CHUNK_WINDOWS_OFF=1: each chunk alone, as before 2026-10-25, to compare)
+      const Chunk window = minChunkSize > 0 && library && !libRoutePatches.empty() && !qEnvironmentVariableIsSet("MS_CHUNK_WINDOWS_OFF")
+                           ? libWindow(chunk, &segmentStart, &segmentEnd, &windowStart, &windowEnd) : Chunk();
+      if (!window) {
+            renderWindow(chunk, events, ctx);
+            return;
+            }
+      LagProbe::Scope probe("MidiRenderer::renderChunk (window)");
+      const int u1 = chunk.utick1(), u2 = chunk.utick2();
+      const size_t traceFrom = libTrace ? libTrace->size() : 0;
+      const size_t infoFrom = evenInfo ? evenInfo->size() : 0;
+      // the levels in force where the next chunk's window starts (libCarry, as at a chunk's end: a route's level and even
+      // levels' glide last until its next note-on, however long after): this window takes them there for it, as it takes
+      // them at its own start from the window before (none rendered before it: none). A window's end carries nothing
+      // (no chunk starts there) but at a repeat segment's end, as in the whole render
+      libSnapshotAt = -1;
+      {
+            auto next = std::find_if(chunks.begin(), chunks.end(), [&](const Chunk& c) {
+                  return c.startMeasure() == chunk.endMeasure() && c.tickOffset() == chunk.tickOffset(); });
+            bool ns = true, ne = true, nws = true, nwe = true;
+            const Chunk nextWindow = next == chunks.end() || segmentEnd ? Chunk() : libWindow(*next, &ns, &ne, &nws, &nwe);
+            if (nextWindow && !nws && nextWindow.utick1() > window.utick1())
+                  libSnapshotAt = nextWindow.utick1();
+      }
+      EventMap all;
+      renderWindow(window, &all, ctx);
+      libSnapshotAt = -1;
+      if (!windowEnd)
+            libCarry.erase(window.utick2());
+      auto own = [&](const Note* n) {
+            const int t = n->chord()->tick().ticks() + chunk.tickOffset();
+            return t >= u1 && t < u2;
+            };
+      if (libTrace)
+            libTrace->erase(std::remove_if(libTrace->begin() + long(traceFrom), libTrace->end(),
+                                           [&](const LibTrace& t) { return !t.note || !own(t.note); }), libTrace->end());
+      if (evenInfo)
+            evenInfo->erase(std::remove_if(evenInfo->begin() + long(infoFrom), evenInfo->end(),
+                                           [&](const EvenLevels::NoteInfo& i) { return !i.note || !own(i.note); }), evenInfo->end());
+      events->startEarlyMs = all.startEarlyMs;
+      events->startLeadMs = all.startLeadMs;
+      events->delayLeadMs = all.delayLeadMs;
+      if (libProbing || libKeepWindow) {        // (the start lead's probe, a clicked note: the whole window, nothing owned)
+            events->insert(all.begin(), all.end());
+            return;
+            }
+      // the boundaries' owners (libCut): set by the first chunk rendered next to them
+      int low = std::numeric_limits<int>::min();
+      if (!segmentStart) {
+            auto c = libCut.find(u1);
+            if (c != libCut.end())
+                  low = c->second;
+            else {
+                  // (rendered before the chunk before: a pre-roll of its own notes' early events)
+                  low = u1;
+                  for (const auto& te : all) {
+                        if (te.first >= u1)
+                              break;
+                        const NPlayEvent& e = te.second;
+                        if (e.type() == ME_NOTEON && e.velo() > 0 && !e.librarySwitch() && e.note() && own(e.note())) {
+                              low = te.first;
+                              break;
+                              }
+                        }
+                  libCut[u1] = low;
+                  }
+            }
+      int high = std::numeric_limits<int>::max();
+      if (!segmentEnd) {
+            auto c = libCut.find(u2);
+            if (c != libCut.end())
+                  high = c->second;
+            else
+                  libCut[u2] = high = u2;
+            }
+      for (auto i = all.lower_bound(low); i != all.end() && i->first < high; ++i)
+            events->insert(*i);
+      }
+
+//---------------------------------------------------------
+//   renderWindow
+//    the measures of one chunk rendered (playback's chunk itself, or the window around it: renderChunk)
+//---------------------------------------------------------
+
+void MidiRenderer::renderWindow(const Chunk& chunk, EventMap* events, const Context& ctx)
+      {
+      LagProbe::Scope probe("MidiRenderer::renderChunk");
+      // the start lead (libraryDelayLead) comes from the score's first notes: a later chunk rendered before the first
+      // (playback from a later bar) renders the first once for it, writing nowhere
+      if (library && !libStartKnown && !libProbing && !writtenTiming && chunk.utick1() > 0) {
+            const Chunk first = getChunkAt(0);
+            if (first) {
+                  EventMap probe;
+                  std::vector<LibTrace>* trace = libTrace;
+                  std::vector<EvenLevels::NoteInfo>* info = evenInfo;
+                  std::map<const Part*, double>* tops = libRangeTops;
+                  libTrace = nullptr;
+                  evenInfo = nullptr;
+                  libRangeTops = nullptr;
+                  libProbing = true;
+                  renderChunk(first, &probe, ctx);
+                  libProbing = false;
+                  libTrace = trace;
+                  evenInfo = info;
+                  libRangeTops = tops;
+                  }
+            }
       // TODO: avoid doing it multiple times for the same measures
       score->createPlayEvents(chunk.startMeasure(), chunk.endMeasure());
       const ScoreTuningScope tuning(score);     // each note's tuning: temperament, accidental, its own (tuning.h)
@@ -4819,7 +7389,7 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       // method (SND and changes at the start of a segment) on CC2 unless the global one has a CC;
       // MS4 and the sound library the MuseScore 4 note model
       const std::map<const Part*, PartPlayback> modes = PartPlaybackModes::read(score->masterScore());
-      auto methodOf = [&](const Part* part) {
+      auto ownMethodOf = [&](const Part* part) {
             switch (PartPlaybackModes::of(part, modes)) {
                   case PartPlayback::MS3:
                         return DynamicsRenderMethod::SEG_START;
@@ -4831,16 +7401,49 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
                   }
             return renderMethod;
             };
+      // Engine lanes (enginelane.h): each switching part's engine from each switch on, its own engine from tick 0; a
+      // library the part has no routes of (MIDI out, not found) plays MS4, as a part the library lacks
+      engineSegs.clear();
+      for (const auto& es : engineSwitches) {
+            const Part* part = es.first;
+            const bool routed = libParts.count(part) > 0;
+            const int own = routed && PartPlaybackModes::playsLibrary(part, modes) ? ENGINE_LIB
+                            : ownMethodOf(part) == DynamicsRenderMethod::MS4 ? ENGINE_MS4 : ENGINE_MS3;
+            std::vector<EngineSeg> segs { { 0, own, 0 } };
+            for (const auto& sw : es.second) {
+                  const QString& e = sw.second.first;
+                  const int kind = e == "ms3" ? ENGINE_MS3 : e == "ms4" || !routed ? ENGINE_MS4 : ENGINE_LIB;
+                  if (sw.first <= 0)
+                        segs.front().kind = kind;
+                  else if (kind != segs.back().kind)
+                        segs.push_back({ sw.first, kind, sw.second.second });
+                  }
+            engineSegs[part] = segs;
+            }
+      auto methodOf = [&](const Part* part) {
+            auto es = engineSegs.find(part);
+            if (es == engineSegs.end())
+                  return ownMethodOf(part);
+            const bool ms4 = std::any_of(es->second.begin(), es->second.end(), [](const EngineSeg& g) { return g.kind != ENGINE_MS3; });
+            return ms4 ? DynamicsRenderMethod::MS4 : DynamicsRenderMethod::SEG_START;
+            };
       ms4Active.clear();
       for (Part* part : score->parts())
             if (methodOf(part) == DynamicsRenderMethod::MS4)
                   ms4Active.insert(part);
 
       libChunkStart = chunk.utick1();
-      libOnsetEarly = library ? SoundLib::onsetEarly(score, *library) : 0;
+      // (written timing, Live's clips: no early start; LiveTiming moves the notes in Live instead)
+      libOnsetEarly = library && !writtenTiming ? SoundLib::onsetEarly(score, *library) : 0;
       libOnsetByPitch = Playback::on("heldNotes/byPitch", score);
       libAvoidBad = Playback::on("notes/avoidBadSamples", score);
       libKeep = Playback::value("legato/keepMs", score) / 1000.0;
+      libTransitionsEarly = library && !writtenTiming ? int(std::lround(Playback::value("slurs/transitionsEarly", score))) : 0;
+      libPlainTiming = library && !writtenTiming && Playback::on("slurs/plainPerformance", score) && Playback::on("slurs/plainTiming", score);
+      libStaccatoLength = library && Playback::on("shorts/staccatoLength", score);
+      libMicrotoneBends = library ? int(std::lround(Playback::value("slurs/microtoneBends", score))) : 0;
+      libPlainAuto = library ? int(std::lround(Playback::value("slurs/plainAuto", score))) : 0;
+      libRunBends = library && Playback::on("slurs/runBends", score);
       libFastShare = Playback::value("legato/fastShare", score) / 100.0;
       libFastFull = Playback::value("legato/fastFullMs", score) / 1000.0;
       libShifts.clear();
@@ -4855,16 +7458,32 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
             sctx.method = methodOf(st->part());
             sctx.cc = sctx.method == renderMethod || cc > 0 ? cc : 2;
             sctx.renderHarmony = ctx.renderHarmony;
-            renderStaffChunk(chunk, events, sctx);
+            if (engineSegs.count(st->part()))
+                  renderEngineStaff(chunk, events, sctx, renderMethod, cc);
+            else
+                  renderStaffChunk(chunk, events, sctx);
             }
+      if (chunk.utick1() == 0) {
+            libStartLead = 0.0;
+            for (const auto& l : libStartLost)
+                  libStartLead = std::max(libStartLead, l.second);
+            libStartLead = std::max(libStartLead, guitarStartLeadMs());   // (a capo at the start: guitarplayback.cpp)
+            libStartKnown = true;
+            events->startEarlyMs = libStartLost;
+            }
+      events->startLeadMs = forLiveClips ? 0.0 : libStartLead;
+      events->delayLeadMs = forLiveClips ? 0.0 : libDelayLead;
       ms4Mode = !ms4Active.empty();
-      if (ms4Mode)
+      if (ms4Mode) {
             renderMs4Dynamics(chunk, events);
+            renderEngineDynamics(chunk, events);
+            }
 
       events->fixupMIDI();
 
       // create sustain pedal events
       renderSpanners(chunk, events);
+      renderEnginePedals(chunk, events);
 
       if (ms4Mode)
             finishLibraryEvents(chunk, events);
@@ -4877,20 +7496,23 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
       int lastChannel = -1;
       int lastController = -1;
       int lastValue = -1;
+      float lastExact = 0.f;              // (a CC's exact value, the guitar pass's: libraryHostedParameters)
+      // (not a legato note-on's speed controller: one a transition, as SSO's script sends it, librarySpeeds)
       for (auto i = events->begin(); i != events->end();) {
-            if (i->second.type() == ME_CONTROLLER) {
+            if (i->second.type() == ME_CONTROLLER && !i->second.librarySpeed()) {
                   auto& event = i->second;
                   // (a sound library part's events on one channel can go to several routes)
                   const int channel = event.isExternal() ? 0x10000 + event.extPort() * 16 + event.extChannel() : event.channel();
                   if (channel == lastChannel &&
                      event.controller() == lastController &&
-                     event.value() == lastValue) {
+                     event.value() == lastValue && event.tuning() == lastExact) {
                         i = events->erase(i);
                         }
                   else {
                         lastChannel = channel;
                         lastController = event.controller();
                         lastValue = event.value();
+                        lastExact = event.tuning();
                         i++;
                         }
                   }
@@ -4898,7 +7520,352 @@ void MidiRenderer::renderChunk(const Chunk& chunk, EventMap* events, const Conte
                   i++;
                   }
             }
+      libraryHostedParameters(chunk, events);
       libraryDelayLead(chunk, events);
+      libraryLowCut(chunk, events);
+      }
+
+//---------------------------------------------------------
+//   libraryLowCut
+//    [levels] lowCut 2, the following low cut (followcut.h; branch follow-cut, 2026-10-31): each route of a patch with
+//    the map's <Instrument lowCut> gets ME_LOWCUT events, the rule's cutoff (FollowCut::steps over the notes of all the
+//    patch's routes of the part: its tuning and voice copies) wherever it changes, and one at the rendered chunk's first
+//    tick with the value there; Vst3Synth smooths and filters. Last of all: the notes' times as played (early starts,
+//    joins, track delays, the delay lead).
+//    Chunks: the events of this render only, the notes of this render only (a note-on counts when its note is written in
+//    the chunk, within 3 s of it: in the whole render a repeat segment's chunk would otherwise see the segments before),
+//    so a window (renderChunk) gives what the whole render gives from 2 s into it (the rule looks back RELEASE_S, ahead
+//    LEAD_S; WINDOW_BEFORE_S is 6 s); events from the chunk's first tick to its last (the score's last chunk: on to its
+//    last note's release), so no chunk's events reach into the next's. A repeat segment's start therefore forgets the
+//    notes of the segment before (their releases don't hold the cut down there), chunked and whole alike.
+//    Not for Live's clips (the plain set writes its own: plainliveset.cpp), not with the written timing, not for MIDI
+//    out (no events: a filter can't be sent)
+//---------------------------------------------------------
+
+void MidiRenderer::libraryLowCut(const Chunk& chunk, EventMap* events)
+      {
+      const int u1 = chunk.utick1(), u2 = chunk.utick2();
+      int end = 0;                        // (the score's last chunk's end)
+      for (const Chunk& c : chunks)
+            end = std::max(end, c.utick2());
+      const bool last = u2 >= end;
+      for (auto i = events->lower_bound(u1); i != events->end();) {
+            if (i->second.type() == ME_LOWCUT && (i->first < u2 || last))
+                  i = events->erase(i);
+            else
+                  ++i;
+            }
+      if (!library || forLiveClips || writtenTiming || libRoutes.empty() || SoundLib::output() != SoundLib::Output::PLUGIN
+          || std::lround(Playback::value("levels/lowCut", score)) != FollowCut::SETTING_VALUE)
+            return;
+      // the patches with a cut: (part, patch) -> its routes and, for each, the event to send (channel, patch, route)
+      struct Group { double floor { 0 }; std::vector<int> routes; std::vector<NPlayEvent> protos; };
+      std::map<std::pair<const Part*, const SoundLib::LibInstrument*>, Group> groups;
+      for (const auto& r : libRoutes) {
+            for (size_t p = 0; p < r.second.size(); ++p) {
+                  for (const std::pair<int, int>& lane : r.second[p]) {
+                        const int route = lane.first * 16 + lane.second;
+                        auto rp = libRoutePatches.find(route);
+                        if (rp == libRoutePatches.end() || !rp->second.second || !(rp->second.second->lowCutHz > 0))
+                              continue;
+                        Group& g = groups[rp->second];
+                        if (std::find(g.routes.begin(), g.routes.end(), route) != g.routes.end())
+                              continue;
+                        g.floor = rp->second.second->lowCutHz;
+                        g.routes.push_back(route);
+                        NPlayEvent e(ME_LOWCUT, 0, 0, 0);
+                        e.setChannel(r.first);
+                        e.setExternal(lane.first, lane.second);
+                        e.setLibraryPatch(int(p));
+                        e.setLibraryDelayed(true);          // (placed: no later pass moves it)
+                        g.protos.push_back(e);
+                        }
+                  }
+            }
+      if (groups.empty())
+            return;
+      const double t1 = score->utick2utime(u1);
+      auto own = [&](int tick, const NPlayEvent& e) {
+            if (!e.note())
+                  return tick >= u1;
+            const int written = e.note()->chord()->tick().ticks() + chunk.tickOffset();
+            return written >= u1 && written < u2 && std::fabs(score->utick2utime(tick) - score->utick2utime(written)) < 3.0;
+            };
+      for (const auto& gp : groups) {
+            const Group& g = gp.second;
+            const std::vector<FollowCut::Note> notes = FollowCut::notes(score, *events, g.routes, own);
+            const std::vector<std::pair<double, double>> steps = FollowCut::steps(notes, g.floor);
+            // the value at the chunk's first tick, then each change after it
+            double at1 = g.floor;
+            std::vector<std::pair<int, double>> out;
+            for (const auto& st : steps) {
+                  if (st.first <= t1) {
+                        at1 = st.second;
+                        continue;
+                        }
+                  const int tick = score->utime2utick(st.first);
+                  if (tick <= u1) {
+                        at1 = st.second;
+                        continue;
+                        }
+                  if (tick >= u2 && !last)
+                        break;
+                  out.push_back({ tick, st.second });
+                  }
+            out.insert(out.begin(), { u1, at1 });
+            for (const NPlayEvent& proto : g.protos) {
+                  for (const auto& o : out) {
+                        NPlayEvent e(proto);
+                        e.setTuning(float(o.second));
+                        events->insert({ o.first, e });
+                        }
+                  }
+            }
+      }
+
+//---------------------------------------------------------
+//   Engine lanes (enginelane.h; the owner, 2026-10-26/27: "switch playback engine for just a few measures and switch
+//   back")
+//    A part with an Engine lane (engineSegs: its engine from each switch on) renders its staves once per engine it uses,
+//    each pass only the chords whose tick falls on that engine (StaffContext::engine): the library's (its LibPart, as
+//    ever), MS4's (its LibPart hidden: libSuppress, so the MS4 path plays its notes on the part's own channels) and
+//    MS3's (SEG_START). A note sounding at a switch ends on its old engine (its tie chain goes with its first note); a
+//    slur's or a plain line's legato never joins two chords on either side of a switch (engineCrosses: legatoTransition,
+//    struckAgain, touchesPatch, nextLegato, onsetEarliest), so the new engine's line starts afresh. Where the part has
+//    library routes its built-in passes' events carry libraryPatch -1 (mergeBuiltIn: as a kit's built-in drums), so
+//    finishLibraryEvents leaves them to the built-in synthesizer. Its MS4 dynamics (CC11) and presets come from a pass of
+//    their own (renderEngineDynamics); with MS3 segments too, MS4's CC11 is left out there (127 at the MS3 segment's
+//    start, the level in force restated where MS4 comes back) and each engine's presets are sent where it starts. The
+//    pedal (renderSpanners: on the library's route) is copied to the built-in synthesizer (renderEnginePedals). Parts
+//    without an Engine lane: untouched (no pass, no copy, no mark)
+//---------------------------------------------------------
+
+int MidiRenderer::engineAt(const Part* part, int tick) const
+      {
+      if (engineSegs.empty())
+            return -1;
+      auto es = engineSegs.find(part);
+      if (es == engineSegs.end())
+            return -1;
+      int kind = es->second.front().kind;
+      for (const EngineSeg& g : es->second) {
+            if (g.tick > tick)
+                  break;
+            kind = g.kind;
+            }
+      return kind;
+      }
+
+bool MidiRenderer::engineCrosses(const Part* part, int tick1, int tick2) const
+      {
+      return !engineSegs.empty() && engineAt(part, tick1) != engineAt(part, tick2);
+      }
+
+void MidiRenderer::mergeBuiltIn(EventMap* events, const EventMap& builtIn, bool mark)
+      {
+      for (const auto& te : builtIn) {
+            NPlayEvent e(te.second);
+            if (mark)
+                  e.setLibraryPatch(-1);
+            events->registerChannel(e.channel());
+            events->insert(std::make_pair(te.first, e));
+            }
+      }
+
+void MidiRenderer::renderEngineStaff(const Chunk& chunk, EventMap* events, const StaffContext& sctx, DynamicsRenderMethod globalMethod, int cc)
+      {
+      const Part* part = sctx.staff->part();
+      const std::vector<EngineSeg>& segs = engineSegs.at(part);
+      const bool routed = libParts.count(part) > 0;
+      EventMap builtIn;
+      bool first = true;
+      for (int kind : { int(ENGINE_LIB), int(ENGINE_MS4), int(ENGINE_MS3) }) {
+            if (std::none_of(segs.begin(), segs.end(), [kind](const EngineSeg& g) { return g.kind == kind; }))
+                  continue;
+            StaffContext c = sctx;
+            c.engine = kind;
+            c.method = kind == ENGINE_MS3 ? DynamicsRenderMethod::SEG_START : DynamicsRenderMethod::MS4;
+            c.cc = c.method == globalMethod || cc > 0 ? cc : 2;
+            c.extra = !first;
+            c.renderHarmony = first && sctx.renderHarmony;
+            libSuppress = routed && kind == ENGINE_MS4 ? part : nullptr;
+            renderStaffChunk(chunk, routed && kind != ENGINE_LIB ? &builtIn : events, c);
+            libSuppress = nullptr;
+            first = false;
+            }
+      mergeBuiltIn(events, builtIn, true);
+      }
+
+void MidiRenderer::renderEngineDynamics(const Chunk& chunk, EventMap* events)
+      {
+      if (engineSegs.empty())
+            return;
+      const int tick1 = chunk.tick1();
+      const int tick2 = chunk.tick2();
+      const int tickOffset = chunk.tickOffset();
+      for (const Part* part : score->parts()) {
+            auto es = engineSegs.find(part);
+            if (es == engineSegs.end() || !ms4Active.count(part))
+                  continue;
+            const std::vector<EngineSeg>& segs = es->second;
+            auto uses = [&segs](int kind) { return std::any_of(segs.begin(), segs.end(), [kind](const EngineSeg& g) { return g.kind == kind; }); };
+            if (!uses(ENGINE_MS4))
+                  continue;
+            const bool routed = libParts.count(part) > 0;
+            EventMap dyn;
+            libSuppress = routed ? part : nullptr;
+            renderMs4Dynamics(chunk, &dyn, part);
+            libSuppress = nullptr;
+            if (uses(ENGINE_MS3)) {
+                  // MS3's segments: no CC11 of MS4's there (127 from their start: MS3's own dynamics), MS3's programs; where
+                  // MS4 comes back, its CC11 in force and its presets again
+                  auto kindAt = [&](int tick) { return engineAt(part, tick); };
+                  std::map<int, int> lastCC11;              // channel -> value, as the events go
+                  std::vector<std::pair<int, NPlayEvent>> presets;
+                  for (const auto& te : dyn) {
+                        const NPlayEvent& e = te.second;
+                        if (te.first == tick1 + tickOffset && e.type() == ME_CONTROLLER
+                            && (e.controller() == CTRL_HBANK || e.controller() == CTRL_LBANK || e.controller() == CTRL_PROGRAM))
+                              presets.push_back(te);
+                        }
+                  EventMap out;
+                  std::vector<int> starts { tick1 };
+                  for (const EngineSeg& g : segs)
+                        if (g.tick > tick1 && g.tick < tick2)
+                              starts.push_back(g.tick);
+                  size_t next = 1;
+                  auto restate = [&](int tick) {
+                        const int kind = kindAt(tick);
+                        const int at = tick + tickOffset;
+                        if (kind == ENGINE_MS3) {
+                              for (const auto& ip : *part->instruments()) {
+                                    for (const Channel* ch : ip.second->channel()) {
+                                          const Channel* pc = score->masterScore()->playbackChannel(ch);
+                                          const int c = pc->channel();
+                                          for (const NPlayEvent& ev : { NPlayEvent(ME_CONTROLLER, c, CTRL_HBANK, (pc->bank() >> 7) & 0x7f),
+                                                                        NPlayEvent(ME_CONTROLLER, c, CTRL_LBANK, pc->bank() & 0x7f),
+                                                                        NPlayEvent(ME_CONTROLLER, c, CTRL_PROGRAM, pc->program()),
+                                                                        NPlayEvent(ME_CONTROLLER, c, CTRL_EXPRESSION, 127) }) {
+                                                NPlayEvent e(ev);
+                                                e.setOriginatingStaff(part->staff(0)->idx());
+                                                out.insert(std::make_pair(at, e));
+                                                }
+                                          }
+                                    }
+                              }
+                        else if (kind == ENGINE_MS4 && tick != tick1) {
+                              for (const auto& p : presets)
+                                    out.insert(std::make_pair(at, p.second));
+                              for (const auto& l : lastCC11) {
+                                    NPlayEvent e(ME_CONTROLLER, l.first, CTRL_EXPRESSION, l.second);
+                                    e.setOriginatingStaff(part->staff(0)->idx());
+                                    out.insert(std::make_pair(at, e));
+                                    }
+                              }
+                        };
+                  if (kindAt(tick1) == ENGINE_MS3)
+                        restate(tick1);
+                  for (const auto& te : dyn) {
+                        while (next < starts.size() && starts[next] + tickOffset <= te.first)
+                              restate(starts[next++]);
+                        const NPlayEvent& e = te.second;
+                        const bool cc11 = e.type() == ME_CONTROLLER && e.controller() == CTRL_EXPRESSION;
+                        if (cc11)
+                              lastCC11[e.channel()] = e.value();
+                        const bool preset = e.type() == ME_CONTROLLER && te.first == tick1 + tickOffset
+                                            && (e.controller() == CTRL_HBANK || e.controller() == CTRL_LBANK || e.controller() == CTRL_PROGRAM);
+                        if (kindAt(te.first - tickOffset) == ENGINE_MS3 && (cc11 || preset))
+                              continue;
+                        out.insert(te);
+                        }
+                  while (next < starts.size())
+                        restate(starts[next++]);
+                  dyn.swap(out);
+                  }
+            mergeBuiltIn(events, dyn, routed);
+            }
+      }
+
+void MidiRenderer::renderEnginePedals(const Chunk& chunk, EventMap* events)
+      {
+      if (engineSegs.empty())
+            return;
+      std::vector<std::pair<int, NPlayEvent>> copies;
+      for (const auto& es : engineSegs) {
+            const Part* part = es.first;
+            if (!libParts.count(part) || std::all_of(es.second.begin(), es.second.end(), [](const EngineSeg& g) { return g.kind == ENGINE_LIB; }))
+                  continue;
+            const int s1 = part->staff(0)->idx();
+            const int s2 = s1 + part->nstaves();
+            for (auto i = events->lower_bound(chunk.utick1()); i != events->end(); ++i) {
+                  const NPlayEvent& e = i->second;
+                  if (e.type() == ME_CONTROLLER && e.controller() == CTRL_SUSTAIN && !e.isExternal() && e.libraryPatch() >= 0
+                      && e.getOriginatingStaff() >= s1 && e.getOriginatingStaff() < s2) {
+                        NPlayEvent c(e);
+                        c.setLibraryPatch(-1);
+                        copies.emplace_back(i->first, c);
+                        }
+                  }
+            }
+      for (const auto& c : copies)
+            events->insert(events->lower_bound(c.first), c);
+      }
+
+//---------------------------------------------------------
+//   libraryHostedParameters
+//    a MIDI controller the hosted plug-in plays by a parameter of its own (soundlibrary.h Controller::hosted: Ample's
+//    CC7 by M-Master Vol): with the plug-in output or for Live's clips each such CC event on a library route, whatever
+//    sent it (its lane, the part's controller, the guitar pass's strum levels and restores), becomes that parameter's
+//    ME_PARAMETER at the same tick, value cc / 127 (the plug-in's own MIDI learn maps it so: measured bit-identical,
+//    ~/MuseScore/ms3fork/private/ample-state/MV.md). No lead: Ample applies either from the start of the host block
+//    holding it (never late) and smooths it over ~13 ms (95 %). dataB keeps the controller number, so a MIDI file
+//    export writes the CC again (exportmidi.cpp). MIDI out: the CC as it was. After the duplicate-controller pass, so
+//    the parameter events are the CC events MIDI out would get. A CC event may carry its exact value 0-1 in tuning (the
+//    guitar pass's strum levels and the volume lane under a strum, multiplied: guitarplayback.cpp): that value then,
+//    when it rounds to the CC's (else cc / 127)
+//---------------------------------------------------------
+
+void MidiRenderer::libraryHostedParameters(const Chunk& chunk, EventMap* events)
+      {
+      if (!library || libRoutePatches.empty() || !(SoundLib::output() == SoundLib::Output::PLUGIN || forLiveClips))
+            return;
+      // route -> (cc -> the parameter's index in the part's main patch's allControllers: ME_PARAMETER's dataA)
+      std::map<int, std::map<int, int>> hosted;
+      for (const auto& r : libRoutePatches) {
+            const SoundLib::LibInstrument* li = r.second.second;
+            if (!li)
+                  continue;
+            auto lp = libParts.find(const_cast<Part*>(r.second.first));
+            const SoundLib::LibInstrument* main = lp != libParts.end() && lp->second.route.instrument ? lp->second.route.instrument : li;
+            for (const SoundLib::Controller& c : li->allControllers) {
+                  if (c.hosted.isEmpty() || c.cc < 0)
+                        continue;
+                  const int index = SoundLib::hostedParameter(*main, c.cc);
+                  if (index >= 0)
+                        hosted[r.first][c.cc] = index;
+                  }
+            }
+      if (hosted.empty())
+            return;
+      const int from = score->utime2utick(std::max(0.0, score->utick2utime(chunk.utick1()) - 2.0));
+      for (auto i = events->lower_bound(from); i != events->end(); ++i) {
+            NPlayEvent& ev = i->second;
+            if (!ev.isExternal() || ev.type() != ME_CONTROLLER)
+                  continue;
+            auto h = hosted.find(ev.extPort() * 16 + ev.extChannel());
+            if (h == hosted.end())
+                  continue;
+            auto c = h->second.find(ev.controller());
+            if (c == h->second.end())
+                  continue;
+            const int cc = ev.controller();
+            const float exact = ev.tuning();
+            const bool hasExact = exact > 0.f && exact <= 1.f && std::abs(exact * 127.0 - ev.value()) <= 0.5 + 1e-4;
+            ev.setTuning(hasExact ? exact : float(qBound(0, ev.value(), 127) / 127.0));
+            ev.setType(ME_PARAMETER);
+            ev.setDataA(c->second);
+            ev.setDataB(cc);
+            }
       }
 
 //---------------------------------------------------------
@@ -4916,24 +7883,35 @@ double MidiRenderer::levelOf(const Note* note) const
       return MarcatoLevel::of(note->chord()) + textLevel(note->chord());
       }
 
+bool MidiRenderer::leadingAt(const Chord* chord) const
+      {
+      if (leadingLanes.empty())
+            return false;
+      auto l = leadingLanes.find(PartPlaybackModes::masterPart(chord->part()));
+      return l != leadingLanes.end() && LeadingLane::on(l->second, chord->tick().ticks());
+      }
+
+double MidiRenderer::leadingDb(const Chord* chord) const
+      {
+      return leadingBuiltInDb > 0.0 && leadingAt(chord) ? leadingBuiltInDb : 0.0;
+      }
+
 void MidiRenderer::updateState()
       {
       const QString modes = score->masterScore()->metaTag(PartPlaybackModes::metaTag);
-      const QString controllers = score->masterScore()->metaTag(PartControllers::metaTag);
       const QString automation = score->masterScore()->metaTag(Automation::metaTag);
       const QString settings = score->masterScore()->metaTag(Playback::metaTag);
       const QString delays = score->masterScore()->metaTag(TrackDelays::metaTag);
       if (delays != trackDelaysTag)
             needUpdate = true;
-      if (library != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
-          || controllers != partControllers || automation != partAutomation || settings != playbackSettingsTag
+      if (libCurrent != SoundLib::current() || libGeneration != SoundLib::routesGeneration() || modes != partModes
+          || automation != partAutomation || settings != playbackSettingsTag
           || Playback::generation() != playbackGeneration)
             needUpdate = true;
       if (needUpdate) {
             playbackSettingsTag = settings;
             playbackGeneration = Playback::generation();
             partModes = modes;
-            partControllers = controllers;
             partAutomation = automation;
             trackDelaysTag = delays;
             // Update the related structures inside score
@@ -4942,10 +7920,23 @@ void MidiRenderer::updateState()
             score->updateCapo();
 
             velocityLanes.clear();
-            for (const auto& pl : Automation::read(score->masterScore()))
+            engineSwitches.clear();
+            leadingLanes.clear();
+            const bool leading = LeadingLane::playing(score);
+            leadingBuiltInDb = leading ? LeadingLane::levelDb(score) : 0.0;
+            // (Engine lanes: not for Live's clips, nor over MIDI out to a library: the parts play their own engines there)
+            const bool engineLanes = !forLiveClips && !(SoundLib::output() == SoundLib::Output::MIDI && SoundLib::current());
+            for (const auto& pl : Automation::read(score->masterScore())) {
                   for (const Automation::Lane& l : pl.second)
                         if (l.target == Automation::VELOCITY_TARGET && !l.points.empty())
                               velocityLanes[pl.first] = l;
+                  if (const Automation::Lane* ll = leading ? LeadingLane::laneOf(pl.second) : nullptr)
+                        leadingLanes[pl.first] = *ll;
+                  const Automation::Lane* el = engineLanes ? EngineLane::laneOf(pl.second) : nullptr;
+                  if (el)
+                        for (const EngineLane::Switch& sw : EngineLane::switches(*el))
+                              engineSwitches[pl.first].push_back({ sw.tick, { sw.engine, sw.fadeMs } });
+                  }
             libParts.clear();
             partTexts.clear();
             for (Part* part : score->parts())
@@ -4953,27 +7944,69 @@ void MidiRenderer::updateState()
             libRoutes.clear();
             libTrackDelays.clear();
             libContextGain.clear();
+            libPlainNotes.clear();
+            libRangeTables.clear();
+            libMics.clear();
             libTrackRoutes.clear();
+            libRoutePatches.clear();
+            libEvenOn = Playback::on("levels/evenLevels", score);
             libDelayLead = 0.0;
+            libStartLost.clear();
+            libStartLead = 0.0;
+            libStartKnown = false;
+            libCarry.clear();
+            libCut.clear();
             libLanes.clear();
+            libDivisi.clear();
+            libUnison.clear();
             libLaneCents.clear();
             libBend.clear();
             libGlideFrom.clear();
             libGlide.clear();
-            library = SoundLib::current();
+            libRunNote.clear();
+            libAttackOnset.clear();
+            libReleaseMs.clear();
+            libAttackShiftMs.clear();
+            libAttackLevelAt.clear();
+            libSpeed.clear();
+            libSpellKey.clear();
+            libSpellCents.clear();
+            libSpelled.clear();
+            libCurrent = SoundLib::current();
+            library = libCurrent;
+            libSlotLibrary.clear();
+            libLibraries = SoundLib::scoreLibraries(score, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
+            if (!library && !libLibraries.empty())
+                  library = libLibraries.front();
             libGeneration = SoundLib::routesGeneration();
             if (library) {
-                  const std::map<const Part*, PartControllers::Values> values = PartControllers::read(score->masterScore());
                   const std::map<const Part*, Automation::PartLanes> allLanes = Automation::read(score->masterScore());
-                  const std::vector<SoundLib::Route> routes = SoundLib::routes(score, *library, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
+                  // (several libraries: each one's routes after the one before, the current library's first: SoundLib::allRoutes;
+                  // the current one alone: its routes as ever)
+                  const std::vector<SoundLib::Route> routes = libLibraries.size() > 1
+                        ? SoundLib::allRoutes(score, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI)
+                        : SoundLib::routes(score, *library, forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
                   const std::map<const Part*, TrackDelays::Delays> delayed = TrackDelays::read(score->masterScore());
                   for (const SoundLib::Route& r : routes) {
+                        libSlotLibrary[r.port * 16 + r.channel] = r.library ? r.library : library.get();
+                        libRoutePatches[r.port * 16 + r.channel] = { r.part, r.instrument };
                         const TrackDelays::Delays d = TrackDelays::of(r.part, delayed);
-                        if (d.empty() && d.rule.empty())
+                        if (d.empty() && d.rule.empty() && d.even.empty() && d.evenAll == 0.0 && d.plain.empty() && d.leading.empty())
                               continue;
                         libTrackDelays[r.part] = d;
                         libTrackRoutes[r.port * 16 + r.channel] = { r.part, r.instrument };
                         libDelayLead = std::max(libDelayLead, -TrackDelays::earliest(d));
+                        }
+                  if (ContextLevel::micCompensation(score)) {
+                        for (const SoundLib::Route& r : routes) {
+                              if (libAt(r.port * 16 + r.channel)->micFader.empty())
+                                    continue;
+                              if (r.lane != 0 || !r.instrument->hasMicLevels || libMics.count({ r.part, r.instrument }))
+                                    continue;
+                              auto v = std::make_shared<ContextLevel::MicValues>(ContextLevel::micValues(r.part, *r.instrument, allLanes));
+                              if (v->automated())
+                                    libMics[{ r.part, r.instrument }] = v;
+                              }
                         }
                   for (const SoundLib::Route& r : routes) {
                         if (r.patch != 0 || r.lane != 0)
@@ -4981,8 +8014,10 @@ void MidiRenderer::updateState()
                         Part* part = const_cast<Part*>(r.part);
                         LibPart& lp = libParts[part];
                         lp.route = r;
-                        lp.velocityDynamics = library->velocityDynamics;
-                        lp.text.build(score, part);
+                        lp.library = libAt(r.port * 16 + r.channel);
+                        const SoundLib::Library& lib = *lp.library;
+                        lp.velocityDynamics = lib.velocityDynamics;
+                        lp.text.build(score, part, r.instrument->guitar.get());
                         // automation: a lane takes its controller's place (its part value, its staff texts)
                         QSet<QString> automated;
                         const QStringList liveTargets = LiveClips::liveLanes(Automation::lanes(part, allLanes));
@@ -5013,7 +8048,7 @@ void MidiRenderer::updateState()
                               // a lane Live's set has as it is here (automation.h) while the library plays
                               // through Live: Live plays it; MuseScore sends nothing for its controller
                               const int laneCC = a.cc >= 0 ? a.cc : lane.cc();
-                              if (laneCC >= 0 && laneCC == library->dynamicsCC && !lane.points.empty())
+                              if (laneCC >= 0 && laneCC == lib.dynamicsCC && !lane.points.empty())
                                     lp.dynamicsLaneFrom = std::min(lp.dynamicsLaneFrom, lane.points.front().tick);
                               if (lane.playedByLive() && (SoundLib::output() == SoundLib::Output::MIDI || forLiveClips)) {
                                     automated.insert(lane.target);
@@ -5021,6 +8056,14 @@ void MidiRenderer::updateState()
                                     }
                               if (a.cc < 0 && a.param < 0)
                                     continue;         // (a controller this library doesn't have)
+                              // a flat lane of a map controller is its setting (partcontrollers.h): a MIDI controller's
+                              // with the part's controllers below (its staff texts over it), a plug-in parameter's set on
+                              // the instance (SoundLibraryHost) and in Live's Kontakt state (livesetexport)
+                              bool setting = false;
+                              for (const SoundLib::Controller& c : r.instrument->allControllers)
+                                    setting = setting || (PartControllers::flatLane({ lane }, c) != nullptr);
+                              if (setting && !(flatParamEvents && a.param >= 0))
+                                    continue;
                               automated.insert(lane.target);
                               lp.automation.push_back(a);
                               }
@@ -5029,7 +8072,8 @@ void MidiRenderer::updateState()
                                     continue;
                               if (automated.contains(c.id) || automated.contains(QString("cc%1").arg(c.cc)))
                                     continue;
-                              lp.controllers.push_back({ c.cc, PartControllers::value(part, c, values),
+                              const double v = PartControllers::value(part, c, allLanes);
+                              lp.controllers.push_back({ c.cc, v < 0 ? -1 : int(std::lround(v)),
                                                          SoundLib::controllerTexts(score, part, c) });
                               }
                         // the main patch's instrument plays all the part's routed patches, an
@@ -5048,20 +8092,33 @@ void MidiRenderer::updateState()
                         // varispeed: a note plays at its lane's tuning (within the tolerance of its own),
                         // so a note joining a lane never retunes what still sounds on it
                         bool tuned = false;           // (a part with no microtones: no bends either)
-                        if (library->varispeed && !r.instrument->kit) {
-                              const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, *library);
+                        if (lib.varispeed && !r.instrument->kit) {
+                              const SoundLib::LaneSettings ls = SoundLib::laneSettings(score, lib);
+                              // (fixed copies as routes() gives them: Live's, MIDI out, hosted slots)
                               const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, ls.tolerance, ls.tail, ls.maxLanes,
-                                                                          forLiveClips || SoundLib::output() == SoundLib::Output::MIDI);
+                                                                          SoundLib::fixedLanes(score, lib, forLiveClips));
                               for (const auto& nl : l.lane)
                                     if (nl.second > 0)
                                           libLanes[nl.first] = nl.second;
+                              libDivisi.insert(l.sounding.begin(), l.sounding.end());
+                              libUnison.insert(l.unison.begin(), l.unison.end());
                               for (const auto& nc : l.cents) {
                                     libLaneCents[nc.first] = nc.second;
                                     tuned = tuned || std::fabs(nc.second) > 1e-6;
                                     }
                               }
+                        else if (SoundLib::anyMono(lp.patches) && !r.instrument->kit) {
+                              // (a monophonic patch without varispeed: its voices' copies only, untuned, as routes() gives them)
+                              const SoundLib::Lanes l = SoundLib::lanes(score, part, lp.patches, std::numeric_limits<double>::infinity(),
+                                                                          SoundLib::laneSettings(score, lib).tail, 1, false);
+                              for (const auto& nl : l.lane)
+                                    if (nl.second > 0)
+                                          libLanes[nl.first] = nl.second;
+                              libDivisi.insert(l.sounding.begin(), l.sounding.end());
+                              libUnison.insert(l.unison.begin(), l.unison.end());
+                              }
                         for (const auto& ip : *part->instruments()) {
-                              const SoundLib::LibInstrument* li = library->match(ip.second, part);
+                              const SoundLib::LibInstrument* li = lib.match(ip.second, part);
                               lp.instruments[ip.second] = li;
                               if (li)
                                     libRoutes[ip.second->channel(0)->channel()] = li == r.instrument ? outs

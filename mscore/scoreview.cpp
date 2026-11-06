@@ -12,6 +12,7 @@
 
 #include "breaksdialog.h"
 #include "continuouspanel.h"
+#include "barruler.h"
 #include "automationlanes.h"
 #include "drumroll.h"
 #include "editdrumset.h"
@@ -25,6 +26,10 @@
 #include "scoreaccessibility.h"
 #include "scoretab.h"
 #include "scoreview.h"
+#include "soundlibraryhost.h"
+#include "libmscore/lagprobe.h"
+#include "libmscore/leadinglane.h"
+#include "libmscore/automation.h"
 #include "seq.h"
 #include "splitstaff.h"
 #include "textcursor.h"
@@ -1104,6 +1109,7 @@ void ScoreView::paintEvent(QPaintEvent* ev)
       {
       if (!_score)
             return;
+      LagProbe::Scope probe("ScoreView::paintEvent");
       QPainter vp(this);
       vp.setRenderHint(QPainter::Antialiasing, preferences.getBool(PREF_UI_CANVAS_MISC_ANTIALIASEDDRAWING));
       vp.setRenderHint(QPainter::TextAntialiasing, true);
@@ -1123,6 +1129,8 @@ void ScoreView::paintEvent(QPaintEvent* ev)
             _continuousPanel->paint(ev->rect(), vp);
       if (_score->layoutMode() == LayoutMode::LINE)
             _lanes->paint(vp, ev->rect());
+      if (_score->layoutMode() == LayoutMode::LINE)
+            BarRuler::paint(this, vp, _continuousPanel);    // every bar's number (barruler.h)
 
       if (!lasso->bbox().isEmpty())
             lasso->draw(&vp);
@@ -1147,6 +1155,41 @@ void ScoreView::drawBackground(QPainter* p, const QRectF& r) const
             p->drawTiledPixmap(r, *_fgPixmap, r.topLeft()
                - QPoint((int)lrint(_matrix.dx()), (int)lrint(_matrix.dy())));
             }
+      }
+
+//---------------------------------------------------------
+//   paintLeadingBands
+//    Leading bands (leadinglane.h): wherever a part's Leading lane is On, its staves get a slightly darker band behind
+//    the music (a lighter one on a dark paper), its top and bottom edges a little stronger, as MuseScore marks a range;
+//    drawn before the elements, so notes, ledger lines and the selection stay on top; never printed or exported (those
+//    don't paint through the view, and printing() is checked)
+//---------------------------------------------------------
+
+void ScoreView::paintLeadingBands(QPainter& p, Page* page)
+      {
+      // (keyed by the score and its parts too: the bands hold part pointers)
+      const MasterScore* ms = _score->masterScore();
+      QString tag = ms->metaTag(Automation::metaTag);
+      if (!tag.isEmpty()) {
+            tag += QString("|%1").arg(quintptr(ms));
+            for (const Part* pt : ms->parts())
+                  tag += QString(",%1").arg(quintptr(pt));
+            }
+      if (tag != _leadingTag) {
+            _leadingTag = tag;
+            _leadingBands = LeadingLane::bands(_score->masterScore());
+            }
+      if (_leadingBands.empty())
+            return;
+      QColor paper = _fgColor;
+      if (_fgPixmap && !_fgPixmap->isNull()) {          // (a paper texture: its average colour, once per texture)
+            if (_fgPixmap->cacheKey() != _leadingPaperKey) {
+                  _leadingPaperKey = _fgPixmap->cacheKey();
+                  _leadingPaper = _fgPixmap->toImage().scaled(1, 1, Qt::IgnoreAspectRatio, Qt::SmoothTransformation).pixelColor(0, 0);
+                  }
+            paper = _leadingPaper;
+            }
+      LeadingLane::paintBands(p, LeadingLane::bandRects(_score, page, _leadingBands), paper);
       }
 
 //---------------------------------------------------------
@@ -1336,6 +1379,8 @@ void ScoreView::paint(const QRect& r, QPainter& p)
 #endif
                   // ------------
 
+                  if (!score()->printing())
+                        paintLeadingBands(p, page);
                   drawElements(p, ell, editElement);
                   }
             }
@@ -1376,6 +1421,8 @@ void ScoreView::paint(const QRect& r, QPainter& p)
 #endif
                   // ------------
 
+                  if (!score()->printing())
+                        paintLeadingBands(p, page);
                   drawElements(p, ell, editElement);
 
                   if (!score()->printing()) {
@@ -1781,12 +1828,19 @@ void ScoreView::setLogicalZoom(ZoomIndex index, qreal logicalLevel, const QPoint
             dy = (int)lrint(p3.y() * newPhysicalLevel);
             }
 
+      // Continuous View: a score whose top was in view stays under the bar ruler (barruler.h) when zooming out
+      if (const int rh = BarRuler::height(this)) {
+            if (_matrix.dy() >= 0.0 && _matrix.dy() + dy < rh)
+                  dy = rh - (int)lrint(_matrix.dy());
+            }
       constraintCanvas(&dx, &dy);
       if (dx != 0 || dy != 0) {
             _matrix.setMatrix(_matrix.m11(), _matrix.m12(), _matrix.m13(), _matrix.m21(),
                _matrix.m22(), _matrix.m23(), _matrix.dx()+dx, _matrix.dy()+dy, _matrix.m33());
             imatrix = _matrix.inverted();
             scroll(dx, dy, QRect(0, 0, width(), height()));
+            if (const int rh = BarRuler::height(this))
+                  update(0, 0, width(), rh + qAbs(dy));
             emit offsetChanged(_matrix.dx(), _matrix.dy());
             }
 
@@ -2352,6 +2406,14 @@ void ScoreView::cmd(const char* s)
                   // ??
                   }},
             {{"play"}, [](ScoreView* cv, const QByteArray&) {
+                  // (the score's sound library patches still loading: Play is grayed, SoundLibraryHost::updatePlayAction; a
+                  // trigger from elsewhere doesn't start either)
+                  if ((cv->state == ViewState::NORMAL || cv->state == ViewState::NOTE_ENTRY)
+                      && SoundLibraryHost::instance()->loading(cv->score())) {
+                        getAction("play")->setChecked(false);
+                        SoundLibraryHost::updatePlayAction();
+                        return;
+                        }
                   if (seq && seq->canStart()) {
                         if (cv->state == ViewState::NORMAL || cv->state == ViewState::NOTE_ENTRY)
                               cv->changeState(ViewState::PLAY);
@@ -3474,6 +3536,8 @@ void ScoreView::dragScoreView(QMouseEvent* ev)
          _matrix.m22(), _matrix.m23(), _matrix.dx()+dx, _matrix.dy()+dy, _matrix.m33());
       imatrix = _matrix.inverted();
       scroll(dx, dy, QRect(0, 0, width(), height()));
+      if (const int rh = BarRuler::height(this))      // the bar ruler stays at the top (barruler.h)
+            update(0, 0, width(), rh + qAbs(dy));
       // scroll schedules an update which is probably too small
       // hack around:
       if (dx > 0)
@@ -3843,8 +3907,149 @@ void ScoreView::pageTop()
       if (score()->paginatedMode())
             setConstrainedOffset(thinPadding, thinPadding);
       else
-            setOffset(thinPadding, score()->lineMode() ? 0.0 : thinPadding);
+            // Continuous View: the score starts under the bar ruler (barruler.h); setLogicalZoom keeps it there
+            setOffset(thinPadding, score()->lineMode() ? qreal(BarRuler::height(this)) : thinPadding);
 
+      update();
+      }
+
+//---------------------------------------------------------
+//   nearestShownStaff
+//    the staff of sys nearest staffIdx (by index) that is shown,
+//    or the one nearest the canvas y (by position) when y >= 0
+//---------------------------------------------------------
+
+static int nearestShownStaff(const System* sys, int staffIdx, qreal y = -1.0)
+      {
+      int best = -1;
+      qreal bestDistance = 0.0;
+      for (int i = 0; i < int(sys->staves()->size()); ++i) {
+            if (!sys->staff(i)->show())
+                  continue;
+            qreal distance;
+            if (y >= 0.0) {
+                  const qreal top = sys->staffCanvasYpage(i);
+                  const qreal bottom = top + sys->staff(i)->bbox().height();
+                  distance = qMax(qMax(top - y, y - bottom), 0.0);
+                  }
+            else
+                  distance = qAbs(i - staffIdx);
+            if (best == -1 || distance < bestDistance) {
+                  best = i;
+                  bestDistance = distance;
+                  }
+            }
+      return best == -1 ? 0 : best;
+      }
+
+//---------------------------------------------------------
+//   viewAnchor
+//    the selection's measure and staff if the measure is in view,
+//    else the measure at (or nearest) the view's centre and its
+//    staff nearest the centre; used by MuseScore::switchLayoutMode
+//---------------------------------------------------------
+
+ViewAnchor ScoreView::viewAnchor() const
+      {
+      ViewAnchor a;
+      if (!score())
+            return a;
+      const QRectF view = toLogical(QRectF(rect()));
+      const QPointF centre = view.center();
+      const Measure* m = nullptr;
+      int staffIdx = -1;
+
+      const Selection& sel = score()->selection();
+      Fraction selTick(-1, 1);
+      if (sel.isRange() && sel.startSegment()) {
+            selTick  = sel.startSegment()->tick();
+            staffIdx = sel.staffStart();
+            }
+      else if (!sel.isRange() && !sel.elements().isEmpty()) {
+            const Element* el = sel.elements().front();
+            if (const Measure* em = el->findMeasure()) {
+                  selTick  = em->tick();
+                  staffIdx = el->staffIdx();
+                  }
+            }
+      if (selTick >= Fraction(0, 1)) {
+            m = score()->tick2measureMM(selTick);       // a multimeasure rest shows the selection's measure
+            if (!m || !m->system() || !view.intersects(m->canvasBoundingRect())) {
+                  m = nullptr;
+                  staffIdx = -1;
+                  }
+            }
+
+      if (!m) {
+            qreal best = 0.0;
+            for (const Measure* mm = score()->firstMeasureMM(); mm; mm = mm->nextMeasureMM()) {
+                  if (!mm->system())
+                        continue;
+                  const QRectF r = mm->canvasBoundingRect();
+                  if (!view.intersects(r))
+                        continue;
+                  // distance from the view's centre, 0 inside the measure
+                  const qreal dx = qMax(qMax(r.left() - centre.x(), centre.x() - r.right()), 0.0);
+                  const qreal dy = qMax(qMax(r.top() - centre.y(), centre.y() - r.bottom()), 0.0);
+                  const qreal d  = dx * dx + dy * dy;
+                  if (!m || d < best) {
+                        m = mm;
+                        best = d;
+                        }
+                  }
+            }
+      if (!m)
+            return a;
+
+      const System* sys = m->system();
+      if (staffIdx < 0 || staffIdx >= int(sys->staves()->size()) || !sys->staff(staffIdx)->show())
+            staffIdx = nearestShownStaff(sys, -1, centre.y());
+      a.tick     = m->tick();
+      a.staffIdx = staffIdx;
+      a.screenY  = sys->staffCanvasYpage(staffIdx) * physicalZoomLevel() + yoffset();
+      return a;
+      }
+
+//---------------------------------------------------------
+//   showViewAnchor
+//    centre the anchor's measure horizontally and put its staff
+//    at the anchor's height, within the score's scroll limits
+//---------------------------------------------------------
+
+void ScoreView::showViewAnchor(const ViewAnchor& a)
+      {
+      if (!a.valid() || !score() || score()->pages().empty())
+            return;
+      const Measure* m = score()->tick2measureMM(a.tick);
+      if (!m || !m->system())
+            return;
+      const System* sys = m->system();
+      int staffIdx = a.staffIdx;
+      if (staffIdx >= int(sys->staves()->size()) || !sys->staff(staffIdx)->show())
+            staffIdx = nearestShownStaff(sys, staffIdx);
+
+      const qreal zoom = physicalZoomLevel();
+      qreal x = width() * 0.5 - m->canvasBoundingRect().center().x() * zoom;
+      qreal y = a.screenY - sys->staffCanvasYpage(staffIdx) * zoom;
+
+      if (score()->lineMode()) {
+            // as adjustCanvasPosition: no empty space left of the score or right of its end
+            const qreal scoreEnd = score()->pages().front()->width() * zoom + x;
+            if (x > thinPadding)
+                  x = thinPadding;
+            else if (scoreEnd < width())
+                  x += width() - scoreEnd;
+            // the score's top stays under the bar ruler (pageTop) unless the score is taller than the view
+            const qreal top = BarRuler::height(this);
+            const qreal scoreHeight = score()->pages().front()->height() * zoom;
+            if (top + scoreHeight <= height())
+                  y = top;
+            else
+                  y = qBound(height() - scoreHeight, y, top);
+            setOffset(x, y);
+            }
+      else
+            setConstrainedOffset(x, y);
       update();
       }
 
@@ -5402,11 +5607,28 @@ bool ScoreView::searchRehearsalMark(const QString& s)
 
 //---------------------------------------------------------
 //   gotoMeasure
+//    selects the measure's first chord or rest: on preferStaff when it has one (its 4 voices; "rewind": the staff
+//    selected, so the selection and the automation lanes stay on that part; the owner, 2026-10-12: rewinding moved the
+//    lanes from the Celli to Violins 1), else top-down as in 3.6
 //---------------------------------------------------------
 
-void ScoreView::gotoMeasure(Measure* measure)
+void ScoreView::gotoMeasure(Measure* measure, int preferStaff)
       {
       adjustCanvasPosition(measure, state != ViewState::NORMAL);
+      if (preferStaff >= 0 && preferStaff < _score->nstaves()) {
+            for (Segment* segment = measure->first(SegmentType::ChordRest); segment; segment = segment->next(SegmentType::ChordRest)) {
+                  for (int track = preferStaff * VOICES; track < (preferStaff + 1) * VOICES; ++track) {
+                        Element* el = segment->element(track);
+                        if (!el || !el->isChordRest())
+                              continue;
+                        Element* e = el->isChord() ? static_cast<Element*>(toChord(el)->upNote()) : el;
+                        _score->select(e, SelectType::SINGLE, 0);
+                        _score->setUpdateAll();
+                        _score->update();
+                        return;
+                        }
+                  }
+            }
       int tracks = _score->nstaves() * VOICES;
       for (Segment* segment = measure->first(); segment; segment = segment->next()) {
             if (segment->segmentType() != SegmentType::ChordRest)

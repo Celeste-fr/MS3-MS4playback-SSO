@@ -25,12 +25,17 @@
 #include "libmscore/pos.h"
 #include "libmscore/property.h"
 
+#include <map>
+#include <utility>
+#include <vector>
+
 namespace Ms {
 
 class ChordRest;
 class Rest;
 class Element;
 class Page;
+class Part;
 class XmlWriter;
 class Note;
 class Lasso;
@@ -150,6 +155,20 @@ struct ScoreViewState {
             yOffset = y;
             }
 };
+
+//---------------------------------------------------------
+//   ViewAnchor
+//    what a layout mode switch keeps in place (ScoreView::viewAnchor):
+//    a measure, centred horizontally, and one of its staves
+//    at the same height on the screen
+//---------------------------------------------------------
+
+struct ViewAnchor {
+      Fraction tick { -1, 1 };      // the measure's tick; -1: none
+      int staffIdx  { 0 };
+      qreal screenY { 0.0 };        // the staff's top line, in pixels from the view's top
+      bool valid() const { return tick >= Fraction(0, 1); }
+      };
 
 //---------------------------------------------------------
 //   ScoreView
@@ -313,6 +332,13 @@ class ScoreView : public QWidget, public MuseScoreView {
       void genPropertyMenuText(Element* e, QMenu* popup);
       void elementPropertyAction(const QString&, Element* e);
       void paintPageBorder(QPainter& p, Page* page);
+      // the Leading lanes' bands behind the music (leadinglane.h; view only): the page's, in page coordinates; the bands
+      // cached by the metaTag's text
+      void paintLeadingBands(QPainter& p, Page* page);
+      QString _leadingTag;
+      std::map<const Part*, std::vector<std::pair<int, int>>> _leadingBands;
+      qint64 _leadingPaperKey { 0 };
+      QColor _leadingPaper;
       bool dropCanvas(Element*);
       void editCmd(const QString&);
       void setLoopCursor(PositionCursor* curLoop, const Fraction& tick, bool isInPos);
@@ -470,6 +496,8 @@ class ScoreView : public QWidget, public MuseScoreView {
       void pagePrev();
       void pageTop();
       void pageEnd();
+      ViewAnchor viewAnchor() const;
+      void showViewAnchor(const ViewAnchor&);
       QPointF toLogical(const QPoint& p) const   { return imatrix.map(QPointF(p)); }
       QPointF toPhysical(const QPointF& p) const {return _matrix.map(p); }
       QRectF toLogical(const QRectF& r) const    { return imatrix.mapRect(r); }
@@ -480,7 +508,7 @@ class ScoreView : public QWidget, public MuseScoreView {
       bool searchMeasure(int i);
       bool searchPage(int i);
       bool searchRehearsalMark(const QString& s);
-      void gotoMeasure(Measure*);
+      void gotoMeasure(Measure*, int preferStaff = -1);     // preferStaff: select its first chord or rest
       void setFocusRect();
       void changeVoice(int voice);
       virtual void drawBackground(QPainter* p, const QRectF& r) const override;

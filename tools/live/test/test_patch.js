@@ -99,9 +99,19 @@ function receive(id, inlet, v) {
                   if (inlet === 0 && list[0] === "bang")
                         emit(id, 0, songPhase);
                   return;
-            case "peek~":                       // (the ring the script fills: the model's)
-                  if (inlet === 0)
-                        emit(id, 0, ring[Math.round(list[0])] || 0);
+            case "peek~":                       // (the rings the script fills: the model's; ---mslt by channel)
+                  if (inlet === 0) {
+                        if (/mslt/.test(args[0]))
+                              emit(id, 0, (tring[args[1] || 1] || {})[Math.round(list[0])] || 0);
+                        else
+                              emit(id, 0, ring[Math.round(list[0])] || 0);
+                        }
+                  return;
+            case "pipe":                        // (pipe 0 0 0: two items, the delay in the right inlet; the model's clock)
+                  if (inlet === 2)
+                        s.delay = list[0];
+                  else if (inlet === 0)
+                        queue.push({ t: clock + (s.delay || 0), id: id, list: list.slice(), seq: seq++ });
                   return;
             case "unpack":
                   for (let k = Math.min(list.length, args.length) - 1; k >= 0; --k)
@@ -202,6 +212,43 @@ function receive(id, inlet, v) {
 
 let songPhase = 0;
 const ring = {};
+const tring = { 1: {}, 2: {} };                 // [buffer~ ---mslt]: channel -> cell -> code
+let clock = 0, seq = 0;
+const queue = [];                               // the pipes' events to come
+// the pipes' events up to time t, in time order (then in the order they went in)
+function fireUntil(t, out) {
+      for (;;) {
+            let k = -1;
+            for (let i = 0; i < queue.length; ++i)
+                  if (queue[i].t <= t && (k < 0 || queue[i].t < queue[k].t || (queue[i].t === queue[k].t && queue[i].seq < queue[k].seq)))
+                        k = i;
+            if (k < 0)
+                  return;
+            const e = queue.splice(k, 1)[0];
+            clock = e.t;
+            midiOut.length = 0;
+            emit(e.id, 1, e.list[1]);
+            emit(e.id, 0, e.list[0]);
+            if (midiOut.length)
+                  out.push([clock, midiOut.slice()]);
+            }
+      }
+// messages at times (ms) and song beats as the patcher sees them -> [time, bytes] as they leave
+function playTimed(events) {
+      const out = [];
+      for (const ev of events.slice().sort((a, b) => a.t - b.t)) {
+            fireUntil(ev.t, out);
+            clock = ev.t;
+            songPhase = ev.beat * 480 / (16384 * 480);
+            midiOut.length = 0;
+            for (const x of ev.bytes)
+                  emit(midiin, 0, x);
+            if (midiOut.length)
+                  out.push([clock, midiOut.slice()]);
+            }
+      fireUntil(Infinity, out);
+      return out;
+      }
 const midiin = patcher.boxes.find((b) => b.box.text === "midiin").box.id;
 for (const b of patcher.boxes)                  // (the patcher loaded: a [loadmess] with a number says it)
       if (b.box.maxclass === "newobj" && /^loadmess \d+$/.test(b.box.text || ""))
@@ -230,10 +277,10 @@ function test(name, fn) {
             }
       }
 
-test("on a track without a MuseScore clip (the gate as loaded, \"gate 2 2\", or the script's \"gate 2\") every note passes, keys 114-127 too", () => {
+test("on a track without a MuseScore clip (the gate as loaded, \"gate 2 2\", or the script's \"gate 2\") every note passes, keys 113-127 too", () => {
       assert.ok((wires[carrierGate + ":0"] || []).some(([d]) => /^route 127 /.test(boxes[d].text)));
       const pass = () => {
-            for (let key = 114; key <= 127; ++key) {
+            for (let key = 113; key <= 127; ++key) {
                   assert.deepStrictEqual(play([0x90, key, 65]), [0x90, key, 65]);
                   assert.deepStrictEqual(play([0x90, key, 1]), [0x90, key, 1]);
                   assert.deepStrictEqual(play([0x90, key, 127]), [0x90, key, 127]);
@@ -256,7 +303,7 @@ test("on a track without a MuseScore clip (the gate as loaded, \"gate 2 2\", or 
 test("notes pass unchanged", () => {
       assert.deepStrictEqual(play([0x90, 60, 90]), [0x90, 60, 90]);
       assert.deepStrictEqual(play([0x80, 60, 0]), [0x90, 60, 0]);            // (a note-off as note-on 0)
-      assert.deepStrictEqual(play([0x90, 113, 20]), [0x90, 113, 20]);        // just below the carriers
+      assert.deepStrictEqual(play([0x90, 112, 20]), [0x90, 112, 20]);        // just below the carriers
       });
 
 test("each carrier key's note-on becomes its controller (UACC: velocity - 1; the others: the velocity, 1 as 0); its note-off goes", () => {
@@ -270,6 +317,14 @@ test("each carrier key's note-on becomes its controller (UACC: velocity - 1; the
             assert.deepStrictEqual(play([0x80, key, 64]), []);
             assert.deepStrictEqual(play([0x90, key, 0]), []);
             });
+      });
+
+test("key 113 (protocol 11) becomes CC119 (SSO's Performance speed; the velocity, 1 as 0), its note-off goes", () => {
+      assert.deepStrictEqual(play([0x90, 113, 63]), [0xb0, 119, 63]);
+      assert.deepStrictEqual(play([0x90, 113, 1]), [0xb0, 119, 0]);
+      assert.deepStrictEqual(play([0x90, 113, 126]), [0xb0, 119, 126]);
+      assert.deepStrictEqual(play([0x80, 113, 0]), []);
+      assert.deepStrictEqual(play([0x90, 113, 0]), []);
       });
 
 test("the pitch bend carriers (115 upper, 114 lower 7 bits; the velocity, 1 as 0) become one pitch bend", () => {
@@ -294,8 +349,10 @@ test("MuseScore's pitch bend carriers: the same keys (libmscore/liveclips.h)", (
       const h = fs.readFileSync(path.join(dir, "..", "..", "libmscore", "liveclips.h"), "utf8");
       assert.ok(/BEND_MSB\s*= 115;/.test(h));
       assert.ok(/BEND_LSB\s*= 114;/.test(h));
-      assert.ok(/CARRIER_LOW\s*= 114;/.test(h));
-      assert.ok(patcher.boxes.some((b) => b.box.text === "route 127 126 125 124 123 122 121 120 119 118 117 116 115 114"));
+      assert.ok(/CARRIER_LOW\s*= 113;/.test(h));
+      assert.ok(patcher.boxes.some((b) => b.box.text === "route 127 126 125 124 123 122 121 120 119 118 117 116 115 114 113"));
+      const cpp = fs.readFileSync(path.join(dir, "..", "..", "libmscore", "liveclips.cpp"), "utf8");
+      assert.ok(/EXTRA_CARRIERS\[EXTRA_CARRIER_COUNT\]\[2\] = \{ \{ 113, 119 \} \};/.test(cpp));
       });
 
 test("other messages pass: controllers, program, pressure, bend, on their channel", () => {
@@ -356,7 +413,7 @@ test("the carrier table is MuseScore's (libmscore/liveclips.cpp)", () => {
       assert.ok(m);
       assert.deepStrictEqual(m[1].split(",").map((x) => Number(x.trim())), CARRIER_CCS);
       const pre = patcher.boxes.filter((b) => /^prepend 176 /.test(b.box.text || "")).map((b) => Number(b.box.text.split(" ")[2]));
-      assert.deepStrictEqual(pre, CARRIER_CCS);
+      assert.deepStrictEqual(pre, CARRIER_CCS.concat([119]));
       });
 
 test("parameter lanes: the song position in ms (phasor~ locked to Live's transport, *~ from the script), 16 slots", () => {
@@ -462,6 +519,127 @@ test("the velocity shaper: a note-on's velocity by the ring's code at the song p
       for (const k of Object.keys(ring))
             delete ring[k];
       assert.ok(/function velShape\(v, c\)/.test(js));
+      });
+
+test("written clips: as loaded (and with \"tgate 2\") every note and controller passes at once; with a record each is delayed into MuseScore's played time", () => {
+      const v8 = patcher.boxes.find((b) => b.box.text === "v8").box.id;
+      carriers(false);
+      // as loaded: at once (the other tests too)
+      assert.deepStrictEqual(playTimed([{ t: 5, beat: 0, bytes: [0x90, 60, 90] }, { t: 6, beat: 0, bytes: [0xb0, 32, 7] }]),
+                             [[5, [0x90, 60, 90]], [6, [0xb0, 32, 7]]]);
+      // MuseScore (livetiming.h): 120 bpm (500 ms a beat), the track's notes early by 86 ms (Track Delay -86, the
+      // lookahead); note A written at beat 2 (1000 ms) to beat 3, played 914 ms to 1444.5 (its end cut by B's early
+      // start); note B written at beat 3, capped: played at 1444.5 (not 1414), to its written end, beat 4; C (a chord
+      // with D) at beat 5 early by 86 as most. Its switch (Live's Sub at the run's clip start, a unit before) goes with it
+      const { FakeLive, loadDevice } = require("./fakelive");
+      const live = new FakeLive();
+      const t = live.track("Violins 1 – Long", { playing_slot_index: -1, back_to_arranger: 0 });
+      live.thisDevice = live.device(t, "MxDeviceMidiEffect", "MuseScore Link").id;
+      const d = loadDevice(live, {}, live.thisDevice);
+      const U = 3840, L = 86;
+      const rec = ["msl-timing", 1, L, 0, L, 2, 2 * U, 3 * U, 60, 0, 30.5, 3 * U, 4 * U, 62, 30.5, L];
+      // the script's own fill: the whole record into [buffer~ ---mslt] from the song's start, and "tlast" (the index stops
+      // there: C and D, after the last exception, read its 0, the default)
+      d.bang();
+      d.message("prefix", ["001mslp"]);
+      d.message("timing", rec);
+      const buf = live.buffers["001mslt"];
+      assert.strictEqual(buf.size, 4 * 480 + 1 + 3);
+      for (const ch of [1, 2])
+            for (let i = 0; i < buf.size; ++i)
+                  if (buf.chans[ch - 1][i])
+                        tring[ch][i] = buf.chans[ch - 1][i];
+      const tlast = d.out.filter((m) => m[0] === 9 && m[1] === "tlast").pop();
+      assert.deepStrictEqual(tlast, [9, "tlast", buf.size - 1]);
+      emit(v8, 9, ["tlast", tlast[2]]);
+      emit(v8, 9, ["tgate", 1]);
+      emit(v8, 9, ["tdef", 0, L]);
+      // Live 12.4.6 (the test VM, 2026-10-12): under a Track Delay of -L ms the patcher sees the note's own song position
+      emit(v8, 9, ["tbias", 0]);              // (the script's bias: one signal vector, 0 in this model)
+      // Live sends each message L ms before its clip time (the Track Delay); the patcher sees the note's own position
+      const at = (beat, bytes) => ({ t: beat * 500 - L, beat: beat, bytes: bytes });
+      const u = 1 / U;
+      const out = playTimed([at(2, [0x90, 60, 90]), at(3 - u, [0xb0, 32, 5]), at(3, [0x80, 60, 0]), at(3, [0x90, 62, 90]),
+                             at(4, [0x80, 62, 0]), at(5, [0x90, 64, 80]), at(5, [0x90, 67, 80]), at(6, [0x80, 64, 0]),
+                             at(6, [0x80, 67, 0])]);
+      const near = (a, b) => Math.abs(a - b) < 1e-6;
+      const want = [[914, [0x90, 60, 90]], [1444.5 - 500 * u, [0xb0, 32, 5]], [1444.5, [0x90, 60, 0]], [1444.5, [0x90, 62, 90]],
+                    [2000, [0x90, 62, 0]], [2414, [0x90, 64, 80]], [2414, [0x90, 67, 80]], [3000, [0x90, 64, 0]],
+                    [3000, [0x90, 67, 0]]];
+      assert.strictEqual(out.length, want.length, JSON.stringify(out));
+      // (in time; at one time a note-off before a note-on is the same as MuseScore's order here)
+      const key = (e) => e[0].toFixed(3) + " " + e[1].join(",");
+      const got = out.map(key).sort(), exp = want.map(key).sort();
+      for (let i = 0; i < want.length; ++i)
+            assert.ok(near(Number(got[i].split(" ")[0]), Number(exp[i].split(" ")[0])) && got[i].split(" ")[1] === exp[i].split(" ")[1],
+                      got[i] + " against " + exp[i]);
+      // a session clip (the script's "tgate 2"): at once again
+      emit(v8, 9, ["tgate", 2]);
+      assert.deepStrictEqual(playTimed([{ t: 7000, beat: 14, bytes: [0x90, 60, 90] }]), [[7000, [0x90, 60, 90]]]);
+      emit(v8, 9, ["tdef", 0, 0]);
+      emit(v8, 9, ["tbias", 0]);
+      emit(v8, 9, ["tlast", 0]);
+      for (const ch of [1, 2])
+            for (const k of Object.keys(tring[ch]))
+                  delete tring[ch][k];
+      carriers(true);
+      });
+
+// (2026-10-12, Live 12.4.6 on the test VM, Export All Individual Tracks of the plain set of Whence: each phrase's first
+// note on Violins 1 / Violas - Performance, own delay 0, played with the track's default and so late by it, +48 / +83 ms.
+// The script filled a ring of codes from the song position 2 s ahead, once a second; an offline export doesn't wait for
+// it. Now the whole record is in the buffer before the song plays)
+test("written clips: every exception applies over the whole song with no work of the script while it plays (an offline export)", () => {
+      const v8 = patcher.boxes.find((b) => b.box.text === "v8").box.id;
+      carriers(false);
+      const { FakeLive, loadDevice } = require("./fakelive");
+      const live = new FakeLive();
+      const t = live.track("Violas – Performance", { playing_slot_index: -1, back_to_arranger: 0 });
+      live.thisDevice = live.device(t, "MxDeviceMidiEffect", "MuseScore Link").id;
+      const d = loadDevice(live, {}, live.thisDevice);
+      // 120 bpm; lookahead 83 ms; most note-ons 60 ms after the Track Delay's place (23 ms early), note-offs 83; three
+      // phrase-first notes (beats 2, 40, 300: 1 s, 20 s, 2.5 min) with their own note-on 0 (83 ms early: a smooth attack)
+      const U = 3840, L = 83, firsts = [2, 40, 300];
+      const rec = ["msl-timing", 1, L, 60, L, firsts.length];
+      for (const b of firsts)
+            rec.push(b * U, (b + 1) * U, 60, 0, L);
+      live.song.current_song_time = 0;
+      d.bang();
+      d.message("prefix", ["002mslp"]);
+      d.message("timing", rec);
+      const buf = live.buffers["002mslt"];
+      for (const ch of [1, 2])
+            for (let i = 0; i < buf.size; ++i)
+                  if (buf.chans[ch - 1][i])
+                        tring[ch][i] = buf.chans[ch - 1][i];
+      for (const m of d.out.filter((x) => x[0] === 9))
+            emit(v8, 9, m.slice(1));
+      // the patcher sees the note's own song position (Live 12.4.6, TIM_SEES_TRACK_DELAY false): the bias as the script sent it
+      const at = (beat, bytes) => ({ t: beat * 500 - L, beat: beat, bytes: bytes });
+      const evs = [];
+      for (const b of [1, 2, 3, 39, 40, 41, 299, 300, 301]) {
+            evs.push(at(b, [0x90, 60, 90]));
+            evs.push(at(b + 0.5, [0x80, 60, 0]));
+            }
+      emit(v8, 9, ["log", 1]);                // (the "vlog on" probe: the timing path's log too)
+      toScript.length = 0;
+      const out = playTimed(evs).filter((e) => e[1][2] > 0);
+      emit(v8, 9, ["log", 0]);
+      const want = [1, 2, 3, 39, 40, 41, 299, 300, 301].map((b) => b * 500 - L + (firsts.indexOf(b) >= 0 ? 0 : 60));
+      assert.deepStrictEqual(out.map((e) => Math.round(e[0] * 1000) / 1000), want);
+      // the log: "tlog <pitch> <phase> <delay> <velocity>", each note as the patcher read it
+      const tl = toScript.filter((m) => m[0] === "tlog" && m[4] > 0);
+      assert.deepStrictEqual(tl.map((m) => [m[1], Math.round(m[2] * 16384 * 1e4) / 1e4, m[3], m[4]]),
+                             [1, 2, 3, 39, 40, 41, 299, 300, 301].map((b) => [60, Math.round(b * 1e4) / 1e4,
+                                                                               firsts.indexOf(b) >= 0 ? 0 : 60, 90]));
+      emit(v8, 9, ["tgate", 2]);
+      emit(v8, 9, ["tdef", 0, 0]);
+      emit(v8, 9, ["tbias", 0]);
+      emit(v8, 9, ["tlast", 0]);
+      for (const ch of [1, 2])
+            for (const k of Object.keys(tring[ch]))
+                  delete tring[ch][k];
+      carriers(true);
       });
 
 test("the script's constants agree with the patcher's", () => {

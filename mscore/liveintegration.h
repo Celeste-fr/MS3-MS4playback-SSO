@@ -34,6 +34,7 @@ class QTimer;
 class QWidget;
 
 #include <map>
+#include <set>
 #include <vector>
 #include <QDateTime>
 #include "libmscore/automation.h"
@@ -57,8 +58,11 @@ bool setPlayThroughMidi(bool midi, QWidget* parent);
 QString linkedSet(const MasterScore* score, bool* autoReimport = nullptr);
 // import the set's automation into the score (undoable); report: what was and wasn't matched. A lane changed both
 // in MuseScore and in Live (Automation::conflicts) is asked about (askParent: the dialog's parent; none: MuseScore's
-// kept, reported); the dialog cancelled: nothing imported, false and the report says so
-bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report, QWidget* askParent = nullptr);
+// kept, reported); the dialog cancelled: nothing imported, false and the report says so. *unchosen: the conflicts kept as
+// MuseScore's without being asked (no dialog: the command line, the tests), by part and target (Update Live Set leaves
+// Live's value in the set for them: never overwritten without a choice)
+bool importSet(MasterScore* score, const QString& path, bool autoReimport, QString* report, QWidget* askParent = nullptr,
+               std::set<std::pair<const Part*, QString>>* unchosen = nullptr);
 // the conflict dialog: per lane MuseScore's or Live's (false: cancelled)
 bool askConflicts(QWidget* parent, const std::vector<Automation::Conflict>& conflicts, const QString& setPath,
                   const QDateTime& setTime, std::map<std::pair<const Part*, QString>, Automation::Keep>* choices);

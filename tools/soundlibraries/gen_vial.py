@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""Generate the Vial Instrumental maps (share/soundlibraries/Vial Instrumental.xml and "Vial Instrumental (Fuse).xml").
+
+    python3 tools/soundlibraries/gen_vial.py [share/soundlibraries]
+
+The owner's "SSO imitations" presets (Vial Instrumental pack, approved 2026-10-25): one Long preset per SSO instrument,
+played by the hosted Vial.vst3 (the preset's .vital file is its VST 3 state) or Vial Fuse.vst3 (the .vialfuse file, Fuse's
+mic mixer around the same preset). The presets are not in the repository: MuseScore reads them at load from Vial's data
+folder (<Files presets>: SoundLib::presetFolder, Vial's own rule).
+
+Each instrument serves the MuseScore instrument ids of its SSO equivalent, read from the generated SSO map (made by
+gen_spitfire_sso.py from its table I), so both maps match the same parts. One articulation (no switching) plays every
+technique; dynamics on CC1 (continuous), CC11 = expression at 127 (an exact gain CC11 / 127 in the presets); CC21 =
+vibrato depth (default 64, SSO's) only where the preset has it.
+
+Levels (the owner, 2026-10-26/27: a Vial part as loud as the SSO part at the same written dynamic, measured): each
+instrument's main patch carries the SSO instrument's realSteps / realSpan / realPlay, its own longLevel and SSO's
+sectionLevel / sectionLevel2 moved by the measured offset (vial_levels.json, made by vial_levels.py from Vial's sweep
+vial_cc1_curves.json against SSO's sso_cc1_curves.json / sso_winds_cc1_curves.json), so that [levels] realRange and
+sectionBalance (Recommended 2 / 2, Library default 0 / 0) play it at SSO's level: contextlevel.h, docs/PLAYBACK_SETTINGS.md
+> Vial levels. Nothing else of SSO's (calibration, onsets, mics) applies, but the SSO Long's keyLevels ([levels] evenKeys,
+2026-10-28): Vial's longLevel matches SSO's keys as SSO plays them (every semitone), the keyLevels take both to the same
+evened curve.
+"""
+import json
+import os
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, '..', '..', 'share', 'soundlibraries')
+SSO = os.path.join(OUT, 'Spitfire Symphony Orchestra.xml')
+LEVELS = os.path.join(HERE, 'vial_levels.json')
+
+# (SSO instrument, preset name, has CC21 vibrato) - the 13 presets of "SSO imitations", file names exactly
+PRESETS = [
+    ('Violins 1', 'Violins 1 - Long', True),
+    ('Violins 2', 'Violins 2 - Long', True),
+    ('Violas', 'Violas - Long', True),
+    ('Celli', 'Celli - Long', True),
+    ('Basses', 'Basses - Long', False),
+    ('Flute Solo', 'Flute Solo - Long', True),
+    ('Oboe Solo', 'Oboe Solo - Long', True),
+    ('Clarinet Solo', 'Clarinet Solo - Long', True),
+    ('Bassoon Solo', 'Bassoon Solo - Long', True),
+    ('Horn Solo', 'Horn Solo - Long', False),
+    ('Trumpet Solo', 'Trumpet Solo - Long', True),
+    ('Tenor Trombone Solo', 'Tenor Trombone Solo - Long', True),
+    ('Tuba Solo', 'Tuba Solo - Long', False),
+]
+# every technique MuseScore asks for plays the Long preset (SSO's one-articulation patches' list; ornaments - trills,
+# tremolos, falls - are left out so that MS4's note model plays them as notes)
+TECHNIQUES = 'long legato short staccatissimo spiccato tenuto marcato longmarcato pizzicato bartok collegno'
+# the two plug-ins: (map name, plug-in bundles (Windows; Linux), preset path under the data folder, extension, presetHeader)
+FLAVOURS = [
+    ('Vial Instrumental', 'Vial.vst3', 'Vial Instrumental/Presets/SSO imitations', '.vital', ''),
+    # (Fuse's header shows the name of the state's "fuse_preset", which a .vialfuse file doesn't carry)
+    ('Vial Instrumental (Fuse)', 'Vial Fuse.vst3;VialFuse.vst3', 'Fuse/Vial Instrumental/SSO imitations', '.vialfuse',
+     'fuse_preset'),
+]
+
+
+def esc(s):
+    return s.replace('&', '&amp;').replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+def sso_instruments():
+    root = ET.parse(SSO).getroot()
+    out = {}
+    for i in root.findall('Instrument'):
+        if i.get('with') is None and i.get('name') not in out:
+            # (the Long's keyLevels: [levels] evenKeys; UACC 1, the swept articulation)
+            a = dict(i.attrib)
+            long = next((x for x in i.findall('Articulation') if x.get('value') == '1'), None)
+            if long is not None and long.get('keyLevels'):
+                a['keyLevels'] = long.get('keyLevels')
+            out[i.get('name')] = (i.get('ids'), i.get('partName'), a)
+    return out
+
+
+def levels():
+    """{instrument: vial_levels.json's entry} (none without the file: the maps without levels)"""
+    if not os.path.exists(LEVELS):
+        return {}
+    return json.load(open(LEVELS, encoding='utf-8'))['instruments']
+
+
+def level_attrs(inst, sso_attrs, lv):
+    e = lv.get(inst)
+    if not e:
+        return ''
+    long = ' '.join(f'{cc}/{p}:{v:g}' for p, per in sorted(((int(p), per) for p, per in e['long'].items()))
+                    for cc, v in sorted(((int(c), v) for c, v in per.items())))
+    a = ''.join(f' {k}="{esc(sso_attrs[k])}"' for k in ('realSpan', 'realPlay', 'realSteps') if k in sso_attrs)
+    return (f' sectionLevel="{e["sectionLevel"]:g}" sectionLevel2="{e["sectionLevel2"]:g}"' + a
+            + f' longLevel="{long}"')
+
+
+def write(name, plugins, folder, ext, header, sso, lv):
+    o = ['<?xml version="1.0" encoding="UTF-8"?>',
+         '<!-- Generated by tools/soundlibraries/gen_vial.py (instrument ids from the SSO map). Do not edit by hand: change',
+         '     the generator and run it again. -->',
+         '<SoundLibrary name="%s">' % esc(name),
+         '  <!-- one sound per patch: no articulation switching -->',
+         '  <Switch type="none"/>',
+         '  <!-- CC1 = the preset\'s dynamics (continuous); CC11 = expression, gain CC11 / 127, sent at 127 -->',
+         '  <Dynamics cc="1" expression="127"/>',
+         '  <Plugin files="%s"/>' % esc(plugins),
+         '  <!-- Vial\'s data folder (its own rule: Vial.config\'s data_directory, else official Vital\'s, else Documents/Vial',
+         '       on Windows, ~/.local/share/vital elsewhere); View > Sound Library... > Library folder... or MS_PRESET_FOLDER',
+         '       override it. Each patch\'s state is its preset file\'s bytes -->',
+         '  <Files presets="Vial" presetsHome=".local/share/vital" presetConfig="vial/Vial.config;vital/Vital.config"'
+         ' presetKey="data_directory"%s/>' % (' presetHeader="%s"' % header if header else '')]
+    for inst, preset, vibrato in PRESETS:
+        ids, part, sso_attrs = sso[inst]
+        attrs = 'name="%s" ids="%s"' % (esc(inst), esc(ids))
+        if part:
+            attrs += ' partName="%s"' % esc(part)
+        attrs += ' preset="%s"' % esc('%s/%s%s' % (folder, preset, ext))
+        attrs += level_attrs(inst, sso_attrs, lv)
+        o.append('  <Instrument %s>' % attrs)
+        # (with levels: the SSO Long's keyLevels, [levels] evenKeys: Vial's longLevel matches SSO's own keys, this takes
+        # both to SSO's evened curve)
+        keys = ' keyLevels="%s"' % sso_attrs['keyLevels'] if lv.get(inst) and 'keyLevels' in sso_attrs else ''
+        o.append('    <Articulation name="Long" value="1" techniques="%s"%s/>' % (TECHNIQUES, keys))
+        if vibrato:
+            o.append('    <Controller id="vibrato" name="Vibrato (CC21)" cc="21" default="64">')
+            o.append('      <Text match="(senza|non) vib(\\.|rato)?" value="0"/>')
+            o.append('      <Text match="molto vib(\\.|rato)?" value="127"/>')
+            o.append('      <Text match="(ord\\.?|ordinario|norm\\.?|vib\\.|vibrato)" value="64"/>')
+            o.append('    </Controller>')
+        o.append('  </Instrument>')
+    o.append('</SoundLibrary>')
+    path = os.path.join(OUT, name + '.xml')
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(o) + '\n')
+    print('wrote', path)
+
+
+def main():
+    sso = sso_instruments()
+    missing = [i for i, _, _ in PRESETS if i not in sso]
+    if missing:
+        sys.exit('not in the SSO map: ' + ', '.join(missing))
+    lv = levels()
+    for name, plugins, folder, ext, header in FLAVOURS:
+        # (Fuse at its default mix renders the .vital's level: the same numbers)
+        write(name, plugins, folder, ext, header, sso, lv)
+
+
+if __name__ == '__main__':
+    main()

@@ -72,6 +72,7 @@
 #include "libmscore/timesig.h"
 #include "libmscore/tuplet.h"
 #include "libmscore/undo.h"
+#include "libmscore/lagprobe.h"
 
 namespace Ms {
 
@@ -215,6 +216,7 @@ const QList<Element*>* Inspector::el() const
 
 void Inspector::update(Score* s)
       {
+      LagProbe::Scope probe("Inspector::update");
       if (_inspectorEdit)     // if within an inspector-originated edit
             return;
       _score = s;

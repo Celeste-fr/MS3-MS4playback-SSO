@@ -34,6 +34,23 @@ class InspectorNote : public InspectorElementBase {
 
       void block(bool);
       void setTuningParts(const Note*);
+      std::vector<Note*> selectedNotes() const;
+      void setTechniques();
+      void setPerformanceShown();
+      QMetaObject::Connection _whenWarmed;      // (setPerformanceShown waits for the edit's renders: editwarmup.h)
+      void techniqueChosen(int index);
+      void setEvenShown();
+
+      // Note › Even level (Note::evenLevel, evenlevels.h): made here; its state (current, stale) below it
+      QLabel* evenLabel { nullptr };
+      QDoubleSpinBox* evenLevel { nullptr };
+      ResetButton* resetEvenLevel { nullptr };
+      QLabel* evenState { nullptr };
+
+      // Note › Technique (the note's own, Note::libraryTechnique): made here, its items the selected notes' own
+      QLabel* techniqueLabel { nullptr };
+      QComboBox* technique { nullptr };
+      ResetButton* resetTechnique { nullptr };
 
    private slots:
       void noteHeadSchemeChanged(int val);
@@ -49,6 +66,11 @@ class InspectorNote : public InspectorElementBase {
    public:
       InspectorNote(QWidget* parent);
       virtual void setElement() override;
+      // the play panel's rows below Velocity, one row each in this order: Technique, the .ui's Performance attack /
+      // transition and Start / End from Live, then Even level and its state (the .ui has no Technique row: the rows
+      // after Velocity move down one; tst_liveintegration::inspectorNoteRows checks no two share a cell)
+      static void placePlayRows(Ui::InspectorNote& n, QWidget* techniqueLabel, QWidget* technique, QWidget* resetTechnique,
+                                QWidget* evenLabel, QWidget* evenLevel, QWidget* resetEvenLevel, QWidget* evenState);
       };
 
 

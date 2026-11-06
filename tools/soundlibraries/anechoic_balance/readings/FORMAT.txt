@@ -1,0 +1,29 @@
+Dynamics transcription format (one TSV file per piece/movement). Lines starting with # are comments.
+
+Header comments (required):
+# piece: ...
+# edition: ... (IMSLP file, pdf path)
+# pages: pdf page -> printed bars on it, e.g. "# page 99: bars 44-52"
+# time signature(s) and the beat unit used for beat numbers, with the bar where each changes
+# any doubts
+
+Rows: part <TAB> type <TAB> start <TAB> end <TAB> value <TAB> comment
+  part   one of the part IDs given in your task (one per player/recorded part; if a staff holds two players,
+         write a row for each player that plays, using "a2"/"zu 2"/"1."/"2." markings to decide who plays)
+  start, end  bar:beat (bar as printed/counted from the movement start, beat 1-based in the stated beat unit,
+         decimals allowed, e.g. 12:2.5). "end" empty for point events.
+  type:
+    notes   a span where the part has notes (start = first note's bar:beat, end = the end of the last note
+            before a rest of one whole bar or longer). Several rows per part.
+    dyn     a dynamic marking at a point: value pp, p, mp, mf, f, ff, fff, ppp (also "più f", "pp sempre" etc. as written)
+    accent  a point accent: value sf, sfz, fz, fp, sfp, rf, >, ^ (as written)
+    cresc   a crescendo: a hairpin "<" (start-end as drawn) or the text cresc./crescendo (start = text, end =
+            where the next dynamic arrives or the text's dashes end); value "hairpin" or "text"
+    dim     the same for > hairpins / dim. / decresc.
+    text    other expressive text that might change the level: dolce, espress., marcato, con sord., gestopft,
+            Schalltrichter auf, pizz., arco, trem., col legno, sul tasto, a2, solo, ... value = the text
+  comment free text, e.g. "uncertain: page dark", "dynamic placed between staves, assumed for both"
+
+Rules: transcribe only what is printed; do not infer dynamics a player "would" play. If a dynamic in a shared
+staff is printed once for two players, give it to each player who plays. Mark every reading you are unsure of
+with "uncertain" in the comment. Cover every bar of the requested range for every part.

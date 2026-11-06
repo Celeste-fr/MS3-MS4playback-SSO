@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 #include <tuple>
 
 #include "click.h"
@@ -28,8 +29,12 @@
 #include "playpanel.h"
 #include "preferences.h"
 #include "scoreview.h"
+#include <functional>
+#include <memory>
 #include "seq.h"
+#include "libmscore/lagprobe.h"
 #include "libmscore/partplayback.h"
+#include "libmscore/playbacksettings.h"
 #include "synthcontrol.h"
 
 #include "audio/midi/msynthesizer.h"
@@ -54,6 +59,8 @@
 #include "libmscore/staff.h"
 #include "libmscore/soundlibrary.h"
 #include "soundlibraryhost.h"
+#include "evenautomeasurer.h"
+#include "libmscore/playstart.h"
 #include "liveclips.h"
 #include "livemidiout.h"
 #include "libmscore/tempo.h"
@@ -252,6 +259,20 @@ Seq::Seq()
       connect(this, SIGNAL(tempoChanged()),this,SLOT(handleTimeSigTempoChanged()));
 
       initialMillisecondTimestampWithLatency = 0;
+
+      // test knobs: MS_PLAY_CAPTURE (what is heard playing, into memory: playcapture.h), MS_AUDIO_STALL "<s>:<ms>"
+      // (processDirect sleeps ms once when playback reaches s seconds: a stand-in for a CPU or memory hog)
+      if (!qEnvironmentVariable("MS_PLAY_CAPTURE").isEmpty()) {
+            const double seconds = qEnvironmentVariableIsSet("MS_PLAY_CAPTURE_SECONDS")
+                                   ? qEnvironmentVariable("MS_PLAY_CAPTURE_SECONDS").toDouble() : 300.0;
+            _capture = new AudioCapture;
+            _capture->data.assign(size_t(std::max(1.0, seconds) * 192000) * 2, 0.f);
+            }
+      const QStringList stall = qEnvironmentVariable("MS_AUDIO_STALL").split(':');
+      if (stall.size() == 2) {
+            _stallAt = stall[0].toDouble();
+            _stallMs = stall[1].toInt();
+            }
       }
 
 //---------------------------------------------------------
@@ -283,6 +304,7 @@ void Seq::setScoreView(ScoreView* v)
       cs = cv ? cv->score()->masterScore() : 0;
       midi = MidiRenderer(cs);
       midi.setMinChunkSize(10);
+      _preview = NotePreview::Previewer();      // (a click's renderer: never one of a score closed since)
 
       if (!heartBeatTimer->isActive())
             heartBeatTimer->start(20);    // msec
@@ -355,7 +377,12 @@ bool Seq::init(bool hotPlug)
       // callback can start running
       syncIndependentMetronomeRealtimeConfig();
 
+      // (before the driver starts: no callback renders before the producer does)
+      if (_driver)
+            startRenderAhead();
       if (!_driver || !_driver->start(hotPlug)) {
+            _ra.stop();
+            _raMode = 0;
             qDebug("Cannot start I/O");
             running = false;
             return false;
@@ -380,8 +407,11 @@ void Seq::exit()
             if (MScore::debugMode)
                   qDebug("Stop I/O");
             stopWait();
+            _raMode = 2;            // (the callbacks until the driver is gone: silence)
             delete _driver;
             _driver = 0;
+            _ra.stop();
+            _raMode = 0;
             }
       }
 
@@ -424,6 +454,7 @@ bool Seq::canStart()
 
 void Seq::start()
       {
+      LagProbe::Scope probe("Seq::start");
       if (!_driver) {
             qDebug("No driver!");
             return;
@@ -434,15 +465,35 @@ void Seq::start()
 
       mscore->moveControlCursor();
 
-      // the sound library's plug-ins for this score (loaded once, then kept)
+      // the sound library's plug-ins for this score (loaded once, then kept): every one loaded, else their loading goes
+      // on in the background and Play is grayed until it is done (soundlibraryhost.h: the window never waits for them;
+      // the owner, 2026-10-24). At a loop's restart (playing) only set up again, as before
       QString libraryError;
-      if (!SoundLibraryHost::instance()->sync(cs, &libraryError))
+      const bool libraryReady = SoundLibraryHost::instance()->readyToPlay(cs, &libraryError);
+      if (!libraryError.isEmpty())
             mscore->showMessage(libraryError, 10000);
+      if (!libraryReady && state != Transport::PLAY) {
+            // (the view went to PLAY to get here: back, once out of its changeState)
+            QTimer::singleShot(0, this, [this]() {
+                  if (state != Transport::STOP)
+                        return;
+                  QAction* play = getAction("play");
+                  if (play && play->isChecked())
+                        play->setChecked(false);
+                  if (cv && cv->mscoreState() == STATE_PLAY)
+                        cv->changeState(ViewState::NORMAL);
+                  SoundLibraryHost::updatePlayAction();
+                  });
+            return;
+            }
       // the Mixer's values on the library parts' MIDI routes, all of them again (a DAW or synth
       // may have been reset since)
       _libOutsStale = true;
       _libSent.clear();
       libraryMixerChanged();
+      // even levels (evenautomeasurer.h): an edit not looked at yet, now (values from the cache are written at once)
+      if (state != Transport::PLAY)
+            EvenAutoMeasurer::instance()->prepare(cs);
 
       allowBackgroundRendering = true;
       // (a change made outside a command marks the playlist dirty after its endCmd, which sends no playlistChanged:
@@ -455,6 +506,19 @@ void Seq::start()
             cs->masterScore()->setPlaylistClean();
             }
       collectEvents(getPlayStartUtick());
+      // a note being measured in what is about to play (from the transport's start, the pre-roll of early notes
+      // included, to the loop's end, else the score's): playback waits for its measured value, then starts here again
+      // (the owner, 2026-10-13: "I'd rather just wait"). Never while playing (a loop's restart)
+      if (state != Transport::PLAY) {
+            const int from = PlayStart(cs, events, getPlayStartUtick()).start();
+            const double to = mscore->loop() ? cs->utick2utime(cs->repeatList().tick2utick(cs->loopOutTick().ticks())) : 1e9;
+            if (EvenAutoMeasurer::instance()->holdPlay(cs, cs->utick2utime(from), to, [this]() {
+                  QAction* play = getAction("play");
+                  if (cs && state == Transport::STOP && play && play->isChecked())
+                        start();
+                  }))
+                  return;
+            }
       if (cs->playMode() == PlayMode::AUDIO) {
             if (!oggInit) {
                   vorbisData.pos  = 0;
@@ -486,6 +550,7 @@ void Seq::start()
 
 void Seq::stop()
       {
+      EvenAutoMeasurer::instance()->cancelHold();     // (Stop while playback waits for even levels)
       const bool seqStopped = (state == Transport::STOP);
       if (!seqStopped)
             LiveIntegration::LiveClipsLink::instance()->stopRequested();     // (Live plays the score: Live stops too)
@@ -507,8 +572,11 @@ void Seq::stop()
             }
       if (!_driver)
             return;
+      if (state == Transport::PLAY && renderingAhead())
+            _raUserStop = true;     // (render ahead: what was rendered ahead isn't heard, the stop is)
       if (!preferences.getBool(PREF_IO_JACK_USEJACKTRANSPORT) || (preferences.getBool(PREF_IO_JACK_USEJACKTRANSPORT) && _driver->getState() == Transport::PLAY))
             stopTransport();
+      _ra.poke();
       if (cv)
             cv->setCursorOn(false);
       if (midiRenderFuture.isRunning())
@@ -562,6 +630,7 @@ void MuseScore::seqStarted()
 void MuseScore::seqStopped()
       {
       cv->setCursorOn(false);
+      SoundLibraryHost::updatePlayAction();     // (stopped while the score's patches still load: Play grayed now)
       }
 
 //---------------------------------------------------------
@@ -593,7 +662,8 @@ void Seq::guiStop()
       if (!cs)
             return;
 
-      int utick = cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate));
+      logLateAudio();
+      int utick = cs->utime2utick(qreal(renderingAhead() ? _ra.heardFrame() : playFrame) / qreal(MScore::sampleRate));
       if (_playStart.preRoll(utick))      // (stopped in the pre-roll: where it was to start)
             utick = _playStart.utick();
       int tck = cs->repeatList().utick2tick(utick);
@@ -621,10 +691,14 @@ void Seq::seqMessage(int msg, int arg)
                   break;
                   }
             case '4':   // Restart the playback at the end of the score
+                  _continuousSeek = true;       // (render ahead: the score's end still to be heard)
                   loopStart();
+                  _continuousSeek = false;
                   break;
             case '3':   // Loop restart while playing
+                  _continuousSeek = true;       // (render ahead: the loop's end still to be heard)
                   seek(cs->repeatList().tick2utick(cs->loopInTick().ticks()));
+                  _continuousSeek = false;
                   break;
             case '2':
                   guiStop();
@@ -692,7 +766,8 @@ void Seq::playEvent(const NPlayEvent& event, unsigned framePos)
                   }
             }
       else if (type == ME_CONTROLLER || type == ME_PITCHBEND || type == ME_AFTERTOUCH || type == ME_POLYAFTER
-               || type == ME_PARAMETER)            // (automation of a hosted plug-in's parameter)
+               || type == ME_PARAMETER             // (automation of a hosted plug-in's parameter)
+               || type == ME_LOWCUT)               // ([levels] lowCut 2: a route's following low cut, Vst3Synth's)
             putEvent(event, framePos);
       }
 
@@ -721,8 +796,6 @@ void Seq::recomputeMaxMidiOutPort()
 
 void Seq::processMessages()
       {
-      if (_libLiveClear.exchange(false))
-            _libLive.clear();
       if (_swapState.load() == 1)
             swapEventsRT();
       for (;;) {
@@ -751,11 +824,10 @@ void Seq::processMessages()
                   case SeqMsgId::PLAY:
                         putEvent(msg.event);
                         break;
-                  case SeqMsgId::LIBRARY_CC_LIVE:
-                        _libLive.set(msg.event.extPort() * 16 + msg.event.extChannel(), msg.event.controller(), msg.intVal, msg.intVal2);
-                        break;
                   case SeqMsgId::SEEK:
                         setPos(msg.intVal);
+                        if (!msg.intVal2 && _raProducing)
+                              _raBlock.flush = true;  // (render ahead: what was rendered from the old position isn't heard)
                         break;
                   case SeqMsgId::ALL_NOTE_OFF:
                         {
@@ -1112,9 +1184,15 @@ void Seq::addCountInClicks()
 //    methods like semaphores can also not be used.
 //-------------------------------------------------------------------
 
-void Seq::process(unsigned framesPerPeriod, float* buffer)
+void Seq::processDirect(unsigned framesPerPeriod, float* buffer)
       {
       _periodStart = std::chrono::steady_clock::now();
+      struct AudioProbe {                 // (MS_LAG_PROBE: the callback's time against its period)
+            qint64 start { -1 };
+            qint64 period { 0 };
+            AudioProbe(unsigned frames) { if (LagProbe::on()) { start = LagProbe::nowNs(); period = qint64(1e9 * frames / MScore::sampleRate); } }
+            ~AudioProbe() { if (start >= 0) LagProbe::addAudio(LagProbe::nowNs() - start, period); }
+            } audioProbe(framesPerPeriod);
       unsigned framesRemain = framesPerPeriod; // the number of frames remaining to be processed by this call to Seq::process
       Transport driverState = _driver->getState();
       // Checking for the reposition from JACK Transport
@@ -1150,6 +1228,9 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   // External synth can have wrong values, for example
                   // if we switch between scores
                   initInstruments(true);
+                  // the library's plug-ins see a transport start with every playback (round robins reset on it)
+                  if (_synti)
+                        _synti->playbackStarted();
                   // Need to change state after calling collectEvents()
                   state = Transport::PLAY;
                   if (mscore->countIn() && cs->playMode() == PlayMode::SYNTHESIZER) {
@@ -1157,11 +1238,19 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                         inCountIn = true;
                         }
                   syncStartPending = true;      // (MIDI sync out: when the score plays)
-                  emit toGui('1');
+                  // render ahead: this play leads unless something leaves MuseScore with its own timing (MIDI out, MIDI
+                  // sync, Live, a Live track, JACK), which the lead would send early
+                  _raEligible = _raProducing && !_driver->canOutputMidi() && !_driver->canOutputSync() && !_liveClips
+                                && !_liveTrack.load() && !cachedPrefs.useJackAudio && !cachedPrefs.useJackMidi
+                                && !cachedPrefs.useJackTransport;
+                  _raUserStop = false;
+                  toGuiRT('1');
                   }
             // Got a message from JACK Transport panel: Stop
             else if (state == Transport::PLAY && driverState == Transport::STOP) {
                   state = Transport::STOP;
+                  if (_raUserStop.exchange(false) && _raProducing)
+                        _raBlock.flush = true;  // (Stop pressed: what was rendered ahead isn't heard, the stop is)
                   syncStartPending = false;
                   syncClock.stop(0, [this](const MidiSync::Message& m) { _driver->putSync(m.status, m.value, 0); });
                   // Muting all notes
@@ -1170,15 +1259,16 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                   if (playPos == eventsEnd) {
                         if (mscore->loop()) {
                               qDebug("Seq.cpp - Process - Loop whole score. playPos = %d, cs->pos() = %d", playPos->first, cs->pos().ticks());
+                              _raBlock.hold = true;   // (render ahead: nothing to queue until the GUI restarts it)
                               emit toGui('4');
                               return;
                               }
                         else {
-                              emit toGui('2');
+                              toGuiRT('2');
                               }
                         }
                   else {
-                     emit toGui('0');
+                     toGuiRT('0');
                      }
                   }
             else if (state != driverState)
@@ -1190,6 +1280,13 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
       float* p = buffer;
 
       processMessages();
+      _raBlock.frame = playFrame;
+
+      // MS_AUDIO_STALL: a test's stall, once, where playback reaches its time (here: on whichever thread renders)
+      if (_stallAt >= 0 && !_stalled && state == Transport::PLAY && playFrame >= _stallAt * MScore::sampleRate) {
+            _stalled = true;
+            QThread::msleep(unsigned(std::max(0, _stallMs)));
+            }
 
       updateIndependentMetronomeFollowState();
 
@@ -1285,6 +1382,7 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
                                                       }
                                                 }
                                           else {
+                                                _raBlock.hold = true;   // (render ahead: until the GUI's seek)
                                                 emit toGui('3'); // calls loopStart()
                                                 }
                                           // Exit this function to avoid segmentation fault in Scoreview
@@ -1471,6 +1569,184 @@ void Seq::process(unsigned framesPerPeriod, float* buffer)
       }
 
 //---------------------------------------------------------
+//   process
+//    the audio callback (every driver). Render ahead off: processDirect, as before. On: the finished audio the
+//    producer thread rendered (RenderAhead::process; stopped, the block rendered for this callback at once). Either
+//    way, late audio is counted while playback is heard (countLate)
+//---------------------------------------------------------
+
+void Seq::process(unsigned framesPerPeriod, float* buffer)
+      {
+      const std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+      const int mode = _raMode.load(std::memory_order_acquire);
+      if (mode == 1) {
+            const bool underrun = _ra.process(framesPerPeriod, buffer, _capture);
+            countLate(framesPerPeriod, t0, underrun, _ra.heardPlaying());
+            return;
+            }
+      if (mode == 2) {
+            memset(buffer, 0, sizeof(float) * framesPerPeriod * 2);
+            return;
+            }
+      processDirect(framesPerPeriod, buffer);
+      const bool heard = state == Transport::PLAY;
+      if (_capture && heard)
+            _capture->append(buffer, framesPerPeriod);
+      countLate(framesPerPeriod, t0, false, heard);
+      }
+
+//---------------------------------------------------------
+//   countLate
+//    (the callback) a callback whose audio was late: it took longer than its frames last, the render-ahead buffer ran
+//    out, or the device said it ran out (PortAudio's output underflow). Each counts once. The warning: three late
+//    callbacks within one second, once per play (Playback couldn't keep up, seq.h)
+//---------------------------------------------------------
+
+void Seq::countLate(unsigned frames, std::chrono::steady_clock::time_point t0, bool underrun, bool heard)
+      {
+      const bool deviceUnderflow = _deviceUnderflow.exchange(false, std::memory_order_acq_rel);
+      if (heard && !_late.heard) {        // (a play begins to be heard: its own counts)
+            _late.blocks = 0;
+            _late.overBudget = 0;
+            _late.underruns = 0;
+            _late.deviceUnderflows = 0;
+            _late.warned = false;
+            _late.n = 0;
+            }
+      _late.heard = heard;
+      if (!heard)
+            return;
+      const std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+      const double budgetMs = 1000.0 * frames / std::max(1, MScore::sampleRate);
+      _late.budgetMs = budgetMs;
+      const bool overBudget = std::chrono::duration<double, std::milli>(t1 - t0).count() > budgetMs;
+      if (!overBudget && !underrun && !deviceUnderflow)
+            return;
+      _late.blocks.fetch_add(1, std::memory_order_relaxed);
+      if (overBudget)
+            _late.overBudget.fetch_add(1, std::memory_order_relaxed);
+      if (underrun)
+            _late.underruns.fetch_add(1, std::memory_order_relaxed);
+      if (deviceUnderflow)
+            _late.deviceUnderflows.fetch_add(1, std::memory_order_relaxed);
+      _late.times[_late.n % 3] = t1;
+      ++_late.n;
+      if (!_late.warned && _late.n >= 3 && t1 - _late.times[_late.n % 3] <= std::chrono::seconds(1)) {
+            _late.warned = true;
+            _late.warn.store(true, std::memory_order_release);
+            }
+      }
+
+//---------------------------------------------------------
+//   lateSummary / logLateAudio
+//    (GUI thread) this play's late audio, as one line; in "load times.log" at the stop when there was any
+//---------------------------------------------------------
+
+QString Seq::lateSummary() const
+      {
+      return QString("%1 late audio block(s) (over budget %2, render-ahead underruns %3, device underflows %4); "
+                     "render ahead %5 ms, block %6 ms%7")
+             .arg(_late.blocks.load()).arg(_late.overBudget.load()).arg(_late.underruns.load()).arg(_late.deviceUnderflows.load())
+             .arg(renderAheadMs()).arg(_late.budgetMs, 0, 'f', 2)
+             .arg(renderingAhead() && !_raEligible ? QString(" (this play without a lead: MIDI out, sync, Live or JACK)") : QString());
+      }
+
+void Seq::logLateAudio()
+      {
+      if (_late.blocks.load() == 0)
+            return;
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (library)
+            SoundLibraryHost::logLoadTime(*library, "Playback: " + lateSummary());
+      qDebug("Playback: %s", qPrintable(lateSummary()));
+      }
+
+//---------------------------------------------------------
+//   startRenderAhead
+//    [soundlibrary] renderAhead ms (MS_RENDER_AHEAD wins), read when the audio device starts: > 0 the producer thread
+//    renders every block from now on (Seq::produceAhead), 0 the callback does (processDirect), as before
+//---------------------------------------------------------
+
+void Seq::startRenderAhead()
+      {
+      _ra.stop();
+      _raMode = 0;
+      const QString env = qEnvironmentVariable("MS_RENDER_AHEAD");
+      const int ms = !env.isEmpty() ? env.toInt() : qRound(Playback::value("soundlibrary/renderAhead"));
+      if (ms <= 0)
+            return;
+      const bool ok = _ra.start(ms, MScore::sampleRate,
+                                [this](unsigned frames, float* out) { return produceAhead(frames, out); },
+                                [this]() {
+                                      return !toSeq.empty() || _swapState.load() == 1 || _raUserStop.load()
+                                             || (_driver && _driver->getState() != state);
+                                      },
+                                [this](int msg, int arg) { emit toGui(msg, arg); });
+      if (ok)
+            _raMode = 1;
+      }
+
+//---------------------------------------------------------
+//   produceAhead
+//    (the producer thread) one block, as the callback renders it (processDirect), and what RenderAhead needs of it
+//---------------------------------------------------------
+
+RenderAhead::Block Seq::produceAhead(unsigned frames, float* out)
+      {
+      _raBlock = RenderAhead::Block();
+      _raProducing = true;
+      setInitialMillisecondTimestampWithLatency();    // (PortMidi's times: from when it is rendered, as the callback did)
+      processDirect(frames, out);
+      _raProducing = false;
+      _raBlock.playing = state == Transport::PLAY;
+      _raBlock.countIn = inCountIn;
+      _raBlock.lead = _raBlock.playing && _raEligible;
+      return _raBlock;
+      }
+
+//---------------------------------------------------------
+//   toGuiRT
+//    a message from processDirect to the GUI: rendering ahead, sent when its block is heard (a Stop, Play's start,
+//    the score's end); else at once
+//---------------------------------------------------------
+
+void Seq::toGuiRT(int msg, int arg)
+      {
+      if (!_raProducing) {
+            emit toGui(msg, arg);
+            return;
+            }
+      if (_raBlock.guiMsg)
+            emit toGui(_raBlock.guiMsg, _raBlock.guiArg);
+      _raBlock.guiMsg = msg;
+      _raBlock.guiArg = arg;
+      }
+
+//---------------------------------------------------------
+//   heardFrame / heardPlaying / producerTick
+//    rendering ahead, what the callback has output (the cursor, a stop's position); stopped, or direct, playFrame
+//---------------------------------------------------------
+
+int Seq::heardFrame() const
+      {
+      if (!renderingAhead())
+            return playFrame;
+      if (!_ra.heardPlaying() && state == Transport::STOP)
+            return playFrame;
+      return _ra.heardFrame();
+      }
+
+bool Seq::heardPlaying() const
+      {
+      return renderingAhead() ? _ra.heardPlaying() : state == Transport::PLAY;
+      }
+
+int Seq::producerTick() const
+      {
+      return cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate));
+      }
+
+//---------------------------------------------------------
 //   initInstruments
 //---------------------------------------------------------
 
@@ -1524,6 +1800,7 @@ void Seq::initInstruments(bool realTime)
 
 void Seq::renderChunk(const MidiRenderer::Chunk& ch, EventMap* eventMap)
       {
+      LagProbe::Scope probe("Seq::renderChunk");
       SynthesizerState synState = mscore->synthesizerState();
       MidiRenderer::Context ctx(synState);
       ctx.metronome = true;
@@ -1549,6 +1826,7 @@ void Seq::updateEventsEnd()
 
 void Seq::collectEvents(int utick)
       {
+      LagProbe::Scope probe("Seq::collectEvents");
       //do not collect even while playing
       if (state == Transport::PLAY && playlistChanged)
             return;
@@ -1560,7 +1838,6 @@ void Seq::collectEvents(int utick)
 
       if (playlistChanged) {
             midi.setScoreChanged();
-            _libLiveClear = true;         // (rendered from the score's values again: nothing to correct)
             events.clear();
             renderEvents.clear();
             renderEventsStatus.clear();
@@ -1595,6 +1872,7 @@ void Seq::collectEvents(int utick)
 
 void Seq::renderAgainPlaying()
       {
+      LagProbe::Scope probe("Seq::renderAgainPlaying");
       if (!cs || state != Transport::PLAY || cs->playMode() != PlayMode::SYNTHESIZER || _swapState.load() != 0)
             return;
       if (midiRenderFuture.isRunning())
@@ -1612,7 +1890,6 @@ void Seq::renderAgainPlaying()
             renderChunk(chunk, &_swapEvents);
             unrenderedUtick = renderEventsStatus.occupiedRangeEnd(utick);
             }
-      _libLiveClear = true;               // (rendered from the score's values again: nothing to correct)
       _swapState = 1;
       // the realtime thread takes it within a period (half a second at most here)
       for (int i = 0; i < 250 && _swapState.load() == 1; ++i)
@@ -1645,13 +1922,13 @@ void Seq::swapEventsRT()
       mutex.lock();
       events.swap(_swapEvents);
       updateEventsEnd();
-      playPos = events.lower_bound(getCurTick());
+      playPos = events.lower_bound(producerTick());
       mutex.unlock();
       stopNotes(-1, true);
       std::map<std::tuple<int, int, int, int, int>, const NPlayEvent*> inForce;   // channel, route, type, controller
       for (auto i = events.cbegin(); i != playPos; ++i) {
             const NPlayEvent& e = i->second;
-            if (e.type() == ME_CONTROLLER || e.type() == ME_PITCHBEND)
+            if (e.type() == ME_CONTROLLER || e.type() == ME_PITCHBEND || e.type() == ME_LOWCUT)
                   inForce[std::make_tuple(e.channel(), e.extPort(), e.extChannel(), e.type(),
                                           e.type() == ME_CONTROLLER ? e.controller() : 0)] = &e;
             }
@@ -1686,13 +1963,26 @@ void Seq::startAfterChange(int tick)
       *connection = connect(this, &Seq::stopped, this, [this, tick, connection]() {
             disconnect(*connection);
             QTimer::singleShot(0, this, [this, tick]() {
-                  if (!cs || state != Transport::STOP)
-                        return;
-                  cs->setPlayPos(Fraction::fromTicks(tick));
-                  playlistChanged = true; // (the change marks the score's playlist dirty after its endCmd: no signal)
-                  QAction* play = getAction("play");
-                  if (!play->isChecked())
-                        play->trigger();
+                  // (the change may need patches not loaded: they load in the background, Play grayed, and playback goes
+                  // on once they are, as it went on after the change's wait before)
+                  auto go = std::make_shared<std::function<void()>>();
+                  const std::weak_ptr<std::function<void()>> weak = go;     // (no cycle: whenLoaded keeps it alive)
+                  *go = [this, tick, weak]() {
+                        if (!cs || state != Transport::STOP)
+                              return;
+                        QString libraryError;
+                        if (!SoundLibraryHost::instance()->readyToPlay(cs, &libraryError)) {
+                              if (const std::shared_ptr<std::function<void()>> self = weak.lock())
+                                    SoundLibraryHost::instance()->whenLoaded(cs, [self]() { (*self)(); });
+                              return;
+                              }
+                        cs->setPlayPos(Fraction::fromTicks(tick));
+                        playlistChanged = true; // (the change marks the score's playlist dirty after its endCmd: no signal)
+                        QAction* play = getAction("play");
+                        if (!play->isChecked())
+                              play->trigger();
+                        };
+                  (*go)();
                   });
             });
       QTimer::singleShot(1000, this, [connection]() { disconnect(*connection); });
@@ -1723,6 +2013,7 @@ void Seq::ensureBufferAsync(int utick)
                   const MidiRenderer::Chunk chunk = midi.getChunkAt(unrenderedUtick);
                   if (chunk) {
                         midiRenderFuture = QtConcurrent::run([this, chunk]() {
+                              LagProbe::nameThread("seq render (pool)");
                               renderChunk(chunk, &renderEvents);
                               });
                         }
@@ -1737,7 +2028,7 @@ void Seq::ensureBufferAsync(int utick)
 
 int Seq::getCurTick()
       {
-      return cs->utime2utick(qreal(playFrame) / qreal(MScore::sampleRate));
+      return cs->utime2utick(qreal(heardFrame()) / qreal(MScore::sampleRate));
       }
 
 //---------------------------------------------------------
@@ -1858,7 +2149,12 @@ void Seq::seek(int utick)
             mscore->currentScoreView()->moveCursor(seg->tick());
       cs->setPlayPos(Fraction::fromTicks(t));
       cs->update();
-      guiToSeq(SeqMsg(SeqMsgId::SEEK, utick));
+      if (renderingAhead()) {
+            // (the notes marked from guiPos once the seek is heard: renderahead.h › heardJumps)
+            _guiPosPending = true;
+            _guiPosJumps = _ra.heardJumps();
+            }
+      guiToSeq(SeqMsg(SeqMsgId::SEEK, utick, _continuousSeek ? 1 : 0));
       }
 
 //---------------------------------------------------------
@@ -1894,6 +2190,68 @@ void Seq::startNote(int channel, int pitch, int velo, int duration, double nt)
       stopNotes();
       startNote(channel, pitch, velo, nt);
       startNoteTimer(duration);
+      }
+
+//---------------------------------------------------------
+//   playNotes
+//    a clicked or entered note as playback plays it (libmscore/notepreview.h). Stopped only: while playing a click
+//    plays as before (the renderer's chunk can't be rendered next to the background render, and the library's
+//    routes are playing). Each click renders the note's playback chunk on a renderer of its own (cached until the
+//    score, its metaTags, the library or the mode change: a click on another note of the chunk renders nothing),
+//    then sends each route's switch, controllers and bend in force and the note-on at once. Hosted, a route whose
+//    slot isn't loaded for the part (a patch the score needs since the last load) gets nothing and the host loads
+//    the score's patches in the background (SoundLibraryHost::preloadSoon): the next click plays it. The patch
+//    volumes are the slots' already (SoundLibraryHost::applyMixer, every 50 ms from the score's first load)
+//---------------------------------------------------------
+
+bool Seq::playNotes(const std::vector<const Note*>& notes, int duration)
+      {
+      LagProbe::Scope probe("Seq::playNotes");
+      if (!cs || notes.empty() || state != Transport::STOP || cs->playMode() != PlayMode::SYNTHESIZER)
+            return false;
+      const Note* first = NotePreview::playedNote(notes.front());
+      if (!first || first->masterScore() != cs)
+            return false;
+      const SynthesizerState synState = mscore->synthesizerState();
+      if (NotePreview::modelOf(first->part(), synState) == NotePreview::Sound::MS3)
+            return false;                       // (MuseScore 3.6's click)
+      if (_liveTrack.load() && _liveTrackScore.load() == cs)
+            return false;                       // (a Live clip edited here: its Live track plays the click, playOnLiveTrack)
+      waitForRendering();                       // (a chunk still rendering in the background since a stop)
+      const NotePreview::Preview p = _preview.preview(notes, synState);
+      if (p.empty())
+            return false;                       // (no note-on: as before)
+      if (p.sound == NotePreview::Sound::LIBRARY && _liveClips)
+            return false;                       // (Live plays the library's parts: MuseScore sends them nothing)
+      // hosted: only to slots loaded for the note's part
+      std::set<int> skip;
+      if (p.sound == NotePreview::Sound::LIBRARY && SoundLib::output() == SoundLib::Output::PLUGIN) {
+            SoundLibraryHost* host = SoundLibraryHost::instance();
+            const std::vector<int> partSlots = host->slotsOf(first->part());
+            bool missing = false;
+            for (const NPlayEvent& e : p.on) {
+                  if (!e.isExternal())
+                        continue;
+                  const int slot = e.extPort() * 16 + e.extChannel();
+                  if (!host->loaded(slot) || std::find(partSlots.begin(), partSlots.end(), slot) == partSlots.end()) {
+                        skip.insert(slot);
+                        missing = true;
+                        }
+                  }
+            if (missing) {
+                  qDebug("playNotes: a route of %s is not loaded yet: loading the score's patches", qPrintable(first->part()->partName()));
+                  host->preloadSoon(cs);
+                  }
+            }
+      stopNotes();
+      for (const NPlayEvent& e : p.on)
+            if (!e.isExternal() || !skip.count(e.extPort() * 16 + e.extChannel()))
+                  sendEvent(e);
+      for (const NPlayEvent& e : p.off)
+            if (!e.isExternal() || !skip.count(e.extPort() * 16 + e.extChannel()))
+                  _previewOffs.push_back(e);
+      startNoteTimer(duration);
+      return true;
       }
 
 //---------------------------------------------------------
@@ -2498,6 +2856,18 @@ void Seq::stopNotes(int channel, bool realTime)
             };
       // For VSTs/devices that do not support All Notes Off
       // CTRL_ALL_NOTES_OFF should still be evoked after calling this function, even if it seems redundant
+      // the notes a click started (playNotes): their note-offs on their routes and channels (GUI thread)
+      if (!realTime && !_previewOffs.empty()) {
+            for (const NPlayEvent& off : _previewOffs)
+                  if (channel == -1 || off.channel() == channel)
+                        send(off);
+            if (channel == -1)
+                  _previewOffs.clear();
+            else
+                  _previewOffs.erase(std::remove_if(_previewOffs.begin(), _previewOffs.end(),
+                                                    [channel](const NPlayEvent& off) { return off.channel() == channel; }),
+                                     _previewOffs.end());
+            }
       auto turnAllNotesOff = [send](int channel) {
             for (unsigned note = 0; note < 128; note++)
                   send(NPlayEvent(ME_NOTEOFF, channel, note, 0));
@@ -2616,6 +2986,9 @@ void Seq::libraryMixerChanged(const Part* part)
             }
       if (!_driver || !_driver->canOutputMidi())
             return;
+      // CC7: the Mixer's volume times the patch's gain (its gain stage and master trim: TrackDelays::midiVolumes)
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      const std::map<int, int> volumes = library ? TrackDelays::midiVolumes(cs->masterScore(), *library, true) : std::map<int, int>();
       for (const Part* p : cs->parts()) {
             if (part && p != part)
                   continue;
@@ -2627,7 +3000,9 @@ void Seq::libraryMixerChanged(const Part* part)
                   continue;
             const SoundLib::PartMix m = SoundLib::partMix(p, true);
             for (const std::pair<int, int>& out : outs) {
-                  for (const std::pair<int, int>& cv : { std::make_pair(int(CTRL_VOLUME), m.volume), std::make_pair(int(CTRL_PANPOT), m.pan),
+                  auto vol = volumes.find(out.first * 16 + out.second);
+                  const int volume = vol != volumes.end() ? vol->second : m.volume;
+                  for (const std::pair<int, int>& cv : { std::make_pair(int(CTRL_VOLUME), volume), std::make_pair(int(CTRL_PANPOT), m.pan),
                                                           std::make_pair(int(CTRL_REVERB_SEND), m.reverb),
                                                           std::make_pair(int(CTRL_CHORUS_SEND), m.chorus) }) {
                         const int key = (out.first * 16 + out.second) * 128 + cv.first;
@@ -2640,39 +3015,6 @@ void Seq::libraryMixerChanged(const Part* part)
                         sendEvent(ev);
                         }
                   }
-            }
-      }
-
-//---------------------------------------------------------
-//   libraryControllersChanged
-//---------------------------------------------------------
-
-void Seq::libraryControllersChanged(MasterScore* score, const Part* part, const PartControllers::Values& before,
-                                    const PartControllers::Values& after)
-      {
-      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
-      if (!cs || score != cs || !part || !library || !SoundLib::active())
-            return;
-      const bool hosted = SoundLib::output() == SoundLib::Output::PLUGIN;
-      if (!hosted && (!_driver || !_driver->canOutputMidi()))
-            return;
-      // (an event's channel must be one of the score's: the part's first, as libraryMixerChanged)
-      const Part* master = PartPlaybackModes::masterPart(part);
-      if (!master || master->instruments()->empty() || master->instruments()->begin()->second->channel().empty())
-            return;
-      const int channel = master->instruments()->begin()->second->channel(0)->channel();
-      if (channel < 0 || channel >= int(cs->midiMapping().size()))
-            return;
-      const int tick = state == Transport::PLAY ? cs->repeatList().utick2tick(getCurTick()) : cs->playPos().ticks();
-      for (const PartControllers::LiveCc& c : PartControllers::liveChanges(cs, SoundLib::routes(cs, *library, !hosted), master,
-                                                                          before, after, tick)) {
-            NPlayEvent ev(ME_CONTROLLER, channel, c.cc, c.to < 0 ? 0 : c.to);
-            ev.setExternal(c.port, c.channel);
-            SeqMsg msg(SeqMsgId::LIBRARY_CC_LIVE, c.from, c.to);
-            msg.event = ev;
-            guiToSeq(msg);
-            if (c.send)
-                  sendEvent(ev);
             }
       }
 
@@ -2923,18 +3265,6 @@ void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
       // a sound library part (soundlibrary.h): to its hosted plug-in (Vst3Synth, the route as
       // the channel), or to MIDI out only, or without its articulation switches to the
       // synthesizer while there is neither
-      // (a controller the Controllers window changed live: the value rendered before plays the new one)
-      if (event.isExternal() && event.type() == ME_CONTROLLER && !_libLive.empty()) {
-            const int value = _libLive.apply(event.extPort() * 16 + event.extChannel(), event.controller(), event.value());
-            if (value < 0)
-                  return;
-            if (value != event.value()) {
-                  NPlayEvent e(event);
-                  e.setValue(value);
-                  putEvent(e, framePos);
-                  return;
-                  }
-            }
       if (event.isExternal() && _liveClips)
             return;                 // (Live plays the score: the library's parts are Live's clips)
       if (event.isExternal() && SoundLib::output() == SoundLib::Output::PLUGIN) {
@@ -2972,6 +3302,7 @@ void Seq::putEvent(const NPlayEvent& event, unsigned framePos)
 
 void Seq::heartBeatTimeout()
       {
+      LagProbe::Scope probe("Seq::heartBeatTimeout");
       SynthControl* sc = mscore->getSynthControl();
       if (sc && _driver) {
             if (++peakTimer[0] >= peakHold)
@@ -2994,16 +3325,44 @@ void Seq::heartBeatTimeout()
                   }
             }
 
-      if (state != Transport::PLAY || inCountIn)
+      // late audio this play (countLate): said once, in the status bar
+      if (_late.warn.exchange(false)) {
+            const int n = int(_late.blocks.load());
+            qDebug("Playback couldn't keep up: %d late audio block(s) so far", n);
+            mscore->showMessage(tr("Playback couldn't keep up: audio was late %n time(s). Other programs may be using the CPU or memory.",
+                                   nullptr, n), 15000);
+            }
+
+      // rendering ahead, the cursor and the marked notes follow what is heard, not what is rendered
+      const bool ahead = renderingAhead();
+      if (ahead ? (!_ra.heardPlaying() || _ra.heardCountIn() || !cs) : (state != Transport::PLAY || inCountIn))
             return;
 
-      int endFrame = playFrame;
+      int endFrame = ahead ? _ra.heardFrame() : playFrame;
 
       mutex.lock();
+      if (events.empty()) {
+            mutex.unlock();
+            return;
+            }
       auto ppos = playPos;
+      if (ahead) {
+            ppos = events.upper_bound(cs->utime2utick(qreal(endFrame) / qreal(MScore::sampleRate)));
+            if (ppos == events.cend() && playPos != events.cend())
+                  ppos = playPos;
+            }
       if (ppos != events.cbegin())
             --ppos;
       mutex.unlock();
+      // (a seek's guiPos, set before it is heard: the notes are marked from it once the jump is heard)
+      if (ahead && _guiPosPending) {
+            if (_ra.heardJumps() == _guiPosJumps) {
+                  int utick = ppos->first;
+                  mscore->currentScoreView()->moveCursor(Fraction::fromTicks(cs->repeatList().utick2tick(utick)));
+                  return;
+                  }
+            _guiPosPending = false;
+            }
 
       ensureBufferAsync(ppos->first);
 
@@ -3091,7 +3450,9 @@ void Seq::updateSynthesizerState(int tick1, int tick2)
       EventMap::const_iterator i2 = ev.upper_bound(tick2);
 
       for (; i1 != i2; ++i1) {
-            if (i1->second.type() == ME_CONTROLLER)
+            // (and a hosted plug-in's parameters, ME_PARAMETER: automation, Ample's capo and its CC7 as M-Master Vol;
+            // in order, the last one in force wins)
+            if (i1->second.type() == ME_CONTROLLER || i1->second.type() == ME_PARAMETER || i1->second.type() == ME_LOWCUT)
                   playEvent(i1->second, 0);
             }
       }

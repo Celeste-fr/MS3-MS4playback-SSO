@@ -1,0 +1,549 @@
+#!/usr/bin/env python3
+"""Tests for heard_check.py on synthetic audio (sawtooth tones with known onsets and glides).
+
+    python3 tools/playbackverify/test_heard_check.py [-v]
+
+Needs numpy, scipy, soundfile, librosa (as heard_check.py).
+"""
+import os
+import sys
+import tempfile
+import unittest
+
+import numpy as np
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import heard_check as H  # noqa: E402
+import heard_control as HC  # noqa: E402
+from loudness import perceived_envelope  # noqa: E402
+
+SR = 44100
+HARD_BIAS_MS = 24.0         # a step onset's reading before the step (test_hard_attack)
+
+
+def saw(f, n, phase=0.0):
+    """a band-limited-enough sawtooth: 12 harmonics; f: Hz per sample (array) or a number"""
+    f = np.broadcast_to(np.asarray(f, dtype=float), (n,))
+    ph = phase + np.cumsum(f) / SR
+    return sum(np.sin(2 * np.pi * k * ph) / k for k in range(1, 13)) * 0.2
+
+
+def hz(midi):
+    return 440.0 * 2 ** ((np.asarray(midi, dtype=float) - 69) / 12)
+
+
+def gain_db(t, points):
+    """piecewise linear dB through (s, dB) points, held beyond"""
+    ts, ds = zip(*points)
+    return 10 ** (np.interp(t, ts, ds) / 20)
+
+
+class Measures(unittest.TestCase):
+    def env(self, x):
+        return perceived_envelope(x, SR)
+
+    def test_hard_attack(self):
+        # silence, then a tone from 1.000 s (5 ms ramp): by the -15 dB rule less 30 ms latency it reads 24 ms early (the
+        # 2048-point window's half, 23 ms, sees it coming; the map's onsets carry the same bias)
+        n = int(2.0 * SR)
+        t = np.arange(n) / SR
+        x = saw(hz(57), n) * gain_db(t, [(0, -120), (0.9999, -120), (1.0, -60), (1.005, 0)])
+        env, first, hop = self.env(x)
+        ms, masked, _ = H.attack_time(env, first, hop, 1000.0, 0.0, 1800.0)
+        self.assertFalse(masked)
+        self.assertLess(abs(ms - (1000.0 - HARD_BIAS_MS)), 6.0, ms)
+
+    def test_swell(self):
+        # a 300 ms swell, linear in dB from -40 to 0 from 1.0 s: -15 dB under its peak at 1.1875 s; heard there within
+        # 15 ms (the envelope's smoothing, the 30 ms latency allowance)
+        n = int(2.5 * SR)
+        t = np.arange(n) / SR
+        x = saw(hz(57), n) * gain_db(t, [(0, -120), (0.9999, -120), (1.0, -40), (1.3, 0)])
+        env, first, hop = self.env(x)
+        ms, masked, _ = H.attack_time(env, first, hop, 1000.0, 0.0, 2400.0)
+        self.assertFalse(masked)
+        self.assertLess(abs(ms - 1187.5), 15.0, ms)
+
+    def test_masked(self):
+        # a note at -8 dB still sounding when the next on its route steps to 0 dB at 1.5 s: masked, found near the step
+        n = int(2.5 * SR)
+        t = np.arange(n) / SR
+        x = saw(hz(57), n) * gain_db(t, [(0, -120), (0.9999, -120), (1.0, -8), (1.4999, -8), (1.505, 0)])
+        env, first, hop = self.env(x)
+        ms, masked, _ = H.attack_time(env, first, hop, 1500.0, 1000.0, 2400.0)
+        self.assertTrue(masked)
+        self.assertLess(abs(ms - (1500.0 - HARD_BIAS_MS)), 10.0, ms)
+
+    def glide(self, cents, glide_s, quarter=0.0):
+        """A3 held, at 1.0 s a glide linear in cents to A3 + cents over glide_s; returns (x, arrival s by the 30 cent
+        rule)"""
+        n = int(2.0 * SR)
+        t = np.arange(n) / SR
+        c = np.clip((t - 1.0) / glide_s, 0, 1) * cents
+        x = saw(hz(57 + c / 100), n)
+        arrive = 1.0 + glide_s * (abs(cents) - H.CENTS_TOL) / abs(cents)
+        return x, arrive
+
+    def test_transition_semitone_up(self):
+        x, arrive = self.glide(100, 0.120)
+        got, _ = H.transition_time(*H.track(x, SR, 54, 61), 1.0, 57, 58)
+        self.assertIsNotNone(got)
+        self.assertLess(abs(got - arrive), 0.020, (got, arrive))
+
+    def test_transition_leave(self):
+        # a 250 ms fifth down from 1.0 s: leaves A3 by 30 cents at 1.0 + 0.25 x 30 / 700 s; the arrival as before
+        x, arrive = self.glide(-700, 0.250)
+        got, leave, why = H.transition_times(*H.track(x, SR, 47, 60), 1.0, 57, 50)
+        self.assertIsNone(why)
+        self.assertLess(abs(got - arrive), 0.020, (got, arrive))
+        self.assertLess(abs(leave - (1.0 + 0.25 * 30 / 700)), 0.015, leave)
+        self.assertLess(leave, got)
+        # a glide that stops short of its target: no arrival, a leave all the same
+        y, _ = self.glide(-150, 0.100)
+        got, leave, why = H.transition_times(*H.track(y, SR, 47, 60), 1.0, 57, 50)
+        self.assertIsNone(got)
+        self.assertEqual(why, "pitch not reached")
+        self.assertLess(abs(leave - (1.0 + 0.1 * 30 / 150)), 0.015, leave)
+
+    def test_transition_quarter_tones(self):
+        # A3 to B3 a quarter-flat (150 cents) over 200 ms: arrives within 30 cents of 58.5 at 1.16 s
+        x, arrive = self.glide(150, 0.200)
+        f0 = H.track(x, SR, 54, 61.5)
+        got, _ = H.transition_time(*f0, 1.0, 57, 58.5)
+        self.assertIsNotNone(got)
+        self.assertLess(abs(got - arrive), 0.020, (got, arrive))
+        # ... and not 12-TET's B-flat 3 (58): never within 30 cents for 3 frames after leaving A3
+        wrong, _ = H.transition_time(*f0, 1.0, 57, 58.0)
+        self.assertTrue(wrong is None or wrong < arrive - 0.03, wrong)
+
+    def test_transition_down_fifth(self):
+        x, arrive = self.glide(-700, 0.250)
+        got, _ = H.transition_time(*H.track(x, SR, 47, 60), 1.0, 57, 50)
+        self.assertIsNotNone(got)
+        self.assertLess(abs(got - arrive), 0.020, (got, arrive))
+
+    def test_transition_needs_the_note_before(self):
+        # A3 held, a glide down to G3 at 1.0 s: as a transition from B-flat 3 (never heard: the note before was not
+        # played) it is not measured
+        x, _ = self.glide(-200, 0.150)
+        got, why = H.transition_time(*H.track(x, SR, 52, 61), 1.0, 58, 55)
+        self.assertIsNone(got)
+        self.assertEqual(why, "the note before not heard at its pitch")
+
+    def test_km_median(self):
+        """censored values (a transition not reached before the next note-on): the median of what was heard is too
+        early; Kaplan-Meier's counts them (Whence's Violas, build 491: 33 heard by 136 ms, 47 not)"""
+        self.assertEqual(H.km_median([1, 2, 3], []), 2)
+        self.assertIsNone(H.km_median([1, 2, 3], [4, 4, 4, 4]))
+        self.assertEqual(H.km_median([1, 2, 3, 6, 7], [4, 4]), 6)
+        heard = [-56 + i for i in range(33)]          # all before the next note-on, -22 against the model
+        self.assertLess(float(np.median(heard)), -20)
+        self.assertIsNone(H.km_median(heard, [-22] * 47))
+
+    def test_rhythm_deviation(self):
+        # Whence's Violas: written 273 / 136 / 136, heard 200 / 210 / 105
+        w = [0, 272.7, 409.1, 545.5]
+        h = [0, 200, 410, 515]
+        self.assertAlmostEqual(H.rhythm_deviation(w, h), 0.158, places=2)
+        self.assertGreater(H.rhythm_deviation(w, h), H.RHYTHM_FAIL)
+        self.assertLess(H.rhythm_deviation(w, [0, 268, 410, 541]), H.RHYTHM_WARN)
+
+
+HEAD = ("part\ttrack\tbar\tbeat\twritten\twrittenEnd\tpitch\tcents\troute\tpatch\tarticulation\ttechniques\tvelocity\tperformance\t"
+        "transition\tfromWritten\tfromPitch\tsentMs\tonsetMs\tglideArriveMs\thasArrival\tarrivalMs\tsub\tgrace\tslur\t"
+        "joinedBefore\tslurredBefore\tdynamicBefore")
+
+
+def row(written, end, pitch, route, patch, art, tech, perf, trans, fromw, fromp, sent, onset, glide, arrival, slur, jb, sb,
+        beat):
+    return "\t".join(str(v) for v in ["Violas", 8, 1, beat, "%.6f" % written, "%.6f" % end, pitch, "0.00", route, patch, art, tech,
+                                      64, perf, trans, "%.6f" % fromw, fromp, sent, onset, glide, 1, arrival, 0, 0, slur, jb, sb, 0])
+
+
+class EndToEnd(unittest.TestCase):
+    def test_triplet_slur_found(self):
+        """an eighth + two sixteenths slurred at 110 bpm (written 0 / 272.7 / 409.1, then a staccato at 545.5 ms): the
+        slur's first note sounding 60 ms late (sent as its model says, the sound slower; a hard start, read 24 ms early),
+        the first transition 70 ms before its model, the second on it: heard 36 / -70 / 0, the staccato -24 (IOIs 167 /
+        206 / 112 for 273 / 136 / 136): RHYTHM fails, ARRIVAL fails, the first note and the first transition drift, the
+        transition after a transition doesn't"""
+        lead_ms = 100.0
+        e8, s16 = 60 / 110 / 2, 60 / 110 / 4
+        w = [0.5, 0.5 + e8, 0.5 + e8 + s16, 0.5 + e8 + 2 * s16]
+        tmp = tempfile.mkdtemp()
+        rows = [
+            row(w[0], w[1], 57, "0-11", "Violas - Performance", "Legato", "legato,long", 1, 0, -1, -1, -50.0, 50.0, -1, 0.0, 0, 0, 0, 1),
+            row(w[1], w[2], 59, "0-11", "Violas - Performance", "Legato", "legato,long", 2, 1, w[0], 57, -100.0, -1, 100.0, 0.0, 0, 1, 1, 1.5),
+            row(w[2], w[3], 60, "0-11", "Violas - Performance", "Legato", "legato,long", 2, 1, w[1], 59, -100.0, -1, 100.0, 0.0, 0, 1, 1, 1.75),
+            row(w[3], w[3] + e8, 62, "0-8", "Violas", "Spiccato", "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0, -1, 0.0, -1, 1, 0, 2),
+        ]
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(rows) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n0-11|Violas|Violas - Performance|0|0.00|99.6\n")
+        off = H.OFFSET_S + lead_ms / 1000
+        n = int((off + 2.0) * SR)
+        t = np.arange(n) / SR
+        # the Performance route: silence, then the first note heard at w0 + 60 ms (a hard start), glides of 100 ms ending
+        # 30 cents short at the model's arrival (note-on - 100 + 100 = the written time)
+        pitch = np.full(n, 57.0)
+        for (a, b, wt, early) in ((57, 59, w[1], 0.070), (59, 60, w[2], 0.0)):
+            s0 = off + wt - 0.100                       # the glide's start: its note-on
+            # (within 30 cents at the written time less early: the first transition arrives 70 ms before its model)
+            dur = (0.100 - early) * (abs(b - a) * 100) / (abs(b - a) * 100 - H.CENTS_TOL)
+            k = (t >= s0)
+            pitch[k] = np.where(t[k] < s0 + dur, a + (b - a) * (t[k] - s0) / dur, b)
+        start = off + w[0] + 0.060
+        perf = saw(hz(pitch), n) * gain_db(t, [(0, -120), (start - 1e-4, -120), (start, -60), (start + 0.005, 0),
+                                                (off + w[3], 0), (off + w[3] + 0.02, -120)])
+        stac = saw(hz(62), n) * gain_db(t, [(0, -120), (off + w[3] - 1e-4, -120), (off + w[3], -60), (off + w[3] + 0.005, 0),
+                                             (off + w[3] + 0.15, -40)])
+        audio = {"0-11": (perf, SR), "0-8": (stac, SR)}
+        res = H.analyse(tmp, tmp, load=lambda r: audio.get(r))
+        heard = {x["pitch"]: x["heardMs"] for x in res["notes"]}
+        self.assertLess(abs(heard[57] - (60 - HARD_BIAS_MS)), 6, heard)
+        self.assertLess(abs(heard[59] + 70), 15, heard)
+        self.assertLess(abs(heard[60]), 15, heard)
+        self.assertLess(abs(heard[62] + HARD_BIAS_MS), 6, heard)
+        kinds = {(f["kind"], f["severity"]) for f in res["findings"]}
+        self.assertIn(("RHYTHM", "FAIL"), kinds, res["findings"])
+        self.assertIn(("ARRIVAL", "FAIL"), kinds, res["findings"])
+        d = {(x["patch"], x["situation"]): x for x in res["drift"]}
+        self.assertTrue(d[("Violas - Performance", "first after silence")]["drifting"])
+        self.assertTrue(d[("Violas - Performance", "transition after attack")]["drifting"])
+        self.assertFalse(d[("Violas - Performance", "transition after transition")]["drifting"])
+        self.assertIn("RHYTHM", H.report_text(res))
+        # every transition reports its leave and arrival; --transition-rule leave judges at leave + 23.5 ms
+        tr = [x for x in res["notes"] if x["transition"]]
+        for x in tr:
+            self.assertEqual(x["arriveMs"], x["heardMs"])
+            self.assertLess(x["leaveMs"], x["arriveMs"])
+        res2 = H.analyse(tmp, tmp, load=lambda r: audio.get(r), transition_rule="leave")
+        self.assertEqual(res2["transitionRule"], "leave")
+        n2 = {x["pitch"]: x for x in res2["notes"]}
+        for x in tr:
+            y = n2[x["pitch"]]
+            self.assertAlmostEqual(y["heardMs"], y["leaveMs"] + H.LEAVE_HEARD_MS, places=0)
+            self.assertEqual(y["arriveMs"], x["arriveMs"])
+            self.assertEqual(y["how"], "pitch leave")
+        self.assertEqual(n2[57]["heardMs"], heard[57])          # attacks unchanged
+
+    def test_export_pairing(self):
+        """the export renderer: sample 0 = score time 0, and the note-on as the export sent it (its events.tsv, 10 ms
+        after the dump's): a staccato whose hard start sounds at the export's note-on reads (sent + 10) - 24 ms"""
+        lead_ms = 100.0
+        w = 0.5
+        tmp = tempfile.mkdtemp()
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + row(w, w + 0.2, 62, "0-8", "Violas", "Spiccato",
+                                                                         "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0,
+                                                                         -1, 0.0, -1, 0, 0, 1) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        on = w + lead_ms / 1000 - 0.020
+        H._write(os.path.join(tmp, "0-8 museScore.txt"), "%.6f on 62 64\n%.6f off 62 0\n" % (on, on + 0.2))
+        H._write(os.path.join(tmp, "score events.tsv"), "time\ttick\tslot\ttype\ta\tb\tswitch\n"
+                 "%.4f\t0\t7\ton\t62\t64\t0\n%.4f\t0\t7\toff\t62\t0\t0\n" % (on + 0.010, on + 0.21))
+        n = int(2.0 * SR)
+        t = np.arange(n) / SR
+        s = on + 0.010
+        x = saw(hz(62), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40)])
+        res = H.analyse(tmp, tmp, load=lambda r: (x, SR) if r == "0-8" else None, export=True)
+        heard = res["notes"][0]["heardMs"]
+        self.assertLess(abs(heard - (-20 + 10 - HARD_BIAS_MS)), 6, heard)
+        self.assertEqual(res["pairing"]["paired"], 1)
+        self.assertAlmostEqual(res["pairing"]["medianMs"], 10.0, places=1)
+        self.assertIn("export renderer: 1 of 1 notes paired", H.report_text(res))
+
+    def test_export_split_runs(self):
+        """HC_SPLIT=parts: a run that plays one part has its own start lead (here 150 ms less): its notes paired by the
+        run's shift, each note's heard time against its run's lead"""
+        lead_ms = 200.0
+        tmp = tempfile.mkdtemp()
+        ws = [0.5 + 0.3 * i for i in range(6)]
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(
+            row(w, w + 0.2, 62 + i, "0-8", "Violas", "Spiccato", "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0, -1, 0.0, -1,
+                0, 0, 1 + i) for i, w in enumerate(ws)) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        ons = [w + lead_ms / 1000 - 0.020 for w in ws]
+        H._write(os.path.join(tmp, "0-8 museScore.txt"), "".join("%.6f on %d 64\n" % (t, 62 + i) for i, t in enumerate(ons)))
+        root = os.path.join(tmp, "out")
+        for k, sh in ((1, 0.0), (2, -0.150)):
+            d = os.path.join(root, "score-%d" % k, "Playback verify")
+            os.makedirs(d)
+            ev = "" if k == 1 else "".join("%.4f\t0\t0\ton\t%d\t64\t0\n" % (t + sh, 62 + i) for i, t in enumerate(ons))
+            H._write(os.path.join(d, "score-%d events.tsv" % k), "time\ttick\tslot\ttype\ta\tb\tswitch\n" + ev)
+        n = int(3.0 * SR)
+        t = np.arange(n) / SR
+        x = np.zeros(n)
+        for i, o in enumerate(ons):
+            s = o - 0.150
+            x += saw(hz(62 + i), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40),
+                                                   (s + 0.25, -120)])
+        res = H.analyse(tmp, root, load=lambda r: (x, SR) if r == "1/0-1" else None, export=True)
+        self.assertEqual(res["pairing"]["paired"], 6, res["pairing"])
+        self.assertEqual(res["pairing"]["shiftsMs"], [-150.0])
+        for note in res["notes"]:
+            self.assertLess(abs(note["heardMs"] - (-20 - HARD_BIAS_MS)), 10, note)
+
+    def test_nothing_measured_fails(self):
+        """no route render (the export wrote no route WAV, 2026-10-16 .. 18): not an empty pass: the report says
+        NOTHING MEASURED and main exits 1; with the render it measures and passes"""
+        lead_ms = 100.0
+        w = 0.5
+        tmp = tempfile.mkdtemp()
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + row(w, w + 0.2, 62, "0-8", "Violas", "Spiccato",
+                                                                         "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0,
+                                                                         -1, 0.0, -1, 0, 0, 1) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % lead_ms)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        res = H.analyse(tmp, tmp, load=lambda r: None)
+        self.assertEqual(res["findings"], [])
+        self.assertIn("0 route WAVs", H.nothing_measured(res))
+        self.assertIn("NOTHING MEASURED", H.report_text(res))
+        self.assertEqual(H.main(["analyse", tmp, tmp]), 1)              # (no wav in tmp)
+        n = int(2.0 * SR)
+        t = np.arange(n) / SR
+        s = w + H.OFFSET_S + lead_ms / 1000 - 0.020
+        x = saw(hz(62), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40)])
+        import soundfile as sf
+        sf.write(os.path.join(tmp, "0-8.wav"), x, SR)
+        self.assertIsNone(H.nothing_measured(H.analyse(tmp, tmp)))
+        self.assertEqual(H.main(["analyse", tmp, tmp]), 0)
+
+
+class PlantedControls(unittest.TestCase):
+    """positive controls: six joined staccatos (300 ms apart, each heard on its model) pass; one sounding 60 ms late fails
+    ARRIVAL, 40 ms warns, 10 ms is measured (its heard time moves by 10 ms) but under the 30 ms warning (Rasch 1979: by
+    design); a transition gliding to 50 cents short of its note (a quarter tone played at 12-TET) is not heard as
+    arriving (UNHEARD), the same glide to its note is"""
+    LEAD_MS = 100.0
+    WS = [0.5 + 0.3 * i for i in range(6)]
+
+    def staccatos(self, late_ms=None, late_index=3):
+        tmp = tempfile.mkdtemp()
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(
+            row(w, w + 0.3, 62 + 2 * i, "0-8", "Violas", "Spiccato", "spiccato,staccatissimo", 0, 0, -1, -1, -20.0, 20.0, -1, 0.0,
+                -1, 1 if i else 0, 0, 1 + i) for i, w in enumerate(self.WS)) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % self.LEAD_MS)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-8|Violas|Violas|0|0.00|0.0\n")
+        off = H.OFFSET_S + self.LEAD_MS / 1000
+        n = int((off + 3.0) * SR)
+        t = np.arange(n) / SR
+        x = np.zeros(n)
+        for i, w in enumerate(self.WS):
+            s = off + w + ((late_ms or 0.0) / 1000 if i == late_index else 0.0)
+            x += saw(hz(62 + 2 * i), n) * gain_db(t, [(0, -120), (s - 1e-4, -120), (s, -60), (s + 0.005, 0), (s + 0.15, -40),
+                                                       (s + 0.25, -120)])
+        res = H.analyse(tmp, tmp, load=lambda r: (x, SR) if r == "0-8" else None)
+        return res, {nn["pitch"]: nn["heardMs"] for nn in res["notes"]}
+
+    def arrivals(self, res):
+        return [(f["severity"], f["value"]) for f in res["findings"] if f["kind"] == "ARRIVAL"]
+
+    def test_clean_passes(self):
+        res, heard = self.staccatos()
+        self.assertEqual(len(heard), 6)
+        self.assertEqual(self.arrivals(res), [], res["findings"])
+        self.assertLess(max(heard.values()) - min(heard.values()), 6.0, heard)     # (the reading's bias by pitch: ~4 ms)
+
+    def test_late_attack(self):
+        _, clean = self.staccatos()
+        for late, severity in ((60.0, "FAIL"), (40.0, "WARN"), (10.0, None)):
+            res, heard = self.staccatos(late)
+            self.assertLess(abs(heard[68] - clean[68] - late), 3.0, (late, heard))
+            a = self.arrivals(res)
+            if severity is None:
+                self.assertEqual(a, [], res["findings"])
+            else:
+                # the late note against the one before, and the note after against it
+                self.assertIn(severity, [x[0] for x in a], a)
+                self.assertTrue(any(abs(v - late) < 6.0 for _, v in a), a)
+                self.assertTrue(any(abs(v + late) < 6.0 for _, v in a), a)
+
+    def glide(self, short_cents):
+        """a slurred attack + transition (57 -> 59, glide 100 ms from its note-on, the model's arrival on the written
+        time) ending short_cents under the new note"""
+        e8 = 60 / 110 / 2
+        w = [0.5, 0.5 + e8]
+        tmp = tempfile.mkdtemp()
+        rows = [row(w[0], w[1], 57, "0-11", "Violas - Performance", "Legato", "legato,long", 1, 0, -1, -1, -50.0, 50.0, -1, 0.0,
+                    0, 0, 0, 1),
+                row(w[1], w[1] + 0.5, 59, "0-11", "Violas - Performance", "Legato", "legato,long", 2, 1, w[0], 57, -100.0, -1,
+                    100.0, 0.0, 0, 1, 1, 1.5)]
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(rows) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % self.LEAD_MS)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "0-11|Violas|Violas - Performance|0|0.00|99.6\n")
+        off = H.OFFSET_S + self.LEAD_MS / 1000
+        n = int((off + 2.0) * SR)
+        t = np.arange(n) / SR
+        end = 59 - short_cents / 100.0
+        s0 = off + w[1] - 0.100
+        pitch = np.where(t < s0, 57.0, np.where(t < s0 + 0.100, 57 + (end - 57) * (t - s0) / 0.100, end))
+        start = off + w[0]
+        x = saw(hz(pitch), n) * gain_db(t, [(0, -120), (start - 1e-4, -120), (start, -60), (start + 0.005, 0),
+                                            (off + w[1] + 0.5, 0), (off + w[1] + 0.52, -120)])
+        res = H.analyse(tmp, tmp, load=lambda r: (x, SR) if r == "0-11" else None)
+        return res, {nn["pitch"]: nn for nn in res["notes"]}
+
+    def test_mistuned_transition(self):
+        res, notes = self.glide(0.0)
+        self.assertIsNotNone(notes[59]["heardMs"], notes)
+        self.assertLess(abs(notes[59]["heardMs"]), 25, notes[59])        # (within 30 cents: before the glide's end)
+        self.assertNotIn("UNHEARD", [f["kind"] for f in res["findings"]], res["findings"])
+        res, notes = self.glide(50.0)
+        self.assertIn(("UNHEARD", 59), [(f["kind"], f.get("pitch")) for f in res["findings"]], (res["findings"], notes[59]))
+
+
+def row2(part, track, written, end, pitch, route, patch, trans, fromw, fromp, sent, glide, arrival, slur, jb, sb, beat,
+         art="Legato", tech="legato,long", perf=2, onset=-1):
+    return "\t".join(str(v) for v in [part, track, 1, beat, "%.6f" % written, "%.6f" % end, pitch, "0.00", route, patch, art, tech,
+                                      64, perf, trans, "%.6f" % fromw, fromp, sent, onset, glide, 1, arrival, 0, 0, slur, jb, sb, 0])
+
+
+class KnownAnswer(unittest.TestCase):
+    """heard_control.py's plants on a synthetic two-part run whose model is right (its null flags nothing): Violas and
+    Celli on their Performance patches, each two slurs of five notes 300 ms apart (a hard attack heard on its model, then
+    four transitions gliding 100 ms from their note-on to within 30 cents on the written time). Planted: the model of
+    Violas' transitions +40 / +80 ms (drift moves by exactly that there and nowhere else, DRIFT flagged there only, the
+    findings unchanged), one Violas transition sounding 60 / 40 ms late (ARRIVAL FAIL / WARN on it and the note after,
+    nothing else), a route 3 / 6 dB quieter from one transition on (one LEVEL step of that size, there only)"""
+    LEAD_MS = 100.0
+    IOI = 0.3
+    PARTS = (("Violas", 8, "0-11", "Violas - Performance", (57, 59, 60, 62, 64)),
+             ("Celli", 12, "0-12", "Celli - Performance", (45, 47, 48, 50, 52)))
+    SLURS = (0.5, 2.3)
+
+    def make(self, late=None):
+        """the dump and the audio; late: (part, slur, note, ms) a transition arriving ms later than its model"""
+        tmp = tempfile.mkdtemp()
+        rows, audio = [], {}
+        off = H.OFFSET_S + self.LEAD_MS / 1000
+        n = int((off + 4.5) * SR)
+        t = np.arange(n) / SR
+        for part, track, route, patch, ps in self.PARTS:
+            pitch = np.full(n, float(ps[0]))
+            gain = [(0, -120)]
+            for si, w0 in enumerate(self.SLURS):
+                ws = [w0 + self.IOI * k for k in range(len(ps))]
+                for k, (w, p) in enumerate(zip(ws, ps)):
+                    end = ws[k + 1] if k + 1 < len(ps) else w + self.IOI
+                    if k == 0:
+                        rows.append(row2(part, track, w, end, p, route, patch, 0, -1, -1, -50.0, -1, -HARD_BIAS_MS, si, 0, 0,
+                                         1 + k, perf=1, onset=50.0))
+                        continue
+                    rows.append(row2(part, track, w, end, p, route, patch, 1, ws[k - 1], ps[k - 1], -100.0, 100.0, 0.0, si, 1, 1,
+                                     1 + k))
+                    a = ps[k - 1]
+                    # (late: the glide starts that much after its note-on, the same glide: heard that much later)
+                    extra = late[3] / 1000 if late and late[:3] == (part, si, k) else 0.0
+                    s0 = off + w - 0.100 + extra                # its note-on: the glide's start
+                    dur = 0.100 * (abs(p - a) * 100) / (abs(p - a) * 100 - H.CENTS_TOL)
+                    m = t >= s0
+                    pitch[m] = np.where(t[m] < s0 + dur, a + (p - a) * (t[m] - s0) / dur, p)
+                if si + 1 < len(self.SLURS):
+                    m = t >= off + ws[-1] + self.IOI
+                    pitch[m] = ps[0]                            # (the next slur's first pitch, in the rest)
+                # (the slur's attack 0.5 dB over the rest, under the 0.69 dB threshold: its loudest value, as on real
+                # renders, so the -15 dB rule's peak lies in it)
+                st, en = off + w0, off + ws[-1] + self.IOI
+                gain += [(st - 1e-4, -120), (st, -60), (st + 0.005, 0.5), (st + self.IOI - 0.13, 0.5), (st + self.IOI - 0.08, 0),
+                         (en - 0.02, 0), (en, -120)]
+            audio[route] = saw(hz(pitch), n) * gain_db(t, gain)
+        H._write(os.path.join(tmp, "predicted.tsv"), HEAD + "\n" + "\n".join(rows) + "\n")
+        H._write(os.path.join(tmp, "lead.txt"), "%.3f\n" % self.LEAD_MS)
+        H._write(os.path.join(tmp, "bars.txt"), "0.0\n")
+        H._write(os.path.join(tmp, "routemap.txt"), "".join("%s|%s|%s|0|0.00|99.6\n" % (r, pt, pa) for pt, _, r, pa, _ in self.PARTS))
+        import soundfile as sf
+        for r, x in audio.items():
+            sf.write(os.path.join(tmp, r + ".wav"), x, SR, subtype="FLOAT")
+        return tmp
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dump = cls.make(cls)
+        cls.null = HC.analyse(cls.dump, cls.dump, False)
+
+    def drifting(self, res):
+        return sorted((d["patch"], d["situation"]) for d in res["drift"] if d["drifting"])
+
+    def test_null(self):
+        notes = self.null["notes"]
+        self.assertEqual(sum(1 for x in notes if x["heardMs"] is not None), 20, [(x["pitch"], x["how"]) for x in notes])
+        self.assertEqual(self.null["findings"], [])
+        self.assertEqual(self.drifting(self.null), [])
+        for d in self.null["drift"]:
+            self.assertLess(abs(d["medianMs"]), 12.0, d)
+
+    def test_model_shift(self):
+        for shift in HC.MODEL_SHIFTS_MS:
+            d = tempfile.mkdtemp()
+            self.assertEqual(HC.plant_model(self.dump, os.path.join(d, "dump"), "Violas - Performance", shift), 8)
+            res = HC.analyse(os.path.join(d, "dump"), self.dump, False)
+            bad, hit = HC.check_model(self.null, res, "Violas - Performance", shift)
+            self.assertEqual(bad, [])
+            self.assertEqual(hit, 2)
+            self.assertEqual(self.drifting(res), [("Violas - Performance", s) for s in HC.TRANSITION_SITUATIONS])
+            self.assertEqual(res["findings"], [])
+        # (the control's own control: an unplanted run doesn't pass as planted)
+        self.assertNotEqual(HC.check_model(self.null, self.null, "Violas - Performance", 40.0)[0], [])
+
+    def test_late_transition(self):
+        for late, severity in ((60.0, "FAIL"), (40.0, "WARN")):
+            res = HC.analyse(*([self.make(("Violas", 1, 2, late))] * 2), False)
+            a = [(f["severity"], f["part"], f["pitch"], f["value"]) for f in res["findings"] if f["kind"] == "ARRIVAL"]
+            self.assertEqual(sorted(x[:3] for x in a), [(severity, "Violas", 60), (severity, "Violas", 62)], res["findings"])
+            for s, _, p, v in a:
+                self.assertLess(abs(v - (late if p == 60 else -late)), 10.0, a)
+            self.assertEqual({f["kind"] for f in res["findings"]} - {"ARRIVAL", "RHYTHM"}, set(), res["findings"])
+            self.assertTrue(all(f["part"] == "Violas" for f in res["findings"]), res["findings"])
+
+    def test_level(self):
+        with self.assertRaises(ValueError):
+            HC.pick_level_note(self.dump, self.null, 3.0)
+        for db in (-3.0, -6.0):
+            pick = HC.pick_level_note(self.dump, self.null, db)
+            self.assertIsNotNone(pick)
+            note, before, cut = pick
+            res = HC.analyse(self.dump, self.dump, False, HC.gain_plant(note["route"], cut, db))
+            bad, step0, step = HC.check_level(self.dump, self.null, res, note, before, cut, db)
+            self.assertEqual(bad, [])
+            self.assertLess(abs(step - step0 - db), HC.LEVEL_TOL_DB, (step0, step))
+            lv = [f for f in res["findings"] if f["kind"] == "LEVEL"]
+            self.assertEqual([(f["part"], f["pitch"]) for f in lv], [(note["part"], note["pitch"])], res["findings"])
+            self.assertLess(abs(lv[0]["value"] - db), HC.LEVEL_TOL_DB, lv)
+            self.assertEqual([f for f in res["findings"] if f["kind"] != "LEVEL"], [])
+            # (the control's own control: an unplanted run doesn't pass as planted)
+            self.assertNotEqual(HC.check_level(self.dump, self.null, self.null, note, before, cut, db)[0], [])
+
+    def test_combined(self):
+        """the model of Violas +40 ms and a level step of -3 dB on the other part's route in one run: drift only at Violas' transitions, LEVEL only
+        at the Celli note; the script's own report passes"""
+        d = tempfile.mkdtemp()
+        HC.plant_model(self.dump, os.path.join(d, "dump"), "Violas - Performance", 40.0)
+        null = dict(self.null, notes=[x for x in self.null["notes"] if x["part"] == "Celli"])
+        note, before, cut = HC.pick_level_note(self.dump, null, -3.0)
+        self.assertEqual(note["part"], "Celli")
+        res = HC.analyse(os.path.join(d, "dump"), self.dump, False, HC.gain_plant(note["route"], cut, -3.0))
+        self.assertEqual(self.drifting(res), [("Violas - Performance", s) for s in HC.TRANSITION_SITUATIONS])
+        self.assertEqual([(f["kind"], f["part"]) for f in res["findings"]], [("LEVEL", note["part"])])
+        out = HC.run(self.dump, self.dump, False, "Violas - Performance", null=self.null)
+        self.assertTrue(out["passed"], HC.text(out))
+
+
+@unittest.skipUnless(os.environ.get("HC_CONTROL_DUMP") and os.environ.get("HC_CONTROL_WAVS"),
+                     "HC_CONTROL_DUMP / HC_CONTROL_WAVS: a kept heard-check run (VERIFY.md › Positive controls)")
+class KeptRun(unittest.TestCase):
+    """heard_control.py on a kept real run (HC_CONTROL_EXPORT=1: MuseScore's export folder)"""
+    def test_controls(self):
+        out = HC.run(os.environ["HC_CONTROL_DUMP"], os.environ["HC_CONTROL_WAVS"], os.environ.get("HC_CONTROL_EXPORT") == "1")
+        self.assertTrue(out["passed"], HC.text(out))
+
+
+if __name__ == "__main__":
+    unittest.main()

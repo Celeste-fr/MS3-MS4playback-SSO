@@ -10,12 +10,20 @@
 
 #include "vst3synth.h"
 
+#include <chrono>
 #include <cmath>
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+#include <immintrin.h>              // (_mm_pause: audioLock's spin)
+#elif defined(_MSC_VER) && defined(_M_ARM64)
+#include <intrin.h>
+#endif
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 
 #include "audio/midi/event.h"
+#include "libmscore/followcut.h"
 
 namespace Ms {
 
@@ -83,25 +91,94 @@ static void logFault(const char* kind, double seconds, int slot, int pitch)
 
 const char* Vst3Synth::NAME = "VST3";
 
+//---------------------------------------------------------
+//   the slots' lock (vst3synth.h › The slots' lock)
+//    SlotsLock: another thread's hold, named for the diagnostic; audioLock: the audio / exporting thread's, which waits
+//---------------------------------------------------------
+
+class Vst3Synth::SlotsLock {
+      const Vst3Synth* _s;
+   public:
+      SlotsLock(const Vst3Synth* s, const char* site) : _s(s)
+            {
+            _s->_mutex.lock();
+            _s->_holder.store(site, std::memory_order_relaxed);
+            }
+      ~SlotsLock()
+            {
+            _s->_holder.store(nullptr, std::memory_order_relaxed);
+            _s->_mutex.unlock();
+            }
+      SlotsLock(const SlotsLock&) = delete;
+      SlotsLock& operator=(const SlotsLock&) = delete;
+      };
+
+static inline void cpuRelax()
+      {
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+      _mm_pause();
+#elif defined(__aarch64__) || defined(_M_ARM64)
+#if defined(_MSC_VER)
+      __yield();
+#else
+      asm volatile("yield");
+#endif
+#endif
+      }
+
+std::unique_lock<std::mutex> Vst3Synth::audioLock()
+      {
+      std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
+      if (lock.owns_lock())
+            return lock;
+      const char* holder = _holder.load(std::memory_order_relaxed);
+      const auto from = std::chrono::steady_clock::now();
+      // spun for up to SPIN_US first: the holder's section is a few instructions, so it is nearly always free again within
+      // a microsecond, while a thread put to sleep by the mutex waits for the scheduler to wake it; a holder pre-empted
+      // inside its section: then blocked, until it runs again (a scheduler slice at worst; tst_soundlibrary::slotLockStress
+      // on a loaded machine: up to 9.7 ms between normal-priority test threads; the app's plays: at most 0.5 us)
+      constexpr long long SPIN_US = 50;
+      for (int i = 0; !lock.try_lock(); ++i) {
+            if ((i & 63) == 63 && std::chrono::steady_clock::now() - from > std::chrono::microseconds(SPIN_US)) {
+                  lock.lock();
+                  break;
+                  }
+            cpuRelax();
+            }
+      const long long ns = (long long)std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - from).count();
+      _waits.fetch_add(1, std::memory_order_relaxed);
+      if (holder)
+            _lastWaitHolder.store(holder, std::memory_order_relaxed);
+      long long m = _maxWaitNs.load(std::memory_order_relaxed);
+      while (ns > m && !_maxWaitNs.compare_exchange_weak(m, ns, std::memory_order_relaxed))
+            ;
+      return lock;
+      }
+
 Vst3Synth::Vst3Synth()
       {
       _slots.resize(MAX_SLOTS);
       _sounding.resize(MAX_SLOTS);
       for (auto& s : _sounding)
             s.fill(0);
-      _pending.reserve(4096);
+      _parameters.resize(MAX_SLOTS);      // (setParameterIds swaps a slot's table in: nothing allocated under the lock)
       }
 
 Vst3Synth::~Vst3Synth()
       {
-      std::lock_guard<std::mutex> lock(_mutex);
-      _slots.clear();
+      std::vector<std::unique_ptr<Vst3Plugin>> owned;     // (destroyed after the lock)
+      {
+            SlotsLock lock(this, "~Vst3Synth");
+            owned.swap(_slots);
+      }
       }
 
+// (the device stopped: restartAudioEngine, MasterSynthesizer::setSampleRate before the driver runs; setSampleRate's
+// setupProcessing under the lock, so this is no tiny section, but no audio thread plays meanwhile)
 void Vst3Synth::init(float sampleRate)
       {
       Synthesizer::init(sampleRate);
-      std::lock_guard<std::mutex> lock(_mutex);
+      SlotsLock lock(this, "init");
       _clockRate = sampleRate;
       for (auto& p : _slots)
             if (p)
@@ -115,44 +192,44 @@ SynthesizerGroup Vst3Synth::state() const
       return g;
       }
 
+// (audio / exporting thread; waits for the slots only as long as another thread's tiny section) the slots' plug-ins see
+// the transport stop and start (Vst3Plugin::restartTransport: a flag, taken at their next block)
+void Vst3Synth::restartTransport()
+      {
+      if (!mine())
+            return;
+      _lowCutSnap = true;           // ([levels] lowCut 2: the cutoff where the playback starts, no glide to it)
+      std::unique_lock<std::mutex> lock = audioLock();
+      if (!mine())
+            return;
+      for (auto& p : _slots)
+            if (p)
+                  p->restartTransport();
+      }
+
 // while exporting, only the exporting thread plays the plug-ins
 bool Vst3Synth::mine() const
       {
-      return !_exporting || std::this_thread::get_id() == _exportThread;
+      return !_exporting || std::this_thread::get_id() == _exportThread.load();
       }
 
 //---------------------------------------------------------
 //   play / process
-//    audio thread (or the exporting thread). While the GUI thread changes the slots, an event
-//    waits in _pending for the next event or block (it was dropped: the owner heard notes stop,
-//    2026-09-28), and a block is skipped
+//    audio thread (or the exporting thread): each waits for the slots' lock (another thread's sections are tiny:
+//    vst3synth.h › The slots' lock), so every event is delivered when it comes and no block is skipped. (Before
+//    slot-lock an event waited in _pending, 2026-09-28: dropped, the owner heard notes stop; and a block was skipped)
 //---------------------------------------------------------
 
-void Vst3Synth::playPending()
-      {
-      if (_allOffPending.exchange(false)) {
-            for (auto& p : _slots)
-                  if (p)
-                        p->allNotesOff();
-            for (auto& s : _sounding)
-                  s.fill(0);
-            }
-      std::lock_guard<std::mutex> lock(_pendingMutex);
-      for (const PlayEvent& e : _pending)
-            deliver(e);
-      _pending.clear();
-      }
-
-// an event to its slot's plug-in (with _mutex held). Varispeed: a note-on sets the slot's speed
-// from its tuning (at once when the slot is silent, else gliding) and goes to the plug-in untuned
+// (the copy made and the old table freed outside the lock: the swap only under it)
 void Vst3Synth::setParameterIds(int slot, const std::vector<long>& ids)
       {
       if (slot < 0 || slot >= MAX_SLOTS)
             return;
-      std::lock_guard<std::mutex> lock(_mutex);
-      if (int(_parameters.size()) <= slot)
-            _parameters.resize(size_t(slot) + 1);
-      _parameters[size_t(slot)] = ids;
+      std::vector<long> table(ids);
+      {
+            SlotsLock lock(this, "setParameterIds");
+            _parameters[size_t(slot)].swap(table);
+      }
       }
 
 // (with _mutex held) MS_VERIFY_FAULT's drop and truncate: true when the event is to be dropped
@@ -202,11 +279,39 @@ void Vst3Synth::releaseDelayed(unsigned frames)
       _releasing = false;
       }
 
+// (with _mutex held) the instance that plays slot and the MIDI channel it listens to for it
+bool Vst3Synth::target(int slot, Vst3Plugin** plugin, int* channel) const
+      {
+      if (slot < 0 || slot >= int(_slots.size()))
+            return false;
+      const Link& l = _links[size_t(slot)];
+      const int k = l.host >= 0 ? l.host : slot;
+      *plugin = _slots[size_t(k)].get();
+      *channel = l.host >= 0 ? l.channel : 0;
+      return *plugin != nullptr;
+      }
+
+// an event to its slot's plug-in (with _mutex held). Varispeed: a note-on sets the slot's speed
+// from its tuning (at once when the slot is silent, else gliding) and goes to the plug-in untuned
 void Vst3Synth::deliver(const PlayEvent& event)
       {
       const int slot = event.channel();
-      if (slot < 0 || slot >= int(_slots.size()) || !_slots[slot])
+      // [levels] lowCut 2: the slot's following cut (followcut.h), never the plug-in's
+      if (event.type() == ME_LOWCUT) {
+            if (slot >= 0 && slot < MAX_SLOTS) {
+                  LowCutState& st = _lowCutState[size_t(slot)];
+                  st.target = std::max(0.f, event.tuning());
+                  st.follow = true;
+                  }
             return;
+            }
+      if (event.type() == ME_CONTROLLER && event.dataA() == CTRL_ALL_NOTES_OFF && slot >= 0 && slot < MAX_SLOTS)
+            _lowCutState[size_t(slot)].snap = true;     // (a stop or a seek: the next cutoff at once)
+      Vst3Plugin* plugin = nullptr;
+      int midiChannel = 0;
+      if (!target(slot, &plugin, &midiChannel))
+            return;
+      const bool tuned = _links[size_t(slot)].tuned;
       if (fault().pedalDropMs >= 0 && !_releasing) {
             if (event.type() == ME_CONTROLLER && event.dataA() == 64 && event.dataB() < 64) {
                   if (_pedalUps.size() <= size_t(slot))
@@ -221,17 +326,18 @@ void Vst3Synth::deliver(const PlayEvent& event)
       const bool noteOn = event.type() == ME_NOTEON && event.dataB() > 0;
       const bool noteOff = event.type() == ME_NOTEOFF || (event.type() == ME_NOTEON && event.dataB() == 0);
       std::array<unsigned char, 128>& sounding = _sounding[size_t(slot)];
-      if (_varispeed && noteOn) {
+      const bool varispeed = varispeedAt(slot);
+      if (varispeed && !tuned && noteOn) {
             bool any = false;
             for (unsigned char n : sounding)
                   any = any || n > 0;
-            _slots[slot]->setPitch(event.tuning(), any ? -1.0 : 0.0);   // (-1: each frame within a cent, GLIDE_CENT_STEP)
+            plugin->setPitch(event.tuning(), any ? -1.0 : 0.0);   // (-1: each frame within a cent, GLIDE_CENT_STEP)
             }
       // automation of a plug-in parameter (not MIDI): the controller's parameter on this slot's instance
       if (event.type() == ME_PARAMETER) {
             const size_t index = size_t(event.dataA());
             if (size_t(slot) < _parameters.size() && index < _parameters[size_t(slot)].size() && _parameters[size_t(slot)][index] >= 0)
-                  _slots[slot]->queueParameter(unsigned(_parameters[size_t(slot)][index]), double(event.tuning()));
+                  plugin->queueParameter(unsigned(_parameters[size_t(slot)][index]), double(event.tuning()));
             return;
             }
       // all notes off (the Mixer's mute or solo, stop): each key still on gets its note-off too, for a
@@ -239,7 +345,7 @@ void Vst3Synth::deliver(const PlayEvent& event)
       if (event.type() == ME_CONTROLLER && event.dataA() == CTRL_ALL_NOTES_OFF) {
             for (int k = 0; k < 128; ++k) {
                   if (sounding[size_t(k)] > 0)
-                        _slots[slot]->midi(ME_NOTEOFF, 0, k, 0);
+                        plugin->midi(ME_NOTEOFF, midiChannel, k, 0);
                   }
             sounding.fill(0);
             }
@@ -248,20 +354,16 @@ void Vst3Synth::deliver(const PlayEvent& event)
             ++sounding[size_t(key)];
       else if (noteOff && sounding[size_t(key)] > 0)
             --sounding[size_t(key)];
-      _slots[slot]->midi(event.type(), 0, event.dataA(), event.dataB(), _varispeed ? 0.f : event.tuning());
+      plugin->midi(event.type(), midiChannel, event.dataA(), event.dataB(), (varispeed || tuned) ? 0.f : event.tuning());
       }
 
 void Vst3Synth::play(const PlayEvent& event)
       {
       if (!mine())
             return;
-      std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
-      if (!lock.owns_lock()) {
-            std::lock_guard<std::mutex> pending(_pendingMutex);
-            _pending.push_back(event);
+      std::unique_lock<std::mutex> lock = audioLock();
+      if (!mine())            // (an export began while this thread waited)
             return;
-            }
-      playPending();
       deliver(event);
       }
 
@@ -269,17 +371,21 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       {
       if (!mine())
             return;
-      std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
-      if (!lock.owns_lock())
+      std::unique_lock<std::mutex> lock = audioLock();
+      if (!mine())            // (an export began while this thread waited: beginExport's first, short hold)
             return;
-      playPending();
+      if (_lowCutSnap.exchange(false))
+            for (LowCutState& st : _lowCutState)
+                  st.snap = true;
       releaseDelayed(frames);
       // MS_VERIFY_FAULT's truncated notes: their note-off at the block they fall in
       if (!_cutoffs.empty()) {
             for (auto i = _cutoffs.begin(); i != _cutoffs.end();) {
                   if (i->at < _clock + (long long)frames) {
-                        if (i->slot >= 0 && i->slot < int(_slots.size()) && _slots[size_t(i->slot)])
-                              _slots[size_t(i->slot)]->midi(ME_NOTEOFF, 0, i->key, 0, 0.f);
+                        Vst3Plugin* p = nullptr;
+                        int ch = 0;
+                        if (target(i->slot, &p, &ch))
+                              p->midi(ME_NOTEOFF, ch, i->key, 0, 0.f);
                         i = _cutoffs.erase(i);
                         }
                   else
@@ -290,6 +396,11 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
       const std::array<Mix, 64>& mix = _exporting ? _exportMix : _mix;
       if (_scratch.size() < size_t(2 * frames))
             _scratch.resize(size_t(2 * frames));
+      // (instances in host processes: every one's block started first, so the processes render it at the same time;
+      // collected below in slot order, each added as before)
+      for (const auto& p : _slots)
+            if (p)
+                  p->beginProcess(int(frames));
       for (int k = 0; k < int(_slots.size()); ++k) {
             Vst3Plugin* p = _slots[size_t(k)].get();
             if (!p)
@@ -297,6 +408,7 @@ void Vst3Synth::process(unsigned frames, float* out, float*, float*)
             float* b = _scratch.data();
             std::fill(b, b + 2 * frames, 0.f);
             p->process(int(frames), b);
+            lowCut(k, (_exporting ? _exportLowCut : _lowCut)[size_t(k)].load(std::memory_order_relaxed), b, frames);
             const float gl = mix[size_t(k)].left.load(std::memory_order_relaxed);
             const float gr = mix[size_t(k)].right.load(std::memory_order_relaxed);
             if (gl == 1.f && gr == 1.f) {
@@ -382,6 +494,168 @@ void Vst3Synth::exportMix(int slot, float* left, float* right) const
       *right = _exportMix[size_t(slot)].right;
       }
 
+//---------------------------------------------------------
+//   the low cut ([levels] lowCut)
+//---------------------------------------------------------
+
+void Vst3Synth::lowCutCoefficients(double hz, double rate, double b[2][3], double a[2][2])
+      {
+      // a 4th-order Butterworth high-pass as two 2nd-order sections (Q = 1 / (2 cos(pi/8)), 1 / (2 cos(3 pi/8))), by the
+      // bilinear transform with the cutoff prewarped (RBJ's cookbook high-pass)
+      const double pi = 3.14159265358979323846;
+      const double q[2] = { 1.0 / (2.0 * std::cos(pi / 8.0)), 1.0 / (2.0 * std::cos(3.0 * pi / 8.0)) };
+      const double w = 2.0 * pi * std::min(hz, 0.45 * rate) / rate;
+      const double cw = std::cos(w);
+      for (int s = 0; s < 2; ++s) {
+            const double alpha = std::sin(w) / (2.0 * q[s]);
+            const double a0 = 1.0 + alpha;
+            b[s][0] = (1.0 + cw) / 2.0 / a0;
+            b[s][1] = -(1.0 + cw) / a0;
+            b[s][2] = (1.0 + cw) / 2.0 / a0;
+            a[s][0] = -2.0 * cw / a0;
+            a[s][1] = (1.0 - alpha) / a0;
+            }
+      }
+
+// the two biquads over frames [from, to) of buf, both channels, at the state's coefficients
+void Vst3Synth::lowCutRun(LowCutState& st, float* buf, unsigned from, unsigned to)
+      {
+      for (int c = 0; c < 2; ++c) {
+            for (unsigned i = from; i < to; ++i) {
+                  double x = buf[2 * i + c];
+                  for (int s = 0; s < 2; ++s) {
+                        double* z = st.z[c][s];
+                        const double y = st.b[s][0] * x + z[0];
+                        z[0] = st.b[s][1] * x - st.a[s][0] * y + z[1];
+                        z[1] = st.b[s][2] * x - st.a[s][1] * y;
+                        x = y;
+                        }
+                  // (denormals: a tiny offset can't build up, the state is double)
+                  buf[2 * i + c] = float(x);
+                  }
+            }
+      }
+
+void Vst3Synth::lowCut(int slot, float hz, float* buf, unsigned frames)
+      {
+      lowCutBlock(_lowCutState[size_t(slot)], hz, _clockRate > 0 ? _clockRate : 44100.0, buf, frames);
+      }
+
+void Vst3Synth::lowCutForTest(std::vector<float>* stereo, double rate, float floorHz,
+                              const std::vector<std::pair<long long, float>>& targets, unsigned block, bool snapEach,
+                              std::vector<double>* cutoffs)
+      {
+      LowCutState st;
+      const long long total = (long long)(stereo->size() / 2);
+      size_t next = 0;
+      if (cutoffs)
+            cutoffs->assign(size_t(total), 0.0);
+      for (long long at = 0; at < total;) {
+            while (next < targets.size() && targets[next].first <= at) {
+                  st.target = std::max(0.f, targets[next].second);
+                  st.follow = true;
+                  st.snap = st.snap || snapEach;
+                  ++next;
+                  }
+            long long n = std::min<long long>(block, total - at);
+            if (next < targets.size())
+                  n = std::min(n, targets[next].first - at);
+            if (cutoffs) {
+                  // (frame by frame: each frame's cutoff as it was when that frame was filtered)
+                  for (long long k = 0; k < n; ++k) {
+                        lowCutBlock(st, floorHz, rate, stereo->data() + 2 * (at + k), 1);
+                        (*cutoffs)[size_t(at + k)] = st.smooth;
+                        }
+                  }
+            else
+                  lowCutBlock(st, floorHz, rate, stereo->data() + 2 * at, unsigned(n));
+            at += n;
+            }
+      }
+
+void Vst3Synth::lowCutBlock(LowCutState& st, float hz, double rate, float* buf, unsigned frames)
+      {
+      if (!(hz > 0.f)) {
+            st.hz = 0.f;
+            st.smooth = 0;
+            return;
+            }
+      if (!st.follow) {
+            // the fixed cut ([levels] lowCut 1, or 2 before the slot's first ME_LOWCUT)
+            if (st.hz != hz || st.rate != rate) {
+                  if (st.rate != rate || st.hz == 0.f)
+                        std::memset(st.z, 0, sizeof(st.z));
+                  lowCutCoefficients(hz, rate, st.b, st.a);
+                  st.hz = hz;
+                  st.rate = rate;
+                  }
+            st.smooth = hz;
+            lowCutRun(st, buf, 0, frames);
+            return;
+            }
+      // [levels] lowCut 2: the following cut, its smoothed cutoff (never under the floor hz) at each step
+      if (st.rate != rate || st.hz == 0.f) {
+            std::memset(st.z, 0, sizeof(st.z));
+            st.smooth = 0;
+            st.phase = 0;
+            }
+      if (!(st.smooth > 0)) {
+            st.smooth = std::max(double(hz), double(st.target));
+            lowCutCoefficients(st.smooth, rate, st.b, st.a);
+            st.snap = false;
+            }
+      st.hz = hz;
+      st.rate = rate;
+      const double a = FollowCut::stepFactor(rate);
+      unsigned i = 0;
+      while (i < frames) {
+            if (st.phase == 0) {
+                  const double goal = std::max(double(hz), double(st.target));
+                  const double before = st.smooth;
+                  if (st.snap)
+                        st.smooth = goal;
+                  else {
+                        st.smooth = a * st.smooth + (1.0 - a) * goal;
+                        if (std::fabs(st.smooth - goal) < 0.01)
+                              st.smooth = goal;
+                        }
+                  st.snap = false;
+                  if (st.smooth != before)
+                        lowCutCoefficients(st.smooth, rate, st.b, st.a);
+                  }
+            const unsigned n = std::min(frames - i, unsigned(FollowCut::STEP_FRAMES - st.phase));
+            lowCutRun(st, buf, i, i + n);
+            i += n;
+            st.phase = (st.phase + int(n)) % FollowCut::STEP_FRAMES;
+            }
+      }
+
+double Vst3Synth::lowCutNow(int slot) const
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return 0;
+      return _lowCutState[size_t(slot)].smooth;
+      }
+
+void Vst3Synth::setLowCut(int slot, float hz)
+      {
+      if (slot >= 0 && slot < MAX_SLOTS)
+            _lowCut[size_t(slot)] = std::max(0.f, hz);
+      }
+
+void Vst3Synth::setExportLowCut(int slot, float hz)
+      {
+      if (slot >= 0 && slot < MAX_SLOTS)
+            _exportLowCut[size_t(slot)] = std::max(0.f, hz);
+      }
+
+float Vst3Synth::lowCutAt(int slot, bool forExport) const
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return 0.f;
+      return (forExport ? _exportLowCut : _lowCut)[size_t(slot)].load();
+      }
+
 void Vst3Synth::allSoundsOff(int slot)
       {
       allNotesOff(slot);
@@ -392,20 +666,9 @@ void Vst3Synth::allNotesOff(int slot)
       {
       if (slot != -1 || !mine())
             return;
-      std::unique_lock<std::mutex> lock(_mutex, std::try_to_lock);
-      if (!lock.owns_lock()) {
-            {
-                  std::lock_guard<std::mutex> pending(_pendingMutex);
-                  _pending.clear();                 // (the notes they'd start would ring on)
-            }
-            _allOffPending = true;
+      std::unique_lock<std::mutex> lock = audioLock();
+      if (!mine())
             return;
-            }
-      {
-            std::lock_guard<std::mutex> pending(_pendingMutex);
-            _pending.clear();
-      }
-      _allOffPending = false;
       for (auto& p : _slots)
             if (p)
                   p->allNotesOff();
@@ -417,9 +680,46 @@ void Vst3Synth::allNotesOff(int slot)
 //   slots (GUI thread)
 //---------------------------------------------------------
 
+void Vst3Synth::setLink(int slot, int host, int channel, bool tuned)
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return;
+      SlotsLock lock(this, "setLink");
+      Link& l = _links[size_t(slot)];
+      const bool changed = l.host != (host == slot ? -1 : host) || l.channel != channel;
+      l.host = host == slot ? -1 : host;
+      l.channel = l.host >= 0 ? qBound(0, channel, 15) : 0;
+      l.tuned = tuned;
+      if (changed)
+            _sounding[size_t(slot)].fill(0);
+      }
+
+void Vst3Synth::clearLinks()
+      {
+      SlotsLock lock(this, "clearLinks");
+      for (Link& l : _links)
+            l = Link();
+      }
+
+int Vst3Synth::hostOf(int slot) const
+      {
+      if (slot < 0 || slot >= MAX_SLOTS)
+            return slot;
+      SlotsLock lock(this, "hostOf");
+      return _links[size_t(slot)].host >= 0 ? _links[size_t(slot)].host : slot;
+      }
+
+Vst3Plugin* Vst3Synth::instance(int slot) const
+      {
+      SlotsLock lock(this, "instance");
+      Vst3Plugin* p = nullptr;
+      int ch = 0;
+      return target(slot, &p, &ch) ? p : nullptr;
+      }
+
 Vst3Plugin* Vst3Synth::plugin(int slot) const
       {
-      std::lock_guard<std::mutex> lock(_mutex);
+      SlotsLock lock(this, "plugin");
       return (slot >= 0 && slot < int(_slots.size())) ? _slots[slot].get() : nullptr;
       }
 
@@ -427,19 +727,30 @@ void Vst3Synth::setPlugin(int slot, std::unique_ptr<Vst3Plugin> plugin)
       {
       if (slot < 0 || slot >= MAX_SLOTS)
             return;
+      // an instance loaded at another rate (its load began before the audio device changed: restartAudioEngine) is
+      // set up at this synth's before it plays; in no slot yet, so not while process() runs. (Same rate: nothing)
+      if (plugin) {
+            double rate = 0;
+            {
+                  SlotsLock lock(this, "setPlugin");
+                  rate = _exporting ? _clockRate : double(_sampleRate);
+            }
+            plugin->setSampleRate(rate);
+            }
       std::unique_ptr<Vst3Plugin> old;
       {
-            std::lock_guard<std::mutex> lock(_mutex);
+            SlotsLock lock(this, "setPlugin");
             old = std::move(_slots[slot]);
             _slots[slot] = std::move(plugin);
             _sounding[size_t(slot)].fill(0);
+            _lowCutState[size_t(slot)] = LowCutState();
       }
       // old goes here, outside the lock: a plug-in can take its time to go
       }
 
 std::unique_ptr<Vst3Plugin> Vst3Synth::takePlugin(int slot)
       {
-      std::lock_guard<std::mutex> lock(_mutex);
+      SlotsLock lock(this, "takePlugin");
       if (slot < 0 || slot >= int(_slots.size()))
             return nullptr;
       return std::move(_slots[slot]);
@@ -451,29 +762,39 @@ int Vst3Synth::slotCount() const
       }
 
 // not with the slots held: Kontakt's controller takes its time over each CC played (the switches,
-// the dynamics), and the audio thread waited. Only this (GUI) thread changes the slots
+// the dynamics), and the audio thread waited. Only this (GUI) thread changes the slots. The slots collected into a fixed
+// array (the held section allocates nothing: before slot-lock its push_backs, every 50 ms while playing, were the hold
+// the audio thread's try_lock met); Vst3Plugin::idle takes the lock only to swap its MIDI mapping in
 void Vst3Synth::idle()
       {
-      std::vector<Vst3Plugin*> plugins;
+      std::array<Vst3Plugin*, MAX_SLOTS> plugins {};
+      size_t n = 0;
       {
-            std::lock_guard<std::mutex> lock(_mutex);
+            SlotsLock lock(this, "idle");
             for (auto& p : _slots)
-                  if (p)
-                        plugins.push_back(p.get());
+                  if (p && n < plugins.size())
+                        plugins[n++] = p.get();
       }
-      for (Vst3Plugin* p : plugins)
-            p->idle(&_mutex);
+      for (size_t i = 0; i < n; ++i)
+            plugins[i]->idle(&_mutex);
       }
 
 //---------------------------------------------------------
 //   beginExport / endExport
 //---------------------------------------------------------
 
+// _exporting set first, in a short hold of its own: from then on the audio thread returns before it takes the lock
+// (mine()), so it never waits through the plug-ins' setOffline / setSampleRate below (long; a helper's: round trips)
 void Vst3Synth::beginExport(float sampleRate)
       {
-      std::lock_guard<std::mutex> lock(_mutex);
-      _exportThread = std::this_thread::get_id();
-      _exporting = true;
+      {
+            SlotsLock lock(this, "beginExport");
+            _exportThread = std::this_thread::get_id();
+            _exporting = true;
+      }
+      SlotsLock lock(this, "beginExport");
+      for (LowCutState& st : _lowCutState)
+            st = LowCutState();
       _clock = 0;                   // (an export's own time, for MS_VERIFY_FAULT)
       _clockRate = sampleRate;
       _cutoffs.clear();
@@ -487,13 +808,15 @@ void Vst3Synth::beginExport(float sampleRate)
                   p->allNotesOff();
                   p->setSampleRate(sampleRate);
                   p->setOffline(true);
+                  p->restartTransport();        // (an export plays the score from its start)
                   }
             }
       }
 
+// (the audio thread returns before the lock until _exporting goes false, at the end of this hold)
 void Vst3Synth::endExport()
       {
-      std::lock_guard<std::mutex> lock(_mutex);
+      SlotsLock lock(this, "endExport");
       for (auto& p : _slots) {
             if (p) {
                   p->allNotesOff();
@@ -503,6 +826,8 @@ void Vst3Synth::endExport()
             }
       _exporting = false;
       _clockRate = _sampleRate;
+      for (LowCutState& st : _lowCutState)
+            st = LowCutState();
       _cutoffs.clear();
       }
 

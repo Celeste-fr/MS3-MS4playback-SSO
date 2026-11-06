@@ -83,7 +83,8 @@ struct Preset {
 const std::vector<Preset>& presets();
 // the preset's keys written into the ini file's text (comments and other lines kept; a missing key or section is added)
 QString applyPresetToText(const QString& text, const Preset& preset);
-// the file edited (written from iniTemplate() first when missing); false when it can't be written. Does not reload.
+// the file rewritten from iniTemplate() (every key at its default) with the preset's values; the old file kept as
+// <path>.bak. false when it can't be written. Does not reload.
 bool applyPreset(const QString& id, const QString& path = QString());
 // the preset the ini's values match ("" : custom); a key not in the ini counts as the map's (Recommended: SSO's 100)
 QString detectPreset(const std::map<QString, double>& iniValues);

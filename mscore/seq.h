@@ -20,17 +20,18 @@
 #ifndef __SEQ_H__
 #define __SEQ_H__
 
-#include "libmscore/partcontrollers.h"
 #include "libmscore/rendermidi.h"
 #include "libmscore/sequencer.h"
 #include "libmscore/fraction.h"
 #include "libmscore/fifo.h"
 #include "libmscore/midisync.h"
 #include "libmscore/playstart.h"
+#include "libmscore/notepreview.h"
 
 #include "audio/midi/event.h"
 #include "audiodrivers/driver.h"
 #include "liveclipmodel.h"
+#include "renderahead.h"
 
 #include <atomic>
 #include <chrono>
@@ -73,8 +74,7 @@ enum class SeqMsgId : char {
       INDEPENDENT_METRONOME_TIME_SIGNATURE,
       INDEPENDENT_METRONOME_FOLLOW,
       INDEPENDENT_METRONOME_ACCENTS,
-      METRONOME_GAIN,
-      LIBRARY_CC_LIVE               // a library part's controller changed live: intVal from, intVal2 to, event its route and CC
+      METRONOME_GAIN
       };
 
 struct SeqMsg {
@@ -120,6 +120,44 @@ enum class Transport : char {
 //---------------------------------------------------------
 //   Seq
 //    sequencer
+//
+//   Render ahead (branch render-ahead, 2026-10-31; the owner approved: his live playback sometimes turned into noise
+//   under memory / CPU load, the export of the same score clean; renderahead.h is the engine)
+//    [soundlibrary] renderAhead ms (500; MS_RENDER_AHEAD wins), read when the audio device starts (Seq::init: start,
+//    a change in Preferences › I/O). 0: the audio callback renders each block itself (processDirect), as before, not
+//    a line of it changed. > 0: one producer thread (realtime priority: MMCSS "Pro Audio" / SCHED_FIFO, as the
+//    helper processes' audio thread; never in a kheap LoadScope) runs processDirect for every block: every synth,
+//    effect and hosted plug-in (in-process or the helpers' post / collect) is processed there only, never by the
+//    callback, which copies finished frames (process). Blocks are the callback's own frame count, so the same events
+//    fall on the same frames and the audio is sample-identical (null-tested, NOTES / HANDOFF › Render ahead).
+//      lead     while playing (a block rendered with state PLAY) the producer keeps up to renderAhead ms queued; a
+//               play leads only when nothing leaves MuseScore with its own timing (MIDI out, MIDI sync, Live plays
+//               the score, a Live track, JACK: _raEligible, decided at Play's start), else it plays as stopped
+//      stopped  no lead: the callback asks the producer for its block and waits for it (up to 90 % of its budget):
+//               a clicked or entered note (playNotes, sendEvent: CLAUDE.md › Clicked / entered notes, stopped only)
+//               and MIDI input sound at the same callback as before. Playing, a click plays 3.6's click, as before,
+//               heard renderAhead later (note entry doesn't run while playing)
+//      start    Play's first block is heard once renderAhead ms are queued (prefill): the start waits up to the time
+//               it takes to render that much
+//      flush    a seek while playing, Stop (Seq::stop: _raUserStop), a device change: what was rendered ahead is
+//               dropped unheard and the lead built again. A loop's restart ('3', '4': _continuousSeek) and the
+//               score's end don't: what was rendered before them is still heard. renderAgainPlaying (a track delay,
+//               level, lane, Mixer or edit while playing) and the Play Panel's tempo take effect where the producer
+//               is: heard renderAhead ms later, nothing cut beyond what the swap itself cuts
+//      heard    the cursor, the marked notes, the Play Panel's time and Stop's position follow what the callback has
+//               output (heardFrame, RenderAhead::heardFrame), not what is rendered; a seek's marks wait until its
+//               jump is heard (_guiPosPending); processDirect's stop / start messages are sent when their block is
+//               heard (toGuiRT)
+//      underrun the producer too slow for longer than the lead: silence, never a repeat of old audio, counted as
+//               late; then prefill again
+//    Exports and the offline renders don't use Seq::process: unchanged
+//
+//   Playback couldn't keep up (the same branch): every driver's callback (process) counts, while playback is heard,
+//   each callback that took longer than its frames last, ran out of rendered audio (render ahead), or that the device
+//   says ran out (PortAudio's output underflow). Three such within one second (an isolated late block is one click:
+//   the VM saw 1-5 scattered ones a minute, build 483; the owner's noise is a run) show, once per play, "Playback
+//   couldn't keep up: audio was late %n time(s). Other programs may be using the CPU or memory." in the status bar;
+//   at the stop a line in the library's "load times.log" when any was late (lateSummary)
 //---------------------------------------------------------
 
 class Seq : public QObject, public Sequencer {
@@ -160,6 +198,10 @@ class Seq : public QObject, public Sequencer {
       RangeMap renderEventsStatus;
       MidiRenderer midi;
       QFuture<void> midiRenderFuture;
+      // a clicked or entered note as playback plays it (playNotes, libmscore/notepreview.h: a renderer of its own,
+      // not midi, the background render's) and the note-offs of the notes a click started (stopNotes sends them)
+      NotePreview::Previewer _preview;
+      std::vector<NPlayEvent> _previewOffs;
       // the Mixer for sound library parts (soundlibrary.h: PartMix): their routes (MIDI out; the
       // hosted plug-ins' slots are the host's), found again at each start or when stale, and the
       // CC7 / CC10 / CC91 / CC93 values last sent on each route over MIDI out (only changes are sent)
@@ -168,11 +210,6 @@ class Seq : public QObject, public Sequencer {
       int _libOutsGeneration { -1 };
       bool _libOutsStale { true };
       std::map<int, int> _libSent;        // (port * 16 + channel) * 128 + cc -> value
-      // the Controllers window's live changes of a library part's MIDI controllers: the events rendered
-      // before them are corrected as they play (audio thread only; PartControllers::LiveOverrides),
-      // until the score is rendered again (_libLiveClear, set by collectEvents)
-      PartControllers::LiveOverrides _libLive;
-      std::atomic<bool> _libLiveClear { false };
       bool allowBackgroundRendering = false; // should be set to true only when playing, so no
                                              // score changes are possible.
       EventMap countInEvents;             // playlist of any metronome countin clicks
@@ -306,6 +343,46 @@ class Seq : public QObject, public Sequencer {
       void startTransport();
       void stopTransport();
 
+      // render ahead (Render ahead, above): the engine; the block the producer is rendering (producer thread);
+      // whether this play may lead (nothing leaving MuseScore by MIDI, no JACK: decided at Play's start); a Stop
+      // pressed (the stop's block drops what was rendered ahead); a seek's marks held until the jump is heard
+      RenderAhead _ra;
+      std::atomic<int> _raMode { 0 };                 // 0 direct (the callback renders), 1 render ahead, 2 closing (silence)
+      RenderAhead::Block _raBlock;
+      bool _raProducing { false };
+      bool _raEligible { false };
+      std::atomic<bool> _raUserStop { false };
+      bool _continuousSeek { false };                 // (GUI) the next seek goes on from what plays: a loop's restart
+      bool _guiPosPending { false };                  // (GUI) guiPos set by a seek not heard yet
+      unsigned _guiPosJumps { 0 };
+      void startRenderAhead();
+      RenderAhead::Block produceAhead(unsigned frames, float* out);
+      void toGuiRT(int msg, int arg = 0);
+      int heardFrame() const;
+      int producerTick() const;
+
+      // late audio (Playback couldn't keep up, above): per play, counted in the callback, shown by the GUI thread
+      struct LateAudio {
+            std::atomic<unsigned> blocks { 0 };       // callbacks with late audio, one of:
+            std::atomic<unsigned> overBudget { 0 };   // the callback took longer than its frames last
+            std::atomic<unsigned> underruns { 0 };    // render ahead: the buffer ran out
+            std::atomic<unsigned> deviceUnderflows { 0 }; // the device said so (PortAudio's output underflow)
+            std::atomic<bool> warn { false };         // to show (once per play)
+            bool warned { false };
+            bool heard { false };                     // (callback) the last callback was heard playing
+            std::chrono::steady_clock::time_point times[3];   // the last three late callbacks
+            unsigned n { 0 };
+            double budgetMs { 0 };
+            };
+      LateAudio _late;
+      std::atomic<bool> _deviceUnderflow { false };
+      AudioCapture* _capture { nullptr };             // MS_PLAY_CAPTURE (playcapture.h)
+      double _stallAt { -1 };                         // MS_AUDIO_STALL "<s>:<ms>" (a test: processDirect sleeps once)
+      int _stallMs { 0 };
+      bool _stalled { false };
+      void countLate(unsigned frames, std::chrono::steady_clock::time_point t0, bool underrun, bool heard);
+      void processDirect(unsigned framesPerPeriod, float* buffer);
+
       void renderChunk(const MidiRenderer::Chunk&, EventMap*);
       void updateEventsEnd();
 
@@ -359,7 +436,7 @@ class Seq : public QObject, public Sequencer {
 
    public slots:
       void setRelTempo(double);
-      void seek(int utick);
+      void seek(int utick);   // (render ahead: what was rendered ahead dropped, unless _continuousSeek)
       void seekRT(int utick);
       void stopNotes(int channel = -1, bool realTime = false);
       void start();
@@ -409,7 +486,18 @@ class Seq : public QObject, public Sequencer {
       bool isStopped() const    { return state == Transport::STOP; }
 
       void processMessages();
+      // the audio callback (every driver): processDirect here, or (render ahead) the finished audio copied
       void process(unsigned framesPerPeriod, float* buffer);
+      void noteOutputUnderflow()   { _deviceUnderflow = true; }   // (the driver: the device ran out before this callback)
+      bool renderingAhead() const  { return _raMode.load() == 1; }
+      int renderAheadMs() const    { return renderingAhead() ? _ra.leadMs() : 0; }
+      // (any thread) this play's late audio: callbacks with late audio, over budget, render-ahead underruns,
+      // device underflows; the capture (MS_PLAY_CAPTURE), null without it
+      unsigned lateBlocks() const        { return _late.blocks; }
+      QString lateSummary() const;
+      void logLateAudio();             // (GUI thread) at a stop: a line in "load times.log" when audio was late
+      AudioCapture* capture() const      { return _capture; }
+      bool heardPlaying() const;
       int getEndUTick() const   { return endUTick;  }
       bool isRealtime() const   { return true;     }
       void sendMessage(SeqMsg&) const;
@@ -421,11 +509,6 @@ class Seq : public QObject, public Sequencer {
       // a sound library part's routes (port, channel): its hosted slots (slot = port * 16 + channel) or
       // its MIDI out routes; none for a part the library doesn't play
       std::vector<std::pair<int, int>> libraryOuts(const Part* part);
-      // (GUI thread) the Controllers window changed a library part's values from before to after: each
-      // MIDI controller changed is sent now on the part's routes (unless a staff text is in force at
-      // the play position), and the events rendered with an older value play the new one
-      void libraryControllersChanged(MasterScore* score, const Part* part, const PartControllers::Values& before,
-                                     const PartControllers::Values& after);
       // (GUI thread) wait for a chunk being rendered in the background, before the score's metaTags change
       // during playback (the renderer reads them); no other one starts before the GUI thread's next heartbeat
       void waitForRendering();
@@ -453,6 +536,11 @@ class Seq : public QObject, public Sequencer {
 
       void putEvent(const NPlayEvent&, unsigned framePos = 0);
       void startNoteTimer(int duration);
+      // (GUI thread) a clicked or entered note (a chord: all its notes) as playback plays it, for duration ms
+      // (libmscore/notepreview.h): a part the sound library plays on its routes (hosted or MIDI out), an MS4 part
+      // on the built-in synthesizer as MS4 renders it. False: the caller plays MuseScore 3.6's click (an MS3
+      // part, playing, Live plays the score, a Live clip edited here, a note playback doesn't sound)
+      bool playNotes(const std::vector<const Note*>& notes, int duration);
       virtual void startNote(int channel, int, int, double nt) override;
       virtual void startNote(int channel, int, int, int, double nt) override;
       virtual void playMetronomeBeat(BeatType type) override;

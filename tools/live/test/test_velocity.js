@@ -135,6 +135,8 @@ function setVel(s, key, serial, atoms) {
 // the code the patcher reads for song beat b (its index rounded: the bias is one vector, as snapshot~ reads it)
 function codeAt(s, b) {
       const buf = s.live.buffers["001mslv"];
+      if (!buf)                                       // (not made until a curve shapes something: all 0)
+            return 0;
       return buf.data[Math.round(b * TICKS) % s.hub.api.VEL_RING];
       }
 

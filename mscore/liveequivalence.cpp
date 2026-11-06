@@ -93,11 +93,11 @@ std::vector<DeviceEvent> deviceMidi(const std::vector<LiveClips::Note>& notes, d
                         e.b = msb;
                         }
                   else {
-                        const int i = 127 - n.pitch;
-                        if (i < 0 || i >= LiveClips::CARRIER_COUNT)
+                        const int cc = LiveClips::carrierController(n.pitch);
+                        if (cc < 0)
                               continue;
                         e.type = ME_CONTROLLER;
-                        e.a = LiveClips::CARRIER_CCS[i];
+                        e.a = cc;
                         e.b = v;
                         }
                   out.push_back({ e, 2 * order++ + 1 });
@@ -264,52 +264,97 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
       qint64 total = 0;
       std::map<int, std::vector<float>> msTrack, liveTrack;        // by slot (port × 16 + channel)
       {
-            std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, float(rate), &error);
-            if (!vst) {
-                  r.error = error;
-                  return r;
-                  }
-            for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k)
-                  vst->setExportMix(k, 100, 64, false);
             const std::map<const Part*, TrackDelays::Delays> delays = TrackDelays::read(score);
-            for (const SoundLib::Route& rt : routes) {
-                  const SoundLib::PartMix m = SoundLib::partMix(rt.part, false);
-                  const double gain = TrackDelays::patchGain(library, TrackDelays::of(rt.part, delays), rt.instrument->name);
-                  vst->setExportMix(rt.port * 16 + rt.channel, m.volume, m.pan, m.muted, float(gain));
-                  }
             const qint64 last = qint64((score->utick2utime(events.rbegin()->first)) * rate);
             total = last + 3 * rate;
             r.museScore.assign(size_t(2 * total), 0.f);
-            // one route at a time (the same instances; Vst3Synth sums its slots, so the mix is their sum): each
-            // part's notes measured on its own, not through another part's
+            // the instances: one library part's at a time (only its routes play in its render; the part before's released
+            // first). Every part's at once ran the 16 GB Windows VM out of memory on big scores (--even-levels and
+            // --verify-playback, 2026-10-16: 7f51a91979); wholeScore loads them all at once, as before. Each route's
+            // render is on its own instance(s) either way, so the tracks are the same samples; the mix is their sum
+            // added up in slot order below, as it always was.
             std::set<int> routeSlots;
+            std::map<const Part*, std::set<int>> slotsOfPart;
+            std::vector<const Part*> partOrder;
             for (const SoundLib::Route& rt : routes)
-                  if (rt.instrument && !rt.instrument->kit)
-                        routeSlots.insert(rt.port * 16 + rt.channel);
-            for (int slot : routeSlots) {
-                  std::vector<float>& out = msTrack[slot];
-                  out.assign(size_t(2 * total), 0.f);
-                  vst->beginExport(float(rate));
-                  const unsigned FRAMES = 512;
-                  qint64 pos = 0;
-                  auto processTo = [&](qint64 to) {
-                        while (pos < to) {
-                              const unsigned n = unsigned(std::min<qint64>(FRAMES, to - pos));
-                              vst->process(n, out.data() + 2 * pos, nullptr, nullptr);
-                              pos += n;
-                              }
-                        };
-                  for (const auto& te : events) {
-                        const NPlayEvent& e = te.second;
-                        if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != slot)
-                              continue;
-                        processTo(std::min(total, qint64(score->utick2utime(te.first) * rate)));
-                        PlayEvent pe(e);
-                        pe.setChannel(slot);
-                        vst->play(pe);
+                  if (rt.instrument && !rt.instrument->kit) {
+                        const int slot = rt.port * 16 + rt.channel;
+                        routeSlots.insert(slot);
+                        if (!slotsOfPart.count(rt.part))
+                              partOrder.push_back(rt.part);
+                        slotsOfPart[rt.part].insert(slot);
                         }
-                  processTo(total);
-                  vst->endExport();
+            std::vector<std::set<const Part*>> groups;
+            if (options.wholeScore) {
+                  std::set<const Part*> every;
+                  for (const SoundLib::Route& rt : routes)
+                        every.insert(rt.part);
+                  groups.push_back(every);
+                  }
+            else
+                  for (const Part* p : partOrder)
+                        groups.push_back({ p });
+            for (const std::set<const Part*>& group : groups) {
+                  std::shared_ptr<Vst3Synth> vst = SoundLibraryExport::loadInstances(score, float(rate), &error, nullptr,
+                                                                                    options.wholeScore ? nullptr : &group);
+                  if (!vst) {
+                        r.error = error;
+                        return r;
+                        }
+                  ++r.partsLoaded;
+                  r.mostPartsAtOnce = std::max(r.mostPartsAtOnce, int(group.size()));
+                  for (int k = 0; k < Vst3Synth::MAX_SLOTS; ++k) {
+                        vst->setExportMix(k, 100, 64, false);
+                        vst->setExportLowCut(k, 0.f);
+                        }
+                  for (const SoundLib::Route& rt : routes) {
+                        if (!group.count(rt.part))
+                              continue;
+                        const SoundLib::PartMix m = SoundLib::partMix(rt.part, false);
+                        const double gain = TrackDelays::patchGain(library, TrackDelays::of(rt.part, delays), rt.instrument->name);
+                        vst->setExportMix(rt.port * 16 + rt.channel, m.volume, m.pan, m.muted, float(gain));
+                        vst->setExportLowCut(rt.port * 16 + rt.channel, float(SoundLib::lowCutHz(rt.instrument, score)));
+                        }
+                  // one route at a time (the same instances; Vst3Synth sums its slots, so the mix is their sum): each
+                  // part's notes measured on its own, not through another part's
+                  for (int slot : routeSlots) {
+                        const SoundLib::Route* owner = nullptr;
+                        for (const SoundLib::Route& rt : routes)
+                              if (rt.port * 16 + rt.channel == slot)
+                                    owner = &rt;
+                        if (!owner || !group.count(owner->part))
+                              continue;
+                        std::vector<float>& out = msTrack[slot];
+                        out.assign(size_t(2 * total), 0.f);
+                        vst->beginExport(float(rate));
+                        const unsigned FRAMES = 512;
+                        qint64 pos = 0;
+                        auto processTo = [&](qint64 to) {
+                              while (pos < to) {
+                                    const unsigned n = unsigned(std::min<qint64>(FRAMES, to - pos));
+                                    vst->process(n, out.data() + 2 * pos, nullptr, nullptr);
+                                    pos += n;
+                                    }
+                              };
+                        for (const auto& te : events) {
+                              const NPlayEvent& e = te.second;
+                              if (!e.isExternal() || e.extPort() * 16 + e.extChannel() != slot)
+                                    continue;
+                              // ([levels] lowCut 2: the route set plays the fixed cut, LIVE.md › What still differs; compared
+                              // at it, so the check is of the set's settings)
+                              if (e.type() == ME_LOWCUT)
+                                    continue;
+                              processTo(std::min(total, qint64(score->utick2utime(te.first) * rate)));
+                              PlayEvent pe(e);
+                              pe.setChannel(slot);
+                              vst->play(pe);
+                              }
+                        processTo(total);
+                        vst->endExport();
+                        }
+                  }                  // (vst released here: the next part's instances load after)
+            for (int slot : routeSlots) {
+                  const std::vector<float>& out = msTrack[slot];
                   for (size_t i = 0; i < out.size(); ++i)
                         r.museScore[i] += out[i];
                   }
@@ -335,7 +380,7 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
             std::unique_ptr<Vst3Plugin> p = Vst3Plugin::load(pluginPath, rate, 4096, &error);
             QByteArray state = p ? Vst3Plugin::joinState(p->name(), t.plugin.component, t.plugin.controller) : QByteArray();
             if (fault.contains("no-controllers"))
-                  state = SoundLibraryHost::setupState(library, t.patch, pluginPath, &error);
+                  state = SoundLibraryHost::setupState(library, t.patch, pluginPath, &error, score, t.partRef);
             if (!p || !p->setState(state)) {
                   r.error = QString("%1: the set's state could not be loaded (%2)").arg(t.name, error);
                   return r;
@@ -353,8 +398,21 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
             out.assign(r.museScore.size(), 0.f);
             float gl, gr;
             liveMixer(t.volume, t.pan, t.active, &gl, &gr);
+            // MuseScore's Utility after the Kontakt (its gain stage: livesetwriter.h › UTILITY_NAME)
+            if (t.utility) {
+                  gl *= float(t.utilityGain);
+                  gr *= float(t.utilityGain);
+                  }
             if (fault.contains("no-mixer"))
                   gl = gr = 1.f;
+            // [levels] lowCut: MuseScore's EQ Eight before the Utility (livesetwriter.h › LOW_CUT_NAME), modelled as its two
+            // Low Cut 12 bands being RBJ high-pass biquads at the Q written, i.e. MuseScore's own Butterworth
+            // (Vst3Synth::lowCutCoefficients): an assumption until Live's EQ Eight is measured (LIVE.md › The plain set ›
+            // Low cut), so this compares the set's settings, not Live's filter
+            const bool eq = t.lowCutHz > 0 && !fault.contains("no-lowcut");
+            double eb[2][3] {}, ea[2][2] {}, ez[2][2][2] {};
+            if (eq)
+                  Vst3Synth::lowCutCoefficients(t.lowCutHz, rate, eb, ea);
             std::vector<float> buf(size_t(2 * 512));
             qint64 pos = 0;
             auto processTo = [&](qint64 to) {
@@ -362,6 +420,20 @@ Result compare(MasterScore* score, const SoundLib::Library& library, const Optio
                         const unsigned n = unsigned(std::min<qint64>(512, to - pos));
                         std::fill(buf.begin(), buf.begin() + 2 * n, 0.f);
                         p->process(int(n), buf.data());
+                        if (eq) {
+                              for (int c = 0; c < 2; ++c)
+                                    for (unsigned i = 0; i < n; ++i) {
+                                          double x = buf[2 * i + c];
+                                          for (int st = 0; st < 2; ++st) {
+                                                double* z = ez[c][st];
+                                                const double y = eb[st][0] * x + z[0];
+                                                z[0] = eb[st][1] * x - ea[st][0] * y + z[1];
+                                                z[1] = eb[st][2] * x - ea[st][1] * y;
+                                                x = y;
+                                                }
+                                          buf[2 * i + c] = float(x);
+                                          }
+                              }
                         for (unsigned i = 0; i < n; ++i) {
                               out[size_t(2 * (pos + i))] += gl * buf[2 * i];
                               out[size_t(2 * (pos + i) + 1)] += gr * buf[2 * i + 1];

@@ -53,6 +53,8 @@ struct ArtRef {
                                           // 2 merged from a tied note (addTiedNote)
       bool erased { false };              // taken out after its phase (the principal's grace type)
       int pitchRange { 0 };               // overallPitchChangesRange (a glissando's interval, 50 = semitone)
+      bool technique { false };           // the playing technique in force from a staff text (Dynamics::techniqueAt);
+                                          // MS4's rendering ignores this flag, the sound-library Want reads it
       };
 
 // ArticulationMap is a std::unordered_map: where MS4 takes "the first" articulation (the average's

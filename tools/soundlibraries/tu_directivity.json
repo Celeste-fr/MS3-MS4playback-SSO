@@ -1,0 +1,217 @@
+{
+ "method": {
+  "source": "TU Berlin directivity database (Ackermann, Boehm, Brinkmann & Weinzierl; DepositOnce doi 10.14279/depositonce-19858, version 3, 2024-02-12; CC BY-NC-SA 4.0: derived numbers only), component 2 (the 32-channel recordings, every note at pp and ff), read remotely by tools/soundlibraries/tu_directivity.py; component 1a holds ff only",
+  "measure": "per note and dynamic, each channel's mean square over the recording's SteadyPart; DI_r = 10 log10(p_r^2 / sum w_q p_q^2), w the receivers' spherical Voronoi areas; per instrument the receiver with the highest mean DI over its ff notes is its loudest direction (Clark & Luce measured each instrument at 10 m in its loudest direction, one direction for every dynamic): diFf its mean ff DI, diPp the mean pp DI at that same receiver",
+  "checks": "diFf against 1a's single-tone ff directivities (ff1a: the partials' pressures, the stored diMax of clark_luce_levels.json, reproduced exactly): within 0.21 dB, the same receiver for all 16. ppOwnReceiver / ppOwnDi: pp's own loudest direction, different for the flute, contrabassoon, French horn, bass clarinet and clarinet (not used: one direction per instrument)"
+ },
+ "instruments": {
+  "Transverse_flute_modern": {
+   "diPp": 1.36,
+   "diFf": 3.13,
+   "receiver": 25,
+   "notes": {
+    "pp": 39,
+    "ff": 36
+   },
+   "ppOwnReceiver": 3,
+   "ppOwnDi": 2.83,
+   "ff1a": 3.11,
+   "ff1aReceiver": 25
+  },
+  "Trumpet_modern": {
+   "diPp": 4.33,
+   "diFf": 7.39,
+   "receiver": 3,
+   "notes": {
+    "pp": 36,
+    "ff": 36
+   },
+   "ppOwnReceiver": 3,
+   "ppOwnDi": 4.33,
+   "ff1a": 7.18,
+   "ff1aReceiver": 3
+  },
+  "English_horn_modern": {
+   "diPp": 4.51,
+   "diFf": 3.32,
+   "receiver": 5,
+   "notes": {
+    "pp": 31,
+    "ff": 31
+   },
+   "ppOwnReceiver": 5,
+   "ppOwnDi": 4.51,
+   "ff1a": 3.3,
+   "ff1aReceiver": 5
+  },
+  "Contrabassoon_modern": {
+   "diPp": 0.95,
+   "diFf": 2.54,
+   "receiver": 5,
+   "notes": {
+    "pp": 31,
+    "ff": 30
+   },
+   "ppOwnReceiver": 6,
+   "ppOwnDi": 1.25,
+   "ff1a": 2.52,
+   "ff1aReceiver": 5
+  },
+  "Double_bass_modern": {
+   "diPp": 4.1,
+   "diFf": 4.67,
+   "receiver": 5,
+   "notes": {
+    "pp": 48,
+    "ff": 49
+   },
+   "ppOwnReceiver": 5,
+   "ppOwnDi": 4.1,
+   "ff1a": 4.62,
+   "ff1aReceiver": 5
+  },
+  "Bass_trombone_modern": {
+   "diPp": 2.68,
+   "diFf": 7.24,
+   "receiver": 3,
+   "notes": {
+    "pp": 38,
+    "ff": 38
+   },
+   "ppOwnReceiver": 3,
+   "ppOwnDi": 2.68,
+   "ff1a": 7.18,
+   "ff1aReceiver": 3
+  },
+  "Violin_modern": {
+   "diPp": 2.03,
+   "diFf": 2.63,
+   "receiver": 6,
+   "notes": {
+    "pp": 37,
+    "ff": 37
+   },
+   "ppOwnReceiver": 6,
+   "ppOwnDi": 2.03,
+   "ff1a": 2.62,
+   "ff1aReceiver": 6
+  },
+  "French_horn_modern": {
+   "diPp": 3.24,
+   "diFf": 9.71,
+   "receiver": 19,
+   "notes": {
+    "pp": 42,
+    "ff": 41
+   },
+   "ppOwnReceiver": 20,
+   "ppOwnDi": 6.28,
+   "ff1a": 9.69,
+   "ff1aReceiver": 19
+  },
+  "Bassoon_modern": {
+   "diPp": 3.4,
+   "diFf": 4.2,
+   "receiver": 24,
+   "notes": {
+    "pp": 43,
+    "ff": 43
+   },
+   "ppOwnReceiver": 24,
+   "ppOwnDi": 3.4,
+   "ff1a": 4.19,
+   "ff1aReceiver": 24
+  },
+  "Bass_clarinet_modern": {
+   "diPp": 1.23,
+   "diFf": 3.36,
+   "receiver": 5,
+   "notes": {
+    "pp": 42,
+    "ff": 42
+   },
+   "ppOwnReceiver": 3,
+   "ppOwnDi": 1.69,
+   "ff1a": 3.36,
+   "ff1aReceiver": 5
+  },
+  "Oboe_modern": {
+   "diPp": 3.63,
+   "diFf": 4.34,
+   "receiver": 3,
+   "notes": {
+    "pp": 33,
+    "ff": 36
+   },
+   "ppOwnReceiver": 3,
+   "ppOwnDi": 3.63,
+   "ff1a": 4.31,
+   "ff1aReceiver": 3
+  },
+  "Tuba_modern": {
+   "diPp": 4.02,
+   "diFf": 6.34,
+   "receiver": 0,
+   "notes": {
+    "pp": 59,
+    "ff": 54
+   },
+   "ppOwnReceiver": 0,
+   "ppOwnDi": 4.02,
+   "ff1a": 6.28,
+   "ff1aReceiver": 0
+  },
+  "Clarinet_modern": {
+   "diPp": 2.51,
+   "diFf": 4.16,
+   "receiver": 25,
+   "notes": {
+    "pp": 45,
+    "ff": 45
+   },
+   "ppOwnReceiver": 3,
+   "ppOwnDi": 3.87,
+   "ff1a": 4.15,
+   "ff1aReceiver": 25
+  },
+  "Tenor_trombone_modern": {
+   "diPp": 3.06,
+   "diFf": 7.1,
+   "receiver": 3,
+   "notes": {
+    "pp": 46,
+    "ff": 46
+   },
+   "ppOwnReceiver": 3,
+   "ppOwnDi": 3.06,
+   "ff1a": 7.0,
+   "ff1aReceiver": 3
+  },
+  "Viola_modern": {
+   "diPp": 1.9,
+   "diFf": 2.34,
+   "receiver": 25,
+   "notes": {
+    "pp": 54,
+    "ff": 54
+   },
+   "ppOwnReceiver": 25,
+   "ppOwnDi": 1.9,
+   "ff1a": 2.32,
+   "ff1aReceiver": 25
+  },
+  "Cello_modern": {
+   "diPp": 2.26,
+   "diFf": 2.68,
+   "receiver": 3,
+   "notes": {
+    "pp": 56,
+    "ff": 56
+   },
+   "ppOwnReceiver": 3,
+   "ppOwnDi": 2.26,
+   "ff1a": 2.64,
+   "ff1aReceiver": 3
+  }
+ }
+}

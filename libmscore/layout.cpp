@@ -61,6 +61,7 @@
 #include "undo.h"
 #include "utils.h"
 #include "volta.h"
+#include "lagprobe.h"
 
 namespace Ms {
 
@@ -5280,6 +5281,7 @@ class CmdStateLocker {
 
 void Score::doLayoutRange(const Fraction& st, const Fraction& et)
       {
+      LagProbe::Scope probe("layout");
       CmdStateLocker cmdStateLocker(this);
       LayoutContext lc(this);
       if (_scordaturaView)

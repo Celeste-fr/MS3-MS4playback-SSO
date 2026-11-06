@@ -81,6 +81,26 @@ class Convert(unittest.TestCase):
         self.assertNotIn("pitches", doc["patches"]["Violas"]["42"])        # (another value)
 
 
+    def test_strings(self):
+        """a sound measured again replaces the measured sound of the same patch and value (Long only)"""
+        strings = {"patches": {"Violas": {
+            "pitch": 69, "checks": {},
+            "Long": {"value": 1, "drivenBy": "controller", "curve": [[16, -40], [127, -30]],
+                     "perceived": [[16, 30], [127, 50]], "expression": [[16, -50], [127, -35]],
+                     "spread": {}, "repeats": 4, "replay": {}},
+            "Spiccato": {"value": 42, "drivenBy": "velocity", "curve": [[16, -1], [127, 0]]}}}}
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.xml")
+            with open(p, "w") as f:
+                f.write(MAP)
+            doc, _, _ = C.convert(MEASURED, C.map_articulations(p), None, strings)
+        long_ = doc["patches"]["Violas"]["1"]
+        self.assertEqual(long_, {"drivenBy": "controller", "curve": [[16, -40.0], [127, -30.0]],
+                                 "perceived": [[16, 30.0], [127, 50.0]], "expression": [[16, -50.0], [127, -35.0]]})
+        self.assertEqual(doc["patches"]["Violas"]["42"]["curve"], [[16, -59.8], [127, -28.8]])    # (kept)
+        self.assertEqual(MEASURED["Violas"]["Long"]["curve"], [[32, -47.512], [127, -35.8]])      # (not changed)
+
+
 class Shipped(unittest.TestCase):
     def test_shipped_file(self):
         path = os.path.splitext(C.MAP)[0] + ".dynamics.json"
@@ -90,17 +110,31 @@ class Shipped(unittest.TestCase):
             measured = json.load(f)
         with open(os.path.join(C.HERE, C.REGISTERS)) as f:
             registers = json.load(f)
-        again, _, missing = C.convert(measured, C.map_articulations(C.MAP), registers)
+        with open(os.path.join(C.HERE, C.STRINGS)) as f:
+            strings = json.load(f)
+        again, _, missing = C.convert(measured, C.map_articulations(C.MAP), registers, strings)
         self.assertEqual(doc, again, "stale: run calibration_from_sound_dynamics.py")
         # per-pitch curves: Long (Rachm.) (16) of the four upper string sections, nothing else
         with_pitches = sorted((p, v) for p, arts in doc["patches"].items() for v, c in arts.items() if "pitches" in c)
         self.assertEqual(with_pitches, [("Celli", "16"), ("Violas", "16"), ("Violins 1", "16"), ("Violins 2", "16")])
         self.assertEqual(sorted(map(int, doc["patches"]["Violas"]["16"]["pitches"])), [48, 50, 53, 55, 69, 74, 79, 90])
         self.assertEqual(missing, [])
-        # known values: Violas' held Long at pp, as measured
-        e = measured["Violas"]["Long"]
+        # known values: Violas' held Long, as measured again (sso_string_dynamics.json); its Spiccato the owner's
+        e = strings["patches"]["Violas"]["Long"]
         c = doc["patches"]["Violas"][str(e["value"])]
         self.assertEqual(c["curve"], [[x, round(y, 2)] for x, y in e["curve"]])
+        e = measured["Violas"]["Spiccato"]
+        self.assertEqual(doc["patches"]["Violas"]["42"]["curve"], [[x, round(y, 2)] for x, y in e["curve"]])
+        # the five sections' Long: on the controller, by ear rising from CC1 16 to 127 and by more than its largest
+        # repeat spread over every step down, within it
+        for p in ("Violins 1", "Violins 2", "Violas", "Celli", "Basses"):
+            c = doc["patches"][p]["1"]
+            self.assertEqual(c["drivenBy"], "controller", p)
+            per = [y for _, y in c["perceived"]]
+            worst = max(y for _, y in strings["patches"][p]["Long"]["spread"]["perceived"])
+            self.assertGreater(per[-1] - per[0], worst, p)
+            for a, b in zip(per, per[1:]):
+                self.assertGreater(b - a, -worst, p)
         self.assertIn("expression", doc["patches"]["Violas - Performance"]["20"])
         for arts in doc["patches"].values():
             for c in arts.values():

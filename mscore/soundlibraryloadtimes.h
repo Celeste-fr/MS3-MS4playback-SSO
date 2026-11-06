@@ -27,6 +27,12 @@
 //                            technique unload its samples, most likely; the value that holds
 //                            them isn't known). Each such value's elements one by one when that
 //                            saved a lot
+//    6 multi parameters      (after 4) a plug-in parameter turned over on a multi of one patch (hosted slots: a
+//                            patch's copies in one instance, SoundLib::Instance) and each slot's script values
+//                            compared before and after: does a parameter set on the instance reach every slot
+//
+//  Phases 2 and 3 load what MuseScore loads (SoundLib::instances): with [tuning] hostedTuning 1 (slots) a patch's
+//  copies for other tunings as one instance, a slot per tuning tuned by Kontakt's Tune (SoundLibraryHost::tunedState)
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License version 3.

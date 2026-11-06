@@ -5,7 +5,9 @@
 //  Vst3Synth: the hosted plug-ins (vst3plugin.h) as one of the MasterSynthesizer's
 //  synthesizers. A sound library part's events come with its route (SoundLib::Route): the
 //  slot port * 16 + channel is the event's channel here, each slot a plug-in instance of its
-//  own (one library instrument, played on MIDI channel 1). It is "dry": mixed in after the
+//  own (one library instrument, played on MIDI channel 1), or linked to another slot's instance
+//  (setLink: a patch's tuning copies as the slots of one Kontakt, each on its own MIDI channel and
+//  tuned by its Tune: SoundLib::Instance, [tuning] hostedTuning slots). It is "dry": mixed in after the
 //  master effects, as the library brings its own room.
 //
 //  The Mixer (volume, pan, mute, solo of the part a slot plays) is applied here, in the host, to
@@ -15,6 +17,21 @@
 //
 //  Audio export uses the same instances (their instruments are loaded already): between
 //  beginExport() and endExport() they play for the exporting thread only, in offline mode.
+//
+//  The slots' lock (_mutex; branch slot-lock, 2026-10-31): the audio (or exporting) thread takes it for every event and
+//  block and WAITS for it (audioLock: a spin of up to 50 us, then blocking); it never skips a block. Before, process() only try_locked it and skipped the whole block when
+//  another thread held it (silence, and the plug-in a block late from then on: render ahead's null test, 2 blocks in one
+//  Whence play, from idle()'s 50 ms timer), and play() / allNotesOff() put events aside (_pending: an all-notes-off then
+//  dropped the switches put aside). Waiting is safe because every other holder keeps it only for a bounded, tiny critical
+//  section: pointers, links, a vector swap; nothing allocated or freed, no plug-in called (a plug-in replaced is destroyed
+//  after the lock, a parameter table made before it and its old one freed after it, idle() collects into a fixed array).
+//  The slots are changed (setPlugin, takePlugin) on one thread only, the one that calls idle() (the GUI's): idle() calls
+//  the instances it collected after the lock, so they must not go meanwhile. The Mixer, low cut and varispeed: atomics.
+//  Exceptions, none while the audio thread plays: init() (the device stopped: restartAudioEngine) and beginExport() /
+//  endExport(), which set _exporting first under a short hold, so the audio thread returns before locking (mine()) while
+//  their plug-in calls run. A holder pre-empted inside its few instructions delays a block by a scheduler slice at worst
+//  (render ahead's lead absorbs that; the direct path's callback is late, not silent). lockWaits() / maxLockWaitUs() /
+//  lastLockHolder() count the waits (a diagnostic, playcapture.h).
 //
 //  This program is free software; you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License version 3.
@@ -37,12 +54,36 @@
 namespace Ms {
 
 class Vst3Synth : public Synthesizer {
-      mutable std::mutex _mutex;          // the slots: GUI thread changes, audio thread plays
+      mutable std::mutex _mutex;          // the slots: GUI thread changes (tiny sections), audio thread plays (waits for it)
+      std::atomic<unsigned> _skipped { 0 };  // blocks process() skipped (none since slot-lock: kept for playcapture.h)
+      // the lock's diagnostic: who holds it (a site's name, set by SlotsLock), the audio thread's waits for it
+      mutable std::atomic<const char*> _holder { nullptr };
+      std::atomic<const char*> _lastWaitHolder { nullptr };
+      std::atomic<unsigned> _waits { 0 };
+      std::atomic<long long> _maxWaitNs { 0 };
+      class SlotsLock;                    // (another thread's hold, named)
+      std::unique_lock<std::mutex> audioLock();     // (the audio / exporting thread's: waits, counted)
       std::vector<std::unique_ptr<Vst3Plugin>> _slots;
       std::vector<std::array<unsigned char, 128>> _sounding;   // per slot, per key: notes on
       std::vector<std::vector<long>> _parameters;   // per slot: the plug-in parameter id of each automated
                                                     // controller index (ME_PARAMETER events), -1: none
       std::atomic<bool> _varispeed { false };
+      // per slot, over _varispeed (several libraries: each one's plug-in its own way, SoundLib::scoreLibraries): 0 as
+      // _varispeed, 1 varispeed, 2 not
+      std::array<std::atomic<unsigned char>, 64> _slotVarispeed {};
+      bool varispeedAt(int slot) const {
+            const unsigned char v = slot >= 0 && slot < 64 ? _slotVarispeed[size_t(slot)].load() : 0;
+            return v == 0 ? _varispeed.load() : v == 1;
+            }
+      // a slot played by another slot's instance (host >= 0), on MIDI channel channel (0-15) of it; tuned: the
+      // instance's state tunes it (Kontakt's Tune), so a note's tuning is neither varispeed nor sent
+      struct Link {
+            int host { -1 };
+            int channel { 0 };
+            bool tuned { false };
+            };
+      std::array<Link, 64> _links;
+      bool target(int slot, Vst3Plugin** plugin, int* channel) const;    // (with _mutex held)
       // the Mixer, per slot: the gains of the left and right output (volume × pan, 0 muted), live and
       // for an export (its own: an export plays mute but not solo, as MuseScore's); a change applies
       // from the next block on, with no glide (the owner, 2026-10-03: no mixer smoothing)
@@ -52,14 +93,37 @@ class Vst3Synth : public Synthesizer {
             };
       std::array<Mix, 64> _mix;
       std::array<Mix, 64> _exportMix;
+      // [levels] lowCut: a slot's high-pass (Hz, 0: none; live and for an export), a 4th-order Butterworth (two biquads,
+      // transposed direct form II in double) on the slot's output before its Mixer gains: in MuseScore's process, so an
+      // instance in a host process (vst3remote.h) is filtered the same; no latency. The state is the audio (export)
+      // thread's: made again when the cutoff or the rate changes, cleared at beginExport / endExport
+      std::array<std::atomic<float>, 64> _lowCut {};
+      std::array<std::atomic<float>, 64> _exportLowCut {};
+      // [levels] lowCut 2, the following cut (libmscore/followcut.h): the renderer's ME_LOWCUT events give a slot's cutoff
+      // (target, Hz; the floor above stays the least), smoothed one-pole every FollowCut::STEP_FRAMES frames of the slot's
+      // own count (phase), so the output doesn't depend on how the blocks are cut; the coefficients made again at each
+      // step it moves, the state kept. A slot without such an event plays the fixed cut as before (follow false). snap: the
+      // next step takes the target at once (a playback start, all notes off: a seek)
+      struct LowCutState {
+            float hz { 0.f };
+            double rate { 0 };
+            double b[2][3] {};
+            double a[2][2] {};
+            double z[2][2][2] {};         // [channel][stage][state]
+            bool follow { false };
+            bool snap { false };
+            float target { 0.f };
+            double smooth { 0 };          // the smoothed cutoff, Hz (the coefficients' when follow)
+            int phase { 0 };
+            };
+      std::array<LowCutState, 64> _lowCutState;
+      std::atomic<bool> _lowCutSnap { false };
+      void lowCut(int slot, float hz, float* b, unsigned frames);
+      static void lowCutBlock(LowCutState& st, float hz, double rate, float* buf, unsigned frames);
+      static void lowCutRun(LowCutState& st, float* buf, unsigned from, unsigned to);
       std::vector<float> _scratch;
-      // what the audio thread couldn't play while the GUI thread had the slots: played with the next
-      // event or block, not dropped (a lost note-off rang on, a lost note-on or switch was a gap)
-      std::mutex _pendingMutex;
-      std::vector<PlayEvent> _pending;
-      std::atomic<bool> _allOffPending { false };
       std::atomic<bool> _exporting { false };
-      std::thread::id _exportThread;
+      std::atomic<std::thread::id> _exportThread {};      // (read by mine() on the audio thread)
       QList<MidiPatch*> _patches;
 
       // fault injection for testing --verify-playback (MS_VERIFY_FAULT, see vst3synth.cpp): the
@@ -77,10 +141,17 @@ class Vst3Synth : public Synthesizer {
       void releaseDelayed(unsigned frames);
 
       bool mine() const;
-      void playPending();                 // (with _mutex held)
       void deliver(const PlayEvent&);     // (with _mutex held)
 
    public:
+      // blocks the audio thread skipped because another thread held the slots (render-ahead 2026-10-31: playcapture.h
+      // reports it); 0 since slot-lock (the audio thread waits instead), kept as the check
+      unsigned skippedBlocks() const { return _skipped.load(std::memory_order_relaxed); }
+      // the audio / exporting thread's waits for the slots' lock (another thread held it), the longest (us), the holder
+      // of the last one (a site's name: "idle", "setLink" …; null: none yet)
+      unsigned lockWaits() const { return _waits.load(std::memory_order_relaxed); }
+      double maxLockWaitUs() const { return double(_maxWaitNs.load(std::memory_order_relaxed)) / 1000.0; }
+      const char* lastLockHolder() const { return _lastWaitHolder.load(std::memory_order_relaxed); }
       static constexpr int MAX_SLOTS = 64;
       static const char* NAME;
 
@@ -97,15 +168,29 @@ class Vst3Synth : public Synthesizer {
       SynthesizerGroup state() const override;
       bool setState(const SynthesizerGroup&) override         { return true; }
 
-      void play(const PlayEvent& event) override;             // channel: the slot
+      void play(const PlayEvent& event) override;             // channel: the slot (audio / exporting thread)
       void process(unsigned frames, float* out, float*, float*) override;
       void allSoundsOff(int slot) override;
       void allNotesOff(int slot) override;
+      // a playback starts (Seq::process, the transport's change to play; an export begins by itself; the
+      // verification's and even levels' passes call it, each pass a playback): every plug-in sees the
+      // transport stop for a block, then start (Vst3Plugin::restartTransport). Realtime-safe
+      void restartTransport();
+      void playbackStarted() override { restartTransport(); }
 
       // a note's tuning as the speed of its slot (Vst3Plugin::setPitch), for a library whose plug-in
       // ignores a note's tuning: set at each note-on, at once when nothing sounds on the slot (the
       // lanes see to that, SoundLib::Lanes), else gliding (legato)
-      void setVarispeed(bool on) { _varispeed = on; }
+      void setVarispeed(bool on) { _varispeed = on; for (auto& v : _slotVarispeed) v = 0; }
+      // a slot's own (several libraries), over setVarispeed's until it is called again
+      void setVarispeed(int slot, bool on) { if (slot >= 0 && slot < 64) _slotVarispeed[size_t(slot)] = on ? 1 : 2; }
+      // (GUI thread) slot played by host's instance on its MIDI channel (0-15; host -1: by its own, channel 0); tuned: its
+      // tuning is in the instance's state (no varispeed, no note tuning sent). The Mixer of a linked slot is its host's
+      // (one instance, one output: a patch's copies are one part's, at one patch volume)
+      void setLink(int slot, int host, int channel, bool tuned);
+      void clearLinks();
+      int hostOf(int slot) const;               // the slot whose instance plays it (itself when not linked)
+      Vst3Plugin* instance(int slot) const;     // the instance that plays the slot (its own or its host's)
       // (GUI thread, SoundLibraryHost::sync) a slot's parameter ids by controller index (automation)
       void setParameterIds(int slot, const std::vector<long>& ids);
       // (a slurred note of another tuning on its previous note's lane glides by varispeed, each output frame within a
@@ -120,6 +205,22 @@ class Vst3Synth : public Synthesizer {
       void setMix(int slot, int volume, int pan, bool muted, float gain = 1.f);
       void setExportMix(int slot, int volume, int pan, bool muted, float gain = 1.f);
       void exportMix(int slot, float* left, float* right) const;    // a slot's export gains, as set
+      // [levels] lowCut (any thread): a slot's output through a 4th-order Butterworth high-pass at hz (0: none; the
+      // map's <Instrument lowCut>, SoundLib::lowCutHz), live and for an export
+      void setLowCut(int slot, float hz);
+      void setExportLowCut(int slot, float hz);
+      float lowCutAt(int slot, bool forExport = false) const;
+      // the filter's coefficients (b0 b1 b2, a1 a2 per stage, a0 = 1) at hz and rate; tests and the Live writer's check
+      static void lowCutCoefficients(double hz, double rate, double b[2][3], double a[2][2]);
+      // [levels] lowCut 2 (tests): the slot's smoothed cutoff now (its floor without ME_LOWCUT events), 0: none
+      double lowCutNow(int slot) const;
+      // (tests) a slot's low cut on a stereo buffer, as process() runs it: at floorHz, the following cut's targets
+      // (frame, Hz: an ME_LOWCUT there; none: the fixed cut) in blocks of block frames (cut at each target's frame, as the
+      // sequencer cuts them at an event); snapEach: every target taken at once (no smoothing: the positive control);
+      // cutoffs (optional): the smoothed cutoff at each frame
+      static void lowCutForTest(std::vector<float>* stereo, double rate, float floorHz,
+                                const std::vector<std::pair<long long, float>>& targets, unsigned block, bool snapEach = false,
+                                std::vector<double>* cutoffs = nullptr);
       static float volumeGain(int volume);
       static void panGains(int pan, float* left, float* right);
 

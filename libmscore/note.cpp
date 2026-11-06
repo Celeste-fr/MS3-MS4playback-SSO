@@ -730,6 +730,11 @@ Note::Note(const Note& n, bool link)
       _performanceTransition = n._performanceTransition;
       _libraryVelocity = n._libraryVelocity;
       _libraryJoin = n._libraryJoin;
+      _liveStart = n._liveStart;
+      _liveEnd = n._liveEnd;
+      _libraryTechnique = n._libraryTechnique;
+      _evenLevel = n._evenLevel;
+      _evenContext = n._evenContext;
       _headScheme        = n._headScheme;
       _headGroup         = n._headGroup;
       _headType          = n._headType;
@@ -1465,6 +1470,16 @@ void Note::write(XmlWriter& xml) const
                   xml.tag("libraryVelocity", _libraryVelocity);
             if (_libraryJoin != PerformanceTechnique::JOIN_AUTO)
                   xml.tag("libraryJoin", _libraryJoin);
+            if (LiveTimingOverride::isSet(_liveStart))      // (livetimingoverride.h: a file keeps it in its metaTag)
+                  xml.tag("liveStart", _liveStart);
+            if (LiveTimingOverride::isSet(_liveEnd))
+                  xml.tag("liveEnd", _liveEnd);
+            if (!_libraryTechnique.isEmpty())
+                  xml.tag("libraryTechnique", _libraryTechnique);
+            if (EvenLevels::isSet(_evenLevel)) {        // (evenlevels.h: a file keeps it in its metaTag)
+                  xml.tag("evenLevel", _evenLevel);
+                  xml.tag("evenContext", _evenContext);
+                  }
             }
 
       for (Spanner* e : _spannerFor)
@@ -1605,6 +1620,16 @@ bool Note::readProperties(XmlReader& e)
             setProperty(Pid::LIBRARY_VELOCITY, e.readInt());
       else if (tag == "libraryJoin")
             setProperty(Pid::LIBRARY_JOIN, e.readInt());
+      else if (tag == "liveStart")
+            setProperty(Pid::LIVE_START, e.readDouble());
+      else if (tag == "liveEnd")
+            setProperty(Pid::LIVE_END, e.readDouble());
+      else if (tag == "libraryTechnique")
+            _libraryTechnique = e.readElementText();
+      else if (tag == "evenLevel")
+            setProperty(Pid::EVEN_LEVEL, e.readDouble());
+      else if (tag == "evenContext")
+            _evenContext = e.readElementText();
       else if (tag == "play")
             setPlay(e.readInt());
       else if (tag == "tuning")
@@ -3116,6 +3141,16 @@ QVariant Note::getProperty(Pid propertyId) const
                   return _libraryVelocity;
             case Pid::LIBRARY_JOIN:
                   return _libraryJoin;
+            case Pid::LIVE_START:
+                  return _liveStart;
+            case Pid::LIVE_END:
+                  return _liveEnd;
+            case Pid::LIBRARY_TECHNIQUE:
+                  return _libraryTechnique;
+            case Pid::EVEN_LEVEL:
+                  return _evenLevel;
+            case Pid::EVEN_LEVEL_CONTEXT:
+                  return _evenContext;
             case Pid::PLAY:
                   return play();
             case Pid::LINE:
@@ -3227,6 +3262,26 @@ bool Note::setProperty(Pid propertyId, const QVariant& v)
                                  : qBound(-PerformanceTechnique::JOIN_MAX, v.toInt(), PerformanceTechnique::JOIN_MAX);
                   score()->setPlaylistDirty();
                   return true;
+            case Pid::LIVE_START:
+                  _liveStart = LiveTimingOverride::clampMs(v.toDouble());
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::LIVE_END:
+                  _liveEnd = LiveTimingOverride::clampMs(v.toDouble());
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::LIBRARY_TECHNIQUE:
+                  _libraryTechnique = v.toString();
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::EVEN_LEVEL:
+                  _evenLevel = EvenLevels::clampDb(v.toDouble());
+                  score()->setPlaylistDirty();
+                  return true;
+            case Pid::EVEN_LEVEL_CONTEXT:
+                  _evenContext = v.toString();
+                  score()->setPlaylistDirty();
+                  return true;
             case Pid::VISIBLE: {
                   setVisible(v.toBool());
                   if (m)
@@ -3304,6 +3359,15 @@ QVariant Note::propertyDefault(Pid propertyId) const
                   return 0;         // as rendered
             case Pid::LIBRARY_JOIN:
                   return PerformanceTechnique::JOIN_AUTO;
+            case Pid::LIVE_START:
+            case Pid::LIVE_END:
+                  return LiveTimingOverride::AUTO;
+            case Pid::LIBRARY_TECHNIQUE:
+                  return QString();       // Auto
+            case Pid::EVEN_LEVEL:
+                  return EvenLevels::NONE;
+            case Pid::EVEN_LEVEL_CONTEXT:
+                  return QString();
             case Pid::PLAY:
                   return true;
             case Pid::FIXED:

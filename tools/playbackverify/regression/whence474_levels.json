@@ -1,0 +1,116 @@
+{
+ "runs": {
+  "#474": {
+   "Violoncellos": [
+    {
+     "time": 26.212,
+     "key": 56,
+     "length": 2.12,
+     "legato": true,
+     "after": 43.4,
+     "refAfter": 49.4,
+     "rise": 6.2,
+     "refRise": 4.3,
+     "base": {
+      "old": 15.3,
+      "cents": 15.3,
+      "heldmean": 15.3,
+      "shortpeak": 15.3,
+      "nogroups": 15.3,
+      "new": -2.8
+     }
+    },
+    {
+     "time": 28.333,
+     "key": 57,
+     "length": 2.182,
+     "legato": true,
+     "after": 41.2,
+     "refAfter": 46.5,
+     "rise": -1.0,
+     "refRise": 8.1,
+     "base": {
+      "old": 14.3,
+      "cents": 12.9,
+      "heldmean": 14.3,
+      "shortpeak": 14.3,
+      "nogroups": 12.9,
+      "new": -3.1
+     }
+    },
+    {
+     "time": 30.515,
+     "key": 59,
+     "length": 2.182,
+     "legato": true,
+     "after": 41.9,
+     "refAfter": 40.6,
+     "rise": 9.4,
+     "refRise": 8.0,
+     "base": {
+      "old": 8.8,
+      "cents": 14.3,
+      "heldmean": 8.8,
+      "shortpeak": 8.8,
+      "nogroups": 14.3,
+      "new": -2.8
+     }
+    },
+    {
+     "time": 32.758,
+     "key": 54,
+     "length": 2.182,
+     "legato": true,
+     "after": 40.3,
+     "refAfter": 42.5,
+     "rise": 6.2,
+     "refRise": 2.6,
+     "base": {
+      "old": 3.3,
+      "cents": 15.5,
+      "heldmean": 3.3,
+      "shortpeak": 3.3,
+      "nogroups": 15.5,
+      "new": 3.3
+     }
+    },
+    {
+     "time": 23.969,
+     "key": 54,
+     "length": 2.182,
+     "legato": true,
+     "after": 46.2,
+     "refAfter": 42.9,
+     "rise": 29.0,
+     "refRise": 5.5,
+     "base": {
+      "old": 3.3,
+      "cents": 15.5,
+      "heldmean": 3.3,
+      "shortpeak": 3.3,
+      "nogroups": 15.5,
+      "new": 3.3
+     }
+    },
+    {
+     "time": 26.151,
+     "key": 48,
+     "length": 2.182,
+     "legato": true,
+     "after": 41.6,
+     "refAfter": 50.9,
+     "rise": 18.6,
+     "refRise": 16.8,
+     "base": {
+      "old": 0.8,
+      "cents": 8.9,
+      "heldmean": 0.8,
+      "shortpeak": 0.8,
+      "nogroups": 8.9,
+      "new": -3.1
+     }
+    }
+   ]
+  }
+ }
+}

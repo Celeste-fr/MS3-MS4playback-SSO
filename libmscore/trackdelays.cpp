@@ -10,18 +10,24 @@
 
 #include "trackdelays.h"
 #include "contextlevel.h"
+#include "evenlevels.h"
+#include "leadinglane.h"
+#include "playbacksettings.h"
 #include "partplayback.h"
 #include "part.h"
 #include "score.h"
 #include "soundlibrary.h"
+#include "undo.h"
 #include "audio/midi/event.h"
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 
 namespace Ms {
 namespace TrackDelays {
@@ -103,6 +109,54 @@ static std::map<const Part*, Delays> readTag(const MasterScore* score)
       return delays;
       }
 
+// [levels] leading: each leading part's patches' L (cached per score by what it depends on: read() is called often, the
+// routes are not cheap)
+static QMutex leadingMutex;
+static std::map<const MasterScore*, std::pair<QString, std::map<const Part*, std::map<QString, double>>>> leadingCache;
+
+static std::map<const Part*, std::map<QString, double>> leadingLevels(const MasterScore* score,
+                                                                     const std::shared_ptr<const SoundLib::Library>& library)
+      {
+      std::map<const Part*, std::map<QString, double>> out;
+      const QString lanes = score->metaTag(Automation::metaTag);
+      if (lanes.indexOf(QString("\"%1\"").arg(LeadingLane::TARGET)) < 0)
+            return out;
+      const UndoStack* undo = score->undoStack();
+      const QString key = QString("%1|%2|%3|%4|%5|%6|").arg(quintptr(library.get())).arg(SoundLib::routesGeneration())
+                          .arg(Playback::generation()).arg(undo ? undo->getCurIdx() : -1).arg(undo ? undo->state() : -1)
+                          .arg(int(SoundLib::output()))
+                          + lanes + "|" + score->metaTag(Playback::metaTag) + "|" + score->metaTag(PartPlaybackModes::metaTag)
+                          + QString("|%1|%2").arg(score->parts().isEmpty() ? 0 : quintptr(score->parts().first())).arg(score->nstaves());
+      {
+            QMutexLocker lock(&leadingMutex);
+            auto c = leadingCache.find(score);
+            if (c != leadingCache.end() && c->second.first == key && !(undo && undo->active()))
+                  return c->second.second;
+      }
+      std::set<const Part*> leadParts;
+      for (const auto& b : LeadingLane::bands(score))
+            leadParts.insert(b.first);
+      if (!leadParts.empty()) {
+            const std::vector<SoundLib::Route> routes = SoundLib::severalLibraries(score) ? SoundLib::allRoutes(score)
+                                                                                           : SoundLib::routes(score, *library);
+            for (const SoundLib::Route& r : routes) {
+                  if (r.lane != 0 || !r.instrument || !leadParts.count(r.part))
+                        continue;
+                  const SoundLib::Library& lib = r.library ? *r.library : *library;
+                  if (lib.dynamicsCC < 0 || lib.dynamicsCC == CTRL_EXPRESSION)
+                        continue;
+                  const double l = LeadingLane::levelDb(*r.instrument, score);
+                  if (l > 0.0)
+                        out[r.part][r.instrument->name] = l;
+                  }
+            }
+      QMutexLocker lock(&leadingMutex);
+      if (leadingCache.size() > 16)
+            leadingCache.clear();
+      leadingCache[score] = { key, out };
+      return out;
+      }
+
 std::map<const Part*, Delays> read(const MasterScore* score)
       {
       std::map<const Part*, Delays> delays = readTag(score);
@@ -110,7 +164,50 @@ std::map<const Part*, Delays> read(const MasterScore* score)
             Delays& d = delays[v.first];
             d.rule = v.second.patchDb;
             d.ruleTop = v.second.top;
+            d.rangeTop = v.second.range;
+            d.micTop = v.second.micTop;
+            d.shift = v.second.shift;
             }
+      // [levels] evenLevels: each patch's largest correction on its gain stage, its notes that much lower. (evenAll: the
+      // old volumes' rest that didn't fit under MAX_DB, legacyPatchGain only)
+      std::shared_ptr<const SoundLib::Library> library = SoundLib::current();
+      if (library && library->dynamicsCC != CTRL_EXPRESSION && Playback::on("levels/evenLevels", score)) {
+            double rest = 0.0;
+            for (const auto& pt : EvenLevels::tops(score)) {
+                  for (const auto& t : pt.second) {
+                        if (t.second <= 0.0)
+                              continue;
+                        Delays& d = delays[pt.first];
+                        auto r = d.rule.find(t.first);
+                        const double now = std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, t.first) + (r == d.rule.end() ? 0.0 : r->second) - d.shift));
+                        d.even[t.first] = t.second;
+                        rest = std::max(rest, t.second - (MAX_DB - now));
+                        }
+                  }
+            if (rest > 0.0) {
+                  for (const Part* part : score->parts())
+                        delays[part].evenAll = -rest;
+                  }
+            }
+      // [levels] leading (leadinglane.h): a part whose Leading lane is On somewhere, each of its patches' L on its gain stage
+      // (its notes L lower by CC11, a leading note at 0: MidiRenderer's trackLevel); not for a library whose dynamics are
+      // CC11 (no CC11 headroom), as the other levels
+      if (library && LeadingLane::playing(score))
+            for (const auto& pl : leadingLevels(score, library))
+                  delays[pl.first].leading = pl.second;
+      // [slurs] plainPerformance: each plain Performance patch's measured shift (the map's plainShift), early; not with
+      // [slurs] plainTiming, whose notes start early each by its own model (the renderer's early starts)
+      if (library && !Playback::on("slurs/plainTiming", score)) {
+            for (const auto& pp : SoundLib::plainPerformancePatches(score, *library))
+                  for (const auto& p : pp.second)
+                        if (std::isfinite(p.second) && p.second > 0.0)
+                              delays[pp.first].plain[p.first] = -clampMs(p.second);
+            }
+      // the master trim (0 while it is being computed: ContextLevel::masterTrim renders the score with these gains)
+      const double trim = ContextLevel::masterTrim(score).db;
+      if (trim != 0.0)
+            for (const Part* part : score->parts())
+                  delays[part].trim = trim;
       return delays;
       }
 
@@ -160,9 +257,15 @@ double own(const Delays& d, const QString& key)
       return it == d.tracks.end() ? 0.0 : it->second;
       }
 
+double plainMs(const Delays& d, const QString& patch)
+      {
+      auto it = d.plain.find(patch);
+      return it == d.plain.end() ? 0.0 : it->second;
+      }
+
 double ms(const Delays& d, const QString& patch, const QString& technique)
       {
-      double x = d.ms + own(d, trackKey(patch));
+      double x = d.ms + own(d, trackKey(patch)) + plainMs(d, patch);
       if (!technique.isEmpty())
             x += own(d, trackKey(patch, technique));
       return x;
@@ -175,6 +278,8 @@ double earliest(const Delays& d)
             const int sep = t.first.indexOf(" / ");
             x = std::min(x, sep < 0 ? ms(d, t.first) : ms(d, t.first.left(sep), t.first.mid(sep + 3)));
             }
+      for (const auto& p : d.plain)
+            x = std::min(x, ms(d, p.first));
       return x;
       }
 
@@ -205,13 +310,78 @@ double noteDb(const Delays& d, const QString& patch, const QString& technique)
       return std::max(MIN_DB, std::min(MAX_DB, db(d, patch, technique))) - headroomDb(d, patch);
       }
 
-double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
+static double ruleDb(const Delays& d, const QString& patch)
+      {
+      auto r = d.rule.find(patch);
+      return r == d.rule.end() ? 0.0 : r->second;
+      }
+
+double faderGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
       {
       if (library.dynamicsCC == CTRL_EXPRESSION)
             return 1.0;
-      auto r = d.rule.find(patch);
-      const double rule = r == d.rule.end() ? 0.0 : r->second;
-      return std::pow(10.0, std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, patch) + rule)) / 20.0);
+      return std::pow(10.0, headroomDb(d, patch) / 20.0);
+      }
+
+double gainStageDb(const SoundLib::Library& library, const Delays& d, const QString& patch)
+      {
+      if (library.dynamicsCC == CTRL_EXPRESSION)
+            return 0.0;
+      return ruleDb(d, patch) + evenDb(d, patch) + leadingDb(d, patch) - d.trim;
+      }
+
+double patchGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
+      {
+      return faderGain(library, d, patch) * std::pow(10.0, gainStageDb(library, d, patch) / 20.0);
+      }
+
+double legacyPatchGain(const SoundLib::Library& library, const Delays& d, const QString& patch)
+      {
+      if (library.dynamicsCC == CTRL_EXPRESSION)
+            return 1.0;
+      const double volume = std::max(MIN_DB, std::min(MAX_DB, headroomDb(d, patch) + ruleDb(d, patch) - d.shift));
+      return std::pow(10.0, (volume + evenDb(d, patch) + d.evenAll) / 20.0);
+      }
+
+double evenDb(const Delays& d, const QString& patch)
+      {
+      auto e = d.even.find(patch);
+      return e == d.even.end() ? 0.0 : e->second;
+      }
+
+double leadingDb(const Delays& d, const QString& patch)
+      {
+      auto e = d.leading.find(patch);
+      return e == d.leading.end() ? 0.0 : e->second;
+      }
+
+std::map<int, int> midiVolumes(const MasterScore* score, const SoundLib::Library& library, bool withSolo)
+      {
+      std::map<int, int> out;
+      if (!score || library.dynamicsCC == CTRL_EXPRESSION)
+            return out;
+      const std::map<const Part*, Delays> delays = read(score);
+      std::map<int, std::pair<double, bool>> want;      // route -> its gain, the Mixer's included (dB); its patch's gain isn't 1
+      double over = 0.0;
+      bool any = false;
+      const double top = 40.0 * std::log10(1.27);                         // CC7 127: (127 / 100)², +4.15 dB
+      for (const SoundLib::Route& r : SoundLib::routes(score, library, true)) {
+            const double gain = patchGain(library, of(r.part, delays), r.instrument->name);
+            const int v = qBound(0, SoundLib::partMix(r.part, withSolo).volume, 127);
+            if (v == 0 || !(gain > 0.0))
+                  continue;
+            const bool own = std::fabs(gain - 1.0) > 1e-9;
+            const double db = 40.0 * std::log10(v / 100.0) + 20.0 * std::log10(gain);
+            want[r.port * 16 + r.channel] = { db, own };
+            over = std::max(over, db - top);
+            any = any || own;
+            }
+      if (!any)
+            return out;
+      for (const auto& w : want)
+            if (w.second.second || over > 0.0)
+                  out[w.first] = qBound(0, int(std::lround(100.0 * std::pow(10.0, (w.second.first - over) / 40.0))), 127);
+      return out;
       }
 
 }     // namespace TrackDelays

@@ -164,21 +164,24 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   value is the velocity, 0 as 1, so 127 is exact and 1 plays as 0; the UACC switch is value + 1:
   `carrierVelocity`), and the **pitch bend** (the microtones of a patch with
   `bend=`, legato glides included) on keys 115 (its upper 7 bits) and 114 (its lower 7), each written
-  when it changes (2026-09-30). The Live Object Model can write a clip's notes but not
+  when it changes (2026-09-30), and below them CC119 on key 113 (`LiveClips::EXTRA_CARRIERS`, the device's protocol 11,
+  2026-10-17: SSO's Performance speed controller with `[slurs] speedFromWritten`; a device of protocol 10 or less would
+  play key 113 as a note, so its clips get none, counted as dropped). The Live Object Model can write a clip's notes but not
   its MIDI controller envelopes, so the controllers travel as notes, and the **MuseScore Link**
   device, placed before Kontakt on the track, turns each carrier into its controller or the pitch bend
-  (and drops its note-off). Keys 114-127 are never played as notes. The device does so only on a track holding a
+  (and drops its note-off). Keys 113-127 are never played as notes. The device does so only on a track holding a
   clip named "MuseScore: …" (protocol 8, 2026-10-07; `MuseScoreLink.js` › Carriers: a `[gate 2 2]` before the carrier
   keys' `[route]`, set by the copy from its own track's arrangement and session clips once a second and at once
-  when the hub makes or deletes one); on any other track every note passes unchanged, keys 114-127 too. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
+  when the hub makes or deletes one); on any other track every note passes unchanged, keys 113-127 too. So everything is in the clip and played by Live's own clock: sample-exact with the notes,
   also in an export or a freeze, and chased when playback starts in the middle (Live's *Chase MIDI
   Notes*: each carrier lasts until that controller's next value). A controller at a note's tick is
   placed just before it (0.26 ms at 120 bpm apart): switches first, then the controllers, the pitch bend
   last; at a tick without a note (a glide's step) the last of them is at the tick itself.
   Plug-in parameter events (MuseScore's own automation lanes of Kontakt's parameters: Vibrato, mics …) are
   not notes: the device sets those parameters itself while Live plays ([Automation lanes in MuseScore and in
-  Live](#automation-lanes-in-musescore-and-in-live)); lanes Live's set already holds are left to Live. The part's *Controllers…* that are plug-in parameters are in each patch's state in the Live Set
-  (Create Live Set, below).
+  Live](#automation-lanes-in-musescore-and-in-live)); lanes Live's set already holds are left to Live. A part's plug-in parameter settings (flat lanes: one value from the
+  score's start, `libmscore/partcontrollers.h`; until 2026-10-15 its *Controllers…* values) are in each patch's state in
+  the Live Set (Create Live Set, below), not sent as events.
 - **Time:** the Live Object Model can't write the song's tempo automation, so Live plays at one tempo,
   the score's first, and the clips hold the notes at their real times (seconds as MuseScore plays them:
   tempo changes, rit./accel. lines, fermatas, repeats). With one tempo throughout, Live's bars are the
@@ -189,8 +192,10 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   follows, MuseScore's own built-in parts play along); a difference of more than 0.15 s moves it; Live's
   Stop stops it; stopped, the cursor follows Live's position. MuseScore's Play starts Live at the play
   position instead, its Stop stops Live. MuseScore sends no MIDI clock in this mode.
-- **The clips belong to MuseScore.** Notes edited in them in Live are overwritten at the next change of
-  the score. Draw automation in the track's lanes, not in the clips. The device never touches a clip it
+- **The clips belong to MuseScore, except the timing you set in Live** (2026-10-11, below: [Timing you set in
+  Live](#timing-you-set-in-live-2026-10-11)): a note moved or resized in a clip keeps that timing, in Live and in
+  MuseScore; other edits made in Live (velocity, pitch, notes added or deleted) are overwritten at the next change of
+  the score, as before. Draw automation in the track's lanes, not in the clips. The device never touches a clip it
   didn't make (another name) and makes none over a track's other clips.
 - **The link:** OSC over UDP on this computer only (127.0.0.1): MuseScore sends to port 9001
   (Preferences › Advanced `io/live/clipsPort`), the device answers on 9002. The device says hello every 2 s;
@@ -211,6 +216,67 @@ plays** the clips; MuseScore sends the library nothing and follows Live's transp
   MuseScore knew them, else a conflict), and their unwritten edits are written. Also notices: a clip tab's clip
   deleted in Live; the MuseScore Link copy removed from (or added again to) a clip tab's track. Not detected:
   the MIDI ports of playing through Live disappearing (loopMIDI closed) without the device.
+
+### Timing you set in Live (2026-10-11)
+
+The owner, 2026-10-11: the clips keep MuseScore's played timing (early onsets, keepMs cuts …: Live's API can't set a
+Track Delay, and a device can only delay), "but if I manually adjust the timings in Live, it stays overridden like
+that". Design: `libmscore/livetimingoverride.h`; MuseScore's side `mscore/liveclips.h`; the device's
+`MuseScoreLink.js` › Timing set in Live (protocol 10).
+
+- **What is an override.** A note of a "MuseScore: …" clip whose start and / or end you changed in Live (moved,
+  trimmed, lengthened). Velocity, pitch, notes added or deleted, carriers and keyswitches are not overrides: they stay
+  in Live until the next change of the score, then MuseScore's clip replaces them, as before.
+- **How it is kept.** On the score's note (the tie chain's first note), as two values: **Start from Live** = ms after
+  the note's written start, **End from Live** = ms after its written end (the end of its tie chain), in seconds as the
+  score's tempo map plays them; each Auto when not set. Saved in the metaTag `liveTimingOverrides` (JSON
+  `[{tick, track, grace, pitch, start, end}]`, left out when no note has one; MuseScore 3.6 keeps it through a round
+  trip). Shown and cleared in the Inspector › Note (the Play section): *Start from Live*, *End from Live*, each with
+  its reset button; reset with many notes selected (e.g. right-click › Select › Similar on this staff: a whole part)
+  clears them all in one undo step. The status line (Mixer › Advanced Options… › Ableton Live) counts the notes that
+  play an override and says what the last edit in Live did.
+- **How it plays.** MuseScore's renderer (`MidiRenderer::libraryTimingOverrides`) puts the note-on and / or note-off
+  there after all automatic timing (onset early, keepMs, the note before cut, joins, the same-key rule, levels, bends)
+  and before the track delays; the switch, controllers and pitch bend at the note's old note-on on its route are
+  copied to the new one. MuseScore's own playback and the next clip both come from that render: Live and MuseScore
+  play the note at the same time (`tst_liveequivalence liveTimingOverride`), and the next push doesn't move it back.
+  The plain set gets it too (its played times, through Track Delay and the device: `livetiming.h`).
+- **The rules** (and why):
+  - relative to the **written** note, not to MuseScore's automatic timing: "stays overridden like that" means where you
+    put it, whatever later changes the automatic timing (another technique and its onset, a playback setting, the
+    note before);
+  - in **ms**: the automatic timing it replaces is in ms, and an ms offset keeps its size when the tempo changes;
+  - the note **moved or lengthened in MuseScore**: the override goes with it; a note entered again (a new note) has
+    none; the note's **technique changed**: kept;
+  - **start and end separately**: a note trimmed at its start keeps its automatic end, and the other way round;
+  - **per note, not per repeat**: a note in a repeated passage plays its override in every pass;
+  - not for grace notes or notes with more than one note-on in a pass (trill, tremolo, glissando steps): replaced at
+    the next push, as before;
+  - **precision**: MuseScore plays a tick (1/480 quarter): a note set between two ticks moves by up to half a tick
+    (0.52 ms at 120 bpm) at the next push, once.
+- **How an edit is found.** After each write the device reads the clip back and keeps its **content hash** (pitch,
+  start, length, velocity, mute of every note, without Live's note ids), and answers it in `/live/applied`. Once a
+  second it reads each clip it wrote; changed (and not yet reported), it sends the clip's notes (`/live/edited`,
+  `/live/editnotes`, units, the carriers left out). MuseScore pairs them with the notes it last wrote there (same:
+  unchanged; else same key, nearest start within a beat): a pair whose start or end differs is an override of that
+  note (one undo step, "Timing from Live"); then the clip is rendered and sent again. Each `/ms/track` carries the
+  content MuseScore knows (`base`): **the device doesn't write over a clip edited since** (it answers "edited in Live"
+  and reports the edit), so an edit of the score made before MuseScore took Live's edit can't undo it. An older
+  MuseScore (no base) or one that knows nothing of the clip (base 0) writes over it, as before.
+- **Across restarts.** What MuseScore knows survives the device's resync; per score file it is also kept on this
+  computer (QSettings `liveIntegration/clipContent`: each route's render hash and the content the device confirmed, the
+  last 50 scores): a score opened as it was last written to Live takes the edits made in Live meanwhile. A score changed
+  since (or never saved) knows nothing: its first push writes over Live's clip, as before.
+- **Tested** (Linux, no Live): `tst_liveequivalence liveTimingOverride` (the edit found, kept, played by MuseScore where
+  the clip has it, stable when read back, relative to the written note, saved and read back, cleared),
+  `tst_liveintegration clipsTimingFromLive` (the OSC report taken by the link, in both passes of a repeat, undo) and
+  `clipsOsc` (the base), `tools/live/test/test_device.js` (reported once, not written over on an old base, written on
+  the reported one, an older MuseScore written over; the content hash). **Only real Live 12.4 can show:** that a note
+  dragged in Live's editor keeps reading back with the fields the hash uses and that a clip written by
+  `add_new_notes` reads back with the same content (else every write would look like an edit: a harmless override of
+  what Live plays, but noise); that `get_all_notes_extended` on every MuseScore clip once a second stays cheap with
+  thousands of notes (not measured: the clip tabs' check does the same for one clip); the round trip with the real
+  device and Kontakt + SSO.
 
 ### Setting it up
 
@@ -251,6 +317,21 @@ gave four clips on four tracks found by name, locators at the right beats (60 th
 and a note moved up in MuseScore reached its clip about a second later, only that clip sent again;
 Live's Play from beat 4 started MuseScore at bar 2, its Stop stopped it.
 
+**The device's load on Live** (fixed 2026-10-12): with the plain set's 28 copies (one per technique track) Live 12.4.6's
+main thread sat near 100 % and the window stopped responding within a minute of opening the set (5 copies: ~40 % to
+100 % in 10 min). Max for Live's JS runs on Live's main thread, and every copy's heartbeat made new LiveAPI objects each
+second (its track, `live_set`, each of the track's 8 clip slots: ~13 a copy a second), the hub's transport report one 25
+times a second, and every copy with a timing record rewrote ~4000 buffer cells a second. Now the script keeps one LiveAPI
+object per Live object (`lom()`: `live_set`, `this_device …`, `id <n>`; existence checks through the parent's list),
+watches the track's clips and slots with observers (Carriers: arrangement_clips, clip_slots, each slot's has_clip, each
+clip's name; everything read again every 5 s in any case), reads nothing from Live on a copy with nothing to do, and
+fills the timing record once. Measured on the test VM (Live 12.4.6, Kontakt 8 + SSO, Whence's plain set with all 28
+copies, idle): with the first fixed build, 18 min after opening, Live's main thread 9 % of a core, the window responding
+throughout, the process ~12.5 s CPU per 10 s (a worker thread at ~95 %, not the main one); with the final build, 15 min,
+main thread 11 %, responding throughout, the process 3-5 s per 10 s; against ~22.5 s and "not responding" from the first
+minute with the old device (the previous agent's run the same day). Tests: `tools/live/test/test_load.js` (no LiveAPI object made in 120
+heartbeats of 28 copies: 43680 before; under 4 property reads a copy a second; none on an idle copy).
+
 Only real Live can show (to check first):
 - the device loads (the `.amxd` container is written by `make_device.py`; Max may want it opened
   and saved once) and its `v8` script runs;
@@ -289,8 +370,45 @@ in a section collapsible at the same time".
   Another CC: one clip the whole song, an envelope stepping from a rest value (the lowest the patch's articulations
   don't use) to the value and back after the run. A keyswitch patch: one clip, a key note one unit long per run. The
   Kontakt track's "Controllers" clip holds the dynamics (CC1), CC11 and the pedal as envelopes; plug-in parameters
-  MuseScore automates are automation on the Kontakt track.
-- **No automatic timing or levels**: what the playback settings say, off by default (docs/PLAYBACK_SETTINGS.md).
+  MuseScore automates are automation on the Kontakt track. **A lane that never changes** (one value from the score's
+  start, `Lane::flatValue`: the controller's setting) **is the parameter's plain value, not automation** (the owner,
+  2026-10-15, "Option B"): its Manual value in Live's panel of Kontakt (*Configure*) and in Kontakt's state, no
+  envelope; a lane that changes is automation (Create Live Set and Update Live Set alike). A constant MIDI-CC lane has no
+  Live parameter: it stays a one-value envelope of the Controllers clip.
+- **Written clips** (the owner, 2026-10-11: "Live clips hold the WRITTEN notes -- on the grid, exact written lengths,
+  rests -- never the played timing"; the timing "is applied at PLAYBACK", per technique by Track Delay, the rest by the
+  device: "a device is fine"; `libmscore/livetiming.h`). The technique tracks' clips hold each note where the notation
+  puts it (MuseScore's note model, in ticks: a second render with `MidiRenderer::setWrittenTiming`, which leaves out
+  every timing the renderer gives library notes in seconds: the early start by the measured onset (`[heldNotes] early`,
+  `byPitch`, a `[slurs] quick` swap's own onset, a Performance attack's), its `[legato] keepMs` cap, the note before on
+  the patch cut at that early start, a Performance note's join (`overlap`, `reattackGap`), and the same-key note-off that
+  follows from them). Each written note keeps MuseScore's played start and end (from the played render, paired by note
+  and key). At playback:
+  - the technique track's **Track Delay** is its *lookahead* earlier: the earliest MuseScore plays any of its note-ons
+    or note-offs before the written place (a technique's median onset with `[heldNotes] byPitch` 0, Recommended; more
+    where a Performance re-attack ends the note before its gap before the next one's early start: Whence 59-171 ms). Live's own lookahead: a note can only sound before its clip time if Live reads it early;
+  - its **MuseScore Link** copy delays each note-on and note-off into MuseScore's time (≥ 0 ms; the device's patcher,
+    MuseScoreLink.js › Written clips): most notes share one pair of delays (the note-ons 0, the note-offs the lookahead:
+    the note was moved early, its end stays), the others (a capped or per-pitch start, a note before cut by the next
+    one's early start, a Performance join) are listed by their written start. The record goes into the device's saved
+    data (`"Timing"`, `LiveSetWriter::linkBlob`), so the set plays it without MuseScore; the script puts the whole
+    record into a buffer once (`[buffer~ ---mslt]`, a cell a tick from the song's start; until 2026-10-12 a ring it
+    filled each second two seconds ahead, which an offline export outran), the patcher reads the delays at the note's
+    own song tick (Live 12.4.6: the patcher sees the note's own song position, not the Track Delay's,
+    `TIM_SEES_TRACK_DELAY` false) and plays the note through a `[pipe]`. A technique's switch (the Bank / Sub Live sends at a run's clip start, a CC envelope's step, a
+    keyswitch note) goes with the run's first note;
+  - the Kontakt track's Controllers clip holds the controllers where MuseScore plays them (a note's dynamic, CC11 and
+    bend right before its played note-on, a glide after it); the Kontakt track has no technique's delay, so they meet
+    the notes as in MuseScore.
+  Live then plays what MuseScore plays: `tst_liveequivalence` `plainWritten` takes every note-on and note-off of
+  MuseScore's own render and finds it at the same time (within a unit, 0.13 ms at 120 bpm) from the written clips, the
+  Track Delays and the device's delays, by pitch and by the median, with keepMs caps and an onset longer than the notes;
+  `tools/live/test/test_patch.js` › written clips runs the patcher's path on a model of Max's objects (and the whole
+  song with no work of the script, as an export), `test_timing.js` the script's buffer. Without the device (`LiveSetKind::PLAIN`) the Track Delay is the technique's most common early
+  start and every note is as written, moved by it (step 2's numbers: HANDOFF.md › Written clips in the plain set). Read back
+  (`livetracks.*`), a technique track's TrackDelay gets its lookahead added back (`Written::lookahead`), so the score's
+  track delays stay the technique's own. A clip tab shows and edits the written notes; a note edited there (moved,
+  added) plays with the track's most common delays (its own exception, keyed by its old place, no longer applies).
 - **The Mixer's mute and solo** (2026-10-06, after the owner's first set came out with only the soloed Violas' notes
   playing): the notes are written as played whatever the Mixer says (only a voice switched off for playback leaves
   its notes deactivated); a muted part's Kontakt track is written deactivated, a solo is left out. (*Live plays the
@@ -308,6 +426,12 @@ in a section collapsible at the same time".
   up to it, then the new one: Live ramps linearly between breakpoints; a glide's tick-apart steps as breakpoints, the
   straight stretches' ends only; parameter automation as steps too). Every tuning's Kontakt has its patch's
   volume and gain. Tests: `tst_liveequivalence` `plainTuned`, `tst_soundlibrary` `tuningLanesLive`, `kontaktTune`.
+- **Chords on a monophonic patch** (2026-10-20, branch `chord-voices`): a Performance patch's chord notes play on
+  copies of their own (voice lanes, `Route::voice`; docs/PLAYBACK_SETTINGS.md › Chords on monophonic patches), which
+  the set treats as tuning copies: slots of the patch's multi, a MIDI track each named "Violoncellos (voice 2)" (with its
+  tuning when not 0 cents, a bending copy "(copy n) (voice 2)"), the notes of that voice in its technique clips; the
+  route set and *Live plays the score* a track / clip per copy. Tests: `tst_liveequivalence` `chordVoicesLive`. Untried in
+  Live.
 - **A patch's copies share one Kontakt** (since 2026-10-10, `PlainLiveSet::multis`): a Kontakt multi, the patch's
   slot once per copy, each slot its own Tune (bent copies as made), slot *i* on MIDI channel *i*
   (`KontaktSetup::withSlots`, by the export). The Kontakt track carries the first copy's Controllers clip and its
@@ -392,6 +516,68 @@ in a section collapsible at the same time".
   note on the patch plays its level less the headroom by CC11 (`noteDb`). Read back: the Kontakt track's Volume less
   the headroom is the Mixer's. Above the Mixer's default (100) the two add past Live's +6 dB: Live is kept at +6 (What
   still differs). Test: `tst_soundlibrary` `trackLevels`, `tst_liveequivalence` `plainSetTrackDelays`.
+- **MuseScore gain: each patch's gain stage in a Utility** (the owner, 2026-10-15: "yeah sure let's go with utility";
+  contextlevel.h › Gain stage and master trim, docs/PLAYBACK_SETTINGS.md › Gain stage and master trim). The level rule's
+  gain, the section balance, the real range, the mic compensation and the even levels are no longer squeezed under the
+  fader's +6 dB by lowering every other patch: each Kontakt track that needs a gain (plain set and route set) has Live's
+  stock **Utility** right after the Kontakt, named **MuseScore gain** (`LiveSetWriter::UTILITY_NAME`; its Info text says
+  what it holds), its Gain the patch's gain stage (`TrackDelays::gainStageDb`, including the score's **master trim**:
+  one per score, only as low as the loudest moment needs not to clip). Utility's Gain runs -inf … +35 dB (a linear
+  factor up to 56.2341309, as Live 12.4 saves it); a gain over +35 dB puts the rest on the fader (`kontaktGains`). The
+  Kontakt track's fader stays where it was before the levels (the part's Mixer times the track levels' headroom), the
+  owner's to use. A tuning copy's slot is in the same Kontakt, behind the same Utility. The Utility's XML is the one Live
+  12.4d1 saves (a factory set's StereoGain, element for element, preset paths left empty as for the other devices); the
+  set stays 12.2's format. **Read back** (`LiveSet::Track::hasMuseScoreGain`, `museScoreGain`): MuseScore's Utility is
+  known by its name and not counted as the owner's device; its Gain changed in Live is reported, not imported (Update
+  Live Set writes MuseScore's again: change the fader instead). A Kontakt track without one, in a set written before the
+  Utility, is read with its old fader (`TrackDelays::legacyPatchGain`, `Track::legacyVolume`), so only the owner's change
+  of it counts. **Update Live Set** writes the Utility's Gain and Info text where they differ; inserts one right after the
+  Kontakt where a track needs it and has none (the owner's devices after it keep their place), and moves a fader still at
+  its old volume to the Mixer's (a fader the owner moved is kept, reported). Tests: `tst_liveequivalence` `liveGainStage`,
+  `liveSectionBalance`, `liveRealRange`, `liveMicCompensation` (fader × Utility = MuseScore's slot gain), `tst_soundlibrary`
+  `gainStage`.
+- **Leading lane** (branch `leading-lane`, 2026-11-05; `[levels] leading`, 0 by default and in both presets;
+  docs/PLAYBACK_SETTINGS.md › Leading lane): nothing of its own in Live. With the setting 1 a leading part's L is in its
+  Kontakts' gain stage (the Utility above) and every note not leading plays L lower by CC11 (Live's clips, the plain set's
+  CC11 lanes), as MuseScore plays it (`tst_liveequivalence::leadingLive`; MIDI out: CC7). The lane itself is MuseScore's:
+  not written into the set, not read back (its target is no controller). Untried in real Live.
+- **Low cut: MuseScore's EQ Eight on the string sections** (branch `lowcut-live`, 2026-10-31; `[levels] lowCut`,
+  docs/PLAYBACK_SETTINGS.md › Low cut; **opens and saves in real Live, response confirmed to about 1-2 dB, not to the 0.5 / 1.5 dB tolerance**: Checked in real Live › Low cut). Where MuseScore plays a patch through its 4th-order
+  Butterworth high-pass (the map's `<Instrument lowCut>`: SSO's five string sections, Violins 150 Hz, Violas 100, Celli
+  50, Basses 25; with the setting on), its Kontakt track (plain set and route set, so *Live plays the score*'s route set
+  too; a multi's tuning / voice copies behind the same one) has Live's stock **EQ Eight** right after the Kontakt and
+  before the Utility, named **MuseScore low cut** (`LiveSetWriter::LOW_CUT_NAME`, `eqLowCutDevice`; its Info text says
+  what it does). EQ Eight has no 24 dB/oct cut (its band types, `Mode` 0-7: Low Cut 48, Low Cut 12, Low Shelf, Bell,
+  Notch, High Shelf, High Cut 12, High Cut 48, read from Live 12.4's own presets), so **bands 1 and 2 are Low Cut 12 at
+  the cutoff with Q 0.5412 and 1.3066** (`LOW_CUT_Q`, a Butterworth's two sections, the pair `Vst3Synth::lowCutCoefficients`
+  uses), the other bands off. The device's XML is Live 12.4d1's default EQ Eight (Core Library `Defaults/Audio
+  Effects/EQ Eight.adv`, the source of the Utility's), element for element, Freq 10 .. 22000 Hz (the Basses' 25 Hz as
+  written), Adaptive Q as its default (on: it moves Q only with a band's gain, the cut bands have none). A patch without
+  lowCut, or the setting off: no EQ, the set byte for byte as before. **Read back** (`LiveSet::Track::hasMuseScoreLowCut`,
+  `museScoreLowCutHz`: band 1's frequency, 0 when the device is off): known by its name, not counted as the owner's
+  device; a cutoff changed in Live is reported, not imported (the cutoff is the map's). **Update Live Set** writes bands
+  1-2's frequency, the device's On and Info text where they differ, inserts the EQ right after the Kontakt (before the
+  Utility; the owner's devices keep their place) where a track needs one and has none, and switches it off (kept in
+  place) when the setting is off now. `--live-equivalence`'s Live side models the EQ as MuseScore's own biquads at the
+  Q written (`MS_LIVE_EQUIVALENCE_FAULT=no-lowcut` leaves it out), so it checks the set's settings, not Live's filter.
+  **To confirm in real Live** (realcheck, below): that Live 12.4 opens the hand-written device (no EQ Eight saved by
+  Live has been read back yet), and that two Low Cut 12 bands at those Q are MuseScore's Butterworth (Live's own filter
+  design, its Q definition and frequency warping: `tools/live/realcheck/lowcut_response.py` measures the response from a
+  track's renders with and without the cut; tolerance 0.5 dB where the Butterworth is above -6 dB, 1.5 dB at -6 ..
+  -24 dB). Tests: `tst_liveequivalence` `lowCutLive`, `test_realcheck.py` (alsset's Eq8 entry, realcheck's feature row,
+  `lowcut_response.py --selftest`).
+  - **The following cut** (`[levels] lowCut` 2, the default and Recommended's since 2026-10-31, branch `follow-cut`;
+    docs/PLAYBACK_SETTINGS.md › Low cut › The following cut): MuseScore's cut moves up with the notes (0.77 x the lowest
+    note sounding or released within 2 s, smoothed 100 ms, never under the fixed cut). The plain set writes it as an
+    arrangement envelope on the EQ's **band 1 and band 2 Freq** (their AutomationTargets; `Track::lowCutEnvelope`,
+    `automationEnvelopes`' `lowCutTargets`): the cutoff MuseScore's slot plays (`FollowCut::smoothedPoints`, straight lines
+    within 0.5 Hz of the smoothing, in beats), from the plain set's own render, the part's copies of the patch together.
+    Update Live Set writes it where it differs, removes it with lowCut 1 / 0 (the fixed cut stays), and inserts it with an EQ
+    it inserts; the read-back takes it as MuseScore's. The **route set** keeps the fixed cut (below, What still differs).
+    **Unconfirmed in real Live**: that Live plays a Freq envelope in Hz as written (the parameter's Manual is in Hz; the
+    mixer's and plug-ins' envelopes are in their Manual's units), and that a Kontakt track's Track Delay moves its
+    automation with its MIDI (the envelope is in the clips' time, before the track delays; an error of at most the delay,
+    within the rule's 2 s and 20 ms margins). Test: `tst_liveequivalence` `followingLowCutLive`.
 - **Read back** (`libmscore/livetracks.*`, metaTag `liveTracks`; the owner, 2026-10-06: "the mscz stores all tracks'
   automation"): *Import automation from Live Set…* on a saved plain set keeps every track's automation and mixer in the score.
   - **Each track's key** is written into its Info text (Name/Annotation): `MuseScore: Strings / Violin / Violin` for
@@ -406,6 +592,36 @@ in a section collapsible at the same time".
     becomes lanes; Create Live Set gives the score's parameter lanes the written envelope's liveHash, so an unchanged
     one keeps MuseScore's lane (Automation::merge). An extra patch's Kontakt: its changed envelopes are reported, not
     imported.
+  - **Derived parameters** (2026-10-21, branch `liveset-hosted-readback`; `livetracks.h` › Derived parameters): parameter
+    automation MuseScore writes on a Kontakt (or Ample) track that is no lane of the score: a MIDI controller the
+    plug-in plays by a parameter (`hosted=`: Ample's CC7 as **M-Master Vol**, the volume lane with the strum levels
+    multiplied in) and the guitar pass's capo (M-Capo). Each envelope is recorded as written (`liveTracks` › written ›
+    `derived`: its hash, its lane, that lane's pointsHash, `plain`: the envelope is the lane's own values). Unchanged it
+    comes back as nothing (before, the read-back made it a lane `m-master-vol` next to `volume`, strum levels baked in,
+    which went on driving M-Master Vol after the volume lane was edited: ample-check456 RESULT.md › Findings 2). Changed
+    in Live: a plain one on the main track is an edit of its lane (M-Master Vol = CC7 / 127, the lane's scale), merged as
+    any lane (unedited here: Live's; edited here too: asked); else (strum levels in it, the capo, an extra patch's
+    Kontakt, deleted) it can't be divided back into a lane: reported, not imported, and Update Live Set leaves Live's
+    envelope while MuseScore would write what it wrote last time, writing MuseScore's (reported) once the score changes
+    it. The route set keeps such lanes in the MuseScore Link device's store, which isn't read back: nothing to recognise
+    there. Tested with the test synth as AGM (`tst_liveequivalence::hostedReadBack`); not in real Live.
+  - **Knobs turned in Live** (the owner, 2026-10-15: "yea sure"; `livetracks.h` › Knobs): a Kontakt parameter Live's
+    panel lists without automation has one value, its Manual value. On the part's main Kontakt track, one that differs
+    from what MuseScore wrote there (`liveTracks` › written › `params`; a set without that record: from what the score
+    plays now, the lane's value or the unautomated one) becomes the part's lane with that one value from the start
+    (one undoable step with the rest of the import), merged as any lane (`Automation::merge`: Live's newer value taken,
+    a lane edited in MuseScore since kept, both changed asked, a dialog per lane). The value then lives in MuseScore and
+    changes only through MuseScore. A lane that came from a knob stays when the parameter leaves Live's panel. An extra
+    patch's Kontakt: a turned knob is reported, not imported. **Not read**: Kontakt's own window (its state is opaque
+    here, LIVE.md › Kontakt's state from the set): a value changed there and not in Live's panel stays unknown to
+    MuseScore (and Update Live Set may write MuseScore's value over it in the state, below). **Live plays and saves the
+    state's value, not the Manual one** (real Live 12.4.7, 2026-10-29, build 491: a Manual 0.25 over a state holding
+    Vibrato 0 opened and was saved as 0): so where a panel value changed since MuseScore wrote the set, Update Live Set
+    loads that Kontakt's state, and when it doesn't hold the value writes the state with it (a knob Live itself saved,
+    state and panel alike, is left as it is). Kontakt holds SSO's parameters in 1/127 steps (0.25 is held, and saved by
+    Live, as 32/127): Create and Update write the panel's value as the plug-in holds it after taking it, and a value
+    within half a step of Live's counts as Live's (`sameKnobValue` in livesetexport.cpp), so that rounding never
+    rewrites the set.
   - **Technique tracks**: their switch (the Sub, the switch envelope, keyswitch notes) is never a lane; another
     clip envelope there is reported as not imported.
   - **Mixer**: a Kontakt track's Volume / Pan / Track Activator is the part's Mixer when the part has only that
@@ -421,7 +637,8 @@ in a section collapsible at the same time".
     samples (Live's toggle) is reported, not imported.
   - Without the record (the score not saved after Create Live Set), the tracks match as any set's (MIDI input or
     name) and the Controllers clip's envelopes come back as lanes.
-  - Test: `tst_liveequivalence` `plainSetReadBack`, `liveTracksJson`.
+  - Test: `tst_liveequivalence` `plainSetReadBack`, `liveTracksJson`, `updateLiveSetKnobs`; `tst_liveintegration`
+    `liveSetKnobs`.
 
 The sections below describe the route set.
 
@@ -461,18 +678,23 @@ The sections below describe the route set.
   - Kontakt's state is the patch's setup exactly as MuseScore loads it (`SoundLibraryHost::setupState`): Kontakt's
     own state when a load has resaved it, else made from the `.nki`; "UACC & UI only" (`$iooxo` 3) and **512
     voices** as MuseScore sets them. Kontakt's controller state: what the setup holds (empty for Kontakt).
-  - **with the part's Controllers** (2026-09-30): when the part sets plug-in parameters of that patch in
-    *Controllers…* (the piano's mic levels, a violin's vibrato …), the state is the one MuseScore plays: the setup
+  - **with the part's settings** (2026-09-30; since 2026-10-15 a flat automation lane, one value from the score's start,
+    is a controller's setting: the *Controllers…* window is gone and old scores' values become such lanes at load, so
+    a migrated score writes the same set): when the part sets plug-in parameters of that patch (the piano's mic levels,
+    a violin's vibrato …), the state is the one MuseScore plays: the setup
     loaded into a Kontakt instance as MuseScore loads it (its script settled, 1 s), the part's values set exactly as
     playback sets them, a quarter second for Kontakt to take them, then Kontakt's state
     (`SoundLibraryHost::stateWithControllers`). A patch without such values keeps its setup byte for byte. The same
     parameters are listed in Live's panel of Kontakt (as after *Configure*: name, id, value), so whether Live sets
     them again over the state or not, both agree, and they are ready for automation.
-  - **with the part's automation lanes** (2026-09-30): each lane's parameter is in Live's panel too (at the patch's own
-    value), so the MuseScore Link device finds it and plays the lane. The report lists per part
+  - **with the part's automation lanes** (2026-09-30): each lane's parameter (other than a flat lane's, in the state)
+    is in Live's panel too (at the patch's own value), so the MuseScore Link device finds it and plays the lane. The report lists per part
     and patch what was set. Controllers on a MIDI CC are in the clips (carriers), as before.
     **Changed later in MuseScore, they don't follow into the set** (the set is a file Live opened): create the set
-    again, or change and automate them in Live (Live's panel has them).
+    again, or change and automate them in Live (Live's panel has them). The plain set's *Update Live Set* (below) writes
+    a flat lane's new value as the parameter's plain value (the owner's option B, 2026-10-15: not constant automation),
+    and reads a Kontakt parameter turned in Live's panel back as a lane (The plain set › Knobs turned in Live); Kontakt's
+    own window stays unread (its state is opaque here).
   - **Live's mixer** = MuseScore's Mixer (2026-09-30): each track's Volume is the part's volume as MuseScore's host
     plays it, (v/100)² as a linear gain (100 = 0 dB, 127 = +4.2 dB, 0 = -70 dB, Live's lowest; MuseScore's 0 is
     silence), its Pan the same position (-1 … 1; Live's law is MuseScore's: constant power, sine / cosine, 0 dB in
@@ -556,11 +778,268 @@ Only real Live can show (to check first):
   the same values (the state itself was checked in real Kontakt on the VM: "Measured with SSO");
 - the mixer: each track's fader and pan at the written values (e.g. -3.9 dB, 25L), a muted part's track deactivated.
 
+Written clips (the plain set, 2026-10-11; tested here only on the model of Max's objects and against MuseScore's own
+render, `plainWritten`, `test_patch.js`, `test_timing.js`), only real Live 12.4 can show (to check first, the VM's Live
+12.4.6 with a recorder track taking each technique track's output, as on 2026-10-07):
+- ~~that a negative Track Delay on a MIDI track moves what it sends MIDI To the Kontakt earlier, and that Live keeps a
+  value with one decimal~~ **confirmed 2026-10-22** (Checked in real Live above);
+- ~~the song position the device's patcher sees for a note Live sends early by the Track Delay~~ **confirmed
+  2026-10-12** (Live 12.4.6 on the test VM, the plain set of Whence, 28 technique tracks, Track Delays 0 to −170.5 ms;
+  the `tlog` probe): the note's own song position less one signal vector (−1.43 to −1.45 ms) for all 310 logged
+  note-ons and 310 note-offs, in playback and in *Export All Individual Tracks*, so `TIM_SEES_TRACK_DELAY` is false.
+  With the old assumption (true) every exception whose neighbouring cells held the default took the default (the
+  measured +48 / +83 ms of Violins 1 / Violas − Performance's phrase-first notes, together with the ring an export
+  outran). With the fix every logged note took its record's delay (0 of 620 off), and in the export Violins 1 −
+  Performance's 3 isolated phrase-first notes landed within 0.9 ms and Violas − Performance's 6 within 3.3 ms (5 at
+  0.0) of the set without the device (where Live itself plays them at written + Track Delay, their MuseScore time);
+  30 isolated notes of 8 Kontakt tracks: median 0.0, max 3.3 ms; Violins 2 – Spiccato's default +5.77 measured +5.8.
+  Probes for a check in Live: `vlog on` (also the timing log), `tim ask` / `tim` (each copy's record, gates, bias),
+  `tlog <track id>`, `tsees 0|1` (override for a test);
+- a negative Track Delay on a MIDI track does move what it sends MIDI To the Kontakt earlier (the export without the
+  device: notes at written + Track Delay, 2026-10-12);
+- that a clip's Bank / Sub (the UACC switch) passes through the device before Kontakt (if Live sends it past the
+  chain, a capped first note of a run would get its switch early: as before, the switch at the run's clip start);
+- how close `[pipe]` lands a delayed note to its time in Live's scheduler in playback (the export, 2026-10-12: within
+  3.3 ms on isolated notes, above; playback not recorded);
+- that the device's `"Timing"` store comes back from the set (`[pattr Timing]`, as the `"Lanes"` stores do) and that
+  `peek~ ---mslt 2`, `buffer~` with two channels and `[pipe 0 0 0]` with its delay in the right inlet behave as
+  modelled.
+
+### Checked in real Live (2026-10-22, `tools/live/realcheck`)
+
+`tools/live/realcheck/realcheck.py run <score> …` (docs/TOOLS.md › 5) makes the plain set with a Windows build, has
+Ableton Live on the test VM open, export (*All Individual Tracks*, 32-bit WAV) and save it, and compares Live's files
+with MuseScore's own export of the score (`--verify-playback --verify-wav`, a route at a time), against the floor
+(MuseScore's second export: bit-identical on the Strings and lane scores, −70 … −100 dB on Whence's Performance patches
+with `[slurs] fixedTransitions`); it diffs the set Live saved against the written one and runs Update Live Set on it.
+Runs: the Strings test score (SSO Solo Violin 1 / Solo Cello, Recommended + fixedTransitions; #464 on Live 12.4.6, #467
+on 12.4.7), the lane score (`realcheck.py lanescore`, Mic 2 stepped every bar; #467, 12.4.7), Whence (Recommended +
+fixedTransitions + speedFromWritten; #464 on 12.4.6, #467 on 12.4.7: the same numbers) and Ample's techniques score
+(`tools/ample/check_scores.py`, Library default + strums, soft strums, pinch harmonics; #464, 12.4.7). **Live updated itself to 12.4.7 on the
+VM during these runs** (its automatic update, on by default: the exe replaced at 08:40 while a run's Live was open, the
+next start showing "There is an automatic update of Live currently in progress"); nothing here needed a Live after 12.4.
+
+**Low cut (2026-10-31 / 11-01, build 512 = branch `lowcut-live` 25dd948, `[levels] lowCut` 1, the fixed cut only; Whence, Live 12.4.7).**
+Not covered: main's following cut (lowCut 2), which build 512 doesn't have. Live opened the set with "MuseScore low cut" on every string
+track (Violins 1 / 2, Violas, Celli, Basses; 150 / 150 / 100 / 50 / 25 Hz), exported, saved and quit twice (load 348 s / 677 s); the saved
+set lost 0 and changed 0 of the written values (Live added 8 of its own); Update Live Set on it, unchanged: wrote nothing, edited:
+updated, both sets re-opened and saved again (lost 0, changed 0). Audio, Live's Kontakt-track exports against MuseScore's: Violins 1 /
+2, Violas, Celli PASS on notes (levels median -0.15 .. -0.23 dB, max 0.61 .. 1.01 dB, onsets max 0 .. 5 ms); Basses DIFFERS (13 notes:
+corr 0.68, level max 17 dB), but against MuseScore's *cut* render the Basses' sum correlates 0.92 (null -8.2 dB) and against its *uncut*
+one 0.81 (-4.6 dB), and above 300 Hz 0.987 / 0.979: the DIFFERS is not the EQ (a Live run without the cut, to prove it, was
+impossible: **the Live 12.4 trial expired on 2026-11-01** ("Saving and exporting will now be deactivated"), run B stopped at
+its first export). **Response**: the designed test (Live's cut against Live's uncut export, `lowcut_response.py`) wasn't possible, so
+Live's A export was measured against MuseScore's own cut and uncut route renders (long-term spectrum, 1/3-octave bands, gain from
+4 .. 10 x the cutoff; the same analysis of MuseScore's cut against its uncut render: the Butterworth within 0.18 dB passband / 0.36 dB
+knee, the control). Live against MuseScore's cut, in the bands where the Butterworth is -24 .. -0.5 dB: max deviation Violins 2 0.17 dB,
+Violas 0.34, Basses 0.89, Violins 1 1.32 (mean -0.95), Celli 2.04 (mean -1.00); below, to -72 dB, 0.3 .. 2.9 dB with no trend:
+Live's two Low Cut 12 bands at the Butterworth's two Q give the 24 dB/oct slope and its depth. The 0.5 / 1.5 dB tolerance is **not
+demonstrated** (the method's own scatter in the flat passband is +-1 .. 2 dB, and Live's knee being ~1 dB lower on Violins 1 and Celli isn't excluded);
+`lowcut_response.py`'s coherence test sees only bins at 2 x the cutoff and up (Live and MuseScore differ in note levels by up to 1 dB).
+
+Confirmed:
+- **The set opens, exports, saves and quits unattended**; Live opens it without a message (the trial notice only). Load:
+  Strings 15-30 s; Whence 160-560 s on 12.4.7 (1311 s on 12.4.6, while the update ran), Live 6-12 GB.
+- **What MuseScore writes survives Live's save**: written and updated sets (Strings, lanes, Whence) lost 0 values,
+  changed 0 (numbers within float32); Track Delays with one decimal (−195.0, −9.8, −172.6 ms) kept; Kontakt's state:
+  the read-back of the saved set identical to the written one (panel values after loading the state); the
+  fixedTransitions / speedFromWritten states (Whence) kept byte for byte (within the diff).
+- **Update Live Set on a set Live 12.4 saved itself**: with the unchanged score it writes nothing (the file's hash the
+  same, no backup); with a note changed it updates the clips (and the timing record), names the backup
+  `<name> [yyyy-MM-dd hhmmss].als` (e.g. `RCupd [2026-10-22 101238].als`), and Live opens the updated set without a
+  message, exports and saves it again (lost 0, changed 0). Its read-back imports 1 lane on Whence (the flat Vibrato) and
+  leaves the Controllers clips' pitch bends out ("a tuning copy's Controllers").
+- **Written clips play MuseScore's timing**: every note's onset within the measure's 1 ms (Strings: 65 + 56 notes, onset
+  0 ms; Whence's Violins 2: 50 notes, 0 ms), levels within 0.2 dB median (Strings 0.00 dB, max 0.54; Whence −0.20 …
+  −0.23 dB median); a negative Track Delay on a MIDI track moves what it sends MIDI To the Kontakt earlier. Strings'
+  Violin nulls at −36.7 dB outside the spans below; a passage of 21.5-32 s comes out one sample (0.02 ms) late (null
+  −12 … −18 dB, −26 … −64 dB at that lag): Live puts the delays on whole samples.
+- **plainShift as the Kontakt track's own Track Delay**: Whence's five part groups line up with MuseScore within 0.5 ms
+  (lags −110.98 … −111.45 ms: MuseScore's start lead), while each Kontakt track's own file is off by exactly its Track
+  Delay (−65.8, −66.0, −111.0, −59.1 ms): *All Individual Tracks* renders a track without its own Track Delay, the group
+  with it.
+- **The gain-stage Utility** ("MuseScore gain", +2.52 / +5.61 dB on Strings): Live's level matches MuseScore's within
+  0.2 dB (gain −0.19 / −0.06 dB).
+- **Tuning slots in a Kontakt multi** (Whence: 4 + 3 + 4 + 4 + 2 copies by MIDI channel): pitches within 2 cents of
+  MuseScore's on held notes (Violins 1, 0.25 s windows).
+- **Parameter-lane edges** (Mic 2 stepped every bar, lane score, Live 12.4.7): the six steps within −5.0 … 0.0 ms of
+  MuseScore's (Live never later); the 11-52 ms late edges of 2026-10 and the silent Solo Violin 1 route did not appear.
+
+**2026-10-29 (build 491, https://github.com/Celeste-fr/MS3-MS4playback-SSO/actions/runs/40833439919, Live 12.4.7; the
+trial notice: "Time remaining: 3 days", so the VM's Live stops saving and exporting about 2026-11-01):**
+- **`[levels] evenKeys` and the winds' gain-stage Utility** (a made-up score, Oboe Solo 58-91 and Bassoon Solo 41-73, a
+  quarter each at mf, Recommended; private realcheck-1029/wnd491): MuseScore's CC11 differs key by key (e.g. Oboe 47 …
+  120); Live plays every note at MuseScore's level: Oboe 34 notes median -0.00 / max 0.01 dB, onsets 0 ms, corr 0.99999,
+  null -48.5 dB; Bassoon 33 notes +0.01 / 0.06 dB, null -29.1 dB (-30.5 outside six 0.25-0.5 s windows at +-0.0 dB); the
+  Utility (-5.51 / -7.15 dB) and the technique tracks' Track Delays (-46.9 / -55.3 ms) confirmed; Live's save lost 0,
+  changed 0; the transportReset state loaded (Reset on transport: no difference to show on winds).
+- **Whence, Recommended + fixedTransitions + speedFromWritten, with `--live-edits`** (the Update Live Set end-to-end
+  run, private realcheck-1029/w491, finished 09:01 after the fix below): both Lives opened, exported, saved and quit
+  (load 344 / 708 s, 7.8 / 7.0 GB, export 280 / 197 s). **Update Live Set end to end works**: the set Live saved keeps
+  everything written (lost 0, changed 0); Update on it with the score unchanged writes nothing (no backup); with a note
+  moved and a knob turned in Live, then the score edited, it updated the set (backup `RCupd [date time].als`), kept the
+  2 note timings set in Live as the notes' Start / End from Live, wrote Vibrato 0.25 into Violins 1 - Performance's
+  panel value and state; the read-back's panel values identical to the written ones. **Found**: Live's save of the
+  updated set changed those two Manual values: the main Kontakt's ("Violins 1") 0.25 -> 0, the Performance one's
+  0.25 -> 0.251968503. **Cause** (the two sets' XML compared): the run's knob edit (`alsset.py liveedit`) changes the
+  Manual value only; Update saw that Manual already at the lane's 0.25 and left the Kontakt's state (Vibrato 0) as it
+  was; Live, opening the set, took the value from the state. The Performance Kontakt's state was written (0.25) and
+  Kontakt rounds to 1/127 (32/127). **Fixed** (branch bowed-join, Linux, `updateLiveSetKnobs`; not yet in real Live):
+  **2026-10-29, build 494 run** (`w494`): Live now kept the knob (0.25 in both Kontakts, lost 0); only Kontakt's 1/127
+  rounding remained ("changed 2": Manual 0.25 -> 0.251968503, the plug-in's `parameter()` right after setting still gave
+  0.25). Now written rounded (`kontaktHeld` in livesetexport.cpp, Update and Create). **Confirmed 2026-10-29, build 495
+  run** (`w495`, Live 12.4.7): set updated survives Live's save PASS (lost 0, changed 0); audio rows as build 494's (same
+  numbers).
+  The plain set › Knobs turned in Live. Audio, Live against MuseScore (MuseScore against itself nulls -43 … -98 dB with
+  fixedTransitions + transportReset): per note within 0.1-0.24 dB (medians) and onsets 0 ms (medians) in every
+  section, but the waveforms don't null as well: Violins 2 PASS (corr 0.979, null -14.0 dB), Celli corr 0.978 / -14.5 dB
+  (first 1.5 s +1.3 dB: the start-lead note sounds), Violas 0.944 / -9.6 dB (one note +2.85 dB), Violins 1 0.858 / -5.4
+  dB (max 1.15 dB, onsets up to 34 ms), Basses 0.672 / -1.5 dB (13 notes, one +16.9 dB: the re-struck accented C2 of
+  2026-10-22, above). The edited set (audio 2 / 2u) the same within 0.1 dB, but Violins 1 +1.0 dB from 26 s against the
+  edited score where the Vibrato edit is (Live plays 0 there). The feature rows (written clips, Utility, slots, voice
+  copies, plainShift, the three states) can't be told apart in one score: all "differs" by these tracks.
+- 2026-10-29 07:36 the same run had failed at Live 1: after the VM's reboot with auto-login, Windows' full-screen
+  "Protect your files … backing up your PC" page (Explorer's Shell_OOBEProxy, "Microsoft account") covered Live, so the
+  trial notice's thumbnail was that page and was escaped as unknown three times. Answered by hand (Opt out of backup,
+  Skip for now), SCOOBE off in the registry; the driver now stops by name on that page and names any window covering a
+  dialog.
+- The driver met three things new on the VM: Live's license check failing in a network outage ("Server could not be
+  resolved … verify your trial license", 430 x 223: the run stops), Chrome over Live's dialogs (their thumbnails were
+  Chrome's: other windows are now minimised first), and Live's crash-recovery question (430 x 155) matching the trial
+  notice's thumbnail (its Yes clicked, the recovered set opened, the run stopped): told apart by size now and answered No.
+
+Differs (open):
+- **A note at the song's start that MuseScore plays early is not played at all.** MuseScore starts everything later by
+  the start lead; the plain set plays such a note by its technique track's negative Track Delay, before song time 0,
+  and Live (12.4.6 and 12.4.7) drops the whole note: Strings' first Violin and Cello notes silent for their 2.5 s, the lane
+  score's held note silent for 19 s; with the Violin's Track Delay set to 0 by hand the note played (late by its onset).
+  A fix needs the set to start later (a lead-in bar) or such notes late by their onset in Live: the owner to decide
+  (OPEN_ITEMS).
+- **A key struck again at the note before's note-off**: MuseScore sends the off first at the same instant; the device's
+  `[pipe]` sent the new note-on 2 µs earlier (the delays' 0.01 ms rounding), so the old note-off ended it (Strings'
+  Cello C3 at 10.69 s: −8 … −12 dB for 0.75 s). With that note-off 0.16 ms earlier in the set (by hand) it played as in
+  MuseScore. **Fixed**: `LiveTiming::track` puts such a note-off `RETRIGGER_MARGIN_MS` (0.15 ms) before the note-on of
+  its key, any technique's on the Kontakt; build #467 on Live 12.4.7: the C3 at the level MuseScore plays it (0.0 dB).
+  A technique played as written has no lookahead to take the off earlier with: since 2026-10-22 (after #467, Linux only)
+  the lookahead makes room. On a Performance patch the same instant reads differently: Whence's Basses, a plain C2
+  re-struck accented (velocity 122) with no gap, is +8 dB louder in Live than in MuseScore, +14 dB with the off 0.15 ms
+  first (by hand): Kontakt takes MuseScore's same-sample off / on otherwise than any gap; the renderer's reattackGap
+  doesn't reach this note (OPEN_ITEMS).
+- **Whence's Celli - Performance is not silent in Live** (reported so on 2026-10-22, corrected the same day, branch
+  `live-celli`): Live plays it at MuseScore's level (rms +0.35 dB). The check's comparison had aligned it a figure off
+  (+407 ms; its repeating figure fooled the envelope match) and then showed the merged span's quietest window as the
+  track's level (-224.7 dB). `compare.py` now aligns a track far from the set's lag again near it (the other tracks'
+  consensus less its own Track Delay) when that correlates better, and gives a span's level over the whole span: the
+  Celli then compare like the other sections (corr 0.895, null -7.2 dB, -24.3 dB outside its spans).
+- **Chord voices' transition speed** (Whence's Celli, bars 9-16: the voice copies of a monophonic patch): at each chord
+  change Live was +5.4 .. +7.6 dB louder for ~0.4 s, its transitions faster (the new pitch ~0.3 s after the note-on,
+  MuseScore's ~0.48 s); between the changes the voices matched within 0.1 dB (the divisi level as in MuseScore). Live
+  sends a clip envelope's value only where it changes: each copy's `[slurs] speedFromWritten` envelope held CC119 0 (every
+  transition of half / whole notes), so its slot never got it. **Fixed** (branch `live-celli`): a technique track's first
+  CC119 value is always a step (`speedEnvelope`); by hand on the set, before the fix: corr 0.895 -> 0.975, null -6.5 ->
+  -13.1 dB, the bursts gone. Ruled out on the way (the same bursts): the MuseScore Link device, the CC11 steps' order, the
+  notes touching / apart / overlapping.
+- Waveforms differ where Whence's quarter tones bend (Violins 1, Violas): levels within 0.3 dB, pitch within 2 cents on
+  held notes, but nulls of −4 … −13 dB over the bent passages and glides that differ by up to ±120 cents within a window
+  (Violins 1 at 11.25 s, 15.75 s); the rest of each track nulls at −23 … −30 dB.
+- **Ample's plain set** (AGM, Live 12.4.7): opens, exports and saves; per note Live plays MuseScore's level and time (113
+  notes: level median −0.07 dB, onsets 0 ms; the Pick patch's track nulls at −24.9 dB) but the Sustain track's waveform
+  doesn't null (correlation 0.32, where MuseScore against itself is bit-identical): AGM's own variation isn't reset by
+  Live's transport as by MuseScore's; some notes up to 14.6 dB apart. Live 12.4.7 fills empty panel slots of the AGM
+  device with parameters of its own (S-Strum Toggle, S-Chord Mode) and keeps the empty slot's value (0.1234567687), which
+  the read-back took for a knob turned in Live: Update Live Set then wrote "S-Chord Mode 0.1235" into the score and
+  the state of an unchanged set. **Fixed** (2026-10-22, Linux only): `LiveTracks::knobs` leaves that value out. The
+  state Live saved holds M-Master Vol at 0.435 / 0.44 (its last automated value) where MuseScore wrote 0.5: the
+  automation sets it again as the set plays.
+- Not measured: *Live plays the score*, the route set, timing overrides (no note was moved in Live), speedFromWritten's
+  and fixedTransitions' effect alone (both are in the states, not isolated), Ample's capo and state lanes.
+
 ### Open questions for the owner
 
 - Live asks where to save a set opened from outside a project: save it next to the score, or in a Live project?
 - The track colours: one per part, from a fixed list. By family (strings, woodwinds …) instead?
 - Return tracks (a reverb / delay like Live's default set): none, since SSO brings its own room. Wanted?
+
+## Update Live Set
+
+The task (2026-10-12): the owner works on the notes in MuseScore and on the production in Live (effects, sends, extra
+tracks, the mixer), and keeps revising the notes; creating the set again loses the Live side's work that the read-back
+doesn't carry. *Mixer › Advanced Options… › Ableton Live › **Update Live Set…*** (next to *Create Live Set…*), or
+`MuseScore3Evo --update-live-set <set.als> <score>`: a plain set Create Live Set wrote, **closed in Live** (Live keeps
+its own copy and would save it over the update), is brought up to date with the score **in place**. Design and rules:
+`libmscore/livesetupdate.h`; the steps: `mscore/livesetexport.h` › Update Live Set.
+
+1. **Read back first**, as *Import automation from Live Set* does (`importSet`: lanes by `Automation::merge`, a
+   conflict asked; the Kontakt's mixer as the part's Mixer, other tracks' mixer kept in `liveTracks`; track delays), then
+   **timing set in Live**: a note moved or trimmed in a technique clip becomes the note's override (*Start / End from
+   Live*, as in *Live plays the score*): where Live plays it (its clip place, the track's Track Delay and the device's
+   delays from the file's `"Timing"` store) less its written place. Which notes Live edited: Create Live Set and Update
+   record each technique track's notes (`liveTracks` › written › `notes`: one hash per note); a note of the file whose
+   hash isn't recorded was edited in Live, a recorded one the file lacks is that note as written, paired by key and the
+   nearest start within a beat; a note the score changed since isn't recorded, so a change in MuseScore is never taken
+   for a timing edit in Live. A set made before (no record): its timing edits aren't taken (reported).
+2. **The plain set for the score now** (`planLiveSet`, Kontakt states only for Kontakts the set doesn't have, or whose
+   slots' tunings changed).
+3. **What MuseScore owns is replaced, only where it differs**: a MuseScore track's arrangement clips (the technique
+   clips with their switch, the Controllers clips; the clip envelopes pointing at the track's own MidiControllers ids), its
+   Track Delay, a technique track's MuseScore Link `"Timing"` store (the device's other stores as Max saved them), the
+   Kontakt's parameter automation MuseScore writes, the parameters MuseScore holds at one value (2026-10-15, the owner's
+   option B: a flat lane, or the map's `default`, as the parameter's **Manual value** in Live's panel, never an envelope;
+   a lane that was automation and is constant now loses MuseScore's envelope; a parameter the panel doesn't list gets
+   one of its free slots, named and with the plug-in's id, as Live's *Configure* lists one; an unautomated parameter
+   MuseScore had written a value for goes back to the patch's own value, only while the set still has MuseScore's value
+   there), with **the set's own Kontakt state** carrying the same values (`SoundLibraryHost::stateWithParameters`: the
+   set's state loaded into an instance, the values set, read back; its other settings kept), and a Kontakt's state from
+   the setup only when its slots' tunings changed (`liveTracks` › written › `slots`; its Kontakt-window settings are
+   then reset, the report says). **A knob turned in Live is never overwritten silently**: the read-back (step 1) takes it
+   into the lane first; changed in MuseScore too, the dialog asks; without a dialog (the command line) Live's value
+   stays in the set, the report says so, and the next update asks again. **Live's own clip edits** (velocities, notes added or deleted) stay while the score's notes on
+   that track are unchanged since the last write (`liveTracks` › written › `clips`); changed in the score too, the score's
+   clip replaces them (reported). A main patch's Controllers clip is always the score's (its edits came back as lanes).
+   **A derived parameter's envelope** (M-Master Vol with strum levels, M-Capo; Read back › Derived parameters) edited
+   in Live the same way: Live's stays while MuseScore would write what it wrote last time, the score's replaces it once
+   the score changes it (reported either way).
+4. **Everything else stays byte for byte**: devices added on any track (after Kontakt too), return tracks and sends,
+   other tracks, names (a renamed track is found by its Info text), colours, the mixer, automation MuseScore doesn't
+   write, locators, tempo, scenes, Live's version attributes. The file is edited as text (`LiveSetUpdate::Xml`: the tags
+   indexed by byte offsets, the edits spliced in), not written again; an update of an unchanged score writes nothing.
+5. **The score changed**: a new technique, patch, tuning copy, part or section: its tracks inserted at the end of
+   their group (a new section before the return tracks), as Create Live Set writes them, with new pointee ids
+   (`NextPointeeId` raised), Track Ids after the set's highest, TrackGroupId and MIDI To pointing at the set's tracks, a
+   Sends list like the set's other tracks' (each send at −inf) and a clip slot per scene of the set. A technique (or a
+   Kontakt) no longer played: its clips cleared and its device's timing removed, the track kept. A part no longer in the
+   score: reported, its tracks untouched. Two tracks with one Info text (duplicated in Live): the first is MuseScore's.
+6. **Safety**: before writing, the set is copied to `Backup/<name> [yyyy-MM-dd hhmmss].als` next to it (the convention
+   of Live's own backups), then written in one go (`QSaveFile`); a set that passed `LiveSetWriter::validate` before
+   must pass it after, else nothing is written. A report lists the tracks updated (and what: clips, Track Delay, timing,
+   automation, state), added, cleared, Live edits kept or replaced, removed parts, what was skipped, and how many of the
+   owner's devices, other tracks and return tracks were kept. The command line writes it to `<set>.update.txt` and saves
+   the score when the update changed it. An unchanged score and set leave the score unmodified too: the plan is made with
+   the lanes' Live marks set aside in place (no undo step, `LiveMarksOff` in livesetexport.cpp; until 2026-10-21 that was
+   an undo step, re-marked afterwards, so every update modified the score and the command line saved it; Create Live Set
+   made again also left lanes Live had marked out of the new set).
+
+Tested here (`tst_liveequivalence` `updateLiveSet`, the test synth as Kontakt): a set Create Live Set wrote, edited as
+in Live (an effect after Kontakt, a return track with a send on every track, an audio track with an EQ, a Kontakt's
+volume, a note moved 1/8 beat in a technique clip, the track renamed), the score changed (a pitch, a marcato on a new
+extra patch, a staccatissimo removed, the piano part removed): the owner's additions and the removed part's tracks
+byte for byte, the backup the saved file, the Spiccato track cleared, the new Kontakt and technique inside the part
+group with a send at −inf, every MuseScore track's clips as a new Create Live Set's, the moved note's override where
+Live played it (`playedBy`), the Long track's timing record the new one; a second update writes nothing; a set
+without the piano part gets its section, part group and tracks. `updateLiveSetKnobs` (the test synth's Tone and Macro
+parameters as Kontakt's): a constant lane written as Live's panel value with no envelope, a changing one as automation; a
+knob turned in the saved set read into the lane and kept; MuseScore's next value written into the panel and the set's
+own state; both changed without a dialog: Live's kept and asked again; a lane made constant losing its envelope; an
+unlisted parameter given a free slot (its id from the instance); an unautomated parameter back at the patch's own value,
+then turned in Live and read back. **Confirmed in real Live 2026-10-22** (Checked in real Live above): Live opens a set
+Update Live Set updated after Live saved it, without a message; an unchanged score writes nothing; the backup is
+`<name> [yyyy-MM-dd hhmmss].als`. **Only real Live 12.4 can show** (still): that Live opens an updated set it saved itself (12.4's format, the inserted tracks written in 12.2's
+as Create Live Set writes them) without a message; that it keeps the inserted tracks' sends and the devices' saved data;
+that the clip envelopes' ControllerTargets ids taken from the file are still the ones Live 12.4 saved; how Live names
+its backups exactly (assumed `<name> [yyyy-MM-dd hhmmss].als`); that Live saves a knob turned in its panel as the
+parameter's Manual value (as the owner's 12.2 sets showed for configured parameters), that it opens a set whose free
+panel slot MuseScore filled. (Answered 2026-10-29: Live takes the panel's values from Kontakt after loading its state,
+so the state must hold them: The plain set › Knobs turned in Live.)
 
 ## Automation lanes in MuseScore and in Live
 
@@ -570,15 +1049,21 @@ then "why not make it so that you can edit the automation curves in both and the
 
 ### Drawing them in MuseScore
 
-In **Continuous View**, click any note (or anything) of a part the sound library plays, of a part Live plays (*Live
-plays the score*) or of an *Edit in MuseScore* clip tab: its automation opens under its staves, on the score's own time
-axis (a lane's point sits under the middle of its note's heads, the grid's bar lines on the staff's: since 2026-10-02,
-when they stood ~1 sp right of them). Header row: *+* adds a lane (Dynamics (CC1), Expression (CC11), and every
+In **Continuous View**, every part the sound library plays, every part Live plays (*Live plays the score*) and an *Edit
+in MuseScore* clip tab's part show a header row under their staves, "Automation · <part>", always (the owner, 2026-10-12:
+"what if every instruments' automation rows get shown at the same time, and I can expand or contract them at will?"), as
+Live's track headers: a click on the header (its triangle or name) opens or folds that part's automation, several parts
+open at once; Alt-click opens or folds every part's (to the clicked one's new state). All folded at first; the folding
+is the session's, per score (not saved, never marks the score changed; undo keeps it), and selecting in the score no
+longer changes it. Open, the lanes lie on the score's own time axis (a lane's point sits under the middle of its note's heads, the grid's bar lines on the staff's: since 2026-10-02,
+when they stood ~1 sp right of them). Header row, right (the owner, 2026-10-12): the pill *( + | All )* chooses which lanes
+are shown: *+* adds a lane (Dynamics (CC1), Expression (CC11), and every
 control of the part's patches from the map: Vibrato, Mic Mix Distance, Mic 1-5, Release, Tightness, Mute …; a part
 Live plays also its Live track's parameters, "Live: Operator › Tone"; a clip tab only its track's Live parameters:
-below), *All* shows them all, the pencil is Draw Mode, *Even* lays the view out with every beat the same width (the
-owner, 2026-10-06; the view only, not saved; a bar line's room goes into the beat before it), the last button shows the
-grid (1/4 … 1/64, Bar; Off: no snap; a click turns snap on / off), the triangle folds. Empty lanes are hidden
+below), *All* shows them all (both open a folded part); the round pencil, in the theme's highlight colour (filled while on),
+is Draw Mode; *Grid 1/4 ▾* shows the snap grid (1/4 … 1/64, Bar; Off: no snap) and its menu sets it, with *Even beat
+spacing* (the owner, 2026-10-06: every beat the same width; the view only, not saved; a bar line's room goes into the
+beat before it). Each control has a tooltip. Empty lanes are hidden
 until added; × hides a lane (it still plays). The grid is fixed (the owner, 2026-10-07: no adaptive grid): one step per
 beat of the time signature at first, Ctrl+1 narrower, Ctrl+2 wider, Ctrl+4 snap on / off (Live's keys; while a lane has
 the focus, where they override MuseScore's Ctrl+1 / 2 / 4). Editing as in Live 12 (manual 25.5): click adds a breakpoint
@@ -811,21 +1296,146 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 
 ### What still differs
 
+- **`[levels] lowCut`** (branch `string-lowcut`, 2026-10-30; docs/PLAYBACK_SETTINGS.md › Low cut): since branch
+  `lowcut-live` (2026-10-31) the plain set and the route set carry it as an EQ Eight before the Utility (Create Live Set
+  › The plain set › Low cut), **checked in real Live to about 1-2 dB** (the fixed cut, build 512, 2026-10-31 / 11-01:
+  Checked in real Live above; the 0.5 / 1.5 dB tolerance of `lowcut_response.py` not demonstrated, the Live trial having expired). *Live plays the score*'s route clips
+  play through the route set's Kontakt tracks, so they get the EQ only where that set has it. **MIDI out**: can't carry a
+  filter (the receiving synth or DAW plays the low end); none planned. **The following cut** (lowCut 2, branch
+  `follow-cut`, 2026-10-31): the plain set has it as the EQ's frequency envelope (unconfirmed in real Live); the **route
+  set** (Add Missing Tracks, *Live plays the score*) keeps the fixed cut: its clips change with every edit in MuseScore and
+  an envelope written once at Create Live Set would go stale (a cut left high under a low note added later), and Live's API
+  can't write arrangement automation before 12.4's `Envelope`. So there the strings keep the noise between the fixed cut
+  and the notes that MuseScore takes out; `--live-equivalence` compares MuseScore's side at the fixed cut (it skips the
+  ME_LOWCUT events), so it checks the set's settings.
+
+- An Engine lane (libmscore/enginelane.h, branch `engine-lane`): Live, Create Live Set and MIDI out ignore it; the part
+  plays its own engine throughout there.
+
+- **Parts on another engine** (several libraries in one score, branch `vial-engine`, 2026-10-26; soundlibrary.h ›
+  engines): Live plays the global library alone. A part whose own playback names another engine (the Mixer's *Part
+  playback*: "Vial Instrumental" while the global library is SSO; metaTag `partPlayback` "library:<name>") has no
+  route for Live (`SoundLib::routes(…, forLive)`, `scoreLibraries(score, true)`): Create Live Set and Update Live Set
+  say so before they write (`otherEnginesLeftOut` in livesetexport.cpp: the parts and their engines, OK / Cancel) and
+  leave those parts out; *Live plays the score*'s clips and the plain set have no track for them. MIDI out the same
+  (the part plays MS4 there; the Mixer's and Play Panel's engine boxes gray every engine but the global one, saying
+  why). Hosted playback in MuseScore plays them on their own plug-in (Vial.vst3 next to Kontakt).
+- **Vial Instrumental** (branch `vial-map`, 2026-10-25; a preset library, README › Preset libraries): hosted playback
+  only was made and tested. Create / Update Live Set would by the existing paths give the Vial track its preset as the
+  plug-in's state (`SoundLibraryHost::setupState`, as for Ample) with CC1 / CC11 / CC21 in the clips, but nothing of it
+  was run (Live's VST 3 device for Vial, the plain set's Kontakt-made multis and Utility). MIDI out sends the same CCs on
+  channel 1; the receiving host must load the preset itself.
+- **Ample Guitar M** (branch `ample-map`, 2026-10-18; a plug-in that isn't Kontakt): Create / Update Live Set and *Live
+  plays the score* were not made or tried for it. By the existing paths its track should get the plug-in's own default
+  state (a patch with a state setting has one: `SoundLibraryHost::defaultState`) with the part's sample set and flat
+  parameter lanes in it (`stateWithControllers` loads it with the part), and a moving parameter lane would go to the
+  MuseScore Link device by title; but Live's panel (*Configure*) is filled by Kontakt's rules, the plain set's
+  multis and Utility were made for Kontakt, and nothing of it was run. To do with phase 2 (HANDOFF.md › Ample guitars).
+  Phase 2's guitar pass (branch `ample-phase2`, 2026-10-20, `guitarplayback.cpp`) adds only events on the part's route:
+  its keys Live's clips and the plain set carry as they carry any note (`[guitar] softStrums` 2's key roll too,
+  `tst_liveequivalence::liveGuitarSoftRoll`). **Volume and strum levels** (ample-fixes2, 2026-10-20): CC7 has no
+  carrier (the clips drop it, the plain set leaves CC7 to Live's fader, `PlainLiveSet::laneController`), so Ample's
+  CC7 is played hosted and in Live as Ample's own **M-Master Vol** parameter (map `<Controller id="volume" cc="7"
+  hosted="m-master-vol">`, `MidiRenderer::libraryHostedParameters`): the volume lane, the part's flat volume and
+  softStrums 0's strum levels and restores become M-Master Vol parameter events at the CC's ticks, value CC / 127 (VM,
+  amphost: bit-identical audio to CC7, both applied from the start of the host block holding them and smoothed ~13 ms;
+  `~/MuseScore/ms3fork/private/ample-state/MV.md`). Route set: the clips' parameter lane, played by the MuseScore Link
+  device; plain set: the Ample track's M-Master Vol automation (steps), a flat lane a one-value envelope as a flat CC
+  lane is; both list M-Master Vol (and M-Capo) in Live's panel (*Configure*). MIDI out keeps CC7. Tests
+  `tst_liveequivalence::liveMasterVol` (the plain set's automation and the clips' lanes = MuseScore's parameter events),
+  `liveGuitarSoftRoll`. Still differs: Ample starts a change at the start of the host block holding it, so in Live it
+  may begin up to one Live buffer early (≤ 11.6 ms at 512), where MuseScore's hosting starts it at its frame; a strum's
+  level can dip what rings that much earlier (not measured in Live). Not run in Live yet. The capo is a plug-in parameter event,
+  sent only to a hosted plug-in (MIDI out: the keys are still sounding - capo, so Ample's own capo must match: set the
+  M-Capo lane), and none of it was tried in Live.
+  **State settings** (Ample's sample set `DBName`, the 204 `Parameter:…` settings, the velocity layers; ample-fixes2,
+  2026-10-20): Create Live Set's route set and plain set embed each part's flat state-lane values in the track's Ample
+  state, the same bytes hosted playback loads (`SoundLibraryHost::setupState` with the part; a state per patch and set
+  of values, `tst_liveequivalence::liveStateSettings`); before, the export made the state without the part, so only the
+  map's fixed `<State>` reached Live and the extra patches (Pick) / (Strum) loaded Finger. A state lane that changes
+  can't be followed: a plug-in's state isn't automatable in Live, and hosted playback loads the state once too
+  (`PartControllers::stateValue`: the lane's first point, its value at the score's start; a later change loads the part
+  again only at the next sync, not while it plays). Both play the start's value. Update Live Set doesn't rewrite a
+  track's plug-in state: after a state lane changes, create the set again.
+
+- **Written clips** (the plain set, 2026-10-11, above): the device's delays are kept to 0.01 ms and Live's Track Delay to
+  0.1 ms; the device reads its delays at the note's own song position (measured in Live 12.4.6, 2026-10-12), a tick on
+  each side tolerated; a note moved or added in Live (or in a
+  clip tab) plays with its track's most common delays; Max's `[pipe]` runs in the scheduler, not sample-timed as the
+  clip's own notes (only Live can say how close). A clip tab playing through its Live track (MuseScore's notes sent to
+  the track at once, `/ms/midi`) plays the written notes as written (no onset): MuseScore plays a clip tab as notation.
+  *Live plays the score*'s clips (and so the route set and `--live-equivalence`) still hold the played timing: their
+  tracks are found or made by hand and Live's API (the Live Object Model) has no Track Delay to set, so written notes
+  there would play late by each route's lookahead until the owner set every track's Track Delay by hand (the owner to
+  decide; HANDOFF.md › Written clips in the plain set). For the same reason their first note can't start before the clip:
+  a note at the score's start whose onset MuseScore plays early by the start lead (`libraryDelayLead`, 2026-10-14;
+  Whence's first Celli note, 172 ms) starts at 0 there, late by its onset; the plain set plays it early (Track Delay), and
+  real Live doesn't play such a note at all (2026-10-22, Checked in real Live above).
+  The plain set's Controllers clip can't start before 0 either: such a note's controllers (CC1 at the dynamic), which
+  MuseScore sends with its early note-on, come at 0 in Live, up to the start lead after the note-on (Whence's first
+  Celli note 172 ms, a `[slurs] plainTiming` attack at the score's start 20-39 ms; `tst_liveequivalence::plainTimingLive`).
+
+- **`[slurs] speedFromWritten`** (2026-10-17, docs/PLAYBACK_SETTINGS.md › Speed from written): the Performance patch's
+  CC119 before each legato note-on reaches Live as a carrier on key 113 (*Live plays the score*, protocol 11) and, in the
+  plain set, as a CC119 envelope of the technique track's clip (not the Kontakt's Controllers clip: it gets the note's own
+  Track Delay), a step one unit before the note as Live plays it (with the MuseScore Link device the controllers pass at
+  once and the notes are delayed: the step is at the note's played start plus the track's lookahead; without the device at
+  the written note); before the first, 0 (a patch just loaded). The Kontakt state Create Live Set embeds has the script's
+  own writing off ($vfm12 0, `SoundLibraryHost::setupState` with the score). `tst_liveequivalence::speedFromWrittenLive`
+  (Linux, test synth): the route clip's carriers and the device's MIDI (CC119 63 before each transition), the plain set's
+  envelope. A carrier's value 1 plays as 0 (as for every carrier). In real Live 12.4.7 (2026-10-22, Whence): the plain
+  set with it opens, plays (levels and onsets as above) and survives Live's save; its effect alone not isolated.
+
+- **`[slurs] fixedTransitions`** (2026-10-20, docs/PLAYBACK_SETTINGS.md › Fixed transitions): the random generator's
+  modulators at 0 are in the Kontakt state Create Live Set embeds (`SoundLibraryHost::setupState` with the score;
+  `tst_liveequivalence::randomSetupState`), so the plain set plays the same fixed take as MuseScore. Update Live Set
+  rewrites a Kontakt's state only when its slots' tunings change, so a set made with the other value keeps its own (make
+  the set again); *Live plays the score* plays the owner's own Kontakt, as it is. In real Live (2026-10-22, Strings and
+  Whence): the state survives Live's save (read-back identical, the set's diff clean); Live renders the same take each
+  time (two runs, two builds: the same nulls to 0.01 dB).
+
+- **`[notes] transportReset`** (2026-10-21, docs/PLAYBACK_SETTINGS.md › Transport reset): "Reset on transport" at 1 is in
+  the Kontakt state Create Live Set embeds, the same way (`tst_liveequivalence::transportResetState`); in Live the patch
+  then resets its round robins at Live's own Play, as Live's other SSO patches do. Update Live Set and *Live plays the
+  score*: as fixedTransitions. **`[levels] hallGuard`**'s split CC1 steps are rendered events, so the clips and the plain
+  set carry them. Untried in real Live.
+
+- **`[slurs] plainPerformance`'s shift** (2026-10-17, docs/PLAYBACK_SETTINGS.md › Plain Performance): the plain set plays
+  it as the Performance patch's Kontakt track's Track Delay (-plainShift; `tst_liveequivalence::plainPerformanceLive`:
+  every note-on, note-off and the patch's CC1 where MuseScore plays them). *Live plays the score*'s clips and the route
+  set (as every track delay there: no Track Delay through Live's API) play the patch's events at their written place,
+  late by the shift (Violas - Performance 95.2 ms) against MuseScore's own playback, until the owner sets that track's
+  Track Delay by hand. The plain set's Track Delay confirmed in real Live 12.4.7 (2026-10-22, Whence: the five part
+  groups within 0.5 ms of MuseScore).
+
+- **A clicked or entered note** (2026-10-15, `libmscore/notepreview.h`): in MuseScore's own playback (hosted or MIDI
+  out) it plays its playback events on its route (patch, switch, CC1 / CC11, bend: docs/PLAYBACK_SETTINGS.md › Clicked
+  and entered notes). While *Live plays the score* MuseScore sends the library's routes nothing, so a click there plays
+  MuseScore 3.6's click on the built-in synthesizer as before; a clip tab playing through its Live track sends the
+  click to that track as before (Live's keyboard option unchanged).
 - **Host-only playback settings** (docs/PLAYBACK_SETTINGS.md; playback.ini `[hosting]`): `settleSeconds` (how long a
   freshly loaded patch runs before MuseScore sets its controllers) acts
   in MuseScore's own hosting only; Live loads and mixes the plug-ins itself. Varispeed's glides too (each frame
   within a cent; varispeed can't reach Live); the pitch-bend glides are rendered and reach the clips. Every other
   playback setting acts in the renderer (the clips' events) or, `[hosting] maxVoices`, in the Kontakt states the Live
   Set carries, so Live gets it identically.
-- **Microtones on patches without `bend=`** (the All techniques patches: SSO's pitch bend doesn't bend them): MuseScore
-  plays them by varispeed on copies of the patch, a copy retuned once silent and slurred notes gliding on one copy
-  (at most `[tuning] maxLanes` copies); Live has no varispeed, so its routes (MIDI out's too) give a copy per tuning,
-  fixed by Kontakt's Tune (the plain set above; the route set the same), and a slurred note of another tuning starts
-  on its own copy: no varispeed glide (the All techniques longs give each note its own attack anyway). More Kontakt
-  slots than MuseScore hosts: one per tuning a patch plays (the plain set: one Kontakt per patch, a slot per tuning;
-  the route set: a Kontakt per copy). Pitches agree within 2 cents (measured). (The Performance
-  patches, Solo Cello and the tuned percussion bend: those match.) A route set made before 2026-10-10 has no tuned
-  copies: make it again.
+- **Microtones on patches without `bend=`** (the All techniques patches: SSO's pitch bend doesn't bend them): since
+  2026-10-15 MuseScore's own hosting tunes them as Live does (`[tuning] hostedTuning` 1, slots, the default;
+  soundlibrary.h › hosted tuning): the same routes, a copy per tuning, fixed by Kontakt's Tune, a patch's copies one
+  Kontakt with a slot per tuning on its own MIDI channel (the plain set's multis; `KontaktSetup::withSlots`), and a
+  slurred note of another tuning starts on its own copy. What still differs: (1) a part's plug-in parameters (SSO's
+  Vibrato, mics): MuseScore sets them on the multi, which reaches every slot (measured, the load-times run's phase 6,
+  2026-10-15), so a part's copies share one Kontakt with them too; the plain set bakes a setting into the state before
+  it copies the slots and keeps a Kontakt of their own only for automated parameters: the sound is the same, the memory
+  may not be. (2) The even-levels background measurer renders each part
+  and patch on one plain instance of its own, its copies' tunings by varispeed (the cheapest load; the levels it
+  measures are of the notes' envelopes, not their pitch). (3) A bending copy with a note beyond its bend range plays it
+  by varispeed in MuseScore (an instance per copy then); Live can't. (4) A score with very many tunings can run out of
+  the 64 routes (4 ports × 16) with a copy per tuning, as MIDI out and Live already could. With `hostedTuning` 0
+  (varispeed, to compare by ear) MuseScore plays them as before 2026-10-15: varispeed on copies of the patch, a copy
+  retuned once silent and slurred notes gliding on one copy (at most `[tuning] maxLanes` copies), a Kontakt per copy.
+  Pitches agree within 2 cents (Tune, measured). (The Performance patches, Solo Cello and the tuned percussion bend:
+  those match.) A route set made before 2026-10-10 has no tuned copies: make it again.
 - **A note at the very start** (time 0) waits in Live for its carriers, which can't go before the clip's start: the
   switch, controllers and bend at 0, 0.26 ms each at 120 bpm (1-4 ms). The wait itself is inaudible, but SSO's
   Performance legato script is sensitive to where a line starts: on the VM the first note of a Solo Violin -
@@ -841,6 +1451,17 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
 - **A raised track level with a loud Mixer** (trackdelays.h, 2026-10-08): a patch's headroom (up to +6 dB) and the
   Mixer's volume above 100 (up to +4.15 dB) multiply on the Kontakt track's Volume, which stops at +6 dB in Live
   (`LiveSetWriter::MAX_VOLUME`); MuseScore's slot has no such top. At the Mixer's default 100 they match.
+- **A gain stage over +35 dB plus +6 dB** (2026-10-15): MuseScore's Utility stops at +35 dB and the fader takes the rest
+  only up to its +6 dB; MuseScore's slot has no top. No score reaches it today (Whence's largest gain stage: HANDOFF.md ›
+  Gain stage).
+- **MIDI out's levels** (2026-10-15): with no host and no Utility, a patch's gain goes on CC7 with the Mixer's on the
+  host's law (gain = (CC7 / 100)², `TrackDelays::midiVolumes`), every route lower together by what goes over CC7's
+  +4.15 dB (the old way). What a receiver makes of CC7 is its own (Kontakt's CC7 law is unmeasured), so MIDI out's
+  balance is only as right as that law matches. Before 2026-10-15 MIDI out sent the Mixer's CC7 alone: none of the level
+  rule's, the section balance's or the real range's volumes reached it.
+- **Live plays the score** (the clips into the owner's own set, `liveclips.*`): it writes no devices, so the gain stage
+  isn't there (as the volumes before it weren't): only Create Live Set's plain set and route set carry MuseScore's
+  Utility.
 - **A carrier value of 1 plays as 0** (the UACC switch: 127 can't be carried, and it is no articulation): 128
   controller values in a note's 127 velocities.
 - **MuseScore's automation lanes of plug-in parameters** play in Live through the device (since 2026-09-30), from a
@@ -856,12 +1477,25 @@ the track mixer; the MuseScore Link device) or be listed below as a difference t
   them; nor any track's mixer automation (a Kontakt's static mixer is the part's Mixer).
 - **Track delays in the route set** (Add Missing Tracks, the Live-against-MuseScore check): its tracks carry none, and
   *Live plays the score*'s clips are rendered without them; only the plain set has them (as TrackDelay).
-- **Controllers and the Mixer changed after the set was written** don't follow: create the set again, or use Live's
-  panel and faders.
+- **The Mixer changed after the set was written** doesn't follow: create the set again, or use Live's faders. *Update
+  Live Set* (below) reads Live's mixer back into the score (Live wins). **Controllers** (flat lanes) changed in MuseScore
+  reach an updated plain set since 2026-10-15 (the parameter's plain value in Live's panel and the set's Kontakt state),
+  and a knob turned in Live's panel comes back as a lane; still differing: a value changed in **Kontakt's own window**
+  (not in Live's panel; Kontakt's state is opaque here) is not read back, so MuseScore plays the lane's value there;
+  a knob turned on an extra patch's Kontakt is reported, not imported (no lane plays an extra patch's Kontakt); the
+  route set (Add Missing Tracks) and *Live plays the score* get no Update.
+- **Live's own clip edits kept by Update Live Set** (velocities, notes added or deleted in a technique clip whose notes
+  the score hasn't changed since; LIVE.md › Update Live Set): Live plays them, MuseScore doesn't (they are not in the
+  score). A note moved or trimmed is not one of them: it became its timing override, which both play.
 - The Play Panel's tempo slider (relTempo) and MuseScore's built-in (non-library) parts are not in Live.
 - The Mixer's volume 0: silence in MuseScore, -70 dB in Live (Live's lowest fader value).
 - Round robins: Kontakt picks its own on each render, in MuseScore and in Live alike (not a difference of the path,
-  but no two renders are sample-identical).
+  but no two renders are sample-identical). SSO's scripts reset their per-key round-robin counters on the transport
+  start (All techniques and single-technique patches; the Performance patches after 1.5 s of silence), which Live's Play
+  does every time; MuseScore's hosted plug-ins now see one on every playback start (`Vst3Synth::restartTransport`: a block
+  with the transport stopped, then playing; also at the start of an export and of each verification / even-levels pass),
+  so a play starts from the same round robins in both. (Before 2026-10-13 the host said "playing" in every block: one
+  start per session.) Not reproduced: Live's own stop-start on a loop or a locator jump.
 
 ### The check (`--live-equivalence`)
 
@@ -1508,11 +2142,19 @@ do.
 (Moved from CLAUDE.md on 2026-10-04, to keep that file short: agents read it whole.)
 
 `libmscore/midisync.h`, `liveset.*` (automation from a set), `liveclips.*` + `mscore/liveclips.*`
-(Live plays the score; carrier notes 114-127, converted by the device only on a track holding a "MuseScore: …" clip, protocol 8), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
+(Live plays the score; carrier notes 113-127, converted by the device only on a track holding a "MuseScore: …" clip, protocol 8; key 113 CC119 from protocol 11), `mscore/liveclipmodel.*` + `liveclipedit.*` (edit Live clips; a clip
 tab's tempo follows the song: `mscore/cliptempo.*`, an arrangement clip's from the saved set's main-track tempo automation
 (`/live/clip/span`, protocol 6; the set file found via Live's `Log.txt` / `Preferences.cfg`, watched), else Live's tempo; a clip tab plays through its own Live track: `Seq::playOnLiveTrack`, `livemidiout.h`, the copy on that track plays `/ms/midi`; QSettings `liveIntegration/clipTabsPlayLive`; while MuseScore plays, the device un-mutes / solos that track and puts it back: `/ms/cliptab/audible`; a clip tab shows no `*` while in sync with Live; status-bar labels are `mscore/elidedlabel.h`; four band staves acting as one, each chord drawn cross-staff on its band after every command: `makeBandStaves`, `assignBands`, `Score::setEndCmdHook`, `Score::lineHidesEmptyStaves`), the connection-loss notices (`LinkWatch`, `mscore/liveclips.h`),
-`libmscore/plainliveset.*` (the plain set), `libmscore/livetracks.*` (the plain set read back: track keys in the
-Info text, metaTag `liveTracks`), `libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
+`libmscore/livetimingoverride.*` (timing set in Live: a note's override, ms after its written start / end, metaTag
+`liveTimingOverrides`, Inspector › Note; found from the device's `/live/edited` report against what MuseScore wrote,
+`base` in `/ms/track`, protocol 10; played by `MidiRenderer::libraryTimingOverrides`),
+`libmscore/livesetupdate.*` + `mscore/livesetexport.*` › Update Live Set (a plain set brought up to date in place:
+read back, timing edits from the technique clips, only MuseScore's parts of the file replaced, new tracks inserted; the
+records in `liveTracks` › written: clips, notes, slots),
+`libmscore/plainliveset.*` (the plain set; its technique clips hold the written notes, `libmscore/livetiming.*` puts
+the played timing back by Track Delay and the device: `MidiRenderer::setWrittenTiming`, `LiveTiming::track`, the
+device's `"Timing"` store and `---mslt` buffer, MuseScoreLink.js › Written clips), `libmscore/livetracks.*` (the plain set
+read back: track keys in the Info text, metaTag `liveTracks`; a technique's TrackDelay plus its lookahead), `libmscore/livesetwriter.*` + `mscore/livesetexport.*` (Create Live Set; compare format changes with
 `tools/live/test/compare_als_skeleton.py`), `mscore/liveequivalence.*`, `tools/live/` (Max for Live device, Node
 tests, `fake_live_server.js`). Plug-in parameter lanes MuseScore plays reach Live through the device (`/ms/params`,
 `/ms/pvals`; tables played by `live.remote~` at Live's song position; Kontakt's slots "#001" matched by
@@ -1548,6 +2190,8 @@ curves in the track (`Track.set_data` through `/ms/keep`, the set marked changed
   (the editor's operations), `undoWrite`; `mscore/automationlanes.{h,cpp}`: the editor.
 - `mscore/liveintegration.{h,cpp}`: the Mixer switch, the import, the link, the watcher.
 - `mscore/liveclips.{h,cpp}`: Live plays the score (`LiveClipsLink`, which owns the UDP socket for both).
+- `libmscore/livesetupdate.{h,cpp}`: Update Live Set, the in-place edit of a saved set (`Xml`, `update`, `timingFromSet`,
+  `records`); `mscore/livesetexport.{h,cpp}` `updateLiveSet`: the read-back, the plan, the backup.
 - `libmscore/livesetwriter.{h,cpp}`: Create Live Set, the writer (and `validate`); `mscore/livesetexport.{h,cpp}`: the
   routes, the device, the states, the dialog. `tools/live/test/compare_als_skeleton.py`: a written set against one
   Live saved.

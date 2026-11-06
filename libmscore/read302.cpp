@@ -29,6 +29,7 @@
 #include "sym.h"
 #include "text.h"
 #include "xml.h"
+#include "partcontrollers.h"
 
 #ifdef OMR
 #include "omr/omr.h"
@@ -368,14 +369,19 @@ bool MasterScore::read(XmlReader& e)
       if (!Score::read(e))
             return false;
       TempoChange::read(this);      // the rit. / accel. lines' settings (tempochange.h)
+      PartControllers::migrate(this);     // the old Controllers values as flat automation lanes (partcontrollers.h)
       PhraseMark::read(this);       // the slurs that are phrase marks (slur.h), with their parts' copies
       MarcatoLevel::read(this);     // the marcatos' levels (articulation.h), likewise
       PerformanceTechnique::read(this);   // the notes' Performance techniques (performancetechnique.h), likewise
+      LiveTimingOverride::read(this);     // the notes' timing set in Live (livetimingoverride.h), likewise
+      EvenLevels::read(this);             // the notes' even-levels corrections (evenlevels.h), likewise
       for (Excerpt* ex : excerpts()) {    // and each part's own lists (a part saved on its own has only those)
             if (ex->partScore()) {
                   PhraseMark::read(ex->partScore());
                   MarcatoLevel::read(ex->partScore());
                   PerformanceTechnique::read(ex->partScore());
+                  LiveTimingOverride::read(ex->partScore());
+                  EvenLevels::read(ex->partScore());
                   }
             }
       for (Staff*& s : staves())

@@ -20,15 +20,19 @@
 
 #include "audio/midi/event.h"
 #include "libmscore/automation.h"
+#include "libmscore/leadinglane.h"
 #include "libmscore/instrument.h"
 #include "libmscore/liveclips.h"
 #include "libmscore/liveset.h"
 #include "libmscore/livesetwriter.h"
+#include "libmscore/livetracks.h"
 #include "libmscore/midisync.h"
 #include "libmscore/chord.h"
 #include "libmscore/note.h"
 #include "libmscore/segment.h"
 #include "libmscore/undo.h"
+#include "libmscore/livetimingoverride.h"
+#include "libmscore/note.h"
 #include "libmscore/part.h"
 #include "libmscore/repeatlist.h"
 #include "libmscore/rendermidi.h"
@@ -55,6 +59,19 @@
 #include "mscore/liveclips.h"
 #include "mscore/liveclipmodel.h"
 #include "mscore/livehelpers.h"
+#include "mscore/lanefolds.h"
+#include "mscore/laneheights.h"
+#include "mscore/automationlanes.h"
+#include "mscore/notelanes.h"
+#include "mscore/soundlibraryhost.h"
+#include "mscore/inspector/inspectorNote.h"
+#include "mscore/icons.h"
+#include "ui_inspector_note.h"
+#include <QGroupBox>
+#include <QLabel>
+#include <QPushButton>
+#include <QTreeWidget>
+#include <QVBoxLayout>
 #include "audio/midi/event.h"
 #include "mscore/livesetexport.h"
 #include "mtest/testutils.h"
@@ -77,6 +94,7 @@ class TestLiveIntegration : public QObject, public MTest
       void liveProjectPath();
       void liveSetRead();
       void liveSetCurve();
+      void liveSetKnobs();
       void liveSetLanes();
       void liveLanesPlayback();
       void clipsTimeline();
@@ -85,6 +103,7 @@ class TestLiveIntegration : public QObject, public MTest
       void clipsOnsetEarly();
       void clipsChanges();
       void clipsOsc();
+      void clipsTimingFromLive();
       void clipsImport();
       void clipEditImport();
       void clipEditPitch();
@@ -114,6 +133,14 @@ class TestLiveIntegration : public QObject, public MTest
       void clipVelocityRecord();
       void clipEnvelopeMapping();
       void laneTimeAxis();
+      void laneFolds();
+      void laneHeights();
+      void leadingBands();
+      void laneDashedLine();
+      void lanePointsOnBarLines();
+      void noteLaneRubber();
+      void soundLibraryWindow();
+      void inspectorNoteRows();
       void laneEvenBeats();
       void liveParamLanes();
       void clipTabMidi();
@@ -391,6 +418,15 @@ void TestLiveIntegration::liveSetRead()
       for (const LiveSet::Point& p : clip.points)
             pts << QString("%1:%2").arg(p.beat).arg(p.value);
       QCOMPARE(pts, QStringList({ "8:0", "12:127", "12:0", "16:127" }));
+      // Live's panel of Kontakt: the named parameters (not the empty slot), their Manual values, both automated
+      QCOMPARE(int(t.parameters.size()), 2);
+      QCOMPARE(t.parameters[0].name, QString("Vibrato"));
+      QCOMPARE(t.parameters[0].id, 1);
+      QCOMPARE(t.parameters[0].manual, 0.25);
+      QVERIFY(t.parameters[0].automated);
+      QCOMPARE(t.parameters[1].name, QString("Unknown Knob"));
+      QVERIFY(t.parameters[1].automated);
+      QVERIFY(LiveTracks::knobs(t).empty());
 
       const LiveSet::Track& f = set.tracks[1];
       QCOMPARE(f.name, QString("Flute"));
@@ -406,6 +442,98 @@ void TestLiveIntegration::liveSetRead()
 //    a curved segment as straight pieces: from a to b, inside their box, each within one MIDI step of the curve
 //    (Automation::flattenCurve: as few as that allows); the diagonal is one line
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   liveSetKnobs
+//    a set's plug-in parameters in Live's panel (LiveSet::Parameter, the owner 2026-10-15: knobs turned in Live come back):
+//    their Manual values, whether an arrangement envelope automates them (a clip envelope doesn't), the empty slots left
+//    out; the knobs (unautomated ones) as LiveTracks::knobs gives them; their hash; the record's JSON; a lane from a knob
+//    kept by Automation::merge when the parameter left Live's panel (an envelope's lane, unedited, goes with its envelope)
+//---------------------------------------------------------
+
+void TestLiveIntegration::liveSetKnobs()
+      {
+      auto param = [](int slot, const char* name, int id, const char* manual, int target) {
+            return QString("<PluginFloatParameter Id=\"%1\"><ParameterName Value=\"%2\" /><ParameterId Value=\"%3\" />"
+                           "<ParameterValue><LomId Value=\"0\" /><Manual Value=\"%4\" /><AutomationTarget Id=\"%5\">"
+                           "<LockEnvelope Value=\"0\" /></AutomationTarget></ParameterValue></PluginFloatParameter>")
+                   .arg(slot).arg(name).arg(id).arg(manual).arg(target);
+            };
+      const QString xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Ableton Creator=\"Ableton Live 12.4.6\"><LiveSet><Tracks>"
+                          "<MidiTrack Id=\"1\"><Name><EffectiveName Value=\"Violins 1\" /><UserName Value=\"\" />"
+                          "<Annotation Value=\"MuseScore: Strings / Violins 1 / Violins 1\" /></Name>"
+                          "<AutomationEnvelopes><Envelopes><AutomationEnvelope Id=\"0\"><EnvelopeTarget><PointeeId Value=\"501\" />"
+                          "</EnvelopeTarget><Automation><Events><FloatEvent Id=\"1\" Time=\"-63072000\" Value=\"0.3\" />"
+                          "<FloatEvent Id=\"2\" Time=\"4\" Value=\"0.9\" /></Events></Automation></AutomationEnvelope></Envelopes>"
+                          "</AutomationEnvelopes><DeviceChain><DeviceChain><Devices><PluginDevice Id=\"0\"><PluginDesc>"
+                          "<Vst3PluginInfo Id=\"0\"><Name Value=\"Kontakt 8\" /></Vst3PluginInfo></PluginDesc><ParameterList>"
+                          + param(0, "Vibrato", 12, "0.3", 501) + param(1, "Release", 13, "0.7000000477", 502)
+                          + param(2, "Mic 2 level", 21, "1", 503) + param(3, "", -1, "0.1234567687", 504)
+                          + "</ParameterList></PluginDevice></Devices></DeviceChain></DeviceChain></MidiTrack>"
+                            "</Tracks></LiveSet></Ableton>";
+      const LiveSet::Set set = LiveSet::parse(xml.toUtf8());
+      QVERIFY2(set.error.isEmpty(), qPrintable(set.error));
+      QCOMPARE(int(set.tracks.size()), 1);
+      const LiveSet::Track& t = set.tracks[0];
+      QCOMPARE(int(t.parameters.size()), 3);
+      QCOMPARE(t.parameters[0].name, QString("Vibrato"));
+      QVERIFY(t.parameters[0].automated);
+      QCOMPARE(t.parameters[1].name, QString("Release"));
+      QCOMPARE(t.parameters[1].id, 13);
+      QVERIFY(!t.parameters[1].automated);
+      QVERIFY(std::fabs(t.parameters[1].manual - 0.7) < 1e-6);
+      QCOMPARE(t.parameters[2].device, QString("Kontakt 8"));
+      const std::map<QString, double> k = LiveTracks::knobs(t);
+      QCOMPARE(int(k.size()), 2);
+      QVERIFY(k.count("Release") && k.count("Mic 2 level") && !k.count("Vibrato"));
+      // the hash: to Live's float precision (1e-4), clamped
+      QCOMPARE(LiveTracks::knobHash(0.7000000477), LiveTracks::knobHash(0.7));
+      QVERIFY(LiveTracks::knobHash(0.7) != LiveTracks::knobHash(0.7002));
+      QCOMPARE(LiveTracks::knobHash(1.2), LiveTracks::knobHash(1.0));
+      QVERIFY(LiveTracks::isKnobHash(LiveTracks::knobHash(0.5)));
+      QVERIFY(!LiveTracks::isKnobHash("abc"));
+      // the record: Written::params through the JSON
+      LiveTracks::Data d;
+      d.written["MuseScore: Strings / Violins 1 / Violins 1"].kind = "kontakt";
+      d.written["MuseScore: Strings / Violins 1 / Violins 1"].params = k;
+      const LiveTracks::Data back = LiveTracks::fromJson(LiveTracks::toJson(d));
+      QVERIFY(std::fabs(back.written.at("MuseScore: Strings / Violins 1 / Violins 1").params.at("Release") - 0.7) < 1e-6);
+      QCOMPARE(back.written.at("MuseScore: Strings / Violins 1 / Violins 1").params.at("Mic 2 level"), 1.0);
+
+      // merge: a lane from a knob (unedited) whose parameter left Live's panel stays, as MuseScore's own; an envelope's
+      // lane (unedited) whose envelope Live deleted goes
+      Automation::Lane knob;
+      knob.target = "release";
+      knob.points.push_back(Automation::Point(0, 0.7, Automation::Curve::STEP));
+      knob.extra["liveHash"] = LiveTracks::knobHash(0.7);
+      knob.extra["pointsHash"] = Automation::pointsHash(knob.points);
+      Automation::Lane env;
+      env.target = "vibrato";
+      env.points = { Automation::Point(0, 0.3, Automation::Curve::STEP), Automation::Point(1920, 0.9, Automation::Curve::STEP) };
+      env.extra["liveHash"] = "e123";
+      env.extra["pointsHash"] = Automation::pointsHash(env.points);
+      QVERIFY(knob.playedByLive() && env.playedByLive());
+      const Part* part = reinterpret_cast<const Part*>(&set);       // (a key only)
+      const std::map<const Part*, Automation::PartLanes> mine { { part, { knob, env } } };
+      const std::map<const Part*, Automation::PartLanes> merged = Automation::merge(mine, {});
+      QCOMPARE(int(merged.at(part).size()), 1);
+      QCOMPARE(merged.at(part)[0].target, QString("release"));
+      QVERIFY(!merged.at(part)[0].extra.contains("liveHash"));
+      QCOMPARE(merged.at(part)[0].flatValue(), 0.7);
+      // a knob turned in Live (another hash), the lane unedited here: Live's taken; edited here too: a conflict
+      Automation::Lane turned = knob;
+      turned.points[0].value = 0.2;
+      turned.extra["liveHash"] = LiveTracks::knobHash(0.2);
+      turned.extra["pointsHash"] = Automation::pointsHash(turned.points);
+      const std::map<const Part*, Automation::PartLanes> live { { part, { turned } } };
+      QVERIFY(Automation::conflicts(mine, live).empty());
+      QCOMPARE(Automation::merge(mine, live).at(part)[0].flatValue(), 0.2);
+      Automation::Lane edited = knob;
+      edited.points[0].value = 0.5;
+      const std::map<const Part*, Automation::PartLanes> mineEdited { { part, { edited } } };
+      QCOMPARE(int(Automation::conflicts(mineEdited, live).size()), 1);
+      QCOMPARE(Automation::merge(mineEdited, live).at(part)[0].flatValue(), 0.5);      // (not chosen: MuseScore's kept)
+      }
 
 void TestLiveIntegration::liveSetCurve()
       {
@@ -892,7 +1020,18 @@ void TestLiveIntegration::clipsOnsetEarly()
       score->rebuildMidiMapping();
       score->setExpandRepeats(true);
       const LiveClips::Timeline tl = LiveClips::timeline(score);
-      const std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      // (rendered as Live's clips are, LiveClipsLink::renderEvents: no start lead, which MuseScore's playback has)
+      EventMap events;
+      {
+      MidiRenderer r(score);
+      r.setForLiveClips(true);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx(ss);
+      ctx.metronome = false;
+      ctx.renderHarmony = true;
+      r.renderScore(&events, ctx);
+      }
+      const std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *lib, events, { "MuseScore A" }, tl);
       QCOMPARE(int(tracks.size()), 2);
       const std::vector<LiveClips::Note> notes = realNotes(tracks[0].notes);
       QVERIFY2(notes.size() == 6, qPrintable(describe(tracks[0].notes)));
@@ -919,6 +1058,87 @@ void TestLiveIntegration::clipsOnsetEarly()
 //    an edit changes the hash of its part's route only (only that clip is sent); the same score
 //    renders the same hashes; the Mixer's mute marks the notes; undo gives the first hash back
 //---------------------------------------------------------
+
+//---------------------------------------------------------
+//   clipsTimingFromLive
+//    the device reports a MuseScore clip edited in Live (/live/edited, /live/editnotes: its notes, the carriers left
+//    out): the link pairs them with what it last wrote there and keeps the moved note's timing as its override
+//    (livetimingoverride.h), one undo step, in every pass of the repeat; a velocity edit is another edit; the content
+//    is the next write's base. The clip rendered again holds the note where Live has it
+//---------------------------------------------------------
+
+void TestLiveIntegration::clipsTimingFromLive()
+      {
+      MasterScore* score = readScore(DIR + "clips.musicxml");
+      QVERIFY(score);
+      auto lib = loadMap(MAP);
+      QVERIFY(lib);
+      SoundLib::setCurrent(lib);
+      SoundLib::setOutput(SoundLib::Output::MIDI);
+      score->rebuildMidiMapping();
+      score->setExpandRepeats(true);
+      const LiveClips::Timeline tl = LiveClips::timeline(score);
+      std::vector<LiveClips::Track> tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      const LiveClips::Track violin = tracks[0];
+      LiveIntegration::LiveClipsLink* link = LiveIntegration::LiveClipsLink::instance();
+      link->setScore(score);
+      link->knowForTest(violin, 1111);
+      QCOMPARE(link->knownContent("0:1"), 1111);
+
+      // the owner, in Live: the D5 of the first pass (beat 4) a tenth of a beat earlier (100 ms at 60 bpm), its length
+      // kept; the F5's velocity 33
+      std::vector<LiveClips::Note> live = realNotes(violin.notes);
+      QCOMPARE(int(live.size()), 6);
+      const LiveClips::Note d5 = live[1];
+      QCOMPARE(d5.pitch, 74);
+      QVERIFY(d5.source);
+      live[1].start -= U / 10;
+      live[5].velocity = 33;
+      const int chunks = (int(live.size()) + 47) / 48;
+      link->receivedForTest("/live/edited", { "0:1", 2222, int(live.size()), chunks });
+      QVariantList args { "0:1", 2222, 0 };
+      for (const LiveClips::Note& n : live)
+            args << n.pitch << n.start << n.length << n.velocity << int(n.muted);
+      link->receivedForTest("/live/editnotes", args);
+
+      const Note* note = d5.source->firstTiedNote();
+      QVERIFY2(std::fabs(note->liveStart() + 100.0) < 0.01, qPrintable(QString::number(note->liveStart())));
+      QVERIFY(LiveTimingOverride::isSet(note->liveEnd()));
+      QCOMPARE(LiveTimingOverride::count(score), 1);
+      QCOMPARE(link->knownContent("0:1"), 2222);            // (the next write's base)
+      QVERIFY2(link->lastEdit().contains("the timing of 1 note") && link->lastEdit().contains("1 other edit"),
+               qPrintable(link->lastEdit()));
+
+      // rendered again: the D5 in both passes 100 ms early, the same length; every other note as it was
+      tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      const std::vector<LiveClips::Note> again = realNotes(tracks[0].notes);
+      const std::vector<LiveClips::Note> was = realNotes(violin.notes);
+      QVERIFY2(again.size() == 6, qPrintable(describe(again)));
+      for (size_t i = 0; i < 6; ++i) {
+            const bool moved = was[i].source && was[i].source->firstTiedNote() == note;
+            QCOMPARE(again[i].pitch, was[i].pitch);
+            const int early = moved ? U / 10 : 0;
+            QVERIFY2(std::abs(again[i].start - (was[i].start - early)) <= U / 480 && std::abs(again[i].length - was[i].length) <= U / 480,
+                     qPrintable(describe(again) + " / " + describe(was)));
+            QCOMPARE(again[i].velocity, was[i].velocity);   // (Live's velocity edit: not kept)
+            }
+      QVERIFY(std::abs(again[3].start - (10 * U - U / 10)) <= U / 480);  // (the repeat's D5 too)
+
+      // undo: as before
+      score->undoRedo(true, nullptr);
+      QCOMPARE(LiveTimingOverride::count(score), 0);
+      QVERIFY(!LiveTimingOverride::isSet(note->liveStart()));
+      tracks = LiveClips::tracks(score, *lib, renderClips(score), { "MuseScore A" }, tl);
+      QCOMPARE(describe(realNotes(tracks[0].notes)), describe(was));
+
+      // a report MuseScore can't pair (it knows nothing of the route): no change
+      link->receivedForTest("/live/edited", { "0:9", 3333, 0, 0 });
+      QVERIFY(link->lastEdit().contains("doesn't know"));
+      QCOMPARE(LiveTimingOverride::count(score), 0);
+      link->setScore(nullptr);
+      SoundLib::setCurrent(nullptr);
+      delete score;
+      }
 
 void TestLiveIntegration::clipsChanges()
       {
@@ -1025,7 +1245,8 @@ void TestLiveIntegration::clipsOsc()
             QVERIFY2(x.size() < 1400, qPrintable(QString::number(x.size())));
       QVERIFY(LiveClips::parseOsc(p[0], &address, &args));
       QCOMPARE(address, QString("/ms/track"));
-      QCOMPARE(args.size(), 11);
+      QCOMPARE(args.size(), 12);
+      QCOMPARE(args[11].toInt(), 0);                        // (the base: MuseScore knows nothing of the clip in Live)
       QCOMPARE(args[0].toInt(), 7);
       QCOMPARE(args[1].toString(), QString("1:16"));
       QCOMPARE(args[2].toString(), QString("MuseScore B"));
@@ -1037,6 +1258,14 @@ void TestLiveIntegration::clipsOsc()
       QCOMPARE(args[8].toInt(), 100);
       QCOMPARE(args[9].toInt(), 3);
       QCOMPARE(qint32(args[10].toInt()), qint32(t.hash));
+      {     // the base (livetimingoverride.h: the device doesn't write over a clip edited in Live since): not in the hash
+      LiveClips::Track b = t;
+      b.base = -123456789;
+      QCOMPARE(LiveClips::hashOf(b), t.hash);
+      QVariantList bargs;
+      QVERIFY(LiveClips::parseOsc(LiveClips::packets(b, 7)[0], &address, &bargs));
+      QCOMPARE(bargs[11].toInt(), -123456789);
+      }
       std::vector<LiveClips::Note> back;
       for (size_t i = 1; i < p.size(); ++i) {
             QVERIFY(LiveClips::parseOsc(p[i], &address, &args));
@@ -1080,7 +1309,10 @@ void TestLiveIntegration::clipsOsc()
       QCOMPARE(LiveClips::carrierPitch(1), 126);
       QCOMPARE(LiveClips::carrierPitch(64), 124);
       QCOMPARE(LiveClips::carrierPitch(68), 116);
-      QCOMPARE(LiveClips::CARRIER_LOW, LiveClips::BEND_LSB);      // (below the controllers: the pitch bend's two)
+      // (below the controllers: the pitch bend's two, then the extra carriers: CC119 on 113, protocol 11)
+      QCOMPARE(LiveClips::BEND_LSB, 114);
+      QCOMPARE(LiveClips::carrierPitch(119), 113);
+      QCOMPARE(LiveClips::CARRIER_LOW, 113);
       QCOMPARE(LiveClips::carrierPitch(7), -1);
       }
 
@@ -3074,6 +3306,858 @@ void TestLiveIntegration::clipEnvelopeMapping()
       }
 
 //---------------------------------------------------------
+//   laneDashedLine
+//    Live's dashed line (the owner, 2026-10-15: "if something has no automated value yet, I want it to show a dashed
+//    line like Ableton does"): a lane without points draws a dashed line at the value its controller plays unautomated
+//    (mscore/automationlanes.h paintEnvelope); not known: nothing; with points the envelope solid from its first point,
+//    the dashed line before it at the unautomated value. MS_LANE_PNG=<folder>: the two lanes as pictures
+//    (lane-unautomated.png, lane-automated.png) and both together (lanes-dashed.png)
+//---------------------------------------------------------
+
+namespace {
+struct LanePicture {
+      QImage img;
+      QRectF rect;
+      QRectF value;
+      };
+}
+
+static LanePicture drawLane(const Automation::Lane& lane, double unautomated, const QString& title, bool antialias = true)
+      {
+      // a lane as the editor draws it: its band (a plug-in parameter's), four bars of 4/4 (bar lines, beats), the line
+      const int w = 760, h = 72, head = 150;
+      LanePicture lp;
+      lp.img = QImage(w, h, QImage::Format_ARGB32);
+      lp.img.fill(QColor(255, 255, 255));
+      lp.rect = QRectF(head, 6, w - head - 10, h - 12);
+      lp.value = lp.rect.adjusted(0, 6, 0, -6);
+      QPainter p(&lp.img);
+      p.setRenderHint(QPainter::Antialiasing, antialias);
+      p.fillRect(QRectF(0, lp.rect.top(), head, lp.rect.height()), QColor(246, 236, 226));
+      p.setPen(QColor(29, 31, 34));
+      QFont f = p.font();
+      f.setPixelSize(12);
+      p.setFont(f);
+      p.drawText(QRectF(8, lp.rect.top(), head - 12, lp.rect.height() / 2), Qt::AlignBottom | Qt::AlignLeft, title);
+      p.setPen(QColor(85, 88, 92));
+      const double shown = lane.points.empty() ? unautomated : lane.valueAt(0) >= 0 ? lane.valueAt(0) : unautomated;
+      p.drawText(QRectF(8, lp.rect.center().y(), head - 12, lp.rect.height() / 2), Qt::AlignTop | Qt::AlignLeft,
+                 shown >= 0 ? QString::number(std::lround(shown * 127)) : QString::fromUtf8("–"));
+      p.setPen(Qt::NoPen);
+      p.setBrush(QColor(251, 245, 239));
+      p.drawRect(lp.rect);
+      const QRectF rect = lp.rect;
+      auto tickToX = [rect](int tick) { return rect.left() + rect.width() * tick / (4.0 * 1920); };
+      for (int t = 0; t < 4 * 1920; t += 480) {
+            p.setPen(QPen(t % 1920 == 0 ? QColor(170, 170, 170) : QColor(220, 220, 220), 1));
+            p.drawLine(QPointF(tickToX(t), rect.top()), QPointF(tickToX(t), rect.bottom()));
+            }
+      p.setPen(QPen(QColor(200, 200, 200), 1));
+      p.setBrush(Qt::NoBrush);
+      p.drawRect(rect);
+      AutomationLanes::paintEnvelope(p, rect, lp.value, lane, unautomated, tickToX, 1.0, QColor(200, 100, 30), {}, rect);
+      return lp;
+      }
+
+// the share of the pixels in [x1, x2) on the row of value v (or the one under it) that the line drew
+static double inked(const LanePicture& lp, double v, int x1, int x2)
+      {
+      const double y = lp.value.bottom() - v * lp.value.height();
+      const QColor bg(251, 245, 239);
+      int ink = 0;
+      for (int x = x1; x < x2; ++x) {
+            bool on = false;
+            for (int row : { int(std::floor(y - 0.5)), int(std::floor(y)), int(std::floor(y + 0.5)) }) {
+                  const QColor c = lp.img.pixelColor(x, row);
+                  on = on || std::abs(c.red() - bg.red()) + std::abs(c.green() - bg.green()) + std::abs(c.blue() - bg.blue()) > 60;
+                  }
+            ink += on;
+            }
+      return double(ink) / (x2 - x1);
+      }
+
+void TestLiveIntegration::laneDashedLine()
+      {
+      // (bars and beats aside: sampled between the grid's lines)
+      auto between = [](const LanePicture& lp, double v, double fromBeat, double toBeat) {
+            const double beat = lp.rect.width() / 16;
+            return inked(lp, v, int(lp.rect.left() + fromBeat * beat) + 3, int(lp.rect.left() + toBeat * beat) - 3);
+            };
+      // no points: dashed at the unautomated value (64 of 127), dashes and gaps along the whole lane
+      Automation::Lane empty;
+      empty.target = "vibrato";
+      const LanePicture none = drawLane(empty, 64 / 127.0, "Vibrato", false);
+      for (int b = 0; b < 16; ++b) {
+            const double share = between(none, 64 / 127.0, b, b + 1);
+            QVERIFY2(share > 0.35 && share < 0.85, qPrintable(QString("beat %1: %2 of the row drawn").arg(b).arg(share)));
+            }
+      for (int b = 0; b < 16; ++b)
+            QCOMPARE(between(none, 1.0, b, b + 1), 0.0);              // (nothing else)
+      // not known: nothing at all
+      const LanePicture unknown = drawLane(empty, -1, "Vibrato", false);
+      for (double v : { 0.0, 0.25, 0.5, 0.75, 1.0 })
+            for (int b = 0; b < 16; ++b)
+                  QCOMPARE(between(unknown, v, b, b + 1), 0.0);
+      // points from bar 2: dashed before them at the unautomated value, the envelope solid from the first point
+      Automation::Lane lane;
+      lane.target = "vibrato";
+      lane.points = { Automation::Point(1920, 100 / 127.0, Automation::Curve::STEP),
+                      Automation::Point(3840, 100 / 127.0, Automation::Curve::LINEAR),
+                      Automation::Point(5760, 30 / 127.0, Automation::Curve::STEP) };
+      const LanePicture with = drawLane(lane, 64 / 127.0, "Vibrato", false);
+      const double dashedBefore = between(with, 64 / 127.0, 0, 4);
+      QVERIFY2(dashedBefore > 0.35 && dashedBefore < 0.85, qPrintable(QString::number(dashedBefore)));
+      QVERIFY(between(with, 100 / 127.0, 4.1, 4.9) > 0.97);           // (bar 2: solid)
+      QVERIFY(between(with, 30 / 127.0, 12.1, 12.9) > 0.97);            // (after the last point: solid on)
+      QCOMPARE(between(with, 64 / 127.0, 4.1, 4.9), 0.0);             // (no dashed line under the envelope)
+      // the last point deleted: the dashed line again (the same picture as without points)
+      Automation::Lane emptied = lane;
+      Automation::Edit::removePoints(emptied, { 0, 1, 2 });
+      QVERIFY(emptied.points.empty());
+      QVERIFY(drawLane(emptied, 64 / 127.0, "Vibrato", false).img == none.img);
+
+      if (qEnvironmentVariableIsSet("MS_LANE_PNG")) {
+            const QString dir = qEnvironmentVariable("MS_LANE_PNG");
+            QDir().mkpath(dir);
+            const LanePicture a = drawLane(empty, 64 / 127.0, "Vibrato (no automation)");
+            const LanePicture b = drawLane(lane, 64 / 127.0, "Vibrato (automated)");
+            QVERIFY(a.img.save(dir + "/lane-unautomated.png"));
+            QVERIFY(b.img.save(dir + "/lane-automated.png"));
+            QImage both(a.img.width(), a.img.height() * 2, QImage::Format_ARGB32);
+            QPainter p(&both);
+            p.drawImage(0, 0, a.img);
+            p.drawImage(0, a.img.height(), b.img);
+            p.end();
+            QVERIFY(both.save(dir + "/lanes-dashed.png"));
+            }
+      }
+
+//---------------------------------------------------------
+//   inspectorNoteRows
+//    Inspector › Note: no two widgets share a grid cell. The Technique row (inspectorNote.cpp) moves the .ui's
+//    Performance rows down one; the Start / End from Live rows must move with them, or the transition and Start from
+//    Live drew over each other (the owner's screenshot, 2026-10-16)
+//---------------------------------------------------------
+
+void TestLiveIntegration::inspectorNoteRows()
+      {
+      // (the Note panel as InspectorNote lays it out: its .ui and placePlayRows, which the constructor calls; the
+      // inspector itself needs a selected element)
+      if (!icons[int(Icons::reset_ICON)]) {     // (the reset buttons' icon: the app makes the set at start)
+            iconPath = QString(":/data/icons/");
+            genIcons();
+            }
+      QWidget panel;
+      Ui::InspectorNote n;
+      n.setupUi(&panel);
+      QLabel techniqueLabel(&panel), evenLabel(&panel), evenState(&panel);
+      QComboBox technique(&panel);
+      QDoubleSpinBox evenLevel(&panel);
+      QToolButton resetTechnique(&panel), resetEvenLevel(&panel);
+      techniqueLabel.setObjectName("techniqueLabel");
+      technique.setObjectName("technique");
+      evenLabel.setObjectName("evenLabel");
+      evenLevel.setObjectName("evenLevel");
+      evenState.setObjectName("evenState");
+      InspectorNote::placePlayRows(n, &techniqueLabel, &technique, &resetTechnique, &evenLabel, &evenLevel, &resetEvenLevel, &evenState);
+      QGridLayout* grid = n.gridLayout_2;
+      QMap<QPair<int, int>, QString> cells;
+      for (int i = 0; i < grid->count(); ++i) {
+            int row, column, rowSpan, columnSpan;
+            grid->getItemPosition(i, &row, &column, &rowSpan, &columnSpan);
+            QLayoutItem* item = grid->itemAt(i);
+            const QString name = item->widget() ? item->widget()->objectName() : QString("layout item %1").arg(i);
+            for (int r = row; r < row + rowSpan; ++r)
+                  for (int c = column; c < column + columnSpan; ++c) {
+                        const QPair<int, int> cell(r, c);
+                        QVERIFY2(!cells.contains(cell), qPrintable(QString("%1 and %2 share row %3, column %4")
+                                                                   .arg(cells.value(cell), name).arg(r).arg(c)));
+                        cells.insert(cell, name);
+                        }
+            }
+      // the order the owner sees
+      int row, column, rowSpan, columnSpan;
+      grid->getItemPosition(grid->indexOf(n.performanceTransition), &row, &column, &rowSpan, &columnSpan);
+      const int transitionRow = row;
+      grid->getItemPosition(grid->indexOf(n.liveStart), &row, &column, &rowSpan, &columnSpan);
+      QCOMPARE(row, transitionRow + 1);
+      grid->getItemPosition(grid->indexOf(&evenLevel), &row, &column, &rowSpan, &columnSpan);
+      QCOMPARE(row, transitionRow + 3);
+      }
+
+//---------------------------------------------------------
+//   soundLibraryWindow
+//    View › Sound Library… (mscore/soundlibraryhost.h, the owner 2026-10-15): no Controllers column (automation lanes
+//    set the controllers); the library's folder box, titled with the library's name alone, above the parts (moved from
+//    Mixer › Advanced Options…, which has it no more). MS_SOUND_LIBRARY_PNG=<file>: a picture of the window
+//---------------------------------------------------------
+
+void TestLiveIntegration::soundLibraryWindow()
+      {
+      QString error;
+      std::shared_ptr<const SoundLib::Library> sso = SoundLib::Library::load(root + "/../share/soundlibraries/Spitfire Symphony Orchestra.xml", &error);
+      QVERIFY2(sso, qPrintable(error));
+      SoundLib::setCurrent(sso);
+      SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      struct Reset { ~Reset() { SoundLib::setCurrent(nullptr); SoundLib::setOutput(SoundLib::Output::MIDI); } } reset;
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      score->rebuildMidiMapping();
+      {
+            SoundLibraryDialog d(sso, SoundLib::Output::PLUGIN, nullptr, score);
+            d.resize(820, 420);
+            QTreeWidget* tree = d.findChild<QTreeWidget*>();
+            QVERIFY(tree);
+            QStringList headers;
+            for (int c = 0; c < tree->columnCount(); ++c)
+                  headers << tree->headerItem()->text(c);
+            QCOMPARE(headers, QStringList({ "Part", "Patch", "Setup", "", "Memory" }));
+            QVERIFY(tree->topLevelItemCount() >= 2);
+            for (QPushButton* b : d.findChildren<QPushButton*>())
+                  QVERIFY2(!b->text().contains("Controllers"), qPrintable(b->text()));
+#ifdef USE_VST3
+            QGroupBox* box = d.findChild<QGroupBox*>("libraryBox");
+            QVERIFY(box);
+            QCOMPARE(box->title(), QString("Spitfire Symphony Orchestra"));
+            QPushButton* folder = d.findChild<QPushButton*>("libraryFolder");
+            QVERIFY(folder && folder->text().startsWith("Library folder"));
+            QLabel* text = nullptr;
+            for (QLabel* l : box->findChildren<QLabel*>())
+                  text = l;
+            QVERIFY(text && (text->text().startsWith("Installed in") || text->text().contains("was not found")));
+            // above the parts
+            QVBoxLayout* layout = qobject_cast<QVBoxLayout*>(d.layout());
+            QVERIFY(layout && layout->indexOf(box) >= 0 && layout->indexOf(box) < layout->indexOf(tree));
+#endif
+            if (qEnvironmentVariableIsSet("MS_SOUND_LIBRARY_PNG"))
+                  QVERIFY(d.grab().toImage().save(qEnvironmentVariable("MS_SOUND_LIBRARY_PNG")));
+      }
+      // Advanced Options: the box no more
+      {
+            SoundLibraryOptions o(score);
+            for (QGroupBox* g : o.findChildren<QGroupBox*>())
+                  QVERIFY2(!g->title().contains("every score") && g->title() != "Spitfire Symphony Orchestra", qPrintable(g->title()));
+            for (QPushButton* b : o.findChildren<QPushButton*>())
+                  QVERIFY2(!b->text().startsWith("Library folder"), qPrintable(b->text()));
+      }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   lanePointsOnBarLines
+//    a lane point on a bar's tick stands on the bar line, as the lanes' grid draws it (the owner, 2026-10-15: "points on
+//    automation lane don't always snap to grid correctly"; Automation::pointX): every bar but a system's first, where
+//    there is none (xAtTick); elsewhere the note's place, as before; the bar line's x maps back to the bar's tick (a point
+//    dragged onto it snaps there). The note lanes' stems stay under their notes (xAtTick, unchanged).
+//    MS_LANE_PNG=<folder>: a Dynamics lane under the score with a point at bar 2's start, before the fix (where xAtTick
+//    put it) and after (lane-barline-before.png, lane-barline-after.png)
+//---------------------------------------------------------
+
+void TestLiveIntegration::lanePointsOnBarLines()
+      {
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      score->setLayoutMode(LayoutMode::LINE);
+      score->doLayout();
+      const double sp = score->spatium();
+      const std::vector<std::pair<int, double>> anchors = Automation::timeAxis(score);
+      QVERIFY(!anchors.empty());
+      int bars = 0;
+      for (Measure* m = score->firstMeasureMM(); m; m = m->nextMeasureMM()) {
+            const int t = m->tick().ticks();
+            const Measure* prev = m->prevMeasureMM();
+            if (!prev || prev->system() != m->system()) {
+                  QCOMPARE(Automation::pointX(score, anchors, t), Automation::xAtTick(anchors, t));    // (a system's first bar)
+                  continue;
+                  }
+            const double bar = Automation::barLineX(prev);
+            QVERIFY2(std::fabs(Automation::pointX(score, anchors, t) - bar) < 1e-9, qPrintable(QString("bar at %1").arg(t)));
+            QVERIFY(Automation::xAtTick(anchors, t) > bar + 0.5 * sp);         // (where it was drawn before: the first note)
+            QCOMPARE(Automation::tickAtX(anchors, bar), t);                     // (dragged onto the bar line: the bar's tick)
+            const int mid = t + (m->endTick().ticks() - t) / 2;                 // (inside a bar: as before)
+            QCOMPARE(Automation::pointX(score, anchors, mid), Automation::xAtTick(anchors, mid));
+            ++bars;
+            }
+      QVERIFY(bars >= 2);
+
+      if (qEnvironmentVariableIsSet("MS_LANE_PNG")) {
+            const QString dir = qEnvironmentVariable("MS_LANE_PNG");
+            QDir().mkpath(dir);
+            Measure* m1 = score->firstMeasureMM();
+            Measure* m3 = m1->nextMeasureMM()->nextMeasureMM();
+            QVERIFY(m3);
+            System* sys = m1->system();
+            QRectF area = sys->canvasBoundingRect();
+            area.setLeft(m1->canvasPos().x() - 4 * sp);
+            area.setRight(Automation::barLineX(m3) + 2 * sp);
+            const QRectF staff = area;
+            const double laneTop = staff.bottom() + 1 * sp;
+            const QRectF lane(area.left() + 4 * sp, laneTop, area.right() - area.left() - 4 * sp, 5 * sp);
+            Automation::Lane dyn;
+            dyn.target = "cc1";
+            const int bar2 = m1->endTick().ticks();
+            dyn.points = { Automation::Point(0, 0.4, Automation::Curve::STEP), Automation::Point(bar2, 0.8, Automation::Curve::LINEAR),
+                           Automation::Point(m3->endTick().ticks(), 0.5, Automation::Curve::STEP) };
+            for (bool after : { false, true }) {
+                  const double scale = 2.0;
+                  const QRectF all = staff.united(lane).adjusted(-sp, -sp, sp, sp);
+                  QImage img(int(all.width() * scale), int(all.height() * scale), QImage::Format_ARGB32);
+                  img.fill(Qt::white);
+                  QPainter p(&img);
+                  p.setRenderHint(QPainter::Antialiasing);
+                  p.scale(scale, scale);
+                  p.translate(-all.topLeft());
+                  score->print(&p, 0);          // (the score as MuseScore draws it: its one page, at the canvas' origin)
+                  // the lane: its band, the grid's bar lines (where the staff's are) and beats, the envelope
+                  p.fillRect(lane, QColor(242, 246, 251));
+                  for (Measure* m = m1; m && m != m3->nextMeasureMM(); m = m->nextMeasureMM()) {
+                        const Measure* prev = m->prevMeasureMM();
+                        for (int t = m->tick().ticks(); t < m->endTick().ticks(); t += 480) {
+                              const bool barStart = t == m->tick().ticks();
+                              const double x = barStart && prev && prev->system() == m->system() ? Automation::barLineX(prev)
+                                                                                                 : Automation::xAtTick(anchors, t);
+                              p.setPen(QPen(barStart ? QColor(170, 170, 170) : QColor(220, 220, 220), 1.0 / scale));
+                              p.drawLine(QPointF(x, lane.top()), QPointF(x, lane.bottom()));
+                              }
+                        }
+                  auto x = [&](int t) { return after ? Automation::pointX(score, anchors, t) : Automation::xAtTick(anchors, t); };
+                  AutomationLanes::paintEnvelope(p, lane, lane.adjusted(0, 0.45 * sp, 0, -0.45 * sp), dyn, -1, x, 1.0 / scale,
+                                                 QColor(47, 109, 181), {}, lane);
+                  p.setPen(QPen(QColor(200, 200, 200), 1.0 / scale));
+                  p.setBrush(Qt::NoBrush);
+                  p.drawRect(lane);
+                  p.setPen(QColor(29, 31, 34));
+                  QFont f = p.font();
+                  f.setPixelSize(int(1.2 * sp));
+                  p.setFont(f);
+                  p.drawText(QRectF(all.left() + 0.5 * sp, lane.top(), 4 * sp, lane.height()), Qt::AlignVCenter | Qt::AlignLeft, "CC1");
+                  p.end();
+                  QVERIFY(img.save(dir + (after ? "/lane-barline-after.png" : "/lane-barline-before.png")));
+                  }
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   noteLaneRubber
+//    the Velocity and Join lanes' rubber band (the owner, 2026-10-15: "the selection box doesn't show up"): drawn as the
+//    automation lanes draw theirs (NoteLanes::paintRubber, which both use). MS_LANE_PNG=<folder>: a Velocity lane's stems
+//    under the score's notes, three selected inside a rubber band (lane-rubber.png; the stems as notelanes.cpp draws them,
+//    composed here: the lanes need a ScoreView, which a test can't make)
+//---------------------------------------------------------
+
+void TestLiveIntegration::noteLaneRubber()
+      {
+      QImage img(200, 80, QImage::Format_ARGB32);
+      img.fill(Qt::white);
+      {
+            QPainter p(&img);
+            NoteLanes::paintRubber(p, QRectF(20.5, 10.5, 100, 50), 1.0);
+      }
+      // its dashed edge and light fill
+      QVERIFY(img.pixelColor(20, 30) != QColor(Qt::white) || img.pixelColor(21, 30) != QColor(Qt::white));
+      const QColor fill = img.pixelColor(70, 35);
+      QVERIFY(fill != QColor(Qt::white) && fill.blue() > fill.red());
+      QCOMPARE(img.pixelColor(150, 35), QColor(Qt::white));
+
+      if (!qEnvironmentVariableIsSet("MS_LANE_PNG"))
+            return;
+      const QString dir = qEnvironmentVariable("MS_LANE_PNG");
+      QDir().mkpath(dir);
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      score->setLayoutMode(LayoutMode::LINE);
+      score->doLayout();
+      const double sp = score->spatium();
+      const std::vector<std::pair<int, double>> anchors = Automation::timeAxis(score);
+      Measure* m1 = score->firstMeasureMM();
+      Measure* m2 = m1->nextMeasureMM()->nextMeasureMM();
+      QVERIFY(m2);
+      System* sys = m1->system();
+      QRectF staff = sys->canvasBoundingRect();
+      staff.setLeft(m1->canvasPos().x() - 4 * sp);
+      staff.setRight(Automation::barLineX(m2) + 2 * sp);
+      const QRectF lane(staff.left() + 4 * sp, staff.bottom() + 1 * sp, staff.width() - 4 * sp, 6 * sp);
+      const double scale = 2.0;
+      const QRectF all = staff.united(lane).adjusted(-sp, -sp, sp, sp);
+      QImage pic(int(all.width() * scale), int(all.height() * scale), QImage::Format_ARGB32);
+      pic.fill(Qt::white);
+      QPainter p(&pic);
+      p.setRenderHint(QPainter::Antialiasing);
+      p.scale(scale, scale);
+      p.translate(-all.topLeft());
+      score->print(&p, 0);
+      const double px = 1.0 / scale;
+      p.fillRect(lane, QColor(246, 246, 246));
+      // the violin's notes of bars 1-2: a stem each at its velocity (made-up example values for the picture, 40 … 100)
+      std::vector<QPointF> heads;
+      int k = 0;
+      for (Segment* s = m1->first(SegmentType::ChordRest); s && s->tick() < m2->endTick(); s = s->next1(SegmentType::ChordRest)) {
+            bool chord = false;
+            for (int track = 0; track < score->parts()[0]->endTrack(); ++track)
+                  chord = chord || (s->element(track) && s->element(track)->isChord());
+            if (!chord)
+                  continue;
+            const int v = 40 + (k++ * 23) % 61;
+            const double x = Automation::xAtTick(anchors, s->tick().ticks());
+            heads.push_back(QPointF(x, lane.bottom() - 0.45 * sp - v / 127.0 * (lane.height() - 0.9 * sp)));
+            }
+      QVERIFY2(heads.size() >= 3, qPrintable(QString::number(heads.size())));
+      const size_t a = heads.size() >= 5 ? 1 : 0;
+      QRectF band(QPointF(heads[a].x() - 1.2 * sp, lane.top() + 0.5 * sp), QPointF(heads[a + 2].x() + 1.2 * sp, lane.bottom() - 0.3 * sp));
+      const double stemPx = 3.0;
+      for (size_t i = 0; i < heads.size(); ++i) {
+            const QColor ink(110, 110, 110);
+            p.setPen(QPen(ink, 1.6 * px));
+            p.drawLine(QPointF(heads[i].x(), lane.bottom()), heads[i]);
+            if (band.contains(heads[i])) {
+                  p.setPen(QPen(QColor(29, 79, 140), 1.4 * px));
+                  p.setBrush(Qt::NoBrush);
+                  p.drawEllipse(heads[i], (stemPx + 2.2) * px, (stemPx + 2.2) * px);
+                  }
+            p.setPen(QPen(ink, 1.6 * px));
+            p.setBrush(QColor(Qt::white));
+            p.drawEllipse(heads[i], stemPx * px, stemPx * px);
+            }
+      NoteLanes::paintRubber(p, band, px);
+      p.setPen(QPen(QColor(200, 200, 200), px));
+      p.setBrush(Qt::NoBrush);
+      p.drawRect(lane);
+      p.end();
+      QVERIFY(pic.save(dir + "/lane-rubber.png"));
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   laneFolds
+//    the automation editor's folding (mscore/lanefolds.h; the owner, 2026-10-12: every part's header shown, each folded
+//    or open at will): all folded at first; several open at once; Alt-click sets every part to the clicked one's new
+//    state; per score; an edit and its undo keep it (the score isn't changed by it), a part removed is dropped
+//---------------------------------------------------------
+
+void TestLiveIntegration::laneFolds()
+      {
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      MasterScore* other = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(other);
+      QCOMPARE(score->parts().size(), 2);
+      const Part* violin = score->parts()[0];
+      const Part* flute = score->parts()[1];
+      const std::vector<const Part*> both { violin, flute };
+      auto parts = [](const Score* s) {
+            std::set<const Part*> out;
+            for (const Part* p : s->parts())
+                  out.insert(p);
+            return out;
+            };
+      LaneFolds f;
+      QVERIFY(!f.isOpen(score, violin) && !f.isOpen(score, flute) && !f.anyOpen(score));      // (folded at first)
+      QVERIFY(f.toggle(score, violin));
+      QVERIFY(f.toggle(score, flute));
+      QVERIFY(f.isOpen(score, violin) && f.isOpen(score, flute));                               // (both open)
+      QVERIFY(!f.toggle(score, violin));
+      QVERIFY(!f.isOpen(score, violin) && f.isOpen(score, flute));
+      // per score: the other score's parts as they were
+      QVERIFY(!f.anyOpen(other));
+      f.setOpen(other, other->parts()[0], true);
+      QVERIFY(f.isOpen(other, other->parts()[0]) && !f.isOpen(score, violin));
+      // Alt-click: on a folded part every part opens, on an open one every part folds
+      QVERIFY(f.toggleAll(score, violin, both));
+      QVERIFY(f.isOpen(score, violin) && f.isOpen(score, flute));
+      QVERIFY(!f.toggleAll(score, flute, both));
+      QVERIFY(!f.anyOpen(score));
+      QVERIFY(f.isOpen(other, other->parts()[0]));
+      // an edit and its undo: the parts are the same, the folding stays, the score isn't changed by folding
+      f.setOpen(score, flute, true);
+      const bool dirtyBefore = score->dirty();
+      f.toggle(score, violin);
+      QCOMPARE(score->dirty(), dirtyBefore);
+      score->startCmd();
+      score->undo(new ChangeMetaText(score, "laneFoldsTest", "1"));     // (any undoable step)
+      score->endCmd();
+      score->undoRedo(true, nullptr);
+      f.keepOnly(score, parts(score));
+      QVERIFY(f.isOpen(score, violin) && f.isOpen(score, flute));
+      // a part removed: dropped (its undo brings it back folded)
+      score->startCmd();
+      score->cmdRemovePart(const_cast<Part*>(flute));
+      score->endCmd();
+      QCOMPARE(score->parts().size(), 1);
+      f.keepOnly(score, parts(score));
+      QVERIFY(f.isOpen(score, violin) && !f.isOpen(score, flute));
+      score->undoRedo(true, nullptr);
+      QCOMPARE(score->parts().size(), 2);
+      f.keepOnly(score, parts(score));
+      QVERIFY(f.isOpen(score, violin) && !f.isOpen(score, flute));
+      delete other;
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   leadingBands
+//    the Leading lane's bands in the score view (leadinglane.h; scoreview.cpp › Leading bands) on leading-bands.musicxml:
+//    the violin leading bars 1-4 up to beat 3, the flute from there to bar 7: page and continuous view, a band per part and
+//    system over its staff only, the flute's starting half a space before its first eighth (bar 4, beat 3), none on the
+//    cello; the score's own printing (score->print: PDF / PNG export) draws none (the bands are the view's).
+//    MS_LEADING_PNG=<folder>: the view's paint composed offscreen (the paper, the bands by LeadingLane::paintBands as the view
+//    paints them, then the score as MuseScore draws it), page and continuous view, with and without the bands
+//    (leading-page-off/on.png, leading-continuous-off/on.png; the continuous one with the flute's Leading lane under the
+//    system as the lanes paint it: its On span in the band's colour, the envelope)
+//---------------------------------------------------------
+
+void TestLiveIntegration::leadingBands()
+      {
+      MasterScore* score = readScore(DIR + "leading-bands.musicxml");
+      QVERIFY(score);
+      QCOMPARE(score->parts().size(), 3);
+      Part* violin = score->parts()[0];
+      Part* flute = score->parts()[1];
+      const int bar = 4 * DIVISION;
+      const int answer = 3 * bar + 2 * DIVISION;
+      Automation::Lane vl, fl;
+      vl.target = fl.target = LeadingLane::TARGET;
+      vl.points = { Automation::Point(0, 1, Automation::Curve::STEP), Automation::Point(answer, 0, Automation::Curve::STEP) };
+      fl.points = { Automation::Point(answer, 1, Automation::Curve::STEP), Automation::Point(6 * bar, 0, Automation::Curve::STEP) };
+      const QColor paper(0xf9f9f9);             // (MuseScore's default paper colour, PREF_UI_CANVAS_FG_COLOR)
+      auto picture = [&](bool on, LayoutMode mode, const QString& file) {
+            score->setLayoutMode(mode);
+            score->doLayout();
+            const std::map<const Part*, std::vector<std::pair<int, int>>> bands = LeadingLane::bands(score);
+            const Page* page = score->pages().front();
+            const double sp = score->spatium();
+            QRectF area = page->canvasBoundingRect();
+            if (mode == LayoutMode::LINE) {
+                  const System* sys = page->systems().front();
+                  area = sys->canvasBoundingRect();
+                  area.setRight(std::min(area.right(), sys->pagePos().x() + 140 * sp));
+                  area.adjust(-2 * sp, -2 * sp, 0, 9 * sp);
+                  }
+            else
+                  area.setBottom(std::min(area.bottom(), page->systems().back()->canvasBoundingRect().bottom() + 6 * sp));
+            const double scale = mode == LayoutMode::LINE ? 0.5 : 0.36;
+            QImage img(int(area.width() * scale), int(area.height() * scale), QImage::Format_ARGB32);
+            img.fill(QColor(0xdddddd));
+            QPainter p(&img);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.scale(scale, scale);
+            p.translate(-area.topLeft());
+            p.fillRect(page->canvasBoundingRect(), paper);
+            if (on)
+                  LeadingLane::paintBands(p, LeadingLane::bandRects(score, page, bands), paper);
+            score->print(&p, 0);
+            if (mode == LayoutMode::LINE && on) {
+                  // the flute's Leading lane under the system, as AutomationLanes::paintLane draws it
+                  const System* sys = page->systems().front();
+                  const QRectF lane(sys->pagePos().x(), sys->canvasBoundingRect().bottom() + 2 * sp, area.right() - sys->pagePos().x(), 5 * sp);
+                  const std::vector<std::pair<int, double>> anchors = Automation::timeAxis(score);
+                  auto x = [&](int t) { return Automation::pointX(score, anchors, t); };
+                  const QColor row(242, 246, 251);
+                  p.fillRect(lane, row);
+                  p.setPen(Qt::NoPen);
+                  p.setBrush(LeadingLane::bandColor(row));
+                  for (const auto& span : LeadingLane::spans(fl, score->lastMeasure()->endTick().ticks()))
+                        p.drawRect(QRectF(x(span.first), lane.top(), x(span.second) - x(span.first), lane.height()));
+                  AutomationLanes::paintEnvelope(p, lane, lane.adjusted(0, 0.45 * sp, 0, -0.45 * sp), fl, 0.0, x, 1.0 / scale,
+                                                 QColor(47, 109, 181), {}, lane);
+                  p.setPen(QPen(QColor(200, 200, 200), 1.0 / scale));
+                  p.setBrush(Qt::NoBrush);
+                  p.drawRect(lane);
+                  p.setPen(QColor(29, 31, 34));
+                  QFont f = p.font();
+                  f.setPixelSize(int(1.4 * sp));
+                  p.setFont(f);
+                  p.drawText(QRectF(lane.left() + 0.5 * sp, lane.top(), 20 * sp, lane.height()), Qt::AlignVCenter | Qt::AlignLeft,
+                             "Flute · Leading");
+                  }
+            p.end();
+            QVERIFY(img.save(file));
+            };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, { { violin, { vl } }, { flute, { fl } } }));
+      for (LayoutMode mode : { LayoutMode::PAGE, LayoutMode::LINE }) {
+            score->setLayoutMode(mode);
+            score->doLayout();
+            const auto bands = LeadingLane::bands(score);
+            QCOMPARE(int(bands.size()), 2);
+            std::vector<QRectF> all;
+            for (const Page* page : score->pages()) {
+                  const std::vector<QRectF> r = LeadingLane::bandRects(score, page, bands);
+                  all.insert(all.end(), r.begin(), r.end());
+                  }
+            QVERIFY(!all.empty());
+            // the flute's first band starts half a space before its first eighth (bar 4, beat 3)
+            Measure* m4 = score->firstMeasure();
+            for (int i = 0; i < 3; ++i)
+                  m4 = m4->nextMeasure();
+            const Segment* s = m4->findSegment(SegmentType::ChordRest, Fraction::fromTicks(answer));
+            QVERIFY(s);
+            const System* sys = m4->system();
+            const double fx = sys->pagePos().x() + m4->pos().x() + s->x() - 0.5 * sys->spatium();
+            const SysStaff* fs = sys->staff(1);
+            const SysStaff* cs = sys->staff(2);
+            const double fluteTop = sys->pagePos().y() + fs->y();
+            const double celloTop = sys->pagePos().y() + cs->y();
+            bool fluteStart = false;
+            for (const QRectF& r : all) {
+                  QVERIFY2(r.top() < celloTop, "a band on the cello");
+                  if (r.top() < fluteTop && r.bottom() > fluteTop && std::fabs(r.left() - fx) < 1e-6)
+                        fluteStart = true;
+                  }
+            QVERIFY(fluteStart);
+            }
+      // the score's own printing (export) draws no band: the same picture with the lanes as without
+      auto printed = [&]() {
+            score->setLayoutMode(LayoutMode::PAGE);
+            score->doLayout();
+            const QRectF r = score->pages().front()->canvasBoundingRect();
+            QImage img(int(r.width() * 0.2), int(r.height() * 0.2), QImage::Format_ARGB32);
+            img.fill(Qt::white);
+            QPainter p(&img);
+            p.scale(0.2, 0.2);
+            score->print(&p, 0);
+            p.end();
+            return img;
+            };
+      const QImage withLanes = printed();
+      const QString tag = score->metaTag(Automation::metaTag);
+      score->setMetaTag(Automation::metaTag, QString());
+      const QImage without = printed();
+      QVERIFY(withLanes == without);
+      score->setMetaTag(Automation::metaTag, tag);
+      if (qEnvironmentVariableIsSet("MS_LEADING_PNG")) {
+            const QString dir = qEnvironmentVariable("MS_LEADING_PNG");
+            QDir().mkpath(dir);
+            picture(false, LayoutMode::PAGE, dir + "/leading-page-off.png");
+            picture(true, LayoutMode::PAGE, dir + "/leading-page-on.png");
+            picture(false, LayoutMode::LINE, dir + "/leading-continuous-off.png");
+            picture(true, LayoutMode::LINE, dir + "/leading-continuous-on.png");
+            }
+      delete score;
+      }
+
+//---------------------------------------------------------
+//   laneHeights
+//    resizable lanes (the owner, 2026-10-28: "a way to resize the automation lanes like in Live, with a way to reset
+//    them to the default height"; laneheights.h): each lane's own height, clamped to MIN_SP .. MAX_SP, Alt: every lane,
+//    a step (Alt + / -), reset one / all, per score, kept over undo, a part removed dropped, never the score's state;
+//    the rows stacked by them (a lane taller: its rect and the ones below), the grip at a lane's lower edge, the layout's
+//    room (Score::setAutomationSpace) moving the next part's staves by as much; folding still works beside it.
+//    MS_LANE_PNG=<folder>: a part's header row and three lanes at the default heights and with the Velocity lane resized
+//    (lane-resize-before.png, lane-resize-after.png)
+//---------------------------------------------------------
+
+void TestLiveIntegration::laneHeights()
+      {
+      MasterScore* score = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(score);
+      MasterScore* other = readScore(DIR + "violin-flute.musicxml");
+      QVERIFY(other);
+      const Part* violin = score->parts()[0];
+      const Part* flute = score->parts()[1];
+      const QString cc1 = "cc1", vel = "note:velocity";
+      using H = LaneHeights;
+      LaneHeights h;
+      QCOMPARE(h.height(score, violin, cc1), H::DEFAULT_SP);
+      QVERIFY(h.isDefault(score, violin, cc1) && !h.anyChanged(score));
+      // one lane: only it
+      h.set(score, violin, cc1, 9.0);
+      QCOMPARE(h.height(score, violin, cc1), 9.0);
+      QCOMPARE(h.height(score, violin, vel), H::DEFAULT_SP);
+      QCOMPARE(h.height(score, flute, cc1), H::DEFAULT_SP);
+      QCOMPARE(h.height(other, other->parts()[0], cc1), H::DEFAULT_SP);       // (per score)
+      QVERIFY(h.anyChanged(score) && !h.anyChanged(other));
+      // the limits
+      h.set(score, violin, vel, 0.1);
+      QCOMPARE(h.height(score, violin, vel), H::MIN_SP);
+      h.set(score, violin, vel, 1000);
+      QCOMPARE(h.height(score, violin, vel), H::MAX_SP);
+      QVERIFY(H::MIN_SP >= 2.4 && H::MIN_SP < H::DEFAULT_SP && H::MAX_SP > H::DEFAULT_SP);      // (one header line: 10 pt = 2 sp)
+      // a step (Alt + / Alt -), stopping at the limits
+      QCOMPARE(h.step(score, violin, vel, +1), H::MAX_SP);
+      h.set(score, violin, vel, H::DEFAULT_SP);
+      QCOMPARE(h.step(score, violin, vel, +1), H::DEFAULT_SP + H::STEP_SP);
+      QCOMPARE(h.step(score, violin, vel, -1), H::DEFAULT_SP);
+      for (int i = 0; i < 20; ++i)
+            h.step(score, violin, vel, -1);
+      QCOMPARE(h.height(score, violin, vel), H::MIN_SP);
+      // reset one: the default again; the other lane's own stays
+      h.reset(score, violin, vel);
+      QVERIFY(h.isDefault(score, violin, vel));
+      QCOMPARE(h.height(score, violin, cc1), 9.0);
+      // Alt: every lane of the score, also lanes not seen yet; then one reset to the default (not to the Alt height)
+      h.setAll(score, 7.0);
+      QCOMPARE(h.height(score, violin, cc1), 7.0);
+      QCOMPARE(h.height(score, flute, "cc11"), 7.0);
+      QCOMPARE(h.height(other, other->parts()[0], cc1), H::DEFAULT_SP);
+      h.reset(score, flute, "cc11");
+      QCOMPARE(h.height(score, flute, "cc11"), H::DEFAULT_SP);
+      QCOMPARE(h.height(score, flute, cc1), 7.0);
+      h.setAll(score, 0);
+      QCOMPARE(h.height(score, violin, cc1), H::MIN_SP);
+      // reset all
+      h.resetAll(score);
+      QVERIFY(!h.anyChanged(score) && h.isDefault(score, violin, cc1) && h.isDefault(score, flute, "cc11"));
+      // setting the default back is no change left over
+      h.set(score, violin, cc1, 6.0);
+      h.set(score, violin, cc1, H::DEFAULT_SP);
+      QVERIFY(!h.anyChanged(score));
+
+      // undo / redo keep it and the score isn't changed by it; a part removed: its heights go
+      auto parts = [](const Score* s) {
+            std::set<const Part*> out;
+            for (const Part* p : s->parts())
+                  out.insert(p);
+            return out;
+            };
+      const bool dirtyBefore = score->dirty();
+      h.set(score, violin, cc1, 8.0);
+      h.set(score, flute, cc1, 4.0);
+      QCOMPARE(score->dirty(), dirtyBefore);
+      QVERIFY(!score->metaTags().contains("laneHeights"));
+      score->startCmd();
+      score->undo(new ChangeMetaText(score, "laneHeightsTest", "1"));
+      score->endCmd();
+      score->undoRedo(true, nullptr);
+      h.keepOnly(score, parts(score));
+      QCOMPARE(h.height(score, violin, cc1), 8.0);
+      QCOMPARE(h.height(score, flute, cc1), 4.0);
+      score->startCmd();
+      score->cmdRemovePart(const_cast<Part*>(flute));
+      score->endCmd();
+      h.keepOnly(score, parts(score));
+      QCOMPARE(h.height(score, violin, cc1), 8.0);
+      score->undoRedo(true, nullptr);
+      QCOMPARE(score->parts().size(), 2);
+      QCOMPARE(h.height(score, flute, cc1), H::DEFAULT_SP);           // (back, at the default)
+
+      // folding beside it: the heights don't fold or open anything, a folded part's lanes keep their heights
+      LaneFolds f;
+      QVERIFY(f.toggle(score, violin));
+      h.set(score, violin, vel, 12.0);
+      QVERIFY(f.isOpen(score, violin) && !f.isOpen(score, flute));
+      QVERIFY(!f.toggle(score, violin));
+      QCOMPARE(h.height(score, violin, vel), 12.0);
+      QVERIFY(f.toggle(score, violin));
+      QCOMPARE(h.height(score, violin, vel), 12.0);
+
+      // the geometry: the rows stacked by their heights (computeRows), the room (updateSpace), the grip (edgeAt)
+      const double HEAD = 3.2;
+      const double sp = 10.0;
+      std::vector<double> lanes { H::DEFAULT_SP, H::DEFAULT_SP, H::DEFAULT_SP };
+      auto rows0 = H::stack(100, HEAD, lanes, sp);
+      QCOMPARE(int(rows0.size()), 3);
+      QCOMPARE(rows0[0].first, 100 + HEAD * sp);
+      QCOMPARE(rows0[1].first - rows0[0].first, (H::DEFAULT_SP + H::GAP_SP) * sp);
+      QCOMPARE(H::spaceOf(HEAD, lanes), HEAD + 3 * (H::DEFAULT_SP + H::GAP_SP));
+      // the grip: at the lower edge (and the gap under it), not inside the lane; the upper lane where they meet
+      QCOMPARE(H::edgeAt(rows0, rows0[0].second - 1), 0);
+      QCOMPARE(H::edgeAt(rows0, rows0[0].second + 2), 0);
+      QCOMPARE(H::edgeAt(rows0, rows0[1].second), 1);
+      QCOMPARE(H::edgeAt(rows0, rows0[2].second + 1), 2);
+      QCOMPARE(H::edgeAt(rows0, (rows0[0].first + rows0[0].second) / 2), -1);
+      QCOMPARE(H::edgeAt(rows0, rows0[0].first + 1), -1);
+      QCOMPARE(H::edgeAt(rows0, rows0[2].second + 10), -1);
+      // the second lane resized: it and the lanes below move, the first doesn't, the grip follows its new edge
+      lanes[1] = 10.0;
+      auto rows1 = H::stack(100, HEAD, lanes, sp);
+      QVERIFY(rows1[0] == rows0[0]);
+      QCOMPARE(rows1[1].first, rows0[1].first);
+      QCOMPARE(rows1[1].second - rows1[1].first, 10.0 * sp);
+      QCOMPARE(rows1[2].first - rows0[2].first, (10.0 - H::DEFAULT_SP) * sp);
+      QCOMPARE(H::edgeAt(rows1, rows0[1].second), -1);                  // (the old edge: inside the lane now)
+      QCOMPARE(H::edgeAt(rows1, rows1[1].second), 1);
+      // a lane at the minimum (on screen as short as 8 px): its top pixel isn't the grip
+      auto shortRows = H::stack(0, HEAD, { H::MIN_SP }, 3.2);
+      QCOMPARE(H::edgeAt(shortRows, shortRows[0].first), -1);
+      QCOMPARE(H::edgeAt(shortRows, shortRows[0].second), 0);
+
+      // the layout: the room under the violin moves the flute's staves by as much (System::layout2)
+      score->setLayoutMode(LayoutMode::LINE);
+      auto fluteY = [&]() {
+            score->doLayout();
+            System* sys = score->firstMeasureMM()->system();
+            return sys->staff(flute->staves()->front()->idx())->y();
+            };
+      const std::vector<double> before { H::DEFAULT_SP, H::DEFAULT_SP };
+      score->setAutomationSpace({ { violin, H::spaceOf(HEAD, before) } });
+      const double y0 = fluteY();
+      score->setAutomationSpace({ { violin, H::spaceOf(HEAD, { H::DEFAULT_SP, 11.0 }) } });
+      const double y1 = fluteY();
+      QVERIFY2(std::fabs((y1 - y0) - (11.0 - H::DEFAULT_SP) * score->spatium()) < 1e-6, qPrintable(QString("%1 -> %2").arg(y0).arg(y1)));
+      score->setAutomationSpace({});
+
+      if (qEnvironmentVariableIsSet("MS_LANE_PNG")) {
+            // the rows as automationlanes.cpp lays them out and colours them: the header band, the Velocity lane's stems,
+            // a Dynamics and an Expression lane; after: the Velocity lane 11 sp, Dynamics at the minimum
+            const QString dir = qEnvironmentVariable("MS_LANE_PNG");
+            QDir().mkpath(dir);
+            const double s = 6.6;           // (a spatium at 100 % zoom, screen pixels)
+            for (bool after : { false, true }) {
+                  const std::vector<double> hs = after ? std::vector<double> { 11.0, H::MIN_SP, H::DEFAULT_SP }
+                                                       : std::vector<double> { H::DEFAULT_SP, H::DEFAULT_SP, H::DEFAULT_SP };
+                  const auto rs = H::stack(4, HEAD, hs, s);
+                  const int w = 520;
+                  QImage img(w, int(rs.back().second + 4 * s), QImage::Format_ARGB32);
+                  img.fill(Qt::white);
+                  QPainter p(&img);
+                  p.setRenderHint(QPainter::Antialiasing);
+                  QFont font = p.font();
+                  font.setPixelSize(13);
+                  p.setFont(font);
+                  const QRectF head(0, 4, w, HEAD * s);
+                  p.fillRect(head, QColor(222, 219, 214));
+                  p.fillRect(QRectF(0, 4, 190, HEAD * s), QColor(214, 211, 206));
+                  p.setPen(QColor(29, 31, 34));
+                  p.drawText(head.adjusted(6, 0, 0, 0), Qt::AlignVCenter | Qt::AlignLeft, QString::fromUtf8("▾ Automation · Violin"));
+                  const char* names[] = { "Velocity", "Dynamics (CC1)", "Expression (CC11)" };
+                  const QColor bands[] = { QColor(246, 246, 246), QColor(242, 246, 251), QColor(242, 246, 251) };
+                  for (size_t i = 0; i < rs.size(); ++i) {
+                        const QRectF lane(0, rs[i].first, w, rs[i].second - rs[i].first);
+                        p.fillRect(lane, bands[i]);
+                        const QRectF data = lane.adjusted(150, 0, 0, 0);
+                        const QRectF vr = data.adjusted(0, 0.45 * s, 0, -0.45 * s);
+                        if (i == 0) {
+                              for (int k = 0; k < 12; ++k) {
+                                    const double x = data.left() + 15 + k * 30;
+                                    const double v = 0.3 + 0.05 * (k % 7);
+                                    const double y = vr.bottom() - v * vr.height();
+                                    p.setPen(QPen(QColor::fromHsv(130, 210, 175), 1.5));
+                                    p.drawLine(QPointF(x, vr.bottom()), QPointF(x, y));
+                                    p.setBrush(QColor::fromHsv(130, 210, 175));
+                                    p.drawEllipse(QPointF(x, y), 3.5, 3.5);
+                                    }
+                              }
+                        else {
+                              Automation::Lane l;
+                              l.target = i == 1 ? "cc1" : "cc11";
+                              l.points = { Automation::Point(0, 0.3, Automation::Curve::LINEAR), Automation::Point(960, 0.8, Automation::Curve::LINEAR),
+                                           Automation::Point(1920, 0.5, Automation::Curve::STEP) };
+                              auto x = [&](int t) { return data.left() + 20 + t * 0.15; };
+                              AutomationLanes::paintEnvelope(p, data, vr, l, -1, x, 1.0, QColor(47, 109, 181), {}, data);
+                              }
+                        p.setPen(QPen(QColor(200, 200, 200), 1.0));
+                        p.setBrush(Qt::NoBrush);
+                        p.drawRect(data);
+                        const QRectF hb(0, lane.top(), 150, lane.height());
+                        p.fillRect(hb, i == 0 ? QColor(226, 234, 245) : QColor(226, 234, 245));
+                        p.setPen(QColor(29, 31, 34));
+                        p.drawText(hb.adjusted(10, 0, -4, 0), Qt::AlignVCenter | Qt::AlignLeft,
+                                   QFontMetrics(font).elidedText(names[i], Qt::ElideRight, 136));
+                        // the grip: the header box's lower edge (laneheights.h), marked where the mouse would take it
+                        if (after && i == 0) {
+                              p.setPen(QPen(QColor(29, 79, 140), 2.0));
+                              p.drawLine(QPointF(0, lane.bottom()), QPointF(150, lane.bottom()));
+                              }
+                        }
+                  p.end();
+                  QVERIFY(img.save(dir + (after ? "/lane-resize-after.png" : "/lane-resize-before.png")));
+                  }
+            }
+      delete other;
+      delete score;
+      }
+
+//---------------------------------------------------------
 //   laneEvenBeats
 //    the automation editor's Even beats (the owner, 2026-10-06: "there should be a way to make every beat the same size
 //    in the automation edit view"): Continuous View places every chord/rest at its time, the same width per tick in
@@ -3207,6 +4291,7 @@ void TestLiveIntegration::liveParamLanes()
       EventMap events;
       MidiRenderer r(score);
       r.setForLiveClips(true);
+      r.setFlatParamEvents(true);       // (as LiveClipsLink renders for the device: Vibrato's flat lane, a setting, too)
       SynthesizerState ss;
       MidiRenderer::Context ctx(ss);
       ctx.metronome = false;
@@ -3243,8 +4328,19 @@ void TestLiveIntegration::liveParamLanes()
             if (t.part == "Flute")
                   QVERIFY(t.params.empty());
 
-      // MuseScore's own playback (the hosted plug-in): Vibrato only
+      // MuseScore's own playback (the hosted plug-in): Vibrato only, and its flat lane (a setting: on the instance,
+      // partcontrollers.h) not as events; with a second value it plays as automation
       SoundLib::setOutput(SoundLib::Output::PLUGIN);
+      score->setPlaylistDirty();
+      {
+            EventMap flat;
+            score->renderMidi(&flat, false, true, ss);
+            for (const auto& te : flat)
+                  QVERIFY(te.second.type() != ME_PARAMETER);
+      }
+      vib.points.push_back(Automation::Point(960, 0.7, Automation::Curve::STEP));
+      all[score->parts()[0]] = { vib, tone, vol, empty };
+      score->setMetaTag(Automation::metaTag, Automation::write(score, all));
       score->setPlaylistDirty();
       EventMap hosted;
       score->renderMidi(&hosted, false, true, ss);

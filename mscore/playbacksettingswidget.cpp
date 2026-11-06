@@ -16,6 +16,7 @@
 
 #include <cmath>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDoubleSpinBox>
 #include <QHBoxLayout>
@@ -41,8 +42,8 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       QHBoxLayout* ph = new QHBoxLayout;
       ph->addWidget(new QLabel(tr("Preset:"), this));
       _preset = new QComboBox(this);
-      _preset->setToolTip(tr("Sets the presets' keys in playback.ini (comments and other values are kept) and reads it again, "
-                             "playback going on."));
+      _preset->setToolTip(tr("Rewrites every setting in playback.ini: the preset's values, every other setting at its default; "
+                             "the old file is kept as playback.ini.bak. Then reads it again, playback going on."));
       ph->addWidget(_preset);
       _presetInfo = new QLabel(this);
       ph->addWidget(_presetInfo, 1);
@@ -60,7 +61,7 @@ PlaybackSettingsWidget::PlaybackSettingsWidget(MasterScore* score, std::shared_p
       QPushButton* open = new QPushButton(tr("Open playback.ini"), this);
       open->setToolTip(Playback::iniPath());
       QPushButton* reload = new QPushButton(tr("Reload playback.ini"), this);
-      reload->setToolTip(tr("Reads playback.ini again and renders the scores again (Edit › Reload Playback Settings)"));
+      reload->setToolTip(tr("Reads playback.ini again and renders the scores again"));
       QPushButton* clear = new QPushButton(tr("Clear this score's values"), this);
       clear->setToolTip(tr("Takes all of this score's own values away: playback.ini (the preset) or the defaults apply"));
       h->addWidget(reset);
@@ -175,7 +176,7 @@ void PlaybackSettingsWidget::fillPreset()
       const QString now = Playback::currentPreset();
       _preset->clear();
       for (const Playback::Preset& p : Playback::presets())
-            _preset->addItem(tr(p.name), QString(p.id));
+            _preset->addItem(QCoreApplication::translate("playbackSettings", p.name), QString(p.id));
       if (now.isEmpty()) {
             _preset->addItem(tr("(Custom)"), QString());
             QStandardItemModel* m = qobject_cast<QStandardItemModel*>(_preset->model());
@@ -230,11 +231,12 @@ void PlaybackSettingsWidget::refresh()
             box->setValue(v);
             if (*d.unit && QString(d.unit) != "on/off")
                   box->setSuffix(QString(" ") + d.unit);
-            // (computed when the map gives none: tuning tail per note, copies by the free memory)
-            if (map < 0 && src != Playback::Source::SCORE && src != Playback::Source::INI
+            // (computed when the map gives none: tuning tail per note; copies: no maximum, as the music needs; the map's
+            // maxLanes is 0 when it gives none)
+            if ((id == "tuning/tail" ? map < 0 : map <= 0) && src != Playback::Source::SCORE && src != Playback::Source::INI
                 && (id == "tuning/tail" || id == "tuning/maxLanes")) {
                   box->setMinimum(d.min - 1);
-                  box->setSpecialValueText(id == "tuning/tail" ? tr("measured release") : tr("by free memory"));
+                  box->setSpecialValueText(id == "tuning/tail" ? tr("measured release") : tr("as the music needs"));
                   box->setValue(d.min - 1);
                   }
             box->setKeyboardTracking(false);

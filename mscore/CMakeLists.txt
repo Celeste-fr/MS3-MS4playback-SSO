@@ -209,7 +209,7 @@ add_library(mscoreapp STATIC
       abstractdialog.h accessibletoolbutton.h albummanager.h
       analyse.h articulationprop.h
       bendcanvas.h breaksdialog.h
-      chordview.h click.h clickableLabel.h continuouspanel.h automationlanes.h notelanes.h debuglog.h downloadUtils.h
+      chordview.h click.h clickableLabel.h continuouspanel.h barruler.h automationlanes.h notelanes.h debuglog.h downloadUtils.h
       drumroll.h drumtools.h drumview.h easeinoutcanvas.h editdrumset.h
       editinstrument.h editpitch.h editraster.h editstaff.h
       editstafftype.h editstringdata.h editstyle.h enableplayforwidget.h
@@ -295,7 +295,7 @@ add_library(mscoreapp STATIC
       palette/palettelistview.cpp
       scorecmp/scorecmp.cpp scorecmp/scorediffmodel.cpp scorecmp/scorelistmodel.cpp
       resourceManager.cpp downloadUtils.cpp
-      textcursor.cpp continuouspanel.cpp automationlanes.cpp notelanes.cpp accessibletoolbutton.cpp scoreaccessibility.cpp
+      textcursor.cpp continuouspanel.cpp barruler.cpp automationlanes.cpp notelanes.cpp accessibletoolbutton.cpp scoreaccessibility.cpp
       startcenter.cpp scoreBrowser.cpp scorePreview.cpp scoreInfo.cpp templateBrowser.cpp
       breaksdialog.cpp searchComboBox.cpp
       help.cpp help.h
@@ -316,9 +316,12 @@ add_library(mscoreapp STATIC
       liveequivalence.cpp liveequivalence.h
       liveclipmodel.cpp liveclipmodel.h liveclipedit.cpp liveclipedit.h cliptempo.cpp cliptempo.h livemidiout.cpp livemidiout.h livehelpers.cpp livehelpers.h
       soundlibrarycheck.cpp soundlibrarycheck.h
-      playbackverify.cpp playbackverify.h
+      playbackverify.cpp playbackverify.h evenlevelsjob.cpp evenlevelsjob.h evenautomeasurer.cpp evenautomeasurer.h
       tuningdialog.cpp tuningdialog.h
       playbackmode.cpp playbackmode.h
+      lagprobesession.cpp lagprobesession.h
+      renderahead.cpp renderahead.h playcapture.cpp playcapture.h
+      editwarmup.cpp editwarmup.h
 
       ${CLOUD_SRC}
       ${IMPORTMIDIUI_SRC}

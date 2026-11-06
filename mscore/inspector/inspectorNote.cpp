@@ -17,11 +17,18 @@
 #include "libmscore/beam.h"
 #include "libmscore/stem.h"
 #include "libmscore/hook.h"
+#include "libmscore/notelane.h"
+#include "libmscore/soundlibrary.h"
 #include "libmscore/tuning.h"
 #include "libmscore/tuplet.h"
 #include "libmscore/staff.h"
 #include "inspector.h"
 #include "inspectorNote.h"
+#include "../editwarmup.h"
+#include <array>
+#include "resetButton.h"
+
+#include <algorithm>
 
 namespace Ms {
 
@@ -108,6 +115,26 @@ InspectorNote::InspectorNote(QWidget* parent)
       n.noteHeadType->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
       n.noteHeadType->setMinimumContentsLength(6);
 
+      // Even level (evenlevels.h): measured by Tools › Even Out Levels…, played with [levels] evenLevels on
+      evenLabel = new QLabel(tr("Even level:"), n.playWidget);
+      evenLevel = new QDoubleSpinBox(n.playWidget);
+      evenLevel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+      evenLevel->setRange(EvenLevels::NONE, EvenLevels::MAX_DB);
+      evenLevel->setDecimals(2);
+      evenLevel->setSingleStep(0.1);
+      evenLevel->setSuffix(tr(" dB"));
+      evenLevel->setSpecialValueText(tr("None"));
+      evenLevel->setToolTip(tr("The note's even-levels correction (Tools > Even Out Levels…): CC11 at the middle of its heard "
+                               "window, gliding to the next note's; played with the playback setting [levels] evenLevels on"));
+      evenLevel->setAccessibleName(tr("Even level"));
+      evenLabel->setBuddy(evenLevel);
+      resetEvenLevel = new ResetButton(n.playWidget);
+      resetEvenLevel->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+      resetEvenLevel->setMinimumSize(10, 0);
+      resetEvenLevel->setAccessibleName(tr("Reset 'Even level' value"));
+      evenState = new QLabel(n.playWidget);
+      evenState->setWordWrap(true);
+
       const std::vector<InspectorItem> iiList = {
             { Pid::SMALL,          0, n.isSmall,       n.resetSmall         },
             { Pid::HEAD_SCHEME,    0, n.noteHeadScheme, n.resetNoteHeadScheme },
@@ -120,6 +147,9 @@ InspectorNote::InspectorNote(QWidget* parent)
             { Pid::VELO_OFFSET,    0, n.velocity,      n.resetVelocity      },
             { Pid::PERFORMANCE_ATTACK,     0, n.performanceAttack,     n.resetPerformanceAttack     },
             { Pid::PERFORMANCE_TRANSITION, 0, n.performanceTransition, n.resetPerformanceTransition },
+            { Pid::LIVE_START,     0, n.liveStart,     n.reset_liveStart    },
+            { Pid::LIVE_END,       0, n.liveEnd,       n.reset_liveEnd      },
+            { Pid::EVEN_LEVEL,     0, evenLevel,       resetEvenLevel       },
             { Pid::FIXED,          0, n.fixed,         n.resetFixed         },
             { Pid::FIXED_LINE,     0, n.fixedLine,     n.resetFixedLine     },
 
@@ -139,6 +169,23 @@ InspectorNote::InspectorNote(QWidget* parent)
 
       connect(n.noteHeadScheme, SIGNAL(currentIndexChanged(int)), SLOT(noteHeadSchemeChanged(int)));
 
+      // Technique (the note's own, SoundLib::chooseOwn) above the Performance attack and transition
+      techniqueLabel = new QLabel(tr("Technique:"), n.playWidget);
+      technique = new QComboBox(n.playWidget);
+      technique->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+      technique->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+      technique->setMinimumContentsLength(6);
+      technique->setToolTip(tr("The library's technique the note plays. Auto: what the notation and the playback settings choose"));
+      technique->setAccessibleName(tr("Technique"));
+      techniqueLabel->setBuddy(technique);
+      resetTechnique = new ResetButton(n.playWidget);
+      resetTechnique->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+      resetTechnique->setMinimumSize(10, 0);
+      resetTechnique->setAccessibleName(tr("Reset 'Technique' value"));
+      placePlayRows(n, techniqueLabel, technique, resetTechnique, evenLabel, evenLevel, resetEvenLevel, evenState);
+      connect(technique, QOverload<int>::of(&QComboBox::activated), this, &InspectorNote::techniqueChosen);
+      connect(resetTechnique, &ResetButton::resetClicked, this, [this] { techniqueChosen(-1); });
+
       connect(n.dot1,     SIGNAL(clicked()),     SLOT(dot1Clicked()));
       connect(n.dot2,     SIGNAL(clicked()),     SLOT(dot2Clicked()));
       connect(n.dot3,     SIGNAL(clicked()),     SLOT(dot3Clicked()));
@@ -147,6 +194,32 @@ InspectorNote::InspectorNote(QWidget* parent)
       connect(n.stem,     SIGNAL(clicked()),     SLOT(stemClicked()));
       connect(n.beam,     SIGNAL(clicked()),     SLOT(beamClicked()));
       connect(n.tuplet,   SIGNAL(clicked()),     SLOT(tupletClicked()));
+      }
+
+//---------------------------------------------------------
+//   placePlayRows
+//    (a row shared by two widgets draws them over each other: Performance transition and Start from Live did, the
+//    owner's screenshot of 2026-10-16, when Technique moved the Performance rows down but not the Live ones)
+//---------------------------------------------------------
+
+void InspectorNote::placePlayRows(Ui::InspectorNote& n, QWidget* techniqueLabel, QWidget* technique, QWidget* resetTechnique,
+                                  QWidget* evenLabel, QWidget* evenLevel, QWidget* resetEvenLevel, QWidget* evenState)
+      {
+      const std::vector<std::array<QWidget*, 3>> rows = {
+            { techniqueLabel, technique, resetTechnique },
+            { n.label_performanceAttack, n.performanceAttack, n.resetPerformanceAttack },
+            { n.label_performanceTransition, n.performanceTransition, n.resetPerformanceTransition },
+            { n.label_liveStart, n.liveStart, n.reset_liveStart },
+            { n.label_liveEnd, n.liveEnd, n.reset_liveEnd },
+            { evenLabel, evenLevel, resetEvenLevel },
+            };
+      int row = 7;      // (the .ui's rows 0-6: Play … Velocity)
+      for (const std::array<QWidget*, 3>& r : rows) {
+            for (int column = 0; column < 3; ++column)
+                  n.gridLayout_2->addWidget(r[column], row, column);
+            ++row;
+            }
+      n.gridLayout_2->addWidget(evenState, row, 0, 1, 3);
       }
 
 //---------------------------------------------------------
@@ -188,6 +261,160 @@ void InspectorNote::setElement()
       n.fixedLine->setEnabled(n.fixed->isChecked());
       n.playWidget->setVisible(n.play->isChecked());
       setTuningParts(note);
+      setTechniques();
+      setPerformanceShown();
+      setEvenShown();
+      }
+
+//---------------------------------------------------------
+//   setEvenShown
+//    Even level: shown when a selected note has one; its state as the last render met it (EvenLevels::state)
+//---------------------------------------------------------
+
+void InspectorNote::setEvenShown()
+      {
+      int set = 0, stale = 0, unknown = 0;
+      for (const Note* note : selectedNotes()) {
+            if (!EvenLevels::isSet(note->evenLevel()))
+                  continue;
+            ++set;
+            const EvenLevels::State s = EvenLevels::state(note);
+            stale += s == EvenLevels::State::STALE ? 1 : 0;
+            unknown += s == EvenLevels::State::UNKNOWN ? 1 : 0;
+            }
+      for (QWidget* w : { static_cast<QWidget*>(evenLabel), static_cast<QWidget*>(evenLevel), static_cast<QWidget*>(resetEvenLevel),
+                          static_cast<QWidget*>(evenState) })
+            w->setVisible(set > 0);
+      if (!set)
+            return;
+      if (stale)
+            evenState->setText(tr("Stale (%1 of %2): the music around it changed since it was measured; not played until "
+                                  "measured again (Tools > Even Out Levels…)").arg(stale).arg(set));
+      else if (unknown)
+            evenState->setText(tr("Not checked since loading: checked when it is next played"));
+      else
+            evenState->setText(tr("Current: plays with the playback setting [levels] evenLevels on"));
+      }
+
+//---------------------------------------------------------
+//   selectedNotes
+//---------------------------------------------------------
+
+std::vector<Note*> InspectorNote::selectedNotes() const
+      {
+      std::vector<Note*> notes;
+      for (Element* e : *inspector->el())
+            if (e->isNote())
+                  notes.push_back(toNote(e));
+      return notes;
+      }
+
+//---------------------------------------------------------
+//   setTechniques
+//    Technique: Auto, then the techniques every selected note's instrument has in the library's map (SoundLib::
+//    ownTechniques: those that sound); the row is hidden when no selected note plays the library. The selected notes'
+//    own value; blank when they differ (as MuseScore's other values of several elements)
+//---------------------------------------------------------
+
+void InspectorNote::setTechniques()
+      {
+      const std::vector<Note*> notes = selectedNotes();
+      std::vector<std::pair<QString, QString>> common;
+      bool any = false;
+      bool first = true;
+      for (const Note* note : notes) {
+            const std::vector<std::pair<QString, QString>> own = SoundLib::ownTechniques(note);
+            any |= !own.empty();
+            if (first)
+                  common = own;
+            else {
+                  std::vector<std::pair<QString, QString>> both;
+                  for (const auto& t : common)
+                        if (std::find(own.begin(), own.end(), t) != own.end())
+                              both.push_back(t);
+                  common = both;
+                  }
+            first = false;
+            }
+      for (QWidget* w : { static_cast<QWidget*>(techniqueLabel), static_cast<QWidget*>(technique), static_cast<QWidget*>(resetTechnique) })
+            w->setVisible(any);
+      if (!any)
+            return;
+      const QSignalBlocker block(technique);
+      technique->clear();
+      technique->addItem(tr("Auto"), QString());
+      for (const auto& t : common)
+            technique->addItem(t.second, t.first);
+      bool same = true;
+      bool own = false;
+      for (const Note* note : notes) {
+            same &= note->libraryTechnique() == notes.front()->libraryTechnique();
+            own |= !note->libraryTechnique().isEmpty();
+            }
+      int index = -1;
+      if (same) {
+            const QString value = notes.front()->libraryTechnique();
+            index = technique->findData(value);
+            if (index < 0) {        // (a technique its patches don't have: plays Auto)
+                  technique->addItem(tr("%1 (not on this part: plays Auto)").arg(value.section('|', 1)), value);
+                  index = technique->count() - 1;
+                  }
+            }
+      technique->setCurrentIndex(index);
+      resetTechnique->setEnabled(own);
+      }
+
+//---------------------------------------------------------
+//   techniqueChosen
+//    every selected note at once, one undo step; then what shows follows (a Performance technique shows the
+//    Performance attack and transition)
+//---------------------------------------------------------
+
+void InspectorNote::techniqueChosen(int index)
+      {
+      const std::vector<Note*> notes = selectedNotes();
+      if (notes.empty())
+            return;
+      const QString value = index < 0 ? QString() : technique->itemData(index).toString();
+      Score* score = notes.front()->score();
+      score->startCmd();
+      for (Note* note : notes)
+            if (note->libraryTechnique() != value)
+                  note->undoChangeProperty(Pid::LIBRARY_TECHNIQUE, value);
+      inspector->setInspectorEdit(true);
+      score->endCmd();
+      inspector->setInspectorEdit(false);       // as InspectorBase::valueChanged: left set, the Inspector never updated again
+      setTechniques();
+      setPerformanceShown();
+      }
+
+//---------------------------------------------------------
+//   setPerformanceShown
+//    Performance attack / transition act on a Performance legato patch only (performancetechnique.h): shown when one
+//    of the selected notes plays on one as playback renders it (its own technique included); hidden otherwise (the
+//    owner, 2026-10-12: "the performance notes would be unavailable and the technique drop down shows up instead").
+//    A value set stays (it plays once the note is, say, slurred)
+//---------------------------------------------------------
+
+void InspectorNote::setPerformanceShown()
+      {
+      const std::vector<Note*> notes = selectedNotes();
+      // (just edited: the answer renders with the edit's volumes and trim, made between events; asked once they are)
+      if (!notes.empty() && EditWarmup::instance()->pending(notes.front()->score())) {
+            if (!_whenWarmed)
+                  _whenWarmed = connect(EditWarmup::instance(), &EditWarmup::warmed, this, [this]() {
+                        disconnect(_whenWarmed);
+                        _whenWarmed = QMetaObject::Connection();
+                        setPerformanceShown();
+                        });
+            return;
+            }
+      const bool on = !NoteLane::onPerformancePatch(std::vector<const Note*>(notes.begin(), notes.end())).empty();
+      for (QWidget* w : { static_cast<QWidget*>(n.label_performanceAttack), static_cast<QWidget*>(n.performanceAttack),
+                          static_cast<QWidget*>(n.resetPerformanceAttack),
+                          static_cast<QWidget*>(n.label_performanceTransition), static_cast<QWidget*>(n.performanceTransition),
+                          static_cast<QWidget*>(n.resetPerformanceTransition) })
+            w->setVisible(on);
       }
 
 //---------------------------------------------------------

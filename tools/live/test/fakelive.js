@@ -131,6 +131,12 @@ class FakeLive {
                   return this.objects[this.objects[this.thisDevice].track];
             return null;
             }
+      // Live's notification that a property of an object changed: its observers called back
+      notify(obj, prop) {
+            for (const x of (this.observers || []).slice())
+                  if (x.id === obj.id && x.prop === prop)
+                        x.cb([prop]);
+            }
       idList(l) {
             const out = [];
             for (const id of l)
@@ -151,6 +157,22 @@ function liveApiFor(live, deviceId) {
                               view: "Song.View", appview: "Application.View", param: "DeviceParameter", mixer: "MixerDevice" }[o.kind] : "";
             this.info = o ? "id " + o.id + "\ntype " + this.type + "\nproperty name str\ndone" : "No object";
             const self = this;
+            live.made = (live.made || 0) + 1;
+            // an observer (new LiveAPI(callback, path), then .property = name): Live calls back on each change
+            // (live.notify), and once when the property is set; "" stops it
+            if (typeof a === "function") {
+                  let prop = "";
+                  Object.defineProperty(this, "property", {
+                        get() { return prop; },
+                        set(v) {
+                              prop = String(v);
+                              live.observers = (live.observers || []).filter((x) => x.api !== self);
+                              if (prop && o) {
+                                    live.observers.push({ api: self, id: o.id, prop: prop, cb: a });
+                                    a([prop]);
+                                    }
+                              } });
+                  }
             this.getcount = function(what) {
                   if (o.kind === "song" && what === "tracks")
                         return o.tracks.length;
@@ -316,20 +338,24 @@ function loadDevice(live, shared, deviceId) {
                   },
             Buffer: function(name) {
                   const b = live.buffers[name] = live.buffers[name] || { size: 0, data: [] };
-                  this.send = function(msg, n) {
+                  this.send = function(msg, n, channels) {
                         if (msg !== "sizeinsamps")
                               throw new Error("buffer~ " + msg);
                         b.size = Number(n);
-                        b.data = new Array(b.size).fill(0);
+                        b.channels = Number(channels) || 1;
+                        b.chans = [];
+                        for (let c = 0; c < b.channels; ++c)
+                              b.chans.push(new Array(b.size).fill(0));
+                        b.data = b.chans[0];
                         };
                   this.poke = function(ch, frame, values) {
-                        if (ch !== 1)
+                        if (!(ch >= 1 && ch <= (b.channels || 1)))
                               throw new Error("poke channel " + ch);
                         const v = Array.isArray(values) ? values : [values];
                         if (frame < 0 || frame + v.length > b.size)
                               throw new Error("poke past the end of " + name);
                         for (let i = 0; i < v.length; ++i)
-                              b.data[frame + i] = v[i];
+                              b.chans[ch - 1][frame + i] = v[i];
                         };
                   this.framecount = function() { return b.size; };
                   },

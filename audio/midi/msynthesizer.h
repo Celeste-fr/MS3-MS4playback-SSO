@@ -109,6 +109,7 @@ class MasterSynthesizer : public QObject {
       void reset();
       void allSoundsOff(int channel);
       void allNotesOff(int channel);
+      void playbackStarted();
 
       void setEffect(int ab, int idx);
       Effect* effect(int ab);

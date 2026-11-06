@@ -63,7 +63,10 @@
 //                                         through Live, the tracks' Monitor on In)
 //       /ms/song   gen:i bpm:f length:i cues:i chunks:i hash:i
 //       /ms/cues   gen:i chunk:i (time:i name:s) × n
-//       /ms/track  gen:i key:s port:s channel:i part:s clip:s main:i length:i notes:i chunks:i hash:i
+//       /ms/track  gen:i key:s port:s channel:i part:s clip:s main:i length:i notes:i chunks:i hash:i base:i
+//                                        (base: the clip's content as MuseScore knows it, the device's hash; the device
+//                                         doesn't write over a clip edited in Live since: it reports the edit instead;
+//                                         0, or left out by an older MuseScore: written)
 //       /ms/notes  gen:i key:s chunk:i  (pitch:i start:i length:i velocity:i mute:i) × n
 //       /ms/clear  gen:i key:s port:s channel:i part:s clip:s          (a route gone: its clip goes)
 //       /ms/params gen:i key:s lanes:i hash:i  (protocol 3: the route's plug-in parameter lanes follow; 0: none)
@@ -77,7 +80,11 @@
 //       /live/hello     session:s protocol:i        (on load, then every 2 s)
 //       /live/bye       session:s                   (the hub copy goes: deleted, its set closed)
 //       /live/resync                                (send everything again)
-//       /live/applied   key:s hash:i status:s track:s   (key "song" for the tempo and locators)
+//       /live/applied   key:s hash:i status:s track:s content:i   (key "song" for the tempo and locators; content: the
+//                                         clip's content hash read after writing; 0: not written, e.g. "edited in Live")
+//       /live/edited    key:s content:i notes:i chunks:i              (the clip changed in Live: its notes follow)
+//       /live/editnotes key:s content:i chunk:i (pitch:i start:i length:i velocity:i mute:i) × n   (units)
+//                                        (livetimingoverride.h: their timing edits become the notes' overrides)
 //       /live/papplied  key:s hash:i status:s track:s   (the parameter lanes: "ok", "missing: <titles>" …)
 //       /live/transport playing:i beat:f bpm:f      (~25 a second while playing, on each change)
 //---------------------------------------------------------
@@ -95,6 +102,7 @@
 namespace Ms {
 
 class EventMap;
+class Note;
 class Score;
 
 namespace SoundLib {
@@ -119,6 +127,7 @@ constexpr int CARRIER_COUNT      = 12;
 // the controller each carrier pitch stands for: pitch 127 - i -> CARRIER_CCS[i] (the device has the same table)
 extern const int CARRIER_CCS[CARRIER_COUNT];
 int carrierPitch(int cc);                     // -1: none
+int carrierController(int pitch);             // the controller a carrier key stands for (-1: none, or the bend's)
 // pitch bend (14 bit, 0-16383, centre 8192) as two carriers below the controllers': its upper 7 bits on BEND_MSB,
 // its lower 7 on BEND_LSB, each as carrierVelocity has it. The device keeps the last of each and sends the whole
 // bend at either, so the pair is right in any order (a chase at a mid-song start). Only the half that changed is
@@ -126,7 +135,13 @@ int carrierPitch(int cc);                     // -1: none
 // the device starting at the centre)
 constexpr int BEND_MSB           = 115;
 constexpr int BEND_LSB           = 114;
-constexpr int CARRIER_LOW        = 114;       // keys CARRIER_LOW … 127 are carriers, never played as notes
+// carriers below the bend's (the device's protocol 11): key 113 CC119, SSO's Performance speed ([slurs] speedFromWritten:
+// the renderer's, the patch's script writes none). A device of protocol 10 or less would play key 113 as a note: its
+// clips get none (mscore/liveclips.cpp, dropped as other controllers are)
+constexpr int EXTRA_CARRIER_COUNT = 1;
+extern const int EXTRA_CARRIERS[EXTRA_CARRIER_COUNT][2];      // (key, cc)
+constexpr int EXTRA_CARRIER_PROTOCOL = 11;    // the device's protocol from which it converts them
+constexpr int CARRIER_LOW        = 113;       // keys CARRIER_LOW … 127 are carriers, never played as notes
 // a carrier's velocity (1-127: 0 is a note-off) for a value 0-127, and the value the device makes of it. 128
 // values in 127 velocities: the UACC switch (key 127) is value + 1 (UACC 1 … 126 exact; 127 is no articulation);
 // the other controllers and the bend halves are the value, 0 as 1 (so 127, CC11's and a pedal's usual value, is
@@ -161,6 +176,18 @@ struct Note {
       int length { 1 };             // units
       int velocity { 100 };
       bool muted { false };         // silenced in MuseScore (the Mixer's mute or solo, a voice not played)
+      // a written note (livetiming.h): where MuseScore plays it, units (the device and Track Delay put it there in
+      // Live); not part of the clip
+      bool timed { false };
+      int playedStart { 0 };
+      int playedEnd { 0 };
+      // the score's note it plays and its note-on's utick (a note of the score, not a carrier or keyswitch; not part of
+      // the clip): an edit of it in Live becomes the note's timing override (livetimingoverride.h)
+      const Ms::Note* source { nullptr };
+      int utick { 0 };
+      // the plain set: the speed controller's value sent right before it ([slurs] speedFromWritten: the patch's speedCC,
+      // the technique clip's envelope; -1: none; not part of the clip's note)
+      int speed { -1 };
       bool operator==(const Note& o) const {
             return pitch == o.pitch && start == o.start && length == o.length && velocity == o.velocity && muted == o.muted;
             }
@@ -203,6 +230,9 @@ struct Track {
       int parameters { 0 };
       int highNotes { 0 };
       quint32 hash { 0 };           // of all that is drawn
+      // the clip's content as the device last read it after writing, or as MuseScore took Live's edits from it
+      // (/live/applied, /live/edited): the device writes over only that (0: MuseScore knows nothing: it writes)
+      qint32 base { 0 };
       // the automation lanes of plug-in parameters MuseScore plays (not those Live's set plays itself:
       // Automation::Lane::playedByLive), for the device to set on the track's plug-in (/ms/params)
       struct ParamLane {
@@ -215,6 +245,9 @@ struct Track {
       };
 
 QString clipName(const QString& part, const QString& patch, bool main, int lane);
+// a track's extra carriers (EXTRA_CARRIERS) left out, counted in dropped, its hash made again (a device older than
+// EXTRA_CARRIER_PROTOCOL)
+void dropExtraCarriers(Track* t);
 std::vector<Track> tracks(const Score* score, const SoundLib::Library& library, const EventMap& events,
                           const QStringList& portNames, const Timeline& tl);
 quint32 hashOf(const Track& t);

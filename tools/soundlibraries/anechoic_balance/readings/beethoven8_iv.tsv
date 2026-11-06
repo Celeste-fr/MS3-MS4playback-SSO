@@ -1,0 +1,425 @@
+# piece: Beethoven, Symphony No. 8 in F major, Op. 93, movement IV, Allegro vivace (F major), bars 0-130
+# edition: Breitkopf & Härtel, Beethovens Werke Serie 1 No. 8 (IMSLP #61814), pdf <work>/dl/scores/b8.pdf
+# page 37: bars 0-10 (system 1: 0-5, system 2: 6-10)
+# page 38: bars 11-23 (11-18, 19-23)
+# page 39: bars 24-37 (24-29, 30-37)
+# page 40: bars 38-56 (38-46, 47-56)
+# page 41: bars 57-73 (57-65, 66-73)
+# page 42: bars 74-91 (74-81, 82-91)
+# page 43: bars 92-106 (92-100, 101-106)
+# page 44: bars 107-121 (107-112, 113-121)
+# page 45: system 1 bars 122-131 (transcribed to bar 130; spans tied over into 131 end at 131:3); system 2 not read
+# time signature alla breve (cut time) throughout; beat unit = half note (beats 1-2; a quarter = 0.5, x:3 = end of bar x).
+# Bar 0 = the half-bar upbeat (violins' triplets on 0:2); bar 1 = first full bar (the unison C-sharp ff falls in bar 17, as in the usual numbering).
+# Scoring: 2 fl, 2 ob, 2 cl in B-flat (written key signature one sharp), 2 bsn, 2 hn in F, 2 tpt in F, timpani in F-C, strings.
+# Voices: a staff with one line and a rest for the other voice is given to player 1 only; two-note chords / two stems to both.
+# Horns and trumpets in bars 59-68 and 124-127 are written as single notes on each staff (unison/a2 not marked): given to both players, uncertain.
+# Flutes in bars 17 and 105-107 are a single line without a second-voice rest: given to both, uncertain.
+# Doubts: beat positions approximate to the nearest quarter (0.5 beat).
+# part	type	start	end	value	comment
+fl1	notes	2:1	2:2		single line, second-voice rest
+fl1	dyn	2:1		pp	
+fl1	notes	4:1	4:2		
+fl1	notes	17:2	48:1.5		17: single-line C-sharp read as both, uncertain; chords from 18
+fl1	dyn	17:2		ff	
+fl1	dyn	18:2		sempre ff	
+fl1	accent	42:2		sf	
+fl1	accent	43:1		sf	
+fl1	dyn	48:1		p	
+fl1	notes	59:2	90:1.5		single line 59-75 (fl1 alone), chords 76-90
+fl1	cresc	59:2	60:1	text	cresc. printed under the flute staff, uncertain whether flute's or oboe's
+fl1	dyn	60:1		p	"p dolce"
+fl1	text	60:1		dolce	
+fl1	dyn	68:1		pp	
+fl1	dyn	70:1		sempre pp	
+fl1	dyn	76:1		f	
+fl1	dyn	84:1		più f	
+fl1	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+fl1	notes	99:1	99:2		single line, second-voice rest
+fl1	dyn	99:1		pp	
+fl1	notes	101:1	101:2		
+fl1	notes	105:2	107:1.5		flute single line read as both, uncertain
+fl1	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+fl1	notes	111:2	115:2		single line, second-voice rest
+fl1	dyn	111:2		pp	
+fl1	notes	116:2	123:3		
+fl1	cresc	119:1.75	120:1	text	cresc. to f
+fl1	dyn	120:2		f	
+fl1	dyn	122:2		f	repeated f on the new half note
+fl2	notes	17:2	48:1.5		17: single-line C-sharp read as both, uncertain; chords from 18
+fl2	dyn	17:2		ff	
+fl2	dyn	18:2		sempre ff	
+fl2	accent	42:2		sf	
+fl2	accent	43:1		sf	
+fl2	dyn	48:1		p	
+fl2	notes	76:1	90:1.5		
+fl2	dyn	76:1		f	
+fl2	dyn	84:1		più f	
+fl2	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+fl2	notes	105:2	107:1.5		flute single line read as both, uncertain
+fl2	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+fl2	notes	120:2	123:3		ob1 has no notes 116:2-120:2
+fl2	dyn	120:2		f	
+fl2	dyn	122:2		f	repeated f on the new half note
+ob1	notes	2:1	2:2		single line, second-voice rest
+ob1	dyn	2:1		pp	
+ob1	notes	4:1	4:2		
+ob1	notes	15:1	48:1.5		single line in 15-17:1
+ob1	dyn	15:1		ppp	
+ob1	dyn	17:2		ff	
+ob1	dyn	18:2		sempre ff	
+ob1	accent	42:2		sf	
+ob1	accent	43:1		sf	
+ob1	dyn	48:1		p	
+ob1	notes	51:2	53:1.5		single line, second-voice rest
+ob1	cresc	51:2	52:1.5	hairpin	
+ob1	dim	52:1.5	53:1	hairpin	
+ob1	notes	55:2	90:1.5		single line 55-75 (ob1 alone), chords 76-90
+ob1	cresc	55:2	56:1	hairpin	short <, extent uncertain
+ob1	dyn	56:1		p	"p cresc."
+ob1	cresc	56:1	59:2.5	text	"p cresc."; end uncertain (p dolce in 60)
+ob1	dyn	60:1		p	"p dolce"
+ob1	text	60:1		dolce	
+ob1	dyn	68:1		pp	
+ob1	dyn	70:1		sempre pp	
+ob1	dyn	76:1		f	
+ob1	dyn	84:1		più f	
+ob1	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+ob1	notes	99:1	99:2		single line, second-voice rest
+ob1	dyn	99:1		pp	
+ob1	notes	101:1	101:2		
+ob1	notes	105:2	107:1.5		flute single line read as both, uncertain
+ob1	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+ob1	notes	113:2	114:2		single line, second-voice rest
+ob1	dyn	113:2		pp	
+ob1	notes	115:2	116:2		
+ob1	notes	120:2	123:3		ob1 has no notes 116:2-120:2
+ob1	dyn	120:2		f	
+ob1	dyn	122:2		f	repeated f on the new half note
+ob2	notes	17:2	48:1.5		
+ob2	dyn	17:2		ff	
+ob2	dyn	18:2		sempre ff	
+ob2	accent	42:2		sf	
+ob2	accent	43:1		sf	
+ob2	dyn	48:1		p	
+ob2	notes	76:1	90:1.5		
+ob2	dyn	76:1		f	
+ob2	dyn	84:1		più f	
+ob2	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+ob2	notes	105:2	107:1.5		flute single line read as both, uncertain
+ob2	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+ob2	notes	120:2	123:3		ob1 has no notes 116:2-120:2
+ob2	dyn	120:2		f	
+ob2	dyn	122:2		f	repeated f on the new half note
+cl1	notes	17:2	59:2.5		whole-note chords 48-56
+cl1	dyn	17:2		ff	
+cl1	dyn	18:2		sempre ff	
+cl1	accent	42:2		sf	
+cl1	accent	43:1		sf	
+cl1	dyn	48:1		p	
+cl1	cresc	56:1.5	59:2.5	text	cresc.; end uncertain (rest in 60)
+cl1	notes	63:2	65:1.5		single line (bassoon in tenor clef)
+cl1	cresc	63:2	64:1.5	hairpin	
+cl1	dim	64:1.5	65:1	hairpin	
+cl1	notes	67:2	68:1.5		
+cl1	cresc	67:2	68:1	hairpin	
+cl1	dyn	68:1		pp	
+cl1	notes	71:2.5	90:1.5		single line 71-75, chords 76-90
+cl1	dyn	71:2.5		pp	pp placed between clarinet and bassoon staves, read as the entering clarinet's, uncertain
+cl1	dyn	76:1		f	
+cl1	dyn	84:1		più f	
+cl1	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+cl1	notes	105:2	107:1.5		flute single line read as both, uncertain
+cl1	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+cl1	notes	118:2	120:1.5		single line, read as player 1, uncertain
+cl1	dyn	118:2		pp	
+cl1	cresc	119:1.75	120:1	text	cresc. to f
+cl1	dyn	120:1		f	
+cl1	notes	128:2	131:3		
+cl1	accent	128:2		sf	
+cl1	accent	130:2		sf	
+cl2	notes	17:2	59:2.5		whole-note chords 48-56
+cl2	dyn	17:2		ff	
+cl2	dyn	18:2		sempre ff	
+cl2	accent	42:2		sf	
+cl2	accent	43:1		sf	
+cl2	dyn	48:1		p	
+cl2	cresc	56:1.5	59:2.5	text	cresc.; end uncertain (rest in 60)
+cl2	notes	76:1	90:1.5		
+cl2	dyn	76:1		f	
+cl2	dyn	84:1		più f	
+cl2	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+cl2	notes	105:2	107:1.5		flute single line read as both, uncertain
+cl2	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+cl2	notes	128:2	131:3		
+cl2	accent	128:2		sf	
+cl2	accent	130:2		sf	
+bsn1	notes	17:2	59:2.5		whole-note chords 48-56
+bsn1	dyn	17:2		ff	
+bsn1	dyn	18:2		sempre ff	
+bsn1	accent	42:2		sf	
+bsn1	accent	43:1		sf	
+bsn1	dyn	48:1		p	
+bsn1	cresc	56:1.5	59:2.5	text	cresc.; end uncertain (rest in 60)
+bsn1	notes	63:2	65:1.5		single line (bassoon in tenor clef)
+bsn1	cresc	63:2	64:1.5	hairpin	
+bsn1	dim	64:1.5	65:1	hairpin	
+bsn1	notes	67:2	90:1.5		single line 67-75 (bsn1 alone), chords 76-90
+bsn1	cresc	67:2	68:1	hairpin	
+bsn1	dyn	68:1		pp	
+bsn1	dyn	70:1		sempre pp	
+bsn1	dyn	76:1		f	
+bsn1	dyn	84:1		più f	
+bsn1	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+bsn1	notes	105:2	107:1.5		flute single line read as both, uncertain
+bsn1	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+bsn1	notes	113:2	114:2		single line, second-voice rest
+bsn1	dyn	113:2		pp	
+bsn1	notes	115:2	116:2		
+bsn1	notes	118:2	120:1.5		single line, read as player 1, uncertain
+bsn1	dyn	118:2		pp	
+bsn1	cresc	119:1.75	120:1	text	cresc. to f
+bsn1	dyn	120:1		f	
+bsn1	notes	128:2	131:3		
+bsn1	accent	128:2		sf	
+bsn1	accent	130:2		sf	
+bsn2	notes	17:2	59:2.5		whole-note chords 48-56
+bsn2	dyn	17:2		ff	
+bsn2	dyn	18:2		sempre ff	
+bsn2	accent	42:2		sf	
+bsn2	accent	43:1		sf	
+bsn2	dyn	48:1		p	
+bsn2	cresc	56:1.5	59:2.5	text	cresc.; end uncertain (rest in 60)
+bsn2	notes	76:1	90:1.5		
+bsn2	dyn	76:1		f	
+bsn2	dyn	84:1		più f	
+bsn2	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+bsn2	notes	105:2	107:1.5		flute single line read as both, uncertain
+bsn2	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+bsn2	notes	128:2	131:3		
+bsn2	accent	128:2		sf	
+bsn2	accent	130:2		sf	
+hn1	notes	15:1	48:1.5		
+hn1	dyn	15:1		ppp	chord of two notes
+hn1	dyn	18:2		sempre ff	
+hn1	accent	42:2		sf	
+hn1	accent	43:1		sf	
+hn1	dyn	48:1		p	
+hn1	notes	59:1	68:1.5		single notes on each staff, given to both players, uncertain
+hn1	dyn	59:1		p	"p cresc."
+hn1	cresc	59:1	60:1	text	"p cresc."
+hn1	dyn	60:1		p	
+hn1	dyn	68:1		pp	
+hn1	notes	77:1	79:1.5		
+hn1	dyn	77:1		f	
+hn1	notes	82:1	83:1.5		
+hn1	notes	88:1	90:1.5		
+hn1	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+hn1	notes	124:2	127:3		single notes on each staff (two whole notes in 125), given to both
+hn1	dyn	124:2		f	
+hn1	accent	126:2		sf	
+hn2	notes	15:1	48:1.5		
+hn2	dyn	15:1		ppp	chord of two notes
+hn2	dyn	18:2		sempre ff	
+hn2	accent	42:2		sf	
+hn2	accent	43:1		sf	
+hn2	dyn	48:1		p	
+hn2	notes	59:1	68:1.5		single notes on each staff, given to both players, uncertain
+hn2	dyn	59:1		p	"p cresc."
+hn2	cresc	59:1	60:1	text	"p cresc."
+hn2	dyn	60:1		p	
+hn2	dyn	68:1		pp	
+hn2	notes	77:1	79:1.5		
+hn2	dyn	77:1		f	
+hn2	notes	82:1	83:1.5		
+hn2	notes	88:1	90:1.5		
+hn2	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+hn2	notes	124:2	127:3		single notes on each staff (two whole notes in 125), given to both
+hn2	dyn	124:2		f	
+hn2	accent	126:2		sf	
+tr1	notes	18:2	48:1.5		
+tr1	dyn	18:2		sempre ff	
+tr1	accent	42:2		sf	
+tr1	accent	43:1		sf	
+tr1	dyn	48:1		p	
+tr1	notes	59:1	68:1.5		single notes on each staff, given to both players, uncertain
+tr1	dyn	59:1		p	"p cresc."
+tr1	cresc	59:1	60:1	text	"p cresc."
+tr1	dyn	60:1		pp	
+tr1	dyn	68:1		pp	
+tr1	notes	77:1	79:1.5		
+tr1	dyn	77:1		f	
+tr1	notes	82:1	83:1.5		
+tr1	notes	88:1	90:1.5		
+tr1	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+tr1	notes	124:2	127:3		single notes on each staff (two whole notes in 125), given to both
+tr1	dyn	124:2		f	
+tr1	accent	126:2		sf	
+tr2	notes	18:2	48:1.5		
+tr2	dyn	18:2		sempre ff	
+tr2	accent	42:2		sf	
+tr2	accent	43:1		sf	
+tr2	dyn	48:1		p	
+tr2	notes	59:1	68:1.5		single notes on each staff, given to both players, uncertain
+tr2	dyn	59:1		p	"p cresc."
+tr2	cresc	59:1	60:1	text	"p cresc."
+tr2	dyn	60:1		pp	
+tr2	dyn	68:1		pp	
+tr2	notes	77:1	79:1.5		
+tr2	dyn	77:1		f	
+tr2	notes	82:1	83:1.5		
+tr2	notes	88:1	90:1.5		
+tr2	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+tr2	notes	124:2	127:3		single notes on each staff (two whole notes in 125), given to both
+tr2	dyn	124:2		f	
+tr2	accent	126:2		sf	
+timp	notes	18:2	23:1.5		
+timp	dyn	18:2		sempre ff	
+timp	notes	25:2.5	29:1.5		
+timp	notes	32:1	33:1.5		
+timp	notes	36:1	36:1.5		
+timp	notes	38:1	39:1.5		
+timp	notes	77:1	77:1.5		
+timp	dyn	77:1		f	
+timp	notes	79:1	79:1.5		
+timp	notes	83:1	83:1.5		
+timp	notes	88:1	90:1.5		
+timp	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+timp	notes	126:2	126:2.5		
+timp	dyn	126:2		f	
+vl1	notes	0:2	90:1.5		
+vl1	dyn	0:2		pp	
+vl1	dyn	13:1		più piano	
+vl1	dyn	15:1		ppp	
+vl1	dyn	17:2		ff	
+vl1	dyn	18:2		sempre ff	
+vl1	accent	34:1		sf	
+vl1	accent	36:1		sf	
+vl1	accent	42:1		sf	
+vl1	accent	43:2		sf	
+vl1	accent	44:1		sf	
+vl1	dyn	48:1		p	
+vl1	cresc	56:1	60:1	text	cresc. to p
+vl1	dyn	60:1		p	
+vl1	dyn	68:1		pp	
+vl1	dyn	70:1		sempre pp	
+vl1	dyn	76:1		f	
+vl1	dyn	84:1		più f	
+vl1	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+vl1	notes	93:2	94:1.5		
+vl1	dyn	93:2		p	
+vl1	notes	97:2	115:2		
+vl1	dyn	97:2		pp	
+vl1	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+vl1	dyn	107:2		pp	
+vl1	dyn	112:1		sempre pp	
+vl1	notes	116:2	131:3		
+vl1	cresc	119:1.75	120:1	text	cresc. to f
+vl1	dyn	120:1		f	
+vl1	accent	129:1		sf	
+vl1	accent	130:1		sf	
+vl2	notes	0:2	90:1.5		
+vl2	dyn	0:2		pp	
+vl2	dyn	13:1		più piano	
+vl2	dyn	15:1		ppp	
+vl2	dyn	17:2		ff	
+vl2	dyn	18:2		sempre ff	
+vl2	accent	34:1		sf	
+vl2	accent	36:1		sf	
+vl2	accent	42:1		sf	
+vl2	accent	43:2		sf	
+vl2	accent	44:1		sf	
+vl2	dyn	48:1		p	
+vl2	cresc	56:1	60:1	text	cresc. to p
+vl2	dyn	60:1		p	
+vl2	dyn	68:1		pp	
+vl2	dyn	70:1		sempre pp	
+vl2	dyn	76:1		f	
+vl2	dyn	84:1		più f	
+vl2	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+vl2	notes	93:2	94:1.5		
+vl2	dyn	93:2		p	
+vl2	notes	97:2	131:3		
+vl2	dyn	97:2		pp	
+vl2	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+vl2	accent	107:1		fp	vl1 has a quarter on 107:1 without a mark
+vl2	dyn	107:2		pp	
+vl2	dyn	112:1		sempre pp	
+vl2	cresc	119:1.75	120:1	text	cresc. to f
+vl2	dyn	120:1		f	
+vla	notes	1:2	1:3		
+vla	dyn	1:2		pp	
+vla	notes	3:2	90:1.5		
+vla	dyn	13:1		più piano	
+vla	dyn	15:1		ppp	
+vla	dyn	17:2		ff	
+vla	dyn	18:2		sempre ff	
+vla	accent	43:2		sf	
+vla	accent	44:1		sf	
+vla	dyn	48:1		p	
+vla	cresc	56:1	60:1	text	cresc. to p
+vla	dyn	60:1		p	
+vla	dyn	68:1		pp	
+vla	dyn	70:1		sempre pp	
+vla	dyn	76:1		f	
+vla	dyn	84:1		più f	
+vla	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+vla	notes	91:2	92:1.5		
+vla	dyn	91:2		p	
+vla	notes	95:2	96:1.5		
+vla	dyn	95:2		pp	
+vla	notes	98:2	98:3		
+vla	dyn	98:2		pp	
+vla	notes	100:1	100:2		
+vla	notes	101:2	120:2.5		
+vla	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+vla	accent	107:1		fp	vl1 has a quarter on 107:1 without a mark
+vla	dyn	107:2		pp	
+vla	dyn	112:1		sempre pp	
+vla	cresc	119:1.75	120:1	text	cresc. to f
+vla	dyn	120:1		f	
+vla	notes	127:2	131:3		
+vc	notes	17:2	90:1.5		pizz. 68:2.5-75:2.5
+vc	dyn	17:2		ff	
+vc	dyn	18:2		sempre ff	
+vc	accent	43:2		sf	
+vc	accent	44:1		sf	
+vc	dyn	48:1		p	
+vc	cresc	56:1	60:1	text	cresc. to p
+vc	dyn	60:1		p	
+vc	dyn	68:1		pp	
+vc	text	68:2.5		pizz.	
+vc	text	75:2.5		arco	
+vc	dyn	76:1		f	
+vc	dyn	84:1		più f	
+vc	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+vc	notes	105:2	107:1.5		
+vc	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+vc	notes	111:2	116:2		
+vc	dyn	111:2		pp	
+vc	dyn	112:1		sempre pp	
+vc	notes	117:2	131:3		
+vc	cresc	119:1.75	120:1	text	cresc. to f
+vc	dyn	120:1		f	
+kb	notes	17:2	90:1.5		pizz. 68:2.5-75:2.5
+kb	dyn	17:2		ff	
+kb	dyn	18:2		sempre ff	
+kb	accent	43:2		sf	
+kb	accent	44:1		sf	
+kb	dyn	48:1		p	
+kb	cresc	56:1	60:1	text	cresc. to p
+kb	dyn	60:1		p	
+kb	dyn	68:1		pp	
+kb	text	68:2.5		pizz.	
+kb	text	75:2.5		arco	
+kb	dyn	76:1		f	
+kb	dyn	84:1		più f	
+kb	dyn	88:1		ff	timpani roll (tremolo half notes) 88-89
+kb	notes	105:2	107:1.5		
+kb	dyn	105:2		f	strings' f printed at mid-bar under running eighths
+kb	notes	111:2	116:2		
+kb	dyn	111:2		pp	
+kb	dyn	112:1		sempre pp	
+kb	notes	117:2	131:3		
+kb	cresc	119:1.75	120:1	text	cresc. to f
+kb	dyn	120:1		f	

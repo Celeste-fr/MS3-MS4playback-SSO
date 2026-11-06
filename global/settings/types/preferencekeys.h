@@ -125,6 +125,8 @@
 #define PREF_IO_OSC_PORTNUMBER                              "io/osc/portNumber"
 #define PREF_IO_OSC_USEREMOTECONTROL                        "io/osc/useRemoteControl"
 #define PREF_IO_PORTAUDIO_DEVICE                            "io/portAudio/device"
+#define PREF_IO_PORTAUDIO_LATENCY                           "io/portAudio/latency"
+#define PREF_IO_PORTAUDIO_DEVICENAME                        "io/portAudio/deviceName"
 #define PREF_IO_PORTAUDIO_USEPORTAUDIO                      "io/portAudio/usePortAudio"
 #define PREF_IO_PORTMIDI_INPUTBUFFERCOUNT                   "io/portMidi/inputBufferCount"
 #define PREF_IO_PORTMIDI_INPUTDEVICE                        "io/portMidi/inputDevice"
@@ -134,6 +136,7 @@
 #define PREF_IO_SOUNDLIBRARY_OUTPUT                         "io/soundLibraryOutput"
 #define PREF_IO_SOUNDLIBRARY_PLUGIN                         "io/soundLibraryPlugin"
 #define PREF_IO_SOUNDLIBRARY_LAST                           "io/soundLibraryLast"   // playback mode (playbackmode.h)
+#define PREF_IO_SOUNDLIBRARY_VARIANTS                       "io/soundLibraryVariants"   // engine -> its variant's map (JSON; playbackmode.h)
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_B                     "io/portMidi/outputDeviceB"
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_C                     "io/portMidi/outputDeviceC"
 #define PREF_IO_PORTMIDI_OUTPUTDEVICE_D                     "io/portMidi/outputDeviceD"

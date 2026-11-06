@@ -195,7 +195,7 @@
          </sizepolicy>
         </property>
         <property name="toolTip">
-         <string>How much louder or softer the notes play whose technique this text sets (pizz., col legno, sul tasto ...), until the next text that changes the technique (sound library parts: than the technique; the built-in synthesizer by its velocity). Adds up with the notes' articulations' levels. Library default: no change</string>
+         <string>How much louder or softer the notes play whose technique this text sets (pizz., col legno, sul tasto…), until the next text that changes the technique (sound library parts: than the technique; the built-in synthesizer by its velocity). Adds up with the notes' articulations' levels. Library default: no change</string>
         </property>
         <property name="accessibleName">
          <string>Level</string>

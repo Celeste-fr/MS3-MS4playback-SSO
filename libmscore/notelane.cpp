@@ -15,11 +15,16 @@
 #include "note.h"
 #include "part.h"
 #include "partplayback.h"
+#include "repeatlist.h"
 #include "score.h"
 #include "synthesizerstate.h"
+#include "lagprobe.h"
+#include "recentresults.h"
+#include "undo.h"
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 #include <set>
 
 namespace Ms {
@@ -39,6 +44,7 @@ std::map<const Part*, std::vector<Mark>> marks(MasterScore* score)
       std::map<const Part*, std::vector<Mark>> out;
       if (!score)
             return out;
+      LagProbe::Scope probe("NoteLane::marks render");
       // (as Seq renders: its chunks; the score's repeats as they are)
       std::vector<MidiRenderer::LibTrace> trace;
       MidiRenderer midi(score);
@@ -72,6 +78,78 @@ std::map<const Part*, std::vector<Mark>> marks(MasterScore* score)
             }
       for (auto& p : out)
             std::stable_sort(p.second.begin(), p.second.end(), [](const Mark& a, const Mark& b) { return a.tick < b.tick; });
+      return out;
+      }
+
+std::set<const Note*> onPerformancePatch(const std::vector<const Note*>& notes)
+      {
+      std::set<const Note*> out;
+      if (notes.empty() || !notes.front()->score() || !SoundLib::current())     // (no library: none renders on one)
+            return out;
+      MasterScore* master = notes.front()->score()->masterScore();
+      // each note as the renderer sees it: the master score's, its tie chain's first
+      std::map<const Note*, std::vector<const Note*>> played;     // master note -> the notes asked
+      for (const Note* n : notes) {
+            const Note* m = n;
+            if (n->score() != master) {
+                  m = nullptr;
+                  for (ScoreElement* l : n->linkList())
+                        if (l->isNote() && static_cast<Note*>(l)->score() == master)
+                              m = static_cast<Note*>(l);
+                  if (!m)
+                        continue;
+                  }
+            m = m->firstTiedNote();
+            played[m].push_back(n);
+            }
+      // (asked twice per command by the Inspector, and again for each selection: the last few answers by everything they
+      // depend on, recentresults.h)
+      const UndoStack* undo = master->undoStack();
+      QString key;
+      if (undo && !undo->active() && EditLag::on()) {
+            key = QString("%1|%2|%3|%4|%5|").arg(quintptr(master)).arg(undo->getCurIdx()).arg(undo->state()).arg(master->nstaves())
+                  .arg(master->parts().isEmpty() ? 0 : quintptr(master->parts().first())) + untrackedInputs(master);
+            for (const Note* n : notes)
+                  key += QString("|%1").arg(quintptr(n));
+            }
+      static RecentResults<std::set<const Note*>> cache;
+      static std::mutex mutex;
+      if (!key.isEmpty()) {
+            std::lock_guard<std::mutex> lock(mutex);
+            if (const std::set<const Note*>* hit = cache.find(key, QString()))
+                  return *hit;
+            }
+      LagProbe::Scope probe("NoteLane::onPerformancePatch render");
+      // (as Seq renders: its chunks)
+      MidiRenderer midi(master);
+      midi.setMinChunkSize(10);
+      std::set<int> chunkStarts;
+      std::vector<MidiRenderer::Chunk> chunks;
+      for (const auto& p : played) {
+            const MidiRenderer::Chunk ch = midi.getChunkAt(master->repeatList().tick2utick(p.first->chord()->tick().ticks()));
+            if (ch && chunkStarts.insert(ch.utick1()).second)
+                  chunks.push_back(ch);
+            }
+      std::vector<MidiRenderer::LibTrace> trace;
+      midi.setLibraryTrace(&trace);
+      SynthesizerState ss;
+      MidiRenderer::Context ctx { ss };
+      ctx.metronome = false;
+      for (const MidiRenderer::Chunk& ch : chunks) {
+            EventMap events;
+            midi.renderChunk(ch, &events, ctx);
+            }
+      for (const MidiRenderer::LibTrace& t : trace) {
+            if (t.performance == MidiRenderer::LibPerformance::NONE)
+                  continue;
+            auto it = played.find(t.note);
+            if (it != played.end())
+                  out.insert(it->second.begin(), it->second.end());
+            }
+      if (!key.isEmpty()) {
+            std::lock_guard<std::mutex> lock(mutex);
+            cache.put(key, QString(), out);
+            }
       return out;
       }
 
@@ -120,6 +198,44 @@ const Band* bandAt(const std::vector<Band>& bands, int velocity)
             if (velocity >= b.low && velocity <= b.high)
                   return &b;
       return nullptr;
+      }
+
+//---------------------------------------------------------
+//   copyClip / pasteClip
+//---------------------------------------------------------
+
+Clip copyClip(const std::vector<Mark>& marks, const std::set<const Note*>& selected, bool join)
+      {
+      Clip c;
+      c.join = join;
+      int first = -1;
+      for (const Mark& m : marks) {
+            if (!selected.count(m.note) || (join && !m.joinable()))
+                  continue;
+            if (first < 0)
+                  first = m.tick;
+            c.items.push_back({ m.tick - first, join ? m.note->libraryJoin() : m.note->libraryVelocity() });
+            }
+      return c;
+      }
+
+std::vector<Note*> pasteClip(const std::vector<Mark>& marks, const Clip& clip, int at)
+      {
+      std::vector<Note*> out;
+      const Pid pid = clip.join ? Pid::LIBRARY_JOIN : Pid::LIBRARY_VELOCITY;
+      size_t i = 0;
+      for (const Mark& m : marks) {
+            if (i >= clip.items.size())
+                  break;
+            if (m.tick < at || (clip.join && !m.joinable()))
+                  continue;
+            Note* n = m.note;
+            const int v = clip.items[i++].value;
+            if (n->getProperty(pid).toInt() != v)
+                  n->undoChangeProperty(pid, v);
+            out.push_back(n);
+            }
+      return out;
       }
 
 }     // namespace NoteLane

@@ -37,20 +37,103 @@
 #include "pm.h"
 #endif
 
+#include <QDateTime>
+#include <QElapsedTimer>
+#include <QFile>
+#include <algorithm>
+#include <atomic>
+#include <vector>
+
 namespace Ms {
 
 static PaStream* stream;
+
+//---------------------------------------------------------
+//   CallbackTiming (kheap-realtime, 2026-10-24)
+//    MS_AUDIO_TIMING=<file>: each audio callback's time against its budget (frames / rate), while playing,
+//    one line per play appended to <file> when it stops (median, p99, p99.9, max ms; callbacks over the budget,
+//    over half of it; PortAudio's underflow flags). The test of a crackle: a callback over its budget. Nothing
+//    without the variable; in the callback only a clock read and a store into memory taken at init.
+//---------------------------------------------------------
+
+struct CallbackTiming {
+      struct Entry { float ms; float budgetMs; quint32 flags; };
+      QString path;
+      std::vector<Entry> entries;
+      std::atomic<size_t> n { 0 };
+      std::atomic<bool> playing { false };
+      QElapsedTimer clock;
+      };
+static CallbackTiming* timing = nullptr;
+// (what else the line says: the helpers' audio round trips, Vst3Remote::timingSummary; set by SoundLibraryHost)
+QString (*paTimingExtra)() = nullptr;
 
 //---------------------------------------------------------
 //   paCallback
 //---------------------------------------------------------
 
 int paCallback(const void*, void* out, long unsigned frames,
-   const PaStreamCallbackTimeInfo*, PaStreamCallbackFlags, void *)
+   const PaStreamCallbackTimeInfo*, PaStreamCallbackFlags flags, void* p)
       {
+      CallbackTiming* t = timing;
+      const qint64 t0 = t ? t->clock.nsecsElapsed() : 0;
       seq->setInitialMillisecondTimestampWithLatency();
+      if (flags & paOutputUnderflow)
+            seq->noteOutputUnderflow();     // (late audio: Seq::countLate)
       seq->process((unsigned)frames, (float*)out);
+      if (t && t->playing.load(std::memory_order_relaxed)) {
+            const size_t i = t->n.load(std::memory_order_relaxed);
+            if (i < t->entries.size()) {
+                  const int rate = static_cast<Portaudio*>(p)->sampleRate();
+                  t->entries[i] = { float((t->clock.nsecsElapsed() - t0) / 1e6), float(1000.0 * frames / (rate > 0 ? rate : 48000)),
+                                    quint32(flags) };
+                  t->n.store(i + 1, std::memory_order_release);
+                  }
+            }
       return 0;
+      }
+
+//---------------------------------------------------------
+//   writeTiming
+//    one play's line (CallbackTiming), then cleared
+//---------------------------------------------------------
+
+static void writeTiming()
+      {
+      CallbackTiming* t = timing;
+      if (!t)
+            return;
+      const size_t n = t->n.load(std::memory_order_acquire);
+      if (n == 0)
+            return;
+      std::vector<float> ms(n);
+      int over = 0, overHalf = 0, underflows = 0;
+      double budget = 0;
+      for (size_t i = 0; i < n; ++i) {
+            const CallbackTiming::Entry& e = t->entries[i];
+            ms[i] = e.ms;
+            budget = std::max(budget, double(e.budgetMs));
+            if (e.ms > e.budgetMs)
+                  ++over;
+            if (e.ms > e.budgetMs / 2)
+                  ++overHalf;
+            if (e.flags & paOutputUnderflow)
+                  ++underflows;
+            }
+      std::sort(ms.begin(), ms.end());
+      auto q = [&](double f) { return double(ms[std::min(n - 1, size_t(f * n))]); };
+      QFile f(t->path);
+      if (f.open(QIODevice::Append | QIODevice::Text)) {
+            const QString line = QString("%1 | allocator %2 | %3 callbacks, budget up to %4 ms | median %5 p99 %6 p99.9 %7 max %8 ms | "
+                                         "over budget %9 | over half %10 | underflow flags %11\n")
+                                 .arg(QDateTime::currentDateTime().toString(Qt::ISODate),
+                                      qEnvironmentVariable("MS_KHEAP_OFF") == "1" ? "system (MS_KHEAP_OFF=1)" : "default").arg(n).arg(budget, 0, 'f', 2)
+                                 .arg(q(0.5), 0, 'f', 3).arg(q(0.99), 0, 'f', 3).arg(q(0.999), 0, 'f', 3).arg(double(ms.back()), 0, 'f', 3)
+                                 .arg(over).arg(overHalf).arg(underflows);
+            const QString extra = paTimingExtra ? paTimingExtra() : QString();
+            f.write((extra.isEmpty() ? line : line.trimmed() + " | " + extra + "\n").toUtf8());
+            }
+      t->n.store(0, std::memory_order_release);
       }
 
 //---------------------------------------------------------
@@ -86,12 +169,57 @@ Portaudio::~Portaudio()
       }
 
 //---------------------------------------------------------
+//   deviceName
+//    "<host API>\t<device>", how the chosen device is found again
+//---------------------------------------------------------
+
+static QString deviceName(PaDeviceIndex idx)
+      {
+      const PaDeviceInfo* di = Pa_GetDeviceInfo(idx);
+      const PaHostApiInfo* api = di ? Pa_GetHostApiInfo(di->hostApi) : nullptr;
+      if (!di || !api)
+            return QString();
+      return QString::fromLocal8Bit(api->name) + '\t' + QString::fromLocal8Bit(di->name);
+      }
+
+//---------------------------------------------------------
+//   savedDevice
+//    the device chosen in Preferences, found by its name: PortAudio numbers the devices in the order the
+//    system lists them, which changes as devices come and go (Steam's, Voicemeeter's, USB), so a saved
+//    number alone ends up on another device. The number alone only for a preference saved before the
+//    name was; -1 (the default device) while the named device is absent.
+//---------------------------------------------------------
+
+static PaDeviceIndex savedDevice()
+      {
+      const PaDeviceIndex idx = preferences.getInt(PREF_IO_PORTAUDIO_DEVICE);
+      const QString name = preferences.getString(PREF_IO_PORTAUDIO_DEVICENAME);
+      if (name.isEmpty())
+            return idx;
+      if (idx >= 0 && idx < Pa_GetDeviceCount() && deviceName(idx) == name)
+            return idx;
+      for (PaDeviceIndex i = 0; i < Pa_GetDeviceCount(); ++i) {
+            if (deviceName(i) == name)
+                  return i;
+            }
+      qDebug("Portaudio: device \"%s\" not found, using the default device", qPrintable(name));
+      return -1;
+      }
+
+//---------------------------------------------------------
 //   init
 //    return false on error
 //---------------------------------------------------------
 
 bool Portaudio::init(bool)
       {
+      const QString timingPath = qEnvironmentVariable("MS_AUDIO_TIMING");
+      if (!timingPath.isEmpty() && !timing) {
+            timing = new CallbackTiming;
+            timing->path = timingPath;
+            timing->entries.resize(1 << 22);       // (about 6 hours of 256-frame callbacks at 48 kHz)
+            timing->clock.start();
+            }
       PaError err = Pa_Initialize();
       if (err != paNoError) {
             qDebug("Portaudio initialize failed: %s", Pa_GetErrorText(err));
@@ -101,7 +229,7 @@ bool Portaudio::init(bool)
       if (MScore::debugMode)
             qDebug("using PortAudio Version: %s", Pa_GetVersionText());
 
-      PaDeviceIndex idx = preferences.getInt(PREF_IO_PORTAUDIO_DEVICE);
+      PaDeviceIndex idx = savedDevice();
       if (idx < 0) {
             idx = Pa_GetDefaultOutputDevice();
             qDebug("No device selected.  PortAudio detected %d devices.  Will use the default device (index %d).", Pa_GetDeviceCount(), idx);
@@ -110,8 +238,10 @@ bool Portaudio::init(bool)
       const PaDeviceInfo* di = Pa_GetDeviceInfo(idx);
 
       //select default output device if no device or device without output channels have been selected
-      if (di == nullptr || di->maxOutputChannels < 1)
-            di = Pa_GetDeviceInfo(Pa_GetDefaultOutputDevice());
+      if (di == nullptr || di->maxOutputChannels < 1) {
+            idx = Pa_GetDefaultOutputDevice();
+            di = Pa_GetDeviceInfo(idx);
+            }
 
       if (!di)
             return false;    // Portaudio is not properly initialized; disable audio
@@ -124,7 +254,10 @@ bool Portaudio::init(bool)
       out.device           = idx;
       out.channelCount     = 2;
       out.sampleFormat     = paFloat32;
-      out.suggestedLatency = di->defaultLowOutputLatency;
+      // the audio buffer: Preferences › I/O › Audio buffer in ms, 0 the device's low latency (as before). A
+      // larger buffer gives the hosted libraries (Kontakt + SSO) more time per block: no crackles, later response
+      const int latencyMs = preferences.getInt(PREF_IO_PORTAUDIO_LATENCY);
+      out.suggestedLatency = latencyMs > 0 ? latencyMs / 1000.0 : di->defaultLowOutputLatency;
       out.hostApiSpecificStreamInfo = 0;
 
       err = Pa_OpenStream(&stream, 0, &out, double(_sampleRate), 0, 0, paCallback, (void*)this);
@@ -205,6 +338,18 @@ int Portaudio::deviceIndex(int apiIdx, int apiDevIdx)
       }
 
 //---------------------------------------------------------
+//   saveDevice
+//    the number and the name (savedDevice)
+//---------------------------------------------------------
+
+void Portaudio::saveDevice(int apiIdx, int apiDevIdx)
+      {
+      const PaDeviceIndex idx = Pa_HostApiDeviceIndexToDeviceIndex(apiIdx, apiDevIdx);
+      preferences.setPreference(PREF_IO_PORTAUDIO_DEVICE, int(idx));
+      preferences.setPreference(PREF_IO_PORTAUDIO_DEVICENAME, idx >= 0 ? deviceName(idx) : QString());
+      }
+
+//---------------------------------------------------------
 //   start
 //---------------------------------------------------------
 
@@ -248,6 +393,8 @@ int Portaudio::framePos() const
 void Portaudio::startTransport()
       {
       state = Transport::PLAY;
+      if (timing)
+            timing->playing = true;
       }
 
 //---------------------------------------------------------
@@ -257,6 +404,10 @@ void Portaudio::startTransport()
 void Portaudio::stopTransport()
       {
       state = Transport::STOP;
+      if (timing) {
+            timing->playing = false;
+            writeTiming();
+            }
       }
 
 //---------------------------------------------------------
@@ -403,7 +554,7 @@ void Portaudio::putSync(int status, int value, unsigned framePos)
 
 int Portaudio::currentApi() const
       {
-      PaDeviceIndex idx = preferences.getInt(PREF_IO_PORTAUDIO_DEVICE);
+      PaDeviceIndex idx = savedDevice();
       if (idx < 0)
             idx = Pa_GetDefaultOutputDevice();
 
@@ -427,7 +578,7 @@ int Portaudio::currentApi() const
 
 int Portaudio::currentDevice() const
       {
-      PaDeviceIndex idx = preferences.getInt(PREF_IO_PORTAUDIO_DEVICE);
+      PaDeviceIndex idx = savedDevice();
       if (idx < 0)
             idx = Pa_GetDefaultOutputDevice();
 

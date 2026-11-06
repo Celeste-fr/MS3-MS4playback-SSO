@@ -7,6 +7,8 @@ set (AUDIODRIVERS_DIR ${CMAKE_CURRENT_LIST_DIR})
 set (AUDIODRIVERS_SRC
     ${AUDIODRIVERS_DIR}/driver.h
     ${AUDIODRIVERS_DIR}/driver.cpp
+    ${AUDIODRIVERS_DIR}/nullaudio.h
+    ${AUDIODRIVERS_DIR}/nullaudio.cpp
     )
 
 if ( NOT MINGW AND NOT MSVC )

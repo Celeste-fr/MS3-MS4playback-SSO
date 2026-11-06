@@ -66,6 +66,10 @@ namespace Ms {
 class MasterScore;
 class Part;
 
+namespace SoundLib {
+struct LibInstrument;
+}
+
 namespace LiveSet {
 
 constexpr double DEFAULT_EVENT_TIME = -63072000;      // Live's "before everything" event
@@ -101,6 +105,17 @@ struct Envelope {
       QString mixer;
       };
 
+// a plug-in parameter in Live's panel of a device (Configure: ParameterList/PluginFloatParameter with a name; also
+// PluginEnumParameter / PluginIntParameter): its value without automation is its Manual value (ParameterValue/Manual,
+// normalized 0-1), the "knob" the owner turns in Live (2026-10-15: read back into MuseScore's lanes, livetracks.h)
+struct Parameter {
+      QString device;               // the plug-in
+      QString name;                 // ParameterName
+      int id { -1 };                // ParameterId (the plug-in's id)
+      double manual { -1 };         // ParameterValue/Manual; -1: none read
+      bool automated { false };     // an arrangement envelope points at its AutomationTarget
+      };
+
 // an arrangement MIDI clip (MainSequencer/…/ArrangerAutomation/Events/MidiClip)
 struct ArrangementClip {
       double time { 0 };            // Time=
@@ -120,6 +135,7 @@ struct Track {
       QString inputDevice;          // the MIDI port it listens to ("" : none or all)
       int inputChannel { -1 };      // 1-16; -1: all
       QStringList devices;          // its plug-ins
+      std::vector<Parameter> parameters;    // its plug-ins' parameters in Live's panel (named ones), in order
       std::vector<Envelope> envelopes;
       std::vector<ArrangementClip> clips;
       // the plain set's read-back (livetracks.h): the track's Id= and its group's (TrackGroupId, -1: none), its Info
@@ -136,6 +152,13 @@ struct Track {
       // its Track Delay (TrackDelay/Value; IsValueSampleBased: in samples, else ms)
       double delay { 0 };
       bool delayInSamples { false };
+      // MuseScore's gain stage (LiveSetWriter::UTILITY_NAME: a Utility of that name in its devices) and its Gain (linear)
+      bool hasMuseScoreGain { false };
+      double museScoreGain { 1 };
+      // [levels] lowCut (LiveSetWriter::LOW_CUT_NAME: an EQ Eight of that name in its devices): its band 1's frequency, 0
+      // when the device is off
+      bool hasMuseScoreLowCut { false };
+      double museScoreLowCutHz { 0 };
       };
 
 struct Set {
@@ -177,6 +200,7 @@ struct PartInfo {
       QString portName;             // the MIDI output it plays on, as Live would show it
       int channel { 0 };            // 1-16
       std::vector<Target> targets;  // its main patch's controllers
+      const SoundLib::LibInstrument* instrument { nullptr };      // its main patch
       };
 
 // the sound library's parts: route, port name (portNames: output A-D's device names), controllers

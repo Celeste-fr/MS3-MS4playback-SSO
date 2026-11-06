@@ -1,0 +1,1556 @@
+{
+ "method": {
+  "source": "TU Berlin directivity database (Ackermann, Boehm, Brinkmann & Weinzierl; DepositOnce doi 10.14279/depositonce-19858, version 3, 2024-02-12; CC BY-NC-SA 4.0: derived numbers only), component 2 (the 32-channel recordings), read by tools/soundlibraries/tu_transient.py",
+  "measure": "lw: sound power by the documentation's eq. (2)-(4): each microphone's pressure squared through the fast time weighting (125 ms), averaged over the whole recording, the microphones' energetic mean, + 10 log10(54.63 m^2); it reproduces 3_Audio_Features.csv's \"SoundPower in dB\" for all 156 harp recordings within 0.005 dB (csv: the CSV's value; the plain mean square without the weighting differs by up to 0.65 dB at pp, the fast maximum by 6.8 dB on average). energy = lw + 10 log10(lengthS): dB re 1 pW s, independent of where the recording was cut (decaying tones have no steady part: SteadyPart [0 0]); onsetS: the fast envelope's first crossing of its peak - 30 dB",
+  "harp": "Double action harp modern, every note at pp and ff (MIDI pitch keys)",
+  "timpani": "Pedal timpani and Timpani, D2 only (the database has no other pitch); the CSV has no timpani. Series v1 .. v4 by mallet and beating spot, each \"6 dynamics\" (or 3 / 4) in rising order, the markings not named"
+ },
+ "harp": {
+  "23": {
+   "ff": {
+    "energy": 77.8,
+    "lw": 71.76,
+    "csv": 71.7615719470945,
+    "lengthS": 4.017,
+    "onsetS": 0.081
+   },
+   "pp": {
+    "energy": 63.95,
+    "lw": 56.33,
+    "csv": 56.3330331794589,
+    "lengthS": 5.772,
+    "onsetS": 0.047
+   }
+  },
+  "25": {
+   "ff": {
+    "energy": 75.53,
+    "lw": 69.83,
+    "csv": 69.8302091010611,
+    "lengthS": 3.718,
+    "onsetS": 0.06
+   },
+   "pp": {
+    "energy": 66.29,
+    "lw": 58.77,
+    "csv": 58.7732631816917,
+    "lengthS": 5.642,
+    "onsetS": 0.047
+   }
+  },
+  "27": {
+   "ff": {
+    "energy": 83.39,
+    "lw": 76.96,
+    "csv": 76.9551196595527,
+    "lengthS": 4.396,
+    "onsetS": 0.074
+   },
+   "pp": {
+    "energy": 63.9,
+    "lw": 57.61,
+    "csv": 57.6053318144019,
+    "lengthS": 4.261,
+    "onsetS": 0.047
+   }
+  },
+  "28": {
+   "ff": {
+    "energy": 84.1,
+    "lw": 77.5,
+    "csv": 77.499623191763,
+    "lengthS": 4.573,
+    "onsetS": 0.08
+   },
+   "pp": {
+    "energy": 63.6,
+    "lw": 55.01,
+    "csv": 55.0117609056751,
+    "lengthS": 7.228,
+    "onsetS": 0.047
+   }
+  },
+  "29": {
+   "ff": {
+    "energy": 84.64,
+    "lw": 77.56,
+    "csv": 77.5577078447121,
+    "lengthS": 5.108,
+    "onsetS": 0.153
+   },
+   "pp": {
+    "energy": 62.84,
+    "lw": 56.13,
+    "csv": 56.1270086644327,
+    "lengthS": 4.689,
+    "onsetS": 0.047
+   }
+  },
+  "30": {
+   "ff": {
+    "energy": 90.35,
+    "lw": 83.72,
+    "csv": 83.7229029292976,
+    "lengthS": 4.603,
+    "onsetS": 0.301
+   },
+   "pp": {
+    "energy": 65.78,
+    "lw": 57.89,
+    "csv": 57.8927511714564,
+    "lengthS": 6.149,
+    "onsetS": 0.047
+   }
+  },
+  "31": {
+   "ff": {
+    "energy": 88.81,
+    "lw": 81.78,
+    "csv": 81.7802598129529,
+    "lengthS": 5.043,
+    "onsetS": 0.182
+   },
+   "pp": {
+    "energy": 65.27,
+    "lw": 57.88,
+    "csv": 57.884002365812,
+    "lengthS": 5.475,
+    "onsetS": 0.047
+   }
+  },
+  "32": {
+   "ff": {
+    "energy": 90.14,
+    "lw": 83.68,
+    "csv": 83.677935987865,
+    "lengthS": 4.425,
+    "onsetS": 0.284
+   },
+   "pp": {
+    "energy": 67.11,
+    "lw": 59.66,
+    "csv": 59.6613734552763,
+    "lengthS": 5.56,
+    "onsetS": 0.049
+   }
+  },
+  "33": {
+   "ff": {
+    "energy": 91.38,
+    "lw": 84.97,
+    "csv": 84.9653362867675,
+    "lengthS": 4.384,
+    "onsetS": 0.241
+   },
+   "pp": {
+    "energy": 62.1,
+    "lw": 56.94,
+    "csv": 56.9363505964169,
+    "lengthS": 3.287,
+    "onsetS": 0.047
+   }
+  },
+  "34": {
+   "ff": {
+    "energy": 93.49,
+    "lw": 87.05,
+    "csv": 87.0487334482215,
+    "lengthS": 4.408,
+    "onsetS": 0.195
+   },
+   "pp": {
+    "energy": 64.31,
+    "lw": 58.3,
+    "csv": 58.300179380054,
+    "lengthS": 3.989,
+    "onsetS": 0.048
+   }
+  },
+  "35": {
+   "ff": {
+    "energy": 91.61,
+    "lw": 85.18,
+    "csv": 85.1764152497653,
+    "lengthS": 4.4,
+    "onsetS": 0.196
+   },
+   "pp": {
+    "energy": 63.55,
+    "lw": 56.48,
+    "csv": 56.48407291546,
+    "lengthS": 5.086,
+    "onsetS": 0.047
+   }
+  },
+  "36": {
+   "ff": {
+    "energy": 93.79,
+    "lw": 87.52,
+    "csv": 87.5174938105357,
+    "lengthS": 4.241,
+    "onsetS": 0.19
+   },
+   "pp": {
+    "energy": 63.81,
+    "lw": 56.97,
+    "csv": 56.9695354375394,
+    "lengthS": 4.828,
+    "onsetS": 0.047
+   }
+  },
+  "37": {
+   "ff": {
+    "energy": 96.26,
+    "lw": 89.32,
+    "csv": 89.3152206456502,
+    "lengthS": 4.946,
+    "onsetS": 0.175
+   },
+   "pp": {
+    "energy": 62.38,
+    "lw": 56.46,
+    "csv": 56.4643589367848,
+    "lengthS": 3.907,
+    "onsetS": 0.047
+   }
+  },
+  "38": {
+   "ff": {
+    "energy": 96.37,
+    "lw": 89.89,
+    "csv": 89.8882728108084,
+    "lengthS": 4.446,
+    "onsetS": 0.157
+   },
+   "pp": {
+    "energy": 62.21,
+    "lw": 56.11,
+    "csv": 56.1133830336076,
+    "lengthS": 4.071,
+    "onsetS": 0.047
+   }
+  },
+  "39": {
+   "ff": {
+    "energy": 94.48,
+    "lw": 88.2,
+    "csv": 88.2040081906598,
+    "lengthS": 4.238,
+    "onsetS": 0.216
+   },
+   "pp": {
+    "energy": 61.5,
+    "lw": 57.12,
+    "csv": 57.1210162189712,
+    "lengthS": 2.741,
+    "onsetS": 0.047
+   }
+  },
+  "40": {
+   "ff": {
+    "energy": 93.76,
+    "lw": 88.04,
+    "csv": 88.0399848884149,
+    "lengthS": 3.731,
+    "onsetS": 0.103
+   },
+   "pp": {
+    "energy": 63.31,
+    "lw": 57.36,
+    "csv": 57.3568478465183,
+    "lengthS": 3.934,
+    "onsetS": 0.047
+   }
+  },
+  "41": {
+   "ff": {
+    "energy": 96.01,
+    "lw": 89.17,
+    "csv": 89.1717507719929,
+    "lengthS": 4.832,
+    "onsetS": 0.196
+   },
+   "pp": {
+    "energy": 60.28,
+    "lw": 56.39,
+    "csv": 56.3867869464446,
+    "lengthS": 2.45,
+    "onsetS": 0.047
+   }
+  },
+  "42": {
+   "ff": {
+    "energy": 95.39,
+    "lw": 89.19,
+    "csv": 89.1853124587234,
+    "lengthS": 4.174,
+    "onsetS": 0.176
+   },
+   "pp": {
+    "energy": 61.27,
+    "lw": 55.38,
+    "csv": 55.3840847565424,
+    "lengthS": 3.88,
+    "onsetS": 0.047
+   }
+  },
+  "43": {
+   "ff": {
+    "energy": 92.36,
+    "lw": 85.98,
+    "csv": 85.9811073994759,
+    "lengthS": 4.349,
+    "onsetS": 0.15
+   },
+   "pp": {
+    "energy": 60.94,
+    "lw": 54.71,
+    "csv": 54.7075956577971,
+    "lengthS": 4.2,
+    "onsetS": 0.047
+   }
+  },
+  "44": {
+   "ff": {
+    "energy": 86.9,
+    "lw": 80.32,
+    "csv": 80.3192020150936,
+    "lengthS": 4.551,
+    "onsetS": 0.093
+   },
+   "pp": {
+    "energy": 62.88,
+    "lw": 56.52,
+    "csv": 56.5155581272899,
+    "lengthS": 4.33,
+    "onsetS": 0.047
+   }
+  },
+  "45": {
+   "ff": {
+    "energy": 94.66,
+    "lw": 88.57,
+    "csv": 88.5709043691392,
+    "lengthS": 4.068,
+    "onsetS": 0.134
+   },
+   "pp": {
+    "energy": 65.82,
+    "lw": 59.43,
+    "csv": 59.4315861498954,
+    "lengthS": 4.355,
+    "onsetS": 0.051
+   }
+  },
+  "46": {
+   "ff": {
+    "energy": 91.95,
+    "lw": 85.72,
+    "csv": 85.715333894847,
+    "lengthS": 4.203,
+    "onsetS": 0.138
+   },
+   "pp": {
+    "energy": 62.62,
+    "lw": 56.55,
+    "csv": 56.5497946652769,
+    "lengthS": 4.044,
+    "onsetS": 0.047
+   }
+  },
+  "47": {
+   "ff": {
+    "energy": 88.9,
+    "lw": 82.94,
+    "csv": 82.9352957669274,
+    "lengthS": 3.945,
+    "onsetS": 0.115
+   },
+   "pp": {
+    "energy": 65.3,
+    "lw": 58.29,
+    "csv": 58.2890445358865,
+    "lengthS": 5.019,
+    "onsetS": 0.048
+   }
+  },
+  "48": {
+   "ff": {
+    "energy": 83.76,
+    "lw": 78.54,
+    "csv": 78.5381029865927,
+    "lengthS": 3.328,
+    "onsetS": 0.179
+   },
+   "pp": {
+    "energy": 62.26,
+    "lw": 56.44,
+    "csv": 56.439811066888,
+    "lengthS": 3.822,
+    "onsetS": 0.048
+   }
+  },
+  "49": {
+   "ff": {
+    "energy": 85.78,
+    "lw": 79.58,
+    "csv": 79.5766713642925,
+    "lengthS": 4.169,
+    "onsetS": 0.184
+   },
+   "pp": {
+    "energy": 60.78,
+    "lw": 54.82,
+    "csv": 54.8219078198784,
+    "lengthS": 3.942,
+    "onsetS": 0.047
+   }
+  },
+  "50": {
+   "ff": {
+    "energy": 86.05,
+    "lw": 79.73,
+    "csv": 79.7297565681248,
+    "lengthS": 4.283,
+    "onsetS": 0.188
+   },
+   "pp": {
+    "energy": 63.36,
+    "lw": 57.77,
+    "csv": 57.7730155828254,
+    "lengthS": 3.617,
+    "onsetS": 0.047
+   }
+  },
+  "51": {
+   "ff": {
+    "energy": 84.58,
+    "lw": 77.93,
+    "csv": 77.9261063601792,
+    "lengthS": 4.629,
+    "onsetS": 0.203
+   },
+   "pp": {
+    "energy": 61.24,
+    "lw": 55.67,
+    "csv": 55.6684349588773,
+    "lengthS": 3.61,
+    "onsetS": 0.046
+   }
+  },
+  "52": {
+   "ff": {
+    "energy": 87.3,
+    "lw": 80.4,
+    "csv": 80.4032270516358,
+    "lengthS": 4.899,
+    "onsetS": 0.229
+   },
+   "pp": {
+    "energy": 66.67,
+    "lw": 59.56,
+    "csv": 59.5568165949901,
+    "lengthS": 5.149,
+    "onsetS": 0.047
+   }
+  },
+  "53": {
+   "ff": {
+    "energy": 93.06,
+    "lw": 85.93,
+    "csv": 85.9259479885933,
+    "lengthS": 5.166,
+    "onsetS": 0.086
+   },
+   "pp": {
+    "energy": 61.62,
+    "lw": 56.34,
+    "csv": 56.3368888901766,
+    "lengthS": 3.378,
+    "onsetS": 0.047
+   }
+  },
+  "54": {
+   "ff": {
+    "energy": 93.03,
+    "lw": 86.33,
+    "csv": 86.3286336887057,
+    "lengthS": 4.683,
+    "onsetS": 0.168
+   },
+   "pp": {
+    "energy": 69.95,
+    "lw": 63.4,
+    "csv": 63.4001409516312,
+    "lengthS": 4.514,
+    "onsetS": 0.054
+   }
+  },
+  "55": {
+   "ff": {
+    "energy": 93.77,
+    "lw": 87.64,
+    "csv": 87.6419217169274,
+    "lengthS": 4.098,
+    "onsetS": 0.123
+   },
+   "pp": {
+    "energy": 66.67,
+    "lw": 59.48,
+    "csv": 59.4823683404879,
+    "lengthS": 5.236,
+    "onsetS": 0.047
+   }
+  },
+  "56": {
+   "ff": {
+    "energy": 96.25,
+    "lw": 89.31,
+    "csv": 89.3121517998831,
+    "lengthS": 4.936,
+    "onsetS": 0.145
+   },
+   "pp": {
+    "energy": 61.85,
+    "lw": 56.02,
+    "csv": 56.0163726346856,
+    "lengthS": 3.834,
+    "onsetS": 0.047
+   }
+  },
+  "57": {
+   "ff": {
+    "energy": 98.26,
+    "lw": 90.99,
+    "csv": 90.9887246715434,
+    "lengthS": 5.333,
+    "onsetS": 0.214
+   },
+   "pp": {
+    "energy": 63.04,
+    "lw": 56.89,
+    "csv": 56.890212487428,
+    "lengthS": 4.125,
+    "onsetS": 0.047
+   }
+  },
+  "58": {
+   "ff": {
+    "energy": 96.04,
+    "lw": 89.65,
+    "csv": 89.6517151754132,
+    "lengthS": 4.356,
+    "onsetS": 0.157
+   },
+   "pp": {
+    "energy": 61.73,
+    "lw": 56.78,
+    "csv": 56.7837045805026,
+    "lengthS": 3.126,
+    "onsetS": 0.047
+   }
+  },
+  "59": {
+   "ff": {
+    "energy": 92.84,
+    "lw": 87.14,
+    "csv": 87.1361601104236,
+    "lengthS": 3.72,
+    "onsetS": 0.16
+   },
+   "pp": {
+    "energy": 65.33,
+    "lw": 58.46,
+    "csv": 58.4574422315382,
+    "lengthS": 4.867,
+    "onsetS": 0.048
+   }
+  },
+  "60": {
+   "ff": {
+    "energy": 93.73,
+    "lw": 86.92,
+    "csv": 86.9170767948823,
+    "lengthS": 4.805,
+    "onsetS": 0.16
+   },
+   "pp": {
+    "energy": 58.54,
+    "lw": 55.19,
+    "csv": 55.1885406109265,
+    "lengthS": 2.165,
+    "onsetS": 0.047
+   }
+  },
+  "61": {
+   "ff": {
+    "energy": 92.7,
+    "lw": 85.66,
+    "csv": 85.6612974445465,
+    "lengthS": 5.062,
+    "onsetS": 0.328
+   },
+   "pp": {
+    "energy": 63.62,
+    "lw": 58.98,
+    "csv": 58.9847667221789,
+    "lengthS": 2.909,
+    "onsetS": 0.047
+   }
+  },
+  "62": {
+   "ff": {
+    "energy": 92.7,
+    "lw": 85.91,
+    "csv": 85.9113916845251,
+    "lengthS": 4.775,
+    "onsetS": 0.171
+   },
+   "pp": {
+    "energy": 59.11,
+    "lw": 55.81,
+    "csv": 55.8127348798708,
+    "lengthS": 2.136,
+    "onsetS": 0.047
+   }
+  },
+  "63": {
+   "ff": {
+    "energy": 90.96,
+    "lw": 83.11,
+    "csv": 83.1113773848262,
+    "lengthS": 6.095,
+    "onsetS": 0.161
+   },
+   "pp": {
+    "energy": 59.23,
+    "lw": 55.26,
+    "csv": 55.2552111268696,
+    "lengthS": 2.496,
+    "onsetS": 0.047
+   }
+  },
+  "64": {
+   "ff": {
+    "energy": 92.99,
+    "lw": 87.91,
+    "csv": 87.9112804437619,
+    "lengthS": 3.216,
+    "onsetS": 0.191
+   },
+   "pp": {
+    "energy": 62.66,
+    "lw": 58.27,
+    "csv": 58.2694571422348,
+    "lengthS": 2.75,
+    "onsetS": 0.048
+   }
+  },
+  "65": {
+   "ff": {
+    "energy": 93.67,
+    "lw": 87.28,
+    "csv": 87.2799560887556,
+    "lengthS": 4.354,
+    "onsetS": 0.126
+   },
+   "pp": {
+    "energy": 62.69,
+    "lw": 58.16,
+    "csv": 58.1625447042897,
+    "lengthS": 2.839,
+    "onsetS": 0.047
+   }
+  },
+  "66": {
+   "ff": {
+    "energy": 92.39,
+    "lw": 86.2,
+    "csv": 86.200027956283,
+    "lengthS": 4.155,
+    "onsetS": 0.16
+   },
+   "pp": {
+    "energy": 58.65,
+    "lw": 56.75,
+    "csv": 56.7495064234169,
+    "lengthS": 1.549,
+    "onsetS": 0.047
+   }
+  },
+  "67": {
+   "ff": {
+    "energy": 91.72,
+    "lw": 85.27,
+    "csv": 85.2707635094323,
+    "lengthS": 4.412,
+    "onsetS": 0.161
+   },
+   "pp": {
+    "energy": 60.83,
+    "lw": 57.13,
+    "csv": 57.1339404159999,
+    "lengthS": 2.343,
+    "onsetS": 0.047
+   }
+  },
+  "68": {
+   "ff": {
+    "energy": 89.73,
+    "lw": 82.46,
+    "csv": 82.4578320319857,
+    "lengthS": 5.336,
+    "onsetS": 0.134
+   },
+   "pp": {
+    "energy": 58.34,
+    "lw": 54.28,
+    "csv": 54.2750554936433,
+    "lengthS": 2.548,
+    "onsetS": 0.046
+   }
+  },
+  "69": {
+   "ff": {
+    "energy": 90.45,
+    "lw": 83.46,
+    "csv": 83.4574242961081,
+    "lengthS": 5.002,
+    "onsetS": 0.142
+   },
+   "pp": {
+    "energy": 62.98,
+    "lw": 58.37,
+    "csv": 58.3731417480136,
+    "lengthS": 2.885,
+    "onsetS": 0.048
+   }
+  },
+  "70": {
+   "ff": {
+    "energy": 87.89,
+    "lw": 81.46,
+    "csv": 81.4579074374105,
+    "lengthS": 4.395,
+    "onsetS": 0.142
+   },
+   "pp": {
+    "energy": 59.89,
+    "lw": 57.76,
+    "csv": 57.7585030900059,
+    "lengthS": 1.633,
+    "onsetS": 0.047
+   }
+  },
+  "71": {
+   "ff": {
+    "energy": 86.71,
+    "lw": 80.58,
+    "csv": 80.5841340666383,
+    "lengthS": 4.098,
+    "onsetS": 0.166
+   },
+   "pp": {
+    "energy": 61.63,
+    "lw": 56.82,
+    "csv": 56.8181717955477,
+    "lengthS": 3.026,
+    "onsetS": 0.047
+   }
+  },
+  "72": {
+   "ff": {
+    "energy": 84.55,
+    "lw": 77.94,
+    "csv": 77.943721014842,
+    "lengthS": 4.574,
+    "onsetS": 0.174
+   },
+   "pp": {
+    "energy": 58.29,
+    "lw": 55.51,
+    "csv": 55.5056982089494,
+    "lengthS": 1.9,
+    "onsetS": 0.047
+   }
+  },
+  "73": {
+   "ff": {
+    "energy": 84.07,
+    "lw": 78.04,
+    "csv": 78.0382652922588,
+    "lengthS": 4.009,
+    "onsetS": 0.125
+   },
+   "pp": {
+    "energy": 59.25,
+    "lw": 58.08,
+    "csv": 58.0819394341738,
+    "lengthS": 1.307,
+    "onsetS": 0.047
+   }
+  },
+  "74": {
+   "ff": {
+    "energy": 81.33,
+    "lw": 77.22,
+    "csv": 77.2174875214467,
+    "lengthS": 2.578,
+    "onsetS": 0.112
+   },
+   "pp": {
+    "energy": 58.91,
+    "lw": 57.99,
+    "csv": 57.9851616635984,
+    "lengthS": 1.238,
+    "onsetS": 0.047
+   }
+  },
+  "75": {
+   "ff": {
+    "energy": 83.86,
+    "lw": 77.31,
+    "csv": 77.3107296109117,
+    "lengthS": 4.514,
+    "onsetS": 0.184
+   },
+   "pp": {
+    "energy": 58.17,
+    "lw": 56.03,
+    "csv": 56.0278988799884,
+    "lengthS": 1.637,
+    "onsetS": 0.047
+   }
+  },
+  "76": {
+   "ff": {
+    "energy": 88.09,
+    "lw": 82.52,
+    "csv": 82.5229250280716,
+    "lengthS": 3.605,
+    "onsetS": 0.158
+   },
+   "pp": {
+    "energy": 57.01,
+    "lw": 56.87,
+    "csv": 56.8711877773405,
+    "lengthS": 1.032,
+    "onsetS": 0.046
+   }
+  },
+  "77": {
+   "ff": {
+    "energy": 83.29,
+    "lw": 77.13,
+    "csv": 77.1279434668678,
+    "lengthS": 4.136,
+    "onsetS": 0.159
+   },
+   "pp": {
+    "energy": 60.05,
+    "lw": 55.66,
+    "csv": 55.6636405699692,
+    "lengthS": 2.743,
+    "onsetS": 0.047
+   }
+  },
+  "78": {
+   "ff": {
+    "energy": 84.49,
+    "lw": 78.24,
+    "csv": 78.2357817081361,
+    "lengthS": 4.218,
+    "onsetS": 0.183
+   },
+   "pp": {
+    "energy": 60.56,
+    "lw": 56.51,
+    "csv": 56.5133710414012,
+    "lengthS": 2.54,
+    "onsetS": 0.047
+   }
+  },
+  "79": {
+   "ff": {
+    "energy": 87.55,
+    "lw": 81.3,
+    "csv": 81.2955266751257,
+    "lengthS": 4.226,
+    "onsetS": 0.134
+   },
+   "pp": {
+    "energy": 61.07,
+    "lw": 55.59,
+    "csv": 55.588107737771,
+    "lengthS": 3.529,
+    "onsetS": 0.047
+   }
+  },
+  "80": {
+   "ff": {
+    "energy": 83.85,
+    "lw": 77.77,
+    "csv": 77.7727693292841,
+    "lengthS": 4.052,
+    "onsetS": 0.126
+   },
+   "pp": {
+    "energy": 61.87,
+    "lw": 56.7,
+    "csv": 56.701610861816,
+    "lengthS": 3.285,
+    "onsetS": 0.047
+   }
+  },
+  "81": {
+   "ff": {
+    "energy": 83.77,
+    "lw": 77.11,
+    "csv": 77.1137408686116,
+    "lengthS": 4.631,
+    "onsetS": 0.132
+   },
+   "pp": {
+    "energy": 57.99,
+    "lw": 55.24,
+    "csv": 55.2363660017377,
+    "lengthS": 1.886,
+    "onsetS": 0.047
+   }
+  },
+  "82": {
+   "ff": {
+    "energy": 87.82,
+    "lw": 81.24,
+    "csv": 81.2423655371269,
+    "lengthS": 4.55,
+    "onsetS": 0.134
+   },
+   "pp": {
+    "energy": 58.85,
+    "lw": 57.04,
+    "csv": 57.0360324023545,
+    "lengthS": 1.52,
+    "onsetS": 0.047
+   }
+  },
+  "83": {
+   "ff": {
+    "energy": 86.46,
+    "lw": 79.32,
+    "csv": 79.3184367983104,
+    "lengthS": 5.18,
+    "onsetS": 0.11
+   },
+   "pp": {
+    "energy": 57.37,
+    "lw": 54.85,
+    "csv": 54.8536556534493,
+    "lengthS": 1.783,
+    "onsetS": 0.047
+   }
+  },
+  "84": {
+   "ff": {
+    "energy": 84.47,
+    "lw": 79.03,
+    "csv": 79.0285681877773,
+    "lengthS": 3.499,
+    "onsetS": 0.127
+   },
+   "pp": {
+    "energy": 55.77,
+    "lw": 53.98,
+    "csv": 53.9753467233652,
+    "lengthS": 1.512,
+    "onsetS": 0.047
+   }
+  },
+  "85": {
+   "ff": {
+    "energy": 84.52,
+    "lw": 78.98,
+    "csv": 78.9838866923566,
+    "lengthS": 3.575,
+    "onsetS": 0.184
+   },
+   "pp": {
+    "energy": 59.49,
+    "lw": 56.42,
+    "csv": 56.4151957382063,
+    "lengthS": 2.032,
+    "onsetS": 0.047
+   }
+  },
+  "86": {
+   "ff": {
+    "energy": 83.9,
+    "lw": 79.22,
+    "csv": 79.2188987795098,
+    "lengthS": 2.937,
+    "onsetS": 0.172
+   },
+   "pp": {
+    "energy": 58.32,
+    "lw": 55.68,
+    "csv": 55.6836241125936,
+    "lengthS": 1.834,
+    "onsetS": 0.047
+   }
+  },
+  "87": {
+   "ff": {
+    "energy": 81.7,
+    "lw": 75.12,
+    "csv": 75.1186439804819,
+    "lengthS": 4.546,
+    "onsetS": 0.142
+   },
+   "pp": {
+    "energy": 60.28,
+    "lw": 56.65,
+    "csv": 56.6487772606009,
+    "lengthS": 2.308,
+    "onsetS": 0.047
+   }
+  },
+  "88": {
+   "ff": {
+    "energy": 83.73,
+    "lw": 79.41,
+    "csv": 79.4064327401894,
+    "lengthS": 2.703,
+    "onsetS": 0.171
+   },
+   "pp": {
+    "energy": 59.84,
+    "lw": 56.22,
+    "csv": 56.2176588724218,
+    "lengthS": 2.3,
+    "onsetS": 0.047
+   }
+  },
+  "89": {
+   "ff": {
+    "energy": 81.25,
+    "lw": 76.57,
+    "csv": 76.5678567269939,
+    "lengthS": 2.937,
+    "onsetS": 0.121
+   },
+   "pp": {
+    "energy": 55.67,
+    "lw": 54.75,
+    "csv": 54.7454629686368,
+    "lengthS": 1.237,
+    "onsetS": 0.046
+   }
+  },
+  "90": {
+   "ff": {
+    "energy": 80.0,
+    "lw": 75.2,
+    "csv": 75.2039126476009,
+    "lengthS": 3.018,
+    "onsetS": 0.088
+   },
+   "pp": {
+    "energy": 55.22,
+    "lw": 54.0,
+    "csv": 54.0008100048225,
+    "lengthS": 1.323,
+    "onsetS": 0.046
+   }
+  },
+  "91": {
+   "ff": {
+    "energy": 83.02,
+    "lw": 79.12,
+    "csv": 79.1242259823216,
+    "lengthS": 2.452,
+    "onsetS": 0.127
+   },
+   "pp": {
+    "energy": 59.02,
+    "lw": 57.01,
+    "csv": 57.0060849491779,
+    "lengthS": 1.59,
+    "onsetS": 0.047
+   }
+  },
+  "92": {
+   "ff": {
+    "energy": 79.4,
+    "lw": 77.6,
+    "csv": 77.6038356537012,
+    "lengthS": 1.511,
+    "onsetS": 0.138
+   },
+   "pp": {
+    "energy": 56.79,
+    "lw": 55.16,
+    "csv": 55.1626477267997,
+    "lengthS": 1.456,
+    "onsetS": 0.047
+   }
+  },
+  "93": {
+   "ff": {
+    "energy": 80.85,
+    "lw": 76.9,
+    "csv": 76.8974559082474,
+    "lengthS": 2.484,
+    "onsetS": 0.118
+   },
+   "pp": {
+    "energy": 60.49,
+    "lw": 58.5,
+    "csv": 58.5046875974137,
+    "lengthS": 1.579,
+    "onsetS": 0.048
+   }
+  },
+  "94": {
+   "ff": {
+    "energy": 78.91,
+    "lw": 77.65,
+    "csv": 77.6514006629474,
+    "lengthS": 1.337,
+    "onsetS": 0.14
+   },
+   "pp": {
+    "energy": 58.58,
+    "lw": 56.86,
+    "csv": 56.8560056872626,
+    "lengthS": 1.486,
+    "onsetS": 0.047
+   }
+  },
+  "95": {
+   "ff": {
+    "energy": 82.99,
+    "lw": 79.81,
+    "csv": 79.8140960226667,
+    "lengthS": 2.078,
+    "onsetS": 0.138
+   },
+   "pp": {
+    "energy": 55.55,
+    "lw": 54.65,
+    "csv": 54.6509375933434,
+    "lengthS": 1.231,
+    "onsetS": 0.047
+   }
+  },
+  "96": {
+   "ff": {
+    "energy": 77.76,
+    "lw": 79.11,
+    "csv": 79.114661090656,
+    "lengthS": 0.731,
+    "onsetS": 0.115
+   },
+   "pp": {
+    "energy": 55.5,
+    "lw": 54.6,
+    "csv": 54.6008413681135,
+    "lengthS": 1.231,
+    "onsetS": 0.047
+   }
+  },
+  "97": {
+   "ff": {
+    "energy": 76.62,
+    "lw": 76.45,
+    "csv": 76.4500967511877,
+    "lengthS": 1.04,
+    "onsetS": 0.145
+   },
+   "pp": {
+    "energy": 54.63,
+    "lw": 54.19,
+    "csv": 54.1927980384135,
+    "lengthS": 1.106,
+    "onsetS": 0.047
+   }
+  },
+  "98": {
+   "ff": {
+    "energy": 75.34,
+    "lw": 75.77,
+    "csv": 75.7667707954865,
+    "lengthS": 0.905,
+    "onsetS": 0.158
+   },
+   "pp": {
+    "energy": 58.16,
+    "lw": 55.99,
+    "csv": 55.9923527406894,
+    "lengthS": 1.648,
+    "onsetS": 0.047
+   }
+  },
+  "99": {
+   "ff": {
+    "energy": 79.96,
+    "lw": 77.72,
+    "csv": 77.7241594823863,
+    "lengthS": 1.672,
+    "onsetS": 0.114
+   },
+   "pp": {
+    "energy": 56.79,
+    "lw": 55.46,
+    "csv": 55.4576400416973,
+    "lengthS": 1.358,
+    "onsetS": 0.047
+   }
+  },
+  "100": {
+   "ff": {
+    "energy": 75.93,
+    "lw": 74.02,
+    "csv": 74.018912797538,
+    "lengthS": 1.554,
+    "onsetS": 0.136
+   },
+   "pp": {
+    "energy": 56.62,
+    "lw": 56.09,
+    "csv": 56.0892985012696,
+    "lengthS": 1.129,
+    "onsetS": 0.047
+   }
+  },
+  "101": {
+   "ff": {
+    "energy": 75.57,
+    "lw": 73.56,
+    "csv": 73.5562640003552,
+    "lengthS": 1.59,
+    "onsetS": 0.088
+   },
+   "pp": {
+    "energy": 56.84,
+    "lw": 55.63,
+    "csv": 55.6271732532998,
+    "lengthS": 1.323,
+    "onsetS": 0.047
+   }
+  },
+  "102": {
+   "ff": {
+    "energy": 71.33,
+    "lw": 69.44,
+    "csv": 69.4430787856036,
+    "lengthS": 1.544,
+    "onsetS": 0.061
+   },
+   "pp": {
+    "energy": 58.23,
+    "lw": 56.55,
+    "csv": 56.5464304031955,
+    "lengthS": 1.474,
+    "onsetS": 0.047
+   }
+  }
+ },
+ "timpani": {
+  "Pedal_timpani_d2_v1_01": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v1: 6 dynamics, felt mallet (soft), played one hand from edge",
+   "energy": 65.13,
+   "lw": 60.77,
+   "lengthS": 2.727,
+   "onsetS": 0.071
+  },
+  "Pedal_timpani_d2_v1_02": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v1: 6 dynamics, felt mallet (soft), played one hand from edge",
+   "energy": 88.04,
+   "lw": 80.55,
+   "lengthS": 5.607,
+   "onsetS": 0.364
+  },
+  "Pedal_timpani_d2_v1_03": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v1: 6 dynamics, felt mallet (soft), played one hand from edge",
+   "energy": 94.22,
+   "lw": 84.91,
+   "lengthS": 8.533,
+   "onsetS": 0.261
+  },
+  "Pedal_timpani_d2_v1_04": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v1: 6 dynamics, felt mallet (soft), played one hand from edge",
+   "energy": 100.9,
+   "lw": 90.51,
+   "lengthS": 10.929,
+   "onsetS": 0.758
+  },
+  "Pedal_timpani_d2_v1_05": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v1: 6 dynamics, felt mallet (soft), played one hand from edge",
+   "energy": 109.97,
+   "lw": 99.05,
+   "lengthS": 12.353,
+   "onsetS": 0.507
+  },
+  "Pedal_timpani_d2_v1_06": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v1: 6 dynamics, felt mallet (soft), played one hand from edge",
+   "energy": 115.55,
+   "lw": 105.02,
+   "lengthS": 11.307,
+   "onsetS": 0.417
+  },
+  "Pedal_timpani_d2_v2_01": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v2: 6 dynamics, felt mallet (hard), played one hand from edge",
+   "energy": 64.78,
+   "lw": 58.01,
+   "lengthS": 4.749,
+   "onsetS": 0.063
+  },
+  "Pedal_timpani_d2_v2_02": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v2: 6 dynamics, felt mallet (hard), played one hand from edge",
+   "energy": 87.86,
+   "lw": 79.12,
+   "lengthS": 7.469,
+   "onsetS": 0.391
+  },
+  "Pedal_timpani_d2_v2_03": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v2: 6 dynamics, felt mallet (hard), played one hand from edge",
+   "energy": 97.17,
+   "lw": 87.17,
+   "lengthS": 10.002,
+   "onsetS": 0.331
+  },
+  "Pedal_timpani_d2_v2_04": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v2: 6 dynamics, felt mallet (hard), played one hand from edge",
+   "energy": 104.43,
+   "lw": 93.85,
+   "lengthS": 11.436,
+   "onsetS": 0.393
+  },
+  "Pedal_timpani_d2_v2_05": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v2: 6 dynamics, felt mallet (hard), played one hand from edge",
+   "energy": 110.23,
+   "lw": 99.46,
+   "lengthS": 11.935,
+   "onsetS": 0.308
+  },
+  "Pedal_timpani_d2_v2_06": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v2: 6 dynamics, felt mallet (hard), played one hand from edge",
+   "energy": 115.17,
+   "lw": 104.08,
+   "lengthS": 12.854,
+   "onsetS": 0.268
+  },
+  "Pedal_timpani_d2_v3_01": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 77.82,
+   "lw": 68.72,
+   "lengthS": 8.122,
+   "onsetS": 0.443
+  },
+  "Pedal_timpani_d2_v3_02": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 86.09,
+   "lw": 76.42,
+   "lengthS": 9.257,
+   "onsetS": 0.553
+  },
+  "Pedal_timpani_d2_v3_03": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 92.48,
+   "lw": 82.46,
+   "lengthS": 10.041,
+   "onsetS": 0.45
+  },
+  "Pedal_timpani_d2_v3_04": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 99.49,
+   "lw": 89.49,
+   "lengthS": 9.996,
+   "onsetS": 0.51
+  },
+  "Pedal_timpani_d2_v3_05": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 107.0,
+   "lw": 96.25,
+   "lengthS": 11.888,
+   "onsetS": 0.348
+  },
+  "Pedal_timpani_d2_v3_06": {
+   "instrument": "Pedal timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 113.6,
+   "lw": 103.03,
+   "lengthS": 11.411,
+   "onsetS": 0.287
+  },
+  "Timpani_d2_v1_01": {
+   "instrument": "Timpani",
+   "description": "note = D2; v1: 6 dynamics, wooden mallet, played one hand from edge",
+   "energy": 75.7,
+   "lw": 68.53,
+   "lengthS": 5.207,
+   "onsetS": 0.16
+  },
+  "Timpani_d2_v1_02": {
+   "instrument": "Timpani",
+   "description": "note = D2; v1: 6 dynamics, wooden mallet, played one hand from edge",
+   "energy": 85.26,
+   "lw": 78.5,
+   "lengthS": 4.738,
+   "onsetS": 0.146
+  },
+  "Timpani_d2_v1_03": {
+   "instrument": "Timpani",
+   "description": "note = D2; v1: 6 dynamics, wooden mallet, played one hand from edge",
+   "energy": 90.12,
+   "lw": 82.91,
+   "lengthS": 5.267,
+   "onsetS": 0.384
+  },
+  "Timpani_d2_v1_04": {
+   "instrument": "Timpani",
+   "description": "note = D2; v1: 6 dynamics, wooden mallet, played one hand from edge",
+   "energy": 97.43,
+   "lw": 90.53,
+   "lengthS": 4.901,
+   "onsetS": 0.296
+  },
+  "Timpani_d2_v1_05": {
+   "instrument": "Timpani",
+   "description": "note = D2; v1: 6 dynamics, wooden mallet, played one hand from edge",
+   "energy": 107.93,
+   "lw": 98.24,
+   "lengthS": 9.327,
+   "onsetS": 0.223
+  },
+  "Timpani_d2_v1_06": {
+   "instrument": "Timpani",
+   "description": "note = D2; v1: 6 dynamics, wooden mallet, played one hand from edge",
+   "energy": 115.21,
+   "lw": 105.18,
+   "lengthS": 10.071,
+   "onsetS": 0.127
+  },
+  "Timpani_d2_v2_01": {
+   "instrument": "Timpani",
+   "description": "note = D2; v2: 3 dynamics, wooden mallet, played close to edge",
+   "energy": 87.58,
+   "lw": 80.13,
+   "lengthS": 5.564,
+   "onsetS": 0.298
+  },
+  "Timpani_d2_v2_02": {
+   "instrument": "Timpani",
+   "description": "note = D2; v2: 3 dynamics, wooden mallet, played close to edge",
+   "energy": 91.93,
+   "lw": 84.19,
+   "lengthS": 5.944,
+   "onsetS": 0.261
+  },
+  "Timpani_d2_v2_03": {
+   "instrument": "Timpani",
+   "description": "note = D2; v2: 3 dynamics, wooden mallet, played close to edge",
+   "energy": 100.05,
+   "lw": 91.77,
+   "lengthS": 6.731,
+   "onsetS": 0.127
+  },
+  "Timpani_d2_v3_01": {
+   "instrument": "Timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 76.59,
+   "lw": 69.54,
+   "lengthS": 5.074,
+   "onsetS": 0.116
+  },
+  "Timpani_d2_v3_02": {
+   "instrument": "Timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 88.09,
+   "lw": 80.32,
+   "lengthS": 5.991,
+   "onsetS": 0.583
+  },
+  "Timpani_d2_v3_03": {
+   "instrument": "Timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 97.19,
+   "lw": 89.26,
+   "lengthS": 6.211,
+   "onsetS": 0.243
+  },
+  "Timpani_d2_v3_04": {
+   "instrument": "Timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 103.17,
+   "lw": 94.96,
+   "lengthS": 6.618,
+   "onsetS": 0.231
+  },
+  "Timpani_d2_v3_05": {
+   "instrument": "Timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 112.83,
+   "lw": 103.11,
+   "lengthS": 9.381,
+   "onsetS": 0.179
+  },
+  "Timpani_d2_v3_06": {
+   "instrument": "Timpani",
+   "description": "note = D2; v3: 6 dynamics, leather mallet, played one hand from edge",
+   "energy": 115.64,
+   "lw": 106.25,
+   "lengthS": 8.694,
+   "onsetS": 0.13
+  },
+  "Timpani_d2_v4_01": {
+   "instrument": "Timpani",
+   "description": "note = D2;  v4: 4 dynamics, leather mallet, played close to edge",
+   "energy": 66.21,
+   "lw": 60.1,
+   "lengthS": 4.075,
+   "onsetS": 0.077
+  },
+  "Timpani_d2_v4_02": {
+   "instrument": "Timpani",
+   "description": "note = D2;  v4: 4 dynamics, leather mallet, played close to edge",
+   "energy": 81.87,
+   "lw": 74.45,
+   "lengthS": 5.526,
+   "onsetS": 0.242
+  },
+  "Timpani_d2_v4_03": {
+   "instrument": "Timpani",
+   "description": "note = D2;  v4: 4 dynamics, leather mallet, played close to edge",
+   "energy": 92.79,
+   "lw": 84.05,
+   "lengthS": 7.483,
+   "onsetS": 0.379
+  },
+  "Timpani_d2_v4_04": {
+   "instrument": "Timpani",
+   "description": "note = D2;  v4: 4 dynamics, leather mallet, played close to edge",
+   "energy": 100.75,
+   "lw": 92.02,
+   "lengthS": 7.465,
+   "onsetS": 0.241
+  }
+ }
+}

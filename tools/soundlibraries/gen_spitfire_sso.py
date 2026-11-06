@@ -178,7 +178,23 @@ out=['<?xml version="1.0" encoding="UTF-8"?>',
 '       (by pitch; measured: 15 dB under its peak): it starts early by that times early percent (0: as written) -->',
 f'  <Onset early="{ONSET_EARLY}"/>',
 '  <Plugin files="Kontakt 8.vst3;Kontakt 7.vst3;Kontakt.vst3"/>',
-'  <Files registry="Spitfire Symphony Orchestra"/>']
+'  <Files registry="Spitfire Symphony Orchestra"/>',
+'  <!-- the settings SSO\'s patches share on a machine (a "share" tick in any patch\'s settings: read from the patch\'s',
+'       script; Kontakt keeps them in its data folder for the library, %LOCALAPPDATA%\\Spitfire Symphony Orchestra\\Data):',
+'       a shared value overrides every patch\'s own at load. Checked, read only, as a patch loads and in every render\'s',
+'       preflight; a value outside good= is reported (-12345 / -12344: not shared) -->']
+# (index in the shared array, good values, what a shared other value does; read from the patch's script)
+SHARED_SETTINGS = [
+    (1, '-12345 -12344 3', 'SSO\'s shared settings set the articulation mode of every patch to another mode than UACC & UI, which the map\'s switches need: articulations will not switch. Untick "share" for the articulation mode in any SSO patch\'s settings'),
+    (2, '-12345 -12344', 'SSO\'s shared settings set "Reset on transport" for every patch: round robins at a playback start differ from the library\'s defaults (and from [notes] transportReset). Untick "share" for it in any SSO patch\'s settings'),
+    (3, '-12345 -12344', 'SSO\'s shared settings turn on a round-robin reset key in every patch: that key resets the takes. Untick "share" for it in any SSO patch\'s settings'),
+    (4, '-12345 -12344 0', 'SSO\'s shared settings transpose every patch: notes sound at other pitches. Untick "share" for the transpose in any SSO patch\'s settings'),
+    (5, '-12345 -12344 0', 'SSO\'s shared settings take every patch\'s velocity from a controller: note velocities (the shorts\' dynamics, Performance techniques) are ignored. Untick "share" for it in any SSO patch\'s settings'),
+    (6, '-12345 -12344 1', 'SSO\'s shared settings turn the Hall trigger (diminuendo release) off in every patch: plays differ from the library\'s defaults. Untick "share" for it in any SSO patch\'s settings'),
+]
+for index, good, text in SHARED_SETTINGS:
+    out.append(f'  <PluginSettings folder="local" format="nka" file="Spitfire Symphony Orchestra/Data/Share__Settings.nka" '
+               f'name="{index}" good="{good}" text={q(text)}/>')
 # Controllers MuseScore sets per part (libmscore/soundlibrary.h: SoundLib::Controller; the part's
 # value in View > Sound Library > Controllers…): (id, name shown, CC or None, plug-in parameter
 # title or None, default 0-127 or None (the patch's own value stays), [(staff text regexp, value)]).
@@ -188,19 +204,34 @@ f'  <Onset early="{ONSET_EARLY}"/>',
 CONTROLLERS = []            # for every patch
 PATCH_CONTROLLERS = {}      # patch name -> [...], over CONTROLLERS (same id: replaces it)
 
-def controller(c, indent):
+def num4(v):
+    s = ('%.4f' % v).rstrip('0').rstrip('.')
+    return s if s not in ('', '-0') else '0'
+
+def controller(c, indent, patchDefault=None):
     cid, name, cc, param, default, texts = c
     assert (cc is None) != (param is None), c
     assert cc is None or 0 <= cc <= 119, c
     assert default is None or 0 <= default <= 127, c
     assert not texts or cc is not None, c           # (staff text: MIDI controllers only)
+    assert patchDefault is None or (param is not None and 0 <= patchDefault <= 1), c
     a = f'{indent}<Controller id={q(cid)} name={q(name)}'
     a += f' cc="{cc}"' if cc is not None else f' param={q(param)}'
     if default is not None:
         a += f' default="{default}"'
+    if patchDefault is not None:
+        a += f' patchDefault="{num4(patchDefault)}"'
     if not texts:
         return [a + '/>']
     return [a + '>'] + [f'{indent}  <Text match={q(m)} value="{v}"/>' for m, v in texts] + [f'{indent}</Controller>']
+
+# Each patch's controllers' own values as the library ships them (<Controller patchDefault>, 0-1: the plug-in's
+# normalized value with MuseScore's setup loaded and settled, nothing set), measured once in Kontakt 8 + SSO on the
+# Windows VM (tools/soundlibraries/sso_controller_defaults.json, controller_defaults_from_extract.py; the owner,
+# 2026-10-15: the dashed lane of a patch never loaded shows them; once it loads, Kontakt's live value takes over and
+# a difference is logged). MuseScore sends nothing for them (unlike default)
+_CD = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_controller_defaults.json')
+CONTROLLER_DEFAULTS = json.load(open(_CD, encoding='utf-8'))['patches'] if os.path.exists(_CD) else {}
 
 out += [x for c in CONTROLLERS for x in controller(c, '  ')]
 patchControllersUsed = set()
@@ -214,7 +245,8 @@ def patchControllers(name):
         else:
             measuredMissing.append(name)
             cs = []
-    return [x for c in cs for x in controller(c, '    ')]
+    own = CONTROLLER_DEFAULTS.get(name, {})
+    return [x for c in cs for x in controller(c, '    ', own.get(c[0]) if c[3] is not None else None)]
 
 # Corrections from Spitfire's own Cubase expression maps for SSS / SSB / SSW (legacy downloads,
 # CC32 = UACC; see check_spitfire_expressionmaps.py), where they differ from the community bank
@@ -255,6 +287,10 @@ SPITFIRE_ADD['Grand Piano'] = [('Direct', 1, ALL, ''), ('Tape', 2, '', '')]
 # Roll, Roll Muted, Swell mf, Swell f, keyswitches marked from C-2), to be confirmed by it.
 KEYSCAN = {'Timpani', 'Celeste', 'Glockenspiel', 'Xylophone', 'Marimba', 'Vibraphone', 'Crotales',
            'Tubular Bells', 'Desk Bells'}
+# Keys that sound an octave off the MIDI number (<Instrument keyShift>, semitones added to the key sent): the timpani's
+# zones span keys 46 .. 74; key 50 sounds 72.8 Hz = D2, key 62 146.5 Hz = D3 (f0 of kthost renders on the Windows VM,
+# Kontakt Player 8.13.1 + SSO, 2026-10-15, sso_percussion_levels.json), so a written D2 (38) goes on key 50.
+KEY_SHIFT = {'Timpani': 12}
 KEYSWITCHED = {'Timpani', 'Celeste', 'Glockenspiel', 'Marimba', 'Vibraphone', 'Tubular Bells'}
 # one sound, no technique list in their window: nothing to switch
 UNSWITCHED = {'Xylophone', 'Crotales', 'Desk Bells'}
@@ -321,10 +357,134 @@ LEGATO_VELOCITY = {'Violas - Performance': 100}
 # with: smooth 5 (the velocity measured slow), portamento 10 and accented 122 (the middles of their bands), spiccato
 # 112, fingered 69, bowed 93, a re-attack 106 after a 54 ms gap, transitions overlapping by 24 ms (the owner's own set,
 # 2026-10-10: its first note, lower neighbour, median transition, medians of its 9 re-attacks and of its overlaps).
-# The string sections only (the other Performance patches not measured: none, their notes play as before)
-PERFORMANCE_TECHNIQUES = (' attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122"'
-                          ' transitions="portamento:1-19:10 fingered:20-84:69 bowed:85-127:93"'
-                          ' reattack="106" reattackGap="54" overlap="24" legatoGap="39"')
+# The string sections only (the other Performance patches not measured: none, their notes play as before).
+# The portamento's velocity (2026-10-17, sso_performance_layers.json: the patches' own group data): the middle of the
+# band where PORT plays alone, below FING's lowest velocity: Violins 1 / 2, Violas, Celli 1-9 -> 5 (FING from 10: the
+# 10 of the article's band middle also played FING); Basses 1-19 -> 10 (FING from 20)
+PERFORMANCE_LAYERS = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                                   'sso_performance_layers.json'), encoding='utf-8')).items()
+                      if not k.startswith('_')}
+def portamentoVelocity(patch):
+    l = PERFORMANCE_LAYERS[patch]
+    low, high = l['portamento'][0], min(l['portamento'][1], l['fingeredLow'] - 1)
+    return (low + high) // 2
+def performanceTechniques(patch):
+    return (' attacks="smooth:1-9:5 spiccato:10-116:112 accented:117-127:122"'
+            f' transitions="portamento:1-19:{portamentoVelocity(patch)} fingered:20-84:69 bowed:85-127:93"'
+            ' reattack="106" reattackGap="54" overlap="24" legatoGap="39"')
+# [shorts] staccatoLength (branch staccato-length, 2026-10-24; the setting 0 until the owner has heard it): a staccato is held,
+# and chosen (from=), no longer than real players sound one: staccatoLength= / staccatissimoLength= (s) on the <Instrument>s
+# of each family, from staccato_lengths.json (RESEARCH.md 2.5a: per note, onset to -20 dB under its peak; the Beethoven 8
+# readings it leans on reviewed by the owner, https://claude.ai/artifact/GNwFDt1PcNHJ1UWoWugvDc):
+# - oboe, clarinet, bassoon, horn: TU Berlin Beethoven 8 / II's staccato sixteenths (IOI 355 ms) of bars 1-2 at pp, the
+#   bars whose readings the owner confirmed (2026-10-24, R02-R05; bars 3-8 and 18-22 "can't tell": measured, not used):
+#   89 notes, 7 players (one oboist: 15 notes); cor anglais the oboe's, bass / contrabass clarinet the clarinet's,
+#   contrabassoon the bassoon's. Measured at pp only (f was 10-30 ms longer in the unconfirmed bars)
+# - flutes: the four winds' pooled median (no flute in the passage: an assumption)
+# - trumpets, trombones, cimbassi, tubas: the horn's (no other brass measured: an assumption)
+# - violins (and violas, the strings ensemble: an assumption): the mean of TU Beethoven 8 / IV's Violin I staccato quarters
+#   and Spheres K. 550's Violins 1 staccato quarters (both partly joined at -20 dB: lower bounds)
+# - celli, basses: no length measurable (their K. 550 staccato eighths at IOI 150 ms never part by 20 dB); the larger
+#   of the two violin values (low strings ring longer after the bow: an assumption)
+# - staccatissimo: 0.16 s, Hähnel & Berndt 2010 (NIME, 10 players on strings, winds and brass: 161 ms), no longer than the
+#   family's staccato (no staccatissimo in the recordings)
+STACCATO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'staccato_lengths.json')
+STACCATISSIMO_S = 0.16
+def staccatoFamilies():
+    g = json.load(open(STACCATO_FILE))['groups'] if os.path.exists(STACCATO_FILE) else {}
+    if not g:
+        return {}
+    e20 = lambda k: g[k]['e20']['medianMs'] / 1000.0
+    # (only groups whose readings the owner confirmed, 2026-10-24: Beethoven 8 / II bars 1-2 at pp)
+    assert all(g[k].get('readingsConfirmed', True) for k in g if k.endswith('b1-2 pp') or k.endswith('b1-2 pp, all'))
+    wind = lambda w: e20(f'B8/II {w} staccato 16ths b1-2 pp')
+    violins = (e20('B8/IV violin 1 quarters, staccato (dots)') + e20('K550/I violins 1 staccato (quarter)')) / 2
+    low = max(e20('B8/IV violin 1 quarters, staccato (dots)'), e20('K550/I violins 1 staccato (quarter)'))
+    fam = {'oboe': wind('oboe'), 'clarinet': wind('clarinet'), 'bassoon': wind('bassoon'), 'horn': wind('horn'),
+           'flute': e20('B8/II winds staccato 16ths b1-2 pp, all'), 'brass': wind('horn'), 'violins': violins, 'low': low}
+    return {k: round(v / 0.005) * 0.005 for k, v in fam.items()}
+STACCATO_FAMILIES = staccatoFamilies()
+STACCATO_RULES = [(r'Strings Ensemble|Violin|Viola', 'violins'), (r'Cell|^Basses', 'low'), (r'Piccolo|Flute', 'flute'),
+                  (r'Oboe|Cor Anglais', 'oboe'), (r'Clarinet', 'clarinet'), (r'Bassoon', 'bassoon'), (r'Horn', 'horn'),
+                  (r'Trumpet|Trombone|Cimbass|Tuba', 'brass')]
+def staccatoAttributes(patch):
+    for rx, fam in STACCATO_RULES:
+        if re.search(rx, patch) and fam in STACCATO_FAMILIES:
+            v = STACCATO_FAMILIES[fam]
+            return f' staccatoLength="{v:g}" staccatissimoLength="{min(v, STACCATISSIMO_S):g}"'
+    return ''
+# [slurs] speedFromWritten (the owner approved, 2026-10-17): the controller the patch's script writes at each legato
+# note-on (Leg. Speed CC) and the script value that turns that off (set to 0 with the setting on), from the same file
+def speedAttributes(patch):
+    l = PERFORMANCE_LAYERS.get(patch)
+    return f' speedCC="{l["speedCC"]}" speedScript="{l["speedScript"]}"' if l else ''
+# Read from the patches' scripts and group data (docs/SSO_SCRIPT_KNOWLEDGE.md, 2026-10-21; branch sso-script-fixes2):
+# - transportResetScript: the script value "Reset on transport" (round robins back to the first take at a transport
+#   start). Saved 0 (off) in these patches only, of the map's (read from the patch's script's saved values); MuseScore's
+#   restartTransport() relies on it. [notes] transportReset sets it to 1 in the state loaded (playbackScriptValues)
+# - hallDrop: the patch's diminuendo-release trigger (its "Hall trigger" on and an "Rls diminuendo" group, read from the
+#   patch's group data: a Dynamics (CC1) step down of this much or more in one change while a key is held plays an extra
+#   release on every held key). The five string sections' Performance patches checked; the other patches not read
+#   (Violins 2 - All techniques has no such group). The audit's HALL; [levels] hallGuard
+# - avoidCC: controllers MuseScore never sends to the patch (read from the patch's script: a helper on these two patches
+#   replaces the note-on velocity by CC112 (a first note) / CC113 (a note while another is held) when they are not 0).
+#   MidiRenderer::libraryAvoidCC drops them; the audit's AVOIDED CC
+TRANSPORT_RESET_OFF = ['Violins 1 - Performance', 'Violins 2 - Performance', 'Violas - Performance',
+                       'Celli - Performance', 'Basses - Performance', 'Tuba Solo - Performance',
+                       'Oboe Principal - Total Performance']
+HALL_DROP = {p: 10 for p in ['Violins 1 - Performance', 'Violins 2 - Performance', 'Violas - Performance',
+                             'Celli - Performance', 'Basses - Performance']}
+AVOID_CC = {'Trumpet Solo - Total Performance': '112 113', 'Tenor Trombone Solo - Total Performance': '112 113'}
+def scriptAttributes(patch):
+    a = ''
+    if patch in TRANSPORT_RESET_OFF:
+        a += ' transportResetScript="$xqdzx"'
+    if patch in HALL_DROP:
+        a += f' hallDrop="{HALL_DROP[patch]}"'
+    if patch in AVOID_CC:
+        a += f' avoidCC="{AVOID_CC[patch]}"'
+    return a
+# [levels] lowCut (branch string-lowcut, 2026-10-30; the owner asked why the strings' new-bow kick isn't fixed): every patch
+# of the five string sections plays through a 4th-order Butterworth high-pass at LOW_CUT Hz (<Instrument lowCut>;
+# Vst3Synth::setLowCut). SSO's new-bow samples (bowed transition, smooth attack) carry a low burst 150-250 ms after the
+# note-on, 1-15 Hz and 40-150 Hz (the Violins 1: p95 -41 dB of the clip's maximum in 40-150 Hz after a 40 Hz cut), all
+# under the section's lowest fundamental: bow / body noise, not the instrument (real strings radiate little under their
+# lowest string's fundamental; Meyer 2009, the strings' spectra). The rule: 0.77 of the section's lowest fundamental
+# (4.6 semitones under it), so the lowest note loses ~0.5 dB, a note a fourth higher 0.05 dB: Violins G3 196 -> 150,
+# Violas C3 131 -> 100, Celli C2 65.4 -> 50; the Basses 25, a compromise (C1 32.7 of the extension -0.5 dB, E1 41.2
+# -0.08 dB; 25-40 Hz of the bursts stays). Measured on the run-bends A/B clips: docs/PLAYBACK_SETTINGS.md › Low cut
+LOW_CUT = {'Violins 1': 150, 'Violins 2': 150, 'Violas': 100, 'Celli': 50, 'Basses': 25}
+LOW_CUT_PATCH = re.compile(r'^(?:Strings - )?(Violins 1|Violins 2|Violas|Celli|Basses)(?: |$)')
+def lowCut(patch):
+    m = LOW_CUT_PATCH.match(patch)
+    return LOW_CUT[m.group(1)] if m else None
+# the smooth attack's own onset (attackOnset="smooth:median;pitch:ms,…"): a lone first note at velocity 5 is heard much
+# later than the onset= measured at velocity 80 (Violas 236 against 111 ms). Measured 2026-10-12 (kthost on the test VM,
+# CC1 64, 5 pitches x 2 repeats, the onset= method; sso_smooth_onset.json): the median over the 10 notes and each
+# pitch's mean. With [slurs] smoothStart (Recommended) a note on the smooth attack starts early by it; the other
+# attacks keep onset= (the owner, 2026-10-12)
+SMOOTH_ONSET = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_smooth_onset.json'),
+                              encoding='utf-8'))['sections']
+def attackOnset(patch):
+    """the attackOnset= text of a Performance patch (None: not measured)"""
+    m = SMOOTH_ONSET.get(patch)
+    if not m:
+        return None
+    by = sorted((int(k), v) for k, v in m['byPitch']['smooth'].items())
+    return f"smooth:{m['median']['smooth']:g};" + ','.join(f'{k}:{v:g}' for k, v in by)
+# [slurs] plainAccents 2 / 3: how much louder the accented attack (velocity 122) plays than the spiccato attack at 64
+# (accentedLevel="pitch/ms:dB …"), perceived peak in the 0.4 s after the note-on, after silence, every semitone x note
+# lengths 100-450 ms (kthost on the test VM, 2026-10-21; sso_accent_attack.json): the renderer plays such a note by CC11 at
+# real players' +5.0 dB over the spiccato attack (rendermidi.h PLAIN_ACCENT_DB)
+ACCENT_ATTACK = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_accent_attack.json'),
+                               encoding='utf-8'))['sections']
+def accentedLevel(patch):
+    """the accentedLevel= text of a Performance patch (None: not measured)"""
+    m = ACCENT_ATTACK.get(patch)
+    if not m:
+        return None
+    return ' '.join(f'{int(p)}/{int(ms)}:{v["db"]:g}' for p, lens in sorted(m['byPitch'].items(), key=lambda kv: int(kv[0]))
+                    for ms, v in sorted(lens.items(), key=lambda kv: int(kv[0])))
 # velocities whose attack plays a faulty recording (avoid="keys:low-high:velocity …"): a round robin with its own narrow
 # tone, measured with kthost on the test VM (sso_bad_samples.json: the bands, the clean velocity next to them and the
 # renders; the owner, 2026-10-10, heard it in Whence's Celli)
@@ -372,7 +532,8 @@ SPITFIRE_RENAME = {('Strings Ensemble', 'Long CS Sul Pont'): ('Long Sul Pont', '
 # defaults: until a part is given a value, the patch keeps its own (the owner, 2026-09-27: values
 # belong to the score, the library's default is SSO's own). Mic 1-5 are Close, Tree, Ambient,
 # Outrigger, Leader (the owner saw them move in Kontakt, 2026-09-27). Mic Mix Distance sets all the
-# mic levels (0: Ambient only, 127: Close only), so it comes first and a mic level ticked wins.
+# mic levels (0: Ambient only, 127: Close only), so it comes first; measured 2026-10-15 (mic_levels.py): mic levels sent
+# with it in one block are overridden by SSO's script, so with it set the mic values don't play.
 def _p(cid, name, title=None):
     return (cid, name, None, title or name, None, [])
 MICS = ['Close', 'Tree', 'Ambient', 'Outrigger', 'Leader']
@@ -443,6 +604,7 @@ for bank,name,ids,pn in I:
     attrs=f'name={q(name)} ids={q(ids)}'
     if pn: attrs+=f' partName={q(pn)}'
     if name in KEYSCAN: attrs+=' keyScan="1"'
+    if name in KEY_SHIFT: attrs+=f' keyShift="{KEY_SHIFT[name]}"'
     out.append(f'  <Instrument {attrs}>')
     if name in KEYSWITCHED:
         out.append('    <Switch type="keyswitch"/>')
@@ -663,6 +825,17 @@ STILL_OFF = {
  'Unpitched - Wood': '(not yet known)',
  'Other - Toys': 'Ratchet Long; Tambourine Roll, Swell, Swell Alt, Fx Rolls; Sleighbells Roll 1 / 2; Castanets Roll',
  }
+# Kickstart (the percussion scripts) plays velocity 127 as 126 unless its option "Roll on high vel." is ticked, in which
+# case a hit at 127 plays a roll the score did not ask for. Thirteen one-drum metal patches ship with the option ticked
+# (read from the saved control values of the owner's .nki files, 2026-10-13; every other percussion patch, the kits
+# and ensembles included, has it off). MuseScore sends them at most MAX_PERCUSSION_VELOCITY (<Instrument maxVelocity>,
+# share/soundlibraries/README.md): a correctness fix, not an adjustment.
+ROLL_ON_HIGH_VELOCITY = ['Anvil', 'Cymbal Hi', 'Cymbal Lo', 'Cymbal Med', 'Mark Tree', 'Mini Anvil', 'Rain Sheet',
+                         'Rivet Cymbal', 'Tam Tam', 'Trash Metals', 'Triangle 1', 'Triangle 2', 'Wind Gong']
+MAX_PERCUSSION_VELOCITY = 126
+def maxVelocity(name):
+    return (f' maxVelocity="{MAX_PERCUSSION_VELOCITY}"'
+            if name.startswith('Percussion - Unpitched - Metal - ') and name.rsplit(' - ', 1)[1] in ROLL_ON_HIGH_VELOCITY else '')
 out.append(f'  <Instrument name="Percussion" ids={q(KIT_IDS)} kit="1"/>')
 for name in PERCUSSION:
     drums = DRUMS.get(name, [])
@@ -674,7 +847,7 @@ for name in PERCUSSION:
     drums = [d for d in drums if hits[d[1]][1]]
     offNames = [n for k, (n, on) in sorted(hits.items()) if not on]
     # (sounds chosen by key: nothing to switch)
-    out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
+    out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1"{maxVelocity(name)}>')
     out.append('    <Switch type="none"/>')
     out += patchControllers(name)
     for pitch, key, n, ids in drums:
@@ -755,7 +928,7 @@ for kit in PERCUSSION:
         assert name in SINGLE_HITS, name                 # (every one-drum patch's list is known)
         hits = SINGLE_HITS[name]
         drums = SINGLE_DRUMS.get(name, [])
-        out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1">')
+        out.append(f'  <Instrument name={q(name)} with="Percussion" keyScan="1"{maxVelocity(name)}>')
         out.append('    <Switch type="none"/>')
         for pitch, key, n, ids in drums:
             assert (key, n, 1) in hits, (name, key, n)
@@ -1183,10 +1356,68 @@ def bendRange(name):
 # bendSmoothing= (ms) beside it: the patch's one-pole smoothing of a bend step on a held note (fit.py,
 # sso_bend_smoothing.json, tau_ms); the renderer sends the glide so that the bend as heard reaches the tuning at the
 # arrival (2026-10-11, branch legato-bend-settle)
+# [slurs] plainPerformance (the owner's "C", 2026-10-17, by ear on Whence's Violas bars 8-13): a part played plain on its
+# Performance patch has every event of the patch sent early by one constant, plainShift= on the patch's <Instrument>
+# (ms): the median heard - written latency of the plain notes, measured in context (sso_plain_performance_shift.json,
+# each entry with its source). A Performance patch without one: shift 0 (the playback audit lists it)
+# plainAttack= (ms; [slurs] plainTiming, 2026-10-21): with it a plain note that is no transition starts this much early
+# instead (the same file's attackMs: the median heard - sent of plain attacks in context, 15 dB under the peak); a
+# transition by its modelled arrival (bendGlide / legatoDelay)
+# mono="1": a monophonic patch: SSO's Performance patches (every "... - Performance" / "... - Total Performance", the
+# Sul G / Sul C ones too) play ONE legato line (read from the patch's script, Violas - Performance, 2026-10-20:
+# a note-on while a note is held is a transition that ends it; one < 15 ms after the note-on before at velocity <= 64 is
+# dropped; the other Performance patches share the script, an assumption checked on Celli - Performance: Whence's
+# three-note chords lost a note each, run 2 of 2026-10-20). MuseScore gives a chord's other notes copies of the patch
+# of their own (voice lanes, SoundLib::lanes; the owner, 2026-10-20: "of course it should play every note")
+MONO = re.compile(r' - (Total )?Performance$')
+PLAIN_SHIFT = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                            'sso_plain_performance_shift.json'), encoding='utf-8')).items()
+               if not k.startswith('_')}
+# bowedEarly= (ms; [slurs] plainAuto 2, branch bowed-early, 2026-10-27): with plainAuto's new bow stroke on the bowed
+# transition (93, Violas 100) the note goes this much earlier than the patch's plainShift already sends it: the bowed
+# transition's median heard time (f0 leave + 23.5 ms) after its note-on less plainShift, without the octave rows (YIN's
+# octave confusion): sso_legato_glide_bowed.json `proposalNoOctavesMs` (legato_glide/bowed.py; kthost + Kontakt 8 + SSO
+# on the Windows VM, 192 transitions a section)
+BOWED_EARLY = {k: v['proposalNoOctavesMs'] for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                                     'sso_legato_glide_bowed.json'), encoding='utf-8')).items()
+               if not k.startswith('_') and 'proposalNoOctavesMs' in v}
+# bowedArrive= ("lenBefore:arrive ..." ms; [slurs] plainAuto 3, branch plain-reattack, the owner's A/B of 2026-11-01 on
+# K. 550 i bars 1-9, real SSO, build 524): when the bowed transition of a plain new bow stroke reaches its pitch (f0 at nine
+# tenths of the way) after its note-on, by the note before's length: the median over sso_legato_glide_bowed.json's rows
+# (legato_glide/bowed.py: velocity 93, Violas 100; after an attack or a transition) without the octave rows (YIN's octave
+# confusion) and with the file's own validity rule (leave > -5, arrive < 550; a transition that never arrives is left out,
+# so the median is if anything early). rendermidi's performanceNote re-attacks a new bow shorter than this instead
+def _bowed_arrive():
+    out = {}
+    data = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide_bowed.json'),
+                          encoding='utf-8'))
+    for patch, v in data.items():
+        if patch.startswith('_') or 'rows' not in v:
+            continue
+        points = []
+        for length in sorted({r[0] for r in v['rows']}):
+            arr = sorted(r[7] for r in v['rows'] if r[0] == length and abs(r[2]) != 12 and r[5] is not None
+                         and r[5] > -5 and r[7] is not None and r[7] < 550)
+            if arr:
+                n = len(arr)
+                points.append((length, round(arr[n // 2] if n % 2 else (arr[n // 2 - 1] + arr[n // 2]) / 2, 1)))
+        if points:
+            out[patch] = points
+    return out
+BOWED_ARRIVE = _bowed_arrive()
 LEGATO_GLIDE = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_legato_glide.json'),
                               encoding='utf-8'))
+# bendGlideFingered= (2026-10-21, branch fast-microtones): the same for the fingered transition, velocity 64 as [slurs]
+# plainPerformance plays it (bendGlide's runs were bowed, 93 / the Violas' 100), read with [slurs] microtoneBends:
+# legato_glide/gen.py --velocity=64, glide.py --summarise --moving (sso_legato_glide_fingered.json)
+LEGATO_GLIDE_FINGERED = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         'sso_legato_glide_fingered.json'), encoding='utf-8')).items() if not k.startswith('_')}
 BEND_SMOOTHING = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_bend_smoothing.json'),
                                 encoding='utf-8'))
+# runLag= (2026-10-29, [slurs] runBends, OPEN_ITEMS 5): SSO's own pitch in fast legato runs, the keys delayed D and
+# smoothed tau per transition kind (sso_run_lag.json: fingered fitted by legato_glide/runlag.py; no bowed since 2026-10-30)
+RUN_LAG = {k: v for k, v in json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sso_run_lag.json'),
+                                           encoding='utf-8')).items() if not k.startswith('_')}
 # - onset= (ms): a sustained articulation's attack, by pitch: when it is heard, its level 15 dB under the note's peak
 #   (the renderer starts a held note that is no legato transition that much early, times <Onset early> percent).
 #   Measured on the VM (2026-10-01, build ce7d801, lone held notes at 3 registers and pp / mf / ff on 13 instruments
@@ -1439,9 +1670,14 @@ def quickLevel(patch, sound):
 #   the patch at CC1 = the written dynamic's value, by dynamic, median note spacing and median pitch ([levels] context,
 #   the owner, 2026-10-10: the same written dynamic sounds equally loud in every string part and technique, in context):
 #   the "rule" of sso_performance_context.json (performance_context/level_rule.py, from the Windows VM's renders)
+# - contextLevelPlain= / contextLevelStaccato= / contextLevelSingle= (the same format): [slurs] plainPerformance's gains
+#   for a note played plain, a slur's / a staccato's / a note's outside a slur, measured on the same grid with every note
+#   as Recommended plays it today (2026-10-17, branch plain-levels: the "plain" rule of sso_performance_context.json)
 CONTEXT_RULE = loadFit('sso_performance_context.json').get('rule', {}).get('sections', {})
-def contextLevel(patch, sound):
-    cells = CONTEXT_RULE.get(patch.replace(' - Performance', '')) if patch in PERFORMANCE_TECHNIQUE_PATCHES and sound == 'Legato' else None
+PLAIN_RULE = loadFit('sso_performance_context.json').get('plain', {}).get('rule', {}).get('kinds', {})
+def contextLevel(patch, sound, kind=None):
+    rule = CONTEXT_RULE if kind is None else PLAIN_RULE.get(kind, {})
+    cells = rule.get(patch.replace(' - Performance', '')) if patch in PERFORMANCE_TECHNIQUE_PATCHES and sound == 'Legato' else None
     if not cells:
         return None
     key = lambda k: tuple(int(x) for x in k.split('|'))
@@ -1459,12 +1695,137 @@ def contextLevel(patch, sound):
 #   - SSO side: measured on the Windows test VM, All techniques Long at CC1 = velocity 64, the loudest 50 ms of the note
 #     (loudDb), every 3 semitones, median of 4 (sso_cc1_curves.json, commit 329681d3a2), linear in dB between them;
 #   - every semitone of the Long's range the database also measured, equal weights; M = -(SSO - real section), centred.
-#   The session's m_final.py, key M_loudDb, 0.01 dB (variants not used: by the sustain's RMS -3.69 -3.00 -1.47 +2.60
-#   +5.56, by LUFS -4.63 -3.66 -2.46 +2.99 +7.75). Listening (ABX, blind, the owner, 2026-10-11): the basses' 1.6-3.6 dB
-#   differences heard soloed 14/14, not in the full mix (5/8); the owner chose M for its model.
-SECTION_FADERS = {'Violins 1': -3.81, 'Violins 2': -2.66, 'Violas': -2.12, 'Celli': 2.77, 'Basses': 5.81}
+#   The session's m_final.py, key M_loudDb, 0.01 dB: -3.81 -2.66 -2.12 +2.77 +5.81 (variants not used: by the sustain's
+#   RMS -3.69 -3.00 -1.47 +2.60 +5.56, by LUFS -4.63 -3.66 -2.46 +2.99 +7.75). Listening (ABX, blind, the owner,
+#   2026-10-11): the basses' 1.6-3.6 dB differences heard soloed 14/14, not in the full mix (5/8); the owner chose M for
+#   its model.
+#   2026-10-14 (the owner): the woodwinds and brass get M too, from the solo data "until we can find better non-solo
+#   data", and ("sure") everything by one rule: mp where [levels] realRange plays it (the Meyer rule, f = a + 2 (b - a) / 5
+#   of pp -> ff; rule D's 3 / 7 for Cor Anglais and Contrabassoon) instead of 0.4, the strings re-centred on it (today's
+#   sso_cc1_curves.json, Celli / Basses every semitone), the winds on the strings' scale, not re-centred. Computed by
+#   section_balance_winds.py -> sso_winds_section_balance.json ("strings", "instruments"), read here
+SECTION_BALANCE = loadFit('sso_winds_section_balance.json')
+SECTION_FADERS = {n: v['M'] for n, v in SECTION_BALANCE.get('strings', {}).items()}
+SECTION_FADERS_WINDS = {n: v['M'] for n, v in SECTION_BALANCE.get('instruments', {}).items()}
 def sectionLevel(name):
-    return round(SECTION_FADERS[name], 3)
+    return round(SECTION_FADERS.get(name, SECTION_FADERS_WINDS.get(name)), 3)
+# - sectionLevel2= (dB; [levels] sectionBalance 2, "Clark & Luce balance", the owner 2026-10-14: "I prefer all the balance
+#   levels and the dynamic levels loudness to be based on real data"): the same M with the real side at playing levels:
+#   Clark & Luce 1965 Fig. 2 (scales at pp / mf / ff as in orchestral music, one direction at 10 m) as sound power with
+#   TU Berlin's directivity in that direction, mp between pp and mf, one player + 10 log10 N; corroborated per family by the
+#   Spheres dataset's sections and Skaalevik 2019's orchestra dosimetry fit. Bass Clarinet, Contrabassoon, Bass Trombone
+#   Solo / a2: their family member's change (an assumption). section_balance_cl.py -> sso_cl_section_balance.json
+#   Strings Ensemble (2026-10-15, docs/BALANCE_LOG.md › Iteration 9): from the sections it mixes at each key
+#   (strings_ensemble.py -> sso_strings_ensemble.json, section_balance_cl.py's last argument); no real range (its sections'
+#   spans differ)
+#   In context (2026-10-24, docs/BALANCE_LOG.md › Iteration 15; the owner: "apply the full measured balance"): the flutes,
+#   oboes, horns and trumpets (every patch of the instrument, its family members without data as an assumption) shifted by
+#   how much softer / louder one player plays against the strings at the same marking in two anechoic orchestra recordings
+#   than the map implies (docs/RESEARCH.md › 1.5a): anechoic_balance.json -> anechoic_shift.py -> sso_anechoic_shift.json
+ANECHOIC_SHIFT = {n: v['shiftDb'] for n, v in loadFit('sso_anechoic_shift.json').get('patches', {}).items()}
+SECTION_LEVEL2 = {n: v['M2'] + ANECHOIC_SHIFT.get(n, 0.0)
+                  for n, v in loadFit('sso_cl_section_balance.json').get('patches', {}).items()}
+def sectionLevelAttributes(name):
+    out = f' sectionLevel="{sectionLevel(name):g}"'
+    if name in SECTION_LEVEL2:
+        out += f' sectionLevel2="{round(SECTION_LEVEL2[name], 3):g}"'
+    return out
+# - realSpan= ("pitch:dB ...") and longLevel= ("cc/pitch:dB ..."), on the five string sections' main Instrument (their
+#   extras take them): [levels] realRange (contextlevel.h › Real range; the owner, 2026-10-12, stage A): a note
+#   plays its written dynamic's level from mp (realPlay below; rule D: steps x realSpan / 7) less (longLevel at its CC1) dB by CC11 and the patches'
+#   volumes. realSpan: one player's ff - pp sound power per semitone (Weinzierl et al. 2018, TU Berlin database v3),
+#   smoothed (local linear, +-k semitones, k by leave-one-out); longLevel: SSO's All techniques Long, the sustain's mean
+#   power less its CC1 64 level, every 3 semitones, Celli and Basses every semitone (sso_cc1_curves.json). Both from
+#   sso_real_range.json (real_range.py). The woodwinds' and brass' main patches the database has (real_range.py WINDS;
+#   2026-10-14) take them too, with their sectionLevel (above): their Long from sso_winds_cc1_curves.json, an a2 / a6 patch one
+#   player's span; since 2026-10-15 the gap patches too (real_range.py GAP_OWN as the winds, their Long from
+#   sso_gap_cc1_curves.json; GAP_FAMILY longLevel and their family's realSteps only, no realSpan: an assumption)
+# - realPlay= ("a b"; the Meyer rule, the owner 2026-10-14, replacing rule D): written pp and ff as fractions of realSpan
+#   above the single-note pp (J. Meyer 2009, ch. 3: in-play levels of rapid scales against single-note extremes, per
+#   instrument); p .. f in 5 equal steps between, ppp / fff at 0 / 1. Missing: rule D (a = 1/7, b = 6/7), for the
+#   instruments Meyer gives no extremes for (real_range.py MEYER_NONE: Cor Anglais, Contrabassoon); the bass clarinet and the bass
+#   trombones take their sibling's (real_range.py SIBLING: an assumption, "plays like its family", the owner 2026-10-14)
+# - realSteps= ("S", dB; [levels] realRange 2, Clark & Luce spans, the owner 2026-10-14): the instrument's written
+#   pp -> ff, the markings in equal steps of S / 5 around mp (ppp / fff one step more): Clark & Luce 1965, Table I, for
+#   every instrument (one source; the Spheres dataset's sections agree within ~2 dB, a cross-check only); the bass
+#   clarinet, contrabassoon and bass trombones their family's (an assumption). real_range.py SPANS
+# - keyLevels= ("pitch:dB ..."; [levels] evenKeys, the owner 2026-10-28: SSO's uneven keys are an artefact) on the
+#   Long (UACC 1, the swept articulation) of every wind and brass patch of the every-semitone sweep: the dB that brings a
+#   key's Long at CC1 64 to within T = 1.5 dB of a smooth curve over pitch (Theil-Sen through the 8 nearest keys; T the
+#   80th percentile of real players' key-to-key deviation at ff, TU Berlin database): sso_even_keys.json (even_keys.py)
+EVEN_KEYS = {k: v['keyLevels'] for k, v in loadFit('sso_even_keys.json').get('patches', {}).items() if v['keyLevels']}
+evenKeysCount = 0
+REAL_RANGE = loadFit('sso_real_range.json').get('sections', {})
+REAL_RANGE_WINDS = loadFit('sso_real_range.json').get('instruments', {})
+# - the timpani (2026-10-15, docs/BALANCE_LOG.md › Iterations 10 and 14): realSteps from the Spheres dataset's written p and f
+#   ((f - p) x 5 / 3) and longLevel from SSO's hit energy by velocity (sso_percussion_levels.json), both computed by
+#   section_balance_cl.py ("realRange" in sso_cl_section_balance.json): a velocity patch, its x the written dynamic
+REAL_RANGE_DECAYING = {n: v['realRange'] for n, v in loadFit('sso_cl_section_balance.json').get('patches', {}).items()
+                       if v.get('realRange')}
+def realRangeAttributes(name):
+    r = REAL_RANGE.get(name) or REAL_RANGE_WINDS.get(name) or REAL_RANGE_DECAYING.get(name)
+    if not r:
+        return ''
+    # (real_range.py GAP_FAMILY: no database instrument, so no realSpan; realSteps their family's, an assumption)
+    span = ' '.join(f'{p}:{v:g}' for p, v in sorted(((int(p), v) for p, v in r.get('span', {}).items())))
+    long = ' '.join(f'{cc}/{p}:{v:g}' for p, per in sorted(((int(p), per) for p, per in r['long'].items()))
+                    for cc, v in sorted(((int(c), v) for c, v in per.items())))
+    play = f' realPlay="{r["fractions"]["pp"]:g} {r["fractions"]["ff"]:g}"' if r.get('rule') == 'meyer' else ''
+    steps = f' realSteps="{r["sectionSpan"]["db"]:g}"' if r.get('sectionSpan') else ''
+    return (f' realSpan="{span}"' if span else '') + f' longLevel="{long}"' + play + steps
+# - <Mics fader= mix=> and micLevels= / micDefault= ([levels] micCompensation, contextlevel.h › Mics; the owner, 2026-10-15:
+#   "mic changes then only affect tone and sense of space, never the balance"): measured on the VM, sso_mic_levels.json
+#   (mic_levels.py): each mic alone at its full fader against the patch's default mix (SSO's Long at CC1 64, the sustain's
+#   power, median over three pitches), the default faders (SSO: the Tree alone at 127), the faders' law and Mic Mix
+#   Distance's (Close / Tree / Ambient). Measured: the 28 patches with a section level and the strings' Performance
+#   patches, and (balance-refine, 2026-10-15, `mic_levels.py extra`) the 15 patches swept for the balance, the harp and the
+#   timpani (their decaying notes by energy, 0 .. 6 s; the timpani's Close mic rendered empty offline, left out); the
+#   percussion kits have no mic Controllers, so MuseScore never changes their mics; another extra takes its main's (soundlibrary.cpp: an assumption, the same recording's mics), other patches none
+MIC = loadFit('sso_mic_levels.json')
+MIC_NAMES = ['Close', 'Tree', 'Ambient', 'Outrigger', 'Leader']
+def micAttributes(name):
+    r = MIC.get('patches', {}).get(name)
+    if not r or not r.get('default'):
+        return ''
+    levels = ' '.join(f'{m}:{r["mics"][m]["rmsDb"]:g}' for m in MIC_NAMES if m in r['mics'] and r['mics'][m]['rmsDb'] is not None)
+    default = ' '.join(f'{m}:{v}' for m, v in r['default'].items())
+    return f' micLevels="{levels}" micDefault="{default}"'
+if MIC.get('faderLaw'):
+    fader = ' '.join(f'{int(x)}:{v:g}' for x, v in sorted(((int(x), v) for x, v in MIC['faderLaw']['db'].items()), reverse=False))
+    mix = ' '.join(f'{int(m)}:' + '/'.join('-' if v is None else f'{v:g}' for v in vs)
+                   for m, vs in sorted((int(m), vs) for m, vs in MIC['mixLaw']['db'].items()))
+    at = out.index('  <Tuning method="varispeed"/>') - 6
+    out[at:at] = [
+        '  <!-- mics ([levels] micCompensation): a mic\'s level at a fader value against 127 (fader=, 0 silent) and what Mic Mix',
+        '       Distance sets Close / Tree / Ambient to (mix=, each against its full fader, - silent); measured on SSO with',
+        '       Kontakt 8 (tools/soundlibraries/sso_mic_levels.json, mic_levels.py); micLevels= on an Instrument: each mic alone',
+        '       at its full fader against the patch\'s default mix (micDefault=: its default faders, the others 0) -->',
+        f'  <Mics fader="{fader}" mix="{mix}"/>']
+# - heldOffset= (dB, or "cc:dB cc:dB" linear in the written dynamic's CC, constant outside; [levels] calibrated 2,
+#   option B', the owner 2026-10-15): on the five string sections' velocity techniques, the dB the technique plays over
+#   the part's held Long matched at the same marking, from real players: the bowed shorts from the Spheres dataset's
+#   Mozart K. 550 (staccato against held at f, perceived, pooled over the sections), the pizzicato from Meyer 2009
+#   (pizzicato against arco at pp / ff, sound power), the Basses' Bartok and col legno 0. A velocity technique without it
+#   keeps SSO's own loud-end difference (SoundLib::loudEndDb; an assumption). technique_offsets.py -> technique_offsets.json
+TECHNIQUE_OFFSETS = loadFit('technique_offsets.json')
+# ("@staccato": the bowed shorts' one value, technique_offsets.json "staccato" > "use"; a placeholder while marked so)
+HELD_OFFSETS = {s: {n: (f"{TECHNIQUE_OFFSETS['staccato']['use']:g}" if v == '@staccato' else v) for n, v in a.items()}
+                for s, a in TECHNIQUE_OFFSETS.get('articulations', {}).items()}
+if TECHNIQUE_OFFSETS.get('staccato', {}).get('placeholder'):
+    print('note: the bowed-staccato heldOffset is a placeholder:', TECHNIQUE_OFFSETS['staccato']['placeholder'], file=sys.stderr)
+heldOffsetCount = 0
+# - <Dynamics crest=> (the master trim, contextlevel.h › Gain stage and master trim; the owner, 2026-10-15): the largest
+#   measured sample peak of a note over its loudest 50 ms (the dynamics calibration's level), sso_crest.json (crest_sweep.py:
+#   the five string sections' All techniques and Performance patches in real Kontakt 8 + SSO on the Windows VM, 392 notes,
+#   2026-10-12); MuseScore adds it to each sounding note's calibrated level to find the score's loudest peak
+CREST = loadFit('sso_crest.json')
+if CREST.get('crest'):
+    at = next(i for i, ln in enumerate(out) if ln.startswith('  <Dynamics cc='))
+    out[at] = out[at].replace('/>', f' crest="{CREST["crest"]["max"]:g}"/>')
+    out[at:at] = [
+        '  <!-- crest=: a note\'s sample peak over its loudest 50 ms, dB, the largest of 392 string notes measured in Kontakt 8',
+        f'       (tools/soundlibraries/sso_crest.json, median {CREST["crest"]["median"]:g}): the master trim adds it to each note\'s',
+        '       calibrated level (libmscore/contextlevel.h › Gain stage and master trim) -->']
 contextLevelCount = 0
 shortFromCount = 0
 onsetCount = 0
@@ -1483,10 +1844,58 @@ for i, line in enumerate(out):
             if b:
                 end = '/>' if line.endswith('/>') else '>'
                 out[i] = line[:-len(end)] + f' bend="{b:g}"' + end
+            if MONO.search(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + ' mono="1"' + end
+            if current in PLAIN_SHIFT:
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + f' plainShift="{PLAIN_SHIFT[current]["shiftMs"]:g}"' + end
+                if 'attackMs' in PLAIN_SHIFT[current]:
+                    out[i] = out[i][:-len(end)] + f' plainAttack="{PLAIN_SHIFT[current]["attackMs"]:g}"' + end
+                if current in BOWED_EARLY:
+                    out[i] = out[i][:-len(end)] + f' bowedEarly="{BOWED_EARLY[current]:g}"' + end
+                if current in BOWED_ARRIVE:
+                    out[i] = out[i][:-len(end)] + ' bowedArrive="%s"' % ' '.join(f'{l:g}:{a:g}' for l, a in BOWED_ARRIVE[current]) + end
+            if staccatoAttributes(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + staccatoAttributes(current) + end
+            if speedAttributes(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + speedAttributes(current) + end
+            if scriptAttributes(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + scriptAttributes(current) + end
+            if lowCut(current):
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + f' lowCut="{lowCut(current):g}"' + end
             if current in SECTION_FADERS:
                 end = '/>' if out[i].endswith('/>') else '>'
-                out[i] = out[i][:-len(end)] + f' sectionLevel="{sectionLevel(current):g}"' + end
+                out[i] = out[i][:-len(end)] + sectionLevelAttributes(current) + realRangeAttributes(current) + end
+            elif current in REAL_RANGE_WINDS:
+                end = '/>' if out[i].endswith('/>') else '>'
+                # (the gap patches, section_balance_cl.py GAP, real_range.py GAP_OWN / GAP_FAMILY: sectionLevel2 only)
+                level = sectionLevelAttributes(current) if current in SECTION_FADERS_WINDS else \
+                    f' sectionLevel2="{round(SECTION_LEVEL2[current], 3):g}"' if current in SECTION_LEVEL2 else ''
+                out[i] = out[i][:-len(end)] + level + realRangeAttributes(current) + end
+            elif current in SECTION_LEVEL2:
+                # a patch with Clark & Luce's balance only (section_balance_cl.py GAP: no sectionLevel)
+                end = '/>' if out[i].endswith('/>') else '>'
+                out[i] = out[i][:-len(end)] + f' sectionLevel2="{round(SECTION_LEVEL2[current], 3):g}"' \
+                         + realRangeAttributes(current) + end
+        if current and micAttributes(current):
+            end = '/>' if out[i].endswith('/>') else '>'
+            out[i] = out[i][:-len(end)] + micAttributes(current) + end
         continue
+    m = re.match(r'    <Articulation name="([^"]*)" value="(\d+)"', line)
+    if m and current in HELD_OFFSETS and m.group(1) in HELD_OFFSETS[current]:
+        assert line.endswith('/>'), line
+        line = out[i] = line[:-2] + f' heldOffset="{HELD_OFFSETS[current][m.group(1)]}"/>'
+        heldOffsetCount += 1
+    m = re.match(r'    <Articulation name="[^"]*" value="1"', line)
+    if m and current in EVEN_KEYS:
+        assert line.endswith('/>') and ' techniques="long' in line, line
+        line = out[i] = line[:-2] + ' keyLevels="%s"/>' % ' '.join(f'{p}:{v:g}' for p, v in EVEN_KEYS[current].items())
+        evenKeysCount += 1
     m = re.match(r'    <Articulation name="[^"]*" value="(\d+)"', line)
     if not m or current not in TIMING:
         continue
@@ -1506,7 +1915,13 @@ for i, line in enumerate(out):
         if current in LEGATO_VELOCITY:
             extra += f' legatoVelocity="{LEGATO_VELOCITY[current]}"'
         if current in PERFORMANCE_TECHNIQUE_PATCHES:
-            extra += PERFORMANCE_TECHNIQUES
+            extra += performanceTechniques(current)
+            ao = attackOnset(current)
+            if ao:
+                extra += f' attackOnset="{ao}"'
+            al = accentedLevel(current)
+            if al:
+                extra += f' accentedLevel="{al}"'
             if current in BAD_SAMPLES:
                 extra += ' avoid="' + ' '.join(
                     (f"{b['keys'][0]}" if b['keys'][0] == b['keys'][1] else f"{b['keys'][0]}-{b['keys'][1]}")
@@ -1515,6 +1930,10 @@ for i, line in enumerate(out):
         if c:
             extra += f' contextLevel="{c}"'
             contextLevelCount += 1
+        for kind, attr in (('slur', 'contextLevelPlain'), ('stac', 'contextLevelStaccato'), ('single', 'contextLevelSingle')):
+            c = contextLevel(current, sound, kind)
+            if c:
+                extra += f' {attr}="{c}"'
         legatoGridUsed.add(current)
         up, down = octaveDelays(current)
         if up:
@@ -1525,8 +1944,12 @@ for i, line in enumerate(out):
             octaveCount += 1
         if current in LEGATO_GLIDE:
             extra += ' bendGlide="%s"' % ' '.join(f'{g[0]}:{g[1]}:{g[2]}' for g in LEGATO_GLIDE[current]['glide'])
+            if current in LEGATO_GLIDE_FINGERED:
+                extra += ' bendGlideFingered="%s"' % ' '.join(f'{g[0]}:{g[1]}:{g[2]}' for g in LEGATO_GLIDE_FINGERED[current]['glide'])
             if current in BEND_SMOOTHING:
                 extra += f' bendSmoothing="{BEND_SMOOTHING[current]["tau_ms"]}"'
+            if current in RUN_LAG:
+                extra += ' runLag="%s"' % ' '.join(f'{k}:{v[0]:g}:{v[1]:g}' for k, v in RUN_LAG[current].items())
     techniques = re.search(r' techniques="([^"]*)"', line).group(1).split()
     f = shortFrom(current, sound)
     if f:
@@ -1562,4 +1985,6 @@ assert missing <= timedValues, missing - timedValues
 # and Oboe Principal, play no articulation a notation chooses as legato)
 assert set(LEGATO_GRID) & mapInstruments - {'Oboe Principal - Total Performance'} <= legatoGridUsed, \
     set(LEGATO_GRID) & mapInstruments - legatoGridUsed
+assert heldOffsetCount == sum(len(v) for v in HELD_OFFSETS.values()), heldOffsetCount
+assert evenKeysCount == len(EVEN_KEYS), (evenKeysCount, set(EVEN_KEYS))
 open(sys.argv[2],'w').write('\n'.join(out)+'\n')

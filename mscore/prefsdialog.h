@@ -20,6 +20,8 @@
 #ifndef __PREFSDIALOG_H__
 #define __PREFSDIALOG_H__
 
+#include <map>
+
 #include "ui_prefsdialog.h"
 #include "abstractdialog.h"
 #include "preferenceslistwidget.h"
@@ -45,6 +47,8 @@ class PreferenceDialog : public AbstractDialog, private Ui::PrefsDialogBase {
       std::vector<PreferenceItem*> modifiedUiWidgets;
       std::vector<PreferenceItem*> modifiedAudioWidgets;
       PreferencesListWidget* advancedWidget;
+      // an engine's variants (playbackmode.h: Vial Instrumental's own map or "(Fuse)"): engine -> its box
+      std::map<QString, QComboBox*> engineVariantBoxes;
 
       virtual void hideEvent(QHideEvent*);
       void apply();

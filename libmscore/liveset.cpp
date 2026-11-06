@@ -20,6 +20,7 @@
 #include <zlib.h>
 
 #include "liveclips.h"
+#include "livesetwriter.h"
 #include "part.h"
 #include "repeatlist.h"
 #include "score.h"
@@ -171,6 +172,8 @@ struct TrackState {
       QString device;
       ParamTarget param;
       QString paramTargetId;
+      double paramManual { -1 };
+      std::vector<std::pair<Parameter, QString>> parameters;      // Live's panel, each with its AutomationTarget Id
       // the MIDI clip being read
       bool inClip { false };
       int clip { -1 };
@@ -330,6 +333,13 @@ Set parse(const QByteArray& xml)
       std::unique_ptr<TrackState> ts;
       int trackDepth = -1;
       int deviceDepth = -1;
+      int utilityDepth = -1;              // a Utility (StereoGain): MuseScore's when named so
+      bool utilityOurs = false;
+      double utilityGain = 1;
+      int lowCutDepth = -1;               // an EQ Eight (Eq8): MuseScore's low cut when named so
+      bool lowCutOurs = false, lowCutOn = true;
+      double lowCutHz = 0;
+      std::vector<QString> lowCutTargets;  // ([levels] lowCut 2) its band 1 / 2 Freq's AutomationTarget ids
       int paramDepth = -1;
       int clipDepth = -1;
       int envelopeDepth = -1;
@@ -446,6 +456,31 @@ Set parse(const QByteArray& xml)
                         else if (n == "LowerDisplayString")
                               lower = value.toString();
                         }
+                  // MuseScore's gain stage: a Utility named LiveSetWriter::UTILITY_NAME
+                  else if (n == "StereoGain" && parent() == "Devices") {
+                        utilityDepth = depth;
+                        utilityOurs = false;
+                        utilityGain = 1;
+                        }
+                  else if (utilityDepth >= 0 && n == "UserName" && depth == utilityDepth + 1)
+                        utilityOurs = value == QLatin1String(LiveSetWriter::UTILITY_NAME);
+                  else if (utilityDepth >= 0 && n == "Manual" && parent() == "Gain" && depth == utilityDepth + 2)
+                        utilityGain = num(value);
+                  // [levels] lowCut: an EQ Eight named LiveSetWriter::LOW_CUT_NAME (its band 1's frequency, its On)
+                  else if (n == "Eq8" && parent() == "Devices") {
+                        lowCutDepth = depth;
+                        lowCutOurs = false;
+                        lowCutOn = true;
+                        lowCutHz = 0;
+                        lowCutTargets.clear();
+                        }
+                  else if (lowCutDepth >= 0 && n == "UserName" && depth == lowCutDepth + 1)
+                        lowCutOurs = value == QLatin1String(LiveSetWriter::LOW_CUT_NAME);
+                  else if (lowCutDepth >= 0 && n == "Manual" && parent() == "On" && depth == lowCutDepth + 2)
+                        lowCutOn = value == QLatin1String("true");
+                  else if (lowCutDepth >= 0 && n == "Manual" && parent() == "Freq" && parent(2) == "ParameterA"
+                           && parent(3) == "Bands.0" && depth == lowCutDepth + 4)
+                        lowCutHz = num(value);
                   // plug-ins
                   else if (n == "PluginDevice" || n == "AuPluginDevice") {
                         deviceDepth = depth;
@@ -463,7 +498,10 @@ Set parse(const QByteArray& xml)
                         ts->param.kind = Envelope::Kind::PARAMETER;
                         ts->param.device = ts->device;
                         ts->paramTargetId.clear();
+                        ts->paramManual = -1;
                         }
+                  else if (paramDepth >= 0 && n == "Manual" && parent() == "ParameterValue" && depth == paramDepth + 2)
+                        ts->paramManual = num(value);
                   else if (paramDepth >= 0 && n == "ParameterName" && depth == paramDepth + 1)
                         ts->param.name = value.toString();
                   else if (paramDepth >= 0 && n == "ParameterId" && depth == paramDepth + 1)
@@ -481,6 +519,14 @@ Set parse(const QByteArray& xml)
                               ts->targets[a.value("Id").toString()] = t;
                         else
                               ts->param = t, paramDepth = depth, ts->paramTargetId.clear();
+                        }
+                  // ([levels] lowCut 2: MuseScore's EQ Eight's cut bands' Freq, named so at the device's end when it is ours)
+                  else if (lowCutDepth >= 0 && n == "AutomationTarget" && a.hasAttribute("Id") && parent() == "Freq"
+                           && parent(2) == "ParameterA" && (parent(3) == "Bands.0" || parent(3) == "Bands.1")) {
+                        ParamTarget t;
+                        t.name = "Freq";
+                        ts->targets[a.value("Id").toString()] = t;
+                        lowCutTargets.push_back(a.value("Id").toString());
                         }
                   // any other automation target: Live's own (mixer, devices), for the report
                   else if (n == "AutomationTarget" && a.hasAttribute("Id")) {
@@ -552,10 +598,35 @@ Set parse(const QByteArray& xml)
                         if (depth == paramDepth) {
                               if (!ts->paramTargetId.isEmpty())
                                     ts->targets[ts->paramTargetId] = ts->param;
+                              if (ts->param.kind == Envelope::Kind::PARAMETER && !ts->param.name.isEmpty()) {
+                                    Parameter pp;
+                                    pp.device = ts->param.device;
+                                    pp.name = ts->param.name;
+                                    pp.id = ts->param.id;
+                                    pp.manual = ts->paramManual;
+                                    ts->parameters.push_back({ pp, ts->paramTargetId });
+                                    }
                               paramDepth = -1;
                               }
                         else if (depth == deviceDepth)
                               deviceDepth = -1;
+                        else if (depth == lowCutDepth) {
+                              if (lowCutOurs && !ts->track.hasMuseScoreLowCut) {
+                                    ts->track.hasMuseScoreLowCut = true;
+                                    ts->track.museScoreLowCutHz = lowCutOn ? lowCutHz : 0.0;
+                                    }
+                              if (lowCutOurs)
+                                    for (const QString& id : lowCutTargets)
+                                          ts->targets[id].name = LiveSetWriter::LOW_CUT_NAME;
+                              lowCutDepth = -1;
+                              }
+                        else if (depth == utilityDepth) {
+                              if (utilityOurs && !ts->track.hasMuseScoreGain) {
+                                    ts->track.hasMuseScoreGain = true;
+                                    ts->track.museScoreGain = utilityGain;
+                                    }
+                              utilityDepth = -1;
+                              }
                         else if (depth == envelopeDepth) {
                               if (!env.pointee.isEmpty() && !env.events.empty())
                                     ts->envelopes.push_back(env);
@@ -585,6 +656,12 @@ Set parse(const QByteArray& xml)
                               midiInput(t, upper, lower);
                               for (const RawEnvelope& e : ts->envelopes)
                                     t.envelopes.push_back(resolve(e, *ts));
+                              for (auto& pp : ts->parameters) {
+                                    for (const RawEnvelope& e : ts->envelopes)
+                                          if (!e.inClip && !pp.second.isEmpty() && e.pointee == pp.second)
+                                                pp.first.automated = true;
+                                    t.parameters.push_back(pp.first);
+                                    }
                               set.tracks.push_back(t);
                               ts.reset();
                               trackDepth = -1;
@@ -682,6 +759,7 @@ std::vector<PartInfo> partInfos(const MasterScore* score, const QStringList& por
             pi.part = r.part;
             pi.portName = r.port < portNames.size() ? portNames[r.port] : QString();
             pi.channel = r.channel + 1;
+            pi.instrument = r.instrument;
             for (const SoundLib::Controller& c : r.instrument->allControllers)
                   pi.targets.push_back({ c.id, c.param, c.name, c.cc });
             out.push_back(pi);
