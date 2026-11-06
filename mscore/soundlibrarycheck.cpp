@@ -314,13 +314,8 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       _info = new QLabel(this);
       _info->setWordWrap(true);
       const bool makes = library && SoundLibraryHost::makesSetups(*library);
-      _info->setText((makes ? tr("Checks the library's map against its plug-in, on every patch of the library: MuseScore sets each "
-                                 "one up by itself (from its .nki, at the library's defaults with UACC switching). ")
-                            : tr("Checks the library's map against its plug-in, on every patch that has a setup. "))
-                     + tr("Check plays every articulation of the ticked patches: it keeps a picture of the plug-in "
-                          "after each switch and listens whether the switch took. Leave the computer alone while it runs "
-                          "(the plug-in's window has to stay visible). The results go in a .zip to hand back. Patches "
-                          "not in the map are always scanned."));
+      _info->setText(tr("Checks the library's map against its plug-in by playing every articulation of the ticked patches. "
+                        "Leave the computer alone while it runs. The results are saved in a .zip file."));
       layout->addWidget(_info);
       _table = new QTableWidget(this);
       _table->setColumnCount(4);
@@ -329,29 +324,24 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       _table->verticalHeader()->hide();
       _table->setSelectionMode(QAbstractItemView::NoSelection);
       layout->addWidget(_table);
-      _scan = new QCheckBox(tr("Scan every value (0–127) too, to find articulations the map lacks (about a minute more per patch)"), this);
+      _scan = new QCheckBox(tr("Scan every value (0–127)"), this);
       layout->addWidget(_scan);
-      _tryAll = new QCheckBox(tr("Try every controller: with Extract plug-in data, also try every MIDI controller and parameter "
-                                 "on each ticked patch (its window opens)"), this);
+      _tryAll = new QCheckBox(tr("Try every controller"), this);
       layout->addWidget(_tryAll);
       // (the owner, 2026-09-27: a faster way than searching each controller's value in the patch)
-      _quick = new QCheckBox(tr("Quick: put the patch back by reloading it instead of searching each controller's own value, "
-                                "and tell which named control each controller moves (about 5 minutes per patch instead of 15-20)"), this);
+      _quick = new QCheckBox(tr("Quick"), this);
       _quick->setChecked(true);
       _quick->setEnabled(false);
       connect(_tryAll, &QCheckBox::toggled, _quick, &QCheckBox::setEnabled);
       layout->addWidget(_quick);
       // (off by default: about 25 s a patch, and most likely the same across a library; the owner,
       // 2026-09-27: measure it on one patch per family, not on all 700)
-      _pitchBend = new QCheckBox(tr("Measure pitch bend: with Extract plug-in data, how far pitch bend bends each ticked patch "
-                                    "(about 25 s more per patch; one patch per family is enough)"), this);
+      _pitchBend = new QCheckBox(tr("Measure pitch bend"), this);
       layout->addWidget(_pitchBend);
       // (the owner, 2026-09-28: "verify that dynamics is consistent across all techniques")
-      _dynamics = new QCheckBox(tr("Dynamics: measure each articulation's loudness from soft to loud (about 20 s more per articulation); "
-                                   "playback then plays short notes as loud as the part's held notes (tick the Performance patches too: "
-                                   "held notes play them). The summary shows the balance"), this);
+      _dynamics = new QCheckBox(tr("Measure dynamics"), this);
       layout->addWidget(_dynamics);
-      _dynamicsOnly = new QCheckBox(tr("Dynamics only: skip the articulation check (much faster)"), this);
+      _dynamicsOnly = new QCheckBox(tr("Dynamics only"), this);
       _dynamicsOnly->setEnabled(false);
       connect(_dynamics, &QCheckBox::toggled, _dynamicsOnly, &QCheckBox::setEnabled);
       layout->addWidget(_dynamicsOnly);
@@ -375,14 +365,13 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
       layout->addWidget(_progress);
       QDialogButtonBox* buttons = new QDialogButtonBox(this);
       // (not when MuseScore makes the setups: the map lists all the library's patches)
-      _add = makes ? new QPushButton(this) : buttons->addButton(tr("Add a patch…"), QDialogButtonBox::ActionRole);
+      _add = makes ? new QPushButton(this) : buttons->addButton(tr("Add Patch…"), QDialogButtonBox::ActionRole);
       _add->setVisible(!makes);
       connect(_add, &QPushButton::clicked, this, &ArticulationCheckDialog::addPatch);
-      _extract = buttons->addButton(tr("Extract plug-in data"), QDialogButtonBox::ActionRole);
-      _extract->setToolTip(tr("Everything the plug-in tells about itself, empty and with each ticked patch (and, ticked above, "
-                              "what every controller does), in a .zip to hand back"));
+      _extract = buttons->addButton(tr("Extract Plug-in Data"), QDialogButtonBox::ActionRole);
+      _extract->setToolTip(tr("Save everything the plug-in reports about itself in a .zip file"));
       connect(_extract, &QPushButton::clicked, this, &ArticulationCheckDialog::extract);
-      _tickAll = buttons->addButton(tr("Tick all"), QDialogButtonBox::ActionRole);
+      _tickAll = buttons->addButton(tr("Tick All"), QDialogButtonBox::ActionRole);
       // (ticks every patch that has a setup; clicked again, unticks them)
       connect(_tickAll, &QPushButton::clicked, this, [this]() {
             const bool tick = !_tickAll->property("ticked").toBool();
@@ -391,7 +380,7 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
                   _table->item(row, 0)->setCheckState(setup && tick ? Qt::Checked : Qt::Unchecked);
                   }
             _tickAll->setProperty("ticked", tick);
-            _tickAll->setText(tick ? tr("Untick all") : tr("Tick all"));
+            _tickAll->setText(tick ? tr("Untick All") : tr("Tick All"));
             });
       // (the owner, 2026-09-28: the scan of the patches the map doesn't use, faster without missing
       // anything: of SSO's 541, the files show 518 with one sound only; the map marks the 23 with
@@ -403,9 +392,8 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
                                    [&](const SoundLib::LibInstrument& p) { return toScan(p, true); })
                        || std::any_of(_library->instruments.begin(), _library->instruments.end(),
                                       [&](const SoundLib::LibInstrument& p) { return toScan(p, false); }))) {
-            QPushButton* toScanButton = buttons->addButton(tr("Tick the patches to scan"), QDialogButtonBox::ActionRole);
-            toScanButton->setToolTip(tr("The patches whose articulation values or keys are not known yet: "
-                                        "they are scanned (a kit's own drum patches: every key)"));
+            QPushButton* toScanButton = buttons->addButton(tr("Tick Patches to Scan"), QDialogButtonBox::ActionRole);
+            toScanButton->setToolTip(tr("Tick the patches whose articulations are not known yet"));
             connect(toScanButton, &QPushButton::clicked, this, [this, toScan]() {
                   for (int row = 0; row < _table->rowCount(); ++row) {
                         const bool setup = _table->item(row, 1)->data(Qt::UserRole).toBool();
@@ -414,7 +402,7 @@ ArticulationCheckDialog::ArticulationCheckDialog(std::shared_ptr<const SoundLib:
                         }
                   });
             }
-      _all = buttons->addButton(tr("Tick what needs checking"), QDialogButtonBox::ActionRole);
+      _all = buttons->addButton(tr("Tick Patches to Check"), QDialogButtonBox::ActionRole);
       _check = buttons->addButton(tr("Check"), QDialogButtonBox::AcceptRole);
       _close = buttons->addButton(QDialogButtonBox::Close);
       connect(_all, &QPushButton::clicked, this, [this]() {
@@ -608,8 +596,8 @@ void ArticulationCheckDialog::addPatch()
       if (_running || !_library)
             return;
       bool ok = false;
-      const QString name = QInputDialog::getText(this, tr("Add a Patch"),
-         tr("The patch's name, as the plug-in lists it (e.g. \"Trombones a5\"):"), QLineEdit::Normal, QString(), &ok).trimmed();
+      const QString name = QInputDialog::getText(this, tr("Add Patch"),
+         tr("Patch name, as the plug-in lists it:"), QLineEdit::Normal, QString(), &ok).trimmed();
       if (!ok || name.isEmpty())
             return;
       for (const Row& row : _rows) {
@@ -1159,7 +1147,7 @@ void ArticulationCheckDialog::rebuild()
       {
       _table->setRowCount(0);
       if (!_library) {
-            _status->setText(tr("No sound library is chosen (Preferences > I/O > Sound Library)."));
+            _status->setText(tr("No sound library is selected (Preferences > I/O > Sound Library)."));
             _check->setEnabled(false);
             return;
             }
@@ -1197,7 +1185,7 @@ void ArticulationCheckDialog::rebuild()
             _table->setItem(i, 0, name);
             const bool makes = SoundLibraryHost::makesSetups(*_library);
             QTableWidgetItem* state = new QTableWidgetItem(setup ? (makes ? tr("Made by MuseScore") : tr("Ready"))
-                                                                 : (makes ? tr("Its .nki was not found") : tr("No setup")));
+                                                                 : (makes ? tr("Missing .nki") : tr("No setup")));
             if (makes)
                   state->setToolTip(QDir::toNativeSeparators(ins.nki));
             state->setData(Qt::UserRole, setup);
@@ -1215,10 +1203,10 @@ void ArticulationCheckDialog::rebuild()
       _table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
       const QString folder = SoundLibraryHost::libraryFolder(*_library);
       if (SoundLibraryHost::makesSetups(*_library) && folder.isEmpty())
-            _status->setText(tr("%1 was not found on this computer: choose its folder in View > Sound Library > Library folder….")
+            _status->setText(tr("%1 was not found on this computer. Choose its folder in the Sound Library window.")
                              .arg(_library->name));
       else
-            _status->setText(tr("%1 of %2 patches can be checked; %3 need checking (ticked).")
+            _status->setText(tr("%1 of %2 patches can be checked, %3 need checking.")
                              .arg(ready).arg(_rows.size()).arg(due));
       }
 
@@ -1307,14 +1295,14 @@ void ArticulationCheckDialog::check()
       for (int row = 0; row < _table->rowCount(); ++row) {
             if (_table->item(row, 0)->checkState() == Qt::Checked) {
                   if (!_table->item(row, 1)->data(Qt::UserRole).toBool()) {
-                        warn(tr("%1 has no setup (its .nki was not found): untick it.").arg(_rows[row].instrument->name));
+                        warn(tr("%1 has no setup. Untick it.").arg(_rows[row].instrument->name));
                         return;
                         }
                   chosen.push_back(row);
                   }
             }
       if (chosen.empty()) {
-            warn(tr("Tick the patches to check."));
+            warn(tr("Select the patches to check."));
             return;
             }
       if (seq && seq->isPlaying())
@@ -1434,7 +1422,7 @@ void ArticulationCheckDialog::check()
             say(QString("done in %1 min: %2").arg(runClock.elapsed() / 60000).arg(QDir::toNativeSeparators(zipPath)));
       else
             QMessageBox::information(this, windowTitle(),
-               tr("The results are in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
+               tr("The results are saved in\n%1").arg(QDir::toNativeSeparators(zipPath)));
 #endif
       }
 
@@ -3355,11 +3343,11 @@ void ArticulationCheckDialog::extract()
                   notSetUp << _rows[row].instrument->name;
             }
       if (!notSetUp.isEmpty() && !_headless) {
-            QMessageBox::warning(this, windowTitle(), tr("No setup (their .nki was not found; untick them): %1").arg(notSetUp.join(", ")));
+            QMessageBox::warning(this, windowTitle(), tr("No setup for %1. Untick them.").arg(notSetUp.join(", ")));
             return;
             }
       if (_tryAll->isChecked() && chosen.empty()) {
-            QMessageBox::information(this, windowTitle(), tr("Tick the patches whose controllers to try."));
+            QMessageBox::information(this, windowTitle(), tr("Select the patches whose controllers to try."));
             return;
             }
       if (seq && seq->isPlaying())
@@ -3525,7 +3513,7 @@ void ArticulationCheckDialog::extract()
             }
       QDesktopServices::openUrl(QUrl::fromLocalFile(root));
       QMessageBox::information(this, windowTitle(),
-         tr("The plug-in's data is in\n%1\n\nHand this .zip back (drag it into the chat).").arg(QDir::toNativeSeparators(zipPath)));
+         tr("The plug-in data is saved in\n%1").arg(QDir::toNativeSeparators(zipPath)));
 #endif
       }
 

@@ -522,8 +522,8 @@ bool MuseScore::saveFile(MasterScore* score)
             return false;
       if (LiveIntegration::LiveClipEditor::instance()->unsavedClipScore(score)) {
             // a Live clip edited here, never saved: no "save as .mscz" dialog; Live's API can't save the set
-            showMessage(tr("Clip edits are already in Live \u2014 save the Live set in Live to keep them "
-                           "(File > Save As\u2026 makes a score file)"), 8000);
+            showMessage(tr("Clip edits are in Live: save the Live set in Live to keep them, "
+                           "or use File > Save As\u2026"), 8000);
             return true;
             }
       if (score->created()) {

@@ -343,7 +343,7 @@ void EvenAutoMeasurer::loaded(const EvenAuto::Job& job, std::shared_ptr<Vst3Synt
             _failed.insert(job.instance);
             logLine(QString("even levels: could not load %1: %2").arg(job.patch, error));
             if (mscore)
-                  mscore->showMessage(tr("Even levels: could not load %1 for measuring: %2").arg(job.patch, error), 10000);
+                  mscore->showMessage(tr("Even levels: cannot load %1: %2").arg(job.patch, error), 10000);
             }
       else {
             std::unique_ptr<Instance> in(new Instance);
@@ -599,8 +599,8 @@ void EvenAutoMeasurer::countdownStep()
       const double speed = _speed > 0 ? _speed : EvenLevels::RENDER_SPEED;
       QString when = tr("playing in ~%1 s").arg(std::max(1, int(std::ceil(audio / speed))));
       if (loading(_session->pendingInstances(_holdFrom, _holdTo)))
-            when = tr("loading the plug-in, then ~%1 s").arg(std::max(1, int(std::ceil(audio / speed))));
-      mscore->showMessage(tr("Even levels: measuring %1 … %2 (Stop cancels)").arg(what.join("; "), when), 0);
+            when = tr("loading, then ~%1 s").arg(std::max(1, int(std::ceil(audio / speed))));
+      mscore->showMessage(tr("Even levels: measuring %1, %2").arg(what.join("; "), when), 0);
       }
 
 void EvenAutoMeasurer::cancelHold()

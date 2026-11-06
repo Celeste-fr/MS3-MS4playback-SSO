@@ -741,7 +741,7 @@ bool AutomationLanes::duplicateTimeSelection()
       _cachedTag = QString("\x01");
       if (next.first < 0) {
             if (mscore)
-                  mscore->showMessage(tr("Duplicate: the score ends here"), 1500);
+                  mscore->showMessage(tr("Cannot duplicate: end of score"), 1500);
             return true;
             }
       // the bars after selected: Ctrl+D again goes on
@@ -756,7 +756,7 @@ bool AutomationLanes::duplicateTimeSelection()
                   mscore->endCmd();       // (the selection's views: the Inspector, the lanes …)
             }
       if (mscore)
-            mscore->showMessage(tr("Duplicated: measures %1–%2").arg(m1 ? m1->no() + 1 : 0).arg(m2 ? m2->no() + 1 : 0), 1500);
+            mscore->showMessage(tr("Duplicated measures %1–%2").arg(m1 ? m1->no() + 1 : 0).arg(m2 ? m2->no() + 1 : 0), 1500);
       _notes->changed();
       updateSpace();
       _view->update();
@@ -801,7 +801,7 @@ QString AutomationLanes::gridLabel() const
       if (!_snapOn)
             return tr("Off");
       if (_gridLevel > 0)
-            return tr("Bar");
+            return tr("Measure");
       return QString("1/%1").arg(1920 / gridTicks(_hover.x() >= 0 ? xToTick(_hover.x()) : 0));
       }
 
@@ -963,10 +963,10 @@ AutomationLanes::Control AutomationLanes::controlAt(const QRectF& header, const 
 QString AutomationLanes::controlTip(Control c) const
       {
       switch (c) {
-            case Control::ADD:  return tr("Add a lane");
+            case Control::ADD:  return tr("Add lane");
             case Control::ALL:  return tr("Show all lanes");
-            case Control::DRAW: return tr("Draw Mode: drag to draw steps as wide as the grid (Alt: a free line)");
-            case Control::GRID: return tr("Snap grid and beat spacing (Ctrl+1 narrower, Ctrl+2 wider, Ctrl+4 snap on / off)");
+            case Control::DRAW: return tr("Draw Mode (hold Alt to draw freely)");
+            case Control::GRID: return tr("Grid (Ctrl+1 narrower, Ctrl+2 wider, Ctrl+4 snap on/off)");
             default:            return QString();
             }
       }
@@ -1050,7 +1050,7 @@ void AutomationLanes::gridMenu(const QPoint& globalPos)
                   });
             };
       choice(tr("Off"), !_snapOn, false, _gridLevel);
-      choice(tr("Bar"), _snapOn && _gridLevel > 0, true, 1);
+      choice(tr("Measure"), _snapOn && _gridLevel > 0, true, 1);
       const int tick = _hover.x() >= 0 ? xToTick(_hover.x()) : 0;
       for (int level = 0; ; --level) {
             const int t = gridTicksAt(tick, level);
@@ -1063,7 +1063,7 @@ void AutomationLanes::gridMenu(const QPoint& globalPos)
       even->setCheckable(true);
       Score* sc = score();
       even->setChecked(sc && sc->lineEvenBeats());
-      even->setToolTip(tr("Every beat the same width in Continuous View (the view only)"));
+      even->setToolTip(tr("Show every beat at the same width in Continuous View"));
       QAction* a = menu.exec(globalPos);
       if (a == even && (sc = score())) {
             // (the view only, every beat the same width: not saved, not an undo step)
@@ -1562,7 +1562,7 @@ void AutomationLanes::addLaneMenu(const Row& r, const QPoint& globalPos)
             a->setData(t.id);
             }
       if (menu.isEmpty())
-            menu.addAction(tr("(every lane is shown)"))->setEnabled(false);
+            menu.addAction(tr("(all lanes shown)"))->setEnabled(false);
       QAction* a = menu.exec(globalPos);
       if (a && !a->data().toString().isEmpty()) {
             _folds.setOpen(score(), r.part, true);
@@ -1880,26 +1880,26 @@ bool AutomationLanes::mouseRelease(QMouseEvent* ev)
                   select(r, { i });
                   _lastAddedTick = tick;
                   _lastAddedAt = QDateTime::currentMSecsSinceEpoch();
-                  commit(tr("Automation: point added"));
+                  commit(tr("Add Automation Point"));
                   return true;
                   }
             case Drag::MOVE:
                   _hoverText.clear();
-                  commit(tr("Automation: moved"));
+                  commit(tr("Move Automation"));
                   return true;
             case Drag::CURVE:
                   _hoverText.clear();
-                  commit(tr("Automation: curve"));
+                  commit(tr("Change Automation Curve"));
                   return true;
             case Drag::DRAW:
             case Drag::FREE:
                   _hoverText.clear();
                   _freePath.clear();
-                  commit(tr("Automation: drawn"));
+                  commit(tr("Draw Automation"));
                   return true;
             case Drag::SEGMENT:
                   _hoverText.clear();
-                  commit(tr("Automation: segment moved"));
+                  commit(tr("Move Automation Segment"));
                   return true;
             case Drag::RUBBER:
             case Drag::RESIZE:
@@ -1938,7 +1938,7 @@ bool AutomationLanes::mouseDoubleClick(QMouseEvent* ev)
             if (s >= 0) {
                   Edit::setSegmentCurvature(l, s, 0);
                   setLane(r.master, l);
-                  commit(tr("Automation: straight"));
+                  commit(tr("Straighten Automation"));
                   }
             return true;
             }
@@ -1953,7 +1953,7 @@ bool AutomationLanes::mouseDoubleClick(QMouseEvent* ev)
             Edit::removePoints(l, { pt });
             setLane(r.master, l);
             select(r, {});
-            commit(tr("Automation: point removed"));
+            commit(tr("Remove Automation Point"));
             }
       return true;
       }
@@ -1995,13 +1995,13 @@ void AutomationLanes::hover(const QPoint& pos)
       // a header row's control, or its name: a tooltip
       QString tip;
       if (edge)
-            tip = tr("Drag: this lane's height; Alt+drag: every lane's\nDouble-click: the default height; Alt+double-click: every lane's");
+            tip = tr("Drag to resize (Alt: all lanes)\nDouble-click to reset (Alt: all lanes)");
       else if (r && r->target.isEmpty()) {
             const QRectF h = headerRect(*r);
             if (h.contains(pos)) {
                   const Control c = controlAt(h, pos);
                   tip = c != Control::NONE ? controlTip(c)
-                                           : tr("Click: open or fold this part's lanes; Alt+click: every part's");
+                                           : tr("Click to show or hide lanes (Alt: all parts)");
                   }
             }
       if (!tip.isEmpty()) {
@@ -2081,11 +2081,11 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
       QAction* writeNotes = nullptr;
       if (velocity) {
             menu.addSeparator();
-            scale = menu.addAction(tr("Scale the Notes' Velocities (0-200 %)"));
-            absolute = menu.addAction(tr("Set the Velocities (1-127)"));
+            scale = menu.addAction(tr("Scale Velocities (0-200 %)"));
+            absolute = menu.addAction(tr("Set Velocities (1-127)"));
             menu.addSeparator();
-            shape = menu.addAction(tr("Shape While Playing (Notes Unchanged)"));
-            writeNotes = menu.addAction(tr("Write into the Notes"));
+            shape = menu.addAction(tr("Shape Playback Only"));
+            writeNotes = menu.addAction(tr("Write to Notes"));
             for (QAction* x : { scale, absolute, shape, writeNotes })
                   x->setCheckable(true);
             scale->setChecked(LiveClipEdit::velMode(l) == LiveClipEdit::VelMode::SCALE);
@@ -2126,7 +2126,7 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
       if (a == scale || a == absolute) {
             LiveClipEdit::setVelMode(l, a == scale ? LiveClipEdit::VelMode::SCALE : LiveClipEdit::VelMode::SET);
             setLane(r.master, l);
-            commit(a == scale ? tr("Velocity: scales the notes' velocities") : tr("Velocity: sets the velocities"));
+            commit(a == scale ? tr("Scale Velocities") : tr("Set Velocities"));
             }
       else if (a == shape || a == writeNotes) {
             if (a == writeNotes && LiveClipEdit::velOutput(l) != LiveClipEdit::VelOutput::WRITE
@@ -2134,7 +2134,7 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
                   return true;
             LiveClipEdit::setVelOutput(l, a == shape ? LiveClipEdit::VelOutput::SHAPE : LiveClipEdit::VelOutput::WRITE);
             setLane(r.master, l);
-            commit(a == shape ? tr("Velocity: shaped while playing") : tr("Velocity: written into the notes"));
+            commit(a == shape ? tr("Shape Velocities") : tr("Write Velocities"));
             }
       else if (a == editValue || a == add) {
             bool ok = false;
@@ -2159,23 +2159,23 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
                   Edit::movePoints(l, sel, 0, v - l.points[size_t(pt)].value);
                   }
             setLane(r.master, l);
-            commit(tr("Automation: value"));
+            commit(tr("Change Automation Value"));
             }
       else if (a == del) {
             Edit::removePoints(l, { pt });
             setLane(r.master, l);
             select(r, {});
-            commit(tr("Automation: point removed"));
+            commit(tr("Remove Automation Point"));
             }
       else if (a == step || a == linear) {
             Edit::setSegmentCurve(l, seg, a == step ? Curve::STEP : Curve::LINEAR);
             setLane(r.master, l);
-            commit(tr("Automation: segment"));
+            commit(tr("Change Automation Segment"));
             }
       else if (a == straight) {
             Edit::setSegmentCurvature(l, seg, 0);
             setLane(r.master, l);
-            commit(tr("Automation: straight"));
+            commit(tr("Straighten Automation"));
             }
       else if (a == simplify) {
             const int t1 = span ? selT1 : l.points.front().tick;
@@ -2187,7 +2187,7 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
                   if (l.points[size_t(i)].tick >= t1 && l.points[size_t(i)].tick <= t2)
                         sel.push_back(i);
             select(r, sel);
-            commit(tr("Automation: simplified"));
+            commit(tr("Simplify Automation"));
             }
       else if (shapeOf.count(a)) {
             const std::pair<int, int> cell = span ? std::make_pair(selT1, selT2) : gridCell(tick, false);
@@ -2200,13 +2200,13 @@ bool AutomationLanes::contextMenu(const QPoint& pos, const QPoint& globalPos)
                   if (l.points[size_t(i)].tick >= cell.first && l.points[size_t(i)].tick <= cell.second)
                         sel.push_back(i);
             select(r, sel);
-            commit(tr("Automation: shape"));
+            commit(tr("Insert Automation Shape"));
             }
       else if (a == clear) {
             l.points.clear();
             setLane(r.master, l);
             select(r, {});
-            commit(tr("Automation: lane cleared"));
+            commit(tr("Clear Automation Lane"));
             }
       else if (a == hide)
             showLane(r.part, r.target, false);
@@ -2266,26 +2266,25 @@ bool AutomationLanes::engineMenu(const Row& r, const QPointF& p, const QPoint& g
       else if (a == fade) {
             bool ok = false;
             const int ms = QInputDialog::getInt(_view, tr("Engine switch"),
-                                                tr("Fade length (ms). It is kept with the switch for a later version; "
-                                                   "for now the engine always changes at once at the switch."),
+                                                tr("Fade length (ms):"),
                                                 EngineLane::fadeMs(l, tick), 0, 60000, 10, &ok);
             if (!ok)
                   return true;
             EngineLane::setFadeMs(l, tick, ms);
             setLane(r.master, l);
-            commit(tr("Engine: fade %1 ms").arg(ms));
+            commit(tr("Engine Fade: %1 ms").arg(ms));
             }
       else if (a == del) {
             Edit::removePoints(l, { pt });
             setLane(r.master, l);
             select(r, {});
-            commit(tr("Engine: switch removed"));
+            commit(tr("Remove Engine Switch"));
             }
       else if (a == clear) {
             l.points.clear();
             setLane(r.master, l);
             select(r, {});
-            commit(tr("Engine: lane cleared"));
+            commit(tr("Clear Engine Lane"));
             }
       else if (a == hide)
             showLane(r.part, r.target, false);
@@ -2330,19 +2329,19 @@ bool AutomationLanes::leadingMenu(const Row& r, const QPointF& p, const QPoint& 
             else
                   Edit::addPoint(l, tick, v);
             setLane(r.master, l);
-            commit(a == on ? tr("Leading: on") : tr("Leading: off"));
+            commit(a == on ? tr("Leading On") : tr("Leading Off"));
             }
       else if (a == del) {
             Edit::removePoints(l, { pt });
             setLane(r.master, l);
             select(r, {});
-            commit(tr("Leading: point removed"));
+            commit(tr("Remove Leading Point"));
             }
       else if (a == clear) {
             l.points.clear();
             setLane(r.master, l);
             select(r, {});
-            commit(tr("Leading: lane cleared"));
+            commit(tr("Clear Leading Lane"));
             }
       else if (a == hide)
             showLane(r.part, r.target, false);
@@ -2409,7 +2408,7 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
             }
       if (NoteLane::isTarget(_selTarget) && ev->key() == Qt::Key_V) {
             if (!_notes->pasteCopied(_hover) && mscore)
-                  mscore->showMessage(tr("Paste: copy stems of the Velocity or Join lane first (Ctrl+C)"), 2500);
+                  mscore->showMessage(tr("Copy Velocity or Join values first (Ctrl+C)"), 2500);
             return true;
             }
       if (NoteLane::isTarget(_selTarget) && (ev->key() == Qt::Key_Delete || ev->key() == Qt::Key_Backspace)) {
@@ -2439,7 +2438,7 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
                   Edit::removePoints(l, _sel);
                   setLane(_selPart, l);
                   _sel.clear();
-                  commit(tr("Automation: points removed"));
+                  commit(tr("Remove Automation Points"));
                   return true;
             case Qt::Key_C:
             case Qt::Key_X:
@@ -2450,10 +2449,10 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
                         Edit::removePoints(l, _sel);
                         setLane(_selPart, l);
                         _sel.clear();
-                        commit(tr("Automation: cut"));
+                        commit(tr("Cut Automation"));
                         }
                   else if (mscore)
-                        mscore->showMessage(tr("Automation: %n point(s) copied", "", int(_clipboard.size())), 1500);
+                        mscore->showMessage(tr("%n point(s) copied", "", int(_clipboard.size())), 1500);
                   return true;
             case Qt::Key_D:
             case Qt::Key_V: {
@@ -2494,7 +2493,7 @@ bool AutomationLanes::keyPress(QKeyEvent* ev)
                   _selPart = toPart;
                   _selTarget = toTarget;
                   _sel = pasted;
-                  commit(ev->key() == Qt::Key_D ? tr("Automation: duplicated") : tr("Automation: pasted"));
+                  commit(ev->key() == Qt::Key_D ? tr("Duplicate Automation") : tr("Paste Automation"));
                   return true;
                   }
             default:
