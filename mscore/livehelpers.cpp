@@ -316,12 +316,12 @@ InstallResult install(const QVector<Item>& items, bool pinOneDrive)
                   continue;
             const QString dir = QFileInfo(it.file.target).absolutePath();
             if (!QDir().mkpath(dir)) {
-                  r.failed << QObject::tr("%1: can't create the folder").arg(QDir::toNativeSeparators(it.file.target));
+                  r.failed << QObject::tr("%1: cannot create folder").arg(QDir::toNativeSeparators(it.file.target));
                   continue;
                   }
             QFile in(it.file.source);
             if (!in.open(QIODevice::ReadOnly)) {
-                  r.failed << QObject::tr("%1: can't read %2").arg(QDir::toNativeSeparators(it.file.target),
+                  r.failed << QObject::tr("%1: cannot read %2").arg(QDir::toNativeSeparators(it.file.target),
                                                                     QDir::toNativeSeparators(it.file.source));
                   continue;
                   }
@@ -359,8 +359,8 @@ static QString describe(const Item& it)
       {
       const QString name = QFileInfo(it.file.target).fileName();
       const QString where = QDir::toNativeSeparators(QFileInfo(it.file.target).absolutePath());
-      const QString state = it.state == State::MISSING ? QObject::tr("not there yet")
-                                                       : QObject::tr("another version is there: replaced");
+      const QString state = it.state == State::MISSING ? QObject::tr("new")
+                                                       : QObject::tr("different version, replaced");
       return QString("<li><b>%1</b> → %2 (%3)</li>").arg(name.toHtmlEscaped(), where.toHtmlEscaped(), state);
       }
 
@@ -378,9 +378,8 @@ static QString resultText(const QVector<Item>& items, const InstallResult& r)
             t = QObject::tr("Installed %1 of %2 file(s). Not installed:").arg(r.copied.size())
                 .arg(r.copied.size() + r.failed.size()) + "\n" + r.failed.join("\n");
       if (r.oneDrive)
-            t += "\n\n" + (r.pinned ? QObject::tr("Pinned in OneDrive (Always keep on this device).")
-                                    : QObject::tr("The User Library is in OneDrive, and pinning the files there didn't "
-                                                  "work: in Explorer, right-click them > Always keep on this device."));
+            t += "\n\n" + (r.pinned ? QObject::tr("Set to Always keep on this device in OneDrive.")
+                                    : QObject::tr("Could not set the files to Always keep on this device in OneDrive. In Explorer, right-click them and choose Always keep on this device."));
       bool scriptNew = false;
       bool scriptChanged = false;
       bool deviceChanged = false;
@@ -394,15 +393,11 @@ static QString resultText(const QVector<Item>& items, const InstallResult& r)
             }
       const bool running = liveRunning();
       if ((scriptNew || scriptChanged) && running)
-            t += "\n\n" + QObject::tr("Live is running: restart Live to load the MuseScoreEnvelopes script.");
+            t += "\n\n" + QObject::tr("Restart Live to load the MuseScoreEnvelopes script.");
       if (scriptNew)
-            t += "\n\n" + QObject::tr("Then, once, in Live: Settings > Tempo & MIDI > Control Surface: choose "
-                                      "MuseScoreEnvelopes in a free row, Input and Output None.");
+            t += "\n\n" + QObject::tr("In Live, open Settings > Tempo & MIDI and choose MuseScoreEnvelopes under Control Surface, with Input and Output set to None.");
       if (deviceChanged)
-            t += "\n\n" + QObject::tr("MuseScore Link: Live sets refer to the device's file in the User Library, so reopen "
-                                      "your Live sets (or reload the device) to use the new version. Devices that were "
-                                      "dragged in from a MuseScore build folder still point there: re-add them once from "
-                                      "Live's browser (User Library > Presets > MIDI Effects > Max MIDI Effect).");
+            t += "\n\n" + QObject::tr("To use the new MuseScore Link, reopen your Live sets or reload the device. A device added from a MuseScore folder must be added again from Live's browser (User Library > Presets > MIDI Effects > Max MIDI Effect).");
       return t;
       }
 
@@ -429,7 +424,7 @@ static void showPrompt(QWidget* parent, const QString& lib, const QVector<Item>&
       prompt = d;
       d->setAttribute(Qt::WA_DeleteOnClose);
       d->setModal(false);
-      d->setWindowTitle(QObject::tr("Ableton Live helpers"));
+      d->setWindowTitle(QObject::tr("Ableton Live Helpers"));
       d->setWindowFlags(d->windowFlags() & ~Qt::WindowContextHelpButtonHint);
       QVBoxLayout* v = new QVBoxLayout(d);
       QLabel* text = new QLabel(d);
@@ -438,14 +433,10 @@ static void showPrompt(QWidget* parent, const QString& lib, const QVector<Item>&
       QString html;
       if (!note.isEmpty())
             html += "<p>" + note.toHtmlEscaped() + "</p>";
-      html += "<p>" + QObject::tr("Ableton Live 12 is on this computer. Its User Library (%1) lacks these files that "
-                                  "come with this MuseScore, or has other versions of them:")
+      html += "<p>" + QObject::tr("These files that come with MuseScore are missing or different in Live's User Library (%1):")
               .arg(QDir::toNativeSeparators(lib).toHtmlEscaped()) + "</p><ul>" + list + "</ul>";
-      html += "<p>" + QObject::tr("<b>MuseScore Link</b> (a Max for Live device) lets Live play the score and lets you edit "
-                                  "Live clips in MuseScore; the <b>MuseScoreEnvelopes</b> Control Surface script writes a "
-                                  "clip tab's automation lanes into the clip's envelopes.") + "</p>";
-      html += "<p>" + QObject::tr("MuseScore copies only these files (and keeps them on this device if the folder is in "
-                                  "OneDrive). Nothing else is changed.") + "</p>";
+      html += "<p>" + QObject::tr("<b>MuseScore Link</b> is a Max for Live device that lets Live play the score and lets you edit Live clips in MuseScore. <b>MuseScoreEnvelopes</b> is a control surface script that writes automation lanes into clips.") + "</p>";
+      html += "<p>" + QObject::tr("Only these files are copied. Nothing else is changed.") + "</p>";
       text->setText(html);
       text->setMinimumWidth(520);
       v->addWidget(text);
@@ -453,8 +444,7 @@ static void showPrompt(QWidget* parent, const QString& lib, const QVector<Item>&
       QPushButton* installButton = box->addButton(update ? QObject::tr("Update") : QObject::tr("Install"), QDialogButtonBox::AcceptRole);
       QPushButton* later = box->addButton(QObject::tr("Not now"), QDialogButtonBox::RejectRole);
       QPushButton* never = box->addButton(QObject::tr("Don't ask again"), QDialogButtonBox::DestructiveRole);
-      never->setToolTip(QObject::tr("Not asked again at startup until a MuseScore comes with other versions of these files. "
-                                    "Mixer > Advanced Options… > Ableton Live > Install Live helpers… installs them any time."));
+      never->setToolTip(QObject::tr("Don't ask again at startup. You can install them later from Mixer > Advanced Options… > Ableton Live."));
       v->addWidget(box);
       QObject::connect(later, &QPushButton::clicked, d, &QDialog::close);
       QObject::connect(never, &QPushButton::clicked, d, [d, version]() {
@@ -514,18 +504,14 @@ void showOnDemand(QWidget* parent)
       const QVector<File> f = files(shippedDir(), lib);
       const QVector<Item> items = check(f);
       if (lib.isEmpty() || items.isEmpty()) {
-            QMessageBox::information(parent, QObject::tr("Ableton Live helpers"),
-                                     lib.isEmpty() ? QObject::tr("No Ableton Live User Library found on this computer (Live's "
-                                                                 "Library.cfg, else Documents\\Ableton\\User Library). Start "
-                                                                 "Live once, then try again.")
-                                                   : QObject::tr("This MuseScore doesn't come with the Live helpers (the "
-                                                                 "Windows builds have them next to MuseScore3Evo.exe)."));
+            QMessageBox::information(parent, QObject::tr("Ableton Live Helpers"),
+                                     lib.isEmpty() ? QObject::tr("No Ableton Live User Library found. Start Live once, then try again.")
+                                                   : QObject::tr("The Live helpers are not included in this MuseScore."));
             return;
             }
       if (upToDate(items)) {
-            QMessageBox::information(parent, QObject::tr("Ableton Live helpers"),
-                                     QObject::tr("The MuseScore Link device and the MuseScoreEnvelopes script in Live's User "
-                                                 "Library (%1) are the ones that come with this MuseScore.")
+            QMessageBox::information(parent, QObject::tr("Ableton Live Helpers"),
+                                     QObject::tr("The Live helpers in Live's User Library (%1) are up to date.")
                                      .arg(QDir::toNativeSeparators(lib)));
             return;
             }
@@ -542,15 +528,13 @@ void controlSurfaceHint(QWidget* parent)
       QVector<Item> items = check(files(shippedDir(), lib));
       items.erase(std::remove_if(items.begin(), items.end(), [](const Item& it) { return !scriptItem(it); }), items.end());
       if (!items.isEmpty() && !upToDate(items)) {
-            showPrompt(parent, lib, items, QString(), QObject::tr("A clip tab's automation lanes need Live's "
-                                                                   "MuseScoreEnvelopes script, and it doesn't answer."));
+            showPrompt(parent, lib, items, QString(), QObject::tr("Automation lanes in a clip tab need the MuseScoreEnvelopes script in Live, which isn't responding."));
             return;
             }
-      QMessageBox* m = new QMessageBox(QMessageBox::Information, QObject::tr("Ableton Live: Control Surface"),
-                                       QObject::tr("A clip tab's automation lanes need Live's MuseScoreEnvelopes script, "
-                                                   "and it doesn't answer.\n\nIn Live: Settings > Tempo & MIDI > Control "
-                                                   "Surface: choose MuseScoreEnvelopes in a free row, Input and Output None. "
-                                                   "(Not in the list: restart Live.)"), QMessageBox::Ok, parent);
+      QMessageBox* m = new QMessageBox(QMessageBox::Information, QObject::tr("Ableton Live Control Surface"),
+                                       QObject::tr("Automation lanes in a clip tab need the MuseScoreEnvelopes script in Live, which isn't responding.\n\n"
+                                                   "In Live, open Settings > Tempo & MIDI and choose MuseScoreEnvelopes under Control Surface, "
+                                                   "with Input and Output set to None. If it isn't listed, restart Live."), QMessageBox::Ok, parent);
       m->setAttribute(Qt::WA_DeleteOnClose);
       m->setModal(false);
       QCheckBox* off = new QCheckBox(QObject::tr("Remember my choice and don't ask again"), m);

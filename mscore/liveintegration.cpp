@@ -75,11 +75,8 @@ bool setPlayThroughMidi(bool midi, QWidget* parent)
       QSettings settings;
       if (!settings.value(DONT_ASK, false).toBool()) {
             QMessageBox box(QMessageBox::Question, QObject::tr("Play through Live"),
-                            midi ? QObject::tr("The sound library's parts will play through MIDI output (A-D) to Ableton Live. "
-                                               "The patches loaded in MuseScore are released (their memory freed); switching "
-                                               "back loads them again.")
-                                 : QObject::tr("The sound library's parts will play through the library's plug-in in MuseScore "
-                                               "again. Its patches are loaded again, which can take a while."),
+                            midi ? QObject::tr("Sound library parts will play through MIDI output to Ableton Live. The patches loaded in MuseScore are released; switching back loads them again.")
+                                 : QObject::tr("Sound library parts will play through the library's plug-in in MuseScore again. Loading the patches can take a while."),
                             QMessageBox::Ok | QMessageBox::Cancel, parent);
             QCheckBox* dontAsk = new QCheckBox(QObject::tr("Remember my choice and don't ask again"), &box);
             box.setCheckBox(dontAsk);
@@ -97,10 +94,10 @@ bool setPlayThroughMidi(bool midi, QWidget* parent)
             mscore->updatePlaybackMode();
             if (!midi && mscore->currentScore())
                   SoundLibraryHost::instance()->preloadSoon(mscore->currentScore());
-            QString message = midi ? QObject::tr("Sound library: through MIDI output (Ableton Live)")
-                                   : QObject::tr("Sound library: through the library's plug-in");
+            QString message = midi ? QObject::tr("Sound library plays through MIDI output")
+                                   : QObject::tr("Sound library plays through its plug-in");
             if (midi && seq && seq->driver() && !seq->driver()->canOutputMidi())
-                  message += QObject::tr(" — no MIDI output is open: set MIDI output A in Preferences > I/O");
+                  message += QObject::tr(". No MIDI output is open: set MIDI output A in Preferences > I/O");
             mscore->showMessage(message, 6000);
             }
       return true;
@@ -231,8 +228,7 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
             QApplication::restoreOverrideCursor();
             if (!askConflicts(askParent, conflicts, path, modified, &choices)) {
                   if (report)
-                        *report = QObject::tr("Not imported: %n lane(s) changed both in MuseScore and in Live, and the choice "
-                                              "was cancelled. Nothing in the score changed.", "", int(conflicts.size()));
+                        *report = QObject::tr("Not imported: %n lane(s) changed in both MuseScore and Live. Nothing was changed.", "", int(conflicts.size()));
                   return false;
                   }
             }
@@ -259,7 +255,7 @@ bool importSet(MasterScore* score, const QString& path, bool autoReimport, QStri
             if (!mixed.isEmpty())
                   *report += "\n" + QObject::tr("Mixer as in Live:") + "\n  " + mixed.join("\n  ");
             if (!both.isEmpty())
-                  *report += "\n" + QObject::tr("Changed in MuseScore and in Live:") + "\n  " + both.join("\n  ");
+                  *report += "\n" + QObject::tr("Changed in both MuseScore and Live:") + "\n  " + both.join("\n  ");
             }
       Watcher::instance()->update();
       return true;
@@ -321,10 +317,9 @@ bool askConflicts(QWidget* parent, const std::vector<Automation::Conflict>& conf
                   const QDateTime& setTime, std::map<std::pair<const Part*, QString>, Automation::Keep>* choices)
       {
       QDialog d(parent);
-      d.setWindowTitle(QObject::tr("Automation changed in MuseScore and in Live"));
+      d.setWindowTitle(QObject::tr("Automation Changed in MuseScore and Live"));
       QVBoxLayout* v = new QVBoxLayout(&d);
-      QLabel* intro = new QLabel(QObject::tr("These lanes were changed in MuseScore and in the Live Set %1 since they last agreed. "
-                                             "Choose which to keep for each; nothing is overwritten without it.")
+      QLabel* intro = new QLabel(QObject::tr("These lanes were changed in both MuseScore and the Live Set %1. Choose which to keep for each lane.")
                                  .arg(QFileInfo(setPath).fileName()), &d);
       intro->setWordWrap(true);
       v->addWidget(intro);
@@ -344,7 +339,7 @@ bool askConflicts(QWidget* parent, const std::vector<Automation::Conflict>& conf
             pic->setPixmap(curvesPixmap(c.mine, c.live, 220, 44));
             t->setCellWidget(i, 2, pic);
             const QString edited = c.mine.extra.value("edited").toString();
-            const QString when = QObject::tr("MuseScore: %1\nLive: set saved %2")
+            const QString when = QObject::tr("MuseScore: %1\nLive: saved %2")
                                  .arg(edited.isEmpty() ? QObject::tr("edited in this score")
                                                        : QDateTime::fromString(edited, Qt::ISODate).toLocalTime().toString("yyyy-MM-dd HH:mm"),
                                       setTime.toLocalTime().toString("yyyy-MM-dd HH:mm"));
@@ -368,10 +363,9 @@ bool askConflicts(QWidget* parent, const std::vector<Automation::Conflict>& conf
       t->resizeColumnsToContents();
       t->horizontalHeader()->setStretchLastSection(true);
       v->addWidget(t);
-      QLabel* note = new QLabel(QObject::tr("MuseScore's kept: in Live the MuseScore Link device plays it and overrides Live's "
-                                            "own automation of that parameter while Live plays the score. Delete Live's "
-                                            "automation of it (right-click the parameter > Delete Automation) so the set shows "
-                                            "what plays. Live's kept: MuseScore's lane is replaced by it (Undo brings it back)."), &d);
+      QLabel* note = new QLabel(QObject::tr("If you keep MuseScore's, MuseScore Link plays it in Live and overrides Live's own automation of that "
+                                            "parameter. Delete Live's automation (right-click the parameter > Delete Automation) so the set "
+                                            "matches. If you keep Live's, it replaces MuseScore's lane (Undo restores it)."), &d);
       note->setWordWrap(true);
       v->addWidget(note);
       QHBoxLayout* buttons = new QHBoxLayout;
@@ -384,7 +378,7 @@ bool askConflicts(QWidget* parent, const std::vector<Automation::Conflict>& conf
       buttons->addStretch();
       QDialogButtonBox* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &d);
       box->button(QDialogButtonBox::Ok)->setText(QObject::tr("Import"));
-      box->button(QDialogButtonBox::Cancel)->setText(QObject::tr("Don't import now"));
+      box->button(QDialogButtonBox::Cancel)->setText(QObject::tr("Cancel"));
       QObject::connect(box, &QDialogButtonBox::accepted, &d, &QDialog::accept);
       QObject::connect(box, &QDialogButtonBox::rejected, &d, &QDialog::reject);
       buttons->addWidget(box);
@@ -414,7 +408,7 @@ void importDialog(MasterScore* score, QWidget* parent)
       QString start = linkedSet(score, &autoReimport);
       if (start.isEmpty())
             start = QSettings().value("liveIntegration/lastFolder").toString();
-      const QString path = QFileDialog::getOpenFileName(parent, QObject::tr("Import automation from Live Set"), start,
+      const QString path = QFileDialog::getOpenFileName(parent, QObject::tr("Import Automation from Live Set"), start,
                                                         QObject::tr("Ableton Live Set (*.als)"));
       if (path.isEmpty())
             return;
@@ -424,10 +418,10 @@ void importDialog(MasterScore* score, QWidget* parent)
       const bool ok = importSet(score, path, autoReimport, &report, parent);
       QApplication::restoreOverrideCursor();
       if (ok)
-            QMessageBox::information(parent, QObject::tr("Import automation from Live Set"), report);
+            QMessageBox::information(parent, QObject::tr("Import Automation from Live Set"), report);
       else
-            QMessageBox::warning(parent, QObject::tr("Import automation from Live Set"),
-                                 QObject::tr("%1 could not be read: %2").arg(QDir::toNativeSeparators(path), report));
+            QMessageBox::warning(parent, QObject::tr("Import Automation from Live Set"),
+                                 QObject::tr("Cannot read %1: %2").arg(QDir::toNativeSeparators(path), report));
       }
 
 //---------------------------------------------------------
@@ -501,7 +495,7 @@ void Watcher::reimport()
             if (importSet(s, path, true, &report, mscore))
                   mscore->showMessage(QObject::tr("Automation re-imported from %1").arg(QFileInfo(path).fileName()), 5000);
             else
-                  mscore->showMessage(QObject::tr("Could not re-import %1: %2").arg(QFileInfo(path).fileName(), report), 10000);
+                  mscore->showMessage(QObject::tr("Cannot re-import %1: %2").arg(QFileInfo(path).fileName(), report), 10000);
             }
       update();         // (a file replaced by rename leaves the watcher)
       }
