@@ -94,7 +94,7 @@ struct StateList {
       };
 
 struct StaffTexts {
-      StateList div, jete, pizz, dyn;
+      StateList div, nonDiv, jete, pizz, dyn;
       std::vector<int> freeBow;     // ticks of "change bow at will" texts (freeBowText)
       std::vector<std::pair<int, ScordaturaText>> scord;      // tick, retuning (or back to the String Data)
       std::vector<std::pair<int, QString>> sul;               // tick, "G" / "IV" (a string to play on), or "" (off)
@@ -189,7 +189,7 @@ class Pass {
       StringInstrument standardAt(Part* part, const Fraction& tick);
       StaffTexts staffTexts(int staffIdx) const;
       double microCents(const Note* note);
-      void handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths, bool divSingle = false);
+      void handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths, int noRed = 0);
       void mark(const Note* n, PlayMark m) { _res.marks[n] = m; }
       // a later check never takes a note's red away
       void markOver(const Note* n, PlayMark m) {
@@ -266,6 +266,7 @@ class Pass {
       void checkStringGliss(Part* part, const QString& staffName);
       void checkVocalNotation(Part* part, const QString& staffName);
       void checkVocalTessitura(Part* part, const QString& staffName);
+      void checkChoirRange(Part* part, const QString& staffName);
       // C1-C3 (SPEC-c1c3)
       bool multiClefAt(Part* part, const Fraction& tick);
       void checkClefs(Part* part, const QString& staffName);
@@ -395,6 +396,23 @@ StaffTexts Pass::staffTexts(int staffIdx) const
                   int v;
                   if ((v = divState(text)) >= 0)
                         tx.div.changes.push_back({ tick, v });
+                  if ((v = nonDivState(text)) >= 0) {
+                        tx.nonDiv.changes.push_back({ tick, v });
+                        // a plain "non div." holds for its passage, up to the staff's next rest; "sempre non div."
+                        // until div. / unis. (Sevsay p. 21 writes "sempre non divisi")
+                        static const QRegularExpression SEMPRE("\\bsempre\\b", QRegularExpression::CaseInsensitiveOption);
+                        if (v == 1 && !SEMPRE.match(text).hasMatch()) {
+                              for (Segment* r = s->next1(SegmentType::ChordRest); r; r = r->next1(SegmentType::ChordRest)) {
+                                    bool rest = false;
+                                    for (int t = staffIdx * VOICES; t < (staffIdx + 1) * VOICES; ++t)
+                                          rest |= r->element(t) && r->element(t)->isRest() && !r->element(t)->generated();
+                                    if (rest) {
+                                          tx.nonDiv.changes.push_back({ r->tick().ticks(), 0 });
+                                          break;
+                                          }
+                                    }
+                              }
+                        }
                   if ((v = jeteState(text)) >= 0)
                         tx.jete.changes.push_back({ tick, v });
                   if ((v = pizzState(text)) >= 0)
@@ -420,6 +438,8 @@ StaffTexts Pass::staffTexts(int staffIdx) const
                   if ((v = dynamicVelocity(text, vel, change)) >= 0)
                         tx.dyn.changes.push_back({ tick, v });
                   }
+      std::stable_sort(tx.nonDiv.changes.begin(), tx.nonDiv.changes.end(),
+                       [](const std::pair<int, int>& a, const std::pair<int, int>& b) { return a.first < b.first; });
       return tx;
       }
 
@@ -675,7 +695,9 @@ static bool isHarmonicCircle(SymId id)
 //    an open string, then a multiple stop unless div. is in force
 //---------------------------------------------------------
 
-void Pass::handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths, bool divSingle)
+// noRed: 1 "div." in a part named as one player, 2 a section's chord with neither "div." nor "non div.":
+// an impossible stop is dark yellow there, a section may divide it
+void Pass::handle(Chord* chord, int grace, const QString& staffName, const StringInstrument& in, bool div, int fifths, int noRed)
       {
       struct Item { Note* note; int pitch; double sound; bool diamond; bool circle; };
       std::vector<Item> list;
@@ -744,10 +766,18 @@ void Pass::handle(Chord* chord, int grace, const QString& staffName, const Strin
                   }
             return;
             }
-      if (div) {
+      // dividing helps only when no note is impossible by itself: a note below the lowest string stays wrong
+      // whoever plays it (then the chord is judged as written, red allowed)
+      bool eachAlone = true;
+      for (const Item& i : list)
+            eachAlone &= analyseStop(in, { i.sound }).verdict != Verdict::IMPOSSIBLE;   // (a bass's stopped note alone
+                                                                                        // reads "no open string": not impossible)
+      if (div && eachAlone) {
             _res.div++;
             return;
             }
+      if (!eachAlone)
+            noRed = 0;
 
       // fingering pitches: a quarter-flat G3 is below the violin's G string, a quarter-sharp G3 is
       // stopped on it
@@ -770,13 +800,18 @@ void Pass::handle(Chord* chord, int grace, const QString& staffName, const Strin
             }
       // under "div." in a part named as one player the name may be wrong ("soli", a string group laid out as
       // chamber music) and a section would split the chord (Adler p. 12): never red there
-      bool bad = res.verdict == Verdict::IMPOSSIBLE && !divSingle;
+      bool bad = res.verdict == Verdict::IMPOSSIBLE && !noRed;
       (bad ? _res.impossible : _res.outOfReach)++;
       for (const Item& i : list)
             mark(i.note, bad ? PlayMark::IMPOSSIBLE : PlayMark::OUT_OF_REACH);
       QString reason = res.reason;
-      if (divSingle)
+      if (noRed == 1 && res.verdict == Verdict::IMPOSSIBLE)
             reason += QString(" (under div.: impossible for one player, a section would split it)");
+      // a section's unmarked chord: Adler p. 12 and Kennan & Grantham p. 31 read it as a multiple stop, Sevsay
+      // p. 21 has the players divide unless "non div." is marked (owner 2026-11-07: dark yellow, not red)
+      if (noRed == 2 && res.verdict == Verdict::IMPOSSIBLE)
+            reason += QString(" (impossible for one player; a section may divide it unmarked, Sevsay p. 21; "
+                              "non div. if each player is to play it)");
       addRow("stop", bad ? "impossible" : "outOfReach", reason, describe(in, pitches, res, sp));
       }
 
@@ -2301,6 +2336,46 @@ void Pass::checkVocalTessitura(Part* part, const QString& staffName)
             addRow(tick, tick, o.first->track(), staffName, "tessitura", "risky", reason, names.join(" + "));
             _res.outOfReach++;
             }
+      }
+
+//---------------------------------------------------------
+//   checkChoirRange (R6, playabilityrules.h): one row per chord with notes outside the chorus range
+//---------------------------------------------------------
+
+void Pass::checkChoirRange(Part* part, const QString& staffName)
+      {
+      QString id, name;
+      partIdName(part, &id, &name);
+      if (!isChoirName(name) || voiceWords(name) > 1)
+            return;                     // a staff for several voices ("Sopranos/Altos"): whose range is unknown
+      const ChoirRange* rg = nullptr;
+      for (const ChoirRange& c : R6_RANGES)
+            if (id == c.id)
+                  rg = &c;
+      if (!rg)
+            return;
+      const QString reason = QString::fromUtf8("beyond every source's chorus range for a %1 section, %2–%3 (outer limits, "
+                                               "for professional choruses; church and civic choirs keep to the practical "
+                                               "range, Kennan & Grantham p. 394) (section) (%4)")
+                             .arg(rg->voice, tpcName(rg->loTpc, rg->lo), tpcName(rg->hiTpc, rg->hi), rg->sources);
+      for (Segment* s = _score->firstSegment(SegmentType::ChordRest); s; s = s->next1(SegmentType::ChordRest))
+            for (int track = part->startTrack(); track < part->endTrack(); ++track) {
+                  Element* e = s->element(track);
+                  if (!e || !e->isChord())
+                        continue;
+                  QStringList names;
+                  for (Note* n : toChord(e)->notes()) {
+                        if (n->tieBack() || (n->ppitch() >= rg->lo && n->ppitch() <= rg->hi))
+                              continue;
+                        markOver(n, PlayMark::OUT_OF_REACH);
+                        names << tpcName(n->tpc1(), n->ppitch());
+                        }
+                  if (names.isEmpty())
+                        continue;
+                  const int tick = s->tick().ticks();
+                  addRow(tick, tick, track, staffName, "choirRange", "risky", reason, names.join(" + "));
+                  _res.outOfReach++;
+                  }
       }
 
 //---------------------------------------------------------
@@ -4065,10 +4140,11 @@ void Pass::run()
                         bool divOn = tx.div.on(tick.ticks());
                         bool div = divOn && in.section;            // one player cannot divide: checked as a multiple stop,
                         bool divSingle = divOn && !in.section;     // capped at dark yellow (the part may really be a section)
+                        int noRed = divSingle ? 1 : (in.section && !divOn && !tx.nonDiv.on(tick.ticks())) ? 2 : 0;
                         const QVector<Chord*>& graces = c->graceNotes();
                         for (int g = 0; g < graces.size(); ++g)
-                              handle(graces[g], g, staffName, in, div, fifths, divSingle);
-                        handle(c, -1, staffName, in, div, fifths, divSingle);
+                              handle(graces[g], g, staffName, in, div, fifths, noRed);
+                        handle(c, -1, staffName, in, div, fifths, noRed);
                         }
                   }
             checkSlurs(st, part, staffName, tx, walked);
@@ -4112,6 +4188,7 @@ void Pass::run()
             checkStringGliss(part, staffName);
             checkVocalNotation(part, staffName);
             checkVocalTessitura(part, staffName);
+            checkChoirRange(part, staffName);
             checkClefs(part, staffName);
             checkSlurRepeats(part, staffName);
             }

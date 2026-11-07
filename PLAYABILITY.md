@@ -499,3 +499,26 @@ notes are taken out; a part named as one player keeps its chords checked as mult
 (the name may be wrong: "soli", or a string group without bass or winds, which counts as chamber music; a section
 would split the chord, Adler p. 12), and the text gets a notation row ("div. in a part named as one player ...").
 Test `soloDivisi` (`solodiv-tests.mscx`, `solodiv-orch-tests.mscx` from `tools/playability/gen_solodiv_tests.py`).
+
+## Choir ranges, R6 (2026-11-07)
+
+The owner: a choir-only range check, dark yellow ("seems good" to: choir parts by plural names, Kennan's chorus ranges,
+never red). Readings of the charts (Kennan p. 393 chorus chart; Blatter's choir charts Ex. 7.17a/b, 7.19, 7.20b, 7.22,
+7.24, 7.26) on https://claude.ai/artifact/2H5chNkg7aXNtftHvQ7ptp. A note of a choir part (`isChoirName`: Sopranos,
+Altos, Tenors, Basses, Soprani, Bassi ..., or Choir / Chorus / Coro / Chor in the name) is marked when it is outside
+EVERY source's chorus range for its voice (`R6_RANGES`, sounding): soprano Bb3-A5, mezzo A3-D5, alto F#3-D5, tenor
+Bb2-A4, baritone G2-F4, bass D2-D4. Kennan p. 394: the outer limits are for professional choruses, church and civic
+choirs keep to the practical range; the message says so. A solo singer: no range rule (MuseScore's range colouring,
+V-D3 2026-10-11). Not checked: a staff named for several voices ("Sopranos/Altos": `voiceWords` > 1), MuseScore's
+own SATB templates (singular names "Soprano", "Alto" ... read as soloists; rename the parts "Sopranos" etc.) and its
+closed-score templates (voice.female / voice.male ids). Grace notes are not checked.
+Test `choirRange` (`choir-tests.mscx` from `tools/playability/gen_choir_tests.py`).
+
+## A section's unmarked chord (2026-11-07)
+
+A chord one player cannot play, in a section's part with neither "div." nor "non div." in force, is dark yellow, not
+red (owner 2026-11-07): Adler p. 12 and Kennan & Grantham p. 31 read an unmarked chord as a multiple stop, Sevsay p. 21
+has the players divide it unless "non div." is marked, so a red could fall on something playable. Under "non div."
+(`nonDivState`; also "non-div.", "nicht geteilt", "non divisé") it stays red, a plain "non div." up to the staff's next
+rest, "sempre non div." until "div." or "unis." (Sevsay p. 21 writes "sempre non divisi"); a single player's stays red.
+"nicht geteilt" was read as "geteilt" (div.) before. Test `soloDivisi` bars 3-6.

@@ -910,12 +910,42 @@ int divState(const QString& text)
       {
       static const QRegularExpression DIV_ON(QString::fromUtf8("\\bdiv(\\.|isi|is[ée]s)?\\b|geteilt|\\bdiv\\s*a\\s*\\d"),
                                              QRegularExpression::CaseInsensitiveOption);
-      static const QRegularExpression DIV_OFF("\\bunis(\\.|on[oi]?)?\\b|\\bnon\\s*div", QRegularExpression::CaseInsensitiveOption);
+      static const QRegularExpression DIV_OFF(QString::fromUtf8("\\bunis(\\.|on[oi]?)?\\b|\\bnon[\\s-]*div|nicht\\s*geteilt|non\\s+divis[ée]"),
+                                              QRegularExpression::CaseInsensitiveOption);
       if (DIV_OFF.match(text).hasMatch())
             return 0;
       if (DIV_ON.match(text).hasMatch())
             return 1;
       return -1;
+      }
+
+bool isChoirName(const QString& name)
+      {
+      static const QRegularExpression CHOIR(QString::fromUtf8(
+            "(^|[^a-z])(sopranos|soprani|mezzos|mezzo-sopranos|altos|alti|contraltos|tenors|tenori|baritones|baritoni|"
+            "basses|bassi|choir|chorus|coro|chor|chœur|choeur)([^a-z]|$)"));
+      return CHOIR.match(name.toLower()).hasMatch();
+      }
+
+int voiceWords(const QString& name)
+      {
+      static const char* WORDS[] = { "sopran", "mezzo", "alt", "contralt", "tenor", "barit", "bass" };
+      int n = 0;
+      QString low = name.toLower();
+      low.replace(QRegularExpression("mezzo[\\s-]*sopran"), "mezzo");     // one voice
+      for (const char* w : WORDS)
+            if (QRegularExpression(QString("(^|[^a-z])") + w + "[a-z]*").match(low).hasMatch())
+                  ++n;
+      return n;
+      }
+
+int nonDivState(const QString& text)
+      {
+      static const QRegularExpression NON(QString::fromUtf8("\\bnon[\\s-]*div|nicht\\s*geteilt|non\\s+divis[ée]"),
+                                          QRegularExpression::CaseInsensitiveOption);
+      if (NON.match(text).hasMatch())
+            return 1;
+      return divState(text) >= 0 ? 0 : -1;       // div. or unis.: the non div. passage is over
       }
 
 QString plainText(const QString& xmlText)

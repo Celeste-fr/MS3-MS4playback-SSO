@@ -306,6 +306,8 @@ int pizzState(const QString& text);
 //---------------------------------------------------------
 
 int divState(const QString& text);
+// "non div.": 1 (each player plays the multiple stop, Kennan & Grantham p. 31); 0 at "div." or "unis."; -1 neither
+int nonDivState(const QString& text);
 // a text as a player reads it: a dynamic's SMuFL symbols become their letters, other tags go
 QString plainText(const QString& xmlText);
 
@@ -573,6 +575,24 @@ constexpr const char* R4_VOICE_NAMES = "\\b(voice|choir|chorus|soprano|mezzo|alt
 constexpr const char* R4_TENOR_ID = "voice.tenor";
 // R5 tessitura (Blatter p. 380; central pitches Blatter pp. 314-319, sounding, as printed): most of the sung time within a
 // perfect 5th either side of the voice's central pitch; under R5_MIN_SHARE the notes outside are marked
+// R6 choir ranges (owner 2026-11-07: a choir part only, dark yellow; readings confirmed on
+// https://claude.ai/artifact/2H5chNkg7aXNtftHvQ7ptp): a note of a choir part (isChoirName) outside EVERY source's
+// chorus range for its voice. Kennan & Grantham p. 393 (chorus chart, the open "possible" notes; p. 394:
+// professional choirs may use the full range, church and civic choirs the practical one) and Blatter's choir charts
+// (Ex. 7.17a/b, 7.19, 7.20b, 7.22, 7.24, 7.26; white range and black notes). Sounding pitches.
+struct ChoirRange { const char* id; int lo, loTpc, hi, hiTpc; const char* voice; const char* sources; };
+constexpr ChoirRange R6_RANGES[] = {
+      { "voice.soprano",       58, 12, 81, 17, "soprano",  "Kennan & Grantham p. 393; Blatter Ex. 7.17" },     // Bb3 (Blatter 7.17b) - A5
+      { "voice.mezzo-soprano", 57, 17, 74, 16, "mezzo",    "Blatter Ex. 7.19" },                               // A3 - D5
+      { "voice.alto",          54, 20, 74, 16, "alto",     "Kennan & Grantham p. 393; Blatter Ex. 7.20b" },    // F#3 - D5
+      { "voice.tenor",         46, 12, 69, 17, "tenor",    "Kennan & Grantham p. 393; Blatter Ex. 7.22" },     // Bb2 (Blatter) - A4
+      { "voice.baritone",      43, 15, 65, 13, "baritone", "Blatter Ex. 7.24" },                               // G2 - F4
+      { "voice.bass",          38, 16, 62, 16, "bass",     "Kennan & Grantham p. 393; Blatter Ex. 7.26" } };   // D2 (Blatter) - D4
+// a choir part: a plural voice name (Sopranos, Altos, Tenors, Basses, Soprani, Bassi ...) or Choir / Chorus / Coro / Chor
+bool isChoirName(const QString& name);
+// how many different voice words (soprano, mezzo, alto, contralto, tenor, baritone, bass) a name holds
+int voiceWords(const QString& name);
+
 constexpr int R5_BAND = 7;                          // semitones either side, both ends inside
 constexpr double R5_MIN_SHARE = 0.75;               // Blatter's 75-80 %, the lower end
 struct VoiceCentre { const char* id; int pitch; int tpc; };        // the band's ends: tpc -1 / +1 (a 5th down / up)

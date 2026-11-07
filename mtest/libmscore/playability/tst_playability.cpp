@@ -102,6 +102,7 @@ class TestPlayability : public QObject, public MTest
       void tempoMarks();
       void bowLengths();
       void soloDivisi();
+      void choirRange();
       void slurRepeats();
       void c1c3OnOldFixtures();
       void falseAlarms();
@@ -244,9 +245,11 @@ void TestPlayability::strings()
       compare(marks(score, r), wantMarks);
       QCOMPARE(r.open, 45);
       QCOMPARE(r.playable, 23);
-      QCOMPARE(r.impossible, 11);
-      QCOMPARE(r.outOfReach, 6);
-      QCOMPARE(r.div, 3);
+      // 2026-11-07: the nine same-string chords are dark yellow (sections: a section may divide them, Sevsay p. 21),
+      // bar 8's D3 + D4 under div. is red and no longer counted as divided
+      QCOMPARE(r.impossible, 3);
+      QCOMPARE(r.outOfReach, 15);
+      QCOMPARE(r.div, 2);
       delete score;
       }
 
@@ -2220,41 +2223,110 @@ void TestPlayability::bowLengths()
 
 void TestPlayability::soloDivisi()
       {
+      using namespace Playability;
       const QString divWhy = "div. in a part named as one player: one player cannot divide; name the part as a section, "
                              "or the notes are a multiple stop (solo) (Kennan & Grantham p. 31; Adler p. 12)";
+      const QString unmarked = " (impossible for one player; a section may divide it unmarked, Sevsay p. 21; "
+                               "non div. if each player is to play it)";
       // strings only (no bass, no wind): every singular name is one player, "soli" too (owner 2026-10-13)
       MasterScore* score = readScore(DIR + "solodiv-tests.mscx");
       QVERIFY(score);
       PlayabilityResult r = Playability::analyse(score);
-      QStringList single;
+      QStringList got;
       for (const PlayabilityRow& row : r.rows) {
-            QVERIFY2(row.staff != "Violins", qPrintable(row.reason));          // the section divides: clean
-            QVERIFY2(row.verdict != "impossible", qPrintable(row.reason));     // never red under div.
             if (row.kind == "divisi") {
                   QCOMPARE(row.reason, divWhy);
                   QCOMPARE(row.verdict, QString("notation"));
-                  single << row.staff + " divisi";
+                  got << QString("%1 %2 divisi").arg(row.bar).arg(row.staff);
                   }
-            if (row.kind == "stop" && row.bar == 1) {                          // G3 + G#3: both on the G string only
-                  QCOMPARE(row.verdict, QString("outOfReach"));
-                  QVERIFY(row.reason.endsWith(" (under div.: impossible for one player, a section would split it)"));
-                  single << row.staff + " stop";
+            if (row.kind == "stop") {                                          // G3 + G#3: both on the G string only
+                  if (row.bar == 1)
+                        QVERIFY(row.reason.endsWith(" (under div.: impossible for one player, a section would split it)"));
+                  if ((row.bar == 3 || row.bar == 6) && row.staff == "Violins")
+                        QVERIFY(row.reason.endsWith(unmarked));
+                  if (row.bar == 4 || row.staff != "Violins")
+                        QVERIFY(!row.reason.endsWith(unmarked));
+                  got << QString("%1 %2 stop %3").arg(row.bar).arg(row.staff, row.verdict);
                   }
             }
-      single.sort();
-      QCOMPARE(single, QStringList({ "Solo Violin divisi", "Solo Violin stop", "Violin I divisi", "Violin I stop",
-                                     "Violin soli divisi", "Violin soli stop" }));
+      got.sort();
+      QCOMPARE(got, QStringList({
+            // bar 1, div.: the section divides (clean); singular names marked, never red
+            "1 Solo Violin divisi", "1 Solo Violin stop outOfReach", "1 Violin I divisi", "1 Violin I stop outOfReach",
+            "1 Violin soli divisi", "1 Violin soli stop outOfReach",
+            // bar 3, no text: one player red, a section dark yellow (it may divide it)
+            "3 Solo Violin stop impossible", "3 Violin I stop impossible", "3 Violin soli stop impossible",
+            "3 Violins stop outOfReach",
+            // bar 4, non div.: every player plays the chord: red
+            "4 Solo Violin stop impossible", "4 Violin I stop impossible", "4 Violin soli stop impossible",
+            "4 Violins stop impossible",
+            // bar 6, after a rest: the non div. passage is over, as bar 3
+            "6 Solo Violin stop impossible", "6 Violin I stop impossible", "6 Violin soli stop impossible",
+            "6 Violins stop outOfReach" }));
       delete score;
       // laid out as an orchestra (a double bass): a singular "Violin" is a section, its div. clean; "Solo Violin" not
       score = readScore(DIR + "solodiv-orch-tests.mscx");
       QVERIFY(score);
       r = Playability::analyse(score);
-      QStringList got;
+      got.clear();
       for (const PlayabilityRow& row : r.rows)
             if (row.kind == "divisi" || row.kind == "stop")
-                  got << row.staff + " " + row.kind;
+                  got << QString("%1 %2 %3 %4").arg(row.bar).arg(row.staff, row.kind, row.verdict);
       got.sort();
-      QCOMPARE(got, QStringList({ "Solo Violin divisi", "Solo Violin stop" }));
+      QCOMPARE(got, QStringList({ "1 Solo Violin divisi notation", "1 Solo Violin stop outOfReach",
+                                  "3 Solo Violin stop impossible", "3 Violin stop outOfReach",
+                                  "4 Solo Violin stop impossible", "4 Violin stop impossible",
+                                  "6 Solo Violin stop impossible", "6 Violin stop outOfReach" }));
+      delete score;
+      QCOMPARE(nonDivState("non div."), 1);
+      QCOMPARE(nonDivState("unis."), 0);
+      QCOMPARE(nonDivState("div."), 0);
+      QCOMPARE(nonDivState("dolce"), -1);
+      QCOMPARE(nonDivState("nicht geteilt"), 1);              // Sevsay p. 32's German
+      QCOMPARE(nonDivState("non-div."), 1);
+      QCOMPARE(divState("nicht geteilt"), 0);                 // was read as "geteilt" = div.
+      QCOMPARE(divState("geteilt"), 1);
+      }
+
+//---------------------------------------------------------
+//   choirRange (R6): choir parts only, outside every source's chorus range; choir-tests.mscx from
+//   tools/playability/gen_choir_tests.py
+//---------------------------------------------------------
+
+void TestPlayability::choirRange()
+      {
+      using namespace Playability;
+      MasterScore* score = readScore(DIR + "choir-tests.mscx");
+      QVERIFY(score);
+      PlayabilityResult r = Playability::analyse(score);
+      auto why = [](const char* voice, const char* lo, const char* hi, const char* src) {
+            return QString::fromUtf8("beyond every source's chorus range for a %1 section, %2–%3 (outer limits, for professional "
+                                     "choruses; church and civic choirs keep to the practical range, Kennan & Grantham p. 394) "
+                                     "(section) (%4)").arg(voice, lo, hi, src); };
+      const QString sop = why("soprano", "Bb3", "A5", "Kennan & Grantham p. 393; Blatter Ex. 7.17");
+      const QString ten = why("tenor", "Bb2", "A4", "Kennan & Grantham p. 393; Blatter Ex. 7.22");
+      const QString bas = why("bass", "D2", "D4", "Kennan & Grantham p. 393; Blatter Ex. 7.26");
+      const QString alt = why("alto", "F#3", "D5", "Kennan & Grantham p. 393; Blatter Ex. 7.20b");
+      QStringList want = {
+            // each staff: the lowest note in range, one below, the highest in range, one above (bars 1-4)
+            rowText(2, "Sopranos", "risky", sop, "A3"), rowText(4, "Sopranos", "risky", sop, "B5"),
+            rowText(2, "Tenors", "risky", ten, "A2"), rowText(4, "Tenors", "risky", ten, "Bb4"),
+            rowText(2, "Basses", "risky", bas, "C#2"), rowText(4, "Basses", "risky", bas, "Eb4"),
+            rowText(2, "Choir Alto", "risky", alt, "F3"), rowText(4, "Choir Alto", "risky", alt, "Eb5") };
+      // the solo Soprano: no choir range (MuseScore's own range colouring covers it)
+      want.sort();
+      QStringList got;
+      for (const PlayabilityRow& row : r.rows)
+            if (row.kind == "choirRange")
+                  got << rowText(row.bar, row.staff, row.verdict, row.reason, row.notes);
+      got.sort();
+      compare(got, want);
+      QVERIFY(isChoirName("Sopranos") && isChoirName("Coro: Alti") && isChoirName("Chorus Tenor") && isChoirName("Bassi"));
+      QVERIFY(!isChoirName("Soprano") && !isChoirName("Bass") && !isChoirName("Mezzo-soprano"));
+      QCOMPARE(voiceWords("Mezzo-sopranos"), 1);
+      QCOMPARE(voiceWords("Choir Alto"), 1);
+      QCOMPARE(voiceWords("Sopranos/Altos"), 2);              // a closed-score staff: skipped
+      QCOMPARE(voiceWords("Tenor-Bass Choir"), 2);
       delete score;
       }
 
