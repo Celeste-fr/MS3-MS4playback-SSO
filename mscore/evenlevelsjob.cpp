@@ -69,7 +69,7 @@ int EvenLevelsJob::apply(MasterScore* score, const QString& resultJson, QString*
       QFile f(resultJson);
       if (!score || !f.open(QIODevice::ReadOnly)) {
             if (summary)
-                  *summary = QObject::tr("No result to apply (%1)").arg(QDir::toNativeSeparators(resultJson));
+                  *summary = QObject::tr("Nothing to apply: the measurement gave no result.");
             return 0;
             }
       const QJsonObject top = QJsonDocument::fromJson(f.readAll()).object();

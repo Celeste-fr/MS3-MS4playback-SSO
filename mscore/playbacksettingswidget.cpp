@@ -234,6 +234,7 @@ void PlaybackSettingsWidget::refresh()
                   if (w->hasFocus())
                         focused = (*i)->data(0, Qt::UserRole).toString();
       QWidget* focusBox = nullptr;
+      int valueWidth = 0;     // the widest value box: the Value column fits every named value
       _tree->clear();
       // the groups in displayGroups()' order (a setting without display data last, under its ini section), each
       // group's settings in the definitions' order
@@ -304,8 +305,9 @@ void PlaybackSettingsWidget::refresh()
                         QDoubleSpinBox* box = new QDoubleSpinBox(_tree);
                         box->setRange(d.min, d.max);
                         const bool integral = d.min == std::floor(d.min) && d.max == std::floor(d.max)
-                                              && QString(d.unit) != "s" && QString(d.unit) != "cents" && id != "shorts/portato";
-                        box->setDecimals(id == "tuning/tolerance" ? 3 : integral ? 0 : 2);
+                                              && QString(d.unit) != "s" && QString(d.unit) != "cents" && QString(d.unit) != "dB"
+                                              && id != "shorts/portato";
+                        box->setDecimals(id == "tuning/tolerance" ? 3 : QString(d.unit) == "dB" ? 1 : integral ? 0 : 2);
                         box->setValue(v);
                         if (*d.unit && QString(d.unit) != "on/off")
                               box->setSuffix(QString(" ") + d.unit);
@@ -336,10 +338,13 @@ void PlaybackSettingsWidget::refresh()
                   editor->setToolTip(tip);
                   editor->setFont(f);
                   _tree->setItemWidget(it, 1, editor);
+                  valueWidth = std::max(valueWidth, editor->sizeHint().width());
                   if (id == focused)
                         focusBox = editor;
                   }
             }
+      if (valueWidth > 0)
+            _tree->setColumnWidth(1, valueWidth + 6);
       _tree->doItemsLayout();
       _tree->verticalScrollBar()->setValue(scrolled);
       if (focusBox)

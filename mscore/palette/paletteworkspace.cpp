@@ -958,11 +958,39 @@ bool PaletteWorkspace::loadPalette(const QModelIndex& index)
       }
 
 //---------------------------------------------------------
+//   addGradualTempoLines
+///   The fork's rit. / rall. / accel. lines (tempochange.h) go at the end of every Tempo palette that lacks
+///   them: the built-in workspaces' palettes (share/workspaces) and workspaces saved before the lines existed.
+//---------------------------------------------------------
+
+static void addGradualTempoLines(PaletteTree* tree)
+      {
+      if (!tree)
+            return;
+      std::unique_ptr<PalettePanel> fresh(MuseScore::newTempoPalettePanel(true));
+      for (auto& panel : tree->palettes) {
+            if (!panel || panel->type() != PalettePanel::Type::Tempo)
+                  continue;
+            for (int i = 0; i < fresh->ncells(); ++i) {
+                  PaletteCellPtr c = fresh->cell(i);
+                  if (!c || !c->element || c->element->type() != ElementType::TEXTLINE)
+                        continue;
+                  bool have = false;
+                  for (int j = 0; j < panel->ncells() && !have; ++j)
+                        have = panel->cell(j) && panel->cell(j)->name == c->name;
+                  if (!have)
+                        panel->insertCell(panel->ncells(), c);
+                  }
+            }
+      }
+
+//---------------------------------------------------------
 //   PaletteWorkspace::setUserPaletteTree
 //---------------------------------------------------------
 
 void PaletteWorkspace::setUserPaletteTree(std::unique_ptr<PaletteTree> tree)
       {
+      addGradualTempoLines(tree.get());
       if (userPalette) {
             disconnect(userPalette, &PaletteTreeModel::treeChanged, this, &PaletteWorkspace::userPaletteChanged);
             userPalette->setPaletteTree(std::move(tree));
@@ -976,6 +1004,7 @@ void PaletteWorkspace::setUserPaletteTree(std::unique_ptr<PaletteTree> tree)
 
 void PaletteWorkspace::setDefaultPaletteTree(std::unique_ptr<PaletteTree> tree)
       {
+      addGradualTempoLines(tree.get());
       if (defaultPalette)
             defaultPalette->setPaletteTree(std::move(tree));
       else
