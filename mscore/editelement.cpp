@@ -46,7 +46,7 @@ void ScoreView::updateGrips()
       qreal h   = 8.0 / _matrix.m22();
       QRectF r(-w*.5, -h*.5, w, h);
 
-      // (a slur's grips may change while it is edited: a phrase mark's Swell has a grip at its peak, libmscore/slur.h)
+      // (a slur's grips may change while it is edited: a phrase mark's swell has a grip at its peak, libmscore/slur.h)
       if (editData.element->isSlurSegment()) {
             editData.grips = editData.element->gripsCount();
             if (int(editData.curGrip) >= editData.grips)
@@ -64,7 +64,7 @@ void ScoreView::updateGrips()
             Element* const page = editData.element->findAncestor(ElementType::PAGE);
             const QPointF pageOffset((page ? page : editData.element)->pos());
 
-            // the Swell's peak grip: 2.5 times the size, so that it stands out among the resize grips (SlurSegment::drawEditMode)
+            // the swell's peak grip: 2.5 times the size, so that it stands out among the resize grips (SlurSegment::drawEditMode)
             if (editData.element->isSlurSegment() && editData.grips > int(SlurSegment::PEAK_GRIP)) {
                   QRectF& peak = editData.grip[int(SlurSegment::PEAK_GRIP)];
                   peak.adjust(-w * .75, -h * .75, w * .75, h * .75);

@@ -104,7 +104,7 @@ static ChordRest* searchCR(Segment* segment, int startTrack, int endTrack)
       }
 
 //---------------------------------------------------------
-//   the Swell's peak grip (slur.h › Phrase shape and ending)
+//   the swell's peak grip (slur.h › Phrase swell)
 //    on the slur at the peak's place in time: the x of the peak's tick between the ChordRest segments around it (a
 //    peak inside a held note between its start and the next one's), the y of the slur's curve there
 //---------------------------------------------------------
@@ -140,7 +140,7 @@ QPointF SlurSegment::peakGripPos() const
       {
       const qreal nan = std::numeric_limits<qreal>::quiet_NaN();
       const Slur* sl = slur();
-      if (!system() || !PhraseMark::hasShape(sl))
+      if (!system() || !PhraseMark::hasSwell(sl))
             return QPointF(nan, nan);
       const int t1 = sl->tick().ticks();
       const int t2 = PhraseMark::endTick(sl);
@@ -204,7 +204,7 @@ int SlurSegment::peakAtX(qreal pageX) const
       return qBound(0, int(std::lround(100.0 * (tick - t1) / (t2 - t1))), 100);
       }
 
-// edit mode: the slur's own grips as every slur's; the Swell's peak grip by drawPeakGrip, which the view calls after the
+// edit mode: the slur's own grips as every slur's; the swell's peak grip by drawPeakGrip, which the view calls after the
 // score (ScoreView::paint), so that it lies in front of the slur
 void SlurSegment::drawEditMode(QPainter* p, EditData& ed)
       {
@@ -219,7 +219,7 @@ void SlurSegment::drawEditMode(QPainter* p, EditData& ed)
       ed.grips = grips;
       }
 
-// the Swell's peak grip: a filled orange diamond, outlined, 2.5 times the other grips' size (its grip rect is,
+// the swell's peak grip: a filled orange diamond, outlined, 2.5 times the other grips' size (its grip rect is,
 // ScoreView::updateGrips), on a short dashed vertical line: it stands out among them and on the selected (blue) slur
 void SlurSegment::drawPeakGrip(QPainter* p, const EditData& ed) const
       {
@@ -309,7 +309,7 @@ bool SlurSegment::edit(EditData& ed)
             return true;
             }
       if (ed.curGrip == PEAK_GRIP) {
-            // the Swell's peak grip (no offset of its own): Home sets Peak back to Auto; arrows move it (editDrag)
+            // the swell's peak grip (no offset of its own): Home sets Peak back to Auto; arrows move it (editDrag)
             if (ed.key == Qt::Key_Home) {
                   sl->undoChangeProperty(Pid::PHRASE_PEAK, PhraseMark::PEAK_AUTO);
                   return true;
@@ -683,8 +683,7 @@ Slur::Slur(const Slur& s)
    : SlurTie(s)
       {
       _phraseMark = s._phraseMark;
-      _phraseShape = s._phraseShape;
-      _phraseEnding = s._phraseEnding;
+      _phraseAmount = s._phraseAmount;
       _phrasePeak = s._phrasePeak;
       }
 
@@ -1185,10 +1184,8 @@ void Slur::write(XmlWriter& xml) const
       // a phrase mark: in the clipboard only; a file keeps it in the metaTag (PhraseMark)
       if (_phraseMark && xml.clipboardmode()) {
             xml.tag("phraseMark", true);
-            if (_phraseShape)
-                  xml.tag("phraseShape", _phraseShape);
-            if (_phraseEnding)
-                  xml.tag("phraseEnding", _phraseEnding);
+            if (_phraseAmount != 0.0)
+                  xml.tag("phraseAmount", _phraseAmount);
             if (_phrasePeak != PhraseMark::PEAK_AUTO)
                   xml.tag("phrasePeak", _phrasePeak);
             }
@@ -1205,12 +1202,8 @@ bool Slur::readProperties(XmlReader& e)
             _phraseMark = e.readBool();
             return true;
             }
-      if (e.name() == "phraseShape") {
-            _phraseShape = e.readInt();
-            return true;
-            }
-      if (e.name() == "phraseEnding") {
-            _phraseEnding = e.readInt();
+      if (e.name() == "phraseAmount") {
+            _phraseAmount = qBound(0.0, e.readDouble(), PhraseMark::MAX_AMOUNT);
             return true;
             }
       if (e.name() == "phrasePeak") {
@@ -1228,10 +1221,8 @@ QVariant Slur::getProperty(Pid propertyId) const
       {
       if (propertyId == Pid::PHRASE_MARK)
             return _phraseMark;
-      if (propertyId == Pid::PHRASE_SHAPE)
-            return _phraseShape;
-      if (propertyId == Pid::PHRASE_ENDING)
-            return _phraseEnding;
+      if (propertyId == Pid::PHRASE_AMOUNT)
+            return _phraseAmount;
       if (propertyId == Pid::PHRASE_PEAK)
             return _phrasePeak;
       return SlurTie::getProperty(propertyId);
@@ -1247,12 +1238,10 @@ bool Slur::setProperty(Pid propertyId, const QVariant& v)
             _phraseMark = v.toBool();
             triggerLayout();              // redrawn in its colour
             score()->setPlaylistDirty();  // no legato any more, or legato again
-            if (_phraseEnding)
-                  score()->setLayoutAll();      // its Ending in the tempo map, or out of it (rebuildTempoAndTimeSigMaps)
             return true;
             }
-      if (propertyId == Pid::PHRASE_SHAPE) {
-            _phraseShape = v.toInt();
+      if (propertyId == Pid::PHRASE_AMOUNT) {
+            _phraseAmount = qBound(0.0, v.toDouble(), PhraseMark::MAX_AMOUNT);
             score()->setPlaylistDirty();
             triggerLayout();              // (the peak's grip in edit mode)
             return true;
@@ -1261,12 +1250,6 @@ bool Slur::setProperty(Pid propertyId, const QVariant& v)
             _phrasePeak = qBound(int(PhraseMark::PEAK_AUTO), v.toInt(), 100);
             score()->setPlaylistDirty();
             triggerLayout();
-            return true;
-            }
-      if (propertyId == Pid::PHRASE_ENDING) {
-            _phraseEnding = v.toInt();
-            score()->setLayoutAll();            // the tempo map (rebuildTempoAndTimeSigMaps)
-            score()->setPlaylistDirty();
             return true;
             }
       return SlurTie::setProperty(propertyId, v);
@@ -1280,11 +1263,25 @@ QVariant Slur::propertyDefault(Pid id) const
       {
       if (id == Pid::PHRASE_MARK)
             return false;
-      if (id == Pid::PHRASE_SHAPE || id == Pid::PHRASE_ENDING)
-            return 0;
+      if (id == Pid::PHRASE_AMOUNT)
+            return PhraseMark::DEFAULT_AMOUNT;  // (the Inspector's reset; a slur's own starts at 0: none)
       if (id == Pid::PHRASE_PEAK)
             return PhraseMark::PEAK_AUTO;
       return SlurTie::propertyDefault(id);
+      }
+
+//---------------------------------------------------------
+//   undoChangeProperty
+//    a slur made a phrase mark without an amount starts at PhraseMark::DEFAULT_AMOUNT, in the same undo step (on the
+//    slur and its linked copies, as Pid::PHRASE_MARK); one that has an amount keeps it
+//---------------------------------------------------------
+
+void Slur::undoChangeProperty(Pid id, const QVariant& v, PropertyFlags ps)
+      {
+      const bool starts = id == Pid::PHRASE_MARK && v.toBool() && !_phraseMark && _phraseAmount == 0.0;
+      SlurTie::undoChangeProperty(id, v, ps);
+      if (starts)
+            SlurTie::undoChangeProperty(Pid::PHRASE_AMOUNT, PhraseMark::DEFAULT_AMOUNT, ps);
       }
 
 //---------------------------------------------------------
@@ -1658,14 +1655,13 @@ void read(Score* score)
                   }
             if (!found)
                   continue;
-            const int shape = qBound(0, o.value("shape").toInt(0), int(SHAPE_SWELL));
-            const int ending = qBound(0, o.value("ending").toInt(0), int(ENDING_BROAD));
+            // (no "amount": a phrase mark from before amounts, no swell; "shape" / "ending" of an unmerged branch ignored)
+            const double amount = qBound(0.0, o.value("amount").toDouble(0.0), MAX_AMOUNT);
             const int peak = qBound(int(PEAK_AUTO), o.value("peak").toInt(PEAK_AUTO), 100);
             for (ScoreElement* e : found->linkList()) {
                   if (e->isSlur()) {
                         toSlur(e)->setPhraseMark(true);
-                        toSlur(e)->setPhraseShape(shape);
-                        toSlur(e)->setPhraseEnding(ending);
+                        toSlur(e)->setPhraseAmount(amount);
                         toSlur(e)->setPhrasePeak(peak);
                         }
                   }
@@ -1688,11 +1684,9 @@ QString write(const Score* score)
             o["tick2"] = s->tick2().ticks();
             o["track"] = s->track();
             o["track2"] = s->track2();
-            // (Shape and Ending: only when set, so that a score without them writes the metaTag as before)
-            if (toSlur(s)->phraseShape())
-                  o["shape"] = toSlur(s)->phraseShape();
-            if (toSlur(s)->phraseEnding())
-                  o["ending"] = toSlur(s)->phraseEnding();
+            // (Amount and Peak: only when set, so that a score without them writes the metaTag as before)
+            if (toSlur(s)->phraseAmount() != 0.0)
+                  o["amount"] = toSlur(s)->phraseAmount();
             if (toSlur(s)->phrasePeak() != PEAK_AUTO)
                   o["peak"] = toSlur(s)->phrasePeak();
             list.append(o);
@@ -1701,20 +1695,15 @@ QString write(const Score* score)
       }
 
 //---------------------------------------------------------
-//   Shape and Ending (slur.h › Phrase shape and ending)
+//   the swell (slur.h › Phrase swell)
 //---------------------------------------------------------
 
-bool hasShape(const Slur* slur)
+bool hasSwell(const Slur* slur)
       {
-      return slur && slur->phraseMark() && slur->phraseShape() == SHAPE_SWELL;
+      return slur && slur->phraseMark() && slur->phraseAmount() > 0.0;
       }
 
-bool hasEnding(const Slur* slur)
-      {
-      return slur && slur->phraseMark() && slur->phraseEnding() > ENDING_NONE && slur->phraseEnding() <= ENDING_BROAD;
-      }
-
-double shapeAt(double x, double peak)
+double swellAt(double x, double peak)
       {
       x = qBound(0.0, x, 1.0);
       peak = qBound(0.0, peak, 1.0);
@@ -1769,9 +1758,9 @@ double peakOf(const Slur* slur)
       return p == PEAK_AUTO ? autoPeak(slur) : qBound(0, p, 100) / 100.0;
       }
 
-double shapeDb(const Chord* chord, double amount)
+double swellDb(const Chord* chord)
       {
-      if (amount == 0.0 || !chord)
+      if (!chord)
             return 0.0;
       if (chord->isGrace() && chord->parent() && chord->parent()->isChord())
             chord = toChord(chord->parent());
@@ -1782,7 +1771,7 @@ double shapeDb(const Chord* chord, double amount)
       const auto found = score->spannerMap().findOverlapping(tick, tick);
       for (const auto& i : found) {
             const Spanner* sp = i.value;
-            if (!sp->isSlur() || !hasShape(toSlur(sp)))
+            if (!sp->isSlur() || !hasSwell(toSlur(sp)))
                   continue;
             if (chord->track() != sp->track() && chord->track() != sp->track2())
                   continue;
@@ -1791,7 +1780,7 @@ double shapeDb(const Chord* chord, double amount)
             const int t2 = endTick(slur);
             if (tick < t1 || tick > slur->tick2().ticks() || t2 <= t1)
                   continue;
-            db = std::max(db, amount * shapeAt(double(tick - t1) / double(t2 - t1), peakOf(slur)));
+            db = std::max(db, slur->phraseAmount() * swellAt(double(tick - t1) / double(t2 - t1), peakOf(slur)));
             }
       return db;
       }

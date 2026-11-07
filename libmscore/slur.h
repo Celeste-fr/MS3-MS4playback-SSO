@@ -26,7 +26,7 @@ class SlurSegment final : public SlurTieSegment {
 
    protected:
       qreal _extraHeight = 0.0;
-      int _peakDragFrom { -2 };     // the Swell's peak when its grip's drag started (-2: no such drag)
+      int _peakDragFrom { -2 };     // the swell's peak when its grip's drag started (-2: no such drag)
       void changeAnchor(EditData&, Element*) override;
       QPointF peakGripPos() const;  // (page coordinates; NaN x: the peak isn't on this segment)
       int peakAtX(qreal pageX) const;
@@ -47,7 +47,7 @@ class SlurSegment final : public SlurTieSegment {
 
       Slur* slur() const { return toSlur(spanner()); }
 
-      // a phrase mark's Swell (PhraseMark below): one more grip, at its peak, dragged along the phrase (screen only)
+      // a phrase mark's swell (PhraseMark below): one more grip, at its peak, dragged along the phrase (screen only)
       static constexpr Grip PEAK_GRIP = Grip(int(Grip::GRIPS));
       bool hasPeakGrip() const;
       int gripsCount() const override;
@@ -68,9 +68,8 @@ class SlurSegment final : public SlurTieSegment {
 class Slur final : public SlurTie {
 
       bool _phraseMark { false };   // a phrase mark, not a slur for playback (see PhraseMark below)
-      int _phraseShape { 0 };       // a phrase mark's Shape (PhraseMark::Shape) and Ending (PhraseMark::Ending); 0: none
-      int _phraseEnding { 0 };
-      int _phrasePeak { -1 };       // its Swell's peak, % of the phrase (PhraseMark::PEAK_AUTO: Auto)
+      double _phraseAmount { 0.0 }; // a phrase mark's swell, dB louder at its peak than at its ends (0: none)
+      int _phrasePeak { -1 };       // its swell's peak, % of the phrase (PhraseMark::PEAK_AUTO: Auto)
 
       void slurPosChord(SlurPos*);
 
@@ -100,16 +99,17 @@ class Slur final : public SlurTie {
       bool phraseMark() const             { return _phraseMark; }
       void setPhraseMark(bool v)          { _phraseMark = v; }
       bool isLegatoSlur() const           { return !_phraseMark; }     // a slur for playback
-      int phraseShape() const             { return _phraseShape; }     // (set: played only on a phrase mark)
-      void setPhraseShape(int v)          { _phraseShape = v; }
-      int phraseEnding() const            { return _phraseEnding; }
-      void setPhraseEnding(int v)         { _phraseEnding = v; }
+      double phraseAmount() const         { return _phraseAmount; }    // (set: played only on a phrase mark)
+      void setPhraseAmount(double v)      { _phraseAmount = v; }
       int phrasePeak() const              { return _phrasePeak; }
       void setPhrasePeak(int v)           { _phrasePeak = v; }
 
       QVariant getProperty(Pid propertyId) const override;
       bool setProperty(Pid propertyId, const QVariant&) override;
       QVariant propertyDefault(Pid id) const override;
+      // (a slur made a phrase mark without an amount gets PhraseMark::DEFAULT_AMOUNT in the same undo step)
+      void undoChangeProperty(Pid id, const QVariant&, PropertyFlags ps) override;
+      using ScoreElement::undoChangeProperty;
       };
 
 //---------------------------------------------------------
@@ -130,36 +130,32 @@ class Slur final : public SlurTie {
 //   score of the file its own: the master score and each part), read after loading and applied to
 //   the matching slurs. Copy / paste keeps it (written in the clipboard's XML only).
 //
-//   Phrase shape and ending (the owner approved the design, 2026-11-06/07: "these are the composer's marks"; nothing
-//   is automatic; the Shape's model 2026-11-07: "I don't like that it only has 3 options", "if you had to pick one note,
-//   then you can't represent swell within one long held note"): a phrase mark may carry more marks, Inspector › Slur ›
-//   Shape, Peak and Ending (shown while "Phrase mark" is ticked; Pid::PHRASE_SHAPE / PHRASE_PEAK / PHRASE_ENDING,
-//   undoable, linked copies with it; played only while it is a phrase mark). Stored in the same metaTag entry as
-//   "shape" / "peak" / "ending" (ints, left out when None / Auto / None: a score without them writes the metaTag as
-//   before), and in the clipboard's XML.
-//   - Shape (None, Swell): a swell of loudness, like a crescendo hairpin to the Peak and a diminuendo from it, on top
-//     of the dynamics. The phrase runs from its first chord's start (0 %) to its last chord's end (100 %, endTick);
-//     the swell is A x s(x) dB, x the place in it by ticks, s rising linearly from 0 at the start to 1 at the peak and
-//     falling to 0 at the end (a peak at 0 % / 100 %: from / to 1 there), so a held note swells inside itself. A is
-//     the setting phrasing/shapeAmount (dB).
+//   Phrase swell (the owner, 2026-11-06/07: "these are the composer's marks", nothing is automatic; 2026-11-07: "I
+//   thought phrasing is just 2 variables, swell location and amount", approved "Amount + Peak, remove Ending; slow a
+//   phrase with a rit. line instead"): a phrase mark has two values of its own, Inspector › Slur › Amount and Peak
+//   (shown while "Phrase mark" is ticked; Pid::PHRASE_AMOUNT / PHRASE_PEAK, undoable, linked copies with it; played only
+//   while it is a phrase mark). Stored in the same metaTag entry as "amount" (dB, left out when 0) and "peak" (left out
+//   when Auto), and in the clipboard's XML (<phraseAmount>, <phrasePeak>). A slur made a phrase mark (Inspector, the
+//   context menu, Alt+S, Add › Lines) starts at DEFAULT_AMOUNT and Auto, unless it already has an amount (Slur::
+//   undoChangeProperty); a phrase mark read without "amount" (written before amounts existed) has 0: no swell, so older
+//   scores play as before.
+//   - Amount (dB, 0 … 12): a swell of loudness, like a crescendo hairpin to the Peak and a diminuendo from it, on top
+//     of the dynamics, Amount dB louder at the peak than at the ends; 0: none. The phrase runs from its first chord's
+//     start (0 %) to its last chord's end (100 %, endTick); the swell is Amount x s(x) dB, x the place in it by ticks,
+//     s rising linearly from 0 at the start to 1 at the peak and falling to 0 at the end (a peak at 0 % / 100 %: from /
+//     to 1 there), so a held note swells inside itself.
 //   - Peak: where the swell is loudest, % of the phrase (0 … 100; it may fall inside a held note), or Auto (-1, the
 //     default): the phrase's highest note when only one chord reaches it and it starts between 25 % and 75 % of the
-//     phrase, else the middle (50 %) (autoPeak). In edit mode a phrase mark with a Swell has one more grip, on the slur
-//     at the peak's place (SlurSegment::PEAK_GRIP), dragged along the phrase to set Peak (one undo step per drag).
-//     Played as a hairpin plays (continuous): MuseScore 4's mode and the libraries put it into the part's dynamics map
-//     (Ms4::Dynamics::build's swells: the expression CC11 on single-note-dynamics instruments, the velocity of every
-//     other note at its start; a library's dynamics CC (CC1), louder by the held note's measured curve, or with
-//     [levels] realRange by the real players' levels, so Live's clips and the plain set carry it as a hairpin's
-//     controller events; MuseScore 3 by SoundFont 2's law); where parts' phrases overlap, the larger swell. MuseScore
-//     3's mode (whose hairpins change velocities) plays each chord's velocity louder by the swell at its start
-//     (shapeDb, SoundFont 2's law).
-//   - Ending (None, Slight, Broad): a slowing at the phrase's end without a written rit.: over the last
-//     phrasing/endingLength beats before the last note's end (from the phrase's start when it is shorter) the tempo
-//     goes from the one in force to phrasing/endingSlight or /endingBroad % of it on the curve phrasing/endingCurve,
-//     and back to the tempo in force after the phrase (TempoChange::addToTempoMap: the tempo map, so MuseScore 3 / 4,
-//     the libraries, Live's clips and MIDI export follow it, as a rit. line). Endings that overlap in time (the same
-//     phrase in several staves) are one slowing: the earliest start, the latest end, the slowest end tempo. A written
-//     tempo change wins: an ending overlapping a tempo-change line, or with a tempo marking inside it, plays none.
+//     phrase, else the middle (50 %) (autoPeak). In edit mode a phrase mark with an Amount has one more grip, on the
+//     slur at the peak's place (SlurSegment::PEAK_GRIP), dragged along the phrase to set Peak (one undo step per drag).
+//   Played as a hairpin plays (continuous), in every preset (a composer's mark, as hairpins are): MuseScore 4's mode and
+//   the libraries put it into the part's dynamics map (Ms4::Dynamics::build's swells: the expression CC11 on
+//   single-note-dynamics instruments, the velocity of every other note at its start; a library's dynamics CC (CC1),
+//   louder by the held note's measured curve, or with [levels] realRange by the real players' levels, so Live's clips
+//   and the plain set carry it as a hairpin's controller events; MuseScore 3 by SoundFont 2's law); where a part's
+//   phrases overlap, the larger swell. MuseScore 3's mode (whose hairpins change velocities) plays each chord's velocity
+//   louder by the swell at its start (swellDb, SoundFont 2's law). A slowing at a phrase's end is a rit. line
+//   (tempochange.h), not a phrase mark's value.
 //---------------------------------------------------------
 
 class Chord;
@@ -174,24 +170,25 @@ QColor color();
 void read(Score* score);
 QString write(const Score* score);
 
-enum Shape { SHAPE_NONE = 0, SHAPE_SWELL };
-enum Ending { ENDING_NONE = 0, ENDING_SLIGHT, ENDING_BROAD };
 constexpr int PEAK_AUTO = -1;
+// a new phrase mark's Amount, dB: a phrase's peak above its ends, the per-piece median of 43 Chopin mazurkas
+// (MazurkaBL, 129 pianists; IQR 1.5-5.1 dB; piano data: docs/PLAYBACK_SETTINGS.md › Phrase swell)
+constexpr double DEFAULT_AMOUNT = 3.3;
+constexpr double MAX_AMOUNT = 12.0;
 
-// the slur plays as a phrase mark with a Shape / an Ending
-bool hasShape(const Slur* slur);
-bool hasEnding(const Slur* slur);
+// the slur plays as a phrase mark with a swell (an Amount above 0)
+bool hasSwell(const Slur* slur);
 // 0 … 1 of the amount at x (0: the phrase's start, 1: its end) of a swell peaking at peak (0 … 1)
-double shapeAt(double x, double peak);
+double swellAt(double x, double peak);
 // Auto's peak (0 … 1): the highest note's chord when only one chord reaches it and it starts within 25 … 75 %, else 0.5
 double autoPeak(const Slur* slur);
 // the swell's peak (0 … 1): its Peak, or Auto's
 double peakOf(const Slur* slur);
-// the tick where the slur's last chord ends (its Ending's and its Swell's end)
+// the tick where the slur's last chord ends (its swell's end)
 int endTick(const Slur* slur);
-// how much louder (dB) the chord plays at its start by the Swells of the phrase marks on its tracks, amount dB at their
-// peaks (the largest where they overlap; MuseScore 3's mode)
-double shapeDb(const Chord* chord, double amount);
+// how much louder (dB) the chord plays at its start by the swells of the phrase marks on its tracks, each its own
+// Amount at its peak (the largest where they overlap; MuseScore 3's mode)
+double swellDb(const Chord* chord);
 
 }     // namespace PhraseMark
 

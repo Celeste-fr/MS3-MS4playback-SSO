@@ -1419,12 +1419,11 @@ InspectorSlurTie::InspectorSlurTie(QWidget* parent)
             };
       // slurs only: a phrase mark plays no legato (libmscore/slur.h)
       const bool slurs = sameTypes && el->isSlurSegment();
-      // (a phrase mark's Shape, Peak and Ending: slur.h › Phrase shape and ending; shown while "Phrase mark" is ticked, postInit)
+      // (a phrase mark's Amount and Peak: slur.h › Phrase swell; shown while "Phrase mark" is ticked, postInit)
       if (slurs) {
             iiList.push_back({ Pid::PHRASE_MARK, 0, s.phraseMark, s.resetPhraseMark });
-            iiList.push_back({ Pid::PHRASE_SHAPE, 0, s.phraseShape, s.resetPhraseShape });
+            iiList.push_back({ Pid::PHRASE_AMOUNT, 0, s.phraseAmount, s.resetPhraseAmount });
             iiList.push_back({ Pid::PHRASE_PEAK, 0, s.phrasePeak, s.resetPhrasePeak });
-            iiList.push_back({ Pid::PHRASE_ENDING, 0, s.phraseEnding, s.resetPhraseEnding });
             }
       s.phraseMark->setVisible(slurs);
       s.resetPhraseMark->setVisible(slurs);
@@ -1435,18 +1434,17 @@ InspectorSlurTie::InspectorSlurTie(QWidget* parent)
 
 //---------------------------------------------------------
 //   postInit
-//    Shape, Peak and Ending only for phrase marks, Peak only for a Swell
+//    Amount and Peak only for phrase marks, Peak only with an Amount
 //---------------------------------------------------------
 
 void InspectorSlurTie::postInit()
       {
       const bool shown = _slurs && s.phraseMark->isChecked();
-      for (QWidget* w : std::initializer_list<QWidget*>{ s.phraseShapeLabel, s.phraseShape, s.resetPhraseShape,
-                                                         s.phrasePeakLabel, s.phrasePeak, s.resetPhrasePeak,
-                                                         s.phraseEndingLabel, s.phraseEnding, s.resetPhraseEnding })
+      for (QWidget* w : std::initializer_list<QWidget*>{ s.phraseAmountLabel, s.phraseAmount, s.resetPhraseAmount,
+                                                         s.phrasePeakLabel, s.phrasePeak, s.resetPhrasePeak })
             w->setVisible(shown);
-      // (Peak: only for a Swell)
-      const bool swell = s.phraseShape->currentIndex() == PhraseMark::SHAPE_SWELL;
+      // (Peak: only with a swell)
+      const bool swell = s.phraseAmount->value() > 0.0;
       s.phrasePeakLabel->setEnabled(swell);
       s.phrasePeak->setEnabled(swell);
       if (!swell)

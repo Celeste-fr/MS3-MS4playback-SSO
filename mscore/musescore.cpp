@@ -7690,12 +7690,8 @@ void MuseScore::reloadPlaybackSettings()
       {
       const GoOnPlaying goOn;
       Playback::reload();
-      for (MasterScore* ms : qAsConst(scoreList)) {
+      for (MasterScore* ms : qAsConst(scoreList))
             ms->setPlaylistDirty();
-            // (phrase marks' Endings are in the tempo map: slur.h › Phrase shape and ending)
-            ms->setLayoutAll();
-            ms->update();
-            }
       SoundLibraryHost::logPreflight("playback.ini reloaded");     // (render preflight.log: the ini's hash and preset)
       const QStringList warn = Playback::warnings();
       showMessage(warn.isEmpty() ? tr("Playback settings reloaded")

@@ -109,12 +109,12 @@ class Dynamics {
       void addTechnique(const StaffTextBase* text, int utick);
       void mergeTracks();
 
-      void addSwells(Score* score, Part* part, double amount, const std::function<int(int value, double db, int pitch)>& louder);
+      void addSwells(Score* score, Part* part, const std::function<int(int value, double db, int pitch)>& louder);
 
    public:
-      // swellAmount: phrase marks' Swells (slur.h › Phrase shape and ending), dB at their peaks (0: none); louder: the
-      // dynamics CC value (0 … 127) that plays db louder than value at the pitch on this part (none: SoundFont 2's law)
-      void build(Score* score, Part* part, double swellAmount = 0.0,
+      // swells: with phrase marks' swells (slur.h › Phrase swell), each its own Amount; louder: the dynamics CC value
+      // (0 … 127) that plays db louder than value at the pitch on this part (none: SoundFont 2's law)
+      void build(Score* score, Part* part, bool swells = false,
                  const std::function<int(int value, double db, int pitch)>& louder = nullptr);
       int levelAt(int track, int utick) const { return appliable(track, utick); }   // unrolled tick
       const std::map<int, int>& levels() const { return _merged; }     // all tracks' changes (FluidSequencer::updateDynamicEvents)

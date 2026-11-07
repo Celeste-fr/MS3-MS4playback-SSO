@@ -89,9 +89,8 @@ run's spacing following the onsets (Recommended until 2026-10-08); the Preset bo
 `levels/leading` (the Leading lane, below) is 1 in Recommended and by default, 0 in Library default (the owner,
 2026-11-06: "let's do the simple 3.5 dB now, we'll refine as we go"); it acts only where a part's Leading lane is On.
 
-`phrasing/shapeAmount`, `endingSlight`, `endingBroad` (Phrase shape and ending, below) are 3.3 dB, 87 %, 75 % (piano
-data) in Recommended and by default, none in Library default (0 dB, 100 %, 100 %); they act only on phrase
-marks a composer gave a Shape or an Ending (2026-11-07, branch `phrase-shape`).
+Phrase marks' swells (Phrase swell, below) are no setting: each phrase mark's own Amount and Peak, composer's marks
+played in every preset, as hairpins are (2026-11-07, branch `phrase-shape`).
 
 `levels/calibrated` 1 (as loud as the held note) is in neither preset since 2026-10-15 (Recommended plays 2, the
 match plus D, real players' difference: option B'): set by hand it shows "(Custom)".
@@ -2145,63 +2144,58 @@ researched separately). Header comment of `libmscore/leadinglane.h` has the desi
 - **0 (and a score without a Leading lane) changes nothing**: no lane read for playback, no gain, no CC11 (tests `leadingLevels`, `leadingLive`; dumps of
   Whence and the test scores identical to main's, branch commit message).
 
-## Phrase shape and ending
+## Phrase swell
 
 2026-11-07 (branch `phrase-shape`; the owner approved the design 2026-11-06/07: these are the composer's marks, nothing
-automatic; PRINCIPLES.md › 1). Header comment of `libmscore/slur.h` › Phrase shape and ending has the design.
+automatic, PRINCIPLES.md › 1; then, the same day: "I thought phrasing is just 2 variables, swell location and amount",
+approved "Amount + Peak, remove Ending; slow a phrase with a rit. line instead"). Header comment of `libmscore/slur.h` ›
+Phrase swell has the design. **No setting**: each phrase mark carries its own values, played in every preset (Library
+default too), as a hairpin is.
 
-- **The marks**: a phrase mark (Inspector › Slur › *Phrase mark* ticked) gets three rows, **Shape** (None, Swell),
-  **Peak** (Auto, 0 … 100 %; enabled only for a Swell) and **Ending** (None, Slight, Broad), shown only while *Phrase
-  mark* is ticked; None / Auto / None by default. Undoable (`Pid::PHRASE_SHAPE`, `PHRASE_PEAK`, `PHRASE_ENDING`, on the
-  slur so its linked copies follow), kept by copy / paste (the clipboard's XML), saved in the phrase mark's entry of the
-  metaTag `phraseMarks` as `"shape"` / `"peak"` / `"ending"` (ints, left out when None / Auto / None: a score without
-  them writes the metaTag exactly as before; MuseScore 3.6 keeps the metaTag). A slur that isn't a phrase mark keeps the
-  values but plays none of them. The Shape had four values (None, Arch, Toward end, Toward start) until the owner's
-  2026-11-07 decision ("I don't like that it only has 3 options", "if you had to pick one note, then you can't
-  represent swell within one long held note"); the branch was unmerged, so no file carries them.
-- **Shape Swell** (`[phrasing] shapeAmount`, dB, default 3.3: a phrase's peak above its ends, MazurkaBL per-piece median,
-  IQR 1.5-5.1 over 43 pieces; Vienna 4x22 3.3 / 4.5 dB; **piano only**, an assumption for other instruments): the phrase
-  runs from its first chord's start (0 %) to its last chord's end (100 %); at x along it (by ticks) the swell is
-  A x s(x) dB, s linear from 0 at the start to 1 at the peak and back to 0 at the end (`PhraseMark::shapeAt`; a peak at
-  0 % falls from 1, at 100 % rises to 1). **Peak** Auto: the phrase's highest note when only one chord reaches it and it
-  starts between 25 % and 75 % of the phrase, else the middle (`PhraseMark::autoPeak`); a set Peak is a point in time and
-  may fall inside a held note. It only adds loudness, on top of the dynamics, **played as a hairpin is (continuous)**:
+- **The marks**: a phrase mark (Inspector › Slur › *Phrase mark* ticked) gets two rows, **Amount** (0.0 … 12.0 dB, one
+  decimal; 0: no swell) and **Peak** (Auto, 0 … 100 %; enabled only when Amount is above 0), shown only while *Phrase
+  mark* is ticked. A slur made a phrase mark (the Inspector's tick, the context menu, Alt+S, Add › Lines › Phrase mark)
+  starts at **Amount 3.3 dB** (`PhraseMark::DEFAULT_AMOUNT`: a phrase's peak above its ends, the per-piece median of 43
+  Chopin mazurkas, MazurkaBL, 129 pianists, IQR 1.5-5.1; Vienna 4x22 3.3 / 4.5 dB; **piano only**, an assumption for
+  other instruments) and Peak Auto, unless it already has an amount (`Slur::undoChangeProperty`, the same undo step);
+  the Amount row's reset button sets 3.3. Undoable (`Pid::PHRASE_AMOUNT`, `PHRASE_PEAK`, on the slur so its linked
+  copies follow), kept by copy / paste (the clipboard's XML: `<phraseAmount>`, `<phrasePeak>`), saved in the phrase
+  mark's entry of the metaTag `phraseMarks` as `"amount"` (dB, left out when 0) and `"peak"` (left out when Auto); a
+  phrase mark without `"amount"` (every score saved before) loads with 0, no swell, so it plays as before; MuseScore 3.6
+  keeps the metaTag. A slur that isn't a phrase mark keeps the values but plays none of them. Earlier on the branch
+  (never merged, no file carries them): a Shape (None / Arch / Toward end / Toward start, then None / Swell) with a
+  global `[phrasing] shapeAmount`, and an Ending (None / Slight / Broad, a slowing in the tempo map with
+  `[phrasing] endingSlight`, `endingBroad`, `endingLength`, `endingCurve`): all gone, their ini keys ignored silently
+  (`REMOVED`); a slowing at a phrase's end is a rit. line.
+- **The swell**: the phrase runs from its first chord's start (0 %) to its last chord's end (100 %); at x along it (by
+  ticks) it is Amount x s(x) dB, s linear from 0 at the start to 1 at the peak and back to 0 at the end
+  (`PhraseMark::swellAt`; a peak at 0 % falls from 1, at 100 % rises to 1). **Peak** Auto: the phrase's highest note when
+  only one chord reaches it and it starts between 25 % and 75 % of the phrase, else the middle (`PhraseMark::autoPeak`);
+  a set Peak is a point in time and may fall inside a held note. It only adds loudness, on top of the dynamics, **played
+  as a hairpin is (continuous)**:
   - MuseScore 4's mode and the libraries: in the part's dynamics map (`Ms4::Dynamics::addSwells`, after the markings and
     hairpins): at the swell's points (every 1/8 beat, at least 24 a side, the peak, its end) and at every change of the
-    written levels inside it, the level whose dynamics CC value plays A x s dB louder; the level in force without it again
-    at the phrase's end. So a single-note-dynamics instrument (strings, winds) swells by CC11 inside a held note, every
-    other instrument by its notes' velocities at their starts (as a hairpin there), a library part by its dynamics CC
-    (CC1) as a hairpin's controller events, so Live's clips and the plain set carry it (no new carrier). The law from dB
-    to the CC value (`MidiRenderer::swellLaw`): a library part with `[levels] realRange` by the real players' level that
-    CC value plays (`realRangeDb` + `longLevelDb`: with realRange a CC1 change is heard at the players' change), else by
-    its held note's measured curve (`DynamicsCurve::louder`, by ear where measured), else SoundFont 2's 40 log10 (MuseScore
-    4's CC11 and velocities). Phrases overlapping in one part: the larger swell (one dynamics CC per part). A Dynamics lane
-    replaces it from its first point, as it does a hairpin.
+    written levels inside it, the level whose dynamics CC value plays Amount x s dB louder; the level in force without it
+    again at the phrase's end. So a single-note-dynamics instrument (strings, winds) swells by CC11 inside a held note,
+    every other instrument by its notes' velocities at their starts (as a hairpin there), a library part by its dynamics
+    CC (CC1) as a hairpin's controller events, so Live's clips and the plain set carry it (no new carrier). The law from
+    dB to the CC value (`MidiRenderer::swellLaw`): a library part with `[levels] realRange` by the real players' level
+    that CC value plays (`realRangeDb` + `longLevelDb`: with realRange a CC1 change is heard at the players' change), else
+    by its held note's measured curve (`DynamicsCurve::louder`, by ear where measured), else SoundFont 2's 40 log10
+    (MuseScore 4's CC11 and velocities). Phrases overlapping in one part: the larger swell (one dynamics CC per part). A
+    Dynamics lane replaces it from its first point, as it does a hairpin.
   - MuseScore 3's mode (whose hairpins change velocities): each chord's velocity louder by the swell at its start, on
-    SoundFont 2's law (`MidiRenderer::phraseDb`, `MarcatoLevel::velocity`). A held note does not swell there (its
-    single-note-dynamics curve comes from the staff's velocity map, which the swell does not enter).
-  0: Swells change nothing.
-- **Ending** (`[phrasing] endingSlight` 87 %, `endingBroad` 75 %, `endingLength` 3 beats, `endingCurve` 0 linear): Broad
-  plays the last three beats x1.04 / x1.14 / x1.27 against MazurkaBL's 8-bar phrase ends x1.07 / x1.20 / x1.27 (per-piece
-  medians, 43 pieces, 129 pianists; last beat 95 % CI 1.16-1.37; phrase grid an assumption); Slight half Broad's
-  lengthening (4-bar ends slow about half as much: ratios 0.44 / 0.53 / 0.15), last beat x1.12, an assumption. **Piano
-  only**: no string, wind or orchestral measurement with several performers was found (Turner 2004's 32 quartet recordings
-  agree in direction, counts only); the study, its audit and scripts: ms3fork-private `private/phrase-research/`. Over the last `endingLength` beats (the time signature's beat)
-  before the phrase's last note ends (from the phrase's start when it is shorter) the tempo goes from the one in force to
-  that % of it on the curve (a rit. line's methods: 0 linear, 1 exponential, 2 ease-in, 3 ease-out, 4 ease-in and out), and
-  the tempo in force before comes back where the last note ends. Points in the tempo map a 32nd apart, as a rit. line's
-  (`TempoChange::addToTempoMap`), so everything that follows the tempo follows it: MuseScore 3 / 4, the libraries, Live's
-  clips (notes at their real times) and MIDI export. Endings overlapping in time (the same phrase in several staves) are
-  one slowing (the earliest start, the latest end, the slowest end tempo). **A written tempo change wins**: an Ending that
-  overlaps a rit. / accel. line or has a tempo marking after its start plays none. 100 %: none.
-- **In the score**: in edit mode a phrase mark with a Swell has one more grip, on the slur at the peak's place
+    SoundFont 2's law (`MidiRenderer::phraseDb`, `PhraseMark::swellDb`, `MarcatoLevel::velocity`). A held note does not
+    swell there (its single-note-dynamics curve comes from the staff's velocity map, which the swell does not enter).
+- **In the score**: in edit mode a phrase mark with an Amount above 0 has one more grip, on the slur at the peak's place
   (`SlurSegment::PEAK_GRIP`: the peak tick's x between the chords around it, the slur curve's y there), dragged
   horizontally along the phrase to set Peak (one undo step per drag; arrow keys move it, Home sets Auto); screen only.
-- **None / Auto / None, and the settings at 0 dB / 100 %, change nothing**: tests `tst_phrasemark` (defaultsUnchanged: every event
-  of the MS3 and MS4 modes and SSO and the tempo map; swellCurve, autoPeak, swellMs3, swellMs4 (CC11 rising then falling
-  inside two held whole notes), swellPeakMoves (0 / 40 / 100 %), swellLibrary (SSO's CC1, realRange 0 and 2), ending,
-  endingWrittenWins, shapeEndingSaveLoad, shapeEndingUndo, shapeEndingCopyPaste); the earlier tests' references (`tst_midi`,
-  `tst_marcatolevel` defaultUnchanged) unchanged.
+- **Amount 0 changes nothing**: tests `tst_phrasemark` (defaultsUnchanged: every event of the MS3 and MS4 modes and SSO
+  with phrase marks at Amount 0; swellCurve, autoPeakRule, swellMs3 (the per-mark amount scales the velocities), swellMs4
+  (CC11 rising then falling inside two held whole notes), swellPeakMoves (0 / 40 / 100 %), swellLibrary (SSO's CC1,
+  realRange 0 and 2), newMarkAmount (3.3 on a new mark, kept on a re-tick), amountPeakSaveLoad (and a metaTag without
+  `"amount"`: 0), amountPeakUndo, amountPeakCopyPaste); the earlier tests' references (`tst_midi`, `tst_marcatolevel`
+  defaultUnchanged) unchanged.
 
 ## Divisi level
 
@@ -2707,8 +2701,7 @@ Ini key = `[section] key`. "Map" = per-patch data in `share/soundlibraries/Spitf
 | Adjustment | Default | Where it acts | Configure |
 |---|---|---|---|
 | Phrase marks: a slur that plays no legato | per slur | `slur.h` Phrase marks, metaTag `phraseMarks` | per slur (Alt+S, Inspector) |
-| Phrase mark Shape Swell: a phrase mark swells to its Peak (Auto: the highest note if unique and within 25-75 %, else the middle; or 0-100 %) and fades to its end, linear in dB from 0 to the amount, on top of the dynamics, continuous as a hairpin: MS4 and libraries in the dynamics map (CC11 / velocity / the library's CC1), MS3 by velocity at each chord (above, Phrase shape and ending) | None per phrase mark; amount 3.3 dB, piano data (Library default: 0 dB) | `slur.h` (`PhraseMark::shapeAt`, `autoPeak`, `shapeDb`), `ms4playback.cpp` (`Dynamics::addSwells`), `rendermidi.cpp` (`swellLaw`, `phraseDb`), metaTag `phraseMarks` (`shape`, `peak`) | per phrase mark: Inspector › Slur › *Shape*, *Peak*, the peak's grip; `[phrasing] shapeAmount` (0 … 12 dB) |
-| Phrase mark Ending: a slowing over the phrase's last beats without a written rit., the tempo in force again after it; a written tempo change wins | None per phrase mark; Slight 87 %, Broad 75 %, over 3 beats, linear, piano data (Library default: 100 %) | `tempochange.cpp` (`addToTempoMap`, `endingsIn`), metaTag `phraseMarks` (`ending`) | per phrase mark: Inspector › Slur › *Ending*; `[phrasing] endingSlight`, `endingBroad` (50 … 100 %), `endingLength` (0.25 … 16 beats), `endingCurve` (0 … 4) |
+| Phrase mark swell: a phrase mark swells to its Peak (Auto: the highest note if unique and within 25-75 %, else the middle; or 0-100 %) and fades to its end, linear in dB from 0 to its Amount, on top of the dynamics, continuous as a hairpin: MS4 and libraries in the dynamics map (CC11 / velocity / the library's CC1), MS3 by velocity at each chord (above, Phrase swell). A composer's mark, played in every preset | per phrase mark: Amount 3.3 dB on a new one (piano data), 0 (none) on one saved before amounts; Peak Auto | `slur.h` (`PhraseMark::swellAt`, `autoPeak`, `swellDb`), `ms4playback.cpp` (`Dynamics::addSwells`), `rendermidi.cpp` (`swellLaw`, `phraseDb`), metaTag `phraseMarks` (`amount`, `peak`) | per phrase mark: Inspector › Slur › *Amount* (0 … 12 dB), *Peak*, the peak's grip |
 | Level (marcato only until 2026-10-08): an articulation sign, or a staff text that changes the technique, louder or softer than the technique plays (above, Calibrated levels). A note on velocity: the velocity at which its measured curve (dynamics.json) is that many dB away, else SoundFont 2's law 40 log10(v/127); a note on the dynamics CC (SSO's strings' Marcato Attack): softer by CC11 (the held note's expression curve, else the law), louder by CC1 (its own curve, else the law; up to 127), on its route from right before its note-on to right before the route's next note-on; built-in synthesizer (MS3 and MS4 modes): the velocity by the law | "Library default" (0 dB: no change) | `articulation.h` MarcatoLevel, `rendermidi.cpp` (`levelOf`, `marcatoLevel`, `libraryNoteLevels`, `playNote`), `SoundLib::TextState::db`, metaTag `marcatoLevels` | per sign: Inspector › Articulation › *Level*; per text: Inspector › Staff text › *Level* (−35.5 … +35.5 dB, 0.5 steps; several selected: all; the range: above). Until 2026-10-08 −18.5 … +12.5, what SSO's marcatos span (`derived_numbers.py marcato`) |
 | Calibrated levels: 2 (2026-10-15, option B'): a technique on velocity as loud as the part's held note at the same dynamic plus D (real players' difference, map `heldOffset` from `technique_offsets.json`; else its level at velocity 127 less the held note's at 127), plus MuseScore 4's offset for its articulations (marcato's too); with the level rule every slur gain + its section's Spiccato D; 1: without D; 1 and 2: a Performance legato note by CC1 as loud as the held note (2026-10-10) | 2 (Recommended; Library default: 0) | `rendermidi.cpp` `libVelocity`, `SoundLib::calibratedVelocity`; data: dynamics.json per patch, else the shipped `Spitfire Symphony Orchestra.dynamics.json` | `[levels] calibrated`; score: `playbackSettings` |
 | Track delay: a library part (and each of its patches and techniques, added to the part's) plays this many ms later, negative earlier, as Live's Track Delay; every library event of the track moved in time, the tempo followed; with a negative delay everything else (other parts, the metronome) plays later by the earliest one (`libraryDelayLead`), so the track is early from its first note (2026-10-07; before: clamped at the start); likewise a note whose own early start (onset) the score's start would cut: everything later by the most cut, the start lead (not a setting; 2026-10-14); a note and its switch by the technique's sum, and so do the controllers and bends right before it at its tick (its track level's CC11, a dynamic; 2026-10-08), other controllers by the patch's | 0 ms (none) | `trackdelays.h`, `rendermidi.cpp` `libraryTrackDelays`, metaTag `trackDelays` | per part: Mixer › *Track delay*, *Tracks…* (−1000 … 1000 ms: a tutorial's figure for Live, its manual gives none); the plain Live set writes it as TrackDelay and reads it back |

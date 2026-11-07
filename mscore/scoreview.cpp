@@ -4576,6 +4576,7 @@ void ScoreView::cmdAddPhraseMark()
             }
       Slur phraseMark(_score);
       phraseMark.setPhraseMark(true);
+      phraseMark.setPhraseAmount(PhraseMark::DEFAULT_AMOUNT);     // (a new phrase mark's swell: slur.h › Phrase swell)
       cmdAddSlur(&phraseMark);
       }
 

@@ -154,12 +154,10 @@ class MidiRenderer {
       std::map<const Part*, SoundLib::TextTechniques> partTexts;
       double textLevel(const Chord* chord) const; // the level of the technique text in effect at the chord, dB
       double levelOf(const Note* note) const;     // the note's chord's articulations' and its technique text's levels, dB
-      // phrase marks' Swells (slur.h › Phrase shape and ending): phrasing/shapeAmount, dB at a swell's peak (0: none);
-      // MuseScore 4's mode and the libraries play them in the parts' dynamics maps (Ms4::Dynamics::build), MuseScore 3's
-      // by each chord's velocity (phraseDb)
-      double phraseShapeAmount { 0.0 };
-      double phraseDb(const Chord* chord) const;  // how much louder the chord plays at its start by its phrase marks' Swells, dB
-      std::function<int(int, double, int)> swellLaw(const Part* part) const;   // a Swell on the part's dynamics CC
+      // phrase marks' swells (slur.h › Phrase swell), each its own Amount: MuseScore 4's mode and the libraries play them
+      // in the parts' dynamics maps (Ms4::Dynamics::build), MuseScore 3's by each chord's velocity (phraseDb)
+      double phraseDb(const Chord* chord) const;  // how much louder the chord plays at its start by its phrase marks' swells, dB
+      std::function<int(int, double, int)> swellLaw(const Part* part) const;   // a swell on the part's dynamics CC
       // each part's Velocity lane (automation.h VELOCITY_TARGET: an Edit-in-MuseScore clip tab's), with points: every
       // note of MuseScore 3's playback shaped by it (playNote), as the MuseScore Link device or the clip's notes do in Live
       std::map<const Part*, Automation::Lane> velocityLanes;

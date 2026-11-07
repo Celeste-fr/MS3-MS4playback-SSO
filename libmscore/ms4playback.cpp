@@ -867,25 +867,23 @@ void Dynamics::addHairpin(Score* score, Hairpin* hairpin, int offset)
 
 //---------------------------------------------------------
 //   addSwells
-//    Not MuseScore 4: phrase marks' Swells (slur.h › Phrase shape and ending), as a crescendo hairpin to the peak and a
+//    Not MuseScore 4: phrase marks' swells (slur.h › Phrase swell), as a crescendo hairpin to the peak and a
 //    diminuendo from it on top of the levels the markings and hairpins set: at the swell's points (every 1/8 beat, at
 //    least 24 a side, the peak, its end) and at every change of those levels inside it, the level whose dynamics CC
-//    value plays A x s(x) dB louder (louder: the part's own law, else SoundFont 2's 40 log10), back to the level in force
+//    value plays A x s(x) dB louder (A: the phrase mark's Amount) (louder: the part's own law, else SoundFont 2's 40 log10), back to the level in force
 //    at the phrase's end. Phrases overlapping in a part: the larger swell (one dynamics CC for the part). At unrolled
 //    ticks, each phrase in the pass where it starts.
 //---------------------------------------------------------
 
-void Dynamics::addSwells(Score* score, Part* part, double amount, const std::function<int(int, double, int)>& louder)
+void Dynamics::addSwells(Score* score, Part* part, const std::function<int(int, double, int)>& louder)
       {
-      if (amount <= 0.0)
-            return;
-      struct Swell { int t1; int t2; double peak; int pitch; };
+      struct Swell { int t1; int t2; double peak; int pitch; double amount; };
       std::vector<Swell> swells;
       for (const RepeatSegment* rs : score->repeatList()) {
             const int offset = rs->utick - rs->tick;
             for (const auto& iv : score->spannerMap().findOverlapping(rs->tick, rs->tick + rs->len() - 1)) {
                   const Spanner* sp = iv.value;
-                  if (!sp->isSlur() || !PhraseMark::hasShape(toSlur(sp)) || sp->track() < _strack || sp->track() >= _etrack)
+                  if (!sp->isSlur() || !PhraseMark::hasSwell(toSlur(sp)) || sp->track() < _strack || sp->track() >= _etrack)
                         continue;
                   if (sp->staff() && !sp->staff()->primaryStaff())
                         continue;                             // linked staves
@@ -904,7 +902,7 @@ void Dynamics::addSwells(Score* score, Part* part, double amount, const std::fun
                                     pitch = std::max(pitch, toChord(e)->upNote()->ppitch());
                               }
                         }
-                  swells.push_back({ t1 + offset, t2 + offset, PhraseMark::peakOf(slur), pitch });
+                  swells.push_back({ t1 + offset, t2 + offset, PhraseMark::peakOf(slur), pitch, slur->phraseAmount() });
                   }
             }
       if (swells.empty())
@@ -942,7 +940,7 @@ void Dynamics::addSwells(Score* score, Part* part, double amount, const std::fun
                   for (const Swell& w : swells) {
                         if (tick < w.t1 || tick > w.t2)
                               continue;
-                        const double d = amount * PhraseMark::shapeAt(double(tick - w.t1) / double(w.t2 - w.t1), w.peak);
+                        const double d = w.amount * PhraseMark::swellAt(double(tick - w.t1) / double(w.t2 - w.t1), w.peak);
                         if (d > db || pitch < 0) {
                               db = std::max(db, d);
                               pitch = w.pitch;
@@ -1015,7 +1013,7 @@ int Dynamics::spannerStop(const Spanner* sp) const
       return it != _clippedStop.end() ? it->second : sp->tick2().ticks();
       }
 
-void Dynamics::build(Score* score, Part* part, double swellAmount, const std::function<int(int, double, int)>& louder)
+void Dynamics::build(Score* score, Part* part, bool swells, const std::function<int(int, double, int)>& louder)
       {
       _byTrack.clear();
       _subito.clear();
@@ -1080,7 +1078,8 @@ void Dynamics::build(Score* score, Part* part, double swellAmount, const std::fu
 
       for (int track = strack; track < etrack; ++track)
             _byTrack[track].emplace(0, Info { NATURAL, 0 });
-      addSwells(score, part, swellAmount, louder);
+      if (swells)
+            addSwells(score, part, louder);
       mergeTracks();
       if (qEnvironmentVariableIsSet("MS4_DEBUG_DYNAMICS")) {
             for (const auto& t : _byTrack)

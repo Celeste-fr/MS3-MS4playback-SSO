@@ -216,20 +216,20 @@
        </widget>
       </item>
       <item row="4" column="0">
-       <widget class="QLabel" name="phraseShapeLabel">
+       <widget class="QLabel" name="phraseAmountLabel">
         <property name="text">
-         <string>Shape:</string>
+         <string>Amount:</string>
         </property>
         <property name="alignment">
          <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
         </property>
         <property name="buddy">
-         <cstring>phraseShape</cstring>
+         <cstring>phraseAmount</cstring>
         </property>
        </widget>
       </item>
       <item row="4" column="1">
-       <widget class="QComboBox" name="phraseShape">
+       <widget class="QDoubleSpinBox" name="phraseAmount">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
           <horstretch>0</horstretch>
@@ -237,25 +237,30 @@
          </sizepolicy>
         </property>
         <property name="toolTip">
-         <string>Whether the phrase swells to a peak and fades</string>
+         <string>How much louder the phrase's peak is than its ends</string>
         </property>
         <property name="accessibleName">
-         <string>Shape</string>
+         <string>Amount</string>
         </property>
-        <item>
-         <property name="text">
-          <string>None</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Swell</string>
-         </property>
-        </item>
+        <property name="suffix">
+         <string> dB</string>
+        </property>
+        <property name="decimals">
+         <number>1</number>
+        </property>
+        <property name="minimum">
+         <double>0.000000000000000</double>
+        </property>
+        <property name="maximum">
+         <double>12.000000000000000</double>
+        </property>
+        <property name="singleStep">
+         <double>0.100000000000000</double>
+        </property>
        </widget>
       </item>
       <item row="4" column="2">
-       <widget class="Ms::ResetButton" name="resetPhraseShape" native="true">
+       <widget class="Ms::ResetButton" name="resetPhraseAmount" native="true">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
           <horstretch>0</horstretch>
@@ -263,7 +268,7 @@
          </sizepolicy>
         </property>
         <property name="accessibleName">
-         <string>Reset 'Shape' value</string>
+         <string>Reset 'Amount' value</string>
         </property>
        </widget>
       </item>
@@ -324,63 +329,6 @@
         </property>
        </widget>
       </item>
-      <item row="6" column="0">
-       <widget class="QLabel" name="phraseEndingLabel">
-        <property name="text">
-         <string>Ending:</string>
-        </property>
-        <property name="alignment">
-         <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
-        </property>
-        <property name="buddy">
-         <cstring>phraseEnding</cstring>
-        </property>
-       </widget>
-      </item>
-      <item row="6" column="1">
-       <widget class="QComboBox" name="phraseEnding">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="toolTip">
-         <string>How much the phrase slows down at its end</string>
-        </property>
-        <property name="accessibleName">
-         <string>Ending</string>
-        </property>
-        <item>
-         <property name="text">
-          <string>None</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Slight</string>
-         </property>
-        </item>
-        <item>
-         <property name="text">
-          <string>Broad</string>
-         </property>
-        </item>
-       </widget>
-      </item>
-      <item row="6" column="2">
-       <widget class="Ms::ResetButton" name="resetPhraseEnding" native="true">
-        <property name="sizePolicy">
-         <sizepolicy hsizetype="Fixed" vsizetype="Preferred">
-          <horstretch>0</horstretch>
-          <verstretch>0</verstretch>
-         </sizepolicy>
-        </property>
-        <property name="accessibleName">
-         <string>Reset 'Ending' value</string>
-        </property>
-       </widget>
-      </item>
      </layout>
     </widget>
    </item>
@@ -399,9 +347,8 @@
   <tabstop>lineType</tabstop>
   <tabstop>slurDirection</tabstop>
   <tabstop>phraseMark</tabstop>
-  <tabstop>phraseShape</tabstop>
+  <tabstop>phraseAmount</tabstop>
   <tabstop>phrasePeak</tabstop>
-  <tabstop>phraseEnding</tabstop>
  </tabstops>
  <resources/>
  <connections/>
